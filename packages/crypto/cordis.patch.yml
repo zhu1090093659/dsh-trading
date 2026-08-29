@@ -1,4 +1,4 @@
-# @dsh-trading/crypto —— insert-only：只插本市场（trading-crypto-* 命名空间）的新行，
+# @dsh-trading/crypto —— insert-only：只插本市场（dsh-trading-crypto-* 命名空间）的新行，
 # 禁止 replace @dsh-trading/base 或其他市场的行（README 设计铁律 #1；
 # patch 语义为按 id 整行替换，否则多市场并存互相覆盖）。
 #

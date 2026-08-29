@@ -14,7 +14,7 @@ import Schema from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
 /**
- * Cordis 插件名 = patch 行 id（TEMPLATES §8）：`trading-crypto-*` 市场命名空间，
+ * Cordis 插件名 = patch 行 id（TEMPLATES §8）：`dsh-trading-crypto-*` 市场命名空间，
  * 全仓唯一，绝不使用 `base` 等官方保留 id（insert-only 铁律 #1）。
  */
 export const name = 'dsh-trading-crypto-connector-binance'

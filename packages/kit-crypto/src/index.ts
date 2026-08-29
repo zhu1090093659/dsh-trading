@@ -56,7 +56,7 @@ const provider: SkillProvider = {
 }
 
 /**
- * Cordis 插件名 = patch 行 id（TEMPLATES §8）：`trading-crypto-*` 市场命名空间，
+ * Cordis 插件名 = patch 行 id（TEMPLATES §8）：`dsh-trading-crypto-*` 市场命名空间，
  * 全仓唯一（insert-only 铁律 #1）。
  */
 export const name = 'dsh-trading-crypto-kit'
