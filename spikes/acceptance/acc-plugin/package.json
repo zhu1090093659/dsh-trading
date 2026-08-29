@@ -1,0 +1,8 @@
+{
+  "name": "dsh-acceptance-observer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "index.js",
+  "description": "Throwaway acceptance observer for task D (in-process, 0 model calls). NOT part of the delivered packages."
+}

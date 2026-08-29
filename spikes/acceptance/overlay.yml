@@ -1,0 +1,11 @@
+# Task D acceptance overlay (throwaway, --patch only, never installed):
+# 1. disable the headless one-shot runner row so the booted process performs
+#    ZERO model calls (the observer drives everything in-process and exits);
+# 2. insert the throwaway observer row (host plane, insert-only).
+# A dummy task argument is still required so the headless command parser does
+# not usage-error and tear the tree down before the observer reads services.
+- id: headless-runner
+  disabled: true
+- insert:
+    - id: dsh-acceptance-observer
+      name: 'dsh-acceptance-observer'

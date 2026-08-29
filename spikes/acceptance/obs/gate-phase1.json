@@ -1,0 +1,7 @@
+{
+  "at": "2026-08-29T09:24:31.323Z",
+  "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any exchange. The reference price is market data only, not a fill price.\",\"id\":\"dry-1787995471323-wfqxmi\",\"symbol\":\"BTCUSDT\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":0.001,\"reference\":{\"source\":\"binance-public-ticker\",\"unavailable\":\"Cannot read private member #client from an object whose class did not declare it\"},\"timestamp\":1787995471323}",
+  "liveReject": {
+    "returned": "{\"status\":\"rejected\",\"code\":\"TRADING_LIVE_TRADING_DISABLED\",\"message\":\"crypto_place_order rejected: the call requests real execution (dryRun=false) but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly after confirmation, or keep dryRun=true for a simulated fill.\"}"
+  }
+}

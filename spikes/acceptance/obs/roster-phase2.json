@@ -1,0 +1,42 @@
+{
+  "phase": "phase2",
+  "at": "2026-08-29T09:25:16.285Z",
+  "roster": [
+    {
+      "id": "standard",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "ptc",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "minimal",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "cordis",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "crypto-trader",
+      "trust": "user",
+      "broken": "2 rows name plugins that cannot be resolved:\n- row \"dsh-trading-crypto-connector-binance\": @dsh-trading/connector-binance\n- row \"dsh-trading-crypto-kit\": @dsh-trading/kit-crypto"
+    },
+    {
+      "id": "liangshen",
+      "trust": "user",
+      "broken": null
+    }
+  ],
+  "resolveCryptoTrader": {
+    "id": "crypto-trader",
+    "trust": "user",
+    "path": "/Users/zcl/.dsh-trading-presets/crypto-trader/agent.cordis.yml",
+    "broken": "2 rows name plugins that cannot be resolved:\n- row \"dsh-trading-crypto-connector-binance\": @dsh-trading/connector-binance\n- row \"dsh-trading-crypto-kit\": @dsh-trading/kit-crypto"
+  }
+}
