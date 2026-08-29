@@ -59,26 +59,29 @@ const SUBSCRIBE_MIN_MS = 250
 const SUBSCRIBE_DEFAULT_MS = 5_000
 
 export class BinanceMarketDataService extends Service implements MarketDataService {
-  readonly #client: BinanceRestClient
+  // 用 TS 编译期 private 而非 ECMAScript # 私有字段：cordis 跨 realm 的 context
+  // 访问可能经代理/包装，# 字段按类身份校验会在合法调用上炸
+  // （「Cannot read private member」）；官方包同用 TS private（acceptance 验收发现）。
+  private readonly client: BinanceRestClient
 
   constructor(ctx: Context, options: BinanceRestOptions = {}, name: string = TRADING_CRYPTO_MARKET_DATA_KEY) {
     super(ctx, name)
-    this.#client = new BinanceRestClient(options)
+    this.client = new BinanceRestClient(options)
   }
 
   getTicker(symbol: string): Promise<Ticker> {
-    return this.#client.getTicker(symbol)
+    return this.client.getTicker(symbol)
   }
 
   getKlines(symbol: string, interval: Interval, limit?: number): Promise<Kline[]> {
-    return this.#client.getKlines(symbol, interval, limit)
+    return this.client.getKlines(symbol, interval, limit)
   }
 
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void, options?: SubscribeTickerOptions): Disposable {
     const ms = Math.max(options?.intervalMs ?? SUBSCRIBE_DEFAULT_MS, SUBSCRIBE_MIN_MS)
     const tick = (): void => {
       // 轮询失败静默跳过（下一 tick 重试）；不产生未处理 rejection。
-      void this.#client.getTicker(symbol).then(cb, () => {})
+      void this.client.getTicker(symbol).then(cb, () => {})
     }
     tick()
     const timer = setInterval(tick, ms)
