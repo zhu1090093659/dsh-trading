@@ -166,3 +166,15 @@ export interface TradingError {
   /** 交易所原始错误/上游 cause。 */
   readonly cause?: unknown
 }
+
+/**
+ * Cordis Context 服务键（能力三角色之「声明」）：市场命名空间键由契约包统一声明，
+ * 连接器 provide、消费方 inject 时获得完整类型。此处仅类型增强——本包保持
+ * 零运行时依赖，不产生任何 JS 输出。
+ */
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** crypto 市场行情服务（由 Binance 连接器以公共 REST 提供，无需凭证）。 */
+    tradingCryptoMarketData: MarketDataService
+  }
+}

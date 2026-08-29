@@ -17,7 +17,8 @@
   ],
   "license": "MIT",
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dsh-trading/api": "workspace:^"
@@ -28,6 +29,7 @@
     "@deepseek-ai/schemastery": ">=3.18.0"
   },
   "devDependencies": {
-    "tsdown": "^0.22.0"
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0"
   }
 }

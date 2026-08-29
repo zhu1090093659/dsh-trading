@@ -48,6 +48,9 @@ importers:
 
   packages/api:
     devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/cordis
+        version: file:../deepseek-harness/vendor/cordis
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(typescript@5.9.3)
@@ -80,6 +83,9 @@ importers:
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)
 
   packages/crypto:
     dependencies:
