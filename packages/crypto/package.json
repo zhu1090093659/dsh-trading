@@ -1,6 +1,6 @@
 {
   "name": "@dsh-trading/crypto",
-  "description": "Crypto market bundle for dsh-trading: insert-only aggregation of the binance connector and crypto kit rows (design rule #1)",
+  "description": "Crypto market bundle for dsh-trading: host-plane crypto-trader preset installer + insert-only aggregation of the binance connector and crypto kit rows (design rule #1)",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -15,6 +15,7 @@
   },
   "files": [
     "lib",
+    "assets",
     "cordis.patch.yml"
   ],
   "license": "MIT",
@@ -29,6 +30,10 @@
   "dependencies": {
     "@dsh-trading/connector-binance": "workspace:*",
     "@dsh-trading/kit-crypto": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/schemastery": ">=4.0.0"
   },
   "devDependencies": {
     "tsdown": "^0.22.0"

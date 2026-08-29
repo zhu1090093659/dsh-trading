@@ -1,6 +1,7 @@
 # crypto-trader agent preset —— dsh-trading crypto 切片（S3 机制）。
 #
-# 本文件由 @dsh-trading/kit-crypto 在插件 apply() 时幂等自安装到市场自有 preset root
+# 本文件由 @dsh-trading/crypto 的 dsh-trading-crypto-installer 插件（bundle host 面
+# 常驻行）在 apply() 时幂等自安装到市场自有 preset root
 # （默认 ~/.dsh-trading-presets/crypto-trader；agent-presets 行需把该 root 配进 roots，
 # 统一配置归 @dsh-trading/base）。插件卸载不删除已安装目录；升级/重装后再次 apply 即
 # 恢复一致，行不可解析时只会得到带原因的 broken 行，无进程崩溃（S3 REPORT broken 语义）。
@@ -31,7 +32,7 @@
   name: cordis:group
   group: true
   isolate:
-    tradingCrypto: true
+    tradingCryptoMarketData: true
   config:
     - id: dsh-trading-crypto-connector-binance
       name: '@dsh-trading/connector-binance'

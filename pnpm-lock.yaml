@@ -109,6 +109,12 @@ importers:
 
   packages/crypto:
     dependencies:
+      '@deepseek-ai/cordis':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/cordis
+        version: file:../deepseek-harness/vendor/cordis
+      '@deepseek-ai/schemastery':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/schemastery
+        version: file:../deepseek-harness/vendor/schemastery
       '@dsh-trading/connector-binance':
         specifier: workspace:*
         version: link:../connector-binance
@@ -128,6 +134,12 @@ importers:
       '@deepseek-ai/dsh-skill':
         specifier: file:/Users/zcl/code/deepseek-harness/packages/skill/skill
         version: file:../deepseek-harness/packages/skill/skill(@deepseek-ai/cordis@file:../deepseek-harness/vendor/cordis)
+      '@deepseek-ai/dsh-tools':
+        specifier: file:/Users/zcl/code/deepseek-harness/packages/core/tools
+        version: file:../deepseek-harness/packages/core/tools(@deepseek-ai/cordis@file:../deepseek-harness/vendor/cordis)
+      '@deepseek-ai/schemastery':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/schemastery
+        version: file:../deepseek-harness/vendor/schemastery
     devDependencies:
       tsdown:
         specifier: ^0.22.0

@@ -1,24 +1,24 @@
 /**
  * Crypto 工具箱插件（dsh-trading crypto 切片）。
  *
- * 三件事：
+ * 两件事：
  *   1. skill provider：crypto-risk-checklist 随包分发（S2 形态；rank 用
  *      BUNDLED_SKILL_RANK=600，用户目录 100-500 天然覆盖之；skill 名市场前缀命名空间）；
  *   2. crypto_funding_rate 工具：Binance USDT 永续公共资金费率（独立 fetch，不经
- *      connector 服务，保持两包解耦；公共接口无凭证）；
- *   3. crypto-trader preset 幂等自安装（S3 机制）：apply() 把 assets/preset/crypto-trader/
- *      写入市场自有 root（默认 ~/.dsh-trading-presets），插件卸载不删除。
+ *      connector 服务，保持两包解耦；公共接口无凭证）。
  *
- * 插件本体不再被 host 面挂载（架构修订）：两行在 preset 的 agent.cordis.yml 内，
- * preset 级会话隔离——tools/skills 注册表按 scope 分层，注册只对 crypto-trader 会话可见，
- * standard 会话看不到 crypto 工具。
+ * 插件本体不被 host 面挂载（架构修订）：两行在 crypto-trader preset 的
+ * agent.cordis.yml 内，preset 级会话隔离——tools/skills 注册表按 scope 分层，注册只对
+ * crypto-trader 会话可见，standard 会话看不到 crypto 工具。
+ *
+ * preset 自安装不在本插件（结构性修复 2026-08-29）：kit 行在 preset 平面，preset 不
+ * 存在时 apply() 永不运行；自安装职责迁到 @dsh-trading/crypto bundle 的常驻安装器行
+ * （dsh-trading-crypto-installer），preset 资产也随 bundle 分发。
  *
  * @module @dsh-trading/kit-crypto
  */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { basename, join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
@@ -74,14 +74,11 @@ export interface Config {
   dryRun: boolean
   /** 实盘总闸门：默认 false。本切片 kit 工具只读公共数据，闸门随 preset 行声明保持一致。 */
   liveTrading: boolean
-  /** preset 自安装 root 覆盖；默认 ~/.dsh-trading-presets（市场自有目录，不混入 ~/.dsh）。 */
-  presetRoot?: string
 }
 
 export const Config: Schema<Config> = Schema.object({
   dryRun: Schema.boolean().default(true),
   liveTrading: Schema.boolean().default(false),
-  presetRoot: Schema.string(),
 })
 
 /** 需要宿主提供的 Cordis 服务。 */
@@ -136,66 +133,9 @@ function renderFundingRates(symbol: string, records: FundingRateRecord[]): strin
   return [`crypto_funding_rate ${symbol} — last ${records.length} funding event(s):`, ...lines].join('\n')
 }
 
-// ── crypto-trader preset 幂等自安装（S3 机制） ─────────────────────────────────
-
-export const PRESET_ID = 'crypto-trader'
-
-/** 默认安装 root：市场自有目录（S3 建议——绝不写进 ~/.dsh/.agent-presets 用户创作区）。 */
-export const DEFAULT_PRESET_ROOT = join(homedir(), '.dsh-trading-presets')
-
-const PRESET_ASSET_DIR = fileURLToPath(new URL('../assets/preset/', import.meta.url))
-const PRESET_FILES = ['agent.cordis.yml', 'preset.yml'] as const
-
-export interface SelfInstallResult {
-  /** 安装目录（preset 目录名即 roster id）。 */
-  dir: string
-  /** 本次实际写入的文件名；空数组 = 目录已是最新的幂等运行。 */
-  wrote: string[]
-}
-
-/**
- * 幂等自安装 crypto-trader preset（S3 机制，参照 spikes/s3-preset/spike-preset-pkg 的
- * selfInstall）：mkdir -p + 逐文件内容 diff 后写，内容一致则零写入。
- *
- * 卸载本插件不删除已安装目录（有意为之）：升级/重装后再次 apply 即恢复一致；本包被移除后
- * preset 行不可解析只会得到带原因的 broken 行，无进程崩溃（S3 REPORT broken 语义）。
- * preset 引用的插件包必须进 @dsh-trading/crypto 的 dependencies（S3 坑 3），已由 bundle 保证。
- */
-export async function installPreset(options: { presetRoot?: string } = {}): Promise<SelfInstallResult> {
-  const dir = join(options.presetRoot ?? DEFAULT_PRESET_ROOT, PRESET_ID)
-  await mkdir(dir, { recursive: true })
-  const wrote: string[] = []
-  for (const file of PRESET_FILES) {
-    const content = await readFile(join(PRESET_ASSET_DIR, PRESET_ID, file), 'utf8')
-    const target = join(dir, file)
-    let current: string | null = null
-    try {
-      current = await readFile(target, 'utf8')
-    } catch {
-      // 不存在（首次安装）或不可读 → 视为需要写入。
-    }
-    if (current !== content) {
-      await writeFile(target, content)
-      wrote.push(file)
-    }
-  }
-  return { dir, wrote }
-}
-
 // ── 插件入口 ──────────────────────────────────────────────────────────────────
 
-/** 宿主 logger 的最小形状（ctx.logger(name) 不可用时回落 console，保证任何面可启动）。 */
-interface LogLike {
-  info: (...args: unknown[]) => void
-  warn: (...args: unknown[]) => void
-}
-
-function logger(ctx: Context): LogLike {
-  const service = (ctx as unknown as { logger?: (name: string) => LogLike }).logger
-  return typeof service === 'function' ? service(name) : console
-}
-
-export function apply(ctx: Context, config: Config): void {
+export function apply(ctx: Context, _config: Config): void {
   ctx.skills.registerProvider(() => provider)
   ctx.tools.register(
     defineTool({
@@ -231,16 +171,5 @@ export function apply(ctx: Context, config: Config): void {
         return renderFundingRates(symbol, records)
       },
     }),
-  )
-
-  // 自安装不阻塞插件启动、失败不炸 preset 挂载（fire-and-forget，日志留痕）。
-  void installPreset({ presetRoot: config.presetRoot }).then(
-    (result) => logger(ctx).info(
-      '[dsh-trading-crypto-kit] self-install %s preset at %s wrote=[%s]',
-      PRESET_ID,
-      result.dir,
-      result.wrote.join(',') || 'nothing — already current',
-    ),
-    (error: unknown) => logger(ctx).warn('[dsh-trading-crypto-kit] crypto-trader preset self-install failed: %s', error),
   )
 }
