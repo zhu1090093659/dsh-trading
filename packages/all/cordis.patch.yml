@@ -1,0 +1,14 @@
+# @dsh-trading/all —— 元 bundle 的 patch 层：**有意保持为空 `[]`**。
+#
+# 为什么不插任何行（README 设计铁律 #1，insert-only）：
+#   patch 语义是按行 id 整行替换（S1 REPORT:40，rows.set(row.id, row)，同 id 后层覆盖前层）。
+#   市场包的行（安装器/gate/agent-presets/preset 平面行）只由各拥有者 bundle 自己 insert
+#   ——base 拥有共享行，crypto/us/cn/hk 各自 insert 本市场命名空间行。all 若重复插同 id 行，
+#   层序在市场包之后（依赖序），会把市场包的行配置整行覆盖，多市场并存即互相踩踏；
+#   all 的组合职责完全由 dependencies 承载：`dsh plugin add @dsh-trading/all` 一条命令
+#   经依赖闭包装齐 base + 全部市场 bundle，行仍归各层插入。
+#
+# 机制注意（spike 实证）：patch 文件必须保持「顶层 YAML 数组」形状——loadProfile →
+# parsePatchList 对非数组直接抛错（见 packages/crypto/cordis.patch.yml 头注同款结论），
+# 所以空层必须写字面量 `[]`，不能只有注释。
+[]

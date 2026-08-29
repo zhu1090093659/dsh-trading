@@ -1,0 +1,36 @@
+{
+  "name": "@dsh-trading/all",
+  "description": "Meta bundle for dsh-trading: one-command install of every market bundle (composition via dependencies only — zero patch rows of its own, insert-only design rule #1). Currently: @dsh-trading/crypto; us/cn/hk join here as they land.",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown"
+  },
+  "dependencies": {
+    "@dsh-trading/base": "workspace:*",
+    "@dsh-trading/crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0"
+  }
+}

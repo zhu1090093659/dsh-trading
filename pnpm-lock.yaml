@@ -51,6 +51,19 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)
 
+  packages/all:
+    dependencies:
+      '@dsh-trading/base':
+        specifier: workspace:*
+        version: link:../base
+      '@dsh-trading/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(typescript@5.9.3)
+
   packages/api:
     devDependencies:
       '@deepseek-ai/cordis':
