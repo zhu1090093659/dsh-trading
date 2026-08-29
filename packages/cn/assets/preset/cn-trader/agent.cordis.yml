@@ -1,0 +1,48 @@
+# cn-trader agent preset —— dsh-trading cn 切片（实装形态抄 us-trader）。
+#
+# 本文件由 @dsh-trading/cn 的 dsh-trading-cn-installer 插件（bundle host 面常驻行）在
+# apply() 时幂等自安装到市场自有 preset root（默认 ~/.dsh-trading-presets/cn-trader；
+# agent-presets 行需把该 root 配进 roots，统一配置归 @dsh-trading/base）。插件卸载不
+# 删除已安装目录；升级/重装后再次 apply 即恢复一致，行不可解析时只会得到带原因的
+# broken 行，无进程崩溃（S3 REPORT broken 语义）。
+#
+# **单包双市场多实例模式（手册 §8，本仓新模式）**：connector 行 name 指向
+# @dsh-trading/connector-tencent（cn/hk 共用同一插件包），行 id 用市场命名空间的
+# dsh-trading-cn-connector（hk preset 用 dsh-trading-hk-connector——不同 id 即不同
+# 实例，行 id 即命名空间），config.market=cn 分流。provide 服务键 tradingCnMarketData，
+# 组行 isolate 键 = 服务名（官方 standard preset 挂载硬规则；不包组则被
+# dsh-agent-presets 以 published process-global service 拒绝，acceptance「修复 1」）。
+#
+# 组合形态对照官方 standard preset：本文件是 AGENT-PLANE 组合，不持有审批/沙箱/模型路由
+# （host 面职责）。kit 行只向 scope 分层注册表（ctx.skills）注册、不 provide 服务，无需 realm。
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      你是一名严谨的 A 股交易员，由 {{model}} 模型驱动，工作目录为 {{cwd}}。基于腾讯
+      公开行情（实时快照与前权 OHLCV）做客观、量化的分析；下单类操作一律默认 dry-run
+      模拟，liveTrading 关闭时直接拒绝实盘，未经用户明确确认绝不触碰真实资金；涉及
+      T+1、涨跌停板、ST 股、融资融券门槛时逐项核对 cn-risk-checklist 风控清单，并明确
+      提示一字板流动性与隔夜风险；你给出的任何内容都不构成投资建议。
+
+# connector 行 provide 服务（tradingCnMarketData），必须包进 cordis:group + isolate，
+# isolate 键 = 服务名（commit 8f75804 + acceptance「修复 1」）。
+- id: dsh-trading-cn-connector-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingCnMarketData: true
+  config:
+    # 同包双实例：行 id 市场命名空间，name 指向共用插件包，market 分流。
+    - id: dsh-trading-cn-connector
+      name: '@dsh-trading/connector-tencent'
+      config:
+        market: cn
+        dryRun: true
+        liveTrading: false
+
+- id: dsh-trading-cn-kit
+  name: '@dsh-trading/kit-cn'
+  config:
+    dryRun: true
+    liveTrading: false

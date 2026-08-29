@@ -99,3 +99,17 @@
 - **真实网络证据**（`spikes/impl-us-yahoo/`，2026-08-29T10:14Z 本出口，AAPL 3 次真实请求）：meta.regularMarketPrice=319.7（Fri 16:00:01 ET 收盘）；与同响应 60m 序列最后收盘 319.70001220703125 一致（float32 精度，相对差 ~1e-7）——**交叉一致性取「同一响应内」对照**；跨请求对照会出现 Yahoo 日线汇总滞后：最新已收盘交易日的日 K 延后补齐（周六早晨日线序列仍缺周五），故 getTicker 的价格/时间取 meta（权威实时面）、volume 取最新日 K 量并在工具描述明示滞后。
 - **合规（铁律 #5）**：Yahoo 非官方 API，个人使用属灰色但被普遍使用的边界，包 README 如实写明；无 key、本仓不缓存不再次分发。
 - **Stooq 退役口径**：connector-stooq 保留在仓（代码完整，其他出口可能可用），包 README 标注「本出口被反爬拒止，状态=未实证」。
+
+---
+
+## 8. cn+hk 复制实测修订（2026-08-31，腾讯单包双市场切片）
+
+数据源定案：**腾讯公共行情端点**（qt.gtimg.cn 报价 / web.ifzq.gtimg.cn K线）。落地 commit：feat(cn,hk)（connector-tencent + kit-cn + kit-hk + cn/hk bundle + all + api 增强）。§1-§4 逐项照抄成立，以下是本切片的**新模式与新坑**（§1-§7 均未覆盖）：
+
+1. **单包双市场多实例模式（本手册最重要的新增模式）**：cn/hk 未按「一市场一连接器包」复制，而是共用一个 `@dsh-trading/connector-tencent`（插件名 `export const name = 'dsh-trading-tencent'`），Config 增加 `market: 'cn' | 'hk'`。两个 preset（cn-trader/hk-trader）各挂一个实例：connector 行 **name 都指向同一 bare 包名**，**行 id 不同**（`dsh-trading-cn-connector` / `dsh-trading-hk-connector`——行 id 即命名空间，同 id 才会整行替换，不同 id 天然多实例）；`config.market` 分流后按市场注册 `cn_*` / `hk_*` 工具、provide 对应服务键。**服务键与 isolate 组键也按实例分流**（cn → `tradingCnMarketData`，hk → `tradingHkMarketData`，isolate 键 = 对应服务名，规则同 §4）。api 包 Context 模块增强一次声明两个键。何时用此模式：两个市场数据源/端点族高度同构；布局差异全部收敛在客户端解析层（parseCnTicker/parseHkTicker）。
+2. **GBK 编码坑**：qt.gtimg.cn 响应 `content-type: text/html; charset=GBK`，UTF-8 直接解码中文即乱码——必须 `new TextDecoder('gbk').decode(new Uint8Array(await res.arrayBuffer()))`（Node 22+/24 全 ICU 内置支持）。测试夹具内嵌 GBK 字节（如「贵州茅台」= `b9f3d6ddc3a9cca8`）直证解码路径；单测对名称字段断言原文即可捕捉回归。
+3. **报价字段布局两市场不同**（实测 2026-08-31，证据 `spikes/impl-cn-hk/REPORT.md`）：cn（88 字段）1=名称 2=代码 3=现价 4=昨收 5=今开 6=成交量（**手**）30=时间 `YYYYMMDDHHMMSS` 31/32=涨跌/涨跌% 33/34=高/低 47/48=涨停/跌停；hk（78 字段）同位但 6=成交量（**股**）、30=时间 `YYYY/MM/DD HH:MM:SS`、37=成交额、46=英文名、48/49=52 周高/低、买卖档位全 0（bid/ask 缺省）。**cn 量是手、hk 量是股**——Ticker.volume 统一归一到股（cn ×100）。hk 报价 wire 前缀 `r_hk`（r_hk00700），cn 无前缀（sh600519/sz000001）。
+4. **K 线字段序坑**：`fqkline/get` 返回行是 `[date, open, close, high, low, volume]`——**开收高低量**，不是 OHLC 直觉序；解析错序整树 OHLC 自洽断言会炸（单测以真实行直证）。hk 行第 7 元素起是分红/回购附加对象与字符串，必须丢弃。**hk K 线 wire 前缀与报价不同**：报价 `r_hk00700` 打 K 线端点返回 `{"code":0,"msg":"param error"}`，K 线要用 `hk00700` 且走 `hkfqkline/get`（cn 走 `fqkline/get`，响应键 qfqday/qfqweek/qfqmonth）。分钟线端点（kline/mkline）本出口不可达——未实现，标「待验证」。
+5. **符号规范化双市场收敛**：cn 接受 `600519/SH600519/sh600519`（6/9 开头→sh，0/3 开头→sz；北交所 4/8 不支持）；hk 接受 `00700/700`（1-5 位数字左补零 5 位）。规范化在客户端层完成，place_order 参数校验只做宽松检查（§3 与 §7-5 的分层结论照旧）。
+6. **ToS 口径**：腾讯公共行情端点无 key、**无官方授权**——包 README 与工具 description 均写明「公开端点、无官方授权、个人使用边界自负」，不缓存不再分发（铁律 #5）。真实网络验证：`node spikes/impl-cn-hk/r3-real-network-verify.mjs`，cn 茅台 + hk 腾讯各 1 次，PASS 2/2（`r3-verify-*.json`）。
+7. 基线：9 包/49 用例（§7 末）→ 本切片 +5 包（connector-tencent/kit-cn/kit-hk/cn/hk）+24 用例；`pnpm -r build`/`pnpm -r test` 全绿。§5 六项验收按任务分工留主 agent。

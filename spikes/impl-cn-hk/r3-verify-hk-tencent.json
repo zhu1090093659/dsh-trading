@@ -1,0 +1,36 @@
+{
+  "case": {
+    "label": "hk-tencent",
+    "market": "hk",
+    "symbol": "700",
+    "klinesLimit": 5
+  },
+  "ticker": {
+    "market": "hk",
+    "currency": "HKD",
+    "name": "腾讯控股",
+    "symbol": "00700",
+    "price": 455.2,
+    "volume": 27742475,
+    "timestamp": 1787904517000,
+    "prevClose": 447.8,
+    "open": 444,
+    "high": 462.2,
+    "low": 443.4,
+    "change": 7.4,
+    "changePercent": 1.65,
+    "week52High": 677.7,
+    "week52Low": 411
+  },
+  "klineCount": 5,
+  "lastKline": {
+    "openTime": 1787875200000,
+    "open": 444,
+    "high": 462.2,
+    "low": 443.4,
+    "close": 455.2,
+    "volume": 27742475,
+    "closeTime": 1787961599999
+  },
+  "verifiedAt": "2026-08-29T10:23:34.706Z"
+}

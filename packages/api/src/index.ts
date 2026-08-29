@@ -178,5 +178,9 @@ declare module '@deepseek-ai/cordis' {
     tradingCryptoMarketData: MarketDataService
     /** us 市场行情服务（由 Stooq 连接器以公共 CSV 端点提供，无需凭证；us 复制 2026-08-31 补齐）。 */
     tradingUsMarketData: MarketDataService
+    /** cn 市场行情服务（由腾讯连接器以公共端点提供，无需凭证；cn+hk 切片 2026-08-31 补齐）。 */
+    tradingCnMarketData: MarketDataService
+    /** hk 市场行情服务（由腾讯连接器同包双实例提供，config.market 分流；cn+hk 切片 2026-08-31 补齐）。 */
+    tradingHkMarketData: MarketDataService
   }
 }

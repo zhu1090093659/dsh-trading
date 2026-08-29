@@ -1,0 +1,38 @@
+{
+  "case": {
+    "label": "cn-moutai",
+    "market": "cn",
+    "symbol": "600519",
+    "klinesLimit": 5
+  },
+  "ticker": {
+    "market": "cn",
+    "currency": "CNY",
+    "name": "贵州茅台",
+    "symbol": "600519",
+    "price": 1297.4,
+    "bid": 1297.35,
+    "ask": 1297.4,
+    "volume": 1612600,
+    "timestamp": 1787904900000,
+    "prevClose": 1292.3,
+    "open": 1289,
+    "high": 1297.89,
+    "low": 1288,
+    "limitUp": 1421.53,
+    "limitDown": 1163.07,
+    "change": 5.1,
+    "changePercent": 0.39
+  },
+  "klineCount": 5,
+  "lastKline": {
+    "openTime": 1787875200000,
+    "open": 1289,
+    "high": 1297.89,
+    "low": 1288,
+    "close": 1297.4,
+    "volume": 16126,
+    "closeTime": 1787961599999
+  },
+  "verifiedAt": "2026-08-29T10:23:34.646Z"
+}

@@ -56,9 +56,15 @@ importers:
       '@dsh-trading/base':
         specifier: workspace:*
         version: link:../base
+      '@dsh-trading/cn':
+        specifier: workspace:*
+        version: link:../cn
       '@dsh-trading/crypto':
         specifier: workspace:*
         version: link:../crypto
+      '@dsh-trading/hk':
+        specifier: workspace:*
+        version: link:../hk
       '@dsh-trading/us':
         specifier: workspace:*
         version: link:../us
@@ -100,6 +106,25 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)
+
+  packages/cn:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/cordis
+        version: file:../deepseek-harness/vendor/cordis
+      '@deepseek-ai/schemastery':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/schemastery
+        version: file:../deepseek-harness/vendor/schemastery
+      '@dsh-trading/connector-tencent':
+        specifier: workspace:*
+        version: link:../connector-tencent
+      '@dsh-trading/kit-cn':
+        specifier: workspace:*
+        version: link:../kit-cn
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(typescript@5.9.3)
 
   packages/connector-binance:
     dependencies:
@@ -208,6 +233,25 @@ importers:
         specifier: ^0.22.0
         version: 0.22.14(typescript@5.9.3)
 
+  packages/hk:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/cordis
+        version: file:../deepseek-harness/vendor/cordis
+      '@deepseek-ai/schemastery':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/schemastery
+        version: file:../deepseek-harness/vendor/schemastery
+      '@dsh-trading/connector-tencent':
+        specifier: workspace:*
+        version: link:../connector-tencent
+      '@dsh-trading/kit-hk':
+        specifier: workspace:*
+        version: link:../kit-hk
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(typescript@5.9.3)
+
   packages/kit-cn:
     dependencies:
       '@deepseek-ai/cordis':
@@ -235,6 +279,22 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: file:/Users/zcl/code/deepseek-harness/packages/core/tools
         version: file:../deepseek-harness/packages/core/tools(@deepseek-ai/cordis@file:../deepseek-harness/vendor/cordis)
+      '@deepseek-ai/schemastery':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/schemastery
+        version: file:../deepseek-harness/vendor/schemastery
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(typescript@5.9.3)
+
+  packages/kit-hk:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/cordis
+        version: file:../deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-skill':
+        specifier: file:/Users/zcl/code/deepseek-harness/packages/skill/skill
+        version: file:../deepseek-harness/packages/skill/skill(@deepseek-ai/cordis@file:../deepseek-harness/vendor/cordis)
       '@deepseek-ai/schemastery':
         specifier: file:/Users/zcl/code/deepseek-harness/vendor/schemastery
         version: file:../deepseek-harness/vendor/schemastery

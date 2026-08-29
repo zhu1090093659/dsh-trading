@@ -1,0 +1,19 @@
+# @dsh-trading/hk —— hk 市场 bundle 的 patch 层（insert-only，README 设计铁律 #1）。
+#
+# 实装形态抄 @dsh-trading/us（架构修订 2026-08-29 主 agent 决策）：connector/kit 的
+# 插件行在 preset 的 agent.cordis.yml（preset 级会话隔离）。本 bundle 的职责：
+#   1. dsh-trading-hk-installer —— host 面常驻安装器插件（src/index.ts）：boot 时幂等
+#      自安装 hk-trader preset 到 ~/.dsh-trading-presets。自安装必须在 bundle 层而非
+#      kit 插件（kit 行在 preset 平面，preset 不存在则 kit.apply() 永不运行）；
+#   2. 依赖安装载体：preset 行按 bare 包名从 profile node_modules 解析（S3 坑 3），本包
+#      dependencies 实装 @dsh-trading/connector-tencent 与 @dsh-trading/kit-hk，保证
+#      preset 行可解析、不 broken。**connector-tencent 是 cn/hk 共用的单包双市场插件**：
+#      本包与 @dsh-trading/cn 依赖同一个包，preset 行以 config.market 分流（新模式，
+#      手册 §8）；
+#   3. agent-presets root 行归 base 层所有（~/.dsh-trading-presets），本层不得重复配置。
+#
+# 注意：patch 文件必须保持「顶层 YAML 数组」形状（loadProfile → parsePatchList 对非数组
+# 直接抛错）；只允许 insert（按 id 打已存在行 = 整行替换，多市场并存会互相覆盖）。
+- insert:
+    - id: dsh-trading-hk-installer
+      name: '@dsh-trading/hk'
