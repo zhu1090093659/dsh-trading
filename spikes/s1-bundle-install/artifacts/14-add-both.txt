@@ -1,0 +1,8 @@
+✓ Lockfile passes supply-chain policies (verified 14s ago)
+
+dependencies:
++ @spike-s1/hello-bundle link:/Users/zcl/code/dsh-trading/spikes/s1-bundle-install/packages/hello-bundle
++ @spike-s1/hello-bundle-2 link:/Users/zcl/code/dsh-trading/spikes/s1-bundle-install/packages/hello-bundle-2
+
+Already up to date
+Done in 222ms using pnpm v11.9.0

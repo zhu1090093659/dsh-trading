@@ -1,0 +1,10 @@
+✓ Lockfile passes supply-chain policies (verified 41m ago)
+Progress: resolved 0, reused 1, downloaded 0, added 0
+
+dependencies:
++ @deepseek-ai/dsh-web-search-exa link:/Users/zcl/code/deepseek-harness/packages/web/web-search-exa
+
+Already up to date
+Progress: resolved 2, reused 2, downloaded 0, added 0, done
+Done in 225ms using pnpm v11.9.0
+dsh: warning: @deepseek-ai/dsh-web-search-exa declares no dsh.bundle — installed as a plain dependency, not a profile layer (a later update that gains one activates it automatically)

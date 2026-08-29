@@ -1,0 +1,20 @@
+{
+  "name": "@spike-s3/preset-pkg",
+  "version": "0.1.0",
+  "description": "S3 spike: out-of-tree bundle that patches @deepseek-ai/dsh-agent-presets with an extra roots entry and self-installs a preset into that root",
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-agent-presets": "link:/Users/zcl/code/deepseek-harness/packages/preset/agent-presets"
+  },
+  "license": "MIT"
+}

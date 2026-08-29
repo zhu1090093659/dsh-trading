@@ -1,0 +1,6 @@
+Progress: resolved 1, reused 0, downloaded 0, added 0
+
+Packages: +3
++++
+Progress: resolved 3, reused 3, downloaded 0, added 3, done
+Done in 261ms using pnpm v11.9.0

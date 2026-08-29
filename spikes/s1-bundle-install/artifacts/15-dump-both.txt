@@ -339,6 +339,9 @@
 # == @spike-s1/hello-bundle
 - id: spike-s1-hello
   name: '@spike-s1/hello-plugin'
+# == @spike-s1/hello-bundle-2
+- id: spike-s1-hello-2
+  name: '@spike-s1/hello-plugin'
 # == /Users/zcl/.dsh/cordis.patch.yml
 - id: ui-subagent-tree
   name: '@deepseek-ai/dsh-client-ui-subagent'

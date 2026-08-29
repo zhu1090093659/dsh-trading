@@ -1,0 +1,32 @@
+# S3 spike bundle layer.
+#
+# Part 1 (insert): the profile composition (dsh-base only) ships NO agent-presets
+# row (it lives in the web-app bundle patch), so this bundle inserts one — the way
+# packages/bundle/web-app/cordis.patch.yml does — plus this bundle's own observer
+# plugin row. The inserted agent-presets config carries a *vendor* root that must
+# DISAPPEAR from the final row if patch semantics really are whole-config
+# replacement.
+#
+# Part 2 (id-targeted override): re-patch the agent-presets row by id with the
+# spike roots. Per vendor/include applyPatches + base-bundle patch docs, an
+# id-targeted config REPLACES the row's whole `config` (no merge), so `default`
+# (required key) MUST be restated here; `includeShippedRoot`/`includeUserRoot`
+# are omitted on purpose and fall back to the plugin schema defaults (both true).
+- insert:
+    - id: spike-s3-observer
+      name: '@spike-s3/preset-pkg'
+
+    - id: agent-presets
+      name: '@deepseek-ai/dsh-agent-presets'
+      config:
+        default: standard
+        roots:
+          - path: /tmp/nonexistent-vendor-root-s3
+            trust: user
+
+- id: agent-presets
+  config:
+    default: spike-s3-preset
+    roots:
+      - path: /Users/zcl/code/dsh-trading/spikes/s3-preset/spike-presets
+        trust: user
