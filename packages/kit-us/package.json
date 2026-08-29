@@ -1,0 +1,31 @@
+{
+  "name": "@dsh-trading/kit-us",
+  "description": "US toolkit plugin for dsh-trading: market-specific trading knowledge as a bundled skill provider (us-risk-checklist); runs as a us-trader preset row (session-scoped)",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "assets"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsdown"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-skill": ">=0.1.2-alpha.1",
+    "@deepseek-ai/schemastery": ">=3.18.0"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0"
+  }
+}

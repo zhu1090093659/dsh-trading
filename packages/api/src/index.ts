@@ -176,5 +176,7 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     /** crypto 市场行情服务（由 Binance 连接器以公共 REST 提供，无需凭证）。 */
     tradingCryptoMarketData: MarketDataService
+    /** us 市场行情服务（由 Stooq 连接器以公共 CSV 端点提供，无需凭证；us 复制 2026-08-31 补齐）。 */
+    tradingUsMarketData: MarketDataService
   }
 }

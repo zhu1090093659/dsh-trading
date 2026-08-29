@@ -1,6 +1,6 @@
 {
-  "name": "@dsh-trading/all",
-  "description": "Meta bundle for dsh-trading: one-command install of every market bundle (composition via dependencies only — zero patch rows of its own, insert-only design rule #1). Currently: @dsh-trading/crypto, @dsh-trading/us; cn/hk join here as they land.",
+  "name": "@dsh-trading/us",
+  "description": "US market bundle for dsh-trading: host-plane us-trader preset installer + insert-only aggregation of the stooq connector and us kit rows (design rule #1)",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -15,6 +15,7 @@
   },
   "files": [
     "lib",
+    "assets",
     "cordis.patch.yml"
   ],
   "license": "MIT",
@@ -27,9 +28,12 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "@dsh-trading/base": "workspace:*",
-    "@dsh-trading/crypto": "workspace:*",
-    "@dsh-trading/us": "workspace:*"
+    "@dsh-trading/connector-stooq": "workspace:*",
+    "@dsh-trading/kit-us": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/schemastery": ">=4.0.0"
   },
   "devDependencies": {
     "tsdown": "^0.22.0"

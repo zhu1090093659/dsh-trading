@@ -76,3 +76,16 @@
 | 自安装位置 | preset 自安装必须在 bundle（host 面常驻）而非 kit 插件（preset 平面鸡生蛋不可达） | commit 9c54ed5；acceptance REPORT 头部 |
 
 **待验证**（本手册不断言，复制 us 时专项核实）：us 市场数据源（Polygon/Alpaca 等）的 ToS 与凭据形态（README 铁律 5 要求逐源写明）；`dsh plugin add @dsh-trading/all` 单命令装齐的端到端行为（依赖序层栈出自 S1 对账机制，但 all 元 bundle 本身未跑过 acceptance 式验收——交付 all 时按 §5 走一遍）。
+
+---
+
+## 7. us 复制实测修订（2026-08-31，执行子 agent 按 §1–§4 落地后的手册修订）
+
+数据源定案：**Stooq**（主 agent 决策）。落地 commit：feat(us)（connector-stooq + kit-us + us bundle + api 增强），基线 6 包/28 用例 → **9 包/49 用例全绿**（`pnpm -r build` / `pnpm -r test`）。§1 建包清单、§2 命名对表、§3 闸门接线、§4 preset 资产四节逐项照抄并全部成立，以下为实测发现的**手册错误/缺口**修订：
+
+1. **手册引用的 Stooq 报价端点已死（§「数据源决策」外部事实错误）**：`https://stooq.com/q/l/?s=aapl.us&f=sd2t2ohlcv&h&e=csv` 在 stooq.com 与 stooq.pl 均返回 404「The page you requested does not exist」，去 `h`、裸 symbol 变体同样 404（证据 `spikes/impl-us/r3-aapl-ticker-*.csv`、`pl-ticker-aapl.csv`）。修订：ticker 语义降级为「最新日 K 收盘价快照」，工具描述必须向模型明示不反映盘前盘后（connector-stooq `src/rest.ts` getTicker + `us_get_ticker` description）。
+2. **「免费公开」有出口/账户策略前提（新坑，入 §6 坑清单口径）**：`/q/d/l/` CSV 下载在清完 stooq 官方 JS proof-of-work 挑战（GET 挑战页 → SHA-256 前缀零 → POST `/__verify` → clearance cookie，等价浏览器行为）后仍返回 `Access denied`（stooq.pl：`Odmowa dostępu`）——疑似按出口 IP/账户策略拒绝匿名下载（证据 `spikes/impl-us/REPORT.md`、`pl-klines-aapl-daily.csv`）。处理：连接器不做挑战求解/伪装（敌意自动化边界），挑战页→`TRADING_RATE_LIMITED`、Access denied→`TRADING_AUTH_FAILED`（文案指明 stooq.com 条款边界）；真实行情可用性须在允许出口复测后方可跑 §5 验收项 3/4 的真数据路径。
+3. **日内分钟级未验证**：i=60/5 等在本出口同样被拒，按「待验证」口径标注；连接器已实现 i=1/5/15/30/60 映射与美东墙钟（含夏令时）时间戳解析，单测夹具覆盖，待出口可用后实测。
+4. **「复用 @dsh-trading/api（不改）」按其自身机制落地时需触碰 api**：市场专属 ctx 键走模块增强声明（本手册 §1 第 1 条机制），us 据此在 api 包 Context 接口补了 `tradingUsMarketData: MarketDataService`（类型层、零运行时）。后续市场复制直接沿用：api 包的增强块是唯一允许的 api 包改动面。
+5. **dsh-tools schema 先于工具 execute 校验枚举**：place_order 工具的 side/type 非法值在 schema 层即抛 `invalid arguments: …`，到不了工具内校验——单测断言按层归位（connector-stooq test/place-order.test.ts），crypto 先例未记录此分层，复制时勿把两类错误混为一谈。
+6. **§5 验收未执行（按任务分工留主 agent）**：装与启动/preset 入 roster/会话隔离/闸门三路径（进程内直测已覆盖）/skill 在目录/卸载重装的多市场联合验收另行安排；本切片交付含单测级三路径直证（21 用例）。
