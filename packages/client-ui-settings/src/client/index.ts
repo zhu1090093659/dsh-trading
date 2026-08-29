@@ -59,16 +59,28 @@ export function apply(ctx: ClientContext): void {
   })
 }
 
-/** 文案字典（zh/en；locale 层按当前会话 locale 取用）。 */
+/** 文案字典：locale.register 契约 = { zh: Record<Key, string>, en: Record<Key, string> }。 */
 function dictionaries() {
   return {
-    'nav': { zh: '交易', en: 'Trading' },
-    'lead': { zh: '选择每个市场使用的数据/交易所提供方。保存后新建会话生效（切换不中断当前会话）。', en: 'Choose the data/exchange provider for each market. Takes effect in new sessions.' },
-    'save': { zh: '保存', en: 'Save' },
-    'discard': { zh: '放弃', en: 'Discard' },
-    'saved': { zh: '已保存', en: 'Saved' },
-    'saveFailed': { zh: '保存失败', en: 'Save failed' },
-    'current': { zh: '当前：{{provider}}', en: 'Current: {{provider}}' },
-    'default': { zh: '默认', en: 'default' },
+    zh: {
+      'nav': '交易',
+      'lead': '选择每个市场使用的数据/交易所提供方。保存后新建会话生效（切换不中断当前会话）。',
+      'save': '保存',
+      'discard': '放弃',
+      'saved': '已保存',
+      'saveFailed': '保存失败',
+      'current': '当前：{{provider}}',
+      'default': '默认',
+    },
+    en: {
+      'nav': 'Trading',
+      'lead': 'Choose the data/exchange provider for each market. Takes effect in new sessions.',
+      'save': 'Save',
+      'discard': 'Discard',
+      'saved': 'Saved',
+      'saveFailed': 'Save failed',
+      'current': 'Current: {{provider}}',
+      'default': 'default',
+    },
   }
 }
