@@ -12,10 +12,10 @@ const TICKER: Ticker = {
   timestamp: 1735689600000,
 }
 
-type GateConfig = { dryRun: boolean; liveTrading: boolean }
+type GateConfig = { enabled: boolean; dryRun: boolean; liveTrading: boolean }
 
 function makeTool(configOverrides: Partial<GateConfig> = {}) {
-  const config: GateConfig = { dryRun: true, liveTrading: false, ...configOverrides }
+  const config: GateConfig = { enabled: true, dryRun: true, liveTrading: false, ...configOverrides }
   const getTicker = vi.fn(async () => TICKER)
   const tool = createPlaceOrderTool({ marketData: { getTicker }, config })
   return { tool, getTicker, config }
@@ -25,7 +25,7 @@ const MARKET_ARGS = { symbol: 'btcusdt', side: 'BUY', type: 'MARKET', quantity: 
 
 describe('evaluateOrderGate（三条闸门路径，铁律 #3 修订版 [S4]）', () => {
   it('① dryRun=false + liveTrading=false → 结构化拒绝', () => {
-    const verdict = evaluateOrderGate({ dryRun: true, liveTrading: false }, { ...MARKET_ARGS, dryRun: false })
+    const verdict = evaluateOrderGate({ enabled: true, dryRun: true, liveTrading: false }, { ...MARKET_ARGS, dryRun: false })
     expect(verdict).toMatchObject({
       action: 'reject',
       code: 'TRADING_LIVE_TRADING_DISABLED',
@@ -36,18 +36,18 @@ describe('evaluateOrderGate（三条闸门路径，铁律 #3 修订版 [S4]）',
   })
 
   it('② dryRun=true（显式或缺省）→ simulate；config.dryRun 强制亦然', () => {
-    expect(evaluateOrderGate({ dryRun: true, liveTrading: false }, MARKET_ARGS)).toEqual({ action: 'simulate' })
-    expect(evaluateOrderGate({ dryRun: true, liveTrading: false }, { ...MARKET_ARGS, dryRun: true })).toEqual({
+    expect(evaluateOrderGate({ enabled: true, dryRun: true, liveTrading: false }, MARKET_ARGS)).toEqual({ action: 'simulate' })
+    expect(evaluateOrderGate({ enabled: true, dryRun: true, liveTrading: false }, { ...MARKET_ARGS, dryRun: true })).toEqual({
       action: 'simulate',
     })
     // liveTrading=true 但 config.dryRun=true：仍强制模拟（不进 ③）。
-    expect(evaluateOrderGate({ dryRun: true, liveTrading: true }, { ...MARKET_ARGS, dryRun: false })).toEqual({
+    expect(evaluateOrderGate({ enabled: true, dryRun: true, liveTrading: true }, { ...MARKET_ARGS, dryRun: false })).toEqual({
       action: 'simulate',
     })
   })
 
   it('③ dryRun=false + liveTrading=true → live（未实现错误路径）', () => {
-    expect(evaluateOrderGate({ dryRun: false, liveTrading: true }, { ...MARKET_ARGS, dryRun: false })).toEqual({
+    expect(evaluateOrderGate({ enabled: true, dryRun: false, liveTrading: true }, { ...MARKET_ARGS, dryRun: false })).toEqual({
       action: 'live',
     })
   })

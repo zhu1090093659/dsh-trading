@@ -1,0 +1,38 @@
+{
+  "at": "2026-08-29T13:03:16.840Z",
+  "out": {
+    "binance-default": {
+      "presetId": "crypto-trader",
+      "visible": {
+        "crypto_get_ticker": true,
+        "crypto_get_klines": true,
+        "crypto_funding_rate": true,
+        "crypto_place_order": true,
+        "crypto_cancel_order": false,
+        "crypto_get_order": false,
+        "crypto_get_balance": false,
+        "crypto_get_positions": false
+      },
+      "skillCount": 34,
+      "hasChecklist": true
+    },
+    "okx-switch": {
+      "presetId": "crypto-trader-okx",
+      "visible": {
+        "crypto_get_ticker": true,
+        "crypto_get_klines": true,
+        "crypto_funding_rate": true,
+        "crypto_place_order": true,
+        "crypto_cancel_order": true,
+        "crypto_get_order": true,
+        "crypto_get_balance": true,
+        "crypto_get_positions": true
+      },
+      "skillCount": 34,
+      "hasChecklist": true
+    },
+    "gate": {
+      "toolMissing": true
+    }
+  }
+}

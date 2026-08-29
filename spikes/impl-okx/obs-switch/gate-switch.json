@@ -1,0 +1,8 @@
+{
+  "at": "2026-08-29T13:04:03.805Z",
+  "out": {
+    "found": true,
+    "dryRun": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to OKX. The reference price is market data only, not a fill price.\",\"id\":\"dry-1788008643805-c4t4ay\",\"instId\":\"BTC-USDT\",\"side\":\"buy\",\"type\":\"limit\",\"quantity\":0.0001,\"quantityUnit\":\"base-asset coins (SWAP orders would be converted to contracts by ctVal)\",\"price\":100,\"reference\":{\"source\":\"okx-public-ticker\",\"price\":77604.9,\"bid\":77604.9,\"ask\":77605,\"timestamp\":1788008641770},\"timestamp\":1788008643805}",
+    "liveReject": "{\"status\":\"rejected\",\"code\":\"TRADING_LIVE_TRADING_DISABLED\",\"message\":\"crypto_place_order rejected: the call requests real execution (dryRun=false) but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly after confirmation, or keep dryRun=true for a simulated fill.\"}"
+  }
+}

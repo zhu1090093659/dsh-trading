@@ -35,9 +35,12 @@ export const Config: Schema<Config> = Schema.object({
   presetRoot: Schema.string(),
 })
 
-// ── crypto-trader preset 幂等自安装（S3 机制） ─────────────────────────────────
+// ── crypto 市场 preset 幂等自安装（S3 机制） ────────────────────────────────
 
-export const PRESET_ID = 'crypto-trader'
+/** 本 bundle 自安装的全部 preset（目录名即 roster id）。 */
+export const PRESET_IDS = ['crypto-trader', 'crypto-trader-okx'] as const
+/** 默认主 preset（默认 Bar 激活 binance 数据面；okx preset 为 OKX 切换会话，见其资产头注）。 */
+export const PRESET_ID = PRESET_IDS[0]
 
 /** 默认安装 root：市场自有目录（S3 建议——绝不写进 ~/.dsh/.agent-presets 用户创作区）。 */
 export const DEFAULT_PRESET_ROOT = join(homedir(), '.dsh-trading-presets')
@@ -92,13 +95,14 @@ export interface SelfInstallResult {
  * 被移除后 preset 行不可解析只会得到带原因的 broken 行，无进程崩溃（S3 REPORT broken 语义）。
  * preset 引用的插件包必须进本 bundle 的 dependencies（S3 坑 3），见 package.json。
  */
-export async function installPreset(options: { presetRoot?: string } = {}): Promise<SelfInstallResult> {
-  const dir = join(options.presetRoot ?? DEFAULT_PRESET_ROOT, PRESET_ID)
+/** 安装单个 preset 目录（resolved 为目录名）。 */
+async function installOne(assetDir: string, presetRoot: string, presetId: string): Promise<SelfInstallResult> {
+  const dir = join(presetRoot, presetId)
   await mkdir(dir, { recursive: true })
   const wrote: string[] = []
   const skipped: string[] = []
   for (const file of PRESET_FILES) {
-    const content = await readFile(join(PRESET_ASSET_DIR, PRESET_ID, file), 'utf8')
+    const content = await readFile(join(assetDir, presetId, file), 'utf8')
     const stamped = `${MANAGED_STAMP_PREFIX}${contentSha8(content)}\n${content}`
     const target = join(dir, file)
     let current: string | null = null
@@ -124,6 +128,20 @@ export async function installPreset(options: { presetRoot?: string } = {}): Prom
   return { dir, wrote, skipped }
 }
 
+/**
+ * 幂等自安装全部 preset（S3 机制 + 2026-08-29 代际管理戳升级）：对每个 preset
+ * 目录 mkdir -p + 逐文件按管理戳三代裁决（见 installOne 注释）。
+ *
+ * 迁移注意：代际升级前由旧安装器写入的已装文件没有管理戳，按「无戳跳过 + log 提示」
+ * 处理——宁可不更新，绝不覆盖用户改动。
+ *
+ * 卸载本 bundle 不删除已安装目录（有意为之）：升级/重装后再次 apply 即恢复一致。
+ */
+export async function installPreset(options: { presetRoot?: string } = {}): Promise<SelfInstallResult[]> {
+  const presetRoot = options.presetRoot ?? DEFAULT_PRESET_ROOT
+  return Promise.all(PRESET_IDS.map((presetId) => installOne(PRESET_ASSET_DIR, presetRoot, presetId)))
+}
+
 // ── 插件入口 ──────────────────────────────────────────────────────────────────
 
 /** 宿主 logger 的最小形状（ctx.logger(name) 不可用时回落 console，保证任何面可启动）。 */
@@ -140,13 +158,17 @@ function logger(ctx: Context): LogLike {
 export function apply(ctx: Context, config: Config): void {
   // 自安装不阻塞插件启动、失败不炸 profile boot（fire-and-forget，日志留痕）。
   void installPreset({ presetRoot: config?.presetRoot }).then(
-    (result) => logger(ctx).info(
-      '[dsh-trading-crypto-installer] self-install %s preset at %s wrote=[%s] skipped=[%s]',
-      PRESET_ID,
-      result.dir,
-      result.wrote.join(',') || 'nothing — already current',
-      result.skipped.join('; ') || 'none',
-    ),
-    (error: unknown) => logger(ctx).warn('[dsh-trading-crypto-installer] crypto-trader preset self-install failed: %s', error),
+    (results) => {
+      for (const result of results) {
+        logger(ctx).info(
+          '[dsh-trading-crypto-installer] self-install %s preset at %s wrote=[%s] skipped=[%s]',
+          result.dir.split('/').pop() ?? result.dir,
+          result.dir,
+          result.wrote.join(',') || 'nothing — already current',
+          result.skipped.join('; ') || 'none',
+        )
+      }
+    },
+    (error: unknown) => logger(ctx).warn('[dsh-trading-crypto-installer] crypto preset self-install failed: %s', error),
   )
 }

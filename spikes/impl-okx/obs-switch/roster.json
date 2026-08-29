@@ -1,0 +1,55 @@
+{
+  "at": "2026-08-29T13:03:13.168Z",
+  "roster": [
+    {
+      "id": "standard",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "ptc",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "minimal",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "cordis",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "crypto-trader",
+      "trust": "user",
+      "broken": null
+    },
+    {
+      "id": "crypto-trader-okx",
+      "trust": "user",
+      "broken": null
+    },
+    {
+      "id": "us-trader",
+      "trust": "user",
+      "broken": "2 rows name plugins that cannot be resolved:\n- row \"dsh-trading-us-connector-yahoo\": @dsh-trading/connector-yahoo\n- row \"dsh-trading-us-kit\": @dsh-trading/kit-us"
+    },
+    {
+      "id": "cn-trader",
+      "trust": "user",
+      "broken": "2 rows name plugins that cannot be resolved:\n- row \"dsh-trading-cn-connector\": @dsh-trading/connector-tencent\n- row \"dsh-trading-cn-kit\": @dsh-trading/kit-cn"
+    },
+    {
+      "id": "hk-trader",
+      "trust": "user",
+      "broken": "2 rows name plugins that cannot be resolved:\n- row \"dsh-trading-hk-connector\": @dsh-trading/connector-tencent\n- row \"dsh-trading-hk-kit\": @dsh-trading/kit-hk"
+    },
+    {
+      "id": "liangshen",
+      "trust": "user",
+      "broken": null
+    }
+  ]
+}

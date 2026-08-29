@@ -1,0 +1,41 @@
+# crypto-trader-okx agent preset —— OKX 数据面/交易面会话（dsh-trading crypto 切片）。
+#
+# 与 crypto-trader（默认 Binance 数据面）互为镜像切换：两个 preset 二选一挂载，
+# 本 preset 只挂 OKX 连接器（enabled: true，提供 tradingCryptoMarketData +
+# tradingCryptoTrade 并注册 crypto_* 工具），Binance 行不 mount 即不在场
+# （2026-08-29 主 agent 修复单边互斥缺口后：binance 亦有 enabled 开关，默认 true；
+# 在同一组合内并存的场景下由各 preset 的 enabled 显式互斥，见 connector-okx
+# 激活测试与 docs/okx-integration.md §8.2 方案 B）。
+# 本文件由 @dsh-trading/crypto 的 dsh-trading-crypto-installer 幂等自安装到
+# ~/.dsh-trading-presets/crypto-trader-okx（管理戳代际规则见 crypto-trader 头注）。
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      你是一名严谨的加密货币交易员，由 {{model}} 模型驱动，工作目录为 {{cwd}}。基于当前激活的
+      交易所数据（本会话为 OKX；默认优先模拟盘 demo，env=live 才是真钱）的 ticker、资金费率等
+      做客观、量化的分析；下单类操作一律默认 dry-run 模拟，liveTrading 关闭时直接拒绝实盘，
+      未经用户明确确认绝不触碰真实资金；涉及杠杆、仓位与资金费率时逐项核对
+      crypto-risk-checklist 风控清单，并明确提示强平与费率风险；你给出的任何内容都不构成投资建议。
+
+# OKX 组行：isolate 覆盖本组可能 provide 的全部服务键（行情 + 交易）。
+- id: dsh-trading-crypto-connector-okx-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingCryptoMarketData: true
+    tradingCryptoTrade: true
+  config:
+    - id: dsh-trading-crypto-connector-okx
+      name: '@dsh-trading/connector-okx'
+      config:
+        enabled: true
+        env: demo
+        dryRun: true
+        liveTrading: false
+
+- id: dsh-trading-crypto-kit
+  name: '@dsh-trading/kit-crypto'
+  config:
+    dryRun: true
+    liveTrading: false

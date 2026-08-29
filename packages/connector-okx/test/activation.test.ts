@@ -80,7 +80,7 @@ const OKX_TOOLS = [
 describe('互斥激活（enabled 默认 false）', () => {
   it('默认组合（binance 激活 + okx 缺省）：只有 binance 注册工具，okx 静默退出一行 log', async () => {
     const host = makeHost()
-    applyBinance(host.newCtx() as never, { dryRun: true, liveTrading: false })
+    applyBinance(host.newCtx() as never, { enabled: true, dryRun: true, liveTrading: false })
     applyOkx(host.newCtx() as never, { ...OKX_DEFAULTS }) // enabled=false（默认）
     await wait(() => host.registered.size >= BINANCE_TOOLS.length)
     expect([...host.registered.keys()].sort()).toEqual([...BINANCE_TOOLS].sort())
@@ -91,7 +91,7 @@ describe('互斥激活（enabled 默认 false）', () => {
 
   it('okx 激活 + binance 同树：同名工具让位（先到先得 + warn），okx 独有面全部注册', async () => {
     const host = makeHost()
-    applyBinance(host.newCtx() as never, { dryRun: true, liveTrading: false })
+    applyBinance(host.newCtx() as never, { enabled: true, dryRun: true, liveTrading: false })
     applyOkx(host.newCtx() as never, { ...OKX_DEFAULTS, enabled: true })
     await wait(() => host.registered.size >= OKX_TOOLS.length)
     expect([...host.registered.keys()].sort()).toEqual([...OKX_TOOLS].sort())
@@ -106,6 +106,17 @@ describe('互斥激活（enabled 默认 false）', () => {
     applyOkx(host.newCtx() as never, { ...OKX_DEFAULTS, enabled: true })
     await wait(() => host.registered.size >= OKX_TOOLS.length)
     expect([...host.registered.keys()].sort()).toEqual([...OKX_TOOLS].sort())
+    expect(host.logs.some((line) => line.includes('WARN'))).toBe(false)
+  })
+
+  it('镜像切换（2026-08-29 对称化修复）：binance enabled=false + okx enabled=true → okx 全量注册、binance 静默退出', async () => {
+    const host = makeHost()
+    applyBinance(host.newCtx() as never, { enabled: false, dryRun: true, liveTrading: false })
+    applyOkx(host.newCtx() as never, { ...OKX_DEFAULTS, enabled: true })
+    await wait(() => host.registered.size >= OKX_TOOLS.length)
+    expect([...host.registered.keys()].sort()).toEqual([...OKX_TOOLS].sort())
+    // binance 零注册 + 一行说明 log；无同名冲突 warn。
+    expect(host.logs.some((line) => line.includes('not activated (enabled=false)'))).toBe(true)
     expect(host.logs.some((line) => line.includes('WARN'))).toBe(false)
   })
 })

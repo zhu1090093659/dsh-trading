@@ -67,9 +67,9 @@ DSH 扩展机制分层与对应选择：
 |---|---|
 | `@dsh-trading/api` | 纯类型契约：行情/交易服务接口 + 错误词汇（零运行时依赖） |
 | `@dsh-trading/base` | bundle：共享行唯一拥有者——统一审批闸门插件（tools/pre-execute）+ agent-presets root 行 |
-| `@dsh-trading/connector-binance` | 插件：Binance 公共 REST 行情服务 + crypto_get_ticker/klines/place_order 工具 |
+| `@dsh-trading/connector-binance` | 插件：Binance 公共 REST 行情服务 + crypto_get_ticker/klines/place_order 工具；`enabled` 开关（默认 true，与 okx 互斥激活） |
 | `@dsh-trading/kit-crypto` | 插件：crypto_funding_rate 工具 + skill provider（crypto-risk-checklist） |
-| `@dsh-trading/crypto` | bundle：依赖安装载体 + host 面安装器（自安装 crypto-trader preset） |
+| `@dsh-trading/crypto` | bundle：依赖安装载体 + host 面安装器（自安装 crypto-trader（默认 Binance 数据面）与 crypto-trader-okx（OKX 镜像切换，含模拟盘/交易面）两个 preset） |
 | `@dsh-trading/connector-yahoo` | 插件：Yahoo Finance v8 chart 行情服务（us_get_ticker/klines/place_order 三段闸门；us 数据面现役） |
 | `@dsh-trading/connector-stooq` | 插件：Stooq 公共 CSV 行情服务（代码保留备选；本出口被反爬拒止，未实证，见其 README） |
 | `@dsh-trading/kit-us` | 插件：skill provider（us-risk-checklist）；股票无资金费率，无附加工具 |
@@ -96,6 +96,7 @@ DSH 扩展机制分层与对应选择：
 3. **服务行必须包 isolate realm 组**，且 isolate 键 = 服务名（如 `tradingCryptoMarketData`）。
 4. **实盘闸门双轨**：显式 `liveTrading` 配置开关为主（headless 唯一防线），approval 管交互形态（headless 下 ask 必 deny = fail-closed 特性）。
 5. cordis 服务类用 **TS 编译期 private**（不用 ECMAScript # 私有字段——realm 代理会按类身份炸）。
+6. **连接器互斥激活必须对称**：同市场各连接器都有 `enabled` 开关（默认面各自声明，binance 默认 true / okx 默认 false），同一 preset 组合同时至多一个为 true——只做单边（如 okx 有而 binance 无）会导致「叠加」而非「切换」（2026-08-29 修复，见 `docs/okx-integration.md` §8.2 方案 B 与 connector-okx 激活测试）。
 
 ## 安装与卸载（未发布 npm 阶段，本机开发形态）
 

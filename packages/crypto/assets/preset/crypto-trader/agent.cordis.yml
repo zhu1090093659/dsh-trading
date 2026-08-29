@@ -37,12 +37,15 @@
     - id: dsh-trading-crypto-connector-binance
       name: '@dsh-trading/connector-binance'
       config:
+        enabled: true
         dryRun: true
         liveTrading: false
 
-# okx 连接器行（2026-08-29 R3）：与 binance 行并存于组合但默认 enabled=false——两连接器
-# 对 tradingCryptoMarketData 服务键与同名 crypto_* 工具互斥激活，同一组合至多激活一个
-# （okx enabled=false 时整个插件静默不注册任何服务/工具；binance 行不动）。okx 激活时
+# okx 连接器行（2026-08-29 R3；切换对称化 2026-08-29）：与 binance 行并存于组合但默认
+# enabled=false——两连接器对 tradingCryptoMarketData 服务键与同名 crypto_* 工具**双开关**
+# 互斥激活，同一组合至多激活一个：binance 默认 enabled=true，要切换到 OKX 需把本行
+# enabled 改为 true **且**把上面 binance 行 enabled 改为 false（只改一侧仍是叠加——先到先得）。
+# 不想手动改配置？直接用 crypto-trader-okx preset（镜像切换，GUI/roster 里选）。okx 激活时
 # 额外 provide tradingCryptoTrade（crypto 市场第一个真实 TradeService，签名 demo/live
 # 下单），因此组内 isolate 同时覆盖它可能 provide 的两个服务键。挂载顺序即同名工具的
 # 仲裁顺序（binance 组行在前 → crypto_get_ticker 等先注册；okx 行在 kit 行前 → okx

@@ -29,6 +29,8 @@ export * from './rest.js'
 export const name = 'dsh-trading-crypto-connector-binance'
 
 export interface Config {
+  /** 互斥激活总开关（默认 true）：false 时本插件不注册任何服务/工具（okx 行启用时须关本开关；docs/okx-integration.md §8.2 方案 B）。 */
+  enabled: boolean
   /** 交易安全闸门（铁律 #3）：true 时下单类工具强制 dry-run。 */
   dryRun: boolean
   /** 实盘总闸门：默认 false；false 时无论 dryRun 与否都拒绝实盘下单 [S4]。 */
@@ -36,6 +38,7 @@ export interface Config {
 }
 
 export const Config: Schema<Config> = Schema.object({
+  enabled: Schema.boolean().default(true),
   dryRun: Schema.boolean().default(true),
   liveTrading: Schema.boolean().default(false),
 })
@@ -300,7 +303,28 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
   })
 }
 
+/** 宿主 logger 的最小形状（ctx.logger(name) 不可用时回落 console，保证任何面可启动）。 */
+interface LogLike {
+  info: (...args: unknown[]) => void
+  warn: (...args: unknown[]) => void
+}
+
+function logger(ctx: Context): LogLike {
+  const service = (ctx as unknown as { logger?: (name: string) => LogLike }).logger
+  return typeof service === 'function' ? service(name) : console
+}
+
 export function apply(ctx: Context, config: Config): void {
+  const log = logger(ctx)
+
+  // 互斥激活：false（配合 okx 行启用）时静默退出，不注册任何东西。
+  if (!config.enabled) {
+    log.info(
+      '[dsh-trading-crypto-connector-binance] not activated (enabled=false) — tradingCryptoMarketData and crypto_* tools stay unregistered; market data comes from the other active connector',
+    )
+    return
+  }
+
   // provide：Service 基类随插件 fiber 注册，插件卸载自动注销。
   new BinanceMarketDataService(ctx)
 
