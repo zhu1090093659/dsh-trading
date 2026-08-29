@@ -1,0 +1,29 @@
+packages:
+  - packages/*
+
+linkWorkspacePackages: true
+
+# 开发期 DSH SDK 解析（TEMPLATES §7）：npm 上 @deepseek-ai/dsh-* 只有不兼容的
+# 0.0.1-rc.1，SDK 一律 peerDependencies 声明，这里用 overrides 把名字钉到官方
+# checkout 的 file: 路径（只读消费，绝不修改 checkout）。运行时由宿主 dsh 提供。
+overrides:
+  '@deepseek-ai/cordis': 'file:/Users/zcl/code/deepseek-harness/vendor/cordis'
+  # cordis/schemastery 内部依赖 cosmokit 用的是 workspace:^ 协议，装进本仓时同样需要钉到本地。
+  '@deepseek-ai/cosmokit': 'file:/Users/zcl/code/deepseek-harness/vendor/cosmokit'
+  '@deepseek-ai/schemastery': 'file:/Users/zcl/code/deepseek-harness/vendor/schemastery'
+  '@deepseek-ai/dsh-tools': 'file:/Users/zcl/code/deepseek-harness/packages/core/tools'
+  '@deepseek-ai/dsh-skill': 'file:/Users/zcl/code/deepseek-harness/packages/skill/skill'
+
+# file: 目标包声明的 peers（dsh-llm/dsh-scope 等）构建期用不到；自动拉取只会从
+# npm 引入不兼容的 0.0.1-rc.1 时代版本。构建需要的 SDK 在 root devDependencies 显式列出。
+autoInstallPeers: false
+
+# pnpm≥10 生命周期脚本默认拒绝，strict 模式下未批准直接报错；esbuild 的 postinstall
+# 是平台二进制校验，显式放行（pnpm 11 的键为 allowBuilds，pnpm approve-builds 生成）。
+strictDepBuilds: true
+allowBuilds:
+  esbuild: true
+
+peerDependencyRules:
+  allowedVersions:
+    typescript: '>=5 <7'

@@ -1,0 +1,13 @@
+# @dsh-trading/base —— 市场无关共享行的唯一拥有者（README 设计铁律 #1）。
+#
+# 后续切片在此 insert（均为 base 独占的共享行，市场 bundle 不得 replace）：
+#   - 组合管理工具行、风控原语工具行
+#   - 统一 preset root 配置行 [S3]
+#   - credentials 引用约定相关行 [S4]
+#
+# 脚手架阶段：insert 列表为空占位。空数组对 patch loader 是 no-op
+# （vendor/include applyEntryPatches：`data.push(...insert)` 推入 0 行，无告警）。
+#
+# patch 语义提醒：非 insert patch 按 id 整行替换该行的整个 config（不做合并），
+# 所以任何共享行只允许在 base 这一层定义一次。
+- insert: []

@@ -1,0 +1,15 @@
+# @dsh-trading/crypto —— insert-only：只插本市场（trading-crypto-* 命名空间）的新行，
+# 禁止 replace @dsh-trading/base 或其他市场的行（README 设计铁律 #1；
+# patch 语义为按 id 整行替换，否则多市场并存互相覆盖）。
+#
+# id 与插件 Cordis name 同值（TEMPLATES §8）；所引插件包在本包 dependencies 实装
+# （workspace:* → 发布时为精确版本钉住，crypto-slice-plan §包清单）。
+# preset 内容行由 kit 插件自安装机制承载 [S3]，不在本层持有审批/沙箱/模型路由（host 面职责）。
+- insert:
+    - id: dsh-trading-crypto-connector-binance
+      name: '@dsh-trading/connector-binance'
+      config:
+        dryRun: true
+        liveTrading: false
+    - id: dsh-trading-crypto-kit
+      name: '@dsh-trading/kit-crypto'

@@ -1,0 +1,35 @@
+{
+  "name": "@dsh-trading/base",
+  "description": "Market-agnostic core bundle for dsh-trading: sole owner of shared cordis rows (portfolio/risk tools, unified preset root) introduced in later slices",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown"
+  },
+  "dependencies": {
+    "@dsh-trading/api": "workspace:^"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0"
+  }
+}
