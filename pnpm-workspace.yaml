@@ -27,3 +27,8 @@ allowBuilds:
 peerDependencyRules:
   allowedVersions:
     typescript: '>=5 <7'
+  # dsh-skill/dsh-tools 声明的 workspace:^ 间接 peer 在宿主运行时由 DSH 提供；
+  # 本地构建不需要，显式忽略（曾尝试 file: 钉住，会连锁拖入更多 workspace: 依赖，放弃）。
+  ignoreMissing:
+    - '@deepseek-ai/dsh-invariants'
+    - '@deepseek-ai/dsh-llm'
