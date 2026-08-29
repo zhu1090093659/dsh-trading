@@ -314,6 +314,26 @@ function logger(ctx: Context): LogLike {
   return typeof service === 'function' ? service(name) : console
 }
 
+/** 本连接器的路由 provider slug（docs/exchange-routing.md §2.2：路由层词汇，非包名）。 */
+export const ROUTER_PROVIDER = 'binance'
+
+/** 市场路由服务的最小消费面（api 包 MarketRouterService 同构；不定死接口）。 */
+export interface MarketRouterLike {
+  activeProvider(market: string): string | undefined
+}
+
+/**
+ * 路由裁决（2026-08-29 设置驱动重构）：router 存在且给本市场选了别的 provider →
+ * 本连接器静默退出（设置是权威）；router 不存在（老部署）→ 回退 enabled 语义。
+ * 返回 true = 应继续 apply。
+ */
+export function routeAllows(ctx: Context, config: Config, market: string): boolean {
+  if (!config.enabled) return false
+  const router = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as MarketRouterLike | undefined
+  if (router === undefined) return true // 无 router：enabled 语义（向后兼容）
+  return router.activeProvider(market) === ROUTER_PROVIDER
+}
+
 export function apply(ctx: Context, config: Config): void {
   const log = logger(ctx)
 
@@ -321,6 +341,17 @@ export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) {
     log.info(
       '[dsh-trading-crypto-connector-binance] not activated (enabled=false) — tradingCryptoMarketData and crypto_* tools stay unregistered; market data comes from the other active connector',
+    )
+    return
+  }
+
+  // 市场路由裁决（2026-08-29）：设置选了别的 provider → 静默退出（不是配置错，是路由）。
+  const router = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as MarketRouterLike | undefined
+  const active = router?.activeProvider('crypto')
+  if (router !== undefined && active !== ROUTER_PROVIDER) {
+    log.info(
+      '[dsh-trading-crypto-connector-binance] market router selects %s for crypto — not activated; set dshtrading.markets.crypto.provider to binance to use this connector',
+      String(active ?? '(unset)'),
     )
     return
   }

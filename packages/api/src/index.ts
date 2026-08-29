@@ -194,5 +194,23 @@ declare module '@deepseek-ai/cordis' {
      * Config.enabled 互斥激活同一 tradingCryptoMarketData 键时一并 provide。
      */
     tradingCryptoTrade: TradeService
+    /**
+     * 市场路由服务（R5 2026-08-29 补齐，@dsh-trading/router 提供）：
+     * 连接器 apply 时 consult activeProvider(market) 决定是否激活——用户设置
+     * dshtrading.markets.<market>.provider 选谁谁激活（docs/exchange-routing.md）。
+     */
+    tradingMarketRouter: MarketRouterService
   }
+}
+
+/**
+ * 市场路由服务契约（router 插件提供）：按市场查询当前激活的数据/交易所提供方。
+ * 用户设置（dshtrading namespace，settings.yaml）是权威；无设置时 = 组合默认值
+ * （现状零变化）。供应商取值与连接器的 provider slug 比对，相符者激活。
+ */
+export interface MarketRouterService {
+  /** 某市场当前激活的 provider slug（settings resolved：用户层赢，缺省 base 默认）。 */
+  activeProvider(market: string): string | undefined
+  /** 订阅激活变化（settings commit 驱动）。 */
+  watch(cb: (next: string | undefined, prev: string | undefined) => void): () => void
 }

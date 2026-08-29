@@ -38,7 +38,7 @@ export const Config: Schema<Config> = Schema.object({
 // ── crypto 市场 preset 幂等自安装（S3 机制） ────────────────────────────────
 
 /** 本 bundle 自安装的全部 preset（目录名即 roster id）。 */
-export const PRESET_IDS = ['crypto-trader', 'crypto-trader-okx'] as const
+export const PRESET_IDS = ['crypto-trader'] as const
 /** 默认主 preset（默认 Bar 激活 binance 数据面；okx preset 为 OKX 切换会话，见其资产头注）。 */
 export const PRESET_ID = PRESET_IDS[0]
 

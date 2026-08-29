@@ -8,6 +8,7 @@ DSH 交易插件包 monorepo：按市场组织 bundle（crypto/us/cn/hk），主
 - 决策记录规则：[.agents/notes/README.md](.agents/notes/README.md)——每个非平凡变更必须在同一变更中写 Agent Note
 - 市场复制手册：[docs/replication.md](docs/replication.md)（含 14 条实证坑清单，改包结构前必读）
 - 交易所接入手册：[docs/connector-playbook.md](docs/connector-playbook.md)（新增交易所/数据源连接器前必读：先经 `scripts/new-connector.mjs` 生成，再按手册填写）
+- 设置路由设计：[docs/exchange-routing.md](docs/exchange-routing.md)（单预设 + dshtrading 设置路由；改动连接器激活/交易所选择前必读）
 - spike 裁决史：[spikes/REVIEW-LOG.md](spikes/REVIEW-LOG.md)
 
 ## Development Workflow

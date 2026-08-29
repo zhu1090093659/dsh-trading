@@ -13,6 +13,11 @@ overrides:
   '@deepseek-ai/schemastery': 'file:/Users/zcl/code/deepseek-harness/vendor/schemastery'
   '@deepseek-ai/dsh-tools': 'file:/Users/zcl/code/deepseek-harness/packages/core/tools'
   '@deepseek-ai/dsh-skill': 'file:/Users/zcl/code/deepseek-harness/packages/skill/skill'
+  # router 包消费 settings seam（dshtrading namespace；installSettingsSection）。
+  # npm 无宿主世代——同 dsh-tools 的 file: 惯例（只读消费，绝不修改 checkout）。
+  # 注意 dsh-settings 的 lib barrel 运行时 import cosmokit 等 workspace: 依赖，链接在
+  # checkout 内解析；file: 拷贝会连锁拖依赖（既有教训），若遇 ERR 改 link:（见上方注释）。
+  '@deepseek-ai/dsh-settings': 'file:/Users/zcl/code/deepseek-harness/packages/settings/settings'
   # base bundle 实装 dsh-agent-presets（preset 行解析进 profile 安装闭包，S3 坑 3）。
   # npm 没有宿主世代（最高 0.1.1-rc.2，宿主 0.1.2-alpha.1），开发期按 S3 实证用 link:
   # 钉到官方 checkout：它带真实 workspace:^ dependencies，file: 拷贝会在本仓连锁拖

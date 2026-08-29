@@ -77,6 +77,7 @@ DSH 扩展机制分层与对应选择：
 | `@dsh-trading/connector-tencent` | 插件：腾讯公共行情，单包双市场（config.market=cn/hk 分流，provide tradingCnMarketData/tradingHkMarketData） |
 | `@dsh-trading/kit-cn` / `kit-hk` | 插件：skill provider（cn-risk-checklist：T+1/涨跌停/ST/两融；hk-risk-checklist：T+0/碎股/供配股/窝轮牛熊证） |
 | `@dsh-trading/cn` / `hk` | bundle：依赖安装载体 + 安装器（cn-trader / hk-trader preset） |
+| `@dsh-trading/router` | 插件：市场/数据源路由（host 面，base 挂载）——注册 `dshtrading` settings namespace + provide `tradingMarketRouter`（连接器 consult 激活），docs/exchange-routing.md |
 | `@dsh-trading/all` | 元 bundle（预留；当前 DSH 版本不展开传递 bundle 依赖，见上「已知限制」） |
 | `@dsh-trading/connector-template` | **脚手架（不入任何 bundle 依赖）**：新交易所连接器模板源，由 `scripts/new-connector.mjs` 生成器展开；接入流程见 `docs/connector-playbook.md` |
 
@@ -97,6 +98,7 @@ DSH 扩展机制分层与对应选择：
 4. **实盘闸门双轨**：显式 `liveTrading` 配置开关为主（headless 唯一防线），approval 管交互形态（headless 下 ask 必 deny = fail-closed 特性）。
 5. cordis 服务类用 **TS 编译期 private**（不用 ECMAScript # 私有字段——realm 代理会按类身份炸）。
 6. **连接器互斥激活必须对称**：同市场各连接器都有 `enabled` 开关（默认面各自声明，binance 默认 true / okx 默认 false），同一 preset 组合同时至多一个为 true——只做单边（如 okx 有而 binance 无）会导致「叠加」而非「切换」（2026-08-29 修复，见 `docs/okx-integration.md` §8.2 方案 B 与 connector-okx 激活测试）。
+7. **交易所需设置驱动，不是会话选择**（2026-08-29 定稿，见 `docs/exchange-routing.md`）：每市场**单预设**，连接器行并存、enabled 均 true，谁激活由用户设置 `dshtrading.markets.<market>.provider` 决定（`@dsh-trading/router` host 行提供 `tradingMarketRouter`，连接器 apply 时 consult，不符即静默）；新交易所 = schema enum 加候选，新市场 = dict 加键，数据/交易分离 = tradeProvider 预留字段。**双 preset 镜像方案（crypto-trader-okx）已废弃**。
 
 ## 安装与卸载（未发布 npm 阶段，本机开发形态）
 

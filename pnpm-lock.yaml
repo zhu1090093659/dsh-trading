@@ -10,6 +10,7 @@ overrides:
   '@deepseek-ai/schemastery': file:/Users/zcl/code/deepseek-harness/vendor/schemastery
   '@deepseek-ai/dsh-tools': file:/Users/zcl/code/deepseek-harness/packages/core/tools
   '@deepseek-ai/dsh-skill': file:/Users/zcl/code/deepseek-harness/packages/skill/skill
+  '@deepseek-ai/dsh-settings': file:/Users/zcl/code/deepseek-harness/packages/settings/settings
   '@deepseek-ai/dsh-agent-presets': link:/Users/zcl/code/deepseek-harness/packages/preset/agent-presets
   '@deepseek-ai/dsh-scope': link:/Users/zcl/code/deepseek-harness/packages/core/scope
   '@deepseek-ai/dsh-llm': link:/Users/zcl/code/deepseek-harness/packages/llm/llm
@@ -99,6 +100,9 @@ importers:
       '@dsh-trading/api':
         specifier: workspace:^
         version: link:../api
+      '@dsh-trading/router':
+        specifier: workspace:^
+        version: link:../router
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -372,6 +376,28 @@ importers:
         specifier: ^0.22.0
         version: 0.22.14(typescript@5.9.3)
 
+  packages/router:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/cordis
+        version: file:../deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-settings':
+        specifier: file:/Users/zcl/code/deepseek-harness/packages/settings/settings
+        version: file:../deepseek-harness/packages/settings/settings(@deepseek-ai/cordis@file:../deepseek-harness/vendor/cordis)(@deepseek-ai/schemastery@file:../deepseek-harness/vendor/schemastery)
+      '@deepseek-ai/schemastery':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/schemastery
+        version: file:../deepseek-harness/vendor/schemastery
+      '@dsh-trading/api':
+        specifier: workspace:^
+        version: link:../api
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)
+
   packages/us:
     dependencies:
       '@deepseek-ai/cordis':
@@ -466,6 +492,14 @@ packages:
 
   '@deepseek-ai/cosmokit@file:../deepseek-harness/vendor/cosmokit':
     resolution: {directory: ../deepseek-harness/vendor/cosmokit, type: directory}
+
+  '@deepseek-ai/dsh-settings@file:../deepseek-harness/packages/settings/settings':
+    resolution: {directory: ../deepseek-harness/packages/settings/settings, type: directory}
+    peerDependencies:
+      '@deepseek-ai/cordis': workspace:^
+      '@deepseek-ai/dsh-brand': workspace:^
+      '@deepseek-ai/dsh-invariants': workspace:^
+      '@deepseek-ai/schemastery': workspace:^
 
   '@deepseek-ai/dsh-skill@file:../deepseek-harness/packages/skill/skill':
     resolution: {directory: ../deepseek-harness/packages/skill/skill, type: directory}
@@ -1884,6 +1918,12 @@ snapshots:
       '@standard-schema/spec': 1.1.0
 
   '@deepseek-ai/cosmokit@file:../deepseek-harness/vendor/cosmokit': {}
+
+  '@deepseek-ai/dsh-settings@file:../deepseek-harness/packages/settings/settings(@deepseek-ai/cordis@file:../deepseek-harness/vendor/cordis)(@deepseek-ai/schemastery@file:../deepseek-harness/vendor/schemastery)':
+    dependencies:
+      '@deepseek-ai/cordis': file:../deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-session': link:../deepseek-harness/packages/core/session
+      '@deepseek-ai/schemastery': file:../deepseek-harness/vendor/schemastery
 
   '@deepseek-ai/dsh-skill@file:../deepseek-harness/packages/skill/skill(@deepseek-ai/cordis@file:../deepseek-harness/vendor/cordis)':
     dependencies:

@@ -1,5 +1,11 @@
 # crypto-trader agent preset —— dsh-trading crypto 切片（S3 机制）。
 #
+# 2026-08-29 设置驱动单预设重构（docs/exchange-routing.md）：本预设是 crypto 市场
+# **唯一**预设——Binance 与 OKX 连接器行并存（enabled 都 true），谁激活由用户设置
+# 决定（dshtrading.markets.crypto.provider，默认 binance；改 ~/.dsh/settings.yaml 后
+# 新建会话生效）。连接器 apply 时 consult tradingMarketRouter 服务，与设置不符的
+# 行静默退出；无需配置互斥（路由即裁决）。本文件不再有"改 enabled 切交易所"的手工步骤。
+#
 # 本文件由 @dsh-trading/crypto 的 dsh-trading-crypto-installer 插件（bundle host 面
 # 常驻行）在 apply() 时幂等自安装到市场自有 preset root
 # （默认 ~/.dsh-trading-presets/crypto-trader；agent-presets 行需把该 root 配进 roots，
@@ -9,25 +15,21 @@
 # 组合形态对照官方 standard preset（@deepseek-ai/dsh-agent-presets 内 standard/）：
 # - 本文件是 AGENT-PLANE 组合：roster 每个 preset 常驻挂载一次，会话按 scope 父子加入；
 #   preset 不持有审批/沙箱/模型路由（host 面职责，官方注释明确）。
-# - persona 行：@deepseek-ai/dsh-persona 的 config.text，{{model}}/{{cwd}} 由 agent 的
-#   路由与工作区解析（官方同款写法）。
-# - isolate realm：connector 与 kit 两行只向宿主 scope 分层注册表（ctx.tools / ctx.skills）
-#   注册、不 provide 任何服务，与官方 standard 的 tool-fs/tool-bash 等同类，无需 realm；
-#   若未来某行开始 provide 服务，必须包进 `group: true` + `isolate` 的组行（entry-local
-#   realm），否则发布进 root realm 与其他 preset 冲突，dsh-agent-presets 挂载时直接拒绝。
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
     text: >-
       你是一名严谨的加密货币交易员，由 {{model}} 模型驱动，工作目录为 {{cwd}}。基于当前激活的
-      交易所数据（默认 Binance；preset 配置切换 okx 行 enabled=true 后为 OKX，含模拟盘）的
-      ticker、资金费率等做客观、量化的分析；下单类操作一律默认 dry-run 模拟，liveTrading 关闭时
-      直接拒绝实盘，未经用户明确确认绝不触碰真实资金；涉及杠杆、仓位与资金费率时逐项核对
-      crypto-risk-checklist 风控清单，并明确提示强平与费率风险；你给出的任何内容都不构成投资建议。
+      交易所数据（默认 Binance；设置 dshtrading.markets.crypto.provider=okx 后为 OKX，
+      OKX 默认打模拟盘 demo，env=live 才是真钱）的 ticker、资金费率等做客观、量化的分析；
+      下单类操作一律默认 dry-run 模拟，liveTrading 关闭时直接拒绝实盘，未经用户明确确认
+      绝不触碰真实资金；涉及杠杆、仓位与资金费率时逐项核对 crypto-risk-checklist 风控清单，
+      并明确提示强平与费率风险；你给出的任何内容都不构成投资建议。
 
 # connector 行 provide 服务（tradingCryptoMarketData），按官方 standard preset 的硬性规则
 # 必须包进 cordis:group + isolate（entry-local realm）：否则服务发布进 root realm，
 # 与其他 preset 冲突，dsh-agent-presets 挂载时直接拒绝。（2026-08-29 主 agent 评审修复）
+# 两连接器行并存、enabled 都 true——互斥由 settings 路由裁决（见头注），无需手工配置。
 - id: dsh-trading-crypto-connector
   name: cordis:group
   group: true
@@ -41,17 +43,6 @@
         dryRun: true
         liveTrading: false
 
-# okx 连接器行（2026-08-29 R3；切换对称化 2026-08-29）：与 binance 行并存于组合但默认
-# enabled=false——两连接器对 tradingCryptoMarketData 服务键与同名 crypto_* 工具**双开关**
-# 互斥激活，同一组合至多激活一个：binance 默认 enabled=true，要切换到 OKX 需把本行
-# enabled 改为 true **且**把上面 binance 行 enabled 改为 false（只改一侧仍是叠加——先到先得）。
-# 不想手动改配置？直接用 crypto-trader-okx preset（镜像切换，GUI/roster 里选）。okx 激活时
-# 额外 provide tradingCryptoTrade（crypto 市场第一个真实 TradeService，签名 demo/live
-# 下单），因此组内 isolate 同时覆盖它可能 provide 的两个服务键。挂载顺序即同名工具的
-# 仲裁顺序（binance 组行在前 → crypto_get_ticker 等先注册；okx 行在 kit 行前 → okx
-# 激活时 crypto_funding_rate 归 okx，kit 的同名 Binance 工具让位——两侧注册均
-# duplicate-safe，冲突降级为跳过 + log 而非炸挂载）。demo 盘凭证：OKX_DEMO_API_KEY /
-# OKX_DEMO_SECRET_KEY / OKX_DEMO_PASSPHRASE（三 ref，见 crypto-risk-checklist skill）。
 - id: dsh-trading-crypto-connector-okx-group
   name: cordis:group
   group: true
@@ -62,7 +53,7 @@
     - id: dsh-trading-crypto-connector-okx
       name: '@dsh-trading/connector-okx'
       config:
-        enabled: false
+        enabled: true
         env: demo
         dryRun: true
         liveTrading: false

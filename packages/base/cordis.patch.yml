@@ -27,6 +27,13 @@
     - id: dsh-trading-base-gate
       name: '@dsh-trading/base'
 
+    # 市场/数据源路由（2026-08-29 设置驱动单预设重构，docs/exchange-routing.md）：
+    # host 面常驻，注册 dshtrading settings namespace + provide tradingMarketRouter；
+    # 连接器 apply 时 consult activeProvider(market)——用户设置选谁谁激活。
+    # 市场无关共享行（四市场共用），只由 base 拥有（铁律 #1/#4）。
+    - id: dsh-trading-market-router
+      name: '@dsh-trading/router'
+
 - id: agent-presets
   name: '@deepseek-ai/dsh-agent-presets'
   config:

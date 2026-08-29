@@ -37,11 +37,11 @@ async function installOne(root: string, presetId: string) {
   return hit
 }
 
-describe('installPreset（代际管理戳，多 preset）', () => {
-  it('第 1 代：两 preset 均不存在 → 全部写入 stamp+内容；re-run 零写入（幂等）', async () => {
+describe('installPreset（代际管理戳，单预设）', () => {
+  it('第 1 代：preset 不存在 → 写入 stamp+内容；re-run 零写入（幂等）', async () => {
     const root = await tempRoot()
     const results = await installPreset({ presetRoot: root })
-    expect(results).toHaveLength(2)
+    expect(results).toHaveLength(1)
     for (const r of results) {
       expect(r.wrote.sort()).toEqual(['agent.cordis.yml', 'preset.yml'])
       expect(r.skipped).toEqual([])

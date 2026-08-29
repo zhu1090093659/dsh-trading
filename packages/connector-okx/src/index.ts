@@ -758,13 +758,32 @@ function logger(ctx: Context): LogLike {
   return typeof service === 'function' ? service(name) : console
 }
 
+/** 本连接器的路由 provider slug（docs/exchange-routing.md §2.2）。 */
+export const ROUTER_PROVIDER = 'okx'
+
+/** 市场路由服务的最小消费面（api 包 MarketRouterService 同构；不定死接口）。 */
+export interface MarketRouterLike {
+  activeProvider(market: string): string | undefined
+}
+
 export function apply(ctx: Context, config: Config): void {
   const log = logger(ctx)
 
-  // 互斥激活（主 agent 裁决 #1）：默认 false——静默退出，不注册任何东西。
+  // 互斥激活：默认 false——静默退出，不注册任何东西。
   if (!config.enabled) {
     log.info(
-      '[dsh-trading-crypto-connector-okx] not activated (enabled=false) — tradingCryptoMarketData/tradingCryptoTrade and crypto_* tools stay unregistered; market data remains with connector-binance',
+      '[dsh-trading-crypto-connector-okx] not activated (enabled=false) — tradingCryptoMarketData/tradingCryptoTrade and crypto_* tools stay unregistered',
+    )
+    return
+  }
+
+  // 市场路由裁决（2026-08-29 设置驱动重构）：router 存在且选了别人 → 静默退出。
+  const router = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as MarketRouterLike | undefined
+  const active = router?.activeProvider('crypto')
+  if (router !== undefined && active !== ROUTER_PROVIDER) {
+    log.info(
+      '[dsh-trading-crypto-connector-okx] market router selects %s for crypto — not activated; set dshtrading.markets.crypto.provider to okx to use this connector',
+      String(active ?? '(unset)'),
     )
     return
   }

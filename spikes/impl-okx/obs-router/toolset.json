@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T13:33:18.769Z",
+  "visible": {
+    "crypto_get_ticker": true,
+    "crypto_get_klines": true,
+    "crypto_funding_rate": true,
+    "crypto_place_order": true,
+    "crypto_cancel_order": true,
+    "crypto_get_order": true,
+    "crypto_get_balance": true,
+    "crypto_get_positions": true
+  }
+}
