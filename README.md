@@ -95,14 +95,47 @@ DSH 扩展机制分层与对应选择：
 4. **实盘闸门双轨**：显式 `liveTrading` 配置开关为主（headless 唯一防线），approval 管交互形态（headless 下 ask 必 deny = fail-closed 特性）。
 5. cordis 服务类用 **TS 编译期 private**（不用 ECMAScript # 私有字段——realm 代理会按类身份炸）。
 
-### 开发期安装（未发布 npm 阶段）
+## 安装与卸载（未发布 npm 阶段，本机开发形态）
 
-profile 的 pnpm-workspace.yaml 末尾 append overrides 把 `@dsh-trading/*` 钉到本仓 file: 路径，
-再 `dsh plugin --profile <名> add @dsh-trading/base @dsh-trading/crypto`（多市场：同命令追加
-`@dsh-trading/us @dsh-trading/cn @dsh-trading/hk`——**不要依赖 all 元包传递入栈**，见上「已知限制」）。
-headless 宿主另需在 profile 级 cordis.patch.yml insert agent-presets 行（范本
-`~/.dsh/profiles/trading-dev/cordis.patch.yml`；web 宿主由 base 的同 id 覆盖条目自动接管）。
-改码后须删 profile node_modules 内对应包再 install（file: 是安装时快照）。完整操作见 `spikes/smoke/REPORT.md`。
+### 安装到任意 profile
+
+1. **钉版**（只需一次）：在 `~/.dsh/profiles/<profile>/pnpm-workspace.yaml` **末尾 append**
+   overrides，把用到的 `@dsh-trading/*` 包钉到本仓 file: 路径，外加
+   `'@deepseek-ai/dsh-agent-presets': 'link:<dsh checkout>/packages/preset/agent-presets'`
+   （npm 上没有可用的官方包版本；该文件是 dsh 维护的 append-only，只追加不改写）。
+   现成范本：`~/.dsh/profiles/trading-dev/pnpm-workspace.yaml` 末尾块。
+2. **安装**（一条命令，市场按需选）：
+
+   ```sh
+   # 单市场（以 crypto 为例）
+   dsh plugin --profile <名> add @dsh-trading/base @dsh-trading/crypto
+   # 多市场：同命令追加 —— 不要依赖 @dsh-trading/all 传递入栈（见「已知限制」）
+   dsh plugin --profile <名> add @dsh-trading/base @dsh-trading/crypto @dsh-trading/us @dsh-trading/cn @dsh-trading/hk
+   ```
+3. **宿主差异**：
+   - **web 宿主**：agent-presets root 行由 base 的同 id 覆盖条目自动接管，无需额外动作。
+   - **headless 宿主**：另需在 profile 级 cordis.patch.yml insert agent-presets 行
+     （范本 `~/.dsh/profiles/trading-dev/cordis.patch.yml`），否则 preset root 不生效。
+4. **生效**：重启该 profile 的 dsh 进程（bundle 层栈在启动时加载；patchReload 只管 patch 文件）。
+   重启后 `<market>-trader` preset 自动出现在 preset roster（bundle 安装器幂等自安装到
+   `~/.dsh-trading-presets/`），新建会话时选择即可。
+5. **验证**：`dsh --profile <名> --dump-config` 应见 `# == @dsh-trading/base` 与各市场层，
+   且 `id: agent-presets` 全树只有一行。
+
+### 改码后的刷新
+
+file: 依赖是安装时快照：改完本仓代码后，删 profile `node_modules/@dsh-trading/*` 再
+`pnpm install`（在 profile 目录），然后重启进程。
+
+### 卸载
+
+```sh
+dsh plugin --profile <名> remove @dsh-trading/crypto   # 市场包
+```
+
+组合树对应层整块消失、官方行零改动（insert-only 实证）；roster 中对应 preset 变 broken
+（行解析不到包，reason 指名缺哪个包），profile 不崩；已安装到 `~/.dsh-trading-presets/`
+的 preset 目录按设计保留（手工删除即可完全清理）。完整验收证据见 `spikes/acceptance-all/`。
 
 ## 协作模式
 
