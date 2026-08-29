@@ -1,137 +1,118 @@
 /**
- * Trading settings page: one 'settings.section' entry ('交易' 一级菜单) —
- * a card per market (crypto/us/cn/hk) with the provider selection that routes
- * the dsh-trading connector set. The state arrives as a SnapshotStore through
- * the hooks compartment (useController(selector)); writes go through the
- * plain inject fields (setProvider/resetProvider), revision-fenced by the
- * scope the Host settings service resolves.
+ * Trading settings section (tab container): the '交易' 一级菜单 host. The
+ * section chrome is a tab bar projected from the dshtrading.market.tab slot
+ * ledger; each market contributes its own panel (id = market id) and the
+ * section renders it through the child slot. New market = new tab registration,
+ * no section changes (官方 settings.plugins.tab 模式).
  */
-import { useEffect, useMemo, useState } from 'react'
-import type { ComposedProps } from '@deepseek-ai/dsh-client-ui-slots'
+import { useEffect, useId, useRef, useState } from 'react'
 import type {
-  TradingSettingsState,
-} from './trading-settings-controller.ts'
-import {
-  MARKET_LABELS, PROVIDER_LABELS,
-} from './trading-settings-controller.ts'
+  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
+} from '@deepseek-ai/dsh-client-ui-slots'
+import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 
-/** Bound selector-hook type for the controller store (SnapshotStore). */
-export type TradingSettingsStateStore = {
-  getSnapshot: () => TradingSettingsState
-  subscribe: (listener: () => void) => () => void
+/** One tab projected from a dshtrading.market.tab contribution. */
+export interface TradingMarketTabEntry {
+  id: string
+  order: number
+  label: string
 }
 
-export interface TradingSettingsInjected {
+/** Registration-side business face for the section. */
+export interface TradingSettingsSectionInjected {
   hooks: {
-    /** Projects the dshtrading namespace view (SnapshotStore). */
-    controller: TradingSettingsStateStore
+    /** Ordered, locale-aware projection of the market tab ledger. */
+    tabs: HostObservable<readonly TradingMarketTabEntry[]>
   }
-  /** Write path: store a market provider selection. */
-  setProvider: (market: string, provider: string) => Promise<void>
-  /** Write path: clear a market provider (re-inherit base/schema default). */
-  resetProvider: (market: string) => Promise<void>
 }
 
-export type TradingSettingsProps =
-  ComposedProps<'settings.section', 'trading', never, never, TradingSettingsInjected, never, 'dshtrading.settings'>
+/** Props the renderer binds for the section. */
+export type TradingSettingsSectionProps =
+  PropsRuntime<'settings.section'>
+  & PropsLocale<'dshtrading.settings'>
+  & PropsRenderSlots<'dshtrading.market.tab'>
+  & InjectFace<TradingSettingsSectionInjected>
 
-/**
- * Render the Trading section: one row per market, provider radio, save/reset.
- * A staged draft holds while the user picks; commit writes on save.
- */
-export function TradingSettingsSection({ t, useController, setProvider, resetProvider }: TradingSettingsProps) {
-  const state = useController((value: TradingSettingsState) => value)
-  const [draft, setDraft] = useState<Record<string, string | undefined>>({})
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<string | undefined>(undefined)
 
-  // 首帧 draft 初始化为当前已解析值（状态 ready 后；effect 而非 render 中 setState）。
-  const ready = state.status === 'ready'
-  const resolvedNow = useMemo(() => state.resolved, [state.resolved, state.status])
+/** Render the Trading page: market tab bar + active market provider panel. */
+export function TradingSettingsSection({ t, renderSlot, useTabs }: TradingSettingsSectionProps) {
+  const tabsId = useId()
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const rows = useTabs(value => value)
+  const [activeId, setActiveId] = useState<string>()
+  const [visitedIds, setVisitedIds] = useState<ReadonlySet<string>>(() => new Set())
+  const active = rows.find(row => row.id === activeId)?.id ?? rows[0]?.id
+
+  // 首次选中即挂载，切换后保持挂载（draft 存活）。
   useEffect(() => {
-    if (ready && Object.keys(draft).length === 0) {
-      setDraft({ ...resolvedNow })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, resolvedNow])
-
-  const dirty = MARKET_LABELS.some((m) => {
-    const current = state.resolved[m.id]
-    const chosen = draft[m.id]
-    const override = state.overridden[m.id]
-    if (chosen === undefined) return override
-    return chosen !== current
-  })
-
-  async function save() {
-    setSaving(true)
-    setMessage(undefined)
-    try {
-      for (const market of MARKET_LABELS) {
-        const chosen = draft[market.id]
-        const current = state.resolved[market.id]
-        const override = state.overridden[market.id]
-        if (chosen === undefined) {
-          if (override) await resetProvider(market.id)
-        } else if (chosen !== current || !override) {
-          await setProvider(market.id, chosen)
-        }
-      }
-      setMessage(t('saved'))
-    } catch (error) {
-      setMessage(`${t('saveFailed')}: ${String(error?.message ?? error)}`)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const writable = state.writable
+    if (active === undefined) return
+    setVisitedIds((previous) => {
+      if (previous.has(active)) return previous
+      return new Set([...previous, active])
+    })
+  }, [active])
 
   return (
     <div>
       <p style={{ marginBottom: 12 }}>{t('lead')}</p>
-      {MARKET_LABELS.map((market) => {
-        const chosen = draft[market.id] ?? state.resolved[market.id]
-        const current = state.resolved[market.id]
-        return (
-          <fieldset key={market.id} style={{ padding: '12px 0', borderTop: '1px solid var(--dsw-alias-border-l2, #eee)' }}>
-            <legend>{market.label}</legend>
-            <p style={{ margin: '4px 0' }}>
-              {t('current', { provider: current ?? t('default') })}
-            </p>
-            {PROVIDER_LABELS.map((provider) => (
-              <label key={`${market.id}-${provider.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 14 }}>
-                <input
-                  type="radio"
-                  name={`provider-${market.id}`}
-                  checked={chosen === provider.id}
-                  disabled={!writable || saving}
-                  onChange={() => setDraft((prev) => ({ ...prev, [market.id]: provider.id }))}
-                />
-                <span>{provider.label}</span>
-              </label>
-            ))}
-          </fieldset>
-        )
-      })}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-        <button type="button" disabled={!dirty || saving || !writable} onClick={() => void save()}>
-          {t('save')}
-        </button>
-        <button
-          type="button"
-          disabled={saving || !dirty}
-          onClick={() => {
-            setDraft({ ...state.resolved })
-            setMessage(undefined)
-          }}
-        >
-          {t('discard')}
-        </button>
-        {message !== undefined ? <span>{message}</span> : null}
-      </div>
+      {rows.length === 0 ? <p>{t('empty')}</p> : (
+        <>
+          <div role="tablist" aria-label={t('tabs')} style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--dsw-alias-border-l2, #eee)' }}>
+            {rows.map((row, index) => {
+              const selected = row.id === active
+              return (
+                <button
+                  key={row.id}
+                  ref={(element) => { tabRefs.current[index] = element }}
+                  id={`${tabsId}-tab-${row.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  aria-controls={`${tabsId}-panel-${row.id}`}
+                  data-active={selected ? 'true' : undefined}
+                  tabIndex={selected ? 0 : -1}
+                  onClick={() => { setActiveId(row.id) }}
+                  onKeyDown={(event) => {
+                    let nextIndex: number
+                    switch (event.key) {
+                      case 'ArrowRight': nextIndex = (index + 1) % rows.length; break
+                      case 'ArrowLeft': nextIndex = (index - 1 + rows.length) % rows.length; break
+                      case 'Home': nextIndex = 0; break
+                      case 'End': nextIndex = rows.length - 1; break
+                      default: return
+                    }
+                    event.preventDefault()
+                    const nextRow = rows[nextIndex] as TradingMarketTabEntry
+                    const nextTab = tabRefs.current[nextIndex] as HTMLButtonElement
+                    setActiveId(nextRow.id)
+                    nextTab.focus()
+                  }}
+                >
+                  {row.label}
+                </button>
+              )
+            })}
+          </div>
+          {rows
+            .filter(row => row.id === active || visitedIds.has(row.id))
+            .map((row) => {
+              const selected = row.id === active
+              return (
+                <div
+                  key={row.id}
+                  id={`${tabsId}-panel-${row.id}`}
+                  role="tabpanel"
+                  aria-labelledby={`${tabsId}-tab-${row.id}`}
+                  hidden={!selected}
+                >
+                  {renderSlot('dshtrading.market.tab', {}, { only: row.id })}
+                </div>
+              )
+            })}
+        </>
+      )}
     </div>
   )
 }
 
-export type { TradingSettingsProps as TradingSettingsSectionProps }
+export type { TradingSettingsSectionProps as TradingSettingsSectionPropsType }

@@ -14,14 +14,6 @@ import type {
   SettingsScopeSnapshot,
 } from '@deepseek-ai/dsh-client-ui-settings/client'
 
-/** 市场显示元数据（与 router 的 dict 键同构；显示名本地化在组件层做）。 */
-export const MARKET_LABELS: readonly Readonly<{ id: string; label: string }>[] = [
-  { id: 'crypto', label: '加密货币' },
-  { id: 'us', label: '美国股票' },
-  { id: 'cn', label: '中国 A 股' },
-  { id: 'hk', label: '香港股票' },
-]
-
 /** provider 候选显示名（slug + 显示名；值与 router PROVIDER_VOCABULARY 对齐）。 */
 export const PROVIDER_LABELS: readonly Readonly<{ id: string; label: string }>[] = [
   { id: 'binance', label: 'Binance' },
@@ -56,12 +48,18 @@ export interface TradingSettingsActions {
 /** 状态转化：从 settings 快照投射为组件的可观察视图。 */
 export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): TradingSettingsState {
   const value = snap.value ?? (snap.base as TradingSettings | undefined)
+  const user = (snap.user ?? {}) as { markets?: Record<string, unknown> }
+  // 市场键 = value/base/user 的实际键并集（dict 开放：新市场的键出现即进入，无需改码）。
+  const marketIds = new Set<string>([
+    ...Object.keys(value?.markets ?? {}),
+    ...Object.keys((snap.base as TradingSettings | undefined)?.markets ?? {}),
+    ...Object.keys(user.markets ?? {}),
+  ])
   const resolved: Record<string, string | undefined> = {}
   const overridden: Record<string, boolean> = {}
-  const user = (snap.user ?? {}) as { markets?: Record<string, unknown> }
-  for (const market of MARKET_LABELS) {
-    resolved[market.id] = value?.markets?.[market.id]?.provider
-    overridden[market.id] = user.markets?.[market.id] !== undefined
+  for (const marketId of marketIds) {
+    resolved[marketId] = value?.markets?.[marketId]?.provider
+    overridden[marketId] = user.markets?.[marketId] !== undefined
   }
   return { status: snap.status, resolved, overridden, writable: snap.writable && snap.mode === 'host' }
 }

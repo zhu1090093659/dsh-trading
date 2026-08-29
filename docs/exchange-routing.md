@@ -269,3 +269,33 @@ task-board 全局锁导致无法另起 web 实例验证；待用户重启 GUI �
 4. 未装 router 的旧组合（模拟）：连接器 enabled 语义照旧（向后兼容单测）。
 5. 文档同步：README（单预设 + 设置路由 + 兼容性表）、docs/exchange-routing.md
    （本文）、Agent Note（决策记录）。
+
+---
+
+## 8. 设置界面二级 tab 结构（2026-08-29 升级实现）
+
+用户裁决：不同市场用不同 tab 二级子菜单，充分考虑后续兼容性。
+
+**结构**：
+
+- 一级菜单「交易」（settings.section id=trading）= **tab 容器**（官方
+  settings.plugins.tab 模式：section chrome = tab 栏 + 子 slot 分发）；
+- 子 slot **dshtrading.market.tab**（keyed, root）：**每个市场一个注册**
+  （id=市场 slug, order, label=t('market.<id>'), children=MarketProviderPanel）；
+- section 的 tabs 从 slot ledger 构建（ctx.slots.entries('dshtrading.market.tab')
+  + locale revision，官方 sectionInjected 模式）；每 tab 内容经
+  renderSlot('dshtrading.market.tab', {}, { only: marketId }) 渲染；
+- MarketProviderPanel 编辑共享 dshtrading scope（store/actions），
+  每 tab 独立 draft + 保存/重置（revision-fenced path mutation）。
+
+**兼容性演进**：
+
+| 未来需求 | 改动 | 影响面 |
+|---|---|---|
+| 新市场（jp） | index.ts 的 MARKET_TABS 加一行 + locale market.jp；schema dict 零改（键出现即进 store） | 仅注册处 |
+| 新交易所 | PROVIDER_LABELS 加一行 + router enum 加候选 + 连接器 | 仅候选清单 |
+| 数据/交易分离 | 面板加 tradeProvider 行（字段已预留） | 面板内 |
+| 市场重排/移除 | MARKET_TABS order / 删注册 | 无 |
+
+**设计原则**：tab 注册是唯一市场入口——容器零硬编码市场列表（tabs 来自 slot
+ledger）；新市场仅在注册处增量。

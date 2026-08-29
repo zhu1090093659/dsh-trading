@@ -1,0 +1,113 @@
+/**
+ * One market's provider-routing panel: the Trading section hosts one of these
+ * per market tab. Edits the shared dshtrading scope through the injected
+ * store/actions; staged draft writes on save, fenced by the revision the
+ * form read. Never touched when a new market is added (contributors register
+ * a new tab).
+ */
+import { useEffect, useMemo, useState } from 'react'
+import type { ComposedProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  TradingSettingsActions,
+  TradingSettingsState,
+} from './trading-settings-controller.ts'
+import { PROVIDER_LABELS } from './trading-settings-controller.ts'
+
+/** SnapshotStore 面（hooks 注入）。 */
+export interface MarketPanelStateStore {
+  getSnapshot: () => TradingSettingsState
+  subscribe: (listener: () => void) => () => void
+}
+
+export interface MarketProviderPanelInjected {
+  hooks: {
+    /** Shared dshtrading view (all markets); the panel reads its own market only. */
+    controller: MarketPanelStateStore
+  }
+  /** This panel's market id (crypto/us/cn/hk/...). */
+  market: string
+  /** Write path: store this market's provider selection. */
+  setProvider: (market: string, provider: string) => Promise<void>
+  /** Write path: clear this market's provider (re-inherit base default). */
+  resetProvider: (market: string) => Promise<void>
+}
+
+export type MarketProviderPanelProps =
+  ComposedProps<'dshtrading.market.tab', 'crypto', never, never, MarketProviderPanelInjected, never, 'dshtrading.settings'>
+
+/** Render one market's provider radio group with save/reset. */
+export function MarketProviderPanel({ t, useController, market, setProvider, resetProvider }: MarketProviderPanelProps) {
+  const state = useController((value: TradingSettingsState) => value)
+  const resolved = state.resolved[market]
+  const overridden = state.overridden[market]
+  const [draft, setDraft] = useState<string | undefined>(undefined)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<string | undefined>(undefined)
+
+  // 首次进入（draft 未定）以当前解析值初始化——effect 而非 render setState。
+  useEffect(() => {
+    if (draft === undefined && state.status === 'ready') {
+      setDraft(resolved)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status, resolved])
+
+  const dirty = useMemo(() => {
+    const chosen = draft ?? resolved
+    if (chosen === undefined) return overridden
+    return chosen !== resolved
+  }, [draft, resolved, overridden])
+
+  const writable = state.writable
+
+  async function save() {
+    setSaving(true)
+    setMessage(undefined)
+    try {
+      const chosen = draft ?? resolved
+      if (chosen === undefined) {
+        if (overridden) await resetProvider(market)
+      } else if (chosen !== resolved || !overridden) {
+        await setProvider(market, chosen)
+      }
+      setMessage(t('saved'))
+    } catch (error) {
+      setMessage(`${t('saveFailed')}: ${String(error?.message ?? error)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div>
+      <p style={{ margin: '4px 0' }}>
+        {t('current', { provider: resolved ?? t('default') })}
+      </p>
+      {PROVIDER_LABELS.map((provider) => (
+        <label key={`${market}-${provider.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 14 }}>
+          <input
+            type="radio"
+            name={`provider-${market}`}
+            checked={draft === undefined ? resolved === provider.id : draft === provider.id}
+            disabled={!writable || saving}
+            onChange={() => setDraft(provider.id)}
+          />
+          <span>{provider.label}</span>
+        </label>
+      ))}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+        <button type="button" disabled={!dirty || saving || !writable} onClick={() => void save()}>
+          {t('save')}
+        </button>
+        <button
+          type="button"
+          disabled={saving || !dirty}
+          onClick={() => { setDraft(undefined); setMessage(undefined) }}
+        >
+          {t('discard')}
+        </button>
+        {message !== undefined ? <span>{message}</span> : null}
+      </div>
+    </div>
+  )
+}
