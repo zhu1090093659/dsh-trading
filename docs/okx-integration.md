@@ -209,6 +209,8 @@ passphraseRef: OKX_PASSPHRASE
 
 真实实盘（`env='live'`）**不设自动化测试**：只允许人工一次点击级验收，证据人工归档。
 
+**2026-08-29 模拟盘实测（R5）**：demo 三 ref 注入 → `POST /api/v5/trade/order`（限价买单 90% 市价）+ `GET /api/v5/trade/order` + `POST /api/v5/trade/cancel-order` 全链路 `code=0`，查单 state=`live`、撤单成功；原始证据 `spikes/impl-okx/r5-order-loop-result.json`（凭证不进仓库，只存在于 `~/.dsh-trading-okx.env`，600 权限）。
+
 ## 8. 实现计划草案
 
 ### 8.1 与 connector-binance 的关系：并存

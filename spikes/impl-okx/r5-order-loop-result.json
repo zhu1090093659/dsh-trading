@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-08-29T12:37:35.189Z",
+  "mode": "demo",
+  "ticker": {
+    "code": "0",
+    "last": 77565.4
+  },
+  "place": {
+    "httpStatus": 200,
+    "code": "0",
+    "msg": "",
+    "sCode": "0",
+    "sMsg": "Order placed",
+    "ordId": "3875693089022251008",
+    "px": 69808
+  },
+  "getOrder": {
+    "code": "0",
+    "state": "live",
+    "px": "69808"
+  },
+  "cancel": {
+    "code": "0",
+    "sCode": "0",
+    "sMsg": ""
+  }
+}

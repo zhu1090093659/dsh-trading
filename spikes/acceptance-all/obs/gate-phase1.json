@@ -1,30 +1,30 @@
 {
-  "at": "2026-08-29T12:08:31.472Z",
+  "at": "2026-08-29T12:10:48.238Z",
   "gates": {
     "crypto": {
       "toolFound": true,
-      "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any exchange. The reference price is market data only, not a fill price.\",\"id\":\"dry-1788005310809-f8vf93\",\"symbol\":\"BTCUSDT\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":0.001,\"reference\":{\"source\":\"binance-public-ticker\",\"price\":77592.22,\"bid\":77592.22,\"ask\":77592.23,\"timestamp\":1788005310809},\"timestamp\":1788005310809}",
+      "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any exchange. The reference price is market data only, not a fill price.\",\"id\":\"dry-1788005447545-t5qa2o\",\"symbol\":\"BTCUSDT\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":0.001,\"reference\":{\"source\":\"binance-public-ticker\",\"price\":77568.76,\"bid\":77568.76,\"ask\":77568.77,\"timestamp\":1788005447545},\"timestamp\":1788005447545}",
       "liveReject": {
         "returned": "{\"status\":\"rejected\",\"code\":\"TRADING_LIVE_TRADING_DISABLED\",\"message\":\"crypto_place_order rejected: the call requests real execution (dryRun=false) but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly after confirmation, or keep dryRun=true for a simulated fill.\"}"
       }
     },
     "us": {
       "toolFound": true,
-      "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any broker. Yahoo Finance is a data source only (no trading API); the reference price is the latest regular-market price, which may not reflect pre/post-market moves.\",\"id\":\"dry-1788005311320-0aijxj\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":1,\"reference\":{\"source\":\"yahoo-regular-market\",\"price\":319.7,\"volume\":32419200,\"timestamp\":1787947201000},\"timestamp\":1788005311320}",
+      "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any broker. Yahoo Finance is a data source only (no trading API); the reference price is the latest regular-market price, which may not reflect pre/post-market moves.\",\"id\":\"dry-1788005448070-6w4lqn\",\"symbol\":\"AAPL\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":1,\"reference\":{\"source\":\"yahoo-regular-market\",\"price\":319.7,\"volume\":32419200,\"timestamp\":1787947201000},\"timestamp\":1788005448070}",
       "liveReject": {
         "returned": "{\"status\":\"rejected\",\"code\":\"TRADING_LIVE_TRADING_DISABLED\",\"message\":\"us_place_order rejected: the call requests real execution (dryRun=false) but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly after confirmation, or keep dryRun=true for a simulated fill.\"}"
       }
     },
     "cn": {
       "toolFound": true,
-      "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any broker. Tencent is a data source only (no trading API); the reference price is the latest public quote snapshot.\",\"id\":\"dry-1788005311451-5fz2in\",\"market\":\"cn\",\"symbol\":\"sh600519\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":100,\"reference\":{\"source\":\"tencent-quote\",\"price\":1297.4,\"volume\":1612600,\"timestamp\":1787904900000},\"timestamp\":1788005311451}",
+      "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any broker. Tencent is a data source only (no trading API); the reference price is the latest public quote snapshot.\",\"id\":\"dry-1788005448199-y3j0is\",\"market\":\"cn\",\"symbol\":\"sh600519\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":100,\"reference\":{\"source\":\"tencent-quote\",\"price\":1297.4,\"volume\":1612600,\"timestamp\":1787904900000},\"timestamp\":1788005448199}",
       "liveReject": {
         "returned": "{\"status\":\"rejected\",\"code\":\"TRADING_LIVE_TRADING_DISABLED\",\"message\":\"cn_place_order rejected: the call requests real execution (dryRun=false) but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly after confirmation, or keep dryRun=true for a simulated fill.\"}"
       }
     },
     "hk": {
       "toolFound": true,
-      "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any broker. Tencent is a data source only (no trading API); the reference price is the latest public quote snapshot.\",\"id\":\"dry-1788005311471-urpss2\",\"market\":\"hk\",\"symbol\":\"00700\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":100,\"reference\":{\"source\":\"tencent-quote\",\"price\":455.2,\"volume\":27742475,\"timestamp\":1787904517000},\"timestamp\":1788005311471}",
+      "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any broker. Tencent is a data source only (no trading API); the reference price is the latest public quote snapshot.\",\"id\":\"dry-1788005448236-nyco7f\",\"market\":\"hk\",\"symbol\":\"00700\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":100,\"reference\":{\"source\":\"tencent-quote\",\"price\":455.2,\"volume\":27742475,\"timestamp\":1787904517000},\"timestamp\":1788005448236}",
       "liveReject": {
         "returned": "{\"status\":\"rejected\",\"code\":\"TRADING_LIVE_TRADING_DISABLED\",\"message\":\"hk_place_order rejected: the call requests real execution (dryRun=false) but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly after confirmation, or keep dryRun=true for a simulated fill.\"}"
       }
