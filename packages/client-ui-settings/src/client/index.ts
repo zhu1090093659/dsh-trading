@@ -99,10 +99,10 @@ export function apply(ctx: ClientContext): void {
     label: () => t('nav'),
     locale: NS,
     inject: sectionInjected,
-    children: { 'dshtrading.market.tab': { kind: 'keyed', scope: 'root' } },
+    children: { 'dshtrading.market.tab': { kind: 'list', scope: 'root' } },
   }, TradingSettingsSection))
 
-  // 每个市场一个 tab（keyed：only=market 时渲染对应面板）。
+  // 每个市场一个 tab（list：id=market slug，only=market 时渲染对应面板，官方 settings.plugins.tab 模式）。
   ctx.slots.inject('dshtrading.market.tab', function* () {
     for (const market of MARKET_TABS) {
       yield ctx.slots.register({

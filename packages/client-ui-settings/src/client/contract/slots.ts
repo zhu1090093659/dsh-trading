@@ -15,7 +15,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * is owned by the Trading section; each contribution renders its own
      * panel body from the shared dshtrading scope.
      */
-    'dshtrading.market.tab': { kind: 'keyed'; scope: 'root'; owner: never }
+    'dshtrading.market.tab': { kind: 'list'; scope: 'root'; owner: never }
   }
 }
 

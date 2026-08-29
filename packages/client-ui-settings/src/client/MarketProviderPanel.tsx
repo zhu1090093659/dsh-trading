@@ -6,7 +6,7 @@
  * a new tab).
  */
 import { useEffect, useMemo, useState } from 'react'
-import type { ComposedProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   TradingSettingsActions,
   TradingSettingsState,
@@ -33,7 +33,9 @@ export interface MarketProviderPanelInjected {
 }
 
 export type MarketProviderPanelProps =
-  ComposedProps<'dshtrading.market.tab', 'crypto', never, never, MarketProviderPanelInjected, never, 'dshtrading.settings'>
+  PropsRuntime<'dshtrading.market.tab'>
+  & PropsLocale<'dshtrading.settings'>
+  & InjectFace<MarketProviderPanelInjected>
 
 /** Render one market's provider radio group with save/reset. */
 export function MarketProviderPanel({ t, useController, market, setProvider, resetProvider }: MarketProviderPanelProps) {
