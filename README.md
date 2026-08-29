@@ -78,6 +78,7 @@ DSH 扩展机制分层与对应选择：
 | `@dsh-trading/kit-cn` / `kit-hk` | 插件：skill provider（cn-risk-checklist：T+1/涨跌停/ST/两融；hk-risk-checklist：T+0/碎股/供配股/窝轮牛熊证） |
 | `@dsh-trading/cn` / `hk` | bundle：依赖安装载体 + 安装器（cn-trader / hk-trader preset） |
 | `@dsh-trading/all` | 元 bundle（预留；当前 DSH 版本不展开传递 bundle 依赖，见上「已知限制」） |
+| `@dsh-trading/connector-template` | **脚手架（不入任何 bundle 依赖）**：新交易所连接器模板源，由 `scripts/new-connector.mjs` 生成器展开；接入流程见 `docs/connector-playbook.md` |
 
 ### 数据源与 ToS（铁律 #5）
 
