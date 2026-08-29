@@ -20,7 +20,9 @@
 @dsh-trading/kit-crypto     插件：crypto 专属工具（资金费率、持仓量等）+ skill provider [S2]
       │                     + preset 自安装逻辑（crypto-trader）[S3]
       ▲
-@dsh-trading/crypto         bundle：cordis.patch.yml insert-only 聚合上述行（铁律 #1）
+@dsh-trading/crypto         bundle：依赖安装载体（preset 行从 profile node_modules 解析，S3 坑 3）；
+                            工具行在 preset 平面（agent.cordis.yml），不在本层 insert（2026-08-29 修订：
+                            preset 级会话隔离；行 id 定稿 dsh-trading-<market>-*）
 ```
 
 包数：5（不含未来的 UI 包）。版本策略：changesets 统一管理；bundle 对连接器用精确版本钉住。

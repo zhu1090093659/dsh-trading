@@ -24,11 +24,20 @@
       仓位与资金费率时逐项核对 crypto-risk-checklist 风控清单，并明确提示强平与费率风险；
       你给出的任何内容都不构成投资建议。
 
-- id: dsh-trading-crypto-connector-binance
-  name: '@dsh-trading/connector-binance'
+# connector 行 provide 服务（tradingCryptoMarketData），按官方 standard preset 的硬性规则
+# 必须包进 cordis:group + isolate（entry-local realm）：否则服务发布进 root realm，
+# 与其他 preset 冲突，dsh-agent-presets 挂载时直接拒绝。（2026-08-29 主 agent 评审修复）
+- id: dsh-trading-crypto-connector
+  name: cordis:group
+  group: true
+  isolate:
+    tradingCrypto: true
   config:
-    dryRun: true
-    liveTrading: false
+    - id: dsh-trading-crypto-connector-binance
+      name: '@dsh-trading/connector-binance'
+      config:
+        dryRun: true
+        liveTrading: false
 
 - id: dsh-trading-crypto-kit
   name: '@dsh-trading/kit-crypto'
