@@ -34,35 +34,39 @@ function captureCtx(): { ctx: Context; listeners: Map<string, unknown> } {
 }
 
 describe('ORDER_GATE_PATTERN', () => {
-  it('matches dsh-trading place/cancel order tool names across markets', () => {
-    expect(isOrderGateTool('dsh-trading-crypto_place_order')).toBe(true)
-    expect(isOrderGateTool('dsh-trading-us_place_order')).toBe(true)
-    expect(isOrderGateTool('dsh-trading-hk_cancel_order')).toBe(true)
-    expect(ORDER_GATE_PATTERN.test('dsh-trading-crypto_cancel_order')).toBe(true)
+  it('matches <market>_place/cancel_order tool names across markets', () => {
+    // 真实工具名词汇（connector-binance 注册的 crypto_place_order 必须命中）
+    expect(isOrderGateTool('crypto_place_order')).toBe(true)
+    expect(isOrderGateTool('us_place_order')).toBe(true)
+    expect(isOrderGateTool('hk_cancel_order')).toBe(true)
+    expect(ORDER_GATE_PATTERN.test('cn_cancel_order')).toBe(true)
   })
 
-  it('ignores read-only tools and non-dsh-trading names', () => {
+  it('ignores read-only tools, suffixed names, and plugin-id-shaped names', () => {
     expect(isOrderGateTool('crypto_get_ticker')).toBe(false)
     expect(isOrderGateTool('crypto_get_klines')).toBe(false)
     expect(isOrderGateTool('crypto_funding_rate')).toBe(false)
-    expect(isOrderGateTool('dsh-trading-crypto_place_order_history')).toBe(false)
+    expect(isOrderGateTool('crypto_place_order_history')).toBe(false)
+    // 回归护栏：dsh-trading- 前缀是插件/行 id 词汇，绝不是工具名（曾误用作闸门模式）
+    expect(isOrderGateTool('dsh-trading-crypto_place_order')).toBe(false)
+    expect(isOrderGateTool('binance_place_order')).toBe(false)
     expect(isOrderGateTool('bash')).toBe(false)
   })
 })
 
 describe('decideOrderGate', () => {
   it('asks for gated tools without explicit dryRun=true', () => {
-    expect(decideOrderGate('dsh-trading-crypto_place_order', {})).toMatchObject({ kind: 'ask' })
-    expect(decideOrderGate('dsh-trading-crypto_place_order', { dryRun: false })).toMatchObject({
+    expect(decideOrderGate('crypto_place_order', {})).toMatchObject({ kind: 'ask' })
+    expect(decideOrderGate('crypto_place_order', { dryRun: false })).toMatchObject({
       kind: 'ask',
     })
-    expect(decideOrderGate('dsh-trading-crypto_cancel_order', undefined)).toMatchObject({
+    expect(decideOrderGate('crypto_cancel_order', undefined)).toMatchObject({
       kind: 'ask',
     })
   })
 
   it('reason states the safety gate and the fail-closed headless behaviour', () => {
-    const decision = decideOrderGate('dsh-trading-crypto_place_order', { dryRun: false })
+    const decision = decideOrderGate('crypto_place_order', { dryRun: false })
     expect(decision).toMatchObject({ kind: 'ask' })
     if (decision?.kind === 'ask') {
       expect(decision.reason).toContain('dryRun')
@@ -71,7 +75,7 @@ describe('decideOrderGate', () => {
   })
 
   it('passes through dryRun=true and non-gated tools (undefined = next())', () => {
-    expect(decideOrderGate('dsh-trading-crypto_place_order', { dryRun: true })).toBeUndefined()
+    expect(decideOrderGate('crypto_place_order', { dryRun: true })).toBeUndefined()
     expect(decideOrderGate('crypto_get_ticker', { symbol: 'BTCUSDT' })).toBeUndefined()
     expect(decideOrderGate('crypto_get_ticker', { dryRun: false })).toBeUndefined()
   })
@@ -81,7 +85,7 @@ describe('createGateListener (tools/pre-execute waterfall contract)', () => {
   it('returns ask for gated calls without touching next()', async () => {
     const listener = createGateListener()
     const next = vi.fn(async () => ALLOW)
-    const decision = await listener.call(undefined, exec('dsh-trading-crypto_place_order', { dryRun: false }), next)
+    const decision = await listener.call(undefined, exec('crypto_place_order', { dryRun: false }), next)
     expect(decision).toMatchObject({ kind: 'ask' })
     expect(next).not.toHaveBeenCalled()
   })
@@ -90,7 +94,7 @@ describe('createGateListener (tools/pre-execute waterfall contract)', () => {
     const listener = createGateListener()
     const next = vi.fn(async () => ALLOW)
 
-    await listener.call(undefined, exec('dsh-trading-crypto_place_order', { dryRun: true }), next)
+    await listener.call(undefined, exec('crypto_place_order', { dryRun: true }), next)
     expect(next).toHaveBeenCalledTimes(1)
 
     await listener.call(undefined, exec('crypto_get_ticker', { symbol: 'BTCUSDT' }), next)
