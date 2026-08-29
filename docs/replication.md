@@ -66,7 +66,8 @@
 | 空 patch 层 | cordis.patch.yml 必须保持顶层 YAML 数组形状（loadProfile→parsePatchList 对非数组抛错）；空层写字面量 `[]`，不能只有注释 | `packages/crypto/cordis.patch.yml` 头注；本仓 spike 实证（S1 patch 语义链路） |
 | ECMAScript `#` 私有字段 | cordis 服务类禁用（realm 代理按类身份炸）；用 TS 编译期 `private` | README 定稿 5；commit 80d7691 |
 | 行 id 即命名空间 | 同 id 后层整行替换前层（insert-only 铁律的机制根源）；patch 打不存在的行仅警告——静默落空风险，id 拼错要靠 dump-config 核对 | S1 REPORT:40；S3 坑入账 |
-| agent-presets 行位置 | 官方该行在 web-app bundle 不在 base/headless——第三方 bundle 必须自己 insert | REVIEW-LOG S3（agent-presets 行在 web-app :435） |
+| agent-presets 行位置 | 官方该行在 web-app bundle 不在 base/headless（REVIEW-LOG S3）；**两宿主不能共用 insert 写法**：insert 无 id 条目一律 append，web 上与 web-app 的行撞「duplicate loader entry id」启动崩溃（trading-web 实测，vendor/loader/lib/index.js:81）。定稿：base 用同 id 覆盖条目（web 生效/headless 警告跳过），headless 部署在 profile 级 cordis.patch.yml 自行 insert（trading-dev 即如此） | commit 见 base patch 修复（2026-08-29）；vendor/include/src/index.ts:77-125 |
+| 重复行 id | loader 扁平化后对重复 id 直接抛错启动失败；insert 唯一安全场景 = id 全仓唯一的行 | 同上实测 |
 | preset 插件解析 | preset 行引用的插件包必须进市场 bundle 的 dependencies，否则标 broken | S3 坑 3；acceptance REPORT 验收项 6 reason |
 | peer 声明 | 插件包漏声明 SDK peer → tsdown 按 file: 依赖内联陈旧 vendor 树 → profile 内 import 崩 | acceptance REPORT「修复 2」 |
 | profile pnpm-workspace.yaml | dsh 维护的 append-only，CI/脚本不得重写；SDK 钉版用 overrides 追加 | S5 修订 4；本仓 pnpm-workspace.yaml 注释 |
