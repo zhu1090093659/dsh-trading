@@ -1,0 +1,54 @@
+{
+  "at": "2026-08-29T08:39:49.549Z",
+  "presetRoot": "/Users/zcl/.dsh-trading-presets",
+  "presetId": "crypto-trader",
+  "selfInstallRunA": {
+    "dir": "/Users/zcl/.dsh-trading-presets/crypto-trader",
+    "wrote": [
+      "agent.cordis.yml",
+      "preset.yml"
+    ]
+  },
+  "apply": {
+    "skillProviders": 1,
+    "toolsRegistered": [
+      "crypto_funding_rate"
+    ],
+    "presetLogs": [
+      [
+        "info",
+        "[dsh-trading-crypto-kit] self-install %s preset at %s wrote=[%s] crypto-trader /Users/zcl/.dsh-trading-presets/crypto-trader nothing — already current"
+      ]
+    ]
+  },
+  "selfInstallRunB": {
+    "dir": "/Users/zcl/.dsh-trading-presets/crypto-trader",
+    "wrote": []
+  },
+  "byteEquality": {
+    "agent.cordis.yml": {
+      "asset": "2c750f68c7d70b7a",
+      "installed": "2c750f68c7d70b7a",
+      "equal": true
+    },
+    "preset.yml": {
+      "asset": "418db2cd4c8c14a9",
+      "installed": "418db2cd4c8c14a9",
+      "equal": true
+    }
+  },
+  "fundingRate": {
+    "args": {
+      "symbol": "btcusdt",
+      "limit": 3
+    },
+    "result": "crypto_funding_rate BTCUSDT — last 3 funding event(s):\n- 2026-08-28T16:00:00.001Z  rate=0.00005913 (0.0059%)  markPrice=78308.90000000\n- 2026-08-29T00:00:00.000Z  rate=0.00010000 (0.0100%)  markPrice=77806.12043478\n- 2026-08-29T08:00:00.000Z  rate=0.00010000 (0.0100%)  markPrice=77597.93110145"
+  },
+  "render": {
+    "blocks": 1,
+    "firstType": "text",
+    "textMatches": true
+  },
+  "negativeSymbol": "crypto_funding_rate: invalid symbol \"../etc/passwd\" — expected an uppercase Binance futures symbol like BTCUSDT",
+  "ok": true
+}
