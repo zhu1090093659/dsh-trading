@@ -3,30 +3,36 @@
 # 本文件只允许 insert（patch 非 insert 语义是按 id 整行替换，多市场并存会互相
 # 覆盖）；共享行一律只在本层定义一次，市场 bundle 不得 replace。
 #
-# 当前 insert 两行：
-#   1. dsh-trading-base-gate —— 本包的统一审批监听器插件（见 src/index.ts）：
-#      对 dsh-trading-* 的 place/cancel_order 且 dryRun!==true 的工具调用返回
-#      ask 交宿主审批面；headless 无应答者时宿主降级为 deny（fail-closed 特性）。
-#   2. agent-presets —— 统一 preset root 配置（S3 机制）。headless 宿主的
-#      base/headless 层没有该行（它在 web-app bundle patch 里），S3 证实第三方
-#      bundle 必须自己 insert；patch 打在已存在的行上也是整行替换，所以 config
-#      全键 restate（不合并）。包名解析依赖本包 dependencies 里的
+# 当前两层语义（2026-08-29 web 宿主实测修正，vendor/loader + vendor/include 源码为准）：
+#   1. insert 行：dsh-trading-base-gate —— 本包的统一审批监听器插件（见 src/index.ts）：
+#      对 <market>_(place|cancel)_order 且 dryRun!==true 的工具调用返回 ask 交宿主
+#      审批面；headless 无应答者时宿主降级为 deny（fail-closed 特性）。
+#      该 id 全仓唯一，insert 在任何宿主都安全。
+#   2. 同 id 覆盖行：agent-presets —— 统一 preset root 配置（S3 机制）。
+#      **为什么不能 insert**：web 宿主的 web-app 层已有 agent-presets 行，insert 无 id
+#      条目一律 append 新行，loader.update 对重复 id 直接抛
+#      「duplicate loader entry id」——web profile 会启动崩溃（trading-web 实测）。
+#      覆盖条目语义：行存在 → 按 key 覆盖（config 全键 restate，不合并——所以 default/
+#      includeShippedRoot/includeUserRoot 必须全带）；行不存在（headless）→ 仅 Loader
+#      警告并跳过，不致命。headless 部署需要该 root 时，由部署方在 profile 级
+#      cordis.patch.yml 自行 insert 同一行（见 README 开发期安装节；trading-dev 即如此）。
+#      roots 用市场自有目录 ~/.dsh-trading-presets（bundle 安装器自安装目的地，
+#      不混入 ~/.dsh/.agent-presets 用户创作区）；default 保持官方 standard，
+#      多市场会话并存时不劫持默认 preset。包名解析依赖本包 dependencies 里的
 #      @deepseek-ai/dsh-agent-presets（进 profile 安装闭包，S3 坑 3）。
-#      roots 用市场自有目录 ~/.dsh-trading-presets（kit-crypto 自安装目的地，
-#      不混入 ~/.dsh/.agent-preset 用户创作区）；default 保持官方 standard，
-#      多市场会话并存时不劫持默认 preset。
 #
 # 脚手架阶段遗留的 insert-only 约定不变：后续共享行（组合管理/风控工具行、
 # credentials 引用约定行 [S4]）继续追加到本文件的 insert 列表。
 - insert:
     - id: dsh-trading-base-gate
       name: '@dsh-trading/base'
-    - id: agent-presets
-      name: '@deepseek-ai/dsh-agent-presets'
-      config:
-        default: standard
-        roots:
-          - path: ~/.dsh-trading-presets
-            trust: user
-        includeShippedRoot: true
-        includeUserRoot: true
+
+- id: agent-presets
+  name: '@deepseek-ai/dsh-agent-presets'
+  config:
+    default: standard
+    roots:
+      - path: ~/.dsh-trading-presets
+        trust: user
+    includeShippedRoot: true
+    includeUserRoot: true

@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-29T09:30:50.777Z",
+  "at": "2026-08-29T09:52:48.684Z",
   "mount": "ok (agents.create + presets.mount in setup; no rejection — see boot-error-*.json for the failure path)",
   "joinedVisible": {
     "crypto_get_ticker": true,

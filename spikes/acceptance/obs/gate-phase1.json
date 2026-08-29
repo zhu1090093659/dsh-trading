@@ -1,6 +1,6 @@
 {
-  "at": "2026-08-29T09:30:50.778Z",
-  "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any exchange. The reference price is market data only, not a fill price.\",\"id\":\"dry-1787995850777-o2dtxm\",\"symbol\":\"BTCUSDT\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":0.001,\"reference\":{\"source\":\"binance-public-ticker\",\"price\":77626.5,\"bid\":77626.49,\"ask\":77626.5,\"timestamp\":1787995850777},\"timestamp\":1787995850777}",
+  "at": "2026-08-29T09:52:48.685Z",
+  "dryRunReceipt": "{\"status\":\"filled\",\"dryRun\":true,\"note\":\"DRY-RUN — simulated fill; no order was sent to any exchange. The reference price is market data only, not a fill price.\",\"id\":\"dry-1787997168684-8po9ye\",\"symbol\":\"BTCUSDT\",\"side\":\"buy\",\"type\":\"market\",\"quantity\":0.001,\"reference\":{\"source\":\"binance-public-ticker\",\"price\":77674,\"bid\":77673.99,\"ask\":77674,\"timestamp\":1787997168684},\"timestamp\":1787997168684}",
   "liveReject": {
     "returned": "{\"status\":\"rejected\",\"code\":\"TRADING_LIVE_TRADING_DISABLED\",\"message\":\"crypto_place_order rejected: the call requests real execution (dryRun=false) but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly after confirmation, or keep dryRun=true for a simulated fill.\"}"
   }
