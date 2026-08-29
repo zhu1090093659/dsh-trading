@@ -22,7 +22,9 @@
     "@deepseek-ai/dsh-tools": "*",
     "@deepseek-ai/schemastery": "*",
     "@types/node": "^24.0.0",
+    "lightningcss": "^1.33.0",
     "tsdown": "^0.22.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.0",
     "vitest": "^3.0.0"
   }

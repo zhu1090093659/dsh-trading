@@ -1,0 +1,62 @@
+{
+  "name": "@dsh-trading/client-ui-settings",
+  "description": "Trading settings section for the dsh web client: market → provider routing (dshtrading namespace). Browser half is a dsh.client bundle; node half is the host row placeholder.",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "bundle": "tsdown && tsdown --config tsdown.client.config.mjs && node -e \"const fs=require('node:fs');fs.existsSync('lib/client.cjs')&&fs.renameSync('lib/client.cjs','lib/client.js')\"",
+    "build": "tsdown && tsdown --config tsdown.client.config.mjs && node -e \"const fs=require('node:fs');fs.existsSync('lib/client.cjs')&&fs.renameSync('lib/client.cjs','lib/client.js')\"",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dsh-trading/router": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-client-connection": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-ui-renderer": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-api-remotes": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-store": ">=0.1.2-alpha.1",
+    "react": "^18.2.0",
+    "@types/react": "~18.3.1"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "platform": "web"
+    }
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0",
+    "lightningcss": "^1.0.0",
+    "react": "^18.2.0",
+    "@types/react": "~18.3.1"
+  }
+}

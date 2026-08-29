@@ -206,7 +206,25 @@ export function apply(ctx: Context, config: Config): void {
 5. **`dsh.client` 声明**：inject 含 `@deepseek-ai/dsh-client-ui-settings`（settings
    界面核心）与 `@deepseek-ai/dsh-client-ui-slots`（slot 系统）等；platform: web。
 
-### 6.3 风险与缓解
+### 6.3 实现状态（2026-08-29 交付）
+
+**已交付**：
+- `@dsh-trading/client-ui-settings`（双面包）：node 半空 apply；浏览器半注册
+  `settings.section` id=trading（『交易』一级菜单）——市场卡（crypto/us/cn/hk）×
+  provider 单选（binance/okx/yahoo/stooq/tencent）× 保存（path mutation + revision
+  防漂移）/重置（unset 回 base）/『新建会话生效』提示；文案 zh/en 双语；
+- `tsdown.client.config.mjs`：外部复刻 DSH 内部 clientBundle 的最小面（cjs/browser/
+  lib/client.js/banner-footer/define NODE_ENV/deps neverBundle=externals/alwaysBundle=其余/
+  purity gate/CSS module+global 内联）；构建产物 lib/client.js（closure-factory 格式）；
+- base cordis.patch.yml insert `dsh-trading-client-ui-settings` 行（host 面；web 宿主 modules
+  扫 loader entries 进 __DSH_BOOT__；headless 解释为普通行——空 apply 无害）；
+- 四 profile overrides 同步（坑 #15）；全仓 19 包 build/test 含新包冒烟 3 用例绿。
+
+**遗留（需用户参与）**：真实 web 宿主首验——机器现有 web GUI 进程（89166）持有
+task-board 全局锁导致无法另起 web 实例验证；待用户重启 GUI 后，设置页应出现
+『交易』一级菜单（若有渲染错误 log 会报）。浏览器半的行为规格见 §7。
+
+### 6.4 风险与缓解
 
 | 风险 | 缓解 |
 |---|---|

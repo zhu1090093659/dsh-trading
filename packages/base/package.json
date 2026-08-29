@@ -30,7 +30,8 @@
   "dependencies": {
     "@dsh-trading/api": "workspace:^",
     "@deepseek-ai/dsh-agent-presets": "0.1.2-alpha.1",
-    "@dsh-trading/router": "workspace:^"
+    "@dsh-trading/router": "workspace:^",
+    "@dsh-trading/client-ui-settings": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

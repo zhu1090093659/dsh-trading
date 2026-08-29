@@ -34,6 +34,13 @@
     - id: dsh-trading-market-router
       name: '@dsh-trading/router'
 
+    # 交易设置一级菜单（2026-08-29 浏览器半包，docs/exchange-routing.md §6）：
+    # dsh.client 双面包（node 半空 apply + 浏览器半注册 settings.section id=trading）。
+    # 浏览器侧由 web 宿主的 dsh-client-modules 扫描 loader entries 进 __DSH_BOOT__；
+    # headless 宿主无 modules 行，此包被解析为普通 host 行（空 apply 无害）。
+    - id: dsh-trading-client-ui-settings
+      name: '@dsh-trading/client-ui-settings'
+
 - id: agent-presets
   name: '@deepseek-ai/dsh-agent-presets'
   config:
