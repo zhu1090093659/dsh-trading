@@ -5,7 +5,9 @@
 - 创建：`dsh plugin --profile spike-runner add <exa 本地路径>` + `add <headless bundle 本地路径>`
 - 组合：bundles = [@deepseek-ai/dsh-base, @deepseek-ai/dsh-headless]，patchReload: live
 - 用法：`cd <spike 目录> && dsh --profile spike-runner "$(cat PROMPT.md)"`
-- 模型：agent-default-model = zai-coding-cn/glm-5.3-flash；路由默认 reasoning: max（2026-08-29 设置，见 settings.yaml.bak-zai-reasoning-max-*）
+- 模型：agent-default-model 当前 = zenmux/z-ai/glm-5.3-flash + reasoningEffort: max（用户 2026-08-29 15:xx 切换；此前为 zai-coding-cn/glm-5.3-flash，触顶 5 小时限额 429）
+- 推理度双保险：agent-default-model 逐请求带 reasoningEffort:max；zai-coding-cn 路由另有默认 reasoning: max（settings.yaml.bak-zai-reasoning-max-* 备份）
+- 注意：settings.yaml 会被运行中的 DSH 进程回写，编辑前必须重新读文件
 
 ## 环境坑（已证实）
 
