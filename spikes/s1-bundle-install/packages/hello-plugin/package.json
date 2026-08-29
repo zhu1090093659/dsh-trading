@@ -1,0 +1,11 @@
+{
+  "name": "@spike-s1/hello-plugin",
+  "version": "0.1.0",
+  "description": "S1 spike: pure Cordis plugin (no dsh.bundle) loaded via a bundle insert row",
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "dsh-profile-spike-s1",
+  "private": true,
+  "dependencies": {},
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base"
+      ],
+      "patchReload": "live"
+    }
+  }
+}

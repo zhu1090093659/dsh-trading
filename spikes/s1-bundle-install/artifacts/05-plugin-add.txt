@@ -1,0 +1,9 @@
+Progress: resolved 1, reused 0, downloaded 0, added 0
+
+dependencies:
++ @spike-s1/hello-bundle file:/Users/zcl/code/dsh-trading/spikes/s1-bundle-install/packages/hello-bundle
+
+Packages: +2
+++
+Progress: resolved 2, reused 2, downloaded 0, added 2, done
+Done in 244ms using pnpm v11.9.0

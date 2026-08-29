@@ -1,0 +1,19 @@
+# S2 spike: replicate the @deepseek-ai/dsh-headless bundle rows as a --patch
+# overlay. Reason: the npm registry only carries ancient RCs of the headless
+# bundle (latest tag = 0.0.1-rc.1, deps unpublished), while the local dsh
+# installation (0.1.2-alpha.1) carries the current @deepseek-ai/dsh-headless
+# and resolves it through $DSH_HOME/profiles/node_modules (installation
+# closure). Rows copied verbatim from packages/bundle/headless/cordis.patch.yml.
+- insert:
+    - id: code-runtime
+      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
+
+    - id: headless-startup
+      name: '@deepseek-ai/dsh-headless/startup'
+
+    # Reads its task from the ordinary headlessStartup provider.
+    - id: headless-runner
+      name: '@deepseek-ai/dsh-headless'
+      inject: [headlessStartup]
+      config:
+        task: !!js ctx.headlessStartup.task

@@ -1,0 +1,16 @@
+{
+  "name": "dsh-profile-spike-s1",
+  "private": true,
+  "dependencies": {
+    "@spike-s1/hello-bundle": "file:/Users/zcl/code/dsh-trading/spikes/s1-bundle-install/packages/hello-bundle"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@spike-s1/hello-bundle"
+      ],
+      "patchReload": "live"
+    }
+  }
+}

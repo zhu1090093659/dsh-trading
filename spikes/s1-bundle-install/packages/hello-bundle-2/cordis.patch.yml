@@ -1,0 +1,5 @@
+# S1 spike second bundle layer: inserts a DIFFERENT row id (insert-only
+# discipline) depending on the same plugin package.
+- insert:
+    - id: spike-s1-hello-2
+      name: '@spike-s1/hello-plugin'

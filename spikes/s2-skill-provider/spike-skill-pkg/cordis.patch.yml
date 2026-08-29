@@ -1,0 +1,4 @@
+# S2 spike bundle patch: mount this package's plugin entry as one insert row.
+- insert:
+    - id: spike-skill-provider
+      name: spike-skill-pkg

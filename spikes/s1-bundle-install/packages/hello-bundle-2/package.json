@@ -1,0 +1,18 @@
+{
+  "name": "@spike-s1/hello-bundle-2",
+  "version": "0.1.0",
+  "description": "S1 spike: second out-of-tree bundle to verify insert-only multi-bundle coexistence",
+  "type": "module",
+  "files": [
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@spike-s1/hello-plugin": "file:../hello-plugin"
+  },
+  "license": "MIT"
+}

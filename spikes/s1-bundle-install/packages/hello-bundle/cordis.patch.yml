@@ -1,0 +1,6 @@
+# S1 spike bundle layer: insert-only, one new row over whatever the earlier
+# layers composed. Row id is spike-s1 namespaced so coexistence with other
+# bundles never collides.
+- insert:
+    - id: spike-s1-hello
+      name: '@spike-s1/hello-plugin'
