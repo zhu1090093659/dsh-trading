@@ -4,7 +4,7 @@ import { defineConfig } from 'tsdown'
 // 浏览器半由 tsdown.client.config.mjs 构建（lib/client.js），bundle 脚本负责两者 + 重命名。
 export default defineConfig({
   entry: ['src/index.ts'],
-  outDir: 'lib/types',
+  outDir: 'lib',
   format: ['esm'],
   platform: 'node',
   target: 'es2024',
