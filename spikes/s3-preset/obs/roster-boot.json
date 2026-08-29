@@ -1,0 +1,69 @@
+{
+  "at": "2026-08-29T07:18:50.928Z",
+  "services": {
+    "agentPresets": true,
+    "agents": true,
+    "agentDefaultModel": true
+  },
+  "selfInstall": {
+    "dir": "/Users/zcl/code/dsh-trading/spikes/s3-preset/spike-presets/spike-s3-preset",
+    "wrote": []
+  },
+  "roster": [
+    {
+      "id": "standard",
+      "trust": "system",
+      "name": "标准模式",
+      "broken": null
+    },
+    {
+      "id": "ptc",
+      "trust": "system",
+      "name": "PTC 模式",
+      "broken": null
+    },
+    {
+      "id": "minimal",
+      "trust": "system",
+      "name": "极简模式",
+      "broken": null
+    },
+    {
+      "id": "cordis",
+      "trust": "system",
+      "name": "创造模式",
+      "broken": null
+    },
+    {
+      "id": "spike-s3-preset",
+      "trust": "user",
+      "name": "S3 Spike Preset",
+      "broken": null
+    },
+    {
+      "id": "spike-broken-badrow",
+      "trust": "user",
+      "name": null,
+      "broken": "row \"bad\" names a plugin that cannot be resolved: @deepseek-ai/dsh-not-installed-anywhere"
+    },
+    {
+      "id": "spike-broken-nofile",
+      "trust": "user",
+      "name": null,
+      "broken": "the composition file agent.cordis.yml is missing — the directory still occupies the id; delete it or restore the file"
+    },
+    {
+      "id": "liangshen",
+      "trust": "user",
+      "name": "梁神模式",
+      "broken": null
+    }
+  ],
+  "resolveSelfInstalled": {
+    "id": "spike-s3-preset",
+    "trust": "user",
+    "path": "/Users/zcl/code/dsh-trading/spikes/s3-preset/spike-presets/spike-s3-preset/agent.cordis.yml",
+    "broken": null
+  },
+  "resolveUnknownError": "agent-presets: preset \"no-such-preset-xyz\" not found (available: standard, ptc, minimal, cordis, spike-s3-preset, spike-broken-badrow, spike-broken-nofile, liangshen)"
+}

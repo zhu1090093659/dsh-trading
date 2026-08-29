@@ -27,3 +27,11 @@
   4. profile pnpm-workspace.yaml 是 dsh 维护的 append-only——CI/脚本不得重写它
   5. 本地联调统一 file: 绝对路径（S1 硬链接坑）或 tarball
 - TEMPLATES.md 已产出，脚手架阶段直接采用。
+## S3 preset root+自安装 — ✅ PASS（2026-08-29 复核）
+- 抽核命中：agent-presets 行确实在 web-app bundle（:435）而非 base——headless 宿主须先 insert 该行（项目关键事实）；discovery 无记忆化（index.ts:151），自安装免重启 2 秒级感知（roster-live.jsonl 实测序列）。
+- 采纳建议：preset root 用市场自有目录（~/.dsh-trading-presets），**不**混入 ~/.dsh/.agent-presets；preset 引用的插件必须进市场 bundle 的 dependencies（否则标 broken）；改 agent.cordis.yml 即新代际免重启生效。
+- 坑入账：file: 依赖是安装时快照（改码须重装）；agents.create setup 必须返回 undefined；patch 打不存在的行仅警告（静默落空风险）。
+
+---
+
+# 第 0 阶段总结论：S1-S5 全部 PASS，无降级项，进入第 1 阶段（脚手架）

@@ -1,0 +1,3 @@
+name: S3 Spike Preset
+description: 由 @spike-s3/preset-pkg 在插件启动时幂等自安装进配置 root 的 preset。
+order: 50

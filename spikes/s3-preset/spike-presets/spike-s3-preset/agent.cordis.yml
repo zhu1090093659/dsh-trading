@@ -1,0 +1,8 @@
+# S3 spike preset — self-installed by @spike-s3/preset-pkg at plugin startup.
+# Agent-plane composition: mounted once per preset (standing mount); every session
+# naming this preset joins by scope parentage. The single row is this bundle's own
+# plugin, so resolution needs nothing beyond the spike profile's node_modules.
+- id: spike-s3-marker
+  name: '@spike-s3/preset-pkg'
+  config:
+    presetRow: true
