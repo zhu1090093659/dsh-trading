@@ -1,6 +1,6 @@
 {
   "name": "@dsh-trading/base",
-  "description": "Market-agnostic core bundle for dsh-trading: sole owner of shared cordis rows (portfolio/risk tools, unified preset root) introduced in later slices",
+  "description": "Market-agnostic core bundle for dsh-trading: sole owner of shared cordis rows — unified order/cancel approval gate plugin and the agent-presets row (unified preset root ~/.dsh-trading-presets)",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -24,12 +24,20 @@
     }
   },
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/api": "workspace:^"
+    "@dsh-trading/api": "workspace:^",
+    "@deepseek-ai/dsh-agent-presets": "0.1.2-alpha.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.2-alpha.1",
+    "@deepseek-ai/schemastery": ">=3.18.0"
   },
   "devDependencies": {
-    "tsdown": "^0.22.0"
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0"
   }
 }

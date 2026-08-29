@@ -1,13 +1,32 @@
 # @dsh-trading/base —— 市场无关共享行的唯一拥有者（README 设计铁律 #1）。
 #
-# 后续切片在此 insert（均为 base 独占的共享行，市场 bundle 不得 replace）：
-#   - 组合管理工具行、风控原语工具行
-#   - 统一 preset root 配置行 [S3]
-#   - credentials 引用约定相关行 [S4]
+# 本文件只允许 insert（patch 非 insert 语义是按 id 整行替换，多市场并存会互相
+# 覆盖）；共享行一律只在本层定义一次，市场 bundle 不得 replace。
 #
-# 脚手架阶段：insert 列表为空占位。空数组对 patch loader 是 no-op
-# （vendor/include applyEntryPatches：`data.push(...insert)` 推入 0 行，无告警）。
+# 当前 insert 两行：
+#   1. dsh-trading-base-gate —— 本包的统一审批监听器插件（见 src/index.ts）：
+#      对 dsh-trading-* 的 place/cancel_order 且 dryRun!==true 的工具调用返回
+#      ask 交宿主审批面；headless 无应答者时宿主降级为 deny（fail-closed 特性）。
+#   2. agent-presets —— 统一 preset root 配置（S3 机制）。headless 宿主的
+#      base/headless 层没有该行（它在 web-app bundle patch 里），S3 证实第三方
+#      bundle 必须自己 insert；patch 打在已存在的行上也是整行替换，所以 config
+#      全键 restate（不合并）。包名解析依赖本包 dependencies 里的
+#      @deepseek-ai/dsh-agent-presets（进 profile 安装闭包，S3 坑 3）。
+#      roots 用市场自有目录 ~/.dsh-trading-presets（kit-crypto 自安装目的地，
+#      不混入 ~/.dsh/.agent-preset 用户创作区）；default 保持官方 standard，
+#      多市场会话并存时不劫持默认 preset。
 #
-# patch 语义提醒：非 insert patch 按 id 整行替换该行的整个 config（不做合并），
-# 所以任何共享行只允许在 base 这一层定义一次。
-- insert: []
+# 脚手架阶段遗留的 insert-only 约定不变：后续共享行（组合管理/风控工具行、
+# credentials 引用约定行 [S4]）继续追加到本文件的 insert 列表。
+- insert:
+    - id: dsh-trading-base-gate
+      name: '@dsh-trading/base'
+    - id: agent-presets
+      name: '@deepseek-ai/dsh-agent-presets'
+      config:
+        default: standard
+        roots:
+          - path: ~/.dsh-trading-presets
+            trust: user
+        includeShippedRoot: true
+        includeUserRoot: true

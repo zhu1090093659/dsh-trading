@@ -17,7 +17,7 @@ import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import type { Disposable, Interval, Kline, MarketDataService, Ticker } from '@dsh-trading/api'
-import { BinanceRestClient, INTERVAL_VOCABULARY } from './rest.js'
+import { BinanceRestClient, INTERVAL_VOCABULARY, TradingServiceError } from './rest.js'
 import type { BinanceRestOptions } from './rest.js'
 
 export * from './rest.js'
@@ -90,7 +90,214 @@ export class BinanceMarketDataService extends Service implements MarketDataServi
 /* 工具注册（经服务执行）                                                 */
 /* ------------------------------------------------------------------ */
 
-export function apply(ctx: Context): void {
+/* ------------------------------------------------------------------ */
+/* crypto_place_order（交易安全闸门：铁律 #3 修订版 [S4]）                  */
+/* ------------------------------------------------------------------ */
+
+/** crypto_place_order 参数契约（本切片词汇：Binance 现货下单参数，dryRun 缺省 true）。 */
+export interface PlaceOrderArgs {
+  /** 交易对符号，如 `BTCUSDT`（执行前归一化为大写）。 */
+  readonly symbol: string
+  /** 方向（交易所词汇大写）。 */
+  readonly side: 'BUY' | 'SELL'
+  /** 订单类型（交易所词汇大写）。 */
+  readonly type: 'MARKET' | 'LIMIT'
+  /** base 资产数量，必须 > 0。 */
+  readonly quantity: number
+  /** LIMIT 单必填（schema 无法条件必填，execute 内校验），必须 > 0。 */
+  readonly price?: number
+  /** 缺省视为 true：仅模拟。显式 false 即实盘意图，进入闸门 ①/③。 */
+  readonly dryRun?: boolean
+}
+
+/**
+ * 闸门判定结果（三条路径，顺序即铁律 #3 修订版的裁决顺序）：
+ *  - `reject`  —— ① 请求实盘（dryRun!==true）而 liveTrading=false：工具返回结构化
+ *                拒绝（不抛异常，模型可读到明确原因与出路）；
+ *  - `simulate` —— ② dryRun=true（显式、缺省，或被插件 config.dryRun 强制）：
+ *                返回 DRY-RUN 模拟成交回执；
+ *  - `live`    —— ③ dryRun=false 且 liveTrading=true：本切片无签名下单能力，
+ *                工具抛 TRADING_NOT_IMPLEMENTED 结构化错误。
+ *
+ * 优先级说明：config.dryRun=true 是「强制模拟」开关，只影响 ②/③ 的归类；
+ * 显式 dryRun=false 的实盘意图在 liveTrading=false 时仍走 ① 明确拒绝，
+ * 不做静默降级（拒绝语义优先于强制模拟，调用方必须知道实盘意图被拒）。
+ */
+export type OrderGateVerdict =
+  | { action: 'reject'; code: 'TRADING_LIVE_TRADING_DISABLED'; message: string }
+  | { action: 'simulate' }
+  | { action: 'live' }
+
+export function evaluateOrderGate(config: Config, args: PlaceOrderArgs): OrderGateVerdict {
+  const requestedDryRun = args.dryRun ?? true
+  if (!requestedDryRun && !config.liveTrading) {
+    return {
+      action: 'reject',
+      code: 'TRADING_LIVE_TRADING_DISABLED',
+      message:
+        `crypto_place_order rejected: the call requests real execution (dryRun=${String(args.dryRun)}) `
+        + 'but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly '
+        + 'after confirmation, or keep dryRun=true for a simulated fill.',
+    }
+  }
+  if (requestedDryRun || config.dryRun) return { action: 'simulate' }
+  return { action: 'live' }
+}
+
+/** Binance 现货符号形如 BTCUSDT / ETHUSDT：大写字母数字（kit 同款词汇）。 */
+const SPOT_SYMBOL_PATTERN = /^[A-Z0-9]{4,20}$/
+
+/** 参数校验（模型调用问题抛普通 Error，与 kit 先例一致；服务故障才用错误词汇）。 */
+function validatePlaceOrderArgs(args: PlaceOrderArgs): void {
+  if (!SPOT_SYMBOL_PATTERN.test(args.symbol)) {
+    throw new Error(`crypto_place_order: invalid symbol ${JSON.stringify(args.symbol)} — expected an uppercase Binance symbol like BTCUSDT`)
+  }
+  if (args.side !== 'BUY' && args.side !== 'SELL') {
+    throw new Error(`crypto_place_order: invalid side ${JSON.stringify(args.side)} — expected BUY or SELL`)
+  }
+  if (args.type !== 'MARKET' && args.type !== 'LIMIT') {
+    throw new Error(`crypto_place_order: invalid type ${JSON.stringify(args.type)} — expected MARKET or LIMIT`)
+  }
+  if (typeof args.quantity !== 'number' || !Number.isFinite(args.quantity) || args.quantity <= 0) {
+    throw new Error(`crypto_place_order: invalid quantity ${JSON.stringify(args.quantity)} — expected a positive number`)
+  }
+  if (args.type === 'LIMIT' && (typeof args.price !== 'number' || !Number.isFinite(args.price) || args.price <= 0)) {
+    throw new Error('crypto_place_order: LIMIT orders require a positive price')
+  }
+}
+
+function normalizePlaceOrderArgs(raw: unknown): PlaceOrderArgs {
+  const args = (raw ?? {}) as PlaceOrderArgs
+  const symbol = typeof args.symbol === 'string' ? args.symbol.trim().toUpperCase() : (undefined as unknown as string)
+  return { ...args, symbol }
+}
+
+/** DRY-RUN 回执：模拟成交 + 当前市价参照（参照取不到不阻断模拟本身）。 */
+export interface DryRunReference {
+  source: 'binance-public-ticker'
+  price?: number
+  bid?: number
+  ask?: number
+  timestamp?: number
+  unavailable?: string
+}
+
+export async function buildDryRunReceipt(
+  args: PlaceOrderArgs,
+  marketData: Pick<MarketDataService, 'getTicker'>,
+): Promise<string> {
+  let reference: DryRunReference
+  try {
+    const ticker = await marketData.getTicker(args.symbol)
+    reference = {
+      source: 'binance-public-ticker',
+      price: ticker.price,
+      bid: ticker.bid,
+      ask: ticker.ask,
+      timestamp: ticker.timestamp,
+    }
+  } catch (error) {
+    // 模拟单不因参照行情失败而失败：明确标注 unavailable 即可。
+    reference = {
+      source: 'binance-public-ticker',
+      unavailable: error instanceof Error ? error.message : String(error),
+    }
+  }
+  return JSON.stringify({
+    status: 'filled',
+    dryRun: true,
+    note: 'DRY-RUN — simulated fill; no order was sent to any exchange. The reference price is market data only, not a fill price.',
+    id: `dry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    symbol: args.symbol,
+    side: args.side.toLowerCase(),
+    type: args.type.toLowerCase(),
+    quantity: args.quantity,
+    ...(args.type === 'LIMIT' ? { price: args.price } : {}),
+    reference,
+    timestamp: Date.now(),
+  })
+}
+
+export interface PlaceOrderToolDeps {
+  /** 行情服务（ dry-run 回执的市价参照），按接口取用，不直连 REST。 */
+  readonly marketData: Pick<MarketDataService, 'getTicker'>
+  /** 插件配置（dryRun 强制模拟 / liveTrading 总闸门）。 */
+  readonly config: Config
+}
+
+/**
+ * crypto_place_order 工具工厂（独立导出便于单测三条闸门路径）。
+ *
+ * 审批不在这里做：dryRun!==true 的调用由 @dsh-trading/base 的 gate 插件在
+ * `tools/pre-execute` waterfall 统一 ask（S4：headless 下 ask=deny，fail-closed）；
+ * 工具内不再重复调 ctx.approval。
+ */
+export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
+  return defineTool({
+    name: 'crypto_place_order',
+    description:
+      'Place a Binance spot order, or simulate one. dryRun defaults to true and returns a DRY-RUN simulated fill receipt with the current market price as reference. Real execution (dryRun=false) requires the plugin liveTrading switch to be enabled plus user approval, and is not implemented yet in this slice.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'Trading pair symbol, e.g. BTCUSDT',
+      },
+      side: {
+        type: 'string',
+        enum: ['BUY', 'SELL'],
+        required: true,
+        description: 'Order side',
+      },
+      type: {
+        type: 'string',
+        enum: ['MARKET', 'LIMIT'],
+        required: true,
+        description: 'Order type',
+      },
+      quantity: {
+        type: 'number',
+        required: true,
+        description: 'Base asset quantity, must be > 0',
+      },
+      price: {
+        type: 'number',
+        description: 'Limit price; required when type=LIMIT',
+      },
+      dryRun: {
+        type: 'boolean',
+        description:
+          'true (default) = simulate only and return a DRY-RUN receipt; false = request real execution (gated by liveTrading and user approval)',
+        default: true,
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(raw) {
+      const args = normalizePlaceOrderArgs(raw)
+      validatePlaceOrderArgs(args)
+
+      const verdict = evaluateOrderGate(deps.config, args)
+      if (verdict.action === 'reject') {
+        // 闸门 ①：结构化拒绝，不抛异常（模型可直接读到原因与出路）。
+        return JSON.stringify({ status: 'rejected', code: verdict.code, message: verdict.message })
+      }
+      if (verdict.action === 'simulate') {
+        // 闸门 ②：模拟成交回执（DRY-RUN 标记 + 市价参照）。
+        return buildDryRunReceipt(args, deps.marketData)
+      }
+      // 闸门 ③：实盘执行未实现（签名下单是后续任务）；结构化错误词汇回给模型。
+      throw new TradingServiceError(
+        'TRADING_NOT_IMPLEMENTED',
+        'crypto_place_order: live order execution is not implemented in this slice — signed order placement (credentials + exchange endpoint) is a follow-up task. Keep dryRun=true for simulated fills.',
+      )
+    },
+  })
+}
+
+export function apply(ctx: Context, config: Config): void {
   // provide：Service 基类随插件 fiber 注册，插件卸载自动注销。
   new BinanceMarketDataService(ctx)
 
@@ -155,6 +362,12 @@ export function apply(ctx: Context): void {
           return JSON.stringify(klines)
         },
       }),
+    )
+
+    // 交易安全闸门（铁律 #3 修订版 [S4]）：三条路径见 evaluateOrderGate；
+    // dryRun!==true 的审批由 base 的 gate 插件统一在 pre-execute 承担。
+    ctx.tools.register(
+      createPlaceOrderTool({ marketData, config }),
     )
   })
 }

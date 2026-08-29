@@ -13,6 +13,20 @@ overrides:
   '@deepseek-ai/schemastery': 'file:/Users/zcl/code/deepseek-harness/vendor/schemastery'
   '@deepseek-ai/dsh-tools': 'file:/Users/zcl/code/deepseek-harness/packages/core/tools'
   '@deepseek-ai/dsh-skill': 'file:/Users/zcl/code/deepseek-harness/packages/skill/skill'
+  # base bundle 实装 dsh-agent-presets（preset 行解析进 profile 安装闭包，S3 坑 3）。
+  # npm 没有宿主世代（最高 0.1.1-rc.2，宿主 0.1.2-alpha.1），开发期按 S3 实证用 link:
+  # 钉到官方 checkout：它带真实 workspace:^ dependencies，file: 拷贝会在本仓连锁拖
+  # 依赖（上方 dsh-tools 的既有教训），link: 让其依赖在 checkout 自身工作区解析。
+  # 发布语义不受影响：dependencies 里仍是正式包名+版本 0.1.2-alpha.1，profile 安装
+  # 时复用宿主解析；本 override 只作用于本仓开发期。
+  '@deepseek-ai/dsh-agent-presets': 'link:/Users/zcl/code/deepseek-harness/packages/preset/agent-presets'
+  # dsh-tools 的 lib barrel 运行时 import 这 4 个 peer（单测真正执行 defineTool 时需要；
+  # 构建不执行所以此前未暴露）。link: 同上——真实路径在 checkout 内，它们自己的依赖
+  # （dsh-timeout/dsh-util-crypto 等）继续由 checkout 工作区解析，不向本仓连锁。
+  '@deepseek-ai/dsh-scope': 'link:/Users/zcl/code/deepseek-harness/packages/core/scope'
+  '@deepseek-ai/dsh-llm': 'link:/Users/zcl/code/deepseek-harness/packages/llm/llm'
+  '@deepseek-ai/dsh-session': 'link:/Users/zcl/code/deepseek-harness/packages/core/session'
+  '@deepseek-ai/dsh-system-prompt': 'link:/Users/zcl/code/deepseek-harness/packages/core/system-prompt'
 
 # file: 目标包声明的 peers（dsh-llm/dsh-scope 等）构建期用不到；自动拉取只会从
 # npm 引入不兼容的 0.0.1-rc.1 时代版本。构建需要的 SDK 在 root devDependencies 显式列出。
