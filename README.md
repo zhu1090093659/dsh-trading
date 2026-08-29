@@ -50,6 +50,16 @@ DSH 扩展机制分层与对应选择：
   kit-us + us bundle（Stooq 因本出口反爬拒止退役为备选，包 README 标注未实证），`pnpm -r
   build` 10 包绿、`pnpm -r test` 60 用例绿；Yahoo 实证证据见 `spikes/impl-us-yahoo/EVIDENCE.md`，
   Stooq 结论与手册修订见 `docs/replication.md`「us 复制实测修订」与 `spikes/impl-us/REPORT.md`。
+- **cn/hk 市场切片（2026-08-31，任务 H）**：connector-tencent 单包双市场多实例（Config.market 分流）+
+  kit-cn/kit-hk + cn/hk bundle；腾讯公共端点实测（GBK 编码、cn/hk 字段布局不同、hk 需独立 hkfqkline
+  端点），证据见 `spikes/impl-cn-hk/REPORT.md`。
+- **多市场联合验收（2026-08-31，任务 I）：6/6 PASS**（`spikes/acceptance-all/REPORT.md`）：四市场
+  bundle 并存组合树 insert-only（卸载 diff 恰好 12 行市场层）、四 preset 同 roster、五 agent 隔离矩阵
+  （含 cn↔hk 同包多实例交叉污染为零）、四市场下单闸门、卸载 broken→重装恢复。
+  **已知限制**：`@dsh-trading/all` 元 bundle 的「单命令装齐」不成立——DSH 0.1.2-alpha.1 的
+  reconcilePlugins 只把 profile 直接依赖里的 bundle 入层栈，不展开传递依赖（apps/cli/src/plugin.ts）。
+  安装口径 = 显式 add base + 各市场 bundle（仍是一条命令多个参数）；all 保留为预留载体。
+  上游改进建议：bundle 层栈递归展开传递 bundle 依赖。
 
 ### 包清单（packages/）
 
@@ -64,12 +74,18 @@ DSH 扩展机制分层与对应选择：
 | `@dsh-trading/connector-stooq` | 插件：Stooq 公共 CSV 行情服务（代码保留备选；本出口被反爬拒止，未实证，见其 README） |
 | `@dsh-trading/kit-us` | 插件：skill provider（us-risk-checklist）；股票无资金费率，无附加工具 |
 | `@dsh-trading/us` | bundle：依赖安装载体 + host 面安装器（自安装 us-trader preset） |
+| `@dsh-trading/connector-tencent` | 插件：腾讯公共行情，单包双市场（config.market=cn/hk 分流，provide tradingCnMarketData/tradingHkMarketData） |
+| `@dsh-trading/kit-cn` / `kit-hk` | 插件：skill provider（cn-risk-checklist：T+1/涨跌停/ST/两融；hk-risk-checklist：T+0/碎股/供配股/窝轮牛熊证） |
+| `@dsh-trading/cn` / `hk` | bundle：依赖安装载体 + 安装器（cn-trader / hk-trader preset） |
+| `@dsh-trading/all` | 元 bundle（预留；当前 DSH 版本不展开传递 bundle 依赖，见上「已知限制」） |
 
 ### 数据源与 ToS（铁律 #5）
 
 | 市场 | 数据源 | ToS 边界 |
 |---|---|---|
 | us | Yahoo Finance v8 chart API（非官方，无 key；2026-08-29 本出口实证） | 无 key、本仓不缓存不再分发；个人使用属灰色但被普遍使用的边界，以 Yahoo Terms of Use 为准（详见 connector-yahoo README）。前任数据源 Stooq（免费公开 CSV）2026-08-31 实测本出口被反爬拒止（JS 挑战 + Access denied），无成功实证，退役为备选，见 `spikes/impl-us/REPORT.md` |
+| cn / hk | 腾讯公共行情端点（qt.gtimg.cn 报价 + web.ifzq.gtimg.cn K线，无 key；2026-08-31 本出口实证） | 公开端点、**无官方授权**，个人使用边界自负，以腾讯服务条款为准；本仓不缓存不再分发（详见 connector-tencent README） |
+| crypto | Binance 公共 REST（api.binance.com / fapi.binance.com，无 key；2026-08-29 实证） | Binance API 公开条款；不缓存不再分发 |
 
 ### 关键架构定稿（实现期修订）
 
@@ -82,8 +98,11 @@ DSH 扩展机制分层与对应选择：
 ### 开发期安装（未发布 npm 阶段）
 
 profile 的 pnpm-workspace.yaml 末尾 append overrides 把 `@dsh-trading/*` 钉到本仓 file: 路径，
-再 `dsh plugin --profile <名> add @dsh-trading/base @dsh-trading/crypto`；改码后须删 profile
-node_modules 内对应包再 install（file: 是安装时快照）。完整操作见 `spikes/smoke/REPORT.md`。
+再 `dsh plugin --profile <名> add @dsh-trading/base @dsh-trading/crypto`（多市场：同命令追加
+`@dsh-trading/us @dsh-trading/cn @dsh-trading/hk`——**不要依赖 all 元包传递入栈**，见上「已知限制」）。
+headless 宿主另需在 profile 级 cordis.patch.yml insert agent-presets 行（范本
+`~/.dsh/profiles/trading-dev/cordis.patch.yml`；web 宿主由 base 的同 id 覆盖条目自动接管）。
+改码后须删 profile node_modules 内对应包再 install（file: 是安装时快照）。完整操作见 `spikes/smoke/REPORT.md`。
 
 ## 协作模式
 

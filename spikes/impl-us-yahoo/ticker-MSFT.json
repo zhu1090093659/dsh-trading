@@ -1,0 +1,97 @@
+{
+  "fetchedAt": "2026-08-29T10:21:28.493Z",
+  "url": "https://query1.finance.yahoo.com/v8/finance/chart/MSFT?interval=1d&range=5d",
+  "meta": {
+    "currency": "USD",
+    "symbol": "MSFT",
+    "exchangeName": "NMS",
+    "fullExchangeName": "NasdaqGS",
+    "instrumentType": "EQUITY",
+    "firstTradeDate": 511108200,
+    "regularMarketTime": 1787947201,
+    "hasPrePostMarketData": true,
+    "gmtoffset": -14400,
+    "timezone": "EDT",
+    "exchangeTimezoneName": "America/New_York",
+    "regularMarketPrice": 513.53,
+    "regularMarketChangePercent": 1.677,
+    "fiftyTwoWeekHigh": 553.72,
+    "fiftyTwoWeekLow": 349.2,
+    "regularMarketDayHigh": 517.78,
+    "regularMarketDayLow": 504.867,
+    "regularMarketVolume": 28953449,
+    "longName": "Microsoft Corporation",
+    "shortName": "Microsoft Corporation",
+    "chartPreviousClose": 483.24,
+    "priceHint": 2,
+    "currentTradingPeriod": {
+      "pre": {
+        "timezone": "EDT",
+        "end": 1787923800,
+        "start": 1787904000,
+        "gmtoffset": -14400
+      },
+      "regular": {
+        "timezone": "EDT",
+        "end": 1787947200,
+        "start": 1787923800,
+        "gmtoffset": -14400
+      },
+      "post": {
+        "timezone": "EDT",
+        "end": 1787961600,
+        "start": 1787947200,
+        "gmtoffset": -14400
+      }
+    },
+    "dataGranularity": "1d",
+    "range": "5d",
+    "validRanges": [
+      "1d",
+      "5d",
+      "1mo",
+      "3mo",
+      "6mo",
+      "1y",
+      "2y",
+      "5y",
+      "10y",
+      "ytd",
+      "max"
+    ]
+  },
+  "bars": [
+    {
+      "time": "2026-08-24T13:30:00.000Z",
+      "o": 483.2099914550781,
+      "h": 490.6099853515625,
+      "l": 481.8599853515625,
+      "c": 487.30999755859375,
+      "v": 17230800
+    },
+    {
+      "time": "2026-08-25T13:30:00.000Z",
+      "o": 485.44000244140625,
+      "h": 492.44000244140625,
+      "l": 484.29998779296875,
+      "c": 491.7099914550781,
+      "v": 19519000
+    },
+    {
+      "time": "2026-08-26T13:30:00.000Z",
+      "o": 487.8500061035156,
+      "h": 497.3999938964844,
+      "l": 487.30999755859375,
+      "c": 496.3699951171875,
+      "v": 20758900
+    },
+    {
+      "time": "2026-08-27T13:30:00.000Z",
+      "o": 494.8800048828125,
+      "h": 506.4800109863281,
+      "l": 490.0799865722656,
+      "c": 505.05999755859375,
+      "v": 28688800
+    }
+  ]
+}

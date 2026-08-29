@@ -74,8 +74,9 @@
 | home 级 patch | `$DSH_HOME/cordis.patch.yml` 对所有 profile 生效且强于 bundle 层，悬空行炸所有 profile 启动；bundle 同 id `disabled: true` 压不住 | S1 REPORT:46 |
 | schedule ≠ 定时交易 | 官方 schedule 仅会话内提醒（≥5min、session-local）；自动化另案（自管 timer/webhook/cron+headless） | REVIEW-LOG S4 关键裁决 |
 | 自安装位置 | preset 自安装必须在 bundle（host 面常驻）而非 kit 插件（preset 平面鸡生蛋不可达） | commit 9c54ed5；acceptance REPORT 头部 |
+| 元 bundle 不展开 | reconcilePlugins 只把 profile **直接依赖**里的 dsh.bundle 包入层栈，传递依赖不展开——`@dsh-trading/all` 单命令装齐在当前 DSH 版本不成立（装/卸对层栈双向 no-op）。安装口径 = 显式 add base + 各市场 bundle | acceptance-all REPORT 任务 1（apps/cli/src/plugin.ts 源码抽核，2026-08-31） |
 
-**待验证**（本手册不断言，复制 us 时专项核实）：us 市场数据源（Polygon/Alpaca 等）的 ToS 与凭据形态（README 铁律 5 要求逐源写明）；`dsh plugin add @dsh-trading/all` 单命令装齐的端到端行为（依赖序层栈出自 S1 对账机制，但 all 元 bundle 本身未跑过 acceptance 式验收——交付 all 时按 §5 走一遍）。
+**已裁决**（原「待验证」）：`@dsh-trading/all` 单命令装齐已经 acceptance-all 实测——**不成立**（见上表「元 bundle 不展开」），安装口径定稿为显式 add。us 数据源 ToS 已按铁律 5 入 README 表（Yahoo 现役/Stooq 退役备选）。
 
 ---
 

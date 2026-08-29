@@ -1,6 +1,6 @@
 {
   "name": "@dsh-trading/all",
-  "description": "Meta bundle for dsh-trading: one-command install of every market bundle (composition via dependencies only — zero patch rows of its own, insert-only design rule #1). Currently: @dsh-trading/crypto, @dsh-trading/us, @dsh-trading/cn, @dsh-trading/hk.",
+  "description": "Meta bundle for dsh-trading (RESERVED — not a one-command install): DSH 0.1.2-alpha.1 reconcilePlugins only stacks bundles from the profile's DIRECT dependencies; transitive bundle deps never join the layer stack (acceptance-all, 2026-08-31). Install explicitly: dsh plugin add @dsh-trading/base @dsh-trading/<market> ... Depends on: crypto, us, cn, hk.",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
