@@ -36,5 +36,9 @@ dsh --profile trading-web
   client 产物后须先重建包，再刷新 profile 内的 file: 副本（见
   [client-bundle-intro](../bug-fix/2026-08-29-client-bundle-intro.md) 的
   Consequences）。
-- `web` profile 里遗留的 `@dsh-trading/base` 依赖不再用于 trading 验证；
-  是否摘除待用户后续决定。
+- （2026-08-29 用户拍板执行）默认 `web` profile 已通过
+  `dsh plugin --profile web remove @dsh-trading/base @dsh-trading/crypto`
+  摘除全部 dsh-trading 插件（依赖与 `dsh.profile.bundles` 同步清空，传递
+  副本随之剪除，`--dump-config` 复核 0 残留）。trading UI 的任何验证不得
+  回流到 web profile；web profile 上出现 dsh-trading 相关 loader entry
+  即为回归。规则已写入仓库 AGENTS.md Development Workflow。
