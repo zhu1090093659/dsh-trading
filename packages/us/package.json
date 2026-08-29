@@ -1,6 +1,6 @@
 {
   "name": "@dsh-trading/us",
-  "description": "US market bundle for dsh-trading: host-plane us-trader preset installer + insert-only aggregation of the stooq connector and us kit rows (design rule #1)",
+  "description": "US market bundle for dsh-trading: host-plane us-trader preset installer + insert-only aggregation of the yahoo connector and us kit rows (design rule #1)",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -28,7 +28,7 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "@dsh-trading/connector-stooq": "workspace:*",
+    "@dsh-trading/connector-yahoo": "workspace:*",
     "@dsh-trading/kit-us": "workspace:*"
   },
   "peerDependencies": {

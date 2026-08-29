@@ -7,7 +7,8 @@
 #      自安装 us-trader preset 到 ~/.dsh-trading-presets。自安装必须在 bundle 层而非
 #      kit 插件（kit 行在 preset 平面，preset 不存在则 kit.apply() 永不运行）；
 #   2. 依赖安装载体：preset 行按 bare 包名从 profile node_modules 解析（S3 坑 3），本包
-#      dependencies 实装 @dsh-trading/connector-stooq 与 @dsh-trading/kit-us，保证
+#      dependencies 实装 @dsh-trading/connector-yahoo（2026-08-29 数据面切换：Stooq 本出口
+#      被反爬拒止，见其 README）与 @dsh-trading/kit-us，保证
 #      preset 行可解析、不 broken；
 #   3. agent-presets root 行归 base 层所有（~/.dsh-trading-presets），本层不得重复配置。
 #

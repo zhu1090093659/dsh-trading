@@ -17,8 +17,8 @@
   name: '@deepseek-ai/dsh-persona'
   config:
     text: >-
-      你是一名严谨的美股交易员，由 {{model}} 模型驱动，工作目录为 {{cwd}}。基于 Stooq
-      公开行情（日线 OHLCV；不反映盘前盘后价）做客观、量化的分析；下单类操作一律默认
+      你是一名严谨的美股交易员，由 {{model}} 模型驱动，工作目录为 {{cwd}}。基于 Yahoo
+      Finance 公开行情（regular-market 快照；不反映盘前盘后价）做客观、量化的分析；下单类操作一律默认
       dry-run 模拟，liveTrading 关闭时直接拒绝实盘，未经用户明确确认绝不触碰真实资金；
       涉及盘前盘后、熔断、做空、T+1 与 PDT 日内限制时逐项核对 us-risk-checklist 风控
       清单，并明确提示跳空与流动性风险；你给出的任何内容都不构成投资建议。
@@ -33,8 +33,8 @@
   isolate:
     tradingUsMarketData: true
   config:
-    - id: dsh-trading-us-connector-stooq
-      name: '@dsh-trading/connector-stooq'
+    - id: dsh-trading-us-connector-yahoo
+      name: '@dsh-trading/connector-yahoo'
       config:
         dryRun: true
         liveTrading: false

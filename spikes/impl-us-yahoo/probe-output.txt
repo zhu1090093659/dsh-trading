@@ -1,0 +1,34 @@
+# Yahoo v8 chart probe 2026-08-29T10:14:07.112Z (egress: this machine, real network)
+{
+  "symbol": "AAPL",
+  "fetchedAt": "2026-08-29T10:14:07.112Z",
+  "requests": 3,
+  "meta": {
+    "currency": "USD",
+    "regularMarketPrice": 319.7,
+    "regularMarketTime": "2026-08-28T20:00:01.000Z",
+    "exchangeTimezoneName": "America/New_York"
+  },
+  "consistency_sameResponse": {
+    "lastDailyBar_tickerResponse": {
+      "time": "2026-08-27T13:30:00.000Z",
+      "close": 314.5799865722656
+    },
+    "relDiff_dailyClose_pct": -1.6015,
+    "last60mBar_close": 319.70001220703125,
+    "relDiff_60mClose_pct": 0,
+    "verdict": "regularMarketPrice must match the last daily close AND last 60m close of the SAME responses (float32 rounding ~1e-6)"
+  },
+  "crossResponse_vintage_note": {
+    "lastDailyBar_1moRange": {
+      "time": "2026-08-27T13:30:00.000Z",
+      "close": 314.5799865722656
+    },
+    "note": "separate 1mo-range request may lag the latest session (non-official API vintage); NOT a contradiction — same-response check above is authoritative"
+  },
+  "counts": {
+    "dailyBars_5d": 4,
+    "dailyBars_1mo": 22,
+    "hourlyBars": 36
+  }
+}

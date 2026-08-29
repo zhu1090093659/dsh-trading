@@ -89,3 +89,13 @@
 4. **「复用 @dsh-trading/api（不改）」按其自身机制落地时需触碰 api**：市场专属 ctx 键走模块增强声明（本手册 §1 第 1 条机制），us 据此在 api 包 Context 接口补了 `tradingUsMarketData: MarketDataService`（类型层、零运行时）。后续市场复制直接沿用：api 包的增强块是唯一允许的 api 包改动面。
 5. **dsh-tools schema 先于工具 execute 校验枚举**：place_order 工具的 side/type 非法值在 schema 层即抛 `invalid arguments: …`，到不了工具内校验——单测断言按层归位（connector-stooq test/place-order.test.ts），crypto 先例未记录此分层，复制时勿把两类错误混为一谈。
 6. **§5 验收未执行（按任务分工留主 agent）**：装与启动/preset 入 roster/会话隔离/闸门三路径（进程内直测已覆盖）/skill 在目录/卸载重装的多市场联合验收另行安排；本切片交付含单测级三路径直证（21 用例）。
+
+### 7.1 Yahoo 切换实证（2026-08-29，任务 G：us 数据面 Stooq → Yahoo Finance）
+
+§7 的 Stooq 定案被本出口事实推翻：Stooq 反爬拒止无成功实证（§7.2），而主 agent 实测 Yahoo v8 chart API 从本出口可用。执行子 agent 据此完成切换，us bundle 数据面现为 **Yahoo Finance v8 chart API**（`query1.finance.yahoo.com/v8/finance/chart/<sym>?interval=…&range=…`，需 `User-Agent: Mozilla/5.0`）：
+
+- **建包**：`packages/connector-yahoo`（`@dsh-trading/connector-yahoo`，插件名 `dsh-trading-us-connector-yahoo`），契约/闸门/工具名与 §1–§3 逐项同构，复用 api 包既有 `tradingUsMarketData` 模块增强（§7.4 口径，api 零改动）。interval 映射 1m/5m/15m/30m/1h→60m/1d/1w→1wk/1M→1mo。
+- **切换点**：us 包 dependencies、`us-trader/agent.cordis.yml` connector 行（id/name 同步，isolate 键 `tradingUsMarketData` 不变）、persona 文案。
+- **真实网络证据**（`spikes/impl-us-yahoo/`，2026-08-29T10:14Z 本出口，AAPL 3 次真实请求）：meta.regularMarketPrice=319.7（Fri 16:00:01 ET 收盘）；与同响应 60m 序列最后收盘 319.70001220703125 一致（float32 精度，相对差 ~1e-7）——**交叉一致性取「同一响应内」对照**；跨请求对照会出现 Yahoo 日线汇总滞后：最新已收盘交易日的日 K 延后补齐（周六早晨日线序列仍缺周五），故 getTicker 的价格/时间取 meta（权威实时面）、volume 取最新日 K 量并在工具描述明示滞后。
+- **合规（铁律 #5）**：Yahoo 非官方 API，个人使用属灰色但被普遍使用的边界，包 README 如实写明；无 key、本仓不缓存不再次分发。
+- **Stooq 退役口径**：connector-stooq 保留在仓（代码完整，其他出口可能可用），包 README 标注「本出口被反爬拒止，状态=未实证」。

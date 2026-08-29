@@ -1,0 +1,97 @@
+{
+  "fetchedAt": "2026-08-29T10:14:07.112Z",
+  "url": "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=5d",
+  "meta": {
+    "currency": "USD",
+    "symbol": "AAPL",
+    "exchangeName": "NMS",
+    "fullExchangeName": "NasdaqGS",
+    "instrumentType": "EQUITY",
+    "firstTradeDate": 345479400,
+    "regularMarketTime": 1787947201,
+    "hasPrePostMarketData": true,
+    "gmtoffset": -14400,
+    "timezone": "EDT",
+    "exchangeTimezoneName": "America/New_York",
+    "regularMarketPrice": 319.7,
+    "regularMarketChangePercent": 1.628,
+    "fiftyTwoWeekHigh": 344.57,
+    "fiftyTwoWeekLow": 225.95,
+    "regularMarketDayHigh": 322.37,
+    "regularMarketDayLow": 315.45,
+    "regularMarketVolume": 38500185,
+    "longName": "Apple Inc.",
+    "shortName": "Apple Inc.",
+    "chartPreviousClose": 309.35,
+    "priceHint": 2,
+    "currentTradingPeriod": {
+      "pre": {
+        "timezone": "EDT",
+        "start": 1787904000,
+        "end": 1787923800,
+        "gmtoffset": -14400
+      },
+      "regular": {
+        "timezone": "EDT",
+        "start": 1787923800,
+        "end": 1787947200,
+        "gmtoffset": -14400
+      },
+      "post": {
+        "timezone": "EDT",
+        "start": 1787947200,
+        "end": 1787961600,
+        "gmtoffset": -14400
+      }
+    },
+    "dataGranularity": "1d",
+    "range": "5d",
+    "validRanges": [
+      "1d",
+      "5d",
+      "1mo",
+      "3mo",
+      "6mo",
+      "1y",
+      "2y",
+      "5y",
+      "10y",
+      "ytd",
+      "max"
+    ]
+  },
+  "bars": [
+    {
+      "time": "2026-08-24T13:30:00.000Z",
+      "o": 311.4700012207031,
+      "h": 313.3599853515625,
+      "l": 309.9700012207031,
+      "c": 310.3399963378906,
+      "v": 34673600
+    },
+    {
+      "time": "2026-08-25T13:30:00.000Z",
+      "o": 310.7900085449219,
+      "h": 313.5899963378906,
+      "l": 308.2099914550781,
+      "c": 309.8999938964844,
+      "v": 25869800
+    },
+    {
+      "time": "2026-08-26T13:30:00.000Z",
+      "o": 310.29998779296875,
+      "h": 315.42999267578125,
+      "l": 308.79998779296875,
+      "c": 313.45001220703125,
+      "v": 34024500
+    },
+    {
+      "time": "2026-08-27T13:30:00.000Z",
+      "o": 310.54998779296875,
+      "h": 315.3999938964844,
+      "l": 309.3999938964844,
+      "c": 314.5799865722656,
+      "v": 32419200
+    }
+  ]
+}

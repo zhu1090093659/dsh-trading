@@ -46,9 +46,10 @@ DSH 扩展机制分层与对应选择：
   （dry-run 模拟回执 / liveTrading=false 结构化拒绝 / headless 下审批 ask→deny fail-closed）、
   卸载变 broken 不崩溃、重装恢复。
 - 构建/测试基线：`pnpm -r build` 5 包绿；`pnpm -r test` 28 用例绿。
-- **us 市场切片（2026-08-31，按 `docs/replication.md` 复制手册落地）**：connector-stooq +
-  kit-us + us bundle，`pnpm -r build` 9 包绿、`pnpm -r test` 49 用例绿；数据源 Stooq 实测
-  结论与手册修订见 `docs/replication.md`「us 复制实测修订」与 `spikes/impl-us/REPORT.md`。
+- **us 市场切片（2026-08-31 落地；2026-08-29 数据面切换 Yahoo，任务 G）**：connector-yahoo +
+  kit-us + us bundle（Stooq 因本出口反爬拒止退役为备选，包 README 标注未实证），`pnpm -r
+  build` 10 包绿、`pnpm -r test` 60 用例绿；Yahoo 实证证据见 `spikes/impl-us-yahoo/EVIDENCE.md`，
+  Stooq 结论与手册修订见 `docs/replication.md`「us 复制实测修订」与 `spikes/impl-us/REPORT.md`。
 
 ### 包清单（packages/）
 
@@ -59,7 +60,8 @@ DSH 扩展机制分层与对应选择：
 | `@dsh-trading/connector-binance` | 插件：Binance 公共 REST 行情服务 + crypto_get_ticker/klines/place_order 工具 |
 | `@dsh-trading/kit-crypto` | 插件：crypto_funding_rate 工具 + skill provider（crypto-risk-checklist） |
 | `@dsh-trading/crypto` | bundle：依赖安装载体 + host 面安装器（自安装 crypto-trader preset） |
-| `@dsh-trading/connector-stooq` | 插件：Stooq 公共 CSV 行情服务（us_get_ticker/klines/place_order 三段闸门） |
+| `@dsh-trading/connector-yahoo` | 插件：Yahoo Finance v8 chart 行情服务（us_get_ticker/klines/place_order 三段闸门；us 数据面现役） |
+| `@dsh-trading/connector-stooq` | 插件：Stooq 公共 CSV 行情服务（代码保留备选；本出口被反爬拒止，未实证，见其 README） |
 | `@dsh-trading/kit-us` | 插件：skill provider（us-risk-checklist）；股票无资金费率，无附加工具 |
 | `@dsh-trading/us` | bundle：依赖安装载体 + host 面安装器（自安装 us-trader preset） |
 
@@ -67,7 +69,7 @@ DSH 扩展机制分层与对应选择：
 
 | 市场 | 数据源 | ToS 边界 |
 |---|---|---|
-| us | Stooq（免费公开 CSV 端点，无 key） | 无 key、本仓不缓存不再分发；个人/非商业使用边界以 stooq.com 条款为准。2026-08-31 实测：无浏览器特征客户端会被下发 JS 反爬挑战；CSV 下载按出口/账户策略可被拒（Access denied），详见 `spikes/impl-us/REPORT.md` 与 connector-stooq `src/rest.ts` 头注 |
+| us | Yahoo Finance v8 chart API（非官方，无 key；2026-08-29 本出口实证） | 无 key、本仓不缓存不再分发；个人使用属灰色但被普遍使用的边界，以 Yahoo Terms of Use 为准（详见 connector-yahoo README）。前任数据源 Stooq（免费公开 CSV）2026-08-31 实测本出口被反爬拒止（JS 挑战 + Access denied），无成功实证，退役为备选，见 `spikes/impl-us/REPORT.md` |
 
 ### 关键架构定稿（实现期修订）
 
