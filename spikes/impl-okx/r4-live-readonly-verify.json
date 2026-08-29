@@ -1,0 +1,34 @@
+{
+  "generatedAt": "2026-08-29T12:03:24.370Z",
+  "keyNote": "live key, read+trade perms, read-only calls only",
+  "balance": {
+    "httpStatus": 200,
+    "code": "0",
+    "msg": "",
+    "assets": [
+      {
+        "ccy": "HYPE",
+        "availBal": "0.51906358"
+      },
+      {
+        "ccy": "BTC",
+        "availBal": "0.0000005342213994"
+      },
+      {
+        "ccy": "ETH",
+        "availBal": "0.000003407"
+      },
+      {
+        "ccy": "USDT",
+        "availBal": "0.0033084545938649"
+      }
+    ],
+    "totalEq": "42.133019210927735"
+  },
+  "positions": {
+    "httpStatus": 200,
+    "code": "0",
+    "msg": "",
+    "count": 0
+  }
+}

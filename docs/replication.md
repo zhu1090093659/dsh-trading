@@ -75,6 +75,7 @@
 | schedule ≠ 定时交易 | 官方 schedule 仅会话内提醒（≥5min、session-local）；自动化另案（自管 timer/webhook/cron+headless） | REVIEW-LOG S4 关键裁决 |
 | 自安装位置 | preset 自安装必须在 bundle（host 面常驻）而非 kit 插件（preset 平面鸡生蛋不可达） | commit 9c54ed5；acceptance REPORT 头部 |
 | 元 bundle 不展开 | reconcilePlugins 只把 profile **直接依赖**里的 dsh.bundle 包入层栈，传递依赖不展开——`@dsh-trading/all` 单命令装齐在当前 DSH 版本不成立（装/卸对层栈双向 no-op）。安装口径 = 显式 add base + 各市场 bundle | acceptance-all REPORT 任务 1（apps/cli/src/plugin.ts 源码抽核，2026-08-31） |
+| 新增包要同步 overrides | 包间依赖用 `workspace:*`，file: 拷贝进 profile 后该协议在 profile workspace 无对应包即 `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND` 且 profile 解析崩——**每新增一个包，所有装过本仓的 profile 的 overrides 都要同步加行**（pnpm overrides 无通配符）。2026-08-29 connector-okx 上线时四个 profile（含 web）同时踩中 | 当日修复记录 |
 
 **已裁决**（原「待验证」）：`@dsh-trading/all` 单命令装齐已经 acceptance-all 实测——**不成立**（见上表「元 bundle 不展开」），安装口径定稿为显式 add。us 数据源 ToS 已按铁律 5 入 README 表（Yahoo 现役/Stooq 退役备选）。
 

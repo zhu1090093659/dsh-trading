@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-29T11:53:21.493Z",
+  "generatedAt": "2026-08-29T11:58:37.046Z",
   "base": "https://openapi.okx.com",
   "pass": 6,
   "fail": [],
@@ -8,12 +8,12 @@
       "name": "ticker BTC-USDT",
       "file": "r3-verify-ticker.json",
       "url": "https://openapi.okx.com/api/v5/market/ticker?instId=BTC-USDT",
-      "latencyMs": 515,
-      "last": "77635.2",
-      "bidPx": "77635.1",
-      "askPx": "77635.2",
-      "vol24h": "6019.21723025",
-      "ts": "1788004399075"
+      "latencyMs": 476,
+      "last": "77583.8",
+      "bidPx": "77583.7",
+      "askPx": "77583.8",
+      "vol24h": "6024.61194933",
+      "ts": "1788004714671"
     },
     {
       "name": "candles 1Dutc vs 1D（日界对照）",
@@ -26,7 +26,7 @@
     {
       "name": "funding-rate BTC-USDT-SWAP",
       "file": "r3-verify-funding.json",
-      "fundingRate": "0.0000249315801316",
+      "fundingRate": "0.0000254081699322",
       "nextFundingRate": "",
       "fundingTime": "1788019200000"
     },
@@ -42,10 +42,10 @@
     {
       "name": "cross-check vs Binance BTCUSDT",
       "file": "r3-verify-cross.json",
-      "okx": 77635.2,
-      "binance": 77643,
-      "relativeDiff": 0.00010045979676214096,
-      "binanceLatencyMs": 456,
+      "okx": 77583.8,
+      "binance": 77573.33,
+      "relativeDiff": 0.00013496906733282126,
+      "binanceLatencyMs": 426,
       "sanity": "PASS（<0.5%，两所价差在正常市场内）"
     },
     {
