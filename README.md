@@ -38,17 +38,38 @@ DSH 扩展机制分层与对应选择：
 4. **base 防腐**：只有当 ≥2 个市场真实需要同一能力时才上移 base，防过早抽象。
 5. **数据合规**：行情数据一律用户自带 key，不重分发；README 写明各数据源 ToS。
 
-## 当前阶段
+## 当前状态（2026-08-29）
 
-第 0 阶段 spike 验证（见 `spikes/` 下各 REPORT.md）：
+- **第 0 阶段（机制 spike S1–S5）：全部 PASS**（`spikes/REVIEW-LOG.md` 有逐条裁决与源码抽核记录）。
+- **第 1 阶段（crypto 垂直切片）：端到端验收 6/6 PASS**（`spikes/acceptance/REPORT.md`，0 模型调用进程内证据）：
+  一条命令安装、crypto-trader preset 免重启入 roster、会话级工具/skill 隔离实测、下单三段闸门
+  （dry-run 模拟回执 / liveTrading=false 结构化拒绝 / headless 下审批 ask→deny fail-closed）、
+  卸载变 broken 不崩溃、重装恢复。
+- 构建/测试基线：`pnpm -r build` 5 包绿；`pnpm -r test` 28 用例绿。
 
-| # | 验证项 | 通过标准 | 失败降级 |
-|---|---|---|---|
-| S1 | 树外 bundle 安装进 scratch profile | patch 生效、插件加载 | 退单包形态 |
-| S2 | 自有包注册 skill provider | skill 目录可见、模型可加载 | skill 走用户目录文件 |
-| S3 | bundle patch 配 preset root + 插件自安装 preset | preset 出现且可挂载会话 | 文档化手工复制 |
-| S4 | schedule / approval / credentials / python 桥 API 调研 | 确认公开稳定 API 面 | 插件内自管 |
-| S5 | 官方包规范 + monorepo 脚手架设计 | 产出模板与约定文档 | — |
+### 包清单（packages/）
+
+| 包 | 职责 |
+|---|---|
+| `@dsh-trading/api` | 纯类型契约：行情/交易服务接口 + 错误词汇（零运行时依赖） |
+| `@dsh-trading/base` | bundle：共享行唯一拥有者——统一审批闸门插件（tools/pre-execute）+ agent-presets root 行 |
+| `@dsh-trading/connector-binance` | 插件：Binance 公共 REST 行情服务 + crypto_get_ticker/klines/place_order 工具 |
+| `@dsh-trading/kit-crypto` | 插件：crypto_funding_rate 工具 + skill provider（crypto-risk-checklist） |
+| `@dsh-trading/crypto` | bundle：依赖安装载体 + host 面安装器（自安装 crypto-trader preset） |
+
+### 关键架构定稿（实现期修订）
+
+1. **工具行在 preset 平面**（agent.cordis.yml），不在 bundle patch——preset 级会话隔离（普通会话看不到 crypto 工具）；bundle = 依赖安装载体 + host 面安装器。
+2. **工具名用短市场前缀**（`crypto_place_order`），`dsh-trading-` 前缀只属于插件名/行 id；闸门模式 `/^(?:crypto|us|cn|hk)_(?:place|cancel)_order$/`。
+3. **服务行必须包 isolate realm 组**，且 isolate 键 = 服务名（如 `tradingCryptoMarketData`）。
+4. **实盘闸门双轨**：显式 `liveTrading` 配置开关为主（headless 唯一防线），approval 管交互形态（headless 下 ask 必 deny = fail-closed 特性）。
+5. cordis 服务类用 **TS 编译期 private**（不用 ECMAScript # 私有字段——realm 代理会按类身份炸）。
+
+### 开发期安装（未发布 npm 阶段）
+
+profile 的 pnpm-workspace.yaml 末尾 append overrides 把 `@dsh-trading/*` 钉到本仓 file: 路径，
+再 `dsh plugin --profile <名> add @dsh-trading/base @dsh-trading/crypto`；改码后须删 profile
+node_modules 内对应包再 install（file: 是安装时快照）。完整操作见 `spikes/smoke/REPORT.md`。
 
 ## 协作模式
 
