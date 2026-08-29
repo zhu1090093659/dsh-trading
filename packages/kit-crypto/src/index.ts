@@ -137,9 +137,12 @@ function renderFundingRates(symbol: string, records: FundingRateRecord[]): strin
 
 export function apply(ctx: Context, _config: Config): void {
   ctx.skills.registerProvider(() => provider)
-  ctx.tools.register(
-    defineTool({
-      name: 'crypto_funding_rate',
+  // duplicate-safe 注册（2026-08-29 okx 切片）：connector-okx 激活时也提供同名
+  // crypto_funding_rate（OKX 词汇），同一组合内至多一家的工具生效——名字已被占用
+  // （先挂载者先得，preset 挂载顺序 = 仲裁顺序）时跳过 + log 让位，而不是让 dsh-tools
+  // 对重复注册抛错炸掉 preset 挂载。默认组合（okx enabled=false）本工具照常注册，行为不变。
+  const fundingTool = defineTool({
+    name: 'crypto_funding_rate',
       description:
         'Get recent funding rate history for a Binance USDⓈ-M perpetual futures symbol (public endpoint, no credentials). Returns the most recent funding events with rate and mark price.',
       parameters: {
@@ -170,6 +173,19 @@ export function apply(ctx: Context, _config: Config): void {
         const records = await fetchFundingRates(symbol, limit)
         return renderFundingRates(symbol, records)
       },
-    }),
-  )
+  })
+
+  const tools = ctx.tools as unknown as {
+    register(definition: { name: string }): unknown
+    get(name: string): { name: string } | undefined
+  }
+  if (tools.get(fundingTool.name) !== undefined) {
+    // 让位给先注册的连接器（如已激活的 connector-okx）：同名工具互斥，先到先得。
+    ctx.logger('dsh-trading-crypto-kit').info(
+      '[dsh-trading-crypto-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
+      fundingTool.name,
+    )
+    return
+  }
+  tools.register(fundingTool)
 }

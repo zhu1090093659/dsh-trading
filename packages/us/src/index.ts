@@ -12,6 +12,7 @@
  * @module @dsh-trading/us
  */
 
+import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -45,16 +46,47 @@ export const DEFAULT_PRESET_ROOT = join(homedir(), '.dsh-trading-presets')
 const PRESET_ASSET_DIR = fileURLToPath(new URL('../assets/preset/', import.meta.url))
 const PRESET_FILES = ['agent.cordis.yml', 'preset.yml'] as const
 
+/** 管理戳注释行前缀：托管安装文件的头行，值 = shipped 内容（不含戳行）的 SHA-256 前 8 位。 */
+const MANAGED_STAMP_PREFIX = '# dsh-trading-managed: '
+
+function contentSha8(content: string): string {
+  return createHash('sha256').update(content, 'utf8').digest('hex').slice(0, 8)
+}
+
+/** 提取已安装文件头行的管理戳；null = 无戳（文件视为用户所有）。 */
+function readManagedStamp(current: string): string | null {
+  if (!current.startsWith(MANAGED_STAMP_PREFIX)) return null
+  const firstLine = current.includes('\n') ? current.slice(0, current.indexOf('\n')) : current
+  const stamp = firstLine.slice(MANAGED_STAMP_PREFIX.length).trim()
+  return /^[0-9a-f]{8}$/.test(stamp) ? stamp : null
+}
+
+/** 已安装文件去掉管理戳头行后的正文。 */
+function bodyAfterStamp(current: string): string {
+  return current.includes('\n') ? current.slice(current.indexOf('\n') + 1) : ''
+}
+
 export interface SelfInstallResult {
   /** 安装目录（preset 目录名即 roster id）。 */
   dir: string
-  /** 本次实际写入的文件名；空数组 = 目录已是最新的幂等运行。 */
+  /** 本次实际写入的文件名；空数组 = 内容已是当前代际。 */
   wrote: string[]
+  /** 被跳过的文件与原因（用户改过/无管理戳）。 */
+  skipped: string[]
 }
 
 /**
- * 幂等自安装 us-trader preset（S3 机制）：mkdir -p + 逐文件内容 diff 后写，内容一致则
- * 零写入。
+ * 幂等自安装 preset（S3 机制 + 2026-08-29 代际管理戳升级）：mkdir -p + 逐文件按管理戳
+ * 三代裁决——
+ *
+ *   1. 目标不存在 → 写入（头行 = `# dsh-trading-managed: <内容sha前8>` + shipped 内容）；
+ *   2. 目标存在且带本包可识别的管理戳（托管文件）→ 正文与 shipped 内容不同则整文件更新
+ *      （以新代际覆盖——戳即「本文件归安装器托管」的约定）；
+ *   3. 目标存在但无管理戳（用户改过/前代安装器所装）→ 跳过并记录提示（删除该文件即可
+ *      让安装器重新提供）。
+ *
+ * 迁移注意：代际升级前由旧安装器写入的已装文件没有管理戳，按第 3 条处理（跳过 + log
+ * 提示）——宁可不更新，绝不覆盖用户改动。
  *
  * 卸载本 bundle 不删除已安装目录（有意为之）：升级/重装后再次 apply 即恢复一致；本包
  * 被移除后 preset 行不可解析只会得到带原因的 broken 行，无进程崩溃（S3 REPORT broken 语义）。
@@ -64,8 +96,10 @@ export async function installPreset(options: { presetRoot?: string } = {}): Prom
   const dir = join(options.presetRoot ?? DEFAULT_PRESET_ROOT, PRESET_ID)
   await mkdir(dir, { recursive: true })
   const wrote: string[] = []
+  const skipped: string[] = []
   for (const file of PRESET_FILES) {
     const content = await readFile(join(PRESET_ASSET_DIR, PRESET_ID, file), 'utf8')
+    const stamped = `${MANAGED_STAMP_PREFIX}${contentSha8(content)}\n${content}`
     const target = join(dir, file)
     let current: string | null = null
     try {
@@ -73,12 +107,21 @@ export async function installPreset(options: { presetRoot?: string } = {}): Prom
     } catch {
       // 不存在（首次安装）或不可读 → 视为需要写入。
     }
-    if (current !== content) {
-      await writeFile(target, content)
+    if (current === null) {
+      await writeFile(target, stamped)
+      wrote.push(file)
+      continue
+    }
+    if (readManagedStamp(current) === null) {
+      skipped.push(`${file} (no management stamp — user-modified file left untouched; delete it to let the installer re-provision it)`)
+      continue
+    }
+    if (bodyAfterStamp(current) !== content) {
+      await writeFile(target, stamped)
       wrote.push(file)
     }
   }
-  return { dir, wrote }
+  return { dir, wrote, skipped }
 }
 
 // ── 插件入口 ──────────────────────────────────────────────────────────────────
@@ -98,10 +141,11 @@ export function apply(ctx: Context, config: Config): void {
   // 自安装不阻塞插件启动、失败不炸 profile boot（fire-and-forget，日志留痕）。
   void installPreset({ presetRoot: config?.presetRoot }).then(
     (result) => logger(ctx).info(
-      '[dsh-trading-us-installer] self-install %s preset at %s wrote=[%s]',
+      '[dsh-trading-us-installer] self-install %s preset at %s wrote=[%s] skipped=[%s]',
       PRESET_ID,
       result.dir,
       result.wrote.join(',') || 'nothing — already current',
+      result.skipped.join('; ') || 'none',
     ),
     (error: unknown) => logger(ctx).warn('[dsh-trading-us-installer] us-trader preset self-install failed: %s', error),
   )

@@ -148,6 +148,31 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)
 
+  packages/connector-okx:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/cordis
+        version: file:../deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-tools':
+        specifier: file:/Users/zcl/code/deepseek-harness/packages/core/tools
+        version: file:../deepseek-harness/packages/core/tools(@deepseek-ai/cordis@file:../deepseek-harness/vendor/cordis)
+      '@deepseek-ai/schemastery':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/schemastery
+        version: file:../deepseek-harness/vendor/schemastery
+      '@dsh-trading/api':
+        specifier: workspace:^
+        version: link:../api
+    devDependencies:
+      '@dsh-trading/connector-binance':
+        specifier: workspace:^
+        version: link:../connector-binance
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)
+
   packages/connector-stooq:
     dependencies:
       '@deepseek-ai/cordis':
@@ -225,6 +250,9 @@ importers:
       '@dsh-trading/connector-binance':
         specifier: workspace:*
         version: link:../connector-binance
+      '@dsh-trading/connector-okx':
+        specifier: workspace:*
+        version: link:../connector-okx
       '@dsh-trading/kit-crypto':
         specifier: workspace:*
         version: link:../kit-crypto
@@ -232,6 +260,9 @@ importers:
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)
 
   packages/hk:
     dependencies:

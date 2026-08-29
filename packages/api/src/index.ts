@@ -128,10 +128,16 @@ export interface MarketDataService {
 /**
  * 交易服务契约：placeOrder 默认 dry-run；实盘前必须过插件 liveTrading 开关与
  * ctx.approval.request（交互形态；headless 下 ask=deny，fail-closed [S4]）。
+ *
+ * R3（okx 切片 2026-08-29）修订：cancelOrder 增加可选 symbol、新增 getOrder——
+ * OKX 按 (instId, ordId) 双键定位订单，单参 id 形态不够；无其他实现方，扩展向后兼容。
  */
 export interface TradeService {
   placeOrder(req: OrderRequest): Promise<Order>
-  cancelOrder(id: string): Promise<void>
+  /** 撤单。symbol 可选：按 (symbol, id) 双键定位订单的交易所（如 OKX）必须提供。 */
+  cancelOrder(id: string, symbol?: string): Promise<void>
+  /** 查询单笔订单状态（按 (symbol, id) 双键）。 */
+  getOrder(symbol: string, id: string): Promise<Order>
   getPositions(): Promise<Position[]>
 }
 
@@ -182,5 +188,11 @@ declare module '@deepseek-ai/cordis' {
     tradingCnMarketData: MarketDataService
     /** hk 市场行情服务（由腾讯连接器同包双实例提供，config.market 分流；cn+hk 切片 2026-08-31 补齐）。 */
     tradingHkMarketData: MarketDataService
+    /**
+     * crypto 市场交易服务（R3 2026-08-29 补齐，crypto 市场第一个真实 TradeService）：
+     * 由 connector-okx 实现（签名 demo/live 下单），与 connector-binance 经
+     * Config.enabled 互斥激活同一 tradingCryptoMarketData 键时一并 provide。
+     */
+    tradingCryptoTrade: TradeService
   }
 }

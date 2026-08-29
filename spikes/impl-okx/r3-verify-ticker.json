@@ -1,0 +1,23 @@
+{
+  "url": "https://openapi.okx.com/api/v5/market/ticker?instId=BTC-USDT",
+  "data": [
+    {
+      "instType": "SPOT",
+      "instId": "BTC-USDT",
+      "last": "77635.2",
+      "lastSz": "0.00128807",
+      "askPx": "77635.2",
+      "askSz": "0.73905595",
+      "bidPx": "77635.1",
+      "bidSz": "0.28498899",
+      "open24h": "79558",
+      "high24h": "79839.3",
+      "low24h": "76888",
+      "volCcy24h": "470075793.184437776",
+      "vol24h": "6019.21723025",
+      "ts": "1788004399075",
+      "sodUtc0": "77844.7",
+      "sodUtc8": "78325.7"
+    }
+  ]
+}

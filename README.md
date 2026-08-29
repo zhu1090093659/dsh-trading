@@ -86,6 +86,7 @@ DSH 扩展机制分层与对应选择：
 | us | Yahoo Finance v8 chart API（非官方，无 key；2026-08-29 本出口实证） | 无 key、本仓不缓存不再分发；个人使用属灰色但被普遍使用的边界，以 Yahoo Terms of Use 为准（详见 connector-yahoo README）。前任数据源 Stooq（免费公开 CSV）2026-08-31 实测本出口被反爬拒止（JS 挑战 + Access denied），无成功实证，退役为备选，见 `spikes/impl-us/REPORT.md` |
 | cn / hk | 腾讯公共行情端点（qt.gtimg.cn 报价 + web.ifzq.gtimg.cn K线，无 key；2026-08-31 本出口实证） | 公开端点、**无官方授权**，个人使用边界自负，以腾讯服务条款为准；本仓不缓存不再分发（详见 connector-tencent README） |
 | crypto | Binance 公共 REST（api.binance.com / fapi.binance.com，无 key；2026-08-29 实证） | Binance API 公开条款；不缓存不再分发 |
+| crypto（okx） | OKX 官方 API v5（openapi.okx.com；公共行情无 key，签名面用户自带三值凭证 BYOK；2026-08-31 本出口实证） | OKX Terms of Service 与 API 使用条款为准；模拟盘为平台虚拟资金；本仓不缓存不再分发、不内置密钥 |
 
 ### 关键架构定稿（实现期修订）
 

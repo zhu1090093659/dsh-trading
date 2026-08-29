@@ -1,0 +1,57 @@
+{
+  "generatedAt": "2026-08-29T11:53:21.493Z",
+  "base": "https://openapi.okx.com",
+  "pass": 6,
+  "fail": [],
+  "results": [
+    {
+      "name": "ticker BTC-USDT",
+      "file": "r3-verify-ticker.json",
+      "url": "https://openapi.okx.com/api/v5/market/ticker?instId=BTC-USDT",
+      "latencyMs": 515,
+      "last": "77635.2",
+      "bidPx": "77635.1",
+      "askPx": "77635.2",
+      "vol24h": "6019.21723025",
+      "ts": "1788004399075"
+    },
+    {
+      "name": "candles 1Dutc vs 1D（日界对照）",
+      "file": "r3-verify-candles.json",
+      "utcFirstBar": "2026-08-29T00:00:00.000Z",
+      "hkFirstBar": "2026-08-28T16:00:00.000Z",
+      "offsetHours": -8,
+      "conclusion": "1D 最新 bar 比 1Dutc 早 8h 开盘（UTC+8 日界=16:00 UTC）→ 实证 1D 按 UTC+8 开盘，Interval 1d 取 1Dutc（与 Binance 日线同日界）成立"
+    },
+    {
+      "name": "funding-rate BTC-USDT-SWAP",
+      "file": "r3-verify-funding.json",
+      "fundingRate": "0.0000249315801316",
+      "nextFundingRate": "",
+      "fundingTime": "1788019200000"
+    },
+    {
+      "name": "instruments BTC-USDT-SWAP",
+      "file": "r3-verify-instruments.json",
+      "ctVal": "0.01",
+      "lotSz": "0.01",
+      "minSz": "0.01",
+      "tickSz": "0.1",
+      "settleCcy": "USDT"
+    },
+    {
+      "name": "cross-check vs Binance BTCUSDT",
+      "file": "r3-verify-cross.json",
+      "okx": 77635.2,
+      "binance": 77643,
+      "relativeDiff": 0.00010045979676214096,
+      "binanceLatencyMs": 456,
+      "sanity": "PASS（<0.5%，两所价差在正常市场内）"
+    },
+    {
+      "name": "demo signed balance probe",
+      "file": null,
+      "skipped": "no OKX_DEMO_* credentials in environment — skipped by design (skip-if-no-creds); provide demo keys to run"
+    }
+  ]
+}

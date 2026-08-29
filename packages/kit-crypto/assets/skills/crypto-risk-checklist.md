@@ -19,4 +19,21 @@ description: 加密合约交易风控检查清单：开仓前逐项核对杠杆�
 - 达到目标位或止损位按计划执行；移动止损只朝有利方向。
 - 资金费率在持仓期间显著反向恶化时，重新评估持有成本，而不是无视。
 
+## OKX 模拟盘（demo）使用法（connector-okx）
+
+OKX 连接器启用后（`enabled: true`，与 binance 行互斥），**第一默认目标是 demo 模拟盘**：
+`dryRun=false + liveTrading=true + env=demo` 时订单真实签名打 OKX 模拟盘（`x-simulated-trading: 1`），
+`env=live` 才是真钱（第二次显式解锁）。
+
+1. **三 ref 环境变量名**（demo/live key 不通用，各建一套）：
+   - demo 组（默认）：`OKX_DEMO_API_KEY` / `OKX_DEMO_SECRET_KEY` / `OKX_DEMO_PASSPHRASE`
+   - live 组：`OKX_API_KEY` / `OKX_SECRET_KEY` / `OKX_PASSPHRASE`
+   - 建法：网页登录 OKX → Trade → Demo Trading → 个人中心 → Demo Trading API → Create API Key。
+2. **权限只勾 Read + Trade，绝不勾 Withdraw**（passphrase 创建时自设，服务端只存 hash，丢失只能重建）。
+3. **demo key 不过期**；实盘 key 若未绑 IP 白名单且带 trade/withdraw 权限，**14 天不活跃即过期**——
+   「key 突然失效」先查这一条。
+4. 单位纪律：现货市价单数量按 base 币（连接器显式 `tgtCcy=base_ccy`，OKX 缺省 buy 是按计价币金额）；永续
+   `sz` 单位是「张」（1 张 = ctVal 币），连接器自动换算——模型侧 quantity 恒为币数。
+5. 模拟盘资金是平台发放的虚拟资金，成交深度与真实盘口有差；demo 结论迁移到实盘前重新校准仓位。
+
 > 本清单是方法论，不构成投资建议。行情与下单工具均为 dry-run 起步，实盘需显式开关与审批（dsh-trading 铁律 #3）。

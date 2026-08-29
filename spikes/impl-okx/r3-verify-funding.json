@@ -1,0 +1,24 @@
+{
+  "url": "https://openapi.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP",
+  "data": [
+    {
+      "formulaType": "withRate",
+      "fundingRate": "0.0000249315801316",
+      "fundingTime": "1788019200000",
+      "impactValue": "20000.0000000000000000",
+      "instId": "BTC-USDT-SWAP",
+      "instType": "SWAP",
+      "interestRate": "0.0001000000000000",
+      "maxFundingRate": "0.00375",
+      "method": "current_period",
+      "minFundingRate": "-0.00375",
+      "nextFundingRate": "",
+      "nextFundingTime": "1788048000000",
+      "premium": "-0.0004508078476630",
+      "prevFundingTime": "1787990400000",
+      "settFundingRate": "0.0000678146415375",
+      "settState": "settled",
+      "ts": "1788004390793"
+    }
+  ]
+}
