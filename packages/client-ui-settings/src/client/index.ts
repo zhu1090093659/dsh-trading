@@ -47,16 +47,32 @@ export function apply(ctx: ClientContext): void {
   })
 }
 
-/** 文案字典（zh/en；重复键由 locale 层的首个注册者胜出——注册顺序即优先级）。 */
+/**
+ * 文案字典。locale 合同：dicts 以 locale id（BCP 47，'zh'/'en'）为顶层键，
+ * 每侧是扁平的 {键: 模板}；模板占位符是单括号 {name}
+ * （locale/src/client/index.ts 的 translate：/\{(\w+)\}/g）。
+ */
 function dictionaries() {
   return {
-    'nav': { zh: '交易', en: 'Trading' },
-    'lead': { zh: '选择每个市场使用的数据/交易所提供方。保存后新建会话生效（切换不中断当前会话）。', en: 'Choose the data/exchange provider for each market. Takes effect in new sessions.' },
-    'save': { zh: '保存', en: 'Save' },
-    'discard': { zh: '放弃', en: 'Discard' },
-    'saved': { zh: '已保存', en: 'Saved' },
-    'saveFailed': { zh: '保存失败', en: 'Save failed' },
-    'current': { zh: '当前：{{provider}}', en: 'Current: {{provider}}' },
-    'default': { zh: '默认', en: 'default' },
+    zh: {
+      'nav': '交易',
+      'lead': '选择每个市场使用的数据/交易所提供方。保存后新建会话生效（切换不中断当前会话）。',
+      'save': '保存',
+      'discard': '放弃',
+      'saved': '已保存',
+      'saveFailed': '保存失败',
+      'current': '当前：{provider}',
+      'default': '默认',
+    },
+    en: {
+      'nav': 'Trading',
+      'lead': 'Choose the data/exchange provider for each market. Takes effect in new sessions.',
+      'save': 'Save',
+      'discard': 'Discard',
+      'saved': 'Saved',
+      'saveFailed': 'Save failed',
+      'current': 'Current: {provider}',
+      'default': 'default',
+    },
   }
 }
