@@ -1,9 +1,14 @@
 /**
- * Trading settings controller: binds the dshtrading namespace through the
- * client settings scope, exposes the resolved markets map, and writes a
- * provider selection as one path mutation fenced by the revision the form
- * read. The Host (dsh-trading/router) owns the namespace and its schema.
+ * Trading settings controller: a SnapshotStore over the dshtrading namespace
+ * view (markets map + provider presence), with the write methods supplied as
+ * plain inject fields (官方模式: hooks = 可观察状态, 普通字段 = 写操作)。
+ * The Host (dsh-trading/router) owns the namespace and its schema; this
+ * controller binds the client settings scope and translates user choices
+ * into revision-fenced path mutations.
  */
+import type {
+  SnapshotStore,
+} from '@deepseek-ai/dsh-client-store'
 import type {
   SettingsScope,
   SettingsScopeSnapshot,
@@ -31,42 +36,46 @@ export interface TradingSettings {
   markets: Record<string, { provider?: string; tradeProvider?: string }>
 }
 
-/** 控制器对外面：快照 + 订阅 + 写路径 + 重置。 */
-export interface TradingSettingsController {
-  snapshot(): SettingsScopeSnapshot<TradingSettings>
-  subscribe(listener: () => void): () => void
-  /** 写入某市场 provider（path mutation + 表单读到的 revision 防漂移）。 */
+/** 组件的可观察状态（SnapshotStore 值）：已解析 value + 覆盖标记。 */
+export interface TradingSettingsState {
+  status: 'loading' | 'ready' | 'unavailable'
+  /** market id → 已解析 provider（undefined = 未解析到）。 */
+  resolved: Record<string, string | undefined>
+  /** market id → 用户是否覆盖（user 层 presence）。 */
+  overridden: Record<string, boolean>
+  /** 表单可写（mode=host 且 writable）。 */
+  writable: boolean
+}
+
+/** 写路径（普通 inject 字段）。 */
+export interface TradingSettingsActions {
   setProvider(market: string, provider: string): Promise<void>
-  /** 重置某市场 provider（unset path → 回 base/schema 默认）。 */
   resetProvider(market: string): Promise<void>
 }
 
-export function createTradingSettingsController(scope: SettingsScope<TradingSettings>): TradingSettingsController {
-  return {
-    snapshot: () => scope.getSnapshot(),
-    subscribe: (listener) => scope.subscribe(listener),
-    async setProvider(market: string, provider: string) {
-      const rev = scope.getSnapshot().revision
-      await scope.mutate([{ op: 'set', path: ['markets', market, 'provider'], value: provider }], rev)
-    },
-    async resetProvider(market: string) {
-      const rev = scope.getSnapshot().revision
-      await scope.mutate([{ op: 'unset', path: ['markets', market, 'provider'] }], rev)
-    },
+/** 状态转化：从 settings 快照投射为组件的可观察视图。 */
+export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): TradingSettingsState {
+  const value = snap.value ?? (snap.base as TradingSettings | undefined)
+  const resolved: Record<string, string | undefined> = {}
+  const overridden: Record<string, boolean> = {}
+  const user = (snap.user ?? {}) as { markets?: Record<string, unknown> }
+  for (const market of MARKET_LABELS) {
+    resolved[market.id] = value?.markets?.[market.id]?.provider
+    overridden[market.id] = user.markets?.[market.id] !== undefined
   }
+  return { status: snap.status, resolved, overridden, writable: snap.writable && snap.mode === 'host' }
 }
 
-/** 工具：判断某市场 provider 是否被用户覆盖（user 层 presence，非值比较）。 */
-export function isOverridden(snapshot: SettingsScopeSnapshot<TradingSettings>, market: string): boolean {
-  const user = (snapshot.user ?? {}) as { markets?: Record<string, unknown> }
-  return user.markets?.[market] !== undefined
-}
-
-/** 工具：读快照中某市场已解析 provider（value 为 undefined 时回落 base）。 */
-export function resolvedProvider(
-  snapshot: SettingsScopeSnapshot<TradingSettings>,
-  market: string,
-): string | undefined {
-  const value = snapshot.value ?? (snapshot.base as TradingSettings | undefined)
-  return value?.markets?.[market]?.provider
+/** 从 settings scope 构建 SnapshotStore（getSnapshot 稳定引用 + subscribe 转发）。 */
+export function createTradingSettingsStore(scope: SettingsScope<TradingSettings>): SnapshotStore<TradingSettingsState> {
+  let cached: TradingSettingsState = projectSnapshot(scope.getSnapshot())
+  return {
+    getSnapshot: () => {
+      const current = projectSnapshot(scope.getSnapshot())
+      // 引用稳定：值未变则复用缓存（bindSnapshotSelector 依赖引用稳定性做浅比较）。
+      if (JSON.stringify(current) !== JSON.stringify(cached)) cached = current
+      return cached
+    },
+    subscribe: (listener) => scope.subscribe(listener),
+  }
 }

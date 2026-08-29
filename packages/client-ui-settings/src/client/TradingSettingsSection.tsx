@@ -1,22 +1,35 @@
 /**
  * Trading settings page: one 'settings.section' entry ('交易' 一级菜单) —
  * a card per market (crypto/us/cn/hk) with the provider selection that routes
- * the dsh-trading connector set. Reads/writes the dshtrading namespace
- * (owned by @dsh-trading/router on the Host) through its controller; staged
- * edits write on save only, fenced by the revision the form read.
+ * the dsh-trading connector set. The state arrives as a SnapshotStore through
+ * the hooks compartment (useController(selector)); writes go through the
+ * plain inject fields (setProvider/resetProvider), revision-fenced by the
+ * scope the Host settings service resolves.
  */
 import { useEffect, useMemo, useState } from 'react'
-import type { ComposedProps, HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import type { TradingSettingsController } from './trading-settings-controller.ts'
-import {
-  MARKET_LABELS, PROVIDER_LABELS, isOverridden, resolvedProvider,
+import type { ComposedProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  TradingSettingsState,
 } from './trading-settings-controller.ts'
+import {
+  MARKET_LABELS, PROVIDER_LABELS,
+} from './trading-settings-controller.ts'
+
+/** Bound selector-hook type for the controller store (SnapshotStore). */
+export type TradingSettingsStateStore = {
+  getSnapshot: () => TradingSettingsState
+  subscribe: (listener: () => void) => () => void
+}
 
 export interface TradingSettingsInjected {
   hooks: {
-    /** Controller snapshot observable (the section subscribes through it). */
-    controller: HostObservable<TradingSettingsController>
+    /** Projects the dshtrading namespace view (SnapshotStore). */
+    controller: TradingSettingsStateStore
   }
+  /** Write path: store a market provider selection. */
+  setProvider: (market: string, provider: string) => Promise<void>
+  /** Write path: clear a market provider (re-inherit base/schema default). */
+  resetProvider: (market: string) => Promise<void>
 }
 
 export type TradingSettingsProps =
@@ -26,35 +39,29 @@ export type TradingSettingsProps =
  * Render the Trading section: one row per market, provider radio, save/reset.
  * A staged draft holds while the user picks; commit writes on save.
  */
-export function TradingSettingsSection({ t, useController }: TradingSettingsProps) {
-  const controller = useController()
+export function TradingSettingsSection({ t, useController, setProvider, resetProvider }: TradingSettingsProps) {
+  const state = useController((value: TradingSettingsState) => value)
   const [draft, setDraft] = useState<Record<string, string | undefined>>({})
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | undefined>(undefined)
 
-  // On mount (and namespace settle), initialize the draft from the resolved value.
+  // 首帧 draft 初始化为当前已解析值（状态 ready 后；effect 而非 render 中 setState）。
+  const ready = state.status === 'ready'
+  const resolvedNow = useMemo(() => state.resolved, [state.resolved, state.status])
   useEffect(() => {
-    const snap = controller.snapshot()
-    if (snap.status === 'ready') {
-      const next: Record<string, string | undefined> = {}
-      for (const market of MARKET_LABELS) {
-        const provider = resolvedProvider(snap, market.id)
-        next[market.id] = provider ?? draftStore.current[market.id]
-      }
-      setDraft((prev) => ({ ...prev, ...next }))
+    if (ready && Object.keys(draft).length === 0) {
+      setDraft({ ...resolvedNow })
     }
-  }, [controller, controller.snapshot().status])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, resolvedNow])
 
-  const dirty = useMemo(() => {
-    const snap = controller.snapshot()
-    return MARKET_LABELS.some((m) => {
-      const current = resolvedProvider(snap, m.id)
-      const chosen = draft[m.id]
-      const override = isOverridden(snap, m.id)
-      if (chosen === undefined) return override
-      return chosen !== current
-    })
-  }, [draft, controller.snapshot()])
+  const dirty = MARKET_LABELS.some((m) => {
+    const current = state.resolved[m.id]
+    const chosen = draft[m.id]
+    const override = state.overridden[m.id]
+    if (chosen === undefined) return override
+    return chosen !== current
+  })
 
   async function save() {
     setSaving(true)
@@ -62,13 +69,12 @@ export function TradingSettingsSection({ t, useController }: TradingSettingsProp
     try {
       for (const market of MARKET_LABELS) {
         const chosen = draft[market.id]
-        const snap = controller.snapshot()
-        const current = resolvedProvider(snap, market.id)
-        const override = isOverridden(snap, market.id)
+        const current = state.resolved[market.id]
+        const override = state.overridden[market.id]
         if (chosen === undefined) {
-          if (override) await controller.resetProvider(market.id)
+          if (override) await resetProvider(market.id)
         } else if (chosen !== current || !override) {
-          await controller.setProvider(market.id, chosen)
+          await setProvider(market.id, chosen)
         }
       }
       setMessage(t('saved'))
@@ -79,25 +85,27 @@ export function TradingSettingsSection({ t, useController }: TradingSettingsProp
     }
   }
 
+  const writable = state.writable
+
   return (
-    <div className="dsh-trading-settings">
-      <p className="dsh-trading-settings__lead">{t('lead')}</p>
+    <div>
+      <p style={{ marginBottom: 12 }}>{t('lead')}</p>
       {MARKET_LABELS.map((market) => {
-        const chosen = draft[market.id]
-        const snap = controller.snapshot()
-        const current = resolvedProvider(snap, market.id)
+        const chosen = draft[market.id] ?? state.resolved[market.id]
+        const current = state.resolved[market.id]
         return (
-          <fieldset key={market.id} className="dsh-trading-settings__market">
+          <fieldset key={market.id} style={{ padding: '12px 0', borderTop: '1px solid var(--dsw-alias-border-l2, #eee)' }}>
             <legend>{market.label}</legend>
-            <p className="dsh-trading-settings__hint">
+            <p style={{ margin: '4px 0' }}>
               {t('current', { provider: current ?? t('default') })}
             </p>
             {PROVIDER_LABELS.map((provider) => (
-              <label key={`${market.id}-${provider.id}`} className="dsh-trading-settings__choice">
+              <label key={`${market.id}-${provider.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 14 }}>
                 <input
                   type="radio"
                   name={`provider-${market.id}`}
                   checked={chosen === provider.id}
+                  disabled={!writable || saving}
                   onChange={() => setDraft((prev) => ({ ...prev, [market.id]: provider.id }))}
                 />
                 <span>{provider.label}</span>
@@ -106,30 +114,24 @@ export function TradingSettingsSection({ t, useController }: TradingSettingsProp
           </fieldset>
         )
       })}
-      <div className="dsh-trading-settings__actions">
-        <button type="button" disabled={!dirty || saving} onClick={() => void save()}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+        <button type="button" disabled={!dirty || saving || !writable} onClick={() => void save()}>
           {t('save')}
         </button>
         <button
           type="button"
           disabled={saving || !dirty}
           onClick={() => {
-            const snap = controller.snapshot()
-            const next: Record<string, string | undefined> = {}
-            for (const market of MARKET_LABELS) next[market.id] = resolvedProvider(snap, market.id)
-            setDraft(next)
+            setDraft({ ...state.resolved })
             setMessage(undefined)
           }}
         >
           {t('discard')}
         </button>
-        {message !== undefined ? <span className="dsh-trading-settings__message">{message}</span> : null}
+        {message !== undefined ? <span>{message}</span> : null}
       </div>
     </div>
   )
 }
-
-/** Module-local draft mirror for the mount effect (avoids a render-time ref dance). */
-const draftStore: { current: Record<string, string | undefined> } = { current: {} }
 
 export type { TradingSettingsProps as TradingSettingsSectionProps }
