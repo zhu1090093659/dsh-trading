@@ -1,0 +1,8 @@
+{
+  "name": "dsh-acceptance-observer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "index.js",
+  "description": "Throwaway multi-market acceptance observer for task I (in-process, 0 model calls). Generalized from spikes/acceptance/acc-plugin (task D). NOT part of the delivered packages."
+}

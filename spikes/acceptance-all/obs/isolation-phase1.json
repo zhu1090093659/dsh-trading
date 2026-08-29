@@ -1,0 +1,182 @@
+{
+  "at": "2026-08-29T10:35:45.161Z",
+  "mount": "ok (5 agents created; presets.mount in setup, no rejection)",
+  "allTools": [
+    "crypto_get_ticker",
+    "crypto_get_klines",
+    "crypto_funding_rate",
+    "crypto_place_order",
+    "us_get_ticker",
+    "us_get_klines",
+    "us_place_order",
+    "cn_get_ticker",
+    "cn_get_klines",
+    "cn_place_order",
+    "hk_get_ticker",
+    "hk_get_klines",
+    "hk_place_order"
+  ],
+  "matrix": {
+    "standard": {
+      "preset": null,
+      "visibleTools": {
+        "crypto_get_ticker": false,
+        "crypto_get_klines": false,
+        "crypto_funding_rate": false,
+        "crypto_place_order": false,
+        "us_get_ticker": false,
+        "us_get_klines": false,
+        "us_place_order": false,
+        "cn_get_ticker": false,
+        "cn_get_klines": false,
+        "cn_place_order": false,
+        "hk_get_ticker": false,
+        "hk_get_klines": false,
+        "hk_place_order": false
+      },
+      "checklists": {
+        "crypto-risk-checklist": false,
+        "us-risk-checklist": false,
+        "cn-risk-checklist": false,
+        "hk-risk-checklist": false
+      },
+      "skillCount": 33
+    },
+    "crypto": {
+      "preset": "crypto-trader",
+      "visibleTools": {
+        "crypto_get_ticker": true,
+        "crypto_get_klines": true,
+        "crypto_funding_rate": true,
+        "crypto_place_order": true,
+        "us_get_ticker": false,
+        "us_get_klines": false,
+        "us_place_order": false,
+        "cn_get_ticker": false,
+        "cn_get_klines": false,
+        "cn_place_order": false,
+        "hk_get_ticker": false,
+        "hk_get_klines": false,
+        "hk_place_order": false
+      },
+      "checklists": {
+        "crypto-risk-checklist": true,
+        "us-risk-checklist": false,
+        "cn-risk-checklist": false,
+        "hk-risk-checklist": false
+      },
+      "skillCount": 34
+    },
+    "us": {
+      "preset": "us-trader",
+      "visibleTools": {
+        "crypto_get_ticker": false,
+        "crypto_get_klines": false,
+        "crypto_funding_rate": false,
+        "crypto_place_order": false,
+        "us_get_ticker": true,
+        "us_get_klines": true,
+        "us_place_order": true,
+        "cn_get_ticker": false,
+        "cn_get_klines": false,
+        "cn_place_order": false,
+        "hk_get_ticker": false,
+        "hk_get_klines": false,
+        "hk_place_order": false
+      },
+      "checklists": {
+        "crypto-risk-checklist": false,
+        "us-risk-checklist": true,
+        "cn-risk-checklist": false,
+        "hk-risk-checklist": false
+      },
+      "skillCount": 34
+    },
+    "cn": {
+      "preset": "cn-trader",
+      "visibleTools": {
+        "crypto_get_ticker": false,
+        "crypto_get_klines": false,
+        "crypto_funding_rate": false,
+        "crypto_place_order": false,
+        "us_get_ticker": false,
+        "us_get_klines": false,
+        "us_place_order": false,
+        "cn_get_ticker": true,
+        "cn_get_klines": true,
+        "cn_place_order": true,
+        "hk_get_ticker": false,
+        "hk_get_klines": false,
+        "hk_place_order": false
+      },
+      "checklists": {
+        "crypto-risk-checklist": false,
+        "us-risk-checklist": false,
+        "cn-risk-checklist": true,
+        "hk-risk-checklist": false
+      },
+      "skillCount": 34
+    },
+    "hk": {
+      "preset": "hk-trader",
+      "visibleTools": {
+        "crypto_get_ticker": false,
+        "crypto_get_klines": false,
+        "crypto_funding_rate": false,
+        "crypto_place_order": false,
+        "us_get_ticker": false,
+        "us_get_klines": false,
+        "us_place_order": false,
+        "cn_get_ticker": false,
+        "cn_get_klines": false,
+        "cn_place_order": false,
+        "hk_get_ticker": true,
+        "hk_get_klines": true,
+        "hk_place_order": true
+      },
+      "checklists": {
+        "crypto-risk-checklist": false,
+        "us-risk-checklist": false,
+        "cn-risk-checklist": false,
+        "hk-risk-checklist": true
+      },
+      "skillCount": 34
+    }
+  },
+  "verdict": {
+    "standard": {
+      "ownToolsAllVisible": true,
+      "foreignToolsVisible": [],
+      "ownChecklistVisible": null,
+      "foreignChecklists": []
+    },
+    "crypto": {
+      "ownToolsAllVisible": true,
+      "foreignToolsVisible": [],
+      "ownChecklistVisible": true,
+      "foreignChecklists": []
+    },
+    "us": {
+      "ownToolsAllVisible": true,
+      "foreignToolsVisible": [],
+      "ownChecklistVisible": true,
+      "foreignChecklists": []
+    },
+    "cn": {
+      "ownToolsAllVisible": true,
+      "foreignToolsVisible": [],
+      "ownChecklistVisible": true,
+      "foreignChecklists": []
+    },
+    "hk": {
+      "ownToolsAllVisible": true,
+      "foreignToolsVisible": [],
+      "ownChecklistVisible": true,
+      "foreignChecklists": []
+    }
+  },
+  "crossContamination": {
+    "cnScopeSeesHkTools": [],
+    "hkScopeSeesCnTools": []
+  }
+}

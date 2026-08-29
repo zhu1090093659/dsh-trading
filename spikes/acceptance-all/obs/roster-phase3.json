@@ -1,0 +1,77 @@
+{
+  "phase": "phase3",
+  "at": "2026-08-29T10:37:07.279Z",
+  "roster": [
+    {
+      "id": "standard",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "ptc",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "minimal",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "cordis",
+      "trust": "system",
+      "broken": null
+    },
+    {
+      "id": "crypto-trader",
+      "trust": "user",
+      "broken": null
+    },
+    {
+      "id": "us-trader",
+      "trust": "user",
+      "broken": null
+    },
+    {
+      "id": "cn-trader",
+      "trust": "user",
+      "broken": null
+    },
+    {
+      "id": "hk-trader",
+      "trust": "user",
+      "broken": null
+    },
+    {
+      "id": "liangshen",
+      "trust": "user",
+      "broken": null
+    }
+  ],
+  "resolves": {
+    "crypto-trader": {
+      "id": "crypto-trader",
+      "trust": "user",
+      "path": "/Users/zcl/.dsh-trading-presets/crypto-trader/agent.cordis.yml",
+      "broken": null
+    },
+    "us-trader": {
+      "id": "us-trader",
+      "trust": "user",
+      "path": "/Users/zcl/.dsh-trading-presets/us-trader/agent.cordis.yml",
+      "broken": null
+    },
+    "cn-trader": {
+      "id": "cn-trader",
+      "trust": "user",
+      "path": "/Users/zcl/.dsh-trading-presets/cn-trader/agent.cordis.yml",
+      "broken": null
+    },
+    "hk-trader": {
+      "id": "hk-trader",
+      "trust": "user",
+      "path": "/Users/zcl/.dsh-trading-presets/hk-trader/agent.cordis.yml",
+      "broken": null
+    }
+  }
+}
