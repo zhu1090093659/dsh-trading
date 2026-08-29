@@ -95,6 +95,10 @@ export default {
   clean: false,
   sourcemap: true,
   entryFileNames: 'client.js',
+  // package.json type:module 会让 tsdown 强制把 cjs 产物改名 .cjs；浏览器半
+  // 由 web 壳按 lib/client.js 供包，用 outExtensions 钉死 .js/.js.map
+  // （browser-only 产物，node 不加载，无 ESM 误读风险）。
+  outExtensions: () => ({ js: '.js' }),
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
     'import.meta.env.MODE': JSON.stringify(process.env.NODE_ENV ?? 'production'),
@@ -112,7 +116,15 @@ export default {
       ],
     },
   },
-  banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(ID)}, factory: (require) => {`,
-  footer: 'return module.exports; } });',
+  // banner/footer/intro 必须走 outputOptions（tsdown 0.22 顶层不认 intro），
+  // 与 DSH 内部 preset packages/client/tsdown.client.ts 的三段保持一致：
+  // CJS 产物在 factory 体内引用 exports/module.exports，intro 负责先建好
+  // module/exports，漏掉会以 "exports is not defined" 在浏览器炸掉整个
+  // loader entry。
+  outputOptions: {
+    banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(ID)}, factory: (require) => {`,
+    footer: 'return module.exports; } });',
+    intro: 'var module = { exports: {} }; var exports = module.exports;',
+  },
   plugins: [purityGate(), cssModulesInline(), cssGlobalInline()],
 }

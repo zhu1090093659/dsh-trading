@@ -21,8 +21,8 @@
   ],
   "license": "MIT",
   "scripts": {
-    "bundle": "tsdown && tsdown --config tsdown.client.config.mjs && node -e \"const fs=require('node:fs');fs.existsSync('lib/client.cjs')&&fs.renameSync('lib/client.cjs','lib/client.js')\"",
-    "build": "tsdown && tsdown --config tsdown.client.config.mjs && node -e \"const fs=require('node:fs');fs.existsSync('lib/client.cjs')&&fs.renameSync('lib/client.cjs','lib/client.js')\"",
+    "bundle": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "build": "tsdown && tsdown --config tsdown.client.config.mjs",
     "test": "vitest run"
   },
   "dependencies": {
