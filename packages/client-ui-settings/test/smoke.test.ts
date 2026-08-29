@@ -1,12 +1,13 @@
 /**
- * 冒烟测试：node half 可加载（空 apply）+ 控制器纯逻辑（快照读取/覆盖判定）。
+ * 冒烟测试：node half 可加载（空 apply）+ 控制器纯逻辑（projectSnapshot 投射）。
  * 不测试浏览器半（bundle 构建由 tsdown.client.config.mjs 负责，浏览器行为需真实宿主）。
  */
 import { describe, expect, it } from 'vitest'
 import { apply } from '../src/index.js'
 import {
-  isOverridden, resolvedProvider,
-  type TradingSettings, type SettingsScopeSnapshotLike,
+  projectSnapshot,
+  type TradingSettings,
+  type SettingsScopeSnapshotLike,
 } from '../src/client/trading-settings-controller.js'
 
 describe('@dsh-trading/client-ui-settings node half', () => {
@@ -17,7 +18,7 @@ describe('@dsh-trading/client-ui-settings node half', () => {
   })
 })
 
-describe('trading settings 控制器纯逻辑', () => {
+describe('projectSnapshot（状态投射：value 优先、user presence、dict 并集）', () => {
   const SNAP = {
     status: 'ready',
     value: { markets: { crypto: { provider: 'okx' } } } as TradingSettings,
@@ -28,15 +29,43 @@ describe('trading settings 控制器纯逻辑', () => {
     mode: 'host' as const,
   }
 
-  it('resolvedProvider：value 优先，undefined 时回落 base', () => {
-    expect(resolvedProvider(SNAP as never, 'crypto')).toBe('okx')
+  it('resolved：value 优先，undefined 时回落 base', () => {
+    const state = projectSnapshot(SNAP as never)
+    expect(state.resolved.crypto).toBe('okx')
     const noValue = { ...SNAP, value: undefined }
-    expect(resolvedProvider(noValue as never, 'crypto')).toBe('binance')
+    const state2 = projectSnapshot(noValue as never)
+    expect(state2.resolved.crypto).toBe('binance')
   })
 
-  it('isOverridden：user 层 presence 判定（非值比较）', () => {
-    expect(isOverridden(SNAP as never, 'crypto')).toBe(true)
+  it('overridden：user 层 presence 判定（非值比较）', () => {
+    const state = projectSnapshot(SNAP as never)
+    expect(state.overridden.crypto).toBe(true)
     const noUser = { ...SNAP, user: {} }
-    expect(isOverridden(noUser as never, 'crypto')).toBe(false)
+    const state2 = projectSnapshot(noUser as never)
+    expect(state2.overridden.crypto).toBe(false)
+  })
+
+  it('市场键 = value/base/user 并集（dict 开放：新市场键自动进入）', () => {
+    const snap = {
+      status: 'ready',
+      value: { markets: { jp: { provider: 'stooq' } } } as TradingSettings,
+      base: { markets: { crypto: { provider: 'binance' } } },
+      user: {},
+      revision: 1,
+      writable: true,
+      mode: 'host' as const,
+    }
+    const state = projectSnapshot(snap as never)
+    expect(state.resolved.jp).toBe('stooq')
+    expect(state.resolved.crypto).toBe('binance')
+  })
+
+  it('writable：mode=host 且 writable 才可写', () => {
+    const readOnly = { ...SNAP, writable: false }
+    const state = projectSnapshot(readOnly as never)
+    expect(state.writable).toBe(false)
+    const local = { ...SNAP, mode: 'local' as const }
+    const state2 = projectSnapshot(local as never)
+    expect(state2.writable).toBe(false)
   })
 })

@@ -57,8 +57,10 @@ export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): T
   ])
   const resolved: Record<string, string | undefined> = {}
   const overridden: Record<string, boolean> = {}
+  const baseMarkets = (snap.base as TradingSettings | undefined)?.markets ?? {}
   for (const marketId of marketIds) {
-    resolved[marketId] = value?.markets?.[marketId]?.provider
+    // 逐市场 value 优先、base 兜底：value 缺该市场键时（部分合并）仍能解析到实际 provider。
+    resolved[marketId] = value?.markets?.[marketId]?.provider ?? baseMarkets[marketId]?.provider
     overridden[marketId] = user.markets?.[marketId] !== undefined
   }
   return { status: snap.status, resolved, overridden, writable: snap.writable && snap.mode === 'host' }
