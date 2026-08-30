@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { fetchKlines, fetchMarkets, fetchTickers } from './api.ts'
+import { searchAllMarkets } from './symbol-catalog.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { Sparkline } from './Sparkline.tsx'
@@ -65,6 +66,7 @@ export function MarketSidebar({
   const [prices, setPrices] = useState<Record<string, Ticker>>({})
   const [series, setSeries] = useState<Record<string, ReferenceSeries>>({})
   const [draft, setDraft] = useState('')
+  const [addMarket, setAddMarket] = useState<MarketId>('crypto')
 
   const reloadMarkets = useRef((): void => {})
   reloadMarkets.current = () => {
@@ -86,6 +88,12 @@ export function MarketSidebar({
   }, [tab, markets, watchlists])
 
   const rowsKey = rows.map(row => rowKey(row.market, row.symbol)).join('|')
+
+  // 联想候选：仅自选页签的添加表单；跨市场全局搜索（候选项自带市场）。
+  const suggestions = useMemo(
+    () => (tab === 'watch' ? searchAllMarkets(draft) : []),
+    [tab, draft],
+  )
 
   // 参考序列（日K收盘 → 迷你走势 + 昨收）：逐标的惰性拉一次，TTL 内复用。
   useEffect(() => {
@@ -166,23 +174,64 @@ export function MarketSidebar({
         </div>
       )}
 
-      {tab !== 'watch' && (
-        <form className={css.addRow} onSubmit={(event) => {
-          event.preventDefault()
-          const symbol = draft.trim()
-          if (symbol === '' || tab === 'watch') return
-          addInstrument(tab, { market: tab, symbol })
-          setDraft('')
-        }}>
-          <input
-            className={css.addInput}
-            value={draft}
-            placeholder={t('sidebar.addPlaceholder')}
-            onChange={event => { setDraft(event.target.value) }}
-          />
-          <button className={css.addButton} type="submit" disabled={draft.trim() === ''}>{t('sidebar.add')}</button>
-        </form>
-      )}
+      {(() => {
+        // 自选 tab 也提供添加入口（2026-08-31 用户反馈）：自选跨市场，加一个
+        // 市场轮换按钮（crypto→us→cn→hk 循环）+ 输入框；市场页签维持原表单。
+        const target: MarketId | null = tab === 'watch' ? addMarket : tab
+        if (target === null) return null
+        return (
+          <form className={css.addRow} onSubmit={(event) => {
+            event.preventDefault()
+            const symbol = draft.trim()
+            if (symbol === '') return
+            addInstrument(target, { market: target, symbol })
+            setDraft('')
+          }}>
+            {tab === 'watch' && (
+              <button
+                type="button"
+                className={css.addMarketToggle}
+                title={t('sidebar.addMarketHint')}
+                onClick={() => {
+                  const order: MarketId[] = ['crypto', 'us', 'cn', 'hk']
+                  const index = order.indexOf(addMarket)
+                  setAddMarket(order[(index + 1) % order.length] ?? 'crypto')
+                }}
+              >
+                {t(TAB_KEY[addMarket])}
+              </button>
+            )}
+            <input
+              className={css.addInput}
+              value={draft}
+              placeholder={t('sidebar.addPlaceholder')}
+              onChange={event => { setDraft(event.target.value) }}
+            />
+            <button className={css.addButton} type="submit" disabled={draft.trim() === ''}>{t('sidebar.add')}</button>
+            {tab === 'watch' && suggestions.length > 0 && (
+              <div className={css.suggestions} role="listbox" aria-label={t('sidebar.addPlaceholder')}>
+                {suggestions.map(entry => (
+                  <button
+                    key={entry.market + ':' + entry.symbol}
+                    type="button"
+                    role="option"
+                    aria-selected="true"
+                    className={css.suggestion}
+                    onClick={() => {
+                      addInstrument(entry.market, { market: entry.market, symbol: entry.symbol, name: entry.name })
+                      setDraft('')
+                    }}
+                  >
+                    <span className={css.suggestionSymbol}>{entry.symbol}</span>
+                    <span className={css.suggestionName}>{entry.name}</span>
+                    <span className={css.suggestionMarket}>{t(TAB_KEY[entry.market])}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </form>
+        )
+      })()}
 
       {rows.length === 0 && !loadError
         ? (

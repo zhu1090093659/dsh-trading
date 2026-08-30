@@ -39,6 +39,7 @@
 }
 
 .addRow {
+  position: relative;
   display: flex;
   gap: 6px;
   padding: 8px 10px;
@@ -78,6 +79,77 @@
 .addButton:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* 自选页签的添加表单：市场轮换按钮（crypto→us→cn→hk 循环）。 */
+.addMarketToggle {
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.addMarketToggle:hover {
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+/* 输入联想下拉（点选即加）：悬浮在表单下方，不挤压 flex 行。 */
+.suggestions {
+  position: absolute;
+  top: 100%;
+  left: 10px;
+  right: 10px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  max-height: 168px;
+  overflow-y: auto;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-solid, #fff);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.suggestion {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 8px;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggestion:hover {
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.suggestionSymbol {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.suggestionName {
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestionMarket {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.55;
+  white-space: nowrap;
 }
 
 .list {

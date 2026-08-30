@@ -17,6 +17,7 @@ export type MarketLocaleKey =
   | 'tab.hk'
   | 'sidebar.addPlaceholder'
   | 'sidebar.add'
+  | 'sidebar.addMarketHint'
   | 'sidebar.empty'
   | 'sidebar.emptyHint'
   | 'sidebar.loadFailed'
