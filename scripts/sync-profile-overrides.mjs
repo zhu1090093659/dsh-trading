@@ -46,8 +46,20 @@ const DSH = String(opts.get('dsh') ?? '/Users/zcl/code/deepseek-harness')
 const DSH_HOME = String(opts.get('dsh-home') ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'))
 const DRY = opts.get('dry-run') === true
 
+/** SDK 包在 DSH checkout 内的路径映射（2026-08-31 补：SDK 面一律钉版，任何包把
+ *  SDK 依赖误放 dependencies 时 profile 解析也不会去 registry 撞版本墙）。 */
+const DSH_SDK_PATHS = {
+  '@deepseek-ai/cordis': ['vendor', 'cordis'],
+  '@deepseek-ai/cosmokit': ['vendor', 'cosmokit'],
+  '@deepseek-ai/schemastery': ['vendor', 'schemastery'],
+  '@deepseek-ai/dsh-tools': ['packages', 'core', 'tools'],
+  '@deepseek-ai/dsh-skill': ['packages', 'skill', 'skill'],
+  '@deepseek-ai/dsh-settings': ['packages', 'settings', 'settings'],
+  '@deepseek-ai/dsh-agent-presets': ['packages', 'preset', 'agent-presets'],
+}
+
 /** 本仓全部可安装包（@dsh-trading/*）：全量钉版——钉了未安装的包惰性无害，
- *  漏钉已安装的包才是坑 #15。 */
+ *  漏钉已安装的包才是坑 #15。顺带收集各包 peer 声明的 SDK 依赖名。 */
 async function listPackages() {
   const dir = join(ROOT, 'packages')
   const out = []
@@ -56,6 +68,9 @@ async function listPackages() {
     try {
       const pkg = JSON.parse(await readFile(join(dir, entry.name, 'package.json'), 'utf8'))
       if (typeof pkg.name === 'string' && pkg.name.startsWith('@dsh-trading/')) {
+        for (const dep of Object.keys(pkg.peerDependencies ?? {})) {
+          if (dep.startsWith('@deepseek-ai/')) sdkPeers.add(dep)
+        }
         out.push({ name: pkg.name, dir: entry.name })
       }
     } catch { /* 无 package.json 的目录跳过 */ }
@@ -63,9 +78,16 @@ async function listPackages() {
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }
 
+const sdkPeers = new Set()
+
 function expectedLines(packages) {
   const lines = packages.map((p) => `  '${p.name}': 'file:${join(ROOT, 'packages', p.dir)}'`)
-  lines.push(`  '@deepseek-ai/dsh-agent-presets': 'link:${join(DSH, 'packages', 'preset', 'agent-presets')}'`)
+  for (const dep of [...sdkPeers].sort()) {
+    const rel = DSH_SDK_PATHS[dep]
+    if (!rel) continue // 映射表外的 SDK 名：跳过并提示（人工增补映射表）
+    const scheme = dep === '@deepseek-ai/dsh-agent-presets' ? 'link' : 'file'
+    lines.push(`  '${dep}': '${scheme}:${join(DSH, ...rel)}'`)
+  }
   return lines
 }
 
@@ -74,17 +96,28 @@ async function syncProfile(profileDir, packages) {
   let text
   try { text = await readFile(file, 'utf8') }
   catch { return { skipped: 'no pnpm-workspace.yaml' } }
+  // vendor 包纳入 profile workspace：SDK file: 包（如 cordis）内部用 workspace:^
+  // 互依（cosmokit），workspace 协议不走 overrides——必须让 vendor glob 出现在
+  // packages 区才能解析（2026-08-31 add us/cn/hk 时实证）。
+  const vendorGlob = `  - ${join(DSH, 'vendor', '*')}`
+  let next = text
+  let vendorAdded = false
+  if (!next.includes(vendorGlob) && /^packages:/m.test(next)) {
+    next = next.replace(/^(packages:\n(?:  - .+\n)+)/m, `$1${vendorGlob}\n`)
+    vendorAdded = true
+  }
   const existing = new Set(
-    [...text.matchAll(/^ {2}'((?:@dsh-trading|@deepseek-ai)\/[^']+)':/gm)].map((m) => m[1]),
+    [...next.matchAll(/^ {2}'((?:@dsh-trading|@deepseek-ai)\/[^']+)':/gm)].map((m) => m[1]),
   )
   const missing = expectedLines(packages).filter((line) => {
     const key = line.match(/^ {2}'([^']+)'/)?.[1]
     return key !== undefined && !existing.has(key)
   })
-  if (missing.length === 0) return { added: [] }
-  const block = (/^overrides:/m.test(text) ? [] : ['', 'overrides:']).concat(missing)
-  if (!DRY) await writeFile(file, text.replace(/\s*$/, '') + '\n' + block.join('\n') + '\n')
-  return { added: missing.map((l) => l.trim()) }
+  if (missing.length === 0 && !vendorAdded) return { added: [] }
+  const block = missing.length === 0 ? []
+    : (/^overrides:/m.test(next) ? [] : ['', 'overrides:']).concat(missing)
+  if (!DRY) await writeFile(file, next.replace(/\s*$/, '') + (block.length ? '\n' + block.join('\n') + '\n' : '\n'))
+  return { added: missing.map((l) => l.trim()), vendorAdded }
 }
 
 let profiles = namedProfiles
