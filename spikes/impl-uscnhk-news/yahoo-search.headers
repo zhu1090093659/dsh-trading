@@ -1,0 +1,17 @@
+HTTP/2 200 
+content-type: application/json;charset=utf-8
+vary: Origin,Origin,Accept-Encoding
+y-rid: 17hnkc5l98djs
+cache-control: public, max-age=600, stale-while-revalidate=180
+content-length: 3280
+x-envoy-upstream-service-time: 85
+date: Sun, 30 Aug 2026 13:56:12 GMT
+server: ATS
+x-envoy-decorator-operation: finance-search--mtls-production-usw2.finance-k8s:4080/*
+age: 0
+strict-transport-security: max-age=31536000
+referrer-policy: no-referrer-when-downgrade
+x-content-type-options: nosniff
+x-xss-protection: 1; mode=block
+x-frame-options: SAMEORIGIN
+
