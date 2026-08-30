@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@dsh-trading/api": "workspace:^",
+    "@dsh-trading/indicators": "workspace:^",
     "lightweight-charts": "^5.2.1"
   },
   "peerDependencies": {

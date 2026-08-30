@@ -4,7 +4,7 @@
  *
  * 结构：pane 0 = 蜡烛 + 主图叠加指标；pane 1 = 成交量；pane 2+ = 每个
  * 副图指标独占一 pane（v5 原生 panes）。渲染层对指标实现零感知，只消费
- * 注册表 compute 的输出（见 indicators/registry.ts）。
+ * 注册表 compute 的输出（@dsh-trading/indicators 注册表）。
  *
  * 性能纪律：蜡烛/成交量走 update() 尾部增量（保留用户视窗与缩放）；
  * 指标数组变化才 setData；series 结构（增删指标）变化才重建 series。
@@ -18,7 +18,7 @@ import type {
   IChartApi, ISeriesApi, MouseEventParams, SeriesType, Time, UTCTimestamp,
 } from 'lightweight-charts'
 import { DOWN_COLOR, UP_COLOR, fmtAxis, priceDigits } from './format.ts'
-import type { IndicatorOutput } from './indicators/registry.ts'
+import type { IndicatorOutput } from '@dsh-trading/indicators'
 import type { Kline } from './types.ts'
 
 export interface TvBar {

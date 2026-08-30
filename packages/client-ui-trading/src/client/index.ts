@@ -14,10 +14,10 @@
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { IndicatorRegistry } from '@dsh-trading/indicators'
 import { createSelectionStore, createWatchlistStore } from './store.ts'
 import { createChartStateStore } from './chart-state.ts'
-// 预置指标注册（副作用 import）：必须在任何 store/compute 使用前完成。
-import './indicators/presets.ts'
+import { indicators } from './indicator-registry.ts'
 import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
 import { HomeHistory } from './HomeHistory.tsx'
@@ -45,7 +45,7 @@ export function apply(ctx: ClientContext): void {
 
   const selection = createSelectionStore()
   const watchlists = createWatchlistStore()
-  const chart = createChartStateStore()
+  const chart = createChartStateStore(indicators)
   const sessions = ctx.sessions as unknown as ISessions
   const uiWorkspace = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined
 
@@ -65,6 +65,15 @@ export function apply(ctx: ClientContext): void {
   // 静态包的 slot 条目崩溃默认无人上报（监督缝只覆盖动态插件）——打到 console 可见化。
   ctx.slots.onEntryError((slot, _entry, error) => {
     console.error(`[dsh-trading] slot entry crashed: ${slot}`, error)
+  })
+
+  // 指标插件桥（可选依赖）：client-ui-indicators 在 client 上下文提供
+  // tradingIndicators 服务（IndicatorRegistry，含预置）；插件未安装时
+  // 回调不触发，行情视图零指标正常工作。definition 是纯数据+纯函数，
+  // 合并进本地注册表即可用；register 通知订阅者（选择器名册重渲染）。
+  ctx.inject(['tradingIndicators'] as never, (scope) => {
+    const service = (scope as unknown as { tradingIndicators: IndicatorRegistry }).tradingIndicators
+    for (const definition of service.list()) indicators.register(definition)
   })
 
   // 左侧停靠：自选面板（官方浮层通道；宿主栅格四轨道重排见 shell-pad.css）。
@@ -172,23 +181,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'indicator.picker': '技术指标',
       'indicator.group.main': '主图指标',
       'indicator.group.sub': '副图指标',
-      'indicator.ma': 'MA',
-      'indicator.ema': 'EMA',
-      'indicator.boll': 'BOLL',
-      'indicator.macd': 'MACD',
-      'indicator.rsi': 'RSI',
-      'indicator.kdj': 'KDJ',
+      'indicator.empty': '暂无可用指标（未安装指标插件？）',
       'indicator.params': '参数',
       'indicator.apply': '应用',
       'indicator.cancel': '取消',
-      'indicator.param.period': '周期',
-      'indicator.param.p1': '周期1',
-      'indicator.param.p2': '周期2',
-      'indicator.param.p3': '周期3',
-      'indicator.param.fast': '快线',
-      'indicator.param.slow': '慢线',
-      'indicator.param.signal': '信号',
-      'indicator.param.mult': '倍数',
     },
     en: {
       'tab.watch': 'Watchlist',
@@ -234,23 +230,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'indicator.picker': 'Indicators',
       'indicator.group.main': 'Main chart',
       'indicator.group.sub': 'Sub-chart',
-      'indicator.ma': 'MA',
-      'indicator.ema': 'EMA',
-      'indicator.boll': 'BOLL',
-      'indicator.macd': 'MACD',
-      'indicator.rsi': 'RSI',
-      'indicator.kdj': 'KDJ',
-      'indicator.params': 'Parameters',
+      'indicator.empty': 'No indicators available (indicator plugin missing?)',
+      'indicator.params': 'Params',
       'indicator.apply': 'Apply',
       'indicator.cancel': 'Cancel',
-      'indicator.param.period': 'Period',
-      'indicator.param.p1': 'Period 1',
-      'indicator.param.p2': 'Period 2',
-      'indicator.param.p3': 'Period 3',
-      'indicator.param.fast': 'Fast',
-      'indicator.param.slow': 'Slow',
-      'indicator.param.signal': 'Signal',
-      'indicator.param.mult': 'Multiple',
     },
   }
 }

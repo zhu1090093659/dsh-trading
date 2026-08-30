@@ -7,9 +7,10 @@
  * 数据经 /dshtrading/api 桥：K线由 usePoll 拉取（挂载/切换立即 + 30s
  * resync，后台标签页冻结）；ticker 5s 轮询，价格尾随合并进最后一根
  * K 线（图表走 update 增量，30s resync 兜底校正量/开高低）。
- * 指标定义来自 indicators/registry.ts，本组件只做 compute 调度与 UI。
+ * 指标 definition 来自本地注册表（指标插件经桥接合并），本组件只做
+ * compute 调度与 UI。
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { fetchKlines, fetchTickers } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvIndicatorGroup } from './TvChart.tsx'
@@ -19,8 +20,8 @@ import {
   INTRADAY_INTERVALS, changePercent, directionColor,
   fmtChange, fmtClock, fmtCompact, fmtPercent, fmtPrice,
 } from './format.ts'
-import { getIndicator, instanceKey, listIndicators } from './indicators/registry.ts'
-import type { IndicatorDefinition, IndicatorInstance } from './indicators/registry.ts'
+import { indicators } from './indicator-registry.ts'
+import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indicators'
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
@@ -61,6 +62,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const symbol = instrument?.symbol
 
   const instances = useChart(state => state.instances)
+  // 指标名册修订号：插件晚于首帧合并 definition 时触发重渲染。
+  const rosterVersion = useSyncExternalStore(indicators.subscribe, indicators.getVersion)
 
   const [chartInterval, setIntervalFor] = useState<string>(() => {
     if (market === undefined) return '1d'
@@ -139,21 +142,22 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   }, [daily, ticker, klines])
 
   // 指标调度：klines × 激活实例 → 渲染输入（compute 是注册表纯函数）。
+  // rosterVersion 入参：插件晚到合并 definition 时强制重算（id 命中新增）。
   const indicatorGroups = useMemo(() => {
     if (klines === null) return []
     const groups: Array<TvIndicatorGroup & { id: string; pane: 'main' | 'sub' }> = []
     for (const instance of instances) {
-      const definition = getIndicator(instance.id)
+      const definition = indicators.get(instance.id)
       if (definition === undefined) continue
       groups.push({
         id: instance.id,
         pane: definition.pane,
-        key: instanceKey(instance),
+        key: indicators.instanceKey(instance),
         outputs: definition.compute(klines, instance.params),
       })
     }
     return groups
-  }, [klines, instances])
+  }, [klines, instances, rosterVersion])
 
   const mainOverlays = useMemo(() => indicatorGroups.filter(group => group.pane === 'main'), [indicatorGroups])
   const subIndicators = useMemo(() => indicatorGroups.filter(group => group.pane === 'sub'), [indicatorGroups])
@@ -294,32 +298,39 @@ function IndicatorPicker(props: {
   onClose: () => void
 }): React.JSX.Element {
   const { t, instances, editingIndicator, onToggle, onEdit, onApply, onClose } = props
-  const definitions = listIndicators()
+  const definitions = indicators.list()
+  const empty = definitions.length === 0
   return (
     <>
       <div className={css.pickerBackdrop} onClick={onClose} aria-hidden="true" />
       <div className={css.pickerPanel} role="dialog" aria-label={t('indicator.picker')}>
         <div className={css.pickerTitle}>{t('indicator.picker')}</div>
-        <PickerGroup
-          title={t('indicator.group.main')}
-          definitions={definitions.filter(definition => definition.pane === 'main')}
-          instances={instances}
-          editingIndicator={editingIndicator}
-          t={t}
-          onToggle={onToggle}
-          onEdit={onEdit}
-          onApply={onApply}
-        />
-        <PickerGroup
-          title={t('indicator.group.sub')}
-          definitions={definitions.filter(definition => definition.pane === 'sub')}
-          instances={instances}
-          editingIndicator={editingIndicator}
-          t={t}
-          onToggle={onToggle}
-          onEdit={onEdit}
-          onApply={onApply}
-        />
+        {empty ? (
+          <div className={css.pickerGroupTitle}>{t('indicator.empty')}</div>
+        ) : (
+          <>
+            <PickerGroup
+              title={t('indicator.group.main')}
+              definitions={definitions.filter(definition => definition.pane === 'main')}
+              instances={instances}
+              editingIndicator={editingIndicator}
+              t={t}
+              onToggle={onToggle}
+              onEdit={onEdit}
+              onApply={onApply}
+            />
+            <PickerGroup
+              title={t('indicator.group.sub')}
+              definitions={definitions.filter(definition => definition.pane === 'sub')}
+              instances={instances}
+              editingIndicator={editingIndicator}
+              t={t}
+              onToggle={onToggle}
+              onEdit={onEdit}
+              onApply={onApply}
+            />
+          </>
+        )}
       </div>
     </>
   )
@@ -351,7 +362,7 @@ function PickerGroup(props: {
                 checked={instance !== null}
                 onChange={() => onToggle(definition.id)}
               />
-              <span>{t(definition.titleKey)}</span>
+              <span>{definition.title}</span>
             </label>
             {instance !== null && (
               <button
@@ -398,7 +409,7 @@ function IndicatorParamEditor(props: {
     <div className={css.paramEditor}>
       {definition.params.map(spec => (
         <label key={spec.key} className={css.paramRow}>
-          <span>{t(spec.labelKey)}</span>
+          <span>{spec.label}</span>
           <input
             type="number"
             min={spec.min}

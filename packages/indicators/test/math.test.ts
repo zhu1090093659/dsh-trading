@@ -3,7 +3,7 @@
  * sma 两条用例自 chart-layout.test.ts 迁入（该模块随 SVG 图表退役）。
  */
 import { describe, expect, it } from 'vitest'
-import { bollinger, ema, kdj, macd, rsi, sma, stdev } from '../src/client/indicators/math.ts'
+import { bollinger, ema, kdj, macd, rsi, sma, stdev } from '../src/math.ts'
 
 describe('sma', () => {
   it('暖期 undefined，之后为均值（金值自 chart-layout 迁入）', () => {

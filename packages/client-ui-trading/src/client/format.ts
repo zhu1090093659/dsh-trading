@@ -8,13 +8,6 @@ export const UP_COLOR = '#e64545'
 export const DOWN_COLOR = '#2ba471'
 export const FLAT_COLOR = '#8a8f99'
 
-/** MA line palette (Futu-like). */
-export const MA_COLORS: Record<string, string> = {
-  MA5: '#e6b800',
-  MA10: '#4a90e2',
-  MA20: '#c05fd8',
-}
-
 export function directionColor(value: number): string {
   if (value > 0) return UP_COLOR
   if (value < 0) return DOWN_COLOR

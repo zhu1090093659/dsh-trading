@@ -1,0 +1,28 @@
+{
+  "name": "@dsh-trading/indicators",
+  "description": "Technical indicator core library for dsh-trading: pure math kernel, indicator definition types, registry factory and preset definitions. Pure library (not a dsh bundle) — consumed by client-ui-trading (UI + local registry) and client-ui-indicators (preset provider plugin).",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0",
+    "typescript": "^5.5.0"
+  }
+}

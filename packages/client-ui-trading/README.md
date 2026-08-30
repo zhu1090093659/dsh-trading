@@ -11,11 +11,23 @@
     标的行（迷你走势、最新价、涨跌幅，红涨绿跌）、搜索加自选（localStorage 持久化）；
   - `shell.overlay` 加 `dshtrading-quote-pane`（order 50）→ 中栏舞台
     `MiddleStage`（3.0）：视图注册表（行情 | 量化占位）+ 顶部切换条；行情视图 =
-    报价头 + **lightweight-charts v5 K线**（主图蜡烛 + 叠加指标 MA/EMA/BOLL，
-    副图成交量 + MACD/RSI/KDJ，周期页签 + 指标条/参数编辑，crypto 支持分钟级）；
+    报价头 + **lightweight-charts v5 K线**（主图蜡烛 + 叠加指标，副图成交量 +
+    指标，周期页签，crypto 支持分钟级）+ OKX 式技术指标选择器（3.1：单按钮
+    展开，主/副图两组勾选 + 行内参数编辑）；
   - `shell.overlay` 加 `dshtrading-session-rail`（order 60）→ 右缘常驻会话竖条
     （折叠/新会话/设置，2.9）。
   - 中栏几何由 QuotePane 实测（自选停靠右缘 ↔ 对话列/竖条左缘），视图互斥挂载。
+
+## 指标系统（3.1 插件化）
+
+- 指标 definition（类型 + math + 预置）在纯库 `@dsh-trading/indicators`；预置
+  MA/EMA/BOLL/MACD/RSI/KDJ 由 `@dsh-trading/client-ui-indicators` 插件在
+  client 上下文 provide 为 `tradingIndicators` 服务（cordis reflect.provide）。
+- 本包持有本地注册表（`indicator-registry.ts` 单例）+ 可选桥接（`ctx.inject`
+  服务可用才合并 definition）；插件未安装时行情视图零指标正常工作。
+- definition 的 title/label 是普通字符串（宿主 locale 命名空间单占，外部插件
+  无 i18n 通道）；社区指标 = 交付纯数据 definition 并 inject 服务 register。
+  设计与备选：`.agents/notes/implemented/architecture/2026-08-30-indicator-plugin-split.md`。
 
 ## 数据与合规（铁律 #5）
 
