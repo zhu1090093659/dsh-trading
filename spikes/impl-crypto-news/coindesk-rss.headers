@@ -1,0 +1,26 @@
+HTTP/2 308 
+cache-control: public, max-age=0, must-revalidate
+content-type: text/plain
+date: Sun, 30 Aug 2026 13:11:16 GMT
+location: /arc/outboundfeeds/rss
+refresh: 0;url=/arc/outboundfeeds/rss
+server: Vercel
+strict-transport-security: max-age=63072000
+x-vercel-id: hkg1::vglw9-1788095476972-9164ebf9c3fa
+
+HTTP/2 200 
+age: 558
+cache-control: public, max-age=0, must-revalidate
+content-type: application/xml
+date: Sun, 30 Aug 2026 13:01:58 GMT
+permissions-policy: browsing-topics=()
+server: Vercel
+strict-transport-security: max-age=63072000
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-matched-path: /arc/outboundfeeds/[...pathname]
+x-vercel-cache: HIT
+x-vercel-id: hkg1::icn1::qjs87-1788095476991-29dda4ea22ad
+x-xss-protection: 1; mode=block
+content-length: 30925
+

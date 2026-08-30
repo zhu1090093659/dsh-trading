@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en" class="vue-app">
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <meta name="format-detection" content="telephone=no">
+
+    <title>News | CryptoPanic</title><meta name="author" content="CryptoPanic">
+
+
+
+
+<meta property="fb:app_id" content="1848168952115035">
+<meta property="fb:admins" content="100005758416232">
+<meta property="og:locale" content="en_us">
+<meta property="og:site_name" content="CryptoPanic">
+<meta name="referrer" content="always">
+<meta name="apple-itunes-app" content="app-id=1290506871">
+    <meta name="description" content="News aggregator platform indicating impact on price and market for traders and cryptocurrency enthusiasts">
+    <meta property="og:url" content="https://cryptopanic.com/developers/api/">
+    <meta property="og:type" content="website">
+    <meta property="og:description" content="News aggregator platform indicating impact on price and market for traders and cryptocurrency enthusiasts.">
+    <meta property="og:title" content="CryptoPanic - If you&#39;re going to panic, panic early.">
+    
+
+    
+
+
+<!-- Mobile app manifests and icons -->
+
+<link rel="shortcut icon" href="https://static.cryptopanic.com/static/img/favicon/favicon.1fe0847e86ea.ico" type="image/x-icon">
+<link rel="icon" href="https://static.cryptopanic.com/static/img/favicon/favicon.1fe0847e86ea.ico" type="image/x-icon">
+<link rel="apple-touch-icon" sizes="180x180" href="https://static.cryptopanic.com/static/img/favicon/apple-touch-icon.5d3be3e1e601.png">
+<meta name="apple-mobile-web-app-title" content="CryptoPanic">
+<meta name="application-name" content="CryptoPanic">
+<link rel="mask-icon" href="https://static.cryptopanic.com/static/img/favicon/safari-pinned-tab.6b8b0897ab05.svg" color="#d83844">
+<meta name="theme-color" content="#FF9933">
+
+<link rel="apple-touch-icon" sizes="180x180" href="https://static.cryptopanic.com/static/img/favicon/apple-touch-icon.5d3be3e1e601.png?m=1">
+<link rel="icon" type="image/png" href="https://static.cryptopanic.com/static/img/favicon/favicon-32x32.93397f90ec1e.png" sizes="32x32">
+<link rel="icon" type="image/png" href="https://static.cryptopanic.com/static/img/favicon/favicon-16x16.fb0ffdf67a96.png" sizes="16x16">
+<meta name="theme-color" content="#ffffff">
+
+<link rel="manifest" href="https://static.cryptopanic.com/static/manifest.19906a0bfcc9.json">
+
+
+
+<style type="text/css">
+    @font-face {
+        font-family: "cryptopanic";
+        src: url("https://static.cryptopanic.com/static/fonts/cryptopanic.cca052e59fcb.eot");
+        src: url("https://static.cryptopanic.com/static/fonts/cryptopanic.cca052e59fcb.eot?#iefix") format("embedded-opentype"),
+        url("https://static.cryptopanic.com/static/fonts/cryptopanic.f91b8c549f01.woff") format("woff"),
+        url("https://static.cryptopanic.com/static/fonts/cryptopanic.ad7f5dac18e6.ttf") format("truetype"),
+        url("https://static.cryptopanic.com/static/fonts/cryptopanic.47bc9405f5ee.svg#30sec") format("svg");
+        font-weight: normal;
+        font-style: normal;
+    }
+</style>
+    <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Droid+Sans+Mono"/>
+
+    
+        <link href="https://static.cryptopanic.com/static/css/cryptopanic.befe8d30fcf4.css" rel='stylesheet' type='text/css'>
+    
+
+
+    
+
+    
+        
+           <!-- Matomo -->
+            <script>
+              var _paq = window._paq = window._paq || [];
+              /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+              _paq.push(['trackPageView']);
+              _paq.push(['enableLinkTracking']);
+              (function() {
+                var u="//matomo.cryptopanic.com/";
+                _paq.push(['setTrackerUrl', u+'matomo.php']);
+                _paq.push(['setSiteId', '1']);
+                var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+                g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+              })();
+            </script>
+            <!-- End Matomo Code -->
+        
+    
+
+</head>
+<body class="app font-normal app-theme-dark site-cryptopanic news-app">
+
+<!--[if lt IE 10]>
+<p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/?locale=en">upgrade
+  your browser</a> to improve your experience.</p>
+<![endif]-->
+
+
+
+
+
+    <div class="stream" id="streamApp">
+        <div class="loader loader-sm" style="margin: 1rem"></div>
+    </div>
+
+    
+
+
+
+
+
+
+
+    <!-- JS defaults -->
+    <script type="text/javascript">
+        var App = {Settings: {}}
+        window.App = App
+        App.Settings = {
+            csrfCookieName: 'csrftoken',
+            FBAppID: 1848168952115035,
+            trackGA: true,
+            app: '',
+            environment: 'production',
+            analyticsEnabled: false,
+            
+            posthogProjectToken: "phc_wDpShaSyBiqW2qtyUmvujtSwtaZuM5L7d75Epc42VaGV",
+            posthogHost: "https://eu.i.posthog.com"
+        }
+        
+    </script>
+
+    
+        <script type="text/javascript" src="https://static.cryptopanic.com/static/js/cryptopanic-vendor.min.a4915615bf22.js"></script>
+        <script type="text/javascript" src="https://static.cryptopanic.com/static/js/cryptopanic.min.5f9d2434286a.js"></script>
+    
+
+
+    
+    
+    <script type="text/javascript">
+        window.CPVME = VueComponents.initStreamApp({"ad_preview_requested": null, "base_url": "/", "cookie_consent_groups": [{"description": "Used for site functioning properly", "is_required": true, "name": "CryptoPanic", "ordering": 1, "varname": "cryptopanic"}, {"description": "Used for CryptoPanic improvements", "is_required": false, "name": "Analytics", "ordering": 2, "varname": "analytics"}], "default_languages": ["en"], "endpoints": {"actions": {"post_positive": "/action/post/0/positive/"}, "check_for_feedback": "/web-api/feedback-check/", "collaboration_request": "/web-api/collaboration-request/", "comments_create": "/comments/_/0/create", "comments_list": "/comments/_/0/", "cookie_consent": "/web-api/cookie-consent/", "create_hub_entry": "/hub/update/0", "currencies": "/web-api/currencies-data/", "currencies_alerts": "/web-api/currencies-alerts/", "currency": "/web-api/currency/_/", "currency_options": "/web-api/currency/_/options/", "currency_search": "/web-api/ac/", "feed_post_link_click": "/news/feed/click/0/", "generate_totp_qrcode": "/web-api/user/generate-totp-qrcode", "get_hub_entry": "/hub/get/0", "get_notifications": "/web-api/notifications/list/", "get_portfolio_settings": "/web-api/settings/portfolio", "get_settings": "/web-api/settings/", "list_hub_entries": "/hub/list", "log_ad_impression": "/web-api/log-ad-impression/", "membership_details": "/web-api/membership-details/", "portfolio": "/web-api/portfolio/", "portfolio_chart": "/web-api/portfolio/chart/", "post_link_click": "/news/click/0/", "pro_sources": "/web-api/pro-sources/", "regenerate_api_key": "/web-api/api-regenerate-key/", "settings_sources_list": "/web-api/sources/list/", "sign_request": "/web-api/sr/", "source_detail": "/web-api/source/_/", "source_find_rss": "/web-api/source/find-rss", "stream_list": "/web-api/posts/", "submit_custom_source": "/web-api/submit-custom-source/", "suggest_source_save": "/web-api/suggest-source/", "update_device": "/web-api/update-device/", "update_notifications": "/web-api/notifications/update/", "update_portfolio_settings": "/web-api/settings/portfolio/update", "update_settings": "/web-api/settings/update", "update_user_info": "/web-api/user/_/user-info", "user_details": "/web-api/user/_/", "user_feedback": "/web-api/user/_/feedback", "user_last_ai_summary": "/web-api/user/last_ai_summary", "user_recent_alerts": "/web-api/user/recent-alerts", "user_requested_feedback": "/web-api/user/_/requested-feedback/0", "user_requested_feedback_reject": "/web-api/user/_/requested-feedback/0/reject", "user_tips_payout": "/web-api/user/_/tips-payout", "user_tips_payout_list": "/web-api/user/_/tips-payout-list", "verify_totp": "/web-api/user/verify-totp"}, "font_options": [{"label": "Normal", "value": "font-normal"}, {"label": "Medium", "value": "font-medium"}, {"label": "Large", "value": "font-large"}], "js": {"widgets": "https://static.cryptopanic.com/static/js/widgets.min.f5c8b9ce807e.js"}, "languages": [["en", "English"], ["de", "Deutsch"], ["nl", "Dutch"], ["es", "Espa\u00f1ol"], ["fr", "Fran\u00e7ais"], ["it", "Italiano"], ["pt", "Portugu\u00eas"], ["ru", "\u0420\u0443\u0441\u0441\u043a\u0438\u0439"], ["tr", "T\u00fcrk\u00e7e"], ["ar", "\u0639\u0631\u0628\u064a"], ["zh", "\u4e2d\u570b\u4eba"], ["ja", "\u65e5\u672c"], ["ko", "\ud55c\uad6d\uc778"]], "login_url": "/accounts/login/?next=%2Fdevelopers%2Fapi%2F", "logo": {"dark": "https://static.cryptopanic.com/static/img/cryptopanic-logo-vert-dark.514a405381d8.svg", "dark_hw": "https://static.cryptopanic.com/static/img/cryptopanic-logo-dark-hw.f4ef7c6f12b0.svg", "light": "https://static.cryptopanic.com/static/img/cryptopanic-logo-vert-light.6e646af3e33e.svg", "light_hw": "https://static.cryptopanic.com/static/img/cryptopanic-logo-light-hw.929a096e2529.svg", "wolf": "https://static.cryptopanic.com/static/img/cryptopanic-logo-wolf-only.7f4291fcd61f.svg", "wolf_hw": "https://static.cryptopanic.com/static/img/cryptopanic-logo-wolf-only-hw.70cae46fcdb5.svg"}, "logout_url": "/logout/", "media_url": "https://media.cryptopanic.com/", "meta": {"env": "production", "title": "CryptoPanic", "title_full": "CryptoPanic - News aggregator platform indicating impact on price and market for traders and cryptocurrency enthusiasts"}, "pr_post_preview_with_press": false, "settings_url": "/accounts/settings/", "show_cookies_consent": true, "show_pro": true, "signup_url": "/accounts/signup/?next=%2Fdevelopers%2Fapi%2F", "site": {"id": 1, "market_ids": [0, null], "market_kinds": ["crypto", "custom", "fiat"], "slug": "cryptopanic", "theme": "", "title": "CryptoPanic"}, "static_url": "https://static.cryptopanic.com/static/", "theme": "dark", "upload_url": "https://core.cryptopanic.com/upload/", "user": null});
+    </script>
+
+
+    
+
+    
+
+    
+    <script type="text/javascript">
+        App.Settings.trackGA = false
+    </script>
+
+    <!-- GA -->
+    
+
+    
+        <!-- FB -->
+        <div id="fb-root"></div>
+        <script>(function (d, s, id) {
+            var js, fjs = d.getElementsByTagName(s)[0]
+            if (d.getElementById(id)) return
+            js = d.createElement(s)
+            js.id = id
+            js.src = "//connect.facebook.net/en_US/sdk.js#xfbml=1&version=v2.9&appId=" + App.Settings.FBAppID
+            fjs.parentNode.insertBefore(js, fjs)
+        }(document, 'script', 'facebook-jssdk'))</script>
+
+
+        <script>window.twttr = (function (d, s, id) {
+            var js, fjs = d.getElementsByTagName(s)[0],
+                t = window.twttr || {}
+            if (d.getElementById(id)) return t
+            js = d.createElement(s)
+            js.id = id
+            js.src = "https://platform.twitter.com/widgets.js"
+            fjs.parentNode.insertBefore(js, fjs)
+
+            t._e = []
+            t.ready = function (f) {
+                t._e.push(f)
+            }
+            return t
+        }(document, "script", "twitter-wjs"))</script>
+    
+
+
+    
+        <!-- Facebook Pixel Code -->
+        <script>
+            !function (f, b, e, v, n, t, s) {
+                if (f.fbq) return
+                n = f.fbq = function () {
+                    n.callMethod ?
+                        n.callMethod.apply(n, arguments) : n.queue.push(arguments)
+                }
+                if (!f._fbq) f._fbq = n
+                n.push = n
+                n.loaded = !0
+                n.version = '2.0'
+                n.queue = []
+                t = b.createElement(e)
+                t.async = !0
+                t.src = v
+                s = b.getElementsByTagName(e)[0]
+                s.parentNode.insertBefore(t, s)
+            }(window,
+                document, 'script', 'https://connect.facebook.net/en_US/fbevents.js')
+
+            fbq.disablePushState = true
+            fbq('init', '194140584396344') // Insert your pixel ID here.
+            fbq('track', 'PageView')
+        </script>
+        <noscript><img height="1" width="1" style="display:none"
+                       src="https://www.facebook.com/tr?id=194140584396344&ev=PageView&noscript=1"
+        /></noscript>
+        <!-- DO NOT MODIFY -->
+        <!-- End Facebook Pixel Code -->
+    
+
+
+
+
+</body>
+</html>

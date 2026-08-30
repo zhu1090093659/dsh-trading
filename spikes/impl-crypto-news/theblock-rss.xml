@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+    xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:atom="http://www.w3.org/2005/Atom"
+    xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+    xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+    xmlns:media="http://search.yahoo.com/mrss/"
+    >
+
+<channel>
+    <title>The Block</title>
+    <link>https://www.theblock.co</link>
+    <atom:link href="https://www.theblock.co/rss.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="https://www.theblock.co/rss.xml?paged=2" rel="next" type="application/rss+xml" />
+    <atom:link href="https://pubsubhubbub.appspot.com/" rel="hub"/>
+    <description>The Block features breaking Crypto news about Bitcoin, Blockchain, Web3, and DeFi from the web&#039;s most reliable source.</description>
+    <lastBuildDate>Sat, 29 Aug 2026 21:16:51 +0000</lastBuildDate>
+    <language>en-US</language>
+    <copyright>© 2026 THE BLOCK</copyright>
+    <generator>TheBlock</generator>
+    <ttl>5</ttl>
+    <sy:updatePeriod>hourly</sy:updatePeriod>
+    <sy:updateFrequency>1</sy:updateFrequency>
+    <image>
+        <url>https://www.tbstat.com/wp/uploads/2024/03/the-block-logo-wordmark-black.png</url>
+        <title>The Block</title>
+        <link>https://www.theblock.co</link>
+    </image>
+        <item>
+        <title><![CDATA[Layer 1 blockchain Fogo halts mainnet after attacker receives 400 million FOGO tokens, 10% of circulating supply]]></title>
+        <link>https://www.theblock.co/news/defi/2026-08-29-layer-1-blockchain-fogo-halts-mainnet-after-attacker-receives-400-million-fogo-tokens-10-of-circulating-supply-413064</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2021/09/20210917_Hack_General-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">91c09846-6ead-5663-99a1-8df0e6372704</guid>
+        <pubDate>Sat, 29 Aug 2026 21:16:51 +0000</pubDate>
+            <description><![CDATA[The affected tokens make up about 4% of FOGO's genesis supply and were worth about $3 million at the time of the incident. ]]></description>            <dc:creator><![CDATA[Zack Abrams]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/crypto-ecosystems"><![CDATA[Crypto Ecosystems]]></category>
+		<category domain="https://www.theblock.co/category/defi"><![CDATA[DeFi]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Cosmos Labs says it wrongly cleared the bug behind a $5.7 million six-chain hack]]></title>
+        <link>https://www.theblock.co/news/defi/2026-08-29-cosmos-labs-says-it-wrongly-cleared-the-bug-behind-a-5-7-million-six-chain-hack-413061</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2025/09/extra2-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">968ca34b-a548-542f-bf77-ad913d92547c</guid>
+        <pubDate>Sat, 29 Aug 2026 20:15:32 +0000</pubDate>
+            <description><![CDATA[MANTRA Chain, which lost $3.6 million, claimed the patch was only released 20 hours before the attack began and did not identify the flaw it fixed. ]]></description>            <dc:creator><![CDATA[Zack Abrams]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/crypto-ecosystems"><![CDATA[Crypto Ecosystems]]></category>
+		<category domain="https://www.theblock.co/category/defi"><![CDATA[DeFi]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Former White House teleprompter operator ordered to pay $172,000 for Kalshi trades on mention markets]]></title>
+        <link>https://www.theblock.co/news/regulation/2026-08-29-former-white-house-teleprompter-operator-ordered-to-pay-172000-for-kalshi-trades-on-mention-markets-413058</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2025/04/20250424_Law_News_4-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">761554c2-c5fc-5f3c-b019-816d3a074ce9</guid>
+        <pubDate>Sat, 29 Aug 2026 13:58:02 +0000</pubDate>
+            <description><![CDATA[The fine marks the CFTC's second insider trading case against a federal employee trading event contracts and its second related settlement in four weeks. ]]></description>            <dc:creator><![CDATA[Zack Abrams]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/policy"><![CDATA[Policy]]></category>
+		<category domain="https://www.theblock.co/category/regulation"><![CDATA[Regulation]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Ninth Circuit deals blow to Kalshi in Nevada sports betting fight, challenging CFTC’s exclusive jurisdiction claim]]></title>
+        <link>https://www.theblock.co/news/regulation/2026-08-28-ninth-circuit-deals-blow-to-kalshi-in-nevada-sports-betting-fight-challenging-cftcs-exclusive-jurisdiction-claim-413046</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2025/09/20250917_Kalshi_News_2-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">678faf53-e4b8-53c9-a14f-2a84ca90628d</guid>
+        <pubDate>Fri, 28 Aug 2026 19:50:48 +0000</pubDate>
+            <description><![CDATA[An appeals court sided with a lower court's ruling that  Kalshi failed to show that the federal government preempts Nevada’s authority.]]></description>            <dc:creator><![CDATA[Sarah Wynn]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/policy"><![CDATA[Policy]]></category>
+		<category domain="https://www.theblock.co/category/regulation"><![CDATA[Regulation]]></category>
+		<category domain="tag"><![CDATA[CFTC]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Bitwise fund is first Solana ETF to hit $1 billion AUM]]></title>
+        <link>https://www.theblock.co/news/markets/2026-08-28-bitwise-fund-is-first-solana-etf-to-hit-1-billion-aum-413035</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2023/10/20230810_Solana_News2-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">e0c77003-f0bd-5c77-bf28-5a9fdce9e33e</guid>
+        <pubDate>Fri, 28 Aug 2026 15:48:52 +0000</pubDate>
+            <description><![CDATA[The Bitwise Solana Staking ETF (ticker BSOL) crossed $1 billion AUM on Friday, less than a year after its launch.]]></description>            <dc:creator><![CDATA[Jason Shubnell]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/deals"><![CDATA[Deals]]></category>
+		<category domain="https://www.theblock.co/category/funds"><![CDATA[Funds]]></category>
+		<category domain="https://www.theblock.co/category/institutional-investing"><![CDATA[Institutional Investors]]></category>
+		<category domain="https://www.theblock.co/category/markets"><![CDATA[Markets]]></category>
+		<category domain="tag"><![CDATA[Asset Managers]]></category>
+		<category domain="tag"><![CDATA[Solana ETF]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Bybit launches 24/7 options on stock perpetuals, starting with SpaceX and Nvidia]]></title>
+        <link>https://www.theblock.co/news/markets/2026-08-28-bybit-launches-24-7-options-on-stock-perpetuals-starting-with-spacex-and-nvidia-413032</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2024/05/20240507_Bybit_News_2-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">8ecc9c42-95b0-548a-97a0-2f27ba9c619f</guid>
+        <pubDate>Fri, 28 Aug 2026 14:44:23 +0000</pubDate>
+            <description><![CDATA[Beginning Sept. 17, Bybit users will be able to trade 24/7 options on SPCX and NVDA, with fractional lots and USDT settlement.]]></description>            <dc:creator><![CDATA[Jason Shubnell]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/crypto-ecosystems"><![CDATA[Crypto Ecosystems]]></category>
+		<category domain="https://www.theblock.co/category/defi"><![CDATA[DeFi]]></category>
+		<category domain="https://www.theblock.co/category/markets"><![CDATA[Markets]]></category>
+		<category domain="tag"><![CDATA[DEXs]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[SBI Holdings invests $270 million in Ajaib, taking 20% stake amid Asia digital asset push]]></title>
+        <link>https://www.theblock.co/news/deals/2026-08-28-sbi-holdings-invests-270-million-in-ajaib-taking-20-stake-amid-asia-digital-asset-push-413023</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2025/04/20250411_Funding_News_3-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">fde88318-5670-584b-ad9c-e4bf33981a06</guid>
+        <pubDate>Fri, 28 Aug 2026 13:32:26 +0000</pubDate>
+            <description><![CDATA[Ajaib offers crypto and stablecoins alongside traditional investments, including OTC settlement services for institutional clients.]]></description>            <dc:creator><![CDATA[James Hunt]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/companies"><![CDATA[Companies]]></category>
+		<category domain="https://www.theblock.co/category/crypto-ecosystems"><![CDATA[Crypto Ecosystems]]></category>
+		<category domain="https://www.theblock.co/category/deals"><![CDATA[Deals]]></category>
+		<category domain="https://www.theblock.co/category/venture-capital"><![CDATA[Venture Capital]]></category>
+		<category domain="https://www.theblock.co/category/web3"><![CDATA[Web3]]></category>
+		<category domain="tag"><![CDATA[Asia]]></category>
+		<category domain="tag"><![CDATA[Strategic Investments]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[IREN’s $25 billion-$30 billion AI buildout may have ‘spooked’ investors, Bernstein says]]></title>
+        <link>https://www.theblock.co/news/business/2026-08-28-irens-25-billion-30-billion-ai-buildout-may-have-spooked-investors-bernstein-says-413016</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2022/11/20221116_Earnings_Generic4-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">c1e26c36-ea39-54b5-b90e-69d84d911d00</guid>
+        <pubDate>Fri, 28 Aug 2026 12:57:52 +0000</pubDate>
+            <description><![CDATA[IREN has $4 billion in contracted cloud ARR for 2026 capacity and has secured over $20M in annual revenue per IT megawatt on recent deals.]]></description>            <dc:creator><![CDATA[James Hunt]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/companies"><![CDATA[Companies]]></category>
+		<category domain="https://www.theblock.co/category/crypto-ecosystems"><![CDATA[Crypto Ecosystems]]></category>
+		<category domain="https://www.theblock.co/category/crypto-infrastructure"><![CDATA[Crypto Infrastructure]]></category>
+		<category domain="https://www.theblock.co/category/equities"><![CDATA[Equities]]></category>
+		<category domain="https://www.theblock.co/category/layer-1s"><![CDATA[Layer 1s]]></category>
+		<category domain="https://www.theblock.co/category/markets"><![CDATA[Markets]]></category>
+		<category domain="https://www.theblock.co/category/token-projects"><![CDATA[Token Projects]]></category>
+		<category domain="https://www.theblock.co/category/web3"><![CDATA[Web3]]></category>
+		<category domain="tag"><![CDATA[AI]]></category>
+		<category domain="tag"><![CDATA[Analyst Reports]]></category>
+		<category domain="tag"><![CDATA[Bitcoin]]></category>
+		<category domain="tag"><![CDATA[Mining Companies]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Investors at least $4.7 billion underwater across Trump crypto ventures, Public Citizen says]]></title>
+        <link>https://www.theblock.co/news/business/2026-08-28-investors-at-least-4-7-billion-underwater-across-trump-crypto-ventures-public-citizen-says-413003</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2025/06/20250602_Trump_News-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">39c8120b-2d77-500a-8aba-e2cd7e82eecd</guid>
+        <pubDate>Fri, 28 Aug 2026 11:26:02 +0000</pubDate>
+            <description><![CDATA[Investors are $4.7 billion underwater across Trump crypto ventures while Trump earned $1.4 billion, Public Citizen reported.]]></description>            <dc:creator><![CDATA[Brian Danga]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/companies"><![CDATA[Companies]]></category>
+		<category domain="https://www.theblock.co/category/crypto-ecosystems"><![CDATA[Crypto Ecosystems]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Circle strikes Chelsea front-of-shirt sponsorship deal featuring USDC]]></title>
+        <link>https://www.theblock.co/news/business/2026-08-28-circle-strikes-chelsea-front-of-shirt-sponsorship-deal-featuring-usdc-413002</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2020/12/20201218_Circle-2-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">ac0893a0-b39a-55dd-b16c-a72d0ed046aa</guid>
+        <pubDate>Fri, 28 Aug 2026 11:00:00 +0000</pubDate>
+            <description><![CDATA[The shirt design prominently features USDC by Circle on Chelsea's men's, women's, and academy shirts beginning this season.]]></description>            <dc:creator><![CDATA[James Hunt]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/companies"><![CDATA[Companies]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Latest annual UK tax data shows 240 people reported more than £1 million in crypto capital gains]]></title>
+        <link>https://www.theblock.co/news/regulation/2026-08-28-uk-tax-crypto-capital-gains-412993</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2023/08/20230712_UK_CryptoTax_News-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">bc5c575e-a468-55b8-bcf6-bfaa878692ac</guid>
+        <pubDate>Fri, 28 Aug 2026 09:37:26 +0000</pubDate>
+            <description><![CDATA[HMRC data shows 240 people reported more than £1 million ($1.36 million) each in crypto gains as UK tax scrutiny intensifies.]]></description>            <dc:creator><![CDATA[Brian Danga]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/policy"><![CDATA[Policy]]></category>
+		<category domain="https://www.theblock.co/category/regulation"><![CDATA[Regulation]]></category>
+		<category domain="https://www.theblock.co/category/tax"><![CDATA[Tax]]></category>
+		<category domain="tag"><![CDATA[HMRC]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Dunamu and Visa partner on stablecoin, AI business; Open Standard’s OUSD under consideration]]></title>
+        <link>https://www.theblock.co/news/business/2026-08-28-dunamu-visa-partner-stablecoin-ai-ousd-412988</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2024/02/20240220_SouthKorea_News-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">85a3a990-5024-5a80-8c8e-c4f4d1167e4a</guid>
+        <pubDate>Fri, 28 Aug 2026 06:00:22 +0000</pubDate>
+            <description><![CDATA[Dunamu specifically said that the partnership will explore potential usage of Open USD in future collaborations.]]></description>            <dc:creator><![CDATA[Danny Park]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/companies"><![CDATA[Companies]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[XRP treasury firm Evernorth says SEC registration now effective, clearing way for Nasdaq listing]]></title>
+        <link>https://www.theblock.co/news/deals/2026-08-27-evernorth-xrp-sec-effective-412981</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2025/03/20250303_XRP_News_2-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">5d544d98-c4c6-53eb-8635-2ddb2c18e758</guid>
+        <pubDate>Fri, 28 Aug 2026 02:30:34 +0000</pubDate>
+            <description><![CDATA[The S-4 registration statement is for Evernorth's merger with SPAC firm Armada, through which it seeks a Nasdaq listing.]]></description>            <dc:creator><![CDATA[Danny Park]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/deals"><![CDATA[Deals]]></category>
+		<category domain="https://www.theblock.co/category/markets"><![CDATA[Markets]]></category>
+		<category domain="https://www.theblock.co/category/token-projects"><![CDATA[Token Projects]]></category>
+		<category domain="tag"><![CDATA[XRP]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[BitGo buys NYDIG’s institutional trading business, expanding derivatives offering]]></title>
+        <link>https://www.theblock.co/news/business/2026-08-27-bitgo-buys-nydig-institutional-trading-412975</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2024/12/bitgo-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">df04c495-7822-53d5-8e61-ac07ffbd7e62</guid>
+        <pubDate>Fri, 28 Aug 2026 01:11:37 +0000</pubDate>
+            <description><![CDATA[With the transaction, around 30 NYDIG employees have joined BitGo, along with their institutional trading relationships.]]></description>            <dc:creator><![CDATA[Danny Park]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/companies"><![CDATA[Companies]]></category>
+		<category domain="https://www.theblock.co/category/deals"><![CDATA[Deals]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[UAE ‘spy sheikh’ takes 49% stake in Trump family’s bank venture: WSJ]]></title>
+        <link>https://www.theblock.co/news/regulation/2026-08-27-uae-spy-sheikh-takes-49-stake-in-trump-familys-bank-venture-wsj-412971</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2025/05/20250523_DJT-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">48b50db9-f997-52e6-8470-2649c7267bde</guid>
+        <pubDate>Thu, 27 Aug 2026 23:02:03 +0000</pubDate>
+            <description><![CDATA[The UAE's national security advisor is playing a major investment role in President Trump's family's bank venture, the WSJ reported.]]></description>            <dc:creator><![CDATA[Sarah Wynn]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/policy-people"><![CDATA[People]]></category>
+		<category domain="https://www.theblock.co/category/policy"><![CDATA[Policy]]></category>
+		<category domain="https://www.theblock.co/category/regulation"><![CDATA[Regulation]]></category>
+		<category domain="tag"><![CDATA[Donald Trump]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Polish Olympic Committee president detained in Zondacrypto bribery probe]]></title>
+        <link>https://www.theblock.co/news/regulation/2026-08-27-polish-olympic-committee-president-detained-in-zondacrypto-bribery-probe-412961</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2019/05/police-arrest-1-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">c92cd467-c3b7-5425-a19a-ca01ec3480c1</guid>
+        <pubDate>Thu, 27 Aug 2026 18:23:53 +0000</pubDate>
+            <description><![CDATA[Polish Olympic Committee President Radosław Piesiewicz was detained as part of an investigation into digital asset platform ZondaCrypto.]]></description>            <dc:creator><![CDATA[Sarah Wynn]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/legal"><![CDATA[Legal]]></category>
+		<category domain="https://www.theblock.co/category/policy"><![CDATA[Policy]]></category>
+		<category domain="https://www.theblock.co/category/regulation"><![CDATA[Regulation]]></category>
+		<category domain="tag"><![CDATA[Crime]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[Ethena Foundation proposes fee switch for ENA token buybacks among other updates]]></title>
+        <link>https://www.theblock.co/news/ecosystems/2026-08-27-ethena-foundation-proposes-fee-switch-ena-token-buybacks-other-updates-412951</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2026/06/20260612_Ethena_News-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">dcb94b7f-d24b-547b-bb01-8a88432581d0</guid>
+        <pubDate>Thu, 27 Aug 2026 17:35:33 +0000</pubDate>
+            <description><![CDATA[Ethena Foundation announced four updates, including buying locked ENA tokens and ending future monthly investor unlocks.]]></description>            <dc:creator><![CDATA[Yogita Khatri]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/crypto-ecosystems"><![CDATA[Crypto Ecosystems]]></category>
+		<category domain="https://www.theblock.co/category/defi"><![CDATA[DeFi]]></category>
+		<category domain="https://www.theblock.co/category/governance"><![CDATA[Governance]]></category>
+		<category domain="https://www.theblock.co/category/markets"><![CDATA[Markets]]></category>
+		<category domain="https://www.theblock.co/category/token-projects"><![CDATA[Token Projects]]></category>
+		<category domain="https://www.theblock.co/category/web3"><![CDATA[Web3]]></category>
+		<category domain="tag"><![CDATA[Crypto]]></category>
+		<category domain="tag"><![CDATA[Tokens]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[DeFi Development Corp resumes Solana purchases, acquiring nearly 20,000 SOL]]></title>
+        <link>https://www.theblock.co/news/business/2026-08-27-defi-development-resumes-solana-purchases-acquiring-nearly-20000-sol-412932</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2024/05/20240502_Solana_News_1-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">6b8cc9d8-ae56-582c-bdd5-b66864f35b8b</guid>
+        <pubDate>Thu, 27 Aug 2026 15:32:13 +0000</pubDate>
+            <description><![CDATA[DFDV's return has been more than twice that of SOL in the month of August, while quarter-to-date, shares have outperformed SOL by 1.8x.]]></description>            <dc:creator><![CDATA[Jason Shubnell]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/companies"><![CDATA[Companies]]></category>
+		<category domain="https://www.theblock.co/category/markets"><![CDATA[Markets]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+        <item>
+        <title><![CDATA[PURR jumps 15% as Hyperliquid Strategies updates $1.9 billion HYPE treasury and ‘fortress balance sheet’]]></title>
+        <link>https://www.theblock.co/news/business/2026-08-27-purr-jumps-hyperliquid-strategies-1-9-billion-hype-treasury-fortress-balance-sheet-412926</link>
+        <media:content url="https://www.tbstat.com/wp/uploads/2026/04/20260410_Hyperliquid_News-1200x675.jpg" type="image/*" medium="image"/>        <guid isPermaLink="false">24cb47e6-cf33-5a26-9b84-f8a1f6c25642</guid>
+        <pubDate>Thu, 27 Aug 2026 14:52:15 +0000</pubDate>
+            <description><![CDATA[The company said it has since deployed $773.4 million to acquire about 16.5 million additional HYPE at an average cost of $46.77.]]></description>            <dc:creator><![CDATA[Jason Shubnell]]></dc:creator>
+        <content:encoded/>
+        		<category domain="https://www.theblock.co/category/companies"><![CDATA[Companies]]></category>
+		<category domain="https://www.theblock.co/category/equities"><![CDATA[Equities]]></category>
+		<category domain="https://www.theblock.co/category/market-updates"><![CDATA[Market Updates]]></category>
+		<category domain="https://www.theblock.co/category/markets"><![CDATA[Markets]]></category>
+		<category domain="tag"><![CDATA[Earnings]]></category>
+		<category domain="tag"><![CDATA[Equity Movers]]></category>
+		<category domain="https://www.theblock.co/">News</category>
+                </item>
+    </channel>
+</rss>

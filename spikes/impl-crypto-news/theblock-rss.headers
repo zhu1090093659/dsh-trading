@@ -1,0 +1,22 @@
+HTTP/2 200 
+date: Sun, 30 Aug 2026 13:11:06 GMT
+content-type: text/xml; charset=UTF-8
+server: cloudflare
+vary: Accept-Encoding
+last-modified: Sat, 29 Aug 2026 21:16:51 GMT
+etag: W/"e1f9a9aacc39c60b60cbcfde4d824969"
+cache-control: public, max-age=60
+link: <https://www.theblock.co/wp-json/>; rel="https://api.w.org/"
+x-powered-by: fix-pro-news-url-duplicate-prefix:538689f1
+x-permitted-cross-domain-policies: none
+referrer-policy: strict-origin-when-cross-origin
+age: 3209
+expires: Sun, 30 Aug 2026 13:12:06 GMT
+cf-cache-status: HIT
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+x-content-type-options: nosniff
+set-cookie: __cf_bm=kzKqPj.aA1PkGFuhj8mvJQOZWoUt8BBqf22lV2iaDkk-1788095466.9640915-1.0.1.1-IypRWWB_EU_AOxjWE7wNKxJ7DtTVXc_Prck1JyrzdcmvQYQvTsD6llI.IPVBdo0RmwRXf09yakOB_CjQshHlIFpRovupGnG.YZdYfpVz3GOYBy9rkMOZVDtc6TN8L09E; HttpOnly; SameSite=None; Secure; Path=/; Domain=theblock.co; Expires=Sun, 30 Aug 2026 13:41:06 GMT
+permissions-policy: microphone=(), camera=()
+cf-ray: a3340a1c8f77b929-HKG
+alt-svc: h3=":443"; ma=86400
+
