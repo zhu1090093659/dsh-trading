@@ -33,3 +33,13 @@ export function IconFoldPanel({ size = 16 }: { size?: number }): ReactElement {
     </svg>
   )
 }
+
+/** 技术指标入口（OKX 式 chart-line 图标语义：坐标轴 + 折线）。 */
+export function IconIndicators({ size = 16 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.75 2.75v10.5h10.5" />
+      <path d="M5.25 9.5 7.5 6.75l2.25 1.75 2.75-3.5" />
+    </svg>
+  )
+}
