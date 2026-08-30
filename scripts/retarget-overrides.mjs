@@ -16,8 +16,13 @@ if (!target || !target.startsWith('/')) {
   console.error('usage: node scripts/retarget-overrides.mjs <absolute dsh checkout path>')
   process.exit(2)
 }
-// 所有 file:/link: 覆盖值里的 deepseek-harness checkout 前缀统一替换。
-const retarget = (text) => text.replace(/(file:|link:)\S*deepseek-harness/g, (m, scheme) => `${scheme}${target}`)
+// 所有指向 deepseek-harness checkout 的路径统一替换。三种形态（2026-08-31 CI 实证）：
+// 1. file:/link: 绝对路径（overrides 块、importer specifier）；
+// 2. file:../ 相对路径（importer version 字段，随包目录深度变化）；
+// 3. resolution: {directory: ../...} 相对路径（无前缀——漏改会在 CI 撞 ENOENT）。
+const retarget = (text) => text
+  .replace(/(file:|link:)\S*deepseek-harness/g, (m, scheme) => `${scheme}${target}`)
+  .replace(/(directory: )\S*deepseek-harness/g, (m, prefix) => `${prefix}${target}`)
 
 // pnpm-workspace.yaml（overrides 源）
 const wsFile = join(ROOT, 'pnpm-workspace.yaml')
