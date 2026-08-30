@@ -1,4 +1,4 @@
-/* QuotePane —— quotes 模式的中栏浮层。 */
+/* QuotePane —— 中栏行情面板（恒渲染，几何由组件按栅格实测）。 */
 
 .pane {
   position: fixed;
@@ -10,35 +10,7 @@
   overflow: hidden;
 }
 
-.paneHeader {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 18px 0;
-}
-
-.paneTitle {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.paneChatButton {
-  margin-left: auto;
-  appearance: none;
-  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
-  background: transparent;
-  color: inherit;
-  border-radius: 6px;
-  padding: 3px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.paneChatButton:hover {
-  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
-}
-
-.paneBody {
+.pane > * {
   flex: 1;
   min-height: 0;
 }

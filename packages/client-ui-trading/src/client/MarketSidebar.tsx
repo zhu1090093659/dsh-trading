@@ -12,7 +12,7 @@ import { fetchKlines, fetchMarkets, fetchTickers } from './api.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { Sparkline } from './Sparkline.tsx'
-import { DEFAULT_WATCHLISTS, rowsFor, type Observable, type SelectionState, type ShellMode, type Watchlists } from './store.ts'
+import { DEFAULT_WATCHLISTS, rowsFor, type Observable, type SelectionState, type Watchlists } from './store.ts'
 import type { Instrument, MarketId, MarketInfo, ReferenceSeries, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
 import css from './market-sidebar.module.css'
@@ -29,10 +29,8 @@ export interface MarketSidebarInjected {
   addInstrument(market: MarketId, instrument: Instrument): void
   /** 写路径：移除。 */
   removeInstrument(market: MarketId, symbol: string): void
-  /** 写路径：选中标的（QuoteStage 消费）。 */
+  /** 写路径：选中标的（中栏 QuotePane 消费）。 */
   selectInstrument(instrument: Instrument): void
-  /** 写路径：点自选 = 直接切到行情模式（中栏浮层）。 */
-  setShellMode(mode: ShellMode): void
 }
 
 export type MarketSidebarProps =
@@ -57,7 +55,7 @@ export function rowKey(market: string, symbol: string): string {
 }
 
 export function MarketSidebar({
-  t, useSelection, useWatchlists, addInstrument, removeInstrument, selectInstrument, setShellMode,
+  t, useSelection, useWatchlists, addInstrument, removeInstrument, selectInstrument,
 }: MarketSidebarProps) {
   const selection = useSelection(value => value.instrument)
   const watchlists = useWatchlists(value => value)
@@ -211,10 +209,7 @@ export function MarketSidebar({
                     className={css.row}
                     data-selected={selected ? 'true' : undefined}
                     title={t('row.select')}
-                    onClick={() => {
-                      selectInstrument(row)
-                      setShellMode('quotes')
-                    }}
+                    onClick={() => { selectInstrument(row) }}
                   >
                     <span className={css.idents}>
                       <span className={css.name}>{row.name ?? row.symbol}</span>

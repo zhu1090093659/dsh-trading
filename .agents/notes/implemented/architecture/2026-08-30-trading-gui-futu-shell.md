@@ -2,6 +2,32 @@
 
 Status: implemented
 
+> **2.4 修订（2026-08-30 同日，用户驱动）**：中栏双模式被推翻——**中栏恒为行情**，
+> 官方对话列整体移入右侧栏，轨迹视图退役。栅格从「rtl 翻转三栏」升级为「rtl + 四轨道
+> `!important` 接管」：`[272px | var(对话,0) | minmax(0,1fr) 行情 | var(详情,360px)]`，
+> 三列按 `grid-column` 显式归位（rtl 下第 1 条线在右缘：会话浏览器 272 贴右缘、对话列
+> 380 其左、行情轨道空置由 QuotePane 恒渲染覆盖、工具详情落左缘）。折叠态镜像宿主
+> `data-sidebar-collapsed`（56px rail）/`data-details-collapsed`（0px）属性，否则 auto
+> 轨道会把收起的详情列撑出内容宽。关键事实：
+>
+> - **mode store 整体删除**：对话列显隐只由「是否有 current 会话」驱动（QuotePane 写
+>   `body[data-dshtrading-chat]`，CSS 展开第 2 轨道）；审批卡在 composer 链随对话列
+>   常驻可见，强制切模式的安全联动不再需要。点自选不再切模式，只改 selection。
+> - **轨迹退役的实现约束**：view tab 名册直接读 `slots.entries('conversation.view')`
+>   目录，slot 遮蔽不能除名（且同名 id 会撞注册）；tab 条只在 `tabs.length > 1` 渲染、
+>   `resolveActiveView` 对失效存储视图回落 chat——因此摘除自家 quote view + CSS 藏末位
+>   tab（roster 顺序确定 [chat(0), trajectory(10)]，选择器限定会话列，左栏市场页签同名
+>   role 不可误伤）即达成，存储过 trajectory 的旧会话也可点「对话」逃回。
+> - **窄对话列（380px）**：ConversationRoot 内容宽度轴 clamp 下限 680px 必然横向溢出，
+>   以 `--dsh-chat-user-width: 100% !important` 压回栏宽（author important 压过其内联
+>   写入）；宽度手柄随之隐藏。scrollbody 本身 overflow-x:hidden，hero 光晕 SVG 超宽无害。
+> - **伴生 bug（2.3 被掩盖）**：`uiWorkspace.connectWorkspace` 只建/复用会话并返回 id，
+>   **不切换 current**——宿主自己的 `startSession` 也是在其后显式 `sessions.open`。
+>   2.3 靠 setShellMode('chat') 掩盖（消息发出但中栏没跟新会话走），去 mode 后暴露；
+>   `startConversation` 现按宿主同款 connect → open → scope.send 三步。
+> - **验证陷阱**：后台标签页冻结宿主 `grid-template-columns` 0.3s transition（动画时钟
+>   不推进），CDP 读数会「每次落后一拍」——验证轨道映射须先冻结 transition 或激活标签页。
+
 > **2.3 修订（2026-08-30 同日，用户驱动）**：初版「遮蔽 sidebar.workspaces 放市场面板 +
 > shell.overlay 右侧会话面板」的形态被推翻——遮蔽官方 WorkspaceBrowser 丢失其工作区分组/
 > 搜索/管理能力，且自建会话面板与官方浏览器并存割裂（会话库全机共享，不按工作区过滤就

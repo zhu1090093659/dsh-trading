@@ -1,37 +1,88 @@
 /* 交易壳与宿主三栏的样式联动。锚点用宿主稳定 data 属性（非哈希类名）；
    自家状态写 body[data-dshtrading-*]。
 
-   布局原理（2.3 定稿）：不动任何宿主组件与 slot 注册——宿主栅格是
-   [sidebar(会话浏览器) | conversation(会话/行情) | details(工具详情)]，
-   用 direction:rtl 把轨道视觉顺序翻转成 [details | conversation | sidebar]，
-   会话浏览器整体落到右侧；左侧空出的位置停靠自选面板（自家浮层内容），
-   中栏以 padding-left 真实让位。 */
+   布局原理（2.4 定稿）：宿主栅格是 [sidebar | conversation | details]，
+   内联模板被 !important 接管为四轨道，配合 direction:rtl（第 1 条轨道线
+   在右缘）得到视觉顺序：
+     [工具详情 | 行情(空置轨道) | 对话列 | 会话浏览器]
+   中栏恒为行情（QuotePane 浮层盖空置轨道）；官方对话列整体移到右侧栏内
+   （有当前会话才展开轨道），审批卡在 composer 链随列常驻可见。 */
 
-/* 1) 栅格方向翻转：轨道 [sidebar, 1fr, details] 视觉上变为 [details, 1fr, sidebar]。
-      子列内容重置回 LTR（滚动条/文本/弹层不镜像）。 */
+/* 1) rtl 翻转 + 四轨道接管。折叠态镜像宿主 data 属性：
+      sidebar 收起 = 56px 紧凑栏（columns.ts SIDEBAR_COLLAPSED），
+      details 收起 = 0px（宿主以 0 宽保持子树挂载）。轨道 var 变化
+      仍走宿主 grid-template-columns transition（对话列展开有滑入动画）。 */
 div:has(> [data-shell-overlay]) {
   direction: rtl;
+  grid-template-columns:
+    var(--dshtrading-sidebar-w, 272px)
+    var(--dshtrading-chat-w, 0px)
+    minmax(0, 1fr)
+    var(--dshtrading-details-w, 360px) !important;
 }
 
+div:has(> [data-shell-overlay])[data-sidebar-collapsed] {
+  --dshtrading-sidebar-w: 56px;
+}
+
+div:has(> [data-shell-overlay])[data-details-collapsed] {
+  --dshtrading-details-w: 0px;
+}
+
+/* 有当前会话 → 对话列轨道展开（380px）。 */
+body[data-dshtrading-chat='on'] div:has(> [data-shell-overlay]) {
+  --dshtrading-chat-w: 380px;
+}
+
+/* 子列内容重置回 LTR（滚动条/文本/弹层不镜像）。 */
 div:has(> [data-shell-overlay]) > div {
   direction: ltr;
 }
 
-/* 2) rtl 下宿主拖拽手柄的物理坐标错位（inline left 按 LTR 计算），隐藏之。
-      代价：左/右列宽拖拽不可用（折叠开关不受影响）。 */
+/* 2) 列位归位（rtl：grid-column 1 = 右缘）。frame 元素子节点顺序固定
+      [sidebarCol, centerCol, detailsCol, overlayLayer, 拖拽手柄…]：
+      1=会话浏览器（右缘）、2=对话列、3=行情（空置，QuotePane 盖）、
+      4=工具详情（左缘）。overlayLayer 与手柄为 absolute，不参与轨道。 */
+div:has(> [data-shell-overlay]) > div:nth-child(1) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+div:has(> [data-shell-overlay]) > div:nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+div:has(> [data-shell-overlay]) > div:nth-child(3) {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+/* 3) 无当前会话 → 对话列退场（display:none + 轨道 0 宽），行情铺满中栏。 */
+body:not([data-dshtrading-chat='on']) div:has(> [data-shell-overlay]) > div:nth-child(2) {
+  display: none;
+}
+
+/* 4) rtl 下宿主拖拽手柄的物理坐标错位（inline left 按 LTR 计算），隐藏之。
+      代价：列宽拖拽不可用（折叠开关不受影响）。 */
 div:has(> [data-shell-overlay]) > [data-side] {
   display: none !important;
 }
 
-/* 3) 中栏为左侧自选面板（272px）真实让位：padding 落在中栏列上，
-      会话/行情内容（ConversationRoot 自测宽度）自动适配。 */
-div:has(> [data-shell-overlay]) > div:nth-child(2) {
-  padding-left: 272px;
+/* 5) 窄对话列：宿主内容宽度轴 clamp 下限 680px，在 380px 栏内必然横向
+      溢出——压回栏宽（author !important 压过 ConversationRoot 可能写入的
+      内联 --dsh-chat-user-width）；宽度手柄随之无意义，隐藏。 */
+div:has(> [data-conversation-scroll]) {
+  --dsh-chat-user-width: 100% !important;
 }
 
-/* 4) quotes 模式：宿主会话壳（header/tab 条/composer/状态栏）整体隐藏，
-      中栏由 QuotePane 浮层取代——无会话也能直接看行情。
-      visibility（非 display）保持布局几何，QuotePane 按其矩形定位。 */
-body[data-dshtrading-mode='quotes'] div:has(> [data-conversation-scroll]) {
-  visibility: hidden;
+div:has(> [data-shell-overlay]) [data-width-handle] {
+  display: none !important;
+}
+
+/* 6) 轨迹视图退役：conversation.view 名册顺序确定 [chat(order 0),
+      trajectory(order 10)]（quote 已摘除），藏末位 tab 即藏轨迹；
+      会话列限定——左栏市场页签用同名 role，不得误伤。 */
+div:has(> [data-shell-overlay]) > div:nth-child(2) [role='tablist'] > button:last-child {
+  display: none !important;
 }

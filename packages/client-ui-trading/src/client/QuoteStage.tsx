@@ -1,7 +1,7 @@
 /**
- * 中栏行情视图：富途式报价头（最新价/涨跌幅/开高低昨收/量）+ K线主图
- * （candle + MA5/10/20 + 成交量）+ 周期页签。挂 conversation.view（id 'quote'，
- * order -10 = 第一个 tab；激活视图由宿主按会话持久化，用户点一次即保持）。
+ * 行情面板主体：富途式报价头（最新价/涨跌幅/开高低昨收/量）+ K线主图
+ * （candle + MA5/10/20 + 成交量）+ 周期页签。曾挂 conversation.view
+ * （id 'quote'），2.4 起由中栏 QuotePane 直接复用（不再注册 view tab）。
  * 数据经 /dshtrading/api 桥拉连接器行情；ticker 5s 轮询（页面隐藏暂停）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

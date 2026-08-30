@@ -1,14 +1,13 @@
 /**
  * 左侧自选停靠面板（shell.overlay 条目）：固定停靠在视口左缘，承载 MarketSidebar。
  *
- * 「接口不变」布局（2.3）：宿主三栏经 CSS rtl 翻转为 [工具详情 | 会话 | 会话浏览器]，
- * 左侧空出的轨道由本面板停靠（自家浮层内容，不遮蔽任何宿主组件）；工具详情列打开时
- * 会占据左侧轨道，本面板测量其矩形自动右移避让。
+ * 「接口不变」布局（2.4）：宿主栅格经 CSS 接管为四轨道 [工具详情 | 行情 | 对话列 |
+ * 会话浏览器]，左缘轨道是工具详情列；详情列打开时本面板测量其矩形自动右移避让。
  */
 import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { MarketSidebar } from './MarketSidebar.tsx'
-import type { Observable, ModeState, SelectionState, ShellMode, Watchlists } from './store.ts'
+import type { Observable, SelectionState, Watchlists } from './store.ts'
 import type { Instrument, MarketId } from './types.ts'
 import css from './market-dock.module.css'
 
@@ -20,7 +19,6 @@ export interface MarketDockInjected {
   addInstrument(market: MarketId, instrument: Instrument): void
   removeInstrument(market: MarketId, symbol: string): void
   selectInstrument(instrument: Instrument): void
-  setShellMode(mode: ShellMode): void
 }
 
 export type MarketDockProps =

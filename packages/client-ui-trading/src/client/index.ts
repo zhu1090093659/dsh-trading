@@ -4,16 +4,15 @@
  * - `shell.overlay`（dshtrading-market-dock）→ 左侧自选停靠面板
  * - `sidebar.workspaces`（priority -1 遮蔽 WorkspaceBrowser）→ 右侧边栏会话区
  *   （历史折叠 + 底部新对话入口；宿主侧栏列已由 CSS rtl 移到右缘）
- * - `conversation.view`（id 'quote', order -10）→ 会话内行情 tab
- * - `shell.overlay`（dshtrading-quote-pane）→ 行情模式的中栏浮层
+ * - `shell.overlay`（dshtrading-quote-pane）→ 中栏行情面板（恒渲染；
+ *   对话列由宿主官方 UI 常驻右侧栏，见 shell-pad.css 2.4 布局）
  *
  * 行情数据走 node 半注册的 /dshtrading/api 桥（同源 fetch，浏览器认证栅栏内）。
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
-import { createSelectionStore, createWatchlistStore, createModeStore } from './store.ts'
+import { createSelectionStore, createWatchlistStore } from './store.ts'
 import { MarketDock } from './MarketDock.tsx'
-import { QuoteStage } from './QuoteStage.tsx'
 import { QuotePane } from './QuotePane.tsx'
 import { SessionBrowser } from './SessionBrowser.tsx'
 import './shell-pad.css'
@@ -42,7 +41,6 @@ export function apply(ctx: ClientContext): void {
 
   const selection = createSelectionStore()
   const watchlists = createWatchlistStore()
-  const mode = createModeStore()
   const sessions = ctx.sessions as unknown as ISessions
   const uiWorkspace = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined
 
@@ -51,7 +49,7 @@ export function apply(ctx: ClientContext): void {
     console.error(`[dsh-trading] slot entry crashed: ${slot}`, error)
   })
 
-  // 左侧停靠：自选面板（官方浮层通道；宿主侧栏列经 CSS rtl 移到右缘）。
+  // 左侧停靠：自选面板（官方浮层通道；宿主栅格四轨道重排见 shell-pad.css）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
     id: 'dshtrading-market-dock',
@@ -62,11 +60,10 @@ export function apply(ctx: ClientContext): void {
       addInstrument: (market, instrument) => { watchlists.add(market, instrument) },
       removeInstrument: (market, symbol) => { watchlists.remove(market, symbol) },
       selectInstrument: (instrument) => { selection.select(instrument) },
-      setShellMode: (next) => { mode.setMode(next) },
     }),
   }, MarketDock))
 
-  // 右侧边栏会话区：遮蔽官方 WorkspaceBrowser（会话浏览器宿主形态被 2.3 布局取代——
+  // 右侧边栏会话区：遮蔽官方 WorkspaceBrowser（会话浏览器宿主形态被 2.4 布局取代——
   // 历史折叠 + 底部新对话入口，数据面仍全是官方 sessions/workspaces 服务）。
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
     name: 'sidebar.workspaces',
@@ -74,41 +71,29 @@ export function apply(ctx: ClientContext): void {
     priority: -1,
     locale: NS,
     inject: () => ({
-      hooks: { mode },
       openSession: (sessionId) => { sessions.open(sessionId) },
       startConversation: async (workspaceId, text) => {
         if (uiWorkspace === undefined) throw new Error('dsh-trading: uiWorkspace service unavailable')
         const sessionId = await uiWorkspace.connectWorkspace(workspaceId)
+        // connectWorkspace 只建/复用会话并返回 id，不切换 current——
+        // 宿主 startSession 同样在其后显式 open（navigation.ts）。
+        sessions.open(String(sessionId))
         const scoped = sessions.scope(String(sessionId))
         const conversation = scoped?.get('conversation') as ScopedConversation | undefined
         if (conversation === undefined) throw new Error('dsh-trading: conversation service unavailable')
         await conversation.send(text)
       },
-      setShellMode: (next) => { mode.setMode(next) },
     }),
   }, SessionBrowser))
 
-  // 中栏：行情视图（会话内 view tab；激活视图由宿主按会话持久化）。
-  ctx.slots.inject('conversation.view', () => ctx.slots.register({
-    name: 'conversation.view',
-    id: 'quote',
-    order: -10,
-    label: () => t('view.quote'),
-    locale: NS,
-    inject: () => ({
-      hooks: { selection },
-    }),
-  }, QuoteStage))
-
-  // 中栏浮层（行情模式）：盖住会话列；仅「对话模式且有进行中会话内容」时让位。
+  // 中栏行情面板：恒渲染，盖住栅格第 3 轨道（行情区）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
     id: 'dshtrading-quote-pane',
     order: 50,
     locale: NS,
     inject: () => ({
-      hooks: { selection, mode },
-      setShellMode: (next) => { mode.setMode(next) },
+      hooks: { selection },
     }),
   }, QuotePane))
 }
@@ -131,7 +116,6 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'sidebar.markets': '市场与自选',
       'row.remove': '移除',
       'row.select': '查看行情',
-      'view.quote': '行情',
       'quote.empty': '选择左侧标的查看行情',
       'quote.emptyHint': '左栏点击任意标的，这里展示 K 线与关键报价',
       'quote.open': '开',
@@ -148,7 +132,6 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'interval.1d': '日',
       'interval.1w': '周',
       'interval.1M': '月',
-      'pane.chat': 'AI 对话',
       'browser.history': '历史会话',
       'browser.historyEmpty': '该工作区还没有会话',
       'browser.newPlaceholder': '输入任务，回车开始新对话…',
@@ -170,7 +153,6 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'sidebar.markets': 'Markets & watchlist',
       'row.remove': 'Remove',
       'row.select': 'View quote',
-      'view.quote': 'Quote',
       'quote.empty': 'Pick an instrument on the left',
       'quote.emptyHint': 'Click any row in the sidebar to chart it here',
       'quote.open': 'Open',
@@ -187,7 +169,6 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'interval.1d': 'D',
       'interval.1w': 'W',
       'interval.1M': 'M',
-      'pane.chat': 'AI Chat',
       'browser.history': 'History',
       'browser.historyEmpty': 'No sessions in this workspace',
       'browser.newPlaceholder': 'Describe a task; Enter to start…',

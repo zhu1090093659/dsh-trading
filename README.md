@@ -61,17 +61,20 @@ DSH 扩展机制分层与对应选择：
   安装口径 = 显式 add base + 各市场 bundle（仍是一条命令多个参数）；all 保留为预留载体。
   上游改进建议：bundle 层栈递归展开传递 bundle 依赖。
 
-- **第二阶段（交易 GUI 富途式三栏，2026-08-30；同日 2.3 布局定稿）**：新包
+- **第二阶段（交易 GUI 富途式三栏，2026-08-30；同日 2.4 布局定稿）**：新包
   `@dsh-trading/client-ui-trading`（base 挂行）。布局原则「接口不变、位置重排」：
-  宿主三栏 CSS rtl 翻转——官方会话浏览器原样移到右缘（工作区分组/搜索/设置全保留），
-  左侧停靠自选面板（市场页签 + 标的行：迷你走势/实时价/红涨绿跌，localStorage 持久化）；
-  侧栏内会话区遮蔽 workspace 浏览器（历史折叠 + 按工作区过滤 + 底部新对话入口，走
-  官方 connectWorkspace + IConversation.send）；中栏双模式——行情（默认，QuotePane
-  浮层 + SVG K线，无会话即可用，点自选即达）/ 对话（官方会话 UI），pending approval
-  强制对话模式（审批卡不可被遮盖）。node 半 `/dshtrading/api` 行情桥（认证栅栏 +
+  宿主栅格 rtl 翻转 + 四轨道接管——**中栏恒为行情**（QuotePane 恒渲染：报价头 +
+  SVG K线 + 周期页签，无会话即可用，点自选即达）；左缘停靠自选面板（市场页签 +
+  标的行：迷你走势/实时价/红涨绿跌，localStorage 持久化）；右侧栏 = 会话浏览器
+  （272px，工作区分组/搜索/设置全保留）+ **官方对话列常驻其左**（380px，有 current
+  会话才展开轨道：transcript/composer/审批卡全官方 UI；空白会话显宿主 hero）；
+  轨迹视图退役（摘除自家 quote view + CSS 藏末位 view tab，失效存储视图回落 chat）。
+  会话区（历史折叠 + 按工作区过滤 + 底部新对话入口走官方 connectWorkspace →
+  sessions.open → IConversation.send）。node 半 `/dshtrading/api` 行情桥（认证栅栏 +
   无缓存透传 + 业务错误信封转 rejection）；四连接器新增 host 面数据行（dataplane，
   只 provide 行情服务不注册工具，激活走同一 settings 路由裁决）。trading-web 实测：
-  桥三端点 + 设置路由数据面生效（provider=okx 实证）+ 浏览器四向模式切换全链路通过。
+  桥三端点 + 设置路由数据面生效（provider=okx 实证）+ 四轨道布局/轨迹隐藏/新对话
+  切换/无会话收起全链路通过，零 slot 错误。
   决策与边界见 `.agents/notes/implemented/architecture/2026-08-30-trading-gui-futu-shell.md`。
 
 ### 包清单（packages/）

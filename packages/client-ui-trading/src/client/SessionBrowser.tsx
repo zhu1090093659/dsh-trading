@@ -4,26 +4,24 @@
  * - 上方：历史会话（默认折叠，展开后按所选工作区过滤）
  * - 下方：新对话入口（工作区选择 + 紧凑输入框 + 发送）——经由官方
  *   uiWorkspace.connectWorkspace（建/复用空白会话）+ IConversation.send
- *   （首条消息入队），无会话时中栏不再出现宿主 hero。
+ *   （首条消息入队）。
+ *
+ * 2.4 布局：官方对话列常驻右侧（会话浏览器左邻），打开会话/新发消息后
+ * 对话列自动展开（QuotePane 按 current 会话驱动），无需模式切换。
  */
 import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
-import { readJson, writeJson, type Observable, type ModeState, type ShellMode } from './store.ts'
+import { readJson, writeJson } from './store.ts'
 import css from './session-browser.module.css'
 
 const WS_KEY = 'dshtrading.browser.workspace.v1'
 
 export interface SessionBrowserInjected {
-  hooks: {
-    mode: Observable<ModeState>
-  }
   /** 打开既有会话。 */
   openSession(sessionId: string): void
   /** 在指定工作区建/复用空白会话并打开，随即发送首条消息（官方 connectWorkspace + IConversation.send）。 */
   startConversation(workspaceId: string, text: string): Promise<void>
-  /** 写路径：切 quotes/chat。 */
-  setShellMode(mode: ShellMode): void
 }
 
 export type SessionBrowserProps =
@@ -38,8 +36,8 @@ interface WorkspaceRow {
 }
 
 export function SessionBrowser({
-  t, wide, useSessions, useWorkspaces, useMode,
-  openSession, startConversation, setShellMode,
+  t, wide, useSessions, useWorkspaces,
+  openSession, startConversation,
 }: SessionBrowserProps) {
   const sessions = useSessions((value: SessionListState) => value)
   const workspaces = useWorkspaces(value => value)
@@ -78,7 +76,6 @@ export function SessionBrowser({
     try {
       await startConversation(effectiveWorkspace, text)
       setDraft('')
-      setShellMode('chat')
     } catch {
       // 失败提示走宿主 promptError 通道；输入保留。
     } finally {
@@ -109,10 +106,7 @@ export function SessionBrowser({
                 className={css.historyRow}
                 data-current={row.id === sessions.current ? 'true' : undefined}
                 title={row.displayTitle}
-                onClick={() => {
-                  openSession(row.id)
-                  setShellMode('chat')
-                }}
+                onClick={() => { openSession(row.id) }}
               >
                 <span className={css.dot} data-running={row.running ? 'true' : undefined} />
                 <span className={css.historyTitle}>{row.displayTitle}</span>

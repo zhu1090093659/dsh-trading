@@ -1,28 +1,28 @@
 /**
- * 行情面板（行情模式的中栏浮层）：盖住中栏列的矩形区域，内容复用 QuoteStage。
- * 中栏可见性规则：仅「对话模式 + 当前会话有实际内容」时显示官方会话 UI；
- * 其余情况（行情模式 / 无会话 / 空白会话）一律行情面板——宿主 hero 与
- * 会话壳（header/tab 条/composer/状态栏）不再上屏（CSS 按 body attr 隐藏）。
+ * 中栏行情面板（2.4 定稿：中栏恒为行情，对话常驻右侧栏）：
+ * 几何 = [自选停靠右缘, 对话列/会话浏览器左缘] 之间的整块区域，
+ * 内容复用 QuoteStage。
  *
- * 安全闸门联动：出现 pending approval 时强制切回对话模式（审批卡在 composer
- * 链，被隐藏 = 用户看不到审批请求，绝不允许）。
+ * 对话列显隐由「是否有当前会话」驱动（官方会话 UI 整列移到右侧，
+ * 审批卡在 composer 链随列可见，无会话时不存在可审批请求）：
+ * 本组件把该状态写到 body[data-dshtrading-chat]，shell-pad.css 据此
+ * 展开/收起栅格第 2 轨道（对话列）。
  *
- * 几何：测量宿主会话壳根节点（[data-conversation-scroll] 的父元素）的矩形，
- * ResizeObserver + resize 跟随（侧栏折叠/右栏展开/窗口缩放都会重测量）。
+ * 几何测量：frame（div:has(> [data-shell-overlay])，rtl 后子元素顺序
+ * [会话浏览器, 对话列, 工具详情, overlayLayer]）+ 自选停靠面板，
+ * ResizeObserver + resize 跟随（对话列轨道经宿主 transition 动画，
+ * RO 在动画期间连续重测量）。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { QuoteStage } from './QuoteStage.tsx'
-import type { Observable, ModeState, SelectionState, ShellMode } from './store.ts'
+import type { Observable, SelectionState } from './store.ts'
 import css from './quote-pane.module.css'
 
 export interface QuotePaneInjected {
   hooks: {
     selection: Observable<SelectionState>
-    mode: Observable<ModeState>
   }
-  /** 写路径：切换 quotes/chat（官方模式，审批联动唯一出口）。 */
-  setShellMode(mode: ShellMode): void
 }
 
 export type QuotePaneProps =
@@ -37,65 +37,47 @@ interface Rect {
   height: number
 }
 
-export function QuotePane({ t, useSelection, useMode, useSessions, setShellMode, useSessionPendingInteraction }: QuotePaneProps) {
-  const mode = useMode(value => value.mode)
+export function QuotePane({ t, useSelection, useSessions }: QuotePaneProps) {
   const [rect, setRect] = useState<Rect | null>(null)
 
-  // 中栏可见性：对话模式 + 有当前会话 → 官方会话 UI（空白会话显示宿主原生 hero，
-  // 属用户显式进入对话的语义）；行情模式或无会话 → 行情面板（默认状态，hero 不上屏）。
-  const currentSession = useSessions(state => state.current)
-  const hasCurrent = currentSession !== undefined
-  const chatVisible = mode === 'chat' && hasCurrent
+  // 对话列在场判据：有当前会话（含首帧恢复），不要求会话已有内容——
+  // 打开瞬间 byId 可能暂缺该行，要求非空会话抖动回行情（2.3 教训）。
+  const chatOn = useSessions(state => state.current) !== undefined
 
-  // 用户在右侧会话区打开会话 → 切到对话模式（首帧恢复的 current 不触发）。
-  const previousSession = useRef(currentSession)
-  useEffect(() => {
-    if (previousSession.current !== undefined
-      && currentSession !== undefined
-      && currentSession !== previousSession.current) {
-      setShellMode('chat')
-    }
-    previousSession.current = currentSession
-  }, [currentSession, setShellMode])
-
-  // 审批等待 → 强制对话模式（审批卡在 composer 链，行情模式下不可见）。
-  const pending = useSessionPendingInteraction(snapshot => {
-    const map = snapshot as unknown as { size?: number } | undefined
-    return (map?.size ?? 0) > 0
-  })
-  useEffect(() => {
-    if (pending && !chatVisible) setShellMode('chat')
-  }, [pending, chatVisible, setShellMode])
-
-  useEffect(() => { document.body.dataset.dshtradingMode = chatVisible ? 'chat' : 'quotes' }, [chatVisible])
+  useEffect(() => { document.body.dataset.dshtradingChat = chatOn ? 'on' : 'off' }, [chatOn])
 
   useEffect(() => {
-    if (chatVisible) return
     let raf = 0
     const measure = (): void => {
-      const root = document.querySelector('[data-conversation-scroll]')?.parentElement
-      if (root === null || root === undefined) return
-      const box = root.getBoundingClientRect()
-      setRect({ left: box.left, top: box.top, width: box.width, height: box.height })
+      const frame = document.querySelector('div:has(> [data-shell-overlay])')
+      if (frame === null) return
+      const frameBox = frame.getBoundingClientRect()
+      const dockBox = document.querySelector('[data-dshtrading-market-dock]')?.getBoundingClientRect()
+      const left = dockBox !== undefined && dockBox.width > 0 ? dockBox.right : frameBox.left
+      // 右缘：对话列在场取对话列（children[1]）左缘，否则取会话浏览器（children[0]）左缘。
+      const rightBox = frame.children[chatOn ? 1 : 0]?.getBoundingClientRect()
+      const right = rightBox !== undefined && rightBox.width > 0 ? rightBox.left : frameBox.right
+      setRect({ left, top: frameBox.top, width: Math.max(0, right - left), height: frameBox.height })
     }
     measure()
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(measure)
     })
-    const target = document.querySelector('[data-conversation-scroll]')?.parentElement
-    if (target !== null && target !== undefined) observer.observe(target)
+    const frame = document.querySelector('div:has(> [data-shell-overlay])')
+    for (const child of Array.from(frame?.children ?? [])) observer.observe(child)
+    if (frame !== null) observer.observe(frame)
+    const dock = document.querySelector('[data-dshtrading-market-dock]')
+    if (dock !== null) observer.observe(dock)
     window.addEventListener('resize', measure)
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', measure)
       cancelAnimationFrame(raf)
     }
-  }, [chatVisible])
+  }, [chatOn])
 
-  // pane = 会话列被隐藏时（行情模式/无会话/空白会话）的中栏替代内容；
-  // chatVisible 时官方会话 UI 上屏，pane 退场。
-  if (chatVisible || rect === null) return null
+  if (rect === null) return null
 
   return (
     <div
@@ -103,22 +85,8 @@ export function QuotePane({ t, useSelection, useMode, useSessions, setShellMode,
       data-dshtrading-quote-pane=""
       style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
     >
-      <div className={css.paneHeader}>
-        <span className={css.paneTitle}>{t('view.quote')}</span>
-        {hasCurrent && (
-          <button
-            type="button"
-            className={css.paneChatButton}
-            onClick={() => { setShellMode('chat') }}
-          >
-            {t('pane.chat')}
-          </button>
-        )}
-      </div>
-      <div className={css.paneBody}>
-        {/* QuoteStage 的 slot 运行时面（viewRequest 等）在面板场景不需要，只取 t/useSelection。 */}
-        <QuoteStage {...({ t, useSelection } as never)} />
-      </div>
+      {/* QuoteStage 的 slot 运行时面（viewRequest 等）在面板场景不需要，只取 t/useSelection。 */}
+      <QuoteStage {...({ t, useSelection } as never)} />
     </div>
   )
 }
