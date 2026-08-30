@@ -1,0 +1,33 @@
+/* HeaderCornerActions —— 会话头 utilities 位内联按钮，贴合宿主头部图标
+   节奏（ghost、28px 命中区）。 */
+
+.action {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.75;
+}
+
+.action:hover {
+  opacity: 1;
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.action[aria-pressed='true'] {
+  opacity: 1;
+  background: var(--dsw-alias-fill-active, rgba(74, 144, 226, 0.14));
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-active, #4a90e2);
+  outline-offset: 1px;
+}

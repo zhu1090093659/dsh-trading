@@ -2,9 +2,9 @@
  * Trading GUI shell, browser half. Slot 布局（不改 DSH 源码，全部走官方 slot 机制）:
  *
  * - `shell.overlay`（dshtrading-market-dock）→ 左侧自选停靠面板
- * - `sidebar.workspaces`（priority -1 遮蔽 WorkspaceBrowser）→ 右侧边栏会话区
- *   （历史会话列表；新对话入口统一走官方首页 composer，宿主侧栏列已由 CSS
- *   rtl 移到右缘）
+ * - `sidebar.workspaces`（priority -1 遮蔽 WorkspaceBrowser）→ 会话历史的
+ *   挂载面：面板 DOM 经 portal 并入官方 hero 容器（HomeHistory——历史与
+ *   hero composer 拼成同一个容器），侧栏列只留 hidden 占位维持遮蔽
  * - `shell.overlay`（dshtrading-quote-pane）→ 中栏行情面板（恒渲染；
  *   对话列由宿主官方 UI 常驻右侧栏，见 shell-pad.css 2.4 布局）
  *
@@ -15,15 +15,24 @@ import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSelectionStore, createWatchlistStore } from './store.ts'
 import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
-import { SessionBrowser } from './SessionBrowser.tsx'
+import { HomeHistory } from './HomeHistory.tsx'
+import { HeaderCornerActions } from './HeaderCornerActions.tsx'
+import { WindowChrome } from './WindowChrome.tsx'
+import { foldStore } from './fold-store.ts'
 import './shell-pad.css'
 import type { MarketLocaleKey } from './contract.ts'
 
 /** 本面板/字符串翻译的 locale namespace。 */
 const NS = 'dshtrading.market'
 
-/** Required services：会话区只读官方 sessions/workspaces 状态（新对话入口已归一官方 composer）。 */
-export const inject = ['slots', 'locale', 'sessions']
+/** Required services：会话区读官方 sessions/workspaces 状态；startSession 是
+ * 右栏退役后新会话的唯一通路（无参取当前/最近工作区）。 */
+export const inject = ['slots', 'locale', 'sessions', 'uiWorkspace']
+
+/** uiWorkspace 的最小结构面（startSession = 建/复用并打开会话）。 */
+interface WorkspaceNavigation {
+  startSession(workspaceId?: string): void
+}
 
 /** 注册 slot + locale 字典。 */
 export function apply(ctx: ClientContext): void {
@@ -33,6 +42,20 @@ export function apply(ctx: ClientContext): void {
   const selection = createSelectionStore()
   const watchlists = createWatchlistStore()
   const sessions = ctx.sessions as unknown as ISessions
+  const uiWorkspace = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined
+
+  // 共享入口动作：窗口角标浮动簇与会话头内联按钮用的是同一组。
+  const startNewSession = (): void => { uiWorkspace?.startSession() }
+  const openSettings = (): void => {
+    // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
+    // 侧栏里唯一的 [aria-haspopup=dialog]，程序化 click 走官方打开逻辑，
+    // 弹层 position:fixed 盖满视口不受列位置影响。
+    document
+      .querySelector<HTMLElement>("div:has(> [data-shell-overlay]) > div:nth-child(1) [aria-haspopup='dialog']")
+      ?.click()
+  }
+  const folded = foldStore()
+  const toggleFold = (): void => { folded.toggle() }
 
   // 静态包的 slot 条目崩溃默认无人上报（监督缝只覆盖动态插件）——打到 console 可见化。
   ctx.slots.onEntryError((slot, _entry, error) => {
@@ -53,18 +76,50 @@ export function apply(ctx: ClientContext): void {
     }),
   }, MarketDock))
 
-  // 右侧边栏会话区：遮蔽官方 WorkspaceBrowser（宿主形态自带每组「+ 新会话」
-  // 等重复入口；这里只留历史会话列表，数据面仍全是官方 sessions/workspaces
-  // 服务，新建会话统一走官方首页 composer）。
+  // 会话历史（sidebar.workspaces）：遮蔽官方 WorkspaceBrowser（其每组
+  // 「+ 新会话」/添加工作区在融合布局下是冗余入口）；HomeHistory 面板
+  // 经 portal 并入官方 hero 容器，数据面仍全是官方 sessions/workspaces 服务。
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
     name: 'sidebar.workspaces',
-    id: 'dshtrading-session-browser',
+    id: 'dshtrading-home-history',
     priority: -1,
     locale: NS,
     inject: () => ({
       openSession: (sessionId) => { sessions.open(sessionId) },
+      startNewSession,
     }),
-  }, SessionBrowser))
+  }, HomeHistory))
+
+  // 窗口角标（shell.overlay）：右上浮动簇（首页/折叠态的折叠+新会话）与
+  // 左下常驻设置钮；会话进行中的右上入口由 HeaderCornerActions 负责。
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'dshtrading-window-chrome',
+    order: 60,
+    locale: NS,
+    inject: () => ({
+      startNewSession,
+      openSettings,
+      toggleFold,
+      hooks: { folded },
+    }),
+  }, WindowChrome))
+
+  // In-session 右上入口：session 作用域的 slot 必须在 conversation scope
+  // 回调里注册（根 ctx 注册会被渲染器忽略）——同 ui-agent-preset。
+  ctx.inject(['slots', 'conversation'], (scope: ClientContext) => {
+    scope.slots.register({
+      name: 'conversation.session.header.utilities',
+      id: 'dshtrading-corner-actions',
+      order: 90,
+      locale: NS,
+      inject: () => ({
+        startNewSession,
+        toggleFold,
+        hooks: { folded },
+      }),
+    }, HeaderCornerActions)
+  })
 
   // 中栏行情面板：恒渲染，盖住栅格第 3 轨道（行情区）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
@@ -114,6 +169,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'interval.1M': '月',
       'browser.history': '历史会话',
       'browser.historyEmpty': '该工作区还没有会话',
+      'entry.new': '新会话',
+      'entry.settings': '设置',
+      'chat.fold': '折叠会话列',
+      'chat.expand': '展开会话列',
     },
     en: {
       'tab.watch': 'Watchlist',
@@ -148,6 +207,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'interval.1M': 'M',
       'browser.history': 'History',
       'browser.historyEmpty': 'No sessions in this workspace',
+      'entry.new': 'New session',
+      'entry.settings': 'Settings',
+      'chat.fold': 'Fold conversation panel',
+      'chat.expand': 'Expand conversation panel',
     },
   }
 }

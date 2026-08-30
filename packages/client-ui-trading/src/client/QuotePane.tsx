@@ -54,8 +54,10 @@ export function QuotePane({ t, useSelection, useSessions }: QuotePaneProps) {
       const frameBox = frame.getBoundingClientRect()
       const dockBox = document.querySelector('[data-dshtrading-market-dock]')?.getBoundingClientRect()
       const left = dockBox !== undefined && dockBox.width > 0 ? dockBox.right : frameBox.left
-      // 右缘：对话列在场取对话列（children[1]）左缘，否则取会话浏览器（children[0]）左缘。
-      const rightBox = frame.children[chatOn ? 1 : 0]?.getBoundingClientRect()
+      // 右缘：一律取对话列（children[1]）左缘——2.7 右栏退役后 children[0]
+      // 是移出视口的退役侧栏（宽 272 但不在视口），不能再用；对话列退场时
+      // 它 display:none（宽 0），自然回落到 frame 右缘。
+      const rightBox = frame.children[1]?.getBoundingClientRect()
       const right = rightBox !== undefined && rightBox.width > 0 ? rightBox.left : frameBox.right
       setRect({ left, top: frameBox.top, width: Math.max(0, right - left), height: frameBox.height })
     }

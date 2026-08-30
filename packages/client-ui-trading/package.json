@@ -1,6 +1,6 @@
 {
   "name": "@dsh-trading/client-ui-trading",
-  "description": "Futu-style trading shell for the dsh web client: market/watchlist sidebar (shadows sidebar.workspaces), quote stage view (conversation.view), collapsible session side panel (shell.overlay), and the /dshtrading/api market-data HTTP bridge on the node half.",
+  "description": "Futu-style trading shell for the dsh web client: market/watchlist sidebar (shell.overlay), quote stage view (conversation.view), hero-fused session history (shadows sidebar.workspaces), window corner entries (fold/new/settings), and the /dshtrading/api market-data HTTP bridge on the node half.",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -37,15 +37,16 @@
     "@deepseek-ai/dsh-client-ui-sidebar": ">=0.1.2-alpha.1",
     "@deepseek-ai/dsh-client-ui-slots": ">=0.1.2-alpha.1",
     "@deepseek-ai/dsh-client-ui-workspace": ">=0.1.2-alpha.1",
-    "react": "^18.2.0",
-    "@types/react": "~18.3.1"
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0"
   },
   "devDependencies": {
-    "tsdown": "^0.22.0",
-    "vitest": "^3.0.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.7",
     "lightningcss": "^1.0.0",
     "react": "^18.2.0",
-    "@types/react": "~18.3.1"
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0"
   },
   "dsh": {
     "client": {

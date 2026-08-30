@@ -1,49 +1,51 @@
-/* SessionBrowser —— 右侧边栏会话区（历史会话列表；新对话入口在官方首页 composer）。 */
+/* HomeHistory —— hero 融合容器的历史半区。容器几何（同宽/拼缝位置）由
+   HomeHistory.tsx 按官方 composer 卡实测内联写入（容器元素由 JS 创建）；
+   拼接色板从卡片计算样式采样进 --dshtrading-fusion-*，这里只管内部结构。 */
 
-.root {
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  box-sizing: border-box;
+.panel {
+  border: 1px solid var(--dshtrading-fusion-border, rgba(0, 0, 0, 0.12));
+  border-top: none;
+  border-radius: 0 0 var(--dshtrading-fusion-radius, 16px) var(--dshtrading-fusion-radius, 16px);
+  background: var(--dshtrading-fusion-bg, transparent);
+  overflow: hidden;
   font-size: 13px;
+  box-sizing: border-box;
 }
 
-.historyToggle {
+.toggle {
   appearance: none;
   border: none;
   background: transparent;
   color: inherit;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 6px;
-  border-radius: 6px;
+  padding: 8px 12px 6px;
   cursor: pointer;
   font-size: 12.5px;
   opacity: 0.8;
   text-align: left;
 }
 
-.historyToggle:hover {
+.toggle:hover {
   opacity: 1;
   background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
 }
 
-.historyChevron {
+.chevron {
   flex: none;
   display: block;
   transition: transform 120ms ease;
 }
 
-.historyToggle[aria-expanded='true'] .historyChevron {
+.toggle[aria-expanded='true'] .chevron {
   transform: rotate(90deg);
 }
 
 /* 列表作用域工作区：占满标签与计数之间的同一弹性轨道，超长省略。 */
-.historyScope {
+.scope {
   flex: 1;
   min-width: 0;
   text-align: right;
@@ -54,7 +56,7 @@
   opacity: 0.5;
 }
 
-.historyCount {
+.count {
   flex: none;
   margin-left: auto;
   font-size: 11px;
@@ -62,23 +64,23 @@
   font-variant-numeric: tabular-nums;
 }
 
-.historyList {
-  flex: 1;
+.list {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 0 6px 6px;
+  max-height: min(40vh, 300px);
   overflow-y: auto;
-  min-height: 0;
 }
 
-.historyEmpty {
+.empty {
   opacity: 0.55;
   font-size: 12px;
   text-align: center;
-  padding: 10px 0;
+  padding: 8px 0;
 }
 
-.historyRow {
+.row {
   appearance: none;
   border: none;
   background: transparent;
@@ -93,11 +95,11 @@
   font-size: 12.5px;
 }
 
-.historyRow:hover {
+.row:hover {
   background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.08));
 }
 
-.historyRow[data-current='true'] {
+.row[data-current='true'] {
   background: var(--dsw-alias-fill-active, rgba(74, 144, 226, 0.12));
   font-weight: 600;
 }
@@ -114,7 +116,7 @@
   background: #2ba471;
 }
 
-.historyTitle {
+.title {
   flex: 1;
   min-width: 0;
   white-space: nowrap;

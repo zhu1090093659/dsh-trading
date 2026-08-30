@@ -80,6 +80,37 @@ div:has(> [data-shell-overlay]) [data-width-handle] {
   display: none !important;
 }
 
+/* 7) 2.6 home 融合容器：历史面板并入 hero（HomeHistory portal），hero+历史
+      组合可能超过视口高——flex 居中溢出会剪掉顶部，safe center 兜底。
+      仅融合态生效，不涉对话流布局。 */
+body[data-dshtrading-home-history='on'] [data-conversation-scroll] {
+  justify-content: safe center !important;
+}
+
+/* 8) 2.7 右栏退役：侧栏轨道归零，原列整体移出视口但保持挂载——官方设置
+      弹层是 sidebar.settings 占位组件的子树，display:none 会连弹层一起
+      隐藏；移出视口则渲染照旧，弹层 position:fixed 照常盖满视口（入口：
+      融合容器底行 / 会话头 actions，程序化 click 该列内的官方触发器）。 */
+div:has(> [data-shell-overlay]) {
+  --dshtrading-sidebar-w: 0px !important;
+}
+
+div:has(> [data-shell-overlay]) > div:nth-child(1) {
+  position: absolute;
+  left: -3000px;
+  width: 272px;
+}
+
+/* 9) 2.8 会话列折叠：右上角标触发，轨道归零 + 整列隐藏（含 hero 融合
+      容器）；QuotePane 测量对 display:none 列自然回落 frame 右缘。 */
+body[data-dshtrading-chat-folded='on'] div:has(> [data-shell-overlay]) {
+  --dshtrading-chat-w: 0px !important;
+}
+
+body[data-dshtrading-chat-folded='on'] div:has(> [data-shell-overlay]) > div:nth-child(2) {
+  display: none !important;
+}
+
 /* 6) 轨迹视图退役：conversation.view 名册顺序确定 [chat(order 0),
       trajectory(order 10)]（quote 已摘除），藏末位 tab 即藏轨迹；
       会话列限定——左栏市场页签用同名 role，不得误伤。 */

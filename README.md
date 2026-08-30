@@ -61,21 +61,26 @@ DSH 扩展机制分层与对应选择：
   安装口径 = 显式 add base + 各市场 bundle（仍是一条命令多个参数）；all 保留为预留载体。
   上游改进建议：bundle 层栈递归展开传递 bundle 依赖。
 
-- **第二阶段（交易 GUI 富途式三栏，2026-08-30；同日 2.4 布局定稿）**：新包
+- **第二阶段（交易 GUI 富途式三栏，2026-08-30；同日 2.4 布局定稿、2.8 右栏退役）**：新包
   `@dsh-trading/client-ui-trading`（base 挂行）。布局原则「接口不变、位置重排」：
   宿主栅格 rtl 翻转 + 四轨道接管——**中栏恒为行情**（QuotePane 恒渲染：报价头 +
   SVG K线 + 周期页签，无会话即可用，点自选即达）；左缘停靠自选面板（市场页签 +
-  标的行：迷你走势/实时价/红涨绿跌，localStorage 持久化）；右侧栏 = 会话浏览器
-  （272px，工作区分组/搜索/设置全保留）+ **官方对话列常驻其左**（380px，有 current
-  会话才展开轨道：transcript/composer/审批卡全官方 UI；空白会话显宿主 hero）；
-  轨迹视图退役（摘除自家 quote view + CSS 藏末位 view tab，失效存储视图回落 chat）。
-  会话区只留历史会话列表（默认展开，作用域跟随当前会话所在工作区；2.5 入口归一——
-  自绘「工作区选择 + 输入框」入口卡退役，新对话统一走官方首页 composer）。node 半 `/dshtrading/api` 行情桥（认证栅栏 +
+  标的行：迷你走势/实时价/红涨绿跌，localStorage 持久化）；轨迹视图退役（摘除
+  自家 quote view + CSS 藏末位 view tab，失效存储视图回落 chat）。**右侧栏整体
+  退役**（2.5-2.8 入口归一）：官方 WorkspaceBrowser（自带每组「+ 新会话」等重复
+  入口）由 hidden 占位遮蔽；历史会话面板 portal 并入官方 hero 容器，与 composer
+  卡拼成同一个「首页启动器」（可折叠、作用域跟随当前会话工作区）；新对话统一走
+  官方 composer。窗口角标：右上 = 会话列折叠/展开 + 新会话（首页/折叠态浮动，
+  会话中经 header.utilities 槽内联排在 Session 日志后），左下 = 设置（官方触发器
+  程序化 click，弹层 fixed 不受退役列影响）；侧栏列归零并移出视口保持挂载。
+  对话列 380px 常驻右缘（有 current 会话才展开：transcript/composer/审批卡全
+  官方 UI；空白会话显宿主 hero）。node 半 `/dshtrading/api` 行情桥（认证栅栏 +
   无缓存透传 + 业务错误信封转 rejection）；四连接器新增 host 面数据行（dataplane，
   只 provide 行情服务不注册工具，激活走同一 settings 路由裁决）。trading-web 实测：
   桥三端点 + 设置路由数据面生效（provider=okx 实证）+ 四轨道布局/轨迹隐藏/新对话
-  切换/无会话收起全链路通过，零 slot 错误。
-  决策与边界见 `.agents/notes/implemented/architecture/2026-08-30-trading-gui-futu-shell.md`。
+  切换/融合容器/折叠持久化/角标入口全链路通过，零 slot 错误。
+  决策与边界见 `.agents/notes/implemented/architecture/2026-08-30-trading-gui-futu-shell.md`
+  与 `.agents/notes/implemented/architecture/2026-08-30-right-rail-retire-hero-fusion.md`。
 
 ### 包清单（packages/）
 

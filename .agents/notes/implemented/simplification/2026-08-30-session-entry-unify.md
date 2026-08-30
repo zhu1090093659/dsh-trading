@@ -2,6 +2,10 @@
 
 Status: implemented
 
+（2026-08-30 同日补充：右栏最终整体退役、历史并入 hero 融合容器，见
+[右栏退役](../architecture/2026-08-30-right-rail-retire-hero-fusion.md)——本篇的
+「右栏只留历史会话列表」形态已被取代，「剔冗余入口」的裁决与理由仍有效。）
+
 ## Problem
 
 2.4 布局下新对话入口有两处并存：左侧官方 composer（工作区文件夹 + PTC +

@@ -42,6 +42,10 @@ export type MarketLocaleKey =
   | 'interval.1M'
   | 'browser.history'
   | 'browser.historyEmpty'
+  | 'entry.new'
+  | 'entry.settings'
+  | 'chat.fold'
+  | 'chat.expand'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
