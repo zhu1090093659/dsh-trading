@@ -49,7 +49,8 @@ interface EastmoneyItem {
   title?: string
   showTime?: string
   code?: string | number
-  stockList?: Array<{ code?: string }>
+  /** 东财快讯关联标的：字符串数组 `<marketId>.<code>`（如 '1.600519'=SH、'116.02493'=HK、'105.AMZN'=US）。 */
+  stockList?: string[]
 }
 
 /** 东财 showTime（YYYY-MM-DD HH:MM:SS，东八区无时区后缀）→ ISO。 */
@@ -62,6 +63,8 @@ async function fetchEastmoney(fetchImpl: typeof globalThis.fetch, limit: number)
   const url = new URL(EASTMONEY_URL)
   url.searchParams.set('client', 'web')
   url.searchParams.set('biz', 'web_724')
+  url.searchParams.set('sortEnd', '')
+  url.searchParams.set('req_trace', '1')
   url.searchParams.set('fastColumn', '102')
   url.searchParams.set('pageSize', String(Math.max(limit, 20)))
   const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA } })
@@ -77,8 +80,9 @@ async function fetchEastmoney(fetchImpl: typeof globalThis.fetch, limit: number)
     if (!it.title || it.code === undefined) continue
     const ts = typeof it.showTime === 'string' ? parseCnShowTime(it.showTime) : NaN
     if (!Number.isFinite(ts)) continue
+    // relatedCodes 保留完整 `<marketId>.<code>`（如 '1.600519'/'116.00700'），匹配时取 code 段。
     const relatedCodes = Array.isArray(it.stockList)
-      ? it.stockList.filter((s) => typeof s?.code === 'string').map((s) => s.code as string)
+      ? it.stockList.filter((s) => typeof s === 'string' && s.includes('.'))
       : undefined
     items.push({
       source: 'eastmoney',
@@ -107,7 +111,8 @@ function matchesSymbol(item: NewsItem, rawSymbol?: string): boolean {
   const tokens = [needle.toUpperCase(), base.toUpperCase()]
   if (tokens.some((t) => t && title.includes(t))) return true
   if (item.relatedCodes) {
-    const codes = item.relatedCodes.map((c) => c.toUpperCase())
+    // 东财 code = `<marketId>.<code>`；按 . 后 code 段匹配（'1.600519' → '600519'）。
+    const codes = item.relatedCodes.map((c) => c.split('.').slice(-1)[0].toUpperCase())
     return tokens.some((t) => t && codes.includes(t))
   }
   return false

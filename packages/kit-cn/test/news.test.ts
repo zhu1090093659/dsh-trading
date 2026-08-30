@@ -16,7 +16,7 @@ const failResp = (status: number, body = 'boom'): Resp => ({ ok: false, status, 
 const eastmoneyJson = {
   data: {
     fastNewsList: [
-      { title: '贵州茅台发布半年度业绩', showTime: '2026-08-30 19:00:00', code: '202608300001', summary: '【正文】...', stockList: [{ code: '600519' }] },
+      { title: '贵州茅台发布半年度业绩', showTime: '2026-08-30 19:00:00', code: '202608300001', summary: '【正文】...', stockList: ['1.600519'] },
       { title: '沪指收盘涨0.5%', showTime: '2026-08-29 15:00:00', code: '202608290002', summary: '【正文】...' },
     ],
   },
@@ -46,6 +46,17 @@ describe('aggregateNews（东财单源聚合 + 过滤）', () => {
     expect(first?.publishedAt).toBe(new Date(Date.parse('2026-08-30T19:00:00+08:00')).toISOString())
     // 29 日 15:00（东八区）相对 now(2026-08-30T20:00Z=08-31 04:00 北京) 超窗被滤
     expect(items.some((i) => i.title.includes('沪指'))).toBe(false)
+  })
+
+  it('东财请求必带 sortEnd 与 req_trace=1（缺一该端点返 data:null 致整源失败）', async () => {
+    let url = ''
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      url = String(input)
+      return jsonResp(eastmoneyJson)
+    }) as unknown as typeof globalThis.fetch
+    await aggregateNews({ fetch: fetchImpl, now: NOW })
+    expect(url).toContain('sortEnd=')
+    expect(url).toContain('req_trace=1')
   })
 
   it('symbol 过滤：600519 命中（含 .SH 归一化）；单源失败 fail-soft', async () => {
