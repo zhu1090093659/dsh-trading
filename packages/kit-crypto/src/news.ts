@@ -260,8 +260,13 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
     fetchRssNews(fetchImpl, 'theblock', THEBLOCK_RSS_URL),
   ]
   if (options.cryptoPanicKey && options.cryptoPanicKey.trim()) {
-    // CryptoPanic currencies 参数用币种代码（BTC/ETH/SOL，不含报价后缀）。
-    const currencies = [...new Set(tokens.map((t) => t.replace(/(?:USDT|USDC|BUSD|FDUSD|USD)$/i, '')))].filter(Boolean).join(',')
+    // CryptoPanic currencies 参数用币种代码（BTC/ETH/SOL，不含报价/合约后缀）。
+    // tokens 含原始串（如 BTCUSDT-SWAP）与 base（BTC）：先剥合约后缀再剥报价段，
+    // 确保 swap 形也归一到币种代码（否则会把 'BTCUSDT-SWAP' 原样发给 CryptoPanic）。
+    const currencies = [...new Set(tokens
+      .map((t) => t.replace(/[-_]?(?:SWAP|PERP|FUTURES|DEFAULT)$/i, ''))
+      .map((t) => t.replace(/(?:USDT|USDC|BUSD|FDUSD|USD)$/i, ''))
+    )].filter(Boolean).join(',')
     fetchers.push(fetchCryptoPanicNews(fetchImpl, options.cryptoPanicKey.trim(), currencies))
   }
 

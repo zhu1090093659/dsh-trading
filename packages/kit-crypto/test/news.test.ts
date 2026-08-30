@@ -189,6 +189,21 @@ describe('CryptoPanic（WS2c：有 key B 增强，失败降级）', () => {
     expect(items[0].source).toBe('cryptopanic')
     expect(items[0].url).toBe('https://cryptopanic.com/news/1')
   })
+
+  it('swap 符号：currencies 参数归一到币种代码（BTCUSDT-SWAP → BTC），不含合约后缀', async () => {
+    const fetchImpl = mockFetchByUrl({
+      'binance.com': () => jsonResp(binanceJson),
+      'okx.com': () => jsonResp(okxJson),
+      'coindesk.com': () => textResp(coinDeskRss),
+      'theblock.co': () => textResp(theBlockRss),
+      'cryptopanic.com': () => jsonResp(cryptoPanicJson),
+    })
+    await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: 'BTCUSDT-SWAP', cryptoPanicKey: 'sec_xyz' })
+    const urls = fetchImpl.mock.calls.map((c) => String(c[0]))
+    const panicUrl = urls.find((u) => u.includes('cryptopanic.com')) ?? ''
+    expect(panicUrl).toContain('currencies=BTC')
+    expect(panicUrl).not.toContain('SWAP')
+  })
 })
 
 describe('createGetNewsTool（工具壳）', () => {
