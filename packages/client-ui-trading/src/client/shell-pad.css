@@ -1,8 +1,37 @@
-/* 右栏面板展开时，中栏内容整体让位（panel 宽 320px）。
-   锚点用宿主稳定 data 属性：[data-conversation-scroll] 是 ConversationRoot
-   的滚动体；其父节点即会话壳，> header 是会话头部。面板折叠后属性翻转，让位消失。 */
+/* 交易壳与宿主三栏的样式联动。锚点用宿主稳定 data 属性（非哈希类名）；
+   自家状态写 body[data-dshtrading-*]。
 
-body[data-dshtrading-panel='open'] [data-conversation-scroll],
-body[data-dshtrading-panel='open'] div:has(> [data-conversation-scroll]) > header {
-  padding-right: 320px;
+   布局原理（2.3 定稿）：不动任何宿主组件与 slot 注册——宿主栅格是
+   [sidebar(会话浏览器) | conversation(会话/行情) | details(工具详情)]，
+   用 direction:rtl 把轨道视觉顺序翻转成 [details | conversation | sidebar]，
+   会话浏览器整体落到右侧；左侧空出的位置停靠自选面板（自家浮层内容），
+   中栏以 padding-left 真实让位。 */
+
+/* 1) 栅格方向翻转：轨道 [sidebar, 1fr, details] 视觉上变为 [details, 1fr, sidebar]。
+      子列内容重置回 LTR（滚动条/文本/弹层不镜像）。 */
+div:has(> [data-shell-overlay]) {
+  direction: rtl;
+}
+
+div:has(> [data-shell-overlay]) > div {
+  direction: ltr;
+}
+
+/* 2) rtl 下宿主拖拽手柄的物理坐标错位（inline left 按 LTR 计算），隐藏之。
+      代价：左/右列宽拖拽不可用（折叠开关不受影响）。 */
+div:has(> [data-shell-overlay]) > [data-side] {
+  display: none !important;
+}
+
+/* 3) 中栏为左侧自选面板（272px）真实让位：padding 落在中栏列上，
+      会话/行情内容（ConversationRoot 自测宽度）自动适配。 */
+div:has(> [data-shell-overlay]) > div:nth-child(2) {
+  padding-left: 272px;
+}
+
+/* 4) quotes 模式：宿主会话壳（header/tab 条/composer/状态栏）整体隐藏，
+      中栏由 QuotePane 浮层取代——无会话也能直接看行情。
+      visibility（非 display）保持布局几何，QuotePane 按其矩形定位。 */
+body[data-dshtrading-mode='quotes'] div:has(> [data-conversation-scroll]) {
+  visibility: hidden;
 }

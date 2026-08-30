@@ -2,6 +2,40 @@
 
 Status: implemented
 
+> **2.3 修订（2026-08-30 同日，用户驱动）**：初版「遮蔽 sidebar.workspaces 放市场面板 +
+> shell.overlay 右侧会话面板」的形态被推翻——遮蔽官方 WorkspaceBrowser 丢失其工作区分组/
+> 搜索/管理能力，且自建会话面板与官方浏览器并存割裂（会话库全机共享，不按工作区过滤就
+> 会混入其他环境的会话）。**定稿形态：「接口不变、位置重排」**：
+>
+> - 宿主三栏栅格用 `direction: rtl` 整体翻转（[sidebar|conversation|details] → 视觉
+>   [details|会话|侧栏]）：**官方会话浏览器原样保留**（工作区分组、搜索、会话管理、
+>   设置入口全在），只是移到右缘；不遮蔽任何宿主组件。
+> - 左侧空出的轨道停靠**自选面板**（`shell.overlay` 官方浮层通道，自家内容不盖宿主内容），
+>   中栏以 padding-left 真实让位（ConversationRoot 自测宽度自动适配）。
+> - 右侧侧栏的 `sidebar.workspaces` 座仍被遮蔽，但 occupant 换成**会话区**：历史会话
+>   （默认折叠、按所选工作区过滤——WorkspaceView.sessionIds）+ 底部**新对话入口**
+>   （工作区选择 + 输入框，走官方 `uiWorkspace.connectWorkspace` + 会话 scope 的
+>   `IConversation.send` 直接发出首条消息，绕开宿主 hero）。
+> - 中栏双模式（mode store，localStorage 按 profile 持久化）：**quotes（默认）**——
+>   会话壳 visibility:hidden + QuotePane 浮层（点自选即行情，无会话也可用）；**chat**——
+>   官方会话 UI 原样上屏。切换通路：点自选→quotes；点历史会话/新对话→chat；pane 内
+>   「AI 对话」按钮→chat；pending approval 强制 chat（审批卡在 composer 链，不可被
+>   行情面板遮盖——安全闸门不降级）。宿主 hero 从此不上屏（空白会话显式进 chat 才见）。
+> - 代价明示：rtl 下宿主拖拽手柄坐标错位（隐藏之，列宽拖拽不可用，折叠开关不受影响）；
+>   工具详情列落到左侧轨道，自选面板测量其矩形自动避让。
+>
+> 初版教训（保留作反模式记录）：CSS 按 aria-label 隐藏宿主按钮、自建会话列表平铺全库、
+> pane 显隐条件依赖会话非空白（打开会话的瞬间 byId 尚无该行 → 判定抖动回行情，正确条件
+> 是「有 current」而非「非空白」）。
+>
+> **伴生 bug（本轮用户加 HYPE 后整页 slot 崩掉暴露）**：桥的业务错误信封是 HTTP 200 +
+> `{ok:false, code, message}`，客户端 `getJson` 未把它转成 rejection——`fetchKlines`
+> 把 `undefined` 当成功值返回，`klines.map` 在组件内炸开（HYPE 不被 Binance/OKX 现货
+> 支持 → klines 必返业务错误）。修复：getJson 检查 `ok===false` 抛 BridgeError，三个
+> fetch 函数再对载荷做默认值兜底；UI 对不支持标的优雅降级（红字 TRADING_UNSUPPORTED_SYMBOL）。
+> 另：静态包的 slot 条目崩溃宿主无人上报（监督缝只覆盖动态插件），本包 apply 里挂
+> `slots.onEntryError` 打 console——调试期利器，保留。
+
 ## Problem
 
 第二阶段目标：把 dsh web GUI 改成富途式交易界面——左栏从「会话/工作区选择」换成

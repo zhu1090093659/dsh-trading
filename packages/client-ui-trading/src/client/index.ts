@@ -1,59 +1,92 @@
 /**
- * Trading GUI shell, browser half. Registers three slots against the host
- * three-column frame（不改 DSH 源码，全部走官方 slot 机制）:
+ * Trading GUI shell, browser half. Slot 布局（不改 DSH 源码，全部走官方 slot 机制）:
  *
- * - `sidebar.workspaces`（priority -1 遮蔽 WorkspaceBrowser）→ 富途式市场/自选栏
- * - `conversation.view`（id 'quote', order -10）→ 中栏行情视图（会话内 tab）
- * - `shell.overlay`（id 'dshtrading-side-panel'）→ 右侧可折叠会话面板
+ * - `shell.overlay`（dshtrading-market-dock）→ 左侧自选停靠面板
+ * - `sidebar.workspaces`（priority -1 遮蔽 WorkspaceBrowser）→ 右侧边栏会话区
+ *   （历史折叠 + 底部新对话入口；宿主侧栏列已由 CSS rtl 移到右缘）
+ * - `conversation.view`（id 'quote', order -10）→ 会话内行情 tab
+ * - `shell.overlay`（dshtrading-quote-pane）→ 行情模式的中栏浮层
  *
  * 行情数据走 node 半注册的 /dshtrading/api 桥（同源 fetch，浏览器认证栅栏内）。
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import { createSelectionStore, createWatchlistStore } from './store.ts'
-import { MarketSidebar } from './MarketSidebar.tsx'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import { createSelectionStore, createWatchlistStore, createModeStore } from './store.ts'
+import { MarketDock } from './MarketDock.tsx'
 import { QuoteStage } from './QuoteStage.tsx'
-import { SidePanel } from './SidePanel.tsx'
+import { QuotePane } from './QuotePane.tsx'
+import { SessionBrowser } from './SessionBrowser.tsx'
 import './shell-pad.css'
 import type { MarketLocaleKey } from './contract.ts'
 
 /** 本面板/字符串翻译的 locale namespace。 */
 const NS = 'dshtrading.market'
 
-/** Required services（sessions/uiWorkspace 供 SidePanel 的会话读写）. */
+/** Required services：新对话入口走 connectWorkspace + 会话 scope 的 conversation.send。 */
 export const inject = ['slots', 'locale', 'sessions', 'uiWorkspace']
 
-/** uiWorkspace 的最小结构面（connectWorkspace = 新建/复用并打开会话）。 */
+/** uiWorkspace 的最小结构面（connectWorkspace = 建/复用并打开会话，返回会话 id）。 */
 interface WorkspaceNavigation {
   connectWorkspace(workspaceId: string): Promise<unknown>
 }
 
-interface SessionsLike {
-  open(sessionId: string): void
+/** 会话 scope 上可用的最小发送面（IConversation.send，排队回合）。 */
+interface ScopedConversation {
+  send(text: string): Promise<void>
 }
 
-/** 注册三个 slot + locale 字典。 */
+/** 注册 slot + locale 字典。 */
 export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.locale.register(NS, dictionaries()), 'dsh-trading-market: dictionaries')
 
   const selection = createSelectionStore()
   const watchlists = createWatchlistStore()
-  const sessions = ctx.get('sessions') as unknown as SessionsLike | undefined
+  const mode = createModeStore()
+  const sessions = ctx.sessions as unknown as ISessions
   const uiWorkspace = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined
 
-  // 左栏：遮蔽官方 WorkspaceBrowser（priority -1 < 0，lowest renders）。
-  ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
-    name: 'sidebar.workspaces',
-    id: 'dshtrading-market-browser',
-    priority: -1,
+  // 静态包的 slot 条目崩溃默认无人上报（监督缝只覆盖动态插件）——打到 console 可见化。
+  ctx.slots.onEntryError((slot, _entry, error) => {
+    console.error(`[dsh-trading] slot entry crashed: ${slot}`, error)
+  })
+
+  // 左侧停靠：自选面板（官方浮层通道；宿主侧栏列经 CSS rtl 移到右缘）。
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'dshtrading-market-dock',
+    order: 10,
     locale: NS,
     inject: () => ({
       hooks: { selection, watchlists },
       addInstrument: (market, instrument) => { watchlists.add(market, instrument) },
       removeInstrument: (market, symbol) => { watchlists.remove(market, symbol) },
       selectInstrument: (instrument) => { selection.select(instrument) },
+      setShellMode: (next) => { mode.setMode(next) },
     }),
-  }, MarketSidebar))
+  }, MarketDock))
+
+  // 右侧边栏会话区：遮蔽官方 WorkspaceBrowser（会话浏览器宿主形态被 2.3 布局取代——
+  // 历史折叠 + 底部新对话入口，数据面仍全是官方 sessions/workspaces 服务）。
+  ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
+    name: 'sidebar.workspaces',
+    id: 'dshtrading-session-browser',
+    priority: -1,
+    locale: NS,
+    inject: () => ({
+      hooks: { mode },
+      openSession: (sessionId) => { sessions.open(sessionId) },
+      startConversation: async (workspaceId, text) => {
+        if (uiWorkspace === undefined) throw new Error('dsh-trading: uiWorkspace service unavailable')
+        const sessionId = await uiWorkspace.connectWorkspace(workspaceId)
+        const scoped = sessions.scope(String(sessionId))
+        const conversation = scoped?.get('conversation') as ScopedConversation | undefined
+        if (conversation === undefined) throw new Error('dsh-trading: conversation service unavailable')
+        await conversation.send(text)
+      },
+      setShellMode: (next) => { mode.setMode(next) },
+    }),
+  }, SessionBrowser))
 
   // 中栏：行情视图（会话内 view tab；激活视图由宿主按会话持久化）。
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
@@ -67,20 +100,17 @@ export function apply(ctx: ClientContext): void {
     }),
   }, QuoteStage))
 
-  // 右栏：可折叠会话面板（overlay 全帧浮层，条目自行开启 pointer-events）。
+  // 中栏浮层（行情模式）：盖住会话列；仅「对话模式且有进行中会话内容」时让位。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
-    id: 'dshtrading-side-panel',
-    order: 100,
+    id: 'dshtrading-quote-pane',
+    order: 50,
     locale: NS,
     inject: () => ({
-      openSession: (sessionId) => { sessions?.open(sessionId) },
-      createSession: async (workspaceId) => {
-        if (uiWorkspace === undefined) throw new Error('dsh-trading: uiWorkspace service unavailable')
-        await uiWorkspace.connectWorkspace(workspaceId)
-      },
+      hooks: { selection, mode },
+      setShellMode: (next) => { mode.setMode(next) },
     }),
-  }, SidePanel))
+  }, QuotePane))
 }
 
 /** 文案字典：locale.register 契约 = { zh, en }。 */
@@ -118,13 +148,12 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'interval.1d': '日',
       'interval.1w': '周',
       'interval.1M': '月',
-      'panel.title': '会话',
-      'panel.new': '新建会话',
-      'panel.workspace': '工作区',
-      'panel.sessionsEmpty': '还没有会话',
-      'panel.collapse': '收起面板',
-      'panel.expand': '展开面板',
-      'panel.running': '运行中',
+      'pane.chat': 'AI 对话',
+      'browser.history': '历史会话',
+      'browser.historyEmpty': '该工作区还没有会话',
+      'browser.newPlaceholder': '输入任务，回车开始新对话…',
+      'browser.send': '发送',
+      'browser.workspace': '工作区',
     },
     en: {
       'tab.watch': 'Watchlist',
@@ -158,13 +187,12 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'interval.1d': 'D',
       'interval.1w': 'W',
       'interval.1M': 'M',
-      'panel.title': 'Sessions',
-      'panel.new': 'New Session',
-      'panel.workspace': 'Workspace',
-      'panel.sessionsEmpty': 'No sessions yet',
-      'panel.collapse': 'Collapse panel',
-      'panel.expand': 'Expand panel',
-      'panel.running': 'running',
+      'pane.chat': 'AI Chat',
+      'browser.history': 'History',
+      'browser.historyEmpty': 'No sessions in this workspace',
+      'browser.newPlaceholder': 'Describe a task; Enter to start…',
+      'browser.send': 'Send',
+      'browser.workspace': 'Workspace',
     },
   }
 }

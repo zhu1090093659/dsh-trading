@@ -1,0 +1,15 @@
+/* MarketDock —— 左侧自选停靠面板容器。 */
+
+.dock {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 272px;
+  z-index: 25;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-l1, #ffffff);
+  border-right: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  overflow: hidden;
+}

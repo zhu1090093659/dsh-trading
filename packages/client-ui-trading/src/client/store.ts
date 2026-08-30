@@ -173,6 +173,33 @@ export function rowsFor(watchlists: Watchlists, market: MarketId): Instrument[] 
   return DEFAULT_WATCHLISTS[market] ?? []
 }
 
+// ---------------------------------------------------------------------------
+// Shell mode: quotes（默认，中栏=行情面板，会话壳隐藏）/ chat（官方会话 UI）
+// ---------------------------------------------------------------------------
+
+const MODE_KEY = 'dshtrading.mode.v1'
+
+export type ShellMode = 'quotes' | 'chat'
+
+export interface ModeState {
+  mode: ShellMode
+}
+
+export interface ModeStore extends WritableObservable<ModeState> {
+  setMode(mode: ShellMode): void
+}
+
+export function createModeStore(): ModeStore {
+  const store = createObservable<ModeState>({ mode: readJson<ShellMode>(MODE_KEY, 'quotes') })
+  return {
+    ...store,
+    setMode(mode) {
+      store.set({ mode })
+      writeJson(MODE_KEY, mode)
+    },
+  }
+}
+
 /** Chart intervals offered per market (connector-supported subsets only). */
 export const MARKET_INTERVALS: Record<MarketId, string[]> = {
   crypto: ['15m', '1h', '4h', '1d', '1w'],

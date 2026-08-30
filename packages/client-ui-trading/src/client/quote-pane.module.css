@@ -1,0 +1,44 @@
+/* QuotePane —— quotes 模式的中栏浮层。 */
+
+.pane {
+  position: fixed;
+  z-index: 30;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-l1, #ffffff);
+  overflow: hidden;
+}
+
+.paneHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px 0;
+}
+
+.paneTitle {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.paneChatButton {
+  margin-left: auto;
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.paneChatButton:hover {
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.paneBody {
+  flex: 1;
+  min-height: 0;
+}

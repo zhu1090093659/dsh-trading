@@ -1,18 +1,18 @@
 /**
- * 富途式左栏：市场页签 + 自选/默认标的列表（遮蔽宿主 WorkspaceBrowser 的
- * sidebar.workspaces 占位者，priority -1）。点击行 = 选中标的（QuoteStage 消费）；
+ * 富途式市场/自选面板（内容组件，由 MarketDock 停靠在左缘）：市场页签 +
+ * 自选/默认标的列表。点击行 = 选中标的并切到行情模式（QuotePane 消费）；
  * 行内嵌迷你走势 + 最新价 + 涨跌幅（红涨绿跌）。行情批量轮询、页面隐藏时暂停。
  *
  * 注入面约定（官方模式）：可观察状态走 hooks（渲染器合成 use* hook），
  * 动作走 inject 直接 props（对照 settings 的 controller/setProvider 拆分）。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { fetchKlines, fetchMarkets, fetchTickers } from './api.ts'
 import type { MarketLocaleKey } from './contract.ts'
-import { UP_COLOR, DOWN_COLOR, changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
+import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { Sparkline } from './Sparkline.tsx'
-import { DEFAULT_WATCHLISTS, rowsFor, type Observable, type SelectionState, type Watchlists } from './store.ts'
+import { DEFAULT_WATCHLISTS, rowsFor, type Observable, type SelectionState, type ShellMode, type Watchlists } from './store.ts'
 import type { Instrument, MarketId, MarketInfo, ReferenceSeries, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
 import css from './market-sidebar.module.css'
@@ -31,11 +31,12 @@ export interface MarketSidebarInjected {
   removeInstrument(market: MarketId, symbol: string): void
   /** 写路径：选中标的（QuoteStage 消费）。 */
   selectInstrument(instrument: Instrument): void
+  /** 写路径：点自选 = 直接切到行情模式（中栏浮层）。 */
+  setShellMode(mode: ShellMode): void
 }
 
 export type MarketSidebarProps =
-  PropsRuntime<'sidebar.workspaces'>
-  & PropsLocale<'dshtrading.market'>
+  PropsLocale<'dshtrading.market'>
   & InjectFace<MarketSidebarInjected>
 
 const SERIES_TTL_MS = 10 * 60 * 1000
@@ -56,7 +57,7 @@ export function rowKey(market: string, symbol: string): string {
 }
 
 export function MarketSidebar({
-  t, wide, useSelection, useWatchlists, addInstrument, removeInstrument, selectInstrument,
+  t, useSelection, useWatchlists, addInstrument, removeInstrument, selectInstrument, setShellMode,
 }: MarketSidebarProps) {
   const selection = useSelection(value => value.instrument)
   const watchlists = useWatchlists(value => value)
@@ -137,8 +138,6 @@ export function MarketSidebar({
     if (Object.keys(next).length > 0) setPrices(current => ({ ...current, ...next }))
   }, PRICE_POLL_MS, [rowsKey])
 
-  if (!wide) return null
-
   const tabs: { id: MarketTab; label: string }[] = [
     { id: 'watch', label: t('tab.watch') },
     ...availableMarkets.map(info => ({ id: info.id as MarketTab, label: t(TAB_KEY[info.id]) })),
@@ -212,7 +211,10 @@ export function MarketSidebar({
                     className={css.row}
                     data-selected={selected ? 'true' : undefined}
                     title={t('row.select')}
-                    onClick={() => { selectInstrument(row) }}
+                    onClick={() => {
+                      selectInstrument(row)
+                      setShellMode('quotes')
+                    }}
                   >
                     <span className={css.idents}>
                       <span className={css.name}>{row.name ?? row.symbol}</span>

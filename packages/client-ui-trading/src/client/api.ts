@@ -16,24 +16,31 @@ async function getJson<T>(path: string): Promise<T> {
   if (response.status === 401) throw new BridgeError(401, 'unauthorized')
   if (response.status === 403) throw new BridgeError(403, 'forbidden')
   if (!response.ok) throw new BridgeError(response.status, `bridge ${path} failed: ${response.status}`)
-  return await response.json() as T
+  const wire = await response.json() as T
+  // 桥的业务错误信封是 HTTP 200 + { ok:false, code, message }；必须转成 rejection，
+  // 否则调用方拿到 undefined 当成功值（会以 .map-of-undefined 之类的次生错误炸开）。
+  if (wire !== null && typeof wire === 'object' && (wire as { ok?: unknown }).ok === false) {
+    const business = wire as { code?: string; message?: string }
+    throw new BridgeError(200, `${business.code ?? 'TRADING_UNKNOWN'}: ${business.message ?? 'bridge business error'}`)
+  }
+  return wire
 }
 
 /** Installed markets + active provider slugs (drives the sidebar tab strip). */
 export async function fetchMarkets(): Promise<MarketInfo[]> {
   const wire = await getJson<{ markets: MarketInfo[] }>('/dshtrading/api/markets')
-  return wire.markets
+  return wire.markets ?? []
 }
 
 /** Batched tickers; per-symbol outcomes are independent (bad codes don't sink the batch). */
 export async function fetchTickers(market: MarketId, symbols: string[]): Promise<Record<string, TickerOutcome>> {
   const query = new URLSearchParams({ market, symbols: symbols.join(',') })
   const wire = await getJson<{ tickers: Record<string, TickerOutcome> }>(`/dshtrading/api/tickers?${query.toString()}`)
-  return wire.tickers
+  return wire.tickers ?? {}
 }
 
 export async function fetchKlines(market: MarketId, symbol: string, interval: string, limit: number): Promise<Kline[]> {
   const query = new URLSearchParams({ market, symbol, interval, limit: String(limit) })
   const wire = await getJson<{ klines: Kline[] }>(`/dshtrading/api/klines?${query.toString()}`)
-  return wire.klines
+  return Array.isArray(wire.klines) ? wire.klines : []
 }
