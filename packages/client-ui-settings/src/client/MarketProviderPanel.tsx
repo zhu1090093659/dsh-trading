@@ -30,6 +30,10 @@ export interface MarketProviderPanelInjected {
   setProvider: (market: string, provider: string) => Promise<void>
   /** Write path: clear this market's provider (re-inherit base default). */
   resetProvider: (market: string) => Promise<void>
+  /** WS2c: write/clear the CryptoPanic news API key (empty = clear → public sources). */
+  setNewsKey: (value: string) => Promise<void>
+  /** WS2c: clear the CryptoPanic news API key back to base (public sources). */
+  resetNewsKey: () => Promise<void>
 }
 
 export type MarketProviderPanelProps =
@@ -37,8 +41,8 @@ export type MarketProviderPanelProps =
   & PropsLocale<'dshtrading.settings'>
   & InjectFace<MarketProviderPanelInjected>
 
-/** Render one market's provider radio group with save/reset. */
-export function MarketProviderPanel({ t, useController, market, setProvider, resetProvider }: MarketProviderPanelProps) {
+/** Render one market's provider radio group with save/reset (+ WS2c news key, crypto only). */
+export function MarketProviderPanel({ t, useController, market, setProvider, resetProvider, setNewsKey, resetNewsKey }: MarketProviderPanelProps) {
   const state = useController((value: TradingSettingsState) => value)
   const resolved = state.resolved[market]
   const overridden = state.overridden[market]
@@ -61,6 +65,38 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
   }, [draft, resolved, overridden])
 
   const writable = state.writable
+
+  // WS2c：CryptoPanic key（仅 crypto 市场展示）。qwerty draft 当前解析值初始化。
+  const [newsDraft, setNewsDraft] = useState<string | undefined>(undefined)
+  const [newsSaving, setNewsSaving] = useState(false)
+  const [newsMessage, setNewsMessage] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    if (newsDraft === undefined && state.status === 'ready') {
+      setNewsDraft(state.newsKey)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status, state.newsKey])
+
+  async function saveNews() {
+    setNewsSaving(true)
+    setNewsMessage(undefined)
+    try {
+      const next = (newsDraft ?? '').trim()
+      const current = state.newsKey ?? ''
+      if (next !== current) {
+        await setNewsKey(next) // 空串 = 清除 → 公共源
+      } else if (state.newsOverridden) {
+        await resetNewsKey()
+      }
+      setNewsMessage(t('newsSaved'))
+    } catch (error) {
+      setNewsMessage(`${t('newsSaveFailed')}: ${String((error as { message?: string })?.message ?? error)}`)
+    } finally {
+      setNewsSaving(false)
+    }
+  }
+
+  const newsDirty = (newsDraft === undefined ? state.newsKey ?? '' : newsDraft.trim()) !== (state.newsKey ?? '')
 
   // 开放词汇（2026-08-30 整改 #4）：schema 不拒未知 slug——若存储值不在内置
   // 候选里（第三方连接器），追加一个「自定义」选项让用户看到并能改回已知项，
@@ -124,6 +160,32 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
         </button>
         {message !== undefined ? <span>{message}</span> : null}
       </div>
+      {market === 'crypto' && (
+        <div style={{ marginTop: 16, borderTop: '1px solid var(--dsw-alias-border-l2, #eee)', paddingTop: 12 }}>
+          <p style={{ margin: '4px 0' }}>{t('newsKeyLabel')}</p>
+          <input
+            type="password"
+            value={newsDraft ?? ''}
+            disabled={!writable || newsSaving}
+            onChange={(event) => setNewsDraft(event.target.value)}
+            placeholder={t('newsKeyPlaceholder')}
+            style={{ width: '100%', maxWidth: 360 }}
+          />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+            <button type="button" disabled={!newsDirty || newsSaving || !writable} onClick={() => void saveNews()}>
+              {t('save')}
+            </button>
+            <button
+              type="button"
+              disabled={newsSaving || !newsDirty}
+              onClick={() => { setNewsDraft(undefined); setNewsMessage(undefined) }}
+            >
+              {t('discard')}
+            </button>
+            {newsMessage !== undefined ? <span>{newsMessage}</span> : null}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

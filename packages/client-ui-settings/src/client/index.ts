@@ -54,6 +54,18 @@ export function apply(ctx: ClientContext): void {
       const rev = scope.getSnapshot().revision
       await scope.mutate([{ op: 'unset', path: ['markets', market, 'provider'] }], rev)
     },
+    async setNewsKey(value) {
+      const rev = scope.getSnapshot().revision
+      // 空串 = 清除（unset 回 base 默认）：无 key = 新闻走公共源。
+      const op = value.trim()
+        ? { op: 'set' as const, path: ['news', 'cryptoPanicKey'], value: value.trim() }
+        : { op: 'unset' as const, path: ['news', 'cryptoPanicKey'] }
+      await scope.mutate([op], rev)
+    },
+    async resetNewsKey() {
+      const rev = scope.getSnapshot().revision
+      await scope.mutate([{ op: 'unset', path: ['news', 'cryptoPanicKey'] }], rev)
+    },
   }
 
   // Tab ledger read + locale revision (官方 sectionInjected 模式).
@@ -138,6 +150,10 @@ function dictionaries() {
       'current': '当前：{{provider}}',
       'default': '默认',
       'custom': '自定义（{{provider}}，由第三方连接器提供）',
+      'newsKeyLabel': 'CryptoPanic API Key（可选）——新闻工具 crypto_get_news 的 B 增强源；留空则用公共源。',
+      'newsKeyPlaceholder': '粘贴 CryptoPanic free API token（私钥，仅本地存储）',
+      'newsSaved': '已保存',
+      'newsSaveFailed': '保存失败',
       'market.crypto': '加密货币',
       'market.us': '美国股票',
       'market.cn': '中国 A 股',
@@ -155,6 +171,10 @@ function dictionaries() {
       'current': 'Current: {{provider}}',
       'default': 'default',
       'custom': 'Custom ({{provider}}, provided by a third-party connector)',
+      'newsKeyLabel': 'CryptoPanic API key (optional) — B-source enrichment for the crypto_get_news tool; leave empty to use public sources.',
+      'newsKeyPlaceholder': 'Paste a CryptoPanic free API token (stored locally only)',
+      'newsSaved': 'Saved',
+      'newsSaveFailed': 'Save failed',
       'market.crypto': 'Crypto',
       'market.us': 'US Stocks',
       'market.cn': 'China A-shares',

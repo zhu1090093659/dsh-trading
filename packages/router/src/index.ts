@@ -59,9 +59,16 @@ export interface MarketProviderEntry {
   tradeProvider?: string
 }
 
+export interface NewsConfig {
+  /** 可选：CryptoPanic API token（WS2c，#4）。有值时 crypto_get_news 走 CryptoPanic 免费层增强；无值/无效则优雅降级到公共源。 */
+  cryptoPanicKey?: string
+}
+
 export interface Config {
   /** 各市场数据提供方；dict 键开放（新市场 = 新键，schema 零改）。 */
   markets: Record<string, MarketProviderEntry>
+  /** 新闻相关设置（WS2c）：默认无 key（公共源）。 */
+  news?: NewsConfig
 }
 
 export const DEFAULT_MARKETS: Record<string, MarketProviderEntry> = {
@@ -85,6 +92,8 @@ export const Config: Schema<Config> = Schema.object({
   // 不兼容）→ settings resolver 在用户文档缺失时输出完整默认 markets（critical：
   // installSettingsSection 的 resolved 值没有默认时 = {}，路由会判不出任何 provider）。
   markets: Schema.dict(MarketProviderEntrySchema).default({ ...DEFAULT_MARKETS }),
+  // news 可选（WS2c）：默认空对象 = 无 key = 公共源；字段在时 settings UI 可展示/编辑。
+  news: Schema.object({ cryptoPanicKey: Schema.string().default(undefined) }).default({}),
 })
 
 /** settings namespace（kebab-case 品牌化，llm-pi-ai 同款）。 */
@@ -114,6 +123,11 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
   /** 某市场当前激活的 provider slug（settings resolved：用户层赢，缺省 base 默认）。 */
   activeProvider(market: string): string | undefined {
     return this.source().markets[market]?.provider
+  }
+
+  /** WS2c：CryptoPanic API token（settings resolved；缺省 undefined = 无 key = 新闻走公共源）。 */
+  newsKey(): string | undefined {
+    return this.source().news?.cryptoPanicKey
   }
 
   /** 订阅激活变化（settings commit 驱动；restart 型当前仅记录，未来 live 用）。 */
@@ -268,7 +282,10 @@ export function warnUnknownProviders(config: Config, log: LogLike): string[] {
 
 export function apply(ctx: Context, config: Config): void {
   // loader 没写官方 config 合并语义时，dict 无默认 → 这里兜底合并 DEFAULT_MARKETS。
-  const effective: Config = { markets: { ...DEFAULT_MARKETS, ...(config?.markets ?? {}) } }
+  const effective: Config = {
+    markets: { ...DEFAULT_MARKETS, ...(config?.markets ?? {}) },
+    news: config?.news ?? {},
+  }
   const service = new MarketRouterService(ctx, () => effective)
   // 注册表与 router 同 fiber 提供：base patch 行零改动。
   new MarketDataRegistryService(ctx, service)

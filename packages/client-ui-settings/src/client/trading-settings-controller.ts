@@ -26,6 +26,8 @@ export const PROVIDER_LABELS: readonly Readonly<{ id: string; label: string }>[]
 /** dshtrading namespace 下的值形状（router 侧同步；窄化后的子集契约）。 */
 export interface TradingSettings {
   markets: Record<string, { provider?: string; tradeProvider?: string }>
+  /** WS2c：新闻相关设置（CryptoPanic API token，可选）。 */
+  news?: { cryptoPanicKey?: string }
 }
 
 /** 组件的可观察状态（SnapshotStore 值）：已解析 value + 覆盖标记。 */
@@ -35,6 +37,10 @@ export interface TradingSettingsState {
   resolved: Record<string, string | undefined>
   /** market id → 用户是否覆盖（user 层 presence）。 */
   overridden: Record<string, boolean>
+  /** WS2c：已解析 CryptoPanic key（undefined = 无 key = 新闻走公共源）。 */
+  newsKey: string | undefined
+  /** WS2c：用户是否覆盖了 CryptoPanic key。 */
+  newsOverridden: boolean
   /** 表单可写（mode=host 且 writable）。 */
   writable: boolean
 }
@@ -43,6 +49,9 @@ export interface TradingSettingsState {
 export interface TradingSettingsActions {
   setProvider(market: string, provider: string): Promise<void>
   resetProvider(market: string): Promise<void>
+  /** WS2c：设置/清除 CryptoPanic key（空串 = 清除回公共源）。 */
+  setNewsKey(value: string): Promise<void>
+  resetNewsKey(): Promise<void>
 }
 
 /** 状态转化：从 settings 快照投射为组件的可观察视图。 */
@@ -63,7 +72,18 @@ export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): T
     resolved[marketId] = value?.markets?.[marketId]?.provider ?? baseMarkets[marketId]?.provider
     overridden[marketId] = user.markets?.[marketId] !== undefined
   }
-  return { status: snap.status, resolved, overridden, writable: snap.writable && snap.mode === 'host' }
+  // WS2c：新闻 key 同理（value 优先、base 兜底；user 层 presence 判 overridden）。
+  const baseNews = (snap.base as TradingSettings | undefined)?.news
+  const news = value?.news ?? baseNews
+  const userNews = ((snap.user ?? {}) as { news?: { cryptoPanicKey?: string } }).news
+  return {
+    status: snap.status,
+    resolved,
+    overridden,
+    newsKey: news?.cryptoPanicKey,
+    newsOverridden: userNews?.cryptoPanicKey !== undefined,
+    writable: snap.writable && snap.mode === 'host',
+  }
 }
 
 /** 从 settings scope 构建 SnapshotStore（getSnapshot 稳定引用 + subscribe 转发）。 */
