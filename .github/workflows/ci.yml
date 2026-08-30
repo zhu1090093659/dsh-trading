@@ -29,15 +29,15 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
-      # 宿主 vendor 包（cordis/cosmokit/schemastery）入口指向 lib/ 构建产物，
-      # 干净 clone 没有——先整体构建钉版 DSH（2026-08-31 CI 实证，见 run 33302626475）。
+      # 宿主 vendor 包（cordis/cosmokit/schemastery）入口指向 lib/ 构建产物且无
+      # build 脚本——官方机制是根 tsc project references（build:lib:host）。
+      # client face 一并构建：client-ui-trading 的 vite 打包消费 client-ui-* 产物。
       - name: Install & build pinned DSH host
         working-directory: dsh
         run: |
           pnpm install --no-frozen-lockfile
-          # 排除宿主自带 Web 前端（不在 @dsh-trading 依赖树；其 vite build 在 CI 不可用）
-          # 注意选择器必须在子命令之前，否则被当参数转发进各包 build 脚本
-          pnpm --filter '!@deepseek-ai/dsh-web-frontend' -r build
+          pnpm build:lib:host
+          pnpm build:lib:client
 
       - name: Retarget SDK overrides to CI checkout
         run: node scripts/retarget-overrides.mjs "$PWD/dsh"
