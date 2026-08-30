@@ -45,5 +45,11 @@ jobs:
       # --no-frozen-lockfile：overrides 重定向后 lockfile 内嵌的本机路径失配，
       # 由 pnpm 按新 overrides 重解（CI 临时工作树，不回写仓库）。
       - run: pnpm install --no-frozen-lockfile
+      - name: Diagnose cordis resolution
+        run: |
+          ls dsh/vendor/cordis/lib 2>&1 | head -3
+          ls -la node_modules/@deepseek-ai/ 2>&1 | grep cordis
+          readlink node_modules/@deepseek-ai/cordis || true
+          node -e "console.log(require.resolve('@deepseek-ai/cordis'))" 2>&1 | head -2
       - run: pnpm -r build
       - run: pnpm -r test
