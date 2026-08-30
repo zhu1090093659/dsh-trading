@@ -14,36 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # SDK 开发期钉 DSH 源码 checkout（npm 世代未对齐，docs/release-checklist.md §1）；
-      # CI 里克隆同 tag 并把 overrides 重定向过去。
-      - name: Checkout DSH at pinned tag
-        uses: actions/checkout@v4
-        with:
-          repository: deepseek-ai/deepseek-harness
-          ref: dsh-v0.1.2-alpha.1   # 与 README「版本基线」节同步
-          path: dsh
-
       - uses: pnpm/action-setup@v4   # 版本读 package.json 的 packageManager 字段
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
-      # 宿主 vendor 包（cordis/cosmokit/schemastery）入口指向 lib/ 构建产物且无
-      # build 脚本——官方机制是根 tsc project references（build:lib:host）。
-      # client face 一并构建：client-ui-trading 的 vite 打包消费 client-ui-* 产物。
-      - name: Install & build pinned DSH host
-        working-directory: dsh
-        run: |
-          pnpm install --no-frozen-lockfile
-          pnpm build:lib:host
-          pnpm build:lib:client
-
-      - name: Retarget SDK overrides to CI checkout
-        run: node scripts/retarget-overrides.mjs "$PWD/dsh"
-
-      # --no-frozen-lockfile：overrides 重定向后 lockfile 内嵌的本机路径失配，
-      # 由 pnpm 按新 overrides 重解（CI 临时工作树，不回写仓库）。
-      - run: pnpm install --no-frozen-lockfile
+      # SDK（@deepseek-ai/* 0.1.2-alpha.2）由 npm 官方源解析，lockfile 已含全部
+      # 解析；不再克隆/构建 DSH 源码 checkout 或重定向 overrides（2026-08-30 切 npm 世代）。
+      - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
       - run: pnpm -r test

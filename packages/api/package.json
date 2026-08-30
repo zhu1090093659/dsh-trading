@@ -20,7 +20,7 @@
     "build": "tsdown"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/cordis": "^4.0.2",
     "tsdown": "^0.22.0"
   }
 }

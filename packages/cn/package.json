@@ -33,7 +33,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
-    "@deepseek-ai/schemastery": ">=4.0.0"
+    "@deepseek-ai/schemastery": ">=3.18.0"
   },
   "devDependencies": {
     "tsdown": "^0.22.0"

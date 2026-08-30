@@ -3,39 +3,13 @@ packages:
 
 linkWorkspacePackages: true
 
-# 开发期 DSH SDK 解析（TEMPLATES §7）：npm 上 @deepseek-ai/dsh-* 只有不兼容的
-# 0.0.1-rc.1，SDK 一律 peerDependencies 声明，这里用 overrides 把名字钉到官方
-# checkout 的 file: 路径（只读消费，绝不修改 checkout）。运行时由宿主 dsh 提供。
-overrides:
-  '@deepseek-ai/cordis': 'file:/Users/zcl/code/deepseek-harness/vendor/cordis'
-  # cordis/schemastery 内部依赖 cosmokit 用的是 workspace:^ 协议，装进本仓时同样需要钉到本地。
-  '@deepseek-ai/cosmokit': 'file:/Users/zcl/code/deepseek-harness/vendor/cosmokit'
-  '@deepseek-ai/schemastery': 'file:/Users/zcl/code/deepseek-harness/vendor/schemastery'
-  '@deepseek-ai/dsh-tools': 'file:/Users/zcl/code/deepseek-harness/packages/core/tools'
-  '@deepseek-ai/dsh-skill': 'file:/Users/zcl/code/deepseek-harness/packages/skill/skill'
-  # router 包消费 settings seam（dshtrading namespace；installSettingsSection）。
-  # npm 无宿主世代——同 dsh-tools 的 file: 惯例（只读消费，绝不修改 checkout）。
-  # 注意 dsh-settings 的 lib barrel 运行时 import cosmokit 等 workspace: 依赖，链接在
-  # checkout 内解析；file: 拷贝会连锁拖依赖（既有教训），若遇 ERR 改 link:（见上方注释）。
-  '@deepseek-ai/dsh-settings': 'file:/Users/zcl/code/deepseek-harness/packages/settings/settings'
-  # base bundle 实装 dsh-agent-presets（preset 行解析进 profile 安装闭包，S3 坑 3）。
-  # npm 没有宿主世代（最高 0.1.1-rc.2，宿主 0.1.2-alpha.1），开发期按 S3 实证用 link:
-  # 钉到官方 checkout：它带真实 workspace:^ dependencies，file: 拷贝会在本仓连锁拖
-  # 依赖（上方 dsh-tools 的既有教训），link: 让其依赖在 checkout 自身工作区解析。
-  # 发布语义不受影响：dependencies 里仍是正式包名+版本 0.1.2-alpha.1，profile 安装
-  # 时复用宿主解析；本 override 只作用于本仓开发期。
-  '@deepseek-ai/dsh-agent-presets': 'link:/Users/zcl/code/deepseek-harness/packages/preset/agent-presets'
-  # dsh-tools 的 lib barrel 运行时 import 这 4 个 peer（单测真正执行 defineTool 时需要；
-  # 构建不执行所以此前未暴露）。link: 同上——真实路径在 checkout 内，它们自己的依赖
-  # （dsh-timeout/dsh-util-crypto 等）继续由 checkout 工作区解析，不向本仓连锁。
-  '@deepseek-ai/dsh-scope': 'link:/Users/zcl/code/deepseek-harness/packages/core/scope'
-  '@deepseek-ai/dsh-llm': 'link:/Users/zcl/code/deepseek-harness/packages/llm/llm'
-  '@deepseek-ai/dsh-session': 'link:/Users/zcl/code/deepseek-harness/packages/core/session'
-  '@deepseek-ai/dsh-system-prompt': 'link:/Users/zcl/code/deepseek-harness/packages/core/system-prompt'
-
-# file: 目标包声明的 peers（dsh-llm/dsh-scope 等）构建期用不到；自动拉取只会从
-# npm 引入不兼容的 0.0.1-rc.1 时代版本。构建需要的 SDK 在 root devDependencies 显式列出。
-autoInstallPeers: false
+# DSH SDK（@deepseek-ai/*）一律以 peerDependencies 声明，运行时由宿主 dsh 提供。
+# 开发期/测试期从 npm 官方 @deepseek-ai 源解析 0.1.2-alpha.2 世代（与 dsh-web 对齐）。
+# autoInstallPeers=true：把 SDK 声明/静态 import 的宿主 peer 集自动物化进本仓，确保
+# vitest 能解析 defineTool 等入口的静态 peer import；发布语义不变（仍是 peers，不进
+# dependencies）。本仓此前用 file:/link: overrides 钉到 DSH 源码 checkout（只读消费），
+# 0.1.2-alpha.2 已从 npm 发布，overrides 已移除，不再依赖 checkout（checkout 保持只读）。
+autoInstallPeers: true
 
 # pnpm≥10 生命周期脚本默认拒绝，strict 模式下未批准直接报错；esbuild 的 postinstall
 # 是平台二进制校验，显式放行（pnpm 11 的键为 allowBuilds，pnpm approve-builds 生成）。
@@ -46,8 +20,68 @@ allowBuilds:
 peerDependencyRules:
   allowedVersions:
     typescript: '>=5 <7'
-  # dsh-skill/dsh-tools 声明的 workspace:^ 间接 peer 在宿主运行时由 DSH 提供；
-  # 本地构建不需要，显式忽略（曾尝试 file: 钉住，会连锁拖入更多 workspace: 依赖，放弃）。
+  # 0.1.2-alpha.2 世代各包已声明完整 peer 集；以下两项在 vendor 时代因 workspace:^
+  # 无法解析而忽略。现由 autoInstallPeers 物化，保留 ignoreMissing 仅作历史静默。
   ignoreMissing:
     - '@deepseek-ai/dsh-invariants'
     - '@deepseek-ai/dsh-llm'
+
+# pnpm 11 的 minimumReleaseAge 会对「刚发布」的包设冷却期；0.1.2-alpha.2 世代
+# （及配套 cordis/cosmokit/schemastery）为最新发布，pnpm install 自动收录到
+# 该排除清单以放行解析。清单与 dsh-web 一致，仅钉本 cohort 版本。
+minimumReleaseAgeExclude:
+  - '@deepseek-ai/cordis-plugin-include@1.0.7'
+  - '@deepseek-ai/cordis-plugin-loader@1.0.3'
+  - '@deepseek-ai/cordis@4.0.2'
+  - '@deepseek-ai/cosmokit@1.8.3'
+  - '@deepseek-ai/dsh-agent-default-model@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-agent-presets@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-agent@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-api-gateway@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-api-remotes@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-api-session-controller@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-atomic-write@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-attachment@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-brand@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-client-connection@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-client-locale@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-client-store@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-client-ui-conversation@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-client-ui-layout@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-client-ui-renderer@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-client-ui-settings@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-client-ui-sidebar@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-client-ui-slots@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-client-ui-workspace@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-code-runtime@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-credentials@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-deque@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-file-reference@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-home-paths@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-invariants@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-llm@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-native-command@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-scope@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-session-persistence@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-session-projection@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-session-query@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-session-title@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-session@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-settings@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-skill@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-storage-domain@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-storage@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-subagent@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-system-prompt@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-timeout@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-tool-todo@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-tools@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-typert-protocol@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-typert-registry@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-user-approval@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-util-crypto@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-util-time@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-util-values@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-util-workspace-path@0.1.2-alpha.2'
+  - '@deepseek-ai/dsh-workspace@0.1.2-alpha.2'
+  - '@deepseek-ai/schemastery@3.18.2'
