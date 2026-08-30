@@ -29,6 +29,7 @@ import {
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { aggregateNews, deriveSymbolTokens, type AggregateNewsOptions } from './news.js'
 
 // ── skill provider（host 面 skill 全局可见即可，本切片不改 skill 作用域） ─────────
 
@@ -196,13 +197,85 @@ export function apply(ctx: Context, _config: Config): void {
     register(definition: { name: string }): unknown
     get(name: string): { name: string } | undefined
   }
-  if (tools.get(fundingTool.name) !== undefined) {
-    // 让位给先注册的连接器（如已激活的 connector-okx）：同名工具互斥，先到先得。
-    ctx.logger('dsh-trading-crypto-kit').info(
-      '[dsh-trading-crypto-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
-      fundingTool.name,
-    )
-    return
+  // duplicate-safe 注册：同名工具互斥（先到先得 + log 让位），不因单个名字被占而
+  // 影响其它工具注册（否则 funding 让位会连带跳过 news）。
+  const registerOnce = (tool: ReturnType<typeof defineTool>): void => {
+    if (tools.get(tool.name) !== undefined) {
+      ctx.logger('dsh-trading-crypto-kit').info(
+        '[dsh-trading-crypto-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
+        tool.name,
+      )
+      return
+    }
+    tools.register(tool)
   }
-  tools.register(fundingTool)
+
+  registerOnce(fundingTool)
+
+  // WS2b（docs/analysis-roadmap.md #3）：动态新闻工具——kit 内薄工具，直连公共源
+  // （spike 推荐：四源均单端点无鉴权，无 connector 契约要素，故不进 dataplane/路由）。
+  // 缺省无 key 全程可用；每源独立容错，输出带来源名 + 时间 + 链接（铁律 #5）。
+  registerOnce(createGetNewsTool())
+}
+
+/* ── crypto_get_news：动态新闻工具（WS2b，#3） ───────────────────────────────── */
+
+const DEFAULT_NEWS_WINDOW_HOURS = 24
+const DEFAULT_NEWS_LIMIT = 20
+
+function renderNewsItem(item: { source: string; title: string; url: string; publishedAt: string }): string {
+  return `[${item.source}] ${item.publishedAt}  ${item.title}\n  ${item.url}`
+}
+
+export function createGetNewsTool() {
+  const description =
+    'Get recent crypto news from public no-key sources (Binance listing/delisting/API announcements, OKX announcements, CoinDesk & The Block RSS). '
+    + 'Aggregates and sorts newest-first; each item carries source name, publish time and a link for traceability. '
+    + 'Optionally filter by symbol (matched against item titles; note media headlines often use asset names like "Bitcoin" rather than tickers) and by a time window. '
+    + 'Source failures are tolerated and reported instead of failing the whole call. No credentials required. Distinguish announcements (listing, delisting, regulatory) from opinion (media) when citing.'
+  return defineTool({
+    name: 'crypto_get_news',
+    description,
+    parameters: {
+      symbol: {
+        type: 'string',
+        description: 'Optional symbol to filter by, market-canonical vocabulary, e.g. BTCUSDT or BTCUSDT-SWAP. Matched against item titles (case-insensitive substring of the symbol or its base asset).',
+      },
+      windowHours: {
+        type: 'number',
+        description: `Only keep items published within the last N hours (1-168, default ${DEFAULT_NEWS_WINDOW_HOURS}).`,
+        default: DEFAULT_NEWS_WINDOW_HOURS,
+      },
+      limit: {
+        type: 'number',
+        description: `Max items to return (1-50, default ${DEFAULT_NEWS_LIMIT}).`,
+        default: DEFAULT_NEWS_LIMIT,
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown; windowHours?: unknown; limit?: unknown }
+      const options: AggregateNewsOptions = {
+        symbol: typeof args.symbol === 'string' ? args.symbol : undefined,
+        windowHours: typeof args.windowHours === 'number' ? args.windowHours : undefined,
+        limit: typeof args.limit === 'number' ? args.limit : undefined,
+      }
+      const { items, unavailable } = await aggregateNews(options)
+      if (items.length === 0 && unavailable.length === 0) {
+        return 'crypto_get_news: no news items found within the requested window.'
+      }
+      const symbolNote = options.symbol ? ` symbol=${options.symbol.trim().toUpperCase()} (tokens: ${deriveSymbolTokens(options.symbol).join(', ')})` : ''
+      const lines = [
+        `crypto_get_news — ${items.length} item(s)${symbolNote}, window=${options.windowHours ?? DEFAULT_NEWS_WINDOW_HOURS}h (newest-first):`,
+        ...items.map(renderNewsItem),
+      ]
+      if (unavailable.length > 0) {
+        lines.push('  (source(s) unavailable this call: ' + unavailable.join('; ') + ')')
+      }
+      return lines.join('\n')
+    },
+  })
 }
