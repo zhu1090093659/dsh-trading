@@ -29,6 +29,14 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
+      # 宿主 vendor 包（cordis/cosmokit/schemastery）入口指向 lib/ 构建产物，
+      # 干净 clone 没有——先整体构建钉版 DSH（2026-08-31 CI 实证，见 run 33302626475）。
+      - name: Install & build pinned DSH host
+        working-directory: dsh
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm -r build
+
       - name: Retarget SDK overrides to CI checkout
         run: node scripts/retarget-overrides.mjs "$PWD/dsh"
 
