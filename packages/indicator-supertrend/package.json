@@ -1,0 +1,42 @@
+{
+  "name": "@dsh-trading/indicator-supertrend",
+  "description": "SPIKE (community-indicator example, 2026-08-30): third-party technical indicator plugin proving the tradingIndicators service channel — injects the service and registers a Supertrend (超级趋势) definition. ATR is implemented locally (zero runtime dependency on @dsh-trading/indicators); types are type-only imports. Not wired into any bundle: mounted by a profile-level cordis.patch.yml row, emulating how a real community plugin joins.",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0"
+  },
+  "devDependencies": {
+    "@dsh-trading/indicators": "workspace:^",
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0",
+    "typescript": "^5.5.0"
+  },
+  "dsh": {
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  }
+}

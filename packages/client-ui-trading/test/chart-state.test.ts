@@ -12,7 +12,6 @@ function makeStore() {
   for (const definition of presetDefinitions()) registry.register(definition)
   return createChartStateStore(registry)
 }
-
 describe('chart-state store', () => {
   it('默认激活 MA(5/10/20)', () => {
     const store = makeStore()
@@ -41,17 +40,21 @@ describe('chart-state store', () => {
     expect(store.instanceFor('rsi')).toEqual({ id: 'rsi', params: { n: 6 } })
   })
 
-  it('未知 id 的 toggle/setParams 为无操作', () => {
+  it('未知 id 的 toggle/setParams 为无 default/clamp 原样落盘（防御手改 localStorage）', () => {
     const store = makeStore()
     store.togglePreset('ghost')
+    expect(store.instanceFor('ghost')).toEqual({ id: 'ghost', params: {} })
     store.setParams('ghost', { n: 1 })
-    expect(store.getSnapshot().instances).toHaveLength(1)
+    expect(store.instanceFor('ghost')).toEqual({ id: 'ghost', params: { n: 1 } })
+    // 已知 id 的 setParams 仍走 clamp 边界。
+    store.setParams('ma', { n1: 9999 })
+    expect(store.instanceFor('ma')?.params.n1).toBe(250)
   })
 
-  it('空注册表（插件未装）：持久化实例被 sanitize 清空，开关无操作', () => {
+  it('空注册表（插件未装）：持久化/默认实例原样保留不清洗，插件就位后自动生效', () => {
     const store = createChartStateStore(createIndicatorRegistry())
-    expect(store.getSnapshot().instances).toEqual([])
-    store.togglePreset('ma')
-    expect(store.getSnapshot().instances).toEqual([])
+    expect(store.getSnapshot().instances).toEqual([{ id: 'ma', params: { n1: 5, n2: 10, n3: 20 } }])
+    store.setParams('rsi', { n: 6 })
+    expect(store.instanceFor('rsi')).toEqual({ id: 'rsi', params: { n: 6 } })
   })
 })

@@ -41,15 +41,24 @@ Status: implemented
   （sanitize 对未知 id 免疫，localStorage 键 `dshtrading.chart.v1` 不迁移）。
   不进 required `inject` 数组。QuoteStage 经 `useSyncExternalStore(registry.
   subscribe, registry.getVersion)` 跟随名册变化（插件晚于首帧合并也能重渲染）。
-- **分发 = base 挂依赖**：`@dsh-trading/base` dependencies 加入
-  client-ui-indicators（指标是市场无关能力，base 是唯一合法挂载点）；客户端
-  半的加载走 node_modules 安装闭包（client-ui-settings 同款先例），无需进
-  profile bundles 层栈（该栈只吃 `dsh.bundle` 声明的 patch 层）。开发期
-  profile 的 pnpm-workspace.yaml overrides 增补两个 file: 钉子（indicators +
+- **分发 = base 挂依赖 + patch insert 行**：`@dsh-trading/base` dependencies 加入
+  client-ui-indicators（指标是市场无关能力，base 是唯一合法挂载点）。**关键宿主
+  事实：client 半的加载看 Loader 条目（cordis.patch.yml 的 insert 行），不是
+  node_modules 闭包**——依赖声明只保证安装与解析，不构造插件 fiber；漏行时
+  dsh-client-modules 扫不到该包，`__DSH_BOOT__` 清单缺席（首启实测：指标选择器
+  空态「未安装指标插件？」即此因）。base patch 为其补 insert 行后修复。
+  headless 宿主该行解析为空 apply host 行，无害。开发期 profile 的
+  pnpm-workspace.yaml overrides 增补 file: 钉子（indicators +
   client-ui-indicators）。
-- **社区指标接入路径**：社区插件 client 半 `inject: ['tradingIndicators']` 拿
-  服务后 `register(definition)` 即出现在选择器面板，与行情壳零耦合；cordis
-  依赖解析保证回调晚于 provide。
+- **chart-state 创建不 sanitize（3.2 修订）**：注册表异步就位（ctx.inject 桥接
+  晚于 store 创建），创建时清洗会把持久化激活态清掉（实测复现：默认 MA 每次
+  启动被清）。改为保留原始实例列表——未知 id 实例对 UI 天然不可见（选择器按
+  definition 名册渲染、指标调度按 indicators.get 跳过），插件就位后自动点亮；
+  default/clamp 收敛在 toggle/setParams 写入边界。
+- **社区指标接入路径**：社区插件 client 半 `ctx.inject(['tradingIndicators'], …)`
+  拿服务后 `register(definition)` 即出现在选择器面板，与行情壳零耦合；cordis
+  依赖解析保证回调晚于 provide。挂载走 profile 级 cordis.patch.yml insert 行
+  （真实社区插件的路径；patch 行严格解析，包名不存在会 boot 崩溃）。
 
 ## Alternatives considered
 
@@ -70,14 +79,17 @@ Status: implemented
 
 ## Consequences
 
-- 包数 +2（19 包）；client-ui-trading 不再内置任何指标，`indicators/` 内部
-  模块与 indicator.{ma..kdj}/indicator.param.* locale 键删除，MA_COLORS 自
-  format.ts 迁出。
-- 验证：`pnpm -r build`（19 包）/`pnpm -r test` 全绿（indicators 20 例 + 插件
-  smoke 1 例 + client-ui-trading 28 例，含空注册表 sanitize/开关无操作新用例）；
-  trading-web profile 副本已刷新（base 传递带入新插件）。UI 实测（勾选/调参/
-  持久化与拆分前一致）待 trading-web 重启后进行。
-- 社区指标 spike（超级趋势等）尚未做——acceptance 里「第三方插件 inject 服务
-  上榜」与「reflect.provide 卸载语义」两项仍需真实宿主实证，spike 时补记。
-- 后续加用户自定义指标的入口（设置/localStorage 加载 definition）复用同一
-  本地注册表，与插件通道并存。
+- 包数 +2（19 包，另加社区示例 spike 包 indicator-supertrend）；client-ui-trading
+  不再内置任何指标，`indicators/` 内部模块与 indicator.{ma..kdj}/indicator.param.*
+  locale 键删除，MA_COLORS 自 format.ts 迁出。
+- 验证：`pnpm -r build`（19 包）/`pnpm -r test`（243 例）全绿；真实 Chrome
+  （trading-web 3081）实测全链路通过——选择器名册 = 六预置 + 超级趋势（spike）
+  同榜，勾选出值（ST 72310.90 与 MACD/MA 共存）、勾选态跨重启+刷新持久、
+  卸载（删 profile patch 行 + 重启）下榜 / 恢复上榜单向均验证。证据入账
+  spikes/REVIEW-LOG.md S6。
+- 卸载语义边界：provide 随插件 fiber 注销，但 definition 已按值合并进消费方
+  本地注册表——无 live 卸载，页面刷新是清理边界（patchReload live 不重载已挂
+  fiber，须重启）。
+- 「第三方插件 inject 上榜」与「provide 卸载语义」两项 acceptance 由 spike
+  实证关闭；用户自定义指标入口（设置/localStorage 加载 definition）复用同一
+  本地注册表，与插件通道并存，留待后续。

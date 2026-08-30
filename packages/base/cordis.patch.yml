@@ -47,6 +47,13 @@
     - id: dsh-trading-client-ui-trading
       name: '@dsh-trading/client-ui-trading'
 
+    # 预置指标提供插件（2026-08-30 指标插件化）：client 半 provide
+    # tradingIndicators 服务（IndicatorRegistry，预置 MA/EMA/BOLL/MACD/RSI/KDJ）；
+    # 社区/自定义指标插件 inject 该服务 register definition 即可上榜。
+    # headless 宿主解析为空 apply host 行，无害。
+    - id: dsh-trading-client-ui-indicators
+      name: '@dsh-trading/client-ui-indicators'
+
 - id: agent-presets
   name: '@deepseek-ai/dsh-agent-presets'
   config:

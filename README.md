@@ -101,6 +101,7 @@ DSH 扩展机制分层与对应选择：
 | `@dsh-trading/router` | 插件：市场/数据源路由（host 面，base 挂载）——注册 `dshtrading` settings namespace + provide `tradingMarketRouter`（连接器 consult 激活），docs/exchange-routing.md |
 | `@dsh-trading/indicators` | 纯库：技术指标核心——math 纯函数内核 + definition 契约 + 注册表工厂 + 预置指标数据（非 bundle；社区指标经 definition 数据接入） |
 | `@dsh-trading/client-ui-indicators` | 插件：预置指标提供方——client 上下文 provide `tradingIndicators` 服务（IndicatorRegistry，MA/EMA/BOLL/MACD/RSI/KDJ）；社区指标插件 inject 同一服务 register 即可上榜，与行情壳零耦合 |
+| `@dsh-trading/indicator-supertrend` | **社区指标示例（spike）**：超级趋势（ATR 本地实现，零运行时依赖 core）——经 profile 级 patch 行挂载、inject `tradingIndicators` 服务上榜的第三方接入范本（不入任何 bundle 依赖） |
 | `@dsh-trading/client-ui-trading` | 交易 GUI 壳（富途式三栏）：左栏市场/自选、中栏视图注册表（行情=TV v5 K线 + OKX 式技术指标选择器 / 量化占位）、右缘常驻会话竖条；指标经 tradingIndicators 服务可选桥接（插件缺席零指标照常）；node 半 `/dshtrading/api` 行情桥（web 宿主，headless 挂起无害） |
 | `@dsh-trading/all` | 元 bundle（预留；当前 DSH 版本不展开传递 bundle 依赖，见上「已知限制」） |
 | `@dsh-trading/connector-template` | **脚手架（不入任何 bundle 依赖）**：新交易所连接器模板源，由 `scripts/new-connector.mjs` 生成器展开；接入流程见 `docs/connector-playbook.md` |

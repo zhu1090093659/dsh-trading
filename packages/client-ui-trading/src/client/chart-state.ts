@@ -1,8 +1,13 @@
 /**
  * 图表状态 store：当前激活的指标实例列表（每 preset id 至多一个实例）。
  * 仿 selection/watchlist store 模式：无依赖可观测 + localStorage 持久化。
- * 读回时按注册表净化——未知 id（自定义指标卸载后）与越界参数不炸。
- * 注册表由 apply 注入（本地单例，指标插件经桥接合并 definition）。
+ *
+ * 3.2 插件化后注册表异步就位（指标插件经 ctx.inject 桥接），创建时对
+ * 「还空的注册表」sanitize 会把持久化激活态清掉——因此创建只读原始实例
+ * 列表不清洗：未知 id 实例对 UI 天然不可见（选择器按 definition 名册渲染、
+ * 指标调度按 indicators.get 跳过），插件就位后自动生效。default/clamp
+ * 收敛在 toggle/setParams 写入边界（定义未知时原样落盘：桥接前选择器没有
+ * 该 id 的可点行，此分支 UI 不可达，防御手改 localStorage）。
  */
 import type { IndicatorInstance, IndicatorRegistry } from '@dsh-trading/indicators'
 import { createObservable, readJson, writeJson } from './store.ts'
@@ -23,15 +28,15 @@ export interface ChartStateStore extends WritableObservable<ChartState> {
   isActive(id: string): boolean
 }
 
-/** 默认激活：MA(5/10/20)，与退役 SVG 图表的既视感一致。 */
-function initialState(registry: IndicatorRegistry): ChartState {
-  const ma = registry.defaultInstance('ma')
-  return { instances: ma !== undefined ? [ma] : [] }
+/** 默认激活：MA(5/10/20)，与退役 SVG 图表的既视感一致。注册表未就位时
+    留作未知实例（UI 不可见），插件桥接后自动点亮。 */
+function initialState(): ChartState {
+  return { instances: [{ id: 'ma', params: { n1: 5, n2: 10, n3: 20 } }] }
 }
 
 export function createChartStateStore(registry: IndicatorRegistry): ChartStateStore {
   const store = createObservable<ChartState>({
-    instances: registry.sanitizeInstances(readJson<unknown>(CHART_KEY, initialState(registry).instances)),
+    instances: readJson<IndicatorInstance[]>(CHART_KEY, initialState().instances),
   })
 
   const persist = (): void => { writeJson(CHART_KEY, store.getSnapshot().instances) }
@@ -40,25 +45,21 @@ export function createChartStateStore(registry: IndicatorRegistry): ChartStateSt
     ...store,
     togglePreset(id) {
       const definition = registry.get(id)
-      if (definition === undefined) return
       store.update((current) => {
         const rest = current.instances.filter(instance => instance.id !== id)
         if (rest.length !== current.instances.length) return { instances: rest }
-        const fresh = registry.defaultInstance(id)
-        return fresh !== undefined ? { instances: [...current.instances, fresh] } : current
+        return { instances: [...current.instances, { id, params: definition !== undefined ? registry.defaultParams(definition) : {} }] }
       })
       persist()
     },
     setParams(id, params) {
       const definition = registry.get(id)
-      if (definition === undefined) return
+      const clamped = definition !== undefined ? registry.clampParams(definition, params) : params
       store.update((current) => {
         const exists = current.instances.some(instance => instance.id === id)
-        const clamped = registry.clampParams(definition, params)
-        const instances = exists
+        return { instances: exists
           ? current.instances.map(instance => instance.id === id ? { id, params: clamped } : instance)
-          : [...current.instances, { id, params: clamped }]
-        return { instances }
+          : [...current.instances, { id, params: clamped }] }
       })
       persist()
     },

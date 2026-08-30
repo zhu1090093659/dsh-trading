@@ -35,3 +35,12 @@
 ---
 
 # 第 0 阶段总结论：S1-S5 全部 PASS，无降级项，进入第 1 阶段（脚手架）
+
+## S6 指标服务通道 + 社区指标接入 — ✅ PASS（2026-08-30 主 agent 实证）
+- 实证形态：`@dsh-trading/indicator-supertrend`（社区指标示例，ATR 本地实现零运行时依赖 core）经 **profile 级 cordis.patch.yml insert 行**挂载，client 半 `ctx.inject(['tradingIndicators'])` 拿服务 `register(definition)`。
+- 真实 Chrome 实测（trading-web 3081）：选择器名册 = 六预置 + 超级趋势同榜；勾选后 ST 读数出值（72310.90 @ BTC）；与预置 MACD/MA 共存；勾选态跨重启+刷新持久。
+- 卸载语义：删 profile patch 行 + 重启 → 超级趋势下榜（provide 随 fiber 注销）；恢复行 + 重启 → 重新上榜。**无 live 卸载**：patchReload live 不重载已挂 fiber，页面刷新是消费方本地注册表的清理边界（definition 按值合并，留存至刷新）。
+- 两个宿主级事实（修复过程中落定）：
+  1. **client 半加载 = Loader 条目，不是 node_modules 闭包**——传递依赖包必须由某个 bundle 的 cordis.patch.yml insert 行挂载（client-ui-indicators 曾因此「已安装未加载」，指标选择器空态）；dsh-client-modules 扫 Loader entries 组 `__DSH_BOOT__`。
+  2. patch 行严格解析：行内包名不存在 → boot 崩溃（ERR_MODULE_NOT_FOUND），不是警告。
+- 采纳：spike 包保留为 `packages/indicator-supertrend`（社区指标接入示例）；接入套路沉淀在 Agent Note「指标系统插件化」。
