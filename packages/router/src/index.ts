@@ -23,7 +23,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 
 import type {
   MarketDataRegistration,
@@ -97,7 +97,7 @@ export const Config: Schema<Config> = Schema.object({
 })
 
 /** settings namespace（kebab-case 品牌化，llm-pi-ai 同款）。 */
-export const SETTINGS_NAMESPACE = settingsNamespace('dshtrading')
+export const SETTINGS_NAMESPACE = 'dshtrading' as SettingsNamespace
 
 /* ------------------------------------------------------------------ */
 /* MarketRouterService（provide 到 tradingMarketRouter）                    */
@@ -295,11 +295,13 @@ export function apply(ctx: Context, config: Config): void {
   // settings 服务存在时：注册 namespace（base = 组合 entry，用户层赢）+ 源切换
   // + onChange 通知 diff。settings 缺失（老部署未挂）→ 服务照常 provide，
   // 源恒为组合配置（= 现状行为），路由仍然有效。
-  installSettingsSection(ctx, SETTINGS_NAMESPACE, Config, effective, {
-    // current 是 thunk（() => resolved Config），不是 Config 本体——先调用再校验，
-    // 否则 Object.entries(undefined) 抛错会掐断 installSettingsSection 的后续接线。
-    setSource: (current) => { service.setSource(current); warnUnknownProviders(current(), log) },
-    onChange: () => service.notify(),
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.settings.installSection(ctx, SETTINGS_NAMESPACE, Config, effective, {
+      // current 是 thunk（() => resolved Config），不是 Config 本体——先调用再校验，
+      // 否则 Object.entries(undefined) 抛错会掐断 installSection 的后续接线。
+      setSource: (current) => { service.setSource(current); warnUnknownProviders(current(), log) },
+      onChange: () => service.notify(),
+    })
   })
 }
 
