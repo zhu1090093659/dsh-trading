@@ -12,6 +12,7 @@ import {
   MarketDataRegistryService,
   MarketRouterService,
   activeProviderOf,
+  warnUnknownProviders,
   type Config as ConfigType,
   type Provider,
 } from '../src/index.js'
@@ -37,19 +38,25 @@ describe('dshtrading schema（用户设置一级）', () => {
     expect(PROVIDER_VOCABULARY).toContain('binance' as Provider)
   })
 
-  it('schema 拒非法 provider 值（设置非法 = 拒写，不静默）', () => {
-    // Schema.union 校验：非法值抛错（schemastery 语义）。
-    const validate = (value: unknown) => {
-      const s = Config as unknown as { validate?: (v: unknown) => void }
-      try {
-        // 直接构造验证——用 schema 的 run 语义（若有）或跨字段检查。
-        expect(value).toBeDefined()
-        return true
-      } catch {
-        return false
-      }
-    }
-    expect(validate('bybit')).toBe(true) // 构造层不拒（由 schema 拒）——此处仅文档化行为
+  it('schema 开放字符串：第三方 slug（bybit）不被一票否决（2026-08-30 整改 #4）', () => {
+    // schemastery Schema 可调用：Config(value) 即校验+解析。
+    const resolve = Config as unknown as (value: unknown) => ConfigType
+    const resolved = resolve({ markets: { crypto: { provider: 'bybit' } } })
+    expect(resolved.markets.crypto?.provider).toBe('bybit')
+  })
+
+  it('运行时校验：未知 slug → warn + 返回清单；已知 slug 静默', () => {
+    const warns: string[] = []
+    const log = { warn: (...args: unknown[]) => warns.push(args.join(' ')) }
+    const unknown = warnUnknownProviders(
+      { markets: { crypto: { provider: 'bybit' }, us: { provider: 'yahoo' } } },
+      log,
+    )
+    expect(unknown).toEqual(['bybit'])
+    expect(warns).toHaveLength(1)
+    expect(warns[0]).toContain('bybit')
+    expect(warns[0]).toContain('crypto')
+    expect(warnUnknownProviders({ markets: { ...DEFAULT_MARKETS } }, log)).toEqual([])
   })
 })
 

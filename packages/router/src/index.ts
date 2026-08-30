@@ -42,15 +42,21 @@ export const name = 'dsh-trading-market-router'
 /* 配置（= settings namespace 的 schema，也是本插件的组合 entry）              */
 /* ------------------------------------------------------------------ */
 
-/** 全仓 provider 候选集（slug = 路由层词汇，非包名/行 id）。 */
+/**
+ * 内置 provider 词汇表（slug = 路由层词汇，非包名/行 id）——**仅供 UI 展示与
+ * 运行时告警，不再是 schema 层硬门槛**（2026-08-30 开放化，架构评审整改 #4）：
+ * schema 接受任意字符串 slug，第三方连接器注册同名 slug + 用户设置同名值即可
+ * 上榜，不需要改本仓任何代码。未知 slug 的代价 = router 启动/变更时 log warn +
+ * 无任何连接器激活（fail-soft），不写时拒。
+ */
 export const PROVIDER_VOCABULARY = ['binance', 'okx', 'yahoo', 'stooq', 'tencent'] as const
 export type Provider = (typeof PROVIDER_VOCABULARY)[number]
 
 export interface MarketProviderEntry {
-  /** 该市场当前激活的数据/交易所提供方（连接器 consult 这个值决定激活与否）。 */
-  provider: Provider
+  /** 该市场当前激活的数据/交易所提供方（连接器 consult 这个值决定激活与否）。开放词汇。 */
+  provider: string
   /** 预留：数据面与交易面分离时的交易提供方（不实现，仅类型面占位，见 §2.4）。 */
-  tradeProvider?: Provider
+  tradeProvider?: string
 }
 
 export interface Config {
@@ -66,9 +72,12 @@ export const DEFAULT_MARKETS: Record<string, MarketProviderEntry> = {
 }
 
 const MarketProviderEntrySchema = Schema.object({
-  provider: Schema.union(PROVIDER_VOCABULARY),
+  // 开放字符串（2026-08-30 整改 #4）：第三方 provider slug 不被 schema 一票否决；
+  // 已知候选校验下沉到设置 UI 候选清单 + router 运行时 warn（见 apply 内
+  // warnUnknownProviders）。
+  provider: Schema.string(),
   // 预留字段：数据/交易分离（§2.4）；schemastery 无 .optional() 方法——default undefined 允许缺省。
-  tradeProvider: Schema.union(PROVIDER_VOCABULARY).default(undefined),
+  tradeProvider: Schema.string().default(undefined),
 })
 
 export const Config: Schema<Config> = Schema.object({
@@ -90,7 +99,7 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
   // TS 编译期 private 而非 ECMAScript #（realm 代理按类身份校验，README 定稿 5）。
   private source: () => Config
   private readonly watchers = new Set<(next: string | undefined, prev: string | undefined) => void>()
-  private last: Record<string, Provider | undefined> = {}
+  private last: Record<string, string | undefined> = {}
 
   constructor(ctx: Context, source: () => Config) {
     super(ctx, 'tradingMarketRouter')
@@ -103,7 +112,7 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
   }
 
   /** 某市场当前激活的 provider slug（settings resolved：用户层赢，缺省 base 默认）。 */
-  activeProvider(market: string): Provider | undefined {
+  activeProvider(market: string): string | undefined {
     return this.source().markets[market]?.provider
   }
 
@@ -116,7 +125,7 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
   /** 内用：settings onChange 后 diff 并通知 watchers（通知在 watch 后注册的同步回调）。 */
   notify(): void {
     const source = this.source()
-    const next: Record<string, Provider | undefined> = {}
+    const next: Record<string, string | undefined> = {}
     for (const [market, entry] of Object.entries(source.markets)) next[market] = entry.provider
     for (const [market, provider] of Object.entries(next)) {
       const prev = this.last[market]
@@ -223,23 +232,59 @@ export function resolveMarketRouter(ctx: Context): MarketRouterLike | undefined 
   return candidate !== undefined ? (candidate as MarketRouterLike) : undefined
 }
 
+/** 宿主 logger 的最小形状（ctx.logger(name) 不可用时回落 console）。 */
+interface LogLike {
+  warn: (...args: unknown[]) => void
+}
+
+function logger(ctx: Context): LogLike {
+  const service = (ctx as unknown as { logger?: (name: string) => LogLike }).logger
+  return typeof service === 'function' ? service(name) : console
+}
+
+/**
+ * 开放词汇的运行时校验（整改 #4）：schema 不再拒未知 slug，改为 warn + fail-soft
+ * （无匹配连接器注册即无激活）。已知词汇仅供此告警与设置 UI 候选清单。
+ * 返回未知 slug 清单（测试可直证）。
+ */
+export function warnUnknownProviders(config: Config, log: LogLike): string[] {
+  const known = new Set<string>(PROVIDER_VOCABULARY)
+  const unknown: string[] = []
+  for (const [market, entry] of Object.entries(config.markets)) {
+    for (const slug of [entry.provider, entry.tradeProvider]) {
+      if (slug !== undefined && !known.has(slug) && !unknown.includes(slug)) unknown.push(slug)
+    }
+    if (entry.provider !== undefined && !known.has(entry.provider)) {
+      log.warn(
+        '[dsh-trading-market-router] unknown provider slug %s for market %s — '
+        + 'no built-in connector will activate; this is only valid if a third-party '
+        + 'connector registers the same slug (see docs/connector-playbook.md)',
+        entry.provider, market,
+      )
+    }
+  }
+  return unknown
+}
+
 export function apply(ctx: Context, config: Config): void {
   // loader 没写官方 config 合并语义时，dict 无默认 → 这里兜底合并 DEFAULT_MARKETS。
   const effective: Config = { markets: { ...DEFAULT_MARKETS, ...(config?.markets ?? {}) } }
   const service = new MarketRouterService(ctx, () => effective)
   // 注册表与 router 同 fiber 提供：base patch 行零改动。
   new MarketDataRegistryService(ctx, service)
+  const log = logger(ctx)
+  warnUnknownProviders(effective, log)
 
   // settings 服务存在时：注册 namespace（base = 组合 entry，用户层赢）+ 源切换
   // + onChange 通知 diff。settings 缺失（老部署未挂）→ 服务照常 provide，
   // 源恒为组合配置（= 现状行为），路由仍然有效。
   installSettingsSection(ctx, SETTINGS_NAMESPACE, Config, effective, {
-    setSource: (current) => service.setSource(current),
+    setSource: (current) => { service.setSource(current); warnUnknownProviders(current, log) },
     onChange: () => service.notify(),
   })
 }
 
 /** 供测试/连接器单测使用的纯函数：给定 Config 返回市场路由判定。 */
-export function activeProviderOf(config: Config, market: string): Provider | undefined {
+export function activeProviderOf(config: Config, market: string): string | undefined {
   return config.markets[market]?.provider
 }

@@ -128,7 +128,7 @@ function dictionaries() {
   return {
     zh: {
       'nav': '交易',
-      'lead': '选择每个市场使用的数据/交易所提供方。保存后新建会话生效（切换不中断当前会话）。',
+      'lead': '选择每个市场使用的数据/交易所提供方。行情面板保存即生效；Agent 会话于新建会话生效（切换不中断当前会话）。',
       'tabs': '市场',
       'empty': '没有可配置的市场。',
       'save': '保存',
@@ -137,6 +137,7 @@ function dictionaries() {
       'saveFailed': '保存失败',
       'current': '当前：{{provider}}',
       'default': '默认',
+      'custom': '自定义（{{provider}}，由第三方连接器提供）',
       'market.crypto': '加密货币',
       'market.us': '美国股票',
       'market.cn': '中国 A 股',
@@ -144,7 +145,7 @@ function dictionaries() {
     },
     en: {
       'nav': 'Trading',
-      'lead': 'Choose the data/exchange provider for each market. Takes effect in new sessions.',
+      'lead': 'Choose the data/exchange provider for each market. Quote panels take effect immediately; agent sessions pick it up in new sessions (running sessions are not interrupted).',
       'tabs': 'Markets',
       'empty': 'No configurable markets.',
       'save': 'Save',
@@ -153,6 +154,7 @@ function dictionaries() {
       'saveFailed': 'Save failed',
       'current': 'Current: {{provider}}',
       'default': 'default',
+      'custom': 'Custom ({{provider}}, provided by a third-party connector)',
       'market.crypto': 'Crypto',
       'market.us': 'US Stocks',
       'market.cn': 'China A-shares',

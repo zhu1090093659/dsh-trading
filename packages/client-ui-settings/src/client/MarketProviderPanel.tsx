@@ -62,6 +62,20 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
 
   const writable = state.writable
 
+  // 开放词汇（2026-08-30 整改 #4）：schema 不拒未知 slug——若存储值不在内置
+  // 候选里（第三方连接器），追加一个「自定义」选项让用户看到并能改回已知项，
+  // 而不是让当前值在 UI 上消失。
+  const options = useMemo(() => {
+    const known = new Set(PROVIDER_LABELS.map((p) => p.id))
+    const extras: { id: string; label: string }[] = []
+    for (const slug of [resolved, draft]) {
+      if (slug !== undefined && !known.has(slug) && !extras.some((e) => e.id === slug)) {
+        extras.push({ id: slug, label: t('custom', { provider: slug }) })
+      }
+    }
+    return [...PROVIDER_LABELS, ...extras]
+  }, [resolved, draft, t])
+
   async function save() {
     setSaving(true)
     setMessage(undefined)
@@ -85,7 +99,7 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
       <p style={{ margin: '4px 0' }}>
         {t('current', { provider: resolved ?? t('default') })}
       </p>
-      {PROVIDER_LABELS.map((provider) => (
+      {options.map((provider) => (
         <label key={`${market}-${provider.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 14 }}>
           <input
             type="radio"

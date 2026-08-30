@@ -72,18 +72,21 @@ crypto-trader preset（会话级，单预设）
 | **路由权威** | 连接器 `apply` 时：`enabled === false` → 静默关；否则读 `tradingMarketRouter.activeProvider(market)`，**路由值就是权威**——与自身 provider slug 不符即跳过（log 说明）。无 router（老部署未升级）→ 回退现有 enabled 语义（向后兼容） |
 | **provider slug** | = 连接器市场内唯一短名：binance / okx / yahoo / stooq / tencent。slug 与 pinng 命名无关，是路由层词汇 |
 | **默认值** | `base` 层（组合默认，非用户层）：crypto=binance、us=yahoo、cn/hk=tencent。用户文档未写时 = 默认数据面（现状行为零变化） |
-| **生效时机** | `applies: 'restart'**——连接器 apply 只在挂载时跑；切交易所后**新建会话**即生效（preset 挂载是会话级的，无需重启 dsh 进程）。watch 保留（服务面提供），live 热切换留待后续（需要连接器支持 re-inject，本轮不做） |
+| **生效时机** | 会话面 `applies: 'restart'`——连接器 apply 只在挂载时跑，切交易所后**新建会话**生效（preset 挂载是会话级的，无需重启 dsh 进程；会话内数据源一致性是有意语义）。**GUI 数据面 = 即时生效**（2026-08-30 注册表模式：host 面连接器全部注册进 tradingMarketDataRegistry，行情桥每请求按路由当前值惰性解析，无 watch 无重启——见 `.agents/notes/implemented/architecture/2026-08-30-market-data-registry-hot-switch.md`） |
 | **explicit 覆盖** | 用户文档显式写 provider（=用户层存在）即覆盖 base 默认；schema enum 校验非法值直接拒写 |
 | **向后兼容** | 老 preset（binance enabled:true + okx enabled:false）在未装 router 时行为不变；装了 router 后 enabled:false 仍是硬关（低优先语义保留） |
 
-### 2.3 Schema（四市场全量，含候选）
+### 2.3 Schema（四市场全量，含候选；2026-08-30 provider 词汇开放化修订）
 
 ```ts
 export const MARKET_IDS = ['crypto', 'us', 'cn', 'hk'] as const
 
 export const MarkеtProviderSchema = Schema.object({
-  provider: Schema.union(['binance', 'okx', 'yahoo', 'stooq', 'tencent']),
+  // provider = 开放字符串（2026-08-30 整改 #4）：第三方连接器 slug 不被 schema
+  // 一票否决；已知候选校验下沉到设置 UI（PROVIDER_LABELS）+ router 运行时 warn。
+  provider: Schema.string(),
   // 预留：数据面与交易面分离时加 tradeProvider（见 §3.4）
+  tradeProvider: Schema.string().default(undefined),
 }).default(() => ({}))
 
 export const Config: Schema<Config> = Schema.object({
@@ -97,13 +100,15 @@ export const Config: Schema<Config> = Schema.object({
 ```
 
 > dict 键不限定四市场——新市场 = 一个新键 + 连接器读它的 provider，schema 零改。
-> 单候选市场（cn/hk/tencent）也进 schema：语义统一 + 未来多源直接加候选。
+> provider 值同理开放（2026-08-30 起）：未知 slug = router warn + 无内置连接器激活
+>（fail-soft），第三方连接器注册同名 slug 即生效。单候选市场（cn/hk/tencent）
+> 也进 schema：语义统一 + 未来多源直接加候选。
 
 ### 2.4 兼容性演进路线（为什么这个形态是"充分考虑后续"）
 
 | 未来需求 | 在本设计下怎么做 | 改动面 |
 |---|---|---|
-| 接 Bybit | ① schema crypto.provider enum 加 `'bybit'`；② 新连接器 slug=bybit 读 `activeProvider('crypto')==='bybit'`；③ bundle deps 加包 + preset 加候选行 enabled:true | 连接器自包含，路由零改 |
+| 接 Bybit | ① 新连接器 slug=bybit 读 `activeProvider('crypto')==='bybit'`；② bundle deps 加包 + preset 加候选行 enabled:true；③（仅内置候选）设置 UI `PROVIDER_LABELS` 加显示行。**schema 不再需动**（2026-08-30 开放字符串） | 连接器自包含，路由零改 |
 | 接第二个 us 源 | schema us.provider enum 加候选（若 stooq 实证则已在内）；us 连接器（yahoo/stooq）各读自己的 slug | 同上 |
 | 新市场（jp） | schema markets 加 `jp` 键（dict 零改）+ jp bundle/router 读 jp | api 增强 + preset |
 | 数据/交易分离（binance 行情 + okx 下单） | markets.crypto 加 `tradeProvider`；行情键 provider 照旧，交易服务遵守 tradeProvider | schema 加字段 + 连接器交易面读 tradeProvider；**字段预留但不提前实现**（铁律 #4：两个市场真实需要才做） |
