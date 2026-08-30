@@ -35,6 +35,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 const PROVIDER_NAME = 'dsh-trading-crypto'
 
 const SKILL_BODY_URL = new URL('../assets/skills/crypto-risk-checklist.md', import.meta.url)
+const ANALYSIS_BODY_URL = new URL('../assets/skills/crypto-instrument-analysis.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -51,18 +52,34 @@ const CANDIDATE: SkillCandidate = {
   locator: SKILL_BODY_URL,
 }
 
-const provider: SkillProvider = {
+// WS3（docs/analysis-roadmap.md #5）：标的定性分析框架——五步流程对应工具与判读
+// 规则；新闻面为占位（WS2b 的 crypto_get_news 交付后写实）。
+const ANALYSIS_CANDIDATE: SkillCandidate = {
+  name: 'crypto-instrument-analysis',
+  description: '加密标的定性分析框架：趋势结构→量价→波动率→资金面→新闻面五步，输出带依据与反方情景的定性结论。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: ANALYSIS_BODY_URL,
+}
+
+const SKILL_CANDIDATES = [CANDIDATE, ANALYSIS_CANDIDATE]
+
+export const provider: SkillProvider = {
   name: PROVIDER_NAME,
-  list: () => Promise.resolve([CANDIDATE]),
-  async get(_candidate): Promise<SkillDefinition> {
+  list: () => Promise.resolve(SKILL_CANDIDATES),
+  async get(candidate): Promise<SkillDefinition> {
+    const target = SKILL_CANDIDATES.find((c) => c.name === candidate.name) ?? CANDIDATE
     return {
-      name: CANDIDATE.name,
-      description: CANDIDATE.description,
-      invocation: CANDIDATE.invocation,
-      provider: CANDIDATE.provider,
-      source: CANDIDATE.source,
+      name: target.name,
+      description: target.description,
+      invocation: target.invocation,
+      provider: target.provider,
+      source: target.source,
       resourceBase: RESOURCE_BASE,
-      content: await readFile(SKILL_BODY_URL, 'utf8'),
+      content: await readFile(target.locator, 'utf8'),
     }
   },
 }
