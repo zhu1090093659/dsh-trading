@@ -208,7 +208,3 @@ dsh plugin --profile <名> remove @dsh-trading/crypto   # 市场包
 组合树对应层整块消失、官方行零改动（insert-only 实证）；roster 中对应 preset 变 broken
 （行解析不到包，reason 指名缺哪个包），profile 不崩；已安装到 `~/.dsh-trading-presets/`
 的 preset 目录按设计保留（手工删除即可完全清理）。完整验收证据见 `spikes/acceptance-all/`。
-
-## 协作模式
-
-主 agent 担任项目推进者与代码审查者；执行子 agent 统一使用 zai-coding-cn / glm-5.3-flash（reasoning_effort=max）。
