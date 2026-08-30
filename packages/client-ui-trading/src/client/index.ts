@@ -7,6 +7,8 @@
  *   hero composer 拼成同一个容器），侧栏列只留 hidden 占位维持遮蔽
  * - `shell.overlay`（dshtrading-quote-pane）→ 中栏行情面板（恒渲染；
  *   对话列由宿主官方 UI 常驻右侧栏，见 shell-pad.css 2.4 布局）
+ * - `shell.overlay`（dshtrading-session-rail）→ 右缘常驻会话竖条（折叠/
+ *   新会话/设置，2.9 起取代窗口角标浮动簇 + 会话头内联按钮双入口）
  *
  * 行情数据走 node 半注册的 /dshtrading/api 桥（同源 fetch，浏览器认证栅栏内）。
  */
@@ -16,8 +18,7 @@ import { createSelectionStore, createWatchlistStore } from './store.ts'
 import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
 import { HomeHistory } from './HomeHistory.tsx'
-import { HeaderCornerActions } from './HeaderCornerActions.tsx'
-import { WindowChrome } from './WindowChrome.tsx'
+import { SessionRail } from './SessionRail.tsx'
 import { foldStore } from './fold-store.ts'
 import './shell-pad.css'
 import type { MarketLocaleKey } from './contract.ts'
@@ -44,7 +45,7 @@ export function apply(ctx: ClientContext): void {
   const sessions = ctx.sessions as unknown as ISessions
   const uiWorkspace = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined
 
-  // 共享入口动作：窗口角标浮动簇与会话头内联按钮用的是同一组。
+  // 共享入口动作：右缘竖条（2.9 起唯一会话入口）使用。
   const startNewSession = (): void => { uiWorkspace?.startSession() }
   const openSettings = (): void => {
     // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
@@ -90,11 +91,11 @@ export function apply(ctx: ClientContext): void {
     }),
   }, HomeHistory))
 
-  // 窗口角标（shell.overlay）：右上浮动簇（首页/折叠态的折叠+新会话）与
-  // 左下常驻设置钮；会话进行中的右上入口由 HeaderCornerActions 负责。
+  // 会话竖条（shell.overlay）：右缘 44px 常驻（折叠/新会话/设置竖排），
+  // 恒挂载——首页、会话进行中、折叠态都是同一入口，不再按状态切换入口面。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
-    id: 'dshtrading-window-chrome',
+    id: 'dshtrading-session-rail',
     order: 60,
     locale: NS,
     inject: () => ({
@@ -103,23 +104,7 @@ export function apply(ctx: ClientContext): void {
       toggleFold,
       hooks: { folded },
     }),
-  }, WindowChrome))
-
-  // In-session 右上入口：session 作用域的 slot 必须在 conversation scope
-  // 回调里注册（根 ctx 注册会被渲染器忽略）——同 ui-agent-preset。
-  ctx.inject(['slots', 'conversation'], (scope: ClientContext) => {
-    scope.slots.register({
-      name: 'conversation.session.header.utilities',
-      id: 'dshtrading-corner-actions',
-      order: 90,
-      locale: NS,
-      inject: () => ({
-        startNewSession,
-        toggleFold,
-        hooks: { folded },
-      }),
-    }, HeaderCornerActions)
-  })
+  }, SessionRail))
 
   // 中栏行情面板：恒渲染，盖住栅格第 3 轨道（行情区）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({

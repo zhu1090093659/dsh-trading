@@ -1,6 +1,6 @@
 /**
  * 中栏行情面板（2.4 定稿：中栏恒为行情，对话常驻右侧栏）：
- * 几何 = [自选停靠右缘, 对话列/会话浏览器左缘] 之间的整块区域，
+ * 几何 = [自选停靠右缘, 对话列左缘/右缘竖条左缘] 之间的整块区域，
  * 内容复用 QuoteStage。
  *
  * 对话列显隐由「是否有当前会话」驱动（官方会话 UI 整列移到右侧，
@@ -54,11 +54,14 @@ export function QuotePane({ t, useSelection, useSessions }: QuotePaneProps) {
       const frameBox = frame.getBoundingClientRect()
       const dockBox = document.querySelector('[data-dshtrading-market-dock]')?.getBoundingClientRect()
       const left = dockBox !== undefined && dockBox.width > 0 ? dockBox.right : frameBox.left
-      // 右缘：一律取对话列（children[1]）左缘——2.7 右栏退役后 children[0]
+      // 右缘：优先取对话列（children[1]）左缘——2.7 右栏退役后 children[0]
       // 是移出视口的退役侧栏（宽 272 但不在视口），不能再用；对话列退场时
-      // 它 display:none（宽 0），自然回落到 frame 右缘。
+      // 它 display:none（宽 0），回落到右缘竖条（2.9 常驻 44px）左缘，
+      // 行情不延伸到竖条底下。
       const rightBox = frame.children[1]?.getBoundingClientRect()
-      const right = rightBox !== undefined && rightBox.width > 0 ? rightBox.left : frameBox.right
+      const railBox = document.querySelector('[data-dshtrading-rail]')?.getBoundingClientRect()
+      const fallbackRight = railBox !== undefined && railBox.width > 0 ? railBox.left : frameBox.right
+      const right = rightBox !== undefined && rightBox.width > 0 ? rightBox.left : fallbackRight
       setRect({ left, top: frameBox.top, width: Math.max(0, right - left), height: frameBox.height })
     }
     measure()
@@ -71,6 +74,9 @@ export function QuotePane({ t, useSelection, useSessions }: QuotePaneProps) {
     if (frame !== null) observer.observe(frame)
     const dock = document.querySelector('[data-dshtrading-market-dock]')
     if (dock !== null) observer.observe(dock)
+    // 竖条首帧晚于本组件挂载时，observe 的初始回调保证补一次重测量。
+    const rail = document.querySelector('[data-dshtrading-rail]')
+    if (rail !== null) observer.observe(rail)
     window.addEventListener('resize', measure)
     return () => {
       observer.disconnect()

@@ -1,0 +1,64 @@
+/* SessionRail —— 右缘常驻会话竖条。fixed 定位贴视口右缘全高；几何占位由
+   shell-pad.css 规则 8 的侧栏轨道（44px）负责，QuotePane 测量读
+   [data-dshtrading-rail] 左缘，行情/对话列都不延伸到竖条底下。 */
+
+.rail {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 0;
+  background: var(--dsw-alias-bg-l1, #ffffff);
+  border-left: 1px solid var(--dsw-alias-border-l2, rgba(127, 127, 127, 0.22));
+  z-index: 40;
+}
+
+.button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.75;
+  flex: none;
+}
+
+.button:hover {
+  opacity: 1;
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.08));
+}
+
+.button[aria-pressed='true'] {
+  opacity: 1;
+  background: var(--dsw-alias-fill-active, rgba(74, 144, 226, 0.14));
+}
+
+/* 折叠态把面板图标水平镜像（折叠折线朝右缘），提示点击向左展开会话列。 */
+.button[aria-pressed='true'] svg {
+  transform: scaleX(-1);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-active, #4a90e2);
+  outline-offset: 1px;
+}
+
+.divider {
+  width: 20px;
+  height: 1px;
+  margin: 4px 0;
+  flex: none;
+  background: var(--dsw-alias-border-l2, rgba(127, 127, 127, 0.22));
+}

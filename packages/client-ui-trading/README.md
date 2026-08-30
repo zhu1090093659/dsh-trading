@@ -28,8 +28,8 @@
    一次（之后按会话保持）。上游若把视图切换暴露成 ctx 服务即可消除。
 2. **无会话时中栏是宿主 hero**（选择工作区 + 新会话输入框）：`conversation.view` 只在
    会话内渲染，属宿主结构；在官方 composer 直接输入即建会话进入。历史会话面板
-   已 portal 并入该 hero 容器拼成同一张卡（HomeHistory），设置/新会话/折叠在
-   窗口角标（WindowChrome / 会话头 utilities 内联）。
+   已 portal 并入该 hero 容器拼成同一张卡（HomeHistory），设置/新会话/折叠收敛在
+   右缘常驻会话竖条（SessionRail，2.9）。
 3. 右栏面板是浮层（`shell.overlay`），非占位列——展开时覆盖中栏右缘；折叠为 34px 细轨。
    真正的停靠列需要宿主 AppFrame 扩展（上游建议）。
 4. `Ticker` 契约无 name 字段：搜索添加的标的以代码为显示名（种子列表带中文名）。
