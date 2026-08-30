@@ -1,0 +1,391 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wfw="http://wellformedweb.org/CommentAPI/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:slash="http://purl.org/rss/1.0/modules/slash/" xmlns:media="http://search.yahoo.com/mrss/" version="2.0">
+  <channel>
+    <title>CoinDesk: Bitcoin, Ethereum, Crypto News and Price Data</title>
+    <link>https://www.coindesk.com/</link>
+    <atom:link rel="self" type="application/rss+xml" href="https://www.coindesk.com/arc/outboundfeeds/rss"/>
+    <atom:link rel="hub" href="true"/>
+    <description>Leader in cryptocurrency, Bitcoin, Ethereum, XRP, blockchain, DeFi, digital finance and Web 3.0 news with analysis, video and live price updates.</description>
+    <lastBuildDate>Sun, 30 Aug 2026 13:01:58 +0000</lastBuildDate>
+    <language>en-US</language>
+    <copyright>© 2026 CoinDesk, Inc.</copyright>
+    <generator>CoinDesk</generator>
+    <ttl>5</ttl>
+    <sy:updatePeriod>hourly</sy:updatePeriod>
+    <sy:updateFrequency>1</sy:updateFrequency>
+    <image>
+      <url>https://downloads.coindesk.com/arc/failsafe/feeds/coindesk-feed-logo.png</url>
+      <title>CoinDesk: Bitcoin, Ethereum, Crypto News and Price Data</title>
+      <link>https://www.coindesk.com/</link>
+    </image>
+    <item>
+      <title><![CDATA[Crypto market makers are cashing in on bitcoin's rally - without betting on direction]]></title>
+      <link>https://www.coindesk.com/markets/2026/08/28/crypto-market-makers-are-cashing-in-on-bitcoin-s-rally-without-betting-on-direction</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/3ec0faabb4311a9cbb3b547c5d4d2d107b6d405e-1920x1080.png?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">5fc01376-dd40-4306-96bf-a34649f054bd</guid>
+      <pubDate>Sun, 30 Aug 2026 12:00:00 +0000</pubDate>
+      <description><![CDATA[As bitcoin surges back above $80,000, sophisticated trading firms are quietly collecting yield rather than making directional bet.]]></description>
+      <dc:creator>Oliver Knight</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/markets"><![CDATA[Markets]]></category>
+      <category domain="tag"><![CDATA[Crypto Trading]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[A $1.1 million crypto card hack crashed a neobank's token 49%]]></title>
+      <link>https://www.coindesk.com/web3/2026/08/29/a-usd1-1-million-crypto-card-hack-crashed-a-neobank-s-token-49</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/da5caf65adc295012880cf200ddf9e937f2db11c-1920x1282.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">ea6b9dff-a0f8-453c-96de-56c0d7cb925a</guid>
+      <pubDate>Sat, 29 Aug 2026 23:49:17 +0000</pubDate>
+      <description><![CDATA[The exploit caused the neobank's AVICI token to drop 49% from a 24-hour high, hitting a record low before paring some of the losses.]]></description>
+      <dc:creator>Francisco Rodrigues</dc:creator>
+      <dc:creator>AI Boost</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/web3"><![CDATA[Web3]]></category>
+      <category domain="tag"><![CDATA[Solana News]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Ditching 'digital gold': BPI study suggests everyday Americans prefer control and micro-investing]]></title>
+      <link>https://www.coindesk.com/business/2026/08/28/ditch-digital-gold-bpi-study-suggests-everyday-americans-prefer-control-and-micro-investing</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/a157306e943dd581a50f1881a075dc427bda6fad-1920x1080.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">4f2c69f7-7eda-4fa6-a7b7-891efbac870a</guid>
+      <pubDate>Sat, 29 Aug 2026 15:00:00 +0000</pubDate>
+      <description><![CDATA[A new survey suggests some of bitcoin's most familiar sales pitches of changing the world may be poorly suited to a majority of prospective buyers.]]></description>
+      <dc:creator>Jamie Crawley</dc:creator>
+      <dc:creator>AI Boost</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[Bitcoin News]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Inside the high-stakes battle between digital dollars and Swift's massive money engine]]></title>
+      <link>https://www.coindesk.com/business/2026/08/29/swift-s-usd1-5-quadrillion-network-faces-a-blockchain-test</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/508c78185616861e76dfe16cc9d55787a0ff9c41-1500x1000.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">5fbf26f1-d14f-404e-a716-5f6d4c427497</guid>
+      <pubDate>Sat, 29 Aug 2026 15:00:00 +0000</pubDate>
+      <description><![CDATA[Crypto executives say new blockchain payment infrastructure could make Swift obsolete. Bankers say its 11,500-institution network gives it the power to absorb the technology instead.]]></description>
+      <dc:creator>Olivier Acuna</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[Stablecoins]]></category>
+      <category domain="tag"><![CDATA[Trade Finance]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[The next trillion-dollar currency may not be a stablecoin — it might not even have a name yet]]></title>
+      <link>https://www.coindesk.com/business/2026/08/29/the-next-trillion-dollar-currency-may-not-be-a-stablecoin-it-might-not-even-have-a-name-yet</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/486b2136ce091f05ce9e6f0e16a7660ee1fabe27-3840x2160.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">6f2f748d-af22-40b1-846f-c0b56e85d9c3</guid>
+      <pubDate>Sat, 29 Aug 2026 15:00:00 +0000</pubDate>
+      <description><![CDATA[AI agents are coming. They will need to pay each other. Crypto executives agree on the problem but disagree sharply on the solution, and one thinks the answer has not been invented yet.
+]]></description>
+      <dc:creator>Olivier Acuna</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[Artificial Intelligence]]></category>
+      <category domain="tag"><![CDATA[Cryptocurrency]]></category>
+      <category domain="tag"><![CDATA[Stablecoins]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Tokenized assets are busier than the data shows]]></title>
+      <link>https://www.coindesk.com/opinion/2026/08/29/tokenized-assets-are-busier-than-the-data-shows</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/8063c00aa61892be74b3d456dde16b88df485efc-8000x4099.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">023b7b4e-60d3-48e7-975a-f3a2e8f25f78</guid>
+      <pubDate>Sat, 29 Aug 2026 13:00:00 +0000</pubDate>
+      <description><![CDATA[When you strip out what was never mobile, correct for who's holding what and why, add back what works off-contract, the utilization of tokenized assets looks close to 20%, argues Katana’s Matthew Fisher.]]></description>
+      <dc:creator>Matthew Fisher</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/opinion"><![CDATA[Opinion]]></category>
+      <category domain="https://www.coindesk.com/">Opinion</category>
+    </item>
+    <item>
+      <title><![CDATA[Bitcoin wallets untouched for 10 years moved $40 million worth of coins]]></title>
+      <link>https://www.coindesk.com/markets/2026/08/28/bitcoin-wallets-untouched-for-10-years-moved-usd40-million-most-avoided-exchanges</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/70198f64252bcded39f90b505eb1a2f4f3b2fb92-1500x1000.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">ebe7db26-ebf2-414f-9adc-8700ba6a0332</guid>
+      <pubDate>Sat, 29 Aug 2026 04:30:00 +0000</pubDate>
+      <description><![CDATA[Six decade-old wallets moved $40 million this month, but Galaxy's data shows dormant coin activity at its lowest since 2022 and 2026 on pace for under half of last year's total.]]></description>
+      <dc:creator>Shaurya Malwa</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/markets"><![CDATA[Markets]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Ripple is preparing XRP Ledger for quantum computers before ‘Q-Day’ arrives]]></title>
+      <link>https://www.coindesk.com/tech/2026/08/28/ripple-is-preparing-xrp-ledger-for-quantum-computers-before-q-day-arrives</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/3fdb04bd3eb1c1413ad0d70e8d1e464ee4866ad9-1500x1000.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">23515530-cbb4-434d-95b6-f0620d9d9c02</guid>
+      <pubDate>Sat, 29 Aug 2026 02:30:00 +0000</pubDate>
+      <description><![CDATA[An Anthropic model cut the work needed to break a leading post-quantum signature candidate by a factor of 67 million last month, while Bitcoin and Ethereum published their own migration plans this week.]]></description>
+      <dc:creator>Shaurya Malwa</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/tech"><![CDATA[Tech]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Kalshi takes legal blow in court ruling confirming state powers over prediction markets]]></title>
+      <link>https://www.coindesk.com/policy/2026/08/28/kalshi-takes-legal-blow-in-court-ruling-confirming-state-powers-over-prediction-markets</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/cd68dbf11ea2b03847eb5020d28aec70f8c83de4-2321x1306.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">dc9e0064-7291-4c9f-8e55-60aaa65d8e88</guid>
+      <pubDate>Fri, 28 Aug 2026 21:28:12 +0000</pubDate>
+      <description><![CDATA[This latest U.S. appeals court ruling sets up a rift between federal courts on event contracts, suggesting the U.S. Supreme Court may need to settle the matter.]]></description>
+      <dc:creator>Jesse Hamilton</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/policy"><![CDATA[Policy]]></category>
+      <category domain="tag"><![CDATA[Prediction Markets]]></category>
+      <category domain="tag"><![CDATA[Kalshi]]></category>
+      <category domain="tag"><![CDATA[Robinhood]]></category>
+      <category domain="tag"><![CDATA[litigation]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Solana vote to double disinflation passes by a hair in dramatic finish]]></title>
+      <link>https://www.coindesk.com/tech/2026/08/28/solana-vote-to-double-disinflation-passes-by-a-hair-in-dramatic-finish</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/54c0f3b41e62df4cdf774aab4c7d68c64e5e976c-1920x1080.png?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">0eaf08d4-495b-4ed9-bde5-71083bf67370</guid>
+      <pubDate>Fri, 28 Aug 2026 16:12:45 +0000</pubDate>
+      <description><![CDATA[Solana's first network-wide vote went down to the wire, with Kraken and Galaxy-linked validators switching sides before the disinflation proposal narrowly passed.]]></description>
+      <dc:creator>Krisztian Sandor</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/tech"><![CDATA[Tech]]></category>
+      <category domain="tag"><![CDATA[Solana News]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[BitGo to buy NYDIG trading arm for $42.5M in cash and stock plus $15M earnout]]></title>
+      <link>https://www.coindesk.com/business/2026/08/28/bitgo-to-buy-nydig-trading-arm-for-usd42-5m-in-cash-and-stock-plus-usd15m-earnout</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/9b492aba5c4c42527c969f1362cd2bfddc02f6ee-1500x1000.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">3061deed-302b-4ec3-8e01-ad3d64590871</guid>
+      <pubDate>Fri, 28 Aug 2026 14:37:14 +0000</pubDate>
+      <description><![CDATA[The deal to buy NYDIG IF Holdings comprises $7 million in cash and around $35.5 million in stock, as well as the $15 earnout.]]></description>
+      <dc:creator>Ian Allison</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[Crypto Trading]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Fed Chair Kevin Warsh at Jackson Hole: 'We have work to do' on inflation]]></title>
+      <link>https://www.coindesk.com/markets/2026/08/28/warsh-at-jackson-hole-we-have-work-to-do-on-inflaiton</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/795c4da9d444b6e877bf0fe2553fc03d30ef461d-6981x4654.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">4ebc4cb9-abb0-46c9-8dad-098dc9833d7d</guid>
+      <pubDate>Fri, 28 Aug 2026 14:05:12 +0000</pubDate>
+      <description><![CDATA[Warsh's highly anticipated remarks at the Kansas City Fed's annual symposium Friday morning leaned hawkish, prompting traders to quickly raise bets on a September rate hike.]]></description>
+      <dc:creator>Stephen Alpher</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/markets"><![CDATA[Markets]]></category>
+      <category domain="tag"><![CDATA[Breaking News]]></category>
+      <category domain="tag"><![CDATA[Top Stories]]></category>
+      <category domain="tag"><![CDATA[Bitcoin News]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[The Clarity Act slipped to September. Banks are building anyway]]></title>
+      <link>https://www.coindesk.com/opinion/2026/08/28/the-clarity-act-slipped-to-september-banks-are-building-anyway</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/019c4dbbfffe197bf777aaea7b45c3fba72db330-6240x4160.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">33c5b204-eef6-4d38-9f16-a77c122a8e04</guid>
+      <pubDate>Fri, 28 Aug 2026 13:00:00 +0000</pubDate>
+      <description><![CDATA[But every month without settled rules quietly rewards the walled garden, writes Matter Labs’ Vassilis Tziokas.]]></description>
+      <dc:creator>Vassilis Tziokas</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/opinion"><![CDATA[Opinion]]></category>
+      <category domain="https://www.coindesk.com/">Opinion</category>
+    </item>
+    <item>
+      <title><![CDATA[Ethena looks beyond crypto to squeeze yield from booming equity perpetuals]]></title>
+      <link>https://www.coindesk.com/business/2026/08/28/ethena-looks-beyond-crypto-to-squeeze-yield-from-booming-equity-perpetuals</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/c48dd32903d41ec222f4a093c9aefa108c259b98-2960x1665.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">50eb4c33-fb79-46d8-bb76-8ee87ebe19dc</guid>
+      <pubDate>Fri, 28 Aug 2026 12:30:57 +0000</pubDate>
+      <description><![CDATA[The issuer of the $4 billion USDe token said it expects real-world asset perpetuals to eclipse crypto derivatives in its backing within 12 to 24 months.]]></description>
+      <dc:creator>Krisztian Sandor</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[DeFi]]></category>
+      <category domain="tag"><![CDATA[Derivatives]]></category>
+      <category domain="tag"><![CDATA[stablecoin yield]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[SBI buys 20% stake in Indonesia's Ajaib for $270 million to expand yen stablecoin in Southeast Asia]]></title>
+      <link>https://www.coindesk.com/business/2026/08/28/sbi-stakes-usd270-million-in-ajaib-to-expand-yen-stablecoin-in-southeast-asia</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/fff5c608bec057a9fea03967f846f3fd7b034f1a-1310x724.png?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">0999b4d9-0753-4054-9e2d-a07097ea4053</guid>
+      <pubDate>Fri, 28 Aug 2026 12:18:31 +0000</pubDate>
+      <description><![CDATA[The Japanese financial giant is acquiring a 20% stake in the Indonesian online brokerage to build a cross-border, blockchain-based settlement network.]]></description>
+      <dc:creator>Olivier Acuna</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[SBI Holdings]]></category>
+      <category domain="tag"><![CDATA[Stablecoins]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Bitcoin is outperforming stocks and correlating with gold just when it matters most]]></title>
+      <link>https://www.coindesk.com/daybook-us/2026/08/28/bitcoin-is-outperforming-stocks-and-correlating-with-gold-just-when-it-matters-most</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/2f8437e589e595529cc560ac6a76355d8b08defb-5184x3456.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">233b7dba-14c4-4ea2-b3db-bc369a0e62a2</guid>
+      <pubDate>Fri, 28 Aug 2026 11:43:19 +0000</pubDate>
+      <description><![CDATA[Your day-ahead look for Aug. 28, 2026]]></description>
+      <dc:creator>Omkar Godbole</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/daybook-us"><![CDATA[Crypto Daybook Americas]]></category>
+      <category domain="tag"><![CDATA[Crypto Daybook Americas]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Circle's USDC takes over Chelsea's jersey in Premier League first sponsorship deal]]></title>
+      <link>https://www.coindesk.com/business/2026/08/28/circle-s-usdc-takes-over-chelsea-s-jersey-in-premier-league-first</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/837cabbae4d84286dc90ee086ea8c364c052c066-1436x804.png?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">9a928b56-149a-488b-bdd2-4870a3f7ddfd</guid>
+      <pubDate>Fri, 28 Aug 2026 11:09:27 +0000</pubDate>
+      <description><![CDATA[Financials were not disclosed, though reports from earlier this year suggested Chelsea was targeting 65 million pounds a year ($88.3 million) for the sponsorship berth.]]></description>
+      <dc:creator>Jamie Crawley</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[Circle]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Bullish backs USD.AI with $100 million in financing to drive GPU-backed loans]]></title>
+      <link>https://www.coindesk.com/business/2026/08/28/bullish-backs-usd-ai-with-usd100-million-gpu-stablecoin-financing</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/f78b3c75bb85d1884d9426f1a0d1ed7fcdbc3c6b-2368x1332.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">4fe76e9f-34df-4d7e-a9ee-1442c9394479</guid>
+      <pubDate>Fri, 28 Aug 2026 11:03:18 +0000</pubDate>
+      <description><![CDATA[Cryptocurrency platform Bullish is extending a $100 million debt facility to USD.AI to finance GPU-backed loans for artificial intelligence infrastructure.]]></description>
+      <dc:creator>Jamie Crawley</dc:creator>
+      <dc:creator>AI Boost</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[Bullish]]></category>
+      <category domain="tag"><![CDATA[Tokenization]]></category>
+      <category domain="tag"><![CDATA[Artificial Intelligence]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Bitcoin hits highest level in 3 months before pulling back as altcoins consolidate]]></title>
+      <link>https://www.coindesk.com/markets/2026/08/28/bitcoin-hits-highest-level-in-3-months-before-pulling-back-as-altcoins-consolidate</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/8f4cc013cf50dbd4248c67a996d0c6570e00b755-1920x1050.png?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">64b6c843-53d3-4591-a8d5-0c560345ccdd</guid>
+      <pubDate>Fri, 28 Aug 2026 10:37:35 +0000</pubDate>
+      <description><![CDATA[BTC briefly touched $81,455 overnight, its highest since May 15 as Nasdaq futures slipped and gold extended gains heading into the weekend.]]></description>
+      <dc:creator>Oliver Knight</dc:creator>
+      <dc:creator>Omkar Godbole</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/markets"><![CDATA[Markets]]></category>
+      <category domain="tag"><![CDATA[Crypto Markets Today]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Visa doubles down on South Korea with Upbit operator Dunamu on stablecoin payments]]></title>
+      <link>https://www.coindesk.com/business/2026/08/28/visa-doubles-down-on-south-korea-with-upbit-operator-dunamu-on-stablecoin-payments</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/e400c51cc73487de1b2a87a882ce2955729b2d16-2204x1240.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">b96be2b5-4adc-47a2-8b88-067461a93a4d</guid>
+      <pubDate>Fri, 28 Aug 2026 10:21:47 +0000</pubDate>
+      <description><![CDATA[Following a deal with Shinhan Financial, the global payments giant is widening its footprint in Asia’s major crypto hub through South Korea's largest exchange.]]></description>
+      <dc:creator>Olivier Acuna</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[Stablecoins]]></category>
+      <category domain="tag"><![CDATA[Artificial Intelligence]]></category>
+      <category domain="tag"><![CDATA[South Korea]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Kraken users briefly locked out after a flood of sanctioned crypto transactions]]></title>
+      <link>https://www.coindesk.com/business/2026/08/28/kraken-users-briefly-locked-out-after-a-flood-of-sanctioned-crypto-transactions</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/8c2d1d6c9e47c3db1e4becaf1739fb8dce590d3b-3600x2400.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">91b0c24d-ab89-4ff1-886c-15f663715fad</guid>
+      <pubDate>Fri, 28 Aug 2026 09:10:40 +0000</pubDate>
+      <description><![CDATA[The activity, appearing to spread sanctioned funds to trigger account restrictions, occurred between Aug. 17 and Aug. 24.]]></description>
+      <dc:creator>Francisco Rodrigues</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[Kraken]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Live updates: Bitcoin slides below $78,000 as markets digest Warsh's hawkish remarks]]></title>
+      <link>https://www.coindesk.com/business/2026/08/28/live-updates-bitcoin-options-worth-usd6-4-billion-just-expired-as-prices-hover-near-usd80-000</link>
+      <guid isPermaLink="false">9ab2f9f0-402b-43e2-80af-445e4523818c</guid>
+      <pubDate>Fri, 28 Aug 2026 09:09:07 +0000</pubDate>
+      <description><![CDATA["We have work to do," on prices, said Warsh in his highly anticipated keynote address at the Kansas City Fed's annual symposium.]]></description>
+      <dc:creator>Shaurya Malwa</dc:creator>
+      <dc:creator>James Van Straten</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/business"><![CDATA[Finance]]></category>
+      <category domain="tag"><![CDATA[Live News]]></category>
+      <category domain="https://www.coindesk.com/">live_news</category>
+    </item>
+    <item>
+      <title><![CDATA[IREN shares fall 8% as costly AI transition weighs on earnings]]></title>
+      <link>https://www.coindesk.com/markets/2026/08/28/iren-shares-fall-8-as-costly-ai-transition-weighs-on-earnings</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/54bd04de039305784bf732dce245207bcc75ba21-7008x3942.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">47ea32d1-0779-4943-a5e3-5bb3834bbe74</guid>
+      <pubDate>Fri, 28 Aug 2026 09:07:00 +0000</pubDate>
+      <description><![CDATA[Weakening profitability overshadowed a major milestone in IREN’s transformation into an AI cloud provider.]]></description>
+      <dc:creator>James Van Straten</dc:creator>
+      <dc:creator>AI Boost</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/markets"><![CDATA[Markets]]></category>
+      <category domain="tag"><![CDATA[Artificial Intelligence]]></category>
+      <category domain="tag"><![CDATA[Bitcoin News]]></category>
+      <category domain="tag"><![CDATA[Bitcoin Mining]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Here’s why Warsh’s Jackson Hole speech is a major event for bitcoin and gold]]></title>
+      <link>https://www.coindesk.com/markets/2026/08/28/here-s-why-warsh-s-jackson-hole-speech-is-a-major-event-for-bitcoin-and-gold</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/17bee3af9fe1ac84bbe5e96e709475f22fb089ca-3542x2362.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">5d5092a7-c28f-4918-8742-b593de43d9d0</guid>
+      <pubDate>Fri, 28 Aug 2026 06:30:10 +0000</pubDate>
+      <description><![CDATA[Warsh’s Jackson Hole speech could shape expectations for Fed support of Treasury buybacks, with implications for bitcoin, gold and long-term yields.]]></description>
+      <dc:creator>Omkar Godbole</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/markets"><![CDATA[Markets]]></category>
+      <category domain="tag"><![CDATA[Bitcoin News]]></category>
+      <category domain="tag"><![CDATA[Federal Reserve]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+    <item>
+      <title><![CDATA[Solana’s faster disinflation plan leads vote as $800K burn proposal trails]]></title>
+      <link>https://www.coindesk.com/tech/2026/08/28/solana-s-faster-supply-cuts-lead-vote-while-usd800-000-daily-burn-plan-trails</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/2e14ef9e0ece47068da06c0d0405ba1e13c15bd8-3904x2196.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">180a76c4-66c5-47ba-b93a-776e3ae5c6c9</guid>
+      <pubDate>Fri, 28 Aug 2026 06:22:10 +0000</pubDate>
+      <description><![CDATA[All three proposals have cleared quorum, but a plan to slow new SOL creation is only narrowly passing while a separate vote to sharply increase token burns remains below the two-thirds support needed.]]></description>
+      <dc:creator>Shaurya Malwa</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/tech"><![CDATA[Tech]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <meta name="format-detection" content="telephone=no">
+
+    <title>Posts | CryptoPanic</title><meta name="author" content="CryptoPanic">
+
+
+
+
+<meta property="fb:app_id" content="1848168952115035">
+<meta property="fb:admins" content="100005758416232">
+<meta property="og:locale" content="en_us">
+<meta property="og:site_name" content="CryptoPanic">
+<meta name="referrer" content="always">
+<meta name="apple-itunes-app" content="app-id=1290506871">
+    <meta name="description" content="News aggregator platform indicating impact on price and market for traders and cryptocurrency enthusiasts">
+    <meta property="og:url" content="https://cryptopanic.com/api/free/v1/posts/">
+    <meta property="og:type" content="website">
+    <meta property="og:description" content="News aggregator platform indicating impact on price and market for traders and cryptocurrency enthusiasts.">
+    <meta property="og:title" content="CryptoPanic - If you&#39;re going to panic, panic early.">
+    
+
+    
+
+
+<!-- Mobile app manifests and icons -->
+
+<link rel="shortcut icon" href="https://static.cryptopanic.com/static/img/favicon/favicon.1fe0847e86ea.ico" type="image/x-icon">
+<link rel="icon" href="https://static.cryptopanic.com/static/img/favicon/favicon.1fe0847e86ea.ico" type="image/x-icon">
+<link rel="apple-touch-icon" sizes="180x180" href="https://static.cryptopanic.com/static/img/favicon/apple-touch-icon.5d3be3e1e601.png">
+<meta name="apple-mobile-web-app-title" content="CryptoPanic">
+<meta name="application-name" content="CryptoPanic">
+<link rel="mask-icon" href="https://static.cryptopanic.com/static/img/favicon/safari-pinned-tab.6b8b0897ab05.svg" color="#d83844">
+<meta name="theme-color" content="#FF9933">
+
+<link rel="apple-touch-icon" sizes="180x180" href="https://static.cryptopanic.com/static/img/favicon/apple-touch-icon.5d3be3e1e601.png?m=1">
+<link rel="icon" type="image/png" href="https://static.cryptopanic.com/static/img/favicon/favicon-32x32.93397f90ec1e.png" sizes="32x32">
+<link rel="icon" type="image/png" href="https://static.cryptopanic.com/static/img/favicon/favicon-16x16.fb0ffdf67a96.png" sizes="16x16">
+<meta name="theme-color" content="#ffffff">
+
+<link rel="manifest" href="https://static.cryptopanic.com/static/manifest.19906a0bfcc9.json">
+
+
+
+<style type="text/css">
+    @font-face {
+        font-family: "cryptopanic";
+        src: url("https://static.cryptopanic.com/static/fonts/cryptopanic.cca052e59fcb.eot");
+        src: url("https://static.cryptopanic.com/static/fonts/cryptopanic.cca052e59fcb.eot?#iefix") format("embedded-opentype"),
+        url("https://static.cryptopanic.com/static/fonts/cryptopanic.f91b8c549f01.woff") format("woff"),
+        url("https://static.cryptopanic.com/static/fonts/cryptopanic.ad7f5dac18e6.ttf") format("truetype"),
+        url("https://static.cryptopanic.com/static/fonts/cryptopanic.47bc9405f5ee.svg#30sec") format("svg");
+        font-weight: normal;
+        font-style: normal;
+    }
+</style>
+    <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Droid+Sans+Mono"/>
+
+    
+        <link href="https://static.cryptopanic.com/static/css/cryptopanic.befe8d30fcf4.css" rel='stylesheet' type='text/css'>
+    
+
+
+    
+
+    
+        
+           <!-- Matomo -->
+            <script>
+              var _paq = window._paq = window._paq || [];
+              /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+              _paq.push(['trackPageView']);
+              _paq.push(['enableLinkTracking']);
+              (function() {
+                var u="//matomo.cryptopanic.com/";
+                _paq.push(['setTrackerUrl', u+'matomo.php']);
+                _paq.push(['setSiteId', '2']);
+                var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+                g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+              })();
+            </script>
+            <!-- End Matomo Code -->
+        
+    
+
+</head>
+<body class="app font-normal app-theme-darkcryptopanic regular-app">
+
+<!--[if lt IE 10]>
+<p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/?locale=en">upgrade
+  your browser</a> to improve your experience.</p>
+<![endif]-->
+
+
+
+
+    <div class="app-layout app-layout-static">
+
+        <div class="app-left-pane app-pane">
+    <div class="left-nav">
+        <a href="/" class="logo-link hidden-mobile"><img
+                src="https://static.cryptopanic.com/static/img/cryptopanic-logo-vert-dark.514a405381d8.svg"
+                alt="" class="normal-logo">
+        </a>
+        <a href="/" class="left-nav-item">
+            <span class="icon icon-rss"></span>
+            News
+        </a>
+<!--        -->
+<!--        <a href="/news/media" class="left-nav-item">-->
+<!--            <span class="icon icon-play-circle"></span>-->
+<!--            Media-->
+<!--        </a>-->
+<!--        -->
+        <div class="left-nav-item-with-menu hover hidden-mobile">
+             <div class="region-switch">
+                <div class="left-nav-item">
+                    <span class="icon icon-flag"></span>
+                    Region
+                    <span class="icon icon-caret-right"></span>
+                </div>
+                <div class="left-nav-sub-menu switch-content">
+                    <ul class="left-nav-sub-nav">
+                        <li class="sub-menu-title">News Feeds</li>
+                        
+                            
+                            <a href="/update_user_regions/?lang=en&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                English
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=de&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                Deutsch
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=nl&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                Dutch
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=es&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                Español
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=fr&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                Français
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=it&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                Italiano
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=pt&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                Português
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=ru&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                Русский
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=tr&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                Türkçe
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=ar&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                عربي
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=zh&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                中國人
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=ja&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                日本
+                            </li>
+                        </a>
+                        
+                            
+                            <a href="/update_user_regions/?lang=ko&amp;action=add">
+                            <li>
+                            
+                                <span class="icon icon-check"></span>
+                                한국인
+                            </li>
+                        </a>
+                        
+                    </ul>
+                    <ul class="left-nav-sub-nav">
+                        <li class="sub-menu-title">UI&nbsp;Language</li>
+                        <li class="active"><span class="icon icon-check"></span>English</li>
+                    </ul>
+                </div>
+                 </div>
+            </div>
+
+        <div class="hidden-mobile">
+        <hr/>
+      </div>
+
+          
+
+        
+            <div class="left-nav-item-with-menu hover hidden-mobile">
+                <a href="/accounts/login/?next=/api/free/v1/posts/%3Fauth_token%3DINVALID_TOKEN_TEST_12345"
+                   class="left-nav-item
+
+                           ">
+                    <span class="icon icon-user"></span>
+                    Sign In
+                    <span class="icon icon-caret-right"></span>
+                </a>
+                <div class="left-nav-sub-menu profile-menu">
+                    <div class="left-nav sub-menu-nav">
+                        <a href="/accounts/login/?next=/api/free/v1/posts/%3Fauth_token%3DINVALID_TOKEN_TEST_12345"
+                           class="left-nav-item
+                                   ">
+                            <span class="icon icon-login"></span>
+                            Login</a>
+                        <a href="/accounts/signup/?next=/api/free/v1/posts/%3Fauth_token%3DINVALID_TOKEN_TEST_12345"
+                           class="left-nav-item
+                                   ">
+                            <span class="icon icon-user-add"></span>
+                            Sign Up</a>
+                        
+                            <a href="/plus" class="left-nav-item">
+                                <span class="icon icon-crown color-yellow"></span>
+                                <span><span class="hidden-mobile">Go </span>PLUS</span>
+                            </a>
+                        
+                    </div>
+                </div>
+            </div>
+        
+
+
+<!--        <a href="/polls/new" class="left-nav-item">-->
+<!--            <span class="icon icon-chart-bar"></span>-->
+<!--            Polls-->
+<!--        </a>-->
+        
+            
+                <a href="/portfolio" class="left-nav-item left-nav-item-portfolio">
+                    <span class="icon icon-briefcase"></span>
+                    Portfolio
+                </a>
+            
+        
+
+        <div class="hidden-mobile">
+        <hr/>
+      </div>
+
+        
+        <a href="/partnership-hub" class="left-nav-item hidden-mobile color-orange">
+              <span class="icon icon-arrow-right color-orange"></span>
+              Bizz hub
+            </a>
+            <a href="/advertise" class="left-nav-item hidden-mobile color-orange">
+              <span class="icon icon-arrow-right color-orange"></span>
+              Advertise
+            </a>
+            <!-- <a href="/roadmap/" class="left-nav-item hidden-mobile">
+                <span class="icon icon-calendar"></span> Roadmap
+            </a>-->
+        
+        <div class="menu-toggle menu-toggle-action hidden-mobile-up" id="menuToggle">
+            <div class="icon-bar"></div>
+            <div class="icon-bar"></div>
+            <div class="icon-bar"></div>
+        </div>
+    </div>
+    <div class="theme-switch">
+        <a href="" class="toggle-light-link toggle-light-link-js"><span
+                class="icon  icon-light-up
+                        "></span></a>
+    </div>
+
+</div>
+
+        <div class="app-center-pane">
+            
+
+
+            
+                <nav class="mobile-nav">
+    <div class="mobile-nav-scroll">
+        <ul class="nav">
+            
+            
+                <li>
+                    <a href="/accounts/login/">Log in</a>
+                </li>
+                <li>
+                    <a href="/accounts/signup/">Sign Up</a>
+                </li>
+            
+            
+                <li>
+                    <a href="/plus">PLUS version</a>
+                </li>
+            
+
+            
+                <li><a href="/submit-source/">Submit Source</a></li>
+            
+                <li><a href="/advertise/">Advertise</a></li>
+            
+                <li><a href="/developers/">Developers</a></li>
+            
+                <li><a href="/about/">About</a></li>
+            
+                <li><a href="/contact/">Contact</a></li>
+            
+                <li><a href="/terms/">Terms</a></li>
+            
+            
+            <li>
+                <a href="" class="toggle-light-link toggle-light-link-js"><span
+                        class="icon  icon-light-up "></span></a>
+            </li>
+        </ul>
+    </div>
+    <div class="close-bar app-pane">
+        
+        <a href="javascript:;" class="close-menu menu-toggle-action">
+            <span class="icon icon-times"></span>
+        </a>
+    </div>
+</nav>
+            
+
+            
+
+                <div class="app-main-container regular-container">
+                    
+    <div class="container main-container">
+
+        <h1>
+    Page not found (Error 404)
+</h1>
+        <br/>
+        
+            Sorry, couldn't find what you were looking for :/
+        
+        <br/>
+        
+            Or if you think this may be a bug, please
+            <a href="/contact/" class="color"><u>contact me</u></a>.
+        
+    </div>
+
+
+                </div>
+            
+
+            
+
+                <div class="app-footer">
+    <div class="social-networks">
+        
+        <a href="https://facebook.com/CryptoPanic" target="_blank"><span class="icon icon-facebook"></span></a>
+        <a href="https://twitter.com/CryptoPanicCom" target="_blank"><span class="icon icon-twitter"></span></a>
+        <a href="/discord/"><span class="icon icon-discord"></span></a>
+        <a href="https://t.me/CryptoPanicCom" target="_blank"><span class="icon icon-telegram"></span></a>
+        <a href="https://itunes.apple.com/it/app/cryptopanic/id1290506871?l=en&mt=8" target="_blank"><span class="icon icon-apple"></span></a>
+        <a href="https://play.google.com/store/apps/details?id=com.cryptopanic.android" target="_blank"><span class="icon icon-android"></span></a>
+        
+    </div>
+    <div class="nav">
+        
+            <a href="/submit-source/">Submit Source</a>
+        
+            <a href="/advertise/">Advertise</a>
+        
+            <a href="/developers/">Developers</a>
+        
+            <a href="/about/">About</a>
+        
+            <a href="/contact/">Contact</a>
+        
+            <a href="/terms/">Terms</a>
+        
+    </div>
+
+    
+
+    
+    
+    
+
+    
+    <div class="copy">
+        &copy; 2026&nbsp;
+        <a href="/about/">CryptoPanic.com</a>
+
+        
+        
+        
+        
+    </div>
+</div>
+
+            
+
+        </div>
+    </div>
+
+
+
+
+
+    <!-- JS defaults -->
+    <script type="text/javascript">
+        var App = {Settings: {}}
+        window.App = App
+        App.Settings = {
+            csrfCookieName: 'csrftoken',
+            FBAppID: 1848168952115035,
+            trackGA: true,
+            app: '',
+            environment: 'production',
+            analyticsEnabled: false,
+            
+            posthogProjectToken: "phc_wDpShaSyBiqW2qtyUmvujtSwtaZuM5L7d75Epc42VaGV",
+            posthogHost: "https://eu.i.posthog.com"
+        }
+        
+    </script>
+
+    
+        <script type="text/javascript" src="https://static.cryptopanic.com/static/js/cryptopanic-vendor.min.a4915615bf22.js"></script>
+        <script type="text/javascript" src="https://static.cryptopanic.com/static/js/cryptopanic.min.5f9d2434286a.js"></script>
+    
+
+
+    
+
+    
+
+    
+
+    
+    
+    <!-- GA -->
+    
+
+    
+
+
+    
+        <!-- Facebook Pixel Code -->
+        <script>
+            !function (f, b, e, v, n, t, s) {
+                if (f.fbq) return
+                n = f.fbq = function () {
+                    n.callMethod ?
+                        n.callMethod.apply(n, arguments) : n.queue.push(arguments)
+                }
+                if (!f._fbq) f._fbq = n
+                n.push = n
+                n.loaded = !0
+                n.version = '2.0'
+                n.queue = []
+                t = b.createElement(e)
+                t.async = !0
+                t.src = v
+                s = b.getElementsByTagName(e)[0]
+                s.parentNode.insertBefore(t, s)
+            }(window,
+                document, 'script', 'https://connect.facebook.net/en_US/fbevents.js')
+
+            fbq.disablePushState = true
+            fbq('init', '194140584396344') // Insert your pixel ID here.
+            fbq('track', 'PageView')
+        </script>
+        <noscript><img height="1" width="1" style="display:none"
+                       src="https://www.facebook.com/tr?id=194140584396344&ev=PageView&noscript=1"
+        /></noscript>
+        <!-- DO NOT MODIFY -->
+        <!-- End Facebook Pixel Code -->
+    
+
+
+
+
+</body>
+</html>

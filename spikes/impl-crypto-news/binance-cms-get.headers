@@ -1,0 +1,20 @@
+HTTP/2 200 
+content-type: application/json;charset=UTF-8
+content-length: 27800
+via: 1.1 tesla, 1.1 c5337f831ef13b6de20c6ba2cda2e028.cloudfront.net (CloudFront)
+x-http2-stream-id: 490931
+x-http2-stream-weight: 16
+access-control-allow-origin: *
+x-frame-options: SAMEORIGIN
+x-xss-protection: 1; mode=block
+x-content-type-options: nosniff
+referrer-policy: origin-when-cross-origin
+strict-transport-security: max-age=31536000; includeSubdomains
+date: Sun, 30 Aug 2026 13:06:35 GMT
+etag: W/"0aef525c06976ca654db01a0f509a81dc"
+vary: accept-encoding
+x-cache: Hit from cloudfront
+x-amz-cf-pop: HKG54-P2
+x-amz-cf-id: DHO_CEdBllTxcraHbbXdzcVdzZPgB8_aQhmpFs99RY4zEu05lzAABA==
+age: 86
+
