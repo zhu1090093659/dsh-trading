@@ -1,4 +1,4 @@
-/* SessionBrowser —— 右侧边栏会话区（历史折叠 + 底部新对话入口）。 */
+/* SessionBrowser —— 右侧边栏会话区（历史会话列表；新对话入口在官方首页 composer）。 */
 
 .root {
   height: 100%;
@@ -33,16 +33,29 @@
 }
 
 .historyChevron {
-  display: inline-block;
+  flex: none;
+  display: block;
   transition: transform 120ms ease;
-  font-size: 10px;
 }
 
-.historyChevron[data-open='true'] {
+.historyToggle[aria-expanded='true'] .historyChevron {
   transform: rotate(90deg);
 }
 
+/* 列表作用域工作区：占满标签与计数之间的同一弹性轨道，超长省略。 */
+.historyScope {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  opacity: 0.5;
+}
+
 .historyCount {
+  flex: none;
   margin-left: auto;
   font-size: 11px;
   opacity: 0.55;
@@ -50,6 +63,7 @@
 }
 
 .historyList {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -106,73 +120,4 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.spacer {
-  flex: 1;
-  min-height: 12px;
-}
-
-.entry {
-  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
-  border-radius: 10px;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: var(--dsw-alias-bg-l2, rgba(127, 127, 127, 0.04));
-}
-
-.workspaceSelect {
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font-size: 12px;
-  opacity: 0.75;
-}
-
-.entryRow {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.entryInput {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font-size: 12.5px;
-  padding: 4px 2px;
-}
-
-.entryInput:focus {
-  outline: none;
-}
-
-.sendButton {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: 8px;
-  background: #4a90e2;
-  color: #ffffff;
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.sendButton:hover:not(:disabled) {
-  background: #3a7fd4;
-}
-
-.sendButton:disabled {
-  opacity: 0.45;
-  cursor: default;
 }

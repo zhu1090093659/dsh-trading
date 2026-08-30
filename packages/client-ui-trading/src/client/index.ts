@@ -3,7 +3,8 @@
  *
  * - `shell.overlay`（dshtrading-market-dock）→ 左侧自选停靠面板
  * - `sidebar.workspaces`（priority -1 遮蔽 WorkspaceBrowser）→ 右侧边栏会话区
- *   （历史折叠 + 底部新对话入口；宿主侧栏列已由 CSS rtl 移到右缘）
+ *   （历史会话列表；新对话入口统一走官方首页 composer，宿主侧栏列已由 CSS
+ *   rtl 移到右缘）
  * - `shell.overlay`（dshtrading-quote-pane）→ 中栏行情面板（恒渲染；
  *   对话列由宿主官方 UI 常驻右侧栏，见 shell-pad.css 2.4 布局）
  *
@@ -21,18 +22,8 @@ import type { MarketLocaleKey } from './contract.ts'
 /** 本面板/字符串翻译的 locale namespace。 */
 const NS = 'dshtrading.market'
 
-/** Required services：新对话入口走 connectWorkspace + 会话 scope 的 conversation.send。 */
-export const inject = ['slots', 'locale', 'sessions', 'uiWorkspace']
-
-/** uiWorkspace 的最小结构面（connectWorkspace = 建/复用并打开会话，返回会话 id）。 */
-interface WorkspaceNavigation {
-  connectWorkspace(workspaceId: string): Promise<unknown>
-}
-
-/** 会话 scope 上可用的最小发送面（IConversation.send，排队回合）。 */
-interface ScopedConversation {
-  send(text: string): Promise<void>
-}
+/** Required services：会话区只读官方 sessions/workspaces 状态（新对话入口已归一官方 composer）。 */
+export const inject = ['slots', 'locale', 'sessions']
 
 /** 注册 slot + locale 字典。 */
 export function apply(ctx: ClientContext): void {
@@ -42,7 +33,6 @@ export function apply(ctx: ClientContext): void {
   const selection = createSelectionStore()
   const watchlists = createWatchlistStore()
   const sessions = ctx.sessions as unknown as ISessions
-  const uiWorkspace = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined
 
   // 静态包的 slot 条目崩溃默认无人上报（监督缝只覆盖动态插件）——打到 console 可见化。
   ctx.slots.onEntryError((slot, _entry, error) => {
@@ -63,8 +53,9 @@ export function apply(ctx: ClientContext): void {
     }),
   }, MarketDock))
 
-  // 右侧边栏会话区：遮蔽官方 WorkspaceBrowser（会话浏览器宿主形态被 2.4 布局取代——
-  // 历史折叠 + 底部新对话入口，数据面仍全是官方 sessions/workspaces 服务）。
+  // 右侧边栏会话区：遮蔽官方 WorkspaceBrowser（宿主形态自带每组「+ 新会话」
+  // 等重复入口；这里只留历史会话列表，数据面仍全是官方 sessions/workspaces
+  // 服务，新建会话统一走官方首页 composer）。
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register({
     name: 'sidebar.workspaces',
     id: 'dshtrading-session-browser',
@@ -72,17 +63,6 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       openSession: (sessionId) => { sessions.open(sessionId) },
-      startConversation: async (workspaceId, text) => {
-        if (uiWorkspace === undefined) throw new Error('dsh-trading: uiWorkspace service unavailable')
-        const sessionId = await uiWorkspace.connectWorkspace(workspaceId)
-        // connectWorkspace 只建/复用会话并返回 id，不切换 current——
-        // 宿主 startSession 同样在其后显式 open（navigation.ts）。
-        sessions.open(String(sessionId))
-        const scoped = sessions.scope(String(sessionId))
-        const conversation = scoped?.get('conversation') as ScopedConversation | undefined
-        if (conversation === undefined) throw new Error('dsh-trading: conversation service unavailable')
-        await conversation.send(text)
-      },
     }),
   }, SessionBrowser))
 
@@ -134,9 +114,6 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'interval.1M': '月',
       'browser.history': '历史会话',
       'browser.historyEmpty': '该工作区还没有会话',
-      'browser.newPlaceholder': '输入任务，回车开始新对话…',
-      'browser.send': '发送',
-      'browser.workspace': '工作区',
     },
     en: {
       'tab.watch': 'Watchlist',
@@ -171,9 +148,6 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'interval.1M': 'M',
       'browser.history': 'History',
       'browser.historyEmpty': 'No sessions in this workspace',
-      'browser.newPlaceholder': 'Describe a task; Enter to start…',
-      'browser.send': 'Send',
-      'browser.workspace': 'Workspace',
     },
   }
 }

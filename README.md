@@ -69,8 +69,8 @@ DSH 扩展机制分层与对应选择：
   （272px，工作区分组/搜索/设置全保留）+ **官方对话列常驻其左**（380px，有 current
   会话才展开轨道：transcript/composer/审批卡全官方 UI；空白会话显宿主 hero）；
   轨迹视图退役（摘除自家 quote view + CSS 藏末位 view tab，失效存储视图回落 chat）。
-  会话区（历史折叠 + 按工作区过滤 + 底部新对话入口走官方 connectWorkspace →
-  sessions.open → IConversation.send）。node 半 `/dshtrading/api` 行情桥（认证栅栏 +
+  会话区只留历史会话列表（默认展开，作用域跟随当前会话所在工作区；2.5 入口归一——
+  自绘「工作区选择 + 输入框」入口卡退役，新对话统一走官方首页 composer）。node 半 `/dshtrading/api` 行情桥（认证栅栏 +
   无缓存透传 + 业务错误信封转 rejection）；四连接器新增 host 面数据行（dataplane，
   只 provide 行情服务不注册工具，激活走同一 settings 路由裁决）。trading-web 实测：
   桥三端点 + 设置路由数据面生效（provider=okx 实证）+ 四轨道布局/轨迹隐藏/新对话
