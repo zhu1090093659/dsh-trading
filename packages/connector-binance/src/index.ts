@@ -16,9 +16,33 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
+import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
 import type { Disposable, Interval, Kline, MarketDataService, Ticker } from '@dsh-trading/api'
 import { BinanceRestClient, INTERVAL_VOCABULARY, TradingServiceError } from './rest.js'
 import type { BinanceRestOptions } from './rest.js'
+
+interface ToolsServiceLike {
+  register(definition: { name: string }): unknown
+  get(name: string): { name: string } | undefined
+}
+
+/**
+ * 互斥激活的注册面（与 connector-okx 的 registerTool 同款，2026-08-31 补齐）：
+ * dsh-tools 对同名重复注册直接抛错，互斥纪律下冲突降级为「先到先得 + warn」。
+ * 没有这层时，inject 回调就绪顺序不定会让同名工具（含 crypto_get_indicators）
+ * 在两 connector 同树时随机炸挂载——activation.test 曾因此竞态翻车。
+ */
+function registerTool(ctx: Context, tool: ReturnType<typeof defineTool>, log: LogLike): void {
+  const tools = ctx.tools as unknown as ToolsServiceLike
+  if (tools.get(tool.name) !== undefined) {
+    log.warn(
+      '[dsh-trading-crypto-connector-binance] tool %s already registered by another provider — skipped (mutual exclusion: at most one crypto connector/toolset may be active)',
+      tool.name,
+    )
+    return
+  }
+  tools.register(tool)
+}
 
 export * from './rest.js'
 
@@ -362,8 +386,14 @@ export function apply(ctx: Context, config: Config): void {
   // inject：等行情服务就绪后注册工具；工具只面向服务接口，不直连 REST。
   ctx.inject(['tradingCryptoMarketData'], (ctx) => {
     const marketData = ctx.tradingCryptoMarketData
+    // duplicate-safe 注册（与 connector-okx 同款仲裁）：同名先到先得 + warn。
+    const register = (tool: ReturnType<typeof defineTool>) => registerTool(ctx, tool, log)
 
-    ctx.tools.register(
+    // WS1b（docs/analysis-roadmap.md #2）：指标计算工具——共享工厂，K 线走本 connector
+    // 行情服务（路由选中的数据源），计算走 @dsh-trading/indicators。
+    register(createGetIndicatorsTool({ marketData, providerLabel: 'binance' }))
+
+    register(
       defineTool({
         name: 'crypto_get_ticker',
         description:
@@ -386,7 +416,7 @@ export function apply(ctx: Context, config: Config): void {
       }),
     )
 
-    ctx.tools.register(
+    register(
       defineTool({
         name: 'crypto_get_klines',
         description:
@@ -424,7 +454,7 @@ export function apply(ctx: Context, config: Config): void {
 
     // 交易安全闸门（铁律 #3 修订版 [S4]）：三条路径见 evaluateOrderGate；
     // dryRun!==true 的审批由 base 的 gate 插件统一在 pre-execute 承担。
-    ctx.tools.register(
+    register(
       createPlaceOrderTool({ marketData, config }),
     )
   })

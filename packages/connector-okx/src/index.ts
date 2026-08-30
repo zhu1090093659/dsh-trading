@@ -44,6 +44,7 @@ import type {
   Ticker,
   TradeService,
 } from '@dsh-trading/api'
+import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
 import {
   BAR_MAP,
   type OkxCredentials,
@@ -792,6 +793,9 @@ export function apply(ctx: Context, config: Config): void {
 
   // inject：等行情服务就绪后注册公共面工具；工具只面向服务接口，不直连 REST。
   ctx.inject(['tradingCryptoMarketData'], () => {
+    // WS1b（docs/analysis-roadmap.md #2）：指标计算工具——共享工厂，K 线走本 connector
+    // 行情服务（路由选中的数据源），计算走 @dsh-trading/indicators。
+    registerTool(ctx, createGetIndicatorsTool({ marketData, providerLabel: 'okx' }), log)
     registerTool(ctx, defineTool({
       name: 'crypto_get_ticker',
       description:

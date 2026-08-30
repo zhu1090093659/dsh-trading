@@ -237,6 +237,9 @@ importers:
       '@dsh-trading/api':
         specifier: workspace:^
         version: link:../api
+      '@dsh-trading/indicators':
+        specifier: workspace:^
+        version: link:../indicators
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -259,6 +262,9 @@ importers:
       '@dsh-trading/api':
         specifier: workspace:^
         version: link:../api
+      '@dsh-trading/indicators':
+        specifier: workspace:^
+        version: link:../indicators
     devDependencies:
       '@dsh-trading/connector-binance':
         specifier: workspace:^
@@ -422,6 +428,10 @@ importers:
         version: 3.2.7(@types/node@24.13.3)(lightningcss@1.33.0)(tsx@4.23.12)
 
   packages/indicators:
+    dependencies:
+      '@deepseek-ai/dsh-tools':
+        specifier: file:/Users/zcl/code/deepseek-harness/packages/core/tools
+        version: file:../deepseek-harness/packages/core/tools(@deepseek-ai/cordis@file:../deepseek-harness/vendor/cordis)
     devDependencies:
       tsdown:
         specifier: ^0.22.0

@@ -10,6 +10,10 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./tool": {
+      "types": "./lib/tool.d.ts",
+      "default": "./lib/tool.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -19,6 +23,9 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-tools": ">=0.1.2-alpha.1"
   },
   "devDependencies": {
     "tsdown": "^0.22.0",
