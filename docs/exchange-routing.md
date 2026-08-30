@@ -72,7 +72,7 @@ crypto-trader preset（会话级，单预设）
 | **路由权威** | 连接器 `apply` 时：`enabled === false` → 静默关；否则读 `tradingMarketRouter.activeProvider(market)`，**路由值就是权威**——与自身 provider slug 不符即跳过（log 说明）。无 router（老部署未升级）→ 回退现有 enabled 语义（向后兼容） |
 | **provider slug** | = 连接器市场内唯一短名：binance / okx / yahoo / stooq / tencent。slug 与 pinng 命名无关，是路由层词汇 |
 | **默认值** | `base` 层（组合默认，非用户层）：crypto=binance、us=yahoo、cn/hk=tencent。用户文档未写时 = 默认数据面（现状行为零变化） |
-| **生效时机** | 会话面 `applies: 'restart'`——连接器 apply 只在挂载时跑，切交易所后**新建会话**生效（preset 挂载是会话级的，无需重启 dsh 进程；会话内数据源一致性是有意语义）。**GUI 数据面 = 即时生效**（2026-08-30 注册表模式：host 面连接器全部注册进 tradingMarketDataRegistry，行情桥每请求按路由当前值惰性解析，无 watch 无重启——见 `.agents/notes/implemented/architecture/2026-08-30-market-data-registry-hot-switch.md`） |
+| **生效时机** | 会话面 `applies: 'restart'`——连接器 apply 只在挂载时跑，切交易所后**新建会话**生效（preset 挂载是会话级的，无需重启 dsh 进程；会话内数据源一致性是有意语义）。**GUI 数据面 = 即时生效**（2026-08-30 注册表模式：host 面连接器全部注册进 tradingMarketDataRegistry，行情桥每请求按路由当前值惰性解析，无 watch 无重启——见 `.agents/notes/implemented/architecture/2026-08-30-market-data-registry-hot-switch.md`）。**生效口径边界**（2026-08-30 实测）：即时生效经**设置 UI 官方写路径**实证闭环；settings-file 的手编 YAML 文件监听传播在该次实测中未观察到（chokidar 无 reload 迹象）——手编文件后按旧口径新建会话/重启兜底，升级宿主时按 upstream-upgrade-checklist §3 复查 |
 | **explicit 覆盖** | 用户文档显式写 provider（=用户层存在）即覆盖 base 默认；schema enum 校验非法值直接拒写 |
 | **向后兼容** | 老 preset（binance enabled:true + okx enabled:false）在未装 router 时行为不变；装了 router 后 enabled:false 仍是硬关（低优先语义保留） |
 
