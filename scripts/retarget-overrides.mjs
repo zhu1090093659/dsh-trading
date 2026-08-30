@@ -16,13 +16,23 @@ if (!target || !target.startsWith('/')) {
   console.error('usage: node scripts/retarget-overrides.mjs <absolute dsh checkout path>')
   process.exit(2)
 }
-const file = join(ROOT, 'pnpm-workspace.yaml')
-const text = await readFile(file, 'utf8')
 // 所有 file:/link: 覆盖值里的 deepseek-harness checkout 前缀统一替换。
-const next = text.replace(/(file:|link:)\S*deepseek-harness/g, (m, scheme) => `${scheme}${target}`)
-if (next === text) {
+const retarget = (text) => text.replace(/(file:|link:)\S*deepseek-harness/g, (m, scheme) => `${scheme}${target}`)
+
+// pnpm-workspace.yaml（overrides 源）
+const wsFile = join(ROOT, 'pnpm-workspace.yaml')
+const wsNext = retarget(await readFile(wsFile, 'utf8'))
+if (!wsNext.includes(target)) {
   console.error('no deepseek-harness override paths found — workspace file drifted?')
   process.exit(1)
 }
-await writeFile(file, next)
-console.log(`retargeted overrides to ${target}`)
+await writeFile(wsFile, wsNext)
+
+// pnpm-lock.yaml（2026-08-31 CI 实证：lockfile 的 overrides 块与 importer specifier
+// 同样内嵌本机绝对路径；frozen install 校验 overrides 一致性，必须同步重定向，
+// 否则 ERR_PNPM_LOCKFILE_CONFIG_MISMATCH）。
+const lockFile = join(ROOT, 'pnpm-lock.yaml')
+const lockNext = retarget(await readFile(lockFile, 'utf8'))
+if (lockNext.includes(target)) await writeFile(lockFile, lockNext)
+
+console.log(`retargeted overrides (workspace + lockfile) to ${target}`)
