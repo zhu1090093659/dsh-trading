@@ -4,8 +4,23 @@
  * 无 settings 服务时回退组合 entry（向后兼容）。
  */
 import { Context as CordisContext } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// installSettingsSection 打桩：捕获 hooks 以直证 apply 的接线语义（thunk 回归）。
+const captured = vi.hoisted(() => ({
+  hooks: undefined as unknown as {
+    setSource: (source: () => import('../src/index.js').Config) => void
+    onChange: () => void
+  } | undefined,
+}))
+vi.mock('@deepseek-ai/dsh-settings', () => ({
+  installSettingsSection: (_ctx: unknown, _ns: unknown, _schema: unknown, _entry: unknown, hooks: unknown) => {
+    captured.hooks = hooks as never
+  },
+  settingsNamespace: (ns: string) => ns,
+}))
 import {
+  apply,
   Config,
   DEFAULT_MARKETS,
   PROVIDER_VOCABULARY,
@@ -114,6 +129,16 @@ describe('MarketDataRegistryService（tradingMarketDataRegistry，2026-08-30 注
     expect(registry.active('jp')?.service).toBe(jp)
     registry.register('jp', 'jp-source-2', fakeService('jp2'))
     expect(registry.active('jp')).toBeUndefined()
+  })
+})
+
+describe('apply 的 installSettingsSection 接线', () => {
+  it('setSource 收到 thunk——先求值再 warn（回归：thunk 误当 Config 抛 TypeError 掐断接线）', () => {
+    apply(new CordisContext() as never, { markets: { ...DEFAULT_MARKETS } } as never)
+    expect(captured.hooks).toBeDefined()
+    const resolved: ConfigType = { markets: { crypto: { provider: 'bybit' } } }
+    expect(() => captured.hooks!.setSource(() => resolved)).not.toThrow()
+    expect(() => captured.hooks!.onChange()).not.toThrow()
   })
 })
 

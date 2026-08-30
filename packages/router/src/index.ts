@@ -279,7 +279,9 @@ export function apply(ctx: Context, config: Config): void {
   // + onChange 通知 diff。settings 缺失（老部署未挂）→ 服务照常 provide，
   // 源恒为组合配置（= 现状行为），路由仍然有效。
   installSettingsSection(ctx, SETTINGS_NAMESPACE, Config, effective, {
-    setSource: (current) => { service.setSource(current); warnUnknownProviders(current, log) },
+    // current 是 thunk（() => resolved Config），不是 Config 本体——先调用再校验，
+    // 否则 Object.entries(undefined) 抛错会掐断 installSettingsSection 的后续接线。
+    setSource: (current) => { service.setSource(current); warnUnknownProviders(current(), log) },
     onChange: () => service.notify(),
   })
 }
