@@ -32,7 +32,7 @@ afterEach(async () => {
 /** 从多 preset 结果中取指定 preset 的那份（crypto-trader 为默认主 preset）。 */
 async function installOne(root: string, presetId: string) {
   const results = await installPreset({ presetRoot: root })
-  const hit = results.find((r) => r.dir.endsWith('/' + presetId))
+  const hit = results.find((r) => r.dir.endsWith('/' + presetId) || r.dir.endsWith('\\' + presetId))
   if (hit === undefined) throw new Error(`preset ${presetId} not installed: ${results.map((r) => r.dir).join(', ')}`)
   return hit
 }

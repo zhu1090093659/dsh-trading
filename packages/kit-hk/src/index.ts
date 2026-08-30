@@ -23,6 +23,7 @@ import {
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
+import { fetchHkFundamentals, renderHkFundamentals } from './fundamentals.js'
 
 // ── skill provider ────────────────────────────────────────────────────────────
 
@@ -92,18 +93,23 @@ export function apply(ctx: Context, _config: Config): void {
   // WS4 #1（#6）：hk_get_news——降级方案（用户裁决 2026-08-30）：东财快讯第 103 列 + 116. 港股代码/关键词过滤，
   // 诚实标注覆盖不纯（统一 CN 金融流、无干净港股公共源）。铁律 #5 只引元数据，不取正文。
   const newsTool = createGetNewsTool()
+  const fundamentalsTool = createGetFundamentalsTool()
   const tools = ctx.tools as unknown as {
     register(definition: { name: string }): unknown
     get(name: string): { name: string } | undefined
   }
-  if (tools.get(newsTool.name) !== undefined) {
-    ctx.logger('dsh-trading-hk-kit').info(
-      '[dsh-trading-hk-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
-      newsTool.name,
-    )
-    return
+  const registerOnce = (tool: ReturnType<typeof defineTool>): void => {
+    if (tools.get(tool.name) !== undefined) {
+      ctx.logger('dsh-trading-hk-kit').info(
+        '[dsh-trading-hk-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
+        tool.name,
+      )
+      return
+    }
+    tools.register(tool)
   }
-  tools.register(newsTool)
+  registerOnce(newsTool)
+  registerOnce(fundamentalsTool)
 }
 
 /* ── hk_get_news：港股新闻工具（WS4 #1，#6 降级） ────────────────────────────── */
@@ -165,6 +171,36 @@ export function createGetNewsTool() {
         lines.push('  (source(s) unavailable this call: ' + unavailable.join('; ') + ')')
       }
       return lines.join('\n')
+    },
+  })
+}
+
+/* ── hk_get_fundamentals：港股基本面工具（WS4） ───────────────────────────────── */
+
+export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+  return defineTool({
+    name: 'hk_get_fundamentals',
+    description:
+      'Get fundamental valuation and financial indicators for Hong Kong stocks (Total Market Cap, Float Market Cap, Dynamic P/E, Trailing P/E, P/B, Dividend Yield, Turnover Rate, Amplitude, Turnover Value, 52-Week Range) via Tencent HK public market quote API. Accepts market-canonical code (e.g. 00700.HK) or 1-5 digit code (700, 00700). No credentials required.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'Hong Kong stock symbol or code, market-canonical vocabulary, e.g. 00700.HK, 09988.HK, 00700, 700',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      if (!symbol) {
+        throw new Error('hk_get_fundamentals: symbol parameter is required (e.g. 00700.HK or 00700)')
+      }
+      const result = await fetchHkFundamentals({ symbol, fetch: options.fetch })
+      return renderHkFundamentals(result, symbol)
     },
   })
 }

@@ -30,6 +30,8 @@ import {
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { aggregateNews, deriveSymbolTokens, type AggregateNewsOptions } from './news.js'
+import { fetchCryptoDerivatives, renderDerivativesData } from './derivatives.js'
+import { fetchCryptoFundamentals, renderCryptoFundamentals } from './fundamentals.js'
 
 // ── skill provider（host 面 skill 全局可见即可，本切片不改 skill 作用域） ─────────
 
@@ -221,6 +223,70 @@ export function apply(ctx: Context, _config: Config): void {
     | { newsKey?: () => string | undefined }
     | undefined
   registerOnce(createGetNewsTool({ cryptoPanicKey: router?.newsKey?.() }))
+
+  // WS4（docs/analysis-roadmap.md WS4）：衍生品数据工具（持仓量/多空比/资金费率）与代币经济学工具
+  registerOnce(createGetDerivativesTool())
+  registerOnce(createGetFundamentalsTool())
+}
+
+/* ── crypto_get_derivatives：衍生品数据工具（WS4） ───────────────────────────── */
+
+export function createGetDerivativesTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+  return defineTool({
+    name: 'crypto_get_derivatives',
+    description:
+      'Get real-time crypto derivatives indicators (Open Interest, Long/Short Account Ratio, Top Trader Position Ratio, Taker Buy/Sell Volume Ratio, and latest Funding Rate) for a perpetual contract via Binance Futures public REST API. Accepts market-canonical (e.g. BTCUSDT, BTCUSDT-SWAP) or native symbols. No credentials required.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'Perpetual contract symbol, market-canonical vocabulary, e.g. BTCUSDT or BTCUSDT-SWAP',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      if (!symbol) {
+        throw new Error('crypto_get_derivatives: symbol parameter is required (e.g. BTCUSDT or BTCUSDT-SWAP)')
+      }
+      const result = await fetchCryptoDerivatives({ symbol, fetch: options.fetch })
+      return renderDerivativesData(result, symbol)
+    },
+  })
+}
+
+/* ── crypto_get_fundamentals：代币经济学与基本面工具（WS4） ───────────────────── */
+
+export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+  return defineTool({
+    name: 'crypto_get_fundamentals',
+    description:
+      'Get tokenomics and fundamental data (Market Cap Rank, Market Cap, Fully Diluted Valuation (FDV), Circulating Supply, Max Supply, 24h Volume and Price Change) for a crypto asset via CoinCap and Binance public REST APIs. Accepts symbol (BTCUSDT) or asset ticker (BTC). No credentials required.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'Crypto symbol or asset ticker, e.g. BTCUSDT, BTC, ETH, SOL',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      if (!symbol) {
+        throw new Error('crypto_get_fundamentals: symbol parameter is required (e.g. BTCUSDT or BTC)')
+      }
+      const result = await fetchCryptoFundamentals({ symbol, fetch: options.fetch })
+      return renderCryptoFundamentals(result, symbol)
+    },
+  })
 }
 
 /* ── crypto_get_news：动态新闻工具（WS2b，#3） ───────────────────────────────── */

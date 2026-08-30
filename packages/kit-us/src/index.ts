@@ -28,6 +28,7 @@ import {
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
+import { fetchUsFundamentals, renderUsFundamentals } from './fundamentals.js'
 
 // ── skill provider（host 面 skill 全局可见即可，本切片不改 skill 作用域） ─────────
 
@@ -97,18 +98,23 @@ export function apply(ctx: Context, _config: Config): void {
   // WS4 #1（#6）：us_get_news——kit 内薄工具，直连公共源（spike 推荐：Yahoo + Google RSS 均单端点无鉴权，
   // 无 connector 契约要素）。缺省无 key 全程可用；每源独立容错，输出带来源名 + 时间 + 链接（铁律 #5）。
   const newsTool = createGetNewsTool()
+  const fundamentalsTool = createGetFundamentalsTool()
   const tools = ctx.tools as unknown as {
     register(definition: { name: string }): unknown
     get(name: string): { name: string } | undefined
   }
-  if (tools.get(newsTool.name) !== undefined) {
-    ctx.logger('dsh-trading-us-kit').info(
-      '[dsh-trading-us-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
-      newsTool.name,
-    )
-    return
+  const registerOnce = (tool: ReturnType<typeof defineTool>): void => {
+    if (tools.get(tool.name) !== undefined) {
+      ctx.logger('dsh-trading-us-kit').info(
+        '[dsh-trading-us-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
+        tool.name,
+      )
+      return
+    }
+    tools.register(tool)
   }
-  tools.register(newsTool)
+  registerOnce(newsTool)
+  registerOnce(fundamentalsTool)
 }
 
 /* ── us_get_news：美股新闻工具（WS4 #1，#6） ─────────────────────────────────── */
@@ -169,6 +175,36 @@ export function createGetNewsTool() {
         lines.push('  (source(s) unavailable this call: ' + unavailable.join('; ') + ')')
       }
       return lines.join('\n')
+    },
+  })
+}
+
+/* ── us_get_fundamentals：美股基本面工具（WS4） ───────────────────────────────── */
+
+export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+  return defineTool({
+    name: 'us_get_fundamentals',
+    description:
+      'Get fundamental valuation and financial metrics for a US stock (Market Cap, Trailing P/E, Forward P/E, P/B, Diluted EPS, Dividend Yield, Beta, 52-Week Range, 3-Month Average Volume) via Yahoo Finance public API. Accepts market-canonical ticker, e.g. AAPL, TSLA, NVDA. No credentials required.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'US stock ticker symbol, market-canonical vocabulary, e.g. AAPL, MSFT, TSLA, NVDA',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      if (!symbol) {
+        throw new Error('us_get_fundamentals: symbol parameter is required (e.g. AAPL or TSLA)')
+      }
+      const result = await fetchUsFundamentals({ symbol, fetch: options.fetch })
+      return renderUsFundamentals(result, symbol)
     },
   })
 }

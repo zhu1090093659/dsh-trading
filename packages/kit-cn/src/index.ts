@@ -23,6 +23,7 @@ import {
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
+import { fetchCnFundamentals, renderCnFundamentals } from './fundamentals.js'
 
 // ── skill provider ────────────────────────────────────────────────────────────
 
@@ -92,18 +93,23 @@ export function apply(ctx: Context, _config: Config): void {
   // WS4 #1（#6）：cn_get_news——kit 内薄工具，东财快讯公共源（spike 推荐：A 级，单端点无鉴权）。
   // 缺省无 key 全程可用；每源独立容错，输出带来源名 + 时间 + 链接（铁律 #5，不引正文）。
   const newsTool = createGetNewsTool()
+  const fundamentalsTool = createGetFundamentalsTool()
   const tools = ctx.tools as unknown as {
     register(definition: { name: string }): unknown
     get(name: string): { name: string } | undefined
   }
-  if (tools.get(newsTool.name) !== undefined) {
-    ctx.logger('dsh-trading-cn-kit').info(
-      '[dsh-trading-cn-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
-      newsTool.name,
-    )
-    return
+  const registerOnce = (tool: ReturnType<typeof defineTool>): void => {
+    if (tools.get(tool.name) !== undefined) {
+      ctx.logger('dsh-trading-cn-kit').info(
+        '[dsh-trading-cn-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
+        tool.name,
+      )
+      return
+    }
+    tools.register(tool)
   }
-  tools.register(newsTool)
+  registerOnce(newsTool)
+  registerOnce(fundamentalsTool)
 }
 
 /* ── cn_get_news：A 股新闻工具（WS4 #1，#6） ─────────────────────────────────── */
@@ -165,6 +171,36 @@ export function createGetNewsTool() {
         lines.push('  (source(s) unavailable this call: ' + unavailable.join('; ') + ')')
       }
       return lines.join('\n')
+    },
+  })
+}
+
+/* ── cn_get_fundamentals：A 股基本面工具（WS4） ───────────────────────────────── */
+
+export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+  return defineTool({
+    name: 'cn_get_fundamentals',
+    description:
+      'Get fundamental valuation and financial indicators for China A-shares (Total Market Cap, Float Market Cap, Dynamic P/E, Trailing P/E, Static P/E, P/B, Turnover Rate, Amplitude, Limit Up/Down Prices, 52-Week Range) via Tencent public market quote API. Accepts market-canonical code (e.g. 600519.SH, 000001.SZ) or raw 6-digit code. No credentials required.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'China A-share symbol or 6-digit code, market-canonical vocabulary, e.g. 600519.SH, 000001.SZ, 600519',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      if (!symbol) {
+        throw new Error('cn_get_fundamentals: symbol parameter is required (e.g. 600519.SH or 600519)')
+      }
+      const result = await fetchCnFundamentals({ symbol, fetch: options.fetch })
+      return renderCnFundamentals(result, symbol)
     },
   })
 }

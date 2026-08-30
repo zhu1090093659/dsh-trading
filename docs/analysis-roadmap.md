@@ -63,18 +63,25 @@ Binance/OKX 公告页（RSS 或 HTML 列表）、主流加密媒体 RSS（CoinDe
 **依赖**：WS1（指标工具）+ WS2b（新闻工具）落地后内容才完整；可先写框架骨架留占位。
 **工作量**：小（纯知识写作，但需要领域判断力）。**协作者友好度**：中。
 
-### WS4 扩展数据（backlog，本迭代不做）
+### WS4 扩展数据（已全线交付 ✅）
 
-基本面（财报/流通量/代币经济学）、us/cn/hk 新闻源（源差异大，crypto 验证模式后再复制）、
-衍生品数据面（funding rate 之外的持仓量/清算——与 symbol-vocabulary 预留的 `-SWAP`
-规范形同批裁决）。各留 stub issue 占位。
+1. **us/cn/hk 新闻源**（✅ 已交付，PR #10 / #11 / #12）：
+   - `us_get_news`：Yahoo Finance + Google News RSS
+   - `cn_get_news`：东方财富快讯 API
+   - `hk_get_news`：东方财富港股过滤降级源
+2. **衍生品数据面**（✅ 已交付）：
+   - `crypto_get_derivatives`：Binance Futures / OKX 公共端点（OI 持仓量、多空人数比、大户持仓比、Taker 买卖比、资金费率），支持 `-SWAP` 规范词汇。
+3. **四市场基本面与估值**（✅ 已交付）：
+   - `crypto_get_fundamentals`：CoinCap + Binance（市值、FDV、流通量、总供应量、全球排名、24h 交易量与换手）
+   - `us_get_fundamentals`：Yahoo Finance Quote API（市值、PE(TTM)、Forward PE、PB、EPS、股息率、52周区间、Beta）
+   - `cn_get_fundamentals`：腾讯行情端点（总市值、流通市值、动态 PE、静态 PE、PB、换手率、振幅、涨跌停区间）
+   - `hk_get_fundamentals`：腾讯港股端点（总市值、流通市值、PE(TTM)、动态 PE、PB、股息率、换手率、52周区间）
 
-## 时序
+## 时序（全路线图均已结清）
 
 ```
 WS1（指标包+工具）──┐
-WS2a spike ──→ WS2b 新闻工具 ──→ WS2c key 增强 ──→ WS3 知识层完整版
-                （WS3 骨架可与 WS1/WS2 并行）
+WS2（新闻工具体系）──┴──→ WS3（知识层）──→ WS4（新闻/衍生品/四市场基本面全线完成 ✅）
 ```
 
 ## 与既有规范的对照（实施时不可逾越）

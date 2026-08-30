@@ -53,6 +53,82 @@ export interface Kline {
   readonly closeTime: number
 }
 
+/** 衍生品市场指标快照（持仓量/多空比/资金费等）。 */
+export interface DerivativesData {
+  /** 交易对符号，市场规范词汇（如 BTCUSDT 或 BTCUSDT-SWAP）。 */
+  readonly symbol: string
+  /** 数据来源（如 binance / okx）。 */
+  readonly source: string
+  /** 未平仓合约量（Open Interest，base 币数或张数）。 */
+  readonly openInterest?: number
+  /** 未平仓合约总价值（USD 或 quote 计价）。 */
+  readonly openInterestValue?: number
+  /** 多空人数比（Long/Short Account Ratio）。 */
+  readonly longShortRatio?: number
+  /** 大户持仓多空比（Top Trader Long/Short Position Ratio）。 */
+  readonly topTraderLongShortRatio?: number
+  /** 主动买入/卖出量比（Taker Buy/Sell Volume Ratio）。 */
+  readonly takerBuySellRatio?: number
+  /** 最新资金费率（小数，如 0.0001 表示 0.01%）。 */
+  readonly fundingRate?: number
+  /** 快照时间（epoch ms）。 */
+  readonly timestamp: number
+}
+
+/** 加密标的代币经济学与基本面快照。 */
+export interface CryptoFundamentals {
+  /** 规范符号或代币代码（如 BTCUSDT 或 BTC）。 */
+  readonly symbol: string
+  /** 标的资产名称（如 Bitcoin）。 */
+  readonly name?: string
+  /** 全球市值排名（Market Cap Rank）。 */
+  readonly rank?: number
+  /** 流通市值（USD 计价）。 */
+  readonly marketCapUsd?: number
+  /** 完全稀释估值（FDV，USD 计价）。 */
+  readonly fdvUsd?: number
+  /** 流通供应量。 */
+  readonly circulatingSupply?: number
+  /** 总供应量 / 最大供应量。 */
+  readonly totalSupply?: number
+  /** 24h 交易量（USD 计价）。 */
+  readonly volume24hUsd?: number
+  /** 快照时间（epoch ms）。 */
+  readonly timestamp: number
+}
+
+/** 股票市场标的基本面与财务估值快照（US/CN/HK）。 */
+export interface StockFundamentals {
+  /** 标的规范符号（如 AAPL, 600519.SH, 00700.HK）。 */
+  readonly symbol: string
+  /** 公司/标的名称。 */
+  readonly name?: string
+  /** 总市值（本位币计价）。 */
+  readonly marketCap?: number
+  /** 流通市值（A 股/港股适用）。 */
+  readonly floatMarketCap?: number
+  /** 滚动市盈率 PE (TTM)。 */
+  readonly peTtm?: number
+  /** 动态/预测市盈率 Forward / Dynamic PE。 */
+  readonly peDynamic?: number
+  /** 市净率 PB。 */
+  readonly pb?: number
+  /** 每股收益 EPS。 */
+  readonly eps?: number
+  /** 每股净资产 BPS。 */
+  readonly bps?: number
+  /** 股息率（小数，如 0.015 表示 1.5%）。 */
+  readonly dividendYield?: number
+  /** 换手率（小数或百分比）。 */
+  readonly turnoverRate?: number
+  /** 52 周最高价。 */
+  readonly fiftyTwoWeekHigh?: number
+  /** 52 周最低价。 */
+  readonly fiftyTwoWeekLow?: number
+  /** 快照时间（epoch ms）。 */
+  readonly timestamp: number
+}
+
 export type PositionSide = 'long' | 'short'
 
 /** 持仓快照。 */
