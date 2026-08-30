@@ -35,7 +35,8 @@ jobs:
         working-directory: dsh
         run: |
           pnpm install --no-frozen-lockfile
-          pnpm -r build
+          # 排除宿主自带 Web 前端（不在 @dsh-trading 依赖树；其 vite build 在 CI 不可用）
+          pnpm -r build --filter '!@deepseek-ai/dsh-web-frontend'
 
       - name: Retarget SDK overrides to CI checkout
         run: node scripts/retarget-overrides.mjs "$PWD/dsh"
