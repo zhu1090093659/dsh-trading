@@ -1,0 +1,22 @@
+HTTP/2 200 
+content-type: application/xml; charset=utf-8
+cache-control: no-cache, no-store, max-age=0, must-revalidate
+pragma: no-cache
+expires: Mon, 01 Jan 1990 00:00:00 GMT
+date: Sun, 30 Aug 2026 13:56:25 GMT
+strict-transport-security: max-age=31536000
+permissions-policy: ch-ua-arch=*, ch-ua-bitness=*, ch-ua-full-version=*, ch-ua-full-version-list=*, ch-ua-model=*, ch-ua-wow64=*, ch-ua-form-factors=*, ch-ua-platform=*, ch-ua-platform-version=*
+cross-origin-opener-policy: same-origin-allow-popups
+content-security-policy: require-trusted-types-for 'script';report-uri /_/DotsSplashUi/cspreport
+content-security-policy: script-src 'unsafe-inline' https: http:;object-src 'none';base-uri 'self';report-uri /_/DotsSplashUi/cspreport;worker-src 'self'
+accept-ch: Sec-CH-UA-Arch, Sec-CH-UA-Bitness, Sec-CH-UA-Full-Version, Sec-CH-UA-Full-Version-List, Sec-CH-UA-Model, Sec-CH-UA-WoW64, Sec-CH-UA-Form-Factors, Sec-CH-UA-Platform, Sec-CH-UA-Platform-Version
+cross-origin-resource-policy: same-site
+reporting-endpoints: default="/_/DotsSplashUi/web-reports?context=eJzjitDikmJw1ZBiqOk4w9B68xzrZCAuWXSetQmIu4B4BhAbKlxitQfiy-mXWIskrrA2APGnqhusAtU3WL8V-7KxlADxW38205BANmcg3qIZzCbEw9H59sIVNoELTbOuMCkpJ-UXxqfklxQXF-QkFmcUpxaVpRbFGxkYmRlYGJnqGZjHFxgAAL5qM5M"
+server: ESF
+x-xss-protection: 0
+x-frame-options: SAMEORIGIN
+x-content-type-options: nosniff
+alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+accept-ranges: none
+vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site,Accept-Encoding
+

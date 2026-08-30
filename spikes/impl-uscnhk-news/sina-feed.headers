@@ -1,0 +1,11 @@
+HTTP/2 200 
+server: nginx
+date: Sun, 30 Aug 2026 13:56:33 GMT
+content-type: application/json; charset=UTF-8
+vary: Accept-Encoding
+access-control-allow-origin: https://finance.sina.com.cn
+access-control-allow-headers: X-Requested-With,X_Requested_With
+sn-reqid: 194d70def4a9574e9ff682aba289fae7
+dpool_header: zhibo-sina-com-cn-5b7d675977-9r694
+x-via-ssl: ssl.21.sinag1.yf.lb.sinanode.com
+
