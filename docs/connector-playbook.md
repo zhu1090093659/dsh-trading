@@ -173,6 +173,7 @@ connector-okx 的对应实现段：
 | demo/live 凭证 | 不通用；按 ref 组分离（模板默认） | docs/okx-integration.md §2 |
 | 时间同步 | 首个签名请求对时 + 50102 重试一次（OKX 先例）；其他所同理加护栏 | docs/okx-integration.md §1 |
 | 撤单幂等化 | 「已终态」错误码视作成功——语义是「确保不再成交」 | rest.ts 清单 #6 |
+| 腾讯 K 线响应键回落 | hkfqkline 对无前权事件的代码返回 `day` 而非 `qfqday`（美团 hk03690 实证）——解析必须 qfq 键缺失回落裸键，行结构相同 | connector-tencent rest.ts（2026-08-31） |
 
 ---
 

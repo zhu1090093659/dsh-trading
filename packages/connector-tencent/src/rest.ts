@@ -424,11 +424,14 @@ export class TencentRestClient {
       )
     }
     const market = payload.data?.[wire]
-    const rows = market?.[mapping.key]
-    if (!Array.isArray(rows) || rows.length === 0) {
+    // 键回落（2026-08-31 实证，美团 hk03690）：hkfqkline 对无前权事件的代码返回
+    // `day`（未复权）而非 `qfqday`——优先 qfq 键，缺失回落裸键，行结构相同。
+    const raw = market?.[mapping.key] ?? market?.[mapping.tf]
+    const rows = Array.isArray(raw) ? raw : undefined
+    if (rows === undefined || rows.length === 0) {
       throw new TradingServiceError(
         'TRADING_UNSUPPORTED_SYMBOL',
-        `Tencent klines for ${sym}: no ${mapping.key} rows (unknown/delisted symbol?)`,
+        `Tencent klines for ${sym}: no ${mapping.key}/${mapping.tf} rows (unknown/delisted symbol?)`,
       )
     }
     const klines: Kline[] = []

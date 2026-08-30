@@ -219,6 +219,14 @@ describe('TencentRestClient.getKlines', () => {
     expect(klines[1]).toMatchObject({ open: 444, close: 455.2, high: 462.2, low: 443.4, volume: 27_742_475 })
   })
 
+  it('hk 无前权事件的代码回落 day 键（2026-08-31 实证：美团 hk03690 返回 day 而非 qfqday）', async () => {
+    const dayJson = JSON.stringify({ code: 0, msg: '', data: { hk03690: { day: [['2026-08-28', '76.550', '77.500', '78.400', '76.200', '33410203.00', {}]] } } })
+    const { impl } = stubFetch([{ match: 'hkfqkline/get', body: dayJson }])
+    const klines = await client('hk', { fetchImpl: impl }).getKlines('03690', '1d', 1)
+    expect(klines).toHaveLength(1)
+    expect(klines[0]).toMatchObject({ open: 76.55, close: 77.5, high: 78.4, low: 76.2 })
+  })
+
   it('maps week/month intervals to qfqweek/qfqmonth', async () => {
     const weekJson = JSON.stringify({ code: 0, msg: '', data: { sh600519: { qfqweek: [['2026-08-21', '1295.000', '1272.830', '1308.880', '1272.010', '213505.000']] } } })
     const monthJson = JSON.stringify({ code: 0, msg: '', data: { sh600519: { qfqmonth: [['2026-07-31', '1180.100', '1350.600', '1362.000', '1166.330', '1164067.000']] } } })
