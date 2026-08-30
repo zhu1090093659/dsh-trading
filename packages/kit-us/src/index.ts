@@ -26,6 +26,8 @@ import {
   type SkillDefinition,
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { aggregateNews, type AggregateNewsOptions } from './news.js'
 
 // ── skill provider（host 面 skill 全局可见即可，本切片不改 skill 作用域） ─────────
 
@@ -79,7 +81,7 @@ export const Config: Schema<Config> = Schema.object({
 })
 
 /** 需要宿主提供的 Cordis 服务。 */
-export const inject = ['skills']
+export const inject = ['skills', 'tools']
 
 /**
  * Cordis 插件名 = preset 行 id（TEMPLATES §8）：`dsh-trading-us-*` 市场命名空间，
@@ -91,4 +93,82 @@ export const name = 'dsh-trading-us-kit'
 
 export function apply(ctx: Context, _config: Config): void {
   ctx.skills.registerProvider(() => provider)
+
+  // WS4 #1（#6）：us_get_news——kit 内薄工具，直连公共源（spike 推荐：Yahoo + Google RSS 均单端点无鉴权，
+  // 无 connector 契约要素）。缺省无 key 全程可用；每源独立容错，输出带来源名 + 时间 + 链接（铁律 #5）。
+  const newsTool = createGetNewsTool()
+  const tools = ctx.tools as unknown as {
+    register(definition: { name: string }): unknown
+    get(name: string): { name: string } | undefined
+  }
+  if (tools.get(newsTool.name) !== undefined) {
+    ctx.logger('dsh-trading-us-kit').info(
+      '[dsh-trading-us-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
+      newsTool.name,
+    )
+    return
+  }
+  tools.register(newsTool)
+}
+
+/* ── us_get_news：美股新闻工具（WS4 #1，#6） ─────────────────────────────────── */
+
+const DEFAULT_NEWS_WINDOW_HOURS = 24
+const DEFAULT_NEWS_LIMIT = 20
+
+function renderNewsItem(item: { source: string; title: string; url: string; publishedAt: string }): string {
+  return `[${item.source}] ${item.publishedAt}  ${item.title}\n  ${item.url}`
+}
+
+export function createGetNewsTool() {
+  const description =
+    'Get recent US stock market news from public no-key sources (Yahoo Finance news + Google News RSS). '
+    + 'Aggregates and sorts newest-first; each item carries source name (publisher), publish time and a link for traceability. '
+    + 'Optionally filter by symbol (matched against item titles; note media headlines often use company names like "Apple" rather than tickers) and by a time window. '
+    + 'Source failures are tolerated and reported instead of failing the whole call. No credentials required. Distinguish announcements/regulatory from opinion (media) when citing.'
+  return defineTool({
+    name: 'us_get_news',
+    description,
+    parameters: {
+      symbol: {
+        type: 'string',
+        description: 'Optional symbol to filter by, market-canonical vocabulary, e.g. AAPL or TSLA. Used as the search query and matched against item titles.',
+      },
+      windowHours: {
+        type: 'number',
+        description: `Only keep items published within the last N hours (1-168, default ${DEFAULT_NEWS_WINDOW_HOURS}).`,
+        default: DEFAULT_NEWS_WINDOW_HOURS,
+      },
+      limit: {
+        type: 'number',
+        description: `Max items to return (1-50, default ${DEFAULT_NEWS_LIMIT}).`,
+        default: DEFAULT_NEWS_LIMIT,
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown; windowHours?: unknown; limit?: unknown }
+      const options: AggregateNewsOptions = {
+        symbol: typeof args.symbol === 'string' ? args.symbol : undefined,
+        windowHours: typeof args.windowHours === 'number' ? args.windowHours : undefined,
+        limit: typeof args.limit === 'number' ? args.limit : undefined,
+      }
+      const { items, unavailable } = await aggregateNews(options)
+      if (items.length === 0 && unavailable.length === 0) {
+        return 'us_get_news: no news items found within the requested window.'
+      }
+      const symbolNote = options.symbol ? ` symbol=${options.symbol.trim().toUpperCase()}` : ''
+      const lines = [
+        `us_get_news — ${items.length} item(s)${symbolNote}, window=${options.windowHours ?? DEFAULT_NEWS_WINDOW_HOURS}h (newest-first):`,
+        ...items.map(renderNewsItem),
+      ]
+      if (unavailable.length > 0) {
+        lines.push('  (source(s) unavailable this call: ' + unavailable.join('; ') + ')')
+      }
+      return lines.join('\n')
+    },
+  })
 }
