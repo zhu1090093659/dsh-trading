@@ -22,11 +22,18 @@ export function directionColor(value: number): string {
 }
 
 /** Price decimals by magnitude (crypto sub-dollar pairs need more precision). */
+export function priceDigits(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) return 2
+  const abs = Math.abs(value)
+  if (abs >= 1000) return 2
+  if (abs >= 1) return 2
+  if (abs >= 0.01) return 4
+  return 6
+}
+
 export function fmtPrice(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return '—'
-  const abs = Math.abs(value)
-  const digits = abs >= 1000 ? 2 : abs >= 1 ? 2 : abs >= 0.01 ? 4 : 6
-  return value.toFixed(digits)
+  return value.toFixed(priceDigits(value))
 }
 
 /** Signed percent string: +1.74% / -0.83% / 0.00%. */

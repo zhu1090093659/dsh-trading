@@ -128,6 +128,12 @@ DSH 扩展机制分层与对应选择：
    `@dsh-trading/client-ui-trading` 的 `/dshtrading/api` 桥。**为什么**：行情服务
    原本只存在于 preset isolate realm，GUI（host 作用域）拿不到；行情是读-only 公共
    数据，host 常驻不破坏会话隔离。
+9. **中栏舞台化（2026-08-30，3.0）**：中栏 = `MiddleStage` 视图注册表（行情 |
+   量化占位，互斥挂载、`dshtrading.stage.v1` 持久化），行情图表为
+   **lightweight-charts v5**（内联进单文件 client.js，终结 SVG-only 先例）；
+   指标 = 注册表（`pane: main|sub` + 参数 schema + 纯函数 compute）+ 预置
+   MA/EMA/BOLL/MACD/RSI/KDJ，自定义指标 = 注册表加一个 definition。见
+   `.agents/notes/implemented/architecture/2026-08-30-middle-stage-tradingview-views.md`。
 
 
 ## 安装与卸载（未发布 npm 阶段，本机开发形态）

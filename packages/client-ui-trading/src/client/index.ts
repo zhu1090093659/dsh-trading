@@ -15,6 +15,9 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSelectionStore, createWatchlistStore } from './store.ts'
+import { createChartStateStore } from './chart-state.ts'
+// 预置指标注册（副作用 import）：必须在任何 store/compute 使用前完成。
+import './indicators/presets.ts'
 import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
 import { HomeHistory } from './HomeHistory.tsx'
@@ -42,6 +45,7 @@ export function apply(ctx: ClientContext): void {
 
   const selection = createSelectionStore()
   const watchlists = createWatchlistStore()
+  const chart = createChartStateStore()
   const sessions = ctx.sessions as unknown as ISessions
   const uiWorkspace = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined
 
@@ -106,14 +110,17 @@ export function apply(ctx: ClientContext): void {
     }),
   }, SessionRail))
 
-  // 中栏行情面板：恒渲染，盖住栅格第 3 轨道（行情区）。
+  // 中栏行情面板：恒渲染，盖住栅格第 3 轨道（行情区）；3.0 起内含
+  // MiddleStage 视图注册表（行情 | 量化），指标态走 chart store。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
     id: 'dshtrading-quote-pane',
     order: 50,
     locale: NS,
     inject: () => ({
-      hooks: { selection },
+      hooks: { selection, chart },
+      toggleIndicator: (id) => { chart.togglePreset(id) },
+      setIndicatorParams: (id, params) => { chart.setParams(id, params) },
     }),
   }, QuotePane))
 }
@@ -158,6 +165,30 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'entry.settings': '设置',
       'chat.fold': '折叠会话列',
       'chat.expand': '展开会话列',
+      'stage.quote': '行情',
+      'stage.workflow': '量化',
+      'workflow.title': '量化工作流',
+      'workflow.placeholder': '回测与量化工作流正在规划中：策略编排、历史回测、绩效分析将在此区域展开。',
+      'indicator.picker': '技术指标',
+      'indicator.group.main': '主图指标',
+      'indicator.group.sub': '副图指标',
+      'indicator.ma': 'MA',
+      'indicator.ema': 'EMA',
+      'indicator.boll': 'BOLL',
+      'indicator.macd': 'MACD',
+      'indicator.rsi': 'RSI',
+      'indicator.kdj': 'KDJ',
+      'indicator.params': '参数',
+      'indicator.apply': '应用',
+      'indicator.cancel': '取消',
+      'indicator.param.period': '周期',
+      'indicator.param.p1': '周期1',
+      'indicator.param.p2': '周期2',
+      'indicator.param.p3': '周期3',
+      'indicator.param.fast': '快线',
+      'indicator.param.slow': '慢线',
+      'indicator.param.signal': '信号',
+      'indicator.param.mult': '倍数',
     },
     en: {
       'tab.watch': 'Watchlist',
@@ -196,6 +227,30 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'entry.settings': 'Settings',
       'chat.fold': 'Fold conversation panel',
       'chat.expand': 'Expand conversation panel',
+      'stage.quote': 'Chart',
+      'stage.workflow': 'Quant',
+      'workflow.title': 'Quant Workflow',
+      'workflow.placeholder': 'Backtesting and quant workflows are on the way: strategy composition, historical backtests and performance analytics will live here.',
+      'indicator.picker': 'Indicators',
+      'indicator.group.main': 'Main chart',
+      'indicator.group.sub': 'Sub-chart',
+      'indicator.ma': 'MA',
+      'indicator.ema': 'EMA',
+      'indicator.boll': 'BOLL',
+      'indicator.macd': 'MACD',
+      'indicator.rsi': 'RSI',
+      'indicator.kdj': 'KDJ',
+      'indicator.params': 'Parameters',
+      'indicator.apply': 'Apply',
+      'indicator.cancel': 'Cancel',
+      'indicator.param.period': 'Period',
+      'indicator.param.p1': 'Period 1',
+      'indicator.param.p2': 'Period 2',
+      'indicator.param.p3': 'Period 3',
+      'indicator.param.fast': 'Fast',
+      'indicator.param.slow': 'Slow',
+      'indicator.param.signal': 'Signal',
+      'indicator.param.mult': 'Multiple',
     },
   }
 }

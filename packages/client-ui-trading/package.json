@@ -26,7 +26,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/api": "workspace:^"
+    "@dsh-trading/api": "workspace:^",
+    "lightweight-charts": "^5.2.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

@@ -1,7 +1,7 @@
 /**
  * 中栏行情面板（2.4 定稿：中栏恒为行情，对话常驻右侧栏）：
  * 几何 = [自选停靠右缘, 对话列左缘/右缘竖条左缘] 之间的整块区域，
- * 内容复用 QuoteStage。
+ * 内容复用 MiddleStage（3.0 起中栏 = 视图注册表：行情 | 量化）。
  *
  * 对话列显隐由「是否有当前会话」驱动（官方会话 UI 整列移到右侧，
  * 审批卡在 composer 链随列可见，无会话时不存在可审批请求）：
@@ -15,14 +15,18 @@
  */
 import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { QuoteStage } from './QuoteStage.tsx'
+import { MiddleStage } from './MiddleStage.tsx'
 import type { Observable, SelectionState } from './store.ts'
+import type { ChartState } from './chart-state.ts'
 import css from './quote-pane.module.css'
 
 export interface QuotePaneInjected {
   hooks: {
     selection: Observable<SelectionState>
+    chart: Observable<ChartState>
   }
+  toggleIndicator: (id: string) => void
+  setIndicatorParams: (id: string, params: Record<string, number>) => void
 }
 
 export type QuotePaneProps =
@@ -37,7 +41,7 @@ interface Rect {
   height: number
 }
 
-export function QuotePane({ t, useSelection, useSessions }: QuotePaneProps) {
+export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, useSessions }: QuotePaneProps) {
   const [rect, setRect] = useState<Rect | null>(null)
 
   // 对话列在场判据：有当前会话（含首帧恢复），不要求会话已有内容——
@@ -93,8 +97,9 @@ export function QuotePane({ t, useSelection, useSessions }: QuotePaneProps) {
       data-dshtrading-quote-pane=""
       style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
     >
-      {/* QuoteStage 的 slot 运行时面（viewRequest 等）在面板场景不需要，只取 t/useSelection。 */}
-      <QuoteStage {...({ t, useSelection } as never)} />
+      {/* MiddleStage 的 slot 运行时面（viewRequest 等）在面板场景不需要，
+          只取 t/两个 store hook 与指标动作。 */}
+      <MiddleStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams } as never)} />
     </div>
   )
 }

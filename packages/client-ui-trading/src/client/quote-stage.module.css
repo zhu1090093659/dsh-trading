@@ -97,6 +97,13 @@
   opacity: 0.55;
 }
 
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .intervalTabs {
   display: flex;
   gap: 2px;
@@ -125,6 +132,195 @@
   background: var(--dsw-alias-fill-active, rgba(127, 127, 127, 0.16));
 }
 
+/* ---- 技术指标选择器（3.1：OKX 式单按钮 + 主/副图勾选面板，取代 chips 指标条） ---- */
+
+.indicatorAnchor {
+  position: relative;
+  margin-left: auto;
+}
+
+.pickerButton {
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: var(--dsw-alias-bg-l1, #ffffff);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.pickerButton:hover {
+  opacity: 1;
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.pickerButton[aria-expanded='true'] {
+  opacity: 1;
+  background: var(--dsw-alias-fill-active, rgba(127, 127, 127, 0.16));
+}
+
+.pickerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+
+.pickerPanel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: 240px;
+  max-height: min(420px, 60vh);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: var(--dsw-alias-bg-l1, #ffffff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+}
+
+.pickerTitle {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.pickerGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.pickerGroupTitle {
+  font-size: 11px;
+  opacity: 0.55;
+  margin: 6px 0 2px;
+}
+
+.pickerRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  border-radius: 5px;
+}
+
+.pickerLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 2px;
+  cursor: pointer;
+}
+
+.pickerLabel input {
+  accent-color: #2563eb;
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  cursor: pointer;
+  flex: none;
+}
+
+.pickerLabel span {
+  font-variant-numeric: tabular-nums;
+}
+
+.pickerParams {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.pickerParams:hover,
+.pickerParams[data-open='true'] {
+  opacity: 1;
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.paramEditor {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 6px;
+  border-top: 1px dashed var(--dsw-alias-border-l2, #e3e6ea);
+}
+
+.paramRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.paramRow input {
+  width: 72px;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  border-radius: 5px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.paramActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.paramButton {
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: transparent;
+  color: inherit;
+  padding: 3px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.paramButton:hover {
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.paramApply {
+  border-color: transparent;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.paramApply:hover {
+  background: #1d4ed8;
+}
+
+.indicatorReadout {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-height: 15px;
+  opacity: 0.9;
+}
+
 .chartBox {
   flex: 1;
   min-height: 0;
@@ -145,15 +341,4 @@
   font-variant-numeric: tabular-nums;
   opacity: 0.85;
   min-height: 16px;
-}
-
-.maLegend {
-  display: flex;
-  gap: 10px;
-  font-size: 11px;
-}
-
-.maLegend span {
-  margin-right: 3px;
-  opacity: 0.8;
 }

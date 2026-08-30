@@ -9,10 +9,13 @@
 - **浏览器半**（`src/client/index.ts`）：
   - 遮蔽 `sidebar.workspaces`（priority -1）→ 左栏市场页签（自选/crypto/us/cn/hk）+
     标的行（迷你走势、最新价、涨跌幅，红涨绿跌）、搜索加自选（localStorage 持久化）；
-  - `conversation.view` 加 `quote` 视图（order -10，第一个 tab）→ 中栏行情
-    （报价头 + SVG K线 + MA5/10/20 + 成交量 + 周期页签，crypto 支持分钟级）；
-  - `shell.overlay` 加 `dshtrading-side-panel` → 右侧可折叠停靠面板
-    （新建会话：工作区选择 + `uiWorkspace.connectWorkspace`；会话列表：`useSessions`）。
+  - `shell.overlay` 加 `dshtrading-quote-pane`（order 50）→ 中栏舞台
+    `MiddleStage`（3.0）：视图注册表（行情 | 量化占位）+ 顶部切换条；行情视图 =
+    报价头 + **lightweight-charts v5 K线**（主图蜡烛 + 叠加指标 MA/EMA/BOLL，
+    副图成交量 + MACD/RSI/KDJ，周期页签 + 指标条/参数编辑，crypto 支持分钟级）；
+  - `shell.overlay` 加 `dshtrading-session-rail`（order 60）→ 右缘常驻会话竖条
+    （折叠/新会话/设置，2.9）。
+  - 中栏几何由 QuotePane 实测（自选停靠右缘 ↔ 对话列/竖条左缘），视图互斥挂载。
 
 ## 数据与合规（铁律 #5）
 

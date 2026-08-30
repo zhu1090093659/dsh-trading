@@ -2,6 +2,13 @@
 
 Status: implemented
 
+> **3.0 修订（2026-08-30 同日）**：本篇「中栏 = 单一行情面板」与「纯 SVG K 线
+> （无第三方图表库，SVG-only 先例）」两条决策被取代——中栏升级为 MiddleStage
+> 视图注册表（行情 | 量化，互斥挂载），图表换 TradingView lightweight-charts
+> v5（canvas 内联进 client.js），指标走注册表 + 主图/副图 pane。详见
+> [middle-stage-tradingview-views](2026-08-30-middle-stage-tradingview-views.md)。
+> 本篇其余决策（slot 遮蔽拓扑、/dshtrading/api 桥、dataplane 拆分、轨道栅格）不变。
+
 > **2.4 修订（2026-08-30 同日，用户驱动）**：中栏双模式被推翻——**中栏恒为行情**，
 > 官方对话列整体移入右侧栏，轨迹视图退役。栅格从「rtl 翻转三栏」升级为「rtl + 四轨道
 > `!important` 接管」：`[272px | var(对话,0) | minmax(0,1fr) 行情 | var(详情,360px)]`，
