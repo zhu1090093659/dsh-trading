@@ -21,6 +21,8 @@ import {
   type SkillDefinition,
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
+import { defineTool } from '@deepseek-ai/dsh-tools'
+import { aggregateNews, type AggregateNewsOptions } from './news.js'
 
 // ── skill provider ────────────────────────────────────────────────────────────
 
@@ -74,7 +76,7 @@ export const Config: Schema<Config> = Schema.object({
 })
 
 /** 需要宿主提供的 Cordis 服务。 */
-export const inject = ['skills']
+export const inject = ['skills', 'tools']
 
 /**
  * Cordis 插件名 = preset 行 id（TEMPLATES §8）：`dsh-trading-hk-*` 市场命名空间，
@@ -86,4 +88,83 @@ export const name = 'dsh-trading-hk-kit'
 
 export function apply(ctx: Context, _config: Config): void {
   ctx.skills.registerProvider(() => provider)
+
+  // WS4 #1（#6）：hk_get_news——降级方案（用户裁决 2026-08-30）：东财快讯第 103 列 + 116. 港股代码/关键词过滤，
+  // 诚实标注覆盖不纯（统一 CN 金融流、无干净港股公共源）。铁律 #5 只引元数据，不取正文。
+  const newsTool = createGetNewsTool()
+  const tools = ctx.tools as unknown as {
+    register(definition: { name: string }): unknown
+    get(name: string): { name: string } | undefined
+  }
+  if (tools.get(newsTool.name) !== undefined) {
+    ctx.logger('dsh-trading-hk-kit').info(
+      '[dsh-trading-hk-kit] tool %s already registered by another provider — skipped (mutual exclusion)',
+      newsTool.name,
+    )
+    return
+  }
+  tools.register(newsTool)
+}
+
+/* ── hk_get_news：港股新闻工具（WS4 #1，#6 降级） ────────────────────────────── */
+
+const DEFAULT_NEWS_WINDOW_HOURS = 24
+const DEFAULT_NEWS_LIMIT = 20
+
+function renderNewsItem(item: { source: string; title: string; url: string; publishedAt: string }): string {
+  return `[${item.source}] ${item.publishedAt}  ${item.title}\n  ${item.url}`
+}
+
+export function createGetNewsTool() {
+  const description =
+    'Get recent Hong Kong stock market news, derived from Eastmoney financial fast-news (HK column) filtered to HK-relevant items '
+    + '(HKEX-listed marketId=116 codes or HK keywords). '
+    + 'DEGRADED SOURCE — Eastmoney is a unified CN financial feed; HK coverage is PARTIAL (HK news without an HK-listed code or HK keyword is not captured; not a dedicated HK news source). '
+    + 'Each item carries source name (东方财富), publish time and a link for traceability; fetches metadata only, never redistributes article bodies. '
+    + 'Optionally filter by symbol (HK code, e.g. 00700 / 00700.HK) and by a time window. No credentials required.'
+  return defineTool({
+    name: 'hk_get_news',
+    description,
+    parameters: {
+      symbol: {
+        type: 'string',
+        description: 'Optional symbol to filter by, market-canonical vocabulary, e.g. 00700 or 00700.HK (Tencent). Best-effort matched against HK-listed stock codes.',
+      },
+      windowHours: {
+        type: 'number',
+        description: `Only keep items published within the last N hours (1-168, default ${DEFAULT_NEWS_WINDOW_HOURS}).`,
+        default: DEFAULT_NEWS_WINDOW_HOURS,
+      },
+      limit: {
+        type: 'number',
+        description: `Max items to return (1-50, default ${DEFAULT_NEWS_LIMIT}).`,
+        default: DEFAULT_NEWS_LIMIT,
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown; windowHours?: unknown; limit?: unknown }
+      const options: AggregateNewsOptions = {
+        symbol: typeof args.symbol === 'string' ? args.symbol : undefined,
+        windowHours: typeof args.windowHours === 'number' ? args.windowHours : undefined,
+        limit: typeof args.limit === 'number' ? args.limit : undefined,
+      }
+      const { items, unavailable } = await aggregateNews(options)
+      if (items.length === 0 && unavailable.length === 0) {
+        return 'hk_get_news: no news items found within the requested window (degraded source: Eastmoney HK column may have no HK-relevant items in-window).'
+      }
+      const symbolNote = options.symbol ? ` symbol=${options.symbol.trim()}` : ''
+      const lines = [
+        `hk_get_news — ${items.length} item(s)${symbolNote}, window=${options.windowHours ?? DEFAULT_NEWS_WINDOW_HOURS}h (newest-first; DEGRADED — Eastmoney HK column, partial HK coverage):`,
+        ...items.map(renderNewsItem),
+      ]
+      if (unavailable.length > 0) {
+        lines.push('  (source(s) unavailable this call: ' + unavailable.join('; ') + ')')
+      }
+      return lines.join('\n')
+    },
+  })
 }

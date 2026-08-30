@@ -27,5 +27,9 @@ hk 无干净公共源。遗留一个复制期结构性坑：kit-us/kit-cn 的 SD
 
 - `us_get_news` / `cn_get_news` 无 key 全程可用；us/cn 单测全绿（us 6 / cn 4），tsdown 构建 3 文件（vendor 未内联）。
 - symbol 过滤已知局限：us 媒体多用全名（"Apple"）非 ticker（"AAPL"）→ 标题子串不命中；cn 标题用中文名（贵州茅台）非代码（600519）→ 靠 stockList 代码命中（快讯自带）。均写入工具 description 明示。
-- hk 新闻留待有干净公共源（或按「需 JS/合规抓取前提」裁决）时与 WS4 其余子工作流同批推进；`#6` 保持开放作跟踪伞。
-- 全量 `pnpm -r build`/`-r test` 由 PR CI 承接；本地已对 kit-crypto（16）、kit-us（6）、kit-cn（4）验证。
+- **hk_get_news（2026-08-30 用户裁决「用降级」）**：东财快讯第 103 列 + 按 `stockList` 的**港交所 marketId=116** 代码 / 港股关键词过滤；工具描述**明确标注 DEGRADED/部分覆盖**（港交所 news 若无关联代码/关键词则不捕获；东财是统一 CN 金融流，非专用港股源）。live 实测（本出口）取到「浙江海亮向港交所提交上市申请」+ 多只 **A+H 双重上市**公司公告（辽港/国航/东航/迈威——均带 `116.` 港股代码）——降级确有真实港股内容。单测 5 例全绿。
+- **live 实测暴露并修复的东财参数坑（cn/hk 共患）**：`getFastNewsList` **必须带 `sortEnd`（空串即可）与 `req_trace=1`**，否则返回 `data:null`（"Required String parameter 'sortEnd'/'req_trace' is not present"）。mock 测试不校验 URL 参数故未捕获，**真网络复测才暴露**——东财这类参数坑应入复制手册注意项。
+- **另一个 live 暴露并修复的契约坑**：东财 `stockList` 是**字符串数组 `<marketId>.<code>`**（如 `'1.600519'`/`'116.00700'`/`'105.AMZN'`），非对象数组；`relatedCodes` 保留全串，匹配时取 `.` 后 code 段（cn 按 code、hk 额外要求 `116.` 前缀）。
+- `#6` 保持开放作跟踪伞；hk 已按降级交付（不再阻塞），WS4 剩余为基本面（#2）、衍生品（#3）。
+- 全量 `pnpm -r build`/`-r test` 由 PR CI 承接；本地已对 kit-crypto（16）、kit-us（6）、kit-cn（4）、kit-hk（5）验证。
+

@@ -16,7 +16,7 @@ const failResp = (status: number, body = 'boom'): Resp => ({ ok: false, status, 
 const eastmoneyJson = {
   data: {
     fastNewsList: [
-      { title: '贵州茅台发布半年度业绩', showTime: '2026-08-30 19:00:00', code: '202608300001', summary: '【正文】...', stockList: [{ code: '600519' }] },
+      { title: '贵州茅台发布半年度业绩', showTime: '2026-08-30 19:00:00', code: '202608300001', summary: '【正文】...', stockList: ['1.600519'] },
       { title: '沪指收盘涨0.5%', showTime: '2026-08-29 15:00:00', code: '202608290002', summary: '【正文】...' },
     ],
   },
