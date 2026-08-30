@@ -16,15 +16,12 @@ if (!target || !target.startsWith('/')) {
   console.error('usage: node scripts/retarget-overrides.mjs <absolute dsh checkout path>')
   process.exit(2)
 }
-// 所有指向 deepseek-harness checkout 的路径统一替换。三种形态（2026-08-31 CI 实证）：
-// 1. file:/link: 绝对路径（overrides 块、importer specifier）；
-// 2. file:../ 相对路径（importer version 字段，随包目录深度变化）；
-// 3. resolution: {directory: ../...} 相对路径（无前缀——漏改会在 CI 撞 ENOENT）。
-const retarget = (text) => text
-  .replace(/(file:|link:)\S*deepseek-harness/g, (m, scheme) => `${scheme}${target}`)
-  .replace(/(directory: )\S*deepseek-harness/g, (m, prefix) => `${prefix}${target}`)
+// 只重写 pnpm-workspace.yaml 的 overrides；lockfile 不做文本手术——
+// 2026-08-31 CI 实证：lockfile 里 file: 路径有绝对/相对/peer 后缀 (pkg@file:...)
+// 三种形态，文本改写 peer 后缀形态会把锁文件语法打坏（路径带 ')'）。CI 侧配合
+// pnpm install --no-frozen-lockfile 让 pnpm 自己按重定向后的 overrides 重解依赖图。
+const retarget = (text) => text.replace(/(file:|link:)\S*deepseek-harness/g, (m, scheme) => `${scheme}${target}`)
 
-// pnpm-workspace.yaml（overrides 源）
 const wsFile = join(ROOT, 'pnpm-workspace.yaml')
 const wsNext = retarget(await readFile(wsFile, 'utf8'))
 if (!wsNext.includes(target)) {
@@ -32,12 +29,4 @@ if (!wsNext.includes(target)) {
   process.exit(1)
 }
 await writeFile(wsFile, wsNext)
-
-// pnpm-lock.yaml（2026-08-31 CI 实证：lockfile 的 overrides 块与 importer specifier
-// 同样内嵌本机绝对路径；frozen install 校验 overrides 一致性，必须同步重定向，
-// 否则 ERR_PNPM_LOCKFILE_CONFIG_MISMATCH）。
-const lockFile = join(ROOT, 'pnpm-lock.yaml')
-const lockNext = retarget(await readFile(lockFile, 'utf8'))
-if (lockNext.includes(target)) await writeFile(lockFile, lockNext)
-
-console.log(`retargeted overrides (workspace + lockfile) to ${target}`)
+console.log(`retargeted overrides (workspace only) to ${target}`)

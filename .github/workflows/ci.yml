@@ -32,6 +32,8 @@ jobs:
       - name: Retarget SDK overrides to CI checkout
         run: node scripts/retarget-overrides.mjs "$PWD/dsh"
 
-      - run: pnpm install
+      # --no-frozen-lockfile：overrides 重定向后 lockfile 内嵌的本机路径失配，
+      # 由 pnpm 按新 overrides 重解（CI 临时工作树，不回写仓库）。
+      - run: pnpm install --no-frozen-lockfile
       - run: pnpm -r build
       - run: pnpm -r test
