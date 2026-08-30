@@ -35,6 +35,13 @@ Status: implemented
    读 activeProvider；新市场 = dict 加键；数据/交易分离 = tradeProvider 字段预留
    不实现（铁律 #4）；多 profile 不同设置不引入（YAGNI）。
 
+> 后续修订（2026-08-30）：host 面数据行（dataplane）的激活解析改为**注册表模式**——
+> 本记录的「restart / 新建会话生效」语义此后只对 preset 平面成立；GUI 数据面经
+> tradingMarketDataRegistry 按路由当前值每请求惰性解析，settings 变更即刻生效。
+> 见 [2026-08-30-market-data-registry-hot-switch.md](2026-08-30-market-data-registry-hot-switch.md)。
+> provider enum 同日开放为字符串（schema 层不拒未知 slug），见
+> [2026-08-30-provider-vocabulary-open.md](2026-08-30-provider-vocabulary-open.md)。
+
 ## Alternatives considered
 
 - **双 preset 镜像（被否决的现状）**：新交易所 = 新 preset 的会话层扩散，配置问题

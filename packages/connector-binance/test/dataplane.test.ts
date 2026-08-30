@@ -47,3 +47,39 @@ describe('connector-binance dataplane', () => {
     expect(provided.tradingCryptoMarketData).toBeUndefined()
   })
 })
+
+describe('connector-binance dataplane（注册表模式，2026-08-30 整改 #1）', () => {
+  function makeRegistryCtx() {
+    const provided: Record<string, unknown> = {}
+    const registrations: Array<{ market: string; provider: string; service: unknown }> = []
+    const registry = {
+      register: (market: string, provider: string, service: unknown) => {
+        registrations.push({ market, provider, service })
+        return () => { registrations.splice(registrations.findIndex((r) => r.service === service), 1) }
+      },
+    }
+    const ctx = {
+      get: (key: string) => (key === 'tradingMarketDataRegistry' ? registry : undefined),
+      isolate: () => ({ reflect: { provide: () => {} } }), // isolate realm 内 provide 不落根
+      effect: (fn: () => () => void) => { fn() },
+      reflect: { provide: (name: string, value: unknown) => { provided[name] = value } },
+    } as unknown as Context
+    return { ctx, provided, registrations }
+  }
+
+  it('有注册表 → 注册 (crypto, binance)，不占 host 根市场键', () => {
+    const { ctx, provided, registrations } = makeRegistryCtx()
+    apply(ctx, CONFIG)
+    expect(registrations).toHaveLength(1)
+    expect(registrations[0]?.market).toBe('crypto')
+    expect(registrations[0]?.provider).toBe('binance')
+    expect(registrations[0]?.service).toBeDefined()
+    expect(provided.tradingCryptoMarketData).toBeUndefined() // 根键不被占用（与 okx 并存无冲突）
+  })
+
+  it('有注册表但 enabled=false → 不注册', () => {
+    const { ctx, registrations } = makeRegistryCtx()
+    apply(ctx, { ...CONFIG, enabled: false })
+    expect(registrations).toHaveLength(0)
+  })
+})

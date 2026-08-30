@@ -9,6 +9,7 @@ import {
   MARKET_SERVICE_KEYS,
   MAX_SYMBOLS,
   TradingBridge,
+  createBridgeHost,
   dispatchBridgeRequest,
   errorPayload,
   type BridgeHost,
@@ -105,6 +106,48 @@ describe('dispatchBridgeRequest', () => {
       .rejects.toThrowError(/no such endpoint/)
     await expect(dispatchBridgeRequest(bridge, 'POST', '/markets', new URLSearchParams()))
       .rejects.toThrowError(/only GET/)
+  })
+})
+
+
+describe('createBridgeHost（registry-first，2026-08-30 整改 #1）', () => {
+  it('注册表有激活项 → 用注册表服务；路由切换后即刻解析到新服务（热切换）', async () => {
+    const binance = fakeService({ getTicker: async (symbol) => ({ symbol, price: 1, timestamp: 1 }) })
+    const okx = fakeService({ getTicker: async (symbol) => ({ symbol, price: 2, timestamp: 2 }) })
+    let routed: string | undefined = 'binance'
+    const registry = {
+      active: (market: string) => {
+        if (market !== 'crypto' || routed === undefined) return undefined
+        return { provider: routed, service: routed === 'okx' ? okx : binance }
+      },
+    }
+    const host = createBridgeHost({ registry, legacy: () => undefined })
+    const bridge = new TradingBridge(host)
+    expect(host.activeProvider('crypto')).toBe('binance')
+    let wire = await bridge.tickers('crypto', ['BTCUSDT'])
+    expect(wire.tickers.BTCUSDT).toMatchObject({ ok: true, ticker: { price: 1 } })
+    routed = 'okx' // 模拟 settings 变更（无需重启、无需 watch）
+    wire = await bridge.tickers('crypto', ['BTCUSDT'])
+    expect(wire.tickers.BTCUSDT).toMatchObject({ ok: true, ticker: { price: 2 } })
+    expect(host.activeProvider('crypto')).toBe('okx')
+  })
+
+  it('注册表选中但未注册（包未装）→ 400 未安装，不静默降级；activeProvider 回退 router 值', () => {
+    const host = createBridgeHost({
+      registry: { active: () => undefined },
+      router: { activeProvider: () => 'okx' },
+      legacy: () => undefined,
+    })
+    expect(host.getMarketService('crypto')).toBeUndefined()
+    expect(host.activeProvider('crypto')).toBe('okx') // 用户能看到设置目标
+  })
+
+  it('注册表缺席（老部署）→ 回退 legacy 市场键直读', async () => {
+    const legacy = fakeService()
+    const host = createBridgeHost({ legacy: () => legacy })
+    const wire = await new TradingBridge(host).tickers('crypto', ['BTCUSDT'])
+    expect(wire.tickers.BTCUSDT).toMatchObject({ ok: true })
+    expect(host.activeProvider('crypto')).toBeUndefined()
   })
 })
 

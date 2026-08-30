@@ -49,3 +49,32 @@ describe('connector-okx dataplane', () => {
     expect(provided.tradingCryptoMarketData).toBeUndefined()
   })
 })
+
+describe('connector-okx dataplane（注册表模式，2026-08-30 整改 #1）', () => {
+  it('有注册表 → 注册 (crypto, okx)，不占 host 根市场键；enabled=false → 不注册', () => {
+    const registrations: Array<{ market: string; provider: string; service: unknown }> = []
+    const provided: Record<string, unknown> = {}
+    const registry = {
+      register: (market: string, provider: string, service: unknown) => {
+        registrations.push({ market, provider, service })
+        return () => {}
+      },
+    }
+    const makeRegistryCtx = () => ({
+      get: (key: string) => (key === 'tradingMarketDataRegistry' ? registry : undefined),
+      isolate: () => ({ reflect: { provide: () => {} } }),
+      effect: (fn: () => () => void) => { fn() },
+      reflect: { provide: (name: string, value: unknown) => { provided[name] = value } },
+    }) as unknown as Context
+
+    apply(makeRegistryCtx(), CONFIG)
+    expect(registrations).toHaveLength(1)
+    expect(registrations[0]?.market).toBe('crypto')
+    expect(registrations[0]?.provider).toBe('okx')
+    expect(provided.tradingCryptoMarketData).toBeUndefined()
+    expect(provided.tradingCryptoTrade).toBeUndefined() // 交易面永不进 host 数据面
+
+    apply(makeRegistryCtx(), { ...CONFIG, enabled: false })
+    expect(registrations).toHaveLength(1)
+  })
+})

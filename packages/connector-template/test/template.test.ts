@@ -115,3 +115,36 @@ describe('模板骨架', () => {
     ].sort())
   })
 })
+/**
+ * dataplane 骨架冒烟（2026-08-30 注册表模式）：注册表在 → 注册 (market, slug) 且
+ * 不占根市场键；enabled=false → 不注册；注册表缺席 → 回退直接 provide。
+ */
+describe('connector-template dataplane 骨架', () => {
+  it('三态：注册表模式 / enabled 硬关 / 老部署回退', async () => {
+    const { apply: dpApply } = await import('../src/dataplane.js')
+    const registrations: Array<{ market: string; provider: string }> = []
+    const provided: Record<string, unknown> = {}
+    const registry = {
+      register: (market: string, provider: string) => {
+        registrations.push({ market, provider })
+        return () => {}
+      },
+    }
+    const mk = (withRegistry: boolean) => ({
+      get: (key: string) => (key === 'tradingMarketDataRegistry' && withRegistry ? registry : undefined),
+      isolate: () => ({ reflect: { provide: () => {} } }),
+      effect: (fn: () => () => void) => { fn() },
+      reflect: { provide: (name: string, value: unknown) => { provided[name] = value } },
+    }) as never
+
+    dpApply(mk(true), { ...DEFAULTS, enabled: true })
+    expect(registrations).toEqual([{ market: '__MARKET__', provider: '__EXCHANGE_SLUG__' }])
+    expect(Object.keys(provided)).toHaveLength(0) // 根市场键不被占用
+
+    dpApply(mk(true), DEFAULTS) // enabled=false
+    expect(registrations).toHaveLength(1)
+
+    dpApply(mk(false), { ...DEFAULTS, enabled: true }) // 老部署回退
+    expect(provided['trading__MARKET_CAP__MarketData']).toBeDefined()
+  })
+})

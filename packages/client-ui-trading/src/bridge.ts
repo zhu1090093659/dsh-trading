@@ -4,8 +4,10 @@
  * 设计约束：
  * - 铁律 #5（数据合规）：本桥是无状态透传，不做任何缓存/落盘；频率由客户端轮询
  *   节奏控制，symbols 数量服务端封顶（MAX_SYMBOLS）。
- * - 服务解析走 resolver（每请求惰性取 ctx.get）而非 apply 时快照——连接器按
- *   settings 路由延迟激活（docs/exchange-routing.md），启动时未必已 provide。
+ * - 服务解析 registry-first（2026-08-30 注册表模式，架构评审整改 #1）：每请求经
+ *   tradingMarketDataRegistry 按路由当前值惰性解析——settings 切换交易所即刻生效
+ *   （GUI 热切换，无 watch 无重启）；注册表缺席或无对应注册项时回退旧的市场键
+ *   直读（老部署/连接器未升级）。preset 平面不经本桥（会话隔离）。
  * - 业务错误一律 HTTP 200 + { ok:false, code, message }（错误词汇沿用
  *   TradingErrorCode 惯例）；仅协议层错误用 4xx。
  */
@@ -22,6 +24,33 @@ export const MARKET_SERVICE_KEYS: Record<MarketId, string> = {
   us: 'tradingUsMarketData',
   cn: 'tradingCnMarketData',
   hk: 'tradingHkMarketData',
+}
+
+/** 注册表服务的最小形状（鸭式，与 @dsh-trading/router 的 MarketDataRegistryLike 同构）。 */
+export interface MarketDataRegistryLike {
+  active(market: string): { provider: string; service: MarketDataService } | undefined
+}
+
+/**
+ * 桥宿主工厂（registry-first 解析的唯一实现，node 半与单测共用）：
+ * - getMarketService：注册表有激活注册项 → 用之；否则回退 legacy 市场键直读
+ *   （2026-08-30 前形态：连接器老 dataplane 互斥 provide 市场键的部署）。
+ * - activeProvider：优先报告实际供数的注册项 provider；注册表未裁决时回退 router 值
+ *   （选中但未注册 → 用户能在 GUI 看到设置目标，行情区报「未安装/未激活」）。
+ */
+export function createBridgeHost(services: {
+  registry?: MarketDataRegistryLike
+  router?: { activeProvider(market: string): string | undefined }
+  legacy(market: MarketId): MarketDataService | undefined
+}): BridgeHost {
+  return {
+    getMarketService: market => {
+      const active = services.registry?.active(market)
+      if (active !== undefined) return active.service
+      return services.legacy(market)
+    },
+    activeProvider: market => services.registry?.active(market)?.provider ?? services.router?.activeProvider(market),
+  }
 }
 
 /** 单次批量报价的 symbols 封顶（保护公共端点，超出部分直接拒绝）。 */

@@ -25,7 +25,12 @@ import { Service } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 
-import type { MarketRouterService as MarketRouterServiceContract } from '@dsh-trading/api'
+import type {
+  MarketDataRegistration,
+  MarketDataRegistry as MarketDataRegistryContract,
+  MarketDataService,
+  MarketRouterService as MarketRouterServiceContract,
+} from '@dsh-trading/api'
 
 /**
  * Cordis 插件名 = patch 行 id：市场无关共享行，base 拥有（铁律 #1/#4）。
@@ -127,6 +132,80 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
 export const TRADING_MARKET_ROUTER_KEY = 'tradingMarketRouter'
 
 /* ------------------------------------------------------------------ */
+/* MarketDataRegistryService（provide 到 tradingMarketDataRegistry）        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 行情服务注册表（2026-08-30 注册表模式定稿，架构评审整改 #1）：
+ * 连接器 host 面数据行全部注册进本表（不再互斥式 provide 市场键），
+ * 激活解析 = 本表按 router 当前值惰性裁决——settings 变更即刻生效
+ *（GUI 热切换，修复「会话面新建会话生效、GUI 面须重启进程」的语义裂口）。
+ *
+ * 与 router 同插件同 fiber 提供：base patch 行零改动，生命周期随行。
+ */
+export class MarketDataRegistryService extends Service implements MarketDataRegistryContract {
+  // TS 编译期 private（realm 代理按类身份校验，README 定稿 5）。
+  private readonly entries = new Map<string, MarketDataRegistration>()
+
+  constructor(ctx: Context, private readonly router: MarketRouterService) {
+    super(ctx, TRADING_MARKET_DATA_REGISTRY_KEY)
+  }
+
+  private static keyOf(market: string, provider: string): string {
+    return market + ' ' + provider
+  }
+
+  register(market: string, provider: string, service: MarketDataService): () => void {
+    const key = MarketDataRegistryService.keyOf(market, provider)
+    const existing = this.entries.get(key)
+    if (existing !== undefined && existing.service !== service) {
+      // 配置错误必须响亮：同 (market, provider) 两个服务实例 = bundle patch 重复挂行。
+      throw new Error('[dsh-trading-market-router] duplicate market data registration: ' + market + '/' + provider)
+    }
+    const registration: MarketDataRegistration = { market, provider, service }
+    this.entries.set(key, registration)
+    return () => {
+      if (this.entries.get(key) === registration) this.entries.delete(key)
+    }
+  }
+
+  active(market: string): MarketDataRegistration | undefined {
+    const routed = this.router.activeProvider(market)
+    if (routed !== undefined) {
+      // 用户设置是权威：选中了但未注册（包未装/enabled=false）→ undefined，
+      // 不静默降级到别家（调用方面向用户报「provider 未安装/未激活」）。
+      return this.entries.get(MarketDataRegistryService.keyOf(market, routed))
+    }
+    // router 无该市场路由（新市场键/未知市场）：恰好一个注册项 → 零配置可用；
+    // 多个注册项无法裁决 → undefined（用户须在 settings 里显式选择）。
+    const all = this.list(market)
+    return all.length === 1 ? all[0] : undefined
+  }
+
+  list(market: string): readonly MarketDataRegistration[] {
+    return [...this.entries.values()].filter((entry) => entry.market === market)
+  }
+}
+
+/** 注册表服务键（与 @dsh-trading/api 的 Context 模块增强一致）。 */
+export const TRADING_MARKET_DATA_REGISTRY_KEY = 'tradingMarketDataRegistry'
+
+/** 连接器/桥侧最小形状（不定死接口）。 */
+export interface MarketDataRegistryLike {
+  register(market: string, provider: string, service: MarketDataService): () => void
+  active(market: string): MarketDataRegistration | undefined
+}
+
+/**
+ * 解析注册表服务的辅助（连接器 dataplane 与行情桥使用）：
+ * 拿不到（老部署 base/router 未升级）→ undefined，调用方回退旧的直接 provide 路径。
+ */
+export function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undefined {
+  const candidate = (ctx as unknown as { get?: (key: string) => unknown }).get?.(TRADING_MARKET_DATA_REGISTRY_KEY)
+  return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
+}
+
+/* ------------------------------------------------------------------ */
 /* 插件入口                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -148,6 +227,8 @@ export function apply(ctx: Context, config: Config): void {
   // loader 没写官方 config 合并语义时，dict 无默认 → 这里兜底合并 DEFAULT_MARKETS。
   const effective: Config = { markets: { ...DEFAULT_MARKETS, ...(config?.markets ?? {}) } }
   const service = new MarketRouterService(ctx, () => effective)
+  // 注册表与 router 同 fiber 提供：base patch 行零改动。
+  new MarketDataRegistryService(ctx, service)
 
   // settings 服务存在时：注册 namespace（base = 组合 entry，用户层赢）+ 源切换
   // + onChange 通知 diff。settings 缺失（老部署未挂）→ 服务照常 provide，

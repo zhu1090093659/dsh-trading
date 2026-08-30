@@ -18,8 +18,9 @@ import {
   BridgeProtocolError,
   MARKET_SERVICE_KEYS,
   TradingBridge,
+  createBridgeHost,
   dispatchBridgeRequest,
-  type BridgeHost,
+  type MarketDataRegistryLike,
 } from './bridge.ts'
 
 /** webServer / connection 的最小结构面（避免对本仓未安装的宿主包产生类型依赖）。 */
@@ -54,14 +55,13 @@ export function apply(ctx: Context): void {
     const webServer = webCtx.get('webServer') as unknown as WebServerLike | undefined
     const connection = webCtx.get('connection') as unknown as ConnectionLike | undefined
     if (webServer === undefined || connection === undefined) return
-    // 每请求惰性解析市场服务：连接器按 settings 路由延迟激活，启动时未必已 provide。
-    const host: BridgeHost = {
-      getMarketService: market => webCtx.get(MARKET_SERVICE_KEYS[market]) as MarketDataService | undefined,
-      activeProvider: market => {
-        const router = webCtx.get('tradingMarketRouter') as { activeProvider(m: string): string | undefined } | undefined
-        return router?.activeProvider(market)
-      },
-    }
+    // registry-first（2026-08-30 注册表模式）：每请求经注册表按路由当前值解析——
+    // settings 切换交易所 GUI 即刻生效（热切换）；注册表缺席回退旧市场键直读。
+    const host = createBridgeHost({
+      registry: webCtx.get('tradingMarketDataRegistry') as MarketDataRegistryLike | undefined,
+      router: webCtx.get('tradingMarketRouter') as { activeProvider(m: string): string | undefined } | undefined,
+      legacy: market => webCtx.get(MARKET_SERVICE_KEYS[market]) as MarketDataService | undefined,
+    })
     const bridge = new TradingBridge(host)
     const route = {
       kind: 'prefix' as const,

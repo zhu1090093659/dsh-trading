@@ -200,7 +200,47 @@ declare module '@deepseek-ai/cordis' {
      * dshtrading.markets.<market>.provider 选谁谁激活（docs/exchange-routing.md）。
      */
     tradingMarketRouter: MarketRouterService
+    /**
+     * 行情服务注册表（2026-08-30 注册表模式定稿，@dsh-trading/router 同插件提供）：
+     * 连接器 host 面数据行注册，GUI 行情桥按路由当前值惰性解析（热切换）。
+     */
+    tradingMarketDataRegistry: MarketDataRegistry
   }
+}
+
+/**
+ * 行情服务注册表契约（router 插件提供，2026-08-30 注册表模式定稿）：
+ * 连接器 host 面数据行不再互斥式 provide 市场键，而是全部注册进本注册表；
+ * 消费方（GUI 行情桥）经 active() 按路由当前值惰性解析——settings 变更即刻生效
+ * （GUI 热切换），无 watch、无进程重启。preset 平面不走注册表：会话内数据源
+ * 一致性是有意语义，切交易所对会话 = 新建会话生效（docs/exchange-routing.md §2.2）。
+ *
+ * 与 tradeProvider 预留的衔接：本注册表只承载 MarketDataService；数据/交易分离
+ * 落地时 TradeService 走独立注册面（不复用本键），铁律 #4 到时再抽象。
+ */
+export interface MarketDataRegistration {
+  /** 市场 slug（crypto/us/cn/hk；开放词汇，新市场 = 新键）。 */
+  readonly market: string
+  /** 提供者 slug（binance/okx/…；开放词汇，第三方连接器可注册新 slug）。 */
+  readonly provider: string
+  readonly service: MarketDataService
+}
+
+export interface MarketDataRegistry {
+  /**
+   * 注册一个市场的某 provider 行情服务；同 (market, provider) 重复注册抛错
+   * （配置错误必须响亮）。返回注销函数（调用方包进 ctx.effect 随 fiber 注销）。
+   */
+  register(market: string, provider: string, service: MarketDataService): () => void
+  /**
+   * 路由裁决后的当前激活注册项：router 选中的 provider 已注册 → 返回之；
+   * 选中了但未注册（包未装/enabled=false）→ undefined（调用方面向用户报错，
+   * 不静默降级到别家——用户设置是权威）；router 无该市场路由（未知市场键）
+   * 且恰好一个注册项 → 返回之（新市场零配置可用）；否则 undefined。
+   */
+  active(market: string): MarketDataRegistration | undefined
+  /** 某市场全部注册项（诊断/设置 UI 展示用）。 */
+  list(market: string): readonly MarketDataRegistration[]
 }
 
 /**
