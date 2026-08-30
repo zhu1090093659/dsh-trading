@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { apply as applyBinance } from '@dsh-trading/connector-binance'
 import { apply as applyOkx, type Config } from '../src/index.js'
 
+
 const OKX_DEFAULTS: Config = {
   enabled: false,
   env: 'demo',
@@ -27,7 +28,7 @@ function makeHost() {
   /** 共享工具注册表（模拟 agent scope 的同一模型工具面）。 */
   const registered = new Map<string, { name: string; owner: string }>()
   const logs: string[] = []
-  const newCtx = () => {
+  const newCtx = (tag = 'unknown') => {
     const ctx = new CordisContext() as unknown as {
       tools: unknown
       logger: unknown
@@ -40,15 +41,19 @@ function makeHost() {
         if (registered.has(def.name)) {
           throw new Error(`tool "${def.name}" is already registered in this scope`)
         }
-        registered.set(def.name, { ...def, owner: 'unknown' })
+        registered.set(def.name, { ...def, owner: tag })
+        logs.push(`REGISTERED ${def.name} by ${tag}`)
       },
       get: (name: string) => registered.get(name),
     }
-    ctx.logger = () => ({
-      // 简易 printf：%s 依序替换（连接器 log 面只用 %s）。
+    // cordis 内部 fiber 把 ctx.logger 当对象取 .error；连接器 helper 把它当函数调用
+    // （传名字取子 logger）——mock 必须同时满足两种用法。
+    const methods = {
       info: (...args: unknown[]) => logs.push(fmt(args)),
       warn: (...args: unknown[]) => logs.push(`WARN ${fmt(args)}`),
-    })
+      error: (...args: unknown[]) => logs.push(`ERR ${fmt(args)}`),
+    }
+    ctx.logger = Object.assign(() => methods, methods)
     return ctx
   }
   return { registered, logs, newCtx }
@@ -70,9 +75,9 @@ const wait = async (cond: () => boolean): Promise<void> => {
   })
 }
 
-const BINANCE_TOOLS = ['crypto_get_ticker', 'crypto_get_klines', 'crypto_place_order']
+const BINANCE_TOOLS = ['crypto_get_ticker', 'crypto_get_klines', 'crypto_get_indicators', 'crypto_place_order']
 const OKX_TOOLS = [
-  'crypto_get_ticker', 'crypto_get_klines', 'crypto_funding_rate',
+  'crypto_get_ticker', 'crypto_get_klines', 'crypto_get_indicators', 'crypto_funding_rate',
   'crypto_place_order', 'crypto_cancel_order', 'crypto_get_order',
   'crypto_get_balance', 'crypto_get_positions',
 ]
@@ -91,17 +96,17 @@ describe('互斥激活（enabled 默认 false）', () => {
 
   it('okx 激活 + binance 同树：同名工具让位（先到先得 + warn），okx 独有面全部注册', async () => {
     const host = makeHost()
-    applyBinance(host.newCtx() as never, { enabled: true, dryRun: true, liveTrading: false })
-    applyOkx(host.newCtx() as never, { ...OKX_DEFAULTS, enabled: true })
+    applyBinance(host.newCtx('binance') as never, { enabled: true, dryRun: true, liveTrading: false })
+    applyOkx(host.newCtx('okx') as never, { ...OKX_DEFAULTS, enabled: true })
     await wait(() => host.registered.size >= OKX_TOOLS.length)
     expect([...host.registered.keys()].sort()).toEqual([...OKX_TOOLS].sort())
-    // 三个同名工具被跳过且留 warn。
+    // 四个同名工具被跳过且留 warn（WS1b 起含 crypto_get_indicators）。
     for (const name of BINANCE_TOOLS) {
       expect(host.logs.some((line) => line.includes(`tool ${name} already registered`))).toBe(true)
     }
   })
 
-  it('okx 单独激活：全量注册（8 工具，含 tradingCryptoTrade 面的 5 个）', async () => {
+  it('okx 单独激活：全量注册（9 工具，含 tradingCryptoTrade 面的 5 个）', async () => {
     const host = makeHost()
     applyOkx(host.newCtx() as never, { ...OKX_DEFAULTS, enabled: true })
     await wait(() => host.registered.size >= OKX_TOOLS.length)
