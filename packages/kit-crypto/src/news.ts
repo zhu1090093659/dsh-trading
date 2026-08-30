@@ -10,8 +10,8 @@
  * 铁律 #5：输出只带元数据（来源名/标题/链接/发布时间），不取正文，不缓存，不再分发。
  * 每源独立容错：单源失败不炸整体，失败源在 `unavailable` 中注明（工具输出可见），fail-soft。
  */
-/** 已接入的新闻来源（EVIDENCE 分级总表：A 级打底 + 媒体面）。 */
-export type NewsSource = 'binance' | 'okx' | 'coindesk' | 'theblock'
+/** 已接入的新闻来源（EVIDENCE 分级总表：A 级打底/媒体面 + B 级 CryptoPanic 自备 key）。 */
+export type NewsSource = 'binance' | 'okx' | 'coindesk' | 'theblock' | 'cryptopanic'
 
 export interface NewsItem {
   /** 来源名（铁律 #5 的来源标注；同时是「引用给 Agent 可以、再分发不行」的边界提醒落点）。 */
@@ -33,6 +33,8 @@ export interface AggregateNewsOptions {
   fetch?: typeof globalThis.fetch
   /** 注入当前时间戳（ms，测试用）；缺省 Date.now()。 */
   now?: number
+  /** WS2c：CryptoPanic API token。有值时加测 CryptoPanic 免费层（B 增强）；无值 = 仅公共源。 */
+  cryptoPanicKey?: string
 }
 
 export interface AggregateNewsResult {
@@ -47,6 +49,7 @@ const DSHTRADING_API = 'https://www.binance.com/bapi/composite/v1/public/cms/art
 const OKX_ANNOUNCEMENT_URL = 'https://www.okx.com/api/v5/support/announcements'
 const COINDESK_RSS_URL = 'https://www.coindesk.com/arc/outboundfeeds/rss/'
 const THEBLOCK_RSS_URL = 'https://www.theblock.co/rss.xml'
+const CRYPTOPANIC_API_URL = 'https://cryptopanic.com/api/free/v1/posts/'
 
 const DEFAULT_WINDOW_HOURS = 24
 const DEFAULT_LIMIT = 20
@@ -186,6 +189,37 @@ async function fetchRssNews(fetchImpl: typeof globalThis.fetch, source: NewsSour
   return parseRss2(text, source)
 }
 
+/* ── CryptoPanic 免费层（WS2c B 增强；用户自备 key，无 key 或失败即降级） ───────── */
+
+interface CryptoPanicPost {
+  title?: string
+  url?: string
+  published_at?: string
+  currency?: string
+}
+
+/** 解析 CryptoPanic { results:[...] }（公开 free API 响应形）。 */
+export function parseCryptoPanic(data: unknown): NewsItem[] {
+  const results = (data as { results?: CryptoPanicPost[] }).results
+  if (!Array.isArray(results)) throw new Error('cryptopanic: unexpected payload (expected results[])')
+  const items: NewsItem[] = []
+  for (const post of results) {
+    if (!post.title || !post.url) continue
+    const ts = Date.parse(post.published_at ?? '')
+    if (!Number.isFinite(ts)) continue
+    items.push({ source: 'cryptopanic', title: post.title, url: post.url, publishedAt: new Date(ts).toISOString() })
+  }
+  return items
+}
+
+async function fetchCryptoPanicNews(fetchImpl: typeof globalThis.fetch, key: string, currencies: string): Promise<NewsItem[]> {
+  const url = new URL(CRYPTOPANIC_API_URL)
+  url.searchParams.set('auth_token', key)
+  if (currencies) url.searchParams.set('currencies', currencies)
+  const text = await fetchText(url.toString(), fetchImpl, 'cryptopanic')
+  return parseCryptoPanic(JSON.parse(text))
+}
+
 /* ── 聚合：并发取四源 → 时间窗/币种过滤 → 按时间倒序 → 截尾 ──────────────────── */
 
 /** 币种过滤 token 派生：剥离常见报价/后缀（BTCUSDT-SWAP → [BTCUSDT-SWAP, BTC]）。 */
@@ -217,12 +251,26 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
   const limit = clampNumber(options.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
   const tokens = deriveSymbolTokens(options.symbol)
 
-  const results = await Promise.allSettled([
+  // WS2c：有 key 时加测 CryptoPanic 免费层（B 增强）；无 key 仅公共源。
+  // cryptopanic 失败不炸整体——落入 allSettled 的 rejected 分支 → unavailable（降级语义）。
+  const fetchers: Promise<NewsItem[]>[] = [
     fetchBinanceNews(fetchImpl),
     fetchOkxNews(fetchImpl),
     fetchRssNews(fetchImpl, 'coindesk', COINDESK_RSS_URL),
     fetchRssNews(fetchImpl, 'theblock', THEBLOCK_RSS_URL),
-  ])
+  ]
+  if (options.cryptoPanicKey && options.cryptoPanicKey.trim()) {
+    // CryptoPanic currencies 参数用币种代码（BTC/ETH/SOL，不含报价/合约后缀）。
+    // tokens 含原始串（如 BTCUSDT-SWAP）与 base（BTC）：先剥合约后缀再剥报价段，
+    // 确保 swap 形也归一到币种代码（否则会把 'BTCUSDT-SWAP' 原样发给 CryptoPanic）。
+    const currencies = [...new Set(tokens
+      .map((t) => t.replace(/[-_]?(?:SWAP|PERP|FUTURES|DEFAULT)$/i, ''))
+      .map((t) => t.replace(/(?:USDT|USDC|BUSD|FDUSD|USD)$/i, ''))
+    )].filter(Boolean).join(',')
+    fetchers.push(fetchCryptoPanicNews(fetchImpl, options.cryptoPanicKey.trim(), currencies))
+  }
+
+  const results = await Promise.allSettled(fetchers)
 
   const items: NewsItem[] = []
   const unavailable: string[] = []

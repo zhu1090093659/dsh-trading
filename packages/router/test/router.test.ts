@@ -43,6 +43,12 @@ describe('dshtrading schema（用户设置一级）', () => {
     expect(activeProviderOf(ENTRY, 'hk')).toBe('tencent')
   })
 
+  it('news 默认空对象（无 key，WS2c）：resolved 无 key 不炸、newsKey 为 undefined', () => {
+    const resolve = Config as unknown as (value: unknown) => ConfigType
+    const resolved = resolve({ markets: { ...DEFAULT_MARKETS } })
+    expect(resolved.news?.cryptoPanicKey).toBeUndefined()
+  })
+
   it('dict 键开放：新市场（jp）不炸 schema（构造即验证，无 schema 报错）', () => {
     const cfg: ConfigType = { markets: { ...DEFAULT_MARKETS, jp: { provider: 'yahoo' } } }
     expect(activeProviderOf(cfg, 'jp')).toBe('yahoo')
@@ -172,5 +178,13 @@ describe('MarketRouterService（tradingMarketRouter）', () => {
     svc.notify()
     const before = events.length
     expect(events).toHaveLength(before) // dispose 后不再通知
+  })
+
+  it('newsKey：默认无 key（undefined），setSource 后读 resolved 的 news.cryptoPanicKey（WS2c）', () => {
+    const svc = new MarketRouterService(new CordisContext() as never, () => ENTRY)
+    expect(svc.newsKey()).toBeUndefined()
+    const resolved: ConfigType = { markets: { ...DEFAULT_MARKETS }, news: { cryptoPanicKey: 'sec_xxx' } }
+    svc.setSource(() => resolved)
+    expect(svc.newsKey()).toBe('sec_xxx')
   })
 })

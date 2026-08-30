@@ -7,7 +7,7 @@
  * OKX data[0].details、RSS 2.0 title/link/pubDate）。
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { aggregateNews, parseRss2, deriveSymbolTokens } from '../src/news.ts'
+import { aggregateNews, parseRss2, deriveSymbolTokens, parseCryptoPanic } from '../src/news.ts'
 import { createGetNewsTool } from '../src/index.ts'
 
 const NOW = Date.parse('2026-08-30T20:00:00Z')
@@ -50,6 +50,13 @@ const theBlockRss = `<?xml version="1.0"?><rss xmlns:dc="http://purl.org/dc/elem
   <title>The Block</title>
   <item><title>Layer 1 chain halts mainnet</title><link>https://www.theblock.co/news/1</link><guid>c</guid><pubDate>Sun, 30 Aug 2026 16:00:00 +0000</pubDate></item>
 </channel></rss>`
+
+const cryptoPanicJson = {
+  results: [
+    { title: 'BTC ETF inflows push price', url: 'https://cryptopanic.com/news/1', published_at: '2026-08-30T18:30:00.000Z', currency: 'BTC' },
+    { title: 'Solana outage reported', url: 'https://cryptopanic.com/news/2', published_at: 'bad-date', currency: 'SOL' },
+  ],
+}
 
 function mockFetchByUrl(responses: Record<string, () => Resp>) {
   return vi.fn(async (input: RequestInfo | URL) => {
@@ -146,6 +153,59 @@ describe('deriveSymbolTokens', () => {
   })
 })
 
+describe('CryptoPanic（WS2c：有 key B 增强，失败降级）', () => {
+  const keyOk = () => mockFetchByUrl({
+    'binance.com': () => jsonResp(binanceJson),
+    'okx.com': () => jsonResp(okxJson),
+    'coindesk.com': () => textResp(coinDeskRss),
+    'theblock.co': () => textResp(theBlockRss),
+    'cryptopanic.com': () => jsonResp(cryptoPanicJson),
+  })
+
+  it('有 key：cryptopanic 源被聚合（B 增强），无 key 则不存在', async () => {
+    const withKey = await aggregateNews({ fetch: keyOk(), now: NOW, cryptoPanicKey: 'sec_xyz' })
+    expect(withKey.items.some((i) => i.source === 'cryptopanic')).toBe(true)
+    const withoutKey = await aggregateNews({ fetch: allSourcesOk(), now: NOW })
+    expect(withoutKey.items.some((i) => i.source === 'cryptopanic')).toBe(false)
+  })
+
+  it('有 key 但 cryptopanic 失败 → 降级：unavailable 注明 cryptopanic，公共源照常返回', async () => {
+    const fetchImpl = mockFetchByUrl({
+      'binance.com': () => jsonResp(binanceJson),
+      'okx.com': () => jsonResp(okxJson),
+      'coindesk.com': () => textResp(coinDeskRss),
+      'theblock.co': () => textResp(theBlockRss),
+      'cryptopanic.com': () => failResp(403),
+    })
+    const { items, unavailable } = await aggregateNews({ fetch: fetchImpl, now: NOW, cryptoPanicKey: 'sec_xyz' })
+    expect(unavailable.some((u) => u.includes('cryptopanic'))).toBe(true)
+    expect(items.some((i) => i.source === 'binance')).toBe(true)
+    expect(items.some((i) => i.source === 'coindesk')).toBe(true)
+  })
+
+  it('parseCryptoPanic：解析 results[]，无效 published_at 跳过', () => {
+    const items = parseCryptoPanic(cryptoPanicJson)
+    expect(items).toHaveLength(1)
+    expect(items[0].source).toBe('cryptopanic')
+    expect(items[0].url).toBe('https://cryptopanic.com/news/1')
+  })
+
+  it('swap 符号：currencies 参数归一到币种代码（BTCUSDT-SWAP → BTC），不含合约后缀', async () => {
+    const fetchImpl = mockFetchByUrl({
+      'binance.com': () => jsonResp(binanceJson),
+      'okx.com': () => jsonResp(okxJson),
+      'coindesk.com': () => textResp(coinDeskRss),
+      'theblock.co': () => textResp(theBlockRss),
+      'cryptopanic.com': () => jsonResp(cryptoPanicJson),
+    })
+    await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: 'BTCUSDT-SWAP', cryptoPanicKey: 'sec_xyz' })
+    const urls = fetchImpl.mock.calls.map((c) => String(c[0]))
+    const panicUrl = urls.find((u) => u.includes('cryptopanic.com')) ?? ''
+    expect(panicUrl).toContain('currencies=BTC')
+    expect(panicUrl).not.toContain('SWAP')
+  })
+})
+
 describe('createGetNewsTool（工具壳）', () => {
   it('execute 渲染：含来源、时间、链接与 unavailable 注明', async () => {
     // 工具走真实 Date.now() 过滤时间窗：夹具须锚定在「现在」附近（而非固定 NOW 常量），
@@ -170,5 +230,22 @@ describe('createGetNewsTool（工具壳）', () => {
     expect(text).toContain('https://www.binance.com/en/support/announcement/abc123')
     expect(text).toContain('symbol=BTCUSDT')
     expect(text).not.toContain('source(s) unavailable') // 四源全成功，无缺席
+  })
+
+  it('有 key：输出标注 cryptopanicKey=set（B-source 注记），无 key 不加', async () => {
+    const base = Date.now() - 1_800_000
+    const nearBinance = { code: '000000', data: { catalogs: [{ catalogId: 48, articles: [{ id: 1, code: 'abc123', title: 'Binance Will Launch BTCUSDT Perpetual Contract', type: 1, releaseDate: base }] }] } }
+    const nearPanic = { results: [{ title: 'BTC ETF inflows push price', url: 'https://cryptopanic.com/news/1', published_at: new Date(base).toISOString(), currency: 'BTC' }] }
+    const fetchImpl = mockFetchByUrl({
+      'binance.com': () => jsonResp(nearBinance),
+      'cryptopanic.com': () => jsonResp(nearPanic),
+      'coindesk.com': () => textResp(`<rss><channel><item><title>X</title><link>https://cd/x</link><guid>a</guid><pubDate>${new Date(base).toUTCString()}</pubDate></item></channel></rss>`),
+      'theblock.co': () => textResp(`<rss><channel><item><title>Y</title><link>https://tb/y</link><guid>c</guid><pubDate>${new Date(base).toUTCString()}</pubDate></item></channel></rss>`),
+    })
+    vi.stubGlobal('fetch', fetchImpl)
+    const tool = createGetNewsTool({ cryptoPanicKey: 'sec_xyz' })
+    const text = await tool.execute({ windowHours: 24, limit: 10 }) as string
+    expect(text).toContain('cryptopanicKey=set (B-source)')
+    expect(text).toContain('[cryptopanic]')
   })
 })

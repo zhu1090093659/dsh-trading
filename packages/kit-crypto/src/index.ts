@@ -215,7 +215,12 @@ export function apply(ctx: Context, _config: Config): void {
   // WS2b（docs/analysis-roadmap.md #3）：动态新闻工具——kit 内薄工具，直连公共源
   // （spike 推荐：四源均单端点无鉴权，无 connector 契约要素，故不进 dataplane/路由）。
   // 缺省无 key 全程可用；每源独立容错，输出带来源名 + 时间 + 链接（铁律 #5）。
-  registerOnce(createGetNewsTool())
+  // WS2c（#4）：经 host 面 tradingMarketRouter 读设置 news.cryptoPanicKey——有值则
+  // crypto_get_news 加测 CryptoPanic 免费层（B 增强）；无 router / 无 key 即公共源。
+  const router = (ctx as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as
+    | { newsKey?: () => string | undefined }
+    | undefined
+  registerOnce(createGetNewsTool({ cryptoPanicKey: router?.newsKey?.() }))
 }
 
 /* ── crypto_get_news：动态新闻工具（WS2b，#3） ───────────────────────────────── */
@@ -227,9 +232,12 @@ function renderNewsItem(item: { source: string; title: string; url: string; publ
   return `[${item.source}] ${item.publishedAt}  ${item.title}\n  ${item.url}`
 }
 
-export function createGetNewsTool() {
+export function createGetNewsTool(toolOptions: { cryptoPanicKey?: string } = {}) {
   const description =
     'Get recent crypto news from public no-key sources (Binance listing/delisting/API announcements, OKX announcements, CoinDesk & The Block RSS). '
+    + (toolOptions.cryptoPanicKey
+      ? 'CryptoPanic user key is set — the CryptoPanic free tier is queried as an additional source and degrades gracefully if it fails. '
+      : '')
     + 'Aggregates and sorts newest-first; each item carries source name, publish time and a link for traceability. '
     + 'Optionally filter by symbol (matched against item titles; note media headlines often use asset names like "Bitcoin" rather than tickers) and by a time window. '
     + 'Source failures are tolerated and reported instead of failing the whole call. No credentials required. Distinguish announcements (listing, delisting, regulatory) from opinion (media) when citing.'
@@ -262,14 +270,16 @@ export function createGetNewsTool() {
         symbol: typeof args.symbol === 'string' ? args.symbol : undefined,
         windowHours: typeof args.windowHours === 'number' ? args.windowHours : undefined,
         limit: typeof args.limit === 'number' ? args.limit : undefined,
+        cryptoPanicKey: toolOptions.cryptoPanicKey,
       }
       const { items, unavailable } = await aggregateNews(options)
       if (items.length === 0 && unavailable.length === 0) {
         return 'crypto_get_news: no news items found within the requested window.'
       }
       const symbolNote = options.symbol ? ` symbol=${options.symbol.trim().toUpperCase()} (tokens: ${deriveSymbolTokens(options.symbol).join(', ')})` : ''
+      const keyNote = options.cryptoPanicKey ? ' cryptopanicKey=set (B-source) ' : ''
       const lines = [
-        `crypto_get_news — ${items.length} item(s)${symbolNote}, window=${options.windowHours ?? DEFAULT_NEWS_WINDOW_HOURS}h (newest-first):`,
+        `crypto_get_news — ${items.length} item(s)${symbolNote}${keyNote}, window=${options.windowHours ?? DEFAULT_NEWS_WINDOW_HOURS}h (newest-first):`,
         ...items.map(renderNewsItem),
       ]
       if (unavailable.length > 0) {
