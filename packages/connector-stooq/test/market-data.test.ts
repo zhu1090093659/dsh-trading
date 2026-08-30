@@ -155,7 +155,7 @@ describe('StooqRestClient.getTicker', () => {
     const ticker = await client.getTicker('aapl')
 
     expect(ticker).toEqual({
-      symbol: 'AAPL.US',
+      symbol: 'AAPL',
       price: 233.5,
       volume: 48770200,
       timestamp: Date.UTC(2026, 7, 31) + 86_400_000 - 1,

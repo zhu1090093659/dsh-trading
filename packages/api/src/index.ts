@@ -28,7 +28,7 @@ export type Interval =
 
 /** 最新行情快照（公共数据，无需凭证）。 */
 export interface Ticker {
-  /** 交易对符号，如 `BTCUSDT`。 */
+  /** 交易对符号，**市场规范词汇**（docs/symbol-vocabulary.md：crypto=BTCUSDT，us=AAPL，cn=600519.SH，hk=00700.HK）。 */
   readonly symbol: string
   /** 最新成交价。 */
   readonly price: number
@@ -118,6 +118,8 @@ export interface Disposable {
 
 /**
  * 行情服务契约：由市场连接器实现，注册到按市场命名空间的 ctx 键（如 ctx.tradingCrypto）。
+ * 符号词汇（2026-08-31 规范，docs/symbol-vocabulary.md）：入参接受市场规范形与连接器原生形，
+ * 输出 `symbol` 一律市场规范形——消费方（GUI/Agent/工作流）与数据源方言解耦。
  */
 export interface MarketDataService {
   getTicker(symbol: string): Promise<Ticker>

@@ -489,7 +489,7 @@ export class OkxRestClient {
 
   /** 最新行情：GET /api/v5/market/ticker。 */
   async getTicker(instId: string): Promise<Ticker> {
-    const id = requireInstId(instId)
+    const id = normalizeOkxSymbol(instId)
     const rows = await this.request('/api/v5/market/ticker', { query: { instId: id } })
     const d = rows[0] as Record<string, unknown> | undefined
     const price = num(d?.last)
@@ -500,7 +500,8 @@ export class OkxRestClient {
     const isSwap = id.endsWith('-SWAP')
     const volume = isSwap ? (num(d?.volCcy24h) ?? num(d?.vol24h)) : num(d?.vol24h)
     return {
-      symbol: str(d?.instId) ?? id,
+      // 输出一律规范形（docs/symbol-vocabulary.md）：下游看到的是 BTCUSDT 而非 BTC-USDT。
+      symbol: toCanonicalOkxSymbol(str(d?.instId) ?? id),
       price,
       timestamp: num(d?.ts) ?? Date.now(),
       ...(num(d?.bidPx) !== undefined ? { bid: num(d?.bidPx) } : {}),
@@ -511,7 +512,7 @@ export class OkxRestClient {
 
   /** K 线：GET /api/v5/market/candles（limit 最大 300；响应新→旧，翻转为旧→新）。 */
   async getKlines(instId: string, interval: Interval, limit = 100): Promise<Kline[]> {
-    const id = requireInstId(instId)
+    const id = normalizeOkxSymbol(instId)
     const bar = toBar(interval)
     if (!Number.isInteger(limit) || limit < 1 || limit > 300) {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX klines: limit must be an integer within 1..300, got ${limit}`)
@@ -543,7 +544,7 @@ export class OkxRestClient {
 
   /** 资金费率：GET /api/v5/public/funding-rate（仅 SWAP；10 次/2s）。 */
   async getFundingRate(instId: string): Promise<OkxFundingRate> {
-    const id = requireInstId(instId)
+    const id = normalizeOkxSymbol(instId)
     if (!id.endsWith('-SWAP')) {
       throw new TradingServiceError(
         'TRADING_UNSUPPORTED_SYMBOL',
@@ -646,13 +647,67 @@ export class OkxRestClient {
 /** instId 校验（R3 词汇：SPOT `BASE-QUOTE` 与 SWAP `BASE-QUOTE-SWAP`，OKX 原生连字符）。 */
 const INST_ID_PATTERN = /^[A-Z0-9]{1,20}-[A-Z0-9]{1,20}(-SWAP)?$/
 
-function requireInstId(instId: string): string {
-  const id = typeof instId === 'string' ? instId.trim().toUpperCase() : ''
-  if (!INST_ID_PATTERN.test(id)) {
-    throw new TradingServiceError(
-      'TRADING_UNSUPPORTED_SYMBOL',
-      `OKX: invalid instId ${JSON.stringify(instId)} — expected OKX native vocabulary like BTC-USDT or BTC-USDT-SWAP`,
-    )
+/* ------------------------------------------------------------------ */
+/* 符号互译（docs/symbol-vocabulary.md，2026-08-31 规范词汇）              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 规范形（crypto canonical）：BASEQUOTE 大写无分隔（BTCUSDT），衍生品预留
+ * BASEQUOTE-SWAP。OKX 原生形：BTC-USDT / BTC-USDT-SWAP。
+ */
+/**
+ * 已知 quote 货币后缀表（规范形拆 base/quote 的依据；最长匹配优先）。
+ * 表是连接器私有实现——新 quote 货币上线在此增补（规范只管词汇形态）。
+ */
+const KNOWN_QUOTES = ['USDT', 'USDC', 'USD', 'EUR', 'BTC', 'ETH', 'OKB'] as const
+
+/**
+ * 输入归一 → OKX 原生 instId。接受规范形（BTCUSDT / BTCUSDT-SWAP）与原生形
+ *（BTC-USDT / BTC-USDT-SWAP）；都解析不出才报 TRADING_UNSUPPORTED_SYMBOL。
+ */
+export function normalizeOkxSymbol(input: string): string {
+  const id = typeof input === 'string' ? input.trim().toUpperCase() : ''
+  // 按 dash 数消歧：规范 SWAP（BTCUSDT-SWAP，单横杠）与原生现货（BTC-USDT，单横杠）
+  // 同形——第二段恰为 'SWAP' 时按规范 SWAP 解（不存在 quote 货币叫 SWAP）；原生 SWAP
+  //（BTC-USDT-SWAP）双横杠无歧义。
+  const parts = id.split('-')
+  const splitCanonicalPair = (pair: string, swapSuffix: string): string | undefined => {
+    if (!/^[A-Z0-9]{2,24}$/.test(pair)) return undefined
+    for (const quote of KNOWN_QUOTES) {
+      if (pair.length > quote.length && pair.endsWith(quote)) {
+        return pair.slice(0, -quote.length) + '-' + quote + swapSuffix
+      }
+    }
+    return undefined
   }
-  return id
+  if (parts.length === 3) {
+    if (INST_ID_PATTERN.test(id)) return id // 原生 SWAP
+  } else if (parts.length === 2) {
+    if (parts[1] === 'SWAP') {
+      const translated = splitCanonicalPair(parts[0] ?? '', '-SWAP') // 规范 SWAP
+      if (translated !== undefined) return translated
+    } else if (INST_ID_PATTERN.test(id)) {
+      return id // 原生现货
+    }
+  } else if (parts.length === 1) {
+    const translated = splitCanonicalPair(id, '') // 规范现货
+    if (translated !== undefined) return translated
+  }
+  throw new TradingServiceError(
+    'TRADING_UNSUPPORTED_SYMBOL',
+    'OKX: cannot parse symbol ' + JSON.stringify(input)
+      + ' — use market-canonical vocabulary (BTCUSDT / BTCUSDT-SWAP) or OKX native (BTC-USDT / BTC-USDT-SWAP)',
+  )
+}
+
+/**
+ * 输出归一 → 规范形（下游永远看到市场规范词汇）。原生 BTC-USDT → BTCUSDT；
+ * BTC-USDT-SWAP → BTCUSDT-SWAP；已是规范形则原样返回。
+ */
+export function toCanonicalOkxSymbol(symbol: string): string {
+  const id = typeof symbol === 'string' ? symbol.trim().toUpperCase() : ''
+  if (!id.includes('-')) return id
+  const parts = id.split('-')
+  if (parts[parts.length - 1] === 'SWAP') return parts.slice(0, -1).join('') + '-SWAP'
+  return parts.join('')
 }

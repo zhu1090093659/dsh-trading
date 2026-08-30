@@ -310,7 +310,8 @@ export class StooqRestClient {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Stooq ticker for ${sym}: no data rows`)
     }
     return {
-      symbol: sym.toUpperCase(),
+      // 输出规范形（docs/symbol-vocabulary.md）：us 规范形无后缀（AAPL 而非 AAPL.US）。
+      symbol: sym.toUpperCase().replace(/\.US$/, ''),
       price: last.close,
       volume: last.volume,
       timestamp: last.closeTime,

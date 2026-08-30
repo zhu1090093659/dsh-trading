@@ -36,7 +36,8 @@ describe('getTicker', () => {
       data: [{ instId: 'BTC-USDT', last: '42000.5', bidPx: '42000.1', askPx: '42000.4', vol24h: '123.4', ts: '1700000000000' }],
     }))
     const ticker = await client(fetchImpl).getTicker('btc-usdt')
-    expect(ticker).toMatchObject({ symbol: 'BTC-USDT', price: 42000.5, bid: 42000.1, ask: 42000.4, volume: 123.4 })
+    // 输出一律规范形（docs/symbol-vocabulary.md）：下游看到 BTCUSDT 而非 BTC-USDT
+    expect(ticker).toMatchObject({ symbol: 'BTCUSDT', price: 42000.5, bid: 42000.1, ask: 42000.4, volume: 123.4 })
     expect(requests[0]?.url).toBe('https://okx.test/api/v5/market/ticker?instId=BTC-USDT')
   })
 
@@ -49,9 +50,15 @@ describe('getTicker', () => {
     expect(ticker.volume).toBe(456.78)
   })
 
-  it('非法 instId → TRADING_UNSUPPORTED_SYMBOL（OKX 原生连字符词汇）', async () => {
-    const { fetchImpl } = routeMock(() => okResponse({ code: '0', data: [] }))
-    await expect(client(fetchImpl).getTicker('BTCUSDT')).rejects.toMatchObject({ code: 'TRADING_UNSUPPORTED_SYMBOL' })
+  it('规范形互译（2026-08-31 规范词汇）：BTCUSDT → BTC-USDT；BTCUSDT-SWAP → BTC-USDT-SWAP；无法解析才报错', async () => {
+    const { fetchImpl, requests } = routeMock(() =>
+      okResponse({ code: '0', data: [{ instId: 'BTC-USDT', last: '42000.5', vol24h: '1', ts: '1700000000000' }] }))
+    await client(fetchImpl).getTicker('BTCUSDT')
+    expect(requests[0]?.url).toContain('instId=BTC-USDT') // 规范形互译为原生形
+    await client(fetchImpl).getTicker('ethusdt-swap')
+    expect(requests[1]?.url).toContain('instId=ETH-USDT-SWAP') // 小写规范衍生品形同样互译
+    await expect(client(fetchImpl).getTicker('!!!')).rejects.toMatchObject({ code: 'TRADING_UNSUPPORTED_SYMBOL' })
+    await expect(client(fetchImpl).getTicker('FOOXX')).rejects.toMatchObject({ code: 'TRADING_UNSUPPORTED_SYMBOL' }) // 未知 quote 后缀
   })
 })
 

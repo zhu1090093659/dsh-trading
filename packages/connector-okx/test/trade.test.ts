@@ -110,9 +110,12 @@ describe('crypto_place_order execute（闸门 × 工具层）', () => {
     expect(placeOrder).toHaveBeenCalledWith(expect.objectContaining({ symbol: 'BTC-USDT', dryRun: false }))
   })
 
-  it('参数校验：instId 必须 OKX 词汇（拒绝 Binance 形态 BTCUSDT）', async () => {
-    const { tool } = makeTool()
-    await expect(tool.execute({ ...MARKET_ARGS, instId: 'BTCUSDT' })).rejects.toThrowError(/instId/)
+  it('参数校验：规范形 BTCUSDT 接受（2026-08-31 规范词汇）；无法解析的输入才拒绝', async () => {
+    const { tool, getTicker } = makeTool()
+    const result = await tool.execute({ ...MARKET_ARGS, instId: 'BTCUSDT' })
+    expect((JSON.parse(result) as { dryRun: boolean }).dryRun).toBe(true) // 规范形顺利走完 dry-run 回执
+    expect(getTicker).toHaveBeenCalledWith('BTCUSDT') // 规范形穿透到服务层，由服务互译为 BTC-USDT
+    await expect(tool.execute({ ...MARKET_ARGS, instId: '!!!' })).rejects.toThrowError(/instId/)
   })
 })
 
@@ -406,7 +409,8 @@ describe('cancelOrder 幂等化与 getOrder 解析', () => {
     const trade = makeTradeService(fetchImpl)
     const positions = await trade.getPositions()
     expect(positions).toHaveLength(1)
-    expect(positions[0]).toMatchObject({ symbol: 'BTC-USDT-SWAP', side: 'short', size: 0.02, entryPrice: 42000, leverage: 3 })
+    // 输出一律规范形（docs/symbol-vocabulary.md）：BTC-USDT-SWAP → BTCUSDT-SWAP
+    expect(positions[0]).toMatchObject({ symbol: 'BTCUSDT-SWAP', side: 'short', size: 0.02, entryPrice: 42000, leverage: 3 })
   })
 
   it('getBalances：availEq/availBal/frozenBal 解析', async () => {

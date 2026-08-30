@@ -86,6 +86,8 @@ function client(market: TencentMarket, options: TencentRestOptions = {}): Tencen
 describe('normalizeCnSymbol', () => {
   it('accepts bare / SH / sz prefixed codes and routes by leading digit', () => {
     expect(normalizeCnSymbol('600519')).toBe('sh600519')
+    expect(normalizeCnSymbol('600519.SH')).toBe('sh600519') // 规范形输入（docs/symbol-vocabulary.md）
+    expect(normalizeCnSymbol('000001.SZ')).toBe('sz000001') // 规范形后缀优先于首位推断
     expect(normalizeCnSymbol('SH600519')).toBe('sh600519')
     expect(normalizeCnSymbol('sh600519')).toBe('sh600519')
     expect(normalizeCnSymbol('000001')).toBe('sz000001')
@@ -105,6 +107,8 @@ describe('normalizeHkSymbol', () => {
   it('zero-pads to 5 digits', () => {
     expect(normalizeHkSymbol('00700')).toBe('00700')
     expect(normalizeHkSymbol('700')).toBe('00700')
+    expect(normalizeHkSymbol('00700.HK')).toBe('00700') // 规范形输入
+    expect(normalizeHkSymbol('700.hk')).toBe('00700')
     expect(normalizeHkSymbol('5')).toBe('00005')
     expect(normalizeHkSymbol('99888')).toBe('99888')
   })
@@ -131,7 +135,7 @@ describe('TencentRestClient.getTicker (cn)', () => {
     const ticker = await client('cn', { fetchImpl: impl }).getTicker('600519')
     expect(urls[0]).toBe('https://qt.gtimg.cn/q=sh600519')
     expect(ticker.name).toBe('贵州茅台') // UTF-8 误解码时这里是乱码——GBK 契约直证
-    expect(ticker.symbol).toBe('600519')
+    expect(ticker.symbol).toBe('600519.SH') // 输出规范形（docs/symbol-vocabulary.md）
     expect(ticker.price).toBe(1297.4)
     expect(ticker.bid).toBe(1297.35)
     expect(ticker.ask).toBe(1297.4)
@@ -170,7 +174,7 @@ describe('TencentRestClient.getTicker (hk)', () => {
     const ticker = await client('hk', { fetchImpl: impl }).getTicker('700')
     expect(urls[0]).toBe('https://qt.gtimg.cn/q=r_hk00700')
     expect(ticker.name).toBe('腾讯控股')
-    expect(ticker.symbol).toBe('00700')
+    expect(ticker.symbol).toBe('00700.HK') // 输出规范形
     expect(ticker.price).toBe(455.2)
     // hk 字段 6 单位是股（与 cn 的手不同，布局差异直证）。
     expect(ticker.volume).toBe(27_742_475)

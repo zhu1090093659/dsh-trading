@@ -88,6 +88,7 @@ connector-okx 的对应实现段：
 | preset 行 id | `dsh-trading-crypto-connector-bybit-group`（组行）/ `dsh-trading-crypto-connector-bybit`（子行） | crypto-trader yml 先例 |
 | 凭证 ref | `BYBIT_API_KEY` / `BYBIT_DEMO_API_KEY` 等 | 模板默认 `${ENV_PREFIX}_*`（生成器展开） |
 | provider slug | 交易所 slug 本身（如 `bybit`），开放词汇 | 2026-08-30 起 schema 不校验（开放字符串），勿复用他人 slug（注册表同键抛错） |
+| 符号词汇 | 输入接受**市场规范形**（docs/symbol-vocabulary.md：crypto=BTCUSDT、us=AAPL、cn=600519.SH、hk=00700.HK）+ 本所原生形；输出 `Ticker/Order/Position.symbol` 一律规范形 | 2026-08-31 规范词汇：消费方与数据源方言解耦（切换 provider 不报废自选/工具参数） |
 
 ---
 

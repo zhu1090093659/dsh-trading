@@ -52,7 +52,9 @@ import {
   OKX_INTERVAL_VOCABULARY,
   OkxRestClient,
   TradingServiceError,
+  normalizeOkxSymbol,
   normalizeSize,
+  toCanonicalOkxSymbol,
 } from './rest.js'
 
 export * from './rest.js'
@@ -296,12 +298,12 @@ export class OkxTradeService extends Service implements TradeService {
    *   ctVal/lotSz/minSz 换算并本地校验（向下取整，省一次 51000 往返）。
    */
   async placeOrder(req: OrderRequest): Promise<Order> {
-    const instId = normalizeInstId(req.symbol)
+    const instId = normalizeOkxSymbol(req.symbol)
     if (req.dryRun !== false) {
       // 契约缺省面：本地模拟回执（工具层另有带市价参照的富回执）。
       return {
         id: `dry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        symbol: instId,
+        symbol: toCanonicalOkxSymbol(instId),
         side: req.side,
         type: req.type,
         status: 'filled',
@@ -333,7 +335,7 @@ export class OkxTradeService extends Service implements TradeService {
     }
     return {
       id: ordId,
-      symbol: instId,
+      symbol: toCanonicalOkxSymbol(instId),
       side: req.side,
       type: req.type,
       status: 'new',
@@ -358,7 +360,7 @@ export class OkxTradeService extends Service implements TradeService {
         'OKX cancelOrder requires the instId (symbol) together with the order id — OKX locates orders by (instId, ordId)',
       )
     }
-    const instId = normalizeInstId(symbol)
+    const instId = normalizeOkxSymbol(symbol)
     const credentials = await this.getCredentials()
     try {
       await this.client.cancelOrder(instId, id, this.auth(credentials))
@@ -373,7 +375,7 @@ export class OkxTradeService extends Service implements TradeService {
 
   /** 查单（api TradeService R3 新增成员）：state → OrderStatus 映射见 ORDER_STATE_MAP。 */
   async getOrder(symbol: string, id: string): Promise<Order> {
-    const instId = normalizeInstId(symbol)
+    const instId = normalizeOkxSymbol(symbol)
     const credentials = await this.getCredentials()
     const rows = await this.client.getOrder(instId, id, this.auth(credentials))
     const d = rows[0] as Record<string, unknown>
@@ -396,7 +398,7 @@ export class OkxTradeService extends Service implements TradeService {
     const timestamp = typeof d.uTime === 'string' ? Number(d.uTime) : typeof d.cTime === 'string' ? Number(d.cTime) : Date.now()
     return {
       id: ordId,
-      symbol: instId,
+      symbol: toCanonicalOkxSymbol(instId),
       side,
       type: ordType,
       status: mapOrderState(state),
@@ -436,7 +438,7 @@ export class OkxTradeService extends Service implements TradeService {
       const leverage = typeof d.lever === 'string' ? Number(d.lever) : undefined
       const timestamp = typeof d.uTime === 'string' ? Number(d.uTime) : Date.now()
       positions.push({
-        symbol: instId,
+        symbol: toCanonicalOkxSymbol(instId),
         side,
         size,
         ...(entryPrice !== undefined && Number.isFinite(entryPrice) ? { entryPrice } : {}),
@@ -493,19 +495,8 @@ export function mapOrderState(state: string): OrderStatus {
   }
 }
 
-function normalizeInstId(instId: string): string {
-  const id = typeof instId === 'string' ? instId.trim().toUpperCase() : ''
-  if (!INST_ID_PATTERN.test(id)) {
-    throw new TradingServiceError(
-      'TRADING_UNSUPPORTED_SYMBOL',
-      `OKX: invalid instId ${JSON.stringify(instId)} — expected OKX native vocabulary like BTC-USDT or BTC-USDT-SWAP`,
-    )
-  }
-  return id
-}
-
-/** OKX instId 词汇（R3：SPOT + SWAP；交割 FUTURES 不在本切片）。 */
-const INST_ID_PATTERN = /^[A-Z0-9]{1,20}-[A-Z0-9]{1,20}(-SWAP)?$/
+// 符号校验/互译统一走 rest.js 的 normalizeOkxSymbol / toCanonicalOkxSymbol
+//（docs/symbol-vocabulary.md：输入宽容接受规范形与原生形，输出一律规范形）。
 
 /* ------------------------------------------------------------------ */
 /* 下单工具（三态闸门）                                                     */
@@ -513,7 +504,7 @@ const INST_ID_PATTERN = /^[A-Z0-9]{1,20}-[A-Z0-9]{1,20}(-SWAP)?$/
 
 /** crypto_place_order 参数契约（OKX 词汇：instId 带连字符、side/ordType 小写）。 */
 export interface PlaceOrderArgs {
-  /** OKX 原生 instId，如 `BTC-USDT` 或 `BTC-USDT-SWAP`（执行前归一化为大写）。 */
+  /** 交易对符号：市场规范形（BTCUSDT / BTCUSDT-SWAP）或 OKX 原生形（BTC-USDT）皆收（docs/symbol-vocabulary.md）。 */
   readonly instId: string
   /** 方向（OKX 词汇小写）。 */
   readonly side: 'buy' | 'sell'
@@ -557,8 +548,11 @@ export function evaluateOrderGate(config: Config, args: PlaceOrderArgs): OrderGa
 
 /** 参数校验（模型调用问题抛普通 Error；服务故障才用错误词汇，connector-binance 先例）。 */
 function validatePlaceOrderArgs(args: PlaceOrderArgs): void {
-  if (!INST_ID_PATTERN.test(args.instId)) {
-    throw new Error(`crypto_place_order: invalid instId ${JSON.stringify(args.instId)} — expected an OKX instId like BTC-USDT or BTC-USDT-SWAP`)
+  // 规范词汇（2026-08-31）：接受市场规范形（BTCUSDT）与 OKX 原生形（BTC-USDT）。
+  try {
+    normalizeOkxSymbol(args.instId)
+  } catch {
+    throw new Error(`crypto_place_order: invalid instId ${JSON.stringify(args.instId)} — expected market-canonical (BTCUSDT / BTCUSDT-SWAP) or OKX native (BTC-USDT / BTC-USDT-SWAP)`)
   }
   if (args.side !== 'buy' && args.side !== 'sell') {
     throw new Error(`crypto_place_order: invalid side ${JSON.stringify(args.side)} — expected buy or sell`)
@@ -647,7 +641,7 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
   return defineTool({
     name: 'crypto_place_order',
     description:
-      'Place an OKX spot or perpetual-swap (SWAP) order, or simulate one. instId uses OKX vocabulary (BTC-USDT, BTC-USDT-SWAP). '
+      'Place an OKX spot or perpetual-swap (SWAP) order, or simulate one. instId accepts market-canonical (BTCUSDT, BTCUSDT-SWAP) or OKX native (BTC-USDT, BTC-USDT-SWAP) vocabulary. '
       + 'quantity is in BASE-ASSET coins: spot MARKET orders are sent with tgtCcy=base_ccy (OKX default for buys is quote-currency amount — a known trap), '
       + 'and SWAP quantities are converted to contracts via ctVal automatically. dryRun defaults to true and returns a DRY-RUN simulated fill receipt '
       + 'with the current market price as reference. Real execution (dryRun=false) requires the plugin liveTrading switch plus user approval; '
@@ -656,7 +650,7 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
       instId: {
         type: 'string',
         required: true,
-        description: 'OKX instrument id, e.g. BTC-USDT (spot) or BTC-USDT-SWAP (perpetual swap)',
+        description: 'Instrument id — market-canonical (BTCUSDT spot / BTCUSDT-SWAP perpetual) or OKX native (BTC-USDT / BTC-USDT-SWAP)',
       },
       side: {
         type: 'string',
@@ -802,12 +796,12 @@ export function apply(ctx: Context, config: Config): void {
       name: 'crypto_get_ticker',
       description:
         'Get the latest public ticker (last price, bid/ask, 24h volume) for an OKX instrument via the OKX public REST API. '
-        + 'instId uses OKX vocabulary (BTC-USDT spot, BTC-USDT-SWAP perpetual). No credentials required.',
+        + 'instId accepts market-canonical (BTCUSDT spot, BTCUSDT-SWAP perpetual) or OKX native vocabulary. No credentials required.',
       parameters: {
         instId: {
           type: 'string',
           required: true,
-          description: 'OKX instrument id, e.g. BTC-USDT or BTC-USDT-SWAP',
+          description: 'Instrument id — market-canonical (BTCUSDT / BTCUSDT-SWAP) or OKX native (BTC-USDT / BTC-USDT-SWAP)',
         },
       },
       output: {
@@ -830,7 +824,7 @@ export function apply(ctx: Context, config: Config): void {
         instId: {
           type: 'string',
           required: true,
-          description: 'OKX instrument id, e.g. BTC-USDT or BTC-USDT-SWAP',
+          description: 'Instrument id — market-canonical (BTCUSDT / BTCUSDT-SWAP) or OKX native (BTC-USDT / BTC-USDT-SWAP)',
         },
         interval: {
           type: 'string',
@@ -859,13 +853,13 @@ export function apply(ctx: Context, config: Config): void {
     registerTool(ctx, defineTool({
       name: 'crypto_funding_rate',
       description:
-        'Get the current and next funding rate for an OKX perpetual swap (instId like BTC-USDT-SWAP) via the OKX public REST API. '
+        'Get the current and next funding rate for an OKX perpetual swap (instId like BTCUSDT-SWAP or BTC-USDT-SWAP) via the OKX public REST API. '
         + 'No credentials required.',
       parameters: {
         instId: {
           type: 'string',
           required: true,
-          description: 'OKX perpetual swap instrument id, e.g. BTC-USDT-SWAP',
+          description: 'OKX perpetual swap instrument id, e.g. BTCUSDT-SWAP (canonical) or BTC-USDT-SWAP (native)',
         },
       },
       output: {
@@ -887,7 +881,7 @@ export function apply(ctx: Context, config: Config): void {
       name: 'crypto_cancel_order',
       description: 'Cancel an OKX order by (instId, ordId). Cancelling an already-terminal order (filled/canceled) is reported as already-terminal, not an error.',
       parameters: {
-        instId: { type: 'string', required: true, description: 'OKX instrument id the order belongs to, e.g. BTC-USDT' },
+        instId: { type: 'string', required: true, description: 'Instrument id the order belongs to — canonical (BTCUSDT) or native (BTC-USDT)' },
         ordId: { type: 'string', required: true, description: 'OKX order id (ordId from place/get order)' },
       },
       output: {
@@ -904,7 +898,7 @@ export function apply(ctx: Context, config: Config): void {
       name: 'crypto_get_order',
       description: 'Query one OKX order by (instId, ordId): state, filled quantity, average price. Read-only.',
       parameters: {
-        instId: { type: 'string', required: true, description: 'OKX instrument id, e.g. BTC-USDT' },
+        instId: { type: 'string', required: true, description: 'Instrument id — canonical (BTCUSDT / BTCUSDT-SWAP) or native (BTC-USDT)' },
         ordId: { type: 'string', required: true, description: 'OKX order id' },
       },
       output: {

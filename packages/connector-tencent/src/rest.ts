@@ -48,8 +48,10 @@ export class TradingServiceError extends Error {
 
 export type TencentMarket = 'cn' | 'hk'
 
-const CN_SYMBOL_PATTERN = /^(?:(sh|sz)(\d{6})|(\d{6}))$/
-const HK_SYMBOL_PATTERN = /^(\d{1,5})$/
+// 规范词汇（docs/symbol-vocabulary.md）：接受 600519.SH / 600519.sh / SH600519 / 裸 6 位。
+const CN_SYMBOL_PATTERN = /^(?:(sh|sz)(\d{6})|(\d{6})(?:\.(sh|sz))?)$/
+// 规范词汇：接受 00700.HK（规范形）与裸 1-5 位数字（宽容输入）。
+const HK_SYMBOL_PATTERN = /^(\d{1,5})(?:\.hk)?$/
 
 /**
  * 规范化 A 股符号：接受 `600519` / `SH600519` / `sh600519` / `sz000001`，统一为
@@ -71,9 +73,10 @@ export function normalizeCnSymbol(symbol: string): string {
       `Symbol ${JSON.stringify(symbol)} is not a valid CN A-share symbol (expected 6-digit code, optionally SH/SZ prefixed)`,
     )
   }
-  if (m[1]) return `${m[1]}${m[2]}`
+  if (m[1]) return `${m[1]}${m[2]}` // 前缀形 sh600519
   const code = m[3]
-  const prefix = code.startsWith('6') || code.startsWith('9') ? 'sh' : 'sz'
+  if (m[4]) return `${m[4]}${code}` // 规范形 600519.SH（后缀即交易所）
+  const prefix = code.startsWith('6') || code.startsWith('9') ? 'sh' : 'sz' // 裸码宽容输入：按首位推断
   return `${prefix}${code}`
 }
 
@@ -88,7 +91,7 @@ export function normalizeHkSymbol(symbol: string): string {
       'Symbol must be a non-empty string, e.g. 00700 or 700',
     )
   }
-  const m = HK_SYMBOL_PATTERN.exec(symbol.trim())
+  const m = HK_SYMBOL_PATTERN.exec(symbol.trim().toLowerCase())
   if (!m) {
     throw new TradingServiceError(
       'TRADING_UNSUPPORTED_SYMBOL',
@@ -101,6 +104,16 @@ export function normalizeHkSymbol(symbol: string): string {
 /** 按市场规范化符号并返回市场。 */
 export function normalizeSymbol(market: TencentMarket, symbol: string): string {
   return market === 'hk' ? normalizeHkSymbol(symbol) : normalizeCnSymbol(symbol)
+}
+
+/**
+ * 输出归一 → 规范形（docs/symbol-vocabulary.md）：cn wire 形 sh600519 → 600519.SH；
+ * hk 5 位形 00700 → 00700.HK。下游永远看到市场规范词汇。
+ */
+export function toCanonicalTencentSymbol(market: TencentMarket, wireOrCode: string): string {
+  if (market === 'hk') return `${wireOrCode.replace(/^hk/i, '')}.HK`
+  const m = /^(sh|sz)(\d{6})$/i.exec(wireOrCode)
+  return m ? `${m[2]}.${(m[1] ?? '').toUpperCase()}` : wireOrCode
 }
 
 /* ------------------------------------------------------------------ */
@@ -374,7 +387,9 @@ export class TencentRestClient {
     const timestamp = this.#market === 'hk'
       ? wallTimeToEpochMs(fields[30] ?? '', 'Asia/Hong_Kong')
       : wallTimeToEpochMs(fields[30] ?? '', 'Asia/Shanghai')
-    return this.#market === 'hk' ? parseHkTicker(fields, timestamp) : parseCnTicker(fields, timestamp)
+    const parsed = this.#market === 'hk' ? parseHkTicker(fields, timestamp) : parseCnTicker(fields, timestamp)
+    // 输出一律规范形（响应体 fields[2] 是裸代码，交易所信息在请求时的 wire 前缀里）。
+    return { ...parsed, symbol: toCanonicalTencentSymbol(this.#market, sym) }
   }
 
   /**

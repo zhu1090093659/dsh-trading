@@ -157,6 +157,13 @@ DSH 扩展机制分层与对应选择：
    `.agents/notes/implemented/architecture/2026-08-30-middle-stage-tradingview-views.md`。
 
 
+10. **市场规范符号词汇（2026-08-31，docs/symbol-vocabulary.md）**：消费方（GUI 自选、
+    Agent 工具参数、存储）只说市场规范形（crypto=`BTCUSDT`、us=`AAPL`、
+    cn=`600519.SH`、hk=`00700.HK`），连接器在 REST 边界互译——输入宽容（规范形
+    + 本所原生形都收），**输出一律规范形**。切换 provider 不再报废已存符号
+    （实证缺口：provider=okx 时自选里的 Binance 形 `BTCUSDT` 全数报错）。
+    衍生品规范形 `-SWAP` 后缀为预留词汇，随首个衍生品数据面落地。
+
 ## 安装与卸载（未发布 npm 阶段，本机开发形态）
 
 ### 安装到任意 profile
