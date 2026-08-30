@@ -109,6 +109,9 @@ importers:
       '@dsh-trading/client-ui-settings':
         specifier: workspace:^
         version: link:../client-ui-settings
+      '@dsh-trading/client-ui-trading':
+        specifier: workspace:^
+        version: link:../client-ui-trading
       '@dsh-trading/router':
         specifier: workspace:^
         version: link:../router
@@ -128,6 +131,31 @@ importers:
       '@dsh-trading/router':
         specifier: workspace:^
         version: link:../router
+    devDependencies:
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.31
+      lightningcss:
+        specifier: ^1.0.0
+        version: 1.33.0
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(lightningcss@1.33.0)(tsx@4.23.12)
+
+  packages/client-ui-trading:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: file:/Users/zcl/code/deepseek-harness/vendor/cordis
+        version: file:../deepseek-harness/vendor/cordis
+      '@dsh-trading/api':
+        specifier: workspace:^
+        version: link:../api
     devDependencies:
       '@types/react':
         specifier: ~18.3.1

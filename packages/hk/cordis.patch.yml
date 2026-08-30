@@ -17,3 +17,9 @@
 - insert:
     - id: dsh-trading-hk-installer
       name: '@dsh-trading/hk'
+
+    # host 面数据行（2026-08-30 GUI 行情桥配套）：只 provide tradingHkMarketData。
+    - id: dsh-trading-hk-dataplane
+      name: '@dsh-trading/connector-tencent/dataplane'
+      config:
+        market: hk

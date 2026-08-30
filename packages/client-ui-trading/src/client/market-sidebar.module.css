@@ -1,0 +1,226 @@
+/* MarketSidebar —— 富途式左栏（市场页签 + 自选列表）。 */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  font-size: 13px;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 10px 0;
+  flex-wrap: wrap;
+}
+
+.tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: inherit;
+  opacity: 0.72;
+  cursor: pointer;
+}
+
+.tab:hover {
+  opacity: 1;
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.tab[data-active='true'] {
+  opacity: 1;
+  font-weight: 600;
+  background: var(--dsw-alias-fill-active, rgba(127, 127, 127, 0.16));
+}
+
+.addRow {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.addInput {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  background: transparent;
+  color: inherit;
+}
+
+.addInput:focus {
+  outline: none;
+  border-color: var(--dsw-alias-border-active, #4a90e2);
+}
+
+.addButton {
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.addButton:hover:not(:disabled) {
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.addButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 4px 8px;
+}
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px 76px;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.08));
+}
+
+.row[data-selected='true'] {
+  background: var(--dsw-alias-fill-active, rgba(74, 144, 226, 0.12));
+}
+
+.idents {
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.codeRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 1px;
+}
+
+.code {
+  font-size: 11px;
+  opacity: 0.55;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marketTag {
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  opacity: 0.75;
+  flex: none;
+}
+
+.spark {
+  justify-self: center;
+  opacity: 0.9;
+}
+
+.quote {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.price {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pct {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.row:hover .remove {
+  opacity: 0.6;
+}
+
+.remove:hover {
+  opacity: 1 !important;
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.15));
+}
+
+.empty {
+  padding: 24px 14px;
+  text-align: center;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.error {
+  padding: 16px 14px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.error button {
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  margin-top: 6px;
+}

@@ -1,0 +1,203 @@
+/* SidePanel —— 右侧可折叠停靠面板（shell.overlay）。 */
+
+.rail {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.railButton {
+  pointer-events: auto;
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  background: var(--dsw-alias-bg-l1, #ffffff);
+  color: inherit;
+  width: 26px;
+  height: 64px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+.railButton:hover {
+  opacity: 1;
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  z-index: 40;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-alias-bg-l1, #ffffff);
+  border-left: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.06);
+  font-size: 13px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+}
+
+.title {
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.headSpacer {
+  flex: 1;
+}
+
+.iconButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  font-size: 13px;
+}
+
+.iconButton:hover {
+  opacity: 1;
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.newCard {
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.select {
+  width: 100%;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12.5px;
+  background: transparent;
+  color: inherit;
+}
+
+.newButton {
+  appearance: none;
+  border: none;
+  border-radius: 6px;
+  background: #4a90e2;
+  color: #ffffff;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.newButton:hover:not(:disabled) {
+  background: #3a7fd4;
+}
+
+.newButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sectionLabel {
+  font-size: 11px;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.sessionList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sessionRow {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+}
+
+.sessionRow:hover {
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.08));
+}
+
+.sessionRow[data-current='true'] {
+  background: var(--dsw-alias-fill-active, rgba(74, 144, 226, 0.12));
+  font-weight: 600;
+}
+
+.dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dsw-alias-border-l2, #c9ced6);
+}
+
+.dot[data-running='true'] {
+  background: #2ba471;
+}
+
+.sessionTitle {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empty {
+  opacity: 0.6;
+  font-size: 12px;
+  text-align: center;
+  padding: 14px 0;
+}

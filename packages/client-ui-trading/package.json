@@ -1,0 +1,61 @@
+{
+  "name": "@dsh-trading/client-ui-trading",
+  "description": "Futu-style trading shell for the dsh web client: market/watchlist sidebar (shadows sidebar.workspaces), quote stage view (conversation.view), collapsible session side panel (shell.overlay), and the /dshtrading/api market-data HTTP bridge on the node half.",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "bundle": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "build": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dsh-trading/api": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-api-session-controller": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-ui-sidebar": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-ui-workspace": ">=0.1.2-alpha.1",
+    "react": "^18.2.0",
+    "@types/react": "~18.3.1"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0",
+    "lightningcss": "^1.0.0",
+    "react": "^18.2.0",
+    "@types/react": "~18.3.1"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ],
+      "platform": "web"
+    }
+  }
+}

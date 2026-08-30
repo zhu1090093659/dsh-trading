@@ -1,0 +1,8 @@
+/* 右栏面板展开时，中栏内容整体让位（panel 宽 320px）。
+   锚点用宿主稳定 data 属性：[data-conversation-scroll] 是 ConversationRoot
+   的滚动体；其父节点即会话壳，> header 是会话头部。面板折叠后属性翻转，让位消失。 */
+
+body[data-dshtrading-panel='open'] [data-conversation-scroll],
+body[data-dshtrading-panel='open'] div:has(> [data-conversation-scroll]) > header {
+  padding-right: 320px;
+}

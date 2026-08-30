@@ -16,3 +16,16 @@
 - insert:
     - id: dsh-trading-crypto-installer
       name: '@dsh-trading/crypto'
+
+    # host 面数据行（2026-08-30 GUI 行情桥配套）：只 provide tradingCryptoMarketData，
+    # 不注册工具（工具面留在 preset 平面）。binance/okx 两行并存、enabled 均 true，
+    # 与 preset 行同形态，激活由 settings 路由裁决（router consult）。
+    - id: dsh-trading-crypto-dataplane-binance
+      name: '@dsh-trading/connector-binance/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-crypto-dataplane-okx
+      name: '@dsh-trading/connector-okx/dataplane'
+      config:
+        enabled: true
+        env: demo

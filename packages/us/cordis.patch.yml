@@ -17,3 +17,7 @@
 - insert:
     - id: dsh-trading-us-installer
       name: '@dsh-trading/us'
+
+    # host 面数据行（2026-08-30 GUI 行情桥配套）：只 provide tradingUsMarketData。
+    - id: dsh-trading-us-dataplane
+      name: '@dsh-trading/connector-yahoo/dataplane'

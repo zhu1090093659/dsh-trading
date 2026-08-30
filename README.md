@@ -61,6 +61,14 @@ DSH 扩展机制分层与对应选择：
   安装口径 = 显式 add base + 各市场 bundle（仍是一条命令多个参数）；all 保留为预留载体。
   上游改进建议：bundle 层栈递归展开传递 bundle 依赖。
 
+- **第二阶段（交易 GUI 富途式三栏，2026-08-30）**：新包 `@dsh-trading/client-ui-trading`
+  （base 挂行）——左栏遮蔽 sidebar.workspaces 换市场/自选、中栏 conversation.view 加
+  「行情」视图（SVG K线）、右栏 shell.overlay 可折叠会话面板；node 半 `/dshtrading/api`
+  行情桥（认证栅栏 + 无缓存透传）；四连接器新增 host 面数据行（dataplane，只 provide
+  行情服务不注册工具，激活走同一 settings 路由裁决）。trading-web 实测：桥三端点 +
+  设置路由数据面生效（provider=okx 实证）+ 浏览器三栏全链路通过。决策与边界见
+  `.agents/notes/implemented/architecture/2026-08-30-trading-gui-futu-shell.md`。
+
 ### 包清单（packages/）
 
 | 包 | 职责 |
@@ -78,6 +86,7 @@ DSH 扩展机制分层与对应选择：
 | `@dsh-trading/kit-cn` / `kit-hk` | 插件：skill provider（cn-risk-checklist：T+1/涨跌停/ST/两融；hk-risk-checklist：T+0/碎股/供配股/窝轮牛熊证） |
 | `@dsh-trading/cn` / `hk` | bundle：依赖安装载体 + 安装器（cn-trader / hk-trader preset） |
 | `@dsh-trading/router` | 插件：市场/数据源路由（host 面，base 挂载）——注册 `dshtrading` settings namespace + provide `tradingMarketRouter`（连接器 consult 激活），docs/exchange-routing.md |
+| `@dsh-trading/client-ui-trading` | 交易 GUI 壳（富途式三栏）：左栏市场/自选（遮蔽 sidebar.workspaces）、中栏行情视图（conversation.view）、右栏可折叠会话面板（shell.overlay）；node 半 `/dshtrading/api` 行情桥（web 宿主，headless 挂起无害） |
 | `@dsh-trading/all` | 元 bundle（预留；当前 DSH 版本不展开传递 bundle 依赖，见上「已知限制」） |
 | `@dsh-trading/connector-template` | **脚手架（不入任何 bundle 依赖）**：新交易所连接器模板源，由 `scripts/new-connector.mjs` 生成器展开；接入流程见 `docs/connector-playbook.md` |
 
@@ -99,6 +108,14 @@ DSH 扩展机制分层与对应选择：
 5. cordis 服务类用 **TS 编译期 private**（不用 ECMAScript # 私有字段——realm 代理会按类身份炸）。
 6. **连接器互斥激活必须对称**：同市场各连接器都有 `enabled` 开关（默认面各自声明，binance 默认 true / okx 默认 false），同一 preset 组合同时至多一个为 true——只做单边（如 okx 有而 binance 无）会导致「叠加」而非「切换」（2026-08-29 修复，见 `docs/okx-integration.md` §8.2 方案 B 与 connector-okx 激活测试）。
 7. **交易所需设置驱动，不是会话选择**（2026-08-29 定稿，见 `docs/exchange-routing.md`）：每市场**单预设**，连接器行并存、enabled 均 true，谁激活由用户设置 `dshtrading.markets.<market>.provider` 决定（`@dsh-trading/router` host 行提供 `tradingMarketRouter`，连接器 apply 时 consult，不符即静默）；新交易所 = schema enum 加候选，新市场 = dict 加键，数据/交易分离 = tradeProvider 预留字段。**双 preset 镜像方案（crypto-trader-okx）已废弃**。
+8. **数据面/工具面分离（2026-08-30，GUI 配套）**：连接器各有 host 面数据行入口
+   `./dataplane`——只 provide `tradingXxMarketData`、不注册工具；工具行仍在 preset
+   平面（会话隔离）。数据行激活语义与 preset 行一致（binance/okx 并存、settings
+   路由裁决谁激活），由各市场 bundle insert（crypto 两行并存）。消费方：
+   `@dsh-trading/client-ui-trading` 的 `/dshtrading/api` 桥。**为什么**：行情服务
+   原本只存在于 preset isolate realm，GUI（host 作用域）拿不到；行情是读-only 公共
+   数据，host 常驻不破坏会话隔离。
+
 
 ## 安装与卸载（未发布 npm 阶段，本机开发形态）
 

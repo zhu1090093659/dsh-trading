@@ -17,3 +17,9 @@
 - insert:
     - id: dsh-trading-cn-installer
       name: '@dsh-trading/cn'
+
+    # host 面数据行（2026-08-30 GUI 行情桥配套）：只 provide tradingCnMarketData。
+    - id: dsh-trading-cn-dataplane
+      name: '@dsh-trading/connector-tencent/dataplane'
+      config:
+        market: cn
