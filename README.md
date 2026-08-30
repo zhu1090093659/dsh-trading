@@ -36,7 +36,17 @@ DSH 扩展机制分层与对应选择：
 2. **知识与代码分离**：市场规则/分析框架/风控常识一律做成 skill，不写进插件代码；连接器代码跨市场复用。
 3. **交易安全闸门**：下单/撤单工具默认 dry-run；实盘需显式开关 + DSH approval 审批；凭证走 credentials/settings，BYOK，绝不内置。
 4. **base 防腐**：只有当 ≥2 个市场真实需要同一能力时才上移 base，防过早抽象。
-5. **数据合规**：行情数据一律用户自带 key，不重分发；README 写明各数据源 ToS。
+5. **数据合规**：行情数据一律用户自带 key，**不再分发**（本仓不内置、不缓存回传、
+   不把上游数据转发给第三方）；README 写明各数据源 ToS。**边界精确化（2026-08-30）**：
+   「不缓存」指不再分发与无差别落盘；**用户本地私有缓存允许**——回测/量化需要历史
+   数据落盘（localStorage/本地文件/本地数据库均可），前提是不回传、不共享、不打包进
+   分发物。回测功能落地时按此口径实现，不视为违反铁律。
+6. **GUI 壳可重写，数据层不可破**（2026-08-30 架构评审立约）：`client-ui-*` 包是
+   寄生在宿主 Web 三栏上的呈现层，宿主界面重做时允许（且预期）**整体推翻重写**；
+   数据层契约——`/dshtrading/api` 行情桥、`dshtrading` settings namespace、
+   `tradingMarketRouter` / `tradingMarketDataRegistry` 服务、`@dsh-trading/api`
+   类型——**不允许破坏**。界面迁移只准重写呈现层；数据层变更必须向后兼容或带
+   迁移路径（老部署回退语义已有先例：注册表缺席时连接器/桥各自回退旧路径）。
 
 ## 当前状态（2026-08-29）
 
@@ -123,14 +133,22 @@ DSH 扩展机制分层与对应选择：
 4. **实盘闸门双轨**：显式 `liveTrading` 配置开关为主（headless 唯一防线），approval 管交互形态（headless 下 ask 必 deny = fail-closed 特性）。
 5. cordis 服务类用 **TS 编译期 private**（不用 ECMAScript # 私有字段——realm 代理会按类身份炸）。
 6. **连接器互斥激活必须对称**：同市场各连接器都有 `enabled` 开关（默认面各自声明，binance 默认 true / okx 默认 false），同一 preset 组合同时至多一个为 true——只做单边（如 okx 有而 binance 无）会导致「叠加」而非「切换」（2026-08-29 修复，见 `docs/okx-integration.md` §8.2 方案 B 与 connector-okx 激活测试）。
-7. **交易所需设置驱动，不是会话选择**（2026-08-29 定稿，见 `docs/exchange-routing.md`）：每市场**单预设**，连接器行并存、enabled 均 true，谁激活由用户设置 `dshtrading.markets.<market>.provider` 决定（`@dsh-trading/router` host 行提供 `tradingMarketRouter`，连接器 apply 时 consult，不符即静默）；新交易所 = schema enum 加候选，新市场 = dict 加键，数据/交易分离 = tradeProvider 预留字段。**双 preset 镜像方案（crypto-trader-okx）已废弃**。
-8. **数据面/工具面分离（2026-08-30，GUI 配套）**：连接器各有 host 面数据行入口
-   `./dataplane`——只 provide `tradingXxMarketData`、不注册工具；工具行仍在 preset
-   平面（会话隔离）。数据行激活语义与 preset 行一致（binance/okx 并存、settings
-   路由裁决谁激活），由各市场 bundle insert（crypto 两行并存）。消费方：
-   `@dsh-trading/client-ui-trading` 的 `/dshtrading/api` 桥。**为什么**：行情服务
-   原本只存在于 preset isolate realm，GUI（host 作用域）拿不到；行情是读-only 公共
-   数据，host 常驻不破坏会话隔离。
+7. **交易所需设置驱动，不是会话选择**（2026-08-29 定稿，见 `docs/exchange-routing.md`）：每市场**单预设**，连接器行并存、enabled 均 true，谁激活由用户设置 `dshtrading.markets.<market>.provider` 决定（`@dsh-trading/router` host 行提供 `tradingMarketRouter`，连接器 apply 时 consult，不符即静默）；新市场 = dict 加键，数据/交易分离 = tradeProvider 预留字段。**双 preset 镜像方案（crypto-trader-okx）已废弃**。
+   **2026-08-30 修订**：provider 从封闭 enum 改开放字符串（schema 不拒未知 slug，
+   运行时 warn + fail-soft）——第三方连接器注册同名 slug 即上榜，零本仓改动；
+   校验下沉到设置 UI 候选清单。见
+   `.agents/notes/implemented/architecture/2026-08-30-provider-vocabulary-open.md`。
+8. **数据面/工具面分离（2026-08-30，GUI 配套；同日注册表模式修订）**：连接器各有
+   host 面数据行入口 `./dataplane`——只提供行情服务、不注册工具；工具行仍在 preset
+   平面（会话隔离）。**激活解析 = 注册表模式**：dataplane 在 isolate realm 构造服务
+   并注册进 `tradingMarketDataRegistry`（router 同插件提供，base patch 零改动），
+   消费方 `@dsh-trading/client-ui-trading` 的 `/dshtrading/api` 桥每请求按路由当前值
+   惰性解析——**settings 切交易所 GUI 即刻生效（热切换），不再要求重启进程**；
+   会话面维持「新建会话生效」（会话内数据源一致性是有意语义）。无注册表的老部署
+   回退旧互斥 provide 路径。**为什么 host 面常驻**：行情服务原本只存在于 preset
+   isolate realm，GUI（host 作用域）拿不到；行情是读-only 公共数据，host 常驻不
+   破坏会话隔离。见
+   `.agents/notes/implemented/architecture/2026-08-30-market-data-registry-hot-switch.md`。
 9. **中栏舞台化（2026-08-30，3.0）**：中栏 = `MiddleStage` 视图注册表（行情 |
    量化占位，互斥挂载、`dshtrading.stage.v1` 持久化），行情图表为
    **lightweight-charts v5**（内联进单文件 client.js，终结 SVG-only 先例）；

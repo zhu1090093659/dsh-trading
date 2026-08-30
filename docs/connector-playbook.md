@@ -17,7 +17,8 @@ packages/connector-<slug>/          ← 生成器产出（模板 token 展开）
 packages/<market>/package.json      ← dependencies 加一行（依赖安装载体，S3 坑 3）
 packages/<market>/assets/preset/<market>-trader/agent.cordis.yml
                                     ← 加 isolate 组行（见 §4）
-packages/<market>/cordis.patch.yml  ← 不动（connector 行在 preset 平面，非 bundle patch）
+packages/<market>/cordis.patch.yml  ← insert host 面数据行（`./dataplane` 入口，
+                                    注册表模式；preset 工具行仍在 preset 平面，两处平面不同）
 packages/base/src/index.ts          ← 一般不动；仅当新市场（非新交易所）才扩闸门正则
 所有装过本仓的 profile 的 pnpm-workspace.yaml
                                     ← overrides 加一行（坑 #15，见 §6）
@@ -86,6 +87,7 @@ connector-okx 的对应实现段：
 | isolate 键 | = 服务名（一个组可同时 isolate 两个键） | acceptance「修复 1」：键不匹配挂载被拒 |
 | preset 行 id | `dsh-trading-crypto-connector-bybit-group`（组行）/ `dsh-trading-crypto-connector-bybit`（子行） | crypto-trader yml 先例 |
 | 凭证 ref | `BYBIT_API_KEY` / `BYBIT_DEMO_API_KEY` 等 | 模板默认 `${ENV_PREFIX}_*`（生成器展开） |
+| provider slug | 交易所 slug 本身（如 `bybit`），开放词汇 | 2026-08-30 起 schema 不校验（开放字符串），勿复用他人 slug（注册表同键抛错） |
 
 ---
 
@@ -112,9 +114,29 @@ connector-okx 的对应实现段：
         liveTrading: false
 ```
 
-- **互斥纪律**：同一服务键 `tradingCryptoMarketData` 至多一个连接器 `enabled: true`；
-  两个交易连接器并存 = 需要新的服务键/工具名方案（方案 A 后缀命名被否，
-  docs/okx-integration.md §8.2 有完整论证），先讨论再动。
+- **互斥纪律**：preset 平面同一服务键 `tradingCryptoMarketData` 至多一个连接器
+  激活（settings 路由裁决；两个交易连接器并存 = 需要新的服务键/工具名方案，
+  方案 A 后缀命名被否，docs/okx-integration.md §8.2 有完整论证），先讨论再动。
+
+### 4.1 host 面数据行（GUI 行情桥配套，2026-08-30 注册表模式）
+
+在 `packages/<market>/cordis.patch.yml` insert 数据行（与 installer 行并列）：
+
+```yaml
+    - id: dsh-trading-<market>-dataplane-<slug>
+      name: '@dsh-trading/connector-<slug>/dataplane'
+      config:
+        enabled: true
+```
+
+- dataplane 入口由模板自带（`src/dataplane.ts`，生成器同步展开）：**注册表模式**——
+  isolate realm 构造服务 + 注册 (market, slug) 进 `tradingMarketDataRegistry`，
+  多连接器并存注册无互斥冲突；激活由行情桥按路由当前值惰性解析（GUI 热切换）。
+  无注册表的老部署回退直接 provide 市场键（此时互斥纪律回适用：同市场至多一行
+  enabled: true，或干脆不插多行）。
+- 同市场多连接器 = 各插一行（crypto 先例：binance/okx 两行并存），行 id 全仓唯一。
+- slug 无需登记进 router schema（2026-08-30 开放字符串）；仅内置候选才需要
+  在 client-ui-settings 的 PROVIDER_LABELS 加显示行。
 - 同时更新 `<market>/package.json` dependencies（bare 包名解析，S3 坑 3）与
   bundle patch 头注里的连接器清单说明（若该文件有——crypto 有）。
 - **重装 preset**：自安装器按管理戳代际更新（头行 `# dsh-trading-managed: <sha8>`），
