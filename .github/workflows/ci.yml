@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['22', '24']   # engines: ^22.19.0 || >=24.0.0
+    steps:
+      - uses: actions/checkout@v4
+
+      # SDK 开发期钉 DSH 源码 checkout（npm 世代未对齐，docs/release-checklist.md §1）；
+      # CI 里克隆同 tag 并把 overrides 重定向过去。
+      - name: Checkout DSH at pinned tag
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: dsh-v0.1.2-alpha.1   # 与 README「版本基线」节同步
+          path: dsh
+
+      - uses: pnpm/action-setup@v4   # 版本读 package.json 的 packageManager 字段
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - name: Retarget SDK overrides to CI checkout
+        run: node scripts/retarget-overrides.mjs "$PWD/dsh"
+
+      - run: pnpm install
+      - run: pnpm -r build
+      - run: pnpm -r test
