@@ -34,9 +34,9 @@ const NS = 'dshtrading.market'
 
 /** Required services：会话区读官方 sessions/workspaces 状态；startSession 是
  * 右栏退役后新会话的唯一通路（无参取当前/最近工作区）。 */
-export const inject = ['slots', 'locale', 'sessions', 'uiWorkspace']
+export const inject = ['slots', 'locale', 'sessions', 'workspaces']
 
-/** uiWorkspace 的最小结构面（startSession = 建/复用并打开会话）。 */
+/** workspaces 的最小结构面（startSession = 建/复用并打开会话）。 */
 interface WorkspaceNavigation {
   startSession(workspaceId?: string): void
 }
@@ -50,10 +50,10 @@ export function apply(ctx: ClientContext): void {
   const watchlists = createWatchlistStore()
   const chart = createChartStateStore(indicators)
   const sessions = ctx.sessions as unknown as ISessions
-  const uiWorkspace = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined
+  const workspaces = ctx.get('workspaces') as unknown as WorkspaceNavigation | undefined
 
   // 共享入口动作：右缘竖条（2.9 起唯一会话入口）使用。
-  const startNewSession = (): void => { uiWorkspace?.startSession() }
+  const startNewSession = (): void => { workspaces?.startSession() }
   const openSettings = (): void => {
     // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
     // 侧栏里唯一的 [aria-haspopup=dialog]，程序化 click 走官方打开逻辑，
