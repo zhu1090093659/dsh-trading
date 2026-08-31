@@ -1,210 +1,172 @@
 # dsh-trading
 
-基于 DeepSeek Harness (DSH) 的交易插件包体系：按市场分包（crypto / us / cn / hk），每个市场包内含该市场的连接器插件、工具、UI 面板、交易知识（skills）与 agent preset。
+> **Your next trading terminal can also be DSH**  
+> *你的下一个交易终端，也可以是 DSH*
 
-## 版本基线
+[![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.1.2--alpha.1-blue.svg)](https://github.com/deepseek-ai)
+[![Markets](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK-green.svg)](#-multi-market-coverage--19-active-connectors)
+[![Connectors](https://img.shields.io/badge/Connectors-19%20Active-orange.svg)](docs/connectors-guide.md)
+[![Architecture](https://img.shields.io/badge/Architecture-Cordis%20Microkernel-purple.svg)](#-architecture--layering-mechanism)
+[![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
-- **DSH 本体：0.1.2-alpha.1**（tag `dsh-v0.1.2-alpha.1`）。本机安装 `dsh`（~/.local/bin/dsh）与参考 checkout（/Users/zcl/code/deepseek-harness）均已核实在此版本。
-- 所有开发只使用官方公开机制与 SDK 接口，**禁止修改 DSH 源码**。
+`dsh-trading` is a modular, full-market AI trading terminal and plugin ecosystem built on **DeepSeek Harness (DSH)**.
 
-## 架构决策（2026-08-29 深度讨论结论）
+It combines the **three-column GUI experience of professional trading software** with deep reasoning AI agents, multi-market automated execution, comprehensive technical indicators, and strict, verifiable risk-control gates — seamlessly uniting conversational investment research with live terminal workflows.
 
-DSH 扩展机制分层与对应选择：
+---
 
-| 层 | 机制 | 本项目用法 |
-|---|---|---|
-| 功能单元 | Cordis 插件（npm 包） | 连接器、工具、UI 面板、自动化 |
-| 分发单元 | **Bundle 组合包**（`dsh.bundle.patch` + cordis.patch.yml + deps） | **每个市场一个 bundle**；`@dsh-trading/base` 承载市场无关核心 |
-| 部署单元 | Profile（`$DSH_HOME/profiles/<name>`） | 用户的部署选择，非本项目分发物；强隔离场景（实盘）另提供 profile 模板文档 |
-| 会话行为 | Agent Preset | 每市场一个 preset（如 crypto-trader），同进程多市场会话并存 |
-| 知识单元 | Skill（随包 provider 注册） | 交易方法论以 SKILL.md 随市场包分发，与代码解耦 |
-
-目标结构：
+## 🌟 Core Architecture & Highlights
 
 ```
-@dsh-trading/base          ← 市场无关抽象：账户/订单/行情接口、组合管理、风控原语、共享 UI 框架、统一 preset root
-├── @dsh-trading/crypto    ← bundle：交易所连接器插件 + crypto skills + preset
-├── @dsh-trading/us        ├── @dsh-trading/cn        └── @dsh-trading/hk
-@dsh-trading/all           ← 元 bundle，一键装全部市场
++---------------------------------------------------------------------------------------------------+
+|                                     DSH Trading Ecosystem Overview                                |
++---------------------------------------------------------------------------------------------------+
+|  [3-Column GUI]      Left: Multi-Market Dock  |  Center: Lightweight Charts v5 + TA  |  Right: Agent Rail |
+|  [Full Markets]      Crypto (4 exchanges)   |  US Equities (6 sources/brokers)     |  CN / HK Markets   |
+|  [Agent-Native]      Session Preset Isolation |  Conversational Market Analysis      |  Risk Checklists   |
+|  [Dual Safety Gates] Default Dry-Run Mode   |  Explicit liveTrading Toggle         |  BYOK Key Custody  |
+|  [Cordis Microkernel] Insert-Only Bundles   |  Open Setting Hot-Routing            |  Zero Host Hacks   |
++---------------------------------------------------------------------------------------------------+
 ```
 
-安装体验：`dsh plugin --profile web add @dsh-trading/base @dsh-trading/crypto`
+### 1. Professional Three-Column Trading GUI
+- **Center Stage Charting Engine**: Built with high-performance **Lightweight Charts v5**, supporting multi-timeframe switching (intraday minutes to daily/weekly); equipped with MA, EMA, BOLL, MACD, RSI, KDJ, and SuperTrend technical indicators, visual parameter customization, and third-party indicator hot-plugging.
+- **Left Market & Watchlist Dock**: Rapid switching across markets (Watchlist / Crypto / US / CN / HK), mini Sparkline price trends, real-time bid/ask quotes, and localized persistent storage.
+- **Right Session Rail & Hero Fusion**: Native AI agent conversation panel docked on the right rail; historical sessions seamlessly merged with the Hero Composer launcher, supporting collapsible distraction-free workflows.
 
-## 设计铁律
+### 2. Multi-Market Coverage & 19+ Active Connectors
+- **Crypto**: Binance, OKX (Paper / Live), Bybit, CCXT (100+ exchanges aggregation).
+- **US Equities (US)**: Yahoo Finance (public), Alpaca (Paper / Live), FMP, Finnhub, Polygon.io, Interactive Brokers (IBKR Client Portal Gateway).
+- **China A-Shares (CN)**: Tencent Finance (public), Eastmoney (public), Tushare Pro, AkShare, MiniQMT (broker gateway).
+- **Hong Kong Stocks (HK)**: Tencent HK (public), Longbridge OpenAPI, Futu OpenD Gateway, Tiger Trade OpenAPI.
+- See the comprehensive onboarding guide in [Connectors Guide (docs/connectors-guide.md)](docs/connectors-guide.md).
 
-1. **insert-only patch**：市场 bundle 只允许 insert 自己的新插件行（按市场命名空间唯一），禁止 replace base 或其他市场的行；共享行配置只由 base 拥有。（patch 语义为按 id 整行替换，否则多市场并存互相覆盖）
-2. **知识与代码分离**：市场规则/分析框架/风控常识一律做成 skill，不写进插件代码；连接器代码跨市场复用。
-3. **交易安全闸门**：下单/撤单工具默认 dry-run；实盘需显式开关 + DSH approval 审批；凭证走 credentials/settings，BYOK，绝不内置。
-4. **base 防腐**：只有当 ≥2 个市场真实需要同一能力时才上移 base，防过早抽象。
-5. **数据合规**：行情数据一律用户自带 key，**不再分发**（本仓不内置、不缓存回传、
-   不把上游数据转发给第三方）；README 写明各数据源 ToS。**边界精确化（2026-08-30）**：
-   「不缓存」指不再分发与无差别落盘；**用户本地私有缓存允许**——回测/量化需要历史
-   数据落盘（localStorage/本地文件/本地数据库均可），前提是不回传、不共享、不打包进
-   分发物。回测功能落地时按此口径实现，不视为违反铁律。
-6. **GUI 壳可重写，数据层不可破**（2026-08-30 架构评审立约）：`client-ui-*` 包是
-   寄生在宿主 Web 三栏上的呈现层，宿主界面重做时允许（且预期）**整体推翻重写**；
-   数据层契约——`/dshtrading/api` 行情桥、`dshtrading` settings namespace、
-   `tradingMarketRouter` / `tradingMarketDataRegistry` 服务、`@dsh-trading/api`
-   类型——**不允许破坏**。界面迁移只准重写呈现层；数据层变更必须向后兼容或带
-   迁移路径（老部署回退语义已有先例：注册表缺席时连接器/桥各自回退旧路径）。
+### 3. Agent-Native Intelligence & Domain Knowledge (Skills)
+- **Session-Level Preset Isolation**: Dedicated presets per market (`crypto-trader`, `us-trader`, `cn-trader`, `hk-trader`), isolating tools and memory per session within the same process.
+- **Bundled Domain Knowledge**: Pre-packaged risk checklists, qualitative analysis frameworks, and research skills ([cn-risk-checklist](.agents/skills/cn-risk-checklist/SKILL.md), [hk-risk-checklist](.agents/skills/hk-risk-checklist/SKILL.md), [us-risk-checklist](.agents/skills/us-risk-checklist/SKILL.md), [crypto-risk-checklist](.agents/skills/crypto-risk-checklist/SKILL.md), [crypto-instrument-analysis](.agents/skills/crypto-instrument-analysis/SKILL.md), [company-analysis](.agents/skills/company-analysis/SKILL.md), [content-insight](.agents/skills/content-insight/SKILL.md)).
 
-## 当前状态（2026-08-29）
+### 4. Strict Safety Gates & Privacy (BYOK)
+- **Dual-Track Order Approval**: Order placement and cancellation tools operate in Dry-run simulation by default. Live order routing requires an explicit `liveTrading: true` configuration and triggers DSH interactive approval prompts (fails closed in headless environments).
+- **Bring Your Own Key (BYOK)**: All API credentials remain on your local machine or in environment variables. No secrets are bundled, relayed, or uploaded.
 
-- **第 0 阶段（机制 spike S1–S5）：全部 PASS**（`spikes/REVIEW-LOG.md` 有逐条裁决与源码抽核记录）。
-- **第 1 阶段（crypto 垂直切片）：端到端验收 6/6 PASS**（`spikes/acceptance/REPORT.md`，0 模型调用进程内证据）：
-  一条命令安装、crypto-trader preset 免重启入 roster、会话级工具/skill 隔离实测、下单三段闸门
-  （dry-run 模拟回执 / liveTrading=false 结构化拒绝 / headless 下审批 ask→deny fail-closed）、
-  卸载变 broken 不崩溃、重装恢复。
-- 构建/测试基线：`pnpm -r build` 5 包绿；`pnpm -r test` 28 用例绿。
-- **us 市场切片（2026-08-31 落地；2026-08-29 数据面切换 Yahoo，任务 G）**：connector-yahoo +
-  kit-us + us bundle（Stooq 因本出口反爬拒止退役为备选，包 README 标注未实证），`pnpm -r
-  build` 10 包绿、`pnpm -r test` 60 用例绿；Yahoo 实证证据见 `spikes/impl-us-yahoo/EVIDENCE.md`，
-  Stooq 结论与手册修订见 `docs/replication.md`「us 复制实测修订」与 `spikes/impl-us/REPORT.md`。
-- **cn/hk 市场切片（2026-08-31，任务 H）**：connector-tencent 单包双市场多实例（Config.market 分流）+
-  kit-cn/kit-hk + cn/hk bundle；腾讯公共端点实测（GBK 编码、cn/hk 字段布局不同、hk 需独立 hkfqkline
-  端点），证据见 `spikes/impl-cn-hk/REPORT.md`。
-- **多市场联合验收（2026-08-31，任务 I）：6/6 PASS**（`spikes/acceptance-all/REPORT.md`）：四市场
-  bundle 并存组合树 insert-only（卸载 diff 恰好 12 行市场层）、四 preset 同 roster、五 agent 隔离矩阵
-  （含 cn↔hk 同包多实例交叉污染为零）、四市场下单闸门、卸载 broken→重装恢复。
-  **已知限制**：`@dsh-trading/all` 元 bundle 的「单命令装齐」不成立——DSH 0.1.2-alpha.1 的
-  reconcilePlugins 只把 profile 直接依赖里的 bundle 入层栈，不展开传递依赖（apps/cli/src/plugin.ts）。
-  安装口径 = 显式 add base + 各市场 bundle（仍是一条命令多个参数）；all 保留为预留载体。
-  上游改进建议：bundle 层栈递归展开传递 bundle 依赖。
+---
 
-- **第二阶段（交易 GUI 富途式三栏，2026-08-30；同日 2.4 布局定稿、2.8 右栏退役）**：新包
-  `@dsh-trading/client-ui-trading`（base 挂行）。布局原则「接口不变、位置重排」：
-  宿主栅格 rtl 翻转 + 四轨道接管——**中栏恒为行情**（QuotePane 恒渲染：报价头 +
-  SVG K线 + 周期页签，无会话即可用，点自选即达）；左缘停靠自选面板（市场页签 +
-  标的行：迷你走势/实时价/红涨绿跌，localStorage 持久化）；轨迹视图退役（摘除
-  自家 quote view + CSS 藏末位 view tab，失效存储视图回落 chat）。**右侧栏整体
-  退役**（2.5-2.8 入口归一）：官方 WorkspaceBrowser（自带每组「+ 新会话」等重复
-  入口）由 hidden 占位遮蔽；历史会话面板 portal 并入官方 hero 容器，与 composer
-  卡拼成同一个「首页启动器」（可折叠、作用域跟随当前会话工作区）；新对话统一走
-  官方 composer。窗口角标：右上 = 会话列折叠/展开 + 新会话（首页/折叠态浮动，
-  会话中经 header.utilities 槽内联排在 Session 日志后），左下 = 设置（官方触发器
-  程序化 click，弹层 fixed 不受退役列影响）；侧栏列归零并移出视口保持挂载。
-  对话列 380px 常驻右缘（有 current 会话才展开：transcript/composer/审批卡全
-  官方 UI；空白会话显宿主 hero）。node 半 `/dshtrading/api` 行情桥（认证栅栏 +
-  无缓存透传 + 业务错误信封转 rejection）；四连接器新增 host 面数据行（dataplane，
-  只 provide 行情服务不注册工具，激活走同一 settings 路由裁决）。trading-web 实测：
-  桥三端点 + 设置路由数据面生效（provider=okx 实证）+ 四轨道布局/轨迹隐藏/新对话
-  切换/融合容器/折叠持久化/角标入口全链路通过，零 slot 错误。
-  决策与边界见 `.agents/notes/implemented/architecture/2026-08-30-trading-gui-futu-shell.md`
-  与 `.agents/notes/implemented/architecture/2026-08-30-right-rail-retire-hero-fusion.md`。
+## 🏛️ Architecture & Layering Mechanism
 
-### 包清单（packages/）
+`dsh-trading` leverages the Cordis microkernel extension architecture provided by DSH:
 
-| 包 | 职责 |
-|---|---|
-| `@dsh-trading/api` | 纯类型契约：行情/交易服务接口 + 错误词汇（零运行时依赖） |
-| `@dsh-trading/base` | bundle：共享行唯一拥有者——统一审批闸门插件（tools/pre-execute）+ agent-presets root 行 |
-| `@dsh-trading/connector-binance` | 插件：Binance 公共 REST 行情服务 + crypto_get_ticker/klines/place_order 工具；`enabled` 开关（默认 true，与 okx 互斥激活） |
-| `@dsh-trading/kit-crypto` | 插件：crypto_funding_rate 工具 + skill provider（crypto-risk-checklist） |
-| `@dsh-trading/crypto` | bundle：依赖安装载体 + host 面安装器（自安装 crypto-trader（默认 Binance 数据面）与 crypto-trader-okx（OKX 镜像切换，含模拟盘/交易面）两个 preset） |
-| `@dsh-trading/connector-yahoo` | 插件：Yahoo Finance v8 chart 行情服务（us_get_ticker/klines/place_order 三段闸门；us 数据面现役） |
-| `@dsh-trading/connector-stooq` | 插件：Stooq 公共 CSV 行情服务（代码保留备选；本出口被反爬拒止，未实证，见其 README） |
-| `@dsh-trading/kit-us` | 插件：skill provider（us-risk-checklist）；股票无资金费率，无附加工具 |
-| `@dsh-trading/us` | bundle：依赖安装载体 + host 面安装器（自安装 us-trader preset） |
-| `@dsh-trading/connector-tencent` | 插件：腾讯公共行情，单包双市场（config.market=cn/hk 分流，provide tradingCnMarketData/tradingHkMarketData） |
-| `@dsh-trading/kit-cn` / `kit-hk` | 插件：skill provider（cn-risk-checklist：T+1/涨跌停/ST/两融；hk-risk-checklist：T+0/碎股/供配股/窝轮牛熊证） |
-| `@dsh-trading/cn` / `hk` | bundle：依赖安装载体 + 安装器（cn-trader / hk-trader preset） |
-| `@dsh-trading/router` | 插件：市场/数据源路由（host 面，base 挂载）——注册 `dshtrading` settings namespace + provide `tradingMarketRouter`（连接器 consult 激活），docs/exchange-routing.md |
-| `@dsh-trading/indicators` | 纯库：技术指标核心——math 纯函数内核 + definition 契约 + 注册表工厂 + 预置指标数据（非 bundle；社区指标经 definition 数据接入） |
-| `@dsh-trading/client-ui-indicators` | 插件：预置指标提供方——client 上下文 provide `tradingIndicators` 服务（IndicatorRegistry，MA/EMA/BOLL/MACD/RSI/KDJ）；社区指标插件 inject 同一服务 register 即可上榜，与行情壳零耦合 |
-| `@dsh-trading/indicator-supertrend` | **社区指标示例（spike）**：超级趋势（ATR 本地实现，零运行时依赖 core）——经 profile 级 patch 行挂载、inject `tradingIndicators` 服务上榜的第三方接入范本（不入任何 bundle 依赖） |
-| `@dsh-trading/client-ui-trading` | 交易 GUI 壳（富途式三栏）：左栏市场/自选、中栏视图注册表（行情=TV v5 K线 + OKX 式技术指标选择器 / 量化占位）、右缘常驻会话竖条；指标经 tradingIndicators 服务可选桥接（插件缺席零指标照常）；node 半 `/dshtrading/api` 行情桥（web 宿主，headless 挂起无害） |
-| `@dsh-trading/all` | 元 bundle（预留；当前 DSH 版本不展开传递 bundle 依赖，见上「已知限制」） |
-| `@dsh-trading/connector-template` | **脚手架（不入任何 bundle 依赖）**：新交易所连接器模板源，由 `scripts/new-connector.mjs` 生成器展开；接入流程见 `docs/connector-playbook.md` |
-
-### 数据源与 ToS（铁律 #5）
-
-| 市场 | 数据源 | ToS 边界 |
+| Layer | Mechanism | Project Implementation |
 |---|---|---|
-| us | Yahoo Finance v8 chart API（非官方，无 key；2026-08-29 本出口实证） | 无 key、本仓不缓存不再分发；个人使用属灰色但被普遍使用的边界，以 Yahoo Terms of Use 为准（详见 connector-yahoo README）。前任数据源 Stooq（免费公开 CSV）2026-08-31 实测本出口被反爬拒止（JS 挑战 + Access denied），无成功实证，退役为备选，见 `spikes/impl-us/REPORT.md` |
-| cn / hk | 腾讯公共行情端点（qt.gtimg.cn 报价 + web.ifzq.gtimg.cn K线，无 key；2026-08-31 本出口实证） | 公开端点、**无官方授权**，个人使用边界自负，以腾讯服务条款为准；本仓不缓存不再分发（详见 connector-tencent README） |
-| crypto | Binance 公共 REST（api.binance.com / fapi.binance.com，无 key；2026-08-29 实证） | Binance API 公开条款；不缓存不再分发 |
-| crypto（okx） | OKX 官方 API v5（openapi.okx.com；公共行情无 key，签名面用户自带三值凭证 BYOK；2026-08-31 本出口实证） | OKX Terms of Service 与 API 使用条款为准；模拟盘为平台虚拟资金；本仓不缓存不再分发、不内置密钥 |
+| **Functional Unit** | Cordis Plugin (npm package) | Connectors, toolkits, UI views, indicator extensions, automation |
+| **Distribution Unit** | **Bundle Package** (`dsh.bundle.patch` + `cordis.patch.yml`) | One bundle per market; `@dsh-trading/base` hosts market-agnostic core abstractions |
+| **Deployment Unit** | Profile (`$DSH_HOME/profiles/<name>`) | User runtime environment; isolated profiles available for live execution |
+| **Session Behavior** | Agent Preset | One preset per market, allowing multi-market sessions to co-exist in one process |
+| **Knowledge Unit** | Skill (`SKILL.md` via package provider) | Trading rules and methodologies distributed alongside market packages |
 
-### 关键架构定稿（实现期修订）
+```
+@dsh-trading/base          ← Core abstractions: account/order/quote interfaces, approval gate, 3-column GUI, preset root
+├── @dsh-trading/crypto    ← Crypto bundle: Binance / OKX / Bybit / CCXT + Skills + Presets
+├── @dsh-trading/us        ← US bundle: Yahoo / Alpaca / FMP / Finnhub / Polygon / IBKR + Skills + Presets
+├── @dsh-trading/cn        ← CN bundle: Tencent / Eastmoney / Tushare / AkShare / MiniQMT + Skills + Presets
+└── @dsh-trading/hk        ← HK bundle: Tencent / Longbridge / Futu OpenD / Tiger + Skills + Presets
+@dsh-trading/all           ← Meta bundle declaration
+```
 
-1. **工具行在 preset 平面**（agent.cordis.yml），不在 bundle patch——preset 级会话隔离（普通会话看不到 crypto 工具）；bundle = 依赖安装载体 + host 面安装器。
-2. **工具名用短市场前缀**（`crypto_place_order`），`dsh-trading-` 前缀只属于插件名/行 id；闸门模式 `/^(?:crypto|us|cn|hk)_(?:place|cancel)_order$/`。
-3. **服务行必须包 isolate realm 组**，且 isolate 键 = 服务名（如 `tradingCryptoMarketData`）。
-4. **实盘闸门双轨**：显式 `liveTrading` 配置开关为主（headless 唯一防线），approval 管交互形态（headless 下 ask 必 deny = fail-closed 特性）。
-5. cordis 服务类用 **TS 编译期 private**（不用 ECMAScript # 私有字段——realm 代理会按类身份炸）。
-6. **连接器互斥激活必须对称**：同市场各连接器都有 `enabled` 开关（默认面各自声明，binance 默认 true / okx 默认 false），同一 preset 组合同时至多一个为 true——只做单边（如 okx 有而 binance 无）会导致「叠加」而非「切换」（2026-08-29 修复，见 `docs/okx-integration.md` §8.2 方案 B 与 connector-okx 激活测试）。
-7. **交易所需设置驱动，不是会话选择**（2026-08-29 定稿，见 `docs/exchange-routing.md`）：每市场**单预设**，连接器行并存、enabled 均 true，谁激活由用户设置 `dshtrading.markets.<market>.provider` 决定（`@dsh-trading/router` host 行提供 `tradingMarketRouter`，连接器 apply 时 consult，不符即静默）；新市场 = dict 加键，数据/交易分离 = tradeProvider 预留字段。**双 preset 镜像方案（crypto-trader-okx）已废弃**。
-   **2026-08-30 修订**：provider 从封闭 enum 改开放字符串（schema 不拒未知 slug，
-   运行时 warn + fail-soft）——第三方连接器注册同名 slug 即上榜，零本仓改动；
-   校验下沉到设置 UI 候选清单。见
-   `.agents/notes/implemented/architecture/2026-08-30-provider-vocabulary-open.md`。
-8. **数据面/工具面分离（2026-08-30，GUI 配套；同日注册表模式修订）**：连接器各有
-   host 面数据行入口 `./dataplane`——只提供行情服务、不注册工具；工具行仍在 preset
-   平面（会话隔离）。**激活解析 = 注册表模式**：dataplane 在 isolate realm 构造服务
-   并注册进 `tradingMarketDataRegistry`（router 同插件提供，base patch 零改动），
-   消费方 `@dsh-trading/client-ui-trading` 的 `/dshtrading/api` 桥每请求按路由当前值
-   惰性解析——**settings 切交易所 GUI 即刻生效（热切换），不再要求重启进程**；
-   会话面维持「新建会话生效」（会话内数据源一致性是有意语义）。无注册表的老部署
-   回退旧互斥 provide 路径。**为什么 host 面常驻**：行情服务原本只存在于 preset
-   isolate realm，GUI（host 作用域）拿不到；行情是读-only 公共数据，host 常驻不
-   破坏会话隔离。见
-   `.agents/notes/implemented/architecture/2026-08-30-market-data-registry-hot-switch.md`。
-9. **中栏舞台化（2026-08-30，3.0）**：中栏 = `MiddleStage` 视图注册表（行情 |
-   量化占位，互斥挂载、`dshtrading.stage.v1` 持久化），行情图表为
-   **lightweight-charts v5**（内联进单文件 client.js，终结 SVG-only 先例）；
-   指标 = 注册表（`pane: main|sub` + 参数 schema + 纯函数 compute）+ 预置
-   MA/EMA/BOLL/MACD/RSI/KDJ，自定义指标 = 注册表加一个 definition。见
-   `.agents/notes/implemented/architecture/2026-08-30-middle-stage-tradingview-views.md`。
+---
 
+## 🛡️ Six Invariant Design Rules
 
-10. **市场规范符号词汇（2026-08-31，docs/symbol-vocabulary.md）**：消费方（GUI 自选、
-    Agent 工具参数、存储）只说市场规范形（crypto=`BTCUSDT`、us=`AAPL`、
-    cn=`600519.SH`、hk=`00700.HK`），连接器在 REST 边界互译——输入宽容（规范形
-    + 本所原生形都收），**输出一律规范形**。切换 provider 不再报废已存符号
-    （实证缺口：provider=okx 时自选里的 Binance 形 `BTCUSDT` 全数报错）。
-    衍生品规范形 `-SWAP` 后缀为预留词汇，随首个衍生品数据面落地。
+1. **Insert-only Patch**: Market bundles may only insert new plugin rows under their own unique namespaces. Replacing rows belonging to base or other markets is strictly forbidden.
+2. **Decoupled Knowledge & Code**: Market regulations, analytical frameworks, and risk checklists must live in skills, not hardcoded into plugin logic.
+3. **Dual-Track Trading Safety Gate**: Order placement and cancellation default to dry-run simulations. Live trading requires explicit configuration (`liveTrading: true`) and interactive approval (fail-closed in headless mode).
+4. **Base Anti-Corruption**: Capabilities are only hoisted to `@dsh-trading/base` when required by $\ge 2$ markets, preventing premature abstraction.
+5. **Data Compliance & Zero Re-distribution**: Users bring their own API keys. No market data is cached for external re-distribution; local private caching for backtesting is permitted.
+6. **Replaceable GUI Shell, Inviolable Data Layer**: The `client-ui-*` frontend presentation layer may be refactored or rewritten as host UI evolves, but core data layer contracts (`/dshtrading/api` bridge, `dshtrading` settings namespace, `tradingMarketRouter` / `tradingMarketDataRegistry`, `@dsh-trading/api` types) must remain backward-compatible and intact.
 
-**路线图**：Agent 标的定性分析能力（指标共享包 / 新闻插件 / 分析知识层）见
-`docs/analysis-roadmap.md`（2026-08-31 立，任务划分与 issue 母文档）。
+---
 
-## 安装与卸载（未发布 npm 阶段，本机开发形态）
+## 📊 Package Inventory & Responsibilities
 
-### 安装到任意 profile
+| Package | Type | Responsibility |
+|---|---|---|
+| `packages/api` | Type Contract | Market data and trading service interfaces, standard Ticker/Kline, error vocabulary (zero runtime deps) |
+| `packages/base` | Core Bundle | Sole owner of shared rows: unified approval gate plugin + agent-presets root row + GUI shell mount |
+| `packages/router` | Router Plugin | Registers `dshtrading` settings namespace, provides `tradingMarketRouter` & `tradingMarketDataRegistry` (hot-switching) |
+| `packages/indicators` | TA Core | Pure math computation kernel for technical indicators (MA/EMA/BOLL/MACD/RSI/KDJ/SuperTrend) and definitions |
+| `packages/client-ui-indicators` | UI Plugin | Client-side indicator provider registering built-in indicators into `tradingIndicators` service |
+| `packages/client-ui-settings` | UI Plugin | Injects the "Settings → Trading" top-level section and per-market provider routing panels |
+| `packages/client-ui-trading` | GUI Terminal Shell | Professional three-column trading GUI: Left watchlist dock, center Lightweight Charts stage, right session rail & HTTP bridge |
+| `packages/connector-*` (16 pkgs) | Connector Plugins | REST / WebSocket / Gateway implementations for all global exchanges and data providers |
+| `packages/kit-*` (4 pkgs) | Market Toolkits | Market-specific tools (funding rates, news) and risk checklist skill providers |
+| `packages/crypto / us / cn / hk` | Market Bundles | Market dependency aggregation packages and automated preset installers |
 
-1. **钉版**（只需一次）：在 `~/.dsh/profiles/<profile>/pnpm-workspace.yaml` **末尾 append**
-   overrides，把用到的 `@dsh-trading/*` 包钉到本仓 file: 路径，外加
-   `'@deepseek-ai/dsh-agent-presets': 'link:<dsh checkout>/packages/preset/agent-presets'`
-   （npm 上没有可用的官方包版本；该文件是 dsh 维护的 append-only，只追加不改写）。
-   现成范本：`~/.dsh/profiles/trading-dev/pnpm-workspace.yaml` 末尾块。
-2. **安装**（一条命令，市场按需选）：
+---
 
-   ```sh
-   # 单市场（以 crypto 为例）
-   dsh plugin --profile <名> add @dsh-trading/base @dsh-trading/crypto
-   # 多市场：同命令追加 —— 不要依赖 @dsh-trading/all 传递入栈（见「已知限制」）
-   dsh plugin --profile <名> add @dsh-trading/base @dsh-trading/crypto @dsh-trading/us @dsh-trading/cn @dsh-trading/hk
-   ```
-3. **宿主差异**：
-   - **web 宿主**：agent-presets root 行由 base 的同 id 覆盖条目自动接管，无需额外动作。
-   - **headless 宿主**：另需在 profile 级 cordis.patch.yml insert agent-presets 行
-     （范本 `~/.dsh/profiles/trading-dev/cordis.patch.yml`），否则 preset root 不生效。
-4. **生效**：重启该 profile 的 dsh 进程（bundle 层栈在启动时加载；patchReload 只管 patch 文件）。
-   重启后 `<market>-trader` preset 自动出现在 preset roster（bundle 安装器幂等自安装到
-   `~/.dsh-trading-presets/`），新建会话时选择即可。
-5. **验证**：`dsh --profile <名> --dump-config` 应见 `# == @dsh-trading/base` 与各市场层，
-   且 `id: agent-presets` 全树只有一行。
+## ⚖️ Data Sources & Terms of Service (ToS)
 
-### 改码后的刷新
+| Market | Default Source | Authorization & ToS Boundary |
+|---|---|---|
+| **US Equities** | Yahoo Finance / Alpaca | Yahoo is a public endpoint (individual usage boundary; see connector-yahoo README); Alpaca provides official Paper/Live APIs |
+| **China A-Shares** | Tencent Finance / Eastmoney | Public endpoints; live execution connects locally to broker MiniQMT gateway |
+| **Hong Kong Stocks** | Tencent HK / Longbridge | Tencent is a public endpoint; Longbridge, Futu, and Tiger provide licensed broker OpenAPI / Gateway connections |
+| **Crypto** | Binance / OKX | Official Binance and OKX APIs; OKX supports simulated paper trading accounts with BYOK keys |
 
-file: 依赖是安装时快照：改完本仓代码后，删 profile `node_modules/@dsh-trading/*` 再
-`pnpm install`（在 profile 目录），然后重启进程。
+---
 
-### 卸载
+## 🚀 Quick Start & Usage
+
+### 1. Install to a DSH Profile
 
 ```sh
-dsh plugin --profile <名> remove @dsh-trading/crypto   # 市场包
+# Install base core along with selected markets (e.g. Crypto and US Equities)
+dsh plugin --profile trading-web add @dsh-trading/base @dsh-trading/crypto @dsh-trading/us
+
+# Or install all markets at once
+dsh plugin --profile trading-web add @dsh-trading/base @dsh-trading/crypto @dsh-trading/us @dsh-trading/cn @dsh-trading/hk
 ```
 
-组合树对应层整块消失、官方行零改动（insert-only 实证）；roster 中对应 preset 变 broken
-（行解析不到包，reason 指名缺哪个包），profile 不崩；已安装到 `~/.dsh-trading-presets/`
-的 preset 目录按设计保留（手工删除即可完全清理）。完整验收证据见 `spikes/acceptance-all/`。
+### 2. Launch the Trading Terminal
+
+```sh
+# Launch dedicated Web trading terminal profile
+dsh --profile trading-web
+
+# Or launch in headless development mode
+dsh --profile trading-dev
+```
+
+After starting:
+1. Open the DSH Web interface in your browser to access the three-column trading terminal (Left: Watchlist, Center: Interactive Charts, Right: AI Agent).
+2. When creating a new conversation, pick `crypto-trader`, `us-trader`, `cn-trader`, or `hk-trader` from the Presets list.
+3. Click "Settings → Trading" in the sidebar or session rail to switch market data/exchange providers on the fly (instant hot-reload).
+
+### 3. Hot Refresh During Development
+
+```sh
+# Rebuild packages
+pnpm -r build
+
+# Clear profile node_modules cache and restart
+rm -rf ~/.dsh/profiles/trading-web/node_modules/@dsh-trading/*
+pnpm install --prefix ~/.dsh/profiles/trading-web
+dsh --profile trading-web
+```
+
+---
+
+## 📚 Documentation Index & Roadmap
+
+- 📖 **Connectors Onboarding & Configuration Guide**: [docs/connectors-guide.md](docs/connectors-guide.md)
+- 📖 **New Connector Standard Playbook**: [docs/connector-playbook.md](docs/connector-playbook.md)
+- 📖 **Skills Architecture & Integration Guide**: [docs/skills-guide.md](docs/skills-guide.md)
+- 📖 **Market Canonical Symbol Vocabulary**: [docs/symbol-vocabulary.md](docs/symbol-vocabulary.md)
+- 📖 **Exchange Routing & Dataplane Architecture**: [docs/exchange-routing.md](docs/exchange-routing.md)
+- 🗺️ **Qualitative Analysis & Quant Roadmap**: [docs/analysis-roadmap.md](docs/analysis-roadmap.md)
+- 📜 **Architecture Decision Log & Spike Reviews**: [spikes/REVIEW-LOG.md](spikes/REVIEW-LOG.md)
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+

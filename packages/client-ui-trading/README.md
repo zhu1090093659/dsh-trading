@@ -1,6 +1,6 @@
 # @dsh-trading/client-ui-trading
 
-交易 GUI 壳（第二阶段「富途式三栏」改造的载体），dsh web 宿主双面包插件：
+交易 GUI 壳（专业交易软件的三栏式架构载体），dsh web 宿主双面包插件：
 
 - **node 半**（`src/index.ts`）：注册 `/dshtrading/api` 前缀路由，把客户端行情请求透传给
   对应市场的 `MarketDataService`（connector-binance/yahoo/tencent）。依赖 `webServer` +

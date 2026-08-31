@@ -1,6 +1,6 @@
 {
   "name": "@dsh-trading/client-ui-trading",
-  "description": "Futu-style trading shell for the dsh web client: market/watchlist sidebar (shell.overlay), quote stage view (conversation.view), hero-fused session history (shadows sidebar.workspaces), window corner entries (fold/new/settings), and the /dshtrading/api market-data HTTP bridge on the node half.",
+  "description": "Professional three-column trading terminal shell for the dsh web client: market/watchlist sidebar (shell.overlay), Lightweight Charts v5 quote stage view (MiddleStage), hero-fused session history (shadows sidebar.workspaces), session rail (fold/new/settings), and the /dshtrading/api market-data HTTP bridge on the node half.",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",

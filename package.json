@@ -1,6 +1,7 @@
 {
   "name": "@dsh-trading/root",
   "version": "0.1.0",
+  "description": "Your next trading terminal can also be DSH. Full-market (Crypto/US/CN/HK) modular AI trading terminal and plugin ecosystem on DeepSeek Harness.",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.9.0",
@@ -8,7 +9,8 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "scripts": {
-    "build": "pnpm -r build",
+    "sync:skills": "node scripts/sync-skills.mjs",
+    "build": "pnpm sync:skills && pnpm -r build",
     "test": "vitest run --passWithNoTests",
     "changeset": "changeset",
     "version-packages": "changeset version",
