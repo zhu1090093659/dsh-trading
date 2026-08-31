@@ -62,7 +62,15 @@ async function main() {
     const srcFile = path.join(AGENTS_SKILLS_DIR, skillName, 'SKILL.md')
     if (!existsSync(srcFile)) continue
 
-    const content = await readFile(srcFile, 'utf8')
+    let content = await readFile(srcFile, 'utf8')
+    // 兼容 Windows git 下未开启 symlink 导致的相对路径纯文本指针
+    if (content.trim().startsWith('../') && content.trim().split('\n').length <= 2) {
+      const realPath = path.resolve(path.dirname(srcFile), content.trim())
+      if (existsSync(realPath)) {
+        content = await readFile(realPath, 'utf8')
+      }
+    }
+
     const targetDirs = resolveTargetDirs(skillName)
 
     for (const targetDir of targetDirs) {
