@@ -1,8 +1,4 @@
-﻿/**
- * @dsh-trading/connector-tiger/rest
- * 老虎证券 (Tiger Trade / TigerOpen) 港美股 REST 客户端。
- */
-
+import * as crypto from 'node:crypto'
 import type {
   AccountBalance,
   Interval,
@@ -40,6 +36,15 @@ export function toTigerSymbol(raw: string): { symbol: string; canonical: string;
   return { symbol: clean, canonical: clean, secType: 'STK' }
 }
 
+export function generateTigerSignature(params: Record<string, string>, privateKeyPem: string): string {
+  const sortedKeys = Object.keys(params).filter((k) => k !== 'sign' && params[k] !== undefined && params[k] !== '').sort()
+  const content = sortedKeys.map((k) => `${k}=${params[k]}`).join('&')
+  const sign = crypto.createSign('RSA-SHA256')
+  sign.update(content, 'utf8')
+  sign.end()
+  return sign.sign(privateKeyPem, 'base64')
+}
+
 export interface TigerRestOptions {
   baseUrl?: string
   tigerId?: string
@@ -64,21 +69,33 @@ export class TigerRestClient {
   }
 
   private async requestJson<T>(bizContent: Record<string, unknown>, method: string): Promise<T> {
-    const payload = {
-      tiger_id: this.tigerId ?? 'demo',
+    const tigerId = this.tigerId ?? 'demo'
+    const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19)
+    const bizContentStr = JSON.stringify(bizContent)
+
+    const rawParams: Record<string, string> = {
+      tiger_id: tigerId,
       method,
       charset: 'UTF-8',
       sign_type: 'RSA2',
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      timestamp,
       version: '1.0',
-      biz_content: JSON.stringify(bizContent),
+      biz_content: bizContentStr,
+    }
+
+    if (this.privateKey) {
+      try {
+        rawParams.sign = generateTigerSignature(rawParams, this.privateKey)
+      } catch (err) {
+        throw new TradingServiceError('TRADING_AUTH_FAILED', `Tiger RSA signature generation failed: ${err instanceof Error ? err.message : String(err)}`, err)
+      }
     }
 
     try {
       const res = await this.fetchImpl(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(rawParams),
       })
       if (!res.ok) {
         throw new TradingServiceError('TRADING_UPSTREAM_ERROR', `Tiger HTTP ${res.status}: ${res.statusText}`)
@@ -170,25 +187,96 @@ export class TigerRestClient {
   }
 
   async getBalance(): Promise<AccountBalance> {
-    return { currency: 'HKD', available: 500000, total: 500000 }
+    if (!this.privateKey) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'Tiger: privateKey (RSA PEM) is required for getBalance')
+    }
+    const acc = this.accountId
+    const res = await this.requestJson<{
+      code: number
+      message?: string
+      data?: { cash?: number; netLiquidation?: number; currency?: string }
+    }>({ account: acc }, 'user_asset')
+
+    if (res.code !== 0 || !res.data) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Tiger getBalance failed: ${res.message ?? `code ${res.code}`}`)
+    }
+
+    return {
+      currency: res.data.currency ?? 'HKD',
+      available: res.data.cash ?? 0,
+      total: res.data.netLiquidation ?? res.data.cash ?? 0,
+    }
+  }
+
+  async getPositions(): Promise<Position[]> {
+    if (!this.privateKey) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'Tiger: privateKey (RSA PEM) is required for getPositions')
+    }
+    const res = await this.requestJson<{
+      code: number
+      message?: string
+      data?: Array<{ symbol: string; quantity: number; averageCost: number; unrealizedPnl: number }>
+    }>({ account: this.accountId }, 'positions')
+
+    if (res.code !== 0 || !Array.isArray(res.data)) return []
+    return res.data.map((p) => ({
+      symbol: toTigerSymbol(p.symbol).canonical,
+      quantity: p.quantity,
+      entryPrice: p.averageCost,
+      unrealizedPnl: p.unrealizedPnl,
+    }))
   }
 
   async placeOrder(_creds: unknown, req: OrderRequest): Promise<Order> {
-    const { canonical } = toTigerSymbol(req.symbol)
+    if (!this.privateKey) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'Tiger: privateKey (RSA PEM) is required for placeOrder')
+    }
+    const { symbol: sym, canonical } = toTigerSymbol(req.symbol)
+    const res = await this.requestJson<{
+      code: number
+      message?: string
+      data?: { id?: string; orderId?: string; status?: string }
+    }>({
+      account: this.accountId,
+      symbol: sym,
+      action: req.side.toUpperCase(),
+      orderType: req.type === 'market' ? 'MKT' : 'LMT',
+      totalQuantity: req.quantity,
+      limitPrice: req.price,
+    }, 'trade_order')
+
+    if (res.code !== 0 || (!res.data?.id && !res.data?.orderId)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Tiger placeOrder failed: ${res.message ?? `code ${res.code}`}`)
+    }
+
+    const id = res.data.id ?? res.data.orderId ?? `tiger-${Date.now()}`
+
     return {
-      id: `tiger-${Date.now()}`,
+      id: String(id),
       symbol: canonical,
       side: req.side,
       type: req.type,
-      status: req.dryRun ? 'filled' : 'new',
+      status: (res.data.status?.toLowerCase() as Order['status']) ?? 'new',
       quantity: req.quantity,
       price: req.price ?? 0,
-      dryRun: req.dryRun ?? true,
+      dryRun: false,
       timestamp: Date.now(),
     }
   }
 
   async cancelOrder(_creds: unknown, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+    if (!this.privateKey) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'Tiger: privateKey (RSA PEM) is required for cancelOrder')
+    }
+    const res = await this.requestJson<{ code: number; message?: string }>({
+      account: this.accountId,
+      orderId,
+    }, 'cancel_order')
+
+    if (res.code !== 0) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Tiger cancelOrder failed: ${res.message ?? `code ${res.code}`}`)
+    }
+
     return { orderId, status: 'canceled' }
   }
 }

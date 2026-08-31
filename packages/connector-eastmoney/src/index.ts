@@ -1,6 +1,6 @@
-﻿/**
+/**
  * @dsh-trading/connector-eastmoney
- * 东方财富 A 股连接器插件（提供 tradingCnMarketData 与 cn_* 交易工具）。
+ * 东方财富 A 股连接器插件（提供 tradingCnMarketData 与 cn_* 行情工具）。
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -8,16 +8,11 @@ import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import type {
-  AccountBalance,
   Disposable,
   Interval,
   Kline,
   MarketDataService,
-  Order,
-  OrderRequest,
-  Position,
   Ticker,
-  TradeService,
 } from '@dsh-trading/api'
 import {
   EastmoneyRestClient,
@@ -31,20 +26,13 @@ export const name = 'dsh-trading-cn-connector-eastmoney'
 
 export interface Config {
   enabled: boolean
-  env: 'demo' | 'live'
-  dryRun: boolean
-  liveTrading: boolean
 }
 
 export const Config: Schema<Config> = Schema.object({
   enabled: Schema.boolean().default(true).description('是否激活东财连接器'),
-  env: Schema.union(['demo', 'live'] as const).default('demo').description('运行环境'),
-  dryRun: Schema.boolean().default(true).description('默认模拟下单'),
-  liveTrading: Schema.boolean().default(false).description('是否允许实盘交易'),
 })
 
 export const TRADING_CN_MARKET_DATA_KEY = 'tradingCnMarketData'
-export const TRADING_CN_TRADE_KEY = 'tradingCnTrade'
 
 export class EastmoneyMarketDataService extends Service implements MarketDataService {
   private readonly client: EastmoneyRestClient
@@ -81,39 +69,6 @@ export class EastmoneyMarketDataService extends Service implements MarketDataSer
   }
 }
 
-export class EastmoneyTradeService extends Service implements TradeService {
-  private readonly client: EastmoneyRestClient
-
-  constructor(
-    ctx: Context,
-    options: EastmoneyRestOptions = {},
-    serviceName: string = TRADING_CN_TRADE_KEY,
-  ) {
-    super(ctx, serviceName)
-    this.client = new EastmoneyRestClient(options)
-  }
-
-  async getBalance(): Promise<AccountBalance> {
-    return this.client.getBalance()
-  }
-
-  async placeOrder(order: OrderRequest): Promise<Order> {
-    return this.client.placeOrder(undefined, order)
-  }
-
-  async cancelOrder(orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
-    return this.client.cancelOrder(undefined, orderId)
-  }
-
-  async getPositions(): Promise<Position[]> {
-    return []
-  }
-
-  async getOrders(): Promise<Order[]> {
-    return []
-  }
-}
-
 export const ROUTER_PROVIDER = 'eastmoney'
 
 export function routeAllows(ctx: Context, config: Config, market: string): boolean {
@@ -128,7 +83,6 @@ export function apply(ctx: Context, config: Config): void {
   if (!routeAllows(ctx, config, 'cn')) return
 
   const marketData = new EastmoneyMarketDataService(ctx)
-  const trade = new EastmoneyTradeService(ctx)
 
   ctx.inject(['tools'], (ctx) => {
     const tools = ctx.tools as unknown as { register(d: unknown): void; get(n: string): unknown }
@@ -158,31 +112,6 @@ export function apply(ctx: Context, config: Config): void {
       async execute(args) {
         const klines = await marketData.getKlines(args.symbol, (args.interval ?? '1d') as Interval, args.limit)
         return JSON.stringify(klines)
-      },
-    }))
-
-    register(defineTool({
-      name: 'cn_place_order',
-      description: 'Place or simulate an A-share order via Eastmoney.',
-      parameters: {
-        symbol: { type: 'string', required: true, description: 'A-share symbol' },
-        side: { type: 'string', enum: ['buy', 'sell'], required: true, description: 'Side' },
-        type: { type: 'string', enum: ['market', 'limit'], required: true, description: 'Type' },
-        quantity: { type: 'number', required: true, description: 'Quantity (shares)' },
-        price: { type: 'number', description: 'Price' },
-        dryRun: { type: 'boolean', default: true, description: 'Dry run' },
-      },
-      output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
-      async execute(args) {
-        const order = await trade.placeOrder({
-          symbol: args.symbol,
-          side: args.side as 'buy' | 'sell',
-          type: args.type as 'market' | 'limit',
-          quantity: args.quantity,
-          price: args.price,
-          dryRun: args.dryRun ?? true,
-        })
-        return JSON.stringify(order)
       },
     }))
   })

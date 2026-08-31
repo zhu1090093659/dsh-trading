@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @dsh-trading/connector-tiger
  * 老虎证券 (Tiger Trade) 港美股连接器插件。
  */
@@ -35,6 +35,7 @@ export interface Config {
   dryRun: boolean
   liveTrading: boolean
   tigerId?: string
+  privateKeyRef?: string
   accountId?: string
 }
 
@@ -44,6 +45,7 @@ export const Config: Schema<Config> = Schema.object({
   dryRun: Schema.boolean().default(true).description('默认模拟下单'),
   liveTrading: Schema.boolean().default(false).description('是否允许实盘交易'),
   tigerId: Schema.string().description('Tiger ID'),
+  privateKeyRef: Schema.string().default('TIGER_PRIVATE_KEY').description('Tiger RSA 私钥环境变量名 (PEM 格式)'),
   accountId: Schema.string().description('Tiger 账户 ID'),
 })
 
@@ -106,7 +108,7 @@ export class TigerTradeService extends Service implements TradeService {
   }
 
   async getPositions(): Promise<Position[]> {
-    return []
+    return this.client.getPositions()
   }
 
   async getOrders(): Promise<Order[]> {
@@ -127,8 +129,9 @@ export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
   if (!routeAllows(ctx, config, 'hk')) return
 
-  const marketData = new TigerMarketDataService(ctx, { tigerId: config.tigerId, accountId: config.accountId })
-  const trade = new TigerTradeService(ctx, { tigerId: config.tigerId, accountId: config.accountId })
+  const privateKey = config.privateKeyRef ? process.env[config.privateKeyRef] : undefined
+  const marketData = new TigerMarketDataService(ctx, { tigerId: config.tigerId, accountId: config.accountId, privateKey })
+  const trade = new TigerTradeService(ctx, { tigerId: config.tigerId, accountId: config.accountId, privateKey })
 
   ctx.inject(['tools'], (ctx) => {
     const tools = ctx.tools as unknown as { register(d: unknown): void; get(n: string): unknown }
@@ -174,7 +177,29 @@ export function apply(ctx: Context, config: Config): void {
       },
       output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
       async execute(args) {
-        if (!config.liveTrading && args.dryRun === false) {
+        if (args.dryRun !== false) {
+          let refPrice = args.price
+          if (!refPrice || refPrice <= 0) {
+            try {
+              const t = await marketData.getTicker(args.symbol)
+              refPrice = t.price
+            } catch {
+              refPrice = 0
+            }
+          }
+          return JSON.stringify({
+            id: `sim-tiger-${Date.now()}`,
+            symbol: toTigerSymbol(args.symbol).canonical,
+            side: args.side,
+            type: args.type,
+            status: 'filled',
+            quantity: args.quantity,
+            price: refPrice ?? 0,
+            dryRun: true,
+            timestamp: Date.now(),
+          })
+        }
+        if (!config.liveTrading) {
           return JSON.stringify({
             status: 'rejected',
             code: 'TRADING_LIVE_TRADING_DISABLED',
@@ -187,7 +212,7 @@ export function apply(ctx: Context, config: Config): void {
           type: args.type as 'market' | 'limit',
           quantity: args.quantity,
           price: args.price,
-          dryRun: args.dryRun ?? true,
+          dryRun: false,
         })
         return JSON.stringify(order)
       },

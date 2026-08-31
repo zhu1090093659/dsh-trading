@@ -1,15 +1,11 @@
-﻿/**
+/**
  * @dsh-trading/connector-akshare/rest
  * AkShare A 股宏观与量化另类数据 REST 客户端。
  */
 
 import type {
-  AccountBalance,
   Interval,
   Kline,
-  Order,
-  OrderRequest,
-  Position,
   Ticker,
   TradingErrorCode,
 } from '@dsh-trading/api'
@@ -82,9 +78,10 @@ export class AkshareRestClient {
     if (!res.data) {
       throw new TradingServiceError('TRADING_SYMBOL_NOT_FOUND', `AkShare/Eastmoney quote not found: ${symbol}`)
     }
+    const rawPrice = typeof res.data.f43 === 'number' ? res.data.f43 / 100 : 0
     return {
       symbol: canonical,
-      price: res.data.f43 ?? 0,
+      price: rawPrice > 0 ? rawPrice : 0,
       volume: res.data.f47 ?? 0,
       timestamp: res.data.f86 ? res.data.f86 * 1000 : Date.now(),
     }
@@ -112,54 +109,16 @@ export class AkshareRestClient {
     })
   }
 
-  async getNorthboundFlow(): Promise<Array<{ date: string; hgtNet: number; sgtNet: number; totalNet: number }>> {
-    const url = 'https://push2.eastmoney.com/api/qt/kamt.kline/get?fields1=f1,f2,f3,f4&fields2=f51,f52,f53,f54&klt=101&lmt=10'
-    const res = await this.requestJson<{ data?: { s2n?: string[] } }>(url)
-    if (!res.data?.s2n) return []
-    return res.data.s2n.map((line) => {
-      const [date, hgt, sgt, total] = line.split(',')
-      return {
-        date,
-        hgtNet: parseFloat(hgt),
-        sgtNet: parseFloat(sgt),
-        totalNet: parseFloat(total),
-      }
-    })
-  }
-
   async getSectorFundFlow(): Promise<Array<{ name: string; changePercent: number; mainNetInflow: number }>> {
     const url = 'https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=10&po=1&np=1&fields=f12,f14,f3,f62&fs=m:90+t:2'
     const res = await this.requestJson<{ data?: { diff?: Array<{ f14: string; f3: number; f62: number }> } }>(url)
     const list = res.data?.diff ?? []
     return list.map((item) => ({
       name: item.f14,
-      changePercent: item.f3,
+      changePercent: typeof item.f3 === 'number' ? item.f3 / 100 : 0,
       mainNetInflow: item.f62,
     }))
   }
-
-  async getBalance(): Promise<AccountBalance> {
-    return { currency: 'CNY', available: 1000000, total: 1000000 }
-  }
-
-  async placeOrder(_creds: unknown, req: OrderRequest): Promise<Order> {
-    const { canonical } = toEastmoneySecid(req.symbol)
-    return {
-      id: `sim-ak-${Date.now()}`,
-      symbol: canonical,
-      side: req.side,
-      type: req.type,
-      status: 'filled',
-      quantity: req.quantity,
-      price: req.price ?? 0,
-      dryRun: true,
-      timestamp: Date.now(),
-    }
-  }
-
-  async cancelOrder(_creds: unknown, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
-    return { orderId, status: 'canceled' }
-  }
 }
 
-export type { AccountBalance, Interval, Kline, Order, Position, Ticker }
+export type { Interval, Kline, Ticker }

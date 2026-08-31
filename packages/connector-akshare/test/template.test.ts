@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   AkshareRestClient,
   INTERVAL_VOCABULARY,
@@ -37,42 +37,42 @@ describe('AkshareRestClient 符号与周期映射', () => {
   })
 })
 
-describe('AkshareRestClient.getNorthboundFlow', () => {
-  it('拉取北向资金流向', async () => {
+describe('AkshareRestClient.getTicker', () => {
+  it('拉取并解析 A 股 Ticker（分精度价格除以 100）', async () => {
     const { impl } = stubFetch([
       {
-        match: 'kamt.kline',
+        match: '/api/qt/stock/get',
         body: {
           data: {
-            s2n: [
-              '2026-08-31,250000.5,150000.2,400000.7',
-            ],
+            f43: 175050,
+            f47: 25000,
+            f86: 1725000000,
           },
         },
       },
     ])
     const client = new AkshareRestClient({ fetchImpl: impl })
-    const flow = await client.getNorthboundFlow()
+    const ticker = await client.getTicker('600519.SH')
 
-    expect(flow).toHaveLength(1)
-    expect(flow[0]).toEqual({
-      date: '2026-08-31',
-      hgtNet: 250000.5,
-      sgtNet: 150000.2,
-      totalNet: 400000.7,
+    expect(ticker).toEqual({
+      symbol: '600519.SH',
+      price: 1750.5,
+      volume: 25000,
+      timestamp: 1725000000000,
     })
   })
 })
 
 describe('AkshareRestClient.getSectorFundFlow', () => {
-  it('拉取板块资金流', async () => {
+  it('拉取板块资金流（f3 涨跌幅除以 100）', async () => {
     const { impl } = stubFetch([
       {
         match: 'clist/get',
         body: {
           data: {
             diff: [
-              { f14: '半导体', f3: 3.45, f62: 1250000000 },
+              { f14: '半导体', f3: 345, f62: 1250000000 },
+              { f14: '航空机场', f3: -120, f62: -50000000 },
             ],
           },
         },
@@ -81,11 +81,16 @@ describe('AkshareRestClient.getSectorFundFlow', () => {
     const client = new AkshareRestClient({ fetchImpl: impl })
     const list = await client.getSectorFundFlow()
 
-    expect(list).toHaveLength(1)
+    expect(list).toHaveLength(2)
     expect(list[0]).toEqual({
       name: '半导体',
       changePercent: 3.45,
       mainNetInflow: 1250000000,
+    })
+    expect(list[1]).toEqual({
+      name: '航空机场',
+      changePercent: -1.2,
+      mainNetInflow: -50000000,
     })
   })
 })

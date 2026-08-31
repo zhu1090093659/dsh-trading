@@ -1,8 +1,4 @@
-﻿/**
- * @dsh-trading/connector-longbridge/rest
- * 长桥证券 (Longbridge/LongPort) OpenAPI 客户端（港美股行情与交易）。
- */
-
+import * as crypto from 'node:crypto'
 import type {
   AccountBalance,
   Interval,
@@ -66,6 +62,18 @@ export function toLongbridgeSymbol(raw: string): { symbol: string; canonical: st
   return { symbol: clean, canonical: clean }
 }
 
+export function generateLongbridgeSignature(
+  secret: string,
+  method: string,
+  path: string,
+  timestamp: string | number,
+  nonce: string,
+  body = '',
+): string {
+  const payload = `${method.toUpperCase()}|${path}|${timestamp}|${nonce}|${body}`
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex')
+}
+
 export interface LongbridgeRestOptions {
   baseUrl?: string
   appKey?: string
@@ -76,21 +84,26 @@ export interface LongbridgeRestOptions {
 
 export class LongbridgeRestClient {
   readonly baseUrl: string
-  private readonly appKey?: string
-  private readonly appSecret?: string
-  private readonly accessToken?: string
+  readonly appKey?: string
+  readonly appSecret?: string
+  readonly accessToken?: string
   private readonly fetchImpl: typeof fetch
 
   constructor(options: LongbridgeRestOptions = {}) {
-    this.baseUrl = options.baseUrl ?? 'https://openapi.longportapp.com'
-    this.appKey = options.appKey
-    this.appSecret = options.appSecret
-    this.accessToken = options.accessToken
+    this.baseUrl = options.baseUrl ?? (process.env.LONGBRIDGE_API_URL || 'https://openapi.longportapp.com')
+    this.appKey = options.appKey ?? process.env.LONGBRIDGE_APP_KEY
+    this.appSecret = options.appSecret ?? process.env.LONGBRIDGE_APP_SECRET
+    this.accessToken = options.accessToken ?? process.env.LONGBRIDGE_ACCESS_TOKEN
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
   }
 
   private async requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const method = (options.method ?? 'GET').toUpperCase()
     const url = `${this.baseUrl}${path}`
+    const timestamp = Date.now().toString()
+    const nonce = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+    const bodyStr = options.body ? String(options.body) : ''
+
     const headers: Record<string, string> = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
@@ -98,10 +111,16 @@ export class LongbridgeRestClient {
     }
 
     if (this.accessToken) {
-      headers['authorization'] = this.accessToken
+      headers['authorization'] = this.accessToken.startsWith('Bearer ') ? this.accessToken : `Bearer ${this.accessToken}`
     }
     if (this.appKey) {
+      headers['x-hk-key'] = this.appKey
       headers['x-api-key'] = this.appKey
+      headers['x-hk-timestamp'] = timestamp
+      headers['x-hk-nonce'] = nonce
+      if (this.appSecret) {
+        headers['x-hk-signature'] = generateLongbridgeSignature(this.appSecret, method, path, timestamp, nonce, bodyStr)
+      }
     }
 
     try {
@@ -182,25 +201,122 @@ export class LongbridgeRestClient {
   }
 
   async getBalance(): Promise<AccountBalance> {
-    return { currency: 'HKD', available: 1000000, total: 1000000 }
+    if (!this.appKey || !this.accessToken) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'Longbridge: appKey and accessToken are required for getBalance')
+    }
+    const res = await this.requestJson<{
+      code: number
+      message?: string
+      data?: {
+        list?: Array<{
+          total_cash?: string
+          net_assets?: string
+          currency?: string
+        }>
+      }
+    }>('/v1/asset/account')
+
+    if (res.code !== 0 || !res.data?.list || res.data.list.length === 0) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Longbridge getBalance failed: ${res.message ?? `code ${res.code}`}`)
+    }
+
+    const first = res.data.list[0]
+    const available = parseFloat(first.total_cash || '0')
+    const total = parseFloat(first.net_assets || first.total_cash || '0')
+
+    return {
+      currency: first.currency ?? 'HKD',
+      available,
+      total,
+    }
+  }
+
+  async getPositions(): Promise<Position[]> {
+    if (!this.appKey || !this.accessToken) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'Longbridge: appKey and accessToken are required for getPositions')
+    }
+    const res = await this.requestJson<{
+      code: number
+      message?: string
+      data?: {
+        channels?: Array<{
+          positions?: Array<{
+            symbol: string
+            quantity: string
+            cost_price: string
+            unrealized_pnl?: string
+          }>
+        }>
+      }
+    }>('/v1/trade/stock/position')
+
+    if (res.code !== 0 || !Array.isArray(res.data?.channels)) return []
+    const positions: Position[] = []
+    for (const channel of res.data.channels) {
+      if (Array.isArray(channel.positions)) {
+        for (const p of channel.positions) {
+          positions.push({
+            symbol: toLongbridgeSymbol(p.symbol).canonical,
+            quantity: parseFloat(p.quantity || '0'),
+            entryPrice: parseFloat(p.cost_price || '0'),
+            unrealizedPnl: parseFloat(p.unrealized_pnl || '0'),
+          })
+        }
+      }
+    }
+    return positions
   }
 
   async placeOrder(_creds: unknown, req: OrderRequest): Promise<Order> {
-    const { canonical } = toLongbridgeSymbol(req.symbol)
+    if (!this.appKey || !this.accessToken) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'Longbridge: appKey and accessToken are required for placeOrder')
+    }
+    const { symbol: lbSymbol, canonical } = toLongbridgeSymbol(req.symbol)
+    const res = await this.requestJson<{
+      code: number
+      message?: string
+      data?: { order_id?: string }
+    }>('/v1/trade/order', {
+      method: 'POST',
+      body: JSON.stringify({
+        symbol: lbSymbol,
+        order_type: req.type === 'market' ? 'MO' : 'LO',
+        side: req.side === 'buy' ? 'Buy' : 'Sell',
+        submitted_quantity: String(req.quantity),
+        submitted_price: req.price ? String(req.price) : undefined,
+        time_in_force: 'Day',
+      }),
+    })
+
+    if (res.code !== 0 || !res.data?.order_id) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Longbridge placeOrder failed: ${res.message ?? `code ${res.code}`}`)
+    }
+
     return {
-      id: `sim-lb-${Date.now()}`,
+      id: res.data.order_id,
       symbol: canonical,
       side: req.side,
       type: req.type,
-      status: 'filled',
+      status: 'new',
       quantity: req.quantity,
       price: req.price ?? 0,
-      dryRun: true,
+      dryRun: false,
       timestamp: Date.now(),
     }
   }
 
   async cancelOrder(_creds: unknown, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+    if (!this.appKey || !this.accessToken) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'Longbridge: appKey and accessToken are required for cancelOrder')
+    }
+    const res = await this.requestJson<{ code: number; message?: string }>(`/v1/trade/order?order_id=${encodeURIComponent(orderId)}`, {
+      method: 'DELETE',
+    })
+
+    if (res.code !== 0) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Longbridge cancelOrder failed: ${res.message ?? `code ${res.code}`}`)
+    }
+
     return { orderId, status: 'canceled' }
   }
 }

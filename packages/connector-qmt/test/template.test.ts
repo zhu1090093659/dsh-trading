@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   INTERVAL_VOCABULARY,
   QmtRestClient,
@@ -38,26 +38,79 @@ describe('QmtRestClient 符号与周期映射', () => {
   })
 })
 
-describe('QmtRestClient.getTicker', () => {
-  it('从本地网关拉取 Ticker', async () => {
-    const { impl } = stubFetch([
+describe('QmtRestClient 交易接口', () => {
+  it('真实拉取可用资金与总资产', async () => {
+    const { impl, urls } = stubFetch([
       {
-        match: '/api/v1/market/ticker',
+        match: '/api/v1/trade/asset',
         body: {
           code: 0,
           data: {
-            lastPrice: 1750.5,
-            volume: 20000,
-            timestamp: 1725000000000,
+            cash: 250000.5,
+            total_asset: 680000.0,
+            frozen_cash: 50000.0,
+            currency: 'CNY',
           },
         },
       },
     ])
-    const client = new QmtRestClient({ fetchImpl: impl, gatewayUrl: 'http://127.0.0.1:5800' })
-    const ticker = await client.getTicker('600519.SH')
+    const client = new QmtRestClient({ fetchImpl: impl, accountId: '12345678' })
+    const bal = await client.getBalance()
 
-    expect(ticker.symbol).toBe('600519.SH')
-    expect(ticker.price).toBe(1750.5)
-    expect(ticker.volume).toBe(20000)
+    expect(urls[0]).toContain('account_id=12345678')
+    expect(bal).toEqual({
+      currency: 'CNY',
+      available: 250000.5,
+      total: 680000.0,
+    })
+  })
+
+  it('真实提交 A 股委托订单', async () => {
+    const { impl, urls } = stubFetch([
+      {
+        match: '/api/v1/trade/order',
+        body: {
+          code: 0,
+          data: {
+            order_id: 'qmt-ord-8888',
+            status: 'new',
+          },
+        },
+      },
+    ])
+    const client = new QmtRestClient({ fetchImpl: impl, accountId: '12345678' })
+    const order = await client.placeOrder(undefined, {
+      symbol: '600519.SH',
+      side: 'buy',
+      type: 'limit',
+      quantity: 100,
+      price: 1750.0,
+    })
+
+    expect(urls[0]).toContain('/api/v1/trade/order')
+    expect(order.id).toBe('qmt-ord-8888')
+    expect(order.symbol).toBe('600519.SH')
+    expect(order.side).toBe('buy')
+    expect(order.dryRun).toBe(false)
+  })
+
+  it('真实撤销 A 股委托订单', async () => {
+    const { impl } = stubFetch([
+      {
+        match: '/api/v1/trade/cancel',
+        body: {
+          code: 0,
+          data: { order_id: 'qmt-ord-8888' },
+        },
+      },
+    ])
+    const client = new QmtRestClient({ fetchImpl: impl, accountId: '12345678' })
+    const res = await client.cancelOrder(undefined, 'qmt-ord-8888')
+    expect(res).toEqual({ orderId: 'qmt-ord-8888', status: 'canceled' })
+  })
+
+  it('无 accountId 时抛出 TRADING_AUTH_FAILED', async () => {
+    const client = new QmtRestClient({})
+    await expect(client.getBalance()).rejects.toThrowError(/accountId is required/)
   })
 })
