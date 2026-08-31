@@ -4,19 +4,25 @@
 > 发布需用户显式授权）。本清单是从开发形态切换到可分发形态的**全部闸门**——
 > 逐条过完才允许 `pnpm release`（changesets 已配，`@dsh-trading/*` fixed 组同族发版）。
 
-## 1. SDK 钉版解除（最硬的闸门）
+## 1. SDK 钉版解除（最硬的闸门）——✅ 已解除（2026-08-30）
+
+> **状态更新（2026-08-30）**：DSH 0.1.2-alpha.2 已发布 npm，本仓 SDK 依赖整体切换到
+> 官方 npm cohort（cordis 4.0.2 / cosmokit 1.8.3 / schemastery 3.18.2；PR #13）。
+> overrides 全部移除、干净环境 CI 全绿、README 口径已改——本节闸门**已通过**，
+> 决策细节见 `.agents/notes/implemented/process/2026-08-30-sdk-upgrade-npm-0.1.2-alpha.2.md`。
+> 以下原始清单保留作历史口径。
 
 本仓 `pnpm-workspace.yaml` 的 overrides 把 `@deepseek-ai/*` SDK 钉到本机绝对路径
 （`/Users/zcl/code/deepseek-harness/...`）——**任何其他机器都无法 install 本仓**。
 发布前必须：
 
-- [ ] npm 上 `@deepseek-ai/*` 世代与本仓代码面兼容（当前宿主 0.1.2-alpha.1；npm 最高
-  0.1.0-rc.x + cordis 4.0.1，dsh-agent-presets 最高 0.1.1-rc.2——**未对齐前不得发布**）；
-- [ ] 删除本仓 overrides 全部 file:/link: 行（peerDependencies 声明已是正式包名+版本，
+- [x] npm 上 `@deepseek-ai/*` 世代与本仓代码面兼容（~~当前宿主 0.1.2-alpha.1~~
+  → npm 0.1.2-alpha.2 cohort 已对齐）；
+- [x] 删除本仓 overrides 全部 file:/link: 行（peerDependencies 声明已是正式包名+版本，
   无需改）；
-- [ ] 在一台**干净环境**（无 /Users/zcl/code/deepseek-harness）`pnpm install &&
-  pnpm -r build && pnpm -r test` 全绿；
-- [ ] README「安装与卸载」节的 file: 钉版口径改写为 npm 版本口径（含 profile
+- [x] 在一台**干净环境**（无 /Users/zcl/code/deepseek-harness）`pnpm install &&
+  pnpm -r build && pnpm -r test` 全绿（CI 即干净环境实证）；
+- [x] README「安装与卸载」节的 file: 钉版口径改写为 npm 版本口径（含 profile
   pnpm-workspace.yaml 范本更新）。
 
 ## 2. 功能与合规
