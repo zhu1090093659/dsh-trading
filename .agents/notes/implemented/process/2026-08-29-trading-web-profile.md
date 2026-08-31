@@ -36,6 +36,9 @@ dsh --profile trading-web
   client 产物后须先重建包，再刷新 profile 内的 file: 副本（见
   [client-bundle-intro](../bug-fix/2026-08-29-client-bundle-intro.md) 的
   Consequences）。
+- （2026-08-31 互链）PR 评审场景的隔离实机环境与交互验证手法另见
+  [shadow-profile-pr-review](2026-08-31-shadow-profile-pr-review.md)——与本篇互补：
+  本篇管"trading UI 验证用哪个 profile"，那篇管"评审如何搭隔离实机"。
 - （2026-08-29 用户拍板执行）默认 `web` profile 已通过
   `dsh plugin --profile web remove @dsh-trading/base @dsh-trading/crypto`
   摘除全部 dsh-trading 插件（依赖与 `dsh.profile.bundles` 同步清空，传递
