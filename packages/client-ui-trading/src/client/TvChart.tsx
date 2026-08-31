@@ -17,7 +17,8 @@ import {
 import type {
   IChartApi, ISeriesApi, MouseEventParams, SeriesType, Time, UTCTimestamp,
 } from 'lightweight-charts'
-import { DOWN_COLOR, UP_COLOR, fmtAxis, priceDigits } from './format.ts'
+import { fmtAxis, priceDigits } from './format.ts'
+import { getColorPalette, type ColorMode } from './color-mode.ts'
 import type { IndicatorOutput } from '@dsh-trading/indicators'
 import type { Kline } from './types.ts'
 
@@ -47,6 +48,7 @@ export interface TvChartProps {
   /** market:symbol:interval——变化即全量重置并 fitContent。 */
   dataKey: string
   intraday: boolean
+  colorMode?: ColorMode
   mainOverlays: readonly TvIndicatorGroup[]
   subIndicators: readonly TvIndicatorGroup[]
   /** 十字线悬停的 K 线下标（离场为 null），父级负责 OHLC 读数。 */
@@ -64,12 +66,13 @@ export function toBar(kline: Kline): TvBar {
   }
 }
 
-export function toVolume(kline: Kline): TvVolume {
+export function toVolume(kline: Kline, colorMode: ColorMode = 'red-up'): TvVolume {
   const up = kline.close >= kline.open
+  const palette = getColorPalette(colorMode)
   return {
     time: Math.floor(kline.openTime / 1000) as UTCTimestamp,
     value: kline.volume,
-    color: up ? 'rgba(230, 69, 69, 0.55)' : 'rgba(43, 164, 113, 0.55)',
+    color: up ? palette.upAlpha(0.55) : palette.downAlpha(0.55),
   }
 }
 
@@ -161,13 +164,14 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     })
     chartRef.current = chart
 
+    const initialPalette = getColorPalette(propsRef.current.colorMode)
     const candles = chart.addSeries(CandlestickSeries, {
-      upColor: UP_COLOR,
-      downColor: DOWN_COLOR,
-      borderUpColor: UP_COLOR,
-      borderDownColor: DOWN_COLOR,
-      wickUpColor: UP_COLOR,
-      wickDownColor: DOWN_COLOR,
+      upColor: initialPalette.upColor,
+      downColor: initialPalette.downColor,
+      borderUpColor: initialPalette.upColor,
+      borderDownColor: initialPalette.downColor,
+      wickUpColor: initialPalette.upColor,
+      wickDownColor: initialPalette.downColor,
       priceLineVisible: true,
       priceLineWidth: 1,
       priceLineStyle: LineStyle.Dashed,
@@ -204,6 +208,22 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     }
   }, [])
 
+  // 涨跌配色热切换（红涨绿跌 ↔ 绿涨红跌）
+  useEffect(() => {
+    const palette = getColorPalette(props.colorMode)
+    candleRef.current?.applyOptions({
+      upColor: palette.upColor,
+      downColor: palette.downColor,
+      borderUpColor: palette.upColor,
+      borderDownColor: palette.downColor,
+      wickUpColor: palette.upColor,
+      wickDownColor: palette.downColor,
+    })
+    if (volumeRef.current && props.volumes.length > 0) {
+      volumeRef.current.setData(props.volumes)
+    }
+  }, [props.colorMode, props.volumes])
+
   // ---- 蜡烛/成交量：dataKey 变化全量重置，否则尾部增量 ----
   const prevRef = useRef<{ key: string; bars: readonly TvBar[]; volumes: readonly TvVolume[] } | null>(null)
   useEffect(() => {
@@ -216,10 +236,11 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
 
     const last = bars[bars.length - 1]
     const up = last !== undefined ? last.close >= last.open : true
+    const palette = getColorPalette(props.colorMode)
     const priceFormat = { type: 'price' as const, precision: priceDigits(last?.close), minMove: 1 / 10 ** priceDigits(last?.close) }
     candles.applyOptions({
       priceFormat,
-      priceLineColor: up ? UP_COLOR : DOWN_COLOR,
+      priceLineColor: up ? palette.upColor : palette.downColor,
     })
 
     if (prev === null || prev.key !== dataKey || bars.length < prev.bars.length || firstTimeDiffers(prev.bars, bars)) {
@@ -232,30 +253,30 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       candles.update(bars[index] as TvBar)
       volume.update(volumes[index] as TvVolume)
     }
-  }, [bars, volumes, dataKey])
+  }, [bars, volumes, dataKey, props.colorMode])
 
   // ---- 指标序列：结构 diff + 数据同步 ----
   useEffect(() => {
     const chart = chartRef.current
     if (chart === null) return
-    // 注册表契约：outputs.values 与 bars 等长——时间轴由 bars 给出。
     const timeAxis = bars.map(bar => bar.time)
-    syncGroups(chart, mainRefs.current, mainOverlays, 0, timeAxis)
-    syncGroups(chart, subRefs.current, subIndicators, 2, timeAxis, true)
+    syncIndicators(chart, mainRefs.current, mainOverlays, timeAxis, false, 0, props.colorMode)
+    syncIndicators(chart, subRefs.current, subIndicators, timeAxis, true, 2, props.colorMode)
     applyStretch(chart)
-  }, [mainOverlays, subIndicators, bars])
+  }, [mainOverlays, subIndicators, bars, props.colorMode])
 
   return <div className="dshtrading-tv-chart" ref={containerRef} style={{ width: '100%', height: '100%' }} />
 }
 
 /** 主图叠加（pane 0）与副图（pane 2+，重建式）两套 diff 策略。 */
-function syncGroups(
+function syncIndicators(
   chart: IChartApi,
   refs: Map<string, Map<string, ISeriesApi<SeriesType>>>,
   groups: readonly TvIndicatorGroup[],
-  basePane: number,
   timeAxis: readonly UTCTimestamp[],
-  recreateAll = false,
+  recreateAll: boolean,
+  basePane: number,
+  colorMode?: ColorMode,
 ): void {
   const nextKeys = new Set(groups.map(group => group.key))
 
@@ -282,7 +303,7 @@ function syncGroups(
       const series = seriesMap.get(output.key)
       if (series === undefined) continue
       if (output.kind === 'histogram') {
-        ;(series as ISeriesApi<'Histogram'>).setData(toHistogramData(output, timeAxis))
+        ;(series as ISeriesApi<'Histogram'>).setData(toHistogramData(output, timeAxis, colorMode))
       } else {
         ;(series as ISeriesApi<'Line' | 'Area'>).setData(toLineData(output, timeAxis))
       }
@@ -331,7 +352,8 @@ function toLineData(output: IndicatorOutput, timeAxis: readonly UTCTimestamp[]):
   return data
 }
 
-function toHistogramData(output: IndicatorOutput, timeAxis: readonly UTCTimestamp[]): Array<{ time: UTCTimestamp; value: number; color: string }> {
+function toHistogramData(output: IndicatorOutput, timeAxis: readonly UTCTimestamp[], colorMode: ColorMode = 'red-up'): Array<{ time: UTCTimestamp; value: number; color: string }> {
+  const palette = getColorPalette(colorMode)
   const data: Array<{ time: UTCTimestamp; value: number; color: string }> = []
   for (let index = 0; index < output.values.length; index++) {
     const value = output.values[index]

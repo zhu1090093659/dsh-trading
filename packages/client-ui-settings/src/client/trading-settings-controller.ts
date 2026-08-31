@@ -50,6 +50,8 @@ export interface TradingSettings {
   markets: Record<string, { provider?: string; tradeProvider?: string }>
   /** WS2c：新闻相关设置（CryptoPanic API token，可选）。 */
   news?: { cryptoPanicKey?: string }
+  /** 涨跌配色模式：red-up = 红涨绿跌（国内），green-up = 绿涨红跌（国际）。 */
+  colorMode?: 'red-up' | 'green-up'
 }
 
 /** 组件的可观察状态（SnapshotStore 值）：已解析 value + 覆盖标记。 */
@@ -63,6 +65,8 @@ export interface TradingSettingsState {
   newsKey: string | undefined
   /** WS2c：用户是否覆盖了 CryptoPanic key。 */
   newsOverridden: boolean
+  /** 涨跌配色模式。 */
+  colorMode: 'red-up' | 'green-up'
   /** 表单可写（mode=host 且 writable）。 */
   writable: boolean
 }
@@ -74,6 +78,8 @@ export interface TradingSettingsActions {
   /** WS2c：设置/清除 CryptoPanic key（空串 = 清除回公共源）。 */
   setNewsKey(value: string): Promise<void>
   resetNewsKey(): Promise<void>
+  /** 设置涨跌配色模式。 */
+  setColorMode(mode: 'red-up' | 'green-up'): Promise<void>
 }
 
 /** 状态转化：从 settings 快照投射为组件的可观察视图。 */
@@ -104,6 +110,7 @@ export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): T
     overridden,
     newsKey: news?.cryptoPanicKey,
     newsOverridden: userNews?.cryptoPanicKey !== undefined,
+    colorMode: value?.colorMode === 'green-up' ? 'green-up' : 'red-up',
     writable: snap.writable && snap.mode === 'host',
   }
 }

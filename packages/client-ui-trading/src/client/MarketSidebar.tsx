@@ -4,12 +4,13 @@
  * 点击行 = 选中标的并切到行情模式（QuotePane 消费）；
  * 行内嵌迷你面积走势 + 最新价 + 涨跌幅（红涨绿跌）。行情批量轮询、页面隐藏时暂停。
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers } from './api.ts'
 import { searchAllMarkets, searchSymbols, setDynamicCatalog } from './symbol-catalog.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
+import { colorModeStore } from './color-mode.ts'
 import { Sparkline } from './Sparkline.tsx'
 import { IconChevronDown, IconFoldPanel } from './icons.tsx'
 import { rowsFor, type Observable, type SelectionState, type Watchlists } from './store.ts'
@@ -68,6 +69,7 @@ export function MarketSidebar({
   const [draft, setDraft] = useState('')
   const [addMarket, setAddMarket] = useState<MarketId>('crypto')
   const [catalogVersion, setCatalogVersion] = useState(0)
+  const colorMode = useSyncExternalStore(colorModeStore.subscribe, colorModeStore.getSnapshot)
 
   const reloadMarkets = useRef((): void => {})
   reloadMarkets.current = () => {
@@ -311,11 +313,11 @@ export function MarketSidebar({
                       </span>
                     </span>
                     <span className={css.spark}>
-                      <Sparkline values={ref?.closes ?? []} width={56} height={22} up={up} />
+                      <Sparkline values={ref?.closes ?? []} width={56} height={22} up={up} colorMode={colorMode} />
                     </span>
                     <span className={css.quote}>
-                      <span className={css.price} style={{ color: directionColor(pct ?? 0) }}>{fmtPrice(price)}</span>
-                      <span className={css.pct} style={{ color: directionColor(pct ?? 0) }}>{fmtPercent(pct)}</span>
+                      <span className={css.price} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPrice(price)}</span>
+                      <span className={css.pct} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPercent(pct)}</span>
                     </span>
                     <span
                       role="button"

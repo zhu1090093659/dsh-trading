@@ -66,6 +66,13 @@ export function apply(ctx: ClientContext): void {
       const rev = scope.getSnapshot().revision
       await scope.mutate([{ op: 'unset', path: ['news', 'cryptoPanicKey'] }], rev)
     },
+    async setColorMode(mode) {
+      const rev = scope.getSnapshot().revision
+      await scope.mutate([{ op: 'set', path: ['colorMode'], value: mode }], rev)
+      // 同步 localStorage + dispatch 事件，通知 client-ui-trading 的 colorModeStore 热切换。
+      try { localStorage.setItem('dshtrading.color_mode.v1', JSON.stringify(mode)) } catch { /* unavailable */ }
+      try { window.dispatchEvent(new Event('dshtrading-color-mode-changed')) } catch { /* SSR guard */ }
+    },
   }
 
   // Tab ledger read + locale revision (官方 sectionInjected 模式).
@@ -110,7 +117,14 @@ export function apply(ctx: ClientContext): void {
     order: 8,
     label: () => t('nav'),
     locale: NS,
-    inject: sectionInjected,
+    inject: () => ({
+      ...sectionInjected(),
+      hooks: {
+        ...sectionInjected().hooks,
+        controller: store,
+      },
+      setColorMode: actions.setColorMode,
+    }),
     children: { 'dshtrading.market.tab': { kind: 'list', scope: 'root' } },
   }, TradingSettingsSection))
 
@@ -154,6 +168,9 @@ function dictionaries() {
       'newsKeyPlaceholder': '粘贴 CryptoPanic free API token（私钥，仅本地存储）',
       'newsSaved': '已保存',
       'newsSaveFailed': '保存失败',
+      'colorMode.label': '涨跌配色',
+      'colorMode.redUp': '红涨绿跌（国内习惯）',
+      'colorMode.greenUp': '绿涨红跌（国际习惯）',
       'market.crypto': '加密货币',
       'market.us': '美国股票',
       'market.cn': '中国 A 股',
@@ -175,6 +192,9 @@ function dictionaries() {
       'newsKeyPlaceholder': 'Paste a CryptoPanic free API token (stored locally only)',
       'newsSaved': 'Saved',
       'newsSaveFailed': 'Save failed',
+      'colorMode.label': 'Price Color Scheme',
+      'colorMode.redUp': 'Red Up / Green Down (Chinese)',
+      'colorMode.greenUp': 'Green Up / Red Down (International)',
       'market.crypto': 'Crypto',
       'market.us': 'US Stocks',
       'market.cn': 'China A-shares',

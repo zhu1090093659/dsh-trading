@@ -214,6 +214,8 @@ export class BinanceRestClient {
     const bid = num(b.bidPrice)
     const ask = num(b.askPrice)
     const volume = num(d.volume)
+    const prevClose = num(d.prevClosePrice)
+    const changePercent = num(d.priceChangePercent)
     const resolvedSymbol = typeof d.symbol === 'string' && d.symbol ? d.symbol : sym
     return {
       symbol: resolvedSymbol,
@@ -222,6 +224,8 @@ export class BinanceRestClient {
       ...(bid !== undefined ? { bid } : {}),
       ...(ask !== undefined ? { ask } : {}),
       ...(volume !== undefined ? { volume } : {}),
+      ...(prevClose !== undefined ? { prevClose } : {}),
+      ...(changePercent !== undefined ? { changePercent } : {}),
     }
   }
 

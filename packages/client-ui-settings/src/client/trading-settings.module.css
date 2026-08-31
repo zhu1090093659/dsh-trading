@@ -66,3 +66,60 @@
 .tabPanel {
   padding-top: 8px;
 }
+
+/* 涨跌配色选择器 */
+.colorModeFieldset {
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  border-radius: 8px;
+  padding: 12px 16px 14px;
+  margin: 0;
+}
+
+.colorModeLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-text-primary, #1a1e24);
+  padding: 0 4px;
+}
+
+.colorModeOptions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.colorModeOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--dsw-alias-text-secondary, #5f6672);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.colorModeOption:hover {
+  background: var(--dsw-alias-fill-hover, rgba(0, 0, 0, 0.04));
+}
+
+.colorModeOption[data-active='true'] {
+  border-color: var(--dsw-alias-primary, #2563eb);
+  color: var(--dsw-alias-text-primary, #1a1e24);
+  background: var(--dsw-alias-primary-bg, rgba(37, 99, 235, 0.06));
+}
+
+.colorModeRadio {
+  display: none;
+}
+
+.colorModeSwatch,
+.colorModeSwatchDown {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+

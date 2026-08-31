@@ -1,17 +1,15 @@
-/**
- * Number/time formatting + the Futu color convention (红涨绿跌, matching the
- * reference UI) for the trading shell.
- */
+import { getColorPalette, type ColorMode } from './color-mode.ts'
 
-/** Up = red, down = green (Futu convention). */
+/** Default red-up constants for backward compatibility. */
 export const UP_COLOR = '#e64545'
 export const DOWN_COLOR = '#2ba471'
 export const FLAT_COLOR = '#8a8f99'
 
-export function directionColor(value: number): string {
-  if (value > 0) return UP_COLOR
-  if (value < 0) return DOWN_COLOR
-  return FLAT_COLOR
+export function directionColor(value: number, mode: ColorMode = 'red-up'): string {
+  const palette = getColorPalette(mode)
+  if (value > 0) return palette.upColor
+  if (value < 0) return palette.downColor
+  return palette.flatColor
 }
 
 /** Price decimals by magnitude (crypto sub-dollar pairs need more precision). */

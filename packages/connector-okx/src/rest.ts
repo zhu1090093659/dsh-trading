@@ -499,6 +499,10 @@ export class OkxRestClient {
     // 24h 量：SPOT 的 vol24h 即 base 币量；SWAP 的 vol24h 是张数，base 币量在 volCcy24h。
     const isSwap = id.endsWith('-SWAP')
     const volume = isSwap ? (num(d?.volCcy24h) ?? num(d?.vol24h)) : num(d?.vol24h)
+    const prevClose = num(d?.open24h) ?? num(d?.sodUtc0)
+    const changePercent = price !== undefined && prevClose !== undefined && prevClose > 0
+      ? ((price - prevClose) / prevClose) * 100
+      : undefined
     return {
       // 输出一律规范形（docs/symbol-vocabulary.md）：下游看到的是 BTCUSDT 而非 BTC-USDT。
       symbol: toCanonicalOkxSymbol(str(d?.instId) ?? id),
@@ -507,6 +511,8 @@ export class OkxRestClient {
       ...(num(d?.bidPx) !== undefined ? { bid: num(d?.bidPx) } : {}),
       ...(num(d?.askPx) !== undefined ? { ask: num(d?.askPx) } : {}),
       ...(volume !== undefined ? { volume } : {}),
+      ...(prevClose !== undefined ? { prevClose } : {}),
+      ...(changePercent !== undefined ? { changePercent } : {}),
     }
   }
 

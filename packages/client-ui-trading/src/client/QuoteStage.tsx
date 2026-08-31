@@ -18,6 +18,8 @@ import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indica
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
+import { colorModeStore, type ColorMode } from './color-mode.ts'
+import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
 import css from './quote-stage.module.css'
@@ -58,6 +60,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const instrument = useSelection(value => value.instrument)
   const market: MarketId | undefined = instrument?.market
   const symbol = instrument?.symbol
+  const activeMarket: MarketId = market ?? 'crypto'
+
+  const colorMode = useSyncExternalStore(colorModeStore.subscribe, colorModeStore.getSnapshot)
 
   const instances = useChart(state => state.instances)
   // 指标名册修订号：插件晚于首帧合并 definition 时触发重渲染。
@@ -75,12 +80,38 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
   const [clock, setClock] = useState(() => formatStatusBarClock(Date.now()))
+  const [indexTickers, setIndexTickers] = useState<Record<string, Ticker>>({})
 
   // 状态栏秒级时钟
   useEffect(() => {
     const timer = setInterval(() => { setClock(formatStatusBarClock(Date.now())) }, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // 市场时段状态（随秒钟与激活市场自动刷新）
+  const sessionStatus = useMemo(() => {
+    return getMarketSessionStatus(activeMarket, Date.now())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMarket, clock])
+
+  const indexDefs = MARKET_INDICES[activeMarket] ?? []
+
+  // 底部大盘指数轮询：按当前激活市场拉取对应核心指数
+  usePoll(async () => {
+    if (indexDefs.length === 0) return
+    try {
+      const symbols = indexDefs.map(def => def.symbol)
+      const outcome = await fetchTickers(activeMarket, symbols)
+      const next: Record<string, Ticker> = {}
+      for (const sym of symbols) {
+        const res = outcome[sym]
+        if (res?.ok) next[sym] = res.ticker
+      }
+      setIndexTickers(next)
+    } catch {
+      /* 下轮重试 */
+    }
+  }, TICKER_POLL_MS, [activeMarket])
 
   // 周期记忆（每市场独立）；切标的时读该市场的上次周期。
   useEffect(() => {
@@ -167,7 +198,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const subIndicators = useMemo(() => indicatorGroups.filter(group => group.pane === 'sub'), [indicatorGroups])
 
   const bars = useMemo(() => klines?.map(toBar) ?? [], [klines])
-  const volumes = useMemo(() => klines?.map(toVolume) ?? [], [klines])
+  const volumes = useMemo(() => klines?.map(k => toVolume(k, colorMode)) ?? [], [klines, colorMode])
 
   const readoutIndex = hoverIndex ?? (klines !== null && klines.length > 0 ? klines.length - 1 : null)
   const readoutCandle = klines !== null && readoutIndex !== null ? klines[readoutIndex] : undefined
@@ -187,7 +218,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   }
 
   const intervals = MARKET_INTERVALS[market] ?? ['1d']
-  const color = directionColor(stats.pct ?? 0)
+  const color = directionColor(stats.pct ?? 0, colorMode)
 
   return (
     <div className={css.root} data-dshtrading-quote-stage="">
@@ -292,6 +323,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             volumes={volumes}
             dataKey={`${market}:${symbol}:${chartInterval}`}
             intraday={INTRADAY_INTERVALS.has(chartInterval)}
+            colorMode={colorMode}
             mainOverlays={mainOverlays}
             subIndicators={subIndicators}
             onHoverIndex={setHoverIndex}
@@ -321,21 +353,28 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       {/* 底部富途式市场状态栏 */}
       <div className={css.statusBar} role="status">
         <span className={css.statusSession}>
-          <span className={css.statusDot} />
-          {t('status.trading')}
+          <span className={css.statusDot} style={{ background: sessionStatus.color }} />
+          {t(sessionStatus.statusKey)}
         </span>
-        <span className={css.indexGroup}>
-          <span className={css.indexName}>恒生指数</span>
-          <span style={{ color: '#2ba471', fontWeight: 600 }}>25350.05 -0.92%</span>
-        </span>
-        <span className={css.indexGroup}>
-          <span className={css.indexName}>恒生科技</span>
-          <span style={{ color: '#2ba471', fontWeight: 600 }}>4546.83 -1.27%</span>
-        </span>
-        <span className={css.indexGroup}>
-          <span className={css.indexName}>上证指数</span>
-          <span style={{ color: '#e64545', fontWeight: 600 }}>2842.21 +0.48%</span>
-        </span>
+        {indexDefs.map(def => {
+          const indexTicker = indexTickers[def.symbol]
+          const price = indexTicker?.price
+          const prevClose = (indexTicker as { prevClose?: number })?.prevClose
+          const pct = (indexTicker as { changePercent?: number })?.changePercent ?? changePercent(price, prevClose)
+          const color = directionColor(pct ?? 0, colorMode)
+          return (
+            <span key={def.symbol} className={css.indexGroup}>
+              <span className={css.indexName}>{def.name}</span>
+              {price !== undefined ? (
+                <span style={{ color, fontWeight: 600 }}>
+                  {fmtPrice(price)} {fmtPercent(pct)}
+                </span>
+              ) : (
+                <span style={{ color: 'var(--dsw-futu-text-muted, #8e95a3)' }}>—</span>
+              )}
+            </span>
+          )
+        })}
         <span className={css.statusClock}>{clock}</span>
       </div>
     </div>

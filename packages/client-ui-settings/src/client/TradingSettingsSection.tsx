@@ -9,6 +9,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type {
   HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
+import type { TradingSettingsState } from './trading-settings-controller.ts'
 import css from './trading-settings.module.css'
 
 /** One tab projected from a dshtrading.market.tab contribution. */
@@ -18,12 +19,22 @@ export interface TradingMarketTabEntry {
   label: string
 }
 
+/** SnapshotStore face for subscribing to controller state. */
+interface ControllerStore {
+  getSnapshot: () => TradingSettingsState
+  subscribe: (listener: () => void) => () => void
+}
+
 /** Registration-side business face for the section. */
 export interface TradingSettingsSectionInjected {
   hooks: {
     /** Ordered, locale-aware projection of the market tab ledger. */
     tabs: HostObservable<readonly TradingMarketTabEntry[]>
+    /** Shared dshtrading controller (for colorMode state). */
+    controller: ControllerStore
   }
+  /** Write action: set global color mode. */
+  setColorMode: (mode: 'red-up' | 'green-up') => Promise<void>
 }
 
 /** Props the renderer binds for the section. */
@@ -33,11 +44,12 @@ export type TradingSettingsSectionProps =
   & PropsRenderSlots<'dshtrading.market.tab'>
   & InjectFace<TradingSettingsSectionInjected>
 
-/** Render the Trading page: market tab bar + active market provider panel. */
-export function TradingSettingsSection({ t, renderSlot, useTabs }: TradingSettingsSectionProps) {
+/** Render the Trading page: color mode selector + market tab bar + active market provider panel. */
+export function TradingSettingsSection({ t, renderSlot, useTabs, useController, setColorMode }: TradingSettingsSectionProps) {
   const tabsId = useId()
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const rows = useTabs(value => value)
+  const controllerState = useController((value: TradingSettingsState) => value)
   const [activeId, setActiveId] = useState<string>()
   const [visitedIds, setVisitedIds] = useState<ReadonlySet<string>>(() => new Set())
   const active = rows.find(row => row.id === activeId)?.id ?? rows[0]?.id
@@ -51,9 +63,45 @@ export function TradingSettingsSection({ t, renderSlot, useTabs }: TradingSettin
     })
   }, [active])
 
+  const currentColorMode = controllerState.colorMode ?? 'red-up'
+
   return (
     <div className={css.root}>
       <p className={css.lead}>{t('lead')}</p>
+
+      {/* 涨跌配色选择 */}
+      <fieldset className={css.colorModeFieldset}>
+        <legend className={css.colorModeLabel}>{t('colorMode.label')}</legend>
+        <div className={css.colorModeOptions}>
+          <label className={css.colorModeOption} data-active={currentColorMode === 'red-up' ? 'true' : undefined}>
+            <input
+              type="radio"
+              name="dshtrading-color-mode"
+              value="red-up"
+              checked={currentColorMode === 'red-up'}
+              onChange={() => { void setColorMode('red-up') }}
+              className={css.colorModeRadio}
+            />
+            <span className={css.colorModeSwatch} style={{ background: '#e64545' }} />
+            <span className={css.colorModeSwatchDown} style={{ background: '#2ba471' }} />
+            <span>{t('colorMode.redUp')}</span>
+          </label>
+          <label className={css.colorModeOption} data-active={currentColorMode === 'green-up' ? 'true' : undefined}>
+            <input
+              type="radio"
+              name="dshtrading-color-mode"
+              value="green-up"
+              checked={currentColorMode === 'green-up'}
+              onChange={() => { void setColorMode('green-up') }}
+              className={css.colorModeRadio}
+            />
+            <span className={css.colorModeSwatch} style={{ background: '#2ba471' }} />
+            <span className={css.colorModeSwatchDown} style={{ background: '#e64545' }} />
+            <span>{t('colorMode.greenUp')}</span>
+          </label>
+        </div>
+      </fieldset>
+
       {rows.length === 0 ? <p className={css.empty}>{t('empty')}</p> : (
         <>
           <div className={css.tabList} role="tablist" aria-label={t('tabs')}>

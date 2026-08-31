@@ -3,14 +3,16 @@
  * Futu-style. Pure SVG, no interaction surface (the row is the hit target).
  */
 import { useId } from 'react'
+import { getColorPalette, type ColorMode } from './color-mode.ts'
 
 export function Sparkline(props: {
   values: readonly number[]
   width: number
   height: number
   up: boolean
+  colorMode?: ColorMode
 }): React.JSX.Element {
-  const { values, width, height, up } = props
+  const { values, width, height, up, colorMode } = props
   const gradientId = useId()
 
   if (values.length < 2) {
@@ -35,8 +37,9 @@ export function Sparkline(props: {
   const strokePoints = pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ')
   const areaPath = `M 0,${height} L ${pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' L ')} L ${width},${height} Z`
 
-  const strokeColor = span === 0 ? '#8a8f99' : up ? '#e64545' : '#2ba471'
-  const gradColor = span === 0 ? 'rgba(138, 143, 153, 0.2)' : up ? 'rgba(230, 69, 69, 0.25)' : 'rgba(43, 164, 113, 0.25)'
+  const palette = getColorPalette(colorMode)
+  const strokeColor = span === 0 ? palette.flatColor : up ? palette.upColor : palette.downColor
+  const gradColor = span === 0 ? 'rgba(138, 143, 153, 0.2)' : up ? palette.upAlpha(0.25) : palette.downAlpha(0.25)
 
   return (
     <svg width={width} height={height} aria-hidden="true" style={{ overflow: 'visible', display: 'block' }}>

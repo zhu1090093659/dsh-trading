@@ -50,8 +50,8 @@ export type TencentMarket = 'cn' | 'hk'
 
 // 规范词汇（docs/symbol-vocabulary.md）：接受 600519.SH / 600519.sh / SH600519 / 裸 6 位。
 const CN_SYMBOL_PATTERN = /^(?:(sh|sz)(\d{6})|(\d{6})(?:\.(sh|sz))?)$/
-// 规范词汇：接受 00700.HK（规范形）与裸 1-5 位数字（宽容输入）。
-const HK_SYMBOL_PATTERN = /^(\d{1,5})(?:\.hk)?$/
+// 规范词汇：接受 00700.HK（规范形）、裸 1-5 位数字（宽容输入）及 HSI/HSTECH/HSCEI 等指数代码。
+const HK_SYMBOL_PATTERN = /^(?:r_hk|hk)?([a-z0-9^]{1,10})(?:\.hk)?$/i
 
 /**
  * 规范化 A 股符号：接受 `600519` / `SH600519` / `sh600519` / `sz000001`，统一为
@@ -81,24 +81,26 @@ export function normalizeCnSymbol(symbol: string): string {
 }
 
 /**
- * 规范化港股符号：接受 `00700` / `700`（1-5 位数字，不足 5 位左补零），统一为 5 位
- * 数字形态 `00700`。wire 形态由客户端按端点再加前缀（报价 `r_hk` / K线 `hk`）。
+ * 规范化港股符号：接受 `00700` / `700`（1-5 位数字，不足 5 位左补零，统一为 5 位数字
+ * 形态 `00700`）及 `HSI` / `HSTECH` / `HSCEI` 等指数符号。wire 形态由客户端按端点再加前缀（报价 `r_hk` / K线 `hk`）。
  */
 export function normalizeHkSymbol(symbol: string): string {
   if (typeof symbol !== 'string' || !symbol.trim()) {
     throw new TradingServiceError(
       'TRADING_UNSUPPORTED_SYMBOL',
-      'Symbol must be a non-empty string, e.g. 00700 or 700',
+      'Symbol must be a non-empty string, e.g. 00700, 700 or HSI',
     )
   }
   const m = HK_SYMBOL_PATTERN.exec(symbol.trim().toLowerCase())
   if (!m) {
     throw new TradingServiceError(
       'TRADING_UNSUPPORTED_SYMBOL',
-      `Symbol ${JSON.stringify(symbol)} is not a valid HK stock code (expected 1-5 digits, e.g. 700 / 00700)`,
+      `Symbol ${JSON.stringify(symbol)} is not a valid HK stock code or index (expected 1-5 digits or index symbol, e.g. 700 / 00700 / HSI)`,
     )
   }
-  return m[1].padStart(5, '0')
+  const code = m[1] ?? ''
+  if (/^\d+$/.test(code)) return code.padStart(5, '0')
+  return code.toUpperCase()
 }
 
 /** 按市场规范化符号并返回市场。 */
@@ -108,10 +110,13 @@ export function normalizeSymbol(market: TencentMarket, symbol: string): string {
 
 /**
  * 输出归一 → 规范形（docs/symbol-vocabulary.md）：cn wire 形 sh600519 → 600519.SH；
- * hk 5 位形 00700 → 00700.HK。下游永远看到市场规范词汇。
+ * hk 5 位形 00700 → 00700.HK，指数形 HSI → HSI.HK。下游永远看到市场规范词汇。
  */
 export function toCanonicalTencentSymbol(market: TencentMarket, wireOrCode: string): string {
-  if (market === 'hk') return `${wireOrCode.replace(/^hk/i, '')}.HK`
+  if (market === 'hk') {
+    const raw = wireOrCode.replace(/^r_hk|^hk/i, '')
+    return `${raw}.HK`
+  }
   const m = /^(sh|sz)(\d{6})$/i.exec(wireOrCode)
   return m ? `${m[2]}.${(m[1] ?? '').toUpperCase()}` : wireOrCode
 }

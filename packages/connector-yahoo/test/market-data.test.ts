@@ -185,12 +185,14 @@ describe('YahooRestClient.getTicker', () => {
     const client = new YahooRestClient({ fetchImpl: impl })
     const ticker = await client.getTicker('aapl')
 
-    expect(ticker).toEqual({
+    expect(ticker).toMatchObject({
       symbol: 'AAPL',
       price: 319.7,
       volume: 41234500,
       timestamp: 1788019201 * 1000,
+      prevClose: 310.34,
     })
+    expect(ticker.changePercent).toBeCloseTo(3.016, 2)
     expect(requests).toHaveLength(1) // 单请求：1d/5d
     expect(requests[0]!.url).toContain('interval=1d&range=5d')
   })

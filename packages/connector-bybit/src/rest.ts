@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @dsh-trading/connector-bybit/rest
  * Bybit API v5 REST 客户端（支持公共行情与现货/衍生品交易）。
  */
@@ -110,6 +110,8 @@ export class BybitRestClient {
         list?: Array<{
           symbol: string
           lastPrice: string
+          prevPrice24h?: string
+          price24hPcnt?: string
           volume24h: string
           time?: number
         }>
@@ -120,16 +122,20 @@ export class BybitRestClient {
       throw new TradingServiceError('TRADING_SYMBOL_NOT_FOUND', `Bybit ticker not found for ${sym}`)
     }
 
-    const row = data.result.list[0]
+    const row = data.result.list[0]!
     const price = parseFloat(row.lastPrice)
     const volume = parseFloat(row.volume24h)
     const timestamp = row.time ? row.time : Date.now()
+    const prevClose = row.prevPrice24h ? parseFloat(row.prevPrice24h) : undefined
+    const changePercent = row.price24hPcnt ? parseFloat(row.price24hPcnt) * 100 : undefined
 
     return {
       symbol: sym,
       price,
       volume,
       timestamp,
+      ...(prevClose !== undefined && Number.isFinite(prevClose) ? { prevClose } : {}),
+      ...(changePercent !== undefined && Number.isFinite(changePercent) ? { changePercent } : {}),
     }
   }
 

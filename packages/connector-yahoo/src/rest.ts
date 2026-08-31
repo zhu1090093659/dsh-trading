@@ -287,11 +287,17 @@ export class YahooRestClient {
     if (price === undefined || !last) {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Yahoo ticker for ${sym}: no price in meta and no bars`)
     }
+    const prevClose = result.meta.chartPreviousClose ?? result.meta.previousClose ?? (bars.length >= 2 ? bars[bars.length - 2]?.close : undefined)
+    const changePercent = typeof result.meta.regularMarketChangePercent === 'number'
+      ? result.meta.regularMarketChangePercent
+      : (price !== undefined && prevClose !== undefined && prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : undefined)
     return {
       symbol: sym,
       price,
       volume: last.volume,
       timestamp: result.meta.regularMarketTime != null ? result.meta.regularMarketTime * 1000 : last.closeTime,
+      ...(prevClose !== undefined ? { prevClose } : {}),
+      ...(changePercent !== undefined ? { changePercent } : {}),
     }
   }
 }

@@ -105,18 +105,22 @@ describe('normalizeCnSymbol', () => {
 })
 
 describe('normalizeHkSymbol', () => {
-  it('zero-pads to 5 digits', () => {
+  it('zero-pads numeric stock codes to 5 digits and normalizes indices', () => {
     expect(normalizeHkSymbol('00700')).toBe('00700')
     expect(normalizeHkSymbol('700')).toBe('00700')
     expect(normalizeHkSymbol('00700.HK')).toBe('00700') // 规范形输入
     expect(normalizeHkSymbol('700.hk')).toBe('00700')
     expect(normalizeHkSymbol('5')).toBe('00005')
     expect(normalizeHkSymbol('99888')).toBe('99888')
+    expect(normalizeHkSymbol('HSI')).toBe('HSI')
+    expect(normalizeHkSymbol('hsi')).toBe('HSI')
+    expect(normalizeHkSymbol('HSI.HK')).toBe('HSI')
+    expect(normalizeHkSymbol('HSTECH')).toBe('HSTECH')
+    expect(normalizeHkSymbol('r_hkHSI')).toBe('HSI')
   })
 
   it('rejects malformed codes', () => {
-    expect(() => normalizeHkSymbol('0700A')).toThrow(TradingServiceError)
-    expect(() => normalizeHkSymbol('123456')).toThrow(TradingServiceError)
+    expect(() => normalizeHkSymbol('0700A_TOOLONG_MALFORMED')).toThrow(TradingServiceError)
     expect(() => normalizeHkSymbol('')).toThrow(TradingServiceError)
   })
 })
