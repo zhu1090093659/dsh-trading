@@ -3,9 +3,11 @@
  *
  * 包含：
  *   1. skill provider：crypto-risk-checklist、crypto-instrument-analysis、indicator-authoring、trading-strategy-paradigms 与 knowledge-curation 随包分发；
- *   2. crypto_get_news、crypto_get_derivatives、crypto_get_fundamentals 工具；
- *   3. indicator_author 创作工具（Issue #19）；
- *   4. knowledge_ingest 与 knowledge_search 知识库工具（Issue #24）。
+ *   2. crypto_funding_rate（Binance 公共资金费率）；
+ *   3. crypto_get_news（动态聚合新闻）；
+ *   4. crypto_get_derivatives 与 crypto_get_fundamentals 工具；
+ *   5. indicator_author 创作工具（Issue #19）；
+ *   6. knowledge_ingest 与 knowledge_search 知识库工具（Issue #24）。
  *
  * @module @dsh-trading/kit-crypto
  */
@@ -25,7 +27,7 @@ import {
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createAuthorIndicatorTool, createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
 import { createKnowledgeIngestTool, createKnowledgeSearchTool, createFileKnowledgeCardStore } from '@dsh-trading/knowledge/tool'
-import { aggregateNews, type AggregateNewsOptions } from './news.js'
+import { aggregateNews, deriveSymbolTokens, type AggregateNewsOptions } from './news.js'
 import { fetchCryptoDerivatives, renderDerivativesData } from './derivatives.js'
 import { fetchCryptoFundamentals, renderCryptoFundamentals } from './fundamentals.js'
 
@@ -139,14 +141,85 @@ export const inject = ['skills', 'tools']
 
 export const name = 'dsh-trading-crypto-kit'
 
+// ── crypto_funding_rate：Binance USDT 永续资金费率 ────────────────────────────
+
+const FUNDING_RATE_URL = 'https://fapi.binance.com/fapi/v1/fundingRate'
+
+const SYMBOL_PATTERN = /^[A-Z0-9]{4,20}$/
+const DEFAULT_FUNDING_LIMIT = 3
+const MAX_FUNDING_LIMIT = 1000
+
+interface FundingRateRecord {
+  symbol: string
+  fundingTime: number
+  fundingRate: string
+  markPrice?: string
+}
+
+async function fetchFundingRates(symbol: string, limit: number): Promise<FundingRateRecord[]> {
+  const url = new URL(FUNDING_RATE_URL)
+  url.searchParams.set('symbol', symbol)
+  url.searchParams.set('limit', String(limit))
+  const response = await fetch(url, { headers: { accept: 'application/json' } })
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Binance futures API error: HTTP ${response.status}${body ? ` — ${body.slice(0, 200)}` : ''}`)
+  }
+  const data: unknown = await response.json()
+  if (!Array.isArray(data)) {
+    throw new Error('Binance futures API returned an unexpected payload (expected an array of funding records)')
+  }
+  return data as FundingRateRecord[]
+}
+
+function renderFundingRates(symbol: string, records: FundingRateRecord[]): string {
+  const lines = records.map((record) => {
+    const rate = Number(record.fundingRate)
+    const percent = Number.isFinite(rate) ? `${(rate * 100).toFixed(4)}%` : record.fundingRate
+    const when = Number.isFinite(record.fundingTime) ? new Date(record.fundingTime).toISOString() : String(record.fundingTime)
+    const mark = record.markPrice === undefined ? '' : `  markPrice=${record.markPrice}`
+    return `- ${when}  rate=${record.fundingRate} (${percent})${mark}`
+  })
+  return [`crypto_funding_rate ${symbol} — last ${records.length} funding event(s):`, ...lines].join('\n')
+}
+
 // ── 插件入口 ──────────────────────────────────────────────────────────────────
 
 export function apply(ctx: Context, _config: Config): void {
   ctx.skills.registerProvider(() => provider)
 
-  const newsTool = createGetNewsTool()
-  const derivativesTool = createGetDerivativesTool()
-  const fundamentalsTool = createGetFundamentalsTool()
+  const fundingTool = defineTool({
+    name: 'crypto_funding_rate',
+    description:
+      'Get recent funding rate history for a Binance USDⓈ-M perpetual futures symbol (public endpoint, no credentials). Returns the most recent funding events with rate and mark price.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'Perpetual futures symbol, e.g. BTCUSDT',
+      },
+      limit: {
+        type: 'number',
+        description: `Number of most recent funding events to return (1-${MAX_FUNDING_LIMIT}, default ${DEFAULT_FUNDING_LIMIT})`,
+        default: DEFAULT_FUNDING_LIMIT,
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown; limit?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim().toUpperCase() : ''
+      if (!SYMBOL_PATTERN.test(symbol)) {
+        throw new Error(`crypto_funding_rate: invalid symbol ${JSON.stringify(args.symbol)} — expected an uppercase Binance futures symbol like BTCUSDT`)
+      }
+      const requested = typeof args.limit === 'number' && Number.isFinite(args.limit) ? Math.trunc(args.limit) : DEFAULT_FUNDING_LIMIT
+      const limit = Math.min(Math.max(requested, 1), MAX_FUNDING_LIMIT)
+      const records = await fetchFundingRates(symbol, limit)
+      return renderFundingRates(symbol, records)
+    },
+  })
 
   const tools = ctx.tools as unknown as {
     register(definition: { name: string }): unknown
@@ -164,9 +237,15 @@ export function apply(ctx: Context, _config: Config): void {
     tools.register(tool)
   }
 
-  registerOnce(newsTool)
-  registerOnce(derivativesTool)
-  registerOnce(fundamentalsTool)
+  registerOnce(fundingTool)
+
+  const router = (ctx as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as
+    | { newsKey?: () => string | undefined }
+    | undefined
+  registerOnce(createGetNewsTool({ cryptoPanicKey: router?.newsKey?.() }))
+
+  registerOnce(createGetDerivativesTool())
+  registerOnce(createGetFundamentalsTool())
 
   // Issue #19：注册自定义指标创作工具 indicator_author（共享 ~/.dsh/indicators/custom.json）
   const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
@@ -180,7 +259,67 @@ export function apply(ctx: Context, _config: Config): void {
   registerOnce(createKnowledgeSearchTool(knowledgeStore))
 }
 
-/* ── crypto_get_news：加密新闻工具（WS1 #1） ───────────────────────────────────── */
+/* ── crypto_get_derivatives：衍生品数据工具（WS4） ───────────────────────────── */
+
+export function createGetDerivativesTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+  return defineTool({
+    name: 'crypto_get_derivatives',
+    description:
+      'Get real-time crypto derivatives indicators (Open Interest, Long/Short Account Ratio, Top Trader Position Ratio, Taker Buy/Sell Volume Ratio, and latest Funding Rate) for a perpetual contract via Binance Futures public REST API. Accepts market-canonical (e.g. BTCUSDT, BTCUSDT-SWAP) or native symbols. No credentials required.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'Perpetual contract symbol, market-canonical vocabulary, e.g. BTCUSDT or BTCUSDT-SWAP',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      if (!symbol) {
+        throw new Error('crypto_get_derivatives: symbol parameter is required (e.g. BTCUSDT or BTCUSDT-SWAP)')
+      }
+      const result = await fetchCryptoDerivatives({ symbol, fetch: options.fetch })
+      return renderDerivativesData(result, symbol)
+    },
+  })
+}
+
+/* ── crypto_get_fundamentals：代币经济学与基本面工具（WS4） ───────────────────── */
+
+export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+  return defineTool({
+    name: 'crypto_get_fundamentals',
+    description:
+      'Get tokenomics and fundamental data (Market Cap Rank, Market Cap, Fully Diluted Valuation (FDV), Circulating Supply, Max Supply, 24h Volume and Price Change) for a crypto asset via CoinCap and Binance public REST APIs. Accepts symbol (BTCUSDT) or asset ticker (BTC). No credentials required.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'Crypto symbol or asset ticker, e.g. BTCUSDT, BTC, ETH, SOL',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      if (!symbol) {
+        throw new Error('crypto_get_fundamentals: symbol parameter is required (e.g. BTCUSDT or BTC)')
+      }
+      const result = await fetchCryptoFundamentals({ symbol, fetch: options.fetch })
+      return renderCryptoFundamentals(result, symbol)
+    },
+  })
+}
+
+/* ── crypto_get_news：动态新闻工具（WS2b，#3） ───────────────────────────────── */
 
 const DEFAULT_NEWS_WINDOW_HOURS = 24
 const DEFAULT_NEWS_LIMIT = 20
@@ -189,19 +328,22 @@ function renderNewsItem(item: { source: string; title: string; url: string; publ
   return `[${item.source}] ${item.publishedAt}  ${item.title}\n  ${item.url}`
 }
 
-export function createGetNewsTool() {
+export function createGetNewsTool(toolOptions: { cryptoPanicKey?: string } = {}) {
   const description =
-    'Get recent cryptocurrency news aggregated across multiple public no-key RSS/Atom feeds (CoinDesk, Cointelegraph, Decrypt, Bitcoin Magazine, Blockworks) and CryptoPanic public feed. '
-    + 'Aggregates, deduplicates, and sorts newest-first; each item carries source name, publish time and a link for traceability. '
-    + 'Optionally filter by coin/symbol (e.g. BTC, ETH, SOL) and by a time window. '
-    + 'Source failures are tolerated and reported instead of failing the whole call. No credentials required.'
+    'Get recent crypto news from public no-key sources (Binance listing/delisting/API announcements, OKX announcements, CoinDesk & The Block RSS). '
+    + (toolOptions.cryptoPanicKey
+      ? 'CryptoPanic user key is set — the CryptoPanic free tier is queried as an additional source and degrades gracefully if it fails. '
+      : '')
+    + 'Aggregates and sorts newest-first; each item carries source name, publish time and a link for traceability. '
+    + 'Optionally filter by symbol (matched against item titles; note media headlines often use asset names like "Bitcoin" rather than tickers) and by a time window. '
+    + 'Source failures are tolerated and reported instead of failing the whole call. No credentials required. Distinguish announcements (listing, delisting, regulatory) from opinion (media) when citing.'
   return defineTool({
     name: 'crypto_get_news',
     description,
     parameters: {
       symbol: {
         type: 'string',
-        description: 'Optional coin symbol or name to filter by (e.g. BTC, ETH, SOL, Bitcoin, Ethereum). Matched against item title.',
+        description: 'Optional symbol to filter by, market-canonical vocabulary, e.g. BTCUSDT or BTCUSDT-SWAP. Matched against item titles (case-insensitive substring of the symbol or its base asset).',
       },
       windowHours: {
         type: 'number',
@@ -224,81 +366,22 @@ export function createGetNewsTool() {
         symbol: typeof args.symbol === 'string' ? args.symbol : undefined,
         windowHours: typeof args.windowHours === 'number' ? args.windowHours : undefined,
         limit: typeof args.limit === 'number' ? args.limit : undefined,
+        cryptoPanicKey: toolOptions.cryptoPanicKey,
       }
       const { items, unavailable } = await aggregateNews(options)
       if (items.length === 0 && unavailable.length === 0) {
         return 'crypto_get_news: no news items found within the requested window.'
       }
-      const symbolNote = options.symbol ? ` symbol=${options.symbol.trim().toUpperCase()}` : ''
+      const symbolNote = options.symbol ? ` symbol=${options.symbol.trim().toUpperCase()} (tokens: ${deriveSymbolTokens(options.symbol).join(', ')})` : ''
+      const keyNote = options.cryptoPanicKey ? ' cryptopanicKey=set (B-source)' : ''
       const lines = [
-        `crypto_get_news — ${items.length} item(s)${symbolNote}, window=${options.windowHours ?? DEFAULT_NEWS_WINDOW_HOURS}h (newest-first):`,
+        `crypto_get_news — ${items.length} item(s)${symbolNote}${keyNote}, window=${options.windowHours ?? DEFAULT_NEWS_WINDOW_HOURS}h (newest-first):`,
         ...items.map(renderNewsItem),
       ]
       if (unavailable.length > 0) {
         lines.push('  (source(s) unavailable this call: ' + unavailable.join('; ') + ')')
       }
       return lines.join('\n')
-    },
-  })
-}
-
-/* ── crypto_get_derivatives：衍生品数据工具（WS1 #2） ───────────────────────── */
-
-export function createGetDerivativesTool(options: { fetch?: typeof globalThis.fetch } = {}) {
-  return defineTool({
-    name: 'crypto_get_derivatives',
-    description:
-      'Get perpetual contract funding rate and open interest across Binance and OKX public endpoints. '
-      + 'No credentials required. Accepts base/quote symbol (e.g. BTC-USDT, ETH-USDT, BTCUSDT).',
-    parameters: {
-      symbol: {
-        type: 'string',
-        required: true,
-        description: 'Perpetual contract symbol, e.g. BTC-USDT, ETH-USDT, BTCUSDT',
-      },
-    },
-    output: {
-      schema: { type: 'string' },
-      render: (_args, value) => [{ type: 'text', text: String(value) }],
-    },
-    async execute(raw) {
-      const args = (raw ?? {}) as { symbol?: unknown }
-      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
-      if (!symbol) {
-        throw new Error('crypto_get_derivatives: symbol parameter is required (e.g. BTC-USDT)')
-      }
-      const result = await fetchCryptoDerivatives({ symbol, fetch: options.fetch })
-      return renderDerivativesData(result, symbol)
-    },
-  })
-}
-
-/* ── crypto_get_fundamentals：加密基本面与链上数据工具（WS1 #3） ─────────────── */
-
-export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.fetch } = {}) {
-  return defineTool({
-    name: 'crypto_get_fundamentals',
-    description:
-      'Get fundamental data for a cryptocurrency (Market Cap, FDV, 24h Volume, Total Supply, Max Supply, Circulating Supply, ATH, ATL, DefiLlama TVL) via CoinGecko / CoinCap / DefiLlama public APIs. Accepts coin symbol or name (e.g. BTC, ETH, SOL, Bitcoin, Ethereum). No credentials required.',
-    parameters: {
-      symbol: {
-        type: 'string',
-        required: true,
-        description: 'Coin symbol or name, e.g. BTC, ETH, SOL, Bitcoin, Ethereum',
-      },
-    },
-    output: {
-      schema: { type: 'string' },
-      render: (_args, value) => [{ type: 'text', text: String(value) }],
-    },
-    async execute(raw) {
-      const args = (raw ?? {}) as { symbol?: unknown }
-      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
-      if (!symbol) {
-        throw new Error('crypto_get_fundamentals: symbol parameter is required (e.g. BTC or Ethereum)')
-      }
-      const result = await fetchCryptoFundamentals({ symbol, fetch: options.fetch })
-      return renderCryptoFundamentals(result, symbol)
     },
   })
 }
