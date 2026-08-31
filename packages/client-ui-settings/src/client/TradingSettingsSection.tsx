@@ -9,7 +9,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type {
   HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
-import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
+import css from './trading-settings.module.css'
 
 /** One tab projected from a dshtrading.market.tab contribution. */
 export interface TradingMarketTabEntry {
@@ -33,7 +33,6 @@ export type TradingSettingsSectionProps =
   & PropsRenderSlots<'dshtrading.market.tab'>
   & InjectFace<TradingSettingsSectionInjected>
 
-
 /** Render the Trading page: market tab bar + active market provider panel. */
 export function TradingSettingsSection({ t, renderSlot, useTabs }: TradingSettingsSectionProps) {
   const tabsId = useId()
@@ -53,11 +52,11 @@ export function TradingSettingsSection({ t, renderSlot, useTabs }: TradingSettin
   }, [active])
 
   return (
-    <div>
-      <p style={{ marginBottom: 12 }}>{t('lead')}</p>
-      {rows.length === 0 ? <p>{t('empty')}</p> : (
+    <div className={css.root}>
+      <p className={css.lead}>{t('lead')}</p>
+      {rows.length === 0 ? <p className={css.empty}>{t('empty')}</p> : (
         <>
-          <div role="tablist" aria-label={t('tabs')} style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--dsw-alias-border-l2, #eee)' }}>
+          <div className={css.tabList} role="tablist" aria-label={t('tabs')}>
             {rows.map((row, index) => {
               const selected = row.id === active
               return (
@@ -71,6 +70,7 @@ export function TradingSettingsSection({ t, renderSlot, useTabs }: TradingSettin
                   aria-controls={`${tabsId}-panel-${row.id}`}
                   data-active={selected ? 'true' : undefined}
                   tabIndex={selected ? 0 : -1}
+                  className={css.tab}
                   onClick={() => { setActiveId(row.id) }}
                   onKeyDown={(event) => {
                     let nextIndex: number
@@ -103,6 +103,7 @@ export function TradingSettingsSection({ t, renderSlot, useTabs }: TradingSettin
                   id={`${tabsId}-panel-${row.id}`}
                   role="tabpanel"
                   aria-labelledby={`${tabsId}-tab-${row.id}`}
+                  className={css.tabPanel}
                   hidden={!selected}
                 >
                   {renderSlot('dshtrading.market.tab', {}, { only: row.id })}

@@ -8,10 +8,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  TradingSettingsActions,
   TradingSettingsState,
 } from './trading-settings-controller.ts'
 import { PROVIDER_LABELS } from './trading-settings-controller.ts'
+import css from './market-provider-panel.module.css'
 
 /** SnapshotStore 面（hooks 注入）。 */
 export interface MarketPanelStateStore {
@@ -41,6 +41,12 @@ export type MarketProviderPanelProps =
   & PropsLocale<'dshtrading.settings'>
   & InjectFace<MarketProviderPanelInjected>
 
+const TYPE_LABEL: Record<string, string> = {
+  public: '免密公共源',
+  gateway: '本地网关',
+  commercial: '商业 API',
+}
+
 /** Render one market's provider radio group with save/reset (+ WS2c news key, crypto only). */
 export function MarketProviderPanel({ t, useController, market, setProvider, resetProvider, setNewsKey, resetNewsKey }: MarketProviderPanelProps) {
   const state = useController((value: TradingSettingsState) => value)
@@ -50,7 +56,7 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | undefined>(undefined)
 
-  // 首次进入（draft 未定）以当前解析值初始化——effect 而非 render setState。
+  // 首次进入（draft 未定）以当前解析值初始化
   useEffect(() => {
     if (draft === undefined && state.status === 'ready') {
       setDraft(resolved)
@@ -66,7 +72,7 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
 
   const writable = state.writable
 
-  // WS2c：CryptoPanic key（仅 crypto 市场展示）。qwerty draft 当前解析值初始化。
+  // WS2c：CryptoPanic key
   const [newsDraft, setNewsDraft] = useState<string | undefined>(undefined)
   const [newsSaving, setNewsSaving] = useState(false)
   const [newsMessage, setNewsMessage] = useState<string | undefined>(undefined)
@@ -84,7 +90,7 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
       const next = (newsDraft ?? '').trim()
       const current = state.newsKey ?? ''
       if (next !== current) {
-        await setNewsKey(next) // 空串 = 清除 → 公共源
+        await setNewsKey(next)
       } else if (state.newsOverridden) {
         await resetNewsKey()
       }
@@ -98,12 +104,9 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
 
   const newsDirty = (newsDraft === undefined ? state.newsKey ?? '' : newsDraft.trim()) !== (state.newsKey ?? '')
 
-  // 开放词汇（2026-08-30 整改 #4）：schema 不拒未知 slug——若存储值不在内置
-  // 候选里（第三方连接器），追加一个「自定义」选项让用户看到并能改回已知项，
-  // 而不是让当前值在 UI 上消失。
   const options = useMemo(() => {
     const known = new Set(PROVIDER_LABELS.map((p) => p.id))
-    const extras: { id: string; label: string }[] = []
+    const extras: { id: string; label: string; url?: string; env?: string; type?: string }[] = []
     for (const slug of [resolved, draft]) {
       if (slug !== undefined && !known.has(slug) && !extras.some((e) => e.id === slug)) {
         extras.push({ id: slug, label: t('custom', { provider: slug }) })
@@ -124,86 +127,121 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
       }
       setMessage(t('saved'))
     } catch (error) {
-      setMessage(`${t('saveFailed')}: ${String(error?.message ?? error)}`)
+      setMessage(`${t('saveFailed')}: ${String((error as { message?: string })?.message ?? error)}`)
     } finally {
       setSaving(false)
     }
   }
 
+  const activeProvider = draft ?? resolved
+
   return (
-    <div>
-      <p style={{ margin: '4px 0' }}>
-        {t('current', { provider: resolved ?? t('default') })}
-      </p>
-      {options.map((provider) => (
-        <label key={`${market}-${provider.id}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginRight: 14 }}>
-          <input
-            type="radio"
-            name={`provider-${market}`}
-            checked={draft === undefined ? resolved === provider.id : draft === provider.id}
-            disabled={!writable || saving}
-            onChange={() => setDraft(provider.id)}
-          />
-          <span>{provider.label}</span>
-        </label>
-      ))}
-      {(() => {
-        const activeId = draft ?? resolved
-        const meta = PROVIDER_LABELS.find((p) => p.id === activeId)
-        if (!meta) return null
-        return (
-          <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--dsw-alias-bg-hover, rgba(0,0,0,0.03))', borderRadius: 6, fontSize: '0.85em' }}>
-            <div>
-              {meta.url && (
-                <span>
-                  指引与文档: <a href={meta.url} target="_blank" rel="noreferrer" style={{ color: 'var(--dsw-alias-primary, #1890ff)', textDecoration: 'underline' }}>{meta.url}</a>
-                </span>
+    <div className={css.panel}>
+      <div className={css.currentHeader}>
+        <span>{t('current', { provider: '' })}</span>
+        <span className={css.currentBadge}>{resolved ?? t('default')}</span>
+      </div>
+
+      <div className={css.grid}>
+        {options.map((provider) => {
+          const selected = (draft === undefined ? resolved === provider.id : draft === provider.id)
+          return (
+            <div
+              key={`${market}-${provider.id}`}
+              className={css.card}
+              data-selected={selected ? 'true' : undefined}
+              onClick={() => { if (writable && !saving) setDraft(provider.id) }}
+            >
+              <div className={css.cardHeader}>
+                <input
+                  type="radio"
+                  name={`provider-${market}`}
+                  checked={selected}
+                  disabled={!writable || saving}
+                  onChange={() => setDraft(provider.id)}
+                />
+                <span className={css.cardTitle}>{provider.label}</span>
+                {provider.type && (
+                  <span className={css.typeBadge}>{TYPE_LABEL[provider.type] ?? provider.type}</span>
+                )}
+              </div>
+
+              {(provider.url || provider.env) && (
+                <div className={css.cardMeta}>
+                  {provider.url && (
+                    <div>
+                      <a
+                        href={provider.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={css.link}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        官方指引与文档 ↗
+                      </a>
+                    </div>
+                  )}
+                  {provider.env && (
+                    <div className={css.envBox}>
+                      环境变量：<code>{provider.env}</code>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-            {meta.env && (
-              <div style={{ marginTop: 4, color: 'var(--dsw-alias-text-secondary, #666)' }}>
-                环境变量 / 密钥配置: <code>{meta.env}</code> {meta.type === 'commercial' ? '(BYOK 自行填入)' : meta.type === 'gateway' ? '(本地网关地址/账号)' : ''}
-              </div>
-            )}
-          </div>
-        )
-      })()}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-        <button type="button" disabled={!dirty || saving || !writable} onClick={() => void save()}>
+          )
+        })}
+      </div>
+
+      <div className={css.actions}>
+        <button
+          type="button"
+          className={css.saveBtn}
+          disabled={!dirty || saving || !writable}
+          onClick={() => void save()}
+        >
           {t('save')}
         </button>
         <button
           type="button"
+          className={css.discardBtn}
           disabled={saving || !dirty}
           onClick={() => { setDraft(undefined); setMessage(undefined) }}
         >
           {t('discard')}
         </button>
-        {message !== undefined ? <span>{message}</span> : null}
+        {message !== undefined ? <span className={css.message}>{message}</span> : null}
       </div>
+
       {market === 'crypto' && (
-        <div style={{ marginTop: 16, borderTop: '1px solid var(--dsw-alias-border-l2, #eee)', paddingTop: 12 }}>
-          <p style={{ margin: '4px 0' }}>{t('newsKeyLabel')}</p>
+        <div className={css.newsSection}>
+          <label className={css.newsLabel}>{t('newsKeyLabel')}</label>
           <input
             type="password"
+            className={css.newsInput}
             value={newsDraft ?? ''}
             disabled={!writable || newsSaving}
             onChange={(event) => setNewsDraft(event.target.value)}
             placeholder={t('newsKeyPlaceholder')}
-            style={{ width: '100%', maxWidth: 360 }}
           />
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-            <button type="button" disabled={!newsDirty || newsSaving || !writable} onClick={() => void saveNews()}>
+          <div className={css.actions}>
+            <button
+              type="button"
+              className={css.saveBtn}
+              disabled={!newsDirty || newsSaving || !writable}
+              onClick={() => void saveNews()}
+            >
               {t('save')}
             </button>
             <button
               type="button"
+              className={css.discardBtn}
               disabled={newsSaving || !newsDirty}
               onClick={() => { setNewsDraft(undefined); setNewsMessage(undefined) }}
             >
               {t('discard')}
             </button>
-            {newsMessage !== undefined ? <span>{newsMessage}</span> : null}
+            {newsMessage !== undefined ? <span className={css.message}>{newsMessage}</span> : null}
           </div>
         </div>
       )}

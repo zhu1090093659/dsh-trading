@@ -1,0 +1,68 @@
+/* TradingSettingsSection —— 交易设置一级菜单页面外壳样式。 */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0 24px;
+  font-size: 13px;
+  color: var(--dsw-alias-text-primary, #1a1e24);
+}
+
+.lead {
+  font-size: 13.5px;
+  color: var(--dsw-alias-text-secondary, #5f6672);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.empty {
+  padding: 24px 0;
+  color: var(--dsw-alias-text-muted, #8e95a3);
+}
+
+.tabList {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  margin-top: 4px;
+}
+
+.tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-text-secondary, #5f6672);
+  padding: 6px 14px 8px;
+  border-radius: 6px 6px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s, background 0.15s;
+}
+
+.tab:hover {
+  color: var(--dsw-alias-text-primary, #1a1e24);
+  background: var(--dsw-alias-fill-hover, rgba(0, 0, 0, 0.04));
+}
+
+.tab[data-active='true'] {
+  color: var(--dsw-alias-primary, #2563eb);
+  font-weight: 600;
+}
+
+.tab[data-active='true']::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--dsw-alias-primary, #2563eb);
+  border-radius: 1px;
+}
+
+.tabPanel {
+  padding-top: 8px;
+}

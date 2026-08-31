@@ -1,4 +1,4 @@
-/* MarketDock —— 左侧自选停靠面板容器。 */
+/* MarketDock —— 左侧自选停靠面板容器（支持富途式展开与折叠竖条）。 */
 
 .dock {
   position: fixed;
@@ -9,7 +9,57 @@
   pointer-events: auto;
   display: flex;
   flex-direction: column;
-  background: var(--dsw-alias-bg-l1, #ffffff);
-  border-right: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: var(--dsw-futu-bg-base, #ffffff);
+  border-right: 1px solid var(--dsw-futu-border-default, #e3e6ea);
   overflow: hidden;
+  transition: width 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dock[data-folded='true'] {
+  width: 44px;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.railButton {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--dsw-futu-radius-md, 6px);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.railButton:hover {
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.railButton[aria-pressed='true'],
+.railButton[data-active='true'] {
+  background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.railDivider {
+  width: 20px;
+  height: 1px;
+  margin: 4px 0;
+  flex: none;
+  background: var(--dsw-futu-border-default, #e3e6ea);
 }

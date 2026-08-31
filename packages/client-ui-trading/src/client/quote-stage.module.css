@@ -1,14 +1,16 @@
-/* QuoteStage —— 中栏行情视图（富途式报价头 + K线图）。 */
+/* QuoteStage —— 中栏行情视图（富途牛牛风格：报价头 + K线图 + 周期胶囊 + 底部指标词条 + 状态栏）。 */
 
 .root {
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 10px 18px 14px;
+  padding: 8px 14px 4px;
   box-sizing: border-box;
-  gap: 8px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12.5px;
+  background: var(--dsw-futu-bg-base, #ffffff);
+  color: var(--dsw-futu-text-primary, #1a1e24);
 }
 
 .empty {
@@ -18,7 +20,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  opacity: 0.6;
+  color: var(--dsw-futu-text-muted, #8e95a3);
   text-align: center;
   line-height: 1.8;
 }
@@ -26,42 +28,47 @@
 .emptyMain {
   font-size: 15px;
   font-weight: 600;
+  color: var(--dsw-futu-text-secondary, #5f6672);
 }
 
+/* 顶部报价头 */
 .header {
   display: flex;
   align-items: baseline;
   gap: 12px;
   flex-wrap: wrap;
+  flex: none;
 }
 
 .ident {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
 }
 
 .name {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
+  color: var(--dsw-futu-text-primary, #1a1e24);
 }
 
 .code {
   font-size: 12px;
-  opacity: 0.55;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  font-variant-numeric: tabular-nums;
 }
 
 .marketTag {
-  font-size: 10.5px;
+  font-size: 10px;
   line-height: 1;
-  padding: 3px 5px;
-  border-radius: 4px;
-  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
-  opacity: 0.75;
+  padding: 2px 4px;
+  border-radius: var(--dsw-futu-radius-xs, 3px);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  color: var(--dsw-futu-text-secondary, #5f6672);
 }
 
 .price {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
@@ -69,23 +76,10 @@
 
 .changes {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   font-variant-numeric: tabular-nums;
-  font-size: 13px;
-}
-
-.stats {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  opacity: 0.85;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat label {
-  opacity: 0.6;
-  margin-right: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
 }
 
 .meta {
@@ -94,46 +88,74 @@
   align-items: baseline;
   gap: 10px;
   font-size: 11px;
-  opacity: 0.55;
+  color: var(--dsw-futu-text-muted, #8e95a3);
 }
 
+/* 统计数据横栏 */
+.stats {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  flex: none;
+}
+
+.stat label {
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  margin-right: 4px;
+}
+
+/* 周期与工具栏 */
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 8px;
   flex-wrap: wrap;
+  padding: 2px 0;
+  border-top: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  border-bottom: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  flex: none;
 }
 
 .intervalTabs {
   display: flex;
-  gap: 2px;
+  gap: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.intervalTabs::-webkit-scrollbar {
+  display: none;
 }
 
 .intervalTab {
   appearance: none;
   border: none;
   background: transparent;
-  color: inherit;
+  color: var(--dsw-futu-text-secondary, #5f6672);
   padding: 3px 8px;
-  border-radius: 5px;
-  font-size: 12px;
+  border-radius: var(--dsw-futu-radius-pill, 14px);
+  font-size: 11.5px;
   cursor: pointer;
-  opacity: 0.7;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
 }
 
 .intervalTab:hover {
-  opacity: 1;
-  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
 }
 
 .intervalTab[data-active='true'] {
-  opacity: 1;
+  color: #ffffff;
   font-weight: 600;
-  background: var(--dsw-alias-fill-active, rgba(127, 127, 127, 0.16));
+  background: #1f2937;
 }
 
-/* ---- 技术指标选择器（3.1：OKX 式单按钮 + 主/副图勾选面板，取代 chips 指标条） ---- */
-
+/* 指标选择弹层 */
 .indicatorAnchor {
   position: relative;
   margin-left: auto;
@@ -141,27 +163,25 @@
 
 .pickerButton {
   appearance: none;
-  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
-  background: var(--dsw-alias-bg-l1, #ffffff);
-  color: inherit;
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  background: #ffffff;
+  color: var(--dsw-futu-text-primary, #1a1e24);
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 10px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: var(--dsw-futu-radius-md, 6px);
+  font-size: 11.5px;
   cursor: pointer;
-  opacity: 0.85;
+  transition: background 0.15s;
 }
 
 .pickerButton:hover {
-  opacity: 1;
-  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
 }
 
 .pickerButton[aria-expanded='true'] {
-  opacity: 1;
-  background: var(--dsw-alias-fill-active, rgba(127, 127, 127, 0.16));
+  background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
 }
 
 .pickerBackdrop {
@@ -175,17 +195,17 @@
   top: calc(100% + 6px);
   right: 0;
   z-index: 40;
-  width: 240px;
+  width: 250px;
   max-height: min(420px, 60vh);
   overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
-  background: var(--dsw-alias-bg-l1, #ffffff);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-radius: var(--dsw-futu-radius-lg, 8px);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  background: #ffffff;
+  box-shadow: var(--dsw-futu-shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.12));
   font-size: 12px;
 }
 
@@ -201,7 +221,7 @@
 
 .pickerGroupTitle {
   font-size: 11px;
-  opacity: 0.55;
+  color: var(--dsw-futu-text-muted, #8e95a3);
   margin: 6px 0 2px;
 }
 
@@ -210,7 +230,7 @@
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  border-radius: 5px;
+  border-radius: var(--dsw-futu-radius-sm, 4px);
 }
 
 .pickerLabel {
@@ -232,10 +252,6 @@
   flex: none;
 }
 
-.pickerLabel span {
-  font-variant-numeric: tabular-nums;
-}
-
 .pickerParams {
   appearance: none;
   border: none;
@@ -243,15 +259,13 @@
   color: #2563eb;
   font-size: 11px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--dsw-futu-radius-xs, 3px);
   cursor: pointer;
-  opacity: 0.75;
 }
 
 .pickerParams:hover,
 .pickerParams[data-open='true'] {
-  opacity: 1;
-  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.05));
 }
 
 .paramEditor {
@@ -260,7 +274,7 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px 0 6px;
-  border-top: 1px dashed var(--dsw-alias-border-l2, #e3e6ea);
+  border-top: 1px dashed var(--dsw-futu-border-default, #e3e6ea);
 }
 
 .paramRow {
@@ -274,8 +288,8 @@
   width: 72px;
   box-sizing: border-box;
   padding: 3px 6px;
-  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
-  border-radius: 5px;
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  border-radius: var(--dsw-futu-radius-sm, 4px);
   font: inherit;
   font-variant-numeric: tabular-nums;
 }
@@ -288,17 +302,17 @@
 
 .paramButton {
   appearance: none;
-  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
   background: transparent;
   color: inherit;
   padding: 3px 10px;
-  border-radius: 5px;
-  font-size: 12px;
+  border-radius: var(--dsw-futu-radius-sm, 4px);
+  font-size: 11.5px;
   cursor: pointer;
 }
 
 .paramButton:hover {
-  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.05));
 }
 
 .paramApply {
@@ -311,6 +325,7 @@
   background: #1d4ed8;
 }
 
+/* 指标读数栏 */
 .indicatorReadout {
   display: flex;
   gap: 12px;
@@ -318,7 +333,8 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   min-height: 15px;
-  opacity: 0.9;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  flex: none;
 }
 
 .chartBox {
@@ -327,18 +343,101 @@
   position: relative;
 }
 
-.error {
-  padding: 12px 0;
-  color: #e64545;
-  font-size: 12.5px;
+/* 底部指标词条带（富途式横向词条） */
+.quickIndicatorBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  border-top: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: none;
 }
 
-.readout {
+.quickIndicatorBar::-webkit-scrollbar {
+  display: none;
+}
+
+.quickIndicatorTag {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  padding: 2px 7px;
+  border-radius: var(--dsw-futu-radius-xs, 3px);
+  font-size: 11px;
+  font-family: var(--dsw-futu-font-mono, monospace);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s, background 0.12s;
+}
+
+.quickIndicatorTag:hover {
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.quickIndicatorTag[data-active='true'] {
+  color: #1f2937;
+  font-weight: 700;
+  background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
+}
+
+/* 底部市场状态栏（富途牛牛式指数与交易状态） */
+.statusBar {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: 11.5px;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 0 2px;
+  border-top: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  opacity: 0.85;
-  min-height: 16px;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  flex: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.statusBar::-webkit-scrollbar {
+  display: none;
+}
+
+.statusSession {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dsw-futu-up, #e64545);
+  display: inline-block;
+}
+
+.indexGroup {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.indexName {
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.statusClock {
+  margin-left: auto;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  white-space: nowrap;
+}
+
+.error {
+  padding: 8px 0;
+  color: var(--dsw-futu-up, #e64545);
+  font-size: 12px;
 }

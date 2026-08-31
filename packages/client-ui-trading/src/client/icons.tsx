@@ -1,7 +1,5 @@
 /**
- * 内联矢量图标（2.7）：与宿主 @deepseek-ai/dsh-client-ui-primitives 的
- * outline 风格保持一致（16px 线宽 stroke、currentColor）。不直接 import
- * primitives——插件包解析不到其类型，内联同样的路径更纯粹。
+ * 内联矢量图标：与宿主 outline 风格及富途牛牛紧凑图标保持一致。
  */
 import type { ReactElement } from 'react'
 
@@ -23,7 +21,7 @@ export function IconSettings({ size = 16 }: { size?: number }): ReactElement {
   )
 }
 
-/** 面板折叠/展开（左栏在左的 panel 图标方向，与宿主 IconPanelLeft 同语义）。 */
+/** 面板折叠/展开（左栏 panel 图标）。 */
 export function IconFoldPanel({ size = 16 }: { size?: number }): ReactElement {
   return (
     <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
@@ -34,12 +32,52 @@ export function IconFoldPanel({ size = 16 }: { size?: number }): ReactElement {
   )
 }
 
-/** 技术指标入口（OKX 式 chart-line 图标语义：坐标轴 + 折线）。 */
+/** 技术指标入口（坐标轴 + 折线）。 */
 export function IconIndicators({ size = 16 }: { size?: number }): ReactElement {
   return (
     <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2.75 2.75v10.5h10.5" />
       <path d="M5.25 9.5 7.5 6.75l2.25 1.75 2.75-3.5" />
+    </svg>
+  )
+}
+
+/** 自选列表图标（富途左栏图标）。 */
+export function IconWatchlist({ size = 16 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 4h10M3 8h10M3 12h10" />
+      <circle cx="1.5" cy="4" r="0.75" fill="currentColor" />
+      <circle cx="1.5" cy="8" r="0.75" fill="currentColor" />
+      <circle cx="1.5" cy="12" r="0.75" fill="currentColor" />
+    </svg>
+  )
+}
+
+/** 行情柱/图表图标。 */
+export function IconQuotes({ size = 16 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 13V7M7 13V3M11 13V9M15 13V5" />
+    </svg>
+  )
+}
+
+/** 放大镜搜索图标。 */
+export function IconSearch({ size = 14 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6.5" cy="6.5" r="4.5" />
+      <path d="M10 10l3.5 3.5" />
+    </svg>
+  )
+}
+
+/** 下拉小箭头图标。 */
+export function IconChevronDown({ size = 12 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 6l4 4 4-4" />
     </svg>
   )
 }

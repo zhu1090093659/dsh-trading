@@ -1,6 +1,4 @@
-/* SessionRail —— 右缘常驻会话竖条。fixed 定位贴视口右缘全高；几何占位由
-   shell-pad.css 规则 8 的侧栏轨道（44px）负责，QuotePane 测量读
-   [data-dshtrading-rail] 左缘，行情/对话列都不延伸到竖条底下。 */
+/* SessionRail —— 右缘常驻会话竖条（富途牛牛式右侧垂直图标条）。 */
 
 .rail {
   position: fixed;
@@ -11,38 +9,40 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 10px 0;
-  background: var(--dsw-alias-bg-l1, #ffffff);
-  border-left: 1px solid var(--dsw-alias-border-l2, rgba(127, 127, 127, 0.22));
+  background: var(--dsw-futu-bg-base, #ffffff);
+  border-left: 1px solid var(--dsw-futu-border-default, #e3e6ea);
   z-index: 40;
+  box-sizing: border-box;
 }
 
 .button {
   appearance: none;
   border: none;
   background: transparent;
-  color: inherit;
+  color: var(--dsw-futu-text-secondary, #5f6672);
   width: 32px;
   height: 32px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: var(--dsw-futu-radius-md, 6px);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.75;
+  transition: background 0.15s, color 0.15s;
   flex: none;
 }
 
 .button:hover {
-  opacity: 1;
-  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.08));
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-futu-text-primary, #1a1e24);
 }
 
-.button[aria-pressed='true'] {
-  opacity: 1;
-  background: var(--dsw-alias-fill-active, rgba(74, 144, 226, 0.14));
+.button[aria-pressed='true'],
+.button[data-active='true'] {
+  background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
+  color: var(--dsw-futu-text-primary, #1a1e24);
 }
 
 /* 折叠态把面板图标水平镜像（折叠折线朝右缘），提示点击向左展开会话列。 */
@@ -51,7 +51,7 @@
 }
 
 .button:focus-visible {
-  outline: 2px solid var(--dsw-alias-border-active, #4a90e2);
+  outline: 2px solid var(--dsw-futu-border-active, #3b82f6);
   outline-offset: 1px;
 }
 
@@ -60,5 +60,5 @@
   height: 1px;
   margin: 4px 0;
   flex: none;
-  background: var(--dsw-alias-border-l2, rgba(127, 127, 127, 0.22));
+  background: var(--dsw-futu-border-default, #e3e6ea);
 }

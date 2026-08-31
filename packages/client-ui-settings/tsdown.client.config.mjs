@@ -51,7 +51,7 @@ const cssModulesInline = () => ({
     const fileId = virtualId.slice(9, -4)
     this.addWatchFile(fileId)
     const source = await readFile(fileId, 'utf8')
-    const { code, exports: cssExports } = transform({ filename: fileId, code: source, cssModules: { pattern: '[hash]_[local]' }, minify: true })
+    const { code, exports: cssExports } = transform({ filename: fileId, code: Buffer.from(source, 'utf8'), cssModules: { pattern: '[hash]_[local]' }, minify: true })
     const classMap = {}
     for (const [local, exp] of Object.entries(cssExports ?? {})) classMap[local] = exp.name
     const tagId = `${ID}/${basename(fileId)}`
@@ -78,7 +78,7 @@ const cssGlobalInline = () => ({
     if (!virtualId.startsWith('\0dsh-global-css:')) return null
     const fileId = virtualId.slice(16, -4)
     this.addWatchFile(fileId)
-    const { code } = transform({ filename: fileId, code: await readFile(fileId, 'utf8'), minify: true })
+    const { code } = transform({ filename: fileId, code: Buffer.from(await readFile(fileId, 'utf8'), 'utf8'), minify: true })
     const tagId = `${ID}/${basename(fileId)}`
     const css = JSON.stringify(code.toString())
     return `const css = ${css};\nconst tagId = ${JSON.stringify(tagId)};\nif (typeof document !== 'undefined' && document.querySelector('style[data-plugin-css=' + JSON.stringify(tagId) + ']') === null) { const tag = document.createElement('style'); tag.dataset.plugin = ${JSON.stringify(ID)}; tag.dataset.pluginCss = tagId; tag.textContent = css; document.head.appendChild(tag); }\nexport default css;`
