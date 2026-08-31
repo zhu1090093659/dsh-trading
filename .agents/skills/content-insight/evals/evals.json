@@ -1,0 +1,30 @@
+{
+  "skill_name": "content-insight",
+  "note": "本管线含ASR转写（受限流影响，9分钟视频约需5-8分钟）与联网核查，单次eval成本高。建议优先跑eval-2（微信文章全流程，快且稳）；视频类eval-0/eval-1按需运行。管线等价性验证：B站BV1Za4C6WEUw（9分钟）已在skill构建前完整跑通（字幕为空→ASR→文稿→核查→报告）；微信示例文章mp.weixin.qq.com/s/V1OHwRhdkdcd5Y05GcJZzw已在skill构建时验证提取（864字正文+11图元数据完整）。",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "帮我看一下这个B站视频讲了什么，把内容整理成一份笔记沉淀下来：https://www.bilibili.com/video/BV1GJ411x7h7/ （测试时请替换为一个时长≤2分钟的公开视频链接）",
+      "expected_output": "字幕文稿txt落盘download/、知识卡片md、对视频内容的结构化总结；若视频无官方字幕则走ASR路径且断点续传可用",
+      "files": []
+    },
+    {
+      "id": 1,
+      "prompt": "我要这个视频的完整字幕文字稿，要带时间戳的，方便我回查原话：BV1Za4C6WEUw",
+      "expected_output": "仅产出带时间戳+纯文本双版本文稿到download/，不生成深度报告；文稿含UP主/时长/链接头部信息",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "帮我读一下这篇微信文章 https://mp.weixin.qq.com/s/V1OHwRhdkdcd5Y05GcJZzw ，总结作者的核心观点，判断哪些说法可靠，并沉淀成知识笔记",
+      "expected_output": "wechat_fetch.py提取成功（标题/公众号/发布时间/正文）；产出知识卡片md与结构化总结；涉及行情数据的声称按三档标注核查；图片型内容提示覆盖局限",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "这是一个财经观点视频 https://www.bilibili.com/video/BV1Za4C6WEUw/ ，我不只要总结，还想知道他说的是不是真的、逻辑站不站得住，帮我做一份深度分析并沉淀成可复用的知识",
+      "expected_output": "全流程：文稿+web-search事实核查（三档标注）+五维分析报告docx（postcheck 0 errors）+知识卡片md",
+      "files": []
+    }
+  ]
+}

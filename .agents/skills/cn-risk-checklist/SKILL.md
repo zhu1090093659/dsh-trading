@@ -1,0 +1,1 @@
+../../../packages/kit-cn/assets/skills/cn-risk-checklist.md

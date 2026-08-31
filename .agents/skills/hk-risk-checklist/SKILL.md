@@ -1,0 +1,1 @@
+../../../packages/kit-hk/assets/skills/hk-risk-checklist.md

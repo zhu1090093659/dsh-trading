@@ -1,0 +1,1 @@
+../../../packages/kit-crypto/assets/skills/crypto-instrument-analysis.md
