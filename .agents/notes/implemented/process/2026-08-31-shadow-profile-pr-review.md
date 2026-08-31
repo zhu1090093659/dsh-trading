@@ -84,6 +84,20 @@ profile 挂在 3081 实例上不可碰。需要一个**隔离、可复现、用�
   UI 类 PR 保持可独立复现的验证能力是 findings-first 的底线；本轮
   首页层实机复核（零控制台错误 + token 渲染正确）正是靠影子环境拿到。
 
+### 6. 补充（同日同步实战修正）
+
+- **新增 workspace 包会击穿所有既有 profile 的刷新**：PR #27/#28 合并后，kit 声明
+  `@dsh-trading/knowledge@workspace:*`，而既有 profile（trading-web/dev/all）的
+  overrides 清单生成于包存在之前 → 刷新必报
+  `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`。修法：向 profile 的
+  pnpm-workspace.yaml overrides 补两条 file: 指向主 checkout（knowledge/strategies），
+  删 lockfile 后 `pnpm install`。三个 profile 已于 2026-08-31 同步修补；
+- **lockfile 删除时序澄清**：工具 install 会重建 lockfile（钉旧路径），因此
+  删除必须发生在**工具 install 之后、直装之前**，且直装后需复查 yaml 补丁
+  仍在（本轮回合曾因顺序颠倒连续三次装到旧内容）；
+- yaml 补丁推荐用 edit 工具或独立 python 步骤并立即 grep 复验——组合命令链里
+  的 heredoc 补丁会因转义折叠静默失效。
+
 ## Consequences
 
 - 后续评审涉及 client 包/UI 时按本手册执行；PR 引入新 workspace 包时
