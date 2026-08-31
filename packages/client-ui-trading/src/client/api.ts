@@ -4,6 +4,7 @@
  * carries the auth cookie by default).
  */
 import type { Kline, MarketId, MarketInfo, TickerOutcome } from './types.ts'
+import type { CustomIndicatorRecord } from '@dsh-trading/indicators'
 
 export class BridgeError extends Error {
   constructor(readonly status: number, message: string) {
@@ -50,4 +51,30 @@ export async function fetchSymbols(market: MarketId): Promise<Array<{ symbol: st
   const query = new URLSearchParams({ market })
   const wire = await getJson<{ symbols: Array<{ symbol: string; name?: string }> }>(`/dshtrading/api/symbols?${query.toString()}`)
   return Array.isArray(wire.symbols) ? wire.symbols : []
+}
+
+/** 拉取自定义指标列表（Issue #19）。 */
+export async function fetchCustomIndicators(): Promise<CustomIndicatorRecord[]> {
+  try {
+    const wire = await getJson<{ ok: boolean; indicators: CustomIndicatorRecord[] }>('/dshtrading/api/indicators/custom')
+    return Array.isArray(wire.indicators) ? wire.indicators : []
+  } catch {
+    return []
+  }
+}
+
+/** 删除自定义指标。 */
+export async function deleteCustomIndicator(id: string): Promise<boolean> {
+  try {
+    const query = new URLSearchParams({ id })
+    const response = await fetch(`/dshtrading/api/indicators/custom?${query.toString()}`, {
+      method: 'DELETE',
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean; removed?: boolean }
+    return wire.ok === true && wire.removed === true
+  } catch {
+    return false
+  }
 }

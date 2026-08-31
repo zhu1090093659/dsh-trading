@@ -10,8 +10,11 @@
  *   直读（老部署/连接器未升级）。preset 平面不经本桥（会话隔离）。
  * - 业务错误一律 HTTP 200 + { ok:false, code, message }（错误词汇沿用
  *   TradingErrorCode 惯例）；仅协议层错误用 4xx。
+ * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  */
 import type { Interval, Kline, MarketDataService, Ticker } from '@dsh-trading/api'
+import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/indicators'
+import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
 
 /** 本桥支持的市场（与连接器服务键一一对应）。 */
 export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
@@ -42,6 +45,7 @@ export function createBridgeHost(services: {
   registry?: MarketDataRegistryLike
   router?: { activeProvider(market: string): string | undefined }
   legacy(market: MarketId): MarketDataService | undefined
+  customIndicatorsStore?: CustomIndicatorStore
 }): BridgeHost {
   return {
     getMarketService: market => {
@@ -50,6 +54,7 @@ export function createBridgeHost(services: {
       return services.legacy(market)
     },
     activeProvider: market => services.registry?.active(market)?.provider ?? services.router?.activeProvider(market),
+    customIndicatorsStore: services.customIndicatorsStore ?? createMemoryCustomIndicatorStore(),
   }
 }
 
@@ -65,6 +70,8 @@ export interface BridgeHost {
   getMarketService(market: MarketId): MarketDataService | undefined
   /** 该市场当前激活的 provider slug（router 设置；可能 undefined）。 */
   activeProvider(market: MarketId): string | undefined
+  /** 自定义指标存储（可选）。 */
+  customIndicatorsStore?: CustomIndicatorStore
 }
 
 export interface MarketInfoWire {
@@ -95,6 +102,11 @@ export interface SymbolInfoWire {
 
 export interface SymbolsWire {
   symbols: SymbolInfoWire[]
+}
+
+export interface CustomIndicatorsWire {
+  ok: true
+  indicators: CustomIndicatorRecord[]
 }
 
 export class BridgeProtocolError extends Error {
@@ -199,6 +211,22 @@ export class TradingBridge {
       return { symbols: [] }
     }
   }
+
+  /** 自定义指标列表。 */
+  async customIndicators(): Promise<CustomIndicatorsWire> {
+    const store = this.host.customIndicatorsStore
+    if (store === undefined) return { ok: true, indicators: [] }
+    const indicators = await store.list()
+    return { ok: true, indicators }
+  }
+
+  /** 删除自定义指标。 */
+  async deleteCustomIndicator(id: string): Promise<{ ok: boolean; removed: boolean }> {
+    const store = this.host.customIndicatorsStore
+    if (store === undefined) return { ok: true, removed: false }
+    const removed = await store.remove(id)
+    return { ok: true, removed }
+  }
 }
 
 /** 请求分发：把 (method, pathname, searchParams) 路由到桥方法，返回 (status, payload)。 */
@@ -208,27 +236,42 @@ export async function dispatchBridgeRequest(
   pathname: string,
   search: URLSearchParams,
 ): Promise<{ status: number; payload: unknown }> {
-  if (method !== 'GET') throw new BridgeProtocolError(405, 'only GET is supported')
-  switch (pathname) {
-    case '/markets':
-      return { status: 200, payload: bridge.markets() }
-    case '/tickers': {
-      const market = search.get('market') ?? ''
-      const symbols = (search.get('symbols') ?? '').split(',')
-      return { status: 200, payload: await bridge.tickers(market, symbols) }
+  if (method === 'GET') {
+    switch (pathname) {
+      case '/markets':
+        return { status: 200, payload: bridge.markets() }
+      case '/tickers': {
+        const market = search.get('market') ?? ''
+        const symbols = (search.get('symbols') ?? '').split(',')
+        return { status: 200, payload: await bridge.tickers(market, symbols) }
+      }
+      case '/klines': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        const interval = search.get('interval') ?? '1d'
+        const limit = search.get('limit')
+        return { status: 200, payload: await bridge.klines(market, symbol, interval, limit) }
+      }
+      case '/symbols': {
+        const market = search.get('market') ?? ''
+        return { status: 200, payload: await bridge.symbols(market) }
+      }
+      case '/indicators/custom': {
+        return { status: 200, payload: await bridge.customIndicators() }
+      }
+      default:
+        throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
     }
-    case '/klines': {
-      const market = search.get('market') ?? ''
-      const symbol = search.get('symbol') ?? ''
-      const interval = search.get('interval') ?? '1d'
-      const limit = search.get('limit')
-      return { status: 200, payload: await bridge.klines(market, symbol, interval, limit) }
-    }
-    case '/symbols': {
-      const market = search.get('market') ?? ''
-      return { status: 200, payload: await bridge.symbols(market) }
-    }
-    default:
-      throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }
+
+  if (method === 'DELETE') {
+    if (pathname === '/indicators/custom') {
+      const id = search.get('id') ?? ''
+      if (!id) throw new BridgeProtocolError(400, 'delete custom indicator: id is required')
+      return { status: 200, payload: await bridge.deleteCustomIndicator(id) }
+    }
+    throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
+  }
+
+  throw new BridgeProtocolError(405, 'only GET and DELETE are supported')
 }

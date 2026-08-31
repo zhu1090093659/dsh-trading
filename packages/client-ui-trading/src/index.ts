@@ -13,7 +13,10 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dsh-trading/api'
+import { createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import os from 'node:os'
+import path from 'node:path'
 import {
   BridgeProtocolError,
   MARKET_SERVICE_KEYS,
@@ -57,10 +60,14 @@ export function apply(ctx: Context): void {
     if (webServer === undefined || connection === undefined) return
     // registry-first（2026-08-30 注册表模式）：每请求经注册表按路由当前值解析——
     // settings 切换交易所 GUI 即刻生效（热切换）；注册表缺席回退旧市场键直读。
+    const storePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
+    const customIndicatorsStore = createFileCustomIndicatorStore(storePath)
+
     const host = createBridgeHost({
       registry: webCtx.get('tradingMarketDataRegistry') as MarketDataRegistryLike | undefined,
       router: webCtx.get('tradingMarketRouter') as { activeProvider(m: string): string | undefined } | undefined,
       legacy: market => webCtx.get(MARKET_SERVICE_KEYS[market]) as MarketDataService | undefined,
+      customIndicatorsStore,
     })
     const bridge = new TradingBridge(host)
     const route = {
