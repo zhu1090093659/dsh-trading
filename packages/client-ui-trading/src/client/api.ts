@@ -85,7 +85,8 @@ export async function fetchKnowledgeCards(): Promise<KnowledgeCard[]> {
   try {
     const wire = await getJson<{ ok: boolean; cards: KnowledgeCard[] }>('/dshtrading/api/knowledge/cards')
     return Array.isArray(wire.cards) ? wire.cards : []
-  } catch {
+  } catch (err) {
+    console.warn('[dsh-trading] fetchKnowledgeCards failed, fallback to empty:', err)
     return []
   }
 }

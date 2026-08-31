@@ -1,30 +1,31 @@
 /**
- * 中栏舞台（对齐 docs/design/strategy-tab.md）：中栏 = 视图注册表 + 顶部切换条（行情 | 策略）。
- * 视图注册表是中栏的扩展点——策略回测等视图按 definition 追加，
- * 与行情视图并列切换；同一时刻仅挂载活动视图（切换即卸载，图表态由
- * store/localStorage 承接，后台视图零渲染开销）。
+ * 中栏舞台：中栏 = 视图注册表 + 顶部切换条（行情 | 策略 | 知识库）。
+ * 视图注册表是中栏的扩展点——各视图按 definition 追加，与行情视图并列切换；
+ * 同一时刻仅挂载活动视图（切换即卸载，图表态由 store/localStorage 承接，后台视图零渲染开销）。
  */
 import { useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { readJson, writeJson } from './store.ts'
 import { QuoteStage } from './QuoteStage.tsx'
 import { StrategyView } from './StrategyView.tsx'
+import { KnowledgeView } from './KnowledgeView.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import type { ChartState } from './chart-state.ts'
 import type { Observable, SelectionState } from './store.ts'
 import css from './stage.module.css'
 
-export type MiddleViewId = 'quote' | 'strategy'
+export type MiddleViewId = 'quote' | 'strategy' | 'knowledge'
 
 export interface MiddleViewDefinition {
   id: MiddleViewId
   titleKey: MarketLocaleKey
 }
 
-/** 中栏视图注册表：行情 | 策略。 */
+/** 中栏视图注册表：行情 | 策略 | 知识库。 */
 export const MIDDLE_VIEWS: readonly MiddleViewDefinition[] = [
   { id: 'quote', titleKey: 'stage.quote' },
   { id: 'strategy', titleKey: 'stage.strategy' },
+  { id: 'knowledge', titleKey: 'stage.knowledge' },
 ]
 
 const STAGE_KEY = 'dshtrading.stage.v1'
@@ -78,10 +79,15 @@ export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setInd
           </button>
         ))}
       </div>
-      {/* 视图互斥挂载：切走即卸载（图表重建成本 < 双图常驻的内存/重绘成本）。 */}
-      {view === 'quote'
-        ? <QuoteStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams } as never)} />
-        : <StrategyView t={t} useSelection={useSelection} />}
+      {/* 视图互斥挂载：切走即卸载（图表重建成本 < 双图常驻的内存/重绘成本）。
+          prop 面沿用 QuotePane→QuoteStage 的 inject 传递约定（cast 收敛在边界）。 */}
+      {view === 'quote' ? (
+        <QuoteStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams } as never)} />
+      ) : view === 'strategy' ? (
+        <StrategyView t={t} useSelection={useSelection} />
+      ) : (
+        <KnowledgeView t={t} />
+      )}
     </div>
   )
 }
