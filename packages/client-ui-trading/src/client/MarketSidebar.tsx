@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { fetchKlines, fetchMarkets, fetchTickers } from './api.ts'
-import { searchAllMarkets } from './symbol-catalog.ts'
+import { searchAllMarkets, searchSymbols } from './symbol-catalog.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { Sparkline } from './Sparkline.tsx'
@@ -89,9 +89,9 @@ export function MarketSidebar({
 
   const rowsKey = rows.map(row => rowKey(row.market, row.symbol)).join('|')
 
-  // 联想候选：仅自选页签的添加表单；跨市场全局搜索（候选项自带市场）。
+  // 联想候选：自选页签跨市场全局搜索（候选自带市场）；市场页签只搜本市场字典。
   const suggestions = useMemo(
-    () => (tab === 'watch' ? searchAllMarkets(draft) : []),
+    () => (tab === 'watch' ? searchAllMarkets(draft) : searchSymbols(tab, draft)),
     [tab, draft],
   )
 
@@ -208,7 +208,7 @@ export function MarketSidebar({
               onChange={event => { setDraft(event.target.value) }}
             />
             <button className={css.addButton} type="submit" disabled={draft.trim() === ''}>{t('sidebar.add')}</button>
-            {tab === 'watch' && suggestions.length > 0 && (
+            {suggestions.length > 0 && (
               <div className={css.suggestions} role="listbox" aria-label={t('sidebar.addPlaceholder')}>
                 {suggestions.map(entry => (
                   <button
