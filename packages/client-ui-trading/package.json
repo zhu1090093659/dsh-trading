@@ -30,6 +30,7 @@
     "@dsh-trading/indicators": "workspace:^",
     "@dsh-trading/knowledge": "workspace:^",
     "@dsh-trading/strategies": "workspace:^",
+    "force-graph": "^1.51.0",
     "lightweight-charts": "^5.2.1"
   },
   "peerDependencies": {
