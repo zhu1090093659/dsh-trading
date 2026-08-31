@@ -28,6 +28,7 @@
   "dependencies": {
     "@dsh-trading/api": "workspace:^",
     "@dsh-trading/indicators": "workspace:^",
+    "@dsh-trading/strategies": "workspace:^",
     "lightweight-charts": "^5.2.1"
   },
   "peerDependencies": {
