@@ -1,0 +1,62 @@
+/**
+ * 全局 Design Tokens：富途牛牛桌面版视觉规范
+ *
+ * 颜色语义：中国市场红涨绿跌规范
+ * 排版规范：tabular-nums 等宽数字，高密度紧凑间距
+ */
+
+:root {
+  /* 红涨绿跌核心 Token */
+  --dsw-futu-up: #e64545;
+  --dsw-futu-up-bg: rgba(230, 69, 69, 0.08);
+  --dsw-futu-up-border: rgba(230, 69, 69, 0.22);
+  --dsw-futu-up-gradient: rgba(230, 69, 69, 0.25);
+
+  --dsw-futu-down: #2ba471;
+  --dsw-futu-down-bg: rgba(43, 164, 113, 0.08);
+  --dsw-futu-down-border: rgba(43, 164, 113, 0.22);
+  --dsw-futu-down-gradient: rgba(43, 164, 113, 0.25);
+
+  --dsw-futu-flat: #8a8f99;
+  --dsw-futu-flat-bg: rgba(138, 143, 153, 0.08);
+
+  /* 背景与表面层级 */
+  --dsw-futu-bg-base: #ffffff;
+  --dsw-futu-bg-surface: #f7f8fa;
+  --dsw-futu-bg-surface-hover: rgba(0, 0, 0, 0.04);
+  --dsw-futu-bg-surface-active: rgba(0, 0, 0, 0.08);
+  --dsw-futu-bg-selected: rgba(230, 69, 69, 0.05);
+
+  /* 边框与分割线 */
+  --dsw-futu-border-default: #e3e6ea;
+  --dsw-futu-border-subtle: #edf0f3;
+  --dsw-futu-border-active: #3b82f6;
+
+  /* 文字层级 */
+  --dsw-futu-text-primary: #1a1e24;
+  --dsw-futu-text-secondary: #5f6672;
+  --dsw-futu-text-muted: #8e95a3;
+  --dsw-futu-text-inverse: #ffffff;
+
+  /* 胶囊与圆角规范 */
+  --dsw-futu-radius-xs: 3px;
+  --dsw-futu-radius-sm: 4px;
+  --dsw-futu-radius-md: 6px;
+  --dsw-futu-radius-lg: 8px;
+  --dsw-futu-radius-pill: 14px;
+
+  /* 阴影 */
+  --dsw-futu-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --dsw-futu-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.08);
+  --dsw-futu-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* 字体族与等宽数字 */
+  --dsw-futu-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* 全站等宽数字工具类 */
+[data-tabular-nums],
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}

@@ -1,10 +1,8 @@
 /**
- * 富途式市场/自选面板（内容组件，由 MarketDock 停靠在左缘）：市场页签 +
- * 自选/默认标的列表。点击行 = 选中标的并切到行情模式（QuotePane 消费）；
- * 行内嵌迷你走势 + 最新价 + 涨跌幅（红涨绿跌）。行情批量轮询、页面隐藏时暂停。
- *
- * 注入面约定（官方模式）：可观察状态走 hooks（渲染器合成 use* hook），
- * 动作走 inject 直接 props（对照 settings 的 controller/setProvider 拆分）。
+ * 富途式市场/自选面板（内容组件，由 MarketDock 停靠在左缘）：
+ * 顶部自选分组与折叠按钮 + 胶囊市场页签 + 表头 + 三段式自选标的列表。
+ * 点击行 = 选中标的并切到行情模式（QuotePane 消费）；
+ * 行内嵌迷你面积走势 + 最新价 + 涨跌幅（红涨绿跌）。行情批量轮询、页面隐藏时暂停。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -13,7 +11,8 @@ import { searchAllMarkets, searchSymbols, setDynamicCatalog } from './symbol-cat
 import type { MarketLocaleKey } from './contract.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { Sparkline } from './Sparkline.tsx'
-import { DEFAULT_WATCHLISTS, rowsFor, type Observable, type SelectionState, type Watchlists } from './store.ts'
+import { IconChevronDown, IconFoldPanel } from './icons.tsx'
+import { rowsFor, type Observable, type SelectionState, type Watchlists } from './store.ts'
 import type { Instrument, MarketId, MarketInfo, ReferenceSeries, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
 import css from './market-sidebar.module.css'
@@ -37,6 +36,7 @@ export interface MarketSidebarInjected {
 export type MarketSidebarProps =
   PropsLocale<'dshtrading.market'>
   & InjectFace<MarketSidebarInjected>
+  & { onFold?: () => void }
 
 const SERIES_TTL_MS = 10 * 60 * 1000
 const PRICE_POLL_MS = 8000
@@ -56,7 +56,7 @@ export function rowKey(market: string, symbol: string): string {
 }
 
 export function MarketSidebar({
-  t, useSelection, useWatchlists, addInstrument, removeInstrument, selectInstrument,
+  t, useSelection, useWatchlists, addInstrument, removeInstrument, selectInstrument, onFold,
 }: MarketSidebarProps) {
   const selection = useSelection(value => value.instrument)
   const watchlists = useWatchlists(value => value)
@@ -136,7 +136,6 @@ export function MarketSidebar({
         .catch(() => { /* 序列失败不影响报价行 */ })
     }
     return () => { cancelled = true }
-    // series 有意不在依赖里（TTL 缓存自判断）；rowsKey 变化即重查。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowsKey])
 
@@ -168,6 +167,26 @@ export function MarketSidebar({
 
   return (
     <div className={css.root} data-dshtrading-market-sidebar="">
+      {/* 顶部标题区：自选下拉组 + 折叠按钮 */}
+      <div className={css.topBar}>
+        <div className={css.titleGroup} title={t('tab.watch')}>
+          <span>{t('tab.watch')}</span>
+          <IconChevronDown size={12} />
+        </div>
+        {onFold !== undefined && (
+          <button
+            type="button"
+            className={css.foldBtn}
+            aria-label={t('sidebar.fold')}
+            title={t('sidebar.fold')}
+            onClick={onFold}
+          >
+            <IconFoldPanel size={15} />
+          </button>
+        )}
+      </div>
+
+      {/* 市场胶囊 Tab 条 */}
       <div className={css.tabs} role="tablist" aria-label={t('sidebar.markets')}>
         {tabs.map(entry => (
           <button
@@ -191,9 +210,8 @@ export function MarketSidebar({
         </div>
       )}
 
+      {/* 添加标的表单 */}
       {(() => {
-        // 自选 tab 也提供添加入口（2026-08-31 用户反馈）：自选跨市场，加一个
-        // 市场轮换按钮（crypto→us→cn→hk 循环）+ 输入框；市场页签维持原表单。
         const target: MarketId | null = tab === 'watch' ? addMarket : tab
         if (target === null) return null
         return (
@@ -250,6 +268,14 @@ export function MarketSidebar({
         )
       })()}
 
+      {/* 列表表头 */}
+      <div className={css.listHeader}>
+        <span>{t('header.symbol')}</span>
+        <span className={css.listHeaderColCenter}>{t('header.trend')}</span>
+        <span className={css.listHeaderColRight}>{t('header.priceChange')}</span>
+      </div>
+
+      {/* 三段式标的列表 */}
       {rows.length === 0 && !loadError
         ? (
             <div className={css.empty}>

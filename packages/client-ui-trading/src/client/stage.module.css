@@ -6,36 +6,49 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  background: var(--dsw-futu-bg-base, #ffffff);
 }
 
 .tabs {
   display: flex;
-  gap: 2px;
-  padding: 8px 18px 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l1, #f0f1f3);
+  gap: 6px;
+  padding: 6px 16px 0;
+  border-bottom: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  background: var(--dsw-futu-bg-base, #ffffff);
 }
 
 .tab {
   appearance: none;
   border: none;
   background: transparent;
-  color: inherit;
-  padding: 5px 12px;
-  border-radius: 6px 6px 0 0;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  padding: 4px 12px 6px;
+  border-radius: 4px 4px 0 0;
   font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
-  opacity: 0.65;
+  position: relative;
+  transition: color 0.15s;
 }
 
 .tab:hover {
-  opacity: 1;
-  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+  color: var(--dsw-futu-text-primary, #1a1e24);
 }
 
 .tab[data-active='true'] {
-  opacity: 1;
+  color: var(--dsw-futu-text-primary, #1a1e24);
   font-weight: 600;
-  background: var(--dsw-alias-fill-active, rgba(127, 127, 127, 0.16));
+}
+
+.tab[data-active='true']::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: var(--dsw-futu-text-primary, #1a1e24);
+  border-radius: 1px;
 }
 
 .root > :not(.tabs) {
@@ -51,19 +64,21 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  opacity: 0.65;
+  color: var(--dsw-futu-text-secondary, #5f6672);
   text-align: center;
 }
 
 .workflowTitle {
   font-size: 16px;
   font-weight: 700;
+  color: var(--dsw-futu-text-primary, #1a1e24);
 }
 
 .workflowHint {
   font-size: 12.5px;
   line-height: 1.8;
   max-width: 380px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
 }
 
 .workflowNodes {
@@ -76,13 +91,13 @@
 .workflowNode {
   width: 64px;
   height: 40px;
-  border-radius: 8px;
-  border: 1.5px dashed var(--dsw-alias-border-l2, #e3e6ea);
-  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.06));
+  border-radius: var(--dsw-futu-radius-lg, 8px);
+  border: 1.5px dashed var(--dsw-futu-border-default, #e3e6ea);
+  background: var(--dsw-futu-bg-surface, #f7f8fa);
 }
 
 .workflowLink {
   width: 26px;
   height: 1.5px;
-  background: var(--dsw-alias-border-l2, #e3e6ea);
+  background: var(--dsw-futu-border-default, #e3e6ea);
 }

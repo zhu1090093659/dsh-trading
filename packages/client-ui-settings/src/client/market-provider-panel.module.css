@@ -1,0 +1,209 @@
+/* MarketProviderPanel —— 数据源 Provider 卡片网格与表单规范。 */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 4px;
+}
+
+.currentHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--dsw-alias-text-secondary, #5f6672);
+}
+
+.currentBadge {
+  font-weight: 600;
+  color: var(--dsw-alias-text-primary, #1a1e24);
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--dsw-alias-fill-hover, rgba(0, 0, 0, 0.05));
+}
+
+/* Provider 网格卡片布局 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: var(--dsw-alias-bg-l1, #ffffff);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  user-select: none;
+}
+
+.card:hover {
+  border-color: var(--dsw-alias-border-active, #93c5fd);
+  background: var(--dsw-alias-fill-hover, rgba(0, 0, 0, 0.02));
+}
+
+.card[data-selected='true'] {
+  border-color: var(--dsw-alias-primary, #2563eb);
+  background: rgba(37, 99, 235, 0.03);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cardHeader input[type='radio'] {
+  margin: 0;
+  accent-color: var(--dsw-alias-primary, #2563eb);
+  cursor: pointer;
+}
+
+.cardTitle {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--dsw-alias-text-primary, #1a1e24);
+  flex: 1;
+  min-width: 0;
+}
+
+.typeBadge {
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  color: var(--dsw-alias-text-secondary, #5f6672);
+  white-space: nowrap;
+}
+
+.cardMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--dsw-alias-text-muted, #8e95a3);
+  padding-top: 4px;
+  border-top: 1px dashed var(--dsw-alias-border-l2, #edf0f3);
+}
+
+.link {
+  color: var(--dsw-alias-primary, #2563eb);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.envBox {
+  font-size: 11.5px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: var(--dsw-alias-fill-hover, rgba(0, 0, 0, 0.04));
+  color: var(--dsw-alias-text-secondary, #5f6672);
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* 操作按钮栏 */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.saveBtn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: var(--dsw-alias-primary, #2563eb);
+  color: #ffffff;
+  padding: 0 16px;
+  height: 32px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.saveBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.discardBtn {
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: #ffffff;
+  color: var(--dsw-alias-text-primary, #1a1e24);
+  padding: 0 14px;
+  height: 32px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.discardBtn:hover:not(:disabled) {
+  background: var(--dsw-alias-fill-hover, rgba(0, 0, 0, 0.04));
+}
+
+.discardBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.message {
+  font-size: 12.5px;
+  color: var(--dsw-alias-text-secondary, #5f6672);
+}
+
+/* 新闻 API Key 卡片 */
+.newsSection {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.newsLabel {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--dsw-alias-text-primary, #1a1e24);
+}
+
+.newsInput {
+  width: 100%;
+  max-width: 380px;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: #ffffff;
+  color: var(--dsw-alias-text-primary, #1a1e24);
+}
+
+.newsInput:focus {
+  outline: none;
+  border-color: var(--dsw-alias-primary, #2563eb);
+}

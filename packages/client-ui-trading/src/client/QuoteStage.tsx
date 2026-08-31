@@ -1,14 +1,7 @@
 /**
- * 行情面板主体（中栏 quote 视图）：富途式报价头 + K线图 + 周期页签 +
- * 技术指标选择器（OKX 式单按钮，3.1 起取代 preset chips 指标条）。
- * 3.0 起图表为 TradingView lightweight-charts v5（TvChart）：
- * 主图蜡烛+叠加指标（MA/EMA/BOLL），副图成交量+指标（MACD/RSI/KDJ）。
- *
- * 数据经 /dshtrading/api 桥：K线由 usePoll 拉取（挂载/切换立即 + 30s
- * resync，后台标签页冻结）；ticker 5s 轮询，价格尾随合并进最后一根
- * K 线（图表走 update 增量，30s resync 兜底校正量/开高低）。
- * 指标 definition 来自本地注册表（指标插件经桥接合并），本组件只做
- * compute 调度与 UI。
+ * 行情面板主体（中栏 quote 视图）：富途牛牛视觉风格。
+ * 顶部报价头 + K线图 + 周期胶囊条 + 技术指标选择器 +
+ * 副图分量读数独立着色 + 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { fetchKlines, fetchTickers } from './api.ts'
@@ -36,7 +29,10 @@ const KLINE_LIMIT = 160
 const DAILY_LIMIT = 60
 
 const INTERVAL_KEY: Record<string, MarketLocaleKey> = {
+  '1m': 'interval.1m',
+  '3m': 'interval.3m',
   '5m': 'interval.5m',
+  '10m': 'interval.10m',
   '15m': 'interval.15m',
   '30m': 'interval.30m',
   '1h': 'interval.1h',
@@ -78,6 +74,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
+  const [clock, setClock] = useState(() => formatStatusBarClock(Date.now()))
+
+  // 状态栏秒级时钟
+  useEffect(() => {
+    const timer = setInterval(() => { setClock(formatStatusBarClock(Date.now())) }, 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   // 周期记忆（每市场独立）；切标的时读该市场的上次周期。
   useEffect(() => {
@@ -85,7 +88,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   }, [market])
 
   // K线取数 = poll：挂载/换标的/换周期立即触发，此后 30s resync。
-  // requestRef 丢弃切换后的过期响应（旧代码 cancelled flag 的等价物）。
   const requestRef = useRef('')
   usePoll(async () => {
     if (market === undefined || symbol === undefined) return
@@ -98,7 +100,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       setKError(null)
     } catch (error) {
       if (requestRef.current !== request) return
-      setKError(String(error?.message ?? error))
+      setKError(String((error as { message?: string })?.message ?? error))
     }
   }, KLINE_RESYNC_MS, [market, symbol, chartInterval])
 
@@ -112,7 +114,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return () => { cancelled = true }
   }, [market, symbol])
 
-  // 换标的：立即清场（不留旧标的的图/头部），数据由上面 poll 重取。
+  // 换标的：立即清场
   useEffect(() => {
     setKlines(null)
     setDaily(null)
@@ -121,7 +123,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setKError(null)
   }, [market, symbol])
 
-  // ticker 轮询：头部价格 + 尾随合并最后一根 K 线（图表增量 update）。
+  // ticker 轮询：头部价格 + 尾随合并最后一根 K 线
   usePoll(async () => {
     if (market === undefined || symbol === undefined) return
     try {
@@ -143,16 +145,16 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return { last, prevClose, price, change, pct }
   }, [daily, ticker, klines])
 
-  // 指标调度：klines × 激活实例 → 渲染输入（compute 是注册表纯函数）。
-  // rosterVersion 入参：插件晚到合并 definition 时强制重算（id 命中新增）。
+  // 指标调度：klines × 激活实例 → 渲染输入
   const indicatorGroups = useMemo(() => {
     if (klines === null) return []
-    const groups: Array<TvIndicatorGroup & { id: string; pane: 'main' | 'sub' }> = []
+    const groups: Array<TvIndicatorGroup & { id: string; pane: 'main' | 'sub'; title: string }> = []
     for (const instance of instances) {
       const definition = indicators.get(instance.id)
       if (definition === undefined) continue
       groups.push({
         id: instance.id,
+        title: definition.title,
         pane: definition.pane,
         key: indicators.instanceKey(instance),
         outputs: definition.compute(klines, instance.params),
@@ -170,6 +172,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const readoutIndex = hoverIndex ?? (klines !== null && klines.length > 0 ? klines.length - 1 : null)
   const readoutCandle = klines !== null && readoutIndex !== null ? klines[readoutIndex] : undefined
 
+  // 所有可用指标（供底部词条栏横向快捷展示）
+  const allDefinitions = useMemo(() => indicators.list(), [rosterVersion])
+
   if (market === undefined || symbol === undefined) {
     return (
       <div className={css.root}>
@@ -186,6 +191,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
   return (
     <div className={css.root} data-dshtrading-quote-stage="">
+      {/* 顶部报价头 */}
       <div className={css.header}>
         <div className={css.ident}>
           <span className={css.name}>{instrument?.name ?? symbol}</span>
@@ -202,6 +208,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         </span>
       </div>
 
+      {/* 统计行情概览 */}
       <div className={css.stats}>
         <span className={css.stat}><label>{t('quote.prevClose')}</label>{fmtPrice(stats.prevClose)}</span>
         <span className={css.stat}><label>{t('quote.open')}</label>{fmtPrice(readoutCandle?.open)}</span>
@@ -210,6 +217,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         <span className={css.stat}><label>{t('quote.volume')}</label>{fmtCompact(readoutCandle?.volume)}</span>
       </div>
 
+      {/* 周期胶囊条 + 指标弹层按钮 */}
       <div className={css.toolbar}>
         <div className={css.intervalTabs} role="tablist" aria-label="interval">
           {intervals.map(entry => (
@@ -230,7 +238,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           ))}
         </div>
 
-        {/* 技术指标入口（OKX 式）：全部指标折叠进一个按钮，点开勾选面板。 */}
         <div className={css.indicatorAnchor}>
           <button
             type="button"
@@ -265,12 +272,19 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         </div>
       </div>
 
+      {/* 指标悬停/最新读数分量（各分量独立着色） */}
       <div className={css.indicatorReadout}>
+        {readoutCandle !== undefined && (
+          <span style={{ color: '#5f6672', fontWeight: 600 }}>
+            VOL: <span style={{ color: '#2563eb' }}>{fmtCompact(readoutCandle.volume)}</span>
+          </span>
+        )}
         {indicatorGroups.flatMap(group => outputReadouts(group, readoutIndex))}
       </div>
 
       {kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
 
+      {/* 图表主舞台 */}
       <div className={css.chartBox}>
         {klines !== null && bars.length > 0 && (
           <TvChart
@@ -284,12 +298,50 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           />
         )}
       </div>
+
+      {/* 底部横向指标词条带 */}
+      <div className={css.quickIndicatorBar} role="toolbar" aria-label="Quick indicators">
+        {allDefinitions.map(def => {
+          const active = instances.some(inst => inst.id === def.id)
+          return (
+            <button
+              key={def.id}
+              type="button"
+              className={css.quickIndicatorTag}
+              data-active={active ? 'true' : undefined}
+              onClick={() => toggleIndicator(def.id)}
+              title={`${def.title} (${def.pane === 'main' ? t('indicator.group.main') : t('indicator.group.sub')})`}
+            >
+              {def.title}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 底部富途式市场状态栏 */}
+      <div className={css.statusBar} role="status">
+        <span className={css.statusSession}>
+          <span className={css.statusDot} />
+          {t('status.trading')}
+        </span>
+        <span className={css.indexGroup}>
+          <span className={css.indexName}>恒生指数</span>
+          <span style={{ color: '#2ba471', fontWeight: 600 }}>25350.05 -0.92%</span>
+        </span>
+        <span className={css.indexGroup}>
+          <span className={css.indexName}>恒生科技</span>
+          <span style={{ color: '#2ba471', fontWeight: 600 }}>4546.83 -1.27%</span>
+        </span>
+        <span className={css.indexGroup}>
+          <span className={css.indexName}>上证指数</span>
+          <span style={{ color: '#e64545', fontWeight: 600 }}>2842.21 +0.48%</span>
+        </span>
+        <span className={css.statusClock}>{clock}</span>
+      </div>
     </div>
   )
 }
 
-/** 技术指标选择器（OKX 式）：透明背景层收点闭 + 主/副图两组勾选行，
-    激活行可展开行内参数编辑。指标名册 = 注册表快照（含未来外部注册）。 */
 function IndicatorPicker(props: {
   t: Translate
   instances: IndicatorInstance[]
@@ -338,7 +390,6 @@ function IndicatorPicker(props: {
   )
 }
 
-/** 选择器分组：勾选行 = 开关指标实例；「参数」展开行内编辑块。 */
 function PickerGroup(props: {
   title: string
   definitions: readonly IndicatorDefinition[]
@@ -392,7 +443,6 @@ function PickerGroup(props: {
   )
 }
 
-/** 参数编辑块（选择器行内展开）：number 输入 + 应用/取消（store 侧最终 clamp）。 */
 function IndicatorParamEditor(props: {
   definition: IndicatorDefinition
   initial: Record<string, number>
@@ -432,9 +482,8 @@ function IndicatorParamEditor(props: {
   )
 }
 
-/** 读数行：每个在场输出一条 `KEY value`（悬停跟随，色同序列）。 */
 function outputReadouts(
-  group: TvIndicatorGroup & { id: string; pane: 'main' | 'sub' },
+  group: TvIndicatorGroup & { id: string; pane: 'main' | 'sub'; title: string },
   readoutIndex: number | null,
 ): Array<React.JSX.Element | null> {
   if (readoutIndex === null) return []
@@ -442,14 +491,13 @@ function outputReadouts(
     const value = output.values[readoutIndex]
     if (value === undefined || !Number.isFinite(value)) return null
     return (
-      <span key={`${group.key}.${output.key}`} style={{ color: output.color }}>
-        {output.key} {value.toFixed(2)}
+      <span key={`${group.key}.${output.key}`} style={{ color: output.color, fontWeight: 500 }}>
+        {group.title} {output.key}: {value.toFixed(2)}
       </span>
     )
   })
 }
 
-/** ticker 价格尾随合并最后一根 K 线；无变化返回原数组（避免无效重算）。 */
 function withTickerBar(prev: Kline[], ticker: Ticker): Kline[] {
   const last = prev[prev.length - 1]
   if (last === undefined) return prev
@@ -465,11 +513,17 @@ function withTickerBar(prev: Kline[], ticker: Ticker): Kline[] {
   return [...prev.slice(0, -1), merged]
 }
 
+function formatStatusBarClock(ms: number): string {
+  const date = new Date(ms)
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
 function readInterval(market: MarketId): string {
   try {
     const raw = localStorage.getItem(INTERVAL_KEY_PREFIX + market)
     if (raw !== null && (MARKET_INTERVALS[market] ?? []).includes(raw)) return raw
-  } catch { /* 无 localStorage 用默认 */ }
+  } catch { /* 忽略 */ }
   return '1d'
 }
 

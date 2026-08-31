@@ -1,18 +1,18 @@
 /**
- * TradingView lightweight-charts v5 封装——中栏行情渲染器（取代退役的
- * SVG CandleChart；canvas 引擎 + 原生缩放/平移，先例变更见 Agent Note）。
+ * TradingView lightweight-charts v5 封装——中栏行情渲染器（富途牛牛视觉风格）。
  *
  * 结构：pane 0 = 蜡烛 + 主图叠加指标；pane 1 = 成交量；pane 2+ = 每个
  * 副图指标独占一 pane（v5 原生 panes）。渲染层对指标实现零感知，只消费
  * 注册表 compute 的输出（@dsh-trading/indicators 注册表）。
  *
- * 性能纪律：蜡烛/成交量走 update() 尾部增量（保留用户视窗与缩放）；
- * 指标数组变化才 setData；series 结构（增删指标）变化才重建 series。
- * autoSize 挂容器 ResizeObserver，无 React 重排参与。
+ * 视觉对齐：
+ * - 红涨绿跌（#e64545 / #2ba471）
+ * - 当前最新价水平虚线与坐标轴实心价签
+ * - 紧凑网格与等宽数字
  */
 import { useEffect, useRef } from 'react'
 import {
-  CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, createChart,
+  CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart,
 } from 'lightweight-charts'
 import type {
   IChartApi, ISeriesApi, MouseEventParams, SeriesType, Time, UTCTimestamp,
@@ -69,7 +69,7 @@ export function toVolume(kline: Kline): TvVolume {
   return {
     time: Math.floor(kline.openTime / 1000) as UTCTimestamp,
     value: kline.volume,
-    color: up ? 'rgba(230, 69, 69, 0.5)' : 'rgba(43, 164, 113, 0.5)',
+    color: up ? 'rgba(230, 69, 69, 0.55)' : 'rgba(43, 164, 113, 0.55)',
   }
 }
 
@@ -89,8 +89,9 @@ const CHART_BASE = {
   autoSize: true,
   layout: {
     background: { type: ColorType.Solid, color: '#ffffff' },
-    textColor: '#6b7280',
-    fontSize: 10,
+    textColor: '#5f6672',
+    fontSize: 10.5,
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, sans-serif',
     panes: {
       separatorColor: '#e3e6ea',
       separatorHoverColor: '#c8cdd4',
@@ -98,19 +99,32 @@ const CHART_BASE = {
     },
   },
   grid: {
-    vertLines: { color: '#f2f3f5' },
-    horzLines: { color: '#eceef1' },
+    vertLines: { color: '#f5f6f8' },
+    horzLines: { color: '#f0f2f5' },
   },
   rightPriceScale: {
     borderColor: '#e5e7eb',
     scaleMargins: { top: 0.08, bottom: 0.08 },
+    entireTextOnly: true,
   },
   timeScale: {
     borderColor: '#e5e7eb',
-    rightOffset: 4,
+    rightOffset: 6,
   },
   crosshair: {
     mode: CrosshairMode.Normal,
+    vertLine: {
+      color: '#8e95a3',
+      width: 1,
+      style: LineStyle.Dashed,
+      labelBackgroundColor: '#1a1e24',
+    },
+    horzLine: {
+      color: '#8e95a3',
+      width: 1,
+      style: LineStyle.Dashed,
+      labelBackgroundColor: '#1a1e24',
+    },
   },
 } as const
 
@@ -154,6 +168,10 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       borderDownColor: DOWN_COLOR,
       wickUpColor: UP_COLOR,
       wickDownColor: DOWN_COLOR,
+      priceLineVisible: true,
+      priceLineWidth: 1,
+      priceLineStyle: LineStyle.Dashed,
+      lastValueVisible: true,
     })
     candleRef.current = candles
 
@@ -197,8 +215,12 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     prevRef.current = { key: dataKey, bars, volumes }
 
     const last = bars[bars.length - 1]
+    const up = last !== undefined ? last.close >= last.open : true
     const priceFormat = { type: 'price' as const, precision: priceDigits(last?.close), minMove: 1 / 10 ** priceDigits(last?.close) }
-    candles.applyOptions({ priceFormat })
+    candles.applyOptions({
+      priceFormat,
+      priceLineColor: up ? UP_COLOR : DOWN_COLOR,
+    })
 
     if (prev === null || prev.key !== dataKey || bars.length < prev.bars.length || firstTimeDiffers(prev.bars, bars)) {
       candles.setData(bars as TvBar[])
@@ -239,8 +261,8 @@ function syncGroups(
 
   // 卸载不在场的组（重建模式下全部先卸）。
   for (const [groupKey, seriesMap] of refs) {
-  const keep = nextKeys.has(groupKey) && !recreateAll
-  if (keep) continue
+    const keep = nextKeys.has(groupKey) && !recreateAll
+    if (keep) continue
     for (const series of seriesMap.values()) chart.removeSeries(series)
     refs.delete(groupKey)
   }
@@ -279,7 +301,7 @@ function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: numb
   }
   return chart.addSeries(LineSeries, {
     color: output.color,
-    lineWidth: 1,
+    lineWidth: 1.2,
     priceLineVisible: false,
     lastValueVisible: false,
     crosshairMarkerVisible: false,

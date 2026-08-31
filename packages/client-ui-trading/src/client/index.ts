@@ -1,7 +1,7 @@
 /**
  * Trading GUI shell, browser half. Slot 布局（不改 DSH 源码，全部走官方 slot 机制）:
  *
- * - `shell.overlay`（dshtrading-market-dock）→ 左侧自选停靠面板
+ * - `shell.overlay`（dshtrading-market-dock）→ 左侧自选停靠面板（支持富途式展开与折叠竖条）
  * - `sidebar.workspaces`（priority -1 遮蔽 WorkspaceBrowser）→ 会话历史的
  *   挂载面：面板 DOM 经 portal 并入官方 hero 容器（HomeHistory——历史与
  *   hero composer 拼成同一个容器），侧栏列只留 hidden 占位维持遮蔽
@@ -22,7 +22,8 @@ import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
 import { HomeHistory } from './HomeHistory.tsx'
 import { SessionRail } from './SessionRail.tsx'
-import { foldStore } from './fold-store.ts'
+import { foldStore, marketFoldStore } from './fold-store.ts'
+import './tokens.css'
 import './shell-pad.css'
 import type { MarketLocaleKey } from './contract.ts'
 
@@ -59,8 +60,10 @@ export function apply(ctx: ClientContext): void {
       .querySelector<HTMLElement>("div:has(> [data-shell-overlay]) > div:nth-child(1) [aria-haspopup='dialog']")
       ?.click()
   }
-  const folded = foldStore()
-  const toggleFold = (): void => { folded.toggle() }
+  const chatFolded = foldStore()
+  const marketFolded = marketFoldStore()
+  const toggleFold = (): void => { chatFolded.toggle() }
+  const toggleMarketFold = (): void => { marketFolded.toggle() }
 
   // 静态包的 slot 条目崩溃默认无人上报（监督缝只覆盖动态插件）——打到 console 可见化。
   ctx.slots.onEntryError((slot, _entry, error) => {
@@ -76,17 +79,18 @@ export function apply(ctx: ClientContext): void {
     for (const definition of service.list()) indicators.register(definition)
   })
 
-  // 左侧停靠：自选面板（官方浮层通道；宿主栅格四轨道重排见 shell-pad.css）。
+  // 左侧停靠：自选面板（官方浮层通道；支持展开与折叠态 MarketRail）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
     id: 'dshtrading-market-dock',
     order: 10,
     locale: NS,
     inject: () => ({
-      hooks: { selection, watchlists },
+      hooks: { selection, watchlists, marketFolded },
       addInstrument: (market, instrument) => { watchlists.add(market, instrument) },
       removeInstrument: (market, symbol) => { watchlists.remove(market, symbol) },
       selectInstrument: (instrument) => { selection.select(instrument) },
+      toggleFold: toggleMarketFold,
     }),
   }, MarketDock))
 
@@ -115,7 +119,7 @@ export function apply(ctx: ClientContext): void {
       startNewSession,
       openSettings,
       toggleFold,
-      hooks: { folded },
+      hooks: { folded: chatFolded },
     }),
   }, SessionRail))
 
@@ -151,6 +155,11 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'sidebar.loadFailed': '行情桥不可用（未装市场包？）',
       'sidebar.retry': '重试',
       'sidebar.markets': '市场与自选',
+      'sidebar.fold': '收起自选',
+      'sidebar.expand': '展开自选',
+      'header.symbol': '名称代码',
+      'header.trend': '走势',
+      'header.priceChange': '最新价/涨跌幅',
       'row.remove': '移除',
       'row.select': '查看行情',
       'quote.empty': '选择左侧标的查看行情',
@@ -163,14 +172,19 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'quote.updated': '更新',
       'quote.loadFailed': 'K线加载失败',
       'quote.noData': '暂无数据',
+      'interval.1m': '1分',
+      'interval.3m': '3分',
       'interval.5m': '5分',
+      'interval.10m': '10分',
       'interval.15m': '15分',
       'interval.30m': '30分',
-      'interval.1h': '时',
-      'interval.4h': '4时',
-      'interval.1d': '日',
-      'interval.1w': '周',
-      'interval.1M': '月',
+      'interval.1h': '1小时',
+      'interval.4h': '4小时',
+      'interval.1d': '日K',
+      'interval.1w': '周K',
+      'interval.1M': '月K',
+      'status.trading': '交易中',
+      'status.closed': '已收盘',
       'browser.history': '历史会话',
       'browser.historyEmpty': '该工作区还没有会话',
       'entry.new': '新会话',
@@ -203,6 +217,11 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'sidebar.loadFailed': 'Quote bridge unavailable (market bundle missing?)',
       'sidebar.retry': 'Retry',
       'sidebar.markets': 'Markets & watchlist',
+      'sidebar.fold': 'Collapse watchlist',
+      'sidebar.expand': 'Expand watchlist',
+      'header.symbol': 'Symbol',
+      'header.trend': 'Trend',
+      'header.priceChange': 'Price / Change',
       'row.remove': 'Remove',
       'row.select': 'View quote',
       'quote.empty': 'Pick an instrument on the left',
@@ -215,7 +234,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'quote.updated': 'Updated',
       'quote.loadFailed': 'Failed to load klines',
       'quote.noData': 'No data',
+      'interval.1m': '1m',
+      'interval.3m': '3m',
       'interval.5m': '5m',
+      'interval.10m': '10m',
       'interval.15m': '15m',
       'interval.30m': '30m',
       'interval.1h': '1H',
@@ -223,6 +245,8 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'interval.1d': 'D',
       'interval.1w': 'W',
       'interval.1M': 'M',
+      'status.trading': 'Trading',
+      'status.closed': 'Closed',
       'browser.history': 'History',
       'browser.historyEmpty': 'No sessions in this workspace',
       'entry.new': 'New session',
