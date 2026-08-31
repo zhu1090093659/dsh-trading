@@ -1,4 +1,4 @@
-/* MiddleStage —— 中栏舞台：视图切换条 + 活动视图容器 + workflow 占位。 */
+/* MiddleStage —— 中栏舞台：视图切换条 + 活动视图容器。 */
 
 .root {
   height: 100%;
@@ -54,50 +54,4 @@
 .root > :not(.tabs) {
   flex: 1;
   min-height: 0;
-}
-
-/* ---- workflow 占位视图 ---- */
-
-.workflow {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--dsw-futu-text-secondary, #5f6672);
-  text-align: center;
-}
-
-.workflowTitle {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--dsw-futu-text-primary, #1a1e24);
-}
-
-.workflowHint {
-  font-size: 12.5px;
-  line-height: 1.8;
-  max-width: 380px;
-  color: var(--dsw-futu-text-muted, #8e95a3);
-}
-
-.workflowNodes {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.workflowNode {
-  width: 64px;
-  height: 40px;
-  border-radius: var(--dsw-futu-radius-lg, 8px);
-  border: 1.5px dashed var(--dsw-futu-border-default, #e3e6ea);
-  background: var(--dsw-futu-bg-surface, #f7f8fa);
-}
-
-.workflowLink {
-  width: 26px;
-  height: 1.5px;
-  background: var(--dsw-futu-border-default, #e3e6ea);
 }

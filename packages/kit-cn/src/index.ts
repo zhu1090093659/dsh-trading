@@ -32,6 +32,7 @@ const PROVIDER_NAME = 'dsh-trading-cn'
 
 const SKILL_BODY_URL = new URL('../assets/skills/cn-risk-checklist.md', import.meta.url)
 const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
+const STRATEGY_BODY_URL = new URL('../assets/skills/trading-strategy-paradigms.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -59,7 +60,18 @@ const AUTHORING_CANDIDATE: SkillCandidate = {
   locator: AUTHORING_BODY_URL,
 }
 
-const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE]
+const STRATEGY_CANDIDATE: SkillCandidate = {
+  name: 'trading-strategy-paradigms',
+  description: '经典交易策略参考范式指南：提供短线（唐奇安突破/RSI极值回归）、波段（EMA双均线/布林带下轨回归）、长线（200日均线基线/12月动量）6大策略原理、参数调优、8项回测指标研读与风险防范 SOP。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: STRATEGY_BODY_URL,
+}
+
+const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE]
 
 const provider: SkillProvider = {
   name: PROVIDER_NAME,
