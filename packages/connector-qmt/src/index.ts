@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @dsh-trading/connector-qmt
  * 迅投 MiniQMT A 股券商实盘交易连接器插件。
  */
@@ -174,7 +174,29 @@ export function apply(ctx: Context, config: Config): void {
       },
       output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
       async execute(args) {
-        if (!config.liveTrading && args.dryRun === false) {
+        if (args.dryRun !== false) {
+          let refPrice = args.price
+          if (!refPrice || refPrice <= 0) {
+            try {
+              const t = await marketData.getTicker(args.symbol)
+              refPrice = t.price
+            } catch {
+              refPrice = 0
+            }
+          }
+          return JSON.stringify({
+            id: `sim-qmt-${Date.now()}`,
+            symbol: toQmtCode(args.symbol),
+            side: args.side,
+            type: args.type,
+            status: 'filled',
+            quantity: args.quantity,
+            price: refPrice ?? 0,
+            dryRun: true,
+            timestamp: Date.now(),
+          })
+        }
+        if (!config.liveTrading) {
           return JSON.stringify({
             status: 'rejected',
             code: 'TRADING_LIVE_TRADING_DISABLED',
@@ -187,7 +209,7 @@ export function apply(ctx: Context, config: Config): void {
           type: args.type as 'market' | 'limit',
           quantity: args.quantity,
           price: args.price,
-          dryRun: args.dryRun ?? true,
+          dryRun: false,
         })
         return JSON.stringify(order)
       },

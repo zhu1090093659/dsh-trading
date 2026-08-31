@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @dsh-trading/connector-ibkr/rest
  * Interactive Brokers (盈透证券) Client Portal Gateway REST 客户端。
  */
@@ -139,25 +139,117 @@ export class IbkrRestClient {
     return []
   }
 
-  async getBalance(): Promise<AccountBalance> {
-    return { currency: 'USD', available: 100000, total: 100000 }
+  async getBalance(accountId?: string): Promise<AccountBalance> {
+    const acc = accountId ?? this.accountId
+    if (!acc) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'IBKR: accountId is required to query balance')
+    }
+    const res = await this.requestJson<Record<string, { cashbalance?: number; netliquidationvalue?: number; currency?: string }>>(
+      `/portfolio/${encodeURIComponent(acc)}/ledger`,
+    )
+
+    const base = res.USD ?? res.BASE ?? Object.values(res)[0]
+    if (!base) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', 'IBKR getBalance: empty ledger returned')
+    }
+
+    return {
+      currency: base.currency ?? 'USD',
+      available: base.cashbalance ?? 0,
+      total: base.netliquidationvalue ?? base.cashbalance ?? 0,
+    }
   }
 
-  async placeOrder(_creds: unknown, req: OrderRequest): Promise<Order> {
+  async getPositions(accountId?: string): Promise<Position[]> {
+    const acc = accountId ?? this.accountId
+    if (!acc) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'IBKR: accountId is required to query positions')
+    }
+    const res = await this.requestJson<Array<{
+      ticker?: string
+      contractDesc?: string
+      position?: number
+      mktPrice?: number
+      avgPrice?: number
+      unrealizedPnl?: number
+    }>>(`/portfolio/${encodeURIComponent(acc)}/positions/0`)
+
+    if (!Array.isArray(res)) return []
+    return res.map((p) => ({
+      symbol: normalizeUsSymbol(p.ticker ?? p.contractDesc ?? ''),
+      quantity: p.position ?? 0,
+      entryPrice: p.avgPrice ?? 0,
+      unrealizedPnl: p.unrealizedPnl ?? 0,
+    }))
+  }
+
+  async placeOrder(creds: { accountId?: string } | undefined, req: OrderRequest): Promise<Order> {
+    const acc = creds?.accountId ?? this.accountId
+    if (!acc) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'IBKR: accountId is required to place order')
+    }
+    const sym = normalizeUsSymbol(req.symbol)
+    let res = await this.requestJson<Array<{ order_id?: string; order_status?: string; id?: string; message?: string[] }>>(
+      `/iserver/account/${encodeURIComponent(acc)}/orders`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          orders: [
+            {
+              acctId: acc,
+              secType: 'STK',
+              ticker: sym,
+              orderType: req.type === 'market' ? 'MKT' : 'LMT',
+              side: req.side.toUpperCase(),
+              quantity: req.quantity,
+              price: req.price,
+              tif: 'DAY',
+            },
+          ],
+        }),
+      },
+    )
+
+    if (!Array.isArray(res) || res.length === 0) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', 'IBKR placeOrder: empty response from gateway')
+    }
+
+    // 处理 IBKR Pre-order Warning 确认提示
+    if (res[0].id && !res[0].order_id) {
+      const replyId = res[0].id
+      res = await this.requestJson<Array<{ order_id?: string; order_status?: string }>>(
+        `/iserver/reply/${encodeURIComponent(replyId)}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ confirmed: true }),
+        },
+      )
+    }
+
+    const first = res[0]
+    const orderId = first?.order_id ?? `ibkr-${Date.now()}`
+
     return {
-      id: `ibkr-${Date.now()}`,
-      symbol: req.symbol,
+      id: String(orderId),
+      symbol: sym,
       side: req.side,
       type: req.type,
-      status: req.dryRun ? 'filled' : 'new',
+      status: (first?.order_status?.toLowerCase() as Order['status']) ?? 'new',
       quantity: req.quantity,
       price: req.price ?? 0,
-      dryRun: req.dryRun ?? true,
+      dryRun: false,
       timestamp: Date.now(),
     }
   }
 
-  async cancelOrder(_creds: unknown, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+  async cancelOrder(creds: { accountId?: string } | undefined, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+    const acc = creds?.accountId ?? this.accountId
+    if (!acc) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'IBKR: accountId is required to cancel order')
+    }
+    await this.requestJson(`/iserver/account/${encodeURIComponent(acc)}/order/${encodeURIComponent(orderId)}`, {
+      method: 'DELETE',
+    })
     return { orderId, status: 'canceled' }
   }
 }

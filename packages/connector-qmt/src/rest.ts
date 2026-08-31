@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @dsh-trading/connector-qmt/rest
  * 迅投 MiniQMT A 股券商实盘交易与行情客户端。
  */
@@ -93,10 +93,17 @@ export class QmtRestClient {
       // 本地网关离线时回退东财
       const secid = qmtCode.startsWith('6') || qmtCode.startsWith('5') ? `1.${qmtCode.split('.')[0]}` : `0.${qmtCode.split('.')[0]}`
       const res = await this.fetchImpl(`https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f43,f47,f86`)
-      const d = await res.json() as { data?: { f43?: number; f47?: number; f86?: number } }
+      const d = await res.json() as { data?: { f43?: number | string; f47?: number; f86?: number } }
+      let rawPrice = 0
+      if (typeof d.data?.f43 === 'number') {
+        rawPrice = d.data.f43 / 100
+      } else if (typeof d.data?.f43 === 'string' && d.data.f43 !== '-' && d.data.f43 !== '−') {
+        const parsed = parseFloat(d.data.f43)
+        rawPrice = Number.isNaN(parsed) ? 0 : parsed / 100
+      }
       return {
         symbol: qmtCode,
-        price: d.data?.f43 ?? 0,
+        price: rawPrice > 0 ? rawPrice : 0,
         volume: d.data?.f47 ?? 0,
         timestamp: d.data?.f86 ? d.data.f86 * 1000 : Date.now(),
       }
@@ -139,30 +146,117 @@ export class QmtRestClient {
     return []
   }
 
-  async getBalance(): Promise<AccountBalance> {
-    return { currency: 'CNY', available: 500000, total: 500000 }
-  }
+  async getBalance(accountId?: string): Promise<AccountBalance> {
+    const acc = accountId ?? this.accountId
+    if (!acc) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'QMT: accountId is required to query balance')
+    }
+    const res = await this.requestJson<{
+      code: number
+      message?: string
+      data?: { cash?: number; total_asset?: number; frozen_cash?: number; currency?: string }
+    }>(`/api/v1/trade/asset?account_id=${encodeURIComponent(acc)}`)
 
-  async getPositions(): Promise<Position[]> {
-    return []
-  }
+    if (res.code !== 0 || !res.data) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `QMT getBalance failed: ${res.message ?? `code ${res.code}`}`)
+    }
 
-  async placeOrder(_creds: unknown, req: OrderRequest): Promise<Order> {
-    const qmtCode = toQmtCode(req.symbol)
     return {
-      id: `qmt-${Date.now()}`,
+      currency: res.data.currency ?? 'CNY',
+      available: res.data.cash ?? 0,
+      total: res.data.total_asset ?? res.data.cash ?? 0,
+    }
+  }
+
+  async getPositions(accountId?: string): Promise<Position[]> {
+    const acc = accountId ?? this.accountId
+    if (!acc) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'QMT: accountId is required to query positions')
+    }
+    const res = await this.requestJson<{
+      code: number
+      message?: string
+      data?: Array<{
+        stock_code: string
+        volume: number
+        can_use_volume: number
+        open_price: number
+        market_value: number
+      }>
+    }>(`/api/v1/trade/positions?account_id=${encodeURIComponent(acc)}`)
+
+    if (res.code !== 0 || !Array.isArray(res.data)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `QMT getPositions failed: ${res.message ?? `code ${res.code}`}`)
+    }
+
+    return res.data.map((p) => ({
+      symbol: toQmtCode(p.stock_code),
+      quantity: p.volume,
+      entryPrice: p.open_price,
+      unrealizedPnl: 0,
+    }))
+  }
+
+  async placeOrder(creds: { accountId?: string } | undefined, req: OrderRequest): Promise<Order> {
+    const acc = creds?.accountId ?? this.accountId
+    if (!acc) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'QMT: accountId is required to place order')
+    }
+    const qmtCode = toQmtCode(req.symbol)
+    const res = await this.requestJson<{
+      code: number
+      message?: string
+      data?: { order_id: string; status?: string }
+    }>('/api/v1/trade/order', {
+      method: 'POST',
+      body: JSON.stringify({
+        account_id: acc,
+        stock_code: qmtCode,
+        order_type: req.type,
+        order_side: req.side,
+        price: req.price ?? 0,
+        order_volume: req.quantity,
+      }),
+    })
+
+    if (res.code !== 0 || !res.data?.order_id) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `QMT placeOrder failed: ${res.message ?? `code ${res.code}`}`)
+    }
+
+    return {
+      id: res.data.order_id,
       symbol: qmtCode,
       side: req.side,
       type: req.type,
-      status: req.dryRun ? 'filled' : 'new',
+      status: (res.data.status as Order['status']) ?? 'new',
       quantity: req.quantity,
       price: req.price ?? 0,
-      dryRun: req.dryRun ?? true,
+      dryRun: false,
       timestamp: Date.now(),
     }
   }
 
-  async cancelOrder(_creds: unknown, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+  async cancelOrder(creds: { accountId?: string } | undefined, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+    const acc = creds?.accountId ?? this.accountId
+    if (!acc) {
+      throw new TradingServiceError('TRADING_AUTH_FAILED', 'QMT: accountId is required to cancel order')
+    }
+    const res = await this.requestJson<{
+      code: number
+      message?: string
+      data?: { order_id: string }
+    }>('/api/v1/trade/cancel', {
+      method: 'POST',
+      body: JSON.stringify({
+        account_id: acc,
+        order_id: orderId,
+      }),
+    })
+
+    if (res.code !== 0) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `QMT cancelOrder failed: ${res.message ?? `code ${res.code}`}`)
+    }
+
     return { orderId, status: 'canceled' }
   }
 }

@@ -4,12 +4,8 @@
  */
 
 import type {
-  AccountBalance,
   Interval,
   Kline,
-  Order,
-  OrderRequest,
-  Position,
   Ticker,
   TradingErrorCode,
 } from '@dsh-trading/api'
@@ -151,13 +147,20 @@ export class EastmoneyRestClient {
     }
 
     const d = res.data
-    const price = typeof d.f43 === 'number' ? d.f43 : typeof d.f43 === 'string' ? parseFloat(d.f43) : 0
+    let rawPrice = 0
+    if (typeof d.f43 === 'number') {
+      rawPrice = d.f43 / 100
+    } else if (typeof d.f43 === 'string' && d.f43 !== '-' && d.f43 !== '−') {
+      const parsed = parseFloat(d.f43)
+      rawPrice = Number.isNaN(parsed) ? 0 : parsed / 100
+    }
+    const price = rawPrice > 0 ? rawPrice : 0
     const volume = typeof d.f47 === 'number' ? d.f47 : typeof d.f47 === 'string' ? parseFloat(d.f47) : 0
     const timestamp = typeof d.f86 === 'number' ? d.f86 * 1000 : Date.now()
 
     return {
       symbol: canonical,
-      price: price > 0 ? price : 0,
+      price,
       volume: volume > 0 ? volume : 0,
       timestamp,
     }
@@ -212,28 +215,5 @@ export class EastmoneyRestClient {
       return { symbol: canonical, name: item.Name }
     })
   }
-
-  async getBalance(): Promise<AccountBalance> {
-    return { currency: 'CNY', available: 1000000, total: 1000000 }
-  }
-
-  async placeOrder(_creds: unknown, req: OrderRequest): Promise<Order> {
-    const { canonical } = toEastmoneySecid(req.symbol)
-    return {
-      id: `sim-em-${Date.now()}`,
-      symbol: canonical,
-      side: req.side,
-      type: req.type,
-      status: 'filled',
-      quantity: req.quantity,
-      price: req.price ?? 0,
-      dryRun: true,
-      timestamp: Date.now(),
-    }
-  }
-
-  async cancelOrder(_creds: unknown, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
-    return { orderId, status: 'canceled' }
-  }
 }
-export type { AccountBalance, Interval, Kline, Order, Position, Ticker }
+export type { Interval, Kline, Ticker }

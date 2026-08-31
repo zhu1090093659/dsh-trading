@@ -1,5 +1,6 @@
-﻿import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
+  generateLongbridgeSignature,
   INTERVAL_VOCABULARY,
   LongbridgeRestClient,
   toLongbridgePeriod,
@@ -73,39 +74,106 @@ describe('LongbridgeRestClient.getTicker', () => {
   })
 })
 
-describe('LongbridgeRestClient.getKlines', () => {
-  it('拉取 5m 分钟 K 线', async () => {
+describe('LongbridgeRestClient 签名算法与交易接口', () => {
+  it('生成符合 LongPort 官方规范的 HMAC-SHA256 签名头', () => {
+    const sig = generateLongbridgeSignature(
+      'secret123',
+      'POST',
+      '/v1/trade/order',
+      {
+        authorization: 'Bearer token-abc',
+        'x-api-key': 'key-123',
+        'x-timestamp': '1725000000000',
+      },
+      '{"symbol":"00700.HK"}',
+    )
+    expect(sig).toMatch(/^HMAC-SHA256 SignedHeaders=authorization;x-api-key;x-timestamp, Signature=[0-9a-f]{64}$/)
+  })
+
+  it('真实拉取可用资金与总资产', async () => {
     const { impl, urls } = stubFetch([
       {
-        match: '/v1/quote/candlesticks',
+        match: '/v1/asset/account',
         body: {
           code: 0,
           data: {
-            candlesticks: [
+            list: [
               {
-                open: '384.0',
-                close: '385.4',
-                high: '386.0',
-                low: '383.8',
-                volume: '50000',
-                timestamp: 1725000000,
+                total_cash: '620000.5',
+                net_assets: '1350000.0',
+                currency: 'HKD',
               },
             ],
           },
         },
       },
     ])
-    const client = new LongbridgeRestClient({ fetchImpl: impl })
-    const klines = await client.getKlines('00700.HK', '5m', 10)
-
-    expect(urls[0]).toContain('period=5m')
-    expect(klines).toHaveLength(1)
-    expect(klines[0]).toMatchObject({
-      open: 384.0,
-      close: 385.4,
-      high: 386.0,
-      low: 383.8,
-      volume: 50000,
+    const client = new LongbridgeRestClient({
+      fetchImpl: impl,
+      appKey: 'key-123',
+      appSecret: 'secret-123',
+      accessToken: 'token-abc',
     })
+    const bal = await client.getBalance()
+
+    expect(urls[0]).toContain('/v1/asset/account')
+    expect(bal).toEqual({
+      currency: 'HKD',
+      available: 620000.5,
+      total: 1350000.0,
+    })
+  })
+
+  it('真实提交港股委托订单', async () => {
+    const { impl, urls } = stubFetch([
+      {
+        match: '/v1/trade/order',
+        body: {
+          code: 0,
+          data: { order_id: 'lb-ord-999' },
+        },
+      },
+    ])
+    const client = new LongbridgeRestClient({
+      fetchImpl: impl,
+      appKey: 'key-123',
+      appSecret: 'secret-123',
+      accessToken: 'token-abc',
+    })
+    const order = await client.placeOrder(undefined, {
+      symbol: '00700.HK',
+      side: 'buy',
+      type: 'limit',
+      quantity: 100,
+      price: 385.0,
+    })
+
+    expect(urls[0]).toContain('/v1/trade/order')
+    expect(order.id).toBe('lb-ord-999')
+    expect(order.symbol).toBe('00700.HK')
+    expect(order.dryRun).toBe(false)
+  })
+
+  it('真实撤销 Longbridge 订单', async () => {
+    const { impl, urls } = stubFetch([
+      {
+        match: '/v1/trade/order',
+        body: { code: 0, message: 'success' },
+      },
+    ])
+    const client = new LongbridgeRestClient({
+      fetchImpl: impl,
+      appKey: 'key-123',
+      appSecret: 'secret-123',
+      accessToken: 'token-abc',
+    })
+    const res = await client.cancelOrder(undefined, 'lb-ord-999')
+    expect(urls[0]).toContain('order_id=lb-ord-999')
+    expect(res).toEqual({ orderId: 'lb-ord-999', status: 'canceled' })
+  })
+
+  it('无凭证时发起交易抛出 TRADING_AUTH_FAILED', async () => {
+    const client = new LongbridgeRestClient({})
+    await expect(client.getBalance()).rejects.toThrowError(/appKey and accessToken are required/)
   })
 })

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @dsh-trading/connector-longbridge
  * 长桥 (Longbridge) 港股连接器插件（提供 tradingHkMarketData 与 hk_* 工具）。
  */
@@ -108,7 +108,7 @@ export class LongbridgeTradeService extends Service implements TradeService {
   }
 
   async getPositions(): Promise<Position[]> {
-    return []
+    return this.client.getPositions()
   }
 
   async getOrders(): Promise<Order[]> {
@@ -163,6 +163,82 @@ export function apply(ctx: Context, config: Config): void {
       async execute(args) {
         const klines = await marketData.getKlines(args.symbol, (args.interval ?? '1d') as Interval, args.limit)
         return JSON.stringify(klines)
+      },
+    }))
+
+    register(defineTool({
+      name: 'hk_place_order',
+      description: 'Place or simulate a HK stock order via Longbridge.',
+      parameters: {
+        symbol: { type: 'string', required: true, description: 'HK symbol, e.g. 00700.HK' },
+        side: { type: 'string', enum: ['buy', 'sell'], required: true, description: 'Side' },
+        type: { type: 'string', enum: ['market', 'limit'], required: true, description: 'Type' },
+        quantity: { type: 'number', required: true, description: 'Quantity (shares)' },
+        price: { type: 'number', description: 'Limit price' },
+        dryRun: { type: 'boolean', default: true, description: 'Dry run' },
+      },
+      output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
+      async execute(args) {
+        if (args.dryRun !== false) {
+          let refPrice = args.price
+          if (!refPrice || refPrice <= 0) {
+            try {
+              const t = await marketData.getTicker(args.symbol)
+              refPrice = t.price
+            } catch {
+              refPrice = 0
+            }
+          }
+          return JSON.stringify({
+            id: `sim-lb-${Date.now()}`,
+            symbol: toLongbridgeSymbol(args.symbol).canonical,
+            side: args.side,
+            type: args.type,
+            status: 'filled',
+            quantity: args.quantity,
+            price: refPrice ?? 0,
+            dryRun: true,
+            timestamp: Date.now(),
+          })
+        }
+        if (!config.liveTrading) {
+          return JSON.stringify({
+            status: 'rejected',
+            code: 'TRADING_LIVE_TRADING_DISABLED',
+            message: 'Live trading is disabled on Longbridge plugin.',
+          })
+        }
+        const order = await trade.placeOrder({
+          symbol: args.symbol,
+          side: args.side as 'buy' | 'sell',
+          type: args.type as 'market' | 'limit',
+          quantity: args.quantity,
+          price: args.price,
+          dryRun: false,
+        })
+        return JSON.stringify(order)
+      },
+    }))
+
+    register(defineTool({
+      name: 'hk_cancel_order',
+      description: 'Cancel a HK stock order on Longbridge by order ID.',
+      parameters: { ordId: { type: 'string', required: true, description: 'Order ID' } },
+      output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
+      async execute(args) {
+        const res = await trade.cancelOrder(args.ordId)
+        return JSON.stringify(res)
+      },
+    }))
+
+    register(defineTool({
+      name: 'hk_get_balance',
+      description: 'Get HK account balance via Longbridge.',
+      parameters: {},
+      output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
+      async execute() {
+        const bal = await trade.getBalance()
+        return JSON.stringify(bal)
       },
     }))
   })

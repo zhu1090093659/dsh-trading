@@ -48,13 +48,13 @@ describe('EastmoneyRestClient 符号与周期映射', () => {
 })
 
 describe('EastmoneyRestClient.getTicker', () => {
-  it('拉取并解析 A 股 Ticker 快照', async () => {
+  it('拉取并解析 A 股 Ticker 快照（分精度整数除以 100）', async () => {
     const { impl, urls } = stubFetch([
       {
         match: '/api/qt/stock/get',
         body: {
           data: {
-            f43: 1750.5,
+            f43: 175050,
             f47: 25000,
             f58: '贵州茅台',
             f86: 1725000000,
@@ -72,6 +72,46 @@ describe('EastmoneyRestClient.getTicker', () => {
       volume: 25000,
       timestamp: 1725000000000,
     })
+  })
+
+  it('处理 "-" 停牌/无数据占位符', async () => {
+    const { impl } = stubFetch([
+      {
+        match: '/api/qt/stock/get',
+        body: {
+          data: {
+            f43: '-',
+            f47: 0,
+            f58: '退市标的',
+            f86: 1725000000,
+          },
+        },
+      },
+    ])
+    const client = new EastmoneyRestClient({ fetchImpl: impl })
+    const ticker = await client.getTicker('600519.SH')
+    expect(ticker.price).toBe(0)
+  })
+
+  it('防回归断言：茅台 ticker price 与最近 K 线 close 在 ±5% 以内', async () => {
+    const klineClose = 1755.0
+    const tickerPriceRaw = 175050 // 上游返回 175050 即 1750.50 元
+    const { impl } = stubFetch([
+      {
+        match: '/api/qt/stock/get',
+        body: { data: { f43: tickerPriceRaw, f47: 25000, f58: '贵州茅台', f86: 1725000000 } },
+      },
+      {
+        match: '/api/qt/stock/kline/get',
+        body: { data: { klines: [`2026-08-31 09:35,1750.0,${klineClose},1758.0,1748.0,5000,87500000.0,0.57`] } },
+      },
+    ])
+    const client = new EastmoneyRestClient({ fetchImpl: impl })
+    const ticker = await client.getTicker('600519.SH')
+    const klines = await client.getKlines('600519.SH', '5m', 1)
+
+    const ratio = Math.abs(ticker.price - klines[0].close) / klines[0].close
+    expect(ratio).toBeLessThan(0.05)
   })
 })
 
