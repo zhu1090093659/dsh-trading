@@ -247,8 +247,8 @@ export function validateCustomIndicator(raw: unknown, options?: { runner?: Compu
       if (typeof output.key !== 'string' || !output.key.trim()) {
         return { ok: false, reason: `outputs[${outIdx}].key 必须是非空字符串` }
       }
-      if (output.kind !== 'line' && output.kind !== 'histogram') {
-        return { ok: false, reason: `outputs[${outIdx}].kind 必须是 "line" 或 "histogram"` }
+      if (output.kind !== 'line' && output.kind !== 'histogram' && output.kind !== 'area') {
+        return { ok: false, reason: `outputs[${outIdx}].kind 必须是 "line"、"histogram" 或 "area"` }
       }
       if (typeof output.color !== 'string' || !output.color.trim()) {
         return { ok: false, reason: `outputs[${outIdx}].color 必须是非空颜色字符串` }

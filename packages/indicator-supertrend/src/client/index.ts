@@ -33,7 +33,7 @@ function atr(highs: readonly number[], lows: readonly number[], closes: readonly
   return out
 }
 
-/** 超级趋势 definition：单向趋势线（上升趋势贴 lower band，下降贴 upper）。 */
+/** 超级趋势 definition：多空分段双色 Area 趋势带（上升趋势多头绿带 + 向上淡绿阴影，下降趋势空头红带 + 向下淡红阴影）。 */
 export function supertrendDefinition(): IndicatorDefinition {
   return {
     id: 'supertrend',
@@ -49,7 +49,8 @@ export function supertrendDefinition(): IndicatorDefinition {
       const lows = bars.map(bar => bar.low)
       const closes = bars.map(bar => bar.close)
       const atrSeries = atr(highs, lows, closes, params.period)
-      const values: Array<number | undefined> = new Array(n).fill(undefined)
+      const upValues: Array<number | undefined> = new Array(n).fill(undefined)
+      const downValues: Array<number | undefined> = new Array(n).fill(undefined)
       let trend = 1
       let finalUpper = 0
       let finalLower = 0
@@ -65,7 +66,7 @@ export function supertrendDefinition(): IndicatorDefinition {
           finalLower = lower
           started = true
           trend = 1
-          values[index] = finalLower
+          upValues[index] = finalLower
           continue
         }
         // band 收敛规则：新带更紧或趋势未破旧带时沿用新/旧带（标准 SuperTrend）。
@@ -73,9 +74,35 @@ export function supertrendDefinition(): IndicatorDefinition {
         finalLower = (lower > finalLower || closes[index - 1]! < finalLower) ? lower : finalLower
         if (trend === 1 && closes[index]! < finalLower) trend = -1
         else if (trend === -1 && closes[index]! > finalUpper) trend = 1
-        values[index] = trend === 1 ? finalLower : finalUpper
+
+        if (trend === 1) {
+          upValues[index] = finalLower
+        } else {
+          downValues[index] = finalUpper
+        }
       }
-      return [{ key: 'ST', kind: 'line' as const, color: '#26a69a', values }]
+      return [
+        {
+          key: 'UP',
+          kind: 'area' as const,
+          color: '#2ba471',
+          topColor: 'rgba(43, 164, 113, 0.00)',
+          bottomColor: 'rgba(43, 164, 113, 0.18)',
+          invertFilledArea: true,
+          lineWidth: 1.5,
+          values: upValues,
+        },
+        {
+          key: 'DN',
+          kind: 'area' as const,
+          color: '#e64545',
+          topColor: 'rgba(230, 69, 69, 0.18)',
+          bottomColor: 'rgba(230, 69, 69, 0.00)',
+          invertFilledArea: false,
+          lineWidth: 1.5,
+          values: downValues,
+        },
+      ]
     },
   }
 }

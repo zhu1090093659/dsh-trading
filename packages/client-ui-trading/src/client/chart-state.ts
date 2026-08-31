@@ -28,10 +28,10 @@ export interface ChartStateStore extends WritableObservable<ChartState> {
   isActive(id: string): boolean
 }
 
-/** 默认激活：MA(5/10/20)，与退役 SVG 图表的既视感一致。注册表未就位时
+/** 默认激活：MA(5/10/20/30/60/120)，与富途 6 均线既视感一致。注册表未就位时
     留作未知实例（UI 不可见），插件桥接后自动点亮。 */
 function initialState(): ChartState {
-  return { instances: [{ id: 'ma', params: { n1: 5, n2: 10, n3: 20 } }] }
+  return { instances: [{ id: 'ma', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 } }] }
 }
 
 export function createChartStateStore(registry: IndicatorRegistry): ChartStateStore {

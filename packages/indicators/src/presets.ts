@@ -6,61 +6,95 @@
 import type { IndicatorDefinition, Kline } from './types.ts'
 import { bollinger, ema, kdj, macd, rsi, sma } from './math.ts'
 
-/** MA 线配色（富途系三色 + 扩展周期轮换调色板）。 */
+/** MA 线配色（富途系配色 + 扩展周期轮换调色板）。 */
 export const MA_COLORS: Record<string, string> = {
   MA5: '#e6b800',
   MA10: '#4a90e2',
   MA20: '#c05fd8',
+  MA30: '#2ba471',
+  MA60: '#f97316',
+  MA120: '#0ea5e9',
+  MA250: '#8a8f99',
 }
 
-/** 任意周期均线的取色：命中富途三色用之，否则按周期轮换调色板。 */
-const FALLBACK_PALETTE: readonly string[] = ['#e6b800', '#4a90e2', '#c05fd8', '#f97316', '#0ea5e9']
+/** EMA 线配色。 */
+export const EMA_COLORS: Record<string, string> = {
+  EMA5: '#e6b800',
+  EMA6: '#e6b800',
+  EMA10: '#4a90e2',
+  EMA12: '#ff9800',
+  EMA20: '#c05fd8',
+  EMA26: '#00bcd4',
+  EMA30: '#2ba471',
+  EMA50: '#2ba471',
+  EMA60: '#f97316',
+  EMA120: '#0ea5e9',
+  EMA200: '#8a8f99',
+  EMA250: '#8a8f99',
+}
 
-function maColor(period: number): string {
-  return MA_COLORS[`MA${period}`] ?? FALLBACK_PALETTE[period % FALLBACK_PALETTE.length] ?? '#8a8f99'
+/** 均线 6 色备用调色板（富途黄/蓝/紫/绿/橙/青）。 */
+const FALLBACK_PALETTE: readonly string[] = ['#e6b800', '#4a90e2', '#c05fd8', '#2ba471', '#f97316', '#0ea5e9']
+
+function maColor(period: number, index: number): string {
+  return MA_COLORS[`MA${period}`] ?? FALLBACK_PALETTE[index % FALLBACK_PALETTE.length] ?? '#8a8f99'
+}
+
+function emaColor(period: number, index: number): string {
+  return EMA_COLORS[`EMA${period}`] ?? FALLBACK_PALETTE[index % FALLBACK_PALETTE.length] ?? '#8a8f99'
 }
 
 const closesOf = (bars: readonly Kline[]): number[] => bars.map(bar => bar.close)
 
 /** 六个预置 definition（纯数据，注册时机归消费方）。 */
-/** 六个预置 definition（纯数据，注册时机归消费方）。 */
 export function presetDefinitions(): IndicatorDefinition[] {
   return [
     {
-      // MA：一组三条均线（周期可调，默认 5/10/20）。
+      // MA：一组最多 6 条均线（周期可调，默认 5/10/20/30/60/120，0 表示隐藏）。
       id: 'ma',
       pane: 'main',
       title: 'MA',
       params: [
-        { key: 'n1', label: '周期1', default: 5, min: 1, max: 250 },
-        { key: 'n2', label: '周期2', default: 10, min: 1, max: 250 },
-        { key: 'n3', label: '周期3', default: 20, min: 1, max: 250 },
+        { key: 'n1', label: '周期1', default: 5, min: 0, max: 250 },
+        { key: 'n2', label: '周期2', default: 10, min: 0, max: 250 },
+        { key: 'n3', label: '周期3', default: 20, min: 0, max: 250 },
+        { key: 'n4', label: '周期4', default: 30, min: 0, max: 250 },
+        { key: 'n5', label: '周期5', default: 60, min: 0, max: 250 },
+        { key: 'n6', label: '周期6', default: 120, min: 0, max: 250 },
       ],
       compute(bars, params) {
         const closes = closesOf(bars)
-        return ([params.n1, params.n2, params.n3] as const).map((period) => ({
+        const periods = [params.n1, params.n2, params.n3, params.n4, params.n5, params.n6]
+          .filter((period): period is number => typeof period === 'number' && Number.isFinite(period) && period > 0)
+        return periods.map((period, index) => ({
           key: `MA${period}`,
           kind: 'line' as const,
-          color: maColor(period),
+          color: maColor(period, index),
           values: sma(closes, period),
         }))
       },
     },
     {
-      // EMA：两条指数均线（12/26，与 MACD 默认周期呼应）。
+      // EMA：一组最多 6 条指数均线（周期可调，默认 5/10/20/30/60/120，0 表示隐藏）。
       id: 'ema',
       pane: 'main',
       title: 'EMA',
       params: [
-        { key: 'n1', label: '周期1', default: 12, min: 1, max: 250 },
-        { key: 'n2', label: '周期2', default: 26, min: 1, max: 250 },
+        { key: 'n1', label: '周期1', default: 5, min: 0, max: 250 },
+        { key: 'n2', label: '周期2', default: 10, min: 0, max: 250 },
+        { key: 'n3', label: '周期3', default: 20, min: 0, max: 250 },
+        { key: 'n4', label: '周期4', default: 30, min: 0, max: 250 },
+        { key: 'n5', label: '周期5', default: 60, min: 0, max: 250 },
+        { key: 'n6', label: '周期6', default: 120, min: 0, max: 250 },
       ],
       compute(bars, params) {
         const closes = closesOf(bars)
-        return ([params.n1, params.n2] as const).map((period, index) => ({
+        const periods = [params.n1, params.n2, params.n3, params.n4, params.n5, params.n6]
+          .filter((period): period is number => typeof period === 'number' && Number.isFinite(period) && period > 0)
+        return periods.map((period, index) => ({
           key: `EMA${period}`,
           kind: 'line' as const,
-          color: index === 0 ? '#ff9800' : '#00bcd4',
+          color: emaColor(period, index),
           values: ema(closes, period),
         }))
       },

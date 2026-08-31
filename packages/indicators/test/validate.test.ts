@@ -301,4 +301,30 @@ describe('createAuthorIndicatorTool', () => {
     expect(list).toHaveLength(1)
     expect(list[0]?.id).toBe('my_custom_sma')
   })
+
+  it('successfully validates custom indicator with area kind and shading options', () => {
+    const areaSource = `(bars, params) => {
+      const closes = bars.map(b => b.close);
+      return [
+        {
+          key: 'BAND',
+          kind: 'area',
+          color: '#2ba471',
+          topColor: 'rgba(43, 164, 113, 0.2)',
+          bottomColor: 'rgba(43, 164, 113, 0.0)',
+          invertFilledArea: true,
+          values: closes,
+        },
+      ];
+    }`
+
+    const res = validateCustomIndicator({
+      id: 'custom_area',
+      title: 'Custom Area',
+      pane: 'main',
+      computeSource: areaSource,
+    })
+
+    expect(res.ok).toBe(true)
+  })
 })

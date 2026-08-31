@@ -29,24 +29,24 @@ function makeTool(overrides: Record<string, unknown> = {}) {
 }
 
 describe('crypto_get_indicators 工厂', () => {
-  it('默认全指标：6 个 id、15 条序列，MA5 latest 手算=397，取数参数透传', async () => {
+  it('默认全指标：6 个 id、22 条序列，MA5 latest 手算=397，取数参数透传', async () => {
     const { tool, getKlines } = makeTool()
     const text = await tool.execute({ symbol: 'BTCUSDT', interval: '1d' }) as string
     expect(text).toContain('6 indicator(s)')
     expect(text).toContain('provider=fake')
     expect(text).toContain('MA5 latest=397')
-    expect((text.match(/tail=\[/g) || []).length).toBe(15)
+    expect((text.match(/tail=\[/g) || []).length).toBe(22)
     expect(getKlines).toHaveBeenCalledWith('BTCUSDT', '1d', 300)
   })
 
-  it('指定子集 + points 截尾：ma+rsi 共 4 条序列，tail 长度 = points', async () => {
+  it('指定子集 + points 截尾：ma+rsi 共 7 条序列，tail 长度 = points', async () => {
     const { tool, getKlines } = makeTool()
     const text = await tool.execute({ symbol: 'BTCUSDT', interval: '1h', indicators: 'ma,rsi', points: 5 }) as string
     expect(text).toContain('2 indicator(s)')
     expect(text).toContain('MA5 ')
     expect(text).toContain('RSI14')
     expect(text).not.toContain('MACD')
-    expect((text.match(/tail=\[/g) || []).length).toBe(4)
+    expect((text.match(/tail=\[/g) || []).length).toBe(7)
     const tailLine = text.split('\n').find((l) => l.includes('MA5'))!
     expect(tailLine.match(/tail=\[[^\]]*\]/)?.[0]?.split(',')).toHaveLength(5)
     expect(getKlines).toHaveBeenCalledWith('BTCUSDT', '1h', 300)

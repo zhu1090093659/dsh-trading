@@ -16,25 +16,31 @@ describe('supertrend definition', () => {
       close: 100 + index * 0.1,
       volume: 1,
     }))
-    const [output] = definition.compute(bars, { period: 10, mult: 3 })
-    expect(output).toBeDefined()
-    expect(output!.values).toHaveLength(bars.length)
-    expect(output!.values.slice(0, 10).every(value => value === undefined)).toBe(true)
-    expect(output!.values[10]).toBeDefined()
+    const [upOutput, dnOutput] = definition.compute(bars, { period: 10, mult: 3 })
+    expect(upOutput).toBeDefined()
+    expect(dnOutput).toBeDefined()
+    expect(upOutput!.kind).toBe('area')
+    expect(dnOutput!.kind).toBe('area')
+    expect(upOutput!.values).toHaveLength(bars.length)
+    expect(dnOutput!.values).toHaveLength(bars.length)
+    expect(upOutput!.values.slice(0, 10).every(value => value === undefined)).toBe(true)
+    expect(upOutput!.values[10]).toBeDefined()
   })
 
-  it('上涨段趋势线低于收盘，跌破后翻转到上方', () => {
+  it('上涨段 UP 趋势线低于收盘，跌破后翻转为 DN 阻力线并高于收盘', () => {
     const definition = supertrendDefinition()
     // 先涨 30 根后急跌 10 根。
     const bars = Array.from({ length: 40 }, (_, index) => {
       const close = index < 30 ? 100 + index : 130 - (index - 29) * 3
       return { openTime: index, open: close, high: close + 0.5, low: close - 0.5, close, volume: 1 }
     })
-    const [output] = definition.compute(bars, { period: 5, mult: 2 })
-    const values = output!.values
-    const upValue = values[25]!
+    const [upOutput, dnOutput] = definition.compute(bars, { period: 5, mult: 2 })
+    const upValue = upOutput!.values[25]!
     expect(upValue).toBeLessThan(bars[25]!.close)
-    const downValue = values[39]!
+    expect(dnOutput!.values[25]).toBeUndefined()
+
+    const downValue = dnOutput!.values[39]!
     expect(downValue).toBeGreaterThan(bars[39]!.close)
+    expect(upOutput!.values[39]).toBeUndefined()
   })
 })

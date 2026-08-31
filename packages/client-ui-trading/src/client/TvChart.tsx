@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef } from 'react'
 import {
-  CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart,
+  AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart,
 } from 'lightweight-charts'
 import type {
   IChartApi, ISeriesApi, MouseEventParams, SeriesType, Time, UTCTimestamp,
@@ -284,7 +284,7 @@ function syncGroups(
       if (output.kind === 'histogram') {
         ;(series as ISeriesApi<'Histogram'>).setData(toHistogramData(output, timeAxis))
       } else {
-        ;(series as ISeriesApi<'Line'>).setData(toLineData(output, timeAxis))
+        ;(series as ISeriesApi<'Line' | 'Area'>).setData(toLineData(output, timeAxis))
       }
     }
   })
@@ -299,9 +299,21 @@ function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: numb
       priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
     }, paneIndex)
   }
+  if (output.kind === 'area') {
+    return chart.addSeries(AreaSeries, {
+      lineColor: output.color,
+      topColor: output.topColor ?? output.color,
+      bottomColor: output.bottomColor ?? 'transparent',
+      invertFilledArea: output.invertFilledArea ?? false,
+      lineWidth: (output.lineWidth ?? 1.5) as 1 | 2 | 3 | 4,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+    }, paneIndex)
+  }
   return chart.addSeries(LineSeries, {
     color: output.color,
-    lineWidth: 1.2,
+    lineWidth: (output.lineWidth ?? 1.2) as 1 | 2 | 3 | 4,
     priceLineVisible: false,
     lastValueVisible: false,
     crosshairMarkerVisible: false,

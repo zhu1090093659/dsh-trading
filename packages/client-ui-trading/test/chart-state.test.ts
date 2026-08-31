@@ -13,10 +13,10 @@ function makeStore() {
   return createChartStateStore(registry)
 }
 describe('chart-state store', () => {
-  it('默认激活 MA(5/10/20)', () => {
+  it('默认激活 MA(5/10/20/30/60/120)', () => {
     const store = makeStore()
     expect(store.getSnapshot().instances).toEqual([
-      { id: 'ma', params: { n1: 5, n2: 10, n3: 20 } },
+      { id: 'ma', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 } },
     ])
     expect(store.isActive('ma')).toBe(true)
     expect(store.isActive('macd')).toBe(false)
@@ -33,8 +33,8 @@ describe('chart-state store', () => {
 
   it('setParams 更新已有实例；未激活时补建', () => {
     const store = makeStore()
-    store.setParams('ma', { n1: 5, n2: 10, n3: 60 })
-    expect(store.instanceFor('ma')?.params).toEqual({ n1: 5, n2: 10, n3: 60 })
+    store.setParams('ma', { n1: 5, n2: 10, n3: 60, n4: 30, n5: 60, n6: 120 })
+    expect(store.instanceFor('ma')?.params).toEqual({ n1: 5, n2: 10, n3: 60, n4: 30, n5: 60, n6: 120 })
     expect(store.getSnapshot().instances).toHaveLength(1)
     store.setParams('rsi', { n: 6 })
     expect(store.instanceFor('rsi')).toEqual({ id: 'rsi', params: { n: 6 } })
@@ -53,7 +53,7 @@ describe('chart-state store', () => {
 
   it('空注册表（插件未装）：持久化/默认实例原样保留不清洗，插件就位后自动生效', () => {
     const store = createChartStateStore(createIndicatorRegistry())
-    expect(store.getSnapshot().instances).toEqual([{ id: 'ma', params: { n1: 5, n2: 10, n3: 20 } }])
+    expect(store.getSnapshot().instances).toEqual([{ id: 'ma', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 } }])
     store.setParams('rsi', { n: 6 })
     expect(store.instanceFor('rsi')).toEqual({ id: 'rsi', params: { n: 6 } })
   })

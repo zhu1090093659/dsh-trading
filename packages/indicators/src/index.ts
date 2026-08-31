@@ -14,7 +14,7 @@ export type {
   IndicatorPane, IndicatorParamSpec, Kline,
 } from './types.ts'
 export { createIndicatorRegistry, type IndicatorRegistry } from './registry.ts'
-export { presetDefinitions, MA_COLORS } from './presets.ts'
+export { presetDefinitions, MA_COLORS, EMA_COLORS } from './presets.ts'
 export {
   bollinger, ema, kdj, macd, rsi, sma, stdev,
   type Series,

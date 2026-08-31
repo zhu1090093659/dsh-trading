@@ -36,12 +36,20 @@ export interface IndicatorParamSpec {
 export interface IndicatorOutput {
   /** 实例内唯一（图例/序列 key）。 */
   key: string
-  kind: 'line' | 'histogram'
+  kind: 'line' | 'histogram' | 'area'
   color: string
   /** 与 K 线逐条对齐；undefined = warm-up，不画。 */
   values: Series
   /** histogram 专用：按符号红涨绿跌着色（MACD 柱）。 */
   histogramBySign?: boolean
+  /** area 专用：顶部渐变色 */
+  topColor?: string
+  /** area 专用：底部渐变色 */
+  bottomColor?: string
+  /** area 专用：反转填充区（true 表示向线上方填充） */
+  invertFilledArea?: boolean
+  /** 线宽（1-4） */
+  lineWidth?: number
 }
 
 export interface IndicatorDefinition {

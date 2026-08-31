@@ -45,15 +45,15 @@ describe('registry', () => {
   it('defaultParams/defaultInstance 取 schema 默认值', () => {
     const registry = makeRegistry()
     const ma = registry.get('ma')!
-    expect(registry.defaultParams(ma)).toEqual({ n1: 5, n2: 10, n3: 20 })
-    expect(registry.defaultInstance('ma')).toEqual({ id: 'ma', params: { n1: 5, n2: 10, n3: 20 } })
+    expect(registry.defaultParams(ma)).toEqual({ n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 })
+    expect(registry.defaultInstance('ma')).toEqual({ id: 'ma', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 } })
     expect(registry.defaultInstance('nope')).toBeUndefined()
   })
 
   it('instanceKey 随参数变化', () => {
     const registry = makeRegistry()
-    expect(registry.instanceKey({ id: 'ma', params: { n1: 5, n2: 10, n3: 20 } })).toBe('ma:5,10,20')
-    expect(registry.instanceKey({ id: 'ma', params: { n1: 5, n2: 10, n3: 30 } })).toBe('ma:5,10,30')
+    expect(registry.instanceKey({ id: 'ma', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 } })).toBe('ma:5,10,20,30,60,120')
+    expect(registry.instanceKey({ id: 'ma', params: { n1: 5, n2: 10, n3: 30, n4: 30, n5: 60, n6: 120 } })).toBe('ma:5,10,30,30,60,120')
   })
 
   it('register 通知订阅者且 version 单调递增', () => {
@@ -92,10 +92,18 @@ describe('presets compute 输出契约', () => {
     const registry = makeRegistry()
     const sample = bars(60)
     const ma = registry.get('ma')!
-    const [ma5] = ma.compute(sample, { n1: 5, n2: 10, n3: 20 })
+    const [ma5] = ma.compute(sample, { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 })
     const closes = sample.slice(-5).map(bar => bar.close)
     expect(ma5?.values[59]).toBeCloseTo(closes.reduce((a, b) => a + b, 0) / 5, 10)
     expect(ma5?.values[0]).toBeUndefined()
+  })
+
+  it('MA / EMA 设置周期为 0 时该线被隐藏（不输出该 line）', () => {
+    const registry = makeRegistry()
+    const sample = bars(60)
+    const ma = registry.get('ma')!
+    const outputs = ma.compute(sample, { n1: 5, n2: 10, n3: 0, n4: 0, n5: 0, n6: 0 })
+    expect(outputs.map(o => o.key)).toEqual(['MA5', 'MA10'])
   })
 
   it('MACD 柱输出 histogramBySign', () => {
@@ -111,13 +119,13 @@ describe('sanitize/clamp', () => {
   it('未知 id 丢弃、参数 clamp、按 id 去重、脏输入回退', () => {
     const registry = makeRegistry()
     const sanitized = registry.sanitizeInstances([
-      { id: 'ma', params: { n1: 5, n2: 10, n3: 9999 } },
+      { id: 'ma', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 9999 } },
       { id: 'ghost', params: {} },
-      { id: 'ma', params: { n1: 1, n2: 2, n3: 3 } },
+      { id: 'ma', params: { n1: 1, n2: 2, n3: 3, n4: 4, n5: 5, n6: 6 } },
       'garbage',
       null,
     ])
-    expect(sanitized).toEqual([{ id: 'ma', params: { n1: 5, n2: 10, n3: 250 } }])
+    expect(sanitized).toEqual([{ id: 'ma', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 250 } }])
     expect(registry.sanitizeInstances('nope')).toEqual([])
   })
 
@@ -125,6 +133,6 @@ describe('sanitize/clamp', () => {
     const registry = makeRegistry()
     const ma = registry.get('ma')!
     expect(registry.clampParams(ma, { n1: 'x', n2: 0, n3: 30 } as unknown as Record<string, number>))
-      .toEqual({ n1: 5, n2: 1, n3: 30 })
+      .toEqual({ n1: 5, n2: 0, n3: 30, n4: 30, n5: 60, n6: 120 })
   })
 })
