@@ -4,8 +4,8 @@
   height: 100%;
   width: 100%;
   overflow-y: auto;
-  background: var(--color-bg-base);
-  color: var(--color-text-primary);
+  background: var(--dsw-futu-bg-base);
+  color: var(--dsw-futu-text-primary);
   padding: 16px 20px;
   gap: 16px;
   box-sizing: border-box;
@@ -19,34 +19,36 @@
 
 .horizonSelector {
   display: flex;
-  gap: 8px;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-subtle);
+  gap: 6px;
+  background: var(--dsw-futu-bg-surface);
+  border: 1px solid var(--dsw-futu-border-subtle);
   padding: 3px;
-  border-radius: 8px;
+  border-radius: var(--dsw-futu-radius-md);
   width: fit-content;
 }
 
 .horizonBtn {
   background: transparent;
   border: none;
-  color: var(--color-text-muted);
-  padding: 6px 16px;
-  font-size: 13px;
+  color: var(--dsw-futu-text-secondary);
+  padding: 5px 14px;
+  font-size: 12.5px;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: var(--dsw-futu-radius-sm);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .horizonBtn:hover {
-  color: var(--color-text-primary);
+  color: var(--dsw-futu-text-primary);
+  background: var(--dsw-futu-bg-surface-hover);
 }
 
 .horizonBtn[data-active='true'] {
-  background: var(--color-bg-overlay);
-  color: var(--color-accent);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  background: var(--dsw-futu-bg-base);
+  color: var(--dsw-futu-text-primary);
+  font-weight: 600;
+  box-shadow: var(--dsw-futu-shadow-sm);
 }
 
 .strategyCards {
@@ -56,9 +58,9 @@
 }
 
 .strategyCard {
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
+  background: var(--dsw-futu-bg-surface);
+  border: 1px solid var(--dsw-futu-border-subtle);
+  border-radius: var(--dsw-futu-radius-lg);
   padding: 12px 14px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -69,36 +71,36 @@
 }
 
 .strategyCard:hover {
-  border-color: var(--color-border-strong);
-  background: var(--color-bg-overlay);
+  border-color: var(--dsw-futu-border-default);
+  background: var(--dsw-futu-bg-surface-hover);
 }
 
 .strategyCard[data-active='true'] {
-  border-color: var(--color-accent);
-  background: rgba(230, 162, 60, 0.08);
+  border-color: var(--dsw-futu-border-active);
+  background: var(--dsw-futu-bg-surface-active);
 }
 
 .cardTitle {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--dsw-futu-text-primary);
 }
 
 .cardSummary {
   font-size: 12px;
-  color: var(--color-text-muted);
-  line-height: 1.4;
+  color: var(--dsw-futu-text-secondary);
+  line-height: 1.45;
 }
 
 .configBar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
-  padding: 12px 16px;
+  gap: 14px;
+  background: var(--dsw-futu-bg-surface);
+  border: 1px solid var(--dsw-futu-border-subtle);
+  border-radius: var(--dsw-futu-radius-lg);
+  padding: 10px 16px;
 }
 
 .paramGroup {
@@ -109,36 +111,43 @@
 
 .paramLabel {
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--dsw-futu-text-secondary);
   white-space: nowrap;
 }
 
+.symbolValue {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dsw-futu-border-active);
+  font-family: var(--dsw-futu-font-mono);
+}
+
 .paramInput {
-  background: var(--color-bg-overlay);
-  border: 1px solid var(--color-border-subtle);
-  color: var(--color-text-primary);
-  border-radius: 4px;
+  background: var(--dsw-futu-bg-base);
+  border: 1px solid var(--dsw-futu-border-default);
+  color: var(--dsw-futu-text-primary);
+  border-radius: var(--dsw-futu-radius-sm);
   padding: 4px 8px;
   font-size: 12px;
-  width: 68px;
-  font-family: var(--font-mono, monospace);
+  width: 64px;
+  font-family: var(--dsw-futu-font-mono);
   font-variant-numeric: tabular-nums;
 }
 
 .paramInput:focus {
   outline: none;
-  border-color: var(--color-accent);
+  border-color: var(--dsw-futu-border-active);
 }
 
 .runBtn {
   margin-left: auto;
-  background: var(--color-accent, #e6a23c);
-  color: #111;
+  background: var(--dsw-futu-border-active);
+  color: var(--dsw-futu-text-inverse);
   font-weight: 600;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--dsw-futu-radius-md);
   padding: 6px 18px;
-  font-size: 13px;
+  font-size: 12.5px;
   cursor: pointer;
   transition: opacity 0.15s;
 }
@@ -152,16 +161,22 @@
   cursor: not-allowed;
 }
 
+.errorMessage {
+  color: var(--dsw-futu-up);
+  font-size: 12.5px;
+  padding: 4px 0;
+}
+
 .metricsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
   gap: 10px;
 }
 
 .metricCard {
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
+  background: var(--dsw-futu-bg-surface);
+  border: 1px solid var(--dsw-futu-border-subtle);
+  border-radius: var(--dsw-futu-radius-md);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -170,22 +185,23 @@
 
 .metricLabel {
   font-size: 11px;
-  color: var(--color-text-muted);
+  color: var(--dsw-futu-text-muted);
 }
 
 .metricValue {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--dsw-futu-font-mono);
+  color: var(--dsw-futu-text-primary);
 }
 
 .chartContainer {
   height: 240px;
   width: 100%;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
+  background: var(--dsw-futu-bg-surface);
+  border: 1px solid var(--dsw-futu-border-subtle);
+  border-radius: var(--dsw-futu-radius-lg);
   overflow: hidden;
   position: relative;
 }
@@ -196,9 +212,9 @@
 }
 
 .tableSection {
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
+  background: var(--dsw-futu-bg-surface);
+  border: 1px solid var(--dsw-futu-border-subtle);
+  border-radius: var(--dsw-futu-radius-lg);
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
@@ -208,7 +224,7 @@
 .tableTitle {
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--dsw-futu-text-secondary);
 }
 
 .tradesTableWrapper {
@@ -225,19 +241,34 @@
 
 .tradesTable th {
   padding: 8px 10px;
-  color: var(--color-text-muted);
-  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--dsw-futu-text-muted);
+  border-bottom: 1px solid var(--dsw-futu-border-default);
   font-weight: 500;
   position: sticky;
   top: 0;
-  background: var(--color-bg-surface);
+  background: var(--dsw-futu-bg-surface);
 }
 
 .tradesTable td {
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--dsw-futu-border-subtle);
   font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--dsw-futu-font-mono);
+  color: var(--dsw-futu-text-primary);
+}
+
+.tableEmptyCell {
+  text-align: center;
+  color: var(--dsw-futu-text-muted);
+  padding: 20px;
+}
+
+.reasonCell {
+  color: var(--dsw-futu-text-secondary);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .emptyState {
@@ -246,20 +277,20 @@
   align-items: center;
   justify-content: center;
   padding: 48px 16px;
-  color: var(--color-text-muted);
-  gap: 8px;
+  color: var(--dsw-futu-text-muted);
+  gap: 10px;
   text-align: center;
 }
 
 .emptyIcon {
-  font-size: 32px;
-  opacity: 0.5;
+  color: var(--dsw-futu-text-muted);
+  opacity: 0.7;
 }
 
 .trendUp {
-  color: var(--color-trend-up, #e64545);
+  color: var(--dsw-futu-up);
 }
 
 .trendDown {
-  color: var(--color-trend-down, #2ba471);
+  color: var(--dsw-futu-down);
 }

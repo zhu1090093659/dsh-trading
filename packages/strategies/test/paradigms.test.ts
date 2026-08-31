@@ -68,7 +68,7 @@ describe('Strategy Paradigms', () => {
           volume: 1000,
         })
       }
-      // 28: 暴跌至 80 (跌破前 10 根最低价 100)
+      // 28: 暴跌至 80 (跌破前 10 根最低价 95，即 bars 18/19 low=95)
       bars.push({
         openTime: baseTime + 28 * day,
         open: 107,

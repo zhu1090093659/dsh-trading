@@ -21,14 +21,17 @@ Status: implemented
      - 波段：`ema-crossover`（EMA20/EMA60 双均线金叉死叉）、`bollinger-reversion`（布林带下轨均值回归）；
      - 长线：`sma-baseline`（SMA200 牛熊择时基线）、`momentum-12m`（12 个月动量择时）。
 
-3. **`StrategyView` UI 交互设计**：
-   - 周期分段（短线 / 波段 / 长线）+ 策略卡高亮选择 + 参数动态调节 + 标的周期继承；
+3. **`StrategyView` UI 交互与视觉规范**：
+   - 周期分段（短线 / 波段 / 长线）+ 策略卡高亮选择 + 参数动态调节 + 标的周期继承（拉取 500 根日 K，确保 250 根长线策略有充足样本窗口）；
+   - 严格对齐 Futu 牛牛设计规范：全面使用 `--dsw-futu-*` Design Tokens（`--dsw-futu-bg-*` / `--dsw-futu-border-*` / `--dsw-futu-text-*` / `--dsw-futu-up/down`），无未定义变量与硬编码内联样式；
+   - 空态使用 `IconStrategy` 矢量 SVG 图标；
    - 8 核心指标卡（Tabular-nums 排版、红涨绿跌 Token）+ Lightweight-charts AreaSeries 权益曲线 + 逐笔交易流水明细表；
-   - 状态持久化至 `dshtrading.strategy.v1`。
+   - 状态持久化至 `dshtrading.strategy.v1`；
+   - 完备的 i18n 字典覆盖（中文与英文 locale 全覆盖，零 `as never` cast 与无掩盖性 `||` 回退）。
 
-4. **SOP 技能体系与分发**：
+4. **SOP 技能体系与通用单源分发**：
    - 编写 `.agents/skills/trading-strategy-paradigms/SKILL.md`（五段论 SOP、反方情景、免责提示与铁律红线）；
-   - 创建 `scripts/sync-skills.mjs` 并在 root 提供 `pnpm sync:skills`，实现向 `kit-crypto`, `kit-us`, `kit-cn`, `kit-hk` 的幂等同步。
+   - 实现通用目录扫描与前缀路由分发的 `scripts/sync-skills.mjs`，`trading-*` 与 `indicator-*` 同步至全部 4 个 market kit（`crypto/us/cn/hk`），市场前缀同步至单 kit，其他同步至 base；在 root 提供 `pnpm sync:skills` 幂等分发。
 
 ## Alternatives considered
 
@@ -41,4 +44,4 @@ Status: implemented
 
 - 交易用户在中栏获得完整的「行情 + 策略」两重视角；
 - 策略引擎经过 12 个确定性与边界用例全面验证，全仓构建 20 个 package 与 431+ 个单测 100% 绿灯；
-- 形成 `pnpm sync:skills` 机制，后续通用交易技能可单源维护并分发至各 kit。
+- 建立标准的 `pnpm sync:skills` 前缀路由分发机制，跨市场通用技能与单市场专用技能单源维护。

@@ -1,5 +1,5 @@
 /**
- * 策略板块主视图（对齐 docs/design/strategy-tab.md §3.4）。
+ * 策略板块主视图（对齐 docs/design/strategy-tab.md §3.4 与 Review 规范）。
  *
  * 结构（自上而下）：
  *   1. 周期分段控件（短线 | 波段 | 长线）
@@ -19,6 +19,7 @@ import {
 } from '@dsh-trading/strategies'
 import { readJson, writeJson, type SelectionState } from './store.ts'
 import { fetchKlines } from './api.ts'
+import { IconStrategy } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import css from './StrategyView.module.css'
 
@@ -65,7 +66,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
   const selection = useSelection?.() ?? { market: 'crypto', symbol: 'BTCUSDT' }
 
   // 1. 本地存储持久化状态
-  const [stored, setStored] = useState<StrategyStateStored>(() => {
+  const [stored] = useState<StrategyStateStored>(() => {
     return readJson<StrategyStateStored>(STRATEGY_STORE_KEY, DEFAULT_STORED)
   })
 
@@ -123,14 +124,14 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
     }))
   }
 
-  // 运行回测
+  // 运行回测（拉取 500 根日 K，确保 250 根长线策略有充足样本窗口）
   const handleRunBacktest = async () => {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const barsRaw = await fetchKlines(selection.market, selection.symbol, '1d', 300)
+      const barsRaw = await fetchKlines(selection.market, selection.symbol, '1d', 500)
       if (!barsRaw || barsRaw.length === 0) {
-        setErrorMsg('未能获取到历史 K 线行情数据')
+        setErrorMsg(t('strategy.error.noKlines'))
         setResult(null)
         return
       }
@@ -145,7 +146,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
       const backtestResult = run(klines, currentStrategy, currentParams)
       setResult(backtestResult)
     } catch (e) {
-      setErrorMsg(`回测执行失败: ${String((e as Error)?.message ?? e)}`)
+      setErrorMsg(`${t('strategy.error.failed')}: ${String((e as Error)?.message ?? e)}`)
       setResult(null)
     } finally {
       setLoading(false)
@@ -169,26 +170,27 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
       height: container.clientHeight,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: 'rgba(255, 255, 255, 0.6)',
+        textColor: '#8e95a3',
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+        vertLines: { color: 'rgba(0, 0, 0, 0.04)' },
+        horzLines: { color: 'rgba(0, 0, 0, 0.04)' },
       },
       timeScale: {
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderColor: '#e3e6ea',
         timeVisible: false,
       },
       rightPriceScale: {
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderColor: '#e3e6ea',
       },
     })
 
+    const isPositive = result.metrics.totalReturn >= 0
     const areaSeries = chart.addSeries(AreaSeries, {
-      topColor: result.metrics.totalReturn >= 0 ? 'rgba(230, 69, 69, 0.4)' : 'rgba(43, 164, 113, 0.4)',
-      bottomColor: result.metrics.totalReturn >= 0 ? 'rgba(230, 69, 69, 0.02)' : 'rgba(43, 164, 113, 0.02)',
-      lineColor: result.metrics.totalReturn >= 0 ? '#e64545' : '#2ba471',
+      topColor: isPositive ? 'rgba(230, 69, 69, 0.35)' : 'rgba(43, 164, 113, 0.35)',
+      bottomColor: isPositive ? 'rgba(230, 69, 69, 0.02)' : 'rgba(43, 164, 113, 0.02)',
+      lineColor: isPositive ? '#e64545' : '#2ba471',
       lineWidth: 2,
     })
 
@@ -236,7 +238,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
             data-active={horizon === 'short' ? 'true' : undefined}
             onClick={() => switchHorizon('short')}
           >
-            {t('strategy.horizon.short' as never) || '短线交易'}
+            {t('strategy.horizon.short')}
           </button>
           <button
             type="button"
@@ -244,7 +246,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
             data-active={horizon === 'swing' ? 'true' : undefined}
             onClick={() => switchHorizon('swing')}
           >
-            {t('strategy.horizon.swing' as never) || '中线波段'}
+            {t('strategy.horizon.swing')}
           </button>
           <button
             type="button"
@@ -252,7 +254,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
             data-active={horizon === 'long' ? 'true' : undefined}
             onClick={() => switchHorizon('long')}
           >
-            {t('strategy.horizon.long' as never) || '长线投资'}
+            {t('strategy.horizon.long')}
           </button>
         </div>
 
@@ -295,9 +297,9 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
         ))}
 
         <div className={css.paramGroup}>
-          <span className={css.paramLabel}>标的:</span>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-accent)' }}>
-            {selection.symbol} (日K)
+          <span className={css.paramLabel}>{t('strategy.symbolLabel')}</span>
+          <span className={css.symbolValue}>
+            {selection.symbol} {t('strategy.intervalDaily')}
           </span>
         </div>
 
@@ -307,12 +309,12 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
           disabled={loading}
           onClick={handleRunBacktest}
         >
-          {loading ? '回测计算中...' : '运行回测'}
+          {loading ? t('strategy.running') : t('strategy.run')}
         </button>
       </div>
 
       {errorMsg && (
-        <div style={{ color: 'var(--color-trend-up)', fontSize: '13px', padding: '8px 0' }}>
+        <div className={css.errorMessage}>
           {errorMsg}
         </div>
       )}
@@ -323,7 +325,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
           {/* 8 指标卡 */}
           <div className={css.metricsGrid}>
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>累计收益率</span>
+              <span className={css.metricLabel}>{t('strategy.metrics.totalReturn')}</span>
               <span
                 className={`${css.metricValue} ${result.metrics.totalReturn >= 0 ? css.trendUp : css.trendDown}`}
               >
@@ -332,7 +334,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>年化收益 (CAGR)</span>
+              <span className={css.metricLabel}>{t('strategy.metrics.cagr')}</span>
               <span
                 className={`${css.metricValue} ${result.metrics.cagr >= 0 ? css.trendUp : css.trendDown}`}
               >
@@ -341,34 +343,36 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>最大回撤</span>
+              <span className={css.metricLabel}>{t('strategy.metrics.maxDrawdown')}</span>
               <span className={`${css.metricValue} ${css.trendDown}`}>
                 {formatPercent(result.metrics.maxDrawdown)}
               </span>
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>夏普比率 (Sharpe)</span>
+              <span className={css.metricLabel}>{t('strategy.metrics.sharpe')}</span>
               <span className={css.metricValue}>{formatNum(result.metrics.sharpe)}</span>
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>胜率 (Win Rate)</span>
+              <span className={css.metricLabel}>{t('strategy.metrics.winRate')}</span>
               <span className={css.metricValue}>{formatPercent(result.metrics.winRate)}</span>
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>盈亏比 (Profit Factor)</span>
+              <span className={css.metricLabel}>{t('strategy.metrics.profitFactor')}</span>
               <span className={css.metricValue}>{formatNum(result.metrics.profitFactor)}</span>
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>交易总笔数</span>
-              <span className={css.metricValue}>{result.metrics.tradeCount} 笔</span>
+              <span className={css.metricLabel}>{t('strategy.metrics.tradeCount')}</span>
+              <span className={css.metricValue}>
+                {result.metrics.tradeCount} {t('strategy.metrics.tradeUnit')}
+              </span>
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>市场暴露度</span>
+              <span className={css.metricLabel}>{t('strategy.metrics.exposure')}</span>
               <span className={css.metricValue}>{formatPercent(result.metrics.exposure)}</span>
             </div>
           </div>
@@ -380,39 +384,41 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
 
           {/* 交易明细流水表 */}
           <div className={css.tableSection}>
-            <div className={css.tableTitle}>交易明细记录 ({result.trades.length} 笔)</div>
+            <div className={css.tableTitle}>
+              {t('strategy.trades.title')} ({result.trades.length} {t('strategy.metrics.tradeUnit')})
+            </div>
             <div className={css.tradesTableWrapper}>
               <table className={css.tradesTable}>
                 <thead>
                   <tr>
-                    <th>入场时间</th>
-                    <th>出场时间</th>
-                    <th>买入价</th>
-                    <th>卖出价</th>
-                    <th>持仓(K线)</th>
-                    <th>净盈亏%</th>
-                    <th>平仓原因</th>
+                    <th>{t('strategy.trades.entryTime')}</th>
+                    <th>{t('strategy.trades.exitTime')}</th>
+                    <th>{t('strategy.trades.entryPrice')}</th>
+                    <th>{t('strategy.trades.exitPrice')}</th>
+                    <th>{t('strategy.trades.holdingBars')}</th>
+                    <th>{t('strategy.trades.netReturn')}</th>
+                    <th>{t('strategy.trades.exitReason')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.trades.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '16px' }}>
-                        回测周期内无完整平仓交易记录
+                      <td colSpan={7} className={css.tableEmptyCell}>
+                        {t('strategy.trades.empty')}
                       </td>
                     </tr>
                   ) : (
-                    result.trades.map((t, idx) => (
+                    result.trades.map((tr, idx) => (
                       <tr key={idx}>
-                        <td>{formatDate(t.entryTime)}</td>
-                        <td>{formatDate(t.exitTime)}</td>
-                        <td>{t.entryPrice.toFixed(2)}</td>
-                        <td>{t.exitPrice.toFixed(2)}</td>
-                        <td>{t.holdingBars}</td>
-                        <td className={t.returnPercent >= 0 ? css.trendUp : css.trendDown}>
-                          {formatPercent(t.returnPercent, true)}
+                        <td>{formatDate(tr.entryTime)}</td>
+                        <td>{formatDate(tr.exitTime)}</td>
+                        <td>{tr.entryPrice.toFixed(2)}</td>
+                        <td>{tr.exitPrice.toFixed(2)}</td>
+                        <td>{tr.holdingBars}</td>
+                        <td className={tr.returnPercent >= 0 ? css.trendUp : css.trendDown}>
+                          {formatPercent(tr.returnPercent, true)}
                         </td>
-                        <td style={{ color: 'var(--color-text-muted)', maxWidth: '200px' }}>{t.exitReason}</td>
+                        <td className={css.reasonCell}>{tr.exitReason}</td>
                       </tr>
                     ))
                   )}
@@ -423,8 +429,10 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
         </>
       ) : (
         <div className={css.emptyState}>
-          <div className={css.emptyIcon}>📊</div>
-          <div>点击「运行回测」计算 {currentStrategy.name} 在 {selection.symbol} 上的历史表现</div>
+          <div className={css.emptyIcon}>
+            <IconStrategy size={36} />
+          </div>
+          <div>{t('strategy.empty.hint')}</div>
         </div>
       )}
     </div>
