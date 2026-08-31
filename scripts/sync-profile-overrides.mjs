@@ -56,6 +56,12 @@ const DSH_SDK_PATHS = {
   '@deepseek-ai/dsh-skill': ['packages', 'skill', 'skill'],
   '@deepseek-ai/dsh-settings': ['packages', 'settings', 'settings'],
   '@deepseek-ai/dsh-agent-presets': ['packages', 'preset', 'agent-presets'],
+  /** 2026-08-31 补：dsh-tools 的 dependencies 里有 dsh-brand / dsh-util-values
+   *  （workspace:^）——它们不在本仓任何包的 peers 里，sdkPeers 收集不到；
+   *  旧 profile 靠「lockfile 最新→pnpm 跳过 re-resolution」侥幸，一旦删
+   *  node_modules 触发重解析就 ERR_PNPM_WORKSPACE_PKG_NOT_FOUND。 */
+  '@deepseek-ai/dsh-brand': ['packages', 'util', 'brand'],
+  '@deepseek-ai/dsh-util-values': ['packages', 'util', 'values'],
 }
 
 /** 本仓全部可安装包（@dsh-trading/*）：全量钉版——钉了未安装的包惰性无害，
@@ -81,6 +87,12 @@ async function listPackages() {
 const sdkPeers = new Set()
 
 function expectedLines(packages) {
+  // dsh-tools 被 pin 时，其内部 workspace:^ 依赖（brand/values）必须可解析，
+  // 否则 profile 重解析即崩（2026-08-31 评审实证）。
+  if (sdkPeers.has('@deepseek-ai/dsh-tools')) {
+    sdkPeers.add('@deepseek-ai/dsh-brand')
+    sdkPeers.add('@deepseek-ai/dsh-util-values')
+  }
   const lines = packages.map((p) => `  '${p.name}': 'file:${join(ROOT, 'packages', p.dir)}'`)
   for (const dep of [...sdkPeers].sort()) {
     const rel = DSH_SDK_PATHS[dep]
@@ -114,9 +126,27 @@ async function syncProfile(profileDir, packages) {
     return key !== undefined && !existing.has(key)
   })
   if (missing.length === 0 && !vendorAdded) return { added: [] }
-  const block = missing.length === 0 ? []
-    : (/^overrides:/m.test(next) ? [] : ['', 'overrides:']).concat(missing)
-  if (!DRY) await writeFile(file, next.replace(/\s*$/, '') + (block.length ? '\n' + block.join('\n') + '\n' : '\n'))
+  let out = next
+  if (missing.length > 0) {
+    if (/^overrides:/m.test(out)) {
+      // 块内插入：追加到 overrides 映射的最后一个条目之后。绝不能文件尾追加——
+      // 尾部是 dsh 维护的 onlyBuiltDependencies 块时，行会混进列表区炸掉 YAML
+      // （2026-08-31 trading-web 实证）。
+      const lines = out.split('\n')
+      const oi = lines.indexOf('overrides:')
+      let insertAt = oi + 1
+      for (let i = oi + 1; i < lines.length; i += 1) {
+        if (/^ {2}'/.test(lines[i])) insertAt = i + 1
+        else if (lines[i].trim() === '') continue
+        else break
+      }
+      lines.splice(insertAt, 0, ...missing)
+      out = lines.join('\n')
+    } else {
+      out = out.replace(/\s*$/, '') + '\n' + ['', 'overrides:', ...missing].join('\n') + '\n'
+    }
+  }
+  if (!DRY) await writeFile(file, out)
   return { added: missing.map((l) => l.trim()), vendorAdded }
 }
 
