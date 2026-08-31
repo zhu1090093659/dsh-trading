@@ -64,7 +64,7 @@ describe('us_get_fundamentals', () => {
     expect(rendered).toContain('Dividend Yield: 0.55%')
     expect(rendered).toContain('Beta (5Y Monthly): 1.12')
     expect(rendered).toContain('52-Week Range: $164.08 - $237.23')
-    expect(rendered).toContain('Avg Volume (3M): 48,500,000 shares')
+    expect(rendered).toContain('Volume / Avg Volume: 48,500,000 shares')
   })
 
   it('handles empty results and network errors gracefully', async () => {

@@ -1,18 +1,18 @@
 /**
- * HK（港股）工具箱插件（dsh-trading cn+hk 双市场切片，模板 = kit-us/kit-cn）。
+ * HK 工具箱插件（dsh-trading hk 切片）。
  *
- * 一件事：skill provider——hk-risk-checklist 随包分发（S2 形态；rank 用
- * BUNDLED_SKILL_RANK=600，用户目录 100-500 天然覆盖之；skill 名市场前缀命名空间）。
- *
- * 插件本体不被 host 面挂载（架构修订，与 kit-crypto/kit-us 同款）：本行在 hk-trader
- * preset 的 agent.cordis.yml 内，preset 级会话隔离——skill 注册表按 scope 分层。
- * preset 自安装不在本插件（在 @dsh-trading/hk bundle 的常驻安装器行）。
+ * 包含：
+ *   1. skill provider：hk-risk-checklist 与 indicator-authoring 随包分发；
+ *   2. hk_get_news 与 hk_get_fundamentals 工具；
+ *   3. indicator_author 创作工具（Issue #19）。
  *
  * @module @dsh-trading/kit-hk
  */
 
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import os from 'node:os'
+import path from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import {
@@ -22,14 +22,16 @@ import {
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { createAuthorIndicatorTool, createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchHkFundamentals, renderHkFundamentals } from './fundamentals.js'
 
-// ── skill provider ────────────────────────────────────────────────────────────
+// ── skill provider（host 面 skill 全局可见即可，本切片不改 skill 作用域） ─────────
 
 const PROVIDER_NAME = 'dsh-trading-hk'
 
 const SKILL_BODY_URL = new URL('../assets/skills/hk-risk-checklist.md', import.meta.url)
+const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -46,18 +48,32 @@ const CANDIDATE: SkillCandidate = {
   locator: SKILL_BODY_URL,
 }
 
+const AUTHORING_CANDIDATE: SkillCandidate = {
+  name: 'indicator-authoring',
+  description: '自定义技术指标创作指南：根据用户自然语言需求生成符合契约的指标代码（TD9/SuperTrend/OBV+MA等），并通过 indicator_author 工具验证与落库。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: AUTHORING_BODY_URL,
+}
+
+const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE]
+
 const provider: SkillProvider = {
   name: PROVIDER_NAME,
-  list: () => Promise.resolve([CANDIDATE]),
-  async get(_candidate): Promise<SkillDefinition> {
+  list: () => Promise.resolve(SKILL_CANDIDATES),
+  async get(candidate): Promise<SkillDefinition> {
+    const target = SKILL_CANDIDATES.find((c) => c.name === candidate.name) ?? CANDIDATE
     return {
-      name: CANDIDATE.name,
-      description: CANDIDATE.description,
-      invocation: CANDIDATE.invocation,
-      provider: CANDIDATE.provider,
-      source: CANDIDATE.source,
+      name: target.name,
+      description: target.description,
+      invocation: target.invocation,
+      provider: target.provider,
+      source: target.source,
       resourceBase: RESOURCE_BASE,
-      content: await readFile(SKILL_BODY_URL, 'utf8'),
+      content: await readFile(target.locator, 'utf8'),
     }
   },
 }
@@ -65,9 +81,7 @@ const provider: SkillProvider = {
 // ── 插件配置 ──────────────────────────────────────────────────────────────────
 
 export interface Config {
-  /** 交易安全闸门（铁律 #3）：与 connector 同词汇，kit 内未来交易辅助工具统一遵守。 */
   dryRun: boolean
-  /** 实盘总闸门：默认 false。本切片 kit 只分发知识（skill），闸门随 preset 行声明保持一致。 */
   liveTrading: boolean
 }
 
@@ -76,13 +90,8 @@ export const Config: Schema<Config> = Schema.object({
   liveTrading: Schema.boolean().default(false),
 })
 
-/** 需要宿主提供的 Cordis 服务。 */
 export const inject = ['skills', 'tools']
 
-/**
- * Cordis 插件名 = preset 行 id（TEMPLATES §8）：`dsh-trading-hk-*` 市场命名空间，
- * 全仓唯一（insert-only 铁律 #1）。
- */
 export const name = 'dsh-trading-hk-kit'
 
 // ── 插件入口 ──────────────────────────────────────────────────────────────────
@@ -90,8 +99,6 @@ export const name = 'dsh-trading-hk-kit'
 export function apply(ctx: Context, _config: Config): void {
   ctx.skills.registerProvider(() => provider)
 
-  // WS4 #1（#6）：hk_get_news——降级方案（用户裁决 2026-08-30）：东财快讯第 103 列 + 116. 港股代码/关键词过滤，
-  // 诚实标注覆盖不纯（统一 CN 金融流、无干净港股公共源）。铁律 #5 只引元数据，不取正文。
   const newsTool = createGetNewsTool()
   const fundamentalsTool = createGetFundamentalsTool()
   const tools = ctx.tools as unknown as {
@@ -110,6 +117,11 @@ export function apply(ctx: Context, _config: Config): void {
   }
   registerOnce(newsTool)
   registerOnce(fundamentalsTool)
+
+  // Issue #19：注册自定义指标创作工具 indicator_author（共享 ~/.dsh/indicators/custom.json）
+  const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
+  const authorStore = createFileCustomIndicatorStore(indicatorStorePath)
+  registerOnce(createAuthorIndicatorTool({ store: authorStore }))
 }
 
 /* ── hk_get_news：港股新闻工具（WS4 #1，#6 降级） ────────────────────────────── */

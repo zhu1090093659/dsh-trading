@@ -1,17 +1,11 @@
-/**
- * Agent 指标工具工厂（WS1b，docs/analysis-roadmap.md）：把指标计算暴露成
- * <market>_get_indicators 工具。放本包子路径导出而非独立包——与 connectors 的
- * 接入面就一个函数，单独建包过重（铁律 #4 不过早抽象）。
- *
- * 为什么由 connector 注册而非 kit：preset 平面插件（kit）拿不到 host/connector
- * isolate 里的 MarketDataService（isolate 键互不可见，crypto_funding_rate 自取数
- * 正是为此绕行）；connector 注册则天然走路由选中的数据源，语义正确。
- *
- * 入参 symbol 用市场规范词汇（docs/symbol-vocabulary.md），翻译归连接器。
- */
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { presetDefinitions, type IndicatorDefinition } from './presets.ts'
-import type { Kline } from './types.ts'
+import type { IndicatorParamSpec, Kline } from './types.ts'
+import type { CustomIndicatorStore } from './custom.ts'
+import { validateCustomIndicatorNode } from './validate-node.ts'
+
+export { createFileCustomIndicatorStore } from './custom-fs.ts'
+export { validateCustomIndicatorNode, nodeVmComputeRunner } from './validate-node.ts'
 
 /** 最小行情服务面（结构类型——与 @dsh-trading/api 的 MarketDataService 兼容）。 */
 export interface IndicatorsMarketDataLike {
@@ -119,6 +113,105 @@ export function createGetIndicatorsTool(options: GetIndicatorsToolOptions) {
         }
       }
       return lines.join('\n')
+    },
+  })
+}
+
+export interface AuthorIndicatorToolOptions {
+  store: CustomIndicatorStore
+}
+
+export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
+  const { store } = options
+
+  return defineTool({
+    name: 'indicator_author',
+    description:
+      'Author, validate, and persist a custom technical indicator from JavaScript compute source. '
+      + 'Executes full sandbox test calculations across multiple kline scenarios (uptrend, downtrend, flat, gaps, short series). '
+      + 'If valid, the indicator is immediately persisted and available for charting; if invalid, detailed diagnostic reasons are returned.',
+    parameters: {
+      id: {
+        type: 'string',
+        required: true,
+        description: 'Unique indicator id (2-32 lowercase alphanumeric or underscore, e.g. "td9", "supertrend", "obv_ma34")',
+      },
+      title: {
+        type: 'string',
+        required: true,
+        description: 'Display title for the indicator (1-32 chars, e.g. "TD9", "SuperTrend", "OBV+MA34")',
+      },
+      pane: {
+        type: 'string',
+        required: true,
+        description: 'Indicator pane placement: "main" (overlay on main price chart, e.g. TD9, SuperTrend) or "sub" (separate sub-chart pane, e.g. OBV, MACD)',
+      },
+      computeSource: {
+        type: 'string',
+        required: true,
+        description:
+          'JavaScript pure compute function source, signature (bars, params) => IndicatorOutput[]. '
+          + 'bars has { openTime, open, high, low, close, volume }; '
+          + 'output values must be strictly aligned with bars.length using undefined for initial warm-up period (no NaN/Infinity allowed).',
+      },
+      paramsJson: {
+        type: 'string',
+        description:
+          'Optional JSON array of parameter specifications, e.g. [{"key":"period","label":"周期","default":14,"min":2,"max":100}]. Up to 8 parameters.',
+      },
+      description: {
+        type: 'string',
+        description: 'Optional human-readable description or usage guidance for the indicator.',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as {
+        id?: unknown
+        title?: unknown
+        pane?: unknown
+        computeSource?: unknown
+        paramsJson?: unknown
+        description?: unknown
+      }
+
+      let parsedParams: IndicatorParamSpec[] = []
+      if (typeof args.paramsJson === 'string' && args.paramsJson.trim()) {
+        try {
+          const parsed = JSON.parse(args.paramsJson)
+          if (Array.isArray(parsed)) parsedParams = parsed
+        } catch {
+          return `[indicator_author] Validation failed: paramsJson is not valid JSON (${args.paramsJson})`
+        }
+      }
+
+      const candidate = {
+        id: typeof args.id === 'string' ? args.id.trim() : '',
+        title: typeof args.title === 'string' ? args.title.trim() : '',
+        pane: args.pane,
+        params: parsedParams,
+        computeSource: typeof args.computeSource === 'string' ? args.computeSource : '',
+        description: typeof args.description === 'string' ? args.description.trim() : undefined,
+      }
+
+      const result = validateCustomIndicatorNode(candidate)
+      if (!result.ok) {
+        return (
+          `[indicator_author] Validation failed: ${result.reason}\n`
+          + 'Please review the indicator requirements: values array length must match bars.length, use undefined for warm-up, avoid NaN, and ensure all math is finite.'
+        )
+      }
+
+      await store.save(result.record)
+
+      const paramSummary = result.record.params.map(p => `${p.key}=${p.default}`).join(', ')
+      return (
+        `[indicator_author] Successfully authored indicator "${result.record.title}" (id: ${result.record.id}, pane: ${result.record.pane}${paramSummary ? `, params: ${paramSummary}` : ''}). `
+        + 'The indicator has passed 5 sandbox verification scenarios and is now persisted and available in the chart quick indicator bar.'
+      )
     },
   })
 }

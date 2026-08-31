@@ -148,11 +148,21 @@ describe('dispatchBridgeRequest', () => {
     expect(payload).toEqual({ symbols: [{ symbol: 'BTCUSDT' }] })
   })
 
-  it('未知端点 404、非 GET 405', async () => {
+  it('未知端点 404、非 GET/DELETE 405', async () => {
     await expect(dispatchBridgeRequest(bridge, 'GET', '/nope', new URLSearchParams()))
       .rejects.toThrowError(/no such endpoint/)
     await expect(dispatchBridgeRequest(bridge, 'POST', '/markets', new URLSearchParams()))
       .rejects.toThrowError(/only GET/)
+  })
+
+  it('GET /indicators/custom & DELETE /indicators/custom', async () => {
+    const { status, payload } = await dispatchBridgeRequest(bridge, 'GET', '/indicators/custom', new URLSearchParams())
+    expect(status).toBe(200)
+    expect(payload).toEqual({ ok: true, indicators: [] })
+
+    const delRes = await dispatchBridgeRequest(bridge, 'DELETE', '/indicators/custom', new URLSearchParams({ id: 'test' }))
+    expect(delRes.status).toBe(200)
+    expect(delRes.payload).toEqual({ ok: true, removed: false })
   })
 })
 

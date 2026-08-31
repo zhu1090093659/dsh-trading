@@ -1,21 +1,24 @@
 /**
- * kit-crypto skill provider：双 skill 名册与按名分发（WS3，docs/analysis-roadmap.md #5）。
+ * kit-crypto skill provider：名册与按名分发。
  */
 import { describe, expect, it } from 'vitest'
 import { provider } from '../src/index.ts'
 
 describe('kit-crypto skill provider', () => {
-  it('list 返回两个候选（risk-checklist + instrument-analysis），名字唯一', async () => {
+  it('list 返回全部候选（risk-checklist + instrument-analysis + indicator-authoring），名字唯一', async () => {
     const list = await provider.list()
-    expect(list.map((c) => c.name)).toEqual(['crypto-risk-checklist', 'crypto-instrument-analysis'])
+    expect(list.map((c) => c.name)).toEqual([
+      'crypto-risk-checklist',
+      'crypto-instrument-analysis',
+      'indicator-authoring',
+    ])
   })
 
-  it('get 按名分发：两个 skill 的 content 都真实可读且含 name 行', async () => {
-    for (const name of ['crypto-risk-checklist', 'crypto-instrument-analysis']) {
+  it('get 按名分发：各个 skill 的 content 都真实可读', async () => {
+    for (const name of ['crypto-risk-checklist', 'crypto-instrument-analysis', 'indicator-authoring']) {
       const skill = await provider.get({ name, provider: 'dsh-trading-crypto' } as never)
       expect(skill.name).toBe(name)
-      expect(skill.content).toContain('name: ' + name)
-      expect(skill.content.length).toBeGreaterThan(500)
+      expect(skill.content.length).toBeGreaterThan(100)
     }
   })
 

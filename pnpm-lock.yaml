@@ -821,10 +821,16 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
+      '@dsh-trading/indicators':
+        specifier: workspace:*
+        version: link:../indicators
     devDependencies:
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(lightningcss@1.33.0)(tsx@4.23.12)
 
   packages/kit-crypto:
     dependencies:
@@ -840,6 +846,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
+      '@dsh-trading/indicators':
+        specifier: workspace:*
+        version: link:../indicators
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -862,10 +871,16 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
+      '@dsh-trading/indicators':
+        specifier: workspace:*
+        version: link:../indicators
     devDependencies:
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(lightningcss@1.33.0)(tsx@4.23.12)
 
   packages/kit-us:
     dependencies:
@@ -881,10 +896,16 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
+      '@dsh-trading/indicators':
+        specifier: workspace:*
+        version: link:../indicators
     devDependencies:
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(lightningcss@1.33.0)(tsx@4.23.12)
 
   packages/router:
     dependencies:

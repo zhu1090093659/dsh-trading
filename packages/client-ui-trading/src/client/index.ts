@@ -15,6 +15,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { IndicatorRegistry } from '@dsh-trading/indicators'
+import { validateCustomIndicator } from '@dsh-trading/indicators'
 import { createSelectionStore, createWatchlistStore } from './store.ts'
 import { createChartStateStore } from './chart-state.ts'
 import { indicators } from './indicator-registry.ts'
@@ -23,6 +24,7 @@ import { QuotePane } from './QuotePane.tsx'
 import { HomeHistory } from './HomeHistory.tsx'
 import { SessionRail } from './SessionRail.tsx'
 import { foldStore, marketFoldStore } from './fold-store.ts'
+import { fetchCustomIndicators } from './api.ts'
 import './tokens.css'
 import './shell-pad.css'
 import type { MarketLocaleKey } from './contract.ts'
@@ -78,6 +80,21 @@ export function apply(ctx: ClientContext): void {
     const service = (scope as unknown as { tradingIndicators: IndicatorRegistry }).tradingIndicators
     for (const definition of service.list()) indicators.register(definition)
   })
+
+  // Issue #19：异步拉取并注册已持久化的自定义指标
+  void (async () => {
+    try {
+      const customList = await fetchCustomIndicators()
+      for (const item of customList) {
+        const result = validateCustomIndicator(item)
+        if (result.ok) {
+          indicators.register(result.definition)
+        }
+      }
+    } catch (e) {
+      console.warn('[dsh-trading] failed to fetch custom indicators:', e)
+    }
+  })()
 
   // 左侧停靠：自选面板（官方浮层通道；支持展开与折叠态 MarketRail）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({

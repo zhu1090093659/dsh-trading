@@ -13,7 +13,10 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dsh-trading/api'
+import { createFileCustomIndicatorStore, createAuthorIndicatorTool } from '@dsh-trading/indicators/tool'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import os from 'node:os'
+import path from 'node:path'
 import {
   BridgeProtocolError,
   MARKET_SERVICE_KEYS,
@@ -51,6 +54,20 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
  * @param ctx - Host cordis context（bundle loader entry）。
  */
 export function apply(ctx: Context): void {
+  const storePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
+  const customIndicatorsStore = createFileCustomIndicatorStore(storePath)
+
+  // 注册 indicator_author 工具到全局 tools（若服务存在）
+  ctx.inject(['tools'] as never, (toolCtx) => {
+    const tools = (toolCtx as unknown as { tools?: { register(t: unknown): void; get(name: string): unknown } }).tools
+    if (tools && typeof tools.register === 'function') {
+      const tool = createAuthorIndicatorTool({ store: customIndicatorsStore })
+      if (tools.get(tool.name) === undefined) {
+        tools.register(tool)
+      }
+    }
+  })
+
   ctx.inject(['webServer', 'connection'], (webCtx) => {
     const webServer = webCtx.get('webServer') as unknown as WebServerLike | undefined
     const connection = webCtx.get('connection') as unknown as ConnectionLike | undefined
@@ -61,6 +78,7 @@ export function apply(ctx: Context): void {
       registry: webCtx.get('tradingMarketDataRegistry') as MarketDataRegistryLike | undefined,
       router: webCtx.get('tradingMarketRouter') as { activeProvider(m: string): string | undefined } | undefined,
       legacy: market => webCtx.get(MARKET_SERVICE_KEYS[market]) as MarketDataService | undefined,
+      customIndicatorsStore,
     })
     const bridge = new TradingBridge(host)
     const route = {
