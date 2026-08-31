@@ -14,27 +14,35 @@ import type {
   SettingsScopeSnapshot,
 } from '@deepseek-ai/dsh-client-ui-settings/client'
 
-/** provider 候选显示名（slug + 显示名；值与 router PROVIDER_VOCABULARY 对齐）。 */
-export const PROVIDER_LABELS: readonly Readonly<{ id: string; label: string }>[] = [
-  { id: 'binance', label: 'Binance (币安)' },
-  { id: 'okx', label: 'OKX (欧易)' },
-  { id: 'bybit', label: 'Bybit' },
-  { id: 'ccxt', label: 'CCXT (跨所聚合 100+)' },
-  { id: 'yahoo', label: 'Yahoo Finance' },
-  { id: 'alpaca', label: 'Alpaca' },
-  { id: 'fmp', label: 'FMP (Financial Modeling Prep)' },
-  { id: 'finnhub', label: 'Finnhub' },
-  { id: 'polygon', label: 'Polygon.io (Massive)' },
-  { id: 'ibkr', label: 'IBKR (盈透证券)' },
-  { id: 'stooq', label: 'Stooq' },
-  { id: 'tencent', label: '腾讯 (Tencent)' },
-  { id: 'eastmoney', label: '东方财富 (Eastmoney)' },
-  { id: 'tushare', label: 'Tushare Pro' },
-  { id: 'akshare', label: 'AkShare (宏观/另类量化)' },
-  { id: 'qmt', label: 'MiniQMT (迅投券商实盘)' },
-  { id: 'futu', label: 'Futu (富途 OpenD)' },
-  { id: 'longbridge', label: 'Longbridge (长桥)' },
-  { id: 'tiger', label: 'Tiger Trade (老虎证券)' },
+export interface ProviderMeta {
+  id: string
+  label: string
+  url?: string
+  env?: string
+  type: 'public' | 'commercial' | 'gateway'
+}
+
+/** provider 候选显示名与指引（slug + 显示名 + 官网/API Key 申请链接 + 环境变量；值与 router PROVIDER_VOCABULARY 对齐）。 */
+export const PROVIDER_LABELS: readonly Readonly<ProviderMeta>[] = [
+  { id: 'binance', label: 'Binance (币安)', url: 'https://binance.com/en/binance-api', env: 'BINANCE_API_KEY', type: 'public' },
+  { id: 'okx', label: 'OKX (欧易)', url: 'https://okx.com/docs-v5/zh/', env: 'OKX_API_KEY', type: 'public' },
+  { id: 'bybit', label: 'Bybit', url: 'https://bybit.com/en/api-overview', env: 'BYBIT_API_KEY', type: 'public' },
+  { id: 'ccxt', label: 'CCXT (跨所聚合 100+)', url: 'https://ccxt.com', env: 'CCXT_API_KEY', type: 'public' },
+  { id: 'yahoo', label: 'Yahoo Finance', url: 'https://finance.yahoo.com', type: 'public' },
+  { id: 'alpaca', label: 'Alpaca', url: 'https://alpaca.markets', env: 'ALPACA_API_KEY', type: 'commercial' },
+  { id: 'fmp', label: 'FMP (Financial Modeling Prep)', url: 'https://site.financialmodelingprep.com/developer', env: 'FMP_API_KEY', type: 'commercial' },
+  { id: 'finnhub', label: 'Finnhub', url: 'https://finnhub.io/register', env: 'FINNHUB_API_KEY', type: 'commercial' },
+  { id: 'polygon', label: 'Polygon.io (Massive)', url: 'https://polygon.io', env: 'POLYGON_API_KEY', type: 'commercial' },
+  { id: 'ibkr', label: 'IBKR (盈透证券)', url: 'https://interactivebrokers.com/campus/ibkr-api-page/cpapi/', env: 'IBKR_GATEWAY_URL', type: 'gateway' },
+  { id: 'stooq', label: 'Stooq', url: 'https://stooq.com', type: 'public' },
+  { id: 'tencent', label: '腾讯 (Tencent)', url: 'https://finance.qq.com', type: 'public' },
+  { id: 'eastmoney', label: '东方财富 (Eastmoney)', url: 'https://eastmoney.com', type: 'public' },
+  { id: 'tushare', label: 'Tushare Pro', url: 'https://tushare.pro/register', env: 'TUSHARE_TOKEN', type: 'commercial' },
+  { id: 'akshare', label: 'AkShare (宏观/另类量化)', url: 'https://akshare.xyz', env: 'AKSHARE_API_URL', type: 'public' },
+  { id: 'qmt', label: 'MiniQMT (迅投券商实盘)', url: 'http://127.0.0.1:5800', env: 'QMT_GATEWAY_URL', type: 'gateway' },
+  { id: 'futu', label: 'Futu (富途 OpenD)', url: 'https://futunn.com/download/open-api', env: 'FUTU_HOST', type: 'gateway' },
+  { id: 'longbridge', label: 'Longbridge (长桥)', url: 'https://open.longportapp.com', env: 'LONGBRIDGE_APP_KEY', type: 'commercial' },
+  { id: 'tiger', label: 'Tiger Trade (老虎证券)', url: 'https://developer.itigerup.com', env: 'TIGER_ID', type: 'commercial' },
 ]
 
 /** dshtrading namespace 下的值形状（router 侧同步；窄化后的子集契约）。 */

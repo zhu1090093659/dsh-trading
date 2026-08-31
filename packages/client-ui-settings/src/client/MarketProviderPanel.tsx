@@ -147,6 +147,27 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
           <span>{provider.label}</span>
         </label>
       ))}
+      {(() => {
+        const activeId = draft ?? resolved
+        const meta = PROVIDER_LABELS.find((p) => p.id === activeId)
+        if (!meta) return null
+        return (
+          <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--dsw-alias-bg-hover, rgba(0,0,0,0.03))', borderRadius: 6, fontSize: '0.85em' }}>
+            <div>
+              {meta.url && (
+                <span>
+                  指引与文档: <a href={meta.url} target="_blank" rel="noreferrer" style={{ color: 'var(--dsw-alias-primary, #1890ff)', textDecoration: 'underline' }}>{meta.url}</a>
+                </span>
+              )}
+            </div>
+            {meta.env && (
+              <div style={{ marginTop: 4, color: 'var(--dsw-alias-text-secondary, #666)' }}>
+                环境变量 / 密钥配置: <code>{meta.env}</code> {meta.type === 'commercial' ? '(BYOK 自行填入)' : meta.type === 'gateway' ? '(本地网关地址/账号)' : ''}
+              </div>
+            )}
+          </div>
+        )
+      })()}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
         <button type="button" disabled={!dirty || saving || !writable} onClick={() => void save()}>
           {t('save')}
