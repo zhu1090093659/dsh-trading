@@ -19,7 +19,22 @@
       name: '@dsh-trading/hk'
 
     # host 面数据行（2026-08-30 GUI 行情桥配套）：只 provide tradingHkMarketData。
-    - id: dsh-trading-hk-dataplane
+    - id: dsh-trading-hk-dataplane-tencent
       name: '@dsh-trading/connector-tencent/dataplane'
       config:
+        enabled: true
         market: hk
+    - id: dsh-trading-hk-dataplane-futu
+      name: '@dsh-trading/connector-futu/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-hk-dataplane-longbridge
+      name: '@dsh-trading/connector-longbridge/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-hk-dataplane-tiger
+      name: '@dsh-trading/connector-tiger/dataplane'
+      config:
+        enabled: true
+
+

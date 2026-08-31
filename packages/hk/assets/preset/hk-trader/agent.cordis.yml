@@ -34,15 +34,60 @@
     tradingHkMarketData: true
   config:
     # 同包双实例：行 id 市场命名空间，name 指向共用插件包，market 分流。
-    - id: dsh-trading-hk-connector
+    - id: dsh-trading-hk-connector-tencent
       name: '@dsh-trading/connector-tencent'
       config:
+        enabled: true
         market: hk
         dryRun: true
         liveTrading: false
+
+- id: dsh-trading-hk-connector-futu-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingHkMarketData: true
+    tradingHkTrade: true
+  config:
+    - id: dsh-trading-hk-connector-futu
+      name: '@dsh-trading/connector-futu'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+- id: dsh-trading-hk-connector-longbridge-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingHkMarketData: true
+    tradingHkTrade: true
+  config:
+    - id: dsh-trading-hk-connector-longbridge
+      name: '@dsh-trading/connector-longbridge'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+- id: dsh-trading-hk-connector-tiger-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingHkMarketData: true
+    tradingHkTrade: true
+  config:
+    - id: dsh-trading-hk-connector-tiger
+      name: '@dsh-trading/connector-tiger'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
 
 - id: dsh-trading-hk-kit
   name: '@dsh-trading/kit-hk'
   config:
     dryRun: true
     liveTrading: false
+

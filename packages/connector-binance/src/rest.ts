@@ -239,4 +239,24 @@ export class BinanceRestClient {
     }
     return body.map((row) => parseKlineRow(row, sym))
   }
+
+  /**
+   * 全部可交易现货标的名册（GET /api/v3/exchangeInfo，status=TRADING 过滤，Issue #15）。
+   * 输出 symbol 为规范形（BTCUSDT），name 为 baseAsset/quoteAsset（如 BTC/USDT）。
+   */
+  async listInstruments(): Promise<Array<{ symbol: string; name?: string }>> {
+    const body = await this.#request('/api/v3/exchangeInfo', {})
+    const info = body as { symbols?: Array<{ symbol?: string; status?: string; baseAsset?: string; quoteAsset?: string }> }
+    if (!Array.isArray(info?.symbols)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', 'Binance exchangeInfo: invalid response shape')
+    }
+    const result: Array<{ symbol: string; name?: string }> = []
+    for (const item of info.symbols) {
+      if (item && item.status === 'TRADING' && typeof item.symbol === 'string' && item.symbol) {
+        const name = item.baseAsset && item.quoteAsset ? `${item.baseAsset}/${item.quoteAsset}` : undefined
+        result.push({ symbol: item.symbol, ...(name ? { name } : {}) })
+      }
+    }
+    return result
+  }
 }

@@ -28,7 +28,11 @@
     "build": "tsdown"
   },
   "dependencies": {
+    "@dsh-trading/connector-akshare": "workspace:*",
+    "@dsh-trading/connector-eastmoney": "workspace:*",
+    "@dsh-trading/connector-qmt": "workspace:*",
     "@dsh-trading/connector-tencent": "workspace:*",
+    "@dsh-trading/connector-tushare": "workspace:*",
     "@dsh-trading/kit-cn": "workspace:*"
   },
   "peerDependencies": {

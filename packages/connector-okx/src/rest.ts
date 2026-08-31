@@ -599,6 +599,19 @@ export class OkxRestClient {
     })
   }
 
+  /**
+   * 全部可交易现货标的名册（GET /api/v5/public/instruments?instType=SPOT，Issue #15）。
+   * 输出 symbol 归一化为市场规范形（BTC-USDT → BTCUSDT），name 为 baseCcy/quoteCcy。
+   */
+  async listInstruments(): Promise<Array<{ symbol: string; name?: string }>> {
+    const instruments = await this.getInstruments('SPOT')
+    return instruments.map((inst) => {
+      const canonical = toCanonicalOkxSymbol(inst.instId)
+      const name = inst.baseCcy && inst.quoteCcy ? `${inst.baseCcy}/${inst.quoteCcy}` : undefined
+      return { symbol: canonical, ...(name ? { name } : {}) }
+    })
+  }
+
   /* -- 签名端点（四头 + demo 头；凭证由调用方每次操作解析） ------------------ */
 
   /** 只读余额：GET /api/v5/account/balance（ccy 可选，逗号分隔 ≤20）。 */

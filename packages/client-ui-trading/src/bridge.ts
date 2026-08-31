@@ -88,6 +88,15 @@ export interface KlinesWire {
   klines: Kline[]
 }
 
+export interface SymbolInfoWire {
+  symbol: string
+  name?: string
+}
+
+export interface SymbolsWire {
+  symbols: SymbolInfoWire[]
+}
+
 export class BridgeProtocolError extends Error {
   readonly status: number
   constructor(status: number, message: string) {
@@ -99,6 +108,9 @@ export class BridgeProtocolError extends Error {
 function isMarketId(value: string): value is MarketId {
   return (MARKET_IDS as readonly string[]).includes(value)
 }
+
+/** 动态标的全集缓存 TTL（30分钟）。 */
+export const SYMBOLS_CACHE_TTL_MS = 30 * 60 * 1000
 
 /** 从 Error 上提取结构化错误词汇（连接器按 TradingError 形状附加 code）。 */
 export function errorPayload(error: unknown): { code: string; message: string } {
@@ -112,6 +124,8 @@ export function errorPayload(error: unknown): { code: string; message: string } 
 }
 
 export class TradingBridge {
+  private readonly symbolsCache = new Map<string, { list: SymbolInfoWire[]; fetchedAt: number }>()
+
   constructor(private readonly host: BridgeHost) {}
 
   /** 已安装（有行情服务）的市场清单 + 当前 provider slug。 */
@@ -161,6 +175,30 @@ export class TradingBridge {
     const klines = await service.getKlines(trimmed, interval as Interval, limit)
     return { klines }
   }
+
+  /** 动态标的全集（带 30min 进程内缓存；未实现或异常静默回落空列表）。 */
+  async symbols(market: string): Promise<SymbolsWire> {
+    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const service = this.host.getMarketService(market)
+    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    const cached = this.symbolsCache.get(market)
+    if (cached !== undefined && Date.now() - cached.fetchedAt < SYMBOLS_CACHE_TTL_MS) {
+      return { symbols: cached.list }
+    }
+    if (typeof service.listInstruments !== 'function') {
+      return { symbols: [] }
+    }
+    try {
+      const list = await service.listInstruments()
+      const symbols: SymbolInfoWire[] = Array.isArray(list)
+        ? list.map(item => ({ symbol: item.symbol, ...(item.name ? { name: item.name } : {}) }))
+        : []
+      this.symbolsCache.set(market, { list: symbols, fetchedAt: Date.now() })
+      return { symbols }
+    } catch {
+      return { symbols: [] }
+    }
+  }
 }
 
 /** 请求分发：把 (method, pathname, searchParams) 路由到桥方法，返回 (status, payload)。 */
@@ -185,6 +223,10 @@ export async function dispatchBridgeRequest(
       const interval = search.get('interval') ?? '1d'
       const limit = search.get('limit')
       return { status: 200, payload: await bridge.klines(market, symbol, interval, limit) }
+    }
+    case '/symbols': {
+      const market = search.get('market') ?? ''
+      return { status: 200, payload: await bridge.symbols(market) }
     }
     default:
       throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)

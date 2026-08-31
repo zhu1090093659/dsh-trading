@@ -36,8 +36,83 @@
     - id: dsh-trading-us-connector-yahoo
       name: '@dsh-trading/connector-yahoo'
       config:
+        enabled: true
         dryRun: true
         liveTrading: false
+
+- id: dsh-trading-us-connector-alpaca-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingUsMarketData: true
+    tradingUsTrade: true
+  config:
+    - id: dsh-trading-us-connector-alpaca
+      name: '@dsh-trading/connector-alpaca'
+      config:
+        enabled: true
+        env: demo
+        dryRun: true
+        liveTrading: false
+
+- id: dsh-trading-us-connector-fmp-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingUsMarketData: true
+    tradingUsTrade: true
+  config:
+    - id: dsh-trading-us-connector-fmp
+      name: '@dsh-trading/connector-fmp'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+- id: dsh-trading-us-connector-finnhub-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingUsMarketData: true
+    tradingUsTrade: true
+  config:
+    - id: dsh-trading-us-connector-finnhub
+      name: '@dsh-trading/connector-finnhub'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+- id: dsh-trading-us-connector-polygon-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingUsMarketData: true
+    tradingUsTrade: true
+  config:
+    - id: dsh-trading-us-connector-polygon
+      name: '@dsh-trading/connector-polygon'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+- id: dsh-trading-us-connector-ibkr-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingUsMarketData: true
+    tradingUsTrade: true
+  config:
+    - id: dsh-trading-us-connector-ibkr
+      name: '@dsh-trading/connector-ibkr'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+
+
 
 - id: dsh-trading-us-kit
   name: '@dsh-trading/kit-us'

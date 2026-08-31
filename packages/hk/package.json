@@ -28,7 +28,10 @@
     "build": "tsdown"
   },
   "dependencies": {
+    "@dsh-trading/connector-futu": "workspace:*",
+    "@dsh-trading/connector-longbridge": "workspace:*",
     "@dsh-trading/connector-tencent": "workspace:*",
+    "@dsh-trading/connector-tiger": "workspace:*",
     "@dsh-trading/kit-hk": "workspace:*"
   },
   "peerDependencies": {

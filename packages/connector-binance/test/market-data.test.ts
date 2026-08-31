@@ -159,3 +159,35 @@ describe('BinanceRestClient timeout', () => {
     await expect(client.getTicker('BTCUSDT')).rejects.toMatchObject({ code: 'TRADING_NETWORK' })
   })
 })
+
+describe('BinanceRestClient.listInstruments', () => {
+  it('filters TRADING status and maps baseAsset/quoteAsset names', async () => {
+    const exchangeInfoBody = {
+      timezone: 'UTC',
+      serverTime: 1735689600000,
+      symbols: [
+        { symbol: 'BTCUSDT', status: 'TRADING', baseAsset: 'BTC', quoteAsset: 'USDT' },
+        { symbol: 'ETHUSDT', status: 'TRADING', baseAsset: 'ETH', quoteAsset: 'USDT' },
+        { symbol: 'OLDCOIN', status: 'BREAK', baseAsset: 'OLD', quoteAsset: 'USDT' },
+        { symbol: 'DELISTED', status: 'HALT', baseAsset: 'DELIST', quoteAsset: 'USDT' },
+      ],
+    }
+    const { impl, urls } = stubFetch([{ match: '/api/v3/exchangeInfo', body: exchangeInfoBody }])
+    const client = new BinanceRestClient({ fetchImpl: impl })
+    const instruments = await client.listInstruments()
+
+    expect(urls[0]).toContain('/api/v3/exchangeInfo')
+    expect(instruments).toEqual([
+      { symbol: 'BTCUSDT', name: 'BTC/USDT' },
+      { symbol: 'ETHUSDT', name: 'ETH/USDT' },
+    ])
+  })
+
+  it('handles empty or malformed exchangeInfo response', async () => {
+    const { impl } = stubFetch([{ match: '/api/v3/exchangeInfo', body: { symbols: 'not-array' } }])
+    const client = new BinanceRestClient({ fetchImpl: impl })
+    await expect(client.listInstruments()).rejects.toMatchObject({
+      code: 'TRADING_EXCHANGE_ERROR',
+    })
+  })
+})

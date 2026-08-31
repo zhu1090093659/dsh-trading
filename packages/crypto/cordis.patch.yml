@@ -29,3 +29,13 @@
       config:
         enabled: true
         env: demo
+    - id: dsh-trading-crypto-dataplane-bybit
+      name: '@dsh-trading/connector-bybit/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-crypto-dataplane-ccxt
+      name: '@dsh-trading/connector-ccxt/dataplane'
+      config:
+        enabled: true
+
+

@@ -28,6 +28,11 @@
     "build": "tsdown"
   },
   "dependencies": {
+    "@dsh-trading/connector-alpaca": "workspace:*",
+    "@dsh-trading/connector-finnhub": "workspace:*",
+    "@dsh-trading/connector-fmp": "workspace:*",
+    "@dsh-trading/connector-ibkr": "workspace:*",
+    "@dsh-trading/connector-polygon": "workspace:*",
     "@dsh-trading/connector-yahoo": "workspace:*",
     "@dsh-trading/kit-us": "workspace:*"
   },

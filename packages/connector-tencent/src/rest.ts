@@ -117,14 +117,26 @@ export function toCanonicalTencentSymbol(market: TencentMarket, wireOrCode: stri
 }
 
 /* ------------------------------------------------------------------ */
-/* interval → 腾讯 fqkline 周期参数（分钟线未实现，见文件头注）                  */
+/* ------------------------------------------------------------------ */
+/* interval → 腾讯周期参数（日周月 fqkline / 分钟 mkline）              */
 /* ------------------------------------------------------------------ */
 
-/** api Interval 词汇的受支持子集 → 腾讯 tf= 值与响应键（qfq<key>）。 */
-const INTERVAL_TO_TENCENT: ReadonlyMap<Interval, { tf: string; key: string }> = new Map([
-  ['1d', { tf: 'day', key: 'qfqday' }],
-  ['1w', { tf: 'week', key: 'qfqweek' }],
-  ['1M', { tf: 'month', key: 'qfqmonth' }],
+export type TencentKlineType = 'fqkline' | 'mkline'
+
+export interface TencentIntervalDef {
+  readonly type: TencentKlineType
+  readonly tf: string
+  readonly key: string
+  readonly durationMs: number
+}
+
+/** api Interval 词汇的受支持子集 → 腾讯 tf= 值与响应键。 */
+const INTERVAL_TO_TENCENT: ReadonlyMap<Interval, TencentIntervalDef> = new Map([
+  ['5m', { type: 'mkline', tf: 'm5', key: 'm5', durationMs: 5 * 60_000 }],
+  ['30m', { type: 'mkline', tf: 'm30', key: 'm30', durationMs: 30 * 60_000 }],
+  ['1d', { type: 'fqkline', tf: 'day', key: 'qfqday', durationMs: 86_400_000 }],
+  ['1w', { type: 'fqkline', tf: 'week', key: 'qfqweek', durationMs: 7 * 86_400_000 }],
+  ['1M', { type: 'fqkline', tf: 'month', key: 'qfqmonth', durationMs: 30 * 86_400_000 }],
 ])
 
 /** 工具 parameters enum 用：受支持 interval 词汇。 */
@@ -133,6 +145,27 @@ export const INTERVAL_VOCABULARY: readonly string[] = [...INTERVAL_TO_TENCENT.ke
 /* ------------------------------------------------------------------ */
 /* 时间处理                                                                */
 /* ------------------------------------------------------------------ */
+
+/**
+ * 分钟 K 线时间 `YYYYMMDDHHmm` → epoch ms（Asia/Shanghai 墙钟，12 位紧凑格式）。
+ */
+export function minuteKlineTimeToEpochMs(value: string, timeZone = 'Asia/Shanghai'): number {
+  const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(value)
+  if (!m) throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `invalid tencent minute kline timestamp ${JSON.stringify(value)}`)
+  const [, y, mo, d, h, mi] = m
+  const guess = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), 0)
+  const offsetMs = (date: number): number => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    }).formatToParts(new Date(date))
+    const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value ?? '0')
+    const hour = get('hour') % 24
+    return Date.UTC(get('year'), get('month') - 1, get('day'), hour, get('minute'), get('second')) - date
+  }
+  return guess - offsetMs(guess)
+}
 
 /** K 线日期 `YYYY-MM-DD` → epoch ms（UTC 当日零点锚定，行情日界语义，与 stooq 映射同构）。 */
 export function klineDateToEpochMs(date: string): number {
@@ -290,6 +323,7 @@ function parseHkTicker(fields: string[], timestamp: number): TencentTicker {
 
 const DEFAULT_QUOTE_BASE_URL = 'https://qt.gtimg.cn'
 const DEFAULT_KLINE_BASE_URL = 'https://web.ifzq.gtimg.cn'
+const DEFAULT_MKLINE_BASE_URL = 'https://ifzq.gtimg.cn'
 const DEFAULT_TIMEOUT_MS = 10_000
 
 export interface TencentRestOptions {
@@ -297,6 +331,8 @@ export interface TencentRestOptions {
   readonly quoteBaseUrl?: string
   /** 覆盖 K 线 base（测试/反代用），末尾不带斜杠。 */
   readonly klineBaseUrl?: string
+  /** 覆盖分钟 K 线 base（测试/反代用），末尾不带斜杠。 */
+  readonly mklineBaseUrl?: string
   /** 单请求超时（ms），默认 10s。 */
   readonly timeoutMs?: number
   /** 注入 fetch 实现；缺省用全局 fetch（Node 22+ 内置）。 */
@@ -308,6 +344,7 @@ export class TencentRestClient {
   readonly #market: TencentMarket
   readonly #quoteBaseUrl: string
   readonly #klineBaseUrl: string
+  readonly #mklineBaseUrl: string
   readonly #timeoutMs: number
   readonly #fetchImpl: typeof fetch
 
@@ -315,6 +352,7 @@ export class TencentRestClient {
     this.#market = market
     this.#quoteBaseUrl = options.quoteBaseUrl ?? DEFAULT_QUOTE_BASE_URL
     this.#klineBaseUrl = options.klineBaseUrl ?? DEFAULT_KLINE_BASE_URL
+    this.#mklineBaseUrl = options.mklineBaseUrl ?? DEFAULT_MKLINE_BASE_URL
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     this.#fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
   }
@@ -393,9 +431,8 @@ export class TencentRestClient {
   }
 
   /**
-   * 日/周/月 K（前权 qfq）。响应 JSON：data.<wireCode>.<qfqday|qfqweek|qfqmonth>，
-   * 行 = [date, open, close, high, low, volume, ...hk 附加对象/字符串（丢弃）]——
-   ** 注意字段序是开收高低量。分钟线未实现（端点本出口不可达，待验证）。
+   * K 线（日/周/月走 fqkline 前权 qfq；5m/30m 分钟线走 mkline 端点）。
+   * 港股 mkline 端点不支持分钟线，请求 5m/30m 会抛出 TRADING_UNSUPPORTED_INTERVAL。
    */
   async getKlines(symbol: string, interval: Interval, limit?: number): Promise<Kline[]> {
     const sym = normalizeSymbol(this.#market, symbol)
@@ -406,10 +443,19 @@ export class TencentRestClient {
         `Tencent klines: unsupported interval ${String(interval)} — supported: ${INTERVAL_VOCABULARY.join('/')}`,
       )
     }
+    if (mapping.type === 'mkline' && this.#market === 'hk') {
+      throw new TradingServiceError(
+        'TRADING_UNSUPPORTED_INTERVAL',
+        `Tencent klines: Hong Kong market (HKEX) does not support minute intervals (${interval}) via public endpoint`,
+      )
+    }
     const count = typeof limit === 'number' && Number.isInteger(limit) && limit > 0 ? Math.min(limit, 800) : 100
     const wire = this.#klineWireCode(sym)
-    const endpoint = this.#market === 'hk' ? 'appstock/app/hkfqkline/get' : 'appstock/app/fqkline/get'
-    const url = `${this.#klineBaseUrl}/${endpoint}?param=${wire},${mapping.tf},,,${count},qfq`
+    const isMinute = mapping.type === 'mkline'
+    const url = isMinute
+      ? `${this.#mklineBaseUrl}/appstock/app/kline/mkline?param=${wire},${mapping.tf},,${count}`
+      : `${this.#klineBaseUrl}/${this.#market === 'hk' ? 'appstock/app/hkfqkline/get' : 'appstock/app/fqkline/get'}?param=${wire},${mapping.tf},,,${count},qfq`
+
     const bytes = await this.#requestArrayBuffer(url)
     let payload: { code?: number; msg?: string; data?: Record<string, Record<string, unknown>> }
     try {
@@ -426,7 +472,9 @@ export class TencentRestClient {
     const market = payload.data?.[wire]
     // 键回落（2026-08-31 实证，美团 hk03690）：hkfqkline 对无前权事件的代码返回
     // `day`（未复权）而非 `qfqday`——优先 qfq 键，缺失回落裸键，行结构相同。
-    const raw = market?.[mapping.key] ?? market?.[mapping.tf]
+    const raw = isMinute
+      ? market?.[mapping.key]
+      : (market?.[mapping.key] ?? market?.[mapping.tf])
     const rows = Array.isArray(raw) ? raw : undefined
     if (rows === undefined || rows.length === 0) {
       throw new TradingServiceError(
@@ -447,7 +495,7 @@ export class TencentRestClient {
       if (open === undefined || close === undefined || high === undefined || low === undefined) {
         throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Tencent klines for ${sym}: malformed row values ${JSON.stringify(row).slice(0, 80)}`)
       }
-      const openTime = klineDateToEpochMs(row[0])
+      const openTime = isMinute ? minuteKlineTimeToEpochMs(row[0]) : klineDateToEpochMs(row[0])
       klines.push({
         openTime,
         open,
@@ -455,7 +503,7 @@ export class TencentRestClient {
         low,
         close,
         volume: volume ?? 0,
-        closeTime: openTime + 86_400_000 - 1,
+        closeTime: openTime + mapping.durationMs - 1,
       })
     }
     return klines

@@ -44,3 +44,10 @@ export async function fetchKlines(market: MarketId, symbol: string, interval: st
   const wire = await getJson<{ klines: Kline[] }>(`/dshtrading/api/klines?${query.toString()}`)
   return Array.isArray(wire.klines) ? wire.klines : []
 }
+
+/** 动态全集标的名册（Issue #15）：未支持或失败时回退空数组。 */
+export async function fetchSymbols(market: MarketId): Promise<Array<{ symbol: string; name?: string }>> {
+  const query = new URLSearchParams({ market })
+  const wire = await getJson<{ symbols: Array<{ symbol: string; name?: string }> }>(`/dshtrading/api/symbols?${query.toString()}`)
+  return Array.isArray(wire.symbols) ? wire.symbols : []
+}

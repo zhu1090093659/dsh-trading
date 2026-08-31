@@ -86,8 +86,48 @@ describe('TradingBridge.klines', () => {
   })
 })
 
+describe('TradingBridge.symbols', () => {
+  it('服务实现 listInstruments 时返回标的名册并缓存', async () => {
+    let callCount = 0
+    const service = fakeService({
+      listInstruments: async () => {
+        callCount++
+        return [{ symbol: 'BTCUSDT', name: 'BTC/USDT' }, { symbol: 'ETHUSDT' }]
+      },
+    })
+    const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: service }))
+    const res1 = await bridge.symbols('crypto')
+    expect(res1.symbols).toEqual([
+      { symbol: 'BTCUSDT', name: 'BTC/USDT' },
+      { symbol: 'ETHUSDT' },
+    ])
+    expect(callCount).toBe(1)
+
+    // 第二次调用命中进程内 TTL 缓存
+    const res2 = await bridge.symbols('crypto')
+    expect(res2.symbols).toHaveLength(2)
+    expect(callCount).toBe(1)
+  })
+
+  it('服务未实现 listInstruments 时静默返回空数组', async () => {
+    const service = fakeService()
+    const bridge = new TradingBridge(fakeHost({ tradingUsMarketData: service }))
+    const res = await bridge.symbols('us')
+    expect(res.symbols).toEqual([])
+  })
+
+  it('未安装市场 → 400', async () => {
+    const bridge = new TradingBridge(fakeHost({}))
+    await expect(bridge.symbols('cn')).rejects.toThrowError(BridgeProtocolError)
+  })
+})
+
 describe('dispatchBridgeRequest', () => {
-  const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: fakeService() }))
+  const bridge = new TradingBridge(fakeHost({
+    tradingCryptoMarketData: fakeService({
+      listInstruments: async () => [{ symbol: 'BTCUSDT' }],
+    }),
+  }))
 
   it('GET /markets → 200', async () => {
     const { status, payload } = await dispatchBridgeRequest(bridge, 'GET', '/markets', new URLSearchParams())
@@ -99,6 +139,13 @@ describe('dispatchBridgeRequest', () => {
     const search = new URLSearchParams({ market: 'crypto', symbols: 'BTCUSDT' })
     const { payload } = await dispatchBridgeRequest(bridge, 'GET', '/tickers', search)
     expect(payload).toMatchObject({ tickers: { BTCUSDT: { ok: true } } })
+  })
+
+  it('GET /symbols → 200', async () => {
+    const search = new URLSearchParams({ market: 'crypto' })
+    const { status, payload } = await dispatchBridgeRequest(bridge, 'GET', '/symbols', search)
+    expect(status).toBe(200)
+    expect(payload).toEqual({ symbols: [{ symbol: 'BTCUSDT' }] })
   })
 
   it('未知端点 404、非 GET 405', async () => {

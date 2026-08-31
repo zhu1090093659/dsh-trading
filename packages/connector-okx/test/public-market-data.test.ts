@@ -205,3 +205,21 @@ describe('网络层', () => {
     expect(err.name).toBe('TradingServiceError')
   })
 })
+
+describe('listInstruments', () => {
+  it('拉取 SPOT instruments 并转换为规范形 symbol 与 base/quote name', async () => {
+    const { fetchImpl, requests } = routeMock(() => okResponse({
+      code: '0',
+      data: [
+        { instId: 'BTC-USDT', instType: 'SPOT', lotSz: '0.00001', minSz: '0.00001', tickSz: '0.1', baseCcy: 'BTC', quoteCcy: 'USDT' },
+        { instId: 'ETH-USDT', instType: 'SPOT', lotSz: '0.001', minSz: '0.001', tickSz: '0.01', baseCcy: 'ETH', quoteCcy: 'USDT' },
+      ],
+    }))
+    const instruments = await client(fetchImpl).listInstruments()
+    expect(requests[0]?.url).toBe('https://okx.test/api/v5/public/instruments?instType=SPOT')
+    expect(instruments).toEqual([
+      { symbol: 'BTCUSDT', name: 'BTC/USDT' },
+      { symbol: 'ETHUSDT', name: 'ETH/USDT' },
+    ])
+  })
+})

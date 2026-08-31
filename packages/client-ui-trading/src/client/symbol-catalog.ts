@@ -194,21 +194,55 @@ export const SYMBOL_CATALOG: Record<MarketId, CatalogEntry[]> = {
   ],
 }
 
+const dynamicCatalogs = new Map<MarketId, CatalogEntry[]>()
+
+/** 注入某市场的动态标的全集（由桥端点拉取并入）。 */
+export function setDynamicCatalog(market: MarketId, entries: Array<{ symbol: string; name?: string }>): void {
+  const normalized: CatalogEntry[] = entries.map((e) => ({
+    symbol: e.symbol,
+    name: e.name ?? e.symbol,
+  }))
+  dynamicCatalogs.set(market, normalized)
+}
+
+/** 获取静态快照 ∪ 动态全集融合后的标的列表（静态优先保留中文名）。 */
+export function getMergedCatalog(market: MarketId): CatalogEntry[] {
+  const staticList = SYMBOL_CATALOG[market] ?? []
+  const dynamicList = dynamicCatalogs.get(market) ?? []
+  if (dynamicList.length === 0) return staticList
+  const seen = new Set<string>()
+  const merged: CatalogEntry[] = []
+  for (const entry of staticList) {
+    seen.add(entry.symbol.toUpperCase())
+    merged.push(entry)
+  }
+  for (const entry of dynamicList) {
+    const sym = entry.symbol.toUpperCase()
+    if (!seen.has(sym)) {
+      seen.add(sym)
+      merged.push(entry)
+    }
+  }
+  return merged
+}
+
 /**
- * 本地联想：symbol 前缀/包含（大小写不敏感）或中文名包含，返回前 limit 条。
+ * 联想搜索：静态 ∪ 动态全集融合，symbol 前缀/包含（大小写不敏感）或中文名包含，返回前 limit 条。
  * 空查询返回空（不打扰）。
  */
 export function searchSymbols(market: MarketId, query: string, limit = 8): CatalogEntry[] {
   const q = query.trim().toUpperCase()
   if (q === '') return []
-  const catalog = SYMBOL_CATALOG[market] ?? []
+  const catalog = getMergedCatalog(market)
   const scored: Array<{ entry: CatalogEntry; score: number }> = []
   for (const entry of catalog) {
     const symbol = entry.symbol.toUpperCase()
+    const name = entry.name ? entry.name.toUpperCase() : ''
     let score = -1
-    if (symbol.startsWith(q)) score = 0
-    else if (entry.name.toUpperCase().includes(q)) score = 1
-    else if (symbol.includes(q)) score = 2
+    if (symbol === q) score = 0
+    else if (symbol.startsWith(q)) score = 1
+    else if (name && name.includes(q)) score = 2
+    else if (symbol.includes(q)) score = 3
     if (score >= 0) scored.push({ entry, score })
   }
   return scored.sort((a, b) => a.score - b.score).slice(0, limit).map((s) => s.entry)

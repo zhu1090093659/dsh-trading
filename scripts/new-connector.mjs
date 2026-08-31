@@ -22,7 +22,7 @@
  *   __MARKET_CAP__     → market 首字母大写（如 Crypto；服务键 infix）
  */
 import { mkdir, readdir, readFile, writeFile, rm, stat } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -112,9 +112,8 @@ for (const file of files) {
     parsed.name = pkgName
     text = JSON.stringify(parsed, null, 2) + '\n'
   }
-  // 确保目标文件父目录存在（按平台分隔符切，Windows 也正确）。
-  const parent = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''
-  await mkdir(parent === '' ? targetDir : join(targetDir, parent), { recursive: true })
+  // 确保目标文件父目录存在（跨平台正确）。
+  await mkdir(dirname(dest), { recursive: true })
   await writeFile(dest, text)
 }
 

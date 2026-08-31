@@ -49,7 +49,27 @@ export const name = 'dsh-trading-market-router'
  * 上榜，不需要改本仓任何代码。未知 slug 的代价 = router 启动/变更时 log warn +
  * 无任何连接器激活（fail-soft），不写时拒。
  */
-export const PROVIDER_VOCABULARY = ['binance', 'okx', 'yahoo', 'stooq', 'tencent'] as const
+export const PROVIDER_VOCABULARY = [
+  'binance',
+  'okx',
+  'bybit',
+  'ccxt',
+  'yahoo',
+  'stooq',
+  'alpaca',
+  'fmp',
+  'finnhub',
+  'polygon',
+  'ibkr',
+  'tencent',
+  'eastmoney',
+  'tushare',
+  'akshare',
+  'qmt',
+  'futu',
+  'longbridge',
+  'tiger',
+] as const
 export type Provider = (typeof PROVIDER_VOCABULARY)[number]
 
 export interface MarketProviderEntry {

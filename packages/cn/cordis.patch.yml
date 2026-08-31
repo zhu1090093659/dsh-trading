@@ -18,8 +18,28 @@
     - id: dsh-trading-cn-installer
       name: '@dsh-trading/cn'
 
-    # host 面数据行（2026-08-30 GUI 行情桥配套）：只 provide tradingCnMarketData。
+    # host 面数据行（2026-08-30 GUI 行情桥配套）：提供 tradingCnMarketData 注册表。
     - id: dsh-trading-cn-dataplane
       name: '@dsh-trading/connector-tencent/dataplane'
       config:
         market: cn
+
+    - id: dsh-trading-cn-dataplane-eastmoney
+      name: '@dsh-trading/connector-eastmoney/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-cn-dataplane-tushare
+      name: '@dsh-trading/connector-tushare/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-cn-dataplane-akshare
+      name: '@dsh-trading/connector-akshare/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-cn-dataplane-qmt
+      name: '@dsh-trading/connector-qmt/dataplane'
+      config:
+        enabled: true
+
+
+

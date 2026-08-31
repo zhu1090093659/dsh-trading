@@ -36,7 +36,9 @@ const KLINE_LIMIT = 160
 const DAILY_LIMIT = 60
 
 const INTERVAL_KEY: Record<string, MarketLocaleKey> = {
+  '5m': 'interval.5m',
   '15m': 'interval.15m',
+  '30m': 'interval.30m',
   '1h': 'interval.1h',
   '4h': 'interval.4h',
   '1d': 'interval.1d',

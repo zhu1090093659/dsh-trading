@@ -356,9 +356,8 @@ export function apply(ctx: Context, config: Config): void {
         name: `${market}_get_klines`,
         description:
           `Get recent OHLCV candles for a ${market === 'hk' ? 'Hong Kong (HKEX)' : 'China A-share'} stock via the Tencent `
-          + 'public kline endpoint (web.ifzq.gtimg.cn, forward-adjusted qfq). Supported intervals: 1d/1w/1M '
-          + '(intraday minute intervals are not implemented in this slice). No credentials required; Tencent public '
-          + 'endpoint, no official authorization — personal use at your own discretion per Tencent terms.',
+          + 'public kline endpoint (cn supports 5m/30m/1d/1w/1M; hk supports 1d/1w/1M forward-adjusted qfq). '
+          + 'No credentials required; Tencent public endpoint, no official authorization — personal use at your own discretion per Tencent terms.',
         parameters: {
           symbol: {
             type: 'string',

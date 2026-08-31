@@ -58,8 +58,38 @@
         dryRun: true
         liveTrading: false
 
+- id: dsh-trading-crypto-connector-bybit-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingCryptoMarketData: true
+    tradingCryptoTrade: true
+  config:
+    - id: dsh-trading-crypto-connector-bybit
+      name: '@dsh-trading/connector-bybit'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+- id: dsh-trading-crypto-connector-ccxt-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingCryptoMarketData: true
+    tradingCryptoTrade: true
+  config:
+    - id: dsh-trading-crypto-connector-ccxt
+      name: '@dsh-trading/connector-ccxt'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+
 - id: dsh-trading-crypto-kit
   name: '@dsh-trading/kit-crypto'
   config:
     dryRun: true
     liveTrading: false
+

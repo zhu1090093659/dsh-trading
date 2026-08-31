@@ -201,6 +201,12 @@ export interface MarketDataService {
   getTicker(symbol: string): Promise<Ticker>
   getKlines(symbol: string, interval: Interval, limit?: number): Promise<Kline[]>
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void): Disposable
+  /**
+   * 查询本市场/交易所支持的全部标的名册（动态全集，Issue #15）。
+   * 输出 `symbol` 一律市场规范词汇（docs/symbol-vocabulary.md）。
+   * 可选方法：无公开全集端点的数据源（如 tencent/yahoo/stooq）可缺省或由桥/前端回退。
+   */
+  listInstruments?(): Promise<Array<{ symbol: string; name?: string }>>
 }
 
 /**

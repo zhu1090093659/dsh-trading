@@ -51,28 +51,51 @@ describe('dshtrading schema（用户设置一级）', () => {
     expect(activeProviderOf(cfg, 'jp')).toBe('yahoo')
   })
 
-  it('provider 候选集 = 全仓词汇（binance/okx/yahoo/stooq/tencent）', () => {
-    expect([...PROVIDER_VOCABULARY].sort()).toEqual(['binance', 'cn', 'hk', 'okx', 'stooq', 'tencent', 'us', 'yahoo'].filter((v) => ['binance', 'okx', 'yahoo', 'stooq', 'tencent'].includes(v)).sort())
+  it('provider 候选集 = 全仓词汇（binance/okx/bybit/ccxt/yahoo/stooq/alpaca/fmp/finnhub/polygon/ibkr/tencent/eastmoney/tushare/akshare/qmt/futu/longbridge/tiger）', () => {
+    expect([...PROVIDER_VOCABULARY].sort()).toEqual([
+      'akshare',
+      'alpaca',
+      'binance',
+      'bybit',
+      'ccxt',
+      'eastmoney',
+      'finnhub',
+      'fmp',
+      'futu',
+      'ibkr',
+      'longbridge',
+      'okx',
+      'polygon',
+      'qmt',
+      'stooq',
+      'tencent',
+      'tiger',
+      'tushare',
+      'yahoo',
+    ].sort())
     expect(PROVIDER_VOCABULARY).toContain('binance' as Provider)
+    expect(PROVIDER_VOCABULARY).toContain('ibkr' as Provider)
+    expect(PROVIDER_VOCABULARY).toContain('qmt' as Provider)
+    expect(PROVIDER_VOCABULARY).toContain('tiger' as Provider)
   })
 
-  it('schema 开放字符串：第三方 slug（bybit）不被一票否决（2026-08-30 整改 #4）', () => {
+  it('schema 开放字符串：第三方 slug（custom_dex）不被一票否决（2026-08-30 整改 #4）', () => {
     // schemastery Schema 可调用：Config(value) 即校验+解析。
     const resolve = Config as unknown as (value: unknown) => ConfigType
-    const resolved = resolve({ markets: { crypto: { provider: 'bybit' } } })
-    expect(resolved.markets.crypto?.provider).toBe('bybit')
+    const resolved = resolve({ markets: { crypto: { provider: 'custom_dex' } } })
+    expect(resolved.markets.crypto?.provider).toBe('custom_dex')
   })
 
   it('运行时校验：未知 slug → warn + 返回清单；已知 slug 静默', () => {
     const warns: string[] = []
     const log = { warn: (...args: unknown[]) => warns.push(args.join(' ')) }
     const unknown = warnUnknownProviders(
-      { markets: { crypto: { provider: 'bybit' }, us: { provider: 'yahoo' } } },
+      { markets: { crypto: { provider: 'unknown_dex' }, us: { provider: 'yahoo' } } },
       log,
     )
-    expect(unknown).toEqual(['bybit'])
+    expect(unknown).toEqual(['unknown_dex'])
     expect(warns).toHaveLength(1)
-    expect(warns[0]).toContain('bybit')
+    expect(warns[0]).toContain('unknown_dex')
     expect(warns[0]).toContain('crypto')
     expect(warnUnknownProviders({ markets: { ...DEFAULT_MARKETS } }, log)).toEqual([])
   })

@@ -104,6 +104,10 @@ export class BinanceMarketDataService extends Service implements MarketDataServi
     return this.client.getKlines(symbol, interval, limit)
   }
 
+  listInstruments(): Promise<Array<{ symbol: string; name?: string }>> {
+    return this.client.listInstruments()
+  }
+
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void, options?: SubscribeTickerOptions): Disposable {
     const ms = Math.max(options?.intervalMs ?? SUBSCRIBE_DEFAULT_MS, SUBSCRIBE_MIN_MS)
     const tick = (): void => {

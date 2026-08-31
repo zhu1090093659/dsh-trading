@@ -8,8 +8,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { fetchKlines, fetchMarkets, fetchTickers } from './api.ts'
-import { searchAllMarkets, searchSymbols } from './symbol-catalog.ts'
+import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers } from './api.ts'
+import { searchAllMarkets, searchSymbols, setDynamicCatalog } from './symbol-catalog.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { Sparkline } from './Sparkline.tsx'
@@ -67,6 +67,7 @@ export function MarketSidebar({
   const [series, setSeries] = useState<Record<string, ReferenceSeries>>({})
   const [draft, setDraft] = useState('')
   const [addMarket, setAddMarket] = useState<MarketId>('crypto')
+  const [catalogVersion, setCatalogVersion] = useState(0)
 
   const reloadMarkets = useRef((): void => {})
   reloadMarkets.current = () => {
@@ -75,6 +76,22 @@ export function MarketSidebar({
       .catch(() => { setLoadError(true) })
   }
   useEffect(() => { reloadMarkets.current() }, [])
+
+  // 动态标的全集预取（Issue #15）：切页签或挂载时触发，成功后注入 catalog 并刷新联想
+  useEffect(() => {
+    const targetMarkets: MarketId[] = tab === 'watch' ? ['crypto', 'us', 'cn', 'hk'] : [tab]
+    let cancelled = false
+    for (const m of targetMarkets) {
+      fetchSymbols(m)
+        .then((symbols) => {
+          if (cancelled || symbols.length === 0) return
+          setDynamicCatalog(m, symbols)
+          setCatalogVersion((v) => v + 1)
+        })
+        .catch(() => { /* 桥不可用/无全集静默回退纯静态 */ })
+    }
+    return () => { cancelled = true }
+  }, [tab])
 
   const availableMarkets = markets ?? []
   const rows = useMemo(() => {
@@ -92,7 +109,7 @@ export function MarketSidebar({
   // 联想候选：自选页签跨市场全局搜索（候选自带市场）；市场页签只搜本市场字典。
   const suggestions = useMemo(
     () => (tab === 'watch' ? searchAllMarkets(draft) : searchSymbols(tab, draft)),
-    [tab, draft],
+    [tab, draft, catalogVersion],
   )
 
   // 参考序列（日K收盘 → 迷你走势 + 昨收）：逐标的惰性拉一次，TTL 内复用。

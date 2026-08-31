@@ -175,8 +175,8 @@ export function rowsFor(watchlists: Watchlists, market: MarketId): Instrument[] 
 
 /** Chart intervals offered per market (connector-supported subsets only). */
 export const MARKET_INTERVALS: Record<MarketId, string[]> = {
-  crypto: ['15m', '1h', '4h', '1d', '1w'],
-  us: ['1d', '1w', '1M'],
-  cn: ['1d', '1w', '1M'],
-  hk: ['1d', '1w', '1M'],
+  crypto: ['5m', '15m', '30m', '1h', '4h', '1d', '1w'],
+  us: ['5m', '15m', '30m', '1h', '1d', '1w', '1M'],
+  cn: ['5m', '30m', '1d', '1w', '1M'],
+  hk: ['5m', '15m', '30m', '1h', '1d', '1w', '1M'],
 }

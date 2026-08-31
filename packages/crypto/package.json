@@ -30,6 +30,8 @@
   },
   "dependencies": {
     "@dsh-trading/connector-binance": "workspace:*",
+    "@dsh-trading/connector-bybit": "workspace:*",
+    "@dsh-trading/connector-ccxt": "workspace:*",
     "@dsh-trading/connector-okx": "workspace:*",
     "@dsh-trading/kit-crypto": "workspace:*"
   },

@@ -19,5 +19,30 @@
       name: '@dsh-trading/us'
 
     # host 面数据行（2026-08-30 GUI 行情桥配套）：只 provide tradingUsMarketData。
-    - id: dsh-trading-us-dataplane
+    - id: dsh-trading-us-dataplane-yahoo
       name: '@dsh-trading/connector-yahoo/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-us-dataplane-alpaca
+      name: '@dsh-trading/connector-alpaca/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-us-dataplane-fmp
+      name: '@dsh-trading/connector-fmp/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-us-dataplane-finnhub
+      name: '@dsh-trading/connector-finnhub/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-us-dataplane-polygon
+      name: '@dsh-trading/connector-polygon/dataplane'
+      config:
+        enabled: true
+    - id: dsh-trading-us-dataplane-ibkr
+      name: '@dsh-trading/connector-ibkr/dataplane'
+      config:
+        enabled: true
+
+
+

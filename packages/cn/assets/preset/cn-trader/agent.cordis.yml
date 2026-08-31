@@ -41,6 +41,37 @@
         dryRun: true
         liveTrading: false
 
+    - id: dsh-trading-cn-connector-eastmoney
+      name: '@dsh-trading/connector-eastmoney'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+    - id: dsh-trading-cn-connector-tushare
+      name: '@dsh-trading/connector-tushare'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+    - id: dsh-trading-cn-connector-akshare
+      name: '@dsh-trading/connector-akshare'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+    - id: dsh-trading-cn-connector-qmt
+      name: '@dsh-trading/connector-qmt'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
+
+
+
 - id: dsh-trading-cn-kit
   name: '@dsh-trading/kit-cn'
   config:

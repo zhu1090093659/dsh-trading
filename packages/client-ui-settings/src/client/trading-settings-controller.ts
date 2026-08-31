@@ -16,11 +16,25 @@ import type {
 
 /** provider 候选显示名（slug + 显示名；值与 router PROVIDER_VOCABULARY 对齐）。 */
 export const PROVIDER_LABELS: readonly Readonly<{ id: string; label: string }>[] = [
-  { id: 'binance', label: 'Binance' },
-  { id: 'okx', label: 'OKX' },
+  { id: 'binance', label: 'Binance (币安)' },
+  { id: 'okx', label: 'OKX (欧易)' },
+  { id: 'bybit', label: 'Bybit' },
+  { id: 'ccxt', label: 'CCXT (跨所聚合 100+)' },
   { id: 'yahoo', label: 'Yahoo Finance' },
+  { id: 'alpaca', label: 'Alpaca' },
+  { id: 'fmp', label: 'FMP (Financial Modeling Prep)' },
+  { id: 'finnhub', label: 'Finnhub' },
+  { id: 'polygon', label: 'Polygon.io (Massive)' },
+  { id: 'ibkr', label: 'IBKR (盈透证券)' },
   { id: 'stooq', label: 'Stooq' },
-  { id: 'tencent', label: '腾讯' },
+  { id: 'tencent', label: '腾讯 (Tencent)' },
+  { id: 'eastmoney', label: '东方财富 (Eastmoney)' },
+  { id: 'tushare', label: 'Tushare Pro' },
+  { id: 'akshare', label: 'AkShare (宏观/另类量化)' },
+  { id: 'qmt', label: 'MiniQMT (迅投券商实盘)' },
+  { id: 'futu', label: 'Futu (富途 OpenD)' },
+  { id: 'longbridge', label: 'Longbridge (长桥)' },
+  { id: 'tiger', label: 'Tiger Trade (老虎证券)' },
 ]
 
 /** dshtrading namespace 下的值形状（router 侧同步；窄化后的子集契约）。 */

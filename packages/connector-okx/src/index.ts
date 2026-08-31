@@ -214,6 +214,10 @@ export class OkxMarketDataService extends Service implements MarketDataService {
     return this.client.getKlines(instId, interval, limit)
   }
 
+  listInstruments(): Promise<Array<{ symbol: string; name?: string }>> {
+    return this.client.listInstruments()
+  }
+
   /** OKX 专属扩展（MarketDataService 契约之外）：SWAP 资金费率。 */
   getFundingRate(instId: string) {
     return this.client.getFundingRate(instId)

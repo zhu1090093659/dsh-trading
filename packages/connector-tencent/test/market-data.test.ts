@@ -6,6 +6,7 @@ import {
   TencentRestClient,
   TradingServiceError,
   klineDateToEpochMs,
+  minuteKlineTimeToEpochMs,
   normalizeCnSymbol,
   normalizeHkSymbol,
   wallTimeToEpochMs,
@@ -126,6 +127,8 @@ describe('time parsing', () => {
     expect(wallTimeToEpochMs('2026-08-28T16:15:00', 'Asia/Shanghai')).toBe(Date.UTC(2026, 7, 28, 8, 15, 0))
     expect(wallTimeToEpochMs('2026/08/28 16:08:37', 'Asia/Hong_Kong')).toBe(Date.UTC(2026, 7, 28, 8, 8, 37))
     expect(klineDateToEpochMs('2026-08-28')).toBe(Date.UTC(2026, 7, 28))
+    // 2026-08-28 14:40 (UTC+8) -> 2026-08-28 06:40 (UTC)
+    expect(minuteKlineTimeToEpochMs('202608281440', 'Asia/Shanghai')).toBe(Date.UTC(2026, 7, 28, 6, 40, 0))
   })
 })
 
@@ -212,6 +215,72 @@ describe('TencentRestClient.getKlines', () => {
     })
   })
 
+  it('parses cn 5m and 30m minute klines via mkline endpoint', async () => {
+    const m5Json = JSON.stringify({
+      code: 0,
+      msg: '',
+      data: {
+        sh600519: {
+          m5: [
+            ['202608281440', '1295.69', '1295.98', '1296.45', '1295.14', '197.00', {}, '0.16'],
+            ['202608281445', '1295.79', '1295.49', '1295.95', '1294.60', '338.00', {}, '0.27'],
+          ],
+        },
+      },
+    })
+    const m30Json = JSON.stringify({
+      code: 0,
+      msg: '',
+      data: {
+        sh600519: {
+          m30: [
+            ['202608281500', '1296.48', '1297.40', '1297.89', '1294.60', '2673.00', {}, '2.14'],
+          ],
+        },
+      },
+    })
+    const { impl, urls } = stubFetch([
+      { match: 'm5', body: m5Json },
+      { match: 'm30', body: m30Json },
+    ])
+    const c = client('cn', { fetchImpl: impl })
+    const klines5m = await c.getKlines('600519', '5m', 2)
+    expect(urls[0]).toBe('https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=sh600519,m5,,2')
+    expect(klines5m).toHaveLength(2)
+    expect(klines5m[0]).toEqual({
+      openTime: Date.UTC(2026, 7, 28, 6, 40, 0),
+      open: 1295.69,
+      close: 1295.98,
+      high: 1296.45,
+      low: 1295.14,
+      volume: 197,
+      closeTime: Date.UTC(2026, 7, 28, 6, 40, 0) + 5 * 60_000 - 1,
+    })
+
+    const klines30m = await c.getKlines('600519', '30m', 1)
+    expect(urls[1]).toBe('https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=sh600519,m30,,1')
+    expect(klines30m).toHaveLength(1)
+    expect(klines30m[0]).toEqual({
+      openTime: Date.UTC(2026, 7, 28, 7, 0, 0),
+      open: 1296.48,
+      close: 1297.4,
+      high: 1297.89,
+      low: 1294.6,
+      volume: 2673,
+      closeTime: Date.UTC(2026, 7, 28, 7, 0, 0) + 30 * 60_000 - 1,
+    })
+  })
+
+  it('rejects minute intervals on hk market', async () => {
+    const c = client('hk')
+    await expect(c.getKlines('00700', '5m')).rejects.toMatchObject({
+      code: 'TRADING_UNSUPPORTED_INTERVAL',
+    })
+    await expect(c.getKlines('00700', '30m')).rejects.toMatchObject({
+      code: 'TRADING_UNSUPPORTED_INTERVAL',
+    })
+  })
+
   it('routes hk to hkfqkline with the hk prefix and drops extra row fields', async () => {
     const { impl, urls } = stubFetch([{ match: 'hkfqkline/get', body: HK_KLINE_JSON }])
     const klines = await client('hk', { fetchImpl: impl }).getKlines('00700', '1d', 2)
@@ -245,8 +314,8 @@ describe('TencentRestClient.getKlines', () => {
     const { impl } = stubFetch([{ match: 'fqkline/get', body: CN_KLINE_JSON }])
     const c = client('cn', { fetchImpl: impl })
     await expect(c.getKlines('600519', '1m')).rejects.toMatchObject({ code: 'TRADING_UNSUPPORTED_INTERVAL' })
-    await expect(c.getKlines('600519', '5m')).rejects.toMatchObject({ code: 'TRADING_UNSUPPORTED_INTERVAL' })
-    expect(INTERVAL_VOCABULARY).toEqual(['1d', '1w', '1M'])
+    await expect(c.getKlines('600519', '1h')).rejects.toMatchObject({ code: 'TRADING_UNSUPPORTED_INTERVAL' })
+    expect(INTERVAL_VOCABULARY).toEqual(['5m', '30m', '1d', '1w', '1M'])
   })
 
   it('maps upstream error payloads to TRADING_EXCHANGE_ERROR', async () => {
