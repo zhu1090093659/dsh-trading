@@ -57,13 +57,17 @@ function formatDate(timestamp: number): string {
   return `${y}-${m}-${day}`
 }
 
+export type UseStoreState<TState> = <TSelected>(selector: (state: TState) => TSelected) => TSelected
+
 export interface StrategyViewProps {
   t: (key: MarketLocaleKey) => string
-  useSelection?: () => SelectionState
+  useSelection?: UseStoreState<SelectionState>
 }
 
 export function StrategyView({ t, useSelection }: StrategyViewProps) {
-  const selection = useSelection?.() ?? { market: 'crypto', symbol: 'BTCUSDT' }
+  const instrument = useSelection ? useSelection((s) => s.instrument) : null
+  const market = instrument?.market ?? 'crypto'
+  const symbol = instrument?.symbol ?? 'BTCUSDT'
 
   // 1. 本地存储持久化状态
   const [stored] = useState<StrategyStateStored>(() => {
@@ -129,7 +133,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const barsRaw = await fetchKlines(selection.market, selection.symbol, '1d', 500)
+      const barsRaw = await fetchKlines(market, symbol, '1d', 500)
       if (!barsRaw || barsRaw.length === 0) {
         setErrorMsg(t('strategy.error.noKlines'))
         setResult(null)
@@ -299,7 +303,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
         <div className={css.paramGroup}>
           <span className={css.paramLabel}>{t('strategy.symbolLabel')}</span>
           <span className={css.symbolValue}>
-            {selection.symbol} {t('strategy.intervalDaily')}
+            {symbol} {t('strategy.intervalDaily')}
           </span>
         </div>
 
