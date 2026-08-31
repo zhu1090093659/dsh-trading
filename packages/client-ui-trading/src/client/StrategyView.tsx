@@ -128,12 +128,12 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
     }))
   }
 
-  // 运行回测（拉取 500 根日 K，确保 250 根长线策略有充足样本窗口）
+  // 运行回测（拉取 300 根日 K，对齐各主流交易所如 OKX 单次 300 根上限，并保障 250 根长线策略有充足样本窗口）
   const handleRunBacktest = async () => {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const barsRaw = await fetchKlines(market, symbol, '1d', 500)
+      const barsRaw = await fetchKlines(market, symbol, '1d', 300)
       if (!barsRaw || barsRaw.length === 0) {
         setErrorMsg(t('strategy.error.noKlines'))
         setResult(null)

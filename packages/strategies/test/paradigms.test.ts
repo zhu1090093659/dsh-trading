@@ -212,4 +212,102 @@ describe('Strategy Paradigms', () => {
       expect(signals[0]?.action).toBe('entry')
     })
   })
+
+  describe('all 6 paradigms execution with 300 bars & default params', () => {
+    const allStrategies = [
+      donchianBreakoutStrategy,
+      rsiReversionStrategy,
+      emaCrossoverStrategy,
+      bollingerReversionStrategy,
+      smaBaselineStrategy,
+      momentum12mStrategy,
+    ]
+
+    // 构造 300 根包含牛市、震荡、熊市的模拟日 K
+    function makeRealistic300Bars(): Kline[] {
+      const bars: Kline[] = []
+      const baseTime = 1700000000000
+      const day = 86400 * 1000
+      let price = 100
+
+      for (let i = 0; i < 300; i++) {
+        // 前 100 根上升趋势，中 100 根剧烈震荡，后 100 根宽幅波段
+        let delta = 0
+        if (i < 100) {
+          delta = Math.sin(i / 5) * 2 + 0.8
+        } else if (i < 200) {
+          delta = Math.sin(i / 3) * 4
+        } else {
+          delta = Math.cos(i / 8) * 3 + (i % 2 === 0 ? 1 : -1)
+        }
+        price = Math.max(10, price + delta)
+        const open = price
+        const high = price + Math.abs(delta) + 1.5
+        const low = Math.max(5, price - Math.abs(delta) - 1.5)
+        const close = price + (delta * 0.5)
+        bars.push({
+          openTime: baseTime + i * day,
+          open,
+          high,
+          low,
+          close,
+          volume: 5000 + Math.abs(delta) * 1000,
+        })
+      }
+      return bars
+    }
+
+    const bars300 = makeRealistic300Bars()
+
+    for (const strat of allStrategies) {
+      it(`runs successfully with 300 bars: ${strat.id}`, () => {
+        const result = run(bars300, strat)
+
+        // 1. 结构与长度验证
+        expect(result).toBeDefined()
+        expect(result.equity).toHaveLength(300)
+
+        // 2. 指标有效性（无 NaN 或未处理异常）
+        expect(Number.isFinite(result.metrics.totalReturn)).toBe(true)
+        expect(Number.isFinite(result.metrics.cagr)).toBe(true)
+        expect(Number.isFinite(result.metrics.maxDrawdown)).toBe(true)
+        expect(Number.isFinite(result.metrics.sharpe)).toBe(true)
+        expect(Number.isFinite(result.metrics.winRate)).toBe(true)
+        expect(Number.isFinite(result.metrics.profitFactor) || result.metrics.profitFactor === Infinity).toBe(true)
+        expect(Number.isFinite(result.metrics.exposure)).toBe(true)
+        expect(result.metrics.tradeCount).toBeGreaterThanOrEqual(0)
+
+        // 3. 交易记录结构有效性
+        for (const trade of result.trades) {
+          expect(trade.entryIndex).toBeLessThan(trade.exitIndex)
+          expect(trade.entryPrice).toBeGreaterThan(0)
+          expect(trade.exitPrice).toBeGreaterThan(0)
+          expect(Number.isFinite(trade.returnPercent)).toBe(true)
+          expect(Number.isFinite(trade.profit)).toBe(true)
+          expect(trade.holdingBars).toBeGreaterThan(0)
+          expect(typeof trade.exitReason).toBe('string')
+        }
+
+        // 4. 权益曲线时序递增
+        for (let k = 1; k < result.equity.length; k++) {
+          expect(result.equity[k].time).toBeGreaterThan(result.equity[k - 1].time)
+          expect(result.equity[k].equity).toBeGreaterThan(0)
+        }
+      })
+
+      it(`handles short history (50 bars) gracefully: ${strat.id}`, () => {
+        const shortBars = bars300.slice(0, 50)
+        const result = run(shortBars, strat)
+        expect(result.equity).toHaveLength(50)
+        expect(Number.isFinite(result.metrics.totalReturn)).toBe(true)
+      })
+
+      it(`handles empty bars gracefully: ${strat.id}`, () => {
+        const result = run([], strat)
+        expect(result.equity).toHaveLength(0)
+        expect(result.metrics.tradeCount).toBe(0)
+        expect(result.metrics.totalReturn).toBe(0)
+      })
+    }
+  })
 })
