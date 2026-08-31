@@ -5,6 +5,7 @@
  */
 import type { Kline, MarketId, MarketInfo, TickerOutcome } from './types.ts'
 import type { CustomIndicatorRecord } from '@dsh-trading/indicators'
+import type { KnowledgeCard } from '@dsh-trading/knowledge'
 
 export class BridgeError extends Error {
   constructor(readonly status: number, message: string) {
@@ -76,5 +77,15 @@ export async function deleteCustomIndicator(id: string): Promise<boolean> {
     return wire.ok === true && wire.removed === true
   } catch {
     return false
+  }
+}
+
+/** 拉取知识库卡片全集列表（Issue #24）。 */
+export async function fetchKnowledgeCards(): Promise<KnowledgeCard[]> {
+  try {
+    const wire = await getJson<{ ok: boolean; cards: KnowledgeCard[] }>('/dshtrading/api/knowledge/cards')
+    return Array.isArray(wire.cards) ? wire.cards : []
+  } catch {
+    return []
   }
 }

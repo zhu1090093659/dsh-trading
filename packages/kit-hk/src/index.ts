@@ -2,9 +2,10 @@
  * HK 工具箱插件（dsh-trading hk 切片）。
  *
  * 包含：
- *   1. skill provider：hk-risk-checklist 与 indicator-authoring 随包分发；
+ *   1. skill provider：hk-risk-checklist、indicator-authoring、trading-strategy-paradigms 与 knowledge-curation 随包分发；
  *   2. hk_get_news 与 hk_get_fundamentals 工具；
- *   3. indicator_author 创作工具（Issue #19）。
+ *   3. indicator_author 创作工具（Issue #19）；
+ *   4. knowledge_ingest 与 knowledge_search 知识库工具（Issue #24）。
  *
  * @module @dsh-trading/kit-hk
  */
@@ -23,6 +24,7 @@ import {
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createAuthorIndicatorTool, createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
+import { createKnowledgeIngestTool, createKnowledgeSearchTool, createFileKnowledgeCardStore } from '@dsh-trading/knowledge/tool'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchHkFundamentals, renderHkFundamentals } from './fundamentals.js'
 
@@ -33,6 +35,7 @@ const PROVIDER_NAME = 'dsh-trading-hk'
 const SKILL_BODY_URL = new URL('../assets/skills/hk-risk-checklist.md', import.meta.url)
 const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
 const STRATEGY_BODY_URL = new URL('../assets/skills/trading-strategy-paradigms.md', import.meta.url)
+const KNOWLEDGE_CURATION_BODY_URL = new URL('../assets/skills/knowledge-curation.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -71,9 +74,20 @@ const STRATEGY_CANDIDATE: SkillCandidate = {
   locator: STRATEGY_BODY_URL,
 }
 
-const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE]
+const KNOWLEDGE_CURATION_CANDIDATE: SkillCandidate = {
+  name: 'knowledge-curation',
+  description: '财经观点沉淀与知识库策展指南：基于 Content Insight 事实核查产物，规范化提取知识卡片字段、受控词表对齐、查重与关联建立，通过 knowledge_ingest 工具入库。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: KNOWLEDGE_CURATION_BODY_URL,
+}
 
-const provider: SkillProvider = {
+const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE, KNOWLEDGE_CURATION_CANDIDATE]
+
+export const provider: SkillProvider = {
   name: PROVIDER_NAME,
   list: () => Promise.resolve(SKILL_CANDIDATES),
   async get(candidate): Promise<SkillDefinition> {
@@ -113,10 +127,12 @@ export function apply(ctx: Context, _config: Config): void {
 
   const newsTool = createGetNewsTool()
   const fundamentalsTool = createGetFundamentalsTool()
+
   const tools = ctx.tools as unknown as {
     register(definition: { name: string }): unknown
     get(name: string): { name: string } | undefined
   }
+
   const registerOnce = (tool: ReturnType<typeof defineTool>): void => {
     if (tools.get(tool.name) !== undefined) {
       ctx.logger('dsh-trading-hk-kit').info(
@@ -127,6 +143,7 @@ export function apply(ctx: Context, _config: Config): void {
     }
     tools.register(tool)
   }
+
   registerOnce(newsTool)
   registerOnce(fundamentalsTool)
 
@@ -134,6 +151,12 @@ export function apply(ctx: Context, _config: Config): void {
   const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
   const authorStore = createFileCustomIndicatorStore(indicatorStorePath)
   registerOnce(createAuthorIndicatorTool({ store: authorStore }))
+
+  // Issue #24：注册知识库摄取与检索工具（共享 ~/.dsh/knowledge/cards.json）
+  const knowledgeStorePath = path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
+  const knowledgeStore = createFileKnowledgeCardStore(knowledgeStorePath)
+  registerOnce(createKnowledgeIngestTool(knowledgeStore))
+  registerOnce(createKnowledgeSearchTool(knowledgeStore))
 }
 
 /* ── hk_get_news：港股新闻工具（WS4 #1，#6 降级） ────────────────────────────── */

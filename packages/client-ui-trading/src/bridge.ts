@@ -11,10 +11,13 @@
  * - 业务错误一律 HTTP 200 + { ok:false, code, message }（错误词汇沿用
  *   TradingErrorCode 惯例）；仅协议层错误用 4xx。
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
+ * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
 import type { Interval, Kline, MarketDataService, Ticker } from '@dsh-trading/api'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/indicators'
 import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
+import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
+import { createMemoryKnowledgeCardStore } from '@dsh-trading/knowledge'
 
 /** 本桥支持的市场（与连接器服务键一一对应）。 */
 export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
@@ -46,6 +49,7 @@ export function createBridgeHost(services: {
   router?: { activeProvider(market: string): string | undefined }
   legacy(market: MarketId): MarketDataService | undefined
   customIndicatorsStore?: CustomIndicatorStore
+  knowledgeStore?: KnowledgeCardStore
 }): BridgeHost {
   return {
     getMarketService: market => {
@@ -55,6 +59,7 @@ export function createBridgeHost(services: {
     },
     activeProvider: market => services.registry?.active(market)?.provider ?? services.router?.activeProvider(market),
     customIndicatorsStore: services.customIndicatorsStore ?? createMemoryCustomIndicatorStore(),
+    knowledgeStore: services.knowledgeStore ?? createMemoryKnowledgeCardStore(),
   }
 }
 
@@ -72,6 +77,8 @@ export interface BridgeHost {
   activeProvider(market: MarketId): string | undefined
   /** 自定义指标存储（可选）。 */
   customIndicatorsStore?: CustomIndicatorStore
+  /** 知识卡片存储（可选）。 */
+  knowledgeStore?: KnowledgeCardStore
 }
 
 export interface MarketInfoWire {
@@ -107,6 +114,11 @@ export interface SymbolsWire {
 export interface CustomIndicatorsWire {
   ok: true
   indicators: CustomIndicatorRecord[]
+}
+
+export interface KnowledgeCardsWire {
+  ok: true
+  cards: readonly KnowledgeCard[]
 }
 
 export class BridgeProtocolError extends Error {
@@ -227,6 +239,14 @@ export class TradingBridge {
     const removed = await store.remove(id)
     return { ok: true, removed }
   }
+
+  /** 获取全部沉淀的知识卡片列表。 */
+  async knowledgeCards(): Promise<KnowledgeCardsWire> {
+    const store = this.host.knowledgeStore
+    if (store === undefined) return { ok: true, cards: [] }
+    const cards = await store.list()
+    return { ok: true, cards }
+  }
 }
 
 /** 请求分发：把 (method, pathname, searchParams) 路由到桥方法，返回 (status, payload)。 */
@@ -258,6 +278,9 @@ export async function dispatchBridgeRequest(
       }
       case '/indicators/custom': {
         return { status: 200, payload: await bridge.customIndicators() }
+      }
+      case '/knowledge/cards': {
+        return { status: 200, payload: await bridge.knowledgeCards() }
       }
       default:
         throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
