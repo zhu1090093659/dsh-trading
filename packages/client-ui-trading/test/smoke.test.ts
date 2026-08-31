@@ -38,11 +38,18 @@ function makeCtx(options: { reject?: number } = {}): {
       return undefined
     },
     effect: () => (() => {}),
+    tools: {
+      register: () => {},
+      get: () => undefined,
+    },
   }
   const ctx = {
     inject: (deps: readonly string[], cb: (scoped: typeof webCtx) => void) => {
-      expect(deps).toEqual(['webServer', 'connection'])
-      cb(webCtx)
+      if (deps.includes('webServer') && deps.includes('connection')) {
+        cb(webCtx)
+      } else if (deps.includes('tools')) {
+        cb(webCtx)
+      }
     },
     effect: (fn: () => () => void) => { fn() },
   }

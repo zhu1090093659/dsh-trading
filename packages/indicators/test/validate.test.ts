@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { validateCustomIndicator, compileComputeSource } from '../src/validate.ts'
 import { createMemoryCustomIndicatorStore } from '../src/custom.ts'
-import { createAuthorIndicatorTool } from '../src/tool.ts'
+import { createAuthorIndicatorTool, validateCustomIndicatorNode } from '../src/tool.ts'
 
 describe('validateCustomIndicator', () => {
   it('rejects invalid structural inputs', () => {
@@ -75,6 +75,17 @@ describe('validateCustomIndicator', () => {
     })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.reason).toContain('非法数值')
+  })
+
+  it('rejects infinite loop in computeSource (timeout protection)', () => {
+    const res = validateCustomIndicatorNode({
+      id: 'infinite_loop',
+      title: 'Loop',
+      pane: 'main',
+      computeSource: '(bars) => { while(true) {} return []; }',
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.reason).toContain('超时')
   })
 
   // ── 黄金范例测试 ──────────────────────────────────────────────────────────

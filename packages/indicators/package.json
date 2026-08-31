@@ -17,7 +17,8 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib"
+    "lib",
+    "assets"
   ],
   "license": "MIT",
   "scripts": {

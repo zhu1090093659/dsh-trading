@@ -1,7 +1,9 @@
 /**
  * 文件持久化版自定义指标存储（Node.js 宿主侧使用）。
+ *
+ * 采用 tmp + rename 原子写入模式，并包含明确的错误日志与异常处理。
  */
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, writeFile, rename, unlink, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from './custom.ts'
 
@@ -21,19 +23,29 @@ export function createFileCustomIndicatorStore(filePath: string): CustomIndicato
       }
       cache = map
       return map
-    } catch {
+    } catch (err: any) {
+      if (err?.code !== 'ENOENT') {
+        console.error(`[dsh-trading/indicators] failed to read custom indicators from ${filePath}:`, err)
+      }
       cache = new Map<string, CustomIndicatorRecord>()
       return cache
     }
   }
 
   async function flush(map: Map<string, CustomIndicatorRecord>): Promise<void> {
+    const dir = dirname(filePath)
+    const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
     try {
-      await mkdir(dirname(filePath), { recursive: true })
+      await mkdir(dir, { recursive: true })
       const data = JSON.stringify([...map.values()], null, 2)
-      await writeFile(filePath, data, 'utf8')
-    } catch {
-      // 写入异常不崩进程
+      await writeFile(tmpPath, data, 'utf8')
+      await rename(tmpPath, filePath)
+    } catch (error) {
+      console.error(`[dsh-trading/indicators] failed to atomic flush custom indicators to ${filePath}:`, error)
+      try {
+        await unlink(tmpPath).catch(() => {})
+      } catch {}
+      throw error
     }
   }
 

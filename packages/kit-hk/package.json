@@ -1,6 +1,6 @@
 {
   "name": "@dsh-trading/kit-hk",
-  "description": "HK (Hong Kong) toolkit plugin for dsh-trading: market-specific trading knowledge as a bundled skill provider (hk-risk-checklist); runs as a hk-trader preset row (session-scoped)",
+  "description": "Hong Kong market toolkit plugin for dsh-trading: HK risk checklist skill provider and HK fast-news (degraded) / fundamentals tools; runs as an hk-trader preset row (session-scoped)",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -18,7 +18,11 @@
   ],
   "license": "MIT",
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dsh-trading/indicators": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
@@ -27,6 +31,7 @@
     "@deepseek-ai/schemastery": ">=3.18.0"
   },
   "devDependencies": {
-    "tsdown": "^0.22.0"
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0"
   }
 }

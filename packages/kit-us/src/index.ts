@@ -1,23 +1,18 @@
 /**
- * US 工具箱插件（dsh-trading us 切片，模板 = kit-crypto commit af5cfff）。
+ * US 工具箱插件（dsh-trading us 切片）。
  *
- * 一件事：skill provider——us-risk-checklist 随包分发（S2 形态；rank 用
- * BUNDLED_SKILL_RANK=600，用户目录 100-500 天然覆盖之；skill 名市场前缀命名空间）。
- * us 市场无需资金费率类工具（现货/股票无永续资金费），当前无附加工具。
- *
- * 插件本体不被 host 面挂载（架构修订，与 kit-crypto 同款）：本行在 us-trader preset 的
- * agent.cordis.yml 内，preset 级会话隔离——skill 注册表按 scope 分层，注册只对
- * us-trader 会话可见，standard 会话看不到 us-* skill。
- *
- * preset 自安装不在本插件（结构性修复 2026-08-29）：kit 行在 preset 平面，preset 不
- * 存在时 apply() 永不运行；自安装职责在 @dsh-trading/us bundle 的常驻安装器行
- * （dsh-trading-us-installer），preset 资产也随 bundle 分发。
+ * 包含：
+ *   1. skill provider：us-risk-checklist 与 indicator-authoring 随包分发；
+ *   2. us_get_news 与 us_get_fundamentals 工具；
+ *   3. indicator_author 创作工具（Issue #19）。
  *
  * @module @dsh-trading/kit-us
  */
 
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import os from 'node:os'
+import path from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import {
@@ -27,6 +22,7 @@ import {
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { createAuthorIndicatorTool, createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchUsFundamentals, renderUsFundamentals } from './fundamentals.js'
 
@@ -35,6 +31,7 @@ import { fetchUsFundamentals, renderUsFundamentals } from './fundamentals.js'
 const PROVIDER_NAME = 'dsh-trading-us'
 
 const SKILL_BODY_URL = new URL('../assets/skills/us-risk-checklist.md', import.meta.url)
+const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -51,18 +48,32 @@ const CANDIDATE: SkillCandidate = {
   locator: SKILL_BODY_URL,
 }
 
+const AUTHORING_CANDIDATE: SkillCandidate = {
+  name: 'indicator-authoring',
+  description: '自定义技术指标创作指南：根据用户自然语言需求生成符合契约的指标代码（TD9/SuperTrend/OBV+MA等），并通过 indicator_author 工具验证与落库。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: AUTHORING_BODY_URL,
+}
+
+const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE]
+
 const provider: SkillProvider = {
   name: PROVIDER_NAME,
-  list: () => Promise.resolve([CANDIDATE]),
-  async get(_candidate): Promise<SkillDefinition> {
+  list: () => Promise.resolve(SKILL_CANDIDATES),
+  async get(candidate): Promise<SkillDefinition> {
+    const target = SKILL_CANDIDATES.find((c) => c.name === candidate.name) ?? CANDIDATE
     return {
-      name: CANDIDATE.name,
-      description: CANDIDATE.description,
-      invocation: CANDIDATE.invocation,
-      provider: CANDIDATE.provider,
-      source: CANDIDATE.source,
+      name: target.name,
+      description: target.description,
+      invocation: target.invocation,
+      provider: target.provider,
+      source: target.source,
       resourceBase: RESOURCE_BASE,
-      content: await readFile(SKILL_BODY_URL, 'utf8'),
+      content: await readFile(target.locator, 'utf8'),
     }
   },
 }
@@ -70,9 +81,7 @@ const provider: SkillProvider = {
 // ── 插件配置 ──────────────────────────────────────────────────────────────────
 
 export interface Config {
-  /** 交易安全闸门（铁律 #3）：与 connector 同词汇，kit 内未来交易辅助工具统一遵守。 */
   dryRun: boolean
-  /** 实盘总闸门：默认 false。本切片 kit 只分发知识（skill），闸门随 preset 行声明保持一致。 */
   liveTrading: boolean
 }
 
@@ -81,13 +90,8 @@ export const Config: Schema<Config> = Schema.object({
   liveTrading: Schema.boolean().default(false),
 })
 
-/** 需要宿主提供的 Cordis 服务。 */
 export const inject = ['skills', 'tools']
 
-/**
- * Cordis 插件名 = preset 行 id（TEMPLATES §8）：`dsh-trading-us-*` 市场命名空间，
- * 全仓唯一（insert-only 铁律 #1）。
- */
 export const name = 'dsh-trading-us-kit'
 
 // ── 插件入口 ──────────────────────────────────────────────────────────────────
@@ -95,8 +99,6 @@ export const name = 'dsh-trading-us-kit'
 export function apply(ctx: Context, _config: Config): void {
   ctx.skills.registerProvider(() => provider)
 
-  // WS4 #1（#6）：us_get_news——kit 内薄工具，直连公共源（spike 推荐：Yahoo + Google RSS 均单端点无鉴权，
-  // 无 connector 契约要素）。缺省无 key 全程可用；每源独立容错，输出带来源名 + 时间 + 链接（铁律 #5）。
   const newsTool = createGetNewsTool()
   const fundamentalsTool = createGetFundamentalsTool()
   const tools = ctx.tools as unknown as {
@@ -115,6 +117,11 @@ export function apply(ctx: Context, _config: Config): void {
   }
   registerOnce(newsTool)
   registerOnce(fundamentalsTool)
+
+  // Issue #19：注册自定义指标创作工具 indicator_author（共享 ~/.dsh/indicators/custom.json）
+  const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
+  const authorStore = createFileCustomIndicatorStore(indicatorStorePath)
+  registerOnce(createAuthorIndicatorTool({ store: authorStore }))
 }
 
 /* ── us_get_news：美股新闻工具（WS4 #1，#6） ─────────────────────────────────── */

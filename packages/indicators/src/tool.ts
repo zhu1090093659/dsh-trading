@@ -1,14 +1,11 @@
-/**
- * Agent 指标工具工厂（WS1b，docs/analysis-roadmap.md）：把指标计算暴露成
- * <market>_get_indicators 工具与 indicator_author 创作工具。
- */
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { presetDefinitions, type IndicatorDefinition } from './presets.ts'
 import type { IndicatorParamSpec, Kline } from './types.ts'
 import type { CustomIndicatorStore } from './custom.ts'
-import { validateCustomIndicator } from './validate.ts'
+import { validateCustomIndicatorNode } from './validate-node.ts'
 
 export { createFileCustomIndicatorStore } from './custom-fs.ts'
+export { validateCustomIndicatorNode, nodeVmComputeRunner } from './validate-node.ts'
 
 /** 最小行情服务面（结构类型——与 @dsh-trading/api 的 MarketDataService 兼容）。 */
 export interface IndicatorsMarketDataLike {
@@ -200,7 +197,7 @@ export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
         description: typeof args.description === 'string' ? args.description.trim() : undefined,
       }
 
-      const result = validateCustomIndicator(candidate)
+      const result = validateCustomIndicatorNode(candidate)
       if (!result.ok) {
         return (
           `[indicator_author] Validation failed: ${result.reason}\n`

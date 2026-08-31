@@ -84,8 +84,8 @@ export async function fetchCnFundamentals(options: CnFundamentalsOptions): Promi
     const limitDownPrice = num(fields[48])
     const peStatic = num(fields[52])
     const peTtm = num(fields[53]) ?? peDynamic
-    const fiftyTwoWeekHigh = num(fields[67])
-    const fiftyTwoWeekLow = num(fields[68])
+    const fiftyTwoWeekHigh = num(fields[68])
+    const fiftyTwoWeekLow = num(fields[69])
 
     const data: StockFundamentals = {
       symbol: canonical,

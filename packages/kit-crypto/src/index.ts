@@ -6,20 +6,15 @@
  *      BUNDLED_SKILL_RANK=600，用户目录 100-500 天然覆盖之；skill 名市场前缀命名空间）；
  *   2. crypto_funding_rate 工具：Binance USDT 永续公共资金费率（独立 fetch，不经
  *      connector 服务，保持两包解耦；公共接口无凭证）。
- *
- * 插件本体不被 host 面挂载（架构修订）：两行在 crypto-trader preset 的
- * agent.cordis.yml 内，preset 级会话隔离——tools/skills 注册表按 scope 分层，注册只对
- * crypto-trader 会话可见，standard 会话看不到 crypto 工具。
- *
- * preset 自安装不在本插件（结构性修复 2026-08-29）：kit 行在 preset 平面，preset 不
- * 存在时 apply() 永不运行；自安装职责迁到 @dsh-trading/crypto bundle 的常驻安装器行
- * （dsh-trading-crypto-installer），preset 资产也随 bundle 分发。
+ *   3. indicator-authoring skill 与 indicator_author 创作工具（Issue #19）。
  *
  * @module @dsh-trading/kit-crypto
  */
 
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import os from 'node:os'
+import path from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import {
@@ -29,6 +24,7 @@ import {
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { createAuthorIndicatorTool, createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
 import { aggregateNews, deriveSymbolTokens, type AggregateNewsOptions } from './news.js'
 import { fetchCryptoDerivatives, renderDerivativesData } from './derivatives.js'
 import { fetchCryptoFundamentals, renderCryptoFundamentals } from './fundamentals.js'
@@ -39,6 +35,7 @@ const PROVIDER_NAME = 'dsh-trading-crypto'
 
 const SKILL_BODY_URL = new URL('../assets/skills/crypto-risk-checklist.md', import.meta.url)
 const ANALYSIS_BODY_URL = new URL('../assets/skills/crypto-instrument-analysis.md', import.meta.url)
+const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -55,8 +52,6 @@ const CANDIDATE: SkillCandidate = {
   locator: SKILL_BODY_URL,
 }
 
-// WS3（docs/analysis-roadmap.md #5）：标的定性分析框架——五步流程对应工具与判读
-// 规则；新闻面为占位（WS2b 的 crypto_get_news 交付后写实）。
 const ANALYSIS_CANDIDATE: SkillCandidate = {
   name: 'crypto-instrument-analysis',
   description: '加密标的定性分析框架：趋势结构→量价→波动率→资金面→新闻面五步，输出带依据与反方情景的定性结论。',
@@ -68,7 +63,18 @@ const ANALYSIS_CANDIDATE: SkillCandidate = {
   locator: ANALYSIS_BODY_URL,
 }
 
-const SKILL_CANDIDATES = [CANDIDATE, ANALYSIS_CANDIDATE]
+const AUTHORING_CANDIDATE: SkillCandidate = {
+  name: 'indicator-authoring',
+  description: '自定义技术指标创作指南：根据用户自然语言需求生成符合契约的指标代码（TD9/SuperTrend/OBV+MA等），并通过 indicator_author 工具验证与落库。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: AUTHORING_BODY_URL,
+}
+
+const SKILL_CANDIDATES = [CANDIDATE, ANALYSIS_CANDIDATE, AUTHORING_CANDIDATE]
 
 export const provider: SkillProvider = {
   name: PROVIDER_NAME,
@@ -90,9 +96,7 @@ export const provider: SkillProvider = {
 // ── 插件配置 ──────────────────────────────────────────────────────────────────
 
 export interface Config {
-  /** 交易安全闸门（铁律 #3）：与 connector 同词汇，kit 内未来交易辅助工具统一遵守。 */
   dryRun: boolean
-  /** 实盘总闸门：默认 false。本切片 kit 工具只读公共数据，闸门随 preset 行声明保持一致。 */
   liveTrading: boolean
 }
 
@@ -101,20 +105,14 @@ export const Config: Schema<Config> = Schema.object({
   liveTrading: Schema.boolean().default(false),
 })
 
-/** 需要宿主提供的 Cordis 服务。 */
 export const inject = ['skills', 'tools']
 
-/**
- * Cordis 插件名 = preset 行 id（TEMPLATES §8）：`dsh-trading-crypto-*` 市场命名空间，
- * 全仓唯一（insert-only 铁律 #1）。
- */
 export const name = 'dsh-trading-crypto-kit'
 
 // ── crypto_funding_rate：Binance USDT 永续资金费率（公共接口，独立 fetch） ──────
 
 const FUNDING_RATE_URL = 'https://fapi.binance.com/fapi/v1/fundingRate'
 
-/** Binance 合约符号形如 BTCUSDT / 1000PEPEUSDT：大写字母数字。 */
 const SYMBOL_PATTERN = /^[A-Z0-9]{4,20}$/
 const DEFAULT_FUNDING_LIMIT = 3
 const MAX_FUNDING_LIMIT = 1000
@@ -157,50 +155,45 @@ function renderFundingRates(symbol: string, records: FundingRateRecord[]): strin
 
 export function apply(ctx: Context, _config: Config): void {
   ctx.skills.registerProvider(() => provider)
-  // duplicate-safe 注册（2026-08-29 okx 切片）：connector-okx 激活时也提供同名
-  // crypto_funding_rate（OKX 词汇），同一组合内至多一家的工具生效——名字已被占用
-  // （先挂载者先得，preset 挂载顺序 = 仲裁顺序）时跳过 + log 让位，而不是让 dsh-tools
-  // 对重复注册抛错炸掉 preset 挂载。默认组合（okx enabled=false）本工具照常注册，行为不变。
+
   const fundingTool = defineTool({
     name: 'crypto_funding_rate',
-      description:
-        'Get recent funding rate history for a Binance USDⓈ-M perpetual futures symbol (public endpoint, no credentials). Returns the most recent funding events with rate and mark price.',
-      parameters: {
-        symbol: {
-          type: 'string',
-          required: true,
-          description: 'Perpetual futures symbol, e.g. BTCUSDT',
-        },
-        limit: {
-          // 可选参数不写 required（dsh-tools schema 编译器：required 出现时必须为 true）。
-          type: 'number',
-          description: `Number of most recent funding events to return (1-${MAX_FUNDING_LIMIT}, default ${DEFAULT_FUNDING_LIMIT})`,
-          default: DEFAULT_FUNDING_LIMIT,
-        },
+    description:
+      'Get recent funding rate history for a Binance USDⓈ-M perpetual futures symbol (public endpoint, no credentials). Returns the most recent funding events with rate and mark price.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'Perpetual futures symbol, e.g. BTCUSDT',
       },
-      output: {
-        schema: { type: 'string' },
-        render: (_args, value) => [{ type: 'text', text: String(value) }],
+      limit: {
+        type: 'number',
+        description: `Number of most recent funding events to return (1-${MAX_FUNDING_LIMIT}, default ${DEFAULT_FUNDING_LIMIT})`,
+        default: DEFAULT_FUNDING_LIMIT,
       },
-      async execute(raw) {
-        const args = (raw ?? {}) as { symbol?: unknown; limit?: unknown }
-        const symbol = typeof args.symbol === 'string' ? args.symbol.trim().toUpperCase() : ''
-        if (!SYMBOL_PATTERN.test(symbol)) {
-          throw new Error(`crypto_funding_rate: invalid symbol ${JSON.stringify(args.symbol)} — expected an uppercase Binance futures symbol like BTCUSDT`)
-        }
-        const requested = typeof args.limit === 'number' && Number.isFinite(args.limit) ? Math.trunc(args.limit) : DEFAULT_FUNDING_LIMIT
-        const limit = Math.min(Math.max(requested, 1), MAX_FUNDING_LIMIT)
-        const records = await fetchFundingRates(symbol, limit)
-        return renderFundingRates(symbol, records)
-      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown; limit?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim().toUpperCase() : ''
+      if (!SYMBOL_PATTERN.test(symbol)) {
+        throw new Error(`crypto_funding_rate: invalid symbol ${JSON.stringify(args.symbol)} — expected an uppercase Binance futures symbol like BTCUSDT`)
+      }
+      const requested = typeof args.limit === 'number' && Number.isFinite(args.limit) ? Math.trunc(args.limit) : DEFAULT_FUNDING_LIMIT
+      const limit = Math.min(Math.max(requested, 1), MAX_FUNDING_LIMIT)
+      const records = await fetchFundingRates(symbol, limit)
+      return renderFundingRates(symbol, records)
+    },
   })
 
   const tools = ctx.tools as unknown as {
     register(definition: { name: string }): unknown
     get(name: string): { name: string } | undefined
   }
-  // duplicate-safe 注册：同名工具互斥（先到先得 + log 让位），不因单个名字被占而
-  // 影响其它工具注册（否则 funding 让位会连带跳过 news）。
+
   const registerOnce = (tool: ReturnType<typeof defineTool>): void => {
     if (tools.get(tool.name) !== undefined) {
       ctx.logger('dsh-trading-crypto-kit').info(
@@ -214,19 +207,18 @@ export function apply(ctx: Context, _config: Config): void {
 
   registerOnce(fundingTool)
 
-  // WS2b（docs/analysis-roadmap.md #3）：动态新闻工具——kit 内薄工具，直连公共源
-  // （spike 推荐：四源均单端点无鉴权，无 connector 契约要素，故不进 dataplane/路由）。
-  // 缺省无 key 全程可用；每源独立容错，输出带来源名 + 时间 + 链接（铁律 #5）。
-  // WS2c（#4）：经 host 面 tradingMarketRouter 读设置 news.cryptoPanicKey——有值则
-  // crypto_get_news 加测 CryptoPanic 免费层（B 增强）；无 router / 无 key 即公共源。
   const router = (ctx as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as
     | { newsKey?: () => string | undefined }
     | undefined
   registerOnce(createGetNewsTool({ cryptoPanicKey: router?.newsKey?.() }))
 
-  // WS4（docs/analysis-roadmap.md WS4）：衍生品数据工具（持仓量/多空比/资金费率）与代币经济学工具
   registerOnce(createGetDerivativesTool())
   registerOnce(createGetFundamentalsTool())
+
+  // Issue #19：注册自定义指标创作工具 indicator_author（共享 ~/.dsh/indicators/custom.json）
+  const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
+  const authorStore = createFileCustomIndicatorStore(indicatorStorePath)
+  registerOnce(createAuthorIndicatorTool({ store: authorStore }))
 }
 
 /* ── crypto_get_derivatives：衍生品数据工具（WS4） ───────────────────────────── */

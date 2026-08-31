@@ -1,12 +1,13 @@
 /**
  * 纯函数安全校验器（Custom Indicator Validator）。
  *
- * 浏览器端与宿主两侧共用：
+ * 浏览器端与宿主两侧共用（零 Node.js 运行时依赖，浏览器纯净安全）：
  * 1. 结构与参数合法性断言
  * 2. 源码体积与格式检查
- * 3. 多场景样例 K 线沙箱试算（上涨/下跌/平盘/缺口/极短序列）
- * 4. 输出形状等长断言（values.length === bars.length）
- * 5. 有限数值与 warm-up 断言（严禁 NaN/Infinity/非法类型）
+ * 3. 多场景样例 K 线试算（上涨/下跌/平盘/缺口/极短序列）
+ * 4. 支持可插拔 runner（Node 侧传入 nodeVmRunner 开启 100ms 超时熔断保护）
+ * 5. 输出形状等长断言（values.length === bars.length）
+ * 6. 有限数值与 warm-up 断言（严禁 NaN/Infinity/非法类型）
  */
 import type {
   IndicatorDefinition,
@@ -22,10 +23,18 @@ const PARAM_KEY_PATTERN = /^[a-zA-Z0-9_]{1,16}$/
 const MAX_SOURCE_LENGTH = 16 * 1024 // 16KB
 const MAX_PARAMS_COUNT = 8
 const RESERVED_IDS = new Set(['ma', 'ema', 'boll', 'macd', 'rsi', 'kdj'])
+const DEFAULT_TIMEOUT_MS = 100
 
 export type ValidationResult =
   | { ok: true; definition: IndicatorDefinition; record: CustomIndicatorRecord }
   | { ok: false; reason: string }
+
+export type ComputeRunner = (
+  computeSource: string,
+  bars: readonly Kline[],
+  params: Record<string, number>,
+  timeoutMs: number,
+) => IndicatorOutput[]
 
 /** 生成特征测试 K 线序列。 */
 export function createSampleBars(): Record<'uptrend' | 'downtrend' | 'flat' | 'gap' | 'short', Kline[]> {
@@ -116,7 +125,13 @@ export function compileComputeSource(source: string): (bars: readonly Kline[], p
   return factory as unknown as (bars: readonly Kline[], params: Readonly<Record<string, number>>) => IndicatorOutput[]
 }
 
-export function validateCustomIndicator(raw: unknown): ValidationResult {
+/** 默认浏览器纯 JS runner。 */
+const defaultJsRunner: ComputeRunner = (source, bars, params) => {
+  const fn = compileComputeSource(source)
+  return fn(bars, params)
+}
+
+export function validateCustomIndicator(raw: unknown, options?: { runner?: ComputeRunner }): ValidationResult {
   if (typeof raw !== 'object' || raw === null) {
     return { ok: false, reason: '指标配置必须是一个非空对象' }
   }
@@ -191,16 +206,11 @@ export function validateCustomIndicator(raw: unknown): ValidationResult {
     return { ok: false, reason: `computeSource 源码长度 (${computeSource.length} B) 超出限制 (${MAX_SOURCE_LENGTH} B / 16KB)` }
   }
 
-  // 6. 编译与试算沙箱
-  let computeFn: (bars: readonly Kline[], params: Readonly<Record<string, number>>) => IndicatorOutput[]
+  // 6. 编译语法验证
   try {
-    computeFn = compileComputeSource(computeSource)
+    compileComputeSource(computeSource)
   } catch (error) {
     return { ok: false, reason: `源码语法错误或无法编译: ${String((error as { message?: string })?.message ?? error)}` }
-  }
-
-  if (typeof computeFn !== 'function') {
-    return { ok: false, reason: 'computeSource 未生成合法的执行函数' }
   }
 
   const defaultParamsMap: Record<string, number> = {}
@@ -208,12 +218,13 @@ export function validateCustomIndicator(raw: unknown): ValidationResult {
 
   const sampleScenarios = createSampleBars()
   const scenarioNames: Array<keyof typeof sampleScenarios> = ['uptrend', 'downtrend', 'flat', 'gap', 'short']
+  const runner = options?.runner ?? defaultJsRunner
 
   for (const scenario of scenarioNames) {
     const bars = sampleScenarios[scenario]
     let outputs: IndicatorOutput[]
     try {
-      outputs = computeFn(bars, defaultParamsMap)
+      outputs = runner(computeSource, bars, defaultParamsMap, DEFAULT_TIMEOUT_MS)
     } catch (error) {
       return { ok: false, reason: `在 ${scenario} 样例数据上试算执行报错: ${String((error as { message?: string })?.message ?? error)}` }
     }
@@ -268,6 +279,8 @@ export function validateCustomIndicator(raw: unknown): ValidationResult {
       }
     }
   }
+
+  const computeFn = compileComputeSource(computeSource)
 
   const definition: IndicatorDefinition = {
     id,
