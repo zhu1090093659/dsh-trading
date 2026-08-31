@@ -75,10 +75,19 @@ describe('LongbridgeRestClient.getTicker', () => {
 })
 
 describe('LongbridgeRestClient 签名算法与交易接口', () => {
-  it('生成合法 HMAC-SHA256 签名', () => {
-    const sig = generateLongbridgeSignature('secret123', 'POST', '/v1/trade/order', '1725000000', 'nonce-abc', '{"symbol":"00700.HK"}')
-    expect(sig).toBeTruthy()
-    expect(sig).toHaveLength(64) // hex string of sha256
+  it('生成符合 LongPort 官方规范的 HMAC-SHA256 签名头', () => {
+    const sig = generateLongbridgeSignature(
+      'secret123',
+      'POST',
+      '/v1/trade/order',
+      {
+        authorization: 'Bearer token-abc',
+        'x-api-key': 'key-123',
+        'x-timestamp': '1725000000000',
+      },
+      '{"symbol":"00700.HK"}',
+    )
+    expect(sig).toMatch(/^HMAC-SHA256 SignedHeaders=authorization;x-api-key;x-timestamp, Signature=[0-9a-f]{64}$/)
   })
 
   it('真实拉取可用资金与总资产', async () => {

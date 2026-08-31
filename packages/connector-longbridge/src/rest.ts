@@ -63,15 +63,26 @@ export function toLongbridgeSymbol(raw: string): { symbol: string; canonical: st
 }
 
 export function generateLongbridgeSignature(
-  secret: string,
+  appSecret: string,
   method: string,
-  path: string,
-  timestamp: string | number,
-  nonce: string,
+  pathWithQuery: string,
+  headers: { authorization: string; 'x-api-key': string; 'x-timestamp': string | number },
   body = '',
 ): string {
-  const payload = `${method.toUpperCase()}|${path}|${timestamp}|${nonce}|${body}`
-  return crypto.createHmac('sha256', secret).update(payload).digest('hex')
+  const methodUpper = method.toUpperCase()
+  const path = pathWithQuery.startsWith('/') ? pathWithQuery : `/${pathWithQuery}`
+  const authVal = headers.authorization
+  const apiKeyVal = headers['x-api-key']
+  const tsVal = String(headers['x-timestamp'])
+
+  const signedHeaders = 'authorization;x-api-key;x-timestamp'
+  const canonicalHeaders = `authorization:${authVal}\nx-api-key:${apiKeyVal}\nx-timestamp:${tsVal}\n`
+  const bodyHash = crypto.createHash('sha256').update(body, 'utf8').digest('hex')
+
+  const canonicalRequest = `${methodUpper}\n${path}\n${canonicalHeaders}\n${signedHeaders}\n${bodyHash}`
+  const signatureHex = crypto.createHmac('sha256', appSecret).update(canonicalRequest, 'utf8').digest('hex')
+
+  return `HMAC-SHA256 SignedHeaders=${signedHeaders}, Signature=${signatureHex}`
 }
 
 export interface LongbridgeRestOptions {
@@ -101,7 +112,6 @@ export class LongbridgeRestClient {
     const method = (options.method ?? 'GET').toUpperCase()
     const url = `${this.baseUrl}${path}`
     const timestamp = Date.now().toString()
-    const nonce = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
     const bodyStr = options.body ? String(options.body) : ''
 
     const headers: Record<string, string> = {
@@ -114,12 +124,20 @@ export class LongbridgeRestClient {
       headers['authorization'] = this.accessToken.startsWith('Bearer ') ? this.accessToken : `Bearer ${this.accessToken}`
     }
     if (this.appKey) {
-      headers['x-hk-key'] = this.appKey
       headers['x-api-key'] = this.appKey
-      headers['x-hk-timestamp'] = timestamp
-      headers['x-hk-nonce'] = nonce
-      if (this.appSecret) {
-        headers['x-hk-signature'] = generateLongbridgeSignature(this.appSecret, method, path, timestamp, nonce, bodyStr)
+      headers['x-timestamp'] = timestamp
+      if (this.appSecret && headers['authorization']) {
+        headers['x-api-signature'] = generateLongbridgeSignature(
+          this.appSecret,
+          method,
+          path,
+          {
+            authorization: headers['authorization'],
+            'x-api-key': this.appKey,
+            'x-timestamp': timestamp,
+          },
+          bodyStr,
+        )
       }
     }
 

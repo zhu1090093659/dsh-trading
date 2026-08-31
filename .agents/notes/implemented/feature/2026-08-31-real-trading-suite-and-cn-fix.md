@@ -38,8 +38,10 @@ ode:crypto 实现 TigerOpen 标准 RSA-SHA256 签名算法（generateTigerSignat
    - 撤单：POST /gateway（method: "cancel_order"）；
    - 持仓：真实请求 POST /gateway（method: "positions"）。
 4. **Longbridge (connector-longbridge)**:
-   - 基于 Node.js 
-ode:crypto 实现 LongPort 标准 HMAC-SHA256 签名（generateLongbridgeSignature）与 Bearer Token 鉴权头；
+   - 基于 LongPort 官方 OpenAPI 规范实现标准签名与请求头：
+     - 头部：uthorization（Bearer token）、x-api-key（App Key）、x-timestamp（毫秒时间戳）；
+     - 签名头：x-api-signature: HMAC-SHA256 SignedHeaders=authorization;x-api-key;x-timestamp, Signature=<sig_hex>；
+     - 待签串：基于 Method + Path + CanonicalHeaders + SignedHeaders + SHA256(Body) 计算 HMAC-SHA256 十六进制摘要；
    - 资金查询：真实请求 GET /v1/asset/account；
    - 订单申报：真实请求 POST /v1/trade/order；
    - 撤单：DELETE /v1/trade/order?order_id=...；
@@ -59,5 +61,5 @@ ode:crypto 实现 LongPort 标准 HMAC-SHA256 签名（generateLongbridgeSignatu
 ---
 
 ## 3. 验证与测试
-- 全仓单测覆盖：RSA-SHA256 验签、HMAC-SHA256 摘要、IBKR Warning Reply 流程、QMT 网关载荷、Eastmoney/Akshare 量纲。
+- 全仓单测覆盖：RSA-SHA256 验签、LongPort 官方规范 HMAC-SHA256 头部签名、IBKR Warning Reply 流程、QMT 网关载荷、Eastmoney/Akshare 量纲。
 - pnpm -r build 与 pnpm -r test 100% 绿灯。
