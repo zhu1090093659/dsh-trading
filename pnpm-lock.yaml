@@ -210,6 +210,9 @@ importers:
       '@dsh-trading/indicators':
         specifier: workspace:^
         version: link:../indicators
+      '@dsh-trading/knowledge':
+        specifier: workspace:^
+        version: link:../knowledge
       '@dsh-trading/strategies':
         specifier: workspace:^
         version: link:../strategies
@@ -827,6 +830,9 @@ importers:
       '@dsh-trading/indicators':
         specifier: workspace:*
         version: link:../indicators
+      '@dsh-trading/knowledge':
+        specifier: workspace:*
+        version: link:../knowledge
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -852,6 +858,9 @@ importers:
       '@dsh-trading/indicators':
         specifier: workspace:*
         version: link:../indicators
+      '@dsh-trading/knowledge':
+        specifier: workspace:*
+        version: link:../knowledge
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -877,6 +886,9 @@ importers:
       '@dsh-trading/indicators':
         specifier: workspace:*
         version: link:../indicators
+      '@dsh-trading/knowledge':
+        specifier: workspace:*
+        version: link:../knowledge
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -902,10 +914,35 @@ importers:
       '@dsh-trading/indicators':
         specifier: workspace:*
         version: link:../indicators
+      '@dsh-trading/knowledge':
+        specifier: workspace:*
+        version: link:../knowledge
     devDependencies:
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(lightningcss@1.33.0)(tsx@4.23.12)
+
+  packages/knowledge:
+    dependencies:
+      '@deepseek-ai/dsh-tools':
+        specifier: ^0.1.2-alpha.2
+        version: 0.1.2-alpha.2(1121451e7f334db134f1e0d3fbe914bd)
+      '@deepseek-ai/schemastery':
+        specifier: ^3.18.2
+        version: 3.18.2
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)(lightningcss@1.33.0)(tsx@4.23.12)

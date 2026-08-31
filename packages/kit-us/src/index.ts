@@ -2,9 +2,10 @@
  * US 工具箱插件（dsh-trading us 切片）。
  *
  * 包含：
- *   1. skill provider：us-risk-checklist 与 indicator-authoring 随包分发；
+ *   1. skill provider：us-risk-checklist、indicator-authoring、trading-strategy-paradigms 与 knowledge-curation 随包分发；
  *   2. us_get_news 与 us_get_fundamentals 工具；
- *   3. indicator_author 创作工具（Issue #19）。
+ *   3. indicator_author 创作工具（Issue #19）；
+ *   4. knowledge_ingest 与 knowledge_search 知识库工具（Issue #24）。
  *
  * @module @dsh-trading/kit-us
  */
@@ -23,6 +24,7 @@ import {
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createAuthorIndicatorTool, createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
+import { createKnowledgeIngestTool, createKnowledgeSearchTool, createFileKnowledgeCardStore } from '@dsh-trading/knowledge/tool'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchUsFundamentals, renderUsFundamentals } from './fundamentals.js'
 
@@ -33,6 +35,7 @@ const PROVIDER_NAME = 'dsh-trading-us'
 const SKILL_BODY_URL = new URL('../assets/skills/us-risk-checklist.md', import.meta.url)
 const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
 const STRATEGY_BODY_URL = new URL('../assets/skills/trading-strategy-paradigms.md', import.meta.url)
+const KNOWLEDGE_CURATION_BODY_URL = new URL('../assets/skills/knowledge-curation.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -71,9 +74,20 @@ const STRATEGY_CANDIDATE: SkillCandidate = {
   locator: STRATEGY_BODY_URL,
 }
 
-const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE]
+const KNOWLEDGE_CURATION_CANDIDATE: SkillCandidate = {
+  name: 'knowledge-curation',
+  description: '财经观点沉淀与知识库策展指南：基于 Content Insight 事实核查产物，规范化提取知识卡片字段、受控词表对齐、查重与关联建立，通过 knowledge_ingest 工具入库。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: KNOWLEDGE_CURATION_BODY_URL,
+}
 
-const provider: SkillProvider = {
+const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE, KNOWLEDGE_CURATION_CANDIDATE]
+
+export const provider: SkillProvider = {
   name: PROVIDER_NAME,
   list: () => Promise.resolve(SKILL_CANDIDATES),
   async get(candidate): Promise<SkillDefinition> {
@@ -113,10 +127,12 @@ export function apply(ctx: Context, _config: Config): void {
 
   const newsTool = createGetNewsTool()
   const fundamentalsTool = createGetFundamentalsTool()
+
   const tools = ctx.tools as unknown as {
     register(definition: { name: string }): unknown
     get(name: string): { name: string } | undefined
   }
+
   const registerOnce = (tool: ReturnType<typeof defineTool>): void => {
     if (tools.get(tool.name) !== undefined) {
       ctx.logger('dsh-trading-us-kit').info(
@@ -127,6 +143,7 @@ export function apply(ctx: Context, _config: Config): void {
     }
     tools.register(tool)
   }
+
   registerOnce(newsTool)
   registerOnce(fundamentalsTool)
 
@@ -134,9 +151,15 @@ export function apply(ctx: Context, _config: Config): void {
   const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
   const authorStore = createFileCustomIndicatorStore(indicatorStorePath)
   registerOnce(createAuthorIndicatorTool({ store: authorStore }))
+
+  // Issue #24：注册知识库摄取与检索工具（共享 ~/.dsh/knowledge/cards.json）
+  const knowledgeStorePath = path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
+  const knowledgeStore = createFileKnowledgeCardStore(knowledgeStorePath)
+  registerOnce(createKnowledgeIngestTool(knowledgeStore))
+  registerOnce(createKnowledgeSearchTool(knowledgeStore))
 }
 
-/* ── us_get_news：美股新闻工具（WS4 #1，#6） ─────────────────────────────────── */
+/* ── us_get_news：美股新闻工具（WS2 #1） ────────────────────────────────────────── */
 
 const DEFAULT_NEWS_WINDOW_HOURS = 24
 const DEFAULT_NEWS_LIMIT = 20
@@ -147,17 +170,17 @@ function renderNewsItem(item: { source: string; title: string; url: string; publ
 
 export function createGetNewsTool() {
   const description =
-    'Get recent US stock market news from public no-key sources (Yahoo Finance news + Google News RSS). '
-    + 'Aggregates and sorts newest-first; each item carries source name (publisher), publish time and a link for traceability. '
-    + 'Optionally filter by symbol (matched against item titles; note media headlines often use company names like "Apple" rather than tickers) and by a time window. '
-    + 'Source failures are tolerated and reported instead of failing the whole call. No credentials required. Distinguish announcements/regulatory from opinion (media) when citing.'
+    'Get recent US stock market news from Yahoo Finance RSS and CNBC RSS feeds. '
+    + 'Aggregates and sorts newest-first; each item carries source name, publish time and a link for traceability. '
+    + 'Optionally filter by symbol (e.g. AAPL, TSLA, NVDA) and by a time window. '
+    + 'Source failures are tolerated and reported instead of failing the whole call. No credentials required.'
   return defineTool({
     name: 'us_get_news',
     description,
     parameters: {
       symbol: {
         type: 'string',
-        description: 'Optional symbol to filter by, market-canonical vocabulary, e.g. AAPL or TSLA. Used as the search query and matched against item titles.',
+        description: 'Optional US stock symbol to filter by (e.g. AAPL, TSLA, NVDA). Matched against item titles.',
       },
       windowHours: {
         type: 'number',
@@ -198,18 +221,18 @@ export function createGetNewsTool() {
   })
 }
 
-/* ── us_get_fundamentals：美股基本面工具（WS4） ───────────────────────────────── */
+/* ── us_get_fundamentals：美股基本面工具（WS2） ───────────────────────────────── */
 
 export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.fetch } = {}) {
   return defineTool({
     name: 'us_get_fundamentals',
     description:
-      'Get fundamental valuation and financial metrics for a US stock (Market Cap, Trailing P/E, Forward P/E, P/B, Diluted EPS, Dividend Yield, Beta, 52-Week Range, 3-Month Average Volume) via Yahoo Finance public API. Accepts market-canonical ticker, e.g. AAPL, TSLA, NVDA. No credentials required.',
+      'Get fundamental valuation and financial indicators for US stocks (Market Cap, Trailing P/E, Forward P/E, P/B, Dividend Yield, Beta, 52-Week High/Low, EPS, 50-Day & 200-Day Moving Averages) via Stooq public equity data. Accepts market-canonical symbol (e.g. AAPL.US, TSLA.US) or pure ticker (AAPL, TSLA). No credentials required.',
     parameters: {
       symbol: {
         type: 'string',
         required: true,
-        description: 'US stock ticker symbol, market-canonical vocabulary, e.g. AAPL, MSFT, TSLA, NVDA',
+        description: 'US stock symbol or ticker, market-canonical vocabulary, e.g. AAPL.US, TSLA.US, AAPL, TSLA',
       },
     },
     output: {
@@ -220,7 +243,7 @@ export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.f
       const args = (raw ?? {}) as { symbol?: unknown }
       const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
       if (!symbol) {
-        throw new Error('us_get_fundamentals: symbol parameter is required (e.g. AAPL or TSLA)')
+        throw new Error('us_get_fundamentals: symbol parameter is required (e.g. AAPL.US or AAPL)')
       }
       const result = await fetchUsFundamentals({ symbol, fetch: options.fetch })
       return renderUsFundamentals(result, symbol)

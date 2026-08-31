@@ -22,7 +22,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/indicators": "workspace:*"
+    "@dsh-trading/indicators": "workspace:*",
+    "@dsh-trading/knowledge": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

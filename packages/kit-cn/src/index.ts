@@ -1,10 +1,11 @@
 /**
- * CN 工具箱插件（dsh-trading cn 切片）。
+ * A 股工具箱插件（dsh-trading cn 切片）。
  *
  * 包含：
- *   1. skill provider：cn-risk-checklist 与 indicator-authoring 随包分发；
+ *   1. skill provider：cn-risk-checklist、indicator-authoring、trading-strategy-paradigms 与 knowledge-curation 随包分发；
  *   2. cn_get_news 与 cn_get_fundamentals 工具；
- *   3. indicator_author 创作工具（Issue #19）。
+ *   3. indicator_author 创作工具（Issue #19）；
+ *   4. knowledge_ingest 与 knowledge_search 知识库工具（Issue #24）。
  *
  * @module @dsh-trading/kit-cn
  */
@@ -23,6 +24,7 @@ import {
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createAuthorIndicatorTool, createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
+import { createKnowledgeIngestTool, createKnowledgeSearchTool, createFileKnowledgeCardStore } from '@dsh-trading/knowledge/tool'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchCnFundamentals, renderCnFundamentals } from './fundamentals.js'
 
@@ -33,6 +35,7 @@ const PROVIDER_NAME = 'dsh-trading-cn'
 const SKILL_BODY_URL = new URL('../assets/skills/cn-risk-checklist.md', import.meta.url)
 const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
 const STRATEGY_BODY_URL = new URL('../assets/skills/trading-strategy-paradigms.md', import.meta.url)
+const KNOWLEDGE_CURATION_BODY_URL = new URL('../assets/skills/knowledge-curation.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -71,9 +74,20 @@ const STRATEGY_CANDIDATE: SkillCandidate = {
   locator: STRATEGY_BODY_URL,
 }
 
-const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE]
+const KNOWLEDGE_CURATION_CANDIDATE: SkillCandidate = {
+  name: 'knowledge-curation',
+  description: '财经观点沉淀与知识库策展指南：基于 Content Insight 事实核查产物，规范化提取知识卡片字段、受控词表对齐、查重与关联建立，通过 knowledge_ingest 工具入库。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: KNOWLEDGE_CURATION_BODY_URL,
+}
 
-const provider: SkillProvider = {
+const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE, KNOWLEDGE_CURATION_CANDIDATE]
+
+export const provider: SkillProvider = {
   name: PROVIDER_NAME,
   list: () => Promise.resolve(SKILL_CANDIDATES),
   async get(candidate): Promise<SkillDefinition> {
@@ -113,10 +127,12 @@ export function apply(ctx: Context, _config: Config): void {
 
   const newsTool = createGetNewsTool()
   const fundamentalsTool = createGetFundamentalsTool()
+
   const tools = ctx.tools as unknown as {
     register(definition: { name: string }): unknown
     get(name: string): { name: string } | undefined
   }
+
   const registerOnce = (tool: ReturnType<typeof defineTool>): void => {
     if (tools.get(tool.name) !== undefined) {
       ctx.logger('dsh-trading-cn-kit').info(
@@ -127,6 +143,7 @@ export function apply(ctx: Context, _config: Config): void {
     }
     tools.register(tool)
   }
+
   registerOnce(newsTool)
   registerOnce(fundamentalsTool)
 
@@ -134,9 +151,15 @@ export function apply(ctx: Context, _config: Config): void {
   const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
   const authorStore = createFileCustomIndicatorStore(indicatorStorePath)
   registerOnce(createAuthorIndicatorTool({ store: authorStore }))
+
+  // Issue #24：注册知识库摄取与检索工具（共享 ~/.dsh/knowledge/cards.json）
+  const knowledgeStorePath = path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
+  const knowledgeStore = createFileKnowledgeCardStore(knowledgeStorePath)
+  registerOnce(createKnowledgeIngestTool(knowledgeStore))
+  registerOnce(createKnowledgeSearchTool(knowledgeStore))
 }
 
-/* ── cn_get_news：A 股新闻工具（WS4 #1，#6） ─────────────────────────────────── */
+/* ── cn_get_news：A 股新闻工具（WS3） ────────────────────────────────────────── */
 
 const DEFAULT_NEWS_WINDOW_HOURS = 24
 const DEFAULT_NEWS_LIMIT = 20
@@ -147,18 +170,17 @@ function renderNewsItem(item: { source: string; title: string; url: string; publ
 
 export function createGetNewsTool() {
   const description =
-    'Get recent China A-share market news from the public no-key Eastmoney fast-news feed (7x24). '
-    + 'Each item carries source name (东方财富), publish time and a link for traceability. '
-    + 'Optionally filter by symbol (best-effort match against item titles; titles usually use company names rather than codes) and by a time window. '
-    + 'Fetches metadata only (title/time/link), never redistributes article bodies. '
-    + 'No credentials required.'
+    'Get recent China A-share market news, announcements, and macro financial updates from Eastmoney financial fast-news feed. '
+    + 'Aggregates and sorts newest-first; each item carries source name (东方财富), publish time and a link for traceability. '
+    + 'Optionally filter by symbol (A-share code, e.g. 600519 / 000001) and by a time window. '
+    + 'Fetches metadata only, never redistributes article bodies. No credentials required.'
   return defineTool({
     name: 'cn_get_news',
     description,
     parameters: {
       symbol: {
         type: 'string',
-        description: 'Optional symbol to filter by, market-canonical vocabulary, e.g. 600519 or 600519.SH. Best-effort matched against item titles (Chinese titles use company names, so this is loose).',
+        description: 'Optional symbol to filter by, market-canonical vocabulary, e.g. 600519 or 000001 (A-share code). Best-effort matched against Eastmoney stock tags.',
       },
       windowHours: {
         type: 'number',
@@ -199,18 +221,18 @@ export function createGetNewsTool() {
   })
 }
 
-/* ── cn_get_fundamentals：A 股基本面工具（WS4） ───────────────────────────────── */
+/* ── cn_get_fundamentals：A 股基本面工具（WS3） ───────────────────────────────── */
 
 export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.fetch } = {}) {
   return defineTool({
     name: 'cn_get_fundamentals',
     description:
-      'Get fundamental valuation and financial indicators for China A-shares (Total Market Cap, Float Market Cap, Dynamic P/E, Trailing P/E, Static P/E, P/B, Turnover Rate, Amplitude, Limit Up/Down Prices, 52-Week Range) via Tencent public market quote API. Accepts market-canonical code (e.g. 600519.SH, 000001.SZ) or raw 6-digit code. No credentials required.',
+      'Get fundamental valuation and financial indicators for China A-share stocks (Total Market Cap, Float Market Cap, Dynamic P/E, Trailing P/E, P/B, Dividend Yield, Turnover Rate, Amplitude, 52-Week Range, Industry/Sector) via Tencent public market quote API. Accepts market-canonical code (e.g. 600519.SS, 000001.SZ) or 6-digit code (600519). No credentials required.',
     parameters: {
       symbol: {
         type: 'string',
         required: true,
-        description: 'China A-share symbol or 6-digit code, market-canonical vocabulary, e.g. 600519.SH, 000001.SZ, 600519',
+        description: 'A-share stock symbol or code, market-canonical vocabulary, e.g. 600519.SS, 000001.SZ, 600519, 000001',
       },
     },
     output: {
@@ -221,7 +243,7 @@ export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.f
       const args = (raw ?? {}) as { symbol?: unknown }
       const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
       if (!symbol) {
-        throw new Error('cn_get_fundamentals: symbol parameter is required (e.g. 600519.SH or 600519)')
+        throw new Error('cn_get_fundamentals: symbol parameter is required (e.g. 600519.SS or 600519)')
       }
       const result = await fetchCnFundamentals({ symbol, fetch: options.fetch })
       return renderCnFundamentals(result, symbol)

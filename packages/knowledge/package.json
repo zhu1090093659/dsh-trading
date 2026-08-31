@@ -1,0 +1,37 @@
+{
+  "name": "@dsh-trading/knowledge",
+  "description": "Knowledge base data plane for dsh-trading: KnowledgeCard data model, validation, graph builder, atomic file store, and knowledge_ingest / knowledge_search agent tools.",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./tool": {
+      "types": "./lib/tool.d.ts",
+      "default": "./lib/tool.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-tools": "^0.1.2-alpha.2",
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}

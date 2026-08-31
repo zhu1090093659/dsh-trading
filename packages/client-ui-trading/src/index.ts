@@ -14,6 +14,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dsh-trading/api'
 import { createFileCustomIndicatorStore, createAuthorIndicatorTool } from '@dsh-trading/indicators/tool'
+import { createFileKnowledgeCardStore, createKnowledgeIngestTool, createKnowledgeSearchTool } from '@dsh-trading/knowledge/tool'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -54,16 +55,29 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
  * @param ctx - Host cordis context（bundle loader entry）。
  */
 export function apply(ctx: Context): void {
-  const storePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
-  const customIndicatorsStore = createFileCustomIndicatorStore(storePath)
+  const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
+  const customIndicatorsStore = createFileCustomIndicatorStore(indicatorStorePath)
 
-  // 注册 indicator_author 工具到全局 tools（若服务存在）
+  const knowledgeStorePath = path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
+  const knowledgeStore = createFileKnowledgeCardStore(knowledgeStorePath)
+
+  // 注册 indicator_author / knowledge_ingest / knowledge_search 工具到全局 tools（若服务存在）
   ctx.inject(['tools'] as never, (toolCtx) => {
     const tools = (toolCtx as unknown as { tools?: { register(t: unknown): void; get(name: string): unknown } }).tools
     if (tools && typeof tools.register === 'function') {
-      const tool = createAuthorIndicatorTool({ store: customIndicatorsStore })
-      if (tools.get(tool.name) === undefined) {
-        tools.register(tool)
+      const authorTool = createAuthorIndicatorTool({ store: customIndicatorsStore })
+      if (tools.get(authorTool.name) === undefined) {
+        tools.register(authorTool)
+      }
+
+      const ingestTool = createKnowledgeIngestTool(knowledgeStore)
+      if (tools.get(ingestTool.name) === undefined) {
+        tools.register(ingestTool)
+      }
+
+      const searchTool = createKnowledgeSearchTool(knowledgeStore)
+      if (tools.get(searchTool.name) === undefined) {
+        tools.register(searchTool)
       }
     }
   })
@@ -79,6 +93,7 @@ export function apply(ctx: Context): void {
       router: webCtx.get('tradingMarketRouter') as { activeProvider(m: string): string | undefined } | undefined,
       legacy: market => webCtx.get(MARKET_SERVICE_KEYS[market]) as MarketDataService | undefined,
       customIndicatorsStore,
+      knowledgeStore,
     })
     const bridge = new TradingBridge(host)
     const route = {

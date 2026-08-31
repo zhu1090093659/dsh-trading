@@ -10,12 +10,12 @@
  * 同时满足各 kit 包在 npm 发布分发时的静态资产打包需求。
  *
  * 路由规则：
- *   - 'trading-*' / 'indicator-*' -> 全部 4 个 market kit（crypto/us/cn/hk）
- *   - 'crypto-*'                  -> kit-crypto
- *   - 'us-*'                      -> kit-us
- *   - 'cn-*'                      -> kit-cn
- *   - 'hk-*'                      -> kit-hk
- *   - 其它通用基础技能             -> base
+ *   - 'trading-*' / 'indicator-*' / 'knowledge-*' -> 全部 4 个 market kit（crypto/us/cn/hk）
+ *   - 'crypto-*'                                  -> kit-crypto
+ *   - 'us-*'                                      -> kit-us
+ *   - 'cn-*'                                      -> kit-cn
+ *   - 'hk-*'                                      -> kit-hk
+ *   - 其它通用基础技能                             -> base
  */
 
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises'
@@ -36,7 +36,11 @@ const MARKET_PACKAGES = {
 }
 
 function resolveTargetDirs(skillName) {
-  if (skillName.startsWith('trading-') || skillName.startsWith('indicator-')) {
+  if (
+    skillName.startsWith('trading-') ||
+    skillName.startsWith('indicator-') ||
+    skillName.startsWith('knowledge-')
+  ) {
     return [MARKET_PACKAGES.crypto, MARKET_PACKAGES.us, MARKET_PACKAGES.cn, MARKET_PACKAGES.hk]
   }
   if (skillName.startsWith('crypto-')) return [MARKET_PACKAGES.crypto]

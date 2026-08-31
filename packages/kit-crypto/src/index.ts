@@ -1,12 +1,13 @@
 /**
  * Crypto 工具箱插件（dsh-trading crypto 切片）。
  *
- * 两件事：
- *   1. skill provider：crypto-risk-checklist 随包分发（S2 形态；rank 用
- *      BUNDLED_SKILL_RANK=600，用户目录 100-500 天然覆盖之；skill 名市场前缀命名空间）；
- *   2. crypto_funding_rate 工具：Binance USDT 永续公共资金费率（独立 fetch，不经
- *      connector 服务，保持两包解耦；公共接口无凭证）。
- *   3. indicator-authoring skill 与 indicator_author 创作工具（Issue #19）。
+ * 包含：
+ *   1. skill provider：crypto-risk-checklist、crypto-instrument-analysis、indicator-authoring、trading-strategy-paradigms 与 knowledge-curation 随包分发；
+ *   2. crypto_funding_rate（Binance 公共资金费率）；
+ *   3. crypto_get_news（动态聚合新闻）；
+ *   4. crypto_get_derivatives 与 crypto_get_fundamentals 工具；
+ *   5. indicator_author 创作工具（Issue #19）；
+ *   6. knowledge_ingest 与 knowledge_search 知识库工具（Issue #24）。
  *
  * @module @dsh-trading/kit-crypto
  */
@@ -25,6 +26,7 @@ import {
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { createAuthorIndicatorTool, createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
+import { createKnowledgeIngestTool, createKnowledgeSearchTool, createFileKnowledgeCardStore } from '@dsh-trading/knowledge/tool'
 import { aggregateNews, deriveSymbolTokens, type AggregateNewsOptions } from './news.js'
 import { fetchCryptoDerivatives, renderDerivativesData } from './derivatives.js'
 import { fetchCryptoFundamentals, renderCryptoFundamentals } from './fundamentals.js'
@@ -37,6 +39,7 @@ const SKILL_BODY_URL = new URL('../assets/skills/crypto-risk-checklist.md', impo
 const ANALYSIS_BODY_URL = new URL('../assets/skills/crypto-instrument-analysis.md', import.meta.url)
 const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
 const STRATEGY_BODY_URL = new URL('../assets/skills/trading-strategy-paradigms.md', import.meta.url)
+const KNOWLEDGE_CURATION_BODY_URL = new URL('../assets/skills/knowledge-curation.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -86,7 +89,24 @@ const STRATEGY_CANDIDATE: SkillCandidate = {
   locator: STRATEGY_BODY_URL,
 }
 
-const SKILL_CANDIDATES = [CANDIDATE, ANALYSIS_CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE]
+const KNOWLEDGE_CURATION_CANDIDATE: SkillCandidate = {
+  name: 'knowledge-curation',
+  description: '财经观点沉淀与知识库策展指南：基于 Content Insight 事实核查产物，规范化提取知识卡片字段、受控词表对齐、查重与关联建立，通过 knowledge_ingest 工具入库。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: KNOWLEDGE_CURATION_BODY_URL,
+}
+
+const SKILL_CANDIDATES = [
+  CANDIDATE,
+  ANALYSIS_CANDIDATE,
+  AUTHORING_CANDIDATE,
+  STRATEGY_CANDIDATE,
+  KNOWLEDGE_CURATION_CANDIDATE,
+]
 
 export const provider: SkillProvider = {
   name: PROVIDER_NAME,
@@ -121,7 +141,7 @@ export const inject = ['skills', 'tools']
 
 export const name = 'dsh-trading-crypto-kit'
 
-// ── crypto_funding_rate：Binance USDT 永续资金费率（公共接口，独立 fetch） ──────
+// ── crypto_funding_rate：Binance USDT 永续资金费率 ────────────────────────────
 
 const FUNDING_RATE_URL = 'https://fapi.binance.com/fapi/v1/fundingRate'
 
@@ -231,6 +251,12 @@ export function apply(ctx: Context, _config: Config): void {
   const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
   const authorStore = createFileCustomIndicatorStore(indicatorStorePath)
   registerOnce(createAuthorIndicatorTool({ store: authorStore }))
+
+  // Issue #24：注册知识库摄取与检索工具（共享 ~/.dsh/knowledge/cards.json）
+  const knowledgeStorePath = path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
+  const knowledgeStore = createFileKnowledgeCardStore(knowledgeStorePath)
+  registerOnce(createKnowledgeIngestTool(knowledgeStore))
+  registerOnce(createKnowledgeSearchTool(knowledgeStore))
 }
 
 /* ── crypto_get_derivatives：衍生品数据工具（WS4） ───────────────────────────── */
@@ -347,7 +373,7 @@ export function createGetNewsTool(toolOptions: { cryptoPanicKey?: string } = {})
         return 'crypto_get_news: no news items found within the requested window.'
       }
       const symbolNote = options.symbol ? ` symbol=${options.symbol.trim().toUpperCase()} (tokens: ${deriveSymbolTokens(options.symbol).join(', ')})` : ''
-      const keyNote = options.cryptoPanicKey ? ' cryptopanicKey=set (B-source) ' : ''
+      const keyNote = options.cryptoPanicKey ? ' cryptopanicKey=set (B-source)' : ''
       const lines = [
         `crypto_get_news — ${items.length} item(s)${symbolNote}${keyNote}, window=${options.windowHours ?? DEFAULT_NEWS_WINDOW_HOURS}h (newest-first):`,
         ...items.map(renderNewsItem),

@@ -208,6 +208,15 @@ describe('createBridgeHost（registry-first，2026-08-30 整改 #1）', () => {
   })
 })
 
+describe('TradingBridge.knowledgeCards', () => {
+  it('GET /knowledge/cards 端点返回知识卡片列表', async () => {
+    const bridge = new TradingBridge(fakeHost({}))
+    const res = await dispatchBridgeRequest(bridge, 'GET', '/knowledge/cards', new URLSearchParams())
+    expect(res.status).toBe(200)
+    expect(res.payload).toMatchObject({ ok: true, cards: [] })
+  })
+})
+
 describe('errorPayload', () => {
   it('带 code 的 Error 提取词汇，普通 Error 落 TRADING_UNKNOWN，非 Error 字符串化', () => {
     expect(errorPayload(Object.assign(new Error('x'), { code: 'TRADING_NETWORK' })))
