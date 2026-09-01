@@ -34,9 +34,15 @@ Status: implemented
 2. 固化为 `scripts/refresh-trading-web-profile.sh`：停实例 → 刷
    @dsh-trading 副本 → `dsh plugin install` → **重挂宿主 dedupe symlink**
    （pnpm install 会重新物化影子拷贝，此步不可省）→ 提示重启。
-3. `package.json` 追加 `@deepseek-ai/dsh-tools: link:<宿主路径>` 依赖
-   （pnpm 原生 link 协议，overrides 里用 link: 会触发 pnpm 11
-   "Cannot convert undefined or null to object" 崩溃，不可用）。
+3. **否决的备选**：package.json 里加 `link:` 依赖做原生 symlink——会让
+   loader 对同一包组合出两条 entry（如 `subagent-model-selection-settings`
+   duplicate）直接 boot 失败；overrides 里用 `link:` 则触发 pnpm 11
+   "Cannot convert undefined or null to object"。均不可用，symlink 重挂
+   由脚本承担。
+4. `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 升到 α3 cohort
+   （α3 发布于 2026-08-31，age 闸门会把它压回 α2）。注意 pnpm 的 hoist
+   冲突仍可能让 base 的 `>=α1` 依赖边物化 α2 实体——脚本的 symlink 重挂
+   是最终兜底，不能依赖解析层。
 
 ## Verification
 
