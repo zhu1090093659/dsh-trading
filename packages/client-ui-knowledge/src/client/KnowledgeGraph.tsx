@@ -133,9 +133,9 @@ export const KnowledgeGraph = forwardRef<KnowledgeGraphHandle, KnowledgeGraphPro
         if (!raw) return node.label
         return `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; padding: 6px 10px; background: rgba(26, 30, 36, 0.92); color: #ffffff; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 260px; pointer-events: none;">
-            <div style="font-weight: 600; margin-bottom: 4px; color: #60a5fa;">${'$'}{node.label}</div>
-            <div style="color: #cbd5e1; line-height: 1.4; margin-bottom: 4px;">${'$'}{raw.summary}</div>
-            <div style="color: #94a3b8; font-size: 10px;">${'$'}{raw.source.author} · ${'$'}{raw.tags.join(', ')}</div>
+            <div style="font-weight: 600; margin-bottom: 4px; color: #60a5fa;">${node.label}</div>
+            <div style="color: #cbd5e1; line-height: 1.4; margin-bottom: 4px;">${raw.summary}</div>
+            <div style="color: #94a3b8; font-size: 10px;">${raw.source.author} · ${raw.tags.join(', ')}</div>
           </div>`
       })
       .onNodeHover((node: KnowledgeGraphNode | null) => {
@@ -221,7 +221,7 @@ export const KnowledgeGraph = forwardRef<KnowledgeGraphHandle, KnowledgeGraphPro
         if (showLabel) {
           const label = hub ? '#' + (node.label || '') : node.label || ''
           const fontSize = hub ? Math.max(10, 12 / globalScale) : Math.max(8, Math.min(13, 11 / globalScale))
-          ctx.font = `${'$'}{hub ? 600 : 400} ${'$'}{fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
+          ctx.font = `${hub ? 600 : 400} ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
           ctx.textAlign = 'center'
           ctx.textBaseline = 'top'
           const ty = hub ? node.y + radius + 2 : node.y + radius + 2
