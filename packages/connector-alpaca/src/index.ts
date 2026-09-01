@@ -169,16 +169,19 @@ export class AlpacaMarketDataService extends Service implements MarketDataServic
 
 export class AlpacaTradeService extends Service implements TradeService {
   private readonly client: AlpacaRestClient
+  /** 插件配置（服务缝闸门 P0：dryRun 强制模拟 / liveTrading 总闸门）。 */
+  private readonly config: Config
   private readonly getCredentials: () => Promise<AlpacaCredentials>
 
   constructor(
     ctx: Context,
-    options: AlpacaRestOptions,
+    options: AlpacaRestOptions & { config: Config },
     getCredentials: () => Promise<AlpacaCredentials>,
     serviceName: string = TRADING_US_TRADE_KEY,
   ) {
     super(ctx, serviceName)
     this.client = new AlpacaRestClient(options)
+    this.config = options.config
     this.getCredentials = getCredentials
   }
 
@@ -188,6 +191,32 @@ export class AlpacaTradeService extends Service implements TradeService {
   }
 
   async placeOrder(order: OrderRequest): Promise<Order> {
+    // 服务缝闸门（P0 · 铁律 #3 修订版 [S4]）：三态检查下推到服务实现内第一步——
+    // 绕过工具层直调本服务（动态包宿主半等）同样 fail-closed；工具层
+    // evaluateOrderGate + base 审批闸门保留（双保险），三态语义与工具层一致。
+    const requestedDryRun = order.dryRun ?? true
+    if (!requestedDryRun && !this.config.liveTrading) {
+      throw new TradingServiceError(
+        'TRADING_LIVE_TRADING_DISABLED',
+        `Alpaca TradeService.placeOrder rejected: the request asks for real execution (dryRun=${String(order.dryRun)}) `
+          + 'but liveTrading=false — enable liveTrading explicitly or keep dryRun=true for a simulated fill.',
+      )
+    }
+    if (requestedDryRun || this.config.dryRun) {
+      // 闸门 ②：本地模拟回执（工具层另有带市价参照的富回执）。
+      return {
+        id: `dry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        symbol: order.symbol,
+        side: order.side,
+        type: order.type,
+        status: 'filled',
+        ...(order.price !== undefined ? { price: order.price } : {}),
+        quantity: order.quantity,
+        dryRun: true,
+        timestamp: Date.now(),
+      }
+    }
+    // 闸门 ③：live（dryRun=false 且 liveTrading=true）→ 真实下单。
     const creds = await this.getCredentials()
     return this.client.placeOrder(creds, {
       symbol: order.symbol,
@@ -199,6 +228,13 @@ export class AlpacaTradeService extends Service implements TradeService {
   }
 
   async cancelOrder(orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+    // 服务缝闸门（P0）：撤单是会改变交易所真实状态的实盘动作，与真实下单同门槛。
+    if (!this.config.liveTrading || this.config.dryRun) {
+      throw new TradingServiceError(
+        'TRADING_LIVE_TRADING_DISABLED',
+        'Alpaca TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
+      )
+    }
     const creds = await this.getCredentials()
     return this.client.cancelOrder(creds, orderId)
   }
@@ -323,7 +359,7 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   const marketData = new AlpacaMarketDataService(ctx, { env: config.env }, getCreds)
-  const trade = new AlpacaTradeService(ctx, { env: config.env }, requireCreds)
+  const trade = new AlpacaTradeService(ctx, { env: config.env, config }, requireCreds)
 
   ctx.inject(['tools'], (ctx) => {
     const tools = ctx.tools as unknown as { register(d: unknown): void; get(n: string): unknown }

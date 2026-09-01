@@ -71,6 +71,56 @@ describe('evaluateOrderGate（三态环境 × 三段闸门）', () => {
   })
 })
 
+/* ------------------------------------------------------------------ */
+/* 服务缝闸门（P0）：绕过工具层直调 TradeService 也 fail-closed                */
+/* ------------------------------------------------------------------ */
+
+describe('OkxTradeService 服务缝闸门（绕过工具层直调）', () => {
+  it('① liveTrading=false（缺省）+ dryRun=false 直调 → TRADING_LIVE_TRADING_DISABLED，不触网', async () => {
+    const { fetchImpl, posts } = routeFetch([])
+    const trade = makeTradeService(fetchImpl, { liveTrading: false })
+    await expect(trade.placeOrder({ symbol: 'BTC-USDT', side: 'buy', type: 'market', quantity: 0.01, dryRun: false }))
+      .rejects.toMatchObject({ code: 'TRADING_LIVE_TRADING_DISABLED' })
+    expect(posts).toHaveLength(0)
+  })
+
+  it('② dryRun 缺省直调 → 本地模拟回执（dryRun=true），不触网', async () => {
+    const { fetchImpl, posts } = routeFetch([])
+    const trade = makeTradeService(fetchImpl)
+    const order = await trade.placeOrder({ symbol: 'BTC-USDT', side: 'buy', type: 'market', quantity: 0.01 })
+    expect(order.dryRun).toBe(true)
+    expect(order.status).toBe('filled')
+    expect(posts).toHaveLength(0)
+  })
+
+  it('② config.dryRun=true 强制模拟：liveTrading=true + dryRun=false 直调也回模拟回执', async () => {
+    const { fetchImpl, posts } = routeFetch([])
+    const trade = makeTradeService(fetchImpl, { dryRun: true, liveTrading: true })
+    const order = await trade.placeOrder({ symbol: 'BTC-USDT', side: 'buy', type: 'market', quantity: 0.01, dryRun: false })
+    expect(order.dryRun).toBe(true)
+    expect(posts).toHaveLength(0)
+  })
+
+  it('③ liveTrading=true + dryRun=false 直调 → 走真实签名路径（打到 mock 交易所）', async () => {
+    const { fetchImpl, posts } = routeFetch([
+      { match: (u) => u.includes('/api/v5/public/instruments'), respond: () => okEnvelope([SPOT_INSTRUMENT]) },
+      { match: (u) => u.includes('/api/v5/trade/order'), respond: () => okEnvelope([{ ordId: 'seam-1', sCode: '0', sMsg: '' }]) },
+    ])
+    const trade = makeTradeService(fetchImpl, { dryRun: false, liveTrading: true })
+    const order = await trade.placeOrder({ symbol: 'BTC-USDT', side: 'buy', type: 'market', quantity: 0.01, dryRun: false })
+    expect(order.dryRun).toBe(false)
+    expect(order.id).toBe('seam-1')
+    expect(posts).toHaveLength(1)
+  })
+
+  it('撤单：liveTrading=false（缺省）直调 → TRADING_LIVE_TRADING_DISABLED（撤单与下单同门槛）', async () => {
+    const { fetchImpl, posts } = routeFetch([])
+    const trade = makeTradeService(fetchImpl)
+    await expect(trade.cancelOrder('12345', 'BTC-USDT')).rejects.toMatchObject({ code: 'TRADING_LIVE_TRADING_DISABLED' })
+    expect(posts).toHaveLength(0)
+  })
+})
+
 describe('crypto_place_order execute（闸门 × 工具层）', () => {
   const TICKER = { symbol: 'BTC-USDT', price: 42000.5, timestamp: 1_700_000_000_000 }
 
@@ -351,7 +401,8 @@ describe('cancelOrder 幂等化与 getOrder 解析', () => {
         respond: () => new Response(JSON.stringify({ code: '1', msg: '', data: [{ sCode: '51400', sMsg: 'Order already canceled or filled' }] }), { status: 200 }),
       },
     ])
-    const trade = makeTradeService(fetchImpl)
+    // 撤单走服务缝闸门 ③（live）：需要 liveTrading=true 且未强制模拟（P0）。
+    const trade = makeTradeService(fetchImpl, { dryRun: false, liveTrading: true })
     await expect(trade.cancelOrder('12345', 'BTC-USDT')).resolves.toBeUndefined()
   })
 
@@ -362,7 +413,7 @@ describe('cancelOrder 幂等化与 getOrder 解析', () => {
         respond: () => new Response(JSON.stringify({ code: '1', msg: '', data: [{ sCode: '51603', sMsg: 'Order does not exist' }] }), { status: 200 }),
       },
     ])
-    const trade = makeTradeService(fetchImpl)
+    const trade = makeTradeService(fetchImpl, { dryRun: false, liveTrading: true })
     await expect(trade.cancelOrder('x', 'BTC-USDT')).resolves.toBeUndefined()
     await expect(trade.cancelOrder('x')).rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR', message: expect.stringContaining('instId') })
   })

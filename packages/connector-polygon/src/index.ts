@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @dsh-trading/connector-polygon
  * Polygon.io (Massive) 美股高频连接器插件（提供 tradingUsMarketData 与 us_* 工具）。
  */
@@ -23,6 +23,7 @@ import {
   INTERVAL_VOCABULARY,
   PolygonRestClient,
   type PolygonRestOptions,
+  TradingServiceError,
 } from './rest.js'
 
 export * from './rest.js'
@@ -85,14 +86,17 @@ export class PolygonMarketDataService extends Service implements MarketDataServi
 
 export class PolygonTradeService extends Service implements TradeService {
   private readonly client: PolygonRestClient
+  /** 插件配置（服务缝闸门 P0：dryRun 强制模拟 / liveTrading 总闸门）。 */
+  private readonly config: Config
 
   constructor(
     ctx: Context,
-    options: PolygonRestOptions = {},
+    options: PolygonRestOptions & { config: Config },
     serviceName: string = TRADING_US_TRADE_KEY,
   ) {
     super(ctx, serviceName)
     this.client = new PolygonRestClient(options)
+    this.config = options.config
   }
 
   async getBalance(): Promise<AccountBalance> {
@@ -100,10 +104,43 @@ export class PolygonTradeService extends Service implements TradeService {
   }
 
   async placeOrder(order: OrderRequest): Promise<Order> {
+    // 服务缝闸门（P0 · 铁律 #3 修订版 [S4]）：三态检查下推到服务实现内第一步——
+    // 绕过工具层直调本服务（动态包宿主半等）同样 fail-closed；工具层闸门保留（双保险）。
+    const requestedDryRun = order.dryRun ?? true
+    if (!requestedDryRun && !this.config.liveTrading) {
+      throw new TradingServiceError(
+        'TRADING_LIVE_TRADING_DISABLED',
+        `Polygon TradeService.placeOrder rejected: the request asks for real execution (dryRun=${String(order.dryRun)}) `
+          + 'but liveTrading=false — enable liveTrading explicitly or keep dryRun=true for a simulated fill.',
+      )
+    }
+    if (requestedDryRun || this.config.dryRun) {
+      // 闸门 ②：本地模拟回执（工具层另有带市价参照的富回执）。
+      return {
+        id: `dry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        symbol: order.symbol,
+        side: order.side,
+        type: order.type,
+        status: 'filled',
+        ...(order.price !== undefined ? { price: order.price } : {}),
+        quantity: order.quantity,
+        dryRun: true,
+        timestamp: Date.now(),
+      }
+    }
+    // 闸门 ③：live（dryRun=false 且 liveTrading=true）→ 真实下单。
     return this.client.placeOrder(undefined, order)
   }
 
   async cancelOrder(orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+    // 服务缝闸门（P0）：撤单是会改变交易所/券商真实状态的实盘动作，与真实下单同门槛
+    // （liveTrading 显式开启且未强制模拟），防「经撤单接口绕过下单闸门」。
+    if (!this.config.liveTrading || this.config.dryRun) {
+      throw new TradingServiceError(
+        'TRADING_LIVE_TRADING_DISABLED',
+        'Polygon TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
+      )
+    }
     return this.client.cancelOrder(undefined, orderId)
   }
 
@@ -131,7 +168,7 @@ export function apply(ctx: Context, config: Config): void {
 
   const apiKey = process.env[config.apiKeyRef]
   const marketData = new PolygonMarketDataService(ctx, { apiKey })
-  const trade = new PolygonTradeService(ctx, { apiKey })
+  const trade = new PolygonTradeService(ctx, { apiKey , config })
 
   ctx.inject(['tools'], (ctx) => {
     const tools = ctx.tools as unknown as { register(d: unknown): void; get(n: string): unknown }

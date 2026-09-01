@@ -266,16 +266,30 @@ export class __EXCHANGE__TradeService extends Service implements TradeService {
   /**
    * 下单（api TradeService 契约）。
    *
-   * - req.dryRun !== false（缺省）→ 本地模拟回执（Order.dryRun=true，不触网）；
-   * - req.dryRun === false → 真实签名下单。liveTrading 闸门与审批由工具层/base gate
-   *   负责，服务层不做二次裁决（connector-binance 先例：闸门收敛在工具工厂）。
+   * **服务缝闸门（P0 · 铁律 #3 修订版 [S4]）**：三态检查下推到服务实现内第一步——
+   * 绕过工具层直调本服务（dsh-tool-cordis 动态包宿主半、未来任何新消费面）同样
+   * fail-closed；工具层 evaluateOrderGate + base 审批闸门保留（双保险）。
+   *
+   * - 闸门 ① reject（dryRun=false 请求实盘而 liveTrading=false）→ 结构化错误抛出；
+   * - 闸门 ② simulate（dryRun 缺省/true，或 config.dryRun 强制模拟）→ 本地模拟回执；
+   * - 闸门 ③ live（dryRun=false 且 liveTrading=true）→ 真实签名下单。
    *
    * TODO: 单位换算（api quantity 恒为 base 币数；合约按 ctVal 等换算成交易所原始单位、
    *       现货市价单的计价币陷阱——见 rest.ts 头部清单第 7 条）。
    */
   async placeOrder(req: OrderRequest): Promise<Order> {
-    if (req.dryRun !== false) {
-      // 契约缺省面：本地模拟回执（工具层另有带市价参照的富回执）。
+    // 服务缝闸门（P0）：三态判定与工具层 evaluateOrderGate 同语义（单点裁决，双保险）。
+    const requestedDryRun = req.dryRun ?? true
+    if (!requestedDryRun && !this.config.liveTrading) {
+      // 闸门 ①：服务级 fail-closed——绕过工具层的直调也拿不到实盘路径。
+      throw new TradingServiceError(
+        'TRADING_LIVE_TRADING_DISABLED',
+        `TradeService.placeOrder rejected: the request asks for real execution (dryRun=${String(req.dryRun)}) `
+          + 'but liveTrading=false — enable liveTrading explicitly or keep dryRun=true for a simulated fill.',
+      )
+    }
+    if (requestedDryRun || this.config.dryRun) {
+      // 闸门 ②：契约缺省面——本地模拟回执（工具层另有带市价参照的富回执）。
       return {
         id: `dry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         symbol: req.symbol,
@@ -288,6 +302,7 @@ export class __EXCHANGE__TradeService extends Service implements TradeService {
         timestamp: Date.now(),
       }
     }
+    // 闸门 ③：live（dryRun=false 且 liveTrading=true）→ 真实签名下单。
     const credentials = await this.getCredentials()
     const rows = await this.client.placeOrder(
       { /* TODO: 按交易所参数形状构造（含单位换算后的 sz） */ },
@@ -317,6 +332,14 @@ export class __EXCHANGE__TradeService extends Service implements TradeService {
    * TODO: 撤单幂等化——交易所的「已终态」错误码视作成功（参照 OKX 51400/51603）。
    */
   async cancelOrder(id: string, symbol?: string): Promise<void> {
+    // 服务缝闸门（P0）：撤单是会改变交易所真实状态的实盘动作，与真实下单同门槛
+    // （liveTrading 显式开启且未强制模拟），防「经撤单接口绕过下单闸门」。
+    if (!this.config.liveTrading || this.config.dryRun) {
+      throw new TradingServiceError(
+        'TRADING_LIVE_TRADING_DISABLED',
+        'TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
+      )
+    }
     if (symbol === undefined || symbol === '') {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `${EXCHANGE} cancelOrder requires the symbol together with the order id`)
     }

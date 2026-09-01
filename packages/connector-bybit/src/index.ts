@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @dsh-trading/connector-bybit
  * Bybit 加密货币连接器插件（提供 tradingCryptoMarketData 与 crypto_* 工具）。
  */
@@ -23,6 +23,7 @@ import {
   BybitRestClient,
   type BybitRestOptions,
   INTERVAL_VOCABULARY,
+  TradingServiceError,
 } from './rest.js'
 
 export * from './rest.js'
@@ -83,14 +84,17 @@ export class BybitMarketDataService extends Service implements MarketDataService
 
 export class BybitTradeService extends Service implements TradeService {
   private readonly client: BybitRestClient
+  /** 插件配置（服务缝闸门 P0：dryRun 强制模拟 / liveTrading 总闸门）。 */
+  private readonly config: Config
 
   constructor(
     ctx: Context,
-    options: BybitRestOptions = {},
+    options: BybitRestOptions & { config: Config },
     serviceName: string = TRADING_CRYPTO_TRADE_KEY,
   ) {
     super(ctx, serviceName)
     this.client = new BybitRestClient(options)
+    this.config = options.config
   }
 
   async getBalance(): Promise<AccountBalance> {
@@ -98,10 +102,43 @@ export class BybitTradeService extends Service implements TradeService {
   }
 
   async placeOrder(order: OrderRequest): Promise<Order> {
+    // 服务缝闸门（P0 · 铁律 #3 修订版 [S4]）：三态检查下推到服务实现内第一步——
+    // 绕过工具层直调本服务（动态包宿主半等）同样 fail-closed；工具层闸门保留（双保险）。
+    const requestedDryRun = order.dryRun ?? true
+    if (!requestedDryRun && !this.config.liveTrading) {
+      throw new TradingServiceError(
+        'TRADING_LIVE_TRADING_DISABLED',
+        `Bybit TradeService.placeOrder rejected: the request asks for real execution (dryRun=${String(order.dryRun)}) `
+          + 'but liveTrading=false — enable liveTrading explicitly or keep dryRun=true for a simulated fill.',
+      )
+    }
+    if (requestedDryRun || this.config.dryRun) {
+      // 闸门 ②：本地模拟回执（工具层另有带市价参照的富回执）。
+      return {
+        id: `dry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        symbol: order.symbol,
+        side: order.side,
+        type: order.type,
+        status: 'filled',
+        ...(order.price !== undefined ? { price: order.price } : {}),
+        quantity: order.quantity,
+        dryRun: true,
+        timestamp: Date.now(),
+      }
+    }
+    // 闸门 ③：live（dryRun=false 且 liveTrading=true）→ 真实下单。
     return this.client.placeOrder(undefined, order)
   }
 
   async cancelOrder(orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+    // 服务缝闸门（P0）：撤单是会改变交易所/券商真实状态的实盘动作，与真实下单同门槛
+    // （liveTrading 显式开启且未强制模拟），防「经撤单接口绕过下单闸门」。
+    if (!this.config.liveTrading || this.config.dryRun) {
+      throw new TradingServiceError(
+        'TRADING_LIVE_TRADING_DISABLED',
+        'Bybit TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
+      )
+    }
     return this.client.cancelOrder(undefined, orderId)
   }
 
@@ -130,7 +167,7 @@ export function apply(ctx: Context, config: Config): void {
   const apiKey = process.env[config.apiKeyRef]
   const apiSecret = process.env[config.secretRef]
   const marketData = new BybitMarketDataService(ctx, { apiKey, apiSecret })
-  const trade = new BybitTradeService(ctx, { apiKey, apiSecret })
+  const trade = new BybitTradeService(ctx, { apiKey, apiSecret , config })
 
   ctx.inject(['tools'], (ctx) => {
     const tools = ctx.tools as unknown as { register(d: unknown): void; get(n: string): unknown }
