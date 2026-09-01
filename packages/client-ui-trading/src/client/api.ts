@@ -6,6 +6,7 @@
 import type { Kline, MarketId, MarketInfo, TickerOutcome } from './types.ts'
 import type { CustomIndicatorRecord } from '@dsh-trading/indicators'
 import type { KnowledgeCard } from '@dsh-trading/knowledge'
+import type { CustomStrategyRecord } from '@dsh-trading/strategies'
 
 export class BridgeError extends Error {
   constructor(readonly status: number, message: string) {
@@ -95,8 +96,35 @@ export async function fetchKnowledgeCards(): Promise<KnowledgeCard[]> {
 /* SSE 失效信号订阅（issue #30 / P1）                                        */
 /* ------------------------------------------------------------------ */
 
+/** 拉取自定义策略名册（issue #31，桥 /strategies/custom；前端校验后并入名册）。 */
+export async function fetchCustomStrategies(): Promise<CustomStrategyRecord[]> {
+  try {
+    const wire = await getJson<{ ok: boolean; strategies: CustomStrategyRecord[] }>('/dshtrading/api/strategies/custom')
+    return Array.isArray(wire.strategies) ? wire.strategies : []
+  } catch (err) {
+    console.warn('[dsh-trading] fetchCustomStrategies failed, fallback to empty:', err)
+    return []
+  }
+}
+
+/** 删除自定义策略（issue #31）。 */
+export async function deleteCustomStrategy(id: string): Promise<boolean> {
+  try {
+    const query = new URLSearchParams({ id })
+    const response = await fetch(`/dshtrading/api/strategies/custom?${query.toString()}`, {
+      method: 'DELETE',
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean; removed?: boolean }
+    return wire.ok === true && wire.removed === true
+  } catch {
+    return false
+  }
+}
+
 /**
- * store 词汇（v1）：镜像 host 半 @dsh-trading/eventbus 的 TradingEventStore。
+ * store 词汇（v1）：镜像 host 半 @dsh-trading/eventbus 的 TradingEventStore.
  * 浏览器半不 import node 包（避免把 cordis 拖进 client bundle）——词汇是封闭
  * 小集合，镜像漂移的代价是 handler 不触发（降级为现状），可接受。
  */

@@ -32,6 +32,7 @@
     "@deepseek-ai/dsh-agent-presets": ">=0.1.2-alpha.1",
     "@dsh-trading/eventbus": "workspace:^",
     "@dsh-trading/router": "workspace:^",
+    "@dsh-trading/strategies": "workspace:^",
     "@dsh-trading/client-ui-indicators": "workspace:^",
     "@dsh-trading/client-ui-settings": "workspace:^",
     "@dsh-trading/client-ui-trading": "workspace:^"

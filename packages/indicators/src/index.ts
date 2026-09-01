@@ -21,9 +21,12 @@ export {
 } from './math.ts'
 export {
   validateCustomIndicator,
+  validateCustomIndicatorAsync,
+  workerComputeRunner,
   compileComputeSource,
   createSampleBars,
   type ValidationResult,
+  type AsyncComputeRunner,
 } from './validate.ts'
 export {
   createMemoryCustomIndicatorStore,

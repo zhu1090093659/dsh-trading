@@ -20,6 +20,20 @@ export type {
 
 export { run } from './engine.ts'
 
+// 自定义策略管线（issue #31 / P2）：纯类型 + 内存存储 + 校验器（浏览器安全；
+// file store 与 host 插件在 ./plugin 子路径，Node 侧专用，不进浏览器 bundle）。
+export {
+  createMemoryCustomStrategyStore,
+  type CustomStrategyRecord,
+  type CustomStrategyStore,
+} from './custom.ts'
+export {
+  validateCustomStrategy,
+  validateSignalSequence,
+  compileStrategySource,
+  type StrategyValidationResult,
+} from './validate.ts'
+
 export {
   strategyParadigms,
   getStrategyById,

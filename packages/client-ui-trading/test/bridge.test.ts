@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { MarketDataService } from '@dsh-trading/api'
+import { createMemoryCustomStrategyStore } from '@dsh-trading/strategies'
 import {
   BridgeProtocolError,
   MARKET_SERVICE_KEYS,
@@ -214,6 +215,44 @@ describe('TradingBridge.knowledgeCards', () => {
     const res = await dispatchBridgeRequest(bridge, 'GET', '/knowledge/cards', new URLSearchParams())
     expect(res.status).toBe(200)
     expect(res.payload).toMatchObject({ ok: true, cards: [] })
+  })
+})
+
+describe('TradingBridge.customStrategies（issue #31 / P2）', () => {
+  const RECORD = {
+    id: 'demo-fs',
+    title: '演示策略',
+    horizon: 'swing',
+    summary: '演示用',
+    paramsJson: '[]',
+    computeSource: '(bars) => []',
+    createdAt: 1700000000000,
+  }
+
+  it('GET /strategies/custom 返回自定义策略名册', async () => {
+    const host = createBridgeHost({ legacy: () => undefined, strategyStore: createMemoryCustomStrategyStore([RECORD]) })
+    const res = await dispatchBridgeRequest(new TradingBridge(host), 'GET', '/strategies/custom', new URLSearchParams())
+    expect(res.status).toBe(200)
+    expect(res.payload).toMatchObject({ ok: true, strategies: [RECORD] })
+  })
+
+  it('DELETE /strategies/custom?id= 删除并回执 removed；缺 id → 400', async () => {
+    const host = createBridgeHost({ legacy: () => undefined, strategyStore: createMemoryCustomStrategyStore([RECORD]) })
+    const bridge = new TradingBridge(host)
+    const del = await dispatchBridgeRequest(bridge, 'DELETE', '/strategies/custom', new URLSearchParams({ id: 'demo-fs' }))
+    expect(del.payload).toMatchObject({ ok: true, removed: true })
+    const after = await dispatchBridgeRequest(bridge, 'GET', '/strategies/custom', new URLSearchParams())
+    expect((after.payload as { strategies: unknown[] }).strategies).toHaveLength(0)
+    await expect(dispatchBridgeRequest(bridge, 'DELETE', '/strategies/custom', new URLSearchParams()))
+      .rejects.toThrowError(/id is required/)
+  })
+
+  it('strategyStore 缺席 → 空名册 + removed:false（老部署降级）', async () => {
+    const bridge = new TradingBridge(fakeHost({}))
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/strategies/custom', new URLSearchParams())
+    expect(list.payload).toMatchObject({ ok: true, strategies: [] })
+    const del = await dispatchBridgeRequest(bridge, 'DELETE', '/strategies/custom', new URLSearchParams({ id: 'x' }))
+    expect(del.payload).toMatchObject({ ok: true, removed: false })
   })
 })
 

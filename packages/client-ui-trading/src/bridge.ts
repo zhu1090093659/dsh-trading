@@ -18,6 +18,8 @@ import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/i
 import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
 import { createMemoryKnowledgeCardStore } from '@dsh-trading/knowledge'
+import type { CustomStrategyRecord, CustomStrategyStore } from '@dsh-trading/strategies'
+import { createMemoryCustomStrategyStore } from '@dsh-trading/strategies'
 
 /** 本桥支持的市场（与连接器服务键一一对应）。 */
 export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
@@ -50,6 +52,7 @@ export function createBridgeHost(services: {
   legacy(market: MarketId): MarketDataService | undefined
   customIndicatorsStore?: CustomIndicatorStore
   knowledgeStore?: KnowledgeCardStore
+  strategyStore?: CustomStrategyStore
 }): BridgeHost {
   return {
     getMarketService: market => {
@@ -60,6 +63,7 @@ export function createBridgeHost(services: {
     activeProvider: market => services.registry?.active(market)?.provider ?? services.router?.activeProvider(market),
     customIndicatorsStore: services.customIndicatorsStore ?? createMemoryCustomIndicatorStore(),
     knowledgeStore: services.knowledgeStore ?? createMemoryKnowledgeCardStore(),
+    strategyStore: services.strategyStore ?? createMemoryCustomStrategyStore(),
   }
 }
 
@@ -79,6 +83,8 @@ export interface BridgeHost {
   customIndicatorsStore?: CustomIndicatorStore
   /** 知识卡片存储（可选）。 */
   knowledgeStore?: KnowledgeCardStore
+  /** 自定义策略存储（可选，issue #31）。 */
+  strategyStore?: CustomStrategyStore
 }
 
 export interface MarketInfoWire {
@@ -247,6 +253,22 @@ export class TradingBridge {
     const cards = await store.list()
     return { ok: true, cards }
   }
+
+  /** 自定义策略名册（issue #31）：返回记录，前端校验后并入名册。 */
+  async customStrategies(): Promise<{ ok: boolean; strategies: CustomStrategyRecord[] }> {
+    const store = this.host.strategyStore
+    if (store === undefined) return { ok: true, strategies: [] }
+    const strategies = await store.list()
+    return { ok: true, strategies }
+  }
+
+  /** 删除自定义策略（issue #31）。 */
+  async deleteCustomStrategy(id: string): Promise<{ ok: boolean; removed: boolean }> {
+    const store = this.host.strategyStore
+    if (store === undefined) return { ok: true, removed: false }
+    const removed = await store.remove(id)
+    return { ok: true, removed }
+  }
 }
 
 /** 请求分发：把 (method, pathname, searchParams) 路由到桥方法，返回 (status, payload)。 */
@@ -282,6 +304,9 @@ export async function dispatchBridgeRequest(
       case '/knowledge/cards': {
         return { status: 200, payload: await bridge.knowledgeCards() }
       }
+      case '/strategies/custom': {
+        return { status: 200, payload: await bridge.customStrategies() }
+      }
       default:
         throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
     }
@@ -292,6 +317,11 @@ export async function dispatchBridgeRequest(
       const id = search.get('id') ?? ''
       if (!id) throw new BridgeProtocolError(400, 'delete custom indicator: id is required')
       return { status: 200, payload: await bridge.deleteCustomIndicator(id) }
+    }
+    if (pathname === '/strategies/custom') {
+      const id = search.get('id') ?? ''
+      if (!id) throw new BridgeProtocolError(400, 'delete custom strategy: id is required')
+      return { status: 200, payload: await bridge.deleteCustomStrategy(id) }
     }
     throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }

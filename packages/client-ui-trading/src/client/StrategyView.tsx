@@ -12,13 +12,14 @@ import { createChart, ColorType, AreaSeries, type IChartApi, type ISeriesApi } f
 import {
   strategyParadigms,
   run,
+  validateCustomStrategy,
   type StrategyHorizon,
   type StrategyDefinition,
   type BacktestResult,
   type Kline,
 } from '@dsh-trading/strategies'
 import { readJson, writeJson, type SelectionState } from './store.ts'
-import { fetchKlines } from './api.ts'
+import { fetchKlines, fetchCustomStrategies, subscribeTradingEvents } from './api.ts'
 import { IconStrategy } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import css from './StrategyView.module.css'
@@ -78,10 +79,38 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
   const [selectedId, setSelectedId] = useState<string>(stored.strategyId ?? 'donchian-breakout')
   const [paramsMap, setParamsMap] = useState<Record<string, Record<string, number>>>(stored.paramsMap ?? {})
 
-  // 2. 当前选中策略
+  // 2. 自定义策略名册（issue #31 / P2）：桥拉取 → 校验（Worker 熔断）→ 并入名册；
+  // SSE 'strategies' 失效信号到达时重拉（strategy_author 入库无需刷新即上榜）。
+  const [customDefs, setCustomDefs] = useState<StrategyDefinition[]>([])
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const records = await fetchCustomStrategies()
+        const defs: StrategyDefinition[] = []
+        for (const record of records) {
+          const result = await validateCustomStrategy(record)
+          if (result.ok) defs.push(result.definition)
+        }
+        if (!cancelled) setCustomDefs(defs)
+      } catch (e) {
+        console.warn('[dsh-trading] failed to load custom strategies:', e)
+      }
+    }
+    void load()
+    const unsubscribe = subscribeTradingEvents({ strategies: () => { void load() } })
+    return () => { cancelled = true; unsubscribe() }
+  }, [])
+
+  // 名册 = 范式 ∪ 自定义合并（issue #31）
+  const allStrategies = useMemo<StrategyDefinition[]>(
+    () => [...strategyParadigms, ...customDefs],
+    [customDefs],
+  )
+
   const currentStrategy = useMemo<StrategyDefinition>(() => {
-    return strategyParadigms.find((s) => s.id === selectedId) ?? strategyParadigms[0]!
-  }, [selectedId])
+    return allStrategies.find((s) => s.id === selectedId) ?? allStrategies[0]!
+  }, [allStrategies, selectedId])
 
   // 当前策略对应的参数
   const currentParams = useMemo<Record<string, number>>(() => {
@@ -112,7 +141,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
   // 切换 horizon 时自动选择该分类下的第一个策略
   const switchHorizon = (h: StrategyHorizon) => {
     setHorizon(h)
-    const firstInHorizon = strategyParadigms.find((s) => s.horizon === h)
+    const firstInHorizon = allStrategies.find((s) => s.horizon === h)
     if (firstInHorizon) {
       setSelectedId(firstInHorizon.id)
     }
@@ -228,8 +257,8 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
   }, [result])
 
   const horizonStrategies = useMemo(() => {
-    return strategyParadigms.filter((s) => s.horizon === horizon)
-  }, [horizon])
+    return allStrategies.filter((s) => s.horizon === horizon)
+  }, [allStrategies, horizon])
 
   return (
     <div className={css.root} data-dshtrading-strategy-view="">

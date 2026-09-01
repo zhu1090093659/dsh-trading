@@ -15,7 +15,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { IndicatorRegistry } from '@dsh-trading/indicators'
-import { validateCustomIndicator } from '@dsh-trading/indicators'
+import { validateCustomIndicatorAsync } from '@dsh-trading/indicators'
 import { createSelectionStore, createWatchlistStore } from './store.ts'
 import { createChartStateStore } from './chart-state.ts'
 import { indicators, markCustomIndicator, unmarkCustomIndicator } from './indicator-registry.ts'
@@ -95,7 +95,9 @@ export function apply(ctx: ClientContext): void {
     try {
       const customList = await fetchCustomIndicators()
       for (const item of customList) {
-        const result = validateCustomIndicator(item)
+        // issue #31：浏览器端校验走 Worker 超时熔断（validateCustomIndicatorAsync），
+        // 补 new Function 裸执行「恶意/死循环源码卡死主线程」的既知缺口。
+        const result = await validateCustomIndicatorAsync(item)
         if (result.ok) {
           indicators.register(result.definition)
           markCustomIndicator(result.definition.id)

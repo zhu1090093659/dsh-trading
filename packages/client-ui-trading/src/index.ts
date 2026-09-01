@@ -16,6 +16,7 @@ import type { MarketDataService } from '@dsh-trading/api'
 import type { TradingEventsService } from '@dsh-trading/eventbus'
 import { createFileCustomIndicatorStore, createAuthorIndicatorTool } from '@dsh-trading/indicators/tool'
 import { createFileKnowledgeCardStore, createKnowledgeIngestTool, createKnowledgeSearchTool } from '@dsh-trading/knowledge/tool'
+import { createFileCustomStrategyStore } from '@dsh-trading/strategies/plugin'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -63,6 +64,9 @@ export function apply(ctx: Context): void {
   const knowledgeStorePath = path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
   const knowledgeStore = createFileKnowledgeCardStore(knowledgeStorePath)
 
+  const strategyStorePath = path.join(os.homedir(), '.dsh', 'strategies', 'custom.json')
+  const strategyStore = createFileCustomStrategyStore(strategyStorePath)
+
   // tradingEvents 失效信号源（issue #30）：base patch 行挂载 eventbus 时可用；
   // 缺席（老部署）→ 发布点静默降级为现状（一次性 fetch 客户端行为不变）。
   const eventsOf = (): TradingEventsService | undefined =>
@@ -108,6 +112,7 @@ export function apply(ctx: Context): void {
       legacy: market => webCtx.get(MARKET_SERVICE_KEYS[market]) as MarketDataService | undefined,
       customIndicatorsStore,
       knowledgeStore,
+      strategyStore,
     })
     const bridge = new TradingBridge(host)
     const route = {
@@ -144,6 +149,11 @@ export function apply(ctx: Context): void {
           if (req.method === 'DELETE' && sub === '/indicators/custom' && status === 200
             && (payload as { ok?: unknown } | undefined)?.ok === true) {
             eventsOf()?.emit('indicators')
+          }
+          // 发布点接线（issue #31）：自定义策略删除成功 → 'strategies' 失效信号。
+          if (req.method === 'DELETE' && sub === '/strategies/custom' && status === 200
+            && (payload as { ok?: unknown } | undefined)?.ok === true) {
+            eventsOf()?.emit('strategies')
           }
           sendJson(res, status, payload)
         } catch (error) {
