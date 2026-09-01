@@ -17,7 +17,7 @@ interface MarketDataRegistryLike {
 
 /** 解析注册表服务；老部署（base/router 未升级）返回 undefined → 调用方回退旧的直接 provide 路径。 */
 function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undefined {
-  const candidate = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketDataRegistry')
+  const candidate = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketDataRegistry', false)
   return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
 }
 /** 本连接器的路由 provider slug（路由层词汇，docs/exchange-routing.md §2.2）。 */

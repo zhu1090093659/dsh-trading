@@ -42,7 +42,7 @@ export interface TradingEventsPublisher {
 }
 
 function eventsOf(ctx: Context): TradingEventsPublisher | undefined {
-  return (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingEvents') as TradingEventsPublisher | undefined
+  return (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingEvents', false) as TradingEventsPublisher | undefined
 }
 
 function parseInstrumentArgs(raw: Record<string, unknown>): { market: string; symbol: string; name?: string } {

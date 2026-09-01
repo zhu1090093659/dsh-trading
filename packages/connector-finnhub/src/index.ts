@@ -161,7 +161,7 @@ export const ROUTER_PROVIDER = 'finnhub'
 
 export function routeAllows(ctx: Context, config: Config, market: string): boolean {
   if (!config.enabled) return false
-  const router = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as { activeProvider(m: string): string | undefined } | undefined
+  const router = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as { activeProvider(m: string): string | undefined } | undefined
   if (router === undefined) return true
   return router.activeProvider(market) === ROUTER_PROVIDER
 }

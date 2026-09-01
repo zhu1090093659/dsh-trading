@@ -53,7 +53,7 @@ export interface TradingEventsPublisher {
 }
 
 function eventsOf(ctx: Context): TradingEventsPublisher | undefined {
-  return (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingEvents') as TradingEventsPublisher | undefined
+  return (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingEvents', false) as TradingEventsPublisher | undefined
 }
 
 /** 注册表 + 老部署回退的行情解析面（与桥同款 registry-first 语义）。 */
@@ -63,7 +63,7 @@ export interface StrategyMarketDataResolver {
 
 export function createMarketDataResolver(ctx: Context): StrategyMarketDataResolver {
   return (market: string) => {
-    const registry = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketDataRegistry') as
+    const registry = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketDataRegistry', false) as
       | { active(m: string): { service: MarketDataService } | undefined }
       | undefined
     if (registry !== undefined) {

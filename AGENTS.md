@@ -22,4 +22,4 @@ DSH 交易插件包 monorepo：按市场组织 bundle（crypto/us/cn/hk），主
 - **宿主 DSH 升级验收**：升级 npm 全局 `@deepseek-ai/dsh` 后的 profile cohort 验收（影子拷贝检测/symlink 归一/冒烟清单）统一走全局 skill `dsh-sdk-upgrade`（`~/.zcode/skills/dsh-sdk-upgrade/`，脚本 `scripts/profile-cohort-check.sh` 跨项目通用；FAIL 必须先修）。trading-web 专属刷新走 `scripts/refresh-trading-web-profile.sh`（重挂宿主核心包 symlink，裸 `dsh plugin install` 不够）。禁止实例运行中执行 `dsh plugin install`。见 [shadow-copy note](.agents/notes/implemented/bug-fix/2026-09-01-profile-shadow-copy-prepare-crash.md)。
 - **构建与测试基线**：`pnpm build` 与 `pnpm test` 必须全绿；连接器改动另需真实网络验证（`spikes/impl-*/` 留原始响应证据）。
 - **铁律速记**：bundle patch insert-only；知识进 skill 随包分发；下单默认 dry-run + liveTrading 显式开关 + base 统一审批闸门；base 拥有全部市场无关行；不内置密钥、不再分发数据。
-- **代码与 Git 规范**：提交用 Conventional Commits；不发布 npm（未授权）；DSH checkout（/Users/zcl/code/deepseek-harness）全程只读。
+- **代码与 Git 规范**：提交用 Conventional Commits；不发布 npm（未授权）；DSH 宿主本体为 npm 全局安装的 `@deepseek-ai/dsh@0.1.2-alpha.3`（`/opt/homebrew/lib/node_modules/@deepseek-ai/dsh`），是 SDK cohort 与 profile 行的权威来源，全程只读；旧 checkout（/Users/zcl/code/deepseek-harness）已弃用，不再作为约束引用。

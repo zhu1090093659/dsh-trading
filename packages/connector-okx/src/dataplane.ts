@@ -22,15 +22,17 @@ interface MarketDataRegistryLike {
 
 /** 解析注册表服务；老部署（base/router 未升级）返回 undefined → 调用方回退旧的直接 provide 路径。 */
 function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undefined {
-  const candidate = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketDataRegistry')
+  // 非严格 get（宿主 α3 / cordis 4.0.2：strict 默认要求 providing fiber 已激活，
+  // loader 顺序挂载期兄弟条目 fiber 尚 pending → apply 期旁查必须 non-strict）。
+  const candidate = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketDataRegistry', false)
   return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
 }
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
   const registry = resolveMarketDataRegistry(ctx)
   if (registry === undefined) {
-    // 老部署回退：互斥激活 + 直接 provide。
-    const router = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as MarketRouterLike | undefined
+    // 老部署回退：互斥激活 + 直接 provide（router 旁查同样 non-strict）。
+    const router = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as MarketRouterLike | undefined
     const active = router?.activeProvider('crypto')
     if (router !== undefined && active !== ROUTER_PROVIDER) return
     new OkxMarketDataService(ctx)

@@ -357,7 +357,7 @@ export interface MarketRouterLike {
  */
 export function routeAllows(ctx: Context, config: Config, market: string): boolean {
   if (!config.enabled) return false
-  const router = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as MarketRouterLike | undefined
+  const router = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as MarketRouterLike | undefined
   if (router === undefined) return true // 无 router：enabled 语义（向后兼容）
   return router.activeProvider(market) === ROUTER_PROVIDER
 }
@@ -374,7 +374,7 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   // 市场路由裁决（2026-08-29）：设置选了别的 provider → 静默退出（不是配置错，是路由）。
-  const router = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as MarketRouterLike | undefined
+  const router = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as MarketRouterLike | undefined
   const active = router?.activeProvider('crypto')
   if (router !== undefined && active !== ROUTER_PROVIDER) {
     log.info(

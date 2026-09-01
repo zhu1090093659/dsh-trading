@@ -13,11 +13,14 @@
  * 用法：
  *   node scripts/sync-profile-overrides.mjs --profile trading-web [--profile trading-dev]
  *   node scripts/sync-profile-overrides.mjs --all            # $DSH_HOME/profiles/ 下全部
- *   选项：--dsh <checkout>（默认 /Users/zcl/code/deepseek-harness）
+ *   选项：--dsh <dir>（默认自动从 dsh 可执行文件 realpath 推导 <dsh>/node_modules；
+ *         2026-09-02 起 DSH 本体 = npm 全局安装包，deepseek-harness 开发 checkout 已废弃）
  *         --dsh-home <dir>（默认 $DSH_HOME 或 ~/.dsh）
  *         --dry-run（只打印将追加的行，不写文件）
  */
 import { readdir, readFile, writeFile, stat } from 'node:fs/promises'
+import { existsSync, realpathSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -42,26 +45,39 @@ function parseArgs(argv) {
 }
 const { profiles: namedProfiles, opts } = parseArgs(process.argv.slice(2))
 
-const DSH = String(opts.get('dsh') ?? '/Users/zcl/code/deepseek-harness')
+/** DSH 本体根（@deepseek-ai/* SDK 面所在）：优先从 dsh 可执行文件 realpath 推导
+ *  （npm 全局安装 → <pkg>/node_modules），失败回落常见全局路径。deepseek-harness
+ *  开发 checkout 已废弃（2026-09-01 owner 确认）。 */
+function defaultDshRoot() {
+  try {
+    const exe = execSync('command -v dsh', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+    const real = realpathSync(exe)
+    const m = real.match(/^(.+)\/bin\//)
+    if (m) return join(m[1], 'node_modules')
+  } catch { /* 无 dsh 可执行文件时回落 */ }
+  return '/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules'
+}
+
+const DSH = String(opts.get('dsh') ?? defaultDshRoot())
 const DSH_HOME = String(opts.get('dsh-home') ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'))
 const DRY = opts.get('dry-run') === true
 
-/** SDK 包在 DSH checkout 内的路径映射（2026-08-31 补：SDK 面一律钉版，任何包把
- *  SDK 依赖误放 dependencies 时 profile 解析也不会去 registry 撞版本墙）。 */
+/** SDK 包在 DSH 本体内的路径映射（npm 安装树为扁平布局：node_modules/@deepseek-ai/<pkg>；
+ *  旧 deepseek-harness checkout 的 vendor/packages 布局已废弃 2026-09-01）。SDK 面一律
+ *  钉版——任何包把 SDK 依赖误放 dependencies 时 profile 解析也不会去 registry 撞版本墙。 */
 const DSH_SDK_PATHS = {
-  '@deepseek-ai/cordis': ['vendor', 'cordis'],
-  '@deepseek-ai/cosmokit': ['vendor', 'cosmokit'],
-  '@deepseek-ai/schemastery': ['vendor', 'schemastery'],
-  '@deepseek-ai/dsh-tools': ['packages', 'core', 'tools'],
-  '@deepseek-ai/dsh-skill': ['packages', 'skill', 'skill'],
-  '@deepseek-ai/dsh-settings': ['packages', 'settings', 'settings'],
-  '@deepseek-ai/dsh-agent-presets': ['packages', 'preset', 'agent-presets'],
-  /** 2026-08-31 补：dsh-tools 的 dependencies 里有 dsh-brand / dsh-util-values
-   *  （workspace:^）——它们不在本仓任何包的 peers 里，sdkPeers 收集不到；
-   *  旧 profile 靠「lockfile 最新→pnpm 跳过 re-resolution」侥幸，一旦删
-   *  node_modules 触发重解析就 ERR_PNPM_WORKSPACE_PKG_NOT_FOUND。 */
-  '@deepseek-ai/dsh-brand': ['packages', 'util', 'brand'],
-  '@deepseek-ai/dsh-util-values': ['packages', 'util', 'values'],
+  '@deepseek-ai/cordis': ['@deepseek-ai', 'cordis'],
+  '@deepseek-ai/cosmokit': ['@deepseek-ai', 'cosmokit'],
+  '@deepseek-ai/schemastery': ['@deepseek-ai', 'schemastery'],
+  '@deepseek-ai/dsh-tools': ['@deepseek-ai', 'dsh-tools'],
+  '@deepseek-ai/dsh-skill': ['@deepseek-ai', 'dsh-skill'],
+  '@deepseek-ai/dsh-settings': ['@deepseek-ai', 'dsh-settings'],
+  '@deepseek-ai/dsh-agent-presets': ['@deepseek-ai', 'dsh-agent-presets'],
+  /** dsh-tools 的 dependencies 里有 dsh-brand / dsh-util-values（workspace:^）——
+   *  它们不在本仓任何包的 peers 里，sdkPeers 收集不到；漏钉会在删 node_modules
+   *  触发重解析时 ERR_PNPM_WORKSPACE_PKG_NOT_FOUND（2026-08-31 评审实证）。 */
+  '@deepseek-ai/dsh-brand': ['@deepseek-ai', 'dsh-brand'],
+  '@deepseek-ai/dsh-util-values': ['@deepseek-ai', 'dsh-util-values'],
 }
 
 /** 本仓全部可安装包（@dsh-trading/*）：全量钉版——钉了未安装的包惰性无害，
@@ -108,16 +124,57 @@ async function syncProfile(profileDir, packages) {
   let text
   try { text = await readFile(file, 'utf8') }
   catch { return { skipped: 'no pnpm-workspace.yaml' } }
-  // vendor 包纳入 profile workspace：SDK file: 包（如 cordis）内部用 workspace:^
-  // 互依（cosmokit），workspace 协议不走 overrides——必须让 vendor glob 出现在
-  // packages 区才能解析（2026-08-31 add us/cn/hk 时实证）。
-  const vendorGlob = `  - ${join(DSH, 'vendor', '*')}`
+  // vendor 包纳入 profile workspace：仅当 DSH 本体真有 vendor 目录（npm 安装树没有——
+  // cordis 等从自身 node_modules 解析依赖，无需 glob；2026-09-02 npm 布局迁移）。
   let next = text
   let vendorAdded = false
-  if (!next.includes(vendorGlob) && /^packages:/m.test(next)) {
-    next = next.replace(/^(packages:\n(?:  - .+\n)+)/m, `$1${vendorGlob}\n`)
-    vendorAdded = true
+  const hasVendorDir = existsSync(join(DSH, 'vendor'))
+  if (hasVendorDir) {
+    const vendorGlob = `  - ${join(DSH, 'vendor', '*')}`
+    if (!next.includes(vendorGlob) && /^packages:/m.test(next)) {
+      next = next.replace(/^(packages:\n(?:  - .+\n)+)/m, `$1${vendorGlob}\n`)
+      vendorAdded = true
+    }
   }
+  // stale 修复（issue 环境阻塞 2026-09-01）：指向不存在目录的 file:/link: 行与死
+  // packages glob（旧 deepseek-harness checkout 路径）→ 重写到 DSH 本体现路径。
+  const expectedByKey = new Map(expectedLines(packages).map((l) => [l.match(/^ {2}'([^']+)'/)?.[1], l.trim()]))
+  const repaired = []
+  next = next.split('\n').map((line) => {
+    // 死 packages glob（以 /* 结尾且基目录不存在）→ 移除
+    const glob = line.match(/^  - (.+)$/)
+    if (glob !== null && glob[1].endsWith('*')) {
+      const base = glob[1].replace(/\/\*$/, '')
+      if (base && !existsSync(base)) {
+        repaired.push(`removed dead packages glob: ${glob[1]}`)
+        return null
+      }
+    }
+    // SDK override 行指向不存在目录 → 重写到 DSH 本体现路径（值带引号/不带引号两种 YAML 形态都认）。
+    const quoted = line.match(/^ {2}'((?:@dsh-trading|@deepseek-ai)\/[^']+)': '(?:file|link):([^']+)'/)
+    const unquoted = quoted === null
+      ? line.match(/^ {2}'((?:@dsh-trading|@deepseek-ai)\/[^']+)': (?:file|link):(\S+)$/)
+      : null
+    const row = quoted ?? (unquoted === null ? null : [null, unquoted[1], unquoted[2]])
+    if (row !== null && !existsSync(row[2])) {
+      const replacement = expectedByKey.get(row[1])
+      if (replacement !== undefined) {
+        repaired.push(`${row[1]}: ${row[2]} -> ${replacement.trim()}`)
+        return '  ' + replacement.trim()
+      }
+      if (row[1].startsWith('@deepseek-ai/')) {
+        const fallback = join(DSH, '@deepseek-ai', row[1].slice('@deepseek-ai/'.length))
+        if (existsSync(fallback)) {
+          const scheme = row[1] === '@deepseek-ai/dsh-agent-presets' ? 'link' : 'file'
+          repaired.push(`${row[1]} -> ${fallback}`)
+          return `  '${row[1]}': '${scheme}:${fallback}'`
+        }
+      }
+      console.warn(`[stale] ${profileDir}: row for ${row[1]} points at missing ${row[2]} and no replacement was found — left as-is`)
+    }
+    return line
+  }).filter((line) => line !== null).join('\n')
+
   const existing = new Set(
     [...next.matchAll(/^ {2}'((?:@dsh-trading|@deepseek-ai)\/[^']+)':/gm)].map((m) => m[1]),
   )
@@ -125,7 +182,7 @@ async function syncProfile(profileDir, packages) {
     const key = line.match(/^ {2}'([^']+)'/)?.[1]
     return key !== undefined && !existing.has(key)
   })
-  if (missing.length === 0 && !vendorAdded) return { added: [] }
+  if (missing.length === 0 && !vendorAdded && repaired.length === 0) return { added: [] }
   let out = next
   if (missing.length > 0) {
     if (/^overrides:/m.test(out)) {
@@ -147,7 +204,7 @@ async function syncProfile(profileDir, packages) {
     }
   }
   if (!DRY) await writeFile(file, out)
-  return { added: missing.map((l) => l.trim()), vendorAdded }
+  return { added: missing.map((l) => l.trim()), repaired, vendorAdded }
 }
 
 let profiles = namedProfiles
@@ -171,7 +228,13 @@ console.log(`found ${packages.length} @dsh-trading packages${DRY ? ' (dry-run)' 
 for (const name of profiles) {
   const result = await syncProfile(join(DSH_HOME, 'profiles', name), packages)
   if (result.skipped) { console.log(`[${name}] skipped: ${result.skipped}`); continue }
-  if (result.added.length === 0) { console.log(`[${name}] already in sync`); continue }
-  console.log(`[${name}] appended ${result.added.length} override line(s):`)
-  for (const line of result.added) console.log(`  ${line}`)
+  if (result.added.length === 0 && (result.repaired?.length ?? 0) === 0) { console.log(`[${name}] already in sync`); continue }
+  if ((result.repaired?.length ?? 0) > 0) {
+    console.log(`[${name}] repaired ${result.repaired.length} stale line(s):`)
+    for (const line of result.repaired) console.log(`  ${line}`)
+  }
+  if (result.added.length > 0) {
+    console.log(`[${name}] appended ${result.added.length} override line(s):`)
+    for (const line of result.added) console.log(`  ${line}`)
+  }
 }

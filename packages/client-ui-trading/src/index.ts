@@ -61,11 +61,11 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
 export function apply(ctx: Context): void {
   // store 单实例解析（issue #33 收口）：能力包 ./plugin 已 provide 服务（同一 file
   // store 实例）→ 直接复用；服务缺席（老部署）→ 回退自建实例（旧行为）。
-  const customIndicatorsStore = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingCustomIndicators') as
+  const customIndicatorsStore = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingCustomIndicators', false) as
     | import('@dsh-trading/indicators').CustomIndicatorStore
     | undefined
     ?? createFileCustomIndicatorStore(path.join(os.homedir(), '.dsh', 'indicators', 'custom.json'))
-  const knowledgeStore = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingKnowledgeCards') as
+  const knowledgeStore = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingKnowledgeCards', false) as
     | import('@dsh-trading/knowledge').KnowledgeCardStore
     | undefined
     ?? createFileKnowledgeCardStore(path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json'))
@@ -81,7 +81,7 @@ export function apply(ctx: Context): void {
   // tradingEvents 失效信号源（issue #30）：base patch 行挂载 eventbus 时可用；
   // 缺席（老部署）→ 发布点静默降级为现状（一次性 fetch 客户端行为不变）。
   const eventsOf = (): TradingEventsService | undefined =>
-    (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingEvents') as TradingEventsService | undefined
+    (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingEvents', false) as TradingEventsService | undefined
 
   // issue #33 收口：indicator_author / knowledge_ingest / knowledge_search 的注册
   // 已迁移至 @dsh-trading/indicators/plugin 与 @dsh-trading/knowledge/plugin
@@ -94,8 +94,8 @@ export function apply(ctx: Context): void {
     // registry-first（2026-08-30 注册表模式）：每请求经注册表按路由当前值解析——
     // settings 切换交易所 GUI 即刻生效（热切换）；注册表缺席回退旧市场键直读。
     const host = createBridgeHost({
-      registry: webCtx.get('tradingMarketDataRegistry') as MarketDataRegistryLike | undefined,
-      router: webCtx.get('tradingMarketRouter') as { activeProvider(m: string): string | undefined } | undefined,
+      registry: webCtx.get('tradingMarketDataRegistry', false) as MarketDataRegistryLike | undefined,
+      router: webCtx.get('tradingMarketRouter', false) as { activeProvider(m: string): string | undefined } | undefined,
       legacy: market => webCtx.get(MARKET_SERVICE_KEYS[market]) as MarketDataService | undefined,
       customIndicatorsStore,
       knowledgeStore,

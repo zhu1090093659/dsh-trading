@@ -93,7 +93,7 @@ export function registerIndicatorsTools(ctx: Context, deps: IndicatorsPluginDeps
     if (!tools || typeof tools.register !== 'function') return
 
     const events = (): TradingEventsPublisher | undefined =>
-      (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingEvents') as TradingEventsPublisher | undefined
+      (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingEvents', false) as TradingEventsPublisher | undefined
 
     const register = (tool: ReturnType<typeof defineTool>) => {
       if (tools.get(tool.name) === undefined) tools.register(tool)

@@ -153,11 +153,11 @@ export function apply(ctx: Context, _config: Config): void {
 
   // issue #33：us_get_indicators 接入（计算库市场无关；行情 registry-first，老部署回退市场键）。
   const serviceGetter = ctx as unknown as { get?: (key: string) => unknown }
-  const registry = serviceGetter.get?.('tradingMarketDataRegistry') as
+  const registry = serviceGetter.get?.('tradingMarketDataRegistry', false) as
     | { active(m: string): { service: MarketDataService } | undefined }
     | undefined
   const marketData = registry?.active('us')?.service
-    ?? serviceGetter.get?.('tradingUsMarketData') as MarketDataService | undefined
+    ?? serviceGetter.get?.('tradingUsMarketData', false) as MarketDataService | undefined
   if (marketData !== undefined) {
     registerOnce(createGetIndicatorsTool({ marketData, market: 'us' }))
   }

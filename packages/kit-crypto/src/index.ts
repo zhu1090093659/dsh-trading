@@ -237,7 +237,7 @@ export function apply(ctx: Context, _config: Config): void {
 
   registerOnce(fundingTool)
 
-  const router = (ctx as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as
+  const router = (ctx as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as
     | { newsKey?: () => string | undefined }
     | undefined
   registerOnce(createGetNewsTool({ cryptoPanicKey: router?.newsKey?.() }))

@@ -808,7 +808,7 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   // 市场路由裁决（2026-08-29 设置驱动重构）：router 存在且选了别人 → 静默退出。
-  const router = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketRouter') as MarketRouterLike | undefined
+  const router = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as MarketRouterLike | undefined
   const active = router?.activeProvider('crypto')
   if (router !== undefined && active !== ROUTER_PROVIDER) {
     log.info(

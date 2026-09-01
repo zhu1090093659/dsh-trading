@@ -46,7 +46,7 @@ export interface TradingEvent {
 /** 订阅回调；同步调用，emit 方不等待。 */
 export type TradingEventListener = (event: TradingEvent) => void
 
-/** SDK 服务键（与 Context 模块增强一致；消费者 `ctx.get('tradingEvents')`）。 */
+/** SDK 服务键（与 Context 模块增强一致；消费者 `ctx.get('tradingEvents', false)`）。 */
 export const TRADING_EVENTS_KEY = 'tradingEvents'
 
 /**

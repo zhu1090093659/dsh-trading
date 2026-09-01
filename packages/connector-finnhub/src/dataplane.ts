@@ -9,7 +9,7 @@ interface MarketDataRegistryLike {
 }
 
 function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undefined {
-  const candidate = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingMarketDataRegistry')
+  const candidate = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketDataRegistry', false)
   return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
 }
 
