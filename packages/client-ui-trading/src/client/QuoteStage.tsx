@@ -207,6 +207,16 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
   const readoutIndex = hoverIndex ?? (klines !== null && klines.length > 0 ? klines.length - 1 : null)
   const readoutCandle = klines !== null && readoutIndex !== null ? klines[readoutIndex] : undefined
+  // 读数行昨收跟随十字光标：悬停历史K线取当前周期序列的前一根收盘价（日K下即该日
+  // 昨收）；未悬停或悬停最新一根沿用官方锚点 ticker.prevClose（日K补齐滞后时序列
+  // 倒数第二根会错位一个交易日，见上方 stats 注释）；序列首根无前一根则留空。
+  const readoutPrevClose = klines === null || readoutIndex === null
+    ? stats.prevClose
+    : readoutIndex <= 0
+      ? undefined
+      : readoutIndex >= klines.length - 1
+        ? stats.prevClose
+        : klines[readoutIndex - 1]?.close
 
   // 所有可用指标（供底部词条栏横向快捷展示）
   const allDefinitions = useMemo(() => indicators.list(), [rosterVersion])
@@ -246,7 +256,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
       {/* 统计行情概览 */}
       <div className={css.stats}>
-        <span className={css.stat}><label>{t('quote.prevClose')}</label>{fmtPrice(stats.prevClose)}</span>
+        <span className={css.stat}><label>{t('quote.prevClose')}</label>{fmtPrice(readoutPrevClose)}</span>
         <span className={css.stat}><label>{t('quote.open')}</label>{fmtPrice(readoutCandle?.open)}</span>
         <span className={css.stat}><label>{t('quote.high')}</label>{fmtPrice(readoutCandle?.high)}</span>
         <span className={css.stat}><label>{t('quote.low')}</label>{fmtPrice(readoutCandle?.low)}</span>
