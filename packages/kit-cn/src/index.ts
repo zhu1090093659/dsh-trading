@@ -23,8 +23,8 @@ import {
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { createAuthorIndicatorTool, createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
-import { createKnowledgeIngestTool, createKnowledgeSearchTool, createFileKnowledgeCardStore } from '@dsh-trading/knowledge/tool'
+import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
+import type { MarketDataService } from '@dsh-trading/api'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchCnFundamentals, renderCnFundamentals } from './fundamentals.js'
 
@@ -147,16 +147,20 @@ export function apply(ctx: Context, _config: Config): void {
   registerOnce(newsTool)
   registerOnce(fundamentalsTool)
 
-  // Issue #19：注册自定义指标创作工具 indicator_author（共享 ~/.dsh/indicators/custom.json）
-  const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
-  const authorStore = createFileCustomIndicatorStore(indicatorStorePath)
-  registerOnce(createAuthorIndicatorTool({ store: authorStore }))
+  // issue #33 收口：indicator_author / knowledge_ingest / knowledge_search 已迁移至
+  // @dsh-trading/indicators/plugin 与 @dsh-trading/knowledge/plugin（base patch 行，
+  // host 平面单点注册）；kit 保留市场专属工具与 skill provider，不再重复注册。
 
-  // Issue #24：注册知识库摄取与检索工具（共享 ~/.dsh/knowledge/cards.json）
-  const knowledgeStorePath = path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
-  const knowledgeStore = createFileKnowledgeCardStore(knowledgeStorePath)
-  registerOnce(createKnowledgeIngestTool(knowledgeStore))
-  registerOnce(createKnowledgeSearchTool(knowledgeStore))
+  // issue #33：cn_get_indicators 接入（计算库市场无关；行情 registry-first，老部署回退市场键）。
+  const serviceGetter = ctx as unknown as { get?: (key: string) => unknown }
+  const registry = serviceGetter.get?.('tradingMarketDataRegistry') as
+    | { active(m: string): { service: MarketDataService } | undefined }
+    | undefined
+  const marketData = registry?.active('cn')?.service
+    ?? serviceGetter.get?.('tradingCnMarketData') as MarketDataService | undefined
+  if (marketData !== undefined) {
+    registerOnce(createGetIndicatorsTool({ marketData, market: 'cn' }))
+  }
 }
 
 /* ── cn_get_news：A 股新闻工具（WS3） ────────────────────────────────────────── */

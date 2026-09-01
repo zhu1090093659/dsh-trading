@@ -105,6 +105,12 @@ importers:
       '@dsh-trading/eventbus':
         specifier: workspace:^
         version: link:../eventbus
+      '@dsh-trading/indicators':
+        specifier: workspace:^
+        version: link:../indicators
+      '@dsh-trading/knowledge':
+        specifier: workspace:^
+        version: link:../knowledge
       '@dsh-trading/router':
         specifier: workspace:^
         version: link:../router
@@ -225,6 +231,9 @@ importers:
       '@dsh-trading/knowledge':
         specifier: workspace:^
         version: link:../knowledge
+      '@dsh-trading/router':
+        specifier: workspace:^
+        version: link:../router
       '@dsh-trading/strategies':
         specifier: workspace:^
         version: link:../strategies
@@ -958,6 +967,9 @@ importers:
 
   packages/knowledge:
     dependencies:
+      '@deepseek-ai/cordis':
+        specifier: '>=4.0.0'
+        version: 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
       '@deepseek-ai/dsh-tools':
         specifier: ^0.1.2-alpha.2
         version: 0.1.2-alpha.2(290f14751751470ef92e8daa730528cd)

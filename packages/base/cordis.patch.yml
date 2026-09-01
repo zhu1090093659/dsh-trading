@@ -59,6 +59,17 @@
     - id: dsh-trading-watchlist
       name: '@dsh-trading/watchlist/plugin'
 
+    # 指标能力收口（issue #33 / P4）：provide tradingCustomIndicators 单实例 store 服务
+    # （桥与工具共享缓存），indicator_author/indicator_delete host 平面注册；
+    # 写后 emit tradingEvents('indicators')。
+    - id: dsh-trading-indicators
+      name: '@dsh-trading/indicators/plugin'
+
+    # 知识能力收口（issue #33 / P4）：provide tradingKnowledgeCards 单实例 store 服务，
+    # knowledge_ingest/search/graph host 平面注册；写后 emit tradingEvents('knowledge')。
+    - id: dsh-trading-knowledge
+      name: '@dsh-trading/knowledge/plugin'
+
     # 交易 GUI 壳（第二阶段富途式三栏，2026-08-30）：左栏市场/自选遮蔽
     # sidebar.workspaces、中栏 conversation.view 加行情 tab、右栏 shell.overlay
     # 会话面板；node 半注册 /dshtrading/api 行情桥（web 宿主，headless 挂起无害）。

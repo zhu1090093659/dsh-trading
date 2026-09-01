@@ -20,6 +20,8 @@ export interface GetIndicatorsToolOptions {
   providerLabel?: string
   /** 取 K 线根数：需覆盖最长 warm-up（MACD 12/26/9），默认 300。 */
   klineLimit?: number
+  /** 可选：自定义指标 store（issue #33）——请求 id 非预置时从此解析（校验+编译后计算）。 */
+  customStore?: CustomIndicatorStore
 }
 
 const DEFAULT_POINTS = 30
@@ -38,7 +40,7 @@ function tail(values: ReadonlyArray<number | undefined>, n: number): Array<numbe
 }
 
 export function createGetIndicatorsTool(options: GetIndicatorsToolOptions) {
-  const { marketData, market = 'crypto', providerLabel, klineLimit = 300 } = options
+  const { marketData, market = 'crypto', providerLabel, klineLimit = 300, customStore } = options
   return defineTool({
     name: market + '_get_indicators',
     description:
@@ -84,10 +86,25 @@ export function createGetIndicatorsTool(options: GetIndicatorsToolOptions) {
         ? args.indicators.split(',').map((s) => s.trim()).filter(Boolean)
         : DEFAULT_INDICATOR_IDS
       const definitions = presetDefinitions()
-      const unknown = requestedIds.filter((id) => !definitions.some((d) => d.id === id))
-      if (unknown.length > 0) {
-        throw new Error((market + '_get_indicators: unknown indicator id(s) ') + unknown.map((s) => JSON.stringify(s)).join(', ')
-          + ' — available: ' + DEFAULT_INDICATOR_IDS.join(', '))
+      // 自定义指标解析（issue #33）：非预置 id → custom store 查记录 → 校验+编译落定。
+      const customDefinitions: IndicatorDefinition[] = []
+      for (const id of requestedIds) {
+        if (definitions.some((d) => d.id === id)) continue
+        if (customStore === undefined) {
+          throw new Error((market + '_get_indicators: unknown indicator id ') + JSON.stringify(id)
+            + ' — available presets: ' + DEFAULT_INDICATOR_IDS.join(', '))
+        }
+        const record = await customStore.get(id)
+        if (record === undefined) {
+          throw new Error((market + '_get_indicators: unknown indicator id ') + JSON.stringify(id)
+            + ' — available presets: ' + DEFAULT_INDICATOR_IDS.join(', ')
+            + '; custom ids require authoring via indicator_author first')
+        }
+        const result = validateCustomIndicatorNode(record)
+        if (!result.ok) {
+          throw new Error((market + '_get_indicators: custom indicator ') + JSON.stringify(id) + ' failed validation: ' + result.reason)
+        }
+        customDefinitions.push(result.definition)
       }
       const requestedPoints = typeof args.points === 'number' && Number.isFinite(args.points) ? Math.trunc(args.points) : DEFAULT_POINTS
       const points = Math.min(Math.max(requestedPoints, 1), MAX_POINTS)
@@ -102,7 +119,7 @@ export function createGetIndicatorsTool(options: GetIndicatorsToolOptions) {
         + (providerLabel ? '  provider=' + providerLabel : ''),
       ]
       for (const id of requestedIds) {
-        const definition = definitions.find((d) => d.id === id)!
+        const definition = definitions.find((d) => d.id === id) ?? customDefinitions.find((d) => d.id === id)!
         const params = defaultParams(definition)
         const paramText = definition.params.map((p) => (p.key + '=' + params[p.key])).join(' ')
         lines.push(definition.title + ' (' + paramText + '):')

@@ -25,8 +25,6 @@ import {
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { createAuthorIndicatorTool, createFileCustomIndicatorStore } from '@dsh-trading/indicators/tool'
-import { createKnowledgeIngestTool, createKnowledgeSearchTool, createFileKnowledgeCardStore } from '@dsh-trading/knowledge/tool'
 import { aggregateNews, deriveSymbolTokens, type AggregateNewsOptions } from './news.js'
 import { fetchCryptoDerivatives, renderDerivativesData } from './derivatives.js'
 import { fetchCryptoFundamentals, renderCryptoFundamentals } from './fundamentals.js'
@@ -247,16 +245,9 @@ export function apply(ctx: Context, _config: Config): void {
   registerOnce(createGetDerivativesTool())
   registerOnce(createGetFundamentalsTool())
 
-  // Issue #19：注册自定义指标创作工具 indicator_author（共享 ~/.dsh/indicators/custom.json）
-  const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
-  const authorStore = createFileCustomIndicatorStore(indicatorStorePath)
-  registerOnce(createAuthorIndicatorTool({ store: authorStore }))
-
-  // Issue #24：注册知识库摄取与检索工具（共享 ~/.dsh/knowledge/cards.json）
-  const knowledgeStorePath = path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
-  const knowledgeStore = createFileKnowledgeCardStore(knowledgeStorePath)
-  registerOnce(createKnowledgeIngestTool(knowledgeStore))
-  registerOnce(createKnowledgeSearchTool(knowledgeStore))
+  // issue #33 收口：indicator_author / knowledge_ingest / knowledge_search 已迁移至
+  // @dsh-trading/indicators/plugin 与 @dsh-trading/knowledge/plugin（base patch 行，
+  // host 平面单点注册）；crypto_get_indicators 由 connector-binance/okx 注册，kit 不重复。
 }
 
 /* ── crypto_get_derivatives：衍生品数据工具（WS4） ───────────────────────────── */

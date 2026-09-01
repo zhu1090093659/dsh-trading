@@ -31,6 +31,7 @@ import type {
   MarketDataService,
   MarketRouterService as MarketRouterServiceContract,
 } from '@dsh-trading/api'
+import { createInstrumentsSearchTool, createRoutingGetTool, type RouterToolServices } from './tools.ts'
 
 /**
  * Cordis 插件名 = patch 行 id：市场无关共享行，base 拥有（铁律 #1/#4）。
@@ -308,9 +309,22 @@ export function apply(ctx: Context, config: Config): void {
   }
   const service = new MarketRouterService(ctx, () => effective)
   // 注册表与 router 同 fiber 提供：base patch 行零改动。
-  new MarketDataRegistryService(ctx, service)
+  const registry = new MarketDataRegistryService(ctx, service)
   const log = logger(ctx)
   warnUnknownProviders(effective, log)
+
+  // routing_get / instruments_search（issue #33 / P4，host 平面，全会话可见 D4）。
+  ctx.inject(['tools'] as never, (toolCtx) => {
+    const tools = (toolCtx as unknown as { tools?: { register(t: unknown): void; get(name: string): unknown } }).tools
+    if (!tools || typeof tools.register !== 'function') return
+    const services: RouterToolServices = {
+      activeProvider: (market) => service.activeProvider(market),
+      registry: { active: (market) => registry.active(market) },
+    }
+    for (const tool of [createRoutingGetTool(services), createInstrumentsSearchTool(services)]) {
+      if (tools.get(tool.name) === undefined) tools.register(tool)
+    }
+  })
 
   // settings 服务存在时：注册 namespace（base = 组合 entry，用户层赢）+ 源切换
   // + onChange 通知 diff。settings 缺失（老部署未挂）→ 服务照常 provide，

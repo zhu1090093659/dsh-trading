@@ -14,8 +14,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dsh-trading/api'
 import type { TradingEventsService } from '@dsh-trading/eventbus'
-import { createFileCustomIndicatorStore, createAuthorIndicatorTool } from '@dsh-trading/indicators/tool'
-import { createFileKnowledgeCardStore, createKnowledgeIngestTool, createKnowledgeSearchTool } from '@dsh-trading/knowledge/tool'
+import { createFileCustomIndicatorStore } from '@dsh-trading/indicators/plugin'
+import { createFileKnowledgeCardStore } from '@dsh-trading/knowledge/plugin'
 import { createFileCustomStrategyStore } from '@dsh-trading/strategies/plugin'
 import { createFileSelectionStore, createFileWatchlistStore } from '@dsh-trading/watchlist/plugin'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -59,11 +59,16 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
  * @param ctx - Host cordis context（bundle loader entry）。
  */
 export function apply(ctx: Context): void {
-  const indicatorStorePath = path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
-  const customIndicatorsStore = createFileCustomIndicatorStore(indicatorStorePath)
-
-  const knowledgeStorePath = path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
-  const knowledgeStore = createFileKnowledgeCardStore(knowledgeStorePath)
+  // store 单实例解析（issue #33 收口）：能力包 ./plugin 已 provide 服务（同一 file
+  // store 实例）→ 直接复用；服务缺席（老部署）→ 回退自建实例（旧行为）。
+  const customIndicatorsStore = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingCustomIndicators') as
+    | import('@dsh-trading/indicators').CustomIndicatorStore
+    | undefined
+    ?? createFileCustomIndicatorStore(path.join(os.homedir(), '.dsh', 'indicators', 'custom.json'))
+  const knowledgeStore = (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingKnowledgeCards') as
+    | import('@dsh-trading/knowledge').KnowledgeCardStore
+    | undefined
+    ?? createFileKnowledgeCardStore(path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json'))
 
   const strategyStorePath = path.join(os.homedir(), '.dsh', 'strategies', 'custom.json')
   const strategyStore = createFileCustomStrategyStore(strategyStorePath)
@@ -78,33 +83,9 @@ export function apply(ctx: Context): void {
   const eventsOf = (): TradingEventsService | undefined =>
     (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingEvents') as TradingEventsService | undefined
 
-  // 注册 indicator_author / knowledge_ingest / knowledge_search 工具到全局 tools（若服务存在）
-  ctx.inject(['tools'] as never, (toolCtx) => {
-    const tools = (toolCtx as unknown as { tools?: { register(t: unknown): void; get(name: string): unknown } }).tools
-    if (tools && typeof tools.register === 'function') {
-      const authorTool = createAuthorIndicatorTool({
-        store: customIndicatorsStore,
-        // 发布点接线（issue #30）：指标入库 → 'indicators' 失效信号 → 已打开的图表实时出现。
-        onWritten: () => eventsOf()?.emit('indicators'),
-      })
-      if (tools.get(authorTool.name) === undefined) {
-        tools.register(authorTool)
-      }
-
-      const ingestTool = createKnowledgeIngestTool(knowledgeStore, {
-        // 发布点接线（issue #30）：知识入库 → 'knowledge' 失效信号 → 知识库 tab 实时刷新。
-        onWritten: () => eventsOf()?.emit('knowledge'),
-      })
-      if (tools.get(ingestTool.name) === undefined) {
-        tools.register(ingestTool)
-      }
-
-      const searchTool = createKnowledgeSearchTool(knowledgeStore)
-      if (tools.get(searchTool.name) === undefined) {
-        tools.register(searchTool)
-      }
-    }
-  })
+  // issue #33 收口：indicator_author / knowledge_ingest / knowledge_search 的注册
+  // 已迁移至 @dsh-trading/indicators/plugin 与 @dsh-trading/knowledge/plugin
+  // （base patch 行，host 平面），emit 接线随迁；本插件不再重复注册。
 
   ctx.inject(['webServer', 'connection'], (webCtx) => {
     const webServer = webCtx.get('webServer') as unknown as WebServerLike | undefined
