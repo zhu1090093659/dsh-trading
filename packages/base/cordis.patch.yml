@@ -90,6 +90,19 @@
     - id: dsh-trading-client-ui-indicators
       name: '@dsh-trading/client-ui-indicators'
 
+    # 策略中栏视图（issue #34 / P5 拆包）：client 半 inject tradingStageViews
+    # 注册「策略」tab + tool.call.toolview 富卡片（strategy_backtest/author）；
+    # 引擎经 @dsh-trading/strategies 纯库 import，桥走 shell 的 tradingBridge
+    # 服务。headless 宿主解析为空 apply host 行，无害。
+    - id: dsh-trading-client-ui-strategies
+      name: '@dsh-trading/client-ui-strategies'
+
+    # 知识库中栏视图（issue #34 / P5 拆包）：client 半 inject tradingStageViews
+    # 注册「知识库」tab；force-graph 力导图谱随本包打包（shell 已卸下该依赖）。
+    # headless 宿主解析为空 apply host 行，无害。
+    - id: dsh-trading-client-ui-knowledge
+      name: '@dsh-trading/client-ui-knowledge'
+
 - id: agent-presets
   name: '@deepseek-ai/dsh-agent-presets'
   config:

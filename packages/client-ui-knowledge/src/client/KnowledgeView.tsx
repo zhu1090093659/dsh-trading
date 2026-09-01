@@ -9,11 +9,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildGraph, type KnowledgeCard, type KnowledgeGraphData } from '@dsh-trading/knowledge'
-import { fetchKnowledgeCards, subscribeTradingEvents } from './api.ts'
-import { readJson, writeJson } from './store.ts'
+import { readJson, writeJson } from './shell-faces.ts'
 import { IconKnowledge, IconSearch } from './icons.tsx'
 import { KnowledgeGraph, type KnowledgeGraphHandle } from './KnowledgeGraph.tsx'
-import type { MarketLocaleKey } from './contract.ts'
+import type { KnowledgeLocaleKey } from './contract.ts'
 import css from './KnowledgeView.module.css'
 
 interface KnowledgeViewStored {
@@ -35,10 +34,15 @@ const DEFAULT_STORED: KnowledgeViewStored = {
 }
 
 export interface KnowledgeViewProps {
-  t: (key: MarketLocaleKey) => string
+  t: (key: KnowledgeLocaleKey) => string
+  /** 桥面（shell 的 tradingBridge 服务；未注入时保持 loading 空态）。 */
+  bridge: {
+    fetchKnowledgeCards: () => Promise<KnowledgeCard[]>
+    subscribeTradingEvents: (handlers: { knowledge?: () => void }) => () => void
+  }
 }
 
-export function KnowledgeView({ t }: KnowledgeViewProps) {
+export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
   // 1. 过滤器持久化状态
   const [stored] = useState<KnowledgeViewStored>(() => {
     return readJson<KnowledgeViewStored>(STORE_KEY, DEFAULT_STORED)
@@ -69,11 +73,11 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
     writeJson(STORE_KEY, nextState)
   }, [query, selectedTag, selectedAuthor, selectedCredibility, selectedSourceType])
 
-  // 拉取知识卡片全集
+  // 拉取知识卡片全集（桥来自 shell 的 tradingBridge 服务；未注入时空态）
   const loadCards = async () => {
     try {
       setLoading(true)
-      const data = await fetchKnowledgeCards()
+      const data = await bridge.fetchKnowledgeCards()
       setCards(data)
     } catch (e) {
       console.warn('[dsh-trading/knowledge-ui] failed to load cards:', e)
@@ -84,13 +88,13 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
 
   useEffect(() => {
     void loadCards()
-  }, [])
+  }, [bridge])
 
   // SSE 失效信号订阅（issue #30 / P1）：knowledge_ingest 入库 / 更新后本视图
   // 实时刷新，无需刷新页面；EventSource 不可用时退化为一次性加载（现状）。
-  useEffect(() => subscribeTradingEvents({
+  useEffect(() => bridge.subscribeTradingEvents({
     knowledge: () => { void loadCards() },
-  }), [])
+  }), [bridge])
 
   // 3. 提取所有可用筛选候选项
   const { allTags, allAuthors } = useMemo(() => {
@@ -186,7 +190,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
             <input
               type="text"
               className={css.searchInput}
-              placeholder={t('knowledge.search.placeholder')}
+              placeholder={t('kv.search.placeholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -198,7 +202,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
             value={selectedTag}
             onChange={(e) => setSelectedTag(e.target.value)}
           >
-            <option value="">{t('knowledge.filter.allTags')}</option>
+            <option value="">{t('kv.filter.allTags')}</option>
             {allTags.map((tag) => (
               <option key={tag} value={tag}>
                 {tag}
@@ -212,7 +216,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
             value={selectedAuthor}
             onChange={(e) => setSelectedAuthor(e.target.value)}
           >
-            <option value="">{t('knowledge.filter.allAuthors')}</option>
+            <option value="">{t('kv.filter.allAuthors')}</option>
             {allAuthors.map((author) => (
               <option key={author} value={author}>
                 {author}
@@ -226,10 +230,10 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
             value={selectedCredibility}
             onChange={(e) => setSelectedCredibility(e.target.value)}
           >
-            <option value="">{t('knowledge.filter.allCredibility')}</option>
-            <option value="high">{t('knowledge.credibility.high')}</option>
-            <option value="medium">{t('knowledge.credibility.medium')}</option>
-            <option value="low">{t('knowledge.credibility.low')}</option>
+            <option value="">{t('kv.filter.allCredibility')}</option>
+            <option value="high">{t('kv.credibility.high')}</option>
+            <option value="medium">{t('kv.credibility.medium')}</option>
+            <option value="low">{t('kv.credibility.low')}</option>
           </select>
 
           {/* 平台过滤 */}
@@ -238,21 +242,21 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
             value={selectedSourceType}
             onChange={(e) => setSelectedSourceType(e.target.value)}
           >
-            <option value="">{t('knowledge.filter.allSourceTypes')}</option>
-            <option value="bilibili">{t('knowledge.sourceType.bilibili')}</option>
-            <option value="wechat">{t('knowledge.sourceType.wechat')}</option>
-            <option value="manual">{t('knowledge.sourceType.manual')}</option>
+            <option value="">{t('kv.filter.allSourceTypes')}</option>
+            <option value="bilibili">{t('kv.sourceType.bilibili')}</option>
+            <option value="wechat">{t('kv.sourceType.wechat')}</option>
+            <option value="manual">{t('kv.sourceType.manual')}</option>
           </select>
 
           {hasActiveFilters && (
             <button type="button" className={css.resetBtn} onClick={handleResetFilters}>
-              {t('knowledge.filter.reset')}
+              {t('kv.filter.reset')}
             </button>
           )}
         </div>
 
         <div className={css.statsText}>
-          {filteredCards.length} {t('knowledge.stats.cards')} · {clusterCount} {t('knowledge.stats.clusters')}
+          {filteredCards.length} {t('kv.stats.cards')} · {clusterCount} {t('kv.stats.clusters')}
         </div>
       </div>
 
@@ -263,16 +267,16 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
             <div className={css.emptyIcon}>
               <IconKnowledge size={40} />
             </div>
-            <div className={css.emptyHint}>{t('knowledge.empty.hint')}</div>
+            <div className={css.emptyHint}>{t('kv.empty.hint')}</div>
           </div>
         ) : filteredCards.length === 0 && !loading ? (
           <div className={css.emptyState}>
             <div className={css.emptyIcon}>
               <IconKnowledge size={32} />
             </div>
-            <div className={css.emptyHint}>{t('knowledge.empty.filtered')}</div>
+            <div className={css.emptyHint}>{t('kv.empty.filtered')}</div>
             <button type="button" className={css.resetBtn} onClick={handleResetFilters}>
-              {t('knowledge.filter.reset')}
+              {t('kv.filter.reset')}
             </button>
           </div>
         ) : (
@@ -326,7 +330,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
             <div className={css.drawerBody}>
               {/* 核心论点 */}
               <div className={css.section}>
-                <div className={css.sectionLabel}>{t('knowledge.drawer.coreClaims')}</div>
+                <div className={css.sectionLabel}>{t('kv.drawer.coreClaims')}</div>
                 <ul className={css.claimsList}>
                   {selectedCard.coreClaims.map((claim, idx) => (
                     <li key={idx}>{claim}</li>
@@ -336,11 +340,11 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
 
               {/* 事实核查三桶 */}
               <div className={css.section}>
-                <div className={css.sectionLabel}>{t('knowledge.drawer.factCheck')}</div>
+                <div className={css.sectionLabel}>{t('kv.drawer.factCheck')}</div>
 
                 {selectedCard.factCheck.verified.length > 0 && (
                   <div className={`${css.factBucket} ${css.factVerified}`}>
-                    <div className={css.bucketTitle}>✅ {t('knowledge.drawer.verified')}</div>
+                    <div className={css.bucketTitle}>✅ {t('kv.drawer.verified')}</div>
                     <ul className={css.bucketList}>
                       {selectedCard.factCheck.verified.map((v, i) => (
                         <li key={i}>{v}</li>
@@ -351,7 +355,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
 
                 {selectedCard.factCheck.discrepancies.length > 0 && (
                   <div className={`${css.factBucket} ${css.factDiscrepancies}`}>
-                    <div className={css.bucketTitle}>⚠️ {t('knowledge.drawer.discrepancies')}</div>
+                    <div className={css.bucketTitle}>⚠️ {t('kv.drawer.discrepancies')}</div>
                     <ul className={css.bucketList}>
                       {selectedCard.factCheck.discrepancies.map((d, i) => (
                         <li key={i}>{d}</li>
@@ -362,7 +366,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
 
                 {selectedCard.factCheck.unverifiable.length > 0 && (
                   <div className={`${css.factBucket} ${css.factUnverifiable}`}>
-                    <div className={css.bucketTitle}>❓ {t('knowledge.drawer.unverifiable')}</div>
+                    <div className={css.bucketTitle}>❓ {t('kv.drawer.unverifiable')}</div>
                     <ul className={css.bucketList}>
                       {selectedCard.factCheck.unverifiable.map((u, i) => (
                         <li key={i}>{u}</li>
@@ -375,7 +379,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
               {/* 可复用经验 */}
               {selectedCard.takeaways.length > 0 && (
                 <div className={css.section}>
-                  <div className={css.sectionLabel}>{t('knowledge.drawer.takeaways')}</div>
+                  <div className={css.sectionLabel}>{t('kv.drawer.takeaways')}</div>
                   <ul className={css.claimsList}>
                     {selectedCard.takeaways.map((item, idx) => (
                       <li key={idx}>{item}</li>
@@ -387,7 +391,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
               {/* 适用边界与避坑 */}
               {selectedCard.boundaries.length > 0 && (
                 <div className={css.section}>
-                  <div className={css.sectionLabel}>{t('knowledge.drawer.boundaries')}</div>
+                  <div className={css.sectionLabel}>{t('kv.drawer.boundaries')}</div>
                   <ul className={css.claimsList}>
                     {selectedCard.boundaries.map((item, idx) => (
                       <li key={idx}>{item}</li>
@@ -398,7 +402,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
 
               {/* 主题标签 */}
               <div className={css.section}>
-                <div className={css.sectionLabel}>{t('knowledge.filter.tag')}</div>
+                <div className={css.sectionLabel}>{t('kv.filter.tag')}</div>
                 <div className={css.tagPills}>
                   {selectedCard.tags.map((tag) => (
                     <span key={tag} className={css.tagPill}>
@@ -411,7 +415,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
               {/* 关联标的 */}
               {selectedCard.tickers && selectedCard.tickers.length > 0 && (
                 <div className={css.section}>
-                  <div className={css.sectionLabel}>{t('knowledge.drawer.tickers')}</div>
+                  <div className={css.sectionLabel}>{t('kv.drawer.tickers')}</div>
                   <div className={css.tagPills}>
                     {selectedCard.tickers.map((sym) => (
                       <span key={sym} className={css.tagPill}>
@@ -425,7 +429,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
               {/* 显式关联卡片 */}
               {selectedCard.related && selectedCard.related.length > 0 && (
                 <div className={css.section}>
-                  <div className={css.sectionLabel}>{t('knowledge.drawer.related')}</div>
+                  <div className={css.sectionLabel}>{t('kv.drawer.related')}</div>
                   {selectedCard.related.map((relId) => {
                     const relCard = cards.find((c) => c.id === relId)
                     return (
@@ -451,7 +455,7 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
                   rel="noopener noreferrer"
                   className={css.openSourceBtn}
                 >
-                  {t('knowledge.drawer.openSource')} ↗
+                  {t('kv.drawer.openSource')} ↗
                 </a>
               </div>
             )}

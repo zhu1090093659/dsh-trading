@@ -18,10 +18,9 @@ import {
   type BacktestResult,
   type Kline,
 } from '@dsh-trading/strategies'
-import { readJson, writeJson, type SelectionState } from './store.ts'
-import { fetchKlines, fetchCustomStrategies, subscribeTradingEvents } from './api.ts'
+import { readJson, writeJson, type SelectionState } from './shell-faces.ts'
 import { IconStrategy } from './icons.tsx'
-import type { MarketLocaleKey } from './contract.ts'
+import type { StrategyLocaleKey } from './contract.ts'
 import css from './StrategyView.module.css'
 
 interface StrategyStateStored {
@@ -61,11 +60,17 @@ function formatDate(timestamp: number): string {
 export type UseStoreState<TState> = <TSelected>(selector: (state: TState) => TSelected) => TSelected
 
 export interface StrategyViewProps {
-  t: (key: MarketLocaleKey) => string
+  t: (key: StrategyLocaleKey) => string
+  /** 桥面（shell 的 tradingBridge 服务；未注入时空跑——视图静默空态）。 */
+  bridge: {
+    fetchKlines: (market: string, symbol: string, interval: string, limit: number) => Promise<Kline[]>
+    fetchCustomStrategies: () => Promise<Array<{ id: string; title: string; horizon: string; summary: string; paramsJson: string; computeSource: string }>>
+    subscribeTradingEvents: (handlers: { strategies?: () => void }) => () => void
+  }
   useSelection?: UseStoreState<SelectionState>
 }
 
-export function StrategyView({ t, useSelection }: StrategyViewProps) {
+export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
   const instrument = useSelection ? useSelection((s) => s.instrument) : null
   const market = instrument?.market ?? 'crypto'
   const symbol = instrument?.symbol ?? 'BTCUSDT'
@@ -81,15 +86,17 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
 
   // 2. 自定义策略名册（issue #31 / P2）：桥拉取 → 校验（Worker 熔断）→ 并入名册；
   // SSE 'strategies' 失效信号到达时重拉（strategy_author 入库无需刷新即上榜）。
+  // 桥来自 shell 的 tradingBridge 服务（未注入时跳过拉取，视图空态）。
   const [customDefs, setCustomDefs] = useState<StrategyDefinition[]>([])
   useEffect(() => {
+    if (bridge === undefined) return
     let cancelled = false
     const load = async () => {
       try {
-        const records = await fetchCustomStrategies()
+        const records = await bridge.fetchCustomStrategies()
         const defs: StrategyDefinition[] = []
         for (const record of records) {
-          const result = await validateCustomStrategy(record)
+          const result = await validateCustomStrategy(record as never)
           if (result.ok) defs.push(result.definition)
         }
         if (!cancelled) setCustomDefs(defs)
@@ -98,9 +105,9 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
       }
     }
     void load()
-    const unsubscribe = subscribeTradingEvents({ strategies: () => { void load() } })
+    const unsubscribe = bridge.subscribeTradingEvents({ strategies: () => { void load() } })
     return () => { cancelled = true; unsubscribe() }
-  }, [])
+  }, [bridge])
 
   // 名册 = 范式 ∪ 自定义合并（issue #31）
   const allStrategies = useMemo<StrategyDefinition[]>(
@@ -162,9 +169,9 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const barsRaw = await fetchKlines(market, symbol, '1d', 300)
+      const barsRaw = await bridge.fetchKlines(market, symbol, '1d', 300)
       if (!barsRaw || barsRaw.length === 0) {
-        setErrorMsg(t('strategy.error.noKlines'))
+        setErrorMsg(t('sv.error.noKlines'))
         setResult(null)
         return
       }
@@ -179,7 +186,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
       const backtestResult = run(klines, currentStrategy, currentParams)
       setResult(backtestResult)
     } catch (e) {
-      setErrorMsg(`${t('strategy.error.failed')}: ${String((e as Error)?.message ?? e)}`)
+      setErrorMsg(`${t('sv.error.failed')}: ${String((e as Error)?.message ?? e)}`)
       setResult(null)
     } finally {
       setLoading(false)
@@ -271,7 +278,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
             data-active={horizon === 'short' ? 'true' : undefined}
             onClick={() => switchHorizon('short')}
           >
-            {t('strategy.horizon.short')}
+            {t('sv.horizon.short')}
           </button>
           <button
             type="button"
@@ -279,7 +286,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
             data-active={horizon === 'swing' ? 'true' : undefined}
             onClick={() => switchHorizon('swing')}
           >
-            {t('strategy.horizon.swing')}
+            {t('sv.horizon.swing')}
           </button>
           <button
             type="button"
@@ -287,7 +294,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
             data-active={horizon === 'long' ? 'true' : undefined}
             onClick={() => switchHorizon('long')}
           >
-            {t('strategy.horizon.long')}
+            {t('sv.horizon.long')}
           </button>
         </div>
 
@@ -330,9 +337,9 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
         ))}
 
         <div className={css.paramGroup}>
-          <span className={css.paramLabel}>{t('strategy.symbolLabel')}</span>
+          <span className={css.paramLabel}>{t('sv.symbolLabel')}</span>
           <span className={css.symbolValue}>
-            {symbol} {t('strategy.intervalDaily')}
+            {symbol} {t('sv.intervalDaily')}
           </span>
         </div>
 
@@ -342,7 +349,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
           disabled={loading}
           onClick={handleRunBacktest}
         >
-          {loading ? t('strategy.running') : t('strategy.run')}
+          {loading ? t('sv.running') : t('sv.run')}
         </button>
       </div>
 
@@ -358,7 +365,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
           {/* 8 指标卡 */}
           <div className={css.metricsGrid}>
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>{t('strategy.metrics.totalReturn')}</span>
+              <span className={css.metricLabel}>{t('sv.metrics.totalReturn')}</span>
               <span
                 className={`${css.metricValue} ${result.metrics.totalReturn >= 0 ? css.trendUp : css.trendDown}`}
               >
@@ -367,7 +374,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>{t('strategy.metrics.cagr')}</span>
+              <span className={css.metricLabel}>{t('sv.metrics.cagr')}</span>
               <span
                 className={`${css.metricValue} ${result.metrics.cagr >= 0 ? css.trendUp : css.trendDown}`}
               >
@@ -376,36 +383,36 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>{t('strategy.metrics.maxDrawdown')}</span>
+              <span className={css.metricLabel}>{t('sv.metrics.maxDrawdown')}</span>
               <span className={`${css.metricValue} ${css.trendDown}`}>
                 {formatPercent(result.metrics.maxDrawdown)}
               </span>
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>{t('strategy.metrics.sharpe')}</span>
+              <span className={css.metricLabel}>{t('sv.metrics.sharpe')}</span>
               <span className={css.metricValue}>{formatNum(result.metrics.sharpe)}</span>
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>{t('strategy.metrics.winRate')}</span>
+              <span className={css.metricLabel}>{t('sv.metrics.winRate')}</span>
               <span className={css.metricValue}>{formatPercent(result.metrics.winRate)}</span>
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>{t('strategy.metrics.profitFactor')}</span>
+              <span className={css.metricLabel}>{t('sv.metrics.profitFactor')}</span>
               <span className={css.metricValue}>{formatNum(result.metrics.profitFactor)}</span>
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>{t('strategy.metrics.tradeCount')}</span>
+              <span className={css.metricLabel}>{t('sv.metrics.tradeCount')}</span>
               <span className={css.metricValue}>
-                {result.metrics.tradeCount} {t('strategy.metrics.tradeUnit')}
+                {result.metrics.tradeCount} {t('sv.metrics.tradeUnit')}
               </span>
             </div>
 
             <div className={css.metricCard}>
-              <span className={css.metricLabel}>{t('strategy.metrics.exposure')}</span>
+              <span className={css.metricLabel}>{t('sv.metrics.exposure')}</span>
               <span className={css.metricValue}>{formatPercent(result.metrics.exposure)}</span>
             </div>
           </div>
@@ -418,26 +425,26 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
           {/* 交易明细流水表 */}
           <div className={css.tableSection}>
             <div className={css.tableTitle}>
-              {t('strategy.trades.title')} ({result.trades.length} {t('strategy.metrics.tradeUnit')})
+              {t('sv.trades.title')} ({result.trades.length} {t('sv.metrics.tradeUnit')})
             </div>
             <div className={css.tradesTableWrapper}>
               <table className={css.tradesTable}>
                 <thead>
                   <tr>
-                    <th>{t('strategy.trades.entryTime')}</th>
-                    <th>{t('strategy.trades.exitTime')}</th>
-                    <th>{t('strategy.trades.entryPrice')}</th>
-                    <th>{t('strategy.trades.exitPrice')}</th>
-                    <th>{t('strategy.trades.holdingBars')}</th>
-                    <th>{t('strategy.trades.netReturn')}</th>
-                    <th>{t('strategy.trades.exitReason')}</th>
+                    <th>{t('sv.trades.entryTime')}</th>
+                    <th>{t('sv.trades.exitTime')}</th>
+                    <th>{t('sv.trades.entryPrice')}</th>
+                    <th>{t('sv.trades.exitPrice')}</th>
+                    <th>{t('sv.trades.holdingBars')}</th>
+                    <th>{t('sv.trades.netReturn')}</th>
+                    <th>{t('sv.trades.exitReason')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.trades.length === 0 ? (
                     <tr>
                       <td colSpan={7} className={css.tableEmptyCell}>
-                        {t('strategy.trades.empty')}
+                        {t('sv.trades.empty')}
                       </td>
                     </tr>
                   ) : (
@@ -465,7 +472,7 @@ export function StrategyView({ t, useSelection }: StrategyViewProps) {
           <div className={css.emptyIcon}>
             <IconStrategy size={36} />
           </div>
-          <div>{t('strategy.empty.hint')}</div>
+          <div>{t('sv.empty.hint')}</div>
         </div>
       )}
     </div>

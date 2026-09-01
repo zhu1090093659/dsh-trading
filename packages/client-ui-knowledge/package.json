@@ -1,0 +1,56 @@
+{
+  "name": "@dsh-trading/client-ui-knowledge",
+  "description": "Knowledge-base stage view plugin for dsh-trading (issue #34 / P5): registers the 中栏「知识库」tab via the tradingStageViews service — Obsidian-style force-directed knowledge graph with search/tag/author/credibility filters and a card detail drawer. Graph logic comes from the @dsh-trading/knowledge pure library; bridge access goes through the shell's tradingBridge service (ctx.inject only, no cross-package module imports).",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "bundle": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "build": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dsh-trading/knowledge": "workspace:^",
+    "force-graph": "^1.51.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "react": "^18.2.0",
+    "@types/react": "~18.3.1",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.2-alpha.1",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.2-alpha.1"
+  },
+  "devDependencies": {
+    "lightningcss": "^1.0.0",
+    "react": "^18.2.0",
+    "@types/react": "~18.3.1",
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0",
+    "typescript": "^5.5.0"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  }
+}

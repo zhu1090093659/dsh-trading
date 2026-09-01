@@ -1,41 +1,44 @@
 /**
- * 中栏舞台：中栏 = 视图注册表 + 顶部切换条（行情 | 策略 | 知识库）。
- * 视图注册表是中栏的扩展点——各视图按 definition 追加，与行情视图并列切换；
- * 同一时刻仅挂载活动视图（切换即卸载，图表态由 store/localStorage 承接，后台视图零渲染开销）。
+ * 中栏舞台：中栏 = 视图注册表 + 顶部切换条（行情 | 策略 | 知识库 | …）。
+ *
+ * 视图注册表是中栏的开放扩展点（issue #34 / P5）：quote 视图由 shell 自注册
+ * 到 registry；策略/知识视图由 client-ui-strategies / client-ui-knowledge 经
+ * tradingStageViews 服务注册。任何 client 插件 inject 该服务 register 即新增
+ * 中栏 tab。同一时刻仅挂载活动视图（切换即卸载，图表态由 store/localStorage
+ * 承接，后台视图零渲染开销）。
  */
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
+import type { ComponentType } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { readJson, writeJson } from './store.ts'
+import { stageViews } from './stage-views.ts'
 import { QuoteStage } from './QuoteStage.tsx'
-import { StrategyView } from './StrategyView.tsx'
-import { KnowledgeView } from './KnowledgeView.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import type { ChartState } from './chart-state.ts'
 import type { Observable, SelectionState } from './store.ts'
 import css from './stage.module.css'
 
-export type MiddleViewId = 'quote' | 'strategy' | 'knowledge'
-
+/** 插件视图的注册 definition 形状（quote 由 shell 内建，不走此面）。 */
 export interface MiddleViewDefinition {
-  id: MiddleViewId
+  id: string
   titleKey: MarketLocaleKey
+  order?: number
+  render: ComponentType<import('./stage-views.ts').StageViewProps>
 }
-
-/** 中栏视图注册表：行情 | 策略 | 知识库。 */
-export const MIDDLE_VIEWS: readonly MiddleViewDefinition[] = [
-  { id: 'quote', titleKey: 'stage.quote' },
-  { id: 'strategy', titleKey: 'stage.strategy' },
-  { id: 'knowledge', titleKey: 'stage.knowledge' },
-]
 
 const STAGE_KEY = 'dshtrading.stage.v1'
 
-function readStageView(): MiddleViewId {
-  const raw = readJson<unknown>(STAGE_KEY, 'quote')
-  return MIDDLE_VIEWS.some(view => view.id === raw) ? raw as MiddleViewId : 'quote'
+function isRegisteredView(raw: unknown): boolean {
+  return typeof raw === 'string' && stageViews.get(raw) !== undefined
 }
 
-function writeStageView(view: MiddleViewId): void {
+function readStageView(): string {
+  const raw = readJson<unknown>(STAGE_KEY, 'quote')
+  // 持久化值指向未安装的插件视图（卸载场景）→ 回落 quote。
+  return isRegisteredView(raw) ? raw as string : 'quote'
+}
+
+function writeStageView(view: string): void {
   writeJson(STAGE_KEY, view)
 }
 
@@ -57,9 +60,12 @@ export type MiddleStageProps =
   & InjectFace<MiddleStageInjected>
 
 export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator }: MiddleStageProps) {
-  const [view, setView] = useState<MiddleViewId>(readStageView)
+  // 名册响应式：registry 版本号驱动 tab 条重渲染；当前视图是普通 state
+  // （readStageView 净化 localStorage 脏值）。
+  useSyncExternalStore(stageViews.subscribe, stageViews.getVersion)
+  const [view, setView] = useState<string>(readStageView)
 
-  const switchView = (next: MiddleViewId): void => {
+  const switchView = (next: string): void => {
     setView(next)
     writeStageView(next)
   }
@@ -67,7 +73,7 @@ export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setInd
   return (
     <div className={css.root} data-dshtrading-middle-stage="">
       <div className={css.tabs} role="tablist" aria-label="stage">
-        {MIDDLE_VIEWS.map(definition => (
+        {stageViews.list().map(definition => (
           <button
             key={definition.id}
             type="button"
@@ -82,13 +88,18 @@ export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setInd
         ))}
       </div>
       {/* 视图互斥挂载：切走即卸载（图表重建成本 < 双图常驻的内存/重绘成本）。
-          prop 面沿用 QuotePane→QuoteStage 的 inject 传递约定（cast 收敛在边界）。 */}
+          prop 面沿用 QuotePane→QuoteStage 的 inject 传递约定（cast 收敛在边界）。
+          quote 视图 = shell 内建（QuoteStage 直引——需要中栏全部指标动作面）；
+          插件视图走 definition.render(props)。 */}
       {view === 'quote' ? (
         <QuoteStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator } as never)} />
-      ) : view === 'strategy' ? (
-        <StrategyView t={t} useSelection={useSelection} />
       ) : (
-        <KnowledgeView t={t} />
+        (() => {
+          const definition = stageViews.get(view)
+          if (definition === undefined) return null
+          const View = definition.render
+          return <View t={t} view={view} />
+        })()
       )}
     </div>
   )

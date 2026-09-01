@@ -1,0 +1,81 @@
+/* shell 半 toolview 卡片样式（与 client-ui-strategies 同款视觉语言；
+   class 名同源，hash 前缀按包隔离）。 */
+
+.card {
+  --dsv-border: rgba(0, 0, 0, 0.08);
+  --dsv-label: #8e95a3;
+  --dsv-value: #1f2329;
+  border: 1px solid var(--dsv-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 560px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsv-value);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip {
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--dsv-label);
+  flex: none;
+}
+
+.meta {
+  font-size: 11px;
+  color: var(--dsv-label);
+}
+
+.badge {
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 7px;
+  border-radius: 4px;
+  flex: none;
+  font-weight: 600;
+}
+
+.badge[data-state='filled'] {
+  background: rgba(43, 164, 113, 0.14);
+  color: #2ba471;
+}
+
+.badge[data-state='rejected'] {
+  background: rgba(197, 73, 60, 0.14);
+  color: #c5493c;
+}
+
+.params {
+  font-size: 12px;
+  color: var(--dsv-label);
+  font-variant-numeric: tabular-nums;
+}
+
+.reason {
+  font-size: 12px;
+  line-height: 18px;
+  color: #c5493c;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -33,8 +33,9 @@
     "@dsh-trading/strategies": "workspace:^",
     "@dsh-trading/router": "workspace:^",
     "@dsh-trading/watchlist": "workspace:^",
-    "force-graph": "^1.51.0",
-    "lightweight-charts": "^5.2.1"
+    "lightweight-charts": "^5.2.1",
+    "@dsh-trading/client-ui-strategies": "workspace:^",
+    "@dsh-trading/client-ui-knowledge": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

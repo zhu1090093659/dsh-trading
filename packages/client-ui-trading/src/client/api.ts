@@ -270,3 +270,36 @@ export function subscribeTradingEvents(handlers: TradingEventHandlers): () => vo
     }
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* tradingBridge client 服务（issue #34 / P5）                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 中栏视图包（client-ui-strategies / client-ui-knowledge 及未来的第三方视图）
+ * 对桥的唯一依赖面。收口为 cordis client 服务（provide 'tradingBridge'），
+ * 原因有二：
+ * 1. 插件间协作必须走服务 inject（一切皆插件裁决——client 插件间不得 import
+ *    彼此内部模块）；
+ * 2. SSE 单例与 fetch 封装留在 shell 内（本模块），多视图包共享同一条
+ *    EventSource 连接——各包自开连接会随拆包数量线性堆积。
+ *
+ * 视图包不 import 本模块；未安装 shell 时 inject 回调不触发，视图静默不注册
+ * （可选依赖语义）。
+ */
+export interface TradingBridgeService {
+  fetchKlines: typeof fetchKlines
+  fetchCustomStrategies: typeof fetchCustomStrategies
+  fetchKnowledgeCards: typeof fetchKnowledgeCards
+  subscribeTradingEvents: typeof subscribeTradingEvents
+}
+
+/** 服务装配（shell apply 时以本模块函数 provide，零转发成本）。 */
+export function createTradingBridgeService(): TradingBridgeService {
+  return {
+    fetchKlines,
+    fetchCustomStrategies,
+    fetchKnowledgeCards,
+    subscribeTradingEvents,
+  }
+}

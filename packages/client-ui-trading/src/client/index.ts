@@ -19,6 +19,9 @@ import { validateCustomIndicatorAsync } from '@dsh-trading/indicators'
 import { createSelectionStore, createWatchlistStore } from './store.ts'
 import { createChartStateStore } from './chart-state.ts'
 import { indicators, markCustomIndicator, unmarkCustomIndicator } from './indicator-registry.ts'
+import { stageViews } from './stage-views.ts'
+import { createTradingBridgeService } from './api.ts'
+import { OrderCard, WatchlistChipCard } from './toolview.tsx'
 import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
 import { HomeHistory } from './HomeHistory.tsx'
@@ -79,6 +82,33 @@ export function apply(ctx: ClientContext): void {
   // 静态包的 slot 条目崩溃默认无人上报（监督缝只覆盖动态插件）——打到 console 可见化。
   ctx.slots.onEntryError((slot, _entry, error) => {
     console.error(`[dsh-trading] slot entry crashed: ${slot}`, error)
+  })
+
+  // 中栏视图开放注册面（issue #34 / P5）：provide tradingStageViews —— 策略/
+  // 知识/第三方视图包经 ctx.inject(['tradingStageViews'], …) register 定义即新增
+  // 中栏 tab；插件未安装时名册只有 quote，行情视图独立正常工作（可选依赖语义）。
+  // provide 由插件 fiber 持有（tradingIndicators 同款），插件卸载服务随之注销。
+  ctx.reflect.provide('tradingStageViews', stageViews)
+
+  // 视图包的桥依赖面：provide tradingBridge（K线/策略/知识卡 fetch + SSE 订阅
+  // 共享单例）。视图包不 import shell 内部模块，只经服务 inject。
+  ctx.reflect.provide('tradingBridge', createTradingBridgeService())
+
+  // quote 视图是 registry 的内建种子条目（stage-views.ts 工厂内写入）——tab 条
+  // 从名册统一渲染，MiddleStage 对 quote 走 QuoteStage 直引面。
+
+  // 对话内富卡片（issue #34 / P5 §5.5）：下单三态卡（4 市场 keyed 各一把 +
+  // 生成器注册）与自选 chip 卡。策略/知识卡的注册在各自视图包（归属随视图）。
+  ctx.slots.inject('tool.call.toolview', function* () {
+    for (const market of ['crypto', 'us', 'cn', 'hk'] as const) {
+      yield ctx.slots.register({
+        name: 'tool.call.toolview',
+        key: `${market}_place_order`,
+        locale: NS,
+      }, OrderCard as never)
+    }
+    yield ctx.slots.register({ name: 'tool.call.toolview', key: 'watchlist_add', locale: NS }, WatchlistChipCard as never)
+    yield ctx.slots.register({ name: 'tool.call.toolview', key: 'watchlist_select', locale: NS }, WatchlistChipCard as never)
   })
 
   // 指标插件桥（可选依赖）：client-ui-indicators 在 client 上下文提供
@@ -247,67 +277,6 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'stage.quote': '行情',
       'stage.strategy': '策略',
       'stage.knowledge': '知识库',
-      'strategy.horizon.short': '短线交易',
-      'strategy.horizon.swing': '波段操作',
-      'strategy.horizon.long': '长线投资',
-      'strategy.run': '运行回测',
-      'strategy.running': '回测计算中...',
-      'strategy.symbolLabel': '标的:',
-      'strategy.intervalDaily': '(日K)',
-      'strategy.error.noKlines': '未能获取到该标的的 K 线数据，无法执行回测',
-      'strategy.error.failed': '策略计算异常',
-      'strategy.metrics.totalReturn': '累计收益率',
-      'strategy.metrics.cagr': '年化复合增长率 (CAGR)',
-      'strategy.metrics.maxDrawdown': '最大回撤 (MDD)',
-      'strategy.metrics.sharpe': '夏普比率 (Sharpe)',
-      'strategy.metrics.winRate': '胜率 (Win Rate)',
-      'strategy.metrics.profitFactor': '盈亏比 (Profit Factor)',
-      'strategy.metrics.tradeCount': '交易笔数',
-      'strategy.metrics.tradeUnit': '笔',
-      'strategy.metrics.exposure': '市场暴露度 (Exposure)',
-      'strategy.trades.title': '交易明细流水',
-      'strategy.trades.empty': '回测区间内未触发交易信号',
-      'strategy.trades.entryTime': '开仓时间',
-      'strategy.trades.exitTime': '平仓时间',
-      'strategy.trades.entryPrice': '开仓均价',
-      'strategy.trades.exitPrice': '平仓均价',
-      'strategy.trades.holdingBars': '持仓根数',
-      'strategy.trades.netReturn': '单笔净收益率',
-      'strategy.trades.exitReason': '离场原因',
-      'strategy.empty.hint': '选择上方策略与参数后，点击「运行回测」查看绩效与权益曲线',
-      'knowledge.search.placeholder': '搜索卡片标题、摘要、标签...',
-      'knowledge.filter.tag': '主题标签',
-      'knowledge.filter.allTags': '全部标签',
-      'knowledge.filter.author': '来源作者',
-      'knowledge.filter.allAuthors': '全部作者',
-      'knowledge.filter.credibility': '可信度',
-      'knowledge.filter.allCredibility': '全部评级',
-      'knowledge.filter.sourceType': '来源平台',
-      'knowledge.filter.allSourceTypes': '全部平台',
-      'knowledge.filter.reset': '重置筛选',
-      'knowledge.credibility.high': '高可信度 (High)',
-      'knowledge.credibility.medium': '中可信度 (Medium)',
-      'knowledge.credibility.low': '低可信度 (Low)',
-      'knowledge.sourceType.bilibili': 'B站 (Bilibili)',
-      'knowledge.sourceType.wechat': '微信公众号 (WeChat)',
-      'knowledge.sourceType.manual': '手工录入 (Manual)',
-      'knowledge.empty.hint': '知识库暂无内容。把 B 站视频或公众号文章链接发给助手，说「沉淀到知识库」即可入库。',
-      'knowledge.empty.filtered': '未找到匹配当前筛选条件的知识卡片',
-      'knowledge.stats.cards': '张卡片',
-      'knowledge.stats.clusters': '个主题簇',
-      'knowledge.drawer.title': '知识卡片详情',
-      'knowledge.drawer.coreClaims': '核心论点',
-      'knowledge.drawer.factCheck': '事实核查 (三桶分类)',
-      'knowledge.drawer.verified': '经核实真实 (Verified)',
-      'knowledge.drawer.discrepancies': '有出入/夸大 (Discrepancies)',
-      'knowledge.drawer.unverifiable': '无法核实 (Unverifiable)',
-      'knowledge.drawer.takeaways': '可复用分析经验',
-      'knowledge.drawer.boundaries': '适用边界与避坑',
-      'knowledge.drawer.tickers': '关联标的',
-      'knowledge.drawer.related': '关联卡片',
-      'knowledge.drawer.openSource': '打开原始链接',
-      'knowledge.drawer.publishedAt': '发布日期',
-      'knowledge.drawer.author': '来源作者',
       'indicator.picker': '技术指标',
       'indicator.group.main': '主图指标',
       'indicator.group.sub': '副图指标',
@@ -375,67 +344,6 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'stage.quote': 'Chart',
       'stage.strategy': 'Strategies',
       'stage.knowledge': 'Knowledge',
-      'strategy.horizon.short': 'Short-term',
-      'strategy.horizon.swing': 'Swing',
-      'strategy.horizon.long': 'Long-term',
-      'strategy.run': 'Run Backtest',
-      'strategy.running': 'Running...',
-      'strategy.symbolLabel': 'Symbol & Interval:',
-      'strategy.intervalDaily': '(Daily)',
-      'strategy.error.noKlines': 'Failed to fetch klines for this symbol, cannot run backtest',
-      'strategy.error.failed': 'Strategy compute error',
-      'strategy.metrics.totalReturn': 'Total Return',
-      'strategy.metrics.cagr': 'CAGR',
-      'strategy.metrics.maxDrawdown': 'Max Drawdown',
-      'strategy.metrics.sharpe': 'Sharpe Ratio',
-      'strategy.metrics.winRate': 'Win Rate',
-      'strategy.metrics.profitFactor': 'Profit Factor',
-      'strategy.metrics.tradeCount': 'Trades',
-      'strategy.metrics.tradeUnit': 'trades',
-      'strategy.metrics.exposure': 'Market Exposure',
-      'strategy.trades.title': 'Trade Log',
-      'strategy.trades.empty': 'No trades generated in the backtest period',
-      'strategy.trades.entryTime': 'Entry Time',
-      'strategy.trades.exitTime': 'Exit Time',
-      'strategy.trades.entryPrice': 'Entry Price',
-      'strategy.trades.exitPrice': 'Exit Price',
-      'strategy.trades.holdingBars': 'Holding Bars',
-      'strategy.trades.netReturn': 'Net Return',
-      'strategy.trades.exitReason': 'Exit Reason',
-      'strategy.empty.hint': 'Select a strategy and parameters above, then click "Run Backtest"',
-      'knowledge.search.placeholder': 'Search title, summary, tags...',
-      'knowledge.filter.tag': 'Topic Tag',
-      'knowledge.filter.allTags': 'All Tags',
-      'knowledge.filter.author': 'Author',
-      'knowledge.filter.allAuthors': 'All Authors',
-      'knowledge.filter.credibility': 'Credibility',
-      'knowledge.filter.allCredibility': 'All Credibility',
-      'knowledge.filter.sourceType': 'Platform',
-      'knowledge.filter.allSourceTypes': 'All Platforms',
-      'knowledge.filter.reset': 'Reset',
-      'knowledge.credibility.high': 'High',
-      'knowledge.credibility.medium': 'Medium',
-      'knowledge.credibility.low': 'Low',
-      'knowledge.sourceType.bilibili': 'Bilibili',
-      'knowledge.sourceType.wechat': 'WeChat',
-      'knowledge.sourceType.manual': 'Manual',
-      'knowledge.empty.hint': 'No knowledge cards yet. Send a Bilibili video or WeChat article link to the assistant and say "Save to knowledge base" to ingest.',
-      'knowledge.empty.filtered': 'No knowledge cards match the current filter criteria',
-      'knowledge.stats.cards': 'Cards',
-      'knowledge.stats.clusters': 'Clusters',
-      'knowledge.drawer.title': 'Knowledge Card Details',
-      'knowledge.drawer.coreClaims': 'Core Claims',
-      'knowledge.drawer.factCheck': 'Fact Check (3 Buckets)',
-      'knowledge.drawer.verified': 'Verified',
-      'knowledge.drawer.discrepancies': 'Discrepancies',
-      'knowledge.drawer.unverifiable': 'Unverifiable',
-      'knowledge.drawer.takeaways': 'Reusable Takeaways',
-      'knowledge.drawer.boundaries': 'Boundaries & Pitfalls',
-      'knowledge.drawer.tickers': 'Related Tickers',
-      'knowledge.drawer.related': 'Related Cards',
-      'knowledge.drawer.openSource': 'Open Original URL',
-      'knowledge.drawer.publishedAt': 'Published At',
-      'knowledge.drawer.author': 'Author',
       'indicator.picker': 'Indicators',
       'indicator.group.main': 'Main chart',
       'indicator.group.sub': 'Sub-chart',
