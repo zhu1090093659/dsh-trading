@@ -1,5 +1,11 @@
 # Agent Note: 修复 PTC 调度器 Symbol 隔离与 client-ui-trading 依赖服务注入
 
+> **SUPERSEDED (2026-08-31 晚)**：本 note 中「uiWorkspace → workspaces」的服务名
+> 裁决对 alpha.2 宿主正确并保留，但「按 0.1.1-rc.2 旧宿主语义适配」的背景已随
+> 宿主升级到 0.1.2-alpha.2 失效；后续修正见
+> `2026-08-31-dsh-alpha2-host-regression-okx-routing-and-rail.md`
+> （含 apply 时刻捕获服务的竞态整改——inject 边不保证 apply 时序）。
+
 Status: implemented
 
 ## Problem

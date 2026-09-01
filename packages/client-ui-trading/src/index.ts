@@ -27,9 +27,14 @@ import {
   type MarketDataRegistryLike,
 } from './bridge.ts'
 
-/** webServer 的最小结构面（避免对本仓未安装的宿主包产生类型依赖）。 */
+/** webServer / connection 的最小结构面（避免对本仓未安装的宿主包产生类型依赖）。 */
 interface WebServerLike {
   register(route: { kind: 'exact' | 'prefix'; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void> }): void
+}
+
+interface ConnectionLike {
+  /** 返回拒绝状态码（401/403），undefined = 已认证放行（alpha.2 官方栅栏，同 /api）。 */
+  requestRejection(req: IncomingMessage): number | undefined
 }
 
 /** 本插件不硬依赖任何服务（headless 宿主零要求）；web 面依赖在 apply 内声明。 */
@@ -77,9 +82,10 @@ export function apply(ctx: Context): void {
     }
   })
 
-  ctx.inject(['webServer'], (webCtx) => {
+  ctx.inject(['webServer', 'connection'], (webCtx) => {
     const webServer = webCtx.get('webServer') as unknown as WebServerLike | undefined
-    if (webServer === undefined) return
+    const connection = webCtx.get('connection') as unknown as ConnectionLike | undefined
+    if (webServer === undefined || connection === undefined) return
     // registry-first（2026-08-30 注册表模式）：每请求经注册表按路由当前值解析——
     // settings 切换交易所 GUI 即刻生效（热切换）；注册表缺席回退旧市场键直读。
     const host = createBridgeHost({
@@ -94,6 +100,14 @@ export function apply(ctx: Context): void {
       kind: 'prefix' as const,
       path: '/dshtrading/api',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
+        // 与官方 RPC 通道同款栅栏（alpha.2 dsh-client-connection register 同构）：
+        // Host/Origin fence + browser auth cookie，未认证一律 401/403。
+        const rejection = connection.requestRejection(req)
+        if (rejection !== undefined) {
+          res.writeHead(rejection)
+          res.end(rejection === 401 ? 'unauthorized' : 'forbidden')
+          return
+        }
         try {
           const url = new URL(req.url ?? '/', 'http://dsh.local')
           // 路由是前缀挂载：剥掉挂载点后按子路径分发。

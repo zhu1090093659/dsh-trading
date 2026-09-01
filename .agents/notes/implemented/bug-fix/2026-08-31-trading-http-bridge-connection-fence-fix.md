@@ -1,5 +1,11 @@
 # Agent Note: 修复行情 HTTP 桥 connection.requestRejection 导致的 400 异常
 
+> **SUPERSEDED (2026-08-31 晚)**：本 note 的根因结论建立在已回归的旧宿主
+> `@deepseek-ai/dsh@0.1.1-rc.2` 上——alpha.2 宿主的 `connection.requestRejection`
+> 存在且是官方栅栏模式，本 note 依据其删除认证栅栏的改动已在
+> `2026-08-31-dsh-alpha2-host-regression-okx-routing-and-rail.md` 中回滚。
+> 400 的公共根因是宿主世代回归，非本 note 所述「上游缺方法」。
+
 Status: implemented
 
 ## Problem

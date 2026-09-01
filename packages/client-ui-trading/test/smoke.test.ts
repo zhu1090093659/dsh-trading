@@ -13,7 +13,7 @@ interface Route {
   handler: (req: Partial<IncomingMessage>, res: Partial<ServerResponse>) => Promise<void>
 }
 
-function makeCtx(): {
+function makeCtx(options: { rejection?: number } = {}): {
   ctx: never
   registered: Route[]
 } {
@@ -21,9 +21,13 @@ function makeCtx(): {
   const webServer = {
     register: (route: Route) => { registered.push(route) },
   }
+  const connection = {
+    requestRejection: () => options.rejection,
+  }
   const webCtx = {
     get: (name: string) => {
       if (name === 'webServer') return webServer
+      if (name === 'connection') return connection
       if (name === 'tradingCryptoMarketData') {
         return {
           getTicker: async (symbol: string) => ({ symbol, price: 42, timestamp: 1 }),
@@ -76,6 +80,21 @@ describe('@dsh-trading/client-ui-trading node half', () => {
     expect(head).toBe(200)
     expect(headers['cache-control']).toBe('no-store')
     expect(JSON.parse(body)).toEqual({ markets: [{ id: 'crypto' }] })
+  })
+
+  it('未认证请求被 connection 栅栏拒绝（401，不进桥）', async () => {
+    const { ctx, registered } = makeCtx({ rejection: 401 })
+    apply(ctx)
+    const route = registered[0] as Route
+    let head: number | undefined
+    let body = ''
+    const res = {
+      writeHead: (status: number) => { head = status },
+      end: (text?: string) => { body = text ?? '' },
+    }
+    await route.handler({ url: '/dshtrading/api/markets', method: 'GET' } as IncomingMessage, res as unknown as ServerResponse)
+    expect(head).toBe(401)
+    expect(body).toBe('unauthorized')
   })
 
   it('未知路径返回 404 BridgeProtocolError JSON', async () => {
