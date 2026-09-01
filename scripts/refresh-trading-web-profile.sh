@@ -18,7 +18,12 @@ set -euo pipefail
 PROFILE="$HOME/.dsh/profiles/trading-web"
 HOST_ROOT="/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
 # 与宿主 CLI 树重叠、必须保持单一模块实例的核心包（模块级状态/Symbol 载体）。
-CORE_PKGS=(dsh-web-app dsh-tools cosmokit schemastery dsh-agent-presets dsh-brand dsh-util-values)
+# 2026-09-02 扩充：profile-cohort-check 查出 router 构建产物内嵌 0.1.2-alpha.2 残留
+# 拷贝（dsh-llm/dsh-scope/dsh-timeout/dsh-typert-protocol/dsh-util-crypto，仓库
+# lockfile 混代遗留）及三份同版实体拷贝（dsh-settings/dsh-skill/dsh-tool-cordis），
+# 全部并入 symlink 归一，消除模块实例割裂类 FAIL/WARN。
+CORE_PKGS=(dsh-web-app dsh-tools cosmokit schemastery dsh-agent-presets dsh-brand dsh-util-values \
+  dsh-settings dsh-skill dsh-tool-cordis dsh-llm dsh-scope dsh-timeout dsh-typert-protocol dsh-util-crypto)
 
 echo "== 停止运行中的 trading-web 实例 =="
 pgrep -f "profile trading-web" | xargs kill 2>/dev/null || true
