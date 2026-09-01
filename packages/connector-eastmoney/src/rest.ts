@@ -55,6 +55,19 @@ export function parseIntervalMs(interval: Interval): number {
 }
 
 /**
+ * 上游分精度整数（×100，如昨收 f60=129740 → 1297.40）→ 数值；
+ * '-'/‘−’ 停牌占位或缺失返回 undefined。
+ */
+function parseScaledHundred(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value / 100 : undefined
+  if (typeof value === 'string' && value !== '-' && value !== '−') {
+    const parsed = parseFloat(value)
+    return Number.isNaN(parsed) ? undefined : parsed / 100
+  }
+  return undefined
+}
+
+/**
  * 将标准代码（如 600519.SH / 000001.SZ / 600519 / 000001）转为东财 secid。
  * 上海（60/68/51等）= 1.xxxxxx
  * 深圳（00/30/15等）= 0.xxxxxx
@@ -139,7 +152,8 @@ export class EastmoneyRestClient {
 
   async getTicker(symbol: string): Promise<Ticker> {
     const { secid, canonical } = toEastmoneySecid(symbol)
-    const url = `${this.baseUrl}/api/qt/stock/get?secid=${secid}&fields=f43,f44,f45,f46,f47,f48,f57,f58,f86,f169,f170`
+    // f60=昨收 f169=涨跌额 f170=涨跌幅（均为 ×100 分精度整数；'-' 停牌占位）。
+    const url = `${this.baseUrl}/api/qt/stock/get?secid=${secid}&fields=f43,f44,f45,f46,f47,f48,f57,f58,f60,f86,f169,f170`
     const res = await this.requestJson<{ data?: Record<string, unknown> }>(url)
 
     if (!res.data) {
@@ -157,12 +171,17 @@ export class EastmoneyRestClient {
     const price = rawPrice > 0 ? rawPrice : 0
     const volume = typeof d.f47 === 'number' ? d.f47 : typeof d.f47 === 'string' ? parseFloat(d.f47) : 0
     const timestamp = typeof d.f86 === 'number' ? d.f86 * 1000 : Date.now()
+    // 官方昨收锚点（与 tencent fields[4] 同语义）：涨跌幅基准，UI 头部/侧栏直接消费。
+    const prevClose = parseScaledHundred(d.f60)
+    const changePercent = parseScaledHundred(d.f170)
 
     return {
       symbol: canonical,
       price,
       volume: volume > 0 ? volume : 0,
       timestamp,
+      ...(prevClose !== undefined && prevClose > 0 ? { prevClose } : {}),
+      ...(changePercent !== undefined ? { changePercent } : {}),
     }
   }
 

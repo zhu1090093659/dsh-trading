@@ -38,7 +38,7 @@ describe('AkshareRestClient 符号与周期映射', () => {
 })
 
 describe('AkshareRestClient.getTicker', () => {
-  it('拉取并解析 A 股 Ticker（分精度价格除以 100）', async () => {
+  it('拉取并解析 A 股 Ticker（分精度价格除以 100，含官方昨收/涨跌幅）', async () => {
     const { impl } = stubFetch([
       {
         match: '/api/qt/stock/get',
@@ -46,7 +46,9 @@ describe('AkshareRestClient.getTicker', () => {
           data: {
             f43: 175050,
             f47: 25000,
+            f60: 174800,
             f86: 1725000000,
+            f170: 15,
           },
         },
       },
@@ -59,6 +61,8 @@ describe('AkshareRestClient.getTicker', () => {
       price: 1750.5,
       volume: 25000,
       timestamp: 1725000000000,
+      prevClose: 1748,
+      changePercent: 0.15,
     })
   })
 })

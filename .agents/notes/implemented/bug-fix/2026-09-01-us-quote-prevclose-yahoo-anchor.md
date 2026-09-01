@@ -56,3 +56,25 @@ Status: implemented
   「316.85 -2.85 -0.89% 昨收 319.70」，与富途截图一致。
 - 遗留非 bug 差异：开 319.56 vs 富途 319.60、量 4066.74万 vs 4124.08万，为
   数据源口径差异（Yahoo vs 富途），不属于本次昨收错位问题。
+
+## Addendum（同日全市场审计）：昨收锚点跨市场核查与 cn 备选连接器加固
+
+用户追加要求核查其他市场是否同类问题。结论与动作（2026-09-01 盘前实测）：
+
+- **默认路由全部健康**（router DEFAULT_MARKETS：crypto=binance, us=yahoo,
+  cn/hk=tencent）。真实网络交叉验证：CN 茅台 prevClose 1297.4=08/28 收盘
+  （+0.16% 与官方一致）；HK 腾讯 prevClose 455.2=08/28 收盘（-0.48%）；binance
+  BTCUSDT prevClose 与 changePercent 完全自洽（24h 滚动锚，加密惯例）；yahoo
+  ^GSPC/^IXIC/^DJI 锚点正确（UI 指数条 -0.33%/-0.12%/-0.70% 吻合）。tencent
+  cn/hk 早已透出官方昨收（fields[4]）与官方涨跌幅（fields[32]）。
+- **cn 备选连接器加固（本次改动）**：eastmoney/akshare 的 getTicker 同打
+  东方财富 push2 `stock/get` 端点，但丢弃了官方昨收字段——eastmoney 甚至
+  请求了 f169/f170 却不映射，f60（昨收）未请求。补齐：两连接器请求并透出
+  `prevClose`（f60/100）与 `changePercent`（f170/100）。实测与 tencent 官方
+  值逐位一致（1297.4 / 0.16）。
+- **其余 14 个备选连接器**（stooq/fmp/finnhub/polygon/alpaca/ibkr/tiger/
+  futu/longbridge/qmt/tushare/ccxt 等）不产 prevClose，UI 落日 K 推算兜底：
+  序列完整时语义正确（盘中含进行中 bar→昨日收盘；盘后冻结上一会话口径），
+  但与 Yahoo 同类的「序列缺根/滞后」风险仍在。均为凭证制或本出口不可达
+  （stooq 被 egress 阻断），无法留真实网络证据，留作后续切换 provider 时
+  的加固候选；不做无验证的盲改。

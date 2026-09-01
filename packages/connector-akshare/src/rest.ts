@@ -73,17 +73,22 @@ export class AkshareRestClient {
 
   async getTicker(symbol: string): Promise<Ticker> {
     const { secid, canonical } = toEastmoneySecid(symbol)
-    const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f43,f47,f86`
-    const res = await this.requestJson<{ data?: { f43?: number; f47?: number; f86?: number } }>(url)
+    // f60=昨收 f170=涨跌幅（×100 分精度整数；官方昨收锚点，UI 头部/侧栏直接消费）。
+    const url = `https://push2.eastmoney.com/api/qt/stock/get?secid=${secid}&fields=f43,f47,f60,f86,f170`
+    const res = await this.requestJson<{ data?: { f43?: number; f47?: number; f60?: number; f86?: number; f170?: number } }>(url)
     if (!res.data) {
       throw new TradingServiceError('TRADING_SYMBOL_NOT_FOUND', `AkShare/Eastmoney quote not found: ${symbol}`)
     }
     const rawPrice = typeof res.data.f43 === 'number' ? res.data.f43 / 100 : 0
+    const prevClose = typeof res.data.f60 === 'number' && res.data.f60 > 0 ? res.data.f60 / 100 : undefined
+    const changePercent = typeof res.data.f170 === 'number' && Number.isFinite(res.data.f170) ? res.data.f170 / 100 : undefined
     return {
       symbol: canonical,
       price: rawPrice > 0 ? rawPrice : 0,
       volume: res.data.f47 ?? 0,
       timestamp: res.data.f86 ? res.data.f86 * 1000 : Date.now(),
+      ...(prevClose !== undefined ? { prevClose } : {}),
+      ...(changePercent !== undefined ? { changePercent } : {}),
     }
   }
 

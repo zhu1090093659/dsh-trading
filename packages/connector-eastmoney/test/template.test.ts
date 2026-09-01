@@ -48,7 +48,7 @@ describe('EastmoneyRestClient 符号与周期映射', () => {
 })
 
 describe('EastmoneyRestClient.getTicker', () => {
-  it('拉取并解析 A 股 Ticker 快照（分精度整数除以 100）', async () => {
+  it('拉取并解析 A 股 Ticker 快照（分精度整数除以 100，含官方昨收/涨跌幅）', async () => {
     const { impl, urls } = stubFetch([
       {
         match: '/api/qt/stock/get',
@@ -57,7 +57,9 @@ describe('EastmoneyRestClient.getTicker', () => {
             f43: 175050,
             f47: 25000,
             f58: '贵州茅台',
+            f60: 174800,
             f86: 1725000000,
+            f170: 15,
           },
         },
       },
@@ -66,11 +68,14 @@ describe('EastmoneyRestClient.getTicker', () => {
     const ticker = await client.getTicker('600519.SH')
 
     expect(urls[0]).toContain('secid=1.600519')
+    expect(urls[0]).toContain('f60')
     expect(ticker).toEqual({
       symbol: '600519.SH',
       price: 1750.5,
       volume: 25000,
       timestamp: 1725000000000,
+      prevClose: 1748,
+      changePercent: 0.15,
     })
   })
 
