@@ -18,13 +18,13 @@ import type { IndicatorRegistry } from '@dsh-trading/indicators'
 import { validateCustomIndicator } from '@dsh-trading/indicators'
 import { createSelectionStore, createWatchlistStore } from './store.ts'
 import { createChartStateStore } from './chart-state.ts'
-import { indicators } from './indicator-registry.ts'
+import { indicators, markCustomIndicator, unmarkCustomIndicator } from './indicator-registry.ts'
 import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
 import { HomeHistory } from './HomeHistory.tsx'
 import { SessionRail } from './SessionRail.tsx'
 import { foldStore, marketFoldStore } from './fold-store.ts'
-import { fetchCustomIndicators } from './api.ts'
+import { deleteCustomIndicator, fetchCustomIndicators, subscribeTradingEvents } from './api.ts'
 import './tokens.css'
 import './shell-pad.css'
 import type { MarketLocaleKey } from './contract.ts'
@@ -89,20 +89,29 @@ export function apply(ctx: ClientContext): void {
     for (const definition of service.list()) indicators.register(definition)
   })
 
-  // Issue #19：异步拉取并注册已持久化的自定义指标
-  void (async () => {
+  // Issue #19 + #30：异步拉取并注册已持久化的自定义指标；SSE 'indicators' 失效
+  // 信号到达时重拉（register 同名覆盖幂等），indicator_author 入库无需刷新即上榜。
+  const loadCustomIndicators = async (): Promise<void> => {
     try {
       const customList = await fetchCustomIndicators()
       for (const item of customList) {
         const result = validateCustomIndicator(item)
         if (result.ok) {
           indicators.register(result.definition)
+          markCustomIndicator(result.definition.id)
         }
       }
     } catch (e) {
       console.warn('[dsh-trading] failed to fetch custom indicators:', e)
     }
-  })()
+  }
+  void loadCustomIndicators()
+
+  // SSE 失效信号订阅（issue #30）：EventSource 单例在 api.ts（多视图共享一条
+  // 连接）；EventSource 不可用或桥 503 → 一次性 fetch 的现状兜底（不劣于现状）。
+  subscribeTradingEvents({
+    indicators: () => { void loadCustomIndicators() },
+  })
 
   // 左侧停靠：自选面板（官方浮层通道；支持展开与折叠态 MarketRail）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
@@ -158,6 +167,15 @@ export function apply(ctx: ClientContext): void {
       hooks: { selection, chart },
       toggleIndicator: (id) => { chart.togglePreset(id) },
       setIndicatorParams: (id, params) => { chart.setParams(id, params) },
+      deleteIndicator: async (id) => {
+        const ok = await deleteCustomIndicator(id)
+        if (ok) {
+          indicators.unregister(id)
+          unmarkCustomIndicator(id)
+          chart.removeInstance(id)
+        }
+        return ok
+      },
     }),
   }, QuotePane))
 }
@@ -290,6 +308,8 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'indicator.params': '参数',
       'indicator.apply': '应用',
       'indicator.cancel': '取消',
+      'indicator.delete': '删除',
+      'indicator.deleteConfirm': '确定删除该自定义指标？已持久化的定义将从指标库移除。',
     },
     en: {
       'tab.watch': 'Watchlist',
@@ -416,6 +436,8 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'indicator.params': 'Params',
       'indicator.apply': 'Apply',
       'indicator.cancel': 'Cancel',
+      'indicator.delete': 'Delete',
+      'indicator.deleteConfirm': 'Delete this custom indicator? The persisted definition will be removed from the library.',
     },
   }
 }

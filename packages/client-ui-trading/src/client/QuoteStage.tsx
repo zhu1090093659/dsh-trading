@@ -14,7 +14,7 @@ import {
   INTRADAY_INTERVALS, changePercent, directionColor,
   fmtChange, fmtClock, fmtCompact, fmtPercent, fmtPrice,
 } from './format.ts'
-import { indicators } from './indicator-registry.ts'
+import { indicators, isCustomIndicator } from './indicator-registry.ts'
 import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indicators'
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
@@ -55,9 +55,11 @@ export interface QuoteStageProps {
   useChart: UseStoreState<ChartState>
   toggleIndicator: (id: string) => void
   setIndicatorParams: (id: string, params: Record<string, number>) => void
+  /** 删除自定义指标（issue #30 删除入口；仅自定义行渲染按钮）。 */
+  deleteIndicator: (id: string) => Promise<boolean>
 }
 
-export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams }: QuoteStageProps) {
+export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
   const market: MarketId | undefined = instrument?.market
   const symbol = instrument?.symbol
@@ -309,6 +311,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 setIndicatorParams(id, params)
                 setEditingIndicator(null)
               }}
+              onDelete={(id) => { void deleteIndicator(id) }}
               onClose={() => {
                 setPickerOpen(false)
                 setEditingIndicator(null)
@@ -402,9 +405,10 @@ function IndicatorPicker(props: {
   onToggle: (id: string) => void
   onEdit: (id: string) => void
   onApply: (id: string, params: Record<string, number>) => void
+  onDelete: (id: string) => void
   onClose: () => void
 }): React.JSX.Element {
-  const { t, instances, editingIndicator, onToggle, onEdit, onApply, onClose } = props
+  const { t, instances, editingIndicator, onToggle, onEdit, onApply, onDelete, onClose } = props
   const definitions = indicators.list()
   const empty = definitions.length === 0
   return (
@@ -425,6 +429,7 @@ function IndicatorPicker(props: {
               onToggle={onToggle}
               onEdit={onEdit}
               onApply={onApply}
+              onDelete={onDelete}
             />
             <PickerGroup
               title={t('indicator.group.sub')}
@@ -435,6 +440,7 @@ function IndicatorPicker(props: {
               onToggle={onToggle}
               onEdit={onEdit}
               onApply={onApply}
+              onDelete={onDelete}
             />
           </>
         )}
@@ -452,8 +458,9 @@ function PickerGroup(props: {
   onToggle: (id: string) => void
   onEdit: (id: string) => void
   onApply: (id: string, params: Record<string, number>) => void
+  onDelete: (id: string) => void
 }): React.JSX.Element {
-  const { title, definitions, instances, editingIndicator, t, onToggle, onEdit, onApply } = props
+  const { title, definitions, instances, editingIndicator, t, onToggle, onEdit, onApply, onDelete } = props
   return (
     <div className={css.pickerGroup}>
       <div className={css.pickerGroupTitle}>{title}</div>
@@ -478,6 +485,19 @@ function PickerGroup(props: {
                 onClick={() => onEdit(definition.id)}
               >
                 {t('indicator.params')}
+              </button>
+            )}
+            {isCustomIndicator(definition.id) && (
+              <button
+                type="button"
+                className={css.pickerParams}
+                title={t('indicator.delete')}
+                aria-label={t('indicator.delete')}
+                onClick={() => {
+                  if (window.confirm(t('indicator.deleteConfirm'))) onDelete(definition.id)
+                }}
+              >
+                {t('indicator.delete')}
               </button>
             )}
             {editing && instance !== null && (

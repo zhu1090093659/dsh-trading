@@ -24,6 +24,8 @@ export interface ChartStateStore extends WritableObservable<ChartState> {
   togglePreset(id: string): void
   /** 更新（或补建）某 preset 的唯一实例参数。 */
   setParams(id: string, params: Record<string, number>): void
+  /** 移除某 preset 的激活实例（自定义指标删除用；无实例时静默）。 */
+  removeInstance(id: string): void
   instanceFor(id: string): IndicatorInstance | undefined
   isActive(id: string): boolean
 }
@@ -61,6 +63,10 @@ export function createChartStateStore(registry: IndicatorRegistry): ChartStateSt
           ? current.instances.map(instance => instance.id === id ? { id, params: clamped } : instance)
           : [...current.instances, { id, params: clamped }] }
       })
+      persist()
+    },
+    removeInstance(id) {
+      store.update((current) => ({ instances: current.instances.filter(instance => instance.id !== id) }))
       persist()
     },
     instanceFor(id) {

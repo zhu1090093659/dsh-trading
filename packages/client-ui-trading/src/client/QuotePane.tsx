@@ -27,6 +27,8 @@ export interface QuotePaneInjected {
   }
   toggleIndicator: (id: string) => void
   setIndicatorParams: (id: string, params: Record<string, number>) => void
+  /** 删除自定义指标（issue #30）：桥 DELETE → 注销注册表 + 移除激活实例。 */
+  deleteIndicator: (id: string) => Promise<boolean>
 }
 
 export type QuotePaneProps =
@@ -41,7 +43,7 @@ interface Rect {
   height: number
 }
 
-export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, useSessions }: QuotePaneProps) {
+export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator, useSessions }: QuotePaneProps) {
   const [rect, setRect] = useState<Rect | null>(null)
 
   // 对话列在场判据：有当前会话（含首帧恢复），不要求会话已有内容——
@@ -99,7 +101,7 @@ export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndic
     >
       {/* MiddleStage 的 slot 运行时面（viewRequest 等）在面板场景不需要，
           只取 t/两个 store hook 与指标动作。 */}
-      <MiddleStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams } as never)} />
+      <MiddleStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator } as never)} />
     </div>
   )
 }

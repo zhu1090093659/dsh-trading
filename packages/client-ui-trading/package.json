@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@dsh-trading/api": "workspace:^",
+    "@dsh-trading/eventbus": "workspace:^",
     "@dsh-trading/indicators": "workspace:^",
     "@dsh-trading/knowledge": "workspace:^",
     "@dsh-trading/strategies": "workspace:^",

@@ -90,3 +90,63 @@ export async function fetchKnowledgeCards(): Promise<KnowledgeCard[]> {
     return []
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* SSE 失效信号订阅（issue #30 / P1）                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * store 词汇（v1）：镜像 host 半 @dsh-trading/eventbus 的 TradingEventStore。
+ * 浏览器半不 import node 包（避免把 cordis 拖进 client bundle）——词汇是封闭
+ * 小集合，镜像漂移的代价是 handler 不触发（降级为现状），可接受。
+ */
+export type TradingEventStoreName =
+  | 'indicators'
+  | 'strategies'
+  | 'knowledge'
+  | 'watchlists'
+  | 'selection'
+  | 'routing'
+
+type TradingEventHandlers = Partial<Record<TradingEventStoreName, () => void>>
+
+/** 模块级单例：多视图共享一条 EventSource 连接（多标签页各自一条，天然隔离）。 */
+let tradingEventSource: EventSource | null = null
+const tradingEventListeners = new Set<(store: TradingEventStoreName) => void>()
+
+function ensureTradingEventSource(): void {
+  if (tradingEventSource !== null) return
+  // 无 EventSource（老浏览器/非 web 环境）→ 一次性 fetch 的现状兜底。
+  if (typeof window === 'undefined' || typeof EventSource === 'undefined') return
+  const source = new EventSource('/dshtrading/api/events')
+  source.addEventListener('store.changed', (event) => {
+    try {
+      const data = JSON.parse((event as MessageEvent).data as string) as { store?: string }
+      if (typeof data.store !== 'string') return
+      for (const listener of [...tradingEventListeners]) listener(data.store as TradingEventStoreName)
+    } catch {
+      /* 坏帧忽略（总线只发 JSON 信号，正常不会发生） */
+    }
+  })
+  source.onerror = () => {
+    /* EventSource 原生自动重连；桥未挂载（503）时持续失败 = 降级现状，不打扰用户 */
+  }
+  tradingEventSource = source
+}
+
+/**
+ * 订阅失效信号：store 名 → refetch 回调。返回退订函数；最后一个订阅者退订时
+ * 关闭连接（视图互斥挂载下 quote/strategy/knowledge 轮流订阅不堆积）。
+ */
+export function subscribeTradingEvents(handlers: TradingEventHandlers): () => void {
+  ensureTradingEventSource()
+  const listener = (store: TradingEventStoreName): void => { handlers[store]?.() }
+  tradingEventListeners.add(listener)
+  return () => {
+    tradingEventListeners.delete(listener)
+    if (tradingEventListeners.size === 0 && tradingEventSource !== null) {
+      tradingEventSource.close()
+      tradingEventSource = null
+    }
+  }
+}

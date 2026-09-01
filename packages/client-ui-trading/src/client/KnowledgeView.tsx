@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { buildGraph, type KnowledgeCard, type KnowledgeGraphData } from '@dsh-trading/knowledge'
-import { fetchKnowledgeCards } from './api.ts'
+import { fetchKnowledgeCards, subscribeTradingEvents } from './api.ts'
 import { readJson, writeJson } from './store.ts'
 import { IconKnowledge, IconSearch } from './icons.tsx'
 import { KnowledgeGraph, type KnowledgeGraphHandle } from './KnowledgeGraph.tsx'
@@ -85,6 +85,12 @@ export function KnowledgeView({ t }: KnowledgeViewProps) {
   useEffect(() => {
     void loadCards()
   }, [])
+
+  // SSE 失效信号订阅（issue #30 / P1）：knowledge_ingest 入库 / 更新后本视图
+  // 实时刷新，无需刷新页面；EventSource 不可用时退化为一次性加载（现状）。
+  useEffect(() => subscribeTradingEvents({
+    knowledge: () => { void loadCards() },
+  }), [])
 
   // 3. 提取所有可用筛选候选项
   const { allTags, allAuthors } = useMemo(() => {

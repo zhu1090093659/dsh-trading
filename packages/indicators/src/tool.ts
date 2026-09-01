@@ -119,10 +119,12 @@ export function createGetIndicatorsTool(options: GetIndicatorsToolOptions) {
 
 export interface AuthorIndicatorToolOptions {
   store: CustomIndicatorStore
+  /** 可选：指标成功落盘后的回调（issue #30：事件总线 emit('indicators') 的接线点）。 */
+  onWritten?: (record: CustomIndicatorRecord) => void
 }
 
 export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
-  const { store } = options
+  const { store, onWritten } = options
 
   return defineTool({
     name: 'indicator_author',
@@ -206,6 +208,7 @@ export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
       }
 
       await store.save(result.record)
+      onWritten?.(result.record)
 
       const paramSummary = result.record.params.map(p => `${p.key}=${p.default}`).join(', ')
       return (

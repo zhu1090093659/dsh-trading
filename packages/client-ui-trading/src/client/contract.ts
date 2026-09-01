@@ -111,6 +111,8 @@ export type MarketLocaleKey =
   | 'indicator.params'
   | 'indicator.apply'
   | 'indicator.cancel'
+  | 'indicator.delete'
+  | 'indicator.deleteConfirm'
   | 'interval.1m'
   | 'interval.3m'
   | 'interval.5m'

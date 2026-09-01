@@ -23,6 +23,8 @@ export interface IndicatorRegistry {
   instanceKey(instance: IndicatorInstance): string
   /** 实例参数按 schema clamp（防 localStorage 脏值越界）。 */
   clampParams(definition: IndicatorDefinition, params: Record<string, number>): Record<string, number>
+  /** 注销指标（自定义指标删除用）；未知 id 静默跳过，名册变化通知订阅者。 */
+  unregister(id: string): void
   /** 持久化读回的实例列表净化：未知 id 丢弃、参数 clamp、按 id 去重。 */
   sanitizeInstances(instances: unknown): IndicatorInstance[]
   /** 订阅名册变化（注册/覆盖）；返回退订函数。UI 据此重渲染名册。 */
@@ -47,6 +49,11 @@ export function createIndicatorRegistry(): IndicatorRegistry {
 
   return {
     register,
+    unregister(id) {
+      if (!registry.delete(id)) return
+      version += 1
+      for (const listener of listeners) listener()
+    },
     get: id => registry.get(id),
     list: () => [...registry.values()],
     defaultParams(definition) {

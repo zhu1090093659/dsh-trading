@@ -7,3 +7,21 @@
 import { createIndicatorRegistry } from '@dsh-trading/indicators'
 
 export const indicators = createIndicatorRegistry()
+
+/**
+ * 自定义指标 id 跟踪（issue #30 删除入口）：从桥加载时登记、删除成功时移除；
+ * 指标选择器 UI 据此只给自定义行渲染删除按钮（预置/插件指标不可删）。
+ */
+const customIds = new Set<string>()
+
+export function markCustomIndicator(id: string): void {
+  customIds.add(id)
+}
+
+export function unmarkCustomIndicator(id: string): void {
+  customIds.delete(id)
+}
+
+export function isCustomIndicator(id: string): boolean {
+  return customIds.has(id)
+}

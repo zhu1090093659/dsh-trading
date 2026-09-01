@@ -41,6 +41,12 @@
     - id: dsh-trading-client-ui-settings
       name: '@dsh-trading/client-ui-settings'
 
+    # 失效信号事件总线（issue #30 / P1）：provide tradingEvents 服务（emit/subscribe/
+    # per-store revision，零 HTTP 零业务数据）；能力包工具与桥写入状态后 emit，
+    # /dshtrading/api/events（SSE）以本服务为数据源出浏览器。
+    - id: dsh-trading-eventbus
+      name: '@dsh-trading/eventbus'
+
     # 交易 GUI 壳（第二阶段富途式三栏，2026-08-30）：左栏市场/自选遮蔽
     # sidebar.workspaces、中栏 conversation.view 加行情 tab、右栏 shell.overlay
     # 会话面板；node 半注册 /dshtrading/api 行情桥（web 宿主，headless 挂起无害）。

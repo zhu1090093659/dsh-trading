@@ -18,7 +18,13 @@ import type {
 
 export { createFileKnowledgeCardStore }
 
-export function createKnowledgeIngestTool(store: KnowledgeCardStore) {
+export interface KnowledgeIngestToolOptions {
+  /** 可选：卡片成功落盘后的回调（issue #30：事件总线 emit('knowledge') 的接线点）。 */
+  onWritten?: (card: KnowledgeCard) => void
+}
+
+export function createKnowledgeIngestTool(store: KnowledgeCardStore, options: KnowledgeIngestToolOptions = {}) {
+  const { onWritten } = options
   return defineTool({
     name: 'knowledge_ingest',
     description:
@@ -186,6 +192,7 @@ export function createKnowledgeIngestTool(store: KnowledgeCardStore) {
 
       const card = validation.card
       await store.save(card)
+      onWritten?.(card)
 
       const isUpdate = !!existingByUrl
       const actionDesc = isUpdate ? '成功更新已有知识卡片' : '成功创建新知识卡片'

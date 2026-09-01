@@ -13,6 +13,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dsh-trading/api'
+import type { TradingEventsService } from '@dsh-trading/eventbus'
 import { createFileCustomIndicatorStore, createAuthorIndicatorTool } from '@dsh-trading/indicators/tool'
 import { createFileKnowledgeCardStore, createKnowledgeIngestTool, createKnowledgeSearchTool } from '@dsh-trading/knowledge/tool'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -26,6 +27,7 @@ import {
   dispatchBridgeRequest,
   type MarketDataRegistryLike,
 } from './bridge.ts'
+import { attachEventStream } from './sse.ts'
 
 /** webServer / connection 的最小结构面（避免对本仓未安装的宿主包产生类型依赖）。 */
 interface WebServerLike {
@@ -61,16 +63,28 @@ export function apply(ctx: Context): void {
   const knowledgeStorePath = path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
   const knowledgeStore = createFileKnowledgeCardStore(knowledgeStorePath)
 
+  // tradingEvents 失效信号源（issue #30）：base patch 行挂载 eventbus 时可用；
+  // 缺席（老部署）→ 发布点静默降级为现状（一次性 fetch 客户端行为不变）。
+  const eventsOf = (): TradingEventsService | undefined =>
+    (ctx as unknown as { get?: (key: string) => unknown }).get?.('tradingEvents') as TradingEventsService | undefined
+
   // 注册 indicator_author / knowledge_ingest / knowledge_search 工具到全局 tools（若服务存在）
   ctx.inject(['tools'] as never, (toolCtx) => {
     const tools = (toolCtx as unknown as { tools?: { register(t: unknown): void; get(name: string): unknown } }).tools
     if (tools && typeof tools.register === 'function') {
-      const authorTool = createAuthorIndicatorTool({ store: customIndicatorsStore })
+      const authorTool = createAuthorIndicatorTool({
+        store: customIndicatorsStore,
+        // 发布点接线（issue #30）：指标入库 → 'indicators' 失效信号 → 已打开的图表实时出现。
+        onWritten: () => eventsOf()?.emit('indicators'),
+      })
       if (tools.get(authorTool.name) === undefined) {
         tools.register(authorTool)
       }
 
-      const ingestTool = createKnowledgeIngestTool(knowledgeStore)
+      const ingestTool = createKnowledgeIngestTool(knowledgeStore, {
+        // 发布点接线（issue #30）：知识入库 → 'knowledge' 失效信号 → 知识库 tab 实时刷新。
+        onWritten: () => eventsOf()?.emit('knowledge'),
+      })
       if (tools.get(ingestTool.name) === undefined) {
         tools.register(ingestTool)
       }
@@ -114,7 +128,23 @@ export function apply(ctx: Context): void {
           const mount = '/dshtrading/api'
           const raw = url.pathname
           const sub = raw === mount || raw.startsWith(`${mount}/`) ? raw.slice(mount.length) || '/' : raw
+          // SSE 失效信号通道（issue #30 / P1）：同一认证栅栏之后的唯一流式端点；
+          // tradingEvents 缺席 → 503，客户端 EventSource 失败降级为一次性 fetch（不劣于现状）。
+          if (req.method === 'GET' && sub === '/events') {
+            const events = eventsOf()
+            if (events === undefined) {
+              sendJson(res, 503, { ok: false, code: 'TRADING_EVENTS_UNAVAILABLE', message: 'tradingEvents service is not mounted' })
+              return
+            }
+            attachEventStream(res, events)
+            return
+          }
           const { status, payload } = await dispatchBridgeRequest(bridge, req.method ?? 'GET', sub, url.searchParams)
+          // 发布点接线（issue #30）：自定义指标删除成功 → 'indicators' 失效信号。
+          if (req.method === 'DELETE' && sub === '/indicators/custom' && status === 200
+            && (payload as { ok?: unknown } | undefined)?.ok === true) {
+            eventsOf()?.emit('indicators')
+          }
           sendJson(res, status, payload)
         } catch (error) {
           if (error instanceof BridgeProtocolError) {
