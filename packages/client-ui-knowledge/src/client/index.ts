@@ -38,8 +38,15 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, dictionaries()), 'dsh-trading-knowledge-view: dictionaries')
 
   // 中栏「知识库」tab：视图组件在 render 闭包里捕获 t 与桥。
+  // bridge/t 必须 apply 期只建一次（引用稳定）：render 闭包里每次新建字面量会让
+  // 视图 useEffect([bridge]) 自激振荡——每帧重拉数据 + force-graph 每帧销毁重建，
+  // 画布永远画不出来（2026-09-01 实证 fetch 风暴 ~80 req/s）。
   ctx.inject(['tradingStageViews', 'tradingBridge'] as never, (scope) => {
     const faces = scope as unknown as { tradingStageViews: StageViewsService; tradingBridge: BridgeService }
+    const bridge = {
+      fetchKnowledgeCards: () => faces.tradingBridge.fetchKnowledgeCards() as never,
+      subscribeTradingEvents: (handlers) => faces.tradingBridge.subscribeTradingEvents(handlers),
+    }
     faces.tradingStageViews.register({
       id: 'knowledge',
       titleKey: 'stage.knowledge',
@@ -47,10 +54,7 @@ export function apply(ctx: ClientContext): void {
       render: (props) => KnowledgeView({
         t: t as unknown as (key: string) => string,
         view: props.view,
-        bridge: {
-          fetchKnowledgeCards: () => faces.tradingBridge.fetchKnowledgeCards() as never,
-          subscribeTradingEvents: (handlers) => faces.tradingBridge.subscribeTradingEvents(handlers),
-        },
+        bridge,
       }),
     })
   })

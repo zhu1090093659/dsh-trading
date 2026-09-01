@@ -45,8 +45,17 @@ export function apply(ctx: ClientContext): void {
 
   // 中栏「策略」tab：视图组件在 render 闭包里捕获 t 与桥（服务就绪后注册，
   // 依赖时序由 cordis inject 解析保证）。
+  // bridge/t 必须 apply 期只建一次（引用稳定）：render 闭包里每次新建字面量会让
+  // 视图 useEffect([bridge]) 自激振荡——每帧重拉数据（2026-09-01 实证 fetch 风暴）。
   ctx.inject(['tradingStageViews', 'tradingBridge'] as never, (scope) => {
     const faces = scope as unknown as { tradingStageViews: StageViewsService; tradingBridge: BridgeService }
+    const bridge = {
+      fetchKlines: (market, symbol, interval, limit) =>
+        faces.tradingBridge.fetchKlines(market, symbol, interval, limit) as never,
+      fetchCustomStrategies: () =>
+        faces.tradingBridge.fetchCustomStrategies() as never,
+      subscribeTradingEvents: (handlers) => faces.tradingBridge.subscribeTradingEvents(handlers),
+    }
     faces.tradingStageViews.register({
       id: 'strategy',
       titleKey: 'stage.strategy',
@@ -56,13 +65,7 @@ export function apply(ctx: ClientContext): void {
         // 只收本包词典；tab 条的 t 由 MiddleStage 自己出。视图内 t 走本包 NS。
         t: t as unknown as (key: string) => string,
         view: props.view,
-        bridge: {
-          fetchKlines: (market, symbol, interval, limit) =>
-            faces.tradingBridge.fetchKlines(market, symbol, interval, limit) as never,
-          fetchCustomStrategies: () =>
-            faces.tradingBridge.fetchCustomStrategies() as never,
-          subscribeTradingEvents: (handlers) => faces.tradingBridge.subscribeTradingEvents(handlers),
-        },
+        bridge,
       }),
     })
   })

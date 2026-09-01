@@ -7,7 +7,7 @@
  *   3. 右侧详情抽屉（卡片全文：核心论点 + 事实核查三桶 + 复用经验 + 边界避坑 + 来源链接）
  *   4. 空态引导与状态持久化 (dshtrading.knowledge.view.v1)
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildGraph, type KnowledgeCard, type KnowledgeGraphData } from '@dsh-trading/knowledge'
 import { readJson, writeJson } from './shell-faces.ts'
 import { IconKnowledge, IconSearch } from './icons.tsx'
@@ -61,6 +61,14 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
 
   const graphRef = useRef<KnowledgeGraphHandle | null>(null)
 
+  // 桥引用稳定化（防御）：上游 render 闭包若每次传新 bridge 字面量，以 bridge 为
+  // 依赖的 effect 会自激振荡（每帧 loadCards → setState → 重渲染 → 新 bridge…）。
+  // 锁定首见引用（首次挂载的桥即用终生；真换桥实例需重挂视图，语义可接受）。
+  // 注意不能写「ref.current !== bridge 时同步」——那等于把每次的新引用都放进 deps。
+  const bridgeRef = useRef(bridge)
+  if (bridgeRef.current === null) bridgeRef.current = bridge
+  const stableBridge = bridgeRef.current
+
   // 同步持久化
   useEffect(() => {
     const nextState: KnowledgeViewStored = {
@@ -88,13 +96,13 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
 
   useEffect(() => {
     void loadCards()
-  }, [bridge])
+  }, [stableBridge])
 
   // SSE 失效信号订阅（issue #30 / P1）：knowledge_ingest 入库 / 更新后本视图
   // 实时刷新，无需刷新页面；EventSource 不可用时退化为一次性加载（现状）。
-  useEffect(() => bridge.subscribeTradingEvents({
+  useEffect(() => stableBridge.subscribeTradingEvents({
     knowledge: () => { void loadCards() },
-  }), [bridge])
+  }), [stableBridge])
 
   // 3. 提取所有可用筛选候选项
   const { allTags, allAuthors } = useMemo(() => {
@@ -168,6 +176,12 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
       graphRef.current?.focusNode(target.id)
     }
   }
+
+  // 图谱节点选中回调（引用稳定：KnowledgeGraph 的初始化 effect 依赖 onSelectCard，
+  // 内联箭头函数会导致实例每帧重建、力导模拟反复清零——画布永远空白）。
+  const handleSelectCard = useCallback((card: KnowledgeCard) => {
+    setSelectedCard(card)
+  }, [])
 
   // 统计主题簇数量
   const clusterCount = useMemo(() => {
@@ -285,7 +299,7 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
               ref={graphRef}
               data={graphData}
               selectedCardId={selectedCard?.id}
-              onSelectCard={(card) => setSelectedCard(card)}
+              onSelectCard={handleSelectCard}
             />
           </div>
         )}

@@ -88,12 +88,18 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
   // SSE 'strategies' 失效信号到达时重拉（strategy_author 入库无需刷新即上榜）。
   // 桥来自 shell 的 tradingBridge 服务（未注入时跳过拉取，视图空态）。
   const [customDefs, setCustomDefs] = useState<StrategyDefinition[]>([])
+  // 桥引用稳定化（防御）：上游若每次 render 传新 bridge 字面量，[bridge] 依赖会
+  // 自激振荡（每帧 loadCards → setState → 新 bridge → …，实证 fetch 风暴）。
+  // 锁定首见引用；真换桥实例需重挂视图，语义可接受。
+  const bridgeRef = useRef(bridge)
+  if (bridgeRef.current === null) bridgeRef.current = bridge
+  const stableBridge = bridgeRef.current
   useEffect(() => {
-    if (bridge === undefined) return
+    if (stableBridge === undefined) return
     let cancelled = false
     const load = async () => {
       try {
-        const records = await bridge.fetchCustomStrategies()
+        const records = await stableBridge.fetchCustomStrategies()
         const defs: StrategyDefinition[] = []
         for (const record of records) {
           const result = await validateCustomStrategy(record as never)
@@ -105,9 +111,9 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
       }
     }
     void load()
-    const unsubscribe = bridge.subscribeTradingEvents({ strategies: () => { void load() } })
+    const unsubscribe = stableBridge.subscribeTradingEvents({ strategies: () => { void load() } })
     return () => { cancelled = true; unsubscribe() }
-  }, [bridge])
+  }, [stableBridge])
 
   // 名册 = 范式 ∪ 自定义合并（issue #31）
   const allStrategies = useMemo<StrategyDefinition[]>(
@@ -169,7 +175,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const barsRaw = await bridge.fetchKlines(market, symbol, '1d', 300)
+      const barsRaw = await stableBridge.fetchKlines(market, symbol, '1d', 300)
       if (!barsRaw || barsRaw.length === 0) {
         setErrorMsg(t('sv.error.noKlines'))
         setResult(null)
