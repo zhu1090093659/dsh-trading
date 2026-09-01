@@ -1,7 +1,8 @@
 /**
  * 行情面板主体（中栏 quote 视图）：富途牛牛视觉风格。
  * 顶部报价头 + K线图 + 周期胶囊条 + 技术指标选择器 +
- * 副图分量读数独立着色 + 底部横向指标快捷词条带 + 底部市场指数状态栏。
+ * 主图指标读数行（副图指标读数在 TvChart 各自 pane 内）+
+ * 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { fetchKlines, fetchTickers } from './api.ts'
@@ -307,15 +308,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         </div>
       </div>
 
-      {/* 指标悬停/最新读数分量（各分量独立着色） */}
-      <div className={css.indicatorReadout}>
-        {readoutCandle !== undefined && (
-          <span style={{ color: '#5f6672', fontWeight: 600 }}>
-            VOL: <span style={{ color: '#2563eb' }}>{fmtCompact(readoutCandle.volume)}</span>
-          </span>
-        )}
-        {indicatorGroups.flatMap(group => outputReadouts(group, readoutIndex))}
-      </div>
+      {/* 主图指标悬停/最新读数分量（各分量独立着色）。VOL/MACD 等副图指标
+          的读数在 TvChart 各自 pane 内渲染，不进主图读数行。 */}
+      {mainOverlays.length > 0 && (
+        <div className={css.indicatorReadout}>
+          {mainOverlays.flatMap(group => outputReadouts(group, readoutIndex))}
+        </div>
+      )}
 
       {kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
 
@@ -330,6 +329,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             colorMode={colorMode}
             mainOverlays={mainOverlays}
             subIndicators={subIndicators}
+            readoutIndex={readoutIndex}
             onHoverIndex={setHoverIndex}
           />
         )}

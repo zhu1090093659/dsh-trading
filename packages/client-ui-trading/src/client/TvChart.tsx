@@ -5,19 +5,23 @@
  * 副图指标独占一 pane（v5 原生 panes）。渲染层对指标实现零感知，只消费
  * 注册表 compute 的输出（@dsh-trading/indicators 注册表）。
  *
+ * pane 内 legend：VOL（pane 1）与副图指标（pane 2+）的读数以绝对定位
+ * overlay 显示在各自 pane 左上角（悬停跟随 readoutIndex，离场回落最新值）；
+ * 主图指标读数由 QuoteStage 的读数行承载，不在这里重复。
+ *
  * 视觉对齐：
  * - 红涨绿跌（#e64545 / #2ba471）
  * - 当前最新价水平虚线与坐标轴实心价签
  * - 紧凑网格与等宽数字
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart,
 } from 'lightweight-charts'
 import type {
   IChartApi, ISeriesApi, MouseEventParams, SeriesType, Time, UTCTimestamp,
 } from 'lightweight-charts'
-import { fmtAxis, priceDigits } from './format.ts'
+import { fmtAxis, fmtCompact, priceDigits } from './format.ts'
 import { getColorPalette, type ColorMode } from './color-mode.ts'
 import type { IndicatorOutput } from '@dsh-trading/indicators'
 import type { Kline } from './types.ts'
@@ -51,6 +55,8 @@ export interface TvChartProps {
   colorMode?: ColorMode
   mainOverlays: readonly TvIndicatorGroup[]
   subIndicators: readonly TvIndicatorGroup[]
+  /** 悬停读数下标（null = 回落最新一根）；pane legend 与父级读数行同源。 */
+  readoutIndex: number | null
   /** 十字线悬停的 K 线下标（离场为 null），父级负责 OHLC 读数。 */
   onHoverIndex: (index: number | null) => void
 }
@@ -132,7 +138,7 @@ const CHART_BASE = {
 } as const
 
 export function TvChart(props: TvChartProps): React.JSX.Element {
-  const { bars, volumes, dataKey, intraday, mainOverlays, subIndicators, onHoverIndex } = props
+  const { bars, volumes, dataKey, intraday, mainOverlays, subIndicators, readoutIndex, onHoverIndex } = props
 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -141,6 +147,8 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
   /** 主图/副图各一张序列表：groupKey → outputKey → series（结构 diff 用）。 */
   const mainRefs = useRef(new Map<string, Map<string, ISeriesApi<SeriesType>>>())
   const subRefs = useRef(new Map<string, Map<string, ISeriesApi<SeriesType>>>())
+  /** 各 pane 顶缘 y 坐标（legend overlay 定位用）；空数组 = 尚未测量。 */
+  const [paneTops, setPaneTops] = useState<number[]>([])
   /** 最新 props 快照，供只跑一次的 chart 工厂与事件回调读取。 */
   const propsRef = useRef(props)
   propsRef.current = props
@@ -265,7 +273,77 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     applyStretch(chart)
   }, [mainOverlays, subIndicators, bars, props.colorMode])
 
-  return <div className="dshtrading-tv-chart" ref={containerRef} style={{ width: '100%', height: '100%' }} />
+  // ---- pane 几何测量：legend overlay 定位用 ----
+  // pane 高度随指标增删 / 容器 resize / 分隔线拖拽变化。v5 无 pane DOM 入口，
+  // 以 getHeight 累加 + 容器高反推分隔条厚度定位。声明在指标同步之后，同一
+  // 提交内先建 pane 再测量；rAF 等 layout 落定。
+  useEffect(() => {
+    const container = containerRef.current
+    const chart = chartRef.current
+    if (container === null || chart === null) return
+    const measure = (): void => {
+      const panes = chart.panes()
+      if (panes.length === 0) {
+        setPaneTops([])
+        return
+      }
+      const heights = panes.map(pane => pane.getHeight())
+      const gapsTotal = panes.length > 1
+        ? Math.max(0, container.clientHeight - heights.reduce((sum, height) => sum + height, 0))
+        : 0
+      const separator = panes.length > 1 ? gapsTotal / (panes.length - 1) : 0
+      const tops: number[] = []
+      let acc = 0
+      for (const height of heights) {
+        tops.push(acc)
+        acc += height + separator
+      }
+      setPaneTops(tops)
+    }
+    const raf = requestAnimationFrame(measure)
+    const observer = new ResizeObserver(measure)
+    observer.observe(container)
+    // 分隔线拖拽结束（pointerup）后复测，拖拽过程允许短暂滞后。
+    container.addEventListener('pointerup', measure)
+    return () => {
+      cancelAnimationFrame(raf)
+      observer.disconnect()
+      container.removeEventListener('pointerup', measure)
+    }
+  }, [mainOverlays, subIndicators, bars, props.colorMode])
+
+  const monoFont = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, sans-serif'
+  const volumeReadout = readoutIndex !== null ? volumes[readoutIndex] : undefined
+
+  return (
+    <div className="dshtrading-tv-chart" ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* pane 1 legend：成交量读数（值按富途式蓝色着色） */}
+      {paneTops[1] !== undefined && volumeReadout !== undefined && (
+        <div style={{ position: 'absolute', left: 8, top: paneTops[1] + 4, zIndex: 2, pointerEvents: 'none', fontSize: 10.5, fontFamily: monoFont, color: '#5f6672', fontWeight: 600 }}>
+          VOL: <span style={{ color: '#2563eb' }}>{fmtCompact(volumeReadout.value)}</span>
+        </div>
+      )}
+      {/* pane 2+ legend：副图指标读数（分量按输出色着色，组名打头） */}
+      {subIndicators.map((group, groupIndex) => {
+        const top = paneTops[2 + groupIndex]
+        if (top === undefined || readoutIndex === null) return null
+        return (
+          <div key={group.key} style={{ position: 'absolute', left: 8, top: top + 4, zIndex: 2, pointerEvents: 'none', fontSize: 10.5, fontFamily: monoFont, display: 'flex', gap: 8 }}>
+            <span style={{ color: '#5f6672', fontWeight: 600 }}>{group.title}</span>
+            {group.outputs.map((output) => {
+              const value = output.values[readoutIndex]
+              if (value === undefined || !Number.isFinite(value)) return null
+              return (
+                <span key={output.key} style={{ color: output.color, fontWeight: 500 }}>
+                  {output.key}: {value.toFixed(2)}
+                </span>
+              )
+            })}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 /** 主图叠加（pane 0）与副图（pane 2+，重建式）两套 diff 策略。 */
