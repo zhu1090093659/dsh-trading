@@ -25,6 +25,7 @@ import { HomeHistory } from './HomeHistory.tsx'
 import { SessionRail } from './SessionRail.tsx'
 import { foldStore, marketFoldStore } from './fold-store.ts'
 import { deleteCustomIndicator, fetchCustomIndicators, subscribeTradingEvents } from './api.ts'
+import { wireHostWatchlistSync } from './host-watchlist-sync.ts'
 import './tokens.css'
 import './shell-pad.css'
 import type { MarketLocaleKey } from './contract.ts'
@@ -114,6 +115,10 @@ export function apply(ctx: ClientContext): void {
   subscribeTradingEvents({
     indicators: () => { void loadCustomIndicators() },
   })
+
+  // 自选股 host SSOT 同步（issue #32）：启动同步 + 一次性迁移 + 变更 host-first
+  // 接管（add/remove/select 写 host 成功后才更新本地）+ SSE 双通道刷新。
+  wireHostWatchlistSync({ watchlists, selection })
 
   // 左侧停靠：自选面板（官方浮层通道；支持展开与折叠态 MarketRail）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({

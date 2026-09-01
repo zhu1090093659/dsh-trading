@@ -123,6 +123,98 @@ export async function deleteCustomStrategy(id: string): Promise<boolean> {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* 自选股 + 选中标的（issue #32 / P3）：host store 为 SSOT                  */
+/* ------------------------------------------------------------------ */
+
+/** host 侧自选行（WatchlistsMap：market → 行数组；不含客户端种子回退）。 */
+export type HostWatchlists = Record<string, Array<{ market: string; symbol: string; name?: string }>>
+
+/** 读取 host 自选全量（启动同步与 SSE 重拉）。 */
+export async function fetchHostWatchlists(): Promise<HostWatchlists> {
+  try {
+    const wire = await getJson<{ ok: boolean; watchlists: HostWatchlists }>('/dshtrading/api/watchlists')
+    return wire.watchlists ?? {}
+  } catch (err) {
+    console.warn('[dsh-trading] fetchHostWatchlists failed, fallback to local mirror:', err)
+    throw err instanceof BridgeError ? err : new BridgeError(0, 'watchlists unavailable')
+  }
+}
+
+/** 追加一行（POST /watchlists）。 */
+export async function addHostWatchlistRow(instrument: { market: string; symbol: string; name?: string }): Promise<boolean> {
+  try {
+    const response = await fetch('/dshtrading/api/watchlists', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(instrument),
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean }
+    return wire.ok === true
+  } catch {
+    return false
+  }
+}
+
+/** 移除一行（DELETE /watchlists?market&symbol）。 */
+export async function removeHostWatchlistRow(market: string, symbol: string): Promise<boolean> {
+  try {
+    const query = new URLSearchParams({ market, symbol })
+    const response = await fetch(`/dshtrading/api/watchlists?${query.toString()}`, {
+      method: 'DELETE',
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean }
+    return wire.ok === true
+  } catch {
+    return false
+  }
+}
+
+/** 一次性迁移导入（POST /watchlists/import；host 非空时服务端拒绝，幂等）。 */
+export async function importHostWatchlists(rows: HostWatchlists): Promise<boolean> {
+  try {
+    const response = await fetch('/dshtrading/api/watchlists/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ watchlists: rows }),
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean }
+    return wire.ok === true
+  } catch {
+    return false
+  }
+}
+
+/** 读取 host 选中标的（GET /selection）。 */
+export async function fetchHostSelection(): Promise<{ market: string; symbol: string; name?: string } | null> {
+  try {
+    const wire = await getJson<{ ok: boolean; instrument: { market: string; symbol: string; name?: string } | null }>('/dshtrading/api/selection')
+    return wire.instrument ?? null
+  } catch {
+    return null
+  }
+}
+
+/** 设置 host 选中标的（PUT /selection；watchlist_select 工具与左栏点击同源）。 */
+export async function putHostSelection(instrument: { market: string; symbol: string; name?: string } | null): Promise<boolean> {
+  try {
+    const response = await fetch('/dshtrading/api/selection', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ instrument }),
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean }
+    return wire.ok === true
+  } catch {
+    return false
+  }
+}
+
 /**
  * store 词汇（v1）：镜像 host 半 @dsh-trading/eventbus 的 TradingEventStore.
  * 浏览器半不 import node 包（避免把 cordis 拖进 client bundle）——词汇是封闭

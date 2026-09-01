@@ -17,6 +17,7 @@ import type { TradingEventsService } from '@dsh-trading/eventbus'
 import { createFileCustomIndicatorStore, createAuthorIndicatorTool } from '@dsh-trading/indicators/tool'
 import { createFileKnowledgeCardStore, createKnowledgeIngestTool, createKnowledgeSearchTool } from '@dsh-trading/knowledge/tool'
 import { createFileCustomStrategyStore } from '@dsh-trading/strategies/plugin'
+import { createFileSelectionStore, createFileWatchlistStore } from '@dsh-trading/watchlist/plugin'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -67,6 +68,11 @@ export function apply(ctx: Context): void {
   const strategyStorePath = path.join(os.homedir(), '.dsh', 'strategies', 'custom.json')
   const strategyStore = createFileCustomStrategyStore(strategyStorePath)
 
+  const watchlistStorePath = path.join(os.homedir(), '.dsh', 'watchlists.json')
+  const watchlistStore = createFileWatchlistStore(watchlistStorePath)
+  const selectionStorePath = path.join(os.homedir(), '.dsh', 'selection.json')
+  const selectionStore = createFileSelectionStore(selectionStorePath)
+
   // tradingEvents 失效信号源（issue #30）：base patch 行挂载 eventbus 时可用；
   // 缺席（老部署）→ 发布点静默降级为现状（一次性 fetch 客户端行为不变）。
   const eventsOf = (): TradingEventsService | undefined =>
@@ -113,6 +119,8 @@ export function apply(ctx: Context): void {
       customIndicatorsStore,
       knowledgeStore,
       strategyStore,
+      watchlistStore,
+      selectionStore,
     })
     const bridge = new TradingBridge(host)
     const route = {
@@ -144,16 +152,19 @@ export function apply(ctx: Context): void {
             attachEventStream(res, events)
             return
           }
-          const { status, payload } = await dispatchBridgeRequest(bridge, req.method ?? 'GET', sub, url.searchParams)
-          // 发布点接线（issue #30）：自定义指标删除成功 → 'indicators' 失效信号。
-          if (req.method === 'DELETE' && sub === '/indicators/custom' && status === 200
-            && (payload as { ok?: unknown } | undefined)?.ok === true) {
-            eventsOf()?.emit('indicators')
+          // PUT/POST（issue #32 自选/选中写入面）：读 JSON body（1MB 封顶）后进桥。
+          let body: unknown
+          if (req.method === 'PUT' || req.method === 'POST') {
+            body = await readJsonBody(req)
           }
-          // 发布点接线（issue #31）：自定义策略删除成功 → 'strategies' 失效信号。
-          if (req.method === 'DELETE' && sub === '/strategies/custom' && status === 200
-            && (payload as { ok?: unknown } | undefined)?.ok === true) {
-            eventsOf()?.emit('strategies')
+          const { status, payload } = await dispatchBridgeRequest(bridge, req.method ?? 'GET', sub, url.searchParams, body)
+          // 发布点接线（issue #30/#31/#32）：写成功 → 对应 store 失效信号。
+          if (status === 200 && (payload as { ok?: unknown } | undefined)?.ok === true) {
+            if (req.method === 'DELETE' && sub === '/indicators/custom') eventsOf()?.emit('indicators')
+            if (req.method === 'DELETE' && sub === '/strategies/custom') eventsOf()?.emit('strategies')
+            if ((req.method === 'PUT' || req.method === 'POST' || req.method === 'DELETE')
+              && (sub === '/watchlists' || sub === '/watchlists/import')) eventsOf()?.emit('watchlists')
+            if (req.method === 'PUT' && sub === '/selection') eventsOf()?.emit('selection')
           }
           sendJson(res, status, payload)
         } catch (error) {
@@ -167,6 +178,26 @@ export function apply(ctx: Context): void {
     }
     ctx.effect(() => webServer.register(route), 'dsh-trading-client-ui-trading: /dshtrading/api route')
   })
+}
+
+/** JSON body 读取（PUT/POST 用；1MB 封顶，非法 JSON → 400 协议错误）。 */
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = []
+  let total = 0
+  for await (const chunk of req) {
+    total += (chunk as Buffer).length
+    if (total > 1024 * 1024) {
+      throw new BridgeProtocolError(413, 'request body too large (1MB cap)')
+    }
+    chunks.push(chunk as Buffer)
+  }
+  const text = Buffer.concat(chunks).toString('utf8').trim()
+  if (!text) return {}
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new BridgeProtocolError(400, 'request body must be valid JSON')
+  }
 }
 
 function errorPayloadOf(error: unknown): { code: string; message: string } {

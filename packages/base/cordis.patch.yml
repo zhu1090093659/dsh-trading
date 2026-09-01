@@ -53,6 +53,12 @@
     - id: dsh-trading-strategies
       name: '@dsh-trading/strategies/plugin'
 
+    # 自选股升位（issue #32 / P3，subpath 插件先例）：watchlist_list/add/remove/select
+    # host 平面工具（跨市场、全会话可见），file store 落 ~/.dsh/watchlists.json +
+    # ~/.dsh/selection.json；写后 emit tradingEvents('watchlists'|'selection')。
+    - id: dsh-trading-watchlist
+      name: '@dsh-trading/watchlist/plugin'
+
     # 交易 GUI 壳（第二阶段富途式三栏，2026-08-30）：左栏市场/自选遮蔽
     # sidebar.workspaces、中栏 conversation.view 加行情 tab、右栏 shell.overlay
     # 会话面板；node 半注册 /dshtrading/api 行情桥（web 宿主，headless 挂起无害）。

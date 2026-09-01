@@ -149,11 +149,13 @@ describe('dispatchBridgeRequest', () => {
     expect(payload).toEqual({ symbols: [{ symbol: 'BTCUSDT' }] })
   })
 
-  it('未知端点 404、非 GET/DELETE 405', async () => {
+  it('未知端点 404；未支持的 HTTP 方法 405（issue #32 起支持 GET/PUT/POST/DELETE）', async () => {
     await expect(dispatchBridgeRequest(bridge, 'GET', '/nope', new URLSearchParams()))
       .rejects.toThrowError(/no such endpoint/)
     await expect(dispatchBridgeRequest(bridge, 'POST', '/markets', new URLSearchParams()))
-      .rejects.toThrowError(/only GET/)
+      .rejects.toThrowError(/no such endpoint/)
+    await expect(dispatchBridgeRequest(bridge, 'PATCH', '/markets', new URLSearchParams()))
+      .rejects.toThrowError(/only GET\/PUT\/POST\/DELETE/)
   })
 
   it('GET /indicators/custom & DELETE /indicators/custom', async () => {
@@ -253,6 +255,73 @@ describe('TradingBridge.customStrategies（issue #31 / P2）', () => {
     expect(list.payload).toMatchObject({ ok: true, strategies: [] })
     const del = await dispatchBridgeRequest(bridge, 'DELETE', '/strategies/custom', new URLSearchParams({ id: 'x' }))
     expect(del.payload).toMatchObject({ ok: true, removed: false })
+  })
+})
+
+describe('watchlist + selection endpoints（issue #32 / P3）', () => {
+  function makeWatchlistHost() {
+    const host = createBridgeHost({ legacy: () => undefined })
+    return { host, bridge: new TradingBridge(host) }
+  }
+
+  it('POST /watchlists 追加行（幂等 added）→ GET 可见 → DELETE 移除', async () => {
+    const { bridge } = makeWatchlistHost()
+    const add = await dispatchBridgeRequest(bridge, 'POST', '/watchlists', new URLSearchParams(), { market: 'us', symbol: 'AAPL', name: '苹果' })
+    expect(add.payload).toMatchObject({ ok: true, added: true, instrument: { market: 'us', symbol: 'AAPL' } })
+    const dup = await dispatchBridgeRequest(bridge, 'POST', '/watchlists', new URLSearchParams(), { market: 'us', symbol: 'AAPL' })
+    expect((dup.payload as { added: boolean }).added).toBe(false)
+
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
+    expect(list.payload).toMatchObject({ ok: true, watchlists: { us: [{ market: 'us', symbol: 'AAPL', name: '苹果' }] } })
+
+    const del = await dispatchBridgeRequest(bridge, 'DELETE', '/watchlists', new URLSearchParams({ market: 'us', symbol: 'AAPL' }))
+    expect(del.payload).toMatchObject({ ok: true, removed: true })
+    await expect(dispatchBridgeRequest(bridge, 'DELETE', '/watchlists', new URLSearchParams({ market: 'us' })))
+      .rejects.toThrowError(/market and symbol are required/)
+  })
+
+  it('PUT /watchlists 全量替换 + 形状校验 400', async () => {
+    const { bridge } = makeWatchlistHost()
+    const put = await dispatchBridgeRequest(bridge, 'PUT', '/watchlists', new URLSearchParams(), {
+      watchlists: { hk: [{ market: 'hk', symbol: '00700', name: '腾讯控股' }] },
+    })
+    expect(put.payload).toMatchObject({ ok: true, watchlists: { hk: [{ symbol: '00700' }] } })
+    await expect(dispatchBridgeRequest(bridge, 'PUT', '/watchlists', new URLSearchParams(), {
+      watchlists: { us: [{ symbol: '' }] },
+    })).rejects.toThrowError(/string symbol/)
+  })
+
+  it('POST /watchlists/import：host 为空导入成功；非空拒绝（幂等）', async () => {
+    const { bridge } = makeWatchlistHost()
+    const first = await dispatchBridgeRequest(bridge, 'POST', '/watchlists/import', new URLSearchParams(), {
+      watchlists: { crypto: [{ market: 'crypto', symbol: 'BTCUSDT', name: 'Bitcoin' }] },
+    })
+    expect(first.payload).toMatchObject({ ok: true, imported: true })
+    const second = await dispatchBridgeRequest(bridge, 'POST', '/watchlists/import', new URLSearchParams(), {
+      watchlists: { us: [{ market: 'us', symbol: 'AAPL' }] },
+    })
+    expect(second.payload).toMatchObject({ ok: false, imported: false })
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
+    expect((list.payload as { watchlists: { us?: unknown } }).watchlists.us).toBeUndefined()
+  })
+
+  it('PUT/GET /selection：设置与读取；非字符串字段容错', async () => {
+    const { bridge } = makeWatchlistHost()
+    await dispatchBridgeRequest(bridge, 'PUT', '/selection', new URLSearchParams(), {
+      instrument: { market: 'cn', symbol: '600519', name: '贵州茅台' },
+    })
+    const got = await dispatchBridgeRequest(bridge, 'GET', '/selection', new URLSearchParams())
+    expect(got.payload).toMatchObject({ ok: true, instrument: { market: 'cn', symbol: '600519', name: '贵州茅台' } })
+    const nulled = await dispatchBridgeRequest(bridge, 'PUT', '/selection', new URLSearchParams(), { instrument: null })
+    expect(nulled.payload).toMatchObject({ ok: true, instrument: null })
+  })
+
+  it('store 缺席（老部署）→ 全部端点空降级', async () => {
+    const bridge = new TradingBridge(fakeHost({}))
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
+    expect(list.payload).toMatchObject({ ok: true, watchlists: {} })
+    const sel = await dispatchBridgeRequest(bridge, 'GET', '/selection', new URLSearchParams())
+    expect(sel.payload).toMatchObject({ ok: true, instrument: null })
   })
 })
 

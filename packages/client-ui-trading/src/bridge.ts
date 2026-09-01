@@ -20,6 +20,8 @@ import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
 import { createMemoryKnowledgeCardStore } from '@dsh-trading/knowledge'
 import type { CustomStrategyRecord, CustomStrategyStore } from '@dsh-trading/strategies'
 import { createMemoryCustomStrategyStore } from '@dsh-trading/strategies'
+import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from '@dsh-trading/watchlist'
+import { createMemorySelectionStore, createMemoryWatchlistStore } from '@dsh-trading/watchlist'
 
 /** 本桥支持的市场（与连接器服务键一一对应）。 */
 export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
@@ -53,6 +55,8 @@ export function createBridgeHost(services: {
   customIndicatorsStore?: CustomIndicatorStore
   knowledgeStore?: KnowledgeCardStore
   strategyStore?: CustomStrategyStore
+  watchlistStore?: WatchlistStore
+  selectionStore?: SelectionStore
 }): BridgeHost {
   return {
     getMarketService: market => {
@@ -64,6 +68,8 @@ export function createBridgeHost(services: {
     customIndicatorsStore: services.customIndicatorsStore ?? createMemoryCustomIndicatorStore(),
     knowledgeStore: services.knowledgeStore ?? createMemoryKnowledgeCardStore(),
     strategyStore: services.strategyStore ?? createMemoryCustomStrategyStore(),
+    watchlistStore: services.watchlistStore ?? createMemoryWatchlistStore(),
+    selectionStore: services.selectionStore ?? createMemorySelectionStore(),
   }
 }
 
@@ -85,6 +91,10 @@ export interface BridgeHost {
   knowledgeStore?: KnowledgeCardStore
   /** 自定义策略存储（可选，issue #31）。 */
   strategyStore?: CustomStrategyStore
+  /** 自选股存储（可选，issue #32）。 */
+  watchlistStore?: WatchlistStore
+  /** 选中标的存储（可选，issue #32）。 */
+  selectionStore?: SelectionStore
 }
 
 export interface MarketInfoWire {
@@ -269,6 +279,128 @@ export class TradingBridge {
     const removed = await store.remove(id)
     return { ok: true, removed }
   }
+
+  /* ---------------------------------------------------------------- */
+  /* 自选股 + 选中（issue #32 / P3）：host store 为 SSOT，localStorage 降级镜像 */
+  /* ---------------------------------------------------------------- */
+
+  /** 全量读取自选行（不含客户端种子回退）。 */
+  async watchlistRows(): Promise<{ ok: boolean; watchlists: WatchlistsMap }> {
+    const store = this.host.watchlistStore
+    if (store === undefined) return { ok: true, watchlists: {} }
+    return { ok: true, watchlists: await store.list() }
+  }
+
+  /** 全量替换自选（客户端启动同步）。 */
+  async replaceWatchlists(body: unknown): Promise<{ ok: boolean; watchlists: WatchlistsMap }> {
+    const store = this.host.watchlistStore
+    if (store === undefined) return { ok: true, watchlists: {} }
+    const map = parseWatchlistsMap(body)
+    await store.save(map)
+    return { ok: true, watchlists: await store.list() }
+  }
+
+  /** 追加一行（POST /watchlists）。 */
+  async addWatchlistRow(body: unknown): Promise<{ ok: boolean; added: boolean; instrument: WatchlistInstrument }> {
+    const store = this.host.watchlistStore
+    if (store === undefined) {
+      const instrument = parseInstrumentBody(body)
+      return { ok: true, added: false, instrument }
+    }
+    const instrument = parseInstrumentBody(body)
+    const added = await store.add(instrument.market, instrument)
+    return { ok: true, added, instrument }
+  }
+
+  /** 移除一行（DELETE /watchlists?market&symbol）。 */
+  async removeWatchlistRow(market: string, symbol: string): Promise<{ ok: boolean; removed: boolean }> {
+    const store = this.host.watchlistStore
+    if (store === undefined || !market || !symbol) return { ok: true, removed: false }
+    const removed = await store.remove(market, symbol)
+    return { ok: true, removed }
+  }
+
+  /**
+   * 一次性迁移导入（POST /watchlists/import）：host 非空拒绝（幂等，防重复导入）。
+   */
+  async importWatchlists(body: unknown): Promise<{ ok: boolean; imported: boolean; reason?: string }> {
+    const store = this.host.watchlistStore
+    if (store === undefined) return { ok: false, imported: false, reason: 'watchlist store is not mounted' }
+    const existing = await store.list()
+    const existingRows = Object.values(existing).reduce((sum, rows) => sum + (rows?.length ?? 0), 0)
+    if (existingRows > 0) {
+      return { ok: false, imported: false, reason: 'host watchlist store is not empty — migration already done (idempotent guard)' }
+    }
+    const map = parseWatchlistsMap(body)
+    await store.save(map)
+    return { ok: true, imported: true }
+  }
+
+  /** 读取选中标的（GET /selection）。 */
+  async selection(): Promise<{ ok: boolean; instrument: WatchlistInstrument | null }> {
+    const store = this.host.selectionStore
+    if (store === undefined) return { ok: true, instrument: null }
+    const record = await store.get()
+    return { ok: true, instrument: record.instrument }
+  }
+
+  /** 设置选中标的（PUT /selection；watchlist_select 工具与左栏点击同源）。 */
+  async putSelection(body: unknown): Promise<{ ok: boolean; instrument: WatchlistInstrument | null }> {
+    const store = this.host.selectionStore
+    const parsed = body as { instrument?: WatchlistInstrument | null } | undefined
+    const instrument = parsed?.instrument === undefined || parsed.instrument === null
+      ? null
+      : {
+        market: String(parsed.instrument.market ?? ''),
+        symbol: String(parsed.instrument.symbol ?? ''),
+        ...(parsed.instrument.name !== undefined ? { name: String(parsed.instrument.name) } : {}),
+      }
+    if (store === undefined) return { ok: true, instrument }
+    await store.set({ instrument })
+    return { ok: true, instrument }
+  }
+}
+
+/** 自选 map 的形状校验（Record<market, Instrument[]>，宽容 name 缺省）。 */
+function parseWatchlistsMap(body: unknown): WatchlistsMap {
+  if (typeof body !== 'object' || body === null) {
+    throw new BridgeProtocolError(400, 'watchlists body must be an object')
+  }
+  const raw = (body as { watchlists?: unknown }).watchlists ?? body
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new BridgeProtocolError(400, 'watchlists must be an object keyed by market')
+  }
+  const out: WatchlistsMap = {}
+  for (const [market, rows] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(rows)) continue
+    out[market] = rows.map((row) => {
+      const r = row as { market?: unknown; symbol?: unknown; name?: unknown }
+      if (typeof r?.symbol !== 'string' || !r.symbol) {
+        throw new BridgeProtocolError(400, `watchlists[${market}] rows must have string symbol`)
+      }
+      return {
+        market: typeof r.market === 'string' ? r.market : market,
+        symbol: r.symbol,
+        ...(typeof r.name === 'string' && r.name ? { name: r.name } : {}),
+      }
+    })
+  }
+  return out
+}
+
+/** 单行 instrument 的形状校验。 */
+function parseInstrumentBody(body: unknown): WatchlistInstrument {
+  const raw = (body ?? {}) as { market?: unknown; symbol?: unknown; name?: unknown }
+  const market = typeof raw.market === 'string' ? raw.market.trim() : ''
+  const symbol = typeof raw.symbol === 'string' ? raw.symbol.trim() : ''
+  if (!market || !symbol) {
+    throw new BridgeProtocolError(400, 'instrument body requires string market and symbol')
+  }
+  return {
+    market,
+    symbol,
+    ...(typeof raw.name === 'string' && raw.name ? { name: raw.name } : {}),
+  }
 }
 
 /** 请求分发：把 (method, pathname, searchParams) 路由到桥方法，返回 (status, payload)。 */
@@ -277,6 +409,7 @@ export async function dispatchBridgeRequest(
   method: string,
   pathname: string,
   search: URLSearchParams,
+  body?: unknown,
 ): Promise<{ status: number; payload: unknown }> {
   if (method === 'GET') {
     switch (pathname) {
@@ -307,6 +440,12 @@ export async function dispatchBridgeRequest(
       case '/strategies/custom': {
         return { status: 200, payload: await bridge.customStrategies() }
       }
+      case '/watchlists': {
+        return { status: 200, payload: await bridge.watchlistRows() }
+      }
+      case '/selection': {
+        return { status: 200, payload: await bridge.selection() }
+      }
       default:
         throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
     }
@@ -323,8 +462,34 @@ export async function dispatchBridgeRequest(
       if (!id) throw new BridgeProtocolError(400, 'delete custom strategy: id is required')
       return { status: 200, payload: await bridge.deleteCustomStrategy(id) }
     }
+    if (pathname === '/watchlists') {
+      const market = search.get('market') ?? ''
+      const symbol = search.get('symbol') ?? ''
+      if (!market || !symbol) throw new BridgeProtocolError(400, 'delete watchlist row: market and symbol are required')
+      return { status: 200, payload: await bridge.removeWatchlistRow(market, symbol) }
+    }
     throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }
 
-  throw new BridgeProtocolError(405, 'only GET and DELETE are supported')
+  if (method === 'PUT') {
+    if (pathname === '/watchlists') {
+      return { status: 200, payload: await bridge.replaceWatchlists(body) }
+    }
+    if (pathname === '/selection') {
+      return { status: 200, payload: await bridge.putSelection(body) }
+    }
+    throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
+  }
+
+  if (method === 'POST') {
+    if (pathname === '/watchlists') {
+      return { status: 200, payload: await bridge.addWatchlistRow(body) }
+    }
+    if (pathname === '/watchlists/import') {
+      return { status: 200, payload: await bridge.importWatchlists(body) }
+    }
+    throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
+  }
+
+  throw new BridgeProtocolError(405, 'only GET/PUT/POST/DELETE are supported')
 }

@@ -33,6 +33,7 @@
     "@dsh-trading/eventbus": "workspace:^",
     "@dsh-trading/router": "workspace:^",
     "@dsh-trading/strategies": "workspace:^",
+    "@dsh-trading/watchlist": "workspace:^",
     "@dsh-trading/client-ui-indicators": "workspace:^",
     "@dsh-trading/client-ui-settings": "workspace:^",
     "@dsh-trading/client-ui-trading": "workspace:^"
