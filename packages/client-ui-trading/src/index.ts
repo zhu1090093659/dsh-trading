@@ -59,15 +59,21 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
  * @param ctx - Host cordis context（bundle loader entry）。
  */
 export function apply(ctx: Context): void {
-  // store 单实例解析（issue #33 收口）：能力包 ./plugin 已 provide 服务（同一 file
-  // store 实例）→ 直接复用；服务缺席（老部署）→ 回退自建实例（旧行为）。
-  const customIndicatorsStore = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingCustomIndicators', false) as
-    | import('@dsh-trading/indicators').CustomIndicatorStore
+  // store 单实例解析（issue #33 收口）：能力包 ./plugin 以 Service 类 provide
+  // 服务——ctx.get 取到的是 Service 实例（store 挂在 .store 属性，不是 store 本
+  // 身；2026-09-01 实证 store.list is not a function 回归）→ 解包 .store 复用同
+  // 一 file store 实例；服务缺席（老部署）→ 回退自建实例（旧行为）。
+  const serviceGet = (key: string): unknown =>
+    (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.(key, false)
+  const customIndicatorsService = serviceGet('tradingCustomIndicators') as
+    | { store?: import('@dsh-trading/indicators').CustomIndicatorStore }
     | undefined
+  const customIndicatorsStore = customIndicatorsService?.store
     ?? createFileCustomIndicatorStore(path.join(os.homedir(), '.dsh', 'indicators', 'custom.json'))
-  const knowledgeStore = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingKnowledgeCards', false) as
-    | import('@dsh-trading/knowledge').KnowledgeCardStore
+  const knowledgeService = serviceGet('tradingKnowledgeCards') as
+    | { store?: import('@dsh-trading/knowledge').KnowledgeCardStore }
     | undefined
+  const knowledgeStore = knowledgeService?.store
     ?? createFileKnowledgeCardStore(path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json'))
 
   const strategyStorePath = path.join(os.homedir(), '.dsh', 'strategies', 'custom.json')
