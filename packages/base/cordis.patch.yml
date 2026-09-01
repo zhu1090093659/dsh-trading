@@ -65,6 +65,13 @@
     - id: dsh-trading-indicators
       name: '@dsh-trading/indicators/plugin'
 
+    # dsh-tool-cordis 动态包能力开放（issue #35 / P6，owner 裁决 D5，硬前置 P0 服务缝
+    # 闸门已落地）：cordis_inspect_* / cordis_define / cordis_run / cordis_stop /
+    # cordis_undefine 7 工具进 trading profile。信任级 = bash（官方声明）；动态包
+    # session-scoped、重启即散、浏览器半需人工审批；服务缝闸门兜底实盘边界。
+    - id: dsh-trading-dynamic-capabilities
+      name: '@deepseek-ai/dsh-tool-cordis'
+
     # 知识能力收口（issue #33 / P4）：provide tradingKnowledgeCards 单实例 store 服务，
     # knowledge_ingest/search/graph host 平面注册；写后 emit tradingEvents('knowledge')。
     - id: dsh-trading-knowledge

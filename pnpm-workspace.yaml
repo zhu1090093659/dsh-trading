@@ -85,3 +85,5 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-util-workspace-path@0.1.2-alpha.3'
   - '@deepseek-ai/dsh-workspace@0.1.2-alpha.3'
   - '@deepseek-ai/schemastery@3.18.2'
+  - '@deepseek-ai/dsh-cordis-host-runner@0.1.2-alpha.3'
+  - '@deepseek-ai/dsh-tool-cordis@0.1.2-alpha.3'
