@@ -29,9 +29,11 @@ div:has(> [data-shell-overlay])[data-details-collapsed] {
   --dshtrading-details-w: 0px;
 }
 
-/* 有当前会话 → 对话列轨道展开（380px）。 */
+/* 有当前会话 → 对话列轨道展开（用户拖拽宽度，默认 380px）。
+   --dshtrading-chat-user-w 由 ChatResizeHandle 写在 body 内联（拖拽路径
+   不进 React 状态），经继承进 frame；折叠态被规则 9 的 !important 压住。 */
 body[data-dshtrading-chat='on'] div:has(> [data-shell-overlay]) {
-  --dshtrading-chat-w: 380px;
+  --dshtrading-chat-w: var(--dshtrading-chat-user-w, 380px);
 }
 
 /* 子列内容重置回 LTR（滚动条/文本/弹层不镜像）。 */
@@ -112,6 +114,17 @@ body[data-dshtrading-chat-folded='on'] div:has(> [data-shell-overlay]) {
 
 body[data-dshtrading-chat-folded='on'] div:has(> [data-shell-overlay]) > div:nth-child(2) {
   display: none !important;
+}
+
+/* 10) 拖拽调宽进行中（ChatResizeHandle）：关宿主轨道 transition——
+      滑入动画会让逐帧拖拽全毁；全局光标与禁选中防文本拖蓝。 */
+body[data-dshtrading-chat-resizing='on'] div:has(> [data-shell-overlay]) {
+  transition: none !important;
+}
+
+body[data-dshtrading-chat-resizing='on'] {
+  cursor: col-resize;
+  user-select: none;
 }
 
 /* 6) 轨迹视图退役：conversation.view 名册顺序确定 [chat(order 0),

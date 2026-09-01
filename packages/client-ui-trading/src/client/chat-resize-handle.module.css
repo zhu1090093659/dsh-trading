@@ -1,0 +1,36 @@
+/* ChatResizeHandle —— 对话列左缘拖拽调宽手柄。宿主栅格 frame 上的
+   --dshtrading-chat-w 经继承可达（组件挂在 overlayLayer 子树），
+   right = 44px 竖条宽 + 对话列轨宽 = 对话列左缘，8px 条骑缝居中。 */
+
+.handle {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: calc(44px + var(--dshtrading-chat-w, 380px) - 4px);
+  width: 8px;
+  z-index: 42;
+  cursor: col-resize;
+  background: transparent;
+}
+
+/* 焦点态不用默认 outline（竖条手柄用 2px 指示线更贴合右缘视觉）。 */
+.handle:focus-visible {
+  outline: none;
+}
+
+.handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background 120ms;
+}
+
+.handle:hover::after,
+.handle:focus-visible::after,
+body[data-dshtrading-chat-resizing='on'] .handle::after {
+  background: var(--dsw-futu-border-active, #3b82f6);
+}

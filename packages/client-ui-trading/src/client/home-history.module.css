@@ -123,3 +123,31 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* 折叠页脚：展开其余 N 条 / 收起。条数 > 3 时才渲染，展开态不持久化。 */
+.more {
+  appearance: none;
+  border: none;
+  border-top: 1px solid var(--dshtrading-fusion-border, rgba(0, 0, 0, 0.08));
+  background: transparent;
+  color: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+  text-align: left;
+}
+
+.more:hover {
+  opacity: 1;
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.more[aria-expanded='true'] .chevron {
+  transform: rotate(90deg);
+}

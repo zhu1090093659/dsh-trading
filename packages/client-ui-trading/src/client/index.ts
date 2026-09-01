@@ -9,6 +9,8 @@
  *   对话列由宿主官方 UI 常驻右侧栏，见 shell-pad.css 2.4 布局）
  * - `shell.overlay`（dshtrading-session-rail）→ 右缘常驻会话竖条（折叠/
  *   新会话/设置，2.9 起取代窗口角标浮动簇 + 会话头内联按钮双入口）
+ * - `shell.overlay`（dshtrading-chat-resize-handle）→ 对话列左缘拖拽调宽
+ *   手柄（宿主手柄在 rtl 下坐标错位被隐藏，见 shell-pad.css 规则 4）
  *
  * 行情数据走 node 半注册的 /dshtrading/api 桥（同源 fetch，浏览器认证栅栏内）。
  */
@@ -26,6 +28,7 @@ import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
 import { HomeHistory } from './HomeHistory.tsx'
 import { SessionRail } from './SessionRail.tsx'
+import { ChatResizeHandle } from './ChatResizeHandle.tsx'
 import { foldStore, marketFoldStore } from './fold-store.ts'
 import { deleteCustomIndicator, fetchCustomIndicators, subscribeTradingEvents } from './api.ts'
 import { wireHostWatchlistSync } from './host-watchlist-sync.ts'
@@ -194,6 +197,19 @@ export function apply(ctx: ClientContext): void {
     }),
   }, SessionRail))
 
+  // 会话列拖拽调宽手柄（shell.overlay）：贴对话列左缘常驻；宽度持久化
+  // chat-width-store（dshtrading.chat.width.v1），拖拽直写 body 变量
+  // --dshtrading-chat-user-w 驱动栅格（shell-pad.css 规则 3/10）。
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'dshtrading-chat-resize-handle',
+    order: 61,
+    locale: NS,
+    inject: () => ({
+      hooks: { folded: chatFolded },
+    }),
+  }, ChatResizeHandle))
+
   // 中栏面板：恒渲染，盖住栅格第 3 轨道（行情区）；内含 MiddleStage 视图注册表（行情 | 策略 | 知识库）
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
@@ -270,10 +286,13 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'status.auction': '集合竞价',
       'browser.history': '历史会话',
       'browser.historyEmpty': '该工作区还没有会话',
+      'browser.showMore': '展开其余 {n} 条',
+      'browser.showLess': '收起',
       'entry.new': '新会话',
       'entry.settings': '设置',
       'chat.fold': '折叠会话列',
       'chat.expand': '展开会话列',
+      'chat.resize': '拖拽调整会话列宽度（双击复位，方向键微调）',
       'stage.quote': '行情',
       'stage.strategy': '策略',
       'stage.knowledge': '知识库',
@@ -337,10 +356,13 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'status.auction': 'Auction',
       'browser.history': 'History',
       'browser.historyEmpty': 'No sessions in this workspace',
+      'browser.showMore': 'Show {n} more',
+      'browser.showLess': 'Show less',
       'entry.new': 'New session',
       'entry.settings': 'Settings',
       'chat.fold': 'Fold conversation panel',
       'chat.expand': 'Expand conversation panel',
+      'chat.resize': 'Drag to resize conversation panel (double-click to reset, arrow keys to nudge)',
       'stage.quote': 'Chart',
       'stage.strategy': 'Strategies',
       'stage.knowledge': 'Knowledge',

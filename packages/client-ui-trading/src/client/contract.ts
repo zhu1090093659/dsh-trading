@@ -71,10 +71,13 @@ export type MarketLocaleKey =
   | 'status.auction'
   | 'browser.history'
   | 'browser.historyEmpty'
+  | 'browser.showMore'
+  | 'browser.showLess'
   | 'entry.new'
   | 'entry.settings'
   | 'chat.fold'
   | 'chat.expand'
+  | 'chat.resize'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {

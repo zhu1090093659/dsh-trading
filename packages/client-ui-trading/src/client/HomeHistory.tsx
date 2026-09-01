@@ -15,7 +15,8 @@
  *
  * 可见性 = 当前会话为 blank（hero 态）；打开非 blank 会话即整板让位对话列
  * （byId 瞬缺按未命中处理——宁可抖动藏面板，不可拼到对话流 composer 上）。
- * 历史区自身可折叠，展开态持久化 localStorage。
+ * 历史区自身可折叠，展开态持久化 localStorage；列表默认只展示最新 3 条，
+ * 其余折叠进「展开其余」页脚（展开态不持久化，回首页即复位）。
  */
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -25,6 +26,10 @@ import { readJson, writeJson } from './store.ts'
 import css from './home-history.module.css'
 
 const OPEN_KEY = 'dshtrading.home.history.open.v1'
+
+/** 收起态默认可见的最新会话条数；更早的折叠进「展开其余」页脚（不持久化，
+ *  每次进入首页都回到收起态——「默认」语义）。 */
+const VISIBLE_ROWS = 3
 
 export interface HomeHistoryInjected {
   /** 打开既有会话。 */
@@ -65,6 +70,7 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
   const sessions = useSessions((value: SessionListState) => value)
   const workspaces = useWorkspaces(value => value)
   const [open, setOpen] = useState(() => readJson<boolean>(OPEN_KEY, true))
+  const [expanded, setExpanded] = useState(false)
   const [host, setHost] = useState<HTMLElement | null>(null)
 
   const blank = sessions.current !== undefined && sessions.byId[sessions.current]?.blank === true
@@ -210,6 +216,8 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
     .map(id => sessions.byId[id])
     .filter(row => row !== undefined && !row.blank && row.origin !== 'subagent')
     .sort((left, right) => right.updatedAt - left.updatedAt)
+  const visibleRows = expanded ? historyRows : historyRows.slice(0, VISIBLE_ROWS)
+  const hiddenCount = historyRows.length - visibleRows.length
 
   return (
     <>
@@ -237,7 +245,7 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
             <div id="dshtrading-home-history" className={css.list}>
               {historyRows.length === 0
                 ? <div className={css.empty}>{t('browser.historyEmpty')}</div>
-                : historyRows.map(row => (
+                : visibleRows.map(row => (
                   <button
                     key={row.id}
                     type="button"
@@ -251,6 +259,21 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
                   </button>
                 ))}
             </div>
+          )}
+          {open && historyRows.length > VISIBLE_ROWS && (
+            <button
+              type="button"
+              className={css.more}
+              aria-expanded={expanded}
+              onClick={() => { setExpanded(value => !value) }}
+            >
+              <svg className={css.chevron} viewBox="0 0 8 8" width="8" height="8" aria-hidden="true">
+                <path d="M2 1l4 3-4 3" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {expanded
+                ? t('browser.showLess')
+                : t('browser.showMore').replace('{n}', String(historyRows.length - VISIBLE_ROWS))}
+            </button>
           )}
         </div>,
         host,
