@@ -18,6 +18,8 @@ const AAPL_DAILY = {
           currency: 'USD',
           regularMarketPrice: 319.7,
           regularMarketTime: 1788019201,
+          regularMarketVolume: 41234500,
+          chartPreviousClose: 310.34,
           exchangeTimezoneName: 'America/New_York',
         },
         timestamp: [Date.UTC(2026, 7, 26) / 1000, Date.UTC(2026, 7, 27) / 1000, Date.UTC(2026, 7, 28) / 1000],
@@ -180,7 +182,7 @@ describe('YahooRestClient.getKlines', () => {
 })
 
 describe('YahooRestClient.getTicker', () => {
-  it('prefers meta.regularMarketPrice/Time; volume from the latest daily bar', async () => {
+  it('prefers meta.regularMarketPrice/Time/Volume/chartPreviousClose over bar-derived values', async () => {
     const { impl, requests } = stubFetch([{ match: '/v8/finance/chart/AAPL', body: AAPL_DAILY }])
     const client = new YahooRestClient({ fetchImpl: impl })
     const ticker = await client.getTicker('aapl')
@@ -193,18 +195,55 @@ describe('YahooRestClient.getTicker', () => {
       prevClose: 310.34,
     })
     expect(ticker.changePercent).toBeCloseTo(3.016, 2)
-    expect(requests).toHaveLength(1) // 单请求：1d/5d
-    expect(requests[0]!.url).toContain('interval=1d&range=5d')
+    expect(requests).toHaveLength(1) // 单请求：1d/1d（昨收锚点依赖 range=1d 窗口语义）
+    expect(requests[0]!.url).toContain('interval=1d&range=1d')
   })
 
-  it('falls back to the last bar when meta price/time are absent', async () => {
+  it('falls back to the last bar when meta price/time/volume/prevClose are absent', async () => {
     const fixture = structuredClone(AAPL_DAILY)
-    delete (fixture.chart.result[0]!.meta as Record<string, unknown>).regularMarketPrice
-    delete (fixture.chart.result[0]!.meta as Record<string, unknown>).regularMarketTime
+    for (const key of ['regularMarketPrice', 'regularMarketTime', 'regularMarketVolume', 'chartPreviousClose']) {
+      delete (fixture.chart.result[0]!.meta as Record<string, unknown>)[key]!
+    }
     const { impl } = stubFetch([{ match: '/v8/finance/chart', body: fixture }])
     const client = new YahooRestClient({ fetchImpl: impl })
     const ticker = await client.getTicker('AAPL')
     expect(ticker.price).toBe(319.7)
+    expect(ticker.volume).toBe(41234500)
+    expect(ticker.prevClose).toBe(310.34) // bars[len-2]
     expect(ticker.timestamp).toBe(Date.UTC(2026, 7, 28) + 86_400_000 - 1)
+  })
+
+  it('returns official prevClose via meta anchor even when the daily series skips a session (2026-09-01 vintage)', async () => {
+    // 真实缺口形态（spikes/impl-us-yahoo/probe-prevclose-20260901-output.txt）：
+    // 日 K 序列整体缺 08-28 bar，昨收 319.7 只存在于 meta.chartPreviousClose（range=1d 窗口）。
+    const lagged = {
+      chart: {
+        result: [
+          {
+            meta: {
+              currency: 'USD',
+              regularMarketPrice: 316.85,
+              regularMarketTime: Date.UTC(2026, 7, 31, 20, 0, 1) / 1000,
+              regularMarketVolume: 40667429,
+              chartPreviousClose: 319.7,
+              exchangeTimezoneName: 'America/New_York',
+            },
+            timestamp: [Date.UTC(2026, 7, 31) / 1000],
+            indicators: {
+              quote: [
+                { open: [319.56], high: [321.2349853515625], low: [312.79998779296875], close: [316.8500061035156], volume: [40667429] },
+              ],
+            },
+          },
+        ],
+      },
+    }
+    const { impl } = stubFetch([{ match: '/v8/finance/chart/AAPL', body: lagged }])
+    const client = new YahooRestClient({ fetchImpl: impl })
+    const ticker = await client.getTicker('AAPL')
+    expect(ticker.price).toBe(316.85)
+    expect(ticker.prevClose).toBe(319.7)
+    expect(ticker.volume).toBe(40667429)
+    expect(ticker.changePercent).toBeCloseTo(-0.892, 2)
   })
 })

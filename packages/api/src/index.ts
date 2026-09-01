@@ -40,6 +40,10 @@ export interface Ticker {
   readonly volume?: number
   /** 快照时间（epoch ms）。 */
   readonly timestamp: number
+  /** 官方昨收（涨跌基准锚点；部分数据源可缺省，缺省时消费方退回日 K 自算）。 */
+  readonly prevClose?: number
+  /** 相对昨收的涨跌幅（百分比，如 -0.89 表示 -0.89%；部分数据源可缺省）。 */
+  readonly changePercent?: number
 }
 
 /** 单根 K 线。 */

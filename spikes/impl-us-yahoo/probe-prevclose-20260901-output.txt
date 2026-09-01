@@ -1,0 +1,20 @@
+# 2026-09-01 真实网络验证：us ticker 昨收锚点修复（bug: 头部昨收 314.58 应为 319.70）
+- 探针：probe-prevclose-20260901.mjs（修复后构建产物 lib/index.js，真实网络非 mock）
+- 对照：富途 AAPL 收盘 316.850 / 跌 2.850 / -0.89% / 昨收 319.700
+
+## getTicker(AAPL)（修复后：interval=1d&range=1d，昨收取 meta.chartPreviousClose）
+getTicker(AAPL) = {
+  "symbol": "AAPL",
+  "price": 316.85,
+  "timestamp": 1788206401000,
+  "volume": 40667429,
+  "prevClose": 319.7,
+  "changePercent": -0.891
+}
+change check = -2.850 / -0.891%
+
+getKlines(AAPL,1d) tail 4 (documenting the daily-series vintage gap):
+  2026-08-25 close 309.8999938964844
+  2026-08-26 close 313.45001220703125
+  2026-08-27 close 314.5799865722656
+  2026-08-31 close 316.8500061035156

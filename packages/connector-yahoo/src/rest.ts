@@ -10,8 +10,9 @@
  *   - interval 支持 1m/5m/15m/30m/60m/1d/1wk/1mo；需 User-Agent 头（Mozilla/5.0 即可）。
  *   - 非官方 API：无 key、无 SLA；实测 meta.regularMarketPrice 与同响应 60m 序列最后收盘
  *     一致（float32 精度）；日线序列的「最新已收盘交易日」可能滞后补齐（周五收盘后周六
- *     早晨仍缺周五日线，证据 probe-output.txt）——getTicker 的价格/时间取 meta（权威实时
- *     面），volume 取最新日 K 量并在工具描述明示该滞后。
+ *     早晨仍缺周五日线，证据 probe-output.txt；2026-09-01 实测还会整体跳缺 08-28 bar）。
+ *     getTicker 的价格/时间/昨收/量全取 meta（权威实时面，见 getTicker 注释），不受该
+ *     vintage 行为影响；getKlines 的日 K 序列仍可能滞后/缺根，消费方勿用尾部推昨收。
  *
  * 合规（README 铁律 #5）：Yahoo Finance 非官方 API，个人使用属灰色但被普遍使用的边界，
  * 以 Yahoo 服务条款为准（https://legal.yahoo.com/terms-of-use/）；无凭证、本仓不缓存
@@ -122,6 +123,11 @@ export interface YahooChartResult {
     regularMarketTime?: number
     regularMarketDayHigh?: number
     regularMarketDayLow?: number
+    regularMarketVolume?: number
+    regularMarketChangePercent?: number
+    /** range 窗口首根前一收盘的锚点（range=1d 时即官方昨收，见 getTicker 注释）。 */
+    chartPreviousClose?: number
+    previousClose?: number
     exchangeTimezoneName?: string
   }
   timestamp: number[]
@@ -272,30 +278,37 @@ export class YahooRestClient {
   }
 
   /**
-   * 最新行情快照：单请求 interval=1d&range=5d。
-   * price/timestamp 取 meta.regularMarketPrice/regularMarketTime（权威实时面，含最近收盘）；
-   * volume 取该响应最新日 K 量——Yahoo 日线汇总可能滞后补齐最新交易日（2026-08-29 实证），
-   * 工具描述必须向模型明示该局限。
+   * 最新行情快照：单请求 interval=1d&range=1d。
+   * price/time/volume/prevClose 全取 meta（权威实时面）：昨收锚点取 meta.chartPreviousClose
+   * ——range=1d 窗口恰只含最新一个会话，其「窗口首根前一收盘」即官方昨收，与富途等终端
+   * 同语义（2026-09-01 AAPL 实测 319.7，富途同值）。不能用 range=5d：其 chartPreviousClose
+   * 锚在窗口首根前一收盘（≈6 个交易日前）；bars[len-2] 兜底也不可靠——日 K 序列存在
+   * 「最新收盘交易日滞后补齐/跳缺」的 vintage 行为（模块头注记），缺口期会错位一个交易日。
+   * 日线滞后窗口内 bars 可能为空：仅凭 meta 仍能出全量快照，不再因缺 bar 抛错。
    */
   async getTicker(symbol: string): Promise<Ticker> {
     const sym = normalizeYahooSymbol(symbol)
-    // 5d 足够覆盖最近交易日且窗口最小（证据：spikes/impl-us-yahoo/EVIDENCE.md）。
-    const result = await this.#requestChart(sym, '1d', '5d')
+    const result = await this.#requestChart(sym, '1d', '1d')
     const bars = parseChartBars(result, '1d')
     const last = bars[bars.length - 1]
     const price = result.meta.regularMarketPrice ?? last?.close
-    if (price === undefined || !last) {
+    if (price === undefined) {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Yahoo ticker for ${sym}: no price in meta and no bars`)
     }
     const prevClose = result.meta.chartPreviousClose ?? result.meta.previousClose ?? (bars.length >= 2 ? bars[bars.length - 2]?.close : undefined)
     const changePercent = typeof result.meta.regularMarketChangePercent === 'number'
       ? result.meta.regularMarketChangePercent
-      : (price !== undefined && prevClose !== undefined && prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : undefined)
+      : (prevClose !== undefined && prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : undefined)
+    const timestamp = result.meta.regularMarketTime != null ? result.meta.regularMarketTime * 1000 : last?.closeTime
+    if (timestamp === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Yahoo ticker for ${sym}: no timestamp in meta and no bars`)
+    }
+    const volume = result.meta.regularMarketVolume ?? last?.volume
     return {
       symbol: sym,
       price,
-      volume: last.volume,
-      timestamp: result.meta.regularMarketTime != null ? result.meta.regularMarketTime * 1000 : last.closeTime,
+      timestamp,
+      ...(volume !== undefined ? { volume } : {}),
       ...(prevClose !== undefined ? { prevClose } : {}),
       ...(changePercent !== undefined ? { changePercent } : {}),
     }

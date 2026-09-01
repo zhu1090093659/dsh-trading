@@ -312,9 +312,9 @@ export function apply(ctx: Context, config: Config): void {
         name: 'us_get_ticker',
         description:
           'Get the latest market snapshot for a US stock via the Yahoo Finance v8 chart API (unofficial; no key). '
-          + 'Returns the latest regular-market price and time (meta.regularMarketPrice/Time) plus the latest daily '
-          + 'bar\'s volume — note Yahoo may consolidate the most recent completed session\'s daily bar with a lag, so '
-          + 'volume can trail the latest session. Personal use per Yahoo terms of use.',
+          + 'Returns the latest regular-market price/time (meta.regularMarketPrice/Time), the official previous close '
+          + 'as prevClose (change anchor) with changePercent, and the session volume (meta.regularMarketVolume — '
+          + 'official figure, unaffected by Yahoo\'s daily-bar consolidation lag). Personal use per Yahoo terms of use.',
         parameters: {
           symbol: {
             type: 'string',

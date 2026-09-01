@@ -169,10 +169,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
   const stats = useMemo(() => {
     const last = daily !== null && daily.length > 0 ? daily[daily.length - 1] : undefined
-    const prevClose = daily !== null && daily.length >= 2 ? daily[daily.length - 2]?.close : undefined
+    const klinePrevClose = daily !== null && daily.length >= 2 ? daily[daily.length - 2]?.close : undefined
+    // 昨收/涨跌优先用快照官方锚点（ticker.prevClose/changePercent）：
+    // 日 K 序列可能缺最新收盘 bar（Yahoo 补齐滞后，见 connector-yahoo），倒数第二根
+    // 会错位一个交易日（2026-09-01 AAPL 实证：显示 314.58 而非 319.70）。
+    const prevClose = ticker?.prevClose ?? klinePrevClose
     const price = ticker?.price ?? klines?.[klines.length - 1]?.close
     const change = price !== undefined && prevClose !== undefined ? price - prevClose : undefined
-    const pct = changePercent(price, prevClose)
+    const pct = ticker?.changePercent ?? changePercent(price, prevClose)
     return { last, prevClose, price, change, pct }
   }, [daily, ticker, klines])
 

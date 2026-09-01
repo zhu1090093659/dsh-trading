@@ -291,7 +291,9 @@ export function MarketSidebar({
                 const ticker = prices[key]
                 const ref = series[key]
                 const price = ticker?.price
-                const pct = changePercent(price, ref?.prevClose)
+                // 涨跌幅昨收优先用快照官方锚点；日 K 推算仅作快照缺 prevClose 时的兜底
+                // （日 K 序列可能缺最新收盘 bar，倒数第二根会错位一个交易日）。
+                const pct = changePercent(price, ticker?.prevClose ?? ref?.prevClose)
                 const up = (pct ?? 0) >= 0
                 const selected = selection !== null && selection.market === row.market && selection.symbol === row.symbol
                 return (
