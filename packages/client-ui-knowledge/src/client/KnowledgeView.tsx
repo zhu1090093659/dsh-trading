@@ -152,7 +152,8 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
 
   // 5. 纯函数构建图结构数据
   const graphData = useMemo<KnowledgeGraphData>(() => {
-    return buildGraph(filteredCards, { coTag: true, coAuthor: true })
+    // Obsidian 式 hub 拓扑：标签聚合为 hub 节点，消除单作者大库下的 O(n²) 全配对边
+    return buildGraph(filteredCards, { tagHubs: true, coTag: false, coAuthor: false })
   }, [filteredCards])
 
   // 重置过滤
@@ -181,6 +182,11 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
   // 内联箭头函数会导致实例每帧重建、力导模拟反复清零——画布永远空白）。
   const handleSelectCard = useCallback((card: KnowledgeCard) => {
     setSelectedCard(card)
+  }, [])
+
+  // 点击标签 hub = 切换标签过滤（Obsidian 交互：点标签即聚焦该主题）
+  const handleTagClick = useCallback((tag: string) => {
+    setSelectedTag((prev) => (prev === tag ? '' : tag))
   }, [])
 
   // 统计主题簇数量
@@ -300,6 +306,7 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
               data={graphData}
               selectedCardId={selectedCard?.id}
               onSelectCard={handleSelectCard}
+              onTagClick={handleTagClick}
             />
           </div>
         )}

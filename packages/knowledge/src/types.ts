@@ -40,7 +40,7 @@ export type KnowledgeCardInput = Omit<KnowledgeCard, 'id' | 'createdAt' | 'updat
   readonly updatedAt?: string
 }
 
-export type GraphLinkKind = 'related' | 'co-tag' | 'co-author'
+export type GraphLinkKind = 'related' | 'co-tag' | 'co-author' | 'tag-hub'
 
 export interface KnowledgeGraphNode {
   readonly id: string
@@ -48,6 +48,8 @@ export interface KnowledgeGraphNode {
   readonly cluster: string
   readonly credibility: KnowledgeCredibility
   readonly degree: number
+  /** 节点类别：'card' = 知识卡片（默认，向后兼容），'tag' = 标签 hub 节点（Obsidian 式）。 */
+  readonly type?: 'card' | 'tag'
   readonly raw?: KnowledgeCard
 }
 
@@ -66,6 +68,13 @@ export interface KnowledgeGraphData {
 export interface BuildGraphOptions {
   readonly coTag?: boolean
   readonly coAuthor?: boolean
+  /**
+   * Obsidian 式标签 hub 模式（2026-09-01 起 UI 默认开启）：标签聚合为独立 hub 节点，
+   * 卡片仅与自己的标签建边（kind='tag-hub'）+ 显式 related 建边；关闭 co-tag/co-author
+   * 全配对边。大规模单作者/单标签库下全配对是 O(n²) 边爆炸（215 卡 ≈ 2 万+边），
+   * 力导模拟发散、画布糊成一团——hub 模式把边数降为 O(卡片数 × 平均标签数)。
+   */
+  readonly tagHubs?: boolean
 }
 
 export interface KnowledgeCardStore {

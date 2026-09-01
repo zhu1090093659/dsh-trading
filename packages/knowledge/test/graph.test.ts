@@ -70,3 +70,41 @@ describe('Knowledge Graph Builder', () => {
     expect(graph.links.some((l) => l.kind === 'co-author')).toBe(true)
   })
 })
+
+describe('Knowledge Graph Builder — tagHubs 模式（Obsidian 式）', () => {
+  it('creates one hub node per distinct tag and card-tag edges only', () => {
+    const card1 = makeCard('kc_1', '卡片1', '作者A', ['宏观', '利率'])
+    const card2 = makeCard('kc_2', '卡片2', '作者A', ['宏观', '成长'])
+    const graph = buildGraph([card1, card2], { tagHubs: true, coTag: false, coAuthor: false })
+
+    // 2 卡片节点 + 3 个标签 hub（宏观/利率/成长）
+    expect(graph.nodes).toHaveLength(5)
+    const hubs = graph.nodes.filter((n) => n.type === 'tag')
+    expect(new Set(hubs.map((n) => n.label))).toEqual(new Set(['宏观', '利率', '成长']))
+    // 边 = 4 条卡-标签边（无 co-tag/co-author 全配对）
+    expect(graph.links).toHaveLength(4)
+    expect(graph.links.every((l) => l.kind === 'tag-hub')).toBe(true)
+    // 宏观 hub 度数 = 2
+    const macroHub = hubs.find((n) => n.label === '宏观')
+    expect(macroHub?.degree).toBe(2)
+  })
+
+  it('keeps explicit related edges in hub mode', () => {
+    const card1 = makeCard('kc_1', '卡片1', '作者A', ['宏观'], ['kc_2'])
+    const card2 = makeCard('kc_2', '卡片2', '作者A', ['宏观'])
+    const graph = buildGraph([card1, card2], { tagHubs: true, coTag: false, coAuthor: false })
+
+    expect(graph.links.some((l) => l.kind === 'related')).toBe(true)
+    expect(graph.links.some((l) => l.kind === 'co-author')).toBe(false)
+    expect(graph.links.some((l) => l.kind === 'co-tag')).toBe(false)
+  })
+
+  it('scales linearly on a single-author large library (no O(n²) blowup)', () => {
+    const cards = Array.from({ length: 100 }, (_, i) => makeCard('kc_' + i, '卡' + i, '同一作者', ['主题', '年份']))
+    const graph = buildGraph(cards, { tagHubs: true, coTag: false, coAuthor: false })
+
+    // 100 卡 + 2 hub，边 = 200 条卡-标签边；全配对模式下这里会是 4950+ 边
+    expect(graph.nodes).toHaveLength(102)
+    expect(graph.links).toHaveLength(200)
+  })
+})

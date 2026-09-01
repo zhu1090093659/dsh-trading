@@ -3,6 +3,10 @@
  *
  * 接收卡片集合，输出解耦的图结构 { nodes, links }。
  * 孤立节点保留（度为 0），多 tag 共享边合并并累加 weight。
+ *
+ * 2026-09-01 新增 tagHubs 模式（Obsidian 式）：标签聚合为 hub 节点，卡片只与
+ * 自己的标签建边 + 显式 related 建边，不做 co-tag/co-author 全配对——大库下
+ * 全配对是 O(n²) 边爆炸（实测 215 卡 ≈ 2 万+边），力导发散、画布不可读。
  */
 import type {
   BuildGraphOptions,
@@ -16,7 +20,7 @@ export function buildGraph(
   cards: readonly KnowledgeCard[],
   options: BuildGraphOptions = {},
 ): KnowledgeGraphData {
-  const { coTag = true, coAuthor = true } = options
+  const { coTag = true, coAuthor = true, tagHubs = false } = options
 
   if (!cards || cards.length === 0) {
     return { nodes: [], links: [] }
@@ -35,6 +39,66 @@ export function buildGraph(
     return `${kind}:${a}:${b}`
   }
 
+  // 0. Obsidian 式标签 hub 模式：标签聚合为 hub 节点，卡片只与自己的标签建边，
+  //    外加显式 related 边；跳过 co-tag/co-author 全配对。
+  if (tagHubs) {
+    for (const card of cards) {
+      if (card.related && Array.isArray(card.related)) {
+        for (const targetId of card.related) {
+          if (cardMap.has(targetId) && targetId !== card.id) {
+            const key = makeLinkKey(card.id, targetId, 'related')
+            if (!linkMap.has(key)) {
+              const [source, target] = card.id < targetId ? [card.id, targetId] : [targetId, card.id]
+              linkMap.set(key, { source, target, kind: 'related', weight: 2 })
+            }
+          }
+        }
+      }
+      const seen = new Set<string>()
+      for (const tag of card.tags) {
+        const name = (tag ?? '').trim()
+        if (!name || seen.has(name)) continue
+        seen.add(name)
+        const hubId = 'tag:' + name
+        linkMap.set(makeLinkKey(card.id, hubId, 'tag-hub'), {
+          source: card.id,
+          target: hubId,
+          kind: 'tag-hub',
+          weight: 1,
+        })
+      }
+    }
+
+    const hubLinks = Array.from(linkMap.values())
+
+    const degreeMap = new Map<string, number>()
+    for (const c of cards) degreeMap.set(c.id, 0)
+    for (const l of hubLinks) {
+      degreeMap.set(l.source, (degreeMap.get(l.source) ?? 0) + 1)
+      degreeMap.set(l.target, (degreeMap.get(l.target) ?? 0) + 1)
+    }
+
+    const cardNodes: KnowledgeGraphNode[] = cards.map((card) => ({
+      id: card.id,
+      label: card.title,
+      cluster: card.tags[0] ?? '未分类',
+      credibility: card.credibility,
+      degree: degreeMap.get(card.id) ?? 0,
+      type: 'card' as const,
+      raw: card,
+    }))
+    const hubNodes: KnowledgeGraphNode[] = [...degreeMap.keys()]
+      .filter((id) => id.startsWith('tag:'))
+      .map((id) => ({
+        id,
+        label: id.slice(4),
+        cluster: id.slice(4),
+        credibility: 'medium' as const,
+        degree: degreeMap.get(id) ?? 0,
+        type: 'tag' as const,
+      }))
+    return { nodes: [...cardNodes, ...hubNodes], links: hubLinks }
+  }
   // 1. 显式 related 关联边
   for (const card of cards) {
     if (card.related && Array.isArray(card.related)) {
