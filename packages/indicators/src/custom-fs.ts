@@ -35,16 +35,25 @@ export function createFileCustomIndicatorStore(filePath: string): CustomIndicato
   async function flush(map: Map<string, CustomIndicatorRecord>): Promise<void> {
     const dir = dirname(filePath)
     const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
+    const data = JSON.stringify([...map.values()], null, 2)
     try {
       await mkdir(dir, { recursive: true })
-      const data = JSON.stringify([...map.values()], null, 2)
       await writeFile(tmpPath, data, 'utf8')
-      await rename(tmpPath, filePath)
+      let lastError: unknown
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await rename(tmpPath, filePath)
+          return
+        } catch (err: any) {
+          if (err?.code !== 'EPERM' && err?.code !== 'EBUSY') throw err
+          lastError = err
+          await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
+        }
+      }
+      throw lastError
     } catch (error) {
       console.error(`[dsh-trading/indicators] failed to atomic flush custom indicators to ${filePath}:`, error)
-      try {
-        await unlink(tmpPath).catch(() => {})
-      } catch {}
+      await unlink(tmpPath).catch(() => {})
       throw error
     }
   }

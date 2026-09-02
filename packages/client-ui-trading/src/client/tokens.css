@@ -23,6 +23,7 @@
   /* 背景与表面层级 */
   --dsw-futu-bg-base: #ffffff;
   --dsw-futu-bg-surface: #f7f8fa;
+  --dsw-futu-bg-subtle: #f5f6f8;
   --dsw-futu-bg-surface-hover: rgba(0, 0, 0, 0.04);
   --dsw-futu-bg-surface-active: rgba(0, 0, 0, 0.08);
   --dsw-futu-bg-selected: rgba(230, 69, 69, 0.05);
@@ -37,6 +38,10 @@
   --dsw-futu-text-secondary: #5f6672;
   --dsw-futu-text-muted: #8e95a3;
   --dsw-futu-text-inverse: #ffffff;
+  --dsw-futu-accent: #2563eb;
+  --dsw-futu-accent-subtle: rgba(37, 99, 235, 0.08);
+  --dsw-futu-accent-border: rgba(37, 99, 235, 0.25);
+  --dsw-futu-accent-text: #2563eb;
 
   /* 胶囊与圆角规范 */
   --dsw-futu-radius-xs: 3px;
@@ -61,20 +66,25 @@ body[data-ds-dark-theme],
   /* 背景与表面层级（专业深黑蓝调，与富途牛牛/TradingView 桌面版暗色对齐） */
   --dsw-futu-bg-base: #131722;
   --dsw-futu-bg-surface: #1e222d;
-  --dsw-futu-bg-surface-hover: rgba(255, 255, 255, 0.06);
-  --dsw-futu-bg-surface-active: rgba(255, 255, 255, 0.1);
+  --dsw-futu-bg-subtle: #242832;
+  --dsw-futu-bg-surface-hover: rgba(255, 255, 255, 0.08);
+  --dsw-futu-bg-surface-active: rgba(255, 255, 255, 0.12);
   --dsw-futu-bg-selected: rgba(230, 69, 69, 0.15);
 
   /* 边框与分割线 */
-  --dsw-futu-border-default: #2a2e39;
+  --dsw-futu-border-default: #2e3342;
   --dsw-futu-border-subtle: #242832;
-  --dsw-futu-border-active: #2962ff;
+  --dsw-futu-border-active: #3b82f6;
 
-  /* 文字层级 */
-  --dsw-futu-text-primary: #d1d4dc;
-  --dsw-futu-text-secondary: #787b86;
-  --dsw-futu-text-muted: #50535e;
+  /* 文字层级（深色模式下全面提升对比度，杜绝发暗看不清） */
+  --dsw-futu-text-primary: #f0f2f5;
+  --dsw-futu-text-secondary: #a0a6b5;
+  --dsw-futu-text-muted: #858c9c;
   --dsw-futu-text-inverse: #ffffff;
+  --dsw-futu-accent: #60a5fa;
+  --dsw-futu-accent-subtle: rgba(96, 165, 250, 0.15);
+  --dsw-futu-accent-border: rgba(96, 165, 250, 0.35);
+  --dsw-futu-accent-text: #93c5fd;
 
   /* 涨跌语义半透明背景与渐变（暗色微调） */
   --dsw-futu-up-bg: rgba(230, 69, 69, 0.16);

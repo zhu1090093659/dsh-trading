@@ -11,7 +11,7 @@
  * 每源独立容错：单源失败不炸整体，失败源在 `unavailable` 中注明（工具输出可见），fail-soft。
  */
 /** 已接入的新闻来源（EVIDENCE 分级总表：A 级打底/媒体面 + B 级 CryptoPanic 自备 key）。 */
-export type NewsSource = 'binance' | 'okx' | 'coindesk' | 'theblock' | 'cryptopanic'
+export type NewsSource = 'binance' | 'okx' | 'coindesk' | 'theblock' | 'cointelegraph' | 'decrypt' | 'cryptopanic'
 
 export interface NewsItem {
   /** 来源名（铁律 #5 的来源标注；同时是「引用给 Agent 可以、再分发不行」的边界提醒落点）。 */
@@ -24,17 +24,17 @@ export interface NewsItem {
 
 export interface AggregateNewsOptions {
   /** 币种过滤（市场规范词汇，如 BTCUSDT / BTCUSDT-SWAP）；缺省 = 不过滤。 */
-  symbol?: string
+  symbol?: string | undefined
   /** 时间窗（小时）：只保留 now - windowHours 内的条目；缺省 24。 */
-  windowHours?: number
+  windowHours?: number | undefined
   /** 输出条数上限；缺省 20。 */
-  limit?: number
+  limit?: number | undefined
   /** 依赖注入的 fetch（测试用 mock；缺省 globalThis.fetch）。 */
-  fetch?: typeof globalThis.fetch
+  fetch?: typeof globalThis.fetch | undefined
   /** 注入当前时间戳（ms，测试用）；缺省 Date.now()。 */
-  now?: number
+  now?: number | undefined
   /** WS2c：CryptoPanic API token。有值时加测 CryptoPanic 免费层（B 增强）；无值 = 仅公共源。 */
-  cryptoPanicKey?: string
+  cryptoPanicKey?: string | undefined
 }
 
 export interface AggregateNewsResult {
@@ -49,11 +49,15 @@ const DSHTRADING_API = 'https://www.binance.com/bapi/composite/v1/public/cms/art
 const OKX_ANNOUNCEMENT_URL = 'https://www.okx.com/api/v5/support/announcements'
 const COINDESK_RSS_URL = 'https://www.coindesk.com/arc/outboundfeeds/rss/'
 const THEBLOCK_RSS_URL = 'https://www.theblock.co/rss.xml'
+const COINTELEGRAPH_RSS_URL = 'https://cointelegraph.com/rss'
+const DECRYPT_RSS_URL = 'https://decrypt.co/feed'
 const CRYPTOPANIC_API_URL = 'https://cryptopanic.com/api/free/v1/posts/'
 
 const DEFAULT_WINDOW_HOURS = 24
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
+/** 下钻 fetch 统一 10s 超时（docs/replication.md §9；上游挂起不得拖垮 60s 轮询链）。 */
+const UPSTREAM_TIMEOUT_MS = 10_000
 
 const BINANCE_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (dsh-trading/crypto_get_news)'
 
@@ -66,6 +70,7 @@ async function fetchText(
 ): Promise<string> {
   const response = await fetchImpl(url, {
     headers: { accept: 'application/json, text/xml, */*', 'user-agent': BINANCE_UA },
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   })
   if (!response.ok) {
     const body = await response.text().catch(() => '')
@@ -239,6 +244,8 @@ function inWindow(publishedAt: string, nowMs: number, windowMs: number): boolean
 
 function matchesSymbol(item: NewsItem, tokens: string[]): boolean {
   if (tokens.length === 0) return true
+  // 币安与欧易的交易所官方公告属于平台级重大事件，在公告流中予以保留展示
+  if (item.source === 'binance' || item.source === 'okx') return true
   const title = item.title.toUpperCase()
   return tokens.some((t) => title.includes(t))
 }
@@ -258,6 +265,8 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
     fetchOkxNews(fetchImpl),
     fetchRssNews(fetchImpl, 'coindesk', COINDESK_RSS_URL),
     fetchRssNews(fetchImpl, 'theblock', THEBLOCK_RSS_URL),
+    fetchRssNews(fetchImpl, 'cointelegraph', COINTELEGRAPH_RSS_URL),
+    fetchRssNews(fetchImpl, 'decrypt', DECRYPT_RSS_URL),
   ]
   if (options.cryptoPanicKey && options.cryptoPanicKey.trim()) {
     // CryptoPanic currencies 参数用币种代码（BTC/ETH/SOL，不含报价/合约后缀）。

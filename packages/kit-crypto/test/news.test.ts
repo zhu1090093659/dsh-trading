@@ -73,6 +73,8 @@ function allSourcesOk() {
     'okx.com': () => jsonResp(okxJson),
     'coindesk.com': () => textResp(coinDeskRss),
     'theblock.co': () => textResp(theBlockRss),
+    'cointelegraph.com': () => textResp('<rss version="2.0"><channel><title>CoinTelegraph</title></channel></rss>'),
+    'decrypt.co': () => textResp('<rss version="2.0"><channel><title>Decrypt</title></channel></rss>'),
   })
 }
 
@@ -99,6 +101,13 @@ describe('aggregateNews（四源聚合 + 过滤）', () => {
     expect(titles).toContain('Binance Will Launch BTCUSDT Perpetual Contract')
     // "Bitcoin rally..." 不含 BTC/BTCUSDT 子串 → 不命中（记录局限，非 bug）
     expect(titles.some((t) => t.includes('Bitcoin rally'))).toBe(false)
+  })
+
+  it('binance/okx 平台级公告绕过 symbol 过滤（有意设计：交易所公报对全平台有效，2026-09-02 评审 Question 裁决固化）', async () => {
+    // BTCUSDT 过滤下：Binance 上币公报（无 BTC 词？——本题含 BTCUSDT，故换 SOL 侧 OKX 公报验证）
+    const { items } = await aggregateNews({ fetch: allSourcesOk(), now: NOW, symbol: 'BTCUSDT' })
+    // OKX 公报标题只含 SOLANA，不含 BTC/BTCUSDT，仍被保留 → 平台级公告豁免过滤
+    expect(items.some((i) => i.source === 'okx' && i.title.includes('SOLANA'))).toBe(true)
   })
 
   it('windowHours 压缩时间窗：只留 now-1h 内', async () => {
@@ -220,6 +229,8 @@ describe('createGetNewsTool（工具壳）', () => {
       'okx.com': () => jsonResp(nearOkx),
       'coindesk.com': () => textResp(nearCoinDesk),
       'theblock.co': () => textResp(nearTheBlock),
+      'cointelegraph.com': () => textResp('<rss version="2.0"><channel><title>CT</title></channel></rss>'),
+      'decrypt.co': () => textResp('<rss version="2.0"><channel><title>Dec</title></channel></rss>'),
     })
     vi.stubGlobal('fetch', fetchImpl)
     const tool = createGetNewsTool()
@@ -229,7 +240,7 @@ describe('createGetNewsTool（工具壳）', () => {
     expect(text).toContain('[binance]')
     expect(text).toContain('https://www.binance.com/en/support/announcement/abc123')
     expect(text).toContain('symbol=BTCUSDT')
-    expect(text).not.toContain('source(s) unavailable') // 四源全成功，无缺席
+    expect(text).not.toContain('source(s) unavailable') // 全源全成功，无缺席
   })
 
   it('有 key：输出标注 cryptopanicKey=set（B-source 注记），无 key 不加', async () => {
@@ -238,9 +249,12 @@ describe('createGetNewsTool（工具壳）', () => {
     const nearPanic = { results: [{ title: 'BTC ETF inflows push price', url: 'https://cryptopanic.com/news/1', published_at: new Date(base).toISOString(), currency: 'BTC' }] }
     const fetchImpl = mockFetchByUrl({
       'binance.com': () => jsonResp(nearBinance),
+      'okx.com': () => jsonResp({ code: '0', data: [] }),
       'cryptopanic.com': () => jsonResp(nearPanic),
       'coindesk.com': () => textResp(`<rss><channel><item><title>X</title><link>https://cd/x</link><guid>a</guid><pubDate>${new Date(base).toUTCString()}</pubDate></item></channel></rss>`),
       'theblock.co': () => textResp(`<rss><channel><item><title>Y</title><link>https://tb/y</link><guid>c</guid><pubDate>${new Date(base).toUTCString()}</pubDate></item></channel></rss>`),
+      'cointelegraph.com': () => textResp('<rss version="2.0"><channel><title>CT</title></channel></rss>'),
+      'decrypt.co': () => textResp('<rss version="2.0"><channel><title>Dec</title></channel></rss>'),
     })
     vi.stubGlobal('fetch', fetchImpl)
     const tool = createGetNewsTool({ cryptoPanicKey: 'sec_xyz' })

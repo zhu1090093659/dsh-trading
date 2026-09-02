@@ -1,0 +1,116 @@
+.pane {
+  max-height: 240px;
+  overflow-y: auto;
+  border-top: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  background: var(--dsw-futu-bg-base, #ffffff);
+  font-size: 12px;
+}
+
+.pane.fullHeight {
+  max-height: none;
+  height: 100%;
+  flex: 1;
+  border-top: none;
+}
+
+.fallbackBanner {
+  padding: 5px 12px;
+  font-size: 11px;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  background: var(--dsw-futu-bg-subtle, #f5f6f8);
+  border-bottom: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.item:hover {
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.source {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+}
+
+/* 不同源类型的色系 */
+.source[data-type='exchange'] { background: #f59e0b; }
+.source[data-type='media'] { background: #3b82f6; }
+.source[data-type='rss'] { background: #6b7280; }
+
+.title {
+  flex: 1;
+  line-height: 1.45;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.time {
+  flex-shrink: 0;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.sendBtn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--dsw-futu-bg-subtle, #f5f6f8);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  border-radius: var(--dsw-futu-radius-sm, 4px);
+  cursor: pointer;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  opacity: 0.85;
+  transition: all 0.15s ease;
+}
+
+.item:hover .sendBtn,
+.sendBtn:hover {
+  opacity: 1;
+  background: var(--dsw-futu-accent, #2563eb);
+  border-color: var(--dsw-futu-accent, #2563eb);
+  color: #ffffff;
+}
+
+.empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+}
+
+.degraded {
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  border-top: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+}

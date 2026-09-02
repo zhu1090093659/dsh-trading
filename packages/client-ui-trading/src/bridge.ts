@@ -13,11 +13,12 @@
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
-import type { AccountBalance, DerivativesData, FundamentalsPackage, Interval, Kline, MarketDataService, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
-import { fetchCnFundamentalsPackage } from '@dsh-trading/kit-cn'
-import { fetchHkFundamentalsPackage } from '@dsh-trading/kit-hk'
-import { fetchUsFundamentalsPackage } from '@dsh-trading/kit-us'
-import { fetchCryptoFundamentalsPackage } from '@dsh-trading/kit-crypto'
+import { isAnnouncementSource } from './client/news-source.ts'
+import type { AccountBalance, DerivativesData, FundamentalsPackage, Interval, Kline, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
+import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dsh-trading/kit-cn'
+import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dsh-trading/kit-hk'
+import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dsh-trading/kit-us'
+import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dsh-trading/kit-crypto'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/indicators'
 import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
@@ -50,6 +51,12 @@ export interface TradeRegistryLike {
   active(market: string): { provider: string; service: TradeService } | undefined
 }
 
+/** 新闻注册表服务的最小形状（issue #37，鸭式；api 包 TradingNewsRegistry 同构）。 */
+export interface TradingNewsRegistryLike {
+  register(market: string, aggregator: NewsAggregator): () => void
+  get(market: string): NewsAggregator | undefined
+}
+
 /**
  * 桥宿主工厂（registry-first 解析的唯一实现，node 半与单测共用）：
  * - getMarketService：注册表有激活注册项 → 用之；否则回退 legacy 市场键直读
@@ -58,15 +65,19 @@ export interface TradeRegistryLike {
  *   （选中但未注册 → 用户能在 GUI 看到设置目标，行情区报「未安装/未激活」）。
  */
 export function createBridgeHost(services: {
-  registry?: MarketDataRegistryLike
-  tradeRegistry?: TradeRegistryLike
-  router?: { activeProvider(market: string): string | undefined }
+  registry?: MarketDataRegistryLike | undefined
+  tradeRegistry?: TradeRegistryLike | undefined
+  router?: { activeProvider(market: string): string | undefined } | undefined
   legacy(market: MarketId): MarketDataService | undefined
-  customIndicatorsStore?: CustomIndicatorStore
-  knowledgeStore?: KnowledgeCardStore
-  strategyStore?: CustomStrategyStore
-  watchlistStore?: WatchlistStore
-  selectionStore?: SelectionStore
+  customIndicatorsStore?: CustomIndicatorStore | undefined
+  knowledgeStore?: KnowledgeCardStore | undefined
+  strategyStore?: CustomStrategyStore | undefined
+  watchlistStore?: WatchlistStore | undefined
+  selectionStore?: SelectionStore | undefined
+  /** 新闻注册表（issue #37）。 */
+  newsRegistry?: TradingNewsRegistryLike | undefined
+  /** CryptoPanic API token 取值函数（从 router settings 获取；可选）。 */
+  newsKey?: (() => string | undefined) | undefined
 }): BridgeHost {
   return {
     getMarketService: market => {
@@ -81,6 +92,8 @@ export function createBridgeHost(services: {
     strategyStore: services.strategyStore ?? createMemoryCustomStrategyStore(),
     watchlistStore: services.watchlistStore ?? createMemoryWatchlistStore(),
     selectionStore: services.selectionStore ?? createMemorySelectionStore(),
+    newsRegistry: services.newsRegistry,
+    newsKey: services.newsKey,
   }
 }
 
@@ -112,6 +125,10 @@ export interface BridgeHost {
    * placeOrder 的 dryRun 被强制为 true，实盘路径不经 GUI。
    */
   getTradeService?(market: MarketId): TradeService | undefined
+  /** 新闻注册表（可选，issue #37）：各市场 Kit 注册的新闻聚合器。 */
+  newsRegistry?: TradingNewsRegistryLike | undefined
+  /** CryptoPanic API token 取值函数（从 router settings 获取；可选，issue #37）。 */
+  newsKey?: (() => string | undefined) | undefined
 }
 
 export interface MarketInfoWire {
@@ -213,6 +230,18 @@ export interface KnowledgeCardsWire {
   ok: true
   cards: readonly KnowledgeCard[]
 }
+
+/* -- 新闻 wire（issue #37）----------------------------------------------- */
+
+export interface NewsWire {
+  ok: true
+  items: readonly NewsItem[]
+  unavailable: readonly string[]
+  fallback?: boolean | undefined
+}
+
+/** 新闻端点条目上限（保护公共数据源；超出部分由 Kit 层截流）。 */
+export const MAX_NEWS_LIMIT = 50
 
 export class BridgeProtocolError extends Error {
   readonly status: number
@@ -477,6 +506,62 @@ export class TradingBridge {
     if (store === undefined) return { ok: true, cards: [] }
     const cards = await store.list()
     return { ok: true, cards }
+  }
+
+  /**
+   * 标的新闻与公告聚合（issue #37）：按市场从 newsRegistry 解析到 Kit 注册的
+   * 聚合器；未注册时回退到各 Kit 导出的 aggregateNews 纯函数（无活跃会话时亦可用）。
+   * 若标的无专属快讯，智能回退为大盘/市场最新要闻并在 fallback 标记。
+   */
+  async news(market: string, symbol: string | null, rawLimit: string | null): Promise<NewsWire> {
+    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const aggregator = this.host.newsRegistry?.get(market)
+      ?? (market === 'cn' ? aggregateCnNews
+        : market === 'hk' ? aggregateHkNews
+        : market === 'us' ? aggregateUsNews
+        : market === 'crypto' ? aggregateCryptoNews
+        : undefined)
+
+    if (aggregator === undefined) {
+      throw Object.assign(
+        new Error(`market ${market} does not have a news provider`),
+        { code: 'TRADING_NOT_IMPLEMENTED' },
+      )
+    }
+    const limit = rawLimit === null || rawLimit === undefined ? undefined : Number(rawLimit)
+    if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0 || limit > MAX_NEWS_LIMIT)) {
+      throw new BridgeProtocolError(400, `news: limit must be an integer in 1..${MAX_NEWS_LIMIT}`)
+    }
+    const result = await aggregator({
+      symbol: symbol ?? undefined,
+      limit: limit ?? 20,
+      windowHours: 24,
+      cryptoPanicKey: this.host.newsKey?.(),
+    })
+
+    let items = result.items
+    let isFallback = false
+    // 智能回退：若指定了具体标的但 24h 内无专属媒体快讯（公告类源不算媒体快讯，
+    // 美股仅剩 SEC 披露时同样触发），自动回退拉取市场大盘最新要闻并并入。
+    const mediaNewsCount = items.filter(it => !isAnnouncementSource(it.source)).length
+    if (mediaNewsCount === 0 && symbol && result.unavailable.length === 0) {
+      try {
+        const macroResult = await aggregator({
+          limit: limit ?? 50,
+          windowHours: 24,
+          cryptoPanicKey: this.host.newsKey?.(),
+        })
+        if (macroResult.items.length > 0) {
+          // 合并后按发布时间倒序重排并按请求 limit 截尾（宏观 50 条混入不得超发）。
+          items = [...macroResult.items, ...items]
+            .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt))
+            .slice(0, limit ?? 20)
+          isFallback = true
+        }
+      } catch {}
+    }
+
+    return { ok: true, items, unavailable: result.unavailable, fallback: isFallback }
   }
 
   /** 自定义策略名册（issue #31）：返回记录，前端校验后并入名册。 */
@@ -780,6 +865,11 @@ export async function dispatchBridgeRequest(
       }
       case '/knowledge/cards': {
         return { status: 200, payload: await bridge.knowledgeCards() }
+      }
+      case '/news': {
+        const market = search.get('market') ?? ''
+        if (!market) throw new BridgeProtocolError(400, 'news: market is required')
+        return { status: 200, payload: await bridge.news(market, search.get('symbol'), search.get('limit')) }
       }
       case '/strategies/custom': {
         return { status: 200, payload: await bridge.customStrategies() }

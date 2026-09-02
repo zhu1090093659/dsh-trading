@@ -4,48 +4,50 @@
  */
 
 .root {
+  --futu-bg-base: var(--dsw-futu-bg-base, #f7f8fa);
+  --futu-bg-card: var(--dsw-futu-bg-surface, #ffffff);
+  --futu-bg-hover: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
+  --futu-bg-active: var(--dsw-futu-accent-subtle, rgba(37, 99, 235, 0.08));
+  --futu-border: var(--dsw-futu-border-default, #e3e6ea);
+  --futu-border-subtle: var(--dsw-futu-border-subtle, #edf0f3);
+  --futu-text-primary: var(--dsw-futu-text-primary, #1a1e24);
+  --futu-text-secondary: var(--dsw-futu-text-secondary, #5f6672);
+  --futu-text-muted: var(--dsw-futu-text-muted, #8e95a3);
+  --futu-accent: var(--dsw-futu-accent, #2563eb);
+  --futu-orange: #f56c1d;
+  --futu-up: var(--dsw-futu-up, #e64545);
+  --futu-down: var(--dsw-futu-down, #2ba471);
+
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--dsw-alias-bg-l0, #f8f9fb);
-  color: var(--dsw-alias-text-primary, #1a1e24);
+  background: var(--futu-bg-base);
+  color: var(--futu-text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   overflow: hidden;
   box-sizing: border-box;
 }
 
-:global(body[data-ds-dark-theme]),
-:global([data-theme='dark']),
-:global(html.dark),
-:global(body.dark) {
-  --futu-bg-base: #101318;
-  --futu-bg-card: #171b22;
-  --futu-bg-hover: rgba(255, 255, 255, 0.05);
-  --futu-bg-active: rgba(50, 117, 245, 0.12);
-  --futu-border: rgba(255, 255, 255, 0.08);
-  --futu-text-primary: #f3f4f6;
-  --futu-text-secondary: #9ca3af;
-  --futu-text-muted: #6b7280;
-  --futu-accent: #3275f5;
-  --futu-orange: #ff7828;
-  --futu-up: #eb5454;
-  --futu-down: #24af68;
-}
-
-:global(body:not([data-ds-dark-theme])):not([data-theme='dark']) {
-  --futu-bg-base: #f4f6f9;
-  --futu-bg-card: #ffffff;
-  --futu-bg-hover: #f0f3f7;
-  --futu-bg-active: #e8f0fe;
-  --futu-border: #e3e6ea;
-  --futu-text-primary: #1a1e24;
-  --futu-text-secondary: #5f6672;
-  --futu-text-muted: #8c93a0;
-  --futu-accent: #1e60f2;
-  --futu-orange: #f56c1d;
-  --futu-up: #e02f2f;
-  --futu-down: #149c58;
+:global(body[data-ds-dark-theme]) .root,
+:global([data-theme='dark']) .root,
+:global(:root[data-theme='dark']) .root,
+:global(html.dark) .root,
+:global(body.dark) .root,
+.root[data-theme='dark'] {
+  --futu-bg-base: var(--dsw-futu-bg-base, #131722);
+  --futu-bg-card: var(--dsw-futu-bg-surface, #1e222d);
+  --futu-bg-hover: var(--dsw-futu-bg-surface-hover, rgba(255, 255, 255, 0.08));
+  --futu-bg-active: var(--dsw-futu-accent-subtle, rgba(96, 165, 250, 0.15));
+  --futu-border: var(--dsw-futu-border-default, #2e3342);
+  --futu-border-subtle: var(--dsw-futu-border-subtle, #242832);
+  --futu-text-primary: var(--dsw-futu-text-primary, #f0f2f5);
+  --futu-text-secondary: var(--dsw-futu-text-secondary, #a0a6b5);
+  --futu-text-muted: var(--dsw-futu-text-muted, #858c9c);
+  --futu-accent: var(--dsw-futu-accent, #60a5fa);
+  --futu-orange: #ff9800;
+  --futu-up: var(--dsw-futu-up, #e64545);
+  --futu-down: var(--dsw-futu-down, #2ba471);
 }
 
 /* 顶部报价与估值药丸条 */
@@ -339,12 +341,13 @@
 .matrixTable td {
   padding: 7px 12px;
   border-bottom: 1px solid var(--futu-border);
+  color: var(--futu-text-primary);
   white-space: nowrap;
 }
 
 .matrixTable th {
   background: var(--futu-bg-card);
-  color: var(--futu-text-muted);
+  color: var(--futu-text-secondary);
   font-weight: 500;
   font-feature-settings: 'tnum';
 }
@@ -355,6 +358,7 @@
   position: sticky;
   left: 0;
   background: var(--futu-bg-card);
+  color: var(--futu-text-primary);
   z-index: 2;
   box-shadow: 2px 0 4px rgba(0, 0, 0, 0.02);
   min-width: 160px;
@@ -375,9 +379,14 @@
 .indicatorRow {
   cursor: pointer;
   transition: background 0.12s ease;
+  color: var(--futu-text-primary);
 }
 
 .indicatorRow:hover {
+  background: var(--futu-bg-hover);
+}
+
+.indicatorRow:hover td:first-child {
   background: var(--futu-bg-hover);
 }
 
@@ -395,6 +404,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  color: var(--futu-text-primary);
+  font-weight: 500;
 }
 
 .indicatorDot {

@@ -4,18 +4,22 @@
  */
 import { useEffect, useRef } from 'react'
 
-export function usePoll(poll: () => Promise<void> | void, intervalMs: number, deps: readonly unknown[]): void {
+export function usePoll(poll: (() => Promise<void> | void) | null | undefined, intervalMs: number, deps: readonly unknown[]): void {
   const pollRef = useRef(poll)
   pollRef.current = poll
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | undefined
     const tick = (): void => {
-      if (document.visibilityState === 'visible') void pollRef.current()
+      if (document.visibilityState === 'visible' && typeof pollRef.current === 'function') {
+        void pollRef.current()
+      }
     }
     tick()
     timer = setInterval(tick, intervalMs)
-    const onVisibility = (): void => { if (document.visibilityState === 'visible') tick() }
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'visible') tick()
+    }
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
       if (timer !== undefined) clearInterval(timer)

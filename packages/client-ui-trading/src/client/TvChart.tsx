@@ -16,10 +16,10 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import {
-  AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart,
+  AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart, createSeriesMarkers,
 } from 'lightweight-charts'
 import type {
-  IChartApi, ISeriesApi, Logical, LogicalRange, MouseEventParams, SeriesType, Time, UTCTimestamp,
+  IChartApi, ISeriesApi, ISeriesMarkersPluginApi, Logical, LogicalRange, MouseEventParams, SeriesType, Time, UTCTimestamp,
 } from 'lightweight-charts'
 import type { BarPrice, PriceFormatCustom } from 'lightweight-charts'
 import { fmtAxis, fmtCompact, priceDigits } from './format.ts'
@@ -47,6 +47,39 @@ export interface TvIndicatorGroup {
   outputs: readonly IndicatorOutput[]
 }
 
+/* ── 图表标记输入（Issue #41）──────────────────────────────── */
+
+/** 策略信号标记输入（从 marker-state 传入）。 */
+export interface ChartSignalMarkerInput {
+  readonly time: number
+  readonly action: 'entry' | 'exit'
+  readonly price: number
+  readonly reason: string
+}
+
+/** 知识事件标记输入（从 marker-state 传入）。 */
+export interface ChartKnowledgeMarkerInput {
+  readonly time: number
+  readonly title: string
+  readonly cardId: string
+  readonly credibility: 'high' | 'medium' | 'low'
+}
+
+/** 悬停标记时传递给父级的详情（驱动 MarkerTooltip 渲染）。 */
+export interface MarkerHoverInfo {
+  /** 屏幕坐标 X（TvChart 容器坐标系）。 */
+  x: number
+  /** 屏幕坐标 Y（TvChart 容器坐标系）。 */
+  y: number
+  /** 容器尺寸（Tooltip 越界翻转钳位用）。 */
+  containerWidth: number
+  containerHeight: number
+  /** 策略信号数据（与 knowledge 互斥）。 */
+  signal?: ChartSignalMarkerInput
+  /** 知识事件数据（与 signal 互斥）。 */
+  knowledge?: ChartKnowledgeMarkerInput
+}
+
 export interface TvChartProps {
   bars: readonly TvBar[]
   volumes: readonly TvVolume[]
@@ -68,6 +101,12 @@ export interface TvChartProps {
   selection?: { start: number; end: number } | null | undefined
   /** 图表就绪时注册截图回调、卸载时以 null 注销（「发给 Agent」用）。 */
   onCaptureReady?: (capture: (() => TvChartCapture | null) | null) => void
+  /** 策略回测信号标记（可选，issue #41）。 */
+  signalMarkers?: readonly ChartSignalMarkerInput[] | undefined
+  /** 知识事件标记（可选，issue #41）。 */
+  knowledgeMarkers?: readonly ChartKnowledgeMarkerInput[] | undefined
+  /** 悬停标记时回调（null = 离开标记区域；父级负责渲染 Tooltip）。 */
+  onMarkerHover?: (info: MarkerHoverInfo | null) => void
 }
 
 /** 一次图表截图（PNG data URL + 像素尺寸，回显/命名用）。 */
@@ -258,6 +297,9 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const markerPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
+  /** 当前图上标记的元数据（命中检测用；与 markerPlugin 的 markers 同步重建）。 */
+  const markerMetaRef = useRef<MarkerMeta[]>([])
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   /** 右轴镜像序列（透明）：top/bottom 钉范围，close 供轴上百分比徽标。 */
   const mirrorTopRef = useRef<ISeriesApi<'Line'> | null>(null)
@@ -388,9 +430,11 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     const onCrosshair = (param: MouseEventParams): void => {
       if (param.logical === undefined || param.time === undefined) {
         propsRef.current.onHoverIndex(null)
+        propsRef.current.onMarkerHover?.(null)
         return
       }
       propsRef.current.onHoverIndex(param.logical)
+      propsRef.current.onMarkerHover?.(hitTestMarker(param, propsRef, chart, candles, container, markerMetaRef))
     }
     chart.subscribeCrosshairMove(onCrosshair)
 
@@ -414,6 +458,9 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       chart.remove()
       chartRef.current = null
       candleRef.current = null
+      markerPluginRef.current?.detach()
+      markerPluginRef.current = null
+      markerMetaRef.current = []
       volumeRef.current = null
       mirrorTopRef.current = null
       mirrorBottomRef.current = null
@@ -478,6 +525,68 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       volume.update(volumes[index] as TvVolume)
     }
   }, [bars, volumes, dataKey, props.colorMode])
+
+  // ---- 策略信号 & 知识事件标记（Issue #41）────────────────────────────
+  useEffect(() => {
+    const candles = candleRef.current
+    if (candles === null) return
+    const markers: Array<{
+      time: UTCTimestamp
+      position: 'belowBar' | 'aboveBar'
+      color: string
+      shape: 'arrowUp' | 'arrowDown' | 'circle'
+      text: string
+    }> = []
+    const meta: MarkerMeta[] = []
+    /** marker time → 柱下标（命中检测按柱下标匹配；bars 变化时本 effect 重建）。 */
+    const indexOfTime = new Map<number, number>()
+    for (let index = 0; index < bars.length; index++) {
+      const bar = bars[index]
+      if (bar !== undefined) indexOfTime.set(bar.time as number, index)
+    }
+
+    // 策略信号 → 绿色买入箭头 / 红色卖出箭头
+    if (props.signalMarkers) {
+      for (const s of props.signalMarkers) {
+        const t = (s.time > 1e11 ? Math.floor(s.time / 1000) : s.time) as UTCTimestamp
+        markers.push({
+          time: t,
+          position: s.action === 'entry' ? 'belowBar' : 'aboveBar',
+          color: s.action === 'entry' ? '#22c55e' : '#ef4444',
+          shape: s.action === 'entry' ? 'arrowUp' : 'arrowDown',
+          text: s.action === 'entry' ? '买入' : '卖出',
+        })
+        meta.push({ index: indexOfTime.get(t as number) ?? -1, signal: s })
+      }
+    }
+
+    // 知识事件 → 蓝色圆形图钉
+    if (props.knowledgeMarkers) {
+      for (const k of props.knowledgeMarkers) {
+        const t = (k.time > 1e11 ? Math.floor(k.time / 1000) : k.time) as UTCTimestamp
+        markers.push({
+          time: t,
+          position: 'aboveBar',
+          color: '#3b82f6',
+          shape: 'circle',
+          text: '📌',
+        })
+        meta.push({ index: indexOfTime.get(t as number) ?? -1, knowledge: k })
+      }
+    }
+
+    // 按 time 升序排列（与 markers 顺序一致）
+    markers.sort((a, b) => (a.time as number) - (b.time as number))
+    meta.sort((a, b) => a.index - b.index)
+    markerMetaRef.current = meta
+    if (markerPluginRef.current === null) {
+      markerPluginRef.current = createSeriesMarkers(candles, markers)
+    } else {
+      markerPluginRef.current.setMarkers(markers)
+    }
+    // 标记消失（切标的/关开关）后悬停详情立即清场。
+    if (meta.length === 0) propsRef.current.onMarkerHover?.(null)
+  }, [props.signalMarkers, props.knowledgeMarkers, bars])
 
   // ---- 右轴镜像数据：top/bottom 包络 = 蜡烛高低 ∪ 主图指标输出（与左轴
   // autoscale 范围完全一致，两轴刻度行对齐的前提），close 序列驱动百分比徽标。
@@ -713,6 +822,52 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       })}
     </div>
   )
+}
+
+/** 一条标记的命中检测元数据（index = 所属柱下标，-1 = 柱不在当前序列）。 */
+type MarkerMeta = {
+  index: number
+  signal?: ChartSignalMarkerInput
+  knowledge?: ChartKnowledgeMarkerInput
+}
+
+/**
+ * 标记命中检测：十字线所在柱有信号/知识标记时回报容器坐标与详情（驱动
+ * MarkerTooltip）。x = 时间轴坐标 + 左价格轴宽；y = 标记锚定价位（entry 在
+ * 柱 low、exit/知识图钉在柱 high），锚点不可见时回退鼠标 y。
+ */
+function hitTestMarker(
+  param: MouseEventParams,
+  propsRef: { current: TvChartProps },
+  chart: IChartApi,
+  candles: ISeriesApi<'Candlestick'>,
+  container: HTMLDivElement,
+  metaRef: { current: readonly MarkerMeta[] },
+): MarkerHoverInfo | null {
+  const meta = metaRef.current
+  if (meta.length === 0 || param.logical === undefined) return null
+  const index = Math.round(Number(param.logical))
+  // 同柱多标记：signal 优先（交易详情信息量更大），knowledge 兜底。
+  const entry = meta.find(m => m.index === index && m.signal !== undefined)
+    ?? meta.find(m => m.index === index && m.knowledge !== undefined)
+  if (entry === undefined) return null
+
+  const paneOffset = chart.priceScale('left').width()
+  const xCoord = chart.timeScale().logicalToCoordinate(param.logical)
+  if (xCoord === null) return null
+  const x = Number(xCoord) + paneOffset
+
+  const bar = propsRef.current.bars[index]
+  const anchorPrice = entry.signal !== undefined
+    ? (entry.signal.action === 'entry' ? bar?.low : bar?.high)
+    : bar?.high
+  const yCoord = anchorPrice !== undefined ? candles.priceToCoordinate(anchorPrice as BarPrice) : null
+  const y = yCoord ?? param.point?.y ?? 0
+
+  const info: MarkerHoverInfo = { x, y, containerWidth: container.clientWidth, containerHeight: container.clientHeight }
+  if (entry.signal !== undefined) info.signal = entry.signal
+  else if (entry.knowledge !== undefined) info.knowledge = entry.knowledge
+  return info
 }
 
 /** 主图叠加（pane 0）与副图（pane 2+，重建式）两套 diff 策略。 */

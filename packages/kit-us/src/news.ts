@@ -21,15 +21,17 @@ export interface NewsItem {
 
 export interface AggregateNewsOptions {
   /** 标的（市场规范词汇，如 AAPL）；缺省 = 通用市场主题。 */
-  symbol?: string
+  symbol?: string | undefined
   /** 时间窗（小时）：只保留 now - windowHours 内的条目；缺省 24。 */
-  windowHours?: number
+  windowHours?: number | undefined
   /** 输出条数上限；缺省 20。 */
-  limit?: number
+  limit?: number | undefined
   /** 依赖注入的 fetch（测试用 mock；缺省 globalThis.fetch）。 */
-  fetch?: typeof globalThis.fetch
+  fetch?: typeof globalThis.fetch | undefined
   /** 注入当前时间戳（ms，测试用）；缺省 Date.now()。 */
-  now?: number
+  now?: number | undefined
+  /** CryptoPanic API token（桥面透传，us 聚合器忽略；对齐 api 契约形状）。 */
+  cryptoPanicKey?: string | undefined
 }
 
 export interface AggregateNewsResult {
@@ -45,11 +47,13 @@ const DEFAULT_WINDOW_HOURS = 24
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (dsh-trading/us_get_news)'
+/** 下钻 fetch 统一 10s 超时（docs/replication.md §9；上游挂起不得拖垮 60s 轮询链）。 */
+const UPSTREAM_TIMEOUT_MS = 10_000
 /** 无 symbol 时的通用市场主题（避免空 query）。 */
 const DEFAULT_QUERY_TOPIC = 'US stock market'
 
 async function fetchText(url: string, fetchImpl: typeof globalThis.fetch, name: string): Promise<string> {
-  const response = await fetchImpl(url, { headers: { accept: 'application/json, text/xml, */*', 'user-agent': UA } })
+  const response = await fetchImpl(url, { headers: { accept: 'application/json, text/xml, */*', 'user-agent': UA }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
   if (!response.ok) {
     const body = await response.text().catch(() => '')
     throw new Error(`${name}: HTTP ${response.status}${body ? ` — ${body.slice(0, 160)}` : ''}`)
@@ -136,7 +140,51 @@ async function fetchGooglenews(fetchImpl: typeof globalThis.fetch, topic: string
   return parseGoogleNewsRss(text).slice(0, limit)
 }
 
-/* ── 聚合：并发取两源 → 时间窗/标的过滤 → 按时间倒序 → 截尾 ──────────────────── */
+/* ── SEC EDGAR 官方披露 Atom Feed（Form 8-K / 10-Q / 10-K / Form 4 等） ─────────── */
+
+export function parseSecEdgarAtom(xml: string): NewsItem[] {
+  const items: NewsItem[] = []
+  const entries = xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi) ?? []
+  for (const entry of entries) {
+    const title = extractTag(entry, 'title')
+    let link = extractTag(entry, 'link')
+    if (!link) {
+      const hrefMatch = entry.match(/<link[^>]+href="([^">]+)"/i)
+      if (hrefMatch) link = hrefMatch[1] ?? ''
+    }
+    if (!title || !link) continue
+    const updated = extractTag(entry, 'updated') || extractTag(entry, 'published')
+    const ts = Date.parse(updated)
+    if (!Number.isFinite(ts)) continue
+    items.push({
+      source: 'sec-edgar',
+      title: title.replace(/\s+/g, ' ').trim(),
+      url: link,
+      publishedAt: new Date(ts).toISOString(),
+    })
+  }
+  return items
+}
+
+async function fetchSecEdgarAnnouncements(fetchImpl: typeof globalThis.fetch, symbol: string, limit: number): Promise<NewsItem[]> {
+  const clean = symbol.trim().toUpperCase()
+  if (!clean || clean === DEFAULT_QUERY_TOPIC.toUpperCase()) return []
+  const url = new URL('https://www.sec.gov/cgi-bin/browse-edgar')
+  url.searchParams.set('action', 'getcompany')
+  url.searchParams.set('CIK', clean)
+  url.searchParams.set('type', '')
+  url.searchParams.set('dateb', '')
+  url.searchParams.set('owner', 'exclude')
+  url.searchParams.set('start', '0')
+  url.searchParams.set('count', String(Math.max(limit, 20)))
+  url.searchParams.set('output', 'atom')
+  // 失败照常抛出：aggregate 用 allSettled 收集进 unavailable，公告源挂掉不与
+  // 「暂无公告」混淆。
+  const text = await fetchText(url.toString(), fetchImpl, 'sec-edgar')
+  return parseSecEdgarAtom(text).slice(0, limit)
+}
+
+/* ── 聚合：并发取源 → 时间窗/标的过滤 → 按时间倒序 → 截尾 ──────────────────── */
 
 function inWindow(publishedAt: string, nowMs: number, windowMs: number): boolean {
   const ts = Date.parse(publishedAt)
@@ -149,7 +197,8 @@ function matchesSymbol(item: NewsItem, rawSymbol?: string): boolean {
   const needle = rawSymbol.trim().toUpperCase()
   if (!needle) return true
   const title = item.title.toUpperCase()
-  // 已知局限：媒体标题常用全名（"Apple"）而非 ticker（"AAPL"），此处仅按 ticker/base 子串匹配。
+  // sec-edgar 本身按 CIK/Ticker 抓取，直接命中
+  if (item.source === 'sec-edgar') return true
   return title.includes(needle)
 }
 
@@ -166,17 +215,24 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
   const limit = clampNumber(options.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
   const topic = (options.symbol?.trim() || DEFAULT_QUERY_TOPIC)
 
-  const results = await Promise.allSettled([
+  const fetchers: Promise<NewsItem[]>[] = [
     fetchYahooNews(fetchImpl, topic, limit),
     fetchGooglenews(fetchImpl, topic, limit),
-  ])
+  ]
+  if (options.symbol && options.symbol.trim()) {
+    fetchers.push(fetchSecEdgarAnnouncements(fetchImpl, options.symbol, limit))
+  }
+
+  const results = await Promise.allSettled(fetchers)
 
   const items: NewsItem[] = []
   const unavailable: string[] = []
   for (const result of results) {
     if (result.status === 'fulfilled') {
       for (const item of result.value) {
-        if (!inWindow(item.publishedAt, now, windowMs)) continue
+        // SEC 官方公报放宽时间窗到 30 天，媒体快讯按 24h 时间窗
+        const maxAge = item.source === 'sec-edgar' ? 30 * 24 * 3_600_000 : windowMs
+        if (!inWindow(item.publishedAt, now, maxAge)) continue
         if (!matchesSymbol(item, options.symbol)) continue
         items.push(item)
       }

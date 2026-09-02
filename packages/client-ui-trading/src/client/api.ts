@@ -210,6 +210,38 @@ export async function fetchKnowledgeCards(): Promise<KnowledgeCard[]> {
 }
 
 /* ------------------------------------------------------------------ */
+/* 新闻情报流（issue #37）                                                */
+/* ------------------------------------------------------------------ */
+
+export interface ClientNewsItem {
+  source: string
+  title: string
+  url: string
+  publishedAt: string
+}
+
+export interface ClientNewsResult {
+  items: ClientNewsItem[]
+  unavailable: string[]
+  fallback?: boolean
+}
+
+/**
+ * 标的新闻（issue #37）。Kit 未注册或会话不活跃 → null：面板显示空态提示。
+ */
+export async function fetchNews(market: MarketId, symbol?: string, limit = 20): Promise<ClientNewsResult | null> {
+  try {
+    const query = new URLSearchParams({ market, ...(symbol ? { symbol } : {}), limit: String(limit) })
+    const wire = await getJson<{ ok: boolean; items: ClientNewsItem[]; unavailable: string[]; fallback?: boolean }>(
+      `/dshtrading/api/news?${query.toString()}`,
+    )
+    return { items: wire.items ?? [], unavailable: wire.unavailable ?? [], fallback: wire.fallback === true }
+  } catch {
+    return null
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* SSE 失效信号订阅（issue #30 / P1）                                        */
 /* ------------------------------------------------------------------ */
 
@@ -421,6 +453,7 @@ export interface TradingBridgeService {
   fetchCustomStrategies: typeof fetchCustomStrategies
   fetchKnowledgeCards: typeof fetchKnowledgeCards
   fetchFundamentals: typeof fetchFundamentals
+  fetchNews: typeof fetchNews
   subscribeTradingEvents: typeof subscribeTradingEvents
 }
 
@@ -431,6 +464,7 @@ export function createTradingBridgeService(): TradingBridgeService {
     fetchCustomStrategies,
     fetchKnowledgeCards,
     fetchFundamentals,
+    fetchNews,
     subscribeTradingEvents,
   }
 }

@@ -110,6 +110,12 @@ export function apply(ctx: Context): void {
       strategyStore,
       watchlistStore,
       selectionStore,
+      // 新闻注册表（issue #37）：各 Kit 向 host 面注册表注册 aggregateNews 纯函数。
+      newsRegistry: webCtx.get('tradingNewsRegistry', false) as import('./bridge.ts').TradingNewsRegistryLike | undefined,
+      newsKey: () => {
+        const router = webCtx.get('tradingMarketRouter', false) as { newsKey?: () => string | undefined } | undefined
+        return router?.newsKey?.()
+      },
     })
     const bridge = new TradingBridge(host)
     const route = {

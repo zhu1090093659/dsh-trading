@@ -34,6 +34,14 @@ import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
+import { fetchNews } from './api.ts'
+import type { ClientNewsItem } from './api.ts'
+import { NewsFeedPane } from './NewsFeedPane.tsx'
+import { MarkerTooltip } from './MarkerTooltip.tsx'
+import type { MarkerHoverInfo } from './TvChart.tsx'
+import { createMarkerStateStore } from './marker-state.ts'
+import { isAnnouncementSource } from './news-source.ts'
+import type { ChartSignalMarkerInput, ChartKnowledgeMarkerInput } from './TvChart.tsx'
 import css from './quote-stage.module.css'
 
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
@@ -99,6 +107,9 @@ function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
 
 type SendState = 'idle' | 'sending' | 'sent' | 'error'
 
+/** 信号 reason 的币种符号（按市场；crypto 以 USD 计价近似）。 */
+const CURRENCY_SYMBOL: Record<MarketId, string> = { cn: '¥', hk: 'HK$', us: '$', crypto: '$' }
+
 export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator, fillComposer }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
   const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk'].includes(instrument.market))
@@ -125,8 +136,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
   const [sendState, setSendState] = useState<SendState>('idle')
-  /** 行情板块页签（图表 | 基本面）：跨标的保持（对比多家基本面时不来回跳）。 */
-  const [stageTab, setStageTab] = useState<'chart' | 'fundamentals'>('chart')
+  /** 行情板块页签（图表 | 基本面 | 新闻 | 公告）：跨标的保持。 */
+  const [stageTab, setStageTab] = useState<'chart' | 'fundamentals' | 'news' | 'announcements'>('chart')
   /** 衍生品指标快照（issue #38，crypto 专属；null = 未实现/失败 → 面板整体隐藏）。 */
   const [derivatives, setDerivatives] = useState<DerivativesData | null>(null)
   /** 盘口竖栏（issue #39）：开关跨标的/会话记忆；数据 null = 数据源未提供（降级提示）。 */
@@ -145,6 +156,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
   /** TvChart 注册的截图回调（图表未渲染/已卸载 = null）。 */
   const captureRef = useRef<(() => TvChartCapture | null) | null>(null)
+
+  // ── 新闻与公告（issue #37）────────────────────────────────────
+  const [newsItems, setNewsItems] = useState<ClientNewsItem[] | null>(null)
+  const [newsUnavailable, setNewsUnavailable] = useState<string[]>([])
+  const [newsFallback, setNewsFallback] = useState<boolean>(false)
+
+  // ── K 线标记（issue #41）──────────────────────────────────────
+  const [markerStore] = useState(() => createMarkerStateStore())
+  const markerState = useSyncExternalStore(markerStore.subscribe, markerStore.getSnapshot)
+  const [markerHover, setMarkerHover] = useState<MarkerHoverInfo | null>(null)
+
   const [clock, setClock] = useState(() => formatStatusBarClock(Date.now()))
   const [indexTickers, setIndexTickers] = useState<Record<string, Ticker>>({})
 
@@ -270,6 +292,10 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setDerivatives(null)
     setOrderbook(null)
     setTrades(null)
+    setNewsItems(null)
+    setNewsUnavailable([])
+    setNewsFallback(false)
+    setMarkerHover(null)
   }, [market, symbol])
 
   // ticker 轮询：头部价格 + 尾随合并最后一根 K 线
@@ -284,6 +310,25 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       }
     } catch { /* 下轮再试 */ }
   }, TICKER_POLL_MS, [market, symbol])
+
+  // 新闻情报流轮询（issue #37）：处于 news/announcements 或开启事件图钉时 60s 轮询；symbol/market 变化时立即重拉。
+  const NEWS_POLL_MS = 60000
+  const newsRequestRef = useRef('')
+  usePoll(async () => {
+    if ((stageTab !== 'news' && stageTab !== 'announcements' && !markerState.showKnowledgeEvents) || market === undefined || symbol === undefined) return
+    const request = `${market}:${symbol}`
+    newsRequestRef.current = request
+    try {
+      const result = await fetchNews(market, symbol, 50)
+      // 竞态守卫：慢响应回来时已切标的 → 丢弃，旧新闻不得覆盖新标的（对齐 klines poll 的 requestRef 模式）。
+      if (newsRequestRef.current !== request) return
+      if (result !== null) {
+        setNewsItems(result.items)
+        setNewsUnavailable(result.unavailable)
+        setNewsFallback(Boolean(result.fallback))
+      }
+    } catch { /* 下轮重试 */ }
+  }, NEWS_POLL_MS, [market, symbol, stageTab, markerState.showKnowledgeEvents])
 
   const stats = useMemo(() => {
     const last = daily !== null && daily.length > 0 ? daily[daily.length - 1] : undefined
@@ -354,6 +399,93 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
   // 所有可用指标（供底部词条栏横向快捷展示）
   const allDefinitions = useMemo(() => indicators.list(), [rosterVersion])
+
+  // 策略信号标记数据（issue #41）：在当前 K 线序列上实时计算 EMA(12, 26) 交叉信号（过滤预热期与边缘噪音）。
+  const signalMarkers = useMemo<readonly ChartSignalMarkerInput[] | undefined>(() => {
+    if (!bars || bars.length < 30) return undefined
+    const cur = CURRENCY_SYMBOL[activeMarket]
+    const k12 = 2 / (12 + 1)
+    const k26 = 2 / (26 + 1)
+    let ema12 = bars[0]?.close ?? 0
+    let ema26 = bars[0]?.close ?? 0
+    const signals: ChartSignalMarkerInput[] = []
+    let prevDiff: number | null = null
+
+    for (let i = 0; i < bars.length; i++) {
+      const bar = bars[i]
+      if (!bar) continue
+      ema12 = bar.close * k12 + ema12 * (1 - k12)
+      ema26 = bar.close * k26 + ema26 * (1 - k26)
+      const diff = ema12 - ema26
+      if (i >= 26 && prevDiff !== null) {
+        if (prevDiff <= 0 && diff > 0) {
+          signals.push({
+            time: bar.time,
+            action: 'entry',
+            price: bar.close,
+            reason: `EMA(12/26) 金叉买入价 ${cur}${bar.close.toFixed(2)}`,
+          })
+        } else if (prevDiff >= 0 && diff < 0) {
+          signals.push({
+            time: bar.time,
+            action: 'exit',
+            price: bar.close,
+            reason: `EMA(12/26) 死叉卖出价 ${cur}${bar.close.toFixed(2)}`,
+          })
+        }
+      }
+      prevDiff = diff
+    }
+    return signals.length > 0 ? signals : undefined
+  }, [bars])
+
+  // 知识事件标记数据（issue #41）：从当前标的的官方公告与知识事件中提取，按时间柱精准锚定（同 K 线柱去重聚合，避免边缘挤压）。
+  const knowledgeMarkers = useMemo<readonly ChartKnowledgeMarkerInput[] | undefined>(() => {
+    if (!newsItems || newsItems.length === 0 || !bars || bars.length === 0) return undefined
+    // 仅针对属于该标的的官方公告/交易所公报打图钉，排除泛财经媒体与宏观回退要闻
+    const announcements = newsItems.filter(it => isAnnouncementSource(it.source))
+    if (announcements.length === 0) return undefined
+
+    // 计算当前 K 线的平均周期步长（如日 K=86400s，周 K=604800s，月 K≈2592000s）
+    const barStep = bars.length > 1 ? Math.abs((bars[bars.length - 1]?.time ?? 0) - (bars[0]?.time ?? 0)) / (bars.length - 1) : 86400
+    const tolerance = Math.max(barStep * 0.8, 43200)
+    const barMap = new Map<number, { title: string; count: number; url: string }>()
+
+    for (const item of announcements) {
+      const ts = Math.floor(new Date(item.publishedAt).getTime() / 1000)
+      if (Number.isNaN(ts)) continue
+
+      let bestBarTime: number | null = null
+      let minDiff = Infinity
+      for (const bar of bars) {
+        const diff = Math.abs(bar.time - ts)
+        if (diff < minDiff && diff <= tolerance) {
+          minDiff = diff
+          bestBarTime = bar.time
+        }
+      }
+
+      if (bestBarTime !== null) {
+        const existing = barMap.get(bestBarTime)
+        if (existing) {
+          existing.count += 1
+        } else {
+          barMap.set(bestBarTime, { title: item.title, count: 1, url: item.url })
+        }
+      }
+    }
+
+    const markers: ChartKnowledgeMarkerInput[] = []
+    for (const [time, info] of barMap.entries()) {
+      markers.push({
+        time,
+        title: info.count > 1 ? `${info.title} (等${info.count}条)` : info.title,
+        cardId: info.url,
+        credibility: 'high',
+      })
+    }
+    return markers.length > 0 ? markers : undefined
+  }, [newsItems, bars])
 
   // 发给 Agent：先截图（画布只在图表挂载期间可取），再把文本 + PNG 填入
   // 会话输入框（不自动发送——用户大概率还要补自己的 prompt）。
@@ -431,7 +563,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           <span>{fmtChange(stats.change)}</span>
           <span>{fmtPercent(stats.pct)}</span>
         </span>
-        {/* 行情板块页签：图表 | 基本面（富途牛牛式，页签随报价头同行） */}
+        {/* 行情板块页签：图表 | 基本面 | 新闻 | 公告（富途牛牛式，页签随报价头同行） */}
         <div className={css.stageTabs} role="tablist" aria-label="quote section">
           <button
             type="button"
@@ -452,6 +584,26 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             onClick={() => { setStageTab('fundamentals') }}
           >
             {t('quote.tab.fundamentals')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={stageTab === 'news'}
+            className={css.stageTab}
+            data-active={stageTab === 'news' ? 'true' : undefined}
+            onClick={() => { setStageTab('news') }}
+          >
+            {t('quote.tab.news')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={stageTab === 'announcements'}
+            className={css.stageTab}
+            data-active={stageTab === 'announcements' ? 'true' : undefined}
+            onClick={() => { setStageTab('announcements') }}
+          >
+            {t('quote.tab.announcements')}
           </button>
         </div>
         <span className={css.meta}>
@@ -544,6 +696,28 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           >
             {t('orderbook.toggle')}
           </button>
+          {/* 策略信号标记开关（issue #41） */}
+          <button
+            type="button"
+            className={css.pickerButton}
+            data-active={markerState.showSignals ? 'true' : undefined}
+            aria-pressed={markerState.showSignals}
+            title="策略信号标记"
+            onClick={() => markerStore.toggleSignals()}
+          >
+            信号
+          </button>
+          {/* 知识事件图钉开关（issue #41） */}
+          <button
+            type="button"
+            className={css.pickerButton}
+            data-active={markerState.showKnowledgeEvents ? 'true' : undefined}
+            aria-pressed={markerState.showKnowledgeEvents}
+            title="知识事件图钉"
+            onClick={() => markerStore.toggleKnowledgeEvents()}
+          >
+            事件
+          </button>
           {/* 区间统计（同花顺式框选统计；紧挨「技术指标」按钮左侧） */}
             <button
               type="button"
@@ -628,6 +802,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 rangeSelectionMode={rangeMode}
                 selection={rangeSelection}
                 onRangeSelect={setRangeSelection}
+                signalMarkers={markerState.showSignals ? signalMarkers : undefined}
+                knowledgeMarkers={markerState.showKnowledgeEvents ? knowledgeMarkers : undefined}
+                onMarkerHover={setMarkerHover}
               />
             )}
             {rangeMode && rangeStats !== null && (
@@ -688,6 +865,27 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 </div>
               </div>
             )}
+            {/* 标记悬停 Tooltip：绝对定位在 chartBox（position:relative）内，
+                坐标系与 TvChart 回报的容器坐标一致 */}
+            {markerHover !== null && (
+              <MarkerTooltip
+                x={markerHover.x}
+                y={markerHover.y}
+                containerWidth={markerHover.containerWidth}
+                containerHeight={markerHover.containerHeight}
+                signal={markerHover.signal ? {
+                  action: markerHover.signal.action,
+                  price: markerHover.signal.price,
+                  reason: markerHover.signal.reason,
+                  time: markerHover.signal.time,
+                } : undefined}
+                knowledge={markerHover.knowledge ? {
+                  title: markerHover.knowledge.title,
+                  credibility: markerHover.knowledge.credibility,
+                  cardId: markerHover.knowledge.cardId,
+                } : undefined}
+              />
+            )}
             </div>
             {market === 'crypto' && derivatives !== null && (
               <DerivativesPane t={t} derivatives={derivatives} colorMode={colorMode} />
@@ -707,9 +905,33 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             />
           )}
         </div>
-      ) : (
+      ) : stageTab === 'fundamentals' ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <FundamentalsStage t={t} useSelection={useSelection} />
+        </div>
+      ) : stageTab === 'news' ? (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <NewsFeedPane
+            items={newsItems}
+            unavailable={newsUnavailable}
+            fallback={newsFallback}
+            fullHeight
+            filterType="media"
+            t={t}
+            fillComposer={fillComposer}
+          />
+        </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <NewsFeedPane
+            items={newsItems}
+            unavailable={newsUnavailable}
+            fallback={false}
+            fullHeight
+            filterType="exchange"
+            t={t}
+            fillComposer={fillComposer}
+          />
         </div>
       )}
 
