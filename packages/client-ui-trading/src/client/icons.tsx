@@ -42,6 +42,15 @@ export function IconIndicators({ size = 16 }: { size?: number }): ReactElement {
   )
 }
 
+/** 发给 Agent（纸飞机）。 */
+export function IconSend({ size = 16 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13.75 2.25 7 9M13.75 2.25 9.5 13.75 7 9 2.25 6.5z" />
+    </svg>
+  )
+}
+
 /** 自选列表图标（富途左栏图标）。 */
 export function IconWatchlist({ size = 16 }: { size?: number }): ReactElement {
   return (

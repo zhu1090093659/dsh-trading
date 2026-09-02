@@ -155,10 +155,18 @@
   background: var(--dsw-futu-text-primary, #1f2937);
 }
 
+/* 右侧动作组：发给 Agent + 指标选择弹层锚（弹层 right:0 贴组右缘）。 */
+.toolbarActions {
+  position: relative;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* 指标选择弹层 */
 .indicatorAnchor {
   position: relative;
-  margin-left: auto;
 }
 
 .pickerButton {
@@ -182,6 +190,41 @@
 
 .pickerButton[aria-expanded='true'] {
   background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
+}
+
+/* 发给 Agent：与 pickerButton 同族；sent/error 态短暂换色后自动复位。 */
+.sendButton {
+  appearance: none;
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  background: #ffffff;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--dsw-futu-radius-md, 6px);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.sendButton:hover:not(:disabled) {
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.sendButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sendButton[data-state='sent'] {
+  border-color: rgba(34, 160, 93, 0.45);
+  color: #16a34a;
+}
+
+.sendButton[data-state='error'] {
+  border-color: rgba(220, 38, 38, 0.45);
+  color: #dc2626;
 }
 
 .pickerBackdrop {

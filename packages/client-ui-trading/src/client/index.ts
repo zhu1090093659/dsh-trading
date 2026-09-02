@@ -23,6 +23,7 @@ import { createChartStateStore } from './chart-state.ts'
 import { indicators, markCustomIndicator, unmarkCustomIndicator } from './indicator-registry.ts'
 import { stageViews } from './stage-views.ts'
 import { createTradingBridgeService } from './api.ts'
+import { sendQuoteToAgent, type SendToAgentFn } from './send-to-agent.ts'
 import { OrderCard, WatchlistChipCard } from './toolview.tsx'
 import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
@@ -69,6 +70,11 @@ export function apply(ctx: ClientContext): void {
   const startNewSession = (): void => {
     ;(ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined)?.startSession()
   }
+
+  // 行情 → Agent（「发给 Agent」按钮）：复用 sessions + startNewSession 入口，
+  // 投递编排细节见 send-to-agent.ts（beginSubmission echo → prompt('queue')）。
+  const sendToAgent: SendToAgentFn = (text, image) =>
+    sendQuoteToAgent({ sessions, startSession: startNewSession }, text, image)
   const openSettings = (): void => {
     // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
     // 侧栏里唯一的 [aria-haspopup=dialog]，程序化 click 走官方打开逻辑，
@@ -229,6 +235,7 @@ export function apply(ctx: ClientContext): void {
         }
         return ok
       },
+      sendToAgent,
     }),
   }, QuotePane))
 }
@@ -267,6 +274,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'quote.updated': '更新',
       'quote.loadFailed': 'K线加载失败',
       'quote.noData': '暂无数据',
+      'quote.sendToAgent': '发给 Agent',
+      'quote.sendSending': '发送中…',
+      'quote.sendSent': '已发给 Agent',
+      'quote.sendFailed': '发送失败',
       'interval.1m': '1分',
       'interval.3m': '3分',
       'interval.5m': '5分',
@@ -337,6 +348,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'quote.updated': 'Updated',
       'quote.loadFailed': 'Failed to load klines',
       'quote.noData': 'No data',
+      'quote.sendToAgent': 'Send to agent',
+      'quote.sendSending': 'Sending…',
+      'quote.sendSent': 'Sent to agent',
+      'quote.sendFailed': 'Send failed',
       'interval.1m': '1m',
       'interval.3m': '3m',
       'interval.5m': '5m',

@@ -7,8 +7,10 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { fetchKlines, fetchTickers } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
-import type { TvIndicatorGroup } from './TvChart.tsx'
-import { IconIndicators } from './icons.tsx'
+import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
+import { composeQuoteMessage } from './compose-quote.ts'
+import type { SendImageInput } from './send-to-agent.ts'
+import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import {
   INTRADAY_INTERVALS, changePercent, directionColor,
@@ -57,6 +59,8 @@ export interface QuoteStageProps {
   setIndicatorParams: (id: string, params: Record<string, number>) => void
   /** 删除自定义指标（issue #30 删除入口；仅自定义行渲染按钮）。 */
   deleteIndicator: (id: string) => Promise<boolean>
+  /** 发给 Agent（shell 注入；缺席时按钮不渲染，独立渲染/单测安全）。 */
+  sendToAgent?: (text: string, image?: SendImageInput) => Promise<void>
 }
 
 function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
@@ -68,7 +72,9 @@ function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
   return 'us'
 }
 
-export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator }: QuoteStageProps) {
+type SendState = 'idle' | 'sending' | 'sent' | 'error'
+
+export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator, sendToAgent }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
   const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk'].includes(instrument.market))
     ? (instrument.market as MarketId)
@@ -93,6 +99,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
+  const [sendState, setSendState] = useState<SendState>('idle')
+  /** TvChart 注册的截图回调（图表未渲染/已卸载 = null）。 */
+  const captureRef = useRef<(() => TvChartCapture | null) | null>(null)
   const [clock, setClock] = useState(() => formatStatusBarClock(Date.now()))
   const [indexTickers, setIndexTickers] = useState<Record<string, Ticker>>({})
 
@@ -234,6 +243,41 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   // 所有可用指标（供底部词条栏横向快捷展示）
   const allDefinitions = useMemo(() => indicators.list(), [rosterVersion])
 
+  // 发给 Agent：先截图（画布只在图表挂载期间可取），再投文本 + PNG。
+  const onSendToAgent = (): void => {
+    if (sendToAgent === undefined || sendState === 'sending') return
+    const capture = captureRef.current?.() ?? null
+    const text = composeQuoteMessage({
+      name: instrument?.name,
+      symbol,
+      marketLabel: t(TAB_KEY[market]),
+      intervalLabel: t(INTERVAL_KEY[chartInterval] ?? 'interval.1d'),
+      price: stats.price,
+      change: stats.change,
+      pct: stats.pct,
+      prevClose: stats.prevClose,
+      candle: readoutCandle,
+      indicatorTitles: instances.map(instance => indicators.get(instance.id)?.title ?? instance.id),
+      withScreenshot: capture !== null,
+    })
+    setSendState('sending')
+    void sendToAgent(text, capture === null ? undefined : {
+      dataUrl: capture.dataUrl,
+      name: `${symbol}-${chartInterval}.png`,
+      width: capture.width,
+      height: capture.height,
+    })
+      .then(() => {
+        setSendState('sent')
+        window.setTimeout(() => { setSendState('idle') }, 2000)
+      })
+      .catch((error: unknown) => {
+        console.warn('[dsh-trading] send quote to agent failed:', error)
+        setSendState('error')
+        window.setTimeout(() => { setSendState('idle') }, 2600)
+      })
+  }
+
   if (market === undefined || symbol === undefined) {
     return (
       <div className={css.root}>
@@ -302,38 +346,59 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           ))}
         </div>
 
-        <div className={css.indicatorAnchor}>
-          <button
-            type="button"
-            className={css.pickerButton}
-            aria-expanded={pickerOpen}
-            aria-haspopup="dialog"
-            onClick={() => { setPickerOpen(open => !open) }}
-          >
-            <IconIndicators size={13} />
-            {t('indicator.picker')}
-          </button>
-          {pickerOpen && (
-            <IndicatorPicker
-              t={t}
-              instances={instances}
-              editingIndicator={editingIndicator}
-              onToggle={(id) => {
-                toggleIndicator(id)
-                setEditingIndicator(null)
-              }}
-              onEdit={(id) => { setEditingIndicator(current => current === id ? null : id) }}
-              onApply={(id, params) => {
-                setIndicatorParams(id, params)
-                setEditingIndicator(null)
-              }}
-              onDelete={(id) => { void deleteIndicator(id) }}
-              onClose={() => {
-                setPickerOpen(false)
-                setEditingIndicator(null)
-              }}
-            />
+        <div className={css.toolbarActions}>
+          {sendToAgent !== undefined && (
+            <button
+              type="button"
+              className={css.sendButton}
+              data-state={sendState === 'idle' ? undefined : sendState}
+              disabled={sendState === 'sending'}
+              title={t('quote.sendToAgent')}
+              onClick={onSendToAgent}
+            >
+              <IconSend size={13} />
+              {sendState === 'sent'
+                ? t('quote.sendSent')
+                : sendState === 'error'
+                  ? t('quote.sendFailed')
+                  : sendState === 'sending'
+                    ? t('quote.sendSending')
+                    : t('quote.sendToAgent')}
+            </button>
           )}
+          <div className={css.indicatorAnchor}>
+            <button
+              type="button"
+              className={css.pickerButton}
+              aria-expanded={pickerOpen}
+              aria-haspopup="dialog"
+              onClick={() => { setPickerOpen(open => !open) }}
+            >
+              <IconIndicators size={13} />
+              {t('indicator.picker')}
+            </button>
+            {pickerOpen && (
+              <IndicatorPicker
+                t={t}
+                instances={instances}
+                editingIndicator={editingIndicator}
+                onToggle={(id) => {
+                  toggleIndicator(id)
+                  setEditingIndicator(null)
+                }}
+                onEdit={(id) => { setEditingIndicator(current => current === id ? null : id) }}
+                onApply={(id, params) => {
+                  setIndicatorParams(id, params)
+                  setEditingIndicator(null)
+                }}
+                onDelete={(id) => { void deleteIndicator(id) }}
+                onClose={() => {
+                  setPickerOpen(false)
+                  setEditingIndicator(null)
+                }}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -360,6 +425,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             subIndicators={subIndicators}
             readoutIndex={readoutIndex}
             onHoverIndex={setHoverIndex}
+            onCaptureReady={(capture) => { captureRef.current = capture }}
           />
         )}
       </div>

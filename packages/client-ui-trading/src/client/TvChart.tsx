@@ -59,6 +59,15 @@ export interface TvChartProps {
   readoutIndex: number | null
   /** 十字线悬停的 K 线下标（离场为 null），父级负责 OHLC 读数。 */
   onHoverIndex: (index: number | null) => void
+  /** 图表就绪时注册截图回调、卸载时以 null 注销（「发给 Agent」用）。 */
+  onCaptureReady?: (capture: (() => TvChartCapture | null) | null) => void
+}
+
+/** 一次图表截图（PNG data URL + 像素尺寸，回显/命名用）。 */
+export interface TvChartCapture {
+  dataUrl: string
+  width: number
+  height: number
 }
 
 /** kline → 图表 bar（openTime 毫秒 → UTC 秒）。 */
@@ -288,7 +297,20 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     }
     chart.subscribeCrosshairMove(onCrosshair)
 
+    // 截图回调（v5 takeScreenshot 覆盖主图+副图 pane，白底、不含十字线）。
+    const capture = (): TvChartCapture | null => {
+      try {
+        const canvas = chart.takeScreenshot()
+        if (canvas === null) return null
+        return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height }
+      } catch {
+        return null
+      }
+    }
+    propsRef.current.onCaptureReady?.(capture)
+
     return () => {
+      propsRef.current.onCaptureReady?.(null)
       chart.unsubscribeCrosshairMove(onCrosshair)
       mainRefs.current.clear()
       subRefs.current.clear()
