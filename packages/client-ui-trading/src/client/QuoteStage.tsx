@@ -386,15 +386,15 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   // 所有可用指标（供底部词条栏横向快捷展示）
   const allDefinitions = useMemo(() => indicators.list(), [rosterVersion])
 
-  // 策略信号标记数据（issue #41）：在当前 K 线序列上实时计算 EMA(12, 26) 经典交叉信号。
+  // 策略信号标记数据（issue #41）：在当前 K 线序列上实时计算 EMA(12, 26) 交叉信号（过滤预热期与边缘噪音）。
   const signalMarkers = useMemo<readonly ChartSignalMarkerInput[] | undefined>(() => {
-    if (!bars || bars.length < 26) return undefined
+    if (!bars || bars.length < 30) return undefined
     const k12 = 2 / (12 + 1)
     const k26 = 2 / (26 + 1)
     let ema12 = bars[0]?.close ?? 0
     let ema26 = bars[0]?.close ?? 0
     const signals: ChartSignalMarkerInput[] = []
-    let prevDiff = 0
+    let prevDiff: number | null = null
 
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i]
@@ -402,7 +402,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       ema12 = bar.close * k12 + ema12 * (1 - k12)
       ema26 = bar.close * k26 + ema26 * (1 - k26)
       const diff = ema12 - ema26
-      if (i >= 26) {
+      if (i >= 26 && prevDiff !== null) {
         if (prevDiff <= 0 && diff > 0) {
           signals.push({
             time: bar.time,
@@ -424,31 +424,49 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return signals.length > 0 ? signals : undefined
   }, [bars])
 
-  // 知识事件标记数据（issue #41）：从当前标的公告和资讯中提取发布日期并锚定到对应 K 线。
+  // 知识事件标记数据（issue #41）：从当前标的的官方公告与知识事件中提取，按时间柱精准锚定（同 K 线柱去重聚合，避免边缘挤压）。
   const knowledgeMarkers = useMemo<readonly ChartKnowledgeMarkerInput[] | undefined>(() => {
     if (!newsItems || newsItems.length === 0 || !bars || bars.length === 0) return undefined
-    const markers: ChartKnowledgeMarkerInput[] = []
-    const firstBarTime = bars[0]?.time ?? 0
-    const lastBarTime = bars[bars.length - 1]?.time ?? 0
+    // 仅针对属于该标的的官方公告/交易所公报打图钉，排除泛财经媒体与宏观回退要闻
+    const announcements = newsItems.filter(it => it.source === 'eastmoney-announcement' || it.source.includes('exchange'))
+    if (announcements.length === 0) return undefined
 
-    for (const item of newsItems) {
+    // 计算当前 K 线的平均周期步长（如日 K=86400s，周 K=604800s，月 K≈2592000s）
+    const barStep = bars.length > 1 ? Math.abs((bars[bars.length - 1]?.time ?? 0) - (bars[0]?.time ?? 0)) / (bars.length - 1) : 86400
+    const tolerance = Math.max(barStep * 0.8, 43200)
+    const barMap = new Map<number, { title: string; count: number; url: string }>()
+
+    for (const item of announcements) {
       const ts = Math.floor(new Date(item.publishedAt).getTime() / 1000)
-      if (Number.isNaN(ts) || ts < firstBarTime - 86400 || ts > lastBarTime + 86400) continue
-      // 寻找最接近的 K 线时间柱
-      let closestTime = bars[0]?.time ?? 0
+      if (Number.isNaN(ts)) continue
+
+      let bestBarTime: number | null = null
       let minDiff = Infinity
       for (const bar of bars) {
         const diff = Math.abs(bar.time - ts)
-        if (diff < minDiff) {
+        if (diff < minDiff && diff <= tolerance) {
           minDiff = diff
-          closestTime = bar.time
+          bestBarTime = bar.time
         }
       }
+
+      if (bestBarTime !== null) {
+        const existing = barMap.get(bestBarTime)
+        if (existing) {
+          existing.count += 1
+        } else {
+          barMap.set(bestBarTime, { title: item.title, count: 1, url: item.url })
+        }
+      }
+    }
+
+    const markers: ChartKnowledgeMarkerInput[] = []
+    for (const [time, info] of barMap.entries()) {
       markers.push({
-        time: closestTime,
-        title: item.title,
-        cardId: item.url,
-        credibility: item.source.includes('announcement') || item.source.includes('exchange') ? 'high' : 'medium',
+        time,
+        title: info.count > 1 ? `${info.title} (等${info.count}条)` : info.title,
+        cardId: info.url,
+        credibility: 'high',
       })
     }
     return markers.length > 0 ? markers : undefined
