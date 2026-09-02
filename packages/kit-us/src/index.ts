@@ -28,6 +28,9 @@ import type { MarketDataService } from '@dsh-trading/api'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchUsFundamentals, renderUsFundamentals } from './fundamentals.js'
 
+export * from './fundamentals.js'
+export * from './news.js'
+
 // ── skill provider（host 面 skill 全局可见即可，本切片不改 skill 作用域） ─────────
 
 const PROVIDER_NAME = 'dsh-trading-us'

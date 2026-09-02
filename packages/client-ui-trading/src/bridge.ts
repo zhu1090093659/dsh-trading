@@ -13,7 +13,11 @@
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
-import type { AccountBalance, DerivativesData, Interval, Kline, MarketDataService, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
+import type { AccountBalance, DerivativesData, FundamentalsPackage, Interval, Kline, MarketDataService, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
+import { fetchCnFundamentalsPackage } from '@dsh-trading/kit-cn'
+import { fetchHkFundamentalsPackage } from '@dsh-trading/kit-hk'
+import { fetchUsFundamentalsPackage } from '@dsh-trading/kit-us'
+import { fetchCryptoFundamentalsPackage } from '@dsh-trading/kit-crypto'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/indicators'
 import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
@@ -225,6 +229,12 @@ function isMarketId(value: string): value is MarketId {
 /** 动态标的全集缓存 TTL（30分钟）。 */
 export const SYMBOLS_CACHE_TTL_MS = 30 * 60 * 1000
 
+/**
+ * 基本面数据包缓存 TTL（5分钟）：财报级/日级数据，非 tick；同键 in-flight 去重
+ * 让 tab 翻转与快速切标的只打一轮上游（issue #36 整改，2026-09-02）。
+ */
+export const FUNDAMENTALS_CACHE_TTL_MS = 5 * 60 * 1000
+
 /** 从 Error 上提取结构化错误词汇（连接器按 TradingError 形状附加 code）。 */
 export function errorPayload(error: unknown): { code: string; message: string } {
   if (error instanceof Error) {
@@ -238,6 +248,8 @@ export function errorPayload(error: unknown): { code: string; message: string } 
 
 export class TradingBridge {
   private readonly symbolsCache = new Map<string, { list: SymbolInfoWire[]; fetchedAt: number }>()
+  private readonly fundamentalsCache = new Map<string, { pkg: StockFundamentals; fetchedAt: number }>()
+  private readonly fundamentalsInflight = new Map<string, Promise<StockFundamentals>>()
 
   constructor(private readonly host: BridgeHost) {}
 
@@ -311,26 +323,6 @@ export class TradingBridge {
     } catch {
       return { symbols: [] }
     }
-  }
-
-  /**
-   * 标的基本面快照（GUI「基本面」页签，2026-09-02）：单 symbol 透传注册表解析出的
-   * 行情服务。连接器未实现可选 getFundamentals（us/crypto 数据源不携带基本面字段）
-   * → 业务错误 TRADING_NOT_IMPLEMENTED（HTTP 200 + ok:false），前端降级为派生数据。
-   */
-  async fundamentals(market: string, symbol: string): Promise<FundamentalsWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
-    const trimmed = symbol.trim()
-    if (trimmed === '') throw new BridgeProtocolError(400, 'fundamentals: symbol is required')
-    const service = this.host.getMarketService(market)
-    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
-    if (typeof service.getFundamentals !== 'function') {
-      throw Object.assign(
-        new Error(`market ${market} provider does not implement fundamentals — derived data only`),
-        { code: 'TRADING_NOT_IMPLEMENTED' },
-      )
-    }
-    return { ok: true, fundamentals: await service.getFundamentals(trimmed) }
   }
 
   /**
@@ -464,7 +456,8 @@ export class TradingBridge {
   }
 
   /** 自定义指标列表。 */
-  async customIndicators(): Promise<CustomIndicatorsWire> {    const store = this.host.customIndicatorsStore
+  async customIndicators(): Promise<CustomIndicatorsWire> {
+    const store = this.host.customIndicatorsStore
     if (store === undefined) return { ok: true, indicators: [] }
     const indicators = await store.list()
     return { ok: true, indicators }
@@ -500,6 +493,81 @@ export class TradingBridge {
     if (store === undefined) return { ok: true, removed: false }
     const removed = await store.remove(id)
     return { ok: true, removed }
+  }
+
+  /**
+   * 标的基本面快照与多期财务矩阵（GUI「基本面」页签，2026-09-02 / Issue #36）。
+   *
+   * 语义（重构自协作者初版，2026-09-02 审查整改）：
+   * - 数据包（kit 的多期报表/股东/分红等下钻）直接按市场取，不要求连接器实现
+   *   getFundamentals——us/crypto 由此可达；快照部分为可选增强（连接器实现了才合并）。
+   * - 快照与数据包并行取（Promise.all）；任一失败只降级自己那半，另一半照常返回。
+   * - 两个都失败 → TRADING_NOT_IMPLEMENTED 业务错误（HTTP 200 + ok:false），
+   *   前端显示诚实空态；不再有「半旧数据冒充新标的」的路径。
+   * - 5 分钟进程内 TTL 缓存（财报级数据，非 tick）+ 同键 in-flight 去重，
+   *   对齐本桥 symbols() 的缓存先例；一次 tab 翻转只打一轮上游。
+   */
+  async fundamentals(market: string, symbol: string): Promise<FundamentalsWire> {
+    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const trimmed = symbol.trim()
+    if (trimmed === '') throw new BridgeProtocolError(400, 'fundamentals: symbol is required')
+    const service = this.host.getMarketService(market)
+    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+
+    const cacheKey = `${market}:${trimmed}`
+    const cached = this.fundamentalsCache.get(cacheKey)
+    if (cached !== undefined && Date.now() - cached.fetchedAt < FUNDAMENTALS_CACHE_TTL_MS) {
+      return { ok: true, fundamentals: cached.pkg }
+    }
+    const inflight = this.fundamentalsInflight.get(cacheKey)
+    if (inflight !== undefined) return { ok: true, fundamentals: await inflight }
+
+    const job = (async (): Promise<StockFundamentals> => {
+      const [snapshot, pkg] = await Promise.all([
+        typeof service.getFundamentals === 'function'
+          ? service.getFundamentals(trimmed).catch(() => undefined)
+          : Promise.resolve(undefined),
+        this.#fetchPkg(market, trimmed),
+      ])
+      if (snapshot === undefined && pkg === undefined) {
+        throw Object.assign(
+          new Error(`no fundamentals data for ${market}/${trimmed} — provider and drill-down both unavailable`),
+          { code: 'TRADING_NOT_IMPLEMENTED' },
+        )
+      }
+      // 合并语义：pkg 是骨架（含 market/symbol），snapshot 只增强 stock 字段；
+      // 只有快照没有 pkg 时，快照自身就是返回值（含 timestamp，满足契约必填）。
+      const result: StockFundamentals = pkg !== undefined
+        ? ({
+            ...pkg,
+            stock: { ...(pkg.stock ?? {}), ...(snapshot ?? {}) },
+            timestamp: snapshot?.timestamp ?? Date.now(),
+          } as unknown as StockFundamentals)
+        : snapshot as StockFundamentals
+      this.fundamentalsCache.set(cacheKey, { pkg: result, fetchedAt: Date.now() })
+      return result
+    })()
+
+    this.fundamentalsInflight.set(cacheKey, job)
+    try {
+      const result = await job
+      return { ok: true, fundamentals: result }
+    } finally {
+      this.fundamentalsInflight.delete(cacheKey)
+    }
+  }
+
+  /** 按市场拉 kit 基本面数据包；kit 未覆盖或上游失败 → undefined（不算错误）。 */
+  async #fetchPkg(market: MarketId, symbol: string): Promise<FundamentalsPackage | undefined> {
+    try {
+      if (market === 'cn') return await fetchCnFundamentalsPackage(symbol)
+      if (market === 'hk') return await fetchHkFundamentalsPackage(symbol)
+      if (market === 'us') return await fetchUsFundamentalsPackage(symbol)
+      if (market === 'crypto') return await fetchCryptoFundamentalsPackage(symbol)
+    } catch {
+      // 下钻失败不阻断快照：调用方以 snapshot 兜底
+    }
+    return undefined
   }
 
   /* ---------------------------------------------------------------- */

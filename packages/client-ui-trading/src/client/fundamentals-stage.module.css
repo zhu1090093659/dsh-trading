@@ -1,0 +1,758 @@
+/**
+ * 富途牛牛风格基本面与估值工作台样式表。
+ * 支持白天（浅色）/夜晚（深色）模式无缝切换。
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--dsw-alias-bg-l0, #f8f9fb);
+  color: var(--dsw-alias-text-primary, #1a1e24);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+:global(body[data-ds-dark-theme]),
+:global([data-theme='dark']),
+:global(html.dark),
+:global(body.dark) {
+  --futu-bg-base: #101318;
+  --futu-bg-card: #171b22;
+  --futu-bg-hover: rgba(255, 255, 255, 0.05);
+  --futu-bg-active: rgba(50, 117, 245, 0.12);
+  --futu-border: rgba(255, 255, 255, 0.08);
+  --futu-text-primary: #f3f4f6;
+  --futu-text-secondary: #9ca3af;
+  --futu-text-muted: #6b7280;
+  --futu-accent: #3275f5;
+  --futu-orange: #ff7828;
+  --futu-up: #eb5454;
+  --futu-down: #24af68;
+}
+
+:global(body:not([data-ds-dark-theme])):not([data-theme='dark']) {
+  --futu-bg-base: #f4f6f9;
+  --futu-bg-card: #ffffff;
+  --futu-bg-hover: #f0f3f7;
+  --futu-bg-active: #e8f0fe;
+  --futu-border: #e3e6ea;
+  --futu-text-primary: #1a1e24;
+  --futu-text-secondary: #5f6672;
+  --futu-text-muted: #8c93a0;
+  --futu-accent: #1e60f2;
+  --futu-orange: #f56c1d;
+  --futu-up: #e02f2f;
+  --futu-down: #149c58;
+}
+
+/* 顶部报价与估值药丸条 */
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--futu-bg-card);
+  border-bottom: 1px solid var(--futu-border);
+  flex-shrink: 0;
+}
+
+.symbolInfo {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.symbolCode {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--futu-text-primary);
+  font-feature-settings: 'tnum';
+}
+
+.symbolName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--futu-text-primary);
+}
+
+.marketBadge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--futu-bg-active);
+  color: var(--futu-accent);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.valuationPills {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.pillItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pillLabel {
+  color: var(--futu-text-muted);
+}
+
+.pillValue {
+  color: var(--futu-text-primary);
+  font-weight: 600;
+  font-feature-settings: 'tnum';
+}
+
+/* 主内容两栏分割 */
+.mainContainer {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 左侧富途垂直导航树 */
+.navTree {
+  width: 150px;
+  background: var(--futu-bg-card);
+  border-right: 1px solid var(--futu-border);
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  user-select: none;
+}
+
+.navGroupTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--futu-text-primary);
+  padding: 8px 16px 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.navGroupDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--futu-text-muted);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px 7px 24px;
+  font-size: 12.5px;
+  color: var(--futu-text-secondary);
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.15s ease;
+  background: none;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  width: 100%;
+  text-align: left;
+}
+
+.navItem:hover {
+  background: var(--futu-bg-hover);
+  color: var(--futu-text-primary);
+}
+
+.navItem[data-active='true'] {
+  background: var(--futu-bg-active);
+  color: var(--futu-orange);
+  font-weight: 600;
+  border-left-color: var(--futu-orange);
+}
+
+.navDotActive {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--futu-orange);
+}
+
+/* 右侧主工作台 */
+.stageContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 12px 16px;
+  gap: 12px;
+  background: var(--futu-bg-base);
+}
+
+/* 上方动态图表卡片 */
+.chartCard {
+  background: var(--futu-bg-card);
+  border: 1px solid var(--futu-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.chartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reportLink {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--futu-text-primary);
+  cursor: pointer;
+}
+
+.reportIcon {
+  font-size: 14px;
+}
+
+.chartControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.controlBadge {
+  font-size: 11.5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--futu-border);
+  background: var(--futu-bg-base);
+  color: var(--futu-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.chartLegend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 11.5px;
+  color: var(--futu-text-secondary);
+  padding: 2px 0;
+}
+
+.legendBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legendBarBox {
+  width: 10px;
+  height: 10px;
+  background: var(--futu-accent);
+  border-radius: 2px;
+}
+
+.legendLine {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legendLineBox {
+  width: 14px;
+  height: 2px;
+  background: var(--futu-orange);
+}
+
+/* SVG 图表容器 */
+.svgChartWrap {
+  width: 100%;
+  height: 160px;
+  position: relative;
+}
+
+.svgChart {
+  width: 100%;
+  height: 100%;
+}
+
+/* 下方多期财务指标矩阵表 */
+.tableCard {
+  background: var(--futu-bg-card);
+  border: 1px solid var(--futu-border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tableHeaderBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--futu-bg-hover);
+  border-bottom: 1px solid var(--futu-border);
+  font-size: 12px;
+  color: var(--futu-text-secondary);
+}
+
+.tableScrollWrap {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.matrixTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: right;
+  min-width: 680px;
+}
+
+.matrixTable th,
+.matrixTable td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--futu-border);
+  white-space: nowrap;
+}
+
+.matrixTable th {
+  background: var(--futu-bg-card);
+  color: var(--futu-text-muted);
+  font-weight: 500;
+  font-feature-settings: 'tnum';
+}
+
+.matrixTable th:first-child,
+.matrixTable td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: var(--futu-bg-card);
+  z-index: 2;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.02);
+  min-width: 160px;
+}
+
+.groupRow {
+  background: var(--futu-bg-hover);
+  cursor: pointer;
+  user-select: none;
+}
+
+.groupRow td {
+  font-weight: 700;
+  color: var(--futu-text-primary);
+  padding: 6px 12px;
+}
+
+.indicatorRow {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.indicatorRow:hover {
+  background: var(--futu-bg-hover);
+}
+
+.indicatorRow[data-active='true'] {
+  background: var(--futu-bg-active);
+}
+
+.indicatorRow[data-active='true'] td:first-child {
+  background: var(--futu-bg-active);
+  color: var(--futu-orange);
+  font-weight: 600;
+}
+
+.indicatorName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.indicatorDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--futu-accent);
+}
+
+.cellValue {
+  font-weight: 600;
+  color: var(--futu-text-primary);
+  font-feature-settings: 'tnum';
+}
+
+.cellChange {
+  font-size: 10.5px;
+  margin-top: 1px;
+  font-weight: 500;
+  font-feature-settings: 'tnum';
+}
+
+.valUp {
+  color: var(--futu-up);
+}
+
+.valDown {
+  color: var(--futu-down);
+}
+
+.valNeutral {
+  color: var(--futu-text-muted);
+}
+
+/* 估值与公司简况卡片 */
+.infoCard {
+  background: var(--futu-bg-card);
+  border: 1px solid var(--futu-border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cardTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--futu-text-primary);
+  border-bottom: 1px solid var(--futu-border);
+  padding-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cardSubNote {
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--futu-text-muted);
+}
+
+.gridCols {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.gridItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--futu-bg-hover);
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--futu-border);
+}
+
+.gridLabel {
+  font-size: 11.5px;
+  color: var(--futu-text-muted);
+}
+
+.gridValue {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--futu-text-primary);
+  font-feature-settings: 'tnum';
+}
+
+/* 52周区间进度刻度尺 */
+.rangeGaugeWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--futu-bg-hover);
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--futu-border);
+}
+
+.rangeGaugeLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--futu-text-secondary);
+}
+
+.rangeTrack {
+  position: relative;
+  height: 8px;
+  background: var(--futu-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rangeProgress {
+  height: 100%;
+  background: linear-gradient(90deg, var(--futu-accent), var(--futu-orange));
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.rangePointerInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--futu-text-primary);
+}
+
+/* 十大股东表格 */
+.shareholdersWrap {
+  overflow-x: auto;
+}
+
+.shareholdersTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.shareholdersTable th {
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--futu-bg-hover);
+  color: var(--futu-text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--futu-border);
+}
+
+.shareholdersTable td {
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--futu-border);
+  color: var(--futu-text-primary);
+  font-feature-settings: 'tnum';
+}
+
+.holderRank {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--futu-bg-hover);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--futu-text-secondary);
+}
+
+.holderName {
+  font-weight: 600;
+}
+
+.changeTagUp {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(235, 84, 84, 0.12);
+  color: var(--futu-up);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.changeTagDown {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(36, 175, 104, 0.12);
+  color: var(--futu-down);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.changeTagFlat {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--futu-bg-hover);
+  color: var(--futu-text-muted);
+  font-size: 11px;
+}
+
+.descText {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--futu-text-secondary);
+  white-space: pre-line;
+  background: var(--futu-bg-hover);
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--futu-border);
+}
+
+/* 预测网格卡片 */
+.forecastGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.forecastStatBox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--futu-bg-hover);
+  border-radius: 6px;
+  border: 1px solid var(--futu-border);
+}
+
+/* 机构研报列表 */
+.reportsList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.reportItemCard {
+  padding: 12px 14px;
+  background: var(--futu-bg-hover);
+  border-radius: 6px;
+  border: 1px solid var(--futu-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reportTopRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.reportOrg {
+  font-weight: 700;
+  color: var(--futu-text-primary);
+}
+
+.reportRating {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(50, 117, 245, 0.12);
+  color: var(--futu-accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.reportDate {
+  margin-left: auto;
+  color: var(--futu-text-muted);
+  font-size: 11px;
+}
+
+.reportTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--futu-text-primary);
+  line-height: 1.4;
+}
+
+.reportSummary {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--futu-text-secondary);
+  margin: 0;
+}
+
+.reportAuthor {
+  font-size: 11.5px;
+  color: var(--futu-text-muted);
+}
+
+/* 主营构成过滤标签与占比条 */
+.tabButtonGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.segmentFilterBtn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--futu-border);
+  background: var(--futu-bg-card);
+  color: var(--futu-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.segmentFilterBtn[data-active='true'] {
+  background: var(--futu-accent);
+  color: #ffffff;
+  border-color: var(--futu-accent);
+  font-weight: 600;
+}
+
+.ratioBarWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ratioBar {
+  height: 6px;
+  background: var(--futu-accent);
+  border-radius: 3px;
+  min-width: 4px;
+  max-width: 100px;
+}
+
+/* 空态与加载态 */
+.emptyState,
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 10px;
+  color: var(--futu-text-muted);
+  font-size: 13px;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--futu-border);
+  border-top-color: var(--futu-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

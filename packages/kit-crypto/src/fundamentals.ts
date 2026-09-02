@@ -169,6 +169,25 @@ export async function fetchCryptoFundamentals(options: CryptoFundamentalsOptions
   return { unavailable }
 }
 
+/** 获取完整加密资产基本面数据包。 */
+export async function fetchCryptoFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FundamentalsPackage> {
+  const quoteRes = await fetchCryptoFundamentals({ symbol, fetch: fetchImpl })
+  const base = extractBaseAsset(symbol)
+
+  return {
+    market: 'crypto',
+    symbol,
+    crypto: quoteRes.data,
+    profile: {
+      symbol,
+      name: quoteRes.data?.name ?? base,
+      industry: 'Blockchain / Cryptocurrency',
+      sector: 'Digital Asset',
+      description: `${quoteRes.data?.name ?? base} 是全球主流加密数字资产，提供去中心化网络价值与交易结算能力。`,
+    },
+  }
+}
+
 export function renderCryptoFundamentals(result: CryptoFundamentalsResult, requestedSymbol: string): string {
   const { data, quoteVolume24h, priceChangePercent24h, tradesCount24h, unavailable = [] } = result
   if (!data) {

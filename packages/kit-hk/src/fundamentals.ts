@@ -109,6 +109,128 @@ export async function fetchHkFundamentals(options: HkFundamentalsOptions): Promi
   }
 }
 
+/** 格式化港股财报日期为期别标签（YYYY/Q1, YYYY/H1, YYYY/Q3, YYYY/FY）。 */
+export function formatHkReportPeriod(dateStr: string): string {
+  if (!dateStr) return ''
+  const m = /(\d{4})[-/](\d{2})[-/](\d{2})/.exec(dateStr)
+  if (!m) return dateStr.slice(0, 7)
+  const [, y, mo] = m
+  if (mo === '03' || mo === '3') return `${y}/Q1`
+  if (mo === '06' || mo === '6') return `${y}/H1`
+  if (mo === '09' || mo === '9') return `${y}/Q3`
+  if (mo === '12' || mo === '12') return `${y}/FY`
+  return `${y}/${mo}`
+}
+
+/** 从东财/公开端点动态拉取港股多期财务指标。 */
+export async function fetchHkFinancialMatrix(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FinancialReportMatrix | undefined> {
+  try {
+    const { code5 } = normalizeHkSymbol(symbol)
+    const url = `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_HKF10_FN_MAININDICATOR&columns=ALL&filter=(SECUCODE%3D%22${code5}.HK%22)&pageNumber=1&pageSize=8&sortTypes=-1&sortColumns=REPORT_DATE`
+    const res = await fetchImpl(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+        Referer: 'https://emweb.securities.eastmoney.com/',
+      },
+    })
+    if (!res.ok) return undefined
+    const json = await res.json() as { result?: { data?: Array<Record<string, unknown>> } }
+    const rawRows = json.result?.data
+    if (!Array.isArray(rawRows) || rawRows.length === 0) return undefined
+
+    const list = [...rawRows].reverse()
+    const periods = list.map(r => formatHkReportPeriod(String(r.REPORT_DATE ?? '')))
+    const latestPeriod = periods[periods.length - 1] ?? ''
+    const latestReportTitle = latestPeriod ? `${latestPeriod.replace('/', '财年')} 财报` : undefined
+
+    const makeRow = (
+      id: string,
+      name: string,
+      valKey: string,
+      yoyKey?: string,
+      unit?: string,
+    ): import('@dsh-trading/api').FinancialIndicatorRow => {
+      const values: Record<string, import('@dsh-trading/api').FinancialCell> = {}
+      list.forEach((r, idx) => {
+        const p = periods[idx]!
+        const rawVal = r[valKey]
+        const val = typeof rawVal === 'number' && Number.isFinite(rawVal) ? rawVal : undefined
+        let changePercent: number | undefined
+        if (yoyKey && typeof r[yoyKey] === 'number') {
+          changePercent = r[yoyKey] as number
+        }
+        values[p] = { value: val, changePercent }
+      })
+      return { id, name, unit, values }
+    }
+
+    const groups: import('@dsh-trading/api').FinancialReportGroup[] = [
+      {
+        id: 'per_share',
+        title: '每股指标',
+        rows: [
+          makeRow('bps', '每股净资产', 'BPS', 'BPS_YOY', 'HKD'),
+          makeRow('basic_eps', '基本每股收益', 'BASIC_EPS', 'BASIC_EPS_YOY', 'HKD'),
+          makeRow('dividend_ps', '每股股息', 'DPS', undefined, 'HKD'),
+        ],
+      },
+      {
+        id: 'profitability',
+        title: '盈利能力',
+        rows: [
+          makeRow('gross_margin', '销售毛利率', 'GROSS_PROFIT_RATIO', undefined, '%'),
+          makeRow('net_margin', '销售净利率', 'NET_PROFIT_RATIO', undefined, '%'),
+          makeRow('roe', '净资产收益率 (ROE)', 'ROE', undefined, '%'),
+          makeRow('roa', '总资产收益率 (ROA)', 'ROA', undefined, '%'),
+        ],
+      },
+      {
+        id: 'growth',
+        title: '收益与成长',
+        rows: [
+          makeRow('revenue', '营业总收入', 'TOTAL_OPERATE_INCOME', 'TOTAL_OPERATE_INCOME_YOY', 'HKD'),
+          makeRow('net_profit', '股东应占溢利/净利润', 'PARENT_NETPROFIT', 'PARENT_NETPROFIT_YOY', 'HKD'),
+        ],
+      },
+    ]
+
+    return {
+      currency: 'HKD',
+      latestReportTitle,
+      periods,
+      groups,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+/** 获取完整港股基本面数据包。 */
+export async function fetchHkFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FundamentalsPackage> {
+  const { canonical } = normalizeHkSymbol(symbol)
+  const [quoteRes, matrix] = await Promise.all([
+    fetchHkFundamentals({ symbol, fetch: fetchImpl }),
+    fetchHkFinancialMatrix(symbol, fetchImpl),
+  ])
+
+  const stock = quoteRes.data ? {
+    ...quoteRes.data,
+    amplitudePercent: quoteRes.amplitudePercent,
+  } : undefined
+
+  return {
+    market: 'hk',
+    symbol: canonical,
+    stock,
+    matrix,
+    profile: stock ? {
+      symbol: canonical,
+      name: stock.name ?? quoteRes.nameEn,
+      description: `${stock.name ?? canonical}（港股上市公司），包含港股每股指标、盈利能力与历史多期财报。`,
+    } : undefined,
+  }
+}
+
 export function renderHkFundamentals(result: HkFundamentalsResult, requestedSymbol: string): string {
   const { data, amplitudePercent, turnoverValueHkd, nameEn, unavailable = [] } = result
   if (!data) {

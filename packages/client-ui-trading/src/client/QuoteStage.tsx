@@ -13,7 +13,7 @@ import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
 import type { SendImageInput } from './fill-composer.ts'
-import { FundamentalsPane, deriveFiftyTwoWeek } from './FundamentalsPane.tsx'
+import { FundamentalsStage } from './FundamentalsStage.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
 import { OrderbookPane } from './OrderbookPane.tsx'
 import { TradeDesk } from './TradeDesk.tsx'
@@ -113,6 +113,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   // 指标名册修订号：插件晚于首帧合并 definition 时触发重渲染。
   const rosterVersion = useSyncExternalStore(indicators.subscribe, indicators.getVersion)
 
+  const [quoteSubTab, setQuoteSubTab] = useState<'chart' | 'fundamentals'>('chart')
   const [chartInterval, setIntervalFor] = useState<string>(() => {
     if (market === undefined) return '1d'
     return readInterval(market)
@@ -428,9 +429,30 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const tickerName = (ticker as { name?: string })?.name
   const displayName = (!isPlaceholderName ? rawName : (tickerName || rawName || symbol))
 
+  const mainGroupReadouts = useMemo(() => {
+    if (readoutIndex === null) return []
+    return mainOverlays.map(group => ({
+      instanceId: group.id,
+      title: group.title,
+      lines: group.outputs
+        .filter(o => Number.isFinite(o.values[readoutIndex]))
+        .map(o => ({ name: o.key, value: o.values[readoutIndex], color: o.color }))
+    }))
+  }, [mainOverlays, readoutIndex])
+
+  const chartIndicatorGroups = useMemo(() => {
+    return indicatorGroups.map(g => ({
+      id: g.id,
+      pane: g.pane,
+      title: g.title,
+      key: g.key,
+      outputs: g.outputs
+    }))
+  }, [indicatorGroups])
+
   return (
     <div className={css.root} data-dshtrading-quote-stage="">
-      {/* 顶部报价头 */}
+      {/* 顶部报价头与二级 Sub-Tab 导航（图表 | 基本面） */}
       <div className={css.header}>
         <div className={css.ident}>
           <span className={css.name}>{displayName}</span>
@@ -442,7 +464,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           <span>{fmtChange(stats.change)}</span>
           <span>{fmtPercent(stats.pct)}</span>
         </span>
-        {/* 行情板块页签：图表 | 基本面（同花顺式，页签随报价头同行） */}
+        {/* 行情板块页签：图表 | 基本面（富途牛牛式，页签随报价头同行） */}
         <div className={css.stageTabs} role="tablist" aria-label="quote section">
           <button
             type="button"
@@ -483,25 +505,25 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
       {/* 周期胶囊条 + 指标弹层按钮（图表页签） */}
       {stageTab === 'chart' && (
-      <div className={css.toolbar}>
-        <div className={css.intervalTabs} role="tablist" aria-label="interval">
-          {intervals.map(entry => (
-            <button
-              key={entry}
-              type="button"
-              role="tab"
-              aria-selected={entry === chartInterval}
-              className={css.intervalTab}
-              data-active={entry === chartInterval ? 'true' : undefined}
-              onClick={() => {
-                setIntervalFor(entry)
-                writeInterval(market, entry)
-              }}
-            >
-              {t(INTERVAL_KEY[entry] ?? 'interval.1d')}
-            </button>
-          ))}
-        </div>
+        <div className={css.toolbar}>
+          <div className={css.intervalTabs} role="tablist" aria-label="interval">
+            {intervals.map(entry => (
+              <button
+                key={entry}
+                type="button"
+                role="tab"
+                aria-selected={entry === chartInterval}
+                className={css.intervalTab}
+                data-active={entry === chartInterval ? 'true' : undefined}
+                onClick={() => {
+                  setIntervalFor(entry)
+                  writeInterval(market, entry)
+                }}
+              >
+                {t(INTERVAL_KEY[entry] ?? 'interval.1d')}
+              </button>
+            ))}
+          </div>
 
         <div className={css.toolbarActions}>
           {fillComposer !== undefined && (
@@ -556,56 +578,56 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             {t('orderbook.toggle')}
           </button>
           {/* 区间统计（同花顺式框选统计；紧挨「技术指标」按钮左侧） */}
-          <button
-            type="button"
-            className={css.pickerButton}
-            data-active={rangeMode ? 'true' : undefined}
-            aria-pressed={rangeMode}
-            title={t('quote.rangeStatsHint')}
-            onClick={() => {
-              setRangeMode((open) => {
-                if (open) setRangeSelection(null)
-                return !open
-              })
-            }}
-          >
-            {t('quote.rangeStats')}
-          </button>
-          <div className={css.indicatorAnchor}>
             <button
               type="button"
               className={css.pickerButton}
-              aria-expanded={pickerOpen}
-              aria-haspopup="dialog"
-              onClick={() => { setPickerOpen(open => !open) }}
+              data-active={rangeMode ? 'true' : undefined}
+              aria-pressed={rangeMode}
+              title={t('quote.rangeStatsHint')}
+              onClick={() => {
+                setRangeMode((open) => {
+                  if (open) setRangeSelection(null)
+                  return !open
+                })
+              }}
             >
-              <IconIndicators size={13} />
-              {t('indicator.picker')}
+              {t('quote.rangeStats')}
             </button>
-            {pickerOpen && (
-              <IndicatorPicker
-                t={t}
-                instances={instances}
-                editingIndicator={editingIndicator}
-                onToggle={(id) => {
-                  toggleIndicator(id)
-                  setEditingIndicator(null)
-                }}
-                onEdit={(id) => { setEditingIndicator(current => current === id ? null : id) }}
-                onApply={(id, params) => {
-                  setIndicatorParams(id, params)
-                  setEditingIndicator(null)
-                }}
-                onDelete={(id) => { void deleteIndicator(id) }}
-                onClose={() => {
-                  setPickerOpen(false)
-                  setEditingIndicator(null)
-                }}
-              />
-            )}
+            <div className={css.indicatorAnchor}>
+              <button
+                type="button"
+                className={css.pickerButton}
+                aria-expanded={pickerOpen}
+                aria-haspopup="dialog"
+                onClick={() => { setPickerOpen(open => !open) }}
+              >
+                <IconIndicators size={13} />
+                {t('indicator.picker')}
+              </button>
+              {pickerOpen && (
+                <IndicatorPicker
+                  t={t}
+                  instances={instances}
+                  editingIndicator={editingIndicator}
+                  onToggle={(id) => {
+                    toggleIndicator(id)
+                    setEditingIndicator(null)
+                  }}
+                  onEdit={(id) => { setEditingIndicator(current => current === id ? null : id) }}
+                  onApply={(id, params) => {
+                    setIndicatorParams(id, params)
+                    setEditingIndicator(null)
+                  }}
+                  onDelete={(id) => { void deleteIndicator(id) }}
+                  onClose={() => {
+                    setPickerOpen(false)
+                    setEditingIndicator(null)
+                  }}
+                />
+              )}
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* 主图指标悬停/最新读数分量（各分量独立着色）。VOL/MACD 等副图指标
@@ -719,15 +741,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           )}
         </div>
       ) : (
-        <FundamentalsPane
-          t={t}
-          market={market}
-          symbol={symbol}
-          name={instrument?.name}
-          fundamentals={fundamentals}
-          loading={fundamentalsLoading}
-          derivedFiftyTwoWeek={fiftyTwoWeek}
-        />
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <FundamentalsStage t={t} useSelection={useSelection} />
+        </div>
       )}
 
       {/* 交易工作台底栏（issue #40，crypto 图表页签专属，默认折叠） */}
@@ -750,23 +766,23 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
       {/* 底部横向指标词条带（图表页签） */}
       {stageTab === 'chart' && (
-      <div className={css.quickIndicatorBar} role="toolbar" aria-label="Quick indicators">
-        {allDefinitions.map(def => {
-          const active = instances.some(inst => inst.id === def.id)
-          return (
-            <button
-              key={def.id}
-              type="button"
-              className={css.quickIndicatorTag}
-              data-active={active ? 'true' : undefined}
-              onClick={() => toggleIndicator(def.id)}
-              title={`${def.title} (${def.pane === 'main' ? t('indicator.group.main') : t('indicator.group.sub')})`}
-            >
-              {def.title}
-            </button>
-          )
-        })}
-      </div>
+        <div className={css.quickIndicatorBar} role="toolbar" aria-label="Quick indicators">
+          {allDefinitions.map(def => {
+            const active = instances.some(inst => inst.id === def.id)
+            return (
+              <button
+                key={def.id}
+                type="button"
+                className={css.quickIndicatorTag}
+                data-active={active ? 'true' : undefined}
+                onClick={() => toggleIndicator(def.id)}
+                title={`${def.title} (${def.pane === 'main' ? t('indicator.group.main') : t('indicator.group.sub')})`}
+              >
+                {def.title}
+              </button>
+            )
+          })}
+        </div>
       )}
 
       {/* 底部富途式市场状态栏 */}

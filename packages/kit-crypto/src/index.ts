@@ -29,6 +29,10 @@ import { aggregateNews, deriveSymbolTokens, type AggregateNewsOptions } from './
 import { fetchCryptoDerivatives, renderDerivativesData } from './derivatives.js'
 import { fetchCryptoFundamentals, renderCryptoFundamentals } from './fundamentals.js'
 
+export * from './fundamentals.js'
+export * from './derivatives.js'
+export * from './news.js'
+
 // ── skill provider（host 面 skill 全局可见即可，本切片不改 skill 作用域） ─────────
 
 const PROVIDER_NAME = 'dsh-trading-crypto'
