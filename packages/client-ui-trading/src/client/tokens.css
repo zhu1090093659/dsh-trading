@@ -23,6 +23,7 @@
   /* 背景与表面层级 */
   --dsw-futu-bg-base: #ffffff;
   --dsw-futu-bg-surface: #f7f8fa;
+  --dsw-futu-bg-subtle: #f5f6f8;
   --dsw-futu-bg-surface-hover: rgba(0, 0, 0, 0.04);
   --dsw-futu-bg-surface-active: rgba(0, 0, 0, 0.08);
   --dsw-futu-bg-selected: rgba(230, 69, 69, 0.05);
@@ -61,6 +62,7 @@ body[data-ds-dark-theme],
   /* 背景与表面层级（专业深黑蓝调，与富途牛牛/TradingView 桌面版暗色对齐） */
   --dsw-futu-bg-base: #131722;
   --dsw-futu-bg-surface: #1e222d;
+  --dsw-futu-bg-subtle: #242832;
   --dsw-futu-bg-surface-hover: rgba(255, 255, 255, 0.06);
   --dsw-futu-bg-surface-active: rgba(255, 255, 255, 0.1);
   --dsw-futu-bg-selected: rgba(230, 69, 69, 0.15);

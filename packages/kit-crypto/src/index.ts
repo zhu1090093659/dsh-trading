@@ -266,6 +266,14 @@ export function apply(ctx: Context, _config: Config): void {
   // issue #33 收口：indicator_author / knowledge_ingest / knowledge_search 已迁移至
   // @dsh-trading/indicators/plugin 与 @dsh-trading/knowledge/plugin（base patch 行，
   // host 平面单点注册）；crypto_get_indicators 由 connector-binance/okx 注册，kit 不重复。
+
+  // 新闻聚合器注册到 host 面注册表（Issue #37）。
+  ctx.inject(['tradingNewsRegistry'] as never, (newsCtx: any) => {
+    const registry = (newsCtx as any).tradingNewsRegistry
+    if (registry && typeof registry.register === 'function') {
+      ctx.effect(() => registry.register('crypto', aggregateNews), 'kit-crypto news registration')
+    }
+  })
 }
 
 /* ── crypto_get_derivatives：衍生品数据工具（WS4） ───────────────────────────── */

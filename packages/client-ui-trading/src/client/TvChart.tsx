@@ -47,6 +47,36 @@ export interface TvIndicatorGroup {
   outputs: readonly IndicatorOutput[]
 }
 
+/* ── 图表标记输入（Issue #41）──────────────────────────────── */
+
+/** 策略信号标记输入（从 marker-state 传入）。 */
+export interface ChartSignalMarkerInput {
+  readonly time: number
+  readonly action: 'entry' | 'exit'
+  readonly price: number
+  readonly reason: string
+}
+
+/** 知识事件标记输入（从 marker-state 传入）。 */
+export interface ChartKnowledgeMarkerInput {
+  readonly time: number
+  readonly title: string
+  readonly cardId: string
+  readonly credibility: 'high' | 'medium' | 'low'
+}
+
+/** 悬停标记时传递给父级的详情（驱动 MarkerTooltip 渲染）。 */
+export interface MarkerHoverInfo {
+  /** 屏幕坐标 X。 */
+  x: number
+  /** 屏幕坐标 Y。 */
+  y: number
+  /** 策略信号数据（与 knowledge 互斥）。 */
+  signal?: ChartSignalMarkerInput
+  /** 知识事件数据（与 signal 互斥）。 */
+  knowledge?: ChartKnowledgeMarkerInput
+}
+
 export interface TvChartProps {
   bars: readonly TvBar[]
   volumes: readonly TvVolume[]
@@ -68,6 +98,12 @@ export interface TvChartProps {
   selection?: { start: number; end: number } | null | undefined
   /** 图表就绪时注册截图回调、卸载时以 null 注销（「发给 Agent」用）。 */
   onCaptureReady?: (capture: (() => TvChartCapture | null) | null) => void
+  /** 策略回测信号标记（可选，issue #41）。 */
+  signalMarkers?: readonly ChartSignalMarkerInput[]
+  /** 知识事件标记（可选，issue #41）。 */
+  knowledgeMarkers?: readonly ChartKnowledgeMarkerInput[]
+  /** 悬停标记时回调（null = 离开标记区域；父级负责渲染 Tooltip）。 */
+  onMarkerHover?: (info: MarkerHoverInfo | null) => void
 }
 
 /** 一次图表截图（PNG data URL + 像素尺寸，回显/命名用）。 */
@@ -478,6 +514,51 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       volume.update(volumes[index] as TvVolume)
     }
   }, [bars, volumes, dataKey, props.colorMode])
+
+  // ---- 策略信号 & 知识事件标记（Issue #41）────────────────────────────
+  // signalMarkers / knowledgeMarkers 变化时重新计算 markers，
+  // 若底层 series 支持 setMarkers（或未来通过插件注入），安全调用之。
+  useEffect(() => {
+    const candles = candleRef.current as (ISeriesApi<'Candlestick'> & { setMarkers?: (markers: unknown[]) => void }) | null
+    if (candles === null || typeof candles.setMarkers !== 'function') return
+    const markers: Array<{
+      time: UTCTimestamp
+      position: 'belowBar' | 'aboveBar'
+      color: string
+      shape: 'arrowUp' | 'arrowDown' | 'circle'
+      text: string
+    }> = []
+
+    // 策略信号 → 绿色买入箭头 / 红色卖出箭头
+    if (props.signalMarkers) {
+      for (const s of props.signalMarkers) {
+        markers.push({
+          time: (s.time / 1000) as UTCTimestamp,
+          position: s.action === 'entry' ? 'belowBar' : 'aboveBar',
+          color: s.action === 'entry' ? '#22c55e' : '#ef4444',
+          shape: s.action === 'entry' ? 'arrowUp' : 'arrowDown',
+          text: s.action === 'entry' ? 'B' : 'S',
+        })
+      }
+    }
+
+    // 知识事件 → 蓝色圆形图钉
+    if (props.knowledgeMarkers) {
+      for (const k of props.knowledgeMarkers) {
+        markers.push({
+          time: (k.time / 1000) as UTCTimestamp,
+          position: 'aboveBar',
+          color: '#3b82f6',
+          shape: 'circle',
+          text: '📌',
+        })
+      }
+    }
+
+    // 按 time 升序排列
+    markers.sort((a, b) => (a.time as number) - (b.time as number))
+    candles.setMarkers(markers)
+  }, [props.signalMarkers, props.knowledgeMarkers])
 
   // ---- 右轴镜像数据：top/bottom 包络 = 蜡烛高低 ∪ 主图指标输出（与左轴
   // autoscale 范围完全一致，两轴刻度行对齐的前提），close 序列驱动百分比徽标。

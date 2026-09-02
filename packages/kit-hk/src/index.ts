@@ -177,6 +177,14 @@ export function apply(ctx: Context, _config: Config): void {
   if (marketData !== undefined) {
     registerOnce(createGetIndicatorsTool({ marketData, market: 'hk' }))
   }
+
+  // 新闻聚合器注册到 host 面注册表（Issue #37）。
+  ctx.inject(['tradingNewsRegistry'] as never, (newsCtx: any) => {
+    const registry = (newsCtx as any).tradingNewsRegistry
+    if (registry && typeof registry.register === 'function') {
+      ctx.effect(() => registry.register('hk', aggregateNews), 'kit-hk news registration')
+    }
+  })
 }
 
 /* ── hk_get_news：港股新闻工具（WS4 #1，#6 降级） ────────────────────────────── */

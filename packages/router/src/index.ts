@@ -30,6 +30,7 @@ import type {
   MarketDataRegistry as MarketDataRegistryContract,
   MarketDataService,
   MarketRouterService as MarketRouterServiceContract,
+  NewsAggregator,
 } from '@dsh-trading/api'
 import { createInstrumentsSearchTool, createRoutingGetTool, type RouterToolServices } from './tools.ts'
 
@@ -249,6 +250,48 @@ export interface MarketDataRegistryLike {
   active(market: string): MarketDataRegistration | undefined
 }
 
+/* ------------------------------------------------------------------ */
+/* TradingNewsRegistry（Issue #37）                                        */
+/* ------------------------------------------------------------------ */
+
+export const TRADING_NEWS_REGISTRY_KEY = 'tradingNewsRegistry'
+
+/**
+ * 新闻聚合器注册表（Issue #37，与 MarketDataRegistry 同模式）：
+ * 各市场 Kit 在 Preset 平面 apply 时向本注册表注册其 aggregateNews 纯函数；
+ * GUI 行情桥按路由当前值惰性解析。注册与 Kit 生命周期绑定：
+ * Preset 销毁时调用方执行退订函数，该市场新闻自动不可用。
+ */
+export class TradingNewsRegistryService extends Service {
+  private readonly providers = new Map<string, NewsAggregator>()
+
+  constructor(ctx: Context) {
+    super(ctx, TRADING_NEWS_REGISTRY_KEY)
+  }
+
+  /** Kit apply 时注册本市场的新闻聚合器；返回退订函数（Kit dispose 时自动清理）。 */
+  register(market: string, aggregator: NewsAggregator): () => void {
+    this.providers.set(market, aggregator)
+    return () => { if (this.providers.get(market) === aggregator) this.providers.delete(market) }
+  }
+
+  /** Bridge 分发时取该市场的聚合器；未注册 → undefined（该市场新闻不可用）。 */
+  get(market: string): NewsAggregator | undefined {
+    return this.providers.get(market)
+  }
+
+  /** 全部已注册市场。 */
+  markets(): string[] {
+    return [...this.providers.keys()]
+  }
+}
+
+/** 连接器/桥侧最小形状（鸭式）。 */
+export interface TradingNewsRegistryLike {
+  register(market: string, aggregator: NewsAggregator): () => void
+  get(market: string): NewsAggregator | undefined
+}
+
 /**
  * 解析注册表服务的辅助（连接器 dataplane 与行情桥使用）：
  * 拿不到（老部署 base/router 未升级）→ undefined，调用方回退旧的直接 provide 路径。
@@ -319,6 +362,8 @@ export function apply(ctx: Context, config: Config): void {
   const service = new MarketRouterService(ctx, () => effective)
   // 注册表与 router 同 fiber 提供：base patch 行零改动。
   const registry = new MarketDataRegistryService(ctx, service)
+  // 新闻注册表与 router/registry 同 fiber 提供（Issue #37）。
+  const newsRegistry = new TradingNewsRegistryService(ctx)
   const log = logger(ctx)
   warnUnknownProviders(effective, log)
 

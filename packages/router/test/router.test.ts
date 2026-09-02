@@ -22,13 +22,14 @@ import {
   DEFAULT_MARKETS,
   PROVIDER_VOCABULARY,
   MarketDataRegistryService,
+  TradingNewsRegistryService,
   MarketRouterService,
   activeProviderOf,
   warnUnknownProviders,
   type Config as ConfigType,
   type Provider,
 } from '../src/index.js'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService, NewsAggregator } from '@dsh-trading/api'
 
 const ENTRY: ConfigType = { markets: { ...DEFAULT_MARKETS } }
 
@@ -213,3 +214,29 @@ describe('MarketRouterService（tradingMarketRouter）', () => {
     expect(svc.newsKey()).toBe('sec_xxx')
   })
 })
+
+describe('TradingNewsRegistryService（tradingNewsRegistry，Issue #37）', () => {
+  const fakeAggregator = (tag: string): NewsAggregator => async () => ({
+    items: [{ source: tag, title: `${tag} title`, url: `https://${tag}.com`, publishedAt: new Date().toISOString() }],
+    unavailable: [],
+  })
+
+  it('注册聚合器、get 获取、markets 列举及注销清理', () => {
+    const registry = new TradingNewsRegistryService(new CordisContext() as never)
+    const cryptoAgg = fakeAggregator('crypto')
+    const usAgg = fakeAggregator('us')
+
+    const unregisterCrypto = registry.register('crypto', cryptoAgg)
+    registry.register('us', usAgg)
+
+    expect(registry.get('crypto')).toBe(cryptoAgg)
+    expect(registry.get('us')).toBe(usAgg)
+    expect(registry.get('cn')).toBeUndefined()
+    expect(registry.markets().sort()).toEqual(['crypto', 'us'])
+
+    unregisterCrypto()
+    expect(registry.get('crypto')).toBeUndefined()
+    expect(registry.markets()).toEqual(['us'])
+  })
+})
+

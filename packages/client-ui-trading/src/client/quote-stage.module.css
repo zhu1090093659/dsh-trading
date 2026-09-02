@@ -348,7 +348,7 @@
 .sendButton {
   appearance: none;
   border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
-  background: #ffffff;
+  background: var(--dsw-futu-bg-surface, #ffffff);
   color: var(--dsw-futu-text-primary, #1a1e24);
   display: inline-flex;
   align-items: center;

@@ -603,6 +603,11 @@ declare module '@deepseek-ai/cordis' {
      * 连接器 host 面数据行注册，GUI 行情桥按路由当前值惰性解析（热切换）。
      */
     tradingMarketDataRegistry: MarketDataRegistry
+    /**
+     * 新闻聚合器注册表（Issue #37，@dsh-trading/router 同插件提供）：
+     * 各市场 Kit apply 时注册 aggregateNews 纯函数，GUI 行情桥按市场获取。
+     */
+    tradingNewsRegistry: TradingNewsRegistry
   }
 }
 
@@ -671,3 +676,50 @@ export interface MarketRouterService {
   /** 订阅激活变化（settings commit 驱动）。 */
   watch(cb: (next: string | undefined, prev: string | undefined) => void): () => void
 }
+
+/* ── 新闻聚合契约（Issue #37）──────────────────────────────── */
+
+/** 新闻/快讯条目（各市场 Kit 统一输出形状）。 */
+export interface NewsItem {
+  /** 来源标识（如 'eastmoney'、'yahoo'、'googlenews'、'binance'、'coindesk' 等）。 */
+  readonly source: string
+  /** 新闻/快讯标题。 */
+  readonly title: string
+  /** 详情页 URL。 */
+  readonly url: string
+  /** ISO 8601 发布时间。 */
+  readonly publishedAt: string
+  /** 关联标的代码（可选，格式随源不同）。 */
+  readonly relatedCodes?: readonly string[]
+}
+
+/** 新闻聚合请求选项。 */
+export interface AggregateNewsOptions {
+  /** 输出条数上限（1~50，默认 20）。 */
+  limit?: number
+  /** 时间窗口（小时，1~168，默认 24）。 */
+  windowHours?: number
+  /** 按标的代码过滤（可选）。 */
+  symbol?: string
+  /** CryptoPanic API token（仅 crypto 市场使用，可选）。 */
+  cryptoPanicKey?: string
+}
+
+/** 新闻聚合结果。 */
+export interface AggregateNewsResult {
+  /** 按发布时间倒序的新闻条目。 */
+  readonly items: readonly NewsItem[]
+  /** 失败的数据源名称（fail-soft 容错：可用源正常返回，不可用源记录在此）。 */
+  readonly unavailable: readonly string[]
+}
+
+/** 新闻聚合器函数签名（各 Kit 导出的 aggregateNews 符合此形状）。 */
+export type NewsAggregator = (options?: AggregateNewsOptions) => Promise<AggregateNewsResult>
+
+/** 新闻聚合器注册表契约（Issue #37，router 插件提供）。 */
+export interface TradingNewsRegistry {
+  register(market: string, aggregator: NewsAggregator): () => void
+  get(market: string): NewsAggregator | undefined
+  markets(): string[]
+}
+

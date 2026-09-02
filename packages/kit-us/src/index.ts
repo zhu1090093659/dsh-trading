@@ -177,6 +177,14 @@ export function apply(ctx: Context, _config: Config): void {
   if (marketData !== undefined) {
     registerOnce(createGetIndicatorsTool({ marketData, market: 'us' }))
   }
+
+  // 新闻聚合器注册到 host 面注册表（Issue #37）。
+  ctx.inject(['tradingNewsRegistry'] as never, (newsCtx: any) => {
+    const registry = (newsCtx as any).tradingNewsRegistry
+    if (registry && typeof registry.register === 'function') {
+      ctx.effect(() => registry.register('us', aggregateNews), 'kit-us news registration')
+    }
+  })
 }
 
 /* ── us_get_news：美股新闻工具（WS2 #1） ────────────────────────────────────────── */

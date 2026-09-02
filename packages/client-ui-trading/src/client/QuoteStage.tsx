@@ -34,11 +34,19 @@ import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
+import { fetchNews, fetchKnowledgeCards } from './api.ts'
+import type { ClientNewsItem } from './api.ts'
+import { NewsFeedPane } from './NewsFeedPane.tsx'
+import { MarkerTooltip } from './MarkerTooltip.tsx'
+import type { MarkerHoverInfo } from './TvChart.tsx'
+import { createMarkerStateStore } from './marker-state.ts'
+import type { ChartSignalMarkerInput, ChartKnowledgeMarkerInput } from './TvChart.tsx'
 import css from './quote-stage.module.css'
 
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
 const ORDERBOOK_OPEN_KEY = 'dshtrading.orderbook.open'
 const TRADE_DESK_OPEN_KEY = 'dshtrading.tradeDesk.open'
+const NEWS_OPEN_KEY = 'dshtrading.news.open'
 const TICKER_POLL_MS = 5000
 const KLINE_RESYNC_MS = 30000
 // 衍生品指标快照轮询（issue #38）：一次刷新 = 2~5 个上游公共端点调用，取 30s
@@ -145,6 +153,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
   /** TvChart 注册的截图回调（图表未渲染/已卸载 = null）。 */
   const captureRef = useRef<(() => TvChartCapture | null) | null>(null)
+
+  // ── 新闻情报流（issue #37）────────────────────────────────────
+  const [newsOpen, setNewsOpen] = useState(() => localStorage.getItem(NEWS_OPEN_KEY) === 'true')
+  const [newsItems, setNewsItems] = useState<ClientNewsItem[] | null>(null)
+  const [newsUnavailable, setNewsUnavailable] = useState<string[]>([])
+
+  // ── K 线标记（issue #41）──────────────────────────────────────
+  const [markerStore] = useState(() => createMarkerStateStore())
+  const markerState = useSyncExternalStore(markerStore.subscribe, markerStore.getSnapshot)
+  const [markerHover, setMarkerHover] = useState<MarkerHoverInfo | null>(null)
+
   const [clock, setClock] = useState(() => formatStatusBarClock(Date.now()))
   const [indexTickers, setIndexTickers] = useState<Record<string, Ticker>>({})
 
@@ -285,6 +304,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     } catch { /* 下轮再试 */ }
   }, TICKER_POLL_MS, [market, symbol])
 
+  // 新闻情报流轮询（issue #37）：面板打开时 60s 轮询；symbol/market 变化时立即重拉。
+  const NEWS_POLL_MS = 60000
+  usePoll(async () => {
+    if (!newsOpen || market === undefined || symbol === undefined) return
+    const result = await fetchNews(market, symbol, 20)
+    if (result !== null) {
+      setNewsItems(result.items)
+      setNewsUnavailable(result.unavailable)
+    }
+  }, NEWS_POLL_MS, [market, symbol, newsOpen])
+
   const stats = useMemo(() => {
     const last = daily !== null && daily.length > 0 ? daily[daily.length - 1] : undefined
     const klinePrevClose = daily !== null && daily.length >= 2 ? daily[daily.length - 2]?.close : undefined
@@ -354,6 +384,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
   // 所有可用指标（供底部词条栏横向快捷展示）
   const allDefinitions = useMemo(() => indicators.list(), [rosterVersion])
+
+  // 策略信号标记数据（issue #41）：当前无回测结果时为 undefined。
+  // 未来版本可接入策略选择与图表内快速回测，当前为占位。
+  const signalMarkers: readonly ChartSignalMarkerInput[] | undefined = undefined
+
+  // 知识事件标记数据（issue #41）：从已拉取的知识卡片中按当前 symbol 过滤。
+  // 未来版本接入 fetchKnowledgeCards，当前为占位。
+  const knowledgeMarkers: readonly ChartKnowledgeMarkerInput[] | undefined = undefined
 
   // 发给 Agent：先截图（画布只在图表挂载期间可取），再把文本 + PNG 填入
   // 会话输入框（不自动发送——用户大概率还要补自己的 prompt）。
@@ -544,6 +582,44 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           >
             {t('orderbook.toggle')}
           </button>
+          {/* 新闻情报流开关（issue #37） */}
+          <button
+            type="button"
+            className={css.pickerButton}
+            data-active={newsOpen ? 'true' : undefined}
+            aria-pressed={newsOpen}
+            title="新闻情报流"
+            onClick={() => {
+              setNewsOpen(open => {
+                localStorage.setItem(NEWS_OPEN_KEY, String(!open))
+                return !open
+              })
+            }}
+          >
+            📰 新闻
+          </button>
+          {/* 策略信号标记开关（issue #41） */}
+          <button
+            type="button"
+            className={css.pickerButton}
+            data-active={markerState.showSignals ? 'true' : undefined}
+            aria-pressed={markerState.showSignals}
+            title="策略信号标记"
+            onClick={() => markerStore.toggleSignals()}
+          >
+            📊 信号
+          </button>
+          {/* 知识事件图钉开关（issue #41） */}
+          <button
+            type="button"
+            className={css.pickerButton}
+            data-active={markerState.showKnowledgeEvents ? 'true' : undefined}
+            aria-pressed={markerState.showKnowledgeEvents}
+            title="知识事件图钉"
+            onClick={() => markerStore.toggleKnowledgeEvents()}
+          >
+            📌 事件
+          </button>
           {/* 区间统计（同花顺式框选统计；紧挨「技术指标」按钮左侧） */}
             <button
               type="button"
@@ -628,6 +704,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 rangeSelectionMode={rangeMode}
                 selection={rangeSelection}
                 onRangeSelect={setRangeSelection}
+                signalMarkers={markerState.showSignals ? signalMarkers : undefined}
+                knowledgeMarkers={markerState.showKnowledgeEvents ? knowledgeMarkers : undefined}
+                onMarkerHover={setMarkerHover}
               />
             )}
             {rangeMode && rangeStats !== null && (
@@ -689,8 +768,33 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               </div>
             )}
             </div>
+            {markerHover !== null && (
+              <MarkerTooltip
+                x={markerHover.x}
+                y={markerHover.y}
+                signal={markerHover.signal ? {
+                  action: markerHover.signal.action,
+                  price: markerHover.signal.price,
+                  reason: markerHover.signal.reason,
+                  time: markerHover.signal.time,
+                } : undefined}
+                knowledge={markerHover.knowledge ? {
+                  title: markerHover.knowledge.title,
+                  credibility: markerHover.knowledge.credibility,
+                  cardId: markerHover.knowledge.cardId,
+                } : undefined}
+              />
+            )}
             {market === 'crypto' && derivatives !== null && (
               <DerivativesPane t={t} derivatives={derivatives} colorMode={colorMode} />
+            )}
+            {newsOpen && (
+              <NewsFeedPane
+                items={newsItems}
+                unavailable={newsUnavailable}
+                t={t}
+                fillComposer={fillComposer}
+              />
             )}
           </div>
           {orderbookOpen && (
