@@ -612,7 +612,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             title="查看新闻情报流"
             onClick={() => { setStageTab('news') }}
           >
-            📰 新闻
+            新闻
           </button>
           {/* 策略信号标记开关（issue #41） */}
           <button
@@ -623,7 +623,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             title="策略信号标记"
             onClick={() => markerStore.toggleSignals()}
           >
-            📊 信号
+            信号
           </button>
           {/* 知识事件图钉开关（issue #41） */}
           <button
@@ -634,7 +634,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             title="知识事件图钉"
             onClick={() => markerStore.toggleKnowledgeEvents()}
           >
-            📌 事件
+            事件
           </button>
           {/* 区间统计（同花顺式框选统计；紧挨「技术指标」按钮左侧） */}
             <button
