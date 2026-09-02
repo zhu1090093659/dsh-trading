@@ -5,11 +5,15 @@
  *（见其 dataplane.ts 头注）。OKX 模拟盘/实盘由 env 配置区分，行情面公共无凭证。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService, TradeRegistry } from '@dsh-trading/api'
 import {
   OkxMarketDataService,
+  OkxRestClient,
+  OkxTradeService,
   ROUTER_PROVIDER,
+  resolveCredentials,
   TRADING_CRYPTO_MARKET_DATA_KEY,
+  TRADING_CRYPTO_TRADE_KEY,
   type Config,
   type MarketRouterLike,
 } from './index.ts'
@@ -27,6 +31,12 @@ function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undef
   const candidate = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketDataRegistry', false)
   return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
 }
+/** 解析交易注册表服务（issue #40）；老部署（未升级）返回 undefined → 跳过交易注册。 */
+function resolveTradeRegistry(ctx: Context): TradeRegistry | undefined {
+  const candidate = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingTradeRegistry', false)
+  return candidate !== undefined ? (candidate as TradeRegistry) : undefined
+}
+
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
   const registry = resolveMarketDataRegistry(ctx)
@@ -38,7 +48,22 @@ export function apply(ctx: Context, config: Config): void {
     new OkxMarketDataService(ctx)
     return
   }
+  const client = new OkxRestClient()
   const inner = ctx.isolate(TRADING_CRYPTO_MARKET_DATA_KEY)
-  const service = new OkxMarketDataService(inner)
+  const service = new OkxMarketDataService(inner, {}, client)
   ctx.effect(() => registry.register('crypto', ROUTER_PROVIDER, service))
+
+  // 交易服务注册（issue #40）：host 面只读 + dry-run 面（GUI 交易台）。
+  // 服务缝三态闸门随实例生效（dryRun 缺省 true、liveTrading=false 时实盘拒绝）；
+  // 凭证缺失不阻断注册——只读方法调用时 fail-closed 报 TRADING_CREDENTIALS_MISSING。
+  const tradeRegistry = resolveTradeRegistry(ctx)
+  if (tradeRegistry !== undefined) {
+    const tradeInner = ctx.isolate(TRADING_CRYPTO_TRADE_KEY)
+    const trade = new OkxTradeService(tradeInner, {
+      client,
+      config,
+      getCredentials: () => resolveCredentials(ctx, config),
+    })
+    ctx.effect(() => tradeRegistry.register('crypto', ROUTER_PROVIDER, trade))
+  }
 }

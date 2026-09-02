@@ -78,3 +78,31 @@ describe('connector-okx dataplane（注册表模式，2026-08-30 整改 #1）', 
     expect(registrations).toHaveLength(1)
   })
 })
+
+describe('connector-okx dataplane（issue #40 注册表模式双注册）', () => {
+  function makeRegistryCtx(withTrade: boolean): { ctx: Context; registered: Array<[string, string]>; disposed: number } {
+    const registered: Array<[string, string]> = []
+    let disposed = 0
+    const marketRegistry = { register: (market: string, provider: string) => { registered.push([market, `${provider}#market`]); return () => { disposed++ } } }
+    const tradeRegistry = { register: (market: string, provider: string) => { registered.push([market, `${provider}#trade`]); return () => { disposed++ } } }
+    const ctx = {
+      get: (key: string) => (key === 'tradingMarketDataRegistry' ? marketRegistry : key === 'tradingTradeRegistry' && withTrade ? tradeRegistry : undefined),
+      reflect: { provide: () => {} },
+      isolate: () => ctx,
+      effect: (fn: () => () => void) => { fn() },
+    } as unknown as Context
+    return { ctx, registered, disposed }
+  }
+
+  it('trade registry 在场 → 行情 + 交易双注册（provider slug 一致）', () => {
+    const { ctx, registered } = makeRegistryCtx(true)
+    apply(ctx, CONFIG)
+    expect(registered).toEqual([['crypto', 'okx#market'], ['crypto', 'okx#trade']])
+  })
+
+  it('trade registry 缺席（老部署）→ 只注册行情，不炸', () => {
+    const { ctx, registered } = makeRegistryCtx(false)
+    apply(ctx, CONFIG)
+    expect(registered).toEqual([['crypto', 'okx#market']])
+  })
+})

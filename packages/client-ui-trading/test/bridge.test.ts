@@ -2,7 +2,7 @@
  * 行情桥单测：市场清单、批量报价（逐 symbol 独立成败 + 封顶）、K线透传与
  * 参数校验、请求分发路由与协议错误。宿主面全部用假件（不触网）。
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { MarketDataService } from '@dsh-trading/api'
 import { createMemoryCustomStrategyStore } from '@dsh-trading/strategies'
 import {
@@ -217,6 +217,78 @@ describe('TradingBridge.orderbook + trades（issue #39 盘口竖栏）', () => {
     const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: fakeService() }))
     await expect(dispatchBridgeRequest(bridge, 'GET', '/trades', new URLSearchParams({ market: 'crypto', symbol: 'BTCUSDT', limit: '0' })))
       .rejects.toBeInstanceOf(BridgeProtocolError)
+  })
+})
+
+describe('TradingBridge.trade/*（issue #40 交易台：只读 + 强制 dry-run）', () => {
+  function tradeService(overrides: Partial<import('@dsh-trading/api').TradeService> = {}): import('@dsh-trading/api').TradeService {
+    return {
+      placeOrder: async (req) => ({
+        id: 'dry-1', symbol: req.symbol, side: req.side, type: req.type,
+        status: 'filled', quantity: req.quantity, dryRun: true, timestamp: 1,
+      }),
+      cancelOrder: async () => {},
+      getOrder: async (_symbol, id) => ({
+        id, symbol: _symbol, side: 'buy', type: 'limit', status: 'new', quantity: 1, dryRun: false, timestamp: 1,
+      }),
+      getPositions: async () => [{ symbol: 'BTCUSDT-SWAP', side: 'long', size: 0.02, entryPrice: 42000, unrealizedPnl: 1.5, timestamp: 1 }],
+      ...overrides,
+    }
+  }
+
+  function tradeHost(service: import('@dsh-trading/api').TradeService | undefined): BridgeHost {
+    return {
+      getMarketService: market => market === 'crypto' ? fakeService() : undefined,
+      activeProvider: () => 'okx',
+      getTradeService: market => market === 'crypto' ? service : undefined,
+    }
+  }
+
+  it('/trade/positions、/trade/orders、/trade/fills、/trade/balances 只读透传', async () => {
+    const service = tradeService({
+      getBalances: async () => [{ asset: 'USDT', free: 100, locked: 0 }],
+      listOpenOrders: async () => [],
+      listTradeFills: async () => [{ id: 'f1', symbol: 'BTCUSDT-SWAP', side: 'buy', price: 42000, amount: 0.02, timestamp: 1 }],
+    })
+    const bridge = new TradingBridge(tradeHost(service))
+    const { payload: positionWire } = await dispatchBridgeRequest(bridge, 'GET', '/trade/positions', new URLSearchParams({ market: 'crypto' }))
+    expect(positionWire).toMatchObject({ ok: true, positions: [{ symbol: 'BTCUSDT-SWAP', side: 'long' }] })
+    const { payload: balanceWire } = await dispatchBridgeRequest(bridge, 'GET', '/trade/balances', new URLSearchParams({ market: 'crypto' }))
+    expect(balanceWire).toMatchObject({ ok: true, balances: [{ asset: 'USDT', free: 100 }] })
+    const { payload: orderWire } = await dispatchBridgeRequest(bridge, 'GET', '/trade/orders', new URLSearchParams({ market: 'crypto' }))
+    expect(orderWire).toMatchObject({ ok: true, orders: [] })
+    const { payload: fillWire } = await dispatchBridgeRequest(bridge, 'GET', '/trade/fills', new URLSearchParams({ market: 'crypto' }))
+    expect(fillWire).toMatchObject({ ok: true, fills: [{ id: 'f1' }] })
+  })
+
+  it('POST /trade/order：placeOrder 收到强制 dryRun=true（即便 body 夹带其他语义）', async () => {
+    const placeOrder = vi.fn(async (req: { dryRun?: boolean }) => ({
+      id: 'dry-1', symbol: req.symbol, side: req.side, type: req.type,
+      status: 'filled' as const, quantity: req.quantity, dryRun: true as const, timestamp: 1,
+    }))
+    const bridge = new TradingBridge(tradeHost(tradeService({ placeOrder: placeOrder as never })))
+    const { payload } = await dispatchBridgeRequest(
+      bridge, 'POST', '/trade/order',
+      new URLSearchParams({ market: 'crypto' }),
+      { symbol: 'BTCUSDT-SWAP', side: 'buy', type: 'limit', quantity: 0.02, price: 42000 },
+    )
+    expect(payload).toMatchObject({ ok: true, order: { dryRun: true, symbol: 'BTCUSDT-SWAP' } })
+    expect(placeOrder).toHaveBeenCalledWith(expect.objectContaining({ symbol: 'BTCUSDT-SWAP', dryRun: true, price: 42000 }))
+  })
+
+  it('limit 单缺价格 → 400；数量非法 → 400；交易服务未注册 → 400', async () => {
+    const bridge = new TradingBridge(tradeHost(tradeService()))
+    await expect(dispatchBridgeRequest(
+      bridge, 'POST', '/trade/order', new URLSearchParams({ market: 'crypto' }),
+      { symbol: 'BTCUSDT-SWAP', side: 'buy', type: 'limit', quantity: 0.02 },
+    )).rejects.toMatchObject({ status: 400 })
+    await expect(dispatchBridgeRequest(
+      bridge, 'POST', '/trade/order', new URLSearchParams({ market: 'crypto' }),
+      { symbol: 'BTCUSDT-SWAP', side: 'buy', type: 'market', quantity: -1 },
+    )).rejects.toMatchObject({ status: 400 })
+    await expect(dispatchBridgeRequest(
+      bridge, 'GET', '/trade/positions', new URLSearchParams({ market: 'us' }),
+    )).rejects.toMatchObject({ status: 400 })
   })
 })
 

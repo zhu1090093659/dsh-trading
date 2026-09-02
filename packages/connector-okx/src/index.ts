@@ -45,6 +45,7 @@ import type {
   Position,
   Ticker,
   TradeService,
+  TradeFill,
   TradeTick,
 } from '@dsh-trading/api'
 import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
@@ -582,6 +583,85 @@ export class OkxTradeService extends Service implements TradeService {
       }
     }
     return balances
+  }
+
+  /** SWAP 的 sz/accFillSz/fillSz（张）→ base 币数（规格缓存，非 SWAP 原值）。 */
+  private async toCoins(instId: string, exchangeAmount: unknown): Promise<number | undefined> {
+    const n = typeof exchangeAmount === 'string' || typeof exchangeAmount === 'number'
+      ? Number(exchangeAmount)
+      : Number.NaN
+    if (!Number.isFinite(n)) return undefined
+    if (!instId.endsWith('-SWAP')) return n
+    try {
+      const instrument = await this.getInstrument(instId)
+      return instrument.ctVal !== undefined ? n * instrument.ctVal : n
+    } catch {
+      return n
+    }
+  }
+
+  /** 当前挂单（TradeService 可选契约，issue #40；只读、需凭证）。 */
+  async listOpenOrders(symbol?: string): Promise<Order[]> {
+    const instId = symbol !== undefined && symbol !== '' ? normalizeOkxSymbol(symbol) : undefined
+    const credentials = await this.getCredentials()
+    const rows = await this.client.listPendingOrders(instId, this.auth(credentials))
+    const orders: Order[] = []
+    for (const row of rows) {
+      const d = row as Record<string, unknown>
+      const ordId = typeof d.ordId === 'string' ? d.ordId : undefined
+      const rawInstId = typeof d.instId === 'string' ? d.instId : undefined
+      if (ordId === undefined || rawInstId === undefined) continue
+      const quantity = await this.toCoins(rawInstId, d.sz)
+      if (quantity === undefined) continue
+      const filledQuantity = await this.toCoins(rawInstId, d.accFillSz)
+      const price = typeof d.px === 'string' && d.px !== '' ? Number(d.px) : typeof d.avgPx === 'string' && d.avgPx !== '' ? Number(d.avgPx) : undefined
+      const state = typeof d.state === 'string' ? d.state : ''
+      const timestamp = typeof d.uTime === 'string' ? Number(d.uTime) : typeof d.cTime === 'string' ? Number(d.cTime) : Date.now()
+      orders.push({
+        id: ordId,
+        symbol: toCanonicalOkxSymbol(rawInstId),
+        side: d.side === 'sell' ? 'sell' as const : 'buy' as const,
+        type: d.ordType === 'market' ? 'market' as const : 'limit' as const,
+        status: state === 'partially_filled' ? 'partially_filled' as const : 'new' as const,
+        ...(price !== undefined && Number.isFinite(price) ? { price } : {}),
+        quantity,
+        ...(filledQuantity !== undefined ? { filledQuantity } : {}),
+        dryRun: false,
+        timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
+      })
+    }
+    return orders
+  }
+
+  /** 最近成交流水（TradeService 可选契约，issue #40；只读、需凭证，时间升序）。 */
+  async listTradeFills(symbol?: string, limit = 50): Promise<TradeFill[]> {
+    const instId = symbol !== undefined && symbol !== '' ? normalizeOkxSymbol(symbol) : undefined
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 50, 100))
+    const credentials = await this.getCredentials()
+    const rows = await this.client.listFillsHistory(instId, capped, this.auth(credentials))
+    const fills: TradeFill[] = []
+    for (const row of rows) {
+      const d = row as Record<string, unknown>
+      const rawInstId = typeof d.instId === 'string' ? d.instId : undefined
+      const price = pickNumber(d.fillPx)
+      if (rawInstId === undefined || price === undefined) continue
+      const amount = await this.toCoins(rawInstId, d.fillSz)
+      if (amount === undefined) continue
+      const fee = pickNumber(d.fee)
+      const feeAsset = typeof d.feeCcy === 'string' && d.feeCcy !== '' ? d.feeCcy : undefined
+      fills.push({
+        id: typeof d.billId === 'string' ? d.billId : String(d.billId ?? ''),
+        symbol: toCanonicalOkxSymbol(rawInstId),
+        side: d.side === 'sell' ? 'sell' as const : 'buy' as const,
+        price,
+        amount,
+        ...(fee !== undefined ? { fee: Math.abs(fee) } : {}),
+        ...(feeAsset !== undefined ? { feeAsset } : {}),
+        timestamp: pickNumber(d.ts) ?? Date.now(),
+      })
+    }
+    // OKX 响应新→旧 → 契约升序（旧→新）。
+    return fills.reverse()
   }
 }
 

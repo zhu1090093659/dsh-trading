@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-09-02T08:14:51.900Z",
+  "note": "本出口无 OKX demo 凭证：只读面预期 fail-closed；dry-run 下单（模拟闸门 + 公共 ticker 参照）应真实成功。",
+  "dryRunOrder": {
+    "status": 200,
+    "ok": true,
+    "order": {
+      "id": "dry-1788336891901-9mz0c2",
+      "symbol": "BTCUSDT-SWAP",
+      "side": "buy",
+      "type": "limit",
+      "status": "filled",
+      "price": 40000,
+      "quantity": 0.02,
+      "dryRun": true,
+      "timestamp": 1788336891901
+    }
+  },
+  "readonlyFailClosed": {
+    "positions": {
+      "endpoint": "/trade/positions",
+      "status": 200,
+      "ok": false,
+      "code": "TRADING_CREDENTIALS_MISSING",
+      "message": "OKX derivatives credentials missing (OKX_DEMO_* unresolved)"
+    },
+    "orders": {
+      "endpoint": "/trade/orders",
+      "status": 200,
+      "ok": false,
+      "code": "TRADING_CREDENTIALS_MISSING",
+      "message": "OKX derivatives credentials missing (OKX_DEMO_* unresolved)"
+    },
+    "fills": {
+      "endpoint": "/trade/fills",
+      "status": 200,
+      "ok": false,
+      "code": "TRADING_CREDENTIALS_MISSING",
+      "message": "OKX derivatives credentials missing (OKX_DEMO_* unresolved)"
+    },
+    "balances": {
+      "endpoint": "/trade/balances",
+      "status": 200,
+      "ok": false,
+      "code": "TRADING_CREDENTIALS_MISSING",
+      "message": "OKX derivatives credentials missing (OKX_DEMO_* unresolved)"
+    }
+  }
+}

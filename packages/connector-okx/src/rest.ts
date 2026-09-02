@@ -814,6 +814,25 @@ export class OkxRestClient {
       auth,
     })
   }
+
+  /** 当前挂单：GET /api/v5/trade/orders-pending（instId 可选过滤；issue #40 交易台）。 */
+  async listPendingOrders(instId: string | undefined, auth: SignedAuth): Promise<unknown[]> {
+    return this.request('/api/v5/trade/orders-pending', {
+      query: instId !== undefined ? { instId } : undefined,
+      auth,
+    })
+  }
+
+  /** 最近成交明细：GET /api/v5/trade/fills-history（instId/limit 可选；issue #40 交易台）。 */
+  async listFillsHistory(instId: string | undefined, limit: number | undefined, auth: SignedAuth): Promise<unknown[]> {
+    const query: Record<string, string> = {}
+    if (instId !== undefined) query.instId = instId
+    if (limit !== undefined) query.limit = String(limit)
+    return this.request('/api/v5/trade/fills-history', {
+      query: Object.keys(query).length > 0 ? query : undefined,
+      auth,
+    })
+  }
 }
 
 /** instId 校验（R3 词汇：SPOT `BASE-QUOTE` 与 SWAP `BASE-QUOTE-SWAP`，OKX 原生连字符）。 */

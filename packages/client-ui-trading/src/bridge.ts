@@ -13,7 +13,7 @@
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
-import type { DerivativesData, Interval, Kline, MarketDataService, Orderbook, StockFundamentals, Ticker, TradeTick } from '@dsh-trading/api'
+import type { AccountBalance, DerivativesData, Interval, Kline, MarketDataService, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/indicators'
 import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
@@ -41,6 +41,11 @@ export interface MarketDataRegistryLike {
   active(market: string): { provider: string; service: MarketDataService } | undefined
 }
 
+/** 交易注册表服务的最小形状（issue #40，鸭式；api 包 TradeRegistry 同构）。 */
+export interface TradeRegistryLike {
+  active(market: string): { provider: string; service: TradeService } | undefined
+}
+
 /**
  * 桥宿主工厂（registry-first 解析的唯一实现，node 半与单测共用）：
  * - getMarketService：注册表有激活注册项 → 用之；否则回退 legacy 市场键直读
@@ -50,6 +55,7 @@ export interface MarketDataRegistryLike {
  */
 export function createBridgeHost(services: {
   registry?: MarketDataRegistryLike
+  tradeRegistry?: TradeRegistryLike
   router?: { activeProvider(market: string): string | undefined }
   legacy(market: MarketId): MarketDataService | undefined
   customIndicatorsStore?: CustomIndicatorStore
@@ -64,6 +70,7 @@ export function createBridgeHost(services: {
       if (active !== undefined) return active.service
       return services.legacy(market)
     },
+    getTradeService: market => services.tradeRegistry?.active(market)?.service,
     activeProvider: market => services.registry?.active(market)?.provider ?? services.router?.activeProvider(market),
     customIndicatorsStore: services.customIndicatorsStore ?? createMemoryCustomIndicatorStore(),
     knowledgeStore: services.knowledgeStore ?? createMemoryKnowledgeCardStore(),
@@ -95,6 +102,12 @@ export interface BridgeHost {
   watchlistStore?: WatchlistStore
   /** 选中标的存储（可选，issue #32）。 */
   selectionStore?: SelectionStore
+  /**
+   * 交易服务（可选，issue #40）：tradeRegistry 按 market 解析；未注册 → undefined
+   * （交易台整体隐藏）。**安全语义**：桥只放行 dry-run 下单与只读查询——
+   * placeOrder 的 dryRun 被强制为 true，实盘路径不经 GUI。
+   */
+  getTradeService?(market: MarketId): TradeService | undefined
 }
 
 export interface MarketInfoWire {
@@ -149,6 +162,43 @@ export interface TradesWire {
 
 /** 桥端逐笔上限（保护公共端点；GUI 流水只展示最近一段）。 */
 export const MAX_TRADES_LIMIT = 100
+
+/* -- 交易台 wire（issue #40）---------------------------------------------- */
+
+export interface PositionsWire {
+  ok: true
+  positions: Position[]
+}
+
+export interface BalancesWire {
+  ok: true
+  balances: AccountBalance[]
+}
+
+export interface OpenOrdersWire {
+  ok: true
+  orders: Order[]
+}
+
+export interface TradeFillsWire {
+  ok: true
+  fills: TradeFill[]
+}
+
+export interface PlaceOrderWire {
+  ok: true
+  order: Order
+}
+
+/** GUI 下单体（桥强制 dry-run：实盘路径不经 GUI，见 placeOrderFromGui）。 */
+export interface GuiOrderBody {
+  readonly market?: unknown
+  readonly symbol?: unknown
+  readonly side?: unknown
+  readonly type?: unknown
+  readonly quantity?: unknown
+  readonly price?: unknown
+}
 
 export interface CustomIndicatorsWire {
   ok: true
@@ -344,6 +394,73 @@ export class TradingBridge {
       )
     }
     return { ok: true, trades: await service.getRecentTrades(trimmed, limit) }
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* 交易台（issue #40）：只读查询 + 强制 dry-run 下单                      */
+  /* ---------------------------------------------------------------- */
+
+  /** 交易服务解析：注册表无注册项（未安装交易连接器）→ undefined（调用方 400）。 */
+  #requireTradeService(market: string): TradeService {
+    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const trade = this.host.getTradeService?.(market)
+    if (trade === undefined) throw new BridgeProtocolError(400, `no trade service for market ${market}`)
+    return trade
+  }
+
+  async positions(market: string): Promise<PositionsWire> {
+    return { ok: true, positions: await this.#requireTradeService(market).getPositions() }
+  }
+
+  async balances(market: string): Promise<BalancesWire> {
+    const trade = this.#requireTradeService(market)
+    if (typeof trade.getBalances !== 'function') {
+      throw Object.assign(new Error('trade service does not implement balances'), { code: 'TRADING_NOT_IMPLEMENTED' })
+    }
+    return { ok: true, balances: await trade.getBalances() }
+  }
+
+  async openOrders(market: string): Promise<OpenOrdersWire> {
+    const trade = this.#requireTradeService(market)
+    if (typeof trade.listOpenOrders !== 'function') {
+      throw Object.assign(new Error('trade service does not implement open orders'), { code: 'TRADING_NOT_IMPLEMENTED' })
+    }
+    return { ok: true, orders: await trade.listOpenOrders() }
+  }
+
+  async tradeFills(market: string): Promise<TradeFillsWire> {
+    const trade = this.#requireTradeService(market)
+    if (typeof trade.listTradeFills !== 'function') {
+      throw Object.assign(new Error('trade service does not implement trade fills'), { code: 'TRADING_NOT_IMPLEMENTED' })
+    }
+    return { ok: true, fills: await trade.listTradeFills() }
+  }
+
+  /**
+   * GUI 下单（issue #40）：**强制 dry-run**——body.dryRun 一律忽略并按 true 透传；
+   * 请求实盘（dryRun=false 语义在本路由不存在）是结构上的不可能，而非运行时判断。
+   * 实盘路径保持唯一：Agent 工具（dryRun=false → 服务缝 liveTrading 闸门 → base
+   * 统一审批闸门）。GUI 的「实盘按钮」只展示状态，不构成下单通道。
+   */
+  async placeOrderFromGui(market: string, body: GuiOrderBody): Promise<PlaceOrderWire> {
+    const trade = this.#requireTradeService(market)
+    const symbol = typeof body.symbol === 'string' ? body.symbol.trim() : ''
+    const side = body.side === 'sell' ? 'sell' as const : body.side === 'buy' ? 'buy' as const : undefined
+    const type = body.type === 'limit' ? 'limit' as const : body.type === 'market' ? 'market' as const : undefined
+    const quantity = typeof body.quantity === 'number' ? body.quantity : Number.NaN
+    if (symbol === '') throw new BridgeProtocolError(400, 'place order: symbol is required')
+    if (side === undefined) throw new BridgeProtocolError(400, 'place order: side must be buy or sell')
+    if (type === undefined) throw new BridgeProtocolError(400, 'place order: type must be market or limit')
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new BridgeProtocolError(400, 'place order: quantity must be a positive number')
+    }
+    const price = typeof body.price === 'number' ? body.price : undefined
+    if (type === 'limit' && (price === undefined || !Number.isFinite(price) || price <= 0)) {
+      throw new BridgeProtocolError(400, 'place order: limit orders require a positive price')
+    }
+    // dryRun 显式 true（语义上等价于缺省）；服务缝闸门第二重兜底。
+    const order = await trade.placeOrder({ symbol, side, type, quantity, ...(price !== undefined ? { price } : {}), dryRun: true })
+    return { ok: true, order }
   }
 
   /** 自定义指标列表。 */
@@ -556,6 +673,18 @@ export async function dispatchBridgeRequest(
         const symbol = search.get('symbol') ?? ''
         return { status: 200, payload: await bridge.trades(market, symbol, search.get('limit')) }
       }
+      case '/trade/positions': {
+        return { status: 200, payload: await bridge.positions(search.get('market') ?? '') }
+      }
+      case '/trade/balances': {
+        return { status: 200, payload: await bridge.balances(search.get('market') ?? '') }
+      }
+      case '/trade/orders': {
+        return { status: 200, payload: await bridge.openOrders(search.get('market') ?? '') }
+      }
+      case '/trade/fills': {
+        return { status: 200, payload: await bridge.tradeFills(search.get('market') ?? '') }
+      }
       case '/indicators/custom': {
         return { status: 200, payload: await bridge.customIndicators() }
       }
@@ -607,6 +736,9 @@ export async function dispatchBridgeRequest(
   }
 
   if (method === 'POST') {
+    if (pathname === '/trade/order') {
+      return { status: 200, payload: await bridge.placeOrderFromGui(search.get('market') ?? '', body as GuiOrderBody) }
+    }
     if (pathname === '/watchlists') {
       return { status: 200, payload: await bridge.addWatchlistRow(body) }
     }

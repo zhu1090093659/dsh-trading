@@ -28,6 +28,7 @@ import {
   createBridgeHost,
   dispatchBridgeRequest,
   type MarketDataRegistryLike,
+  type TradeRegistryLike,
 } from './bridge.ts'
 import { attachEventStream } from './sse.ts'
 
@@ -101,6 +102,7 @@ export function apply(ctx: Context): void {
     // settings 切换交易所 GUI 即刻生效（热切换）；注册表缺席回退旧市场键直读。
     const host = createBridgeHost({
       registry: webCtx.get('tradingMarketDataRegistry', false) as MarketDataRegistryLike | undefined,
+      tradeRegistry: webCtx.get('tradingTradeRegistry', false) as TradeRegistryLike | undefined,
       router: webCtx.get('tradingMarketRouter', false) as { activeProvider(m: string): string | undefined } | undefined,
       legacy: market => webCtx.get(MARKET_SERVICE_KEYS[market]) as MarketDataService | undefined,
       customIndicatorsStore,

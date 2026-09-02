@@ -3,7 +3,7 @@
  * half registers the route behind the browser-auth fence; same-origin fetch
  * carries the auth cookie by default).
  */
-import type { DerivativesData, Kline, MarketId, MarketInfo, Orderbook, StockFundamentals, TickerOutcome, TradeTick } from './types.ts'
+import type { AccountBalance, DerivativesData, Kline, MarketId, MarketInfo, Order, Orderbook, Position, StockFundamentals, TickerOutcome, TradeFill, TradeTick } from './types.ts'
 import type { CustomIndicatorRecord } from '@dsh-trading/indicators'
 import type { KnowledgeCard } from '@dsh-trading/knowledge'
 import type { CustomStrategyRecord } from '@dsh-trading/strategies'
@@ -99,6 +99,80 @@ export async function fetchRecentTrades(market: MarketId, symbol: string, limit 
     const query = new URLSearchParams({ market, symbol, limit: String(limit) })
     const wire = await getJson<{ ok: boolean; trades: TradeTick[] }>(`/dshtrading/api/trades?${query.toString()}`)
     return Array.isArray(wire.trades) ? wire.trades : []
+  } catch {
+    return null
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 交易台（issue #40）：只读查询 + 强制 dry-run 下单                        */
+/* ------------------------------------------------------------------ */
+
+/** 持仓快照。交易服务未挂载（桥 400）或失败 → null：交易台整体隐藏。 */
+export async function fetchTradePositions(market: MarketId): Promise<Position[] | null> {
+  try {
+    const wire = await getJson<{ ok: boolean; positions: Position[] }>(`/dshtrading/api/trade/positions?market=${market}`)
+    return Array.isArray(wire.positions) ? wire.positions : []
+  } catch {
+    return null
+  }
+}
+
+/** 余额快照（可选面）。未实现/失败 → null。 */
+export async function fetchTradeBalances(market: MarketId): Promise<AccountBalance[] | null> {
+  try {
+    const wire = await getJson<{ ok: boolean; balances: AccountBalance[] }>(`/dshtrading/api/trade/balances?market=${market}`)
+    return Array.isArray(wire.balances) ? wire.balances : []
+  } catch {
+    return null
+  }
+}
+
+/** 当前挂单（可选面）。未实现/失败 → null。 */
+export async function fetchTradeOpenOrders(market: MarketId): Promise<Order[] | null> {
+  try {
+    const wire = await getJson<{ ok: boolean; orders: Order[] }>(`/dshtrading/api/trade/orders?market=${market}`)
+    return Array.isArray(wire.orders) ? wire.orders : []
+  } catch {
+    return null
+  }
+}
+
+/** 最近成交流水（可选面）。未实现/失败 → null。 */
+export async function fetchTradeFills(market: MarketId): Promise<TradeFill[] | null> {
+  try {
+    const wire = await getJson<{ ok: boolean; fills: TradeFill[] }>(`/dshtrading/api/trade/fills?market=${market}`)
+    return Array.isArray(wire.fills) ? wire.fills : []
+  } catch {
+    return null
+  }
+}
+
+export interface GuiOrderInput {
+  symbol: string
+  side: 'buy' | 'sell'
+  type: 'market' | 'limit'
+  quantity: number
+  price?: number
+}
+
+/**
+ * GUI 下单（dry-run 专用）：桥强制 dryRun=true，返回模拟回执。网络/校验失败 → null。
+ */
+export async function placeGuiDryRunOrder(market: MarketId, input: GuiOrderInput): Promise<Order | null> {
+  try {
+    const response = await fetch(`/dshtrading/api/trade/order?market=${market}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    if (!response.ok) return null
+    const wire = await response.json() as { ok?: boolean; order?: Order; code?: string; message?: string }
+    if (wire.ok !== true || wire.order === undefined) {
+      console.warn('[dsh-trading] gui order rejected:', wire.code, wire.message)
+      return null
+    }
+    return wire.order
   } catch {
     return null
   }
