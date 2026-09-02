@@ -34,18 +34,39 @@ export function createFileCustomIndicatorStore(filePath: string): CustomIndicato
 
   async function flush(map: Map<string, CustomIndicatorRecord>): Promise<void> {
     const dir = dirname(filePath)
+    await mkdir(dir, { recursive: true })
     const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
+    const data = JSON.stringify([...map.values()], null, 2)
     try {
-      await mkdir(dir, { recursive: true })
-      const data = JSON.stringify([...map.values()], null, 2)
       await writeFile(tmpPath, data, 'utf8')
-      await rename(tmpPath, filePath)
+      let renamed = false
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await rename(tmpPath, filePath)
+          renamed = true
+          break
+        } catch (err: any) {
+          if (err?.code === 'EPERM' || err?.code === 'EBUSY' || err?.code === 'EACCES') {
+            await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
+            continue
+          }
+          throw err
+        }
+      }
+      if (!renamed) {
+        await writeFile(filePath, data, 'utf8')
+        await unlink(tmpPath).catch(() => {})
+      }
     } catch (error) {
-      console.error(`[dsh-trading/indicators] failed to atomic flush custom indicators to ${filePath}:`, error)
       try {
         await unlink(tmpPath).catch(() => {})
       } catch {}
-      throw error
+      try {
+        await writeFile(filePath, data, 'utf8')
+      } catch (finalErr) {
+        console.error(`[dsh-trading/indicators] failed to atomic flush custom indicators to ${filePath}:`, finalErr)
+        throw finalErr
+      }
     }
   }
 

@@ -6,8 +6,55 @@ import { readFile, writeFile, rename, unlink, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { SelectionRecord, SelectionStore, WatchlistStore, WatchlistsMap } from './index.ts'
 
+/**
+ * 跨平台健壮原子写入（带 Windows EPERM / EBUSY 重试与 writeFile 兜底）。
+ */
+async function safeAtomicWrite(filePath: string, data: string): Promise<void> {
+  const dir = dirname(filePath)
+  await mkdir(dir, { recursive: true })
+  const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
+  try {
+    await writeFile(tmpPath, data, 'utf8')
+    let renamed = false
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await rename(tmpPath, filePath)
+        renamed = true
+        break
+      } catch (err: any) {
+        if (err?.code === 'EPERM' || err?.code === 'EBUSY' || err?.code === 'EACCES') {
+          await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
+          continue
+        }
+        throw err
+      }
+    }
+    if (!renamed) {
+      await writeFile(filePath, data, 'utf8')
+      await unlink(tmpPath).catch(() => {})
+    }
+  } catch (error) {
+    try {
+      await unlink(tmpPath).catch(() => {})
+    } catch {}
+    try {
+      await writeFile(filePath, data, 'utf8')
+    } catch (finalErr) {
+      console.error(`[dsh-trading/watchlist] failed to write to ${filePath}:`, finalErr)
+      throw finalErr
+    }
+  }
+}
+
 export function createFileWatchlistStore(filePath: string): WatchlistStore {
   let cache: WatchlistsMap | null = null
+  let pendingWrite = Promise.resolve()
+
+  const enqueue = <T>(fn: () => Promise<T>): Promise<T> => {
+    const next = pendingWrite.then(fn, fn)
+    pendingWrite = next.then(() => {}, () => {})
+    return next
+  }
 
   async function load(): Promise<WatchlistsMap> {
     if (cache !== null) return cache
@@ -25,19 +72,9 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
   }
 
   async function flush(map: WatchlistsMap): Promise<void> {
-    const dir = dirname(filePath)
-    const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
-    try {
-      await mkdir(dir, { recursive: true })
-      await writeFile(tmpPath, JSON.stringify(map, null, 2), 'utf8')
-      await rename(tmpPath, filePath)
-    } catch (error) {
-      console.error(`[dsh-trading/watchlist] failed to atomic flush watchlists to ${filePath}:`, error)
-      try {
-        await unlink(tmpPath).catch(() => {})
-      } catch {}
-      throw error
-    }
+    return enqueue(async () => {
+      await safeAtomicWrite(filePath, JSON.stringify(map, null, 2))
+    })
   }
 
   return {
@@ -72,6 +109,13 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
 
 export function createFileSelectionStore(filePath: string): SelectionStore {
   let cache: SelectionRecord | null = null
+  let pendingWrite = Promise.resolve()
+
+  const enqueue = <T>(fn: () => Promise<T>): Promise<T> => {
+    const next = pendingWrite.then(fn, fn)
+    pendingWrite = next.then(() => {}, () => {})
+    return next
+  }
 
   async function load(): Promise<SelectionRecord> {
     if (cache !== null) return cache
@@ -91,19 +135,9 @@ export function createFileSelectionStore(filePath: string): SelectionStore {
   }
 
   async function flush(record: SelectionRecord): Promise<void> {
-    const dir = dirname(filePath)
-    const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
-    try {
-      await mkdir(dir, { recursive: true })
-      await writeFile(tmpPath, JSON.stringify(record, null, 2), 'utf8')
-      await rename(tmpPath, filePath)
-    } catch (error) {
-      console.error(`[dsh-trading/watchlist] failed to atomic flush selection to ${filePath}:`, error)
-      try {
-        await unlink(tmpPath).catch(() => {})
-      } catch {}
-      throw error
-    }
+    return enqueue(async () => {
+      await safeAtomicWrite(filePath, JSON.stringify(record, null, 2))
+    })
   }
 
   return {
