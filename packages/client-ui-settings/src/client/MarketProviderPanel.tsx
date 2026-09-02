@@ -56,13 +56,11 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | undefined>(undefined)
 
-  // 首次进入（draft 未定）以当前解析值初始化
+  // 首次进入或切换市场时，以当前市场的解析值初始化
   useEffect(() => {
-    if (draft === undefined && state.status === 'ready') {
-      setDraft(resolved)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.status, resolved])
+    setDraft(resolved)
+    setMessage(undefined)
+  }, [market, resolved])
 
   const dirty = useMemo(() => {
     const chosen = draft ?? resolved
@@ -105,15 +103,16 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
   const newsDirty = (newsDraft === undefined ? state.newsKey ?? '' : newsDraft.trim()) !== (state.newsKey ?? '')
 
   const options = useMemo(() => {
-    const known = new Set(PROVIDER_LABELS.map((p) => p.id))
+    const matched = PROVIDER_LABELS.filter((p) => p.markets.includes(market))
+    const known = new Set(matched.map((p) => p.id))
     const extras: { id: string; label: string; url?: string; env?: string; type?: string }[] = []
     for (const slug of [resolved, draft]) {
       if (slug !== undefined && !known.has(slug) && !extras.some((e) => e.id === slug)) {
         extras.push({ id: slug, label: t('custom', { provider: slug }) })
       }
     }
-    return [...PROVIDER_LABELS, ...extras]
-  }, [resolved, draft, t])
+    return [...matched, ...extras]
+  }, [market, resolved, draft, t])
 
   async function save() {
     setSaving(true)
