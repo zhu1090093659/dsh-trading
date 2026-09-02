@@ -16,7 +16,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import {
-  AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart,
+  AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart, createSeriesMarkers,
 } from 'lightweight-charts'
 import type {
   IChartApi, ISeriesApi, Logical, LogicalRange, MouseEventParams, SeriesType, Time, UTCTimestamp,
@@ -294,6 +294,7 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const markerPluginRef = useRef<ReturnType<typeof createSeriesMarkers> | null>(null)
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   /** 右轴镜像序列（透明）：top/bottom 钉范围，close 供轴上百分比徽标。 */
   const mirrorTopRef = useRef<ISeriesApi<'Line'> | null>(null)
@@ -450,6 +451,8 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       chart.remove()
       chartRef.current = null
       candleRef.current = null
+      markerPluginRef.current?.detach()
+      markerPluginRef.current = null
       volumeRef.current = null
       mirrorTopRef.current = null
       mirrorBottomRef.current = null
@@ -516,11 +519,9 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
   }, [bars, volumes, dataKey, props.colorMode])
 
   // ---- 策略信号 & 知识事件标记（Issue #41）────────────────────────────
-  // signalMarkers / knowledgeMarkers 变化时重新计算 markers，
-  // 若底层 series 支持 setMarkers（或未来通过插件注入），安全调用之。
   useEffect(() => {
-    const candles = candleRef.current as (ISeriesApi<'Candlestick'> & { setMarkers?: (markers: unknown[]) => void }) | null
-    if (candles === null || typeof candles.setMarkers !== 'function') return
+    const candles = candleRef.current
+    if (candles === null) return
     const markers: Array<{
       time: UTCTimestamp
       position: 'belowBar' | 'aboveBar'
@@ -532,12 +533,13 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     // 策略信号 → 绿色买入箭头 / 红色卖出箭头
     if (props.signalMarkers) {
       for (const s of props.signalMarkers) {
+        const t = (s.time > 1e11 ? Math.floor(s.time / 1000) : s.time) as UTCTimestamp
         markers.push({
-          time: (s.time / 1000) as UTCTimestamp,
+          time: t,
           position: s.action === 'entry' ? 'belowBar' : 'aboveBar',
           color: s.action === 'entry' ? '#22c55e' : '#ef4444',
           shape: s.action === 'entry' ? 'arrowUp' : 'arrowDown',
-          text: s.action === 'entry' ? 'B' : 'S',
+          text: s.action === 'entry' ? '买入' : '卖出',
         })
       }
     }
@@ -545,8 +547,9 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     // 知识事件 → 蓝色圆形图钉
     if (props.knowledgeMarkers) {
       for (const k of props.knowledgeMarkers) {
+        const t = (k.time > 1e11 ? Math.floor(k.time / 1000) : k.time) as UTCTimestamp
         markers.push({
-          time: (k.time / 1000) as UTCTimestamp,
+          time: t,
           position: 'aboveBar',
           color: '#3b82f6',
           shape: 'circle',
@@ -557,8 +560,13 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
 
     // 按 time 升序排列
     markers.sort((a, b) => (a.time as number) - (b.time as number))
-    candles.setMarkers(markers)
-  }, [props.signalMarkers, props.knowledgeMarkers])
+
+    if (markerPluginRef.current === null) {
+      markerPluginRef.current = createSeriesMarkers(candles, markers)
+    } else {
+      markerPluginRef.current.setMarkers(markers)
+    }
+  }, [props.signalMarkers, props.knowledgeMarkers, bars])
 
   // ---- 右轴镜像数据：top/bottom 包络 = 蜡烛高低 ∪ 主图指标输出（与左轴
   // autoscale 范围完全一致，两轴刻度行对齐的前提），close 序列驱动百分比徽标。
