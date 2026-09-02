@@ -304,17 +304,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     } catch { /* 下轮再试 */ }
   }, TICKER_POLL_MS, [market, symbol])
 
-  // 新闻情报流轮询（issue #37）：处于 news 或 announcements 页签时 60s 轮询；symbol/market 变化时立即重拉。
+  // 新闻情报流轮询（issue #37）：处于 news/announcements 或开启事件图钉时 60s 轮询；symbol/market 变化时立即重拉。
   const NEWS_POLL_MS = 60000
   usePoll(async () => {
-    if ((stageTab !== 'news' && stageTab !== 'announcements') || market === undefined || symbol === undefined) return
+    if ((stageTab !== 'news' && stageTab !== 'announcements' && !markerState.showKnowledgeEvents) || market === undefined || symbol === undefined) return
     const result = await fetchNews(market, symbol, 50)
     if (result !== null) {
       setNewsItems(result.items)
       setNewsUnavailable(result.unavailable)
       setNewsFallback(Boolean(result.fallback))
     }
-  }, NEWS_POLL_MS, [market, symbol, stageTab])
+  }, NEWS_POLL_MS, [market, symbol, stageTab, markerState.showKnowledgeEvents])
 
   const stats = useMemo(() => {
     const last = daily !== null && daily.length > 0 ? daily[daily.length - 1] : undefined
@@ -386,13 +386,73 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   // 所有可用指标（供底部词条栏横向快捷展示）
   const allDefinitions = useMemo(() => indicators.list(), [rosterVersion])
 
-  // 策略信号标记数据（issue #41）：当前无回测结果时为 undefined。
-  // 未来版本可接入策略选择与图表内快速回测，当前为占位。
-  const signalMarkers: readonly ChartSignalMarkerInput[] | undefined = undefined
+  // 策略信号标记数据（issue #41）：在当前 K 线序列上实时计算 EMA(12, 26) 经典交叉信号。
+  const signalMarkers = useMemo<readonly ChartSignalMarkerInput[] | undefined>(() => {
+    if (!bars || bars.length < 26) return undefined
+    const k12 = 2 / (12 + 1)
+    const k26 = 2 / (26 + 1)
+    let ema12 = bars[0]?.close ?? 0
+    let ema26 = bars[0]?.close ?? 0
+    const signals: ChartSignalMarkerInput[] = []
+    let prevDiff = 0
 
-  // 知识事件标记数据（issue #41）：从已拉取的知识卡片中按当前 symbol 过滤。
-  // 未来版本接入 fetchKnowledgeCards，当前为占位。
-  const knowledgeMarkers: readonly ChartKnowledgeMarkerInput[] | undefined = undefined
+    for (let i = 0; i < bars.length; i++) {
+      const bar = bars[i]
+      if (!bar) continue
+      ema12 = bar.close * k12 + ema12 * (1 - k12)
+      ema26 = bar.close * k26 + ema26 * (1 - k26)
+      const diff = ema12 - ema26
+      if (i >= 26) {
+        if (prevDiff <= 0 && diff > 0) {
+          signals.push({
+            time: bar.time,
+            action: 'entry',
+            price: bar.close,
+            reason: `EMA(12/26) 金叉买入价 ¥${bar.close.toFixed(2)}`,
+          })
+        } else if (prevDiff >= 0 && diff < 0) {
+          signals.push({
+            time: bar.time,
+            action: 'exit',
+            price: bar.close,
+            reason: `EMA(12/26) 死叉卖出价 ¥${bar.close.toFixed(2)}`,
+          })
+        }
+      }
+      prevDiff = diff
+    }
+    return signals.length > 0 ? signals : undefined
+  }, [bars])
+
+  // 知识事件标记数据（issue #41）：从当前标的公告和资讯中提取发布日期并锚定到对应 K 线。
+  const knowledgeMarkers = useMemo<readonly ChartKnowledgeMarkerInput[] | undefined>(() => {
+    if (!newsItems || newsItems.length === 0 || !bars || bars.length === 0) return undefined
+    const markers: ChartKnowledgeMarkerInput[] = []
+    const firstBarTime = bars[0]?.time ?? 0
+    const lastBarTime = bars[bars.length - 1]?.time ?? 0
+
+    for (const item of newsItems) {
+      const ts = Math.floor(new Date(item.publishedAt).getTime() / 1000)
+      if (Number.isNaN(ts) || ts < firstBarTime - 86400 || ts > lastBarTime + 86400) continue
+      // 寻找最接近的 K 线时间柱
+      let closestTime = bars[0]?.time ?? 0
+      let minDiff = Infinity
+      for (const bar of bars) {
+        const diff = Math.abs(bar.time - ts)
+        if (diff < minDiff) {
+          minDiff = diff
+          closestTime = bar.time
+        }
+      }
+      markers.push({
+        time: closestTime,
+        title: item.title,
+        cardId: item.url,
+        credibility: item.source.includes('announcement') || item.source.includes('exchange') ? 'high' : 'medium',
+      })
+    }
+    return markers.length > 0 ? markers : undefined
+  }, [newsItems, bars])
 
   // 发给 Agent：先截图（画布只在图表挂载期间可取），再把文本 + PNG 填入
   // 会话输入框（不自动发送——用户大概率还要补自己的 prompt）。
