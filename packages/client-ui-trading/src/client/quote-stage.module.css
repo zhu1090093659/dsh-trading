@@ -91,6 +91,48 @@
   color: var(--dsw-futu-text-muted, #8e95a3);
 }
 
+/* 行情板块页签（图表 | 基本面）：随报价头同行，同花顺式下划线激活态 */
+.stageTabs {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-left: 2px;
+  padding-left: 12px;
+  border-left: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+}
+
+.stageTab {
+  appearance: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  padding: 2px 8px 6px;
+  position: relative;
+}
+
+.stageTab:hover {
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.stageTab[data-active='true'] {
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.stageTab[data-active='true']::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dsw-futu-text-primary, #1a1e24);
+}
+
 /* 统计数据横栏 */
 .stats {
   display: flex;

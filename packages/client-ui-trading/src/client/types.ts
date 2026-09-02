@@ -3,7 +3,7 @@
  * (src/bridge.ts) and @dsh-trading/api's data contracts — type-only imports,
  * erased at bundle time (the client half must not require non-seed modules).
  */
-import type { Kline, Ticker } from '@dsh-trading/api'
+import type { Kline, StockFundamentals, Ticker } from '@dsh-trading/api'
 
 /** Markets served by the bridge (subset = installed connector set). */
 export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
@@ -25,7 +25,7 @@ export type TickerOutcome =
   | { ok: true; ticker: Ticker }
   | { ok: false; code: string; message: string }
 
-export type { Kline, Ticker }
+export type { Kline, Ticker, StockFundamentals }
 
 /** Per-instrument cached reference series: closes for the sparkline + prev daily close for change%. */
 export interface ReferenceSeries {

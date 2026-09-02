@@ -5,11 +5,12 @@
  * 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { fetchKlines, fetchTickers } from './api.ts'
+import { fetchKlines, fetchTickers, fetchFundamentals } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
 import type { SendImageInput } from './fill-composer.ts'
+import { FundamentalsPane, deriveFiftyTwoWeek } from './FundamentalsPane.tsx'
 import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import {
@@ -21,7 +22,8 @@ import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indica
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
-import { colorModeStore, type ColorMode } from './color-mode.ts'
+import type { StockFundamentals } from './types.ts'
+import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
@@ -31,7 +33,8 @@ const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
 const TICKER_POLL_MS = 5000
 const KLINE_RESYNC_MS = 30000
 const KLINE_LIMIT = 500
-const DAILY_LIMIT = 60
+// 日K参考（头部昨收 + 基本面页签 52 周高低派生）：260 根 ≈ 一年交易日。
+const DAILY_LIMIT = 260
 
 const INTERVAL_KEY: Record<string, MarketLocaleKey> = {
   '1m': 'interval.1m',
@@ -100,6 +103,10 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
   const [sendState, setSendState] = useState<SendState>('idle')
+  /** 行情板块页签（图表 | 基本面）：跨标的保持（对比多家基本面时不来回跳）。 */
+  const [stageTab, setStageTab] = useState<'chart' | 'fundamentals'>('chart')
+  const [fundamentals, setFundamentals] = useState<StockFundamentals | null>(null)
+  const [fundamentalsLoading, setFundamentalsLoading] = useState(false)
   /** TvChart 注册的截图回调（图表未渲染/已卸载 = null）。 */
   const captureRef = useRef<(() => TvChartCapture | null) | null>(null)
   const [clock, setClock] = useState(() => formatStatusBarClock(Date.now()))
@@ -168,6 +175,18 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return () => { cancelled = true }
   }, [market, symbol])
 
+  // 基本面快照（每标的拉一次）：连接器未实现（us/crypto）或失败 → null，
+  // 面板降级为行情派生数据（日K 52 周高低），不报错横幅。
+  useEffect(() => {
+    if (market === undefined || symbol === undefined) return
+    let cancelled = false
+    setFundamentalsLoading(true)
+    fetchFundamentals(market, symbol)
+      .then((data) => { if (!cancelled) setFundamentals(data) })
+      .finally(() => { if (!cancelled) setFundamentalsLoading(false) })
+    return () => { cancelled = true }
+  }, [market, symbol])
+
   // 换标的：立即清场
   useEffect(() => {
     setKlines(null)
@@ -175,6 +194,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setTicker(null)
     setHoverIndex(null)
     setKError(null)
+    setFundamentals(null)
   }, [market, symbol])
 
   // ticker 轮询：头部价格 + 尾随合并最后一根 K 线
@@ -202,6 +222,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     const pct = ticker?.changePercent ?? changePercent(price, prevClose)
     return { last, prevClose, price, change, pct }
   }, [daily, ticker, klines])
+
+  // 基本面页签派生 52 周区间：快照缺字段（或 us/crypto 派生模式）时的兜底。
+  const fiftyTwoWeek = useMemo(() => deriveFiftyTwoWeek(daily), [daily])
 
   // 指标调度：klines × 激活实例 → 渲染输入
   const indicatorGroups = useMemo(() => {
@@ -312,21 +335,47 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           <span>{fmtChange(stats.change)}</span>
           <span>{fmtPercent(stats.pct)}</span>
         </span>
+        {/* 行情板块页签：图表 | 基本面（同花顺式，页签随报价头同行） */}
+        <div className={css.stageTabs} role="tablist" aria-label="quote section">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={stageTab === 'chart'}
+            className={css.stageTab}
+            data-active={stageTab === 'chart' ? 'true' : undefined}
+            onClick={() => { setStageTab('chart') }}
+          >
+            {t('quote.tab.chart')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={stageTab === 'fundamentals'}
+            className={css.stageTab}
+            data-active={stageTab === 'fundamentals' ? 'true' : undefined}
+            onClick={() => { setStageTab('fundamentals') }}
+          >
+            {t('quote.tab.fundamentals')}
+          </button>
+        </div>
         <span className={css.meta}>
           {ticker !== null && <span>{t('quote.updated')} {fmtClock(ticker.timestamp)}</span>}
         </span>
       </div>
 
-      {/* 统计行情概览 */}
-      <div className={css.stats}>
-        <span className={css.stat}><label>{t('quote.prevClose')}</label>{fmtPrice(readoutPrevClose)}</span>
-        <span className={css.stat}><label>{t('quote.open')}</label>{fmtPrice(readoutCandle?.open)}</span>
-        <span className={css.stat}><label>{t('quote.high')}</label>{fmtPrice(readoutCandle?.high)}</span>
-        <span className={css.stat}><label>{t('quote.low')}</label>{fmtPrice(readoutCandle?.low)}</span>
-        <span className={css.stat}><label>{t('quote.volume')}</label>{fmtCompact(readoutCandle?.volume)}</span>
-      </div>
+      {/* 统计行情概览（图表页签专属：基本面页签有自己的信息网格） */}
+      {stageTab === 'chart' && (
+        <div className={css.stats}>
+          <span className={css.stat}><label>{t('quote.prevClose')}</label>{fmtPrice(readoutPrevClose)}</span>
+          <span className={css.stat}><label>{t('quote.open')}</label>{fmtPrice(readoutCandle?.open)}</span>
+          <span className={css.stat}><label>{t('quote.high')}</label>{fmtPrice(readoutCandle?.high)}</span>
+          <span className={css.stat}><label>{t('quote.low')}</label>{fmtPrice(readoutCandle?.low)}</span>
+          <span className={css.stat}><label>{t('quote.volume')}</label>{fmtCompact(readoutCandle?.volume)}</span>
+        </div>
+      )}
 
-      {/* 周期胶囊条 + 指标弹层按钮 */}
+      {/* 周期胶囊条 + 指标弹层按钮（图表页签） */}
+      {stageTab === 'chart' && (
       <div className={css.toolbar}>
         <div className={css.intervalTabs} role="tablist" aria-label="interval">
           {intervals.map(entry => (
@@ -402,36 +451,50 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           </div>
         </div>
       </div>
+      )}
 
       {/* 主图指标悬停/最新读数分量（各分量独立着色）。VOL/MACD 等副图指标
           的读数在 TvChart 各自 pane 内渲染，不进主图读数行。 */}
-      {mainOverlays.length > 0 && (
+      {stageTab === 'chart' && mainOverlays.length > 0 && (
         <div className={css.indicatorReadout}>
           {mainOverlays.flatMap(group => outputReadouts(group, readoutIndex))}
         </div>
       )}
 
-      {kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
+      {stageTab === 'chart' && kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
 
-      {/* 图表主舞台 */}
-      <div className={css.chartBox}>
-        {klines !== null && bars.length > 0 && (
-          <TvChart
-            bars={bars}
-            volumes={volumes}
-            dataKey={`${market}:${symbol}:${chartInterval}`}
-            intraday={INTRADAY_INTERVALS.has(chartInterval)}
-            colorMode={colorMode}
-            mainOverlays={mainOverlays}
-            subIndicators={subIndicators}
-            readoutIndex={readoutIndex}
-            onHoverIndex={setHoverIndex}
-            onCaptureReady={(capture) => { captureRef.current = capture }}
-          />
-        )}
-      </div>
+      {/* 图表主舞台 / 基本面页签（互斥挂载） */}
+      {stageTab === 'chart' ? (
+        <div className={css.chartBox}>
+          {klines !== null && bars.length > 0 && (
+            <TvChart
+              bars={bars}
+              volumes={volumes}
+              dataKey={`${market}:${symbol}:${chartInterval}`}
+              intraday={INTRADAY_INTERVALS.has(chartInterval)}
+              colorMode={colorMode}
+              mainOverlays={mainOverlays}
+              subIndicators={subIndicators}
+              readoutIndex={readoutIndex}
+              onHoverIndex={setHoverIndex}
+              onCaptureReady={(capture) => { captureRef.current = capture }}
+            />
+          )}
+        </div>
+      ) : (
+        <FundamentalsPane
+          t={t}
+          market={market}
+          symbol={symbol}
+          name={instrument?.name}
+          fundamentals={fundamentals}
+          loading={fundamentalsLoading}
+          derivedFiftyTwoWeek={fiftyTwoWeek}
+        />
+      )}
 
-      {/* 底部横向指标词条带 */}
+      {/* 底部横向指标词条带（图表页签） */}
+      {stageTab === 'chart' && (
       <div className={css.quickIndicatorBar} role="toolbar" aria-label="Quick indicators">
         {allDefinitions.map(def => {
           const active = instances.some(inst => inst.id === def.id)
@@ -449,6 +512,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           )
         })}
       </div>
+      )}
 
       {/* 底部富途式市场状态栏 */}
       <div className={css.statusBar} role="status">

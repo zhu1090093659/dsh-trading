@@ -3,7 +3,7 @@
  * half registers the route behind the browser-auth fence; same-origin fetch
  * carries the auth cookie by default).
  */
-import type { Kline, MarketId, MarketInfo, TickerOutcome } from './types.ts'
+import type { Kline, MarketId, MarketInfo, StockFundamentals, TickerOutcome } from './types.ts'
 import type { CustomIndicatorRecord } from '@dsh-trading/indicators'
 import type { KnowledgeCard } from '@dsh-trading/knowledge'
 import type { CustomStrategyRecord } from '@dsh-trading/strategies'
@@ -46,6 +46,20 @@ export async function fetchKlines(market: MarketId, symbol: string, interval: st
   const query = new URLSearchParams({ market, symbol, interval, limit: String(limit) })
   const wire = await getJson<{ klines: Kline[] }>(`/dshtrading/api/klines?${query.toString()}`)
   return Array.isArray(wire.klines) ? wire.klines : []
+}
+
+/**
+ * 基本面快照（2026-09-02 基本面页签）。连接器未实现 getFundamentals（us/crypto）
+ * 或取数失败 → null：面板降级为行情派生数据（日K 52 周高低），不报错横幅。
+ */
+export async function fetchFundamentals(market: MarketId, symbol: string): Promise<StockFundamentals | null> {
+  try {
+    const query = new URLSearchParams({ market, symbol })
+    const wire = await getJson<{ ok: boolean; fundamentals: StockFundamentals }>(`/dshtrading/api/fundamentals?${query.toString()}`)
+    return wire.fundamentals ?? null
+  } catch {
+    return null
+  }
 }
 
 /** 动态全集标的名册（Issue #15）：未支持或失败时回退空数组。 */
