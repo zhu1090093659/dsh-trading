@@ -1,16 +1,10 @@
-/**
- * One market's provider-routing panel: the Trading section hosts one of these
- * per market tab. Edits the shared dshtrading scope through the injected
- * store/actions; staged draft writes on save, fenced by the revision the
- * form read. Never touched when a new market is added (contributors register
- * a new tab).
- */
 import { useEffect, useMemo, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
+  CredentialField,
   TradingSettingsState,
 } from './trading-settings-controller.ts'
-import { PROVIDER_LABELS } from './trading-settings-controller.ts'
+import { PROVIDER_CREDENTIAL_SPECS, PROVIDER_LABELS } from './trading-settings-controller.ts'
 import css from './market-provider-panel.module.css'
 
 /** SnapshotStore 面（hooks 注入）。 */
@@ -30,6 +24,10 @@ export interface MarketProviderPanelInjected {
   setProvider: (market: string, provider: string) => Promise<void>
   /** Write path: clear this market's provider (re-inherit base default). */
   resetProvider: (market: string) => Promise<void>
+  /** Write path: set credentials for a provider. */
+  setCredential: (provider: string, fields: Record<string, string>) => Promise<void>
+  /** Write path: delete/clear credentials for a provider. */
+  deleteCredential: (provider: string) => Promise<void>
   /** WS2c: write/clear the CryptoPanic news API key (empty = clear → public sources). */
   setNewsKey: (value: string) => Promise<void>
   /** WS2c: clear the CryptoPanic news API key back to base (public sources). */
@@ -47,8 +45,148 @@ const TYPE_LABEL: Record<string, string> = {
   commercial: '商业 API',
 }
 
+function ProviderCredentialCard(props: {
+  providerId: string
+  spec: readonly CredentialField[]
+  currentValues?: Record<string, string>
+  writable: boolean
+  onSave: (fields: Record<string, string>) => Promise<void>
+  onDelete: () => Promise<void>
+  t: (key: string) => string
+}) {
+  const { providerId, spec, currentValues = {}, writable, onSave, onDelete, t } = props
+  const [open, setOpen] = useState(false)
+  const [fields, setFields] = useState<Record<string, string>>(() => ({ ...currentValues }))
+  const [showSecret, setShowSecret] = useState<Record<string, boolean>>({})
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    setFields({ ...currentValues })
+  }, [currentValues])
+
+  const isConfigured = Object.values(currentValues).some((v) => Boolean(v && v.trim()))
+  const isDirty = spec.some((s) => (fields[s.key] ?? '') !== (currentValues[s.key] ?? ''))
+
+  const handleSave = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSaving(true)
+    setMsg(null)
+    try {
+      await onSave(fields)
+      setMsg(t('credential.saved'))
+    } catch (err) {
+      setMsg(`${t('credential.saveFailed')}: ${String(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSaving(true)
+    setMsg(null)
+    try {
+      await onDelete()
+      setFields({})
+      setMsg(t('credential.deleted'))
+    } catch (err) {
+      setMsg(`${t('credential.deleteFailed')}: ${String(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className={css.credentialBlock} onClick={(e) => e.stopPropagation()}>
+      <div className={css.credentialHeader}>
+        <span className={css.credentialStatus} data-configured={isConfigured ? 'true' : 'false'}>
+          <span>{isConfigured ? '●' : '○'}</span>
+          <span>{isConfigured ? t('credential.configured') : t('credential.notConfigured')}</span>
+        </span>
+        <button
+          type="button"
+          className={css.credentialToggleBtn}
+          onClick={() => {
+            setOpen(!open)
+            setMsg(null)
+          }}
+        >
+          {open ? t('credential.btnFold') : t('credential.btn')}
+        </button>
+      </div>
+
+      {open && (
+        <div className={css.credentialDrawer}>
+          <div className={css.credentialFields}>
+            {spec.map((field) => {
+              const isPass = field.secret && !showSecret[field.key]
+              return (
+                <div key={field.key} className={css.fieldRow}>
+                  <label className={css.fieldLabel}>{field.label}</label>
+                  <div className={css.inputWrapper}>
+                    <input
+                      type={isPass ? 'password' : 'text'}
+                      className={css.credInput}
+                      value={fields[field.key] ?? ''}
+                      placeholder={field.placeholder}
+                      disabled={!writable || saving}
+                      onChange={(e) => setFields({ ...fields, [field.key]: e.target.value })}
+                    />
+                    {field.secret && (
+                      <button
+                        type="button"
+                        className={css.eyeBtn}
+                        onClick={() => setShowSecret((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
+                        title={showSecret[field.key] ? '隐藏' : '显示'}
+                      >
+                        {showSecret[field.key] ? '🙈' : '👁️'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div className={css.credActions}>
+            <button
+              type="button"
+              className={css.credSaveBtn}
+              disabled={!isDirty || saving || !writable}
+              onClick={handleSave}
+            >
+              {t('credential.save')}
+            </button>
+            {isConfigured && (
+              <button
+                type="button"
+                className={css.credDeleteBtn}
+                disabled={saving || !writable}
+                onClick={handleDelete}
+              >
+                {t('credential.delete')}
+              </button>
+            )}
+            {msg && <span className={css.credMsg}>{msg}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** Render one market's provider radio group with save/reset (+ WS2c news key, crypto only). */
-export function MarketProviderPanel({ t, useController, market, setProvider, resetProvider, setNewsKey, resetNewsKey }: MarketProviderPanelProps) {
+export function MarketProviderPanel({
+  t,
+  useController,
+  market,
+  setProvider,
+  resetProvider,
+  setCredential,
+  deleteCredential,
+  setNewsKey,
+  resetNewsKey,
+}: MarketProviderPanelProps) {
   const state = useController((value: TradingSettingsState) => value)
   const resolved = state.resolved[market]
   const overridden = state.overridden[market]
@@ -144,6 +282,8 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
       <div className={css.grid}>
         {options.map((provider) => {
           const selected = (draft === undefined ? resolved === provider.id : draft === provider.id)
+          const credSpec = PROVIDER_CREDENTIAL_SPECS[provider.id]
+          const currentCreds = state.credentials?.[provider.id]
           return (
             <div
               key={`${market}-${provider.id}`}
@@ -186,6 +326,18 @@ export function MarketProviderPanel({ t, useController, market, setProvider, res
                     </div>
                   )}
                 </div>
+              )}
+
+              {credSpec && credSpec.length > 0 && (
+                <ProviderCredentialCard
+                  providerId={provider.id}
+                  spec={credSpec}
+                  currentValues={currentCreds}
+                  writable={writable}
+                  onSave={(fields) => setCredential(provider.id, fields)}
+                  onDelete={() => deleteCredential(provider.id)}
+                  t={t as (k: string) => string}
+                />
               )}
             </div>
           )

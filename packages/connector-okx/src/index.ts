@@ -149,6 +149,16 @@ export function credentialRefsFor(config: Config, env: 'demo' | 'live' = config.
  * 任何一处未命中/无效 → TRADING_CREDENTIALS_MISSING，消息只带 ref 名（绝不带值）。
  */
 export async function resolveCredentials(ctx: CredentialsContext, config: Config): Promise<OkxCredentials> {
+  const router = (ctx.get('tradingMarketRouter') as { getCredential?(p: string): Record<string, string> | undefined } | undefined) ?? undefined
+  const routerCreds = router?.getCredential?.('okx')
+  if (routerCreds?.apiKey && (routerCreds?.secretKey || routerCreds?.secret) && routerCreds?.passphrase) {
+    return {
+      key: routerCreds.apiKey,
+      secret: routerCreds.secretKey || routerCreds.secret,
+      passphrase: routerCreds.passphrase,
+    }
+  }
+
   const refs = credentialRefsFor(config)
   for (const ref of [refs.apiKeyRef, refs.secretRef, refs.passphraseRef]) {
     if (!CREDENTIAL_REF_PATTERN.test(ref)) {
@@ -158,6 +168,7 @@ export async function resolveCredentials(ctx: CredentialsContext, config: Config
       )
     }
   }
+
   const resolver = (ctx.get('credentials') as CredentialResolverLike | undefined) ?? undefined
   const entries: ReadonlyArray<[slot: string, ref: string]> = [
     ['apiKeyRef', refs.apiKeyRef],

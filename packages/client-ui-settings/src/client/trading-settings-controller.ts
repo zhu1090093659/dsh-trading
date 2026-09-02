@@ -46,9 +46,76 @@ export const PROVIDER_LABELS: readonly Readonly<ProviderMeta>[] = [
   { id: 'tiger', label: 'Tiger Trade (老虎证券)', url: 'https://developer.itigerup.com', env: 'TIGER_ID', type: 'commercial', markets: ['hk', 'us', 'cn'] },
 ]
 
+export interface CredentialField {
+  key: string
+  label: string
+  placeholder?: string
+  secret?: boolean
+}
+
+export const PROVIDER_CREDENTIAL_SPECS: Record<string, readonly CredentialField[]> = {
+  binance: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'BINANCE_API_KEY (留空走免密公共行情)', secret: true },
+    { key: 'apiSecret', label: 'API Secret', placeholder: 'BINANCE_API_SECRET', secret: true },
+  ],
+  okx: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'OKX_API_KEY (留空走免密公共行情)', secret: true },
+    { key: 'secretKey', label: 'Secret Key', placeholder: 'OKX_SECRET_KEY', secret: true },
+    { key: 'passphrase', label: 'Passphrase', placeholder: 'OKX_PASSPHRASE', secret: true },
+  ],
+  bybit: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'BYBIT_API_KEY (留空走免密公共行情)', secret: true },
+    { key: 'apiSecret', label: 'API Secret', placeholder: 'BYBIT_API_SECRET', secret: true },
+  ],
+  ccxt: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'CCXT_API_KEY', secret: true },
+    { key: 'apiSecret', label: 'API Secret', placeholder: 'CCXT_API_SECRET', secret: true },
+  ],
+  alpaca: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'ALPACA_API_KEY', secret: true },
+    { key: 'secretKey', label: 'Secret Key', placeholder: 'ALPACA_SECRET_KEY', secret: true },
+  ],
+  fmp: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'FMP_API_KEY', secret: true },
+  ],
+  finnhub: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'FINNHUB_API_KEY', secret: true },
+  ],
+  polygon: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'POLYGON_API_KEY', secret: true },
+  ],
+  tushare: [
+    { key: 'token', label: 'Pro Token', placeholder: 'TUSHARE_TOKEN', secret: true },
+  ],
+  akshare: [
+    { key: 'apiUrl', label: 'HTTP 服务地址', placeholder: 'http://127.0.0.1:8080 (默认内置)' },
+  ],
+  qmt: [
+    { key: 'gatewayUrl', label: 'MiniQMT 服务地址', placeholder: 'http://127.0.0.1:5800' },
+  ],
+  futu: [
+    { key: 'host', label: 'OpenD IP', placeholder: '127.0.0.1' },
+    { key: 'port', label: 'OpenD 端口', placeholder: '11111' },
+  ],
+  ibkr: [
+    { key: 'gatewayUrl', label: 'CP Gateway 地址', placeholder: 'https://localhost:5000' },
+  ],
+  longbridge: [
+    { key: 'appKey', label: 'App Key', placeholder: 'LONGBRIDGE_APP_KEY', secret: true },
+    { key: 'appSecret', label: 'App Secret', placeholder: 'LONGBRIDGE_APP_SECRET', secret: true },
+    { key: 'accessToken', label: 'Access Token', placeholder: 'LONGBRIDGE_ACCESS_TOKEN', secret: true },
+  ],
+  tiger: [
+    { key: 'tigerId', label: 'Tiger ID', placeholder: 'TIGER_ID' },
+    { key: 'privateKey', label: 'RSA 私钥', placeholder: 'TIGER_PRIVATE_KEY', secret: true },
+  ],
+}
+
 /** dshtrading namespace 下的值形状（router 侧同步；窄化后的子集契约）。 */
 export interface TradingSettings {
   markets: Record<string, { provider?: string; tradeProvider?: string }>
+  /** 各提供方 API 凭证。 */
+  credentials?: Record<string, Record<string, string>>
   /** WS2c：新闻相关设置（CryptoPanic API token，可选）。 */
   news?: { cryptoPanicKey?: string }
   /** 涨跌配色模式：red-up = 红涨绿跌（国内），green-up = 绿涨红跌（国际）。 */
@@ -62,6 +129,8 @@ export interface TradingSettingsState {
   resolved: Record<string, string | undefined>
   /** market id → 用户是否覆盖（user 层 presence）。 */
   overridden: Record<string, boolean>
+  /** provider id → credentials 字典。 */
+  credentials: Record<string, Record<string, string>>
   /** WS2c：已解析 CryptoPanic key（undefined = 无 key = 新闻走公共源）。 */
   newsKey: string | undefined
   /** WS2c：用户是否覆盖了 CryptoPanic key。 */
@@ -76,6 +145,8 @@ export interface TradingSettingsState {
 export interface TradingSettingsActions {
   setProvider(market: string, provider: string): Promise<void>
   resetProvider(market: string): Promise<void>
+  setCredential(provider: string, fields: Record<string, string>): Promise<void>
+  deleteCredential(provider: string): Promise<void>
   /** WS2c：设置/清除 CryptoPanic key（空串 = 清除回公共源）。 */
   setNewsKey(value: string): Promise<void>
   resetNewsKey(): Promise<void>
@@ -86,7 +157,7 @@ export interface TradingSettingsActions {
 /** 状态转化：从 settings 快照投射为组件的可观察视图。 */
 export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): TradingSettingsState {
   const value = snap.value ?? (snap.base as TradingSettings | undefined)
-  const user = (snap.user ?? {}) as { markets?: Record<string, unknown> }
+  const user = (snap.user ?? {}) as { markets?: Record<string, unknown>; credentials?: Record<string, unknown> }
   // 市场键 = value/base/user 的实际键并集（dict 开放：新市场的键出现即进入，无需改码）。
   const marketIds = new Set<string>([
     ...Object.keys(value?.markets ?? {}),
@@ -101,6 +172,10 @@ export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): T
     resolved[marketId] = value?.markets?.[marketId]?.provider ?? baseMarkets[marketId]?.provider
     overridden[marketId] = user.markets?.[marketId] !== undefined
   }
+
+  // 凭证字典
+  const credentials = value?.credentials ?? {}
+
   // WS2c：新闻 key 同理（value 优先、base 兜底；user 层 presence 判 overridden）。
   const baseNews = (snap.base as TradingSettings | undefined)?.news
   const news = value?.news ?? baseNews
@@ -109,6 +184,7 @@ export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): T
     status: snap.status,
     resolved,
     overridden,
+    credentials,
     newsKey: news?.cryptoPanicKey,
     newsOverridden: userNews?.cryptoPanicKey !== undefined,
     colorMode: value?.colorMode === 'green-up' ? 'green-up' : 'red-up',

@@ -170,7 +170,9 @@ export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
   if (!routeAllows(ctx, config, 'us')) return
 
-  const apiKey = process.env[config.apiKeyRef]
+  const router = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as { getCredential?(p: string): Record<string, string> | undefined } | undefined
+  const creds = router?.getCredential?.(ROUTER_PROVIDER)
+  const apiKey = creds?.apiKey || process.env[config.apiKeyRef]
   const marketData = new FmpMarketDataService(ctx, { apiKey })
   const trade = new FmpTradeService(ctx, { apiKey , config })
 

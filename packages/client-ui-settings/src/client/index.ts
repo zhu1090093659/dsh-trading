@@ -54,6 +54,14 @@ export function apply(ctx: ClientContext): void {
       const rev = scope.getSnapshot().revision
       await scope.mutate([{ op: 'unset', path: ['markets', market, 'provider'] }], rev)
     },
+    async setCredential(provider, fields) {
+      const rev = scope.getSnapshot().revision
+      await scope.mutate([{ op: 'set', path: ['credentials', provider], value: fields }], rev)
+    },
+    async deleteCredential(provider) {
+      const rev = scope.getSnapshot().revision
+      await scope.mutate([{ op: 'unset', path: ['credentials', provider] }], rev)
+    },
     async setNewsKey(value) {
       const rev = scope.getSnapshot().revision
       // 空串 = 清除（unset 回 base 默认）：无 key = 新闻走公共源。
@@ -175,6 +183,16 @@ function dictionaries() {
       'market.us': '美国股票',
       'market.cn': '中国 A 股',
       'market.hk': '香港股票',
+      'credential.btn': '配置 API 凭证',
+      'credential.btnFold': '收起配置',
+      'credential.configured': '已配置凭证',
+      'credential.notConfigured': '未配置',
+      'credential.save': '保存凭证',
+      'credential.delete': '清除/删除凭证',
+      'credential.saved': 'API 凭证已保存',
+      'credential.deleted': 'API 凭证已删除',
+      'credential.saveFailed': '凭证保存失败',
+      'credential.deleteFailed': '凭证清除失败',
     },
     en: {
       'nav': 'Trading',
@@ -199,6 +217,16 @@ function dictionaries() {
       'market.us': 'US Stocks',
       'market.cn': 'China A-shares',
       'market.hk': 'Hong Kong',
+      'credential.btn': 'Configure API Credentials',
+      'credential.btnFold': 'Hide Configuration',
+      'credential.configured': 'Configured',
+      'credential.notConfigured': 'Not Configured',
+      'credential.save': 'Save Credentials',
+      'credential.delete': 'Clear / Delete Credentials',
+      'credential.saved': 'API Credentials saved',
+      'credential.deleted': 'API Credentials cleared',
+      'credential.saveFailed': 'Failed to save credentials',
+      'credential.deleteFailed': 'Failed to clear credentials',
     },
   }
 }

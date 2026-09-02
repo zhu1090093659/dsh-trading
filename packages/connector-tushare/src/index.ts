@@ -166,7 +166,9 @@ export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
   if (!routeAllows(ctx, config, 'cn')) return
 
-  const token = process.env[config.tokenRef]
+  const router = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as { getCredential?(p: string): Record<string, string> | undefined } | undefined
+  const creds = router?.getCredential?.(ROUTER_PROVIDER)
+  const token = creds?.token || process.env[config.tokenRef]
   const marketData = new TushareMarketDataService(ctx, { token })
   const trade = new TushareTradeService(ctx, { token , config })
 

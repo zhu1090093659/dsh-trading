@@ -88,6 +88,8 @@ export interface NewsConfig {
 export interface Config {
   /** 各市场数据提供方；dict 键开放（新市场 = 新键，schema 零改）。 */
   markets: Record<string, MarketProviderEntry>
+  /** 各提供方 API 凭证（apiKey / apiSecret / token / gatewayUrl 等；dict 开放）。 */
+  credentials?: Record<string, Record<string, string>>
   /** 新闻相关设置（WS2c）：默认无 key（公共源）。 */
   news?: NewsConfig
 }
@@ -113,6 +115,8 @@ export const Config: Schema<Config> = Schema.object({
   // 不兼容）→ settings resolver 在用户文档缺失时输出完整默认 markets（critical：
   // installSettingsSection 的 resolved 值没有默认时 = {}，路由会判不出任何 provider）。
   markets: Schema.dict(MarketProviderEntrySchema).default({ ...DEFAULT_MARKETS }),
+  // credentials 可选：各 provider 的 API Key/Secret/Token/Gateway 地址字典
+  credentials: Schema.dict(Schema.dict(Schema.string())).default({}),
   // news 可选（WS2c）：默认空对象 = 无 key = 公共源；字段在时 settings UI 可展示/编辑。
   news: Schema.object({ cryptoPanicKey: Schema.string().default(undefined) }).default({}),
 })
@@ -144,6 +148,11 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
   /** 某市场当前激活的 provider slug（settings resolved：用户层赢，缺省 base 默认）。 */
   activeProvider(market: string): string | undefined {
     return this.source().markets[market]?.provider
+  }
+
+  /** 获取某提供方的 API 凭证字典（如 apiKey、apiSecret 等）。 */
+  getCredential(provider: string): Record<string, string> | undefined {
+    return this.source().credentials?.[provider]
   }
 
   /** WS2c：CryptoPanic API token（settings resolved；缺省 undefined = 无 key = 新闻走公共源）。 */

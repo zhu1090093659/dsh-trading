@@ -207,3 +207,167 @@
   outline: none;
   border-color: var(--dsw-alias-primary, #2563eb);
 }
+
+/* 凭证配置抽屉与表单 */
+.credentialHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px dashed var(--dsw-alias-border-l2, #edf0f3);
+}
+
+.credentialStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--dsw-alias-text-muted, #8e95a3);
+}
+
+.credentialStatus[data-configured='true'] {
+  color: #16a34a;
+  font-weight: 500;
+}
+
+.credentialToggleBtn {
+  appearance: none;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: var(--dsw-alias-bg-l1, #ffffff);
+  color: var(--dsw-alias-text-secondary, #5f6672);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.credentialToggleBtn:hover {
+  border-color: var(--dsw-alias-primary, #2563eb);
+  color: var(--dsw-alias-primary, #2563eb);
+}
+
+.credentialDrawer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  margin-top: 4px;
+  border-radius: 6px;
+  background: var(--dsw-alias-fill-hover, rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--dsw-alias-border-l2, #edf0f3);
+  cursor: default;
+}
+
+.credentialFields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.fieldLabel {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--dsw-alias-text-secondary, #5f6672);
+}
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.credInput {
+  width: 100%;
+  height: 28px;
+  padding: 0 28px 0 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
+  background: var(--dsw-alias-bg-l1, #ffffff);
+  color: var(--dsw-alias-text-primary, #1a1e24);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.credInput:focus {
+  outline: none;
+  border-color: var(--dsw-alias-primary, #2563eb);
+}
+
+.eyeBtn {
+  position: absolute;
+  right: 4px;
+  appearance: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px;
+  opacity: 0.7;
+}
+
+.eyeBtn:hover {
+  opacity: 1;
+}
+
+.credActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.credSaveBtn {
+  appearance: none;
+  border: none;
+  background: var(--dsw-alias-primary, #2563eb);
+  color: #ffffff;
+  padding: 0 10px;
+  height: 26px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.credSaveBtn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.credSaveBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.credDeleteBtn {
+  appearance: none;
+  border: 1px solid #fca5a5;
+  background: #fef2f2;
+  color: #dc2626;
+  padding: 0 8px;
+  height: 26px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.credDeleteBtn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.credDeleteBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.credMsg {
+  font-size: 11.5px;
+  color: #16a34a;
+}
+

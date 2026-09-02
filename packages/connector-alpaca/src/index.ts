@@ -90,6 +90,12 @@ export async function resolveCredentials(
     ['secret', refs.secretRef],
   ]
 
+  const router = (ctx.get('tradingMarketRouter') as { getCredential?(p: string): Record<string, string> | undefined } | undefined) ?? undefined
+  const routerCreds = router?.getCredential?.('alpaca')
+  if (routerCreds?.apiKey && (routerCreds?.secretKey || routerCreds?.secret)) {
+    return { key: routerCreds.apiKey, secret: routerCreds.secretKey || routerCreds.secret }
+  }
+
   for (const [field, ref] of entries) {
     if (!CREDENTIAL_REF_PATTERN.test(ref)) {
       throw new TradingServiceError(
