@@ -46,7 +46,6 @@ import css from './quote-stage.module.css'
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
 const ORDERBOOK_OPEN_KEY = 'dshtrading.orderbook.open'
 const TRADE_DESK_OPEN_KEY = 'dshtrading.tradeDesk.open'
-const NEWS_OPEN_KEY = 'dshtrading.news.open'
 const TICKER_POLL_MS = 5000
 const KLINE_RESYNC_MS = 30000
 // 衍生品指标快照轮询（issue #38）：一次刷新 = 2~5 个上游公共端点调用，取 30s
@@ -133,8 +132,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
   const [sendState, setSendState] = useState<SendState>('idle')
-  /** 行情板块页签（图表 | 基本面）：跨标的保持（对比多家基本面时不来回跳）。 */
-  const [stageTab, setStageTab] = useState<'chart' | 'fundamentals'>('chart')
+  /** 行情板块页签（图表 | 基本面 | 新闻 | 公告）：跨标的保持。 */
+  const [stageTab, setStageTab] = useState<'chart' | 'fundamentals' | 'news' | 'announcements'>('chart')
   /** 衍生品指标快照（issue #38，crypto 专属；null = 未实现/失败 → 面板整体隐藏）。 */
   const [derivatives, setDerivatives] = useState<DerivativesData | null>(null)
   /** 盘口竖栏（issue #39）：开关跨标的/会话记忆；数据 null = 数据源未提供（降级提示）。 */
@@ -154,8 +153,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   /** TvChart 注册的截图回调（图表未渲染/已卸载 = null）。 */
   const captureRef = useRef<(() => TvChartCapture | null) | null>(null)
 
-  // ── 新闻情报流（issue #37）────────────────────────────────────
-  const [newsOpen, setNewsOpen] = useState(() => localStorage.getItem(NEWS_OPEN_KEY) === 'true')
+  // ── 新闻与公告（issue #37）────────────────────────────────────
   const [newsItems, setNewsItems] = useState<ClientNewsItem[] | null>(null)
   const [newsUnavailable, setNewsUnavailable] = useState<string[]>([])
   const [newsFallback, setNewsFallback] = useState<boolean>(false)
@@ -306,17 +304,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     } catch { /* 下轮再试 */ }
   }, TICKER_POLL_MS, [market, symbol])
 
-  // 新闻情报流轮询（issue #37）：面板打开时 60s 轮询；symbol/market 变化时立即重拉。
+  // 新闻情报流轮询（issue #37）：处于 news 或 announcements 页签时 60s 轮询；symbol/market 变化时立即重拉。
   const NEWS_POLL_MS = 60000
   usePoll(async () => {
-    if (!newsOpen || market === undefined || symbol === undefined) return
-    const result = await fetchNews(market, symbol, 20)
+    if ((stageTab !== 'news' && stageTab !== 'announcements') || market === undefined || symbol === undefined) return
+    const result = await fetchNews(market, symbol, 50)
     if (result !== null) {
       setNewsItems(result.items)
       setNewsUnavailable(result.unavailable)
       setNewsFallback(Boolean(result.fallback))
     }
-  }, NEWS_POLL_MS, [market, symbol, newsOpen])
+  }, NEWS_POLL_MS, [market, symbol, stageTab])
 
   const stats = useMemo(() => {
     const last = daily !== null && daily.length > 0 ? daily[daily.length - 1] : undefined
@@ -472,7 +470,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           <span>{fmtChange(stats.change)}</span>
           <span>{fmtPercent(stats.pct)}</span>
         </span>
-        {/* 行情板块页签：图表 | 基本面（富途牛牛式，页签随报价头同行） */}
+        {/* 行情板块页签：图表 | 基本面 | 新闻 | 公告（富途牛牛式，页签随报价头同行） */}
         <div className={css.stageTabs} role="tablist" aria-label="quote section">
           <button
             type="button"
@@ -493,6 +491,26 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             onClick={() => { setStageTab('fundamentals') }}
           >
             {t('quote.tab.fundamentals')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={stageTab === 'news'}
+            className={css.stageTab}
+            data-active={stageTab === 'news' ? 'true' : undefined}
+            onClick={() => { setStageTab('news') }}
+          >
+            {t('quote.tab.news')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={stageTab === 'announcements'}
+            className={css.stageTab}
+            data-active={stageTab === 'announcements' ? 'true' : undefined}
+            onClick={() => { setStageTab('announcements') }}
+          >
+            {t('quote.tab.announcements')}
           </button>
         </div>
         <span className={css.meta}>
@@ -585,19 +603,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           >
             {t('orderbook.toggle')}
           </button>
-          {/* 新闻情报流开关（issue #37） */}
+          {/* 新闻情报流页签入口（issue #37） */}
           <button
             type="button"
             className={css.pickerButton}
-            data-active={newsOpen ? 'true' : undefined}
-            aria-pressed={newsOpen}
-            title="新闻情报流"
-            onClick={() => {
-              setNewsOpen(open => {
-                localStorage.setItem(NEWS_OPEN_KEY, String(!open))
-                return !open
-              })
-            }}
+            data-active={stageTab === 'news' ? 'true' : undefined}
+            aria-pressed={stageTab === 'news'}
+            title="查看新闻情报流"
+            onClick={() => { setStageTab('news') }}
           >
             📰 新闻
           </button>
@@ -791,15 +804,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             {market === 'crypto' && derivatives !== null && (
               <DerivativesPane t={t} derivatives={derivatives} colorMode={colorMode} />
             )}
-            {newsOpen && (
-              <NewsFeedPane
-                items={newsItems}
-                unavailable={newsUnavailable}
-                fallback={newsFallback}
-                t={t}
-                fillComposer={fillComposer}
-              />
-            )}
           </div>
           {orderbookOpen && (
             <OrderbookPane
@@ -815,9 +819,32 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             />
           )}
         </div>
-      ) : (
+      ) : stageTab === 'fundamentals' ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <FundamentalsStage t={t} useSelection={useSelection} />
+        </div>
+      ) : stageTab === 'news' ? (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <NewsFeedPane
+            items={newsItems}
+            unavailable={newsUnavailable}
+            fallback={newsFallback}
+            fullHeight
+            t={t}
+            fillComposer={fillComposer}
+          />
+        </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <NewsFeedPane
+            items={newsItems}
+            unavailable={newsUnavailable}
+            fallback={false}
+            fullHeight
+            filterType="exchange"
+            t={t}
+            fillComposer={fillComposer}
+          />
         </div>
       )}
 

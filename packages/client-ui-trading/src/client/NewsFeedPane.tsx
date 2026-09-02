@@ -23,6 +23,10 @@ export interface NewsFeedPaneProps {
   unavailable?: readonly string[]
   /** 是否为无专属快讯时回退展示的宏观/大盘要闻 */
   fallback?: boolean
+  /** 是否占满高度（用于 Tab 独立页签视图） */
+  fullHeight?: boolean
+  /** 过滤类型：仅公告（exchange）或全部资讯 */
+  filterType?: 'exchange' | 'all'
   /** 国际化翻译函数 */
   t: (key: MarketLocaleKey) => string
   /** 发给 Agent 分析 */
@@ -52,7 +56,7 @@ function getSourceType(source: string): string {
   return 'media'
 }
 
-export function NewsFeedPane({ items, unavailable, fallback, t, fillComposer }: NewsFeedPaneProps): React.JSX.Element {
+export function NewsFeedPane({ items, unavailable, fallback, fullHeight = false, filterType = 'all', t, fillComposer }: NewsFeedPaneProps): React.JSX.Element {
   const [, setNow] = useState(Date.now())
   
   // 每分钟更新一次相对时间
@@ -61,25 +65,33 @@ export function NewsFeedPane({ items, unavailable, fallback, t, fillComposer }: 
     return () => clearInterval(timer)
   }, [])
 
-  if (items === null) {
+  const filteredItems = items === null ? null : (
+    filterType === 'exchange'
+      ? items.filter(it => getSourceType(it.source) === 'exchange' || it.title.includes('公告') || it.title.includes('提示') || it.title.includes('决议'))
+      : items
+  )
+
+  const rootClass = `${css.pane} ${fullHeight ? css.fullHeight : ''}`
+
+  if (filteredItems === null) {
     return (
-      <div className={css.pane} data-dshtrading-news-feed="">
-        <div className={css.empty}>新闻源未激活</div>
+      <div className={rootClass} data-dshtrading-news-feed="">
+        <div className={css.empty}>{filterType === 'exchange' ? '公告源未就绪' : '新闻源未激活'}</div>
       </div>
     )
   }
 
-  if (items.length === 0) {
+  if (filteredItems.length === 0) {
     return (
-      <div className={css.pane} data-dshtrading-news-feed="">
-        <div className={css.empty}>暂无相关新闻</div>
+      <div className={rootClass} data-dshtrading-news-feed="">
+        <div className={css.empty}>{filterType === 'exchange' ? '暂无相关公告' : '暂无相关新闻'}</div>
       </div>
     )
   }
 
   return (
-    <div className={css.pane} data-dshtrading-news-feed="">
-      {fallback && (
+    <div className={rootClass} data-dshtrading-news-feed="">
+      {fallback && filterType === 'all' && (
         <div className={css.fallbackBanner}>
           📌 该标的 24 小时内暂无专属快讯，已为您展示市场最新要闻
         </div>

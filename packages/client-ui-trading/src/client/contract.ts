@@ -47,6 +47,8 @@ export type MarketLocaleKey =
   | 'quote.sendFailed'
   | 'quote.tab.chart'
   | 'quote.tab.fundamentals'
+  | 'quote.tab.news'
+  | 'quote.tab.announcements'
   | 'fundamentals.peTtm'
   | 'fundamentals.peDynamic'
   | 'fundamentals.pb'
