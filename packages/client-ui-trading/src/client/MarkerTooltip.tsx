@@ -23,28 +23,35 @@ export interface KnowledgeTooltipData {
 }
 
 export interface MarkerTooltipProps {
-  /** 绝对定位 X（像素） */
+  /** 绝对定位 X（TvChart 容器坐标系） */
   x: number
-  /** 绝对定位 Y（像素） */
+  /** 绝对定位 Y（TvChart 容器坐标系） */
   y: number
+  /** 图表容器尺寸（越界翻转钳位基准，与 x/y 同坐标系） */
+  containerWidth: number
+  containerHeight: number
   /** 策略信号数据（与 knowledge 互斥） */
-  signal?: SignalTooltipData
+  signal?: SignalTooltipData | undefined
   /** 知识事件数据（与 signal 互斥） */
-  knowledge?: KnowledgeTooltipData
+  knowledge?: KnowledgeTooltipData | undefined
 }
 
-export function MarkerTooltip({ x, y, signal, knowledge }: MarkerTooltipProps): React.JSX.Element | null {
+export function MarkerTooltip({ x, y, containerWidth, containerHeight, signal, knowledge }: MarkerTooltipProps): React.JSX.Element | null {
   if (!signal && !knowledge) return null
 
-  // 智能定位：防止超出视口（x + 280 > viewport 时向左翻转）
+  // 智能定位：X/Y 任一轴越界时向另一侧翻转，并钳在容器内。
   const tooltipWidth = 280
-  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1000
-  const isOverflow = x + tooltipWidth > viewportWidth
-  const left = isOverflow ? x - tooltipWidth : x
+  // Tooltip 高度估算（signal 含交易详情取上限），翻转时据此上移。
+  const estimatedHeight = signal?.trade !== undefined ? 230 : 150
+  const gap = 12
+  const flipX = x + gap + tooltipWidth > containerWidth
+  const left = Math.max(0, flipX ? x - gap - tooltipWidth : x + gap)
+  const flipY = y + gap + estimatedHeight > containerHeight
+  const top = Math.max(0, flipY ? y - gap - estimatedHeight : y + gap)
 
   const style: React.CSSProperties = {
     left: `${left}px`,
-    top: `${y}px`,
+    top: `${top}px`,
   }
 
   return (

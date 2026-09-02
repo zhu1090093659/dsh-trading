@@ -19,11 +19,13 @@ export interface NewsItem {
 
 export interface AggregateNewsOptions {
   /** 标的（市场规范词汇，如 00700 / 00700.HK / 0700）；缺省 = 不过滤。 */
-  symbol?: string
-  windowHours?: number
-  limit?: number
-  fetch?: typeof globalThis.fetch
-  now?: number
+  symbol?: string | undefined
+  windowHours?: number | undefined
+  limit?: number | undefined
+  fetch?: typeof globalThis.fetch | undefined
+  now?: number | undefined
+  /** CryptoPanic API token（桥面透传，hk 聚合器忽略；对齐 api 契约形状）。 */
+  cryptoPanicKey?: string | undefined
 }
 
 export interface AggregateNewsResult {
@@ -36,6 +38,8 @@ const DEFAULT_WINDOW_HOURS = 24
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (dsh-trading/hk_get_news)'
+/** 下钻 fetch 统一 10s 超时（docs/replication.md §9；上游挂起不得拖垮 60s 轮询链）。 */
+const UPSTREAM_TIMEOUT_MS = 10_000
 /** 港交所 marketId（stockList 前缀，如 '116.00700'）。 */
 const HK_MARKET_ID = '116.'
 /** 港股关键词（无关联代码时仍判为港股相关）。 */
@@ -68,7 +72,7 @@ async function fetchEastmoneyHk(fetchImpl: typeof globalThis.fetch, limit: numbe
   url.searchParams.set('req_trace', '1')
   url.searchParams.set('fastColumn', '103')
   url.searchParams.set('pageSize', String(Math.max(limit * 2, 40)))
-  const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA } })
+  const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
   if (!response.ok) {
     const body = await response.text().catch(() => '')
     throw new Error(`eastmoney: HTTP ${response.status}${body ? ` — ${body.slice(0, 160)}` : ''}`)
@@ -134,30 +138,31 @@ async function fetchEastmoneyHkAnnouncements(fetchImpl: typeof globalThis.fetch,
   url.searchParams.set('ann_type', 'H')
   url.searchParams.set('client_source', 'web')
   url.searchParams.set('stock_list', clean)
-  try {
-    const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA } })
-    if (!response.ok) return []
-    const parsed: unknown = JSON.parse(await response.text())
-    const list = (parsed as { data?: { list?: Array<{ art_code?: string; title_ch?: string; title?: string; display_time?: string; notice_date?: string }> } }).data?.list
-    if (!Array.isArray(list)) return []
-    const items: NewsItem[] = []
-    for (const it of list) {
-      const title = it.title_ch || it.title
-      if (!title || !it.art_code) continue
-      const timeStr = it.display_time || it.notice_date || ''
-      const ts = parseHkShowTime(timeStr.slice(0, 19))
-      items.push({
-        source: 'eastmoney-announcement',
-        title,
-        url: `https://data.eastmoney.com/notices/detail/${clean}/${encodeURIComponent(it.art_code)}.html`,
-        publishedAt: Number.isFinite(ts) ? new Date(ts).toISOString() : new Date().toISOString(),
-        relatedCodes: [`116.${clean}`],
-      })
-    }
-    return items
-  } catch {
-    return []
+  const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`eastmoney-announcement: HTTP ${response.status}${body ? ` — ${body.slice(0, 160)}` : ''}`)
   }
+  const parsed: unknown = JSON.parse(await response.text())
+  const list = (parsed as { data?: { list?: Array<{ art_code?: string; title_ch?: string; title?: string; display_time?: string; notice_date?: string }> } }).data?.list
+  if (!Array.isArray(list)) throw new Error('eastmoney-announcement: unexpected payload (expected data.list[])')
+  const items: NewsItem[] = []
+  for (const it of list) {
+    const title = it.title_ch || it.title
+    if (!title || !it.art_code) continue
+    const timeStr = it.display_time || it.notice_date || ''
+    const ts = parseHkShowTime(timeStr.slice(0, 19))
+    // 解析失败丢弃该条，绝不回退「现在」——虚假新鲜事件会恒过时间窗并钉到最新 K 线。
+    if (!Number.isFinite(ts)) continue
+    items.push({
+      source: 'eastmoney-announcement',
+      title,
+      url: `https://data.eastmoney.com/notices/detail/${clean}/${encodeURIComponent(it.art_code)}.html`,
+      publishedAt: new Date(ts).toISOString(),
+      relatedCodes: [`116.${clean}`],
+    })
+  }
+  return items
 }
 
 export async function aggregateNews(options: AggregateNewsOptions = {}): Promise<AggregateNewsResult> {

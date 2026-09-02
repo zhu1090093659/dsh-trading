@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from 'react'
 import type { MarketLocaleKey } from './contract.ts'
+import { isAnnouncementSource } from './news-source.ts'
 import css from './news-feed-pane.module.css'
 
 export interface ClientNewsItem {
@@ -20,17 +21,23 @@ export interface NewsFeedPaneProps {
   /** 新闻条目列表 */
   items: readonly ClientNewsItem[] | null
   /** 失败的数据源 */
-  unavailable?: readonly string[]
+  unavailable?: readonly string[] | undefined
   /** 是否为无专属快讯时回退展示的宏观/大盘要闻 */
-  fallback?: boolean
+  fallback?: boolean | undefined
   /** 是否占满高度（用于 Tab 独立页签视图） */
-  fullHeight?: boolean
+  fullHeight?: boolean | undefined
   /** 过滤类型：仅公告（exchange）、仅媒体快讯（media）或全部资讯（all） */
-  filterType?: 'exchange' | 'media' | 'all'
+  filterType?: 'exchange' | 'media' | 'all' | undefined
   /** 国际化翻译函数 */
   t: (key: MarketLocaleKey) => string
   /** 发给 Agent 分析 */
-  fillComposer?: (text: string) => Promise<void>
+  fillComposer?: ((text: string) => Promise<void>) | undefined
+}
+
+/** 仅打开 http(s) 外链（纵深防御：url 来自外部 payload，不校验 scheme 直接 open）。 */
+function openExternal(url: string): void {
+  if (!/^https?:\/\//i.test(url)) return
+  window.open(url, '_blank', 'noopener')
 }
 
 function relativeTime(isoString: string): string {
@@ -50,19 +57,8 @@ function relativeTime(isoString: string): string {
 }
 
 function getSourceType(source: string): string {
-  const lower = source.toLowerCase()
-  if (
-    lower.includes('exchange') ||
-    lower.includes('announcement') ||
-    lower.includes('sec-edgar') ||
-    lower.includes('binance') ||
-    lower.includes('okx') ||
-    lower.includes('交易所') ||
-    lower.includes('公告')
-  ) {
-    return 'exchange'
-  }
-  if (lower.includes('rss')) return 'rss'
+  if (isAnnouncementSource(source)) return 'exchange'
+  if (source.toLowerCase().includes('rss')) return 'rss'
   return 'media'
 }
 
@@ -81,7 +77,7 @@ function formatSourceLabel(source: string): string {
   return source
 }
 
-export function NewsFeedPane({ items, unavailable, fallback, fullHeight = false, filterType = 'all', t, fillComposer }: NewsFeedPaneProps): React.JSX.Element {
+export function NewsFeedPane({ items, unavailable, fallback, fullHeight = false, filterType = 'all', fillComposer }: NewsFeedPaneProps): React.JSX.Element {
   const [, setNow] = useState(Date.now())
   
   // 每分钟更新一次相对时间
@@ -125,7 +121,7 @@ export function NewsFeedPane({ items, unavailable, fallback, fullHeight = false,
       )}
       <ul className={css.list}>
         {filteredItems.map((item, index) => (
-          <li key={`${item.url}-${index}`} className={css.item} onClick={() => window.open(item.url, '_blank', 'noopener')}>
+          <li key={`${item.url}-${index}`} className={css.item} onClick={() => openExternal(item.url)}>
             <span className={css.source} data-type={getSourceType(item.source)}>
               {formatSourceLabel(item.source)}
             </span>

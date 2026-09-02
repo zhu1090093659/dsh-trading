@@ -83,3 +83,54 @@ describe('createGetNewsTool（工具壳）', () => {
     expect(text).toContain('https://finance.eastmoney.com/a/202608300001.html')
   })
 })
+
+describe('fetchEastmoneyAnnouncements（公告源，评审 M4/M5/M6 整改）', () => {
+  const annJson = {
+    data: {
+      list: [
+        { art_code: 'A1', title: '贵州茅台关于回购股份的公告', display_time: '2026-08-25 09:00:00' },
+        { art_code: 'A2', title: '坏时间条目', display_time: 'not-a-time' },
+      ],
+    },
+  }
+
+  it('公告走 7 天放宽窗：窗口外但 7 天内的公告保留；解析失败条目丢弃而非回退「现在」', async () => {
+    const { items, unavailable } = await aggregateNews({
+      fetch: vi.fn(async (input: RequestInfo | URL) => {
+        return String(input).includes('np-anotice') ? jsonResp(annJson) : jsonResp({ data: { fastNewsList: [] } })
+      }) as unknown as typeof globalThis.fetch,
+      now: NOW,
+      symbol: '600519',
+    })
+    expect(unavailable).toEqual([])
+    // NOW = 08-30 20:00Z，公告 08-25 09:00(东八区)=08-25 01:00Z → 5.8 天前，在 7 天窗内
+    const ann = items.find((i) => i.source === 'eastmoney-announcement')
+    expect(ann?.title).toContain('回购股份')
+    expect(ann?.publishedAt).toBe(new Date(Date.parse('2026-08-25T09:00:00+08:00')).toISOString())
+    // 时间解析失败的条目被丢弃，不得回退 now()（虚假新鲜事件会恒过窗并钉最新 K 线）
+    expect(items.some((i) => i.title === '坏时间条目')).toBe(false)
+  })
+
+  it('公告接口非 2xx → throw 进 unavailable，不再静默空数组', async () => {
+    const { unavailable, items } = await aggregateNews({
+      fetch: vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        return url.includes('np-anotice') ? failResp(503) : jsonResp(eastmoneyJson)
+      }) as unknown as typeof globalThis.fetch,
+      now: NOW,
+      symbol: '600519',
+    })
+    expect(unavailable.some((u) => u.includes('eastmoney-announcement'))).toBe(true)
+    expect(items.every((i) => i.source !== 'eastmoney-announcement')).toBe(true)
+  })
+
+  it('公告 fetch 必带 10s AbortSignal（replication.md §9）', async () => {
+    let signal: AbortSignal | undefined
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      signal = init?.signal as AbortSignal | undefined
+      return jsonResp(annJson)
+    }) as unknown as typeof globalThis.fetch
+    await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '600519' })
+    expect(signal).toBeInstanceOf(AbortSignal)
+  })
+})

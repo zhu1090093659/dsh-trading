@@ -111,9 +111,11 @@ describe('createGetNewsTool（工具壳）', () => {
     const base = Date.now() - 3_600_000
     const nearYahoo = { news: [{ uuid: '1', title: 'AAPL: Apple beats Q3 earnings estimates', link: 'https://finance.yahoo.com/1', publisher: 'Reuters', providerPublishTime: base / 1000 }] }
     const nearGoogle = `<rss><channel><item><title>Apple stock record</title><link>https://news.google.com/a</link><guid>a</guid><pubDate>${new Date(base).toUTCString()}</pubDate><source>MarketWatch</source></item></channel></rss>`
+    const nearSec = `<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>8-K - Current report</title><link href="https://www.sec.gov/Archives/edgar/data/320193/aapl.htm"/><updated>${new Date(base).toISOString()}</updated></entry></feed>`
     const fetchImpl = mockFetchByUrl({
       'finance.yahoo.com': () => jsonResp(nearYahoo),
       'news.google.com': () => textResp(nearGoogle),
+      'sec.gov': () => textResp(nearSec),
     })
     vi.stubGlobal('fetch', fetchImpl)
     const tool = createGetNewsTool()

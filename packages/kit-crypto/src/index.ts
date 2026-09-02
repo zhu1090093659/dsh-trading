@@ -268,10 +268,17 @@ export function apply(ctx: Context, _config: Config): void {
   // host 平面单点注册）；crypto_get_indicators 由 connector-binance/okx 注册，kit 不重复。
 
   // 新闻聚合器注册到 host 面注册表（Issue #37）。
-  ctx.inject(['tradingNewsRegistry'] as never, (newsCtx: any) => {
-    const registry = (newsCtx as any).tradingNewsRegistry
+  // 注册表服务就绪时机不定，经 cordis inject 等待就绪后注册。kit 编译程序下
+  // cordis Context 类型增强不完整（Context['inject'] 探针报缺），与同包 get 的
+  // duck-type 处理一致。
+  const lifecycle = ctx as unknown as {
+    inject?: (deps: string[], callback: (scope: unknown) => void) => void
+    effect?: (fn: () => void, name?: string) => void
+  }
+  lifecycle.inject?.(['tradingNewsRegistry'], (scope) => {
+    const registry = (scope as { tradingNewsRegistry?: { register(market: string, aggregator: unknown): () => void } }).tradingNewsRegistry
     if (registry && typeof registry.register === 'function') {
-      ctx.effect(() => registry.register('crypto', aggregateNews), 'kit-crypto news registration')
+      lifecycle.effect?.(() => registry.register('crypto', aggregateNews), 'kit-crypto news registration')
     }
   })
 }

@@ -69,7 +69,7 @@ interface PersistedMarkerState {
 }
 
 function initialState(): MarkerState {
-  const persisted = readJson<PersistedMarkerState>(MARKER_KEY, null)
+  const persisted = readJson<PersistedMarkerState | null>(MARKER_KEY, null)
   return {
     showSignals: persisted?.showSignals ?? false,
     showKnowledgeEvents: persisted?.showKnowledgeEvents ?? false,
@@ -91,7 +91,7 @@ export function createMarkerStateStore(): MarkerStateStore {
 
   const persist = (): void => {
     const s = store.getSnapshot()
-    writeJson<PersistedMarkerState>(MARKER_KEY, {
+    writeJson(MARKER_KEY, {
       showSignals: s.showSignals,
       showKnowledgeEvents: s.showKnowledgeEvents,
       activeStrategyId: s.activeStrategyId,

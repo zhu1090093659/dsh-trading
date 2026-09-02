@@ -23,15 +23,17 @@ export interface NewsItem {
 
 export interface AggregateNewsOptions {
   /** 标的（市场规范词汇，如 600519 / 600519.SH）；缺省 = 不过滤。 */
-  symbol?: string
+  symbol?: string | undefined
   /** 时间窗（小时）：只保留 now - windowHours 内的条目；缺省 24。 */
-  windowHours?: number
+  windowHours?: number | undefined
   /** 输出条数上限；缺省 20。 */
-  limit?: number
+  limit?: number | undefined
   /** 依赖注入的 fetch（测试用 mock；缺省 globalThis.fetch）。 */
-  fetch?: typeof globalThis.fetch
+  fetch?: typeof globalThis.fetch | undefined
   /** 注入当前时间戳（ms，测试用）；缺省 Date.now()。 */
-  now?: number
+  now?: number | undefined
+  /** CryptoPanic API token（桥面透传，cn/hk/us 聚合器忽略；对齐 api 契约形状）。 */
+  cryptoPanicKey?: string | undefined
 }
 
 export interface AggregateNewsResult {
@@ -44,6 +46,10 @@ const DEFAULT_WINDOW_HOURS = 24
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (dsh-trading/cn_get_news)'
+/** 下钻 fetch 统一 10s 超时（docs/replication.md §9；上游挂起不得拖垮 60s 轮询链）。 */
+const UPSTREAM_TIMEOUT_MS = 10_000
+/** 公告时间窗放宽：上市公司公告 7 天内有效展示（媒体快讯仍按 24h 窗）。 */
+const ANNOUNCEMENT_MAX_AGE_MS = 7 * 24 * 3_600_000
 
 interface EastmoneyItem {
   title?: string
@@ -67,7 +73,7 @@ async function fetchEastmoney(fetchImpl: typeof globalThis.fetch, limit: number)
   url.searchParams.set('req_trace', '1')
   url.searchParams.set('fastColumn', '102')
   url.searchParams.set('pageSize', String(Math.max(limit, 20)))
-  const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA } })
+  const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
   if (!response.ok) {
     const body = await response.text().catch(() => '')
     throw new Error(`eastmoney: HTTP ${response.status}${body ? ` — ${body.slice(0, 160)}` : ''}`)
@@ -104,21 +110,26 @@ async function fetchEastmoneyAnnouncements(fetchImpl: typeof globalThis.fetch, r
   url.searchParams.set('ann_type', 'A')
   url.searchParams.set('client_source', 'web')
   url.searchParams.set('stock_list', stockCode)
-  const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA } })
-  if (!response.ok) return []
+  const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`eastmoney-announcement: HTTP ${response.status}${body ? ` — ${body.slice(0, 160)}` : ''}`)
+  }
   const parsed: unknown = JSON.parse(await response.text())
   const list = (parsed as { data?: { list?: Array<{ art_code?: string; title?: string; display_time?: string; notice_date?: string }> } }).data?.list
-  if (!Array.isArray(list)) return []
+  if (!Array.isArray(list)) throw new Error('eastmoney-announcement: unexpected payload (expected data.list[])')
   const items: NewsItem[] = []
   for (const it of list) {
     if (!it.title || !it.art_code) continue
     const timeStr = it.display_time || it.notice_date || ''
     const ts = parseCnShowTime(timeStr.slice(0, 19))
+    // 解析失败丢弃该条，绝不回退「现在」——虚假新鲜事件会恒过时间窗并钉到最新 K 线。
+    if (!Number.isFinite(ts)) continue
     items.push({
       source: 'eastmoney-announcement',
       title: it.title,
       url: `https://data.eastmoney.com/notices/detail/${stockCode}/${encodeURIComponent(it.art_code)}.html`,
-      publishedAt: Number.isFinite(ts) ? new Date(ts).toISOString() : new Date().toISOString(),
+      publishedAt: new Date(ts).toISOString(),
       relatedCodes: [stockCode],
     })
   }
@@ -172,8 +183,9 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
   for (const result of results) {
     if (result.status === 'fulfilled') {
       for (const item of result.value) {
-        // 公告由于发布频次较低（周/月级），不因 24h 窗口过度截断，保留最新公告
-        if (item.source !== 'eastmoney-announcement' && !inWindow(item.publishedAt, now, windowMs)) continue
+        // 公告放宽时间窗（上市公司公告 7 天内均有效展示），媒体快讯按 24h 时间窗
+        const maxAge = item.source === 'eastmoney-announcement' ? ANNOUNCEMENT_MAX_AGE_MS : windowMs
+        if (!inWindow(item.publishedAt, now, maxAge)) continue
         if (!matchesSymbol(item, options.symbol)) continue
         items.push(item)
       }

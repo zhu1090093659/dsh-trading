@@ -362,8 +362,8 @@ export function apply(ctx: Context, config: Config): void {
   const service = new MarketRouterService(ctx, () => effective)
   // 注册表与 router 同 fiber 提供：base patch 行零改动。
   const registry = new MarketDataRegistryService(ctx, service)
-  // 新闻注册表与 router/registry 同 fiber 提供（Issue #37）。
-  const newsRegistry = new TradingNewsRegistryService(ctx)
+  // 新闻注册表与 router/registry 同 fiber 提供（Issue #37）；Service 构造即自 provide。
+  new TradingNewsRegistryService(ctx)
   const log = logger(ctx)
   warnUnknownProviders(effective, log)
 

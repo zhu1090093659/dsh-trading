@@ -13,6 +13,7 @@
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
+import { isAnnouncementSource } from './client/news-source.ts'
 import type { AccountBalance, DerivativesData, FundamentalsPackage, Interval, Kline, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
 import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dsh-trading/kit-cn'
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dsh-trading/kit-hk'
@@ -64,15 +65,15 @@ export interface TradingNewsRegistryLike {
  *   （选中但未注册 → 用户能在 GUI 看到设置目标，行情区报「未安装/未激活」）。
  */
 export function createBridgeHost(services: {
-  registry?: MarketDataRegistryLike
-  tradeRegistry?: TradeRegistryLike
-  router?: { activeProvider(market: string): string | undefined }
+  registry?: MarketDataRegistryLike | undefined
+  tradeRegistry?: TradeRegistryLike | undefined
+  router?: { activeProvider(market: string): string | undefined } | undefined
   legacy(market: MarketId): MarketDataService | undefined
-  customIndicatorsStore?: CustomIndicatorStore
-  knowledgeStore?: KnowledgeCardStore
-  strategyStore?: CustomStrategyStore
-  watchlistStore?: WatchlistStore
-  selectionStore?: SelectionStore
+  customIndicatorsStore?: CustomIndicatorStore | undefined
+  knowledgeStore?: KnowledgeCardStore | undefined
+  strategyStore?: CustomStrategyStore | undefined
+  watchlistStore?: WatchlistStore | undefined
+  selectionStore?: SelectionStore | undefined
   /** 新闻注册表（issue #37）。 */
   newsRegistry?: TradingNewsRegistryLike | undefined
   /** CryptoPanic API token 取值函数（从 router settings 获取；可选）。 */
@@ -540,8 +541,9 @@ export class TradingBridge {
 
     let items = result.items
     let isFallback = false
-    // 智能回退：若指定了具体标的但 24h 内无专属媒体快讯，自动回退拉取市场大盘最新要闻并并入
-    const mediaNewsCount = items.filter(it => it.source !== 'eastmoney-announcement').length
+    // 智能回退：若指定了具体标的但 24h 内无专属媒体快讯（公告类源不算媒体快讯，
+    // 美股仅剩 SEC 披露时同样触发），自动回退拉取市场大盘最新要闻并并入。
+    const mediaNewsCount = items.filter(it => !isAnnouncementSource(it.source)).length
     if (mediaNewsCount === 0 && symbol && result.unavailable.length === 0) {
       try {
         const macroResult = await aggregator({
@@ -550,7 +552,10 @@ export class TradingBridge {
           cryptoPanicKey: this.host.newsKey?.(),
         })
         if (macroResult.items.length > 0) {
+          // 合并后按发布时间倒序重排并按请求 limit 截尾（宏观 50 条混入不得超发）。
           items = [...macroResult.items, ...items]
+            .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt))
+            .slice(0, limit ?? 20)
           isFallback = true
         }
       } catch {}

@@ -24,17 +24,17 @@ export interface NewsItem {
 
 export interface AggregateNewsOptions {
   /** 币种过滤（市场规范词汇，如 BTCUSDT / BTCUSDT-SWAP）；缺省 = 不过滤。 */
-  symbol?: string
+  symbol?: string | undefined
   /** 时间窗（小时）：只保留 now - windowHours 内的条目；缺省 24。 */
-  windowHours?: number
+  windowHours?: number | undefined
   /** 输出条数上限；缺省 20。 */
-  limit?: number
+  limit?: number | undefined
   /** 依赖注入的 fetch（测试用 mock；缺省 globalThis.fetch）。 */
-  fetch?: typeof globalThis.fetch
+  fetch?: typeof globalThis.fetch | undefined
   /** 注入当前时间戳（ms，测试用）；缺省 Date.now()。 */
-  now?: number
+  now?: number | undefined
   /** WS2c：CryptoPanic API token。有值时加测 CryptoPanic 免费层（B 增强）；无值 = 仅公共源。 */
-  cryptoPanicKey?: string
+  cryptoPanicKey?: string | undefined
 }
 
 export interface AggregateNewsResult {
@@ -56,6 +56,8 @@ const CRYPTOPANIC_API_URL = 'https://cryptopanic.com/api/free/v1/posts/'
 const DEFAULT_WINDOW_HOURS = 24
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
+/** 下钻 fetch 统一 10s 超时（docs/replication.md §9；上游挂起不得拖垮 60s 轮询链）。 */
+const UPSTREAM_TIMEOUT_MS = 10_000
 
 const BINANCE_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (dsh-trading/crypto_get_news)'
 
@@ -68,6 +70,7 @@ async function fetchText(
 ): Promise<string> {
   const response = await fetchImpl(url, {
     headers: { accept: 'application/json, text/xml, */*', 'user-agent': BINANCE_UA },
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   })
   if (!response.ok) {
     const body = await response.text().catch(() => '')

@@ -235,7 +235,7 @@ export async function fetchNews(market: MarketId, symbol?: string, limit = 20): 
     const wire = await getJson<{ ok: boolean; items: ClientNewsItem[]; unavailable: string[]; fallback?: boolean }>(
       `/dshtrading/api/news?${query.toString()}`,
     )
-    return { items: wire.items ?? [], unavailable: wire.unavailable ?? [], fallback: wire.fallback }
+    return { items: wire.items ?? [], unavailable: wire.unavailable ?? [], fallback: wire.fallback === true }
   } catch {
     return null
   }

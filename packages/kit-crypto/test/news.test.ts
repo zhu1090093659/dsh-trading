@@ -103,6 +103,13 @@ describe('aggregateNews（四源聚合 + 过滤）', () => {
     expect(titles.some((t) => t.includes('Bitcoin rally'))).toBe(false)
   })
 
+  it('binance/okx 平台级公告绕过 symbol 过滤（有意设计：交易所公报对全平台有效，2026-09-02 评审 Question 裁决固化）', async () => {
+    // BTCUSDT 过滤下：Binance 上币公报（无 BTC 词？——本题含 BTCUSDT，故换 SOL 侧 OKX 公报验证）
+    const { items } = await aggregateNews({ fetch: allSourcesOk(), now: NOW, symbol: 'BTCUSDT' })
+    // OKX 公报标题只含 SOLANA，不含 BTC/BTCUSDT，仍被保留 → 平台级公告豁免过滤
+    expect(items.some((i) => i.source === 'okx' && i.title.includes('SOLANA'))).toBe(true)
+  })
+
   it('windowHours 压缩时间窗：只留 now-1h 内', async () => {
     const { items } = await aggregateNews({ fetch: allSourcesOk(), now: NOW, windowHours: 1 })
     // binance (now-1h) 在界内；okx (now-2h) 与 theblock (now-4h) 被滤掉

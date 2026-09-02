@@ -75,3 +75,51 @@ describe('createGetNewsTool（工具壳）', () => {
     expect(text).toContain('https://finance.eastmoney.com/a/202608300001.html')
   })
 })
+
+describe('fetchEastmoneyHkAnnouncements（港股公告源，评审 M5/M6 整改）', () => {
+  const annJson = {
+    data: {
+      list: [
+        { art_code: 'H1', title: '腾讯控股截至2026年6月30日止中期业绩公告', display_time: '2026-08-26 09:00:00' },
+        { art_code: 'H2', title: '坏时间条目', display_time: 'not-a-time' },
+      ],
+    },
+  }
+
+  it('7 天窗豁免生效：窗口外但 7 天内的公告保留；解析失败条目丢弃而非回退「现在」', async () => {
+    const { items, unavailable } = await aggregateNews({
+      fetch: vi.fn(async (input: RequestInfo | URL) => {
+        return String(input).includes('np-anotice') ? jsonResp(annJson) : jsonResp({ data: { fastNewsList: [] } })
+      }) as unknown as typeof globalThis.fetch,
+      now: NOW,
+      symbol: '00700',
+    })
+    expect(unavailable).toEqual([])
+    const ann = items.find((i) => i.source === 'eastmoney-announcement')
+    expect(ann?.title).toContain('中期业绩')
+    expect(ann?.publishedAt).toBe(new Date(Date.parse('2026-08-26T09:00:00+08:00')).toISOString())
+    expect(items.some((i) => i.title === '坏时间条目')).toBe(false)
+  })
+
+  it('公告接口非 2xx → throw 进 unavailable（不再静默空数组）', async () => {
+    const { unavailable, items } = await aggregateNews({
+      fetch: vi.fn(async (input: RequestInfo | URL) => {
+        return String(input).includes('np-anotice') ? failResp(500) : jsonResp({ data: { fastNewsList: [] } })
+      }) as unknown as typeof globalThis.fetch,
+      now: NOW,
+      symbol: '00700',
+    })
+    expect(unavailable.some((u) => u.includes('eastmoney-announcement'))).toBe(true)
+    expect(items.every((i) => i.source !== 'eastmoney-announcement')).toBe(true)
+  })
+
+  it('公告 fetch 必带 10s AbortSignal（replication.md §9）', async () => {
+    let signal: AbortSignal | undefined
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      signal = init?.signal as AbortSignal | undefined
+      return jsonResp({ data: { fastNewsList: [] } })
+    }) as unknown as typeof globalThis.fetch
+    await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '00700' })
+    expect(signal).toBeInstanceOf(AbortSignal)
+  })
+})

@@ -21,15 +21,17 @@ export interface NewsItem {
 
 export interface AggregateNewsOptions {
   /** 标的（市场规范词汇，如 AAPL）；缺省 = 通用市场主题。 */
-  symbol?: string
+  symbol?: string | undefined
   /** 时间窗（小时）：只保留 now - windowHours 内的条目；缺省 24。 */
-  windowHours?: number
+  windowHours?: number | undefined
   /** 输出条数上限；缺省 20。 */
-  limit?: number
+  limit?: number | undefined
   /** 依赖注入的 fetch（测试用 mock；缺省 globalThis.fetch）。 */
-  fetch?: typeof globalThis.fetch
+  fetch?: typeof globalThis.fetch | undefined
   /** 注入当前时间戳（ms，测试用）；缺省 Date.now()。 */
-  now?: number
+  now?: number | undefined
+  /** CryptoPanic API token（桥面透传，us 聚合器忽略；对齐 api 契约形状）。 */
+  cryptoPanicKey?: string | undefined
 }
 
 export interface AggregateNewsResult {
@@ -45,11 +47,13 @@ const DEFAULT_WINDOW_HOURS = 24
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (dsh-trading/us_get_news)'
+/** 下钻 fetch 统一 10s 超时（docs/replication.md §9；上游挂起不得拖垮 60s 轮询链）。 */
+const UPSTREAM_TIMEOUT_MS = 10_000
 /** 无 symbol 时的通用市场主题（避免空 query）。 */
 const DEFAULT_QUERY_TOPIC = 'US stock market'
 
 async function fetchText(url: string, fetchImpl: typeof globalThis.fetch, name: string): Promise<string> {
-  const response = await fetchImpl(url, { headers: { accept: 'application/json, text/xml, */*', 'user-agent': UA } })
+  const response = await fetchImpl(url, { headers: { accept: 'application/json, text/xml, */*', 'user-agent': UA }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
   if (!response.ok) {
     const body = await response.text().catch(() => '')
     throw new Error(`${name}: HTTP ${response.status}${body ? ` — ${body.slice(0, 160)}` : ''}`)
@@ -174,12 +178,10 @@ async function fetchSecEdgarAnnouncements(fetchImpl: typeof globalThis.fetch, sy
   url.searchParams.set('start', '0')
   url.searchParams.set('count', String(Math.max(limit, 20)))
   url.searchParams.set('output', 'atom')
-  try {
-    const text = await fetchText(url.toString(), fetchImpl, 'sec-edgar')
-    return parseSecEdgarAtom(text).slice(0, limit)
-  } catch {
-    return []
-  }
+  // 失败照常抛出：aggregate 用 allSettled 收集进 unavailable，公告源挂掉不与
+  // 「暂无公告」混淆。
+  const text = await fetchText(url.toString(), fetchImpl, 'sec-edgar')
+  return parseSecEdgarAtom(text).slice(0, limit)
 }
 
 /* ── 聚合：并发取源 → 时间窗/标的过滤 → 按时间倒序 → 截尾 ──────────────────── */

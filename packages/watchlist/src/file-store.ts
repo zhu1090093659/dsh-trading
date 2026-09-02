@@ -7,42 +7,32 @@ import { dirname } from 'node:path'
 import type { SelectionRecord, SelectionStore, WatchlistStore, WatchlistsMap } from './index.ts'
 
 /**
- * 跨平台健壮原子写入（带 Windows EPERM / EBUSY 重试与 writeFile 兜底）。
+ * 跨平台健壮原子写入：rename 遇 Windows EPERM/EBUSY（目标被占用）短暂退避重试；
+ * 重试耗尽或任何失败一律保留旧文件、清理 tmp、log + throw——目标文件永远只被
+ * 原子 rename 触碰，绝不非原子直写（防止半截写损坏 JSON 导致 load 静默重置）。
  */
 async function safeAtomicWrite(filePath: string, data: string): Promise<void> {
   const dir = dirname(filePath)
-  await mkdir(dir, { recursive: true })
   const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
   try {
+    await mkdir(dir, { recursive: true })
     await writeFile(tmpPath, data, 'utf8')
-    let renamed = false
+    let lastError: unknown
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await rename(tmpPath, filePath)
-        renamed = true
-        break
+        return
       } catch (err: any) {
-        if (err?.code === 'EPERM' || err?.code === 'EBUSY' || err?.code === 'EACCES') {
-          await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
-          continue
-        }
-        throw err
+        if (err?.code !== 'EPERM' && err?.code !== 'EBUSY') throw err
+        lastError = err
+        await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
       }
     }
-    if (!renamed) {
-      await writeFile(filePath, data, 'utf8')
-      await unlink(tmpPath).catch(() => {})
-    }
+    throw lastError
   } catch (error) {
-    try {
-      await unlink(tmpPath).catch(() => {})
-    } catch {}
-    try {
-      await writeFile(filePath, data, 'utf8')
-    } catch (finalErr) {
-      console.error(`[dsh-trading/watchlist] failed to write to ${filePath}:`, finalErr)
-      throw finalErr
-    }
+    console.error(`[dsh-trading/watchlist] failed to atomic flush watchlists to ${filePath}:`, error)
+    await unlink(tmpPath).catch(() => {})
+    throw error
   }
 }
 

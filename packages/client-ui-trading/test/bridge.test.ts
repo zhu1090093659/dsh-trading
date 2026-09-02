@@ -3,7 +3,7 @@
  * 参数校验、请求分发路由与协议错误。宿主面全部用假件（不触网）。
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService, NewsAggregator } from '@dsh-trading/api'
 import { createMemoryCustomStrategyStore } from '@dsh-trading/strategies'
 import {
   BridgeProtocolError,
@@ -521,6 +521,75 @@ describe('watchlist + selection endpoints（issue #32 / P3）', () => {
     expect(list.payload).toMatchObject({ ok: true, watchlists: {} })
     const sel = await dispatchBridgeRequest(bridge, 'GET', '/selection', new URLSearchParams())
     expect(sel.payload).toMatchObject({ ok: true, instrument: null })
+  })
+})
+
+describe('TradingBridge.news（issue #37 新闻聚合；2026-09-02 评审 M3/M6 整改）', () => {
+  function newsHost(aggregator: NewsAggregator): BridgeHost {
+    return {
+      getMarketService: () => undefined,
+      activeProvider: () => undefined,
+      newsRegistry: { register: () => () => {}, get: (market) => market === 'us' ? aggregator : undefined },
+      newsKey: () => undefined,
+    }
+  }
+
+  const item = (source: string, title: string, publishedAt: string) => ({ source, title, url: `https://x/${title}`, publishedAt })
+
+  it('非法 limit → 400（非整数/越界/未知市场）', async () => {
+    const bridge = new TradingBridge(newsHost(async () => ({ items: [], unavailable: [] })))
+    await expect(bridge.news('us', 'AAPL', '0')).rejects.toThrowError(/limit/)
+    await expect(bridge.news('us', 'AAPL', 'abc')).rejects.toThrowError(/limit/)
+    await expect(bridge.news('us', 'AAPL', String(51))).rejects.toThrowError(/limit/)
+    await expect(bridge.news('jp', 'AAPL', null)).rejects.toThrowError(/unknown market/)
+  })
+
+  it('有媒体快讯 → 不触发回退，registry 聚合器结果透传', async () => {
+    let calls = 0
+    const aggregator: NewsAggregator = async () => {
+      calls++
+      return { items: [item('yahoo', 'Apple beats earnings', '2026-09-02T10:00:00Z')], unavailable: [] }
+    }
+    const bridge = new TradingBridge(newsHost(aggregator))
+    const wire = await bridge.news('us', 'AAPL', '10')
+    expect(calls).toBe(1)
+    expect(wire.ok).toBe(true)
+    expect(wire.fallback).toBe(false)
+    expect(wire.items).toHaveLength(1)
+    expect(wire.items[0]?.source).toBe('yahoo')
+  })
+
+  it('仅剩公告（sec-edgar）→ 触发宏观回退：合并按时间倒序 + 按 limit 截尾', async () => {
+    let calls = 0
+    const aggregator: NewsAggregator = async (options) => {
+      calls++
+      if (options?.symbol !== undefined) {
+        // 24h 内只有官方披露（公告类不算媒体新闻），且是旧于宏观要闻的时间戳
+        return { items: [item('sec-edgar', '8-K filing', '2026-09-01T09:00:00Z')], unavailable: [] }
+      }
+      return {
+        items: [
+          item('yahoo', 'macro newest', '2026-09-02T12:00:00Z'),
+          item('googlenews', 'macro mid', '2026-09-02T08:00:00Z'),
+        ],
+        unavailable: [],
+      }
+    }
+    const bridge = new TradingBridge(newsHost(aggregator))
+    const wire = await bridge.news('us', 'AAPL', '2')
+    expect(calls).toBe(2)
+    expect(wire.fallback).toBe(true)
+    // 倒序重排（12:00 > 09:01 的 8-K > 08:00）+ 截尾到 limit=2 → 旧公告被裁掉
+    expect(wire.items.map(it => it.title)).toEqual(['macro newest', 'macro mid'])
+  })
+
+  it('公告源挂掉 → unavailable 注明，不与「暂无公告」混淆', async () => {
+    const aggregator: NewsAggregator = async () => ({ items: [], unavailable: ['eastmoney-announcement: HTTP 503'] })
+    const bridge = new TradingBridge(newsHost(aggregator))
+    const wire = await bridge.news('us', 'AAPL', null)
+    expect(wire.unavailable).toEqual(['eastmoney-announcement: HTTP 503'])
+    expect(wire.fallback).toBe(false)
+    expect(wire.items).toEqual([])
   })
 })
 

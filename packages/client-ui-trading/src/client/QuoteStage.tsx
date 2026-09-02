@@ -34,12 +34,13 @@ import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
-import { fetchNews, fetchKnowledgeCards } from './api.ts'
+import { fetchNews } from './api.ts'
 import type { ClientNewsItem } from './api.ts'
 import { NewsFeedPane } from './NewsFeedPane.tsx'
 import { MarkerTooltip } from './MarkerTooltip.tsx'
 import type { MarkerHoverInfo } from './TvChart.tsx'
 import { createMarkerStateStore } from './marker-state.ts'
+import { isAnnouncementSource } from './news-source.ts'
 import type { ChartSignalMarkerInput, ChartKnowledgeMarkerInput } from './TvChart.tsx'
 import css from './quote-stage.module.css'
 
@@ -105,6 +106,9 @@ function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
 }
 
 type SendState = 'idle' | 'sending' | 'sent' | 'error'
+
+/** 信号 reason 的币种符号（按市场；crypto 以 USD 计价近似）。 */
+const CURRENCY_SYMBOL: Record<MarketId, string> = { cn: '¥', hk: 'HK$', us: '$', crypto: '$' }
 
 export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator, fillComposer }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
@@ -288,7 +292,10 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setDerivatives(null)
     setOrderbook(null)
     setTrades(null)
+    setNewsItems(null)
+    setNewsUnavailable([])
     setNewsFallback(false)
+    setMarkerHover(null)
   }, [market, symbol])
 
   // ticker 轮询：头部价格 + 尾随合并最后一根 K 线
@@ -306,14 +313,21 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
   // 新闻情报流轮询（issue #37）：处于 news/announcements 或开启事件图钉时 60s 轮询；symbol/market 变化时立即重拉。
   const NEWS_POLL_MS = 60000
+  const newsRequestRef = useRef('')
   usePoll(async () => {
     if ((stageTab !== 'news' && stageTab !== 'announcements' && !markerState.showKnowledgeEvents) || market === undefined || symbol === undefined) return
-    const result = await fetchNews(market, symbol, 50)
-    if (result !== null) {
-      setNewsItems(result.items)
-      setNewsUnavailable(result.unavailable)
-      setNewsFallback(Boolean(result.fallback))
-    }
+    const request = `${market}:${symbol}`
+    newsRequestRef.current = request
+    try {
+      const result = await fetchNews(market, symbol, 50)
+      // 竞态守卫：慢响应回来时已切标的 → 丢弃，旧新闻不得覆盖新标的（对齐 klines poll 的 requestRef 模式）。
+      if (newsRequestRef.current !== request) return
+      if (result !== null) {
+        setNewsItems(result.items)
+        setNewsUnavailable(result.unavailable)
+        setNewsFallback(Boolean(result.fallback))
+      }
+    } catch { /* 下轮重试 */ }
   }, NEWS_POLL_MS, [market, symbol, stageTab, markerState.showKnowledgeEvents])
 
   const stats = useMemo(() => {
@@ -389,6 +403,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   // 策略信号标记数据（issue #41）：在当前 K 线序列上实时计算 EMA(12, 26) 交叉信号（过滤预热期与边缘噪音）。
   const signalMarkers = useMemo<readonly ChartSignalMarkerInput[] | undefined>(() => {
     if (!bars || bars.length < 30) return undefined
+    const cur = CURRENCY_SYMBOL[activeMarket]
     const k12 = 2 / (12 + 1)
     const k26 = 2 / (26 + 1)
     let ema12 = bars[0]?.close ?? 0
@@ -408,14 +423,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             time: bar.time,
             action: 'entry',
             price: bar.close,
-            reason: `EMA(12/26) 金叉买入价 ¥${bar.close.toFixed(2)}`,
+            reason: `EMA(12/26) 金叉买入价 ${cur}${bar.close.toFixed(2)}`,
           })
         } else if (prevDiff >= 0 && diff < 0) {
           signals.push({
             time: bar.time,
             action: 'exit',
             price: bar.close,
-            reason: `EMA(12/26) 死叉卖出价 ¥${bar.close.toFixed(2)}`,
+            reason: `EMA(12/26) 死叉卖出价 ${cur}${bar.close.toFixed(2)}`,
           })
         }
       }
@@ -428,7 +443,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const knowledgeMarkers = useMemo<readonly ChartKnowledgeMarkerInput[] | undefined>(() => {
     if (!newsItems || newsItems.length === 0 || !bars || bars.length === 0) return undefined
     // 仅针对属于该标的的官方公告/交易所公报打图钉，排除泛财经媒体与宏观回退要闻
-    const announcements = newsItems.filter(it => it.source === 'eastmoney-announcement' || it.source.includes('exchange'))
+    const announcements = newsItems.filter(it => isAnnouncementSource(it.source))
     if (announcements.length === 0) return undefined
 
     // 计算当前 K 线的平均周期步长（如日 K=86400s，周 K=604800s，月 K≈2592000s）
@@ -850,11 +865,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 </div>
               </div>
             )}
-            </div>
+            {/* 标记悬停 Tooltip：绝对定位在 chartBox（position:relative）内，
+                坐标系与 TvChart 回报的容器坐标一致 */}
             {markerHover !== null && (
               <MarkerTooltip
                 x={markerHover.x}
                 y={markerHover.y}
+                containerWidth={markerHover.containerWidth}
+                containerHeight={markerHover.containerHeight}
                 signal={markerHover.signal ? {
                   action: markerHover.signal.action,
                   price: markerHover.signal.price,
@@ -868,6 +886,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 } : undefined}
               />
             )}
+            </div>
             {market === 'crypto' && derivatives !== null && (
               <DerivativesPane t={t} derivatives={derivatives} colorMode={colorMode} />
             )}
