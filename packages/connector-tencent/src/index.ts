@@ -25,7 +25,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
-import type { Disposable, Interval, Kline, MarketDataService, StockFundamentals, Ticker } from '@dsh-trading/api'
+import type { Disposable, Interval, Kline, MarketDataService, Orderbook, StockFundamentals, Ticker } from '@dsh-trading/api'
 import {
   INTERVAL_VOCABULARY,
   type TencentMarket,
@@ -105,6 +105,14 @@ export class TencentMarketDataService extends Service implements MarketDataServi
   /** 基本面快照（同一报价行解析，MarketDataService 可选契约 2026-09-02）。 */
   getFundamentals(symbol: string): Promise<StockFundamentals> {
     return this.client.getFundamentals(symbol)
+  }
+
+  /**
+   * 盘口快照（MarketDataService 可选契约，issue #39）：同一报价行五档字段。
+   * hk 实例结构性不支持（r_hk 行档位全 0，getOrderbook 内按 NOT_IMPLEMENTED 拒绝）。
+   */
+  getOrderbook(symbol: string): Promise<Orderbook> {
+    return this.client.getOrderbook(symbol)
   }
 
   getKlines(symbol: string, interval: Interval, limit?: number): Promise<Kline[]> {

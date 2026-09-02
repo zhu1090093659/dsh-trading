@@ -135,6 +135,37 @@ export interface StockFundamentals {
   readonly timestamp: number
 }
 
+/** 盘口档位（价格 + 挂单量，量单位=标的基准单位：股票股、crypto 币）。 */
+export interface OrderbookLevel {
+  readonly price: number
+  readonly amount: number
+}
+
+/**
+ * 盘口快照（GUI「盘口」竖栏用，issue #39）。实现保证：bids 按价格降序（买一在前）、
+ * asks 按价格升序（卖一在前），档位数由数据源决定（沪深五档、crypto 常见 5~20 档）。
+ */
+export interface Orderbook {
+  readonly symbol: string
+  readonly bids: readonly OrderbookLevel[]
+  readonly asks: readonly OrderbookLevel[]
+  /** 快照时间（epoch ms）。 */
+  readonly timestamp: number
+}
+
+/** 逐笔成交（taker 视角：side 为主动方；流水单条）。 */
+export interface TradeTick {
+  /** 交易所成交 id（字符串透传，排序稳定性由时间戳保证）。 */
+  readonly id: string
+  readonly symbol: string
+  readonly price: number
+  /** 成交量（基准单位，同 OrderbookLevel.amount）。 */
+  readonly amount: number
+  /** 主动方向：buy=主动买（外盘）、sell=主动卖（内盘）；数据源缺方向时 unknown。 */
+  readonly side: 'buy' | 'sell' | 'unknown'
+  readonly timestamp: number
+}
+
 export type PositionSide = 'long' | 'short'
 
 /** 持仓快照。 */
@@ -227,6 +258,18 @@ export interface MarketDataService {
    * 入参接受规范形与连接器原生形，输出 `symbol` 一律规范词汇 SWAP 形（BTCUSDT-SWAP）。
    */
   getDerivatives?(symbol: string): Promise<DerivativesData>
+  /**
+   * 盘口快照（GUI「盘口」竖栏用，issue #39）：档位词汇见 Orderbook。可选方法：
+   * 数据源无盘口能力时不实现（如 stooq/yahoo、腾讯 r_hk 港股行档位全 0）。
+   * 入参接受规范形与连接器原生形，输出 `symbol` 一律市场规范词汇。
+   */
+  getOrderbook?(symbol: string): Promise<Orderbook>
+  /**
+   * 最近逐笔成交流水（GUI「分笔」用，issue #39）：取最近 limit 笔（缺省 ≤50），
+   * **时间升序（旧→新）**，与 K 线序列同向；方向缺省的数据源 side='unknown'。
+   * 可选方法：无公共逐笔端点的数据源（腾讯沪深行情行）不实现。
+   */
+  getRecentTrades?(symbol: string, limit?: number): Promise<TradeTick[]>
 }
 
 /**

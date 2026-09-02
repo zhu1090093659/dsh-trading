@@ -361,3 +361,33 @@ describe('TencentRestClient.getKlines', () => {
     await expect(client('cn', { fetchImpl: impl }).getKlines('600519', '1d')).rejects.toMatchObject({ code: 'TRADING_UNSUPPORTED_SYMBOL' })
   })
 })
+
+describe('TencentRestClient.getOrderbook（issue #39 盘口）', () => {
+  it('cn 五档：同一报价行解析，手→股换算，bids 降序 / asks 升序', async () => {
+    const { impl, urls } = stubFetch([{ match: 'qt.gtimg.cn', body: gbkResponse(CN_TICKER_TEMPLATE, CN_NAME_GBK) }])
+    const orderbook = await client('cn', { fetchImpl: impl }).getOrderbook('600519')
+    // 与 getTicker 同一请求（零额外端点），规范形 symbol 输出。
+    expect(urls).toHaveLength(1)
+    expect(orderbook.symbol).toBe('600519.SH')
+    expect(orderbook.bids).toEqual([
+      { price: 1297.35, amount: 500 },
+      { price: 1297.2, amount: 100 },
+      { price: 1297.1, amount: 300 },
+      { price: 1297.01, amount: 300 },
+      { price: 1297, amount: 1100 },
+    ])
+    expect(orderbook.asks).toEqual([
+      { price: 1297.4, amount: 900 },
+      { price: 1297.5, amount: 1100 },
+      { price: 1297.55, amount: 200 },
+      { price: 1297.68, amount: 100 },
+      { price: 1297.7, amount: 100 },
+    ])
+  })
+
+  it('hk → TRADING_NOT_IMPLEMENTED（r_hk 行档位全 0，结构性不支持）', async () => {
+    const { impl } = stubFetch([{ match: 'qt.gtimg.cn', body: gbkResponse(HK_TICKER_TEMPLATE, HK_NAME_GBK) }])
+    await expect(client('hk', { fetchImpl: impl }).getOrderbook('00700'))
+      .rejects.toMatchObject({ code: 'TRADING_NOT_IMPLEMENTED' })
+  })
+})

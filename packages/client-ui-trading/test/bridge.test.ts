@@ -185,6 +185,41 @@ describe('TradingBridge.derivatives（issue #38 衍生品面板）', () => {
   })
 })
 
+describe('TradingBridge.orderbook + trades（issue #39 盘口竖栏）', () => {
+  it('/orderbook 透传；/trades 透传 limit', async () => {
+    const service = fakeService({
+      getOrderbook: async (symbol: string) => ({
+        symbol, timestamp: 1234,
+        bids: [{ price: 99, amount: 5 }, { price: 98, amount: 10 }],
+        asks: [{ price: 100, amount: 8 }, { price: 101, amount: 2 }],
+      }),
+      getRecentTrades: async (symbol: string, limit?: number) => ([
+        { id: '1', symbol, price: 99, amount: 1, side: 'sell' as const, timestamp: 100 },
+        { id: '2', symbol, price: 100, amount: 2, side: 'buy' as const, timestamp: 1234, ...(limit !== undefined ? {} : {}) },
+      ]),
+    })
+    const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: service }))
+    const { payload: book } = await dispatchBridgeRequest(bridge, 'GET', '/orderbook', new URLSearchParams({ market: 'crypto', symbol: 'BTCUSDT' }))
+    expect(book).toMatchObject({ ok: true, orderbook: { symbol: 'BTCUSDT', bids: [{ price: 99, amount: 5 }, { price: 98, amount: 10 }] } })
+    const { payload: trades } = await dispatchBridgeRequest(bridge, 'GET', '/trades', new URLSearchParams({ market: 'crypto', symbol: 'BTCUSDT', limit: '50' }))
+    expect(trades).toMatchObject({ ok: true, trades: [{ id: '1' }, { id: '2' }] })
+  })
+
+  it('未实现 getOrderbook → TRADING_NOT_IMPLEMENTED；缺 symbol 400', async () => {
+    const bridge = new TradingBridge(fakeHost({ tradingUsMarketData: fakeService() }))
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/orderbook', new URLSearchParams({ market: 'us', symbol: 'AAPL' })))
+      .rejects.toMatchObject({ code: 'TRADING_NOT_IMPLEMENTED' })
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/trades', new URLSearchParams({ market: 'us', symbol: '' })))
+      .rejects.toBeInstanceOf(BridgeProtocolError)
+  })
+
+  it('/trades 非法 limit → 400', async () => {
+    const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: fakeService() }))
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/trades', new URLSearchParams({ market: 'crypto', symbol: 'BTCUSDT', limit: '0' })))
+      .rejects.toBeInstanceOf(BridgeProtocolError)
+  })
+})
+
 describe('dispatchBridgeRequest', () => {
   const bridge = new TradingBridge(fakeHost({
     tradingCryptoMarketData: fakeService({

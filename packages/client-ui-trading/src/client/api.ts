@@ -3,13 +3,10 @@
  * half registers the route behind the browser-auth fence; same-origin fetch
  * carries the auth cookie by default).
  */
-import type { Kline, MarketId, MarketInfo, StockFundamentals, TickerOutcome } from './types.ts'
+import type { DerivativesData, Kline, MarketId, MarketInfo, Orderbook, StockFundamentals, TickerOutcome, TradeTick } from './types.ts'
 import type { CustomIndicatorRecord } from '@dsh-trading/indicators'
 import type { KnowledgeCard } from '@dsh-trading/knowledge'
 import type { CustomStrategyRecord } from '@dsh-trading/strategies'
-
-/** 衍生品指标快照（issue #38）：node 半桥透传 @dsh-trading/api 的 DerivativesData。 */
-export type { DerivativesData } from './types.ts'
 
 export class BridgeError extends Error {
   constructor(readonly status: number, message: string) {
@@ -74,6 +71,34 @@ export async function fetchDerivatives(market: MarketId, symbol: string): Promis
     const query = new URLSearchParams({ market, symbol })
     const wire = await getJson<{ ok: boolean; derivatives: DerivativesData }>(`/dshtrading/api/derivatives?${query.toString()}`)
     return wire.derivatives ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 盘口快照（issue #39）。连接器未实现 getOrderbook（yahoo/stooq/腾讯 r_hk）或
+ * 取数失败 → null：竖栏降级为「未提供盘口」提示，不报错横幅。
+ */
+export async function fetchOrderbook(market: MarketId, symbol: string): Promise<Orderbook | null> {
+  try {
+    const query = new URLSearchParams({ market, symbol })
+    const wire = await getJson<{ ok: boolean; orderbook: Orderbook }>(`/dshtrading/api/orderbook?${query.toString()}`)
+    return wire.orderbook ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 最近逐笔成交（issue #39，时间升序）。连接器未实现 getRecentTrades 或失败 → null：
+ * 流水段隐藏；成功但空数组 → []（展示空态由调用方判断 length）。
+ */
+export async function fetchRecentTrades(market: MarketId, symbol: string, limit = 50): Promise<TradeTick[] | null> {
+  try {
+    const query = new URLSearchParams({ market, symbol, limit: String(limit) })
+    const wire = await getJson<{ ok: boolean; trades: TradeTick[] }>(`/dshtrading/api/trades?${query.toString()}`)
+    return Array.isArray(wire.trades) ? wire.trades : []
   } catch {
     return null
   }

@@ -5,13 +5,14 @@
  * 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { fetchKlines, fetchTickers, fetchFundamentals, fetchDerivatives } from './api.ts'
+import { fetchKlines, fetchTickers, fetchFundamentals, fetchDerivatives, fetchOrderbook, fetchRecentTrades } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
 import type { SendImageInput } from './fill-composer.ts'
 import { FundamentalsPane, deriveFiftyTwoWeek } from './FundamentalsPane.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
+import { OrderbookPane } from './OrderbookPane.tsx'
 import { computeRangeStats } from './range-stats.ts'
 import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
@@ -24,7 +25,7 @@ import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indica
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
-import type { DerivativesData, StockFundamentals } from './types.ts'
+import type { DerivativesData, Orderbook, StockFundamentals, TradeTick } from './types.ts'
 import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
@@ -32,11 +33,15 @@ import { usePoll } from './usePoll.ts'
 import css from './quote-stage.module.css'
 
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
+const ORDERBOOK_OPEN_KEY = 'dshtrading.orderbook.open'
 const TICKER_POLL_MS = 5000
 const KLINE_RESYNC_MS = 30000
 // 衍生品指标快照轮询（issue #38）：一次刷新 = 2~5 个上游公共端点调用，取 30s
 // 对齐 K 线 resync 节奏，避免放大限频消耗（funding 8h 才变，OI 30s 粒度够看）。
 const DERIVATIVES_POLL_MS = 30000
+// 盘口/分笔轮询（issue #39）：竖栏打开才拉；一次刷新 = depth + trades 两请求，
+// 4s 在「盯盘时效」与公共端点限频之间取衡。
+const ORDERBOOK_POLL_MS = 4000
 // 盘中周期 K 线根数按市场区分：crypto 取 300——OKX 单请求上限 300，图表每 30s
 // resync 一次，不触发游标翻页、不放大限频消耗；其余市场取 500。日 K 深度需求由
 // 1d 分支单独走 DAILY_LIMIT。
@@ -119,6 +124,11 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [fundamentalsLoading, setFundamentalsLoading] = useState(false)
   /** 衍生品指标快照（issue #38，crypto 专属；null = 未实现/失败 → 面板整体隐藏）。 */
   const [derivatives, setDerivatives] = useState<DerivativesData | null>(null)
+  /** 盘口竖栏（issue #39）：开关跨标的/会话记忆；数据 null = 数据源未提供（降级提示）。 */
+  const [orderbookOpen, setOrderbookOpen] = useState<boolean>(() => readOrderbookOpen())
+  const [orderbook, setOrderbook] = useState<Orderbook | null>(null)
+  const [orderbookLoading, setOrderbookLoading] = useState(false)
+  const [trades, setTrades] = useState<TradeTick[] | null>(null)
   /** 区间统计：框选模式开 + 已选逻辑下标区间（TvChart 上报，面板消费）。 */
   const [rangeMode, setRangeMode] = useState(false)
   const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
@@ -209,6 +219,22 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setDerivatives(data)
   }, DERIVATIVES_POLL_MS, [market, symbol])
 
+  // 盘口/分笔轮询（issue #39）：竖栏打开 + 图表页签时才拉，省上游配额。
+  usePoll(async () => {
+    if (!orderbookOpen || stageTab !== 'chart' || market === undefined || symbol === undefined) return
+    setOrderbookLoading(true)
+    try {
+      const [book, recentTrades] = await Promise.all([
+        fetchOrderbook(market, symbol),
+        fetchRecentTrades(market, symbol, 50),
+      ])
+      setOrderbook(book)
+      setTrades(recentTrades)
+    } finally {
+      setOrderbookLoading(false)
+    }
+  }, ORDERBOOK_POLL_MS, [orderbookOpen, stageTab, market, symbol])
+
   // 换标的：立即清场
   useEffect(() => {
     setKlines(null)
@@ -218,6 +244,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setKError(null)
     setFundamentals(null)
     setDerivatives(null)
+    setOrderbook(null)
+    setTrades(null)
   }, [market, symbol])
 
   // ticker 轮询：头部价格 + 尾随合并最后一根 K 线
@@ -456,6 +484,21 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                     : t('quote.sendToAgent')}
             </button>
           )}
+          {/* 盘口竖栏开关（issue #39；紧挨区间统计左侧） */}
+          <button
+            type="button"
+            className={css.pickerButton}
+            data-active={orderbookOpen ? 'true' : undefined}
+            aria-pressed={orderbookOpen}
+            onClick={() => {
+              setOrderbookOpen((open) => {
+                writeOrderbookOpen(!open)
+                return !open
+              })
+            }}
+          >
+            {t('orderbook.toggle')}
+          </button>
           {/* 区间统计（同花顺式框选统计；紧挨「技术指标」按钮左侧） */}
           <button
             type="button"
@@ -519,10 +562,12 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
       {stageTab === 'chart' && kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
 
-      {/* 图表主舞台 / 基本面页签（互斥挂载）；crypto 图表下方挂衍生品指标条（issue #38） */}
+      {/* 图表主舞台 / 基本面页签（互斥挂载）；crypto 图表下方挂衍生品指标条（issue #38），
+          右侧可折叠盘口竖栏（issue #39） */}
       {stageTab === 'chart' ? (
-        <>
-          <div className={css.chartBox}>
+        <div className={css.chartRow}>
+          <div className={css.chartColumn}>
+            <div className={css.chartBox}>
             {klines !== null && bars.length > 0 && (
               <TvChart
                 bars={bars}
@@ -598,11 +643,25 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 </div>
               </div>
             )}
+            </div>
+            {market === 'crypto' && derivatives !== null && (
+              <DerivativesPane t={t} derivatives={derivatives} colorMode={colorMode} />
+            )}
           </div>
-          {market === 'crypto' && derivatives !== null && (
-            <DerivativesPane t={t} derivatives={derivatives} colorMode={colorMode} />
+          {orderbookOpen && (
+            <OrderbookPane
+              t={t}
+              orderbook={orderbook}
+              trades={trades}
+              orderbookLoading={orderbookLoading}
+              colorMode={colorMode}
+              onClose={() => {
+                setOrderbookOpen(false)
+                writeOrderbookOpen(false)
+              }}
+            />
           )}
-        </>
+        </div>
       ) : (
         <FundamentalsPane
           t={t}
@@ -879,6 +938,20 @@ function readInterval(market: MarketId): string {
 function writeInterval(market: MarketId, interval: string): void {
   try {
     localStorage.setItem(INTERVAL_KEY_PREFIX + market, interval)
+  } catch { /* 忽略 */ }
+}
+
+/** 盘口竖栏开关记忆（issue #39；跨会话，坏值/隐私模式回退默认开）。 */
+function readOrderbookOpen(): boolean {
+  try {
+    return localStorage.getItem(ORDERBOOK_OPEN_KEY) !== '0'
+  } catch { /* 忽略 */ }
+  return true
+}
+
+function writeOrderbookOpen(open: boolean): void {
+  try {
+    localStorage.setItem(ORDERBOOK_OPEN_KEY, open ? '1' : '0')
   } catch { /* 忽略 */ }
 }
 
