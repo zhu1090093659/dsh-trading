@@ -50,6 +50,14 @@ longbridge 24、kit-cn 26、knowledge 26、strategies 42、settings.client 33。
 
 ## Gotchas
 
+- **CI 既有红会掩蔽新门禁的信号**：本 PR 首次 CI 红在 `pnpm -r test`，精准
+  归因后发现是 main 既有问题（最近三次 push #39/#40/#46 全红于同一处）：
+  `client-ui-knowledge` 自创建起无 `test/` 目录（vitest.config.ts 为预留），
+  test 脚本裸 `vitest run` 在 `pnpm -r test` 下以 "No test files found"
+  退出 1；本地因 root `pnpm test` 带 `--passWithNoTests` 而全绿。同 PR 补
+  一行 `--passWithNoTests`（对齐 root 惯例）恢复 CI 红绿信号可用性。教训：
+  「本地全绿」依赖入口脚本口径，`pnpm -r test` 与 `pnpm test` 语义不同；
+  门禁类 PR 合并前必须让 CI 真绿，否则新门禁无法自证。
 - **tsc 5.9 退出码带诊断是 2 不是 1**：脚本首版按「exit 1 = 有诊断」判定，
   并发池下 40/53 配置被误判基础设施异常。实证 `node tsc --noEmit` 带错退出
   2、干净退出 0 后修正判定（有诊断数且 ∈ {1,2}）。任何「exit code 语义」
@@ -71,3 +79,4 @@ longbridge 24、kit-cn 26、knowledge 26、strategies 42、settings.client 33。
 - `--update` 在探针存在时拒绝写入（exit 1，要求 --force）。
 - `pnpm build && pnpm test` 全绿（101 文件 711 测试 passed；jsx 回归在验证中
   暴露并已修）。
+- PR #49 CI：node 22/24 双矩阵 pass（build → typecheck gate → test 全链）。
