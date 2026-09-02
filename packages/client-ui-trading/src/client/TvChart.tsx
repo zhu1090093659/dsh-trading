@@ -603,8 +603,11 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     const chart = chartRef.current
     if (chart === null) return
     const box = event.currentTarget.getBoundingClientRect()
-    const fromLogical = chart.timeScale().coordinateToLogical(startX)
-    const toLogical = chart.timeScale().coordinateToLogical(event.clientX - box.left)
+    // 容器坐标 → pane 坐标：时间刻度换算以 pane 左缘为原点，容器含左价格轴，
+    // 不减去轴宽会整体右移选区（提交端被 lastIndex 钳位掩盖）。
+    const paneOffset = chart.priceScale('left').width()
+    const fromLogical = chart.timeScale().coordinateToLogical(startX - paneOffset)
+    const toLogical = chart.timeScale().coordinateToLogical(event.clientX - box.left - paneOffset)
     if (fromLogical === null || toLogical === null) {
       propsRef.current.onRangeSelect?.(null)
       return
@@ -629,18 +632,21 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
   }
 
   // 高亮矩形：拖拽中用像素坐标；已提交选区由逻辑下标反查坐标（布局变化经
-  // paneTops 测量 effect 的 ResizeObserver 触发重渲染重算）。
+  // paneTops 测量 effect 的 ResizeObserver 触发重渲染重算）。logicalToCoordinate
+  // 返回 pane 内坐标，绘制在容器上需加回左价格轴宽度（与 pointerup 换算互逆）。
   const selectionRect = ((): { left: number; width: number } | null => {
     if (dragRect !== null) {
       return { left: Math.min(dragRect.x1, dragRect.x2), width: Math.abs(dragRect.x2 - dragRect.x1) }
     }
     if (props.rangeSelectionMode === true && props.selection != null) {
-      const timeScale = chartRef.current?.timeScale()
-      if (timeScale === undefined) return null
+      const chart = chartRef.current
+      if (chart === null) return null
+      const timeScale = chart.timeScale()
+      const paneOffset = chart.priceScale('left').width()
       const x1 = timeScale.logicalToCoordinate(props.selection.start as Logical)
       const x2 = timeScale.logicalToCoordinate(props.selection.end as Logical)
       if (x1 === null || x2 === null) return null
-      return { left: Math.min(Number(x1), Number(x2)), width: Math.abs(Number(x2) - Number(x1)) }
+      return { left: Math.min(Number(x1), Number(x2)) + paneOffset, width: Math.abs(Number(x2) - Number(x1)) }
     }
     return null
   })()
