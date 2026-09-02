@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "tsdown": "^0.22.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "@dsh-trading/api": "workspace:*"
   }
 }

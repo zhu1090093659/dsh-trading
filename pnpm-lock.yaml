@@ -257,6 +257,9 @@ importers:
         specifier: ^5.2.1
         version: 5.2.1
     devDependencies:
+      '@deepseek-ai/dsh-client-ui-tool':
+        specifier: 0.1.2-alpha.3
+        version: 0.1.2-alpha.3(@deepseek-ai/cordis@4.0.2)
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.1
@@ -360,6 +363,9 @@ importers:
         specifier: ^5.2.1
         version: 5.2.1
     devDependencies:
+      '@deepseek-ai/dsh-client-ui-tool':
+        specifier: 0.1.2-alpha.3
+        version: 0.1.2-alpha.3(@deepseek-ai/cordis@4.0.2)
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31
@@ -987,6 +993,9 @@ importers:
         specifier: workspace:*
         version: link:../knowledge
     devDependencies:
+      '@dsh-trading/api':
+        specifier: workspace:*
+        version: link:../api
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -1015,6 +1024,9 @@ importers:
         specifier: workspace:*
         version: link:../knowledge
     devDependencies:
+      '@dsh-trading/api':
+        specifier: workspace:*
+        version: link:../api
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -1043,6 +1055,9 @@ importers:
         specifier: workspace:*
         version: link:../knowledge
     devDependencies:
+      '@dsh-trading/api':
+        specifier: workspace:*
+        version: link:../api
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -1071,6 +1086,9 @@ importers:
         specifier: workspace:*
         version: link:../knowledge
     devDependencies:
+      '@dsh-trading/api':
+        specifier: workspace:*
+        version: link:../api
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -1140,6 +1158,9 @@ importers:
         specifier: workspace:*
         version: link:../indicators
     devDependencies:
+      '@dsh-trading/api':
+        specifier: workspace:*
+        version: link:../api
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -1501,6 +1522,11 @@ packages:
 
   '@deepseek-ai/dsh-client-ui-slots@0.1.2-alpha.2':
     resolution: {integrity: sha512-6ihXjJcgQLExj28SkKuPK0Rr7xfOvHhOiAIeO+uD5yywxtz7mSAW4S9JuxAOrpk2I2gNNU0DnFU4MmB229tjww==}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.2
+
+  '@deepseek-ai/dsh-client-ui-tool@0.1.2-alpha.3':
+    resolution: {integrity: sha512-8/eXRX108xjf8Ws/La4LMZYnxQTmd6b0vDRsix5yuSop+fEfMOElu3ICbp+y3wFp8KzSL1eXU1M0QRFyavsZZg==}
     peerDependencies:
       '@deepseek-ai/cordis': ^4.0.2
 
@@ -4052,6 +4078,11 @@ snapshots:
   '@deepseek-ai/dsh-client-ui-slots@0.1.2-alpha.2(@deepseek-ai/cordis@4.0.2)':
     dependencies:
       '@deepseek-ai/cordis': 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
+
+  '@deepseek-ai/dsh-client-ui-tool@0.1.2-alpha.3(@deepseek-ai/cordis@4.0.2)':
+    dependencies:
+      '@deepseek-ai/cordis': 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
+      clsx: 2.1.1
 
   '@deepseek-ai/dsh-client-ui-workspace@0.1.2-alpha.2(@deepseek-ai/cordis@4.0.2)':
     dependencies:

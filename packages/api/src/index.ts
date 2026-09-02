@@ -8,6 +8,9 @@
  * @module @dsh-trading/api
  */
 
+// cordis Context augmentation 的解析锚点：无此 type-only import，TS2664 下 augmentation 整体失效。
+import type {} from '@deepseek-ai/cordis'
+
 /** K线周期（Binance 现货/合约 interval 词汇）。 */
 export type Interval =
   | '1m'

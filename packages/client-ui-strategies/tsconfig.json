@@ -3,9 +3,12 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib/types",
+    // include 只收 server 入口（client 专职 tsconfig.client.json），但 vitest/esbuild
+    // 转译 test/*.tsx 按就近 tsconfig 读 jsx，与 include 无关——删掉会让测试炸
+    // "React is not defined"。
     "jsx": "react-jsx"
   },
   "include": [
-    "src"
+    "src/index.ts"
   ]
 }
