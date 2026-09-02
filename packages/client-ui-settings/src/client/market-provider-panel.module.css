@@ -150,7 +150,7 @@
 .discardBtn {
   appearance: none;
   border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
-  background: #ffffff;
+  background: var(--dsw-alias-bg-l1, #ffffff);
   color: var(--dsw-alias-text-primary, #1a1e24);
   padding: 0 14px;
   height: 32px;
@@ -199,7 +199,7 @@
   border: 1px solid var(--dsw-alias-border-l2, #e3e6ea);
   border-radius: 6px;
   font-size: 12.5px;
-  background: #ffffff;
+  background: var(--dsw-alias-bg-l1, #ffffff);
   color: var(--dsw-alias-text-primary, #1a1e24);
 }
 

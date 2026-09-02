@@ -108,9 +108,9 @@ export function MarketSidebar({
 
   const rowsKey = rows.map(row => rowKey(row.market, row.symbol)).join('|')
 
-  // 联想候选：自选页签跨市场全局搜索（候选自带市场）；市场页签只搜本市场字典。
+  // 联想候选：自选页签跨市场全局搜索（候选自带市场）；市场页签只搜本市场字典（显式注入当前市场）。
   const suggestions = useMemo(
-    () => (tab === 'watch' ? searchAllMarkets(draft) : searchSymbols(tab, draft)),
+    () => (tab === 'watch' ? searchAllMarkets(draft) : searchSymbols(tab, draft).map(entry => ({ ...entry, market: tab }))),
     [tab, draft, catalogVersion],
   )
 
@@ -219,9 +219,22 @@ export function MarketSidebar({
         return (
           <form className={css.addRow} onSubmit={(event) => {
             event.preventDefault()
-            const symbol = draft.trim()
-            if (symbol === '') return
-            addInstrument(target, { market: target, symbol })
+            const raw = draft.trim().toUpperCase()
+            if (raw === '') return
+            const match = suggestions.find(s => s.symbol.toUpperCase() === raw || s.symbol.toUpperCase().startsWith(raw))
+            const symbol = match ? match.symbol : (
+              target === 'cn' && /^\d{6}$/.test(raw)
+                ? `${raw}.${raw.startsWith('6') || raw.startsWith('9') ? 'SH' : 'SZ'}`
+                : (target === 'hk' && /^\d{1,5}$/.test(raw) ? `${raw.padStart(5, '0')}.HK` : raw)
+            )
+            const name = match?.name
+            const market = match?.market ?? target
+            const item: Instrument = { market, symbol, ...(name ? { name } : {}) }
+            addInstrument(market, item)
+            selectInstrument(item)
+            if (tab !== 'watch' && tab !== market) {
+              setTab(market)
+            }
             setDraft('')
           }}>
             {tab === 'watch' && (
@@ -254,8 +267,14 @@ export function MarketSidebar({
                     role="option"
                     aria-selected="true"
                     className={css.suggestion}
+                    onMouseDown={(e) => { e.preventDefault() }}
                     onClick={() => {
-                      addInstrument(entry.market, { market: entry.market, symbol: entry.symbol, name: entry.name })
+                      const item: Instrument = { market: entry.market, symbol: entry.symbol, name: entry.name }
+                      addInstrument(entry.market, item)
+                      selectInstrument(item)
+                      if (tab !== 'watch' && tab !== entry.market) {
+                        setTab(entry.market)
+                      }
                       setDraft('')
                     }}
                   >
@@ -308,7 +327,7 @@ export function MarketSidebar({
                     onClick={() => { selectInstrument(row) }}
                   >
                     <span className={css.idents}>
-                      <span className={css.name}>{row.name ?? row.symbol}</span>
+                      <span className={css.name}>{row.name ?? (ticker as { name?: string })?.name ?? row.symbol}</span>
                       <span className={css.codeRow}>
                         <span className={css.code}>{row.symbol}</span>
                         {tab === 'watch' && <span className={css.marketTag}>{t(TAB_KEY[row.market])}</span>}

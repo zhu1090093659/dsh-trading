@@ -115,14 +115,14 @@
 
 .addInput:focus {
   outline: none;
-  background: #ffffff;
+  background: var(--dsw-futu-bg-base, #ffffff);
   border-color: var(--dsw-futu-border-active, #3b82f6);
 }
 
 .addButton {
   appearance: none;
   border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
-  background: #ffffff;
+  background: var(--dsw-futu-bg-surface, #ffffff);
   color: var(--dsw-futu-text-primary, #1a1e24);
   border-radius: var(--dsw-futu-radius-md, 6px);
   padding: 0 8px;
@@ -172,7 +172,7 @@
   overflow-y: auto;
   border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
   border-radius: var(--dsw-futu-radius-md, 6px);
-  background: #ffffff;
+  background: var(--dsw-futu-bg-surface, #ffffff);
   box-shadow: var(--dsw-futu-shadow-md, 0 4px 14px rgba(0, 0, 0, 0.08));
 }
 
@@ -387,7 +387,7 @@
 .error button {
   appearance: none;
   border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
-  background: #ffffff;
+  background: var(--dsw-futu-bg-surface, #ffffff);
   color: var(--dsw-futu-text-primary, #1a1e24);
   border-radius: var(--dsw-futu-radius-md, 6px);
   padding: 3px 10px;

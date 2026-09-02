@@ -94,52 +94,116 @@ function localTime(ms: number): string {
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
 }
 
-const CHART_BASE = {
-  autoSize: true,
-  layout: {
-    background: { type: ColorType.Solid, color: '#ffffff' },
-    textColor: '#5f6672',
-    fontSize: 10.5,
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, sans-serif',
-    panes: {
-      separatorColor: '#e3e6ea',
-      separatorHoverColor: '#c8cdd4',
-      enableResize: true,
+export function isDarkTheme(): boolean {
+  if (typeof document === 'undefined') return false
+  return document.body.hasAttribute('data-ds-dark-theme')
+    || document.documentElement.getAttribute('data-theme') === 'dark'
+    || document.body.getAttribute('data-theme') === 'dark'
+}
+
+export function getChartThemeOptions(dark: boolean) {
+  if (dark) {
+    return {
+      autoSize: true,
+      layout: {
+        background: { type: ColorType.Solid, color: '#131722' },
+        textColor: '#787b86',
+        fontSize: 10.5,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, sans-serif',
+        panes: {
+          separatorColor: '#2a2e39',
+          separatorHoverColor: '#363a45',
+          enableResize: true,
+        },
+      },
+      grid: {
+        vertLines: { color: '#1e222d' },
+        horzLines: { color: '#1e222d' },
+      },
+      rightPriceScale: {
+        borderColor: '#2a2e39',
+        scaleMargins: { top: 0.08, bottom: 0.08 },
+        entireTextOnly: true,
+      },
+      timeScale: {
+        borderColor: '#2a2e39',
+        rightOffset: 6,
+        barSpacing: 9,
+        minBarSpacing: 0.5,
+        fixLeftEdge: true,
+        fixRightEdge: true,
+        shiftVisibleRangeOnNewBar: true,
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: '#787b86',
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: '#2a2e39',
+        },
+        horzLine: {
+          color: '#787b86',
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: '#2a2e39',
+        },
+      },
+    } as const
+  }
+  return {
+    autoSize: true,
+    layout: {
+      background: { type: ColorType.Solid, color: '#ffffff' },
+      textColor: '#5f6672',
+      fontSize: 10.5,
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, sans-serif',
+      panes: {
+        separatorColor: '#e3e6ea',
+        separatorHoverColor: '#c8cdd4',
+        enableResize: true,
+      },
     },
-  },
-  grid: {
-    vertLines: { color: '#f5f6f8' },
-    horzLines: { color: '#f0f2f5' },
-  },
-  rightPriceScale: {
-    borderColor: '#e5e7eb',
-    scaleMargins: { top: 0.08, bottom: 0.08 },
-    entireTextOnly: true,
-  },
-  timeScale: {
-    borderColor: '#e5e7eb',
-    rightOffset: 6,
-  },
-  crosshair: {
-    mode: CrosshairMode.Normal,
-    vertLine: {
-      color: '#8e95a3',
-      width: 1,
-      style: LineStyle.Dashed,
-      labelBackgroundColor: '#1a1e24',
+    grid: {
+      vertLines: { color: '#f5f6f8' },
+      horzLines: { color: '#f0f2f5' },
     },
-    horzLine: {
-      color: '#8e95a3',
-      width: 1,
-      style: LineStyle.Dashed,
-      labelBackgroundColor: '#1a1e24',
+    rightPriceScale: {
+      borderColor: '#e5e7eb',
+      scaleMargins: { top: 0.08, bottom: 0.08 },
+      entireTextOnly: true,
     },
-  },
-} as const
+    timeScale: {
+      borderColor: '#e5e7eb',
+      rightOffset: 6,
+      barSpacing: 9,
+      minBarSpacing: 0.5,
+      fixLeftEdge: true,
+      fixRightEdge: true,
+      shiftVisibleRangeOnNewBar: true,
+    },
+    crosshair: {
+      mode: CrosshairMode.Normal,
+      vertLine: {
+        color: '#8e95a3',
+        width: 1,
+        style: LineStyle.Dashed,
+        labelBackgroundColor: '#1a1e24',
+      },
+      horzLine: {
+        color: '#8e95a3',
+        width: 1,
+        style: LineStyle.Dashed,
+        labelBackgroundColor: '#1a1e24',
+      },
+    },
+  } as const
+}
 
 export function TvChart(props: TvChartProps): React.JSX.Element {
   const { bars, volumes, dataKey, intraday, mainOverlays, subIndicators, readoutIndex, onHoverIndex } = props
 
+  const [dark, setDark] = useState<boolean>(() => isDarkTheme())
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -153,12 +217,31 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
   const propsRef = useRef(props)
   propsRef.current = props
 
+  // 监听宿主主题切换（body 属性与 media query）
+  useEffect(() => {
+    const updateTheme = (): void => {
+      setDark(isDarkTheme())
+    }
+    const mo = new MutationObserver(updateTheme)
+    if (typeof document !== 'undefined') {
+      mo.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'data-theme'] })
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] })
+    }
+    const mql = typeof matchMedia !== 'undefined' ? matchMedia('(prefers-color-scheme: dark)') : undefined
+    mql?.addEventListener('change', updateTheme)
+    return () => {
+      mo.disconnect()
+      mql?.removeEventListener('change', updateTheme)
+    }
+  }, [])
+
   // ---- 图表生命周期（仅挂载/卸载各一次） ----
   useEffect(() => {
     const container = containerRef.current
     if (container === null) return
+    const initialTheme = getChartThemeOptions(isDarkTheme())
     const chart = createChart(container, {
-      ...CHART_BASE,
+      ...initialTheme,
       localization: {
         timeFormatter: (time: Time): string => {
           const ms = Number(time) * 1000
@@ -166,7 +249,7 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
         },
       },
       timeScale: {
-        ...CHART_BASE.timeScale,
+        ...initialTheme.timeScale,
         tickMarkFormatter: (time: Time): string => fmtAxis(Number(time) * 1000, propsRef.current.intraday),
       },
     })
@@ -216,6 +299,14 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     }
   }, [])
 
+  // 主题热切换（浅色 ↔ 深色动态 applyOptions）
+  useEffect(() => {
+    const chart = chartRef.current
+    if (chart === null) return
+    const themeOpts = getChartThemeOptions(dark)
+    chart.applyOptions(themeOpts)
+  }, [dark])
+
   // 涨跌配色热切换（红涨绿跌 ↔ 绿涨红跌）
   useEffect(() => {
     const palette = getColorPalette(props.colorMode)
@@ -254,7 +345,8 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     if (prev === null || prev.key !== dataKey || bars.length < prev.bars.length || firstTimeDiffers(prev.bars, bars)) {
       candles.setData(bars as TvBar[])
       volume.setData(volumes as TvVolume[])
-      chart.timeScale().fitContent()
+      chart.timeScale().resetTimeScale()
+      chart.timeScale().scrollToRealTime()
       return
     }
     for (let index = Math.max(prev.bars.length - 1, 0); index < bars.length; index++) {
@@ -319,7 +411,7 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     <div className="dshtrading-tv-chart" ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       {/* pane 1 legend：成交量读数（值按富途式蓝色着色） */}
       {paneTops[1] !== undefined && volumeReadout !== undefined && (
-        <div style={{ position: 'absolute', left: 8, top: paneTops[1] + 4, zIndex: 2, pointerEvents: 'none', fontSize: 10.5, fontFamily: monoFont, color: '#5f6672', fontWeight: 600 }}>
+        <div style={{ position: 'absolute', left: 8, top: paneTops[1] + 4, zIndex: 2, pointerEvents: 'none', fontSize: 10.5, fontFamily: monoFont, color: 'var(--dsw-futu-text-secondary, #5f6672)', fontWeight: 600 }}>
           VOL: <span style={{ color: '#2563eb' }}>{fmtCompact(volumeReadout.value)}</span>
         </div>
       )}
@@ -329,7 +421,7 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
         if (top === undefined || readoutIndex === null) return null
         return (
           <div key={group.key} style={{ position: 'absolute', left: 8, top: top + 4, zIndex: 2, pointerEvents: 'none', fontSize: 10.5, fontFamily: monoFont, display: 'flex', gap: 8 }}>
-            <span style={{ color: '#5f6672', fontWeight: 600 }}>{group.title}</span>
+            <span style={{ color: 'var(--dsw-futu-text-secondary, #5f6672)', fontWeight: 600 }}>{group.title}</span>
             {group.outputs.map((output) => {
               const value = output.values[readoutIndex]
               if (value === undefined || !Number.isFinite(value)) return null

@@ -54,6 +54,45 @@
   --dsw-futu-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* 深色模式 Token：支持宿主标记 body[data-ds-dark-theme] 及 [data-theme='dark'] */
+body[data-ds-dark-theme],
+[data-theme='dark'],
+:root[data-theme='dark'] {
+  /* 背景与表面层级（专业深黑蓝调，与富途牛牛/TradingView 桌面版暗色对齐） */
+  --dsw-futu-bg-base: #131722;
+  --dsw-futu-bg-surface: #1e222d;
+  --dsw-futu-bg-surface-hover: rgba(255, 255, 255, 0.06);
+  --dsw-futu-bg-surface-active: rgba(255, 255, 255, 0.1);
+  --dsw-futu-bg-selected: rgba(230, 69, 69, 0.15);
+
+  /* 边框与分割线 */
+  --dsw-futu-border-default: #2a2e39;
+  --dsw-futu-border-subtle: #242832;
+  --dsw-futu-border-active: #2962ff;
+
+  /* 文字层级 */
+  --dsw-futu-text-primary: #d1d4dc;
+  --dsw-futu-text-secondary: #787b86;
+  --dsw-futu-text-muted: #50535e;
+  --dsw-futu-text-inverse: #ffffff;
+
+  /* 涨跌语义半透明背景与渐变（暗色微调） */
+  --dsw-futu-up-bg: rgba(230, 69, 69, 0.16);
+  --dsw-futu-up-border: rgba(230, 69, 69, 0.32);
+  --dsw-futu-up-gradient: rgba(230, 69, 69, 0.35);
+
+  --dsw-futu-down-bg: rgba(43, 164, 113, 0.16);
+  --dsw-futu-down-border: rgba(43, 164, 113, 0.32);
+  --dsw-futu-down-gradient: rgba(43, 164, 113, 0.35);
+
+  --dsw-futu-flat-bg: rgba(138, 143, 153, 0.16);
+
+  /* 阴影 */
+  --dsw-futu-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);
+  --dsw-futu-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.32);
+  --dsw-futu-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.48);
+}
+
 /* 全站等宽数字工具类 */
 [data-tabular-nums],
 .tabular-nums {

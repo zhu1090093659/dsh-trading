@@ -6,7 +6,7 @@
   pointer-events: auto;
   display: flex;
   flex-direction: column;
-  background: var(--dsw-alias-bg-l1, #ffffff);
+  background: var(--dsw-futu-bg-base, var(--dsw-alias-bg-base, #ffffff));
   overflow: hidden;
 }
 

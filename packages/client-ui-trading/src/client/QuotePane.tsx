@@ -43,31 +43,34 @@ interface Rect {
   height: number
 }
 
-export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator, useSessions }: QuotePaneProps) {
+export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator }: QuotePaneProps) {
   const [rect, setRect] = useState<Rect | null>(null)
-
-  // 对话列在场判据：有当前会话（含首帧恢复），不要求会话已有内容——
-  // 打开瞬间 byId 可能暂缺该行，要求非空会话抖动回行情（2.3 教训）。
-  const chatOn = useSessions(state => state.current) !== undefined
-
-  useEffect(() => { document.body.dataset.dshtradingChat = chatOn ? 'on' : 'off' }, [chatOn])
 
   useEffect(() => {
     let raf = 0
     const measure = (): void => {
-      const frame = document.querySelector('div:has(> [data-shell-overlay])')
+      const frame = document.querySelector<HTMLElement>('div:has(> [data-shell-overlay])')
       if (frame === null) return
+      if (frame.scrollLeft !== 0) frame.scrollLeft = 0
       const frameBox = frame.getBoundingClientRect()
       const dockBox = document.querySelector('[data-dshtrading-market-dock]')?.getBoundingClientRect()
       const left = dockBox !== undefined && dockBox.width > 0 ? dockBox.right : frameBox.left
-      // 右缘：优先取对话列（children[1]）左缘——2.7 右栏退役后 children[0]
-      // 是移出视口的退役侧栏（宽 272 但不在视口），不能再用；对话列退场时
-      // 它 display:none（宽 0），回落到右缘竖条（2.9 常驻 44px）左缘，
-      // 行情不延伸到竖条底下。
+
+      const chatFolded = document.body.dataset.dshtradingChatFolded === 'on'
       const rightBox = frame.children[1]?.getBoundingClientRect()
       const railBox = document.querySelector('[data-dshtrading-rail]')?.getBoundingClientRect()
       const fallbackRight = railBox !== undefined && railBox.width > 0 ? railBox.left : frameBox.right
-      const right = rightBox !== undefined && rightBox.width > 0 ? rightBox.left : fallbackRight
+
+      let right = fallbackRight
+      if (!chatFolded) {
+        if (rightBox !== undefined && rightBox.width > 0) {
+          right = rightBox.left
+        } else if (railBox !== undefined && railBox.width > 0) {
+          // 瞬态保护：未折叠时预留对话列空间（380px），避免瞬态铺满覆盖
+          right = Math.max(left, railBox.left - 380)
+        }
+      }
+
       setRect({ left, top: frameBox.top, width: Math.max(0, right - left), height: frameBox.height })
     }
     measure()
@@ -83,13 +86,27 @@ export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndic
     // 竖条首帧晚于本组件挂载时，observe 的初始回调保证补一次重测量。
     const rail = document.querySelector('[data-dshtrading-rail]')
     if (rail !== null) observer.observe(rail)
+
+    // 监听主题切换及折叠状态变化，立即触发重新测量
+    const mo = new MutationObserver(() => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(measure)
+    })
+    if (typeof document !== 'undefined') {
+      mo.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['data-ds-dark-theme', 'data-theme', 'data-dshtrading-chat-folded'],
+      })
+    }
+
     window.addEventListener('resize', measure)
     return () => {
       observer.disconnect()
+      mo.disconnect()
       window.removeEventListener('resize', measure)
       cancelAnimationFrame(raf)
     }
-  }, [chatOn])
+  }, [])
 
   if (rect === null) return null
 

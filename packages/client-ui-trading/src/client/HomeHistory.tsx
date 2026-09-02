@@ -104,15 +104,37 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
     let raf = 0
     let disposed = false
 
+    const updateColors = (): void => {
+      if (container === null || card === null) return
+      const style = getComputedStyle(card)
+      const border = style.borderTopColor
+      const bg = style.backgroundColor
+      if (border && container.style.getPropertyValue('--dshtrading-fusion-border') !== border) {
+        container.style.setProperty('--dshtrading-fusion-border', border)
+      }
+      if (bg && container.style.getPropertyValue('--dshtrading-fusion-bg') !== bg) {
+        container.style.setProperty('--dshtrading-fusion-bg', bg)
+      }
+      if (saved !== null && saved.radiusX && container.style.getPropertyValue('--dshtrading-fusion-radius') !== saved.radiusX) {
+        container.style.setProperty('--dshtrading-fusion-radius', saved.radiusX)
+      }
+    }
+
     // composer 卡 = seat 内最靠下的可见圆角块（哈希类名不可依赖，按几何取）。
     const findCard = (): HTMLElement | null => {
+      if (card !== null && card.isConnected && seat.contains(card)) {
+        const style = getComputedStyle(card)
+        if (style.display !== 'none') return card
+      }
+
       let best: HTMLElement | null = null
       let bestBottom = -1
       for (const el of seat.querySelectorAll<HTMLElement>('*')) {
         const box = el.getBoundingClientRect()
         if (box.width < 120 || box.height < 40) continue
         const style = getComputedStyle(el)
-        if (style.display === 'none' || style.borderBottomLeftRadius === '0px') continue
+        if (style.display === 'none') continue
+        if (el !== card && style.borderTopLeftRadius === '0px' && style.borderBottomLeftRadius === '0px') continue
         if (box.bottom > bestBottom) {
           bestBottom = box.bottom
           best = el
@@ -126,11 +148,16 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
       const bodyBox = scrollBody.getBoundingClientRect()
       const cardBox = card.getBoundingClientRect()
       const seatBox = seat.getBoundingClientRect()
-      container.style.width = `${cardBox.width}px`
-      container.style.marginLeft = `${cardBox.left - bodyBox.left}px`
-      // 上缘移到卡底：seat 底部含 hero 栈尾部留白，负 margin 抵消——
-      // 卡片底边框留在两段之间，正好成为容器内分隔线。
-      container.style.marginTop = `${cardBox.bottom - seatBox.bottom}px`
+      if (cardBox.width === 0 || cardBox.height === 0) return
+
+      const nextWidth = `${Math.round(cardBox.width)}px`
+      const nextMarginLeft = `${Math.round(cardBox.left - bodyBox.left)}px`
+      const nextMarginTop = `${Math.round(cardBox.bottom - seatBox.bottom)}px`
+
+      if (container.style.width !== nextWidth) container.style.width = nextWidth
+      if (container.style.marginLeft !== nextMarginLeft) container.style.marginLeft = nextMarginLeft
+      if (container.style.marginTop !== nextMarginTop) container.style.marginTop = nextMarginTop
+      updateColors()
     }
 
     const adopt = (next: HTMLElement | null): void => {
@@ -151,15 +178,11 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
         cancelAnimationFrame(raf)
         raf = requestAnimationFrame(fuse)
       })
-      saved = { radiusX: style.borderBottomLeftRadius, radiusY: style.borderBottomRightRadius, observer }
+      saved = { radiusX: style.borderBottomLeftRadius || '16px', radiusY: style.borderBottomRightRadius || '16px', observer }
       card.style.borderBottomLeftRadius = '0px'
       card.style.borderBottomRightRadius = '0px'
       observer.observe(card)
-      if (container !== null) {
-        container.style.setProperty('--dshtrading-fusion-border', style.borderTopColor)
-        container.style.setProperty('--dshtrading-fusion-bg', style.backgroundColor)
-        container.style.setProperty('--dshtrading-fusion-radius', saved.radiusX)
-      }
+      updateColors()
       fuse()
     }
 
@@ -167,21 +190,20 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
     container.dataset.dshtradingHomeHistory = ''
     scrollBody.appendChild(container)
 
-    // hero 子树重挂载（React 换节点）→ 换卡重拼；普通尺寸变化 → 重量。
+    // 只观察输入框 seat 的子树变动，绝不观察 scrollBody 以免被 container 的 portal 渲染反向触发死循环
     const mo = new MutationObserver(() => {
       adopt(findCard())
     })
-    mo.observe(scrollBody, { childList: true })
+    mo.observe(seat, { childList: true, subtree: true })
+    if (typeof document !== 'undefined') {
+      mo.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'data-theme'] })
+    }
     adopt(findCard())
 
-    // 尺寸变化也可能让 hero 从挤压不可见变为可测（宿主栅格展开带 transition
-    // 动画）——重找卡而不是只重量已知卡；卡未变时 adopt 内部只做重量。
-    const onResize = (): void => { adopt(findCard()) }
-    const bodyObserver = new ResizeObserver(() => {
+    const onResize = (): void => {
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(onResize)
-    })
-    bodyObserver.observe(scrollBody)
+      raf = requestAnimationFrame(() => { adopt(findCard()) })
+    }
     window.addEventListener('resize', onResize)
 
     setHost(container)
@@ -189,7 +211,6 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
       disposed = true
       cancelAnimationFrame(raf)
       mo.disconnect()
-      bodyObserver.disconnect()
       window.removeEventListener('resize', onResize)
       if (card !== null && saved !== null) {
         card.style.borderBottomLeftRadius = saved.radiusX

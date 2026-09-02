@@ -74,15 +74,37 @@ export type SelectionStore = WritableObservable<SelectionState> & {
   select(instrument: Instrument): void
 }
 
+export function inferMarket(symbol?: string): MarketId {
+  if (!symbol) return 'crypto'
+  const sym = symbol.toUpperCase()
+  if (sym.endsWith('.SH') || sym.endsWith('.SZ') || /^\d{6}$/.test(sym)) return 'cn'
+  if (sym.endsWith('.HK') || /^\d{5}$/.test(sym)) return 'hk'
+  if (sym.includes('USDT') || sym.includes('BTC') || sym.includes('ETH')) return 'crypto'
+  return 'us'
+}
+
 export function createSelectionStore(): SelectionStore {
+  const raw = readJson<Instrument | null>(SELECTION_KEY, null)
+  const initialInstrument: Instrument | null = raw && typeof raw.symbol === 'string' && raw.symbol
+    ? {
+        market: raw.market && ['crypto', 'us', 'cn', 'hk'].includes(raw.market) ? (raw.market as MarketId) : inferMarket(raw.symbol),
+        symbol: raw.symbol,
+        ...(raw.name ? { name: raw.name } : {}),
+      }
+    : null
   const store = createObservable<SelectionState>({
-    instrument: readJson<Instrument | null>(SELECTION_KEY, null),
+    instrument: initialInstrument,
   })
   return {
     ...store,
     select(instrument) {
-      store.set({ instrument })
-      writeJson(SELECTION_KEY, instrument)
+      const sanitized: Instrument = {
+        market: instrument.market && ['crypto', 'us', 'cn', 'hk'].includes(instrument.market) ? instrument.market : inferMarket(instrument.symbol),
+        symbol: instrument.symbol,
+        ...(instrument.name ? { name: instrument.name } : {}),
+      }
+      store.set({ instrument: sanitized })
+      writeJson(SELECTION_KEY, sanitized)
     },
   }
 }
@@ -108,8 +130,24 @@ export function sameInstrument(a: Instrument, b: Instrument): boolean {
   return a.market === b.market && a.symbol === b.symbol
 }
 
+function sanitizeWatchlists(raw: Watchlists): Watchlists {
+  const clean: Watchlists = {}
+  for (const [key, rows] of Object.entries(raw)) {
+    if (!['crypto', 'us', 'cn', 'hk'].includes(key) || !Array.isArray(rows)) continue
+    const market = key as MarketId
+    clean[market] = rows
+      .filter((row): row is Instrument => Boolean(row && typeof row.symbol === 'string' && row.symbol))
+      .map(row => ({
+        market: row.market && ['crypto', 'us', 'cn', 'hk'].includes(row.market) ? row.market : market,
+        symbol: row.symbol,
+        ...(row.name ? { name: row.name } : {}),
+      }))
+  }
+  return clean
+}
+
 export function createWatchlistStore(): WatchlistStore {
-  const store = createObservable<Watchlists>(readJson<Watchlists>(WATCHLIST_KEY, {}))
+  const store = createObservable<Watchlists>(sanitizeWatchlists(readJson<Watchlists>(WATCHLIST_KEY, {})))
   const persist = (): void => { writeJson(WATCHLIST_KEY, store.getSnapshot()) }
   return {
     ...store,
@@ -123,17 +161,24 @@ export function createWatchlistStore(): WatchlistStore {
       return rows !== undefined && rows.length > 0
     },
     add(market, instrument) {
+      const targetMarket = ['crypto', 'us', 'cn', 'hk'].includes(market) ? market : inferMarket(instrument.symbol)
+      const sanitized: Instrument = {
+        market: targetMarket,
+        symbol: instrument.symbol,
+        ...(instrument.name ? { name: instrument.name } : {}),
+      }
       store.update((current) => {
-        const rows = current[market] ?? []
-        if (rows.some(row => row.symbol === instrument.symbol)) return current
-        return { ...current, [market]: [...rows, instrument] }
+        const rows = current[targetMarket] ?? []
+        if (rows.some(row => row.symbol === sanitized.symbol)) return current
+        return { ...current, [targetMarket]: [...rows, sanitized] }
       })
       persist()
     },
     remove(market, symbol) {
+      const targetMarket = ['crypto', 'us', 'cn', 'hk'].includes(market) ? market : inferMarket(symbol)
       store.update((current) => {
-        const rows = current[market] ?? []
-        return { ...current, [market]: rows.filter(row => row.symbol !== symbol) }
+        const rows = current[targetMarket] ?? []
+        return { ...current, [targetMarket]: rows.filter(row => row.symbol !== symbol) }
       })
       persist()
     },

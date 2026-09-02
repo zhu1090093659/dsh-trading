@@ -28,7 +28,7 @@ import css from './quote-stage.module.css'
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
 const TICKER_POLL_MS = 5000
 const KLINE_RESYNC_MS = 30000
-const KLINE_LIMIT = 160
+const KLINE_LIMIT = 500
 const DAILY_LIMIT = 60
 
 const INTERVAL_KEY: Record<string, MarketLocaleKey> = {
@@ -59,9 +59,20 @@ export interface QuoteStageProps {
   deleteIndicator: (id: string) => Promise<boolean>
 }
 
+function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
+  if (!symbol) return undefined
+  const sym = symbol.toUpperCase()
+  if (sym.endsWith('.SH') || sym.endsWith('.SZ') || /^\d{6}$/.test(sym)) return 'cn'
+  if (sym.endsWith('.HK') || /^\d{5}$/.test(sym)) return 'hk'
+  if (sym.includes('USDT') || sym.includes('BTC') || sym.includes('ETH')) return 'crypto'
+  return 'us'
+}
+
 export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
-  const market: MarketId | undefined = instrument?.market
+  const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk'].includes(instrument.market))
+    ? (instrument.market as MarketId)
+    : inferMarketFromSymbol(instrument?.symbol)
   const symbol = instrument?.symbol
   const activeMarket: MarketId = market ?? 'crypto'
 
@@ -124,7 +135,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   // K线取数 = poll：挂载/换标的/换周期立即触发，此后 30s resync。
   const requestRef = useRef('')
   usePoll(async () => {
-    if (market === undefined || symbol === undefined) return
+    if (!market || !symbol) return
     const request = `${market}:${symbol}:${chartInterval}`
     requestRef.current = request
     try {
@@ -140,7 +151,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
   // 日K参考（头部涨跌/昨收）：每标的只拉一次。
   useEffect(() => {
-    if (market === undefined || symbol === undefined) return
+    if (!market || !symbol) return
     let cancelled = false
     fetchKlines(market, symbol, '1d', DAILY_LIMIT)
       .then((rows) => { if (!cancelled) setDaily(rows) })
@@ -242,7 +253,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       {/* 顶部报价头 */}
       <div className={css.header}>
         <div className={css.ident}>
-          <span className={css.name}>{instrument?.name ?? symbol}</span>
+          <span className={css.name}>{instrument?.name ?? (ticker as { name?: string })?.name ?? symbol}</span>
           <span className={css.code}>{symbol}</span>
           <span className={css.marketTag}>{t(TAB_KEY[market])}</span>
         </div>

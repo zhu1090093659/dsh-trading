@@ -12,21 +12,26 @@
       sidebar 收起 = 56px 紧凑栏（columns.ts SIDEBAR_COLLAPSED），
       details 收起 = 0px（宿主以 0 宽保持子树挂载）。轨道 var 变化
       仍走宿主 grid-template-columns transition（对话列展开有滑入动画）。 */
+/* 1) rtl 翻转 + 四轨道接管。
+      第 1 轨道：右缘侧栏/竖条预留（44px）
+      第 2 轨道：对话列（默认 380px，折叠时 0px）
+      第 3 轨道：行情区（1fr）
+      第 4 轨道：工具详情（360px / 折叠时 0px） */
 div:has(> [data-shell-overlay]) {
   direction: rtl;
   grid-template-columns:
-    var(--dshtrading-sidebar-w, 272px)
-    var(--dshtrading-chat-w, 0px)
+    var(--dshtrading-sidebar-w, 44px)
+    var(--dshtrading-chat-w, 380px)
     minmax(0, 1fr)
     var(--dshtrading-details-w, 360px) !important;
 }
 
 div:has(> [data-shell-overlay])[data-sidebar-collapsed] {
-  --dshtrading-sidebar-w: 56px;
+  --dshtrading-sidebar-w: 44px !important;
 }
 
 div:has(> [data-shell-overlay])[data-details-collapsed] {
-  --dshtrading-details-w: 0px;
+  --dshtrading-details-w: 0px !important;
 }
 
 /* 有当前会话 → 对话列轨道展开（用户拖拽宽度，默认 380px）。
@@ -60,11 +65,6 @@ div:has(> [data-shell-overlay]) > div:nth-child(3) {
   grid-row: 1;
 }
 
-/* 3) 无当前会话 → 对话列退场（display:none + 轨道 0 宽），行情铺满中栏。 */
-body:not([data-dshtrading-chat='on']) div:has(> [data-shell-overlay]) > div:nth-child(2) {
-  display: none;
-}
-
 /* 4) rtl 下宿主拖拽手柄的物理坐标错位（inline left 按 LTR 计算），隐藏之。
       代价：列宽拖拽不可用（折叠开关不受影响）。 */
 div:has(> [data-shell-overlay]) > [data-side] {
@@ -89,20 +89,44 @@ body[data-dshtrading-home-history='on'] [data-conversation-scroll] {
   justify-content: safe center !important;
 }
 
-/* 8) 2.7 右栏退役 + 2.9 会话竖条：原列整体移出视口但保持挂载——官方设置
-      弹层是 sidebar.settings 占位组件的子树，display:none 会连弹层一起
-      隐藏；移出视口则渲染照旧，弹层 position:fixed 照常盖满视口（入口：
-      右缘竖条设置钮，程序化 click 该列内的官方触发器）。
-      2.9 起侧栏轨道不再归零：右缘常驻 44px 会话竖条（SessionRail，fixed
-      贴视口右缘），对话列/行情都以竖条左缘为界。 */
+/* 8) 2.7 右栏退役 + 2.9 会话竖条：原列移出文档流，但保持设置弹层正常唤起与交互。
+      通过 (0, 0) 坐标和 0 宽占位，杜绝关闭弹层时 focus 回跳导致浏览器横向滚动。
+      子树弹层（SettingsPanel）是 position:fixed，能正常完整显示并响应点击。 */
 div:has(> [data-shell-overlay]) {
   --dshtrading-sidebar-w: 44px !important;
+  overflow-x: hidden !important;
 }
 
 div:has(> [data-shell-overlay]) > div:nth-child(1) {
-  position: absolute;
-  left: -3000px;
-  width: 272px;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  pointer-events: auto !important;
+  z-index: 100 !important;
+}
+
+/* 隐藏退役侧栏的常规界面，避免露出在 (0,0) */
+div:has(> [data-shell-overlay]) > div:nth-child(1) > nav,
+div:has(> [data-shell-overlay]) > div:nth-child(1) > header,
+div:has(> [data-shell-overlay]) > div:nth-child(1) > aside,
+div:has(> [data-shell-overlay]) > div:nth-child(1) > div:not(:has([aria-haspopup='dialog'])) {
+  display: none !important;
+}
+
+/* 设置触发按钮尺寸微缩至原点，不阻碍点击也不产生偏移 */
+div:has(> [data-shell-overlay]) > div:nth-child(1) [aria-haspopup='dialog'] {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  pointer-events: auto !important;
 }
 
 /* 9) 2.8 会话列折叠（2.9 起入口在右缘竖条）：折叠钮触发，轨道归零 +

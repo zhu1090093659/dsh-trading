@@ -150,9 +150,9 @@
 }
 
 .intervalTab[data-active='true'] {
-  color: #ffffff;
+  color: var(--dsw-futu-bg-base, #ffffff);
   font-weight: 600;
-  background: #1f2937;
+  background: var(--dsw-futu-text-primary, #1f2937);
 }
 
 /* 指标选择弹层 */
@@ -164,7 +164,7 @@
 .pickerButton {
   appearance: none;
   border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
-  background: #ffffff;
+  background: var(--dsw-futu-bg-surface, #ffffff);
   color: var(--dsw-futu-text-primary, #1a1e24);
   display: inline-flex;
   align-items: center;
@@ -204,7 +204,7 @@
   padding: 10px 12px;
   border-radius: var(--dsw-futu-radius-lg, 8px);
   border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
-  background: #ffffff;
+  background: var(--dsw-futu-bg-surface, #ffffff);
   box-shadow: var(--dsw-futu-shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.12));
   font-size: 12px;
 }
@@ -379,7 +379,7 @@
 }
 
 .quickIndicatorTag[data-active='true'] {
-  color: #1f2937;
+  color: var(--dsw-futu-text-primary, #1f2937);
   font-weight: 700;
   background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
 }

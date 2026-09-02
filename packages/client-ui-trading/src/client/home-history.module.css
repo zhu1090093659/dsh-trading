@@ -3,10 +3,11 @@
    拼接色板从卡片计算样式采样进 --dshtrading-fusion-*，这里只管内部结构。 */
 
 .panel {
-  border: 1px solid var(--dshtrading-fusion-border, rgba(0, 0, 0, 0.12));
+  border: 1px solid var(--dshtrading-fusion-border, var(--dsw-futu-border-default, rgba(0, 0, 0, 0.12)));
   border-top: none;
   border-radius: 0 0 var(--dshtrading-fusion-radius, 16px) var(--dshtrading-fusion-radius, 16px);
-  background: var(--dshtrading-fusion-bg, transparent);
+  background: var(--dshtrading-fusion-bg, var(--dsw-futu-bg-surface, transparent));
+  color: var(--dsw-futu-text-primary, inherit);
   overflow: hidden;
   font-size: 13px;
   box-sizing: border-box;
