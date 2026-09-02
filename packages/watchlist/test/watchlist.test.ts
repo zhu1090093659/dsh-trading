@@ -65,16 +65,33 @@ describe('file stores（原子写）', () => {
 })
 
 describe('watchlist_* tools', () => {
-  it('watchlist_list：空库 / 有行两种形态', async () => {
+  it('watchlist_list：空库也回落种子行（合并视图，与 GUI 左栏一致），sources 标注来源', async () => {
     const { deps } = makeDeps()
     const tool = createWatchlistListTool(deps)
-    const empty = JSON.parse(String(await tool.execute({}))) as { total: number }
-    expect(empty.total).toBe(0)
+    const empty = JSON.parse(String(await tool.execute({}))) as {
+      total: number
+      markets: string[]
+      sources: Record<string, 'custom' | 'seed'>
+      watchlists: Record<string, Array<{ market: string; symbol: string; name?: string }>>
+    }
+    // 全空 host store → 4 个市场全部回落种子展示行。
+    expect(empty.markets).toEqual(['crypto', 'us', 'cn', 'hk'])
+    expect(empty.total).toBe(14)
+    expect(Object.values(empty.sources).every(source => source === 'seed')).toBe(true)
+    expect(empty.watchlists.us[0]).toEqual({ market: 'us', symbol: 'AAPL', name: '苹果' })
 
     await createWatchlistAddTool(deps).execute({ market: 'us', symbol: 'AAPL', name: '苹果' })
-    const wire = JSON.parse(String(await tool.execute({}))) as { total: number; markets: string[] }
-    expect(wire.total).toBe(1)
-    expect(wire.markets).toEqual(['us'])
+    const wire = JSON.parse(String(await tool.execute({}))) as {
+      total: number
+      sources: Record<string, 'custom' | 'seed'>
+      watchlists: Record<string, Array<{ symbol: string }>>
+    }
+    // 定制后该市场以用户行为准（不再混入种子），来源翻 custom；行内容不变。
+    expect(wire.sources.us).toBe('custom')
+    expect(wire.sources.crypto).toBe('seed')
+    expect(wire.watchlists.us).toEqual([{ market: 'us', symbol: 'AAPL', name: '苹果' }])
+    // crypto 4 + us 1（定制后种子被抑制）+ cn 3 + hk 3。
+    expect(wire.total).toBe(11)
   })
 
   it('watchlist_add：去重 + 事件回调仅在实际新增时触发', async () => {
@@ -102,14 +119,17 @@ describe('watchlist_* tools', () => {
     expect(onWatchlistsChanged).toHaveBeenCalledTimes(1)
   })
 
-  it('watchlist_select：自选行名称复用；未知 symbol 以裸 symbol 兜底；触发 selection 事件', async () => {
+  it('watchlist_select：自选行名称复用；种子行同名解析；未知 symbol 以裸 symbol 兜底；触发 selection 事件', async () => {
     const { deps, selection, onSelectionChanged } = makeDeps()
     await createWatchlistAddTool(deps).execute({ market: 'cn', symbol: '600519', name: '贵州茅台' })
     const named = JSON.parse(String(await createWatchlistSelectTool(deps).execute({ market: 'cn', symbol: '600519' }))) as { selected: { name?: string } }
     expect(named.selected.name).toBe('贵州茅台')
-    const unknown = JSON.parse(String(await createWatchlistSelectTool(deps).execute({ market: 'hk', symbol: '00700' }))) as { selected: { name?: string } }
-    expect(unknown.selected).toEqual({ market: 'hk', symbol: '00700' })
-    expect((await selection.get()).instrument).toEqual({ market: 'hk', symbol: '00700' })
-    expect(onSelectionChanged).toHaveBeenCalledTimes(2)
+    // 种子行（host store 无行）：合并视图解析出展示名（与 watchlist_list 一致）。
+    const seeded = JSON.parse(String(await createWatchlistSelectTool(deps).execute({ market: 'hk', symbol: '00700' }))) as { selected: { name?: string } }
+    expect(seeded.selected).toEqual({ market: 'hk', symbol: '00700', name: '腾讯控股' })
+    const unknown = JSON.parse(String(await createWatchlistSelectTool(deps).execute({ market: 'hk', symbol: '09999' }))) as { selected: { name?: string } }
+    expect(unknown.selected).toEqual({ market: 'hk', symbol: '09999' })
+    expect((await selection.get()).instrument).toEqual({ market: 'hk', symbol: '09999' })
+    expect(onSelectionChanged).toHaveBeenCalledTimes(3)
   })
 })

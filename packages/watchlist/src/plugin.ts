@@ -3,7 +3,8 @@
  *
  * patch 行：id `dsh-trading-watchlist` / name `@dsh-trading/watchlist/plugin`
  * （base 拥有该共享行）。host 平面注册 4 工具（全会话可见，owner 裁决 D4）：
- * - `watchlist_list`：全市场自选行（只读）；
+ * - `watchlist_list`：全市场自选行（只读）——合并用户定制行与市场种子行
+ *   （seeds.ts 单源，与 GUI 左栏展示一致；2026-09-02 agent 可见性修复）。
  * - `watchlist_add`：追加一行（同市场按 symbol 去重）→ emit 'watchlists'；
  * - `watchlist_remove`：移除一行 → emit 'watchlists'；
  * - `watchlist_select`：设置选中标的 → emit 'selection'（客户端 SSE 收到后中栏切图）。
@@ -16,6 +17,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createMemorySelectionStore, createMemoryWatchlistStore } from './index.ts'
 import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from './index.ts'
+import { effectiveWatchlistRows, WATCHLIST_SEEDS, watchlistRowSource } from './seeds.ts'
 import { createFileSelectionStore, createFileWatchlistStore } from './file-store.ts'
 
 // 桥（client-ui-trading node 半）经本子路径取 file store（knowledge/tool 同款再导出先例）。
@@ -66,9 +68,12 @@ export function createWatchlistListTool(deps: WatchlistToolDeps) {
   return defineTool({
     name: 'watchlist_list',
     description:
-      'List the user watchlist rows across all markets (crypto/us/cn/hk), as persisted on the host. '
-      + 'Rows are the user-customized entries only; a market without rows falls back to client-side seed display. '
-      + 'Read-only.',
+      'List the user\'s watchlist exactly as displayed in the trading GUI sidebar, across all markets (crypto/us/cn/hk). '
+      + 'Rows merge the user\'s customized entries (source "custom") with each market\'s default seed rows (source "seed", '
+      + 'shown while that market has no custom edits) — the GUI shows the same rows, so this list IS what the user sees. '
+      + 'It also maps display names to symbols (e.g. 苹果 → AAPL / us, 贵州茅台 → 600519 / cn). '
+      + 'ALWAYS call this first when the user mentions any instrument by name or symbol; never conclude an instrument '
+      + 'is untracked from docs or connector coverage alone. Read-only.',
     parameters: {},
     output: {
       schema: { type: 'string' },
@@ -76,9 +81,20 @@ export function createWatchlistListTool(deps: WatchlistToolDeps) {
     },
     async execute() {
       const map: WatchlistsMap = await deps.watchlists.list()
-      const markets = Object.keys(map).filter(market => (map[market] ?? []).length > 0)
-      const total = markets.reduce((sum, market) => sum + (map[market]?.length ?? 0), 0)
-      return JSON.stringify({ ok: true, total, markets, watchlists: map })
+      // 合并视图 = 客户端 rowsFor 同构：定制行优先，未定制市场回落种子行
+      // （seeds.ts 单一事实源）——Agent 看到的行与 GUI 左栏一致。
+      const markets = [...new Set([...Object.keys(map), ...Object.keys(WATCHLIST_SEEDS)])]
+        .filter(market => effectiveWatchlistRows(map, market).length > 0)
+      const watchlists: WatchlistsMap = {}
+      const sources: Record<string, 'custom' | 'seed'> = {}
+      let total = 0
+      for (const market of markets) {
+        const rows = effectiveWatchlistRows(map, market)
+        watchlists[market] = rows
+        sources[market] = watchlistRowSource(map, market)
+        total += rows.length
+      }
+      return JSON.stringify({ ok: true, total, markets, sources, watchlists })
     },
   })
 }
@@ -186,9 +202,10 @@ export function createWatchlistSelectTool(deps: WatchlistToolDeps) {
     },
     async execute(raw) {
       const { market, symbol } = parseInstrumentArgs((raw ?? {}) as Record<string, unknown>)
-      // 名称解析：自选行里已有的行带展示名；否则以 symbol 兜底。
+      // 名称解析走合并视图（定制行优先，种子行兜底——与 watchlist_list 同源，
+      // 否则 agent 从 list 看到"腾讯控股 00700"再 select 却拿不到展示名）。
       const map = await deps.watchlists.list()
-      const row = (map[market] ?? []).find(row => row.symbol === symbol)
+      const row = effectiveWatchlistRows(map, market).find(row => row.symbol === symbol)
       const instrument: WatchlistInstrument = row ?? { market, symbol }
       await deps.selection.set({ instrument })
       deps.onSelectionChanged?.()

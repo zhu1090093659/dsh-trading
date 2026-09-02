@@ -3,12 +3,16 @@
  * HostObservable face the slot renderer synthesizes use* hooks from) plus the
  * two trading-shell stores — instrument selection and per-market watchlists.
  *
- * Deliberately framework-free and dependency-free (no @deepseek-ai/dsh-client-store
- * import): these modules are unit-tested under vitest, where seed-module
- * resolution is unavailable. Both stores persist to localStorage (durable
- * across reloads; single-user local app — no server sync by design).
+ * Deliberately framework-free and dependency-free of SDK runtime code (no
+ * @deepseek-ai/dsh-client-store import): these modules are unit-tested under
+ * vitest, where seed-module resolution is unavailable. The only workspace
+ * import is the watchlist seed table (@dsh-trading/watchlist, pure data) —
+ * bundled inline by the client build; Agent 工具同源（见 seeds.ts）。Both stores
+ * persist to localStorage (durable across reloads; single-user local app — no
+ * server sync by design).
  */
 import type { Instrument, MarketId } from './types.ts'
+import { WATCHLIST_SEEDS } from '@dsh-trading/watchlist'
 
 /** Minimal observable face — matches the slot kit's HostObservable contract. */
 export interface Observable<T> {
@@ -185,31 +189,9 @@ export function createWatchlistStore(): WatchlistStore {
   }
 }
 
-/** Seed rows per market (connector-validated symbol formats). */
-export const DEFAULT_WATCHLISTS: Record<MarketId, Instrument[]> = {
-  crypto: [
-    { market: 'crypto', symbol: 'BTCUSDT', name: 'Bitcoin' },
-    { market: 'crypto', symbol: 'ETHUSDT', name: 'Ethereum' },
-    { market: 'crypto', symbol: 'SOLUSDT', name: 'Solana' },
-    { market: 'crypto', symbol: 'BNBUSDT', name: 'BNB' },
-  ],
-  us: [
-    { market: 'us', symbol: 'AAPL', name: '苹果' },
-    { market: 'us', symbol: 'MSFT', name: '微软' },
-    { market: 'us', symbol: 'NVDA', name: '英伟达' },
-    { market: 'us', symbol: 'GOOGL', name: '谷歌' },
-  ],
-  cn: [
-    { market: 'cn', symbol: '600519', name: '贵州茅台' },
-    { market: 'cn', symbol: '000001', name: '平安银行' },
-    { market: 'cn', symbol: '601318', name: '中国平安' },
-  ],
-  hk: [
-    { market: 'hk', symbol: '00700', name: '腾讯控股' },
-    { market: 'hk', symbol: '09988', name: '阿里巴巴-W' },
-    { market: 'hk', symbol: '03690', name: '美团-W' },
-  ],
-}
+/** Seed rows per market（SSOT 在 @dsh-trading/watchlist：agent 的 watchlist_list
+ * 合并视图与 GUI 左栏展示同源，2026-09-02 agent 可见性修复）。 */
+export const DEFAULT_WATCHLISTS = WATCHLIST_SEEDS as unknown as Record<MarketId, Instrument[]>
 
 /** 一个市场的展示行：用户列表，未定制时回落种子列表。 */
 export function rowsFor(watchlists: Watchlists, market: MarketId): Instrument[] {

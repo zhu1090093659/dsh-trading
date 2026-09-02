@@ -78,6 +78,9 @@ export function createMemoryWatchlistStore(initial: WatchlistsMap = {}): Watchli
   }
 }
 
+// 各市场种子自选行（GUI 展示回退 = Agent 工具合并视图，同源单例）。
+export { WATCHLIST_SEEDS, effectiveWatchlistRows, watchlistRowSource } from './seeds.ts'
+
 /** 内存版选中 store（单测用）。 */
 export function createMemorySelectionStore(initial: SelectionRecord = { instrument: null }): SelectionStore {
   let current: SelectionRecord = { ...initial }
