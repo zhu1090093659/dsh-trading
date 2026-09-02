@@ -218,6 +218,21 @@ export interface AccountBalance {
   readonly locked: number
 }
 
+/** 成交流水单条（GUI 交易台「成交历史」用，issue #40）。 */
+export interface TradeFill {
+  /** 交易所成交 id。 */
+  readonly id: string
+  readonly symbol: string
+  readonly side: OrderSide
+  readonly price: number
+  /** 成交量（base 币数）。 */
+  readonly amount: number
+  /** 手续费（绝对值，币种由 feeAsset 表达）。 */
+  readonly fee?: number
+  readonly feeAsset?: string
+  readonly timestamp: number
+}
+
 /** 账户快照（需凭证，BYOK 经 ctx.credentials 引用 [S4]）。 */
 export interface IAccount {
   readonly id: string
@@ -286,6 +301,22 @@ export interface TradeService {
   /** 查询单笔订单状态（按 (symbol, id) 双键）。 */
   getOrder(symbol: string, id: string): Promise<Order>
   getPositions(): Promise<Position[]>
+  /**
+   * 账户余额快照（issue #40 GUI 交易台；只读，需凭证）。
+   * 可选方法：实现方已有只读余额面时实现（connector-okx 的 crypto_get_balance 同源）。
+   */
+  getBalances?(): Promise<AccountBalance[]>
+  /**
+   * 当前挂单列表（issue #40 GUI 交易台；只读，需凭证）。
+   * 可选方法：无批量挂单端点的实现方可缺省（GUI 隐藏挂单区）。
+   * 输出 `symbol` 一律市场规范词汇；status 只含 new / partially_filled。
+   */
+  listOpenOrders?(symbol?: string): Promise<Order[]>
+  /**
+   * 最近成交流水（issue #40 GUI 交易台；只读，需凭证）。
+   * 可选方法：时间升序（旧→新），最多 limit 条（缺省 ≤50）。
+   */
+  listTradeFills?(symbol?: string, limit?: number): Promise<TradeFill[]>
 }
 
 /**
@@ -342,6 +373,14 @@ declare module '@deepseek-ai/cordis' {
      */
     tradingCryptoTrade: TradeService
     /**
+     * 交易服务注册表（issue #40 GUI 交易台，@dsh-trading/api 类型声明）：
+     * 与 tradingMarketDataRegistry 同构的宿主平面注册面——交易连接器 host 面数据行
+     * 注册，GUI 桥按路由当前值惰性解析。**注册不改变安全语义**：placeOrder 的
+     * 服务缝闸门（dryRun 缺省 true + liveTrading 显式开关）随服务实例生效；
+     * GUI 桥只放行 dry-run 下单与只读查询，实盘路径仍走 Agent 工具的 base 审批闸门。
+     */
+    tradingTradeRegistry: TradeRegistry
+    /**
      * 市场路由服务（R5 2026-08-29 补齐，@dsh-trading/router 提供）：
      * 连接器 apply 时 consult activeProvider(market) 决定是否激活——用户设置
      * dshtrading.markets.<market>.provider 选谁谁激活（docs/exchange-routing.md）。
@@ -388,6 +427,25 @@ export interface MarketDataRegistry {
   active(market: string): MarketDataRegistration | undefined
   /** 某市场全部注册项（诊断/设置 UI 展示用）。 */
   list(market: string): readonly MarketDataRegistration[]
+}
+
+/** 交易服务注册项（tradingTradeRegistry 的条目，issue #40）。 */
+export interface TradeRegistration {
+  readonly market: string
+  readonly provider: string
+  readonly service: TradeService
+}
+
+/**
+ * 交易服务注册表（router 插件同款注册模式，issue #40）：交易连接器在 host 面
+ * 数据行注册（凭证经 ctx.credentials / 环境变量解析，缺失时只读方法 fail-closed
+ * 报 TRADING_CREDENTIALS_MISSING）；注册面本身不做安全裁决——闸门在服务缝
+ * （placeOrder 三态）与桥层（GUI 只放行 dry-run）。
+ */
+export interface TradeRegistry {
+  register(market: string, provider: string, service: TradeService): () => void
+  active(market: string): TradeRegistration | undefined
+  list(market: string): readonly TradeRegistration[]
 }
 
 /**

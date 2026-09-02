@@ -5,7 +5,10 @@
  * 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { fetchKlines, fetchTickers, fetchFundamentals, fetchDerivatives, fetchOrderbook, fetchRecentTrades } from './api.ts'
+import {
+  fetchKlines, fetchTickers, fetchFundamentals, fetchDerivatives, fetchOrderbook, fetchRecentTrades,
+  fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiDryRunOrder,
+} from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
@@ -13,6 +16,7 @@ import type { SendImageInput } from './fill-composer.ts'
 import { FundamentalsPane, deriveFiftyTwoWeek } from './FundamentalsPane.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
 import { OrderbookPane } from './OrderbookPane.tsx'
+import { TradeDesk } from './TradeDesk.tsx'
 import { computeRangeStats } from './range-stats.ts'
 import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
@@ -25,7 +29,7 @@ import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indica
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
-import type { DerivativesData, Orderbook, StockFundamentals, TradeTick } from './types.ts'
+import type { AccountBalance, DerivativesData, Order, Orderbook, Position, StockFundamentals, TradeFill, TradeTick } from './types.ts'
 import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
@@ -34,6 +38,7 @@ import css from './quote-stage.module.css'
 
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
 const ORDERBOOK_OPEN_KEY = 'dshtrading.orderbook.open'
+const TRADE_DESK_OPEN_KEY = 'dshtrading.tradeDesk.open'
 const TICKER_POLL_MS = 5000
 const KLINE_RESYNC_MS = 30000
 // 衍生品指标快照轮询（issue #38）：一次刷新 = 2~5 个上游公共端点调用，取 30s
@@ -42,6 +47,8 @@ const DERIVATIVES_POLL_MS = 30000
 // 盘口/分笔轮询（issue #39）：竖栏打开才拉；一次刷新 = depth + trades 两请求，
 // 4s 在「盯盘时效」与公共端点限频之间取衡。
 const ORDERBOOK_POLL_MS = 4000
+// 交易台只读轮询（issue #40）：15s 慢节奏（签名端点 + 个人账户面，无盯盘时效要求）。
+const TRADE_DESK_POLL_MS = 15000
 // 盘中周期 K 线根数按市场区分：crypto 取 300——OKX 单请求上限 300，图表每 30s
 // resync 一次，不触发游标翻页、不放大限频消耗；其余市场取 500。日 K 深度需求由
 // 1d 分支单独走 DAILY_LIMIT。
@@ -129,6 +136,12 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [orderbook, setOrderbook] = useState<Orderbook | null>(null)
   const [orderbookLoading, setOrderbookLoading] = useState(false)
   const [trades, setTrades] = useState<TradeTick[] | null>(null)
+  /** 交易工作台（issue #40）：默认关（安全敏感面）；只读数据 null = 服务未挂载/凭证缺失。 */
+  const [tradeDeskOpen, setTradeDeskOpen] = useState<boolean>(() => readTradeDeskOpen())
+  const [tradePositions, setTradePositions] = useState<Position[] | null>(null)
+  const [tradeBalances, setTradeBalances] = useState<AccountBalance[] | null>(null)
+  const [tradeOrders, setTradeOrders] = useState<Order[] | null>(null)
+  const [tradeFills, setTradeFills] = useState<TradeFill[] | null>(null)
   /** 区间统计：框选模式开 + 已选逻辑下标区间（TvChart 上报，面板消费）。 */
   const [rangeMode, setRangeMode] = useState(false)
   const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
@@ -234,6 +247,32 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       setOrderbookLoading(false)
     }
   }, ORDERBOOK_POLL_MS, [orderbookOpen, stageTab, market, symbol])
+
+  // 交易台只读轮询（issue #40，仅 crypto + 面板打开）：positions 为主探针——
+  // 服务未注册（400）或凭证缺失（ok:false）都置 null，分区按语义降级。
+  usePoll(async () => {
+    if (!tradeDeskOpen || stageTab !== 'chart' || market !== 'crypto') return
+    const [positionRows, balanceRows, orderRows, fillRows] = await Promise.all([
+      fetchTradePositions(market),
+      fetchTradeBalances(market),
+      fetchTradeOpenOrders(market),
+      fetchTradeFills(market),
+    ])
+    setTradePositions(positionRows)
+    setTradeBalances(balanceRows)
+    setTradeOrders(orderRows)
+    setTradeFills(fillRows)
+  }, TRADE_DESK_POLL_MS, [tradeDeskOpen, stageTab, market])
+
+  const onSubmitGuiOrder = (input: Parameters<typeof placeGuiDryRunOrder>[1]) =>
+    placeGuiDryRunOrder('crypto', input).then((order) => {
+      // 下单成功（模拟）→ 立即刷新只读面，不等下一轮轮询。
+      if (order !== null && market === 'crypto') {
+        void fetchTradePositions(market).then(setTradePositions)
+        void fetchTradeOpenOrders(market).then(setTradeOrders)
+      }
+      return order
+    })
 
   // 换标的：立即清场
   useEffect(() => {
@@ -484,6 +523,23 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                     : t('quote.sendToAgent')}
             </button>
           )}
+          {/* 交易工作台开关（issue #40；仅 crypto——交易注册面当前只有加密连接器注册） */}
+          {market === 'crypto' && (
+            <button
+              type="button"
+              className={css.pickerButton}
+              data-active={tradeDeskOpen ? 'true' : undefined}
+              aria-pressed={tradeDeskOpen}
+              onClick={() => {
+                setTradeDeskOpen((open) => {
+                  writeTradeDeskOpen(!open)
+                  return !open
+                })
+              }}
+            >
+              {t('trade.toggle')}
+            </button>
+          )}
           {/* 盘口竖栏开关（issue #39；紧挨区间统计左侧） */}
           <button
             type="button"
@@ -671,6 +727,24 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           fundamentals={fundamentals}
           loading={fundamentalsLoading}
           derivedFiftyTwoWeek={fiftyTwoWeek}
+        />
+      )}
+
+      {/* 交易工作台底栏（issue #40，crypto 图表页签专属，默认折叠） */}
+      {stageTab === 'chart' && market === 'crypto' && tradeDeskOpen && (
+        <TradeDesk
+          t={t}
+          symbol={symbol}
+          positions={tradePositions}
+          balances={tradeBalances}
+          orders={tradeOrders}
+          fills={tradeFills}
+          colorMode={colorMode}
+          onClose={() => {
+            setTradeDeskOpen(false)
+            writeTradeDeskOpen(false)
+          }}
+          onSubmit={onSubmitGuiOrder}
         />
       )}
 
@@ -952,6 +1026,20 @@ function readOrderbookOpen(): boolean {
 function writeOrderbookOpen(open: boolean): void {
   try {
     localStorage.setItem(ORDERBOOK_OPEN_KEY, open ? '1' : '0')
+  } catch { /* 忽略 */ }
+}
+
+/** 交易台开关记忆（issue #40；默认关——安全敏感面）。 */
+function readTradeDeskOpen(): boolean {
+  try {
+    return localStorage.getItem(TRADE_DESK_OPEN_KEY) === '1'
+  } catch { /* 忽略 */ }
+  return false
+}
+
+function writeTradeDeskOpen(open: boolean): void {
+  try {
+    localStorage.setItem(TRADE_DESK_OPEN_KEY, open ? '1' : '0')
   } catch { /* 忽略 */ }
 }
 

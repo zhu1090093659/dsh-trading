@@ -1,0 +1,178 @@
+/* TradeDesk —— 交易工作台底栏（issue #40；GUI 仅 dry-run，实盘走 Agent 审批闸门）。 */
+
+.root {
+  flex: none;
+  max-height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  padding: 6px 2px 4px;
+  overflow: hidden;
+}
+
+.head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-secondary, #4a5060);
+}
+
+.dryRunBadge {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  background: var(--dsw-futu-bg-subtle, #f5f6f8);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.close {
+  margin-left: auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  padding: 2px 4px;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+}
+
+/* -- 左：下单表单 ------------------------------------------------------- */
+
+.form {
+  flex: none;
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.sideToggle,
+.typeToggle {
+  display: flex;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+}
+
+.toggleBtn {
+  flex: 1;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 4px 0;
+  font-size: 11px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.toggleBtn[data-active='true'] {
+  font-weight: 600;
+  color: #fff;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.field label {
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  font-size: 10.5px;
+}
+
+.field input {
+  border: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.submit {
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 5px 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.submit:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.receipt {
+  font-size: 10px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+/* -- 右：只读表格区 ----------------------------------------------------- */
+
+.tables {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-secondary, #4a5060);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  padding: 1px 8px 1px 0;
+}
+
+.table td {
+  padding: 2px 8px 2px 0;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  white-space: nowrap;
+}
+
+.empty {
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  font-size: 11px;
+}
+
+.hint {
+  font-size: 10.5px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  background: var(--dsw-futu-bg-subtle, #f5f6f8);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
