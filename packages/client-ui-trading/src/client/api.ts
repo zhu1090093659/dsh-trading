@@ -223,19 +223,19 @@ export interface ClientNewsItem {
 export interface ClientNewsResult {
   items: ClientNewsItem[]
   unavailable: string[]
-  fallback?: boolean
 }
 
 /**
  * 标的新闻（issue #37）。Kit 未注册或会话不活跃 → null：面板显示空态提示。
+ * 只返回与标的相关的条目；无相关内容即空列表，无市场要闻兜底。
  */
 export async function fetchNews(market: MarketId, symbol?: string, limit = 20): Promise<ClientNewsResult | null> {
   try {
     const query = new URLSearchParams({ market, ...(symbol ? { symbol } : {}), limit: String(limit) })
-    const wire = await getJson<{ ok: boolean; items: ClientNewsItem[]; unavailable: string[]; fallback?: boolean }>(
+    const wire = await getJson<{ ok: boolean; items: ClientNewsItem[]; unavailable: string[] }>(
       `/dshtrading/api/news?${query.toString()}`,
     )
-    return { items: wire.items ?? [], unavailable: wire.unavailable ?? [], fallback: wire.fallback === true }
+    return { items: wire.items ?? [], unavailable: wire.unavailable ?? [] }
   } catch {
     return null
   }

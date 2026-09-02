@@ -13,7 +13,6 @@
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
-import { isAnnouncementSource } from './client/news-source.ts'
 import type { AccountBalance, DerivativesData, FundamentalsPackage, Interval, Kline, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
 import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dsh-trading/kit-cn'
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dsh-trading/kit-hk'
@@ -237,7 +236,6 @@ export interface NewsWire {
   ok: true
   items: readonly NewsItem[]
   unavailable: readonly string[]
-  fallback?: boolean | undefined
 }
 
 /** 新闻端点条目上限（保护公共数据源；超出部分由 Kit 层截流）。 */
@@ -511,7 +509,8 @@ export class TradingBridge {
   /**
    * 标的新闻与公告聚合（issue #37）：按市场从 newsRegistry 解析到 Kit 注册的
    * 聚合器；未注册时回退到各 Kit 导出的 aggregateNews 纯函数（无活跃会话时亦可用）。
-   * 若标的无专属快讯，智能回退为大盘/市场最新要闻并在 fallback 标记。
+   * 只返回与标的相关的条目（2026-09-03 owner 裁决）：无相关新闻/公告就返回空列表，
+   * 不再回退展示大盘要闻——此前的智能回退会把已抓到的公告挤出 limit 截尾窗。
    */
   async news(market: string, symbol: string | null, rawLimit: string | null): Promise<NewsWire> {
     if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
@@ -539,29 +538,7 @@ export class TradingBridge {
       cryptoPanicKey: this.host.newsKey?.(),
     })
 
-    let items = result.items
-    let isFallback = false
-    // 智能回退：若指定了具体标的但 24h 内无专属媒体快讯（公告类源不算媒体快讯，
-    // 美股仅剩 SEC 披露时同样触发），自动回退拉取市场大盘最新要闻并并入。
-    const mediaNewsCount = items.filter(it => !isAnnouncementSource(it.source)).length
-    if (mediaNewsCount === 0 && symbol && result.unavailable.length === 0) {
-      try {
-        const macroResult = await aggregator({
-          limit: limit ?? 50,
-          windowHours: 24,
-          cryptoPanicKey: this.host.newsKey?.(),
-        })
-        if (macroResult.items.length > 0) {
-          // 合并后按发布时间倒序重排并按请求 limit 截尾（宏观 50 条混入不得超发）。
-          items = [...macroResult.items, ...items]
-            .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt))
-            .slice(0, limit ?? 20)
-          isFallback = true
-        }
-      } catch {}
-    }
-
-    return { ok: true, items, unavailable: result.unavailable, fallback: isFallback }
+    return { ok: true, items: result.items, unavailable: result.unavailable }
   }
 
   /** 自定义策略名册（issue #31）：返回记录，前端校验后并入名册。 */
