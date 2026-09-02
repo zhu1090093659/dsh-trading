@@ -95,6 +95,36 @@ async function fetchEastmoney(fetchImpl: typeof globalThis.fetch, limit: number)
   return items
 }
 
+async function fetchEastmoneyAnnouncements(fetchImpl: typeof globalThis.fetch, rawSymbol: string, limit: number): Promise<NewsItem[]> {
+  const stockCode = rawSymbol.trim().replace(/\.(SH|SZ|BJ)$/i, '')
+  if (!/^\d{6}$/.test(stockCode)) return []
+  const url = new URL('https://np-anotice-stock.eastmoney.com/api/security/ann')
+  url.searchParams.set('page_size', String(Math.max(limit, 20)))
+  url.searchParams.set('page_index', '1')
+  url.searchParams.set('ann_type', 'A')
+  url.searchParams.set('client_source', 'web')
+  url.searchParams.set('stock_list', stockCode)
+  const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA } })
+  if (!response.ok) return []
+  const parsed: unknown = JSON.parse(await response.text())
+  const list = (parsed as { data?: { list?: Array<{ art_code?: string; title?: string; display_time?: string; notice_date?: string }> } }).data?.list
+  if (!Array.isArray(list)) return []
+  const items: NewsItem[] = []
+  for (const it of list) {
+    if (!it.title || !it.art_code) continue
+    const timeStr = it.display_time || it.notice_date || ''
+    const ts = parseCnShowTime(timeStr.slice(0, 19))
+    items.push({
+      source: 'eastmoney-announcement',
+      title: it.title,
+      url: `https://data.eastmoney.com/notices/detail/${stockCode}/${encodeURIComponent(it.art_code)}.html`,
+      publishedAt: Number.isFinite(ts) ? new Date(ts).toISOString() : new Date().toISOString(),
+      relatedCodes: [stockCode],
+    })
+  }
+  return items
+}
+
 function inWindow(publishedAt: string, nowMs: number, windowMs: number): boolean {
   const ts = Date.parse(publishedAt)
   if (!Number.isFinite(ts)) return false
@@ -130,14 +160,20 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
   const windowMs = windowHours * 3_600_000
   const limit = clampNumber(options.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
 
-  const results = await Promise.allSettled([fetchEastmoney(fetchImpl, limit)])
+  const tasks: Promise<NewsItem[]>[] = [fetchEastmoney(fetchImpl, limit)]
+  if (options.symbol) {
+    tasks.push(fetchEastmoneyAnnouncements(fetchImpl, options.symbol, limit))
+  }
+
+  const results = await Promise.allSettled(tasks)
 
   const items: NewsItem[] = []
   const unavailable: string[] = []
   for (const result of results) {
     if (result.status === 'fulfilled') {
       for (const item of result.value) {
-        if (!inWindow(item.publishedAt, now, windowMs)) continue
+        // 公告由于发布频次较低（周/月级），不因 24h 窗口过度截断，保留最新公告
+        if (item.source !== 'eastmoney-announcement' && !inWindow(item.publishedAt, now, windowMs)) continue
         if (!matchesSymbol(item, options.symbol)) continue
         items.push(item)
       }

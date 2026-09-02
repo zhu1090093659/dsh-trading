@@ -51,9 +51,15 @@ function relativeTime(isoString: string): string {
 
 function getSourceType(source: string): string {
   const lower = source.toLowerCase()
-  if (lower.includes('exchange') || lower.includes('交易所') || lower.includes('公告')) return 'exchange'
+  if (lower.includes('exchange') || lower.includes('announcement') || lower.includes('交易所') || lower.includes('公告')) return 'exchange'
   if (lower.includes('rss')) return 'rss'
   return 'media'
+}
+
+function formatSourceLabel(source: string): string {
+  if (source === 'eastmoney-announcement') return '公司公告'
+  if (source === 'eastmoney') return '东方财富'
+  return source
 }
 
 export function NewsFeedPane({ items, unavailable, fallback, fullHeight = false, filterType = 'all', t, fillComposer }: NewsFeedPaneProps): React.JSX.Element {
@@ -67,7 +73,7 @@ export function NewsFeedPane({ items, unavailable, fallback, fullHeight = false,
 
   const filteredItems = items === null ? null : (
     filterType === 'exchange'
-      ? items.filter(it => getSourceType(it.source) === 'exchange' || it.title.includes('公告') || it.title.includes('提示') || it.title.includes('决议'))
+      ? items.filter(it => getSourceType(it.source) === 'exchange' || it.title.includes('公告') || it.title.includes('提示') || it.title.includes('决议') || it.title.includes('报告'))
       : items
   )
 
@@ -97,10 +103,10 @@ export function NewsFeedPane({ items, unavailable, fallback, fullHeight = false,
         </div>
       )}
       <ul className={css.list}>
-        {items.map((item, index) => (
+        {filteredItems.map((item, index) => (
           <li key={`${item.url}-${index}`} className={css.item} onClick={() => window.open(item.url, '_blank', 'noopener')}>
             <span className={css.source} data-type={getSourceType(item.source)}>
-              {item.source}
+              {formatSourceLabel(item.source)}
             </span>
             <span className={css.title} title={item.title}>
               {item.title}
