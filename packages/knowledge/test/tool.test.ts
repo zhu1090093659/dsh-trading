@@ -177,6 +177,60 @@ describe('Knowledge Agent Tools', () => {
     await expect((getTool as any).execute({})).rejects.toThrow()
   })
 
+  it('knowledge_search caps detail=full at 20 results even with a higher limit', async () => {
+    const mkCard = (id: string): KnowledgeCard => ({
+      id,
+      title: `宏观卡片 ${id}`,
+      summary: '宏观主题摘要。',
+      source: { type: 'manual', url: `manual:${id}`, author: '手工' },
+      credibility: 'medium',
+      coreClaims: [],
+      factCheck: { verified: [], discrepancies: [], unverifiable: [] },
+      takeaways: [],
+      boundaries: [],
+      tags: ['宏观'],
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    })
+    const store = createMemoryKnowledgeCardStore(Array.from({ length: 25 }, (_, i) => mkCard(`kc_bulk_${String(i).padStart(2, '0')}`)))
+    const searchTool = createKnowledgeSearchTool(store)
+
+    const fullRes = await (searchTool as any).execute({ query: '宏观', detail: 'full', limit: 50 })
+    const fullHits = fullRes.match(/- \[kc_/g) ?? []
+    expect(fullHits.length).toBe(20)
+
+    const summaryRes = await (searchTool as any).execute({ query: '宏观', limit: 50 })
+    const summaryHits = summaryRes.match(/- \[kc_/g) ?? []
+    expect(summaryHits.length).toBe(25)
+  })
+
+  it('knowledge_search filters by cluster (first tag) for two-level drill-down', async () => {
+    const store = createMemoryKnowledgeCardStore()
+    const ingestTool = createKnowledgeIngestTool(store)
+    const searchTool = createKnowledgeSearchTool(store)
+
+    await (ingestTool as any).execute(createSampleIngestArgs('https://www.bilibili.com/video/BV_c1', '周期主体卡片'))
+    await (ingestTool as any).execute({
+      ...createSampleIngestArgs('https://mp.weixin.qq.com/s/wx_c2', '宏观主体卡片'),
+      sourceType: 'wechat',
+      sourceUrl: 'https://mp.weixin.qq.com/s/wx_c2',
+      tagsJson: JSON.stringify(['红利', '宏观']),
+    })
+
+    // 主体 = 首标签精确匹配：周期主体只命中第一张
+    const clusterRes = await (searchTool as any).execute({ cluster: '周期' })
+    expect(clusterRes).toContain('周期主体卡片')
+    expect(clusterRes).not.toContain('宏观主体卡片')
+
+    // 「宏观」是第二张卡的第二标签而非主体——cluster 不命中
+    const notClusterRes = await (searchTool as any).execute({ cluster: '宏观' })
+    expect(notClusterRes).toContain('未搜索到')
+
+    // tags 过滤仍按任意标签命中
+    const tagsRes = await (searchTool as any).execute({ tags: '宏观' })
+    expect(tagsRes).toContain('宏观主体卡片')
+  })
+
   it('knowledge_delete removes a card, cleans dangling related references and fires the event callback', async () => {
     const store = createMemoryKnowledgeCardStore()
     const ingestTool = createKnowledgeIngestTool(store)

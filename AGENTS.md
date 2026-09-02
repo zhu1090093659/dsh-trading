@@ -27,4 +27,4 @@ DSH 交易插件包 monorepo：按市场组织 bundle（crypto/us/cn/hk），主
 
 ## 交易会话守则（Trading Session）
 
-对任何标的、行业或宏观主题做正式分析前，先调 `knowledge_search` 检索本地知识库（按标的代码、行业与主题标签）：命中的知识卡片作为线索证据纳入分析并标注卡片 id 便于溯源，未命中如实说明「知识库无相关沉淀」。卡片是「别人观点的结构化转述」——转述≠背书，只作线索证据，不替代原始披露与权威数据；注意卡片时效（`updatedAt` 与素材发布时间），宏观/政策类观点过期即降权，不当作当前事实引用；对外明示不构成投资建议。分析中形成新的可复用结论时，按 knowledge-curation skill 建议用户查重后入库。交易日志纪律（双轨 append-only、先闸门后记账）见 trading-notes-setup skill；该 skill 在无本守则的外部工作区建骨架时，把同款守则写入 `.trading-journal/AGENTS.md` 作便携兜底。
+对任何标的、行业或宏观主题做正式分析前，先调 `knowledge_search` 检索本地知识库（按标的代码、行业与主题标签）：命中的知识卡片作为线索证据纳入分析并标注卡片 id 便于溯源，未命中如实说明「知识库无相关沉淀」。知识库按主体组织（图谱聚类），两级检索：主题宽泛或不确定时先 `knowledge_graph` 看主体分布，再 `knowledge_search` 按 `cluster` 钻取、`knowledge_get` 读全文。卡片是「别人观点的结构化转述」——转述≠背书，只作线索证据，不替代原始披露与权威数据；注意卡片时效（`updatedAt` 与素材发布时间），宏观/政策类观点过期即降权，不当作当前事实引用；对外明示不构成投资建议。分析中形成新的可复用结论时，按 knowledge-curation skill 建议用户查重后入库。交易日志纪律（双轨 append-only、先闸门后记账）见 trading-notes-setup skill；该 skill 在无本守则的外部工作区建骨架时，把同款守则写入 `.trading-journal/AGENTS.md` 作便携兜底。

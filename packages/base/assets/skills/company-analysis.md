@@ -166,7 +166,7 @@ description: Use this skill when the user wants to analyze a listed company, sto
 
 公司分析默认把 Wind MCP 作为第一取数入口。凡用户问题涉及 A 股、港股、美股、基金、指数、债券、上市公司公告、财经新闻、宏观经济或行业指标，且内置 Wind MCP 支持该范围时，必须先使用 Wind 获取行情、估值、K 线、财务、股东、事件、技术、风险、公告、新闻、宏观或行业数据；不得先用 Web Search、通用网页、非 Wind 插件或记忆替代。
 
-在 Wind 结构化取数的同时，先调 `knowledge_search` 检索本地知识库中与标的、行业和主题相关的知识卡片（需要全文用 `detail: "full"`）：命中卡片是「别人观点的结构化转述」，按信源分级表归入 C/D 级——只能作为线索与假设来源，不得单独定论，引用时标注卡片 id 并列入「来源与口径」；未命中也如实说明「知识库无相关沉淀」。
+在 Wind 结构化取数的同时，先调 `knowledge_search` 检索本地知识库中与标的、行业和主题相关的知识卡片（需要全文用 `detail: "full"`）：命中卡片是「别人观点的结构化转述」，按信源分级表归入 C/D 级——只能作为线索与假设来源，不得单独定论，引用时标注卡片 id 并列入「来源与口径」；未命中也如实说明「知识库无相关沉淀」。主题宽泛或不确定时走两级检索：先 `knowledge_graph` 看主体（聚类）分布，再 `knowledge_search` 按 `cluster` 钻取。
 
 调用 Wind 时，优先使用本 skill 内置资源，不依赖外部单独安装的 `wind-mcp-skill`：
 

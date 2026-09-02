@@ -225,7 +225,8 @@ export function createKnowledgeSearchTool(store: KnowledgeCardStore) {
     description:
       '检索本地知识库中的知识卡片。'
       + '有关键词时按字段命中相关度排序（标签 > 标题 > 核心论点 > 摘要/作者），无关键词时按更新时间倒序；'
-      + '支持按作者、来源类型、可信度多维过滤。detail="full" 时同时返回核心论点、事实核查与可复用经验全文。',
+      + '支持按主体（cluster，配合 knowledge_graph 两级检索）、作者、来源类型、可信度多维过滤。'
+      + 'detail="full" 时同时返回核心论点、事实核查与可复用经验全文（上限 20 张）。',
     parameters: {
       query: {
         type: 'string',
@@ -234,6 +235,10 @@ export function createKnowledgeSearchTool(store: KnowledgeCardStore) {
       tags: {
         type: 'string',
         description: '逗号分隔的标签过滤（例如 "宏观,高股息"，匹配其中任意一个）',
+      },
+      cluster: {
+        type: 'string',
+        description: '按主体精确过滤（主体 = 图谱聚类键 = 卡片首个标签）。两级检索第二级：先 knowledge_graph 看主体分布，再用本参数钻取该主体下的卡片',
       },
       author: {
         type: 'string',
@@ -266,6 +271,7 @@ export function createKnowledgeSearchTool(store: KnowledgeCardStore) {
       const params = (raw ?? {}) as {
         query?: unknown
         tags?: unknown
+        cluster?: unknown
         author?: unknown
         sourceType?: unknown
         credibility?: unknown
@@ -277,16 +283,22 @@ export function createKnowledgeSearchTool(store: KnowledgeCardStore) {
       const queryLower = typeof params.query === 'string' ? params.query.trim().toLowerCase() : ''
       const authorLower = typeof params.author === 'string' ? params.author.trim().toLowerCase() : ''
       const rawTags = typeof params.tags === 'string' ? params.tags.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean) : []
+      const targetCluster = typeof params.cluster === 'string' ? params.cluster.trim().toLowerCase() : ''
       const targetSourceType = typeof params.sourceType === 'string' ? params.sourceType.trim() : undefined
       const targetCredibility = typeof params.credibility === 'string' ? params.credibility.trim() : undefined
       const limit = typeof params.limit === 'number' && Number.isFinite(params.limit) ? Math.max(1, Math.min(params.limit, 100)) : 20
       const detail = params.detail === 'full' ? 'full' : 'summary'
+      // detail=full 时单卡输出约 1-2KB：上限收口到 20，避免一次调用向上下文倾倒百卡全文。
+      const effectiveLimit = detail === 'full' ? Math.min(limit, 20) : limit
 
       const matched = allCards.filter((card) => {
         if (targetSourceType && card.source.type !== targetSourceType) {
           return false
         }
         if (targetCredibility && card.credibility !== targetCredibility) {
+          return false
+        }
+        if (targetCluster && (card.tags[0] ?? '').trim().toLowerCase() !== targetCluster) {
           return false
         }
         if (authorLower && !card.source.author.toLowerCase().includes(authorLower)) {
@@ -327,7 +339,7 @@ export function createKnowledgeSearchTool(store: KnowledgeCardStore) {
         b.score - a.score
         || new Date(b.card.updatedAt).getTime() - new Date(a.card.updatedAt).getTime(),
       )
-      const results = scored.slice(0, limit).map((s) => s.card)
+      const results = scored.slice(0, effectiveLimit).map((s) => s.card)
 
       const lines: string[] = [
         `[knowledge_search] 匹配到 ${matched.length} 张卡片 (展示前 ${results.length} 项${detail === 'full' ? ', detail=full' : ''}):`,

@@ -57,9 +57,10 @@ export function createKnowledgeGraphTool(options: KnowledgeGraphToolOptions) {
   return defineTool({
     name: 'knowledge_graph',
     description:
-      'Build a structural overview of the persisted knowledge cards (nodes = cards, edges = shared tags/authors/related). '
-      + 'Read-only: returns counts, top topic clusters and credibility distribution. '
-      + 'For concrete card content use knowledge_search / knowledge_get instead.',
+      'Level 1 of the two-level knowledge retrieval: structural overview of the persisted cards '
+      + '(nodes = cards, edges = shared tags/authors/related). Returns the full cluster (topic) '
+      + 'distribution and credibility counts. Pick a cluster here, then drill down with '
+      + 'knowledge_search { cluster } and read full cards with knowledge_get.',
     parameters: {},
     output: {
       schema: { type: 'string' },
@@ -68,8 +69,8 @@ export function createKnowledgeGraphTool(options: KnowledgeGraphToolOptions) {
     async execute() {
       const cards = await store.list()
       const data = buildGraph(cards)
-      // 知识库增大后全量 label 倾倒是无差别 token 消耗：结构发现收敛为
-      // 聚类 top-N + 可信度分布；具体内容一律走 knowledge_search / knowledge_get。
+      // 两级检索第一级：主体（聚类键 = 卡片首个标签）全量分布——清洗后约 10-20 个
+      // 主体，全量返回成本可忽略；卡片级内容一律走 knowledge_search / knowledge_get。
       const clusterCounts = new Map<string, number>()
       const credibility = { high: 0, medium: 0, low: 0 }
       for (const card of cards) {
@@ -77,16 +78,15 @@ export function createKnowledgeGraphTool(options: KnowledgeGraphToolOptions) {
         clusterCounts.set(cluster, (clusterCounts.get(cluster) ?? 0) + 1)
         credibility[card.credibility] += 1
       }
-      const topClusters = [...clusterCounts.entries()]
+      const clusters = [...clusterCounts.entries()]
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
         .map(([cluster, count]) => ({ cluster, count }))
       return JSON.stringify({
         ok: true,
         cards: cards.length,
         nodeCount: data.nodes.length,
         edgeCount: data.links.length,
-        topClusters,
+        clusters,
         credibility,
       })
     },
