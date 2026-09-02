@@ -25,8 +25,8 @@ export interface NewsFeedPaneProps {
   fallback?: boolean
   /** 是否占满高度（用于 Tab 独立页签视图） */
   fullHeight?: boolean
-  /** 过滤类型：仅公告（exchange）或全部资讯 */
-  filterType?: 'exchange' | 'all'
+  /** 过滤类型：仅公告（exchange）、仅媒体快讯（media）或全部资讯（all） */
+  filterType?: 'exchange' | 'media' | 'all'
   /** 国际化翻译函数 */
   t: (key: MarketLocaleKey) => string
   /** 发给 Agent 分析 */
@@ -74,7 +74,9 @@ export function NewsFeedPane({ items, unavailable, fallback, fullHeight = false,
   const filteredItems = items === null ? null : (
     filterType === 'exchange'
       ? items.filter(it => getSourceType(it.source) === 'exchange' || it.title.includes('公告') || it.title.includes('提示') || it.title.includes('决议') || it.title.includes('报告'))
-      : items
+      : filterType === 'media'
+        ? items.filter(it => getSourceType(it.source) !== 'exchange' && it.source !== 'eastmoney-announcement')
+        : items
   )
 
   const rootClass = `${css.pane} ${fullHeight ? css.fullHeight : ''}`
@@ -97,7 +99,7 @@ export function NewsFeedPane({ items, unavailable, fallback, fullHeight = false,
 
   return (
     <div className={rootClass} data-dshtrading-news-feed="">
-      {fallback && filterType === 'all' && (
+      {fallback && filterType !== 'exchange' && (
         <div className={css.fallbackBanner}>
           📌 该标的 24 小时内暂无专属快讯，已为您展示市场最新要闻
         </div>

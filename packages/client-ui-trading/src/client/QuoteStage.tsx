@@ -830,6 +830,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             unavailable={newsUnavailable}
             fallback={newsFallback}
             fullHeight
+            filterType="media"
             t={t}
             fillComposer={fillComposer}
           />

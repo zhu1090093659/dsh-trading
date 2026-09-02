@@ -539,16 +539,17 @@ export class TradingBridge {
 
     let items = result.items
     let isFallback = false
-    // 智能回退：若指定了具体标的但 24h 内无专属快讯，自动回退拉取市场大盘最新要闻
-    if (items.length === 0 && symbol && result.unavailable.length === 0) {
+    // 智能回退：若指定了具体标的但 24h 内无专属媒体快讯，自动回退拉取市场大盘最新要闻并并入
+    const mediaNewsCount = items.filter(it => it.source !== 'eastmoney-announcement').length
+    if (mediaNewsCount === 0 && symbol && result.unavailable.length === 0) {
       try {
         const macroResult = await aggregator({
-          limit: limit ?? 20,
+          limit: limit ?? 50,
           windowHours: 24,
           cryptoPanicKey: this.host.newsKey?.(),
         })
         if (macroResult.items.length > 0) {
-          items = macroResult.items
+          items = [...macroResult.items, ...items]
           isFallback = true
         }
       } catch {}
