@@ -21,6 +21,8 @@ export interface NewsFeedPaneProps {
   items: readonly ClientNewsItem[] | null
   /** 失败的数据源 */
   unavailable?: readonly string[]
+  /** 是否为无专属快讯时回退展示的宏观/大盘要闻 */
+  fallback?: boolean
   /** 国际化翻译函数 */
   t: (key: MarketLocaleKey) => string
   /** 发给 Agent 分析 */
@@ -50,7 +52,7 @@ function getSourceType(source: string): string {
   return 'media'
 }
 
-export function NewsFeedPane({ items, unavailable, t, fillComposer }: NewsFeedPaneProps): React.JSX.Element {
+export function NewsFeedPane({ items, unavailable, fallback, t, fillComposer }: NewsFeedPaneProps): React.JSX.Element {
   const [, setNow] = useState(Date.now())
   
   // 每分钟更新一次相对时间
@@ -77,6 +79,11 @@ export function NewsFeedPane({ items, unavailable, t, fillComposer }: NewsFeedPa
 
   return (
     <div className={css.pane} data-dshtrading-news-feed="">
+      {fallback && (
+        <div className={css.fallbackBanner}>
+          📌 该标的 24 小时内暂无专属快讯，已为您展示市场最新要闻
+        </div>
+      )}
       <ul className={css.list}>
         {items.map((item, index) => (
           <li key={`${item.url}-${index}`} className={css.item} onClick={() => window.open(item.url, '_blank', 'noopener')}>

@@ -14,10 +14,10 @@
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
 import type { AccountBalance, DerivativesData, FundamentalsPackage, Interval, Kline, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
-import { fetchCnFundamentalsPackage } from '@dsh-trading/kit-cn'
-import { fetchHkFundamentalsPackage } from '@dsh-trading/kit-hk'
-import { fetchUsFundamentalsPackage } from '@dsh-trading/kit-us'
-import { fetchCryptoFundamentalsPackage } from '@dsh-trading/kit-crypto'
+import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dsh-trading/kit-cn'
+import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dsh-trading/kit-hk'
+import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dsh-trading/kit-us'
+import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dsh-trading/kit-crypto'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/indicators'
 import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
@@ -508,15 +508,21 @@ export class TradingBridge {
 
   /**
    * 标的新闻与公告聚合（issue #37）：按市场从 newsRegistry 解析到 Kit 注册的
-   * 纯 HTTP 聚合器，透传 symbol/limit 参数。Kit 未注册（Preset 不活跃或该市场
-   * bundle 未安装）→ TRADING_NOT_IMPLEMENTED 业务错误，前端显示空态提示。
+   * 聚合器；未注册时回退到各 Kit 导出的 aggregateNews 纯函数（无活跃会话时亦可用）。
+   * 若标的无专属快讯，智能回退为大盘/市场最新要闻并在 fallback 标记。
    */
   async news(market: string, symbol: string | null, rawLimit: string | null): Promise<NewsWire> {
     if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
     const aggregator = this.host.newsRegistry?.get(market)
+      ?? (market === 'cn' ? aggregateCnNews
+        : market === 'hk' ? aggregateHkNews
+        : market === 'us' ? aggregateUsNews
+        : market === 'crypto' ? aggregateCryptoNews
+        : undefined)
+
     if (aggregator === undefined) {
       throw Object.assign(
-        new Error(`market ${market} does not have a news provider — kit not installed or session inactive`),
+        new Error(`market ${market} does not have a news provider`),
         { code: 'TRADING_NOT_IMPLEMENTED' },
       )
     }
@@ -530,7 +536,25 @@ export class TradingBridge {
       windowHours: 24,
       cryptoPanicKey: this.host.newsKey?.(),
     })
-    return { ok: true, items: result.items, unavailable: result.unavailable }
+
+    let items = result.items
+    let isFallback = false
+    // 智能回退：若指定了具体标的但 24h 内无专属快讯，自动回退拉取市场大盘最新要闻
+    if (items.length === 0 && symbol && result.unavailable.length === 0) {
+      try {
+        const macroResult = await aggregator({
+          limit: limit ?? 20,
+          windowHours: 24,
+          cryptoPanicKey: this.host.newsKey?.(),
+        })
+        if (macroResult.items.length > 0) {
+          items = macroResult.items
+          isFallback = true
+        }
+      } catch {}
+    }
+
+    return { ok: true, items, unavailable: result.unavailable, fallback: isFallback }
   }
 
   /** 自定义策略名册（issue #31）：返回记录，前端校验后并入名册。 */

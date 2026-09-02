@@ -158,6 +158,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [newsOpen, setNewsOpen] = useState(() => localStorage.getItem(NEWS_OPEN_KEY) === 'true')
   const [newsItems, setNewsItems] = useState<ClientNewsItem[] | null>(null)
   const [newsUnavailable, setNewsUnavailable] = useState<string[]>([])
+  const [newsFallback, setNewsFallback] = useState<boolean>(false)
 
   // ── K 线标记（issue #41）──────────────────────────────────────
   const [markerStore] = useState(() => createMarkerStateStore())
@@ -289,6 +290,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setDerivatives(null)
     setOrderbook(null)
     setTrades(null)
+    setNewsFallback(false)
   }, [market, symbol])
 
   // ticker 轮询：头部价格 + 尾随合并最后一根 K 线
@@ -312,6 +314,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     if (result !== null) {
       setNewsItems(result.items)
       setNewsUnavailable(result.unavailable)
+      setNewsFallback(Boolean(result.fallback))
     }
   }, NEWS_POLL_MS, [market, symbol, newsOpen])
 
@@ -792,6 +795,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               <NewsFeedPane
                 items={newsItems}
                 unavailable={newsUnavailable}
+                fallback={newsFallback}
                 t={t}
                 fillComposer={fillComposer}
               />

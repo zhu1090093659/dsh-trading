@@ -223,6 +223,7 @@ export interface ClientNewsItem {
 export interface ClientNewsResult {
   items: ClientNewsItem[]
   unavailable: string[]
+  fallback?: boolean
 }
 
 /**
@@ -231,10 +232,10 @@ export interface ClientNewsResult {
 export async function fetchNews(market: MarketId, symbol?: string, limit = 20): Promise<ClientNewsResult | null> {
   try {
     const query = new URLSearchParams({ market, ...(symbol ? { symbol } : {}), limit: String(limit) })
-    const wire = await getJson<{ ok: boolean; items: ClientNewsItem[]; unavailable: string[] }>(
-      `/dshtrading/api/news?${query.toString()}`
+    const wire = await getJson<{ ok: boolean; items: ClientNewsItem[]; unavailable: string[]; fallback?: boolean }>(
+      `/dshtrading/api/news?${query.toString()}`,
     )
-    return { items: wire.items ?? [], unavailable: wire.unavailable ?? [] }
+    return { items: wire.items ?? [], unavailable: wire.unavailable ?? [], fallback: wire.fallback }
   } catch {
     return null
   }
