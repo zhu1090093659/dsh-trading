@@ -2,7 +2,7 @@
  * Crypto 工具箱插件（dsh-trading crypto 切片）。
  *
  * 包含：
- *   1. skill provider：crypto-risk-checklist、crypto-instrument-analysis、indicator-authoring、trading-strategy-paradigms 与 knowledge-curation 随包分发；
+ *   1. skill provider：crypto-risk-checklist、crypto-instrument-analysis、indicator-authoring、trading-strategy-paradigms、knowledge-curation 与 trading-notes-setup 随包分发；
  *   2. crypto_funding_rate（Binance 公共资金费率）；
  *   3. crypto_get_news（动态聚合新闻）；
  *   4. crypto_get_derivatives 与 crypto_get_fundamentals 工具；
@@ -38,6 +38,7 @@ const ANALYSIS_BODY_URL = new URL('../assets/skills/crypto-instrument-analysis.m
 const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
 const STRATEGY_BODY_URL = new URL('../assets/skills/trading-strategy-paradigms.md', import.meta.url)
 const KNOWLEDGE_CURATION_BODY_URL = new URL('../assets/skills/knowledge-curation.md', import.meta.url)
+const JOURNAL_BODY_URL = new URL('../assets/skills/trading-notes-setup.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -98,12 +99,25 @@ const KNOWLEDGE_CURATION_CANDIDATE: SkillCandidate = {
   locator: KNOWLEDGE_CURATION_BODY_URL,
 }
 
+const JOURNAL_CANDIDATE: SkillCandidate = {
+  name: 'trading-notes-setup',
+  description:
+    '交易日志建立与记录规范：检查/创建工作区 .trading-journal/ 双轨目录（agent 轨 + human 轨），分别记录 agent 与人类各自的操作。会话启动检查发现工作区没有交易日志目录时调用本技能建立骨架；记录条目格式以本技能为权威。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: JOURNAL_BODY_URL,
+}
+
 const SKILL_CANDIDATES = [
   CANDIDATE,
   ANALYSIS_CANDIDATE,
   AUTHORING_CANDIDATE,
   STRATEGY_CANDIDATE,
   KNOWLEDGE_CURATION_CANDIDATE,
+  JOURNAL_CANDIDATE,
 ]
 
 export const provider: SkillProvider = {

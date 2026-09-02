@@ -2,7 +2,7 @@
  * US 工具箱插件（dsh-trading us 切片）。
  *
  * 包含：
- *   1. skill provider：us-risk-checklist、indicator-authoring、trading-strategy-paradigms 与 knowledge-curation 随包分发；
+ *   1. skill provider：us-risk-checklist、indicator-authoring、trading-strategy-paradigms、knowledge-curation 与 trading-notes-setup 随包分发；
  *   2. us_get_news 与 us_get_fundamentals 工具；
  *   3. indicator_author 创作工具（Issue #19）；
  *   4. knowledge_ingest 与 knowledge_search 知识库工具（Issue #24）。
@@ -36,6 +36,7 @@ const SKILL_BODY_URL = new URL('../assets/skills/us-risk-checklist.md', import.m
 const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
 const STRATEGY_BODY_URL = new URL('../assets/skills/trading-strategy-paradigms.md', import.meta.url)
 const KNOWLEDGE_CURATION_BODY_URL = new URL('../assets/skills/knowledge-curation.md', import.meta.url)
+const JOURNAL_BODY_URL = new URL('../assets/skills/trading-notes-setup.md', import.meta.url)
 const RESOURCE_BASE = {
   kind: 'directory',
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
@@ -85,7 +86,19 @@ const KNOWLEDGE_CURATION_CANDIDATE: SkillCandidate = {
   locator: KNOWLEDGE_CURATION_BODY_URL,
 }
 
-const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE, KNOWLEDGE_CURATION_CANDIDATE]
+const JOURNAL_CANDIDATE: SkillCandidate = {
+  name: 'trading-notes-setup',
+  description:
+    '交易日志建立与记录规范：检查/创建工作区 .trading-journal/ 双轨目录（agent 轨 + human 轨），分别记录 agent 与人类各自的操作。会话启动检查发现工作区没有交易日志目录时调用本技能建立骨架；记录条目格式以本技能为权威。',
+  invocation: { modelInvocable: true, userInvocable: true },
+  provider: PROVIDER_NAME,
+  source: 'bundled',
+  resourceBase: RESOURCE_BASE,
+  rank: BUNDLED_SKILL_RANK,
+  locator: JOURNAL_BODY_URL,
+}
+
+const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE, KNOWLEDGE_CURATION_CANDIDATE, JOURNAL_CANDIDATE]
 
 export const provider: SkillProvider = {
   name: PROVIDER_NAME,

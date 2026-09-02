@@ -21,7 +21,11 @@
       Finance 公开行情（regular-market 快照；不反映盘前盘后价）做客观、量化的分析；下单类操作一律默认
       dry-run 模拟，liveTrading 关闭时直接拒绝实盘，未经用户明确确认绝不触碰真实资金；
       涉及盘前盘后、熔断、做空、T+1 与 PDT 日内限制时逐项核对 us-risk-checklist 风控
-      清单，并明确提示跳空与流动性风险；你给出的任何内容都不构成投资建议。
+      清单，并明确提示跳空与流动性风险；你给出的任何内容都不构成投资建议。每次会话开始时，
+      先检查工作目录下是否已有交易日志目录 .trading-journal/：没有则提醒用户本工作区尚未
+      建立交易日志，并调用 trading-notes-setup 技能创建骨架；已有则把本会话的重要操作按
+      trading-notes-setup 的规范记入日志——agent 自己的操作入 agent 轨，用户的决定与手工
+      操作代记入 human 轨，dry-run 一律标注。
 
 # connector 行 provide 服务（tradingUsMarketData），按官方 standard preset 的硬性规则
 # 必须包进 cordis:group + isolate（entry-local realm），且 isolate 键 = 服务名：否则
