@@ -23,7 +23,7 @@ import { createChartStateStore } from './chart-state.ts'
 import { indicators, markCustomIndicator, unmarkCustomIndicator } from './indicator-registry.ts'
 import { stageViews } from './stage-views.ts'
 import { createTradingBridgeService } from './api.ts'
-import { sendQuoteToAgent, type SendToAgentFn } from './send-to-agent.ts'
+import { fillComposerWithQuote, type FillComposerFn, type ConversationDraftFace } from './fill-composer.ts'
 import { OrderCard, WatchlistChipCard } from './toolview.tsx'
 import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
@@ -71,10 +71,15 @@ export function apply(ctx: ClientContext): void {
     ;(ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined)?.startSession()
   }
 
-  // 行情 → Agent（「发给 Agent」按钮）：复用 sessions + startNewSession 入口，
-  // 投递编排细节见 send-to-agent.ts（beginSubmission echo → prompt('queue')）。
-  const sendToAgent: SendToAgentFn = (text, image) =>
-    sendQuoteToAgent({ sessions, startSession: startNewSession }, text, image)
+  // 行情 → 会话输入框（「发给 Agent」按钮）：只把上下文 + 截图**填入 composer
+  // 不提交**（owner 裁决：用户还要补自己的 prompt）。conversation 根服务在点击
+  // 时惰性解析（同 uiWorkspace 纪律：apply 时序不保证）；编排细节见 fill-composer.ts。
+  const fillComposer: FillComposerFn = (text, image) =>
+    fillComposerWithQuote({
+      sessions,
+      conversation: ctx.get('conversation', false) as ConversationDraftFace | undefined,
+      startSession: startNewSession,
+    }, text, image)
   const openSettings = (): void => {
     // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
     // 侧栏里唯一的 [aria-haspopup=dialog]，程序化 click 走官方打开逻辑，
@@ -235,10 +240,9 @@ export function apply(ctx: ClientContext): void {
         }
         return ok
       },
-      sendToAgent,
+      fillComposer,
     }),
-  }, QuotePane))
-}
+  }, QuotePane))}
 
 /** 文案字典：locale.register 契约 = { zh, en }。 */
 function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
@@ -275,9 +279,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'quote.loadFailed': 'K线加载失败',
       'quote.noData': '暂无数据',
       'quote.sendToAgent': '发给 Agent',
-      'quote.sendSending': '发送中…',
-      'quote.sendSent': '已发给 Agent',
-      'quote.sendFailed': '发送失败',
+      'quote.sendToAgentHint': '把当前标的行情与图表截图填入会话输入框（可继续编辑，自行发送）',
+      'quote.sendSending': '填入中…',
+      'quote.sendSent': '已填入输入框',
+      'quote.sendFailed': '填入失败',
       'interval.1m': '1分',
       'interval.3m': '3分',
       'interval.5m': '5分',
@@ -349,9 +354,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'quote.loadFailed': 'Failed to load klines',
       'quote.noData': 'No data',
       'quote.sendToAgent': 'Send to agent',
-      'quote.sendSending': 'Sending…',
-      'quote.sendSent': 'Sent to agent',
-      'quote.sendFailed': 'Send failed',
+      'quote.sendToAgentHint': 'Fill the quote context and chart screenshot into the composer (edit freely, send yourself)',
+      'quote.sendSending': 'Filling…',
+      'quote.sendSent': 'Filled into composer',
+      'quote.sendFailed': 'Fill failed',
       'interval.1m': '1m',
       'interval.3m': '3m',
       'interval.5m': '5m',

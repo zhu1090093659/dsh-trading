@@ -9,7 +9,7 @@ import { fetchKlines, fetchTickers } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
-import type { SendImageInput } from './send-to-agent.ts'
+import type { SendImageInput } from './fill-composer.ts'
 import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import {
@@ -59,8 +59,8 @@ export interface QuoteStageProps {
   setIndicatorParams: (id: string, params: Record<string, number>) => void
   /** 删除自定义指标（issue #30 删除入口；仅自定义行渲染按钮）。 */
   deleteIndicator: (id: string) => Promise<boolean>
-  /** 发给 Agent（shell 注入；缺席时按钮不渲染，独立渲染/单测安全）。 */
-  sendToAgent?: (text: string, image?: SendImageInput) => Promise<void>
+  /** 行情上下文 → 会话输入框（只填入不发送；shell 注入，缺席时按钮不渲染）。 */
+  fillComposer?: (text: string, image?: SendImageInput) => Promise<void>
 }
 
 function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
@@ -74,7 +74,7 @@ function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
 
 type SendState = 'idle' | 'sending' | 'sent' | 'error'
 
-export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator, sendToAgent }: QuoteStageProps) {
+export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator, fillComposer }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
   const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk'].includes(instrument.market))
     ? (instrument.market as MarketId)
@@ -243,9 +243,10 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   // 所有可用指标（供底部词条栏横向快捷展示）
   const allDefinitions = useMemo(() => indicators.list(), [rosterVersion])
 
-  // 发给 Agent：先截图（画布只在图表挂载期间可取），再投文本 + PNG。
+  // 发给 Agent：先截图（画布只在图表挂载期间可取），再把文本 + PNG 填入
+  // 会话输入框（不自动发送——用户大概率还要补自己的 prompt）。
   const onSendToAgent = (): void => {
-    if (sendToAgent === undefined || sendState === 'sending') return
+    if (fillComposer === undefined || sendState === 'sending') return
     const capture = captureRef.current?.() ?? null
     const text = composeQuoteMessage({
       name: instrument?.name,
@@ -261,7 +262,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       withScreenshot: capture !== null,
     })
     setSendState('sending')
-    void sendToAgent(text, capture === null ? undefined : {
+    void fillComposer(text, capture === null ? undefined : {
       dataUrl: capture.dataUrl,
       name: `${symbol}-${chartInterval}.png`,
       width: capture.width,
@@ -272,7 +273,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         window.setTimeout(() => { setSendState('idle') }, 2000)
       })
       .catch((error: unknown) => {
-        console.warn('[dsh-trading] send quote to agent failed:', error)
+        console.warn('[dsh-trading] fill composer from quote failed:', error)
         setSendState('error')
         window.setTimeout(() => { setSendState('idle') }, 2600)
       })
@@ -347,13 +348,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         </div>
 
         <div className={css.toolbarActions}>
-          {sendToAgent !== undefined && (
+          {fillComposer !== undefined && (
             <button
               type="button"
               className={css.sendButton}
               data-state={sendState === 'idle' ? undefined : sendState}
               disabled={sendState === 'sending'}
-              title={t('quote.sendToAgent')}
+              title={t('quote.sendToAgentHint')}
               onClick={onSendToAgent}
             >
               <IconSend size={13} />
