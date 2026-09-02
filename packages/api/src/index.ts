@@ -699,13 +699,13 @@ export interface NewsItem {
 /** 新闻聚合请求选项。 */
 export interface AggregateNewsOptions {
   /** 输出条数上限（1~50，默认 20）。 */
-  limit?: number
+  limit?: number | undefined
   /** 时间窗口（小时，1~168，默认 24）。 */
-  windowHours?: number
+  windowHours?: number | undefined
   /** 按标的代码过滤（可选）。 */
-  symbol?: string
+  symbol?: string | undefined
   /** CryptoPanic API token（仅 crypto 市场使用，可选）。 */
-  cryptoPanicKey?: string
+  cryptoPanicKey?: string | undefined
 }
 
 /** 新闻聚合结果。 */

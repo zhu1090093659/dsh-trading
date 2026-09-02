@@ -74,9 +74,9 @@ export function createBridgeHost(services: {
   watchlistStore?: WatchlistStore
   selectionStore?: SelectionStore
   /** 新闻注册表（issue #37）。 */
-  newsRegistry?: TradingNewsRegistryLike
+  newsRegistry?: TradingNewsRegistryLike | undefined
   /** CryptoPanic API token 取值函数（从 router settings 获取；可选）。 */
-  newsKey?: () => string | undefined
+  newsKey?: (() => string | undefined) | undefined
 }): BridgeHost {
   return {
     getMarketService: market => {
@@ -125,9 +125,9 @@ export interface BridgeHost {
    */
   getTradeService?(market: MarketId): TradeService | undefined
   /** 新闻注册表（可选，issue #37）：各市场 Kit 注册的新闻聚合器。 */
-  newsRegistry?: TradingNewsRegistryLike
+  newsRegistry?: TradingNewsRegistryLike | undefined
   /** CryptoPanic API token 取值函数（从 router settings 获取；可选，issue #37）。 */
-  newsKey?: () => string | undefined
+  newsKey?: (() => string | undefined) | undefined
 }
 
 export interface MarketInfoWire {
@@ -236,6 +236,7 @@ export interface NewsWire {
   ok: true
   items: readonly NewsItem[]
   unavailable: readonly string[]
+  fallback?: boolean | undefined
 }
 
 /** 新闻端点条目上限（保护公共数据源；超出部分由 Kit 层截流）。 */

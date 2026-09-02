@@ -344,38 +344,43 @@
   background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
 }
 
-/* 发给 Agent：与 pickerButton 同族；sent/error 态短暂换色后自动复位。 */
+/* 发给 Agent：强化主色调与高辨识度，深浅主题均明亮清晰。 */
 .sendButton {
   appearance: none;
-  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
-  background: var(--dsw-futu-bg-surface, #ffffff);
-  color: var(--dsw-futu-text-primary, #1a1e24);
+  border: 1px solid var(--dsw-futu-accent-border, rgba(37, 99, 235, 0.25));
+  background: var(--dsw-futu-accent-subtle, rgba(37, 99, 235, 0.08));
+  color: var(--dsw-futu-accent-text, #2563eb);
+  font-weight: 500;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 9px;
+  padding: 3px 10px;
   border-radius: var(--dsw-futu-radius-md, 6px);
   font-size: 11.5px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: all 0.15s ease;
 }
 
 .sendButton:hover:not(:disabled) {
-  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
+  background: var(--dsw-futu-accent, #2563eb);
+  border-color: var(--dsw-futu-accent, #2563eb);
+  color: #ffffff;
 }
 
 .sendButton:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: default;
 }
 
 .sendButton[data-state='sent'] {
   border-color: rgba(34, 160, 93, 0.45);
+  background: rgba(34, 160, 93, 0.1);
   color: #16a34a;
 }
 
 .sendButton[data-state='error'] {
   border-color: rgba(220, 38, 38, 0.45);
+  background: rgba(220, 38, 38, 0.1);
   color: #dc2626;
 }
 

@@ -41,7 +41,7 @@ function enumerateConfigs() {
   for (const pkg of readdirSync(join(ROOT, 'packages')).sort()) {
     const pkgDir = join(ROOT, 'packages', pkg)
     for (const f of readdirSync(pkgDir).sort()) {
-      if (/^tsconfig[^/]*\.json$/.test(f)) configs.push(relative(ROOT, join(pkgDir, f)))
+      if (/^tsconfig[^/]*\.json$/.test(f)) configs.push(relative(ROOT, join(pkgDir, f)).replace(/\\/g, '/'))
     }
   }
   return configs

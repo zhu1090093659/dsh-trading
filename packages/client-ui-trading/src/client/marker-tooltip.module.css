@@ -58,6 +58,6 @@
   font-size: 10px;
 }
 
-.badgeHigh { background: #dcfce7; color: #166534; }
-.badgeMedium { background: #fef9c3; color: #854d0e; }
-.badgeLow { background: #fee2e2; color: #991b1b; }
+.badgeHigh { background: var(--dsw-futu-down-bg, rgba(43, 164, 113, 0.12)); color: var(--dsw-futu-down, #2ba471); }
+.badgeMedium { background: rgba(245, 158, 11, 0.12); color: #d97706; }
+.badgeLow { background: var(--dsw-futu-up-bg, rgba(230, 69, 69, 0.12)); color: var(--dsw-futu-up, #e64545); }
