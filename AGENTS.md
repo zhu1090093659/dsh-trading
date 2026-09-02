@@ -24,3 +24,7 @@ DSH 交易插件包 monorepo：按市场组织 bundle（crypto/us/cn/hk），主
 - **铁律速记**：bundle patch insert-only；知识进 skill 随包分发；下单默认 dry-run + liveTrading 显式开关 + base 统一审批闸门；base 拥有全部市场无关行；不内置密钥、不再分发数据。
 - **交付流分级**：按改动规模与风险面分两档（有没有建 Issue 不是判据）。较大功能开发——改公共契约（packages/api）、交易安全语义（铁律 #3）、跨多包联动的新功能/重构——走「最新 main 开 `feat/<issue号>-<短名>` 分支 + PR 合并」，PR 描述挂 Issue、至少一个审查批准；小修小补（docs/notes、注释、CI 与脚本微调、单点 bug 修复、lockfile 维护）直接提交 main，不强制 PR。定案见 [PR flow note](.agents/notes/implemented/process/2026-09-02-issue-batch-assignment-pr-flow.md) 与 [scope refinement](.agents/notes/implemented/process/2026-09-02-pr-flow-scope-refined.md)。
 - **代码与 Git 规范**：提交用 Conventional Commits；不发布 npm（未授权）；DSH 宿主本体为 npm 全局安装的 `@deepseek-ai/dsh@0.1.2-alpha.3`（`/opt/homebrew/lib/node_modules/@deepseek-ai/dsh`），是 SDK cohort 与 profile 行的权威来源，全程只读；旧 checkout（/Users/zcl/code/deepseek-harness）已弃用，不再作为约束引用。
+
+## 交易会话守则（Trading Session）
+
+对任何标的、行业或宏观主题做正式分析前，先调 `knowledge_search` 检索本地知识库（按标的代码、行业与主题标签）：命中的知识卡片作为线索证据纳入分析并标注卡片 id 便于溯源，未命中如实说明「知识库无相关沉淀」。卡片是「别人观点的结构化转述」——转述≠背书，只作线索证据，不替代原始披露与权威数据；注意卡片时效（`updatedAt` 与素材发布时间），宏观/政策类观点过期即降权，不当作当前事实引用；对外明示不构成投资建议。分析中形成新的可复用结论时，按 knowledge-curation skill 建议用户查重后入库。交易日志纪律（双轨 append-only、先闸门后记账）见 trading-notes-setup skill；该 skill 在无本守则的外部工作区建骨架时，把同款守则写入 `.trading-journal/AGENTS.md` 作便携兜底。
