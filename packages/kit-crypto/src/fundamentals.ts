@@ -33,6 +33,9 @@ export interface CryptoFundamentalsResult {
 const COINCAP_API_BASE = 'https://api.coincap.io/v2'
 const BINANCE_API_BASE = 'https://api.binance.com'
 
+/** 上游超时（2026-09-02 整改）：防公共端点挂起拖死桥请求。 */
+const UPSTREAM_TIMEOUT_MS = 10_000
+
 const COMMON_COIN_ID_MAP: Record<string, string> = {
   BTC: 'bitcoin',
   ETH: 'ethereum',
@@ -73,7 +76,7 @@ async function fetchCoinCapAsset(base: string, fetchImpl: typeof globalThis.fetc
   const directId = COMMON_COIN_ID_MAP[base]
   if (directId) {
     try {
-      const res = await fetchImpl(`${COINCAP_API_BASE}/assets/${directId}`, { headers: { accept: 'application/json' } })
+      const res = await fetchImpl(`${COINCAP_API_BASE}/assets/${directId}`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
       if (res.ok) {
         const json = (await res.json()) as { data?: CoinCapAsset }
         if (json.data) return json.data
@@ -86,6 +89,7 @@ async function fetchCoinCapAsset(base: string, fetchImpl: typeof globalThis.fetc
   // 搜索端点
   const res = await fetchImpl(`${COINCAP_API_BASE}/assets?search=${encodeURIComponent(base)}&limit=5`, {
     headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
   })
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}`)
@@ -116,6 +120,7 @@ export async function fetchCryptoFundamentals(options: CryptoFundamentalsOptions
   try {
     const res = await fetchImpl(`${BINANCE_API_BASE}/api/v3/ticker/24hr?symbol=${encodeURIComponent(binancePair)}`, {
       headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     })
     if (res.ok) {
       const ticker = (await res.json()) as {

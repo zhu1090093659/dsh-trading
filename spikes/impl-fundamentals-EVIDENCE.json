@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-09-02T10:42:31.510Z",
+  "checks": [
+    {
+      "name": "eastmoney-f10-zyzb",
+      "ok": true,
+      "detail": "HTTP 200, rows>0（原始响应见 spikes/impl-fundamentals-f10-600519.json，20KB 截断）"
+    },
+    {
+      "name": "reportapi-list",
+      "ok": true,
+      "detail": "HTTP 200, rows>0（研报列表，最小 UA 无 Referer）"
+    },
+    {
+      "name": "coincap-btc",
+      "ok": false,
+      "detail": "本出口 TLS 握手被断（curl 同样 SSL_ERROR_SYSCALL）——出口级不可达，非代码缺陷；CoinCap 路径保留，运行时降级路径已由单测覆盖"
+    }
+  ]
+}

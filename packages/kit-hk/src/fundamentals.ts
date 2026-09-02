@@ -25,6 +25,22 @@ export interface HkFundamentalsResult {
 
 const TENCENT_HK_QUOTE_BASE = 'https://qt.gtimg.cn/q=r_hk'
 
+/**
+ * 东财公开端点统一取数（2026-09-02 审查整改）：最小 UA（不做浏览器伪装/伪造
+ * Referer，docs/replication.md 数据源边界）+ 10s AbortSignal 超时（对齐
+ * connector-tencent 模式，防爬取端点挂起拖死桥请求）。
+ */
+const UPSTREAM_TIMEOUT_MS = 10_000
+
+async function fetchJsonUpstream<T>(url: string, fetchImpl: typeof globalThis.fetch): Promise<T | undefined> {
+  const res = await fetchImpl(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  })
+  if (!res.ok) return undefined
+  return await res.json() as T
+}
+
 /** 规范化港股代码：接受 00700 / 700 / 00700.HK / 700.hk，输出 5 位补零代码与规范符号 00700.HK。 */
 export function normalizeHkSymbol(input: string): { code5: string; canonical: string } {
   const raw = input.trim().toLowerCase().replace(/\.hk$/, '')
@@ -118,7 +134,7 @@ export function formatHkReportPeriod(dateStr: string): string {
   if (mo === '03' || mo === '3') return `${y}/Q1`
   if (mo === '06' || mo === '6') return `${y}/H1`
   if (mo === '09' || mo === '9') return `${y}/Q3`
-  if (mo === '12' || mo === '12') return `${y}/FY`
+  if (mo === '12') return `${y}/FY`
   return `${y}/${mo}`
 }
 
@@ -127,14 +143,8 @@ export async function fetchHkFinancialMatrix(symbol: string, fetchImpl: typeof g
   try {
     const { code5 } = normalizeHkSymbol(symbol)
     const url = `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_HKF10_FN_MAININDICATOR&columns=ALL&filter=(SECUCODE%3D%22${code5}.HK%22)&pageNumber=1&pageSize=8&sortTypes=-1&sortColumns=REPORT_DATE`
-    const res = await fetchImpl(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        Referer: 'https://emweb.securities.eastmoney.com/',
-      },
-    })
-    if (!res.ok) return undefined
-    const json = await res.json() as { result?: { data?: Array<Record<string, unknown>> } }
+    const json = await fetchJsonUpstream<{ result?: { data?: Array<Record<string, unknown>> } }>(url, fetchImpl)
+    if (json === undefined) return undefined
     const rawRows = json.result?.data
     if (!Array.isArray(rawRows) || rawRows.length === 0) return undefined
 

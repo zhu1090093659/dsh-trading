@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
-  fetchKlines, fetchTickers, fetchFundamentals, fetchDerivatives, fetchOrderbook, fetchRecentTrades,
+  fetchKlines, fetchTickers, fetchDerivatives, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiDryRunOrder,
 } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
@@ -29,7 +29,7 @@ import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indica
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
-import type { AccountBalance, DerivativesData, Order, Orderbook, Position, StockFundamentals, TradeFill, TradeTick } from './types.ts'
+import type { AccountBalance, DerivativesData, Order, Orderbook, Position, TradeFill, TradeTick } from './types.ts'
 import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
@@ -113,7 +113,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   // 指标名册修订号：插件晚于首帧合并 definition 时触发重渲染。
   const rosterVersion = useSyncExternalStore(indicators.subscribe, indicators.getVersion)
 
-  const [quoteSubTab, setQuoteSubTab] = useState<'chart' | 'fundamentals'>('chart')
   const [chartInterval, setIntervalFor] = useState<string>(() => {
     if (market === undefined) return '1d'
     return readInterval(market)
@@ -128,8 +127,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [sendState, setSendState] = useState<SendState>('idle')
   /** 行情板块页签（图表 | 基本面）：跨标的保持（对比多家基本面时不来回跳）。 */
   const [stageTab, setStageTab] = useState<'chart' | 'fundamentals'>('chart')
-  const [fundamentals, setFundamentals] = useState<StockFundamentals | null>(null)
-  const [fundamentalsLoading, setFundamentalsLoading] = useState(false)
   /** 衍生品指标快照（issue #38，crypto 专属；null = 未实现/失败 → 面板整体隐藏）。 */
   const [derivatives, setDerivatives] = useState<DerivativesData | null>(null)
   /** 盘口竖栏（issue #39）：开关跨标的/会话记忆；数据 null = 数据源未提供（降级提示）。 */
@@ -214,18 +211,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return () => { cancelled = true }
   }, [market, symbol])
 
-  // 基本面快照（每标的拉一次）：连接器未实现（us/crypto）或失败 → null，
-  // 面板降级为行情派生数据（日K 52 周高低），不报错横幅。
-  useEffect(() => {
-    if (market === undefined || symbol === undefined) return
-    let cancelled = false
-    setFundamentalsLoading(true)
-    fetchFundamentals(market, symbol)
-      .then((data) => { if (!cancelled) setFundamentals(data) })
-      .finally(() => { if (!cancelled) setFundamentalsLoading(false) })
-    return () => { cancelled = true }
-  }, [market, symbol])
-
   // 衍生品指标轮询（issue #38，仅 crypto；现货输入由连接器升到对应永续）。
   usePoll(async () => {
     if (market !== 'crypto' || symbol === undefined) return
@@ -282,7 +267,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setTicker(null)
     setHoverIndex(null)
     setKError(null)
-    setFundamentals(null)
     setDerivatives(null)
     setOrderbook(null)
     setTrades(null)
@@ -313,9 +297,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     const pct = ticker?.changePercent ?? changePercent(price, prevClose)
     return { last, prevClose, price, change, pct }
   }, [daily, ticker, klines])
-
-  // 基本面页签派生 52 周区间：快照缺字段（或 us/crypto 派生模式）时的兜底。
-  const fiftyTwoWeek = useMemo(() => deriveFiftyTwoWeek(daily), [daily])
 
   // 区间统计：框选模式 ESC 退出（连同清空选区）。
   useEffect(() => {
@@ -376,13 +357,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
   // 发给 Agent：先截图（画布只在图表挂载期间可取），再把文本 + PNG 填入
   // 会话输入框（不自动发送——用户大概率还要补自己的 prompt）。
+  // market/symbol 在函数体内收窄（闭包对 TS 不透传 narrowing），先落成常量。
   const onSendToAgent = (): void => {
     if (fillComposer === undefined || sendState === 'sending') return
+    if (market === undefined || symbol === undefined) return
+    const activeMarket: MarketId = market
+    const activeSymbol: string = symbol
     const capture = captureRef.current?.() ?? null
-    const text = composeQuoteMessage({
+    const input = {
       name: instrument?.name,
-      symbol,
-      marketLabel: t(TAB_KEY[market]),
+      symbol: activeSymbol,
+      marketLabel: t(TAB_KEY[activeMarket]),
       intervalLabel: t(INTERVAL_KEY[chartInterval] ?? 'interval.1d'),
       price: stats.price,
       change: stats.change,
@@ -391,11 +376,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       candle: readoutCandle,
       indicatorTitles: instances.map(instance => indicators.get(instance.id)?.title ?? instance.id),
       withScreenshot: capture !== null,
-    })
+    }
+    // exactOptionalPropertyTypes：undefined 字段直接剔除而非显式传 undefined。
+    const text = composeQuoteMessage(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as unknown as Parameters<typeof composeQuoteMessage>[0])
     setSendState('sending')
     void fillComposer(text, capture === null ? undefined : {
       dataUrl: capture.dataUrl,
-      name: `${symbol}-${chartInterval}.png`,
+      name: `${activeSymbol}-${chartInterval}.png`,
       width: capture.width,
       height: capture.height,
     })
@@ -410,6 +397,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       })
   }
 
+  // 空态：未选择标的（空态之后的渲染路径依赖 market/symbol 非空，提前收窄）。
   if (market === undefined || symbol === undefined) {
     return (
       <div className={css.root}>
@@ -428,27 +416,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const isPlaceholderName = !rawName || rawName === symbol || /\(A股\)|\(港股\)/.test(rawName)
   const tickerName = (ticker as { name?: string })?.name
   const displayName = (!isPlaceholderName ? rawName : (tickerName || rawName || symbol))
-
-  const mainGroupReadouts = useMemo(() => {
-    if (readoutIndex === null) return []
-    return mainOverlays.map(group => ({
-      instanceId: group.id,
-      title: group.title,
-      lines: group.outputs
-        .filter(o => Number.isFinite(o.values[readoutIndex]))
-        .map(o => ({ name: o.key, value: o.values[readoutIndex], color: o.color }))
-    }))
-  }, [mainOverlays, readoutIndex])
-
-  const chartIndicatorGroups = useMemo(() => {
-    return indicatorGroups.map(g => ({
-      id: g.id,
-      pane: g.pane,
-      title: g.title,
-      key: g.key,
-      outputs: g.outputs
-    }))
-  }, [indicatorGroups])
 
   return (
     <div className={css.root} data-dshtrading-quote-stage="">

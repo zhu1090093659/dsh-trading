@@ -111,6 +111,7 @@ It combines the **three-column GUI experience of professional trading software**
 | **China A-Shares** | Tencent Finance / Eastmoney | Public endpoints; live execution connects locally to broker MiniQMT gateway |
 | **Hong Kong Stocks** | Tencent HK / Longbridge | Tencent is a public endpoint; Longbridge, Futu, and Tiger provide licensed broker OpenAPI / Gateway connections |
 | **Crypto** | Binance / OKX | Official Binance and OKX APIs; OKX supports simulated paper trading accounts with BYOK keys |
+| **Crypto fundamentals drill-down** | CoinCap | Public REST endpoint (`api.coincap.io`), individual usage boundary only — no redistribution, no bulk scraping (issue #36, 2026-09-02) |
 
 ---
 

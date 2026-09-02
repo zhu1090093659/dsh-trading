@@ -14,7 +14,8 @@ import css from './fundamentals-stage.module.css'
 export type UseStoreState<TState> = <TSelected>(selector: (state: TState) => TSelected) => TSelected
 
 export interface FundamentalsStageProps {
-  t: (key: MarketLocaleKey) => string
+  /** 预留：本页签文案暂为内置中文（富途工作台语义密集，先不进 locale 词典）。 */
+  t?: (key: MarketLocaleKey) => string
   useSelection?: UseStoreState<SelectionState>
 }
 
@@ -55,15 +56,17 @@ function formatChange(change: number | undefined): { text: string; cls: string }
   return { text, cls: css.valNeutral }
 }
 
-export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
+export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
   const hookInstrument = useSelection?.(s => s.instrument)
-  const storedInstrument = readJson<Instrument | null>('dshtrading.selection.v1', null)
+  // localStorage 镜像只在缺失 hook 面时读一次（useEffect 每渲染 JSON.parse 是浪费）。
+  const [storedInstrument] = useState(() => readJson<Instrument | null>('dshtrading.selection.v1', null))
   const instrument = hookInstrument ?? storedInstrument
   const market = (instrument?.market || 'cn') as MarketId
   const symbol = instrument?.symbol || ''
 
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<FundamentalsPackage | undefined>(undefined)
+  /** 请求代号：竞态守卫 + 错误路径归因（慢响应不得覆盖新标的的空态）。 */
   const [activeNav, setActiveNav] = useState<NavSubCategory>('financials_key')
   const [selectedIndicatorId, setSelectedIndicatorId] = useState<string>('bps')
   const [showYoY, setShowYoY] = useState(true)
@@ -73,18 +76,24 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
   useEffect(() => {
     if (!symbol) return
     let cancelled = false
+    // 换标的立即清场：错误路径（桥业务错误/网络失败）绝不能保留上一个
+    // 标的的数据——交易语境下「B 的代码显示 A 的财务」是致命误导。
+    setData(undefined)
+    setSelectedIndicatorId('bps')
+    setCollapsedGroups({})
+    setSegmentFilter('all')
     setLoading(true)
 
     fetchFundamentals(market, symbol)
       .then((pkg) => {
-        if (!cancelled) {
-          setData(pkg)
-          setLoading(false)
-          const firstRow = pkg?.matrix?.groups?.[0]?.rows?.[0]
-          if (firstRow) setSelectedIndicatorId(firstRow.id)
-        }
+        if (cancelled) return
+        setData(pkg)
+        setLoading(false)
+        const firstRow = pkg?.matrix?.groups?.[0]?.rows?.[0]
+        if (firstRow) setSelectedIndicatorId(firstRow.id)
       })
       .catch(() => {
+        // 失败 → 保持空态（setData(undefined) 已在上面执行），只停 spinner。
         if (!cancelled) setLoading(false)
       })
 
@@ -518,7 +527,7 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                       </thead>
                       <tbody>
                         {displayGroups.map(group => {
-                          const isCollapsed = collapsedGroups[group.id]
+                          const isCollapsed = collapsedGroups[group.id] === true
                           return (
                             <GroupFragment
                               key={group.id}
@@ -661,27 +670,20 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                 <span className={css.cardSubNote}>基于多周期市盈率、市净率与价格区间综合诊断</span>
               </div>
 
-              {/* 52 周价格区间位置刻度尺 */}
+              {/* 52 周区间与 PE 评注：价格未进入本组件（基本面快照无现价字段），
+                  不渲染位置指针——不做 PE 分档假水位（2026-09-02 审查整改）。 */}
               {stock?.fiftyTwoWeekLow !== undefined && stock?.fiftyTwoWeekHigh !== undefined && (
                 <div className={css.rangeGaugeWrap}>
                   <div className={css.rangePointerInfo}>
-                    <span>52 周价格区间位置</span>
+                    <span>52 周价格区间</span>
                     <span>
                       {stock.fiftyTwoWeekLow.toFixed(2)} ~ {stock.fiftyTwoWeekHigh.toFixed(2)}
                     </span>
                   </div>
-                  <div className={css.rangeTrack}>
-                    <div
-                      className={css.rangeProgress}
-                      style={{
-                        width: stock.peTtm ? `${Math.min(100, Math.max(15, Math.min(85, stock.peTtm > 40 ? 80 : stock.peTtm > 20 ? 55 : 30)))}%` : '50%',
-                      }}
-                    />
-                  </div>
                   <div className={css.rangeGaugeLabels}>
                     <span>52周最低: {stock.fiftyTwoWeekLow.toFixed(2)}</span>
                     <span>
-                      估值评级: {stock.peTtm ? (stock.peTtm < 15 ? '🟢 相对低估' : stock.peTtm < 30 ? '🟡 估值合理' : '🔴 相对偏高') : '评估中'}
+                      估值评注: {stock.peTtm !== undefined ? (stock.peTtm < 15 ? '🟢 相对低估' : stock.peTtm < 30 ? '🟡 估值合理' : '🔴 相对偏高') : '评估中'}
                     </span>
                     <span>52周最高: {stock.fiftyTwoWeekHigh.toFixed(2)}</span>
                   </div>
@@ -866,10 +868,10 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                 </div>
               </div>
               <p className={css.descText} style={{ marginTop: 14 }}>
-                {efficiency?.inventoryTurnoverDays && efficiency?.accountsReceivableTurnoverDays ? (
-                  `本期存货周转天数约为 ${efficiency.inventoryTurnoverDays.toFixed(1)} 天，应收账款周转天数约为 ${efficiency.accountsReceivableTurnoverDays.toFixed(1)} 天，净营业周期为 ${efficiency.operatingCycleDays?.toFixed(1) ?? '--'} 天，企业营运资产周转处于行业稳健水平。`
+                {efficiency?.inventoryTurnoverDays !== undefined && efficiency?.accountsReceivableTurnoverDays !== undefined ? (
+                  `本期存货周转天数约为 ${efficiency.inventoryTurnoverDays.toFixed(1)} 天，应收账款周转天数约为 ${efficiency.accountsReceivableTurnoverDays.toFixed(1)} 天，净营业周期为 ${efficiency.operatingCycleDays !== undefined ? efficiency.operatingCycleDays.toFixed(1) : '--'} 天。`
                 ) : (
-                  '根据最新季度多期财报，公司运营周转保持在行业健康区间内。'
+                  '经营效率明细数据暂未获取到（数据源未覆盖该报告期），不做推断性描述。'
                 )}
               </p>
             </div>
@@ -1002,7 +1004,7 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                 </div>
               ) : (
                 <p className={css.descText}>
-                  近 6 个月内公司重要股东及高管持股保持相对稳定，未出现触及披露标准的重大变动。
+                  暂无股东增减持明细数据（数据源未覆盖或该报告期无披露记录）。
                 </p>
               )}
             </div>
@@ -1236,37 +1238,9 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                   </table>
                 </div>
               ) : (
-                <>
-                  <div className={css.forecastGrid} style={{ marginBottom: 14 }}>
-                    <div className={css.forecastStatBox}>
-                      <span className={css.gridLabel}>总股本</span>
-                      <span className={css.pillValue} style={{ fontSize: 16 }}>
-                        {stock?.totalShares ? `${(stock.totalShares / 100_000_000).toFixed(2)} 亿股` : '--'}
-                      </span>
-                    </div>
-                    <div className={css.forecastStatBox}>
-                      <span className={css.gridLabel}>流通A股</span>
-                      <span className={css.pillValue} style={{ fontSize: 16, color: 'var(--futu-accent)' }}>
-                        {stock?.circulatingShares ? `${(stock.circulatingShares / 100_000_000).toFixed(2)} 亿股` : '--'}
-                      </span>
-                    </div>
-                    <div className={css.forecastStatBox}>
-                      <span className={css.gridLabel}>回购状态</span>
-                      <span className={css.pillValue} style={{ fontSize: 16, color: 'var(--futu-orange)' }}>
-                        暂未开展
-                      </span>
-                    </div>
-                    <div className={css.forecastStatBox}>
-                      <span className={css.gridLabel}>股本稳定性</span>
-                      <span className={css.pillValue} style={{ fontSize: 16 }}>
-                        高（无注销减资）
-                      </span>
-                    </div>
-                  </div>
-                  <p className={css.descText}>
-                    当前标的暂未开展大额集中竞价股份回购计划，总股本与流通股本保持稳定。投资者回报主要通过历年持续现金分红（已累计实施 {dividends?.length ?? 0} 次派息）与资本公积转增股本实现。
-                  </p>
-                </>
+                <p className={css.descText}>
+                  暂无回购记录数据（数据源未覆盖或该标的确实未公告回购），以下字段留空以待数据补齐；不做推测性描述。
+                </p>
               )}
             </div>
           )}
@@ -1301,7 +1275,7 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                 </div>
               ) : (
                 <p className={css.descText}>
-                  该标的近期无拆股并股或送转股事件，股本保持稳定。
+                  暂无拆股并股或送转股记录数据（数据源未覆盖或该标的确实无相关事件）。
                 </p>
               )}
             </div>

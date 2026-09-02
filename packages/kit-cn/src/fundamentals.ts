@@ -26,6 +26,23 @@ export interface CnFundamentalsResult {
 
 const TENCENT_QUOTE_BASE = 'https://qt.gtimg.cn/q='
 
+/**
+ * 东财/腾讯公开端点统一取数（2026-09-02 审查整改）：
+ * - 最小 UA（docs/replication.md 数据源边界：不做浏览器伪装/伪造 Referer）；
+ * - 10s AbortSignal 超时（对齐 connector-tencent DEFAULT_TIMEOUT_MS 模式），
+ *   防 F10 爬取端点挂起把整个 /fundamentals 请求拖死。
+ */
+const UPSTREAM_TIMEOUT_MS = 10_000
+
+async function fetchJsonUpstream<T>(url: string, fetchImpl: typeof globalThis.fetch): Promise<T | undefined> {
+  const res = await fetchImpl(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  })
+  if (!res.ok) return undefined
+  return await res.json() as T
+}
+
 /** 规范化 A 股符号并返回腾讯 wire 前缀小写形态（如 sh600519, sz000001）与规范符号（如 600519.SH）。 */
 export function normalizeCnSymbol(input: string): { wire: string; canonical: string } {
   const raw = input.trim().toLowerCase()
@@ -34,7 +51,7 @@ export function normalizeCnSymbol(input: string): { wire: string; canonical: str
     throw new Error(`cn_get_fundamentals: invalid A-share symbol ${JSON.stringify(input)} — expected e.g. 600519, 600519.SH, sh600519`)
   }
   let prefix = m[1] ?? m[4]
-  const code = m[2] ?? m[3]
+  const code = (m[2] ?? m[3]) as string
   if (!prefix) {
     prefix = code.startsWith('6') || code.startsWith('9') || code.startsWith('688') ? 'sh' : 'sz'
   }
@@ -126,7 +143,7 @@ export function formatReportPeriod(dateStr: string): string {
   if (mo === '03' || mo === '3') return `${y}/Q1`
   if (mo === '06' || mo === '6') return `${y}/H1`
   if (mo === '09' || mo === '9') return `${y}/Q3`
-  if (mo === '12' || mo === '12') return `${y}/FY`
+  if (mo === '12') return `${y}/FY`
   return `${y}/${mo}`
 }
 
@@ -169,17 +186,10 @@ export async function fetchCnFinancialMatrix(symbol: string, fetchImpl: typeof g
     // 1. 优先请求东方财富 PC_HSF10 核心财务指标
     try {
       const f10Url = `https://emweb.securities.eastmoney.com/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew?type=0&code=${fullCode}`
-      const res = await fetchImpl(f10Url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-          Referer: 'https://emweb.securities.eastmoney.com/',
-        },
-      })
-      if (res.ok) {
-        const json = await res.json() as { data?: EastmoneyReportRow[] }
-        if (Array.isArray(json.data) && json.data.length > 0) {
-          rawRows = json.data.slice(0, 8)
-        }
+      const json = await fetchJsonUpstream<{ data?: EastmoneyReportRow[] }>(f10Url, fetchImpl)
+      if (json === undefined) return undefined
+      if (json !== undefined && Array.isArray(json.data) && json.data.length > 0) {
+        rawRows = json.data.slice(0, 8)
       }
     } catch {
       /* fallback to datacenter */
@@ -189,17 +199,10 @@ export async function fetchCnFinancialMatrix(symbol: string, fetchImpl: typeof g
     if (rawRows.length === 0) {
       try {
         const dcUrl = `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_LICO_FN_CPD&columns=ALL&filter=(SECURITY_CODE%3D%22${code}%22)&pageNumber=1&pageSize=8&sortTypes=-1&sortColumns=REPORTDATE`
-        const res = await fetchImpl(dcUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-            Referer: 'https://emweb.securities.eastmoney.com/',
-          },
-        })
-        if (res.ok) {
-          const json = await res.json() as { result?: { data?: EastmoneyReportRow[] } }
-          if (Array.isArray(json.result?.data) && json.result.data.length > 0) {
-            rawRows = json.result.data
-          }
+        const json = await fetchJsonUpstream<{ result?: { data?: EastmoneyReportRow[] } }>(dcUrl, fetchImpl)
+        if (json === undefined) return undefined
+        if (json !== undefined && Array.isArray(json.result?.data) && json.result.data.length > 0) {
+          rawRows = json.result.data
         }
       } catch {
         /* fallback */
@@ -293,14 +296,8 @@ export async function fetchCnCompanyProfile(symbol: string, fetchImpl: typeof gl
     const code = canonical.split('.')[0]!
     const prefix = wire.slice(0, 2).toUpperCase()
     const url = `https://emweb.securities.eastmoney.com/PC_HSF10/CompanySurvey/CompanySurveyAjax?code=${prefix}${code}`
-    const res = await fetchImpl(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        Referer: 'https://emweb.securities.eastmoney.com/',
-      },
-    })
-    if (!res.ok) return undefined
-    const json = await res.json() as { jbzl?: Record<string, string> }
+    const json = await fetchJsonUpstream<{ jbzl?: Record<string, string> }>(url, fetchImpl)
+    if (json === undefined) return undefined
     const jb = json.jbzl
     if (!jb) return undefined
 
@@ -334,22 +331,41 @@ export async function fetchCnCompanyProfile(symbol: string, fetchImpl: typeof gl
   }
 }
 
-/** 从机构研报与公开数据中聚合机构盈利预测。 */
-export async function fetchCnForecast(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').ForecastSummary | undefined> {
+/**
+ * 机构研报列表共享取数（2026-09-02 整改）：fetchCnForecast 与 fetchCnReports 原
+ * 各自打同一个 reportapi URL（每次 /fundamentals 两倍上游请求），现合一。
+ * fetchCnFundamentalsPackage 取一次结果喂两个解析器；上游空/失败返回 []（哨兵），
+ * 调用方（package 层）传入后解析器不再重复打上游。直接调用（无 reportList 实参）
+ * 时仍各自取数，行为向后兼容。
+ */
+async function fetchCnReportList(symbol: string, fetchImpl: typeof globalThis.fetch): Promise<Array<Record<string, unknown>> | undefined> {
   try {
     const { canonical } = normalizeCnSymbol(symbol)
     const code = canonical.split('.')[0]!
     const url = `https://reportapi.eastmoney.com/report/list?industryCode=*&pageSize=10&industry=*&rating=&ratingChange=&beginTime=&endTime=&pageNo=1&fields=&qType=0&orgCode=&code=${code}`
-    const res = await fetchImpl(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        Referer: 'https://data.eastmoney.com/',
-      },
-    })
-    if (!res.ok) return undefined
-    const json = await res.json() as { data?: Array<Record<string, unknown>> }
+    const json = await fetchJsonUpstream<{ data?: Array<Record<string, unknown>> }>(url, fetchImpl)
+    if (json === undefined) return []
     const list = json.data
-    if (!Array.isArray(list) || list.length === 0) return undefined
+    if (!Array.isArray(list)) return []
+    return list
+  } catch {
+    return []
+  }
+}
+
+/** 评级归类：买入/增持→buy，中性/持有→hold，减持/卖出→sell，未知→other（不兜底计入买入）。 */
+function classifyRating(rating: string): 'buy' | 'hold' | 'sell' | 'other' {
+  if (rating.includes('买入') || rating.includes('增持') || rating.includes('强烈推荐')) return 'buy'
+  if (rating.includes('中性') || rating.includes('持有') || rating.includes('观望')) return 'hold'
+  if (rating.includes('减持') || rating.includes('卖出')) return 'sell'
+  return 'other'
+}
+
+/** 从机构研报与公开数据中聚合机构盈利预测（revenue/netProfit 上游不提供 → 不产出假零值）。 */
+export async function fetchCnForecast(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch, reportList?: Array<Record<string, unknown>>): Promise<import('@dsh-trading/api').ForecastSummary | undefined> {
+  try {
+    const list = reportList ?? await fetchCnReportList(symbol, fetchImpl)
+    if (list === undefined || list.length === 0) return undefined
 
     const epsThisYear: number[] = []
     const epsNextYear: number[] = []
@@ -371,15 +387,11 @@ export async function fetchCnForecast(symbol: string, fetchImpl: typeof globalTh
       if (Number.isFinite(nextTwoEps) && nextTwoEps > 0) epsNextTwoYear.push(nextTwoEps)
 
       const rating = String(item.emRatingName || item.rating || '')
-      if (rating.includes('买入') || rating.includes('增持') || rating.includes('强烈推荐')) {
-        buyCount++
-      } else if (rating.includes('中性') || rating.includes('持有')) {
-        holdCount++
-      } else if (rating.includes('减持') || rating.includes('卖出')) {
-        sellCount++
-      } else {
-        buyCount++
-      }
+      const bucket = classifyRating(rating)
+      if (bucket === 'buy') buyCount++
+      else if (bucket === 'hold') holdCount++
+      else if (bucket === 'sell') sellCount++
+      // other（无法识别/缺评级）不计入任何一档，诚实呈现
     }
 
     const avg = (arr: number[]) => (arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : undefined)
@@ -387,6 +399,7 @@ export async function fetchCnForecast(symbol: string, fetchImpl: typeof globalTh
     const avgNext = avg(epsNextYear)
     const avgNextTwo = avg(epsNextTwoYear)
 
+    // 上游不提供营收/净利润一致预期 → items 只含 EPS（不再填 0 冒充真实预测值）。
     const items: Array<{ year: string; eps: number; revenue: number; netProfit: number; orgCount?: number }> = []
     if (avgThis !== undefined) {
       items.push({
@@ -430,31 +443,21 @@ export async function fetchCnForecast(symbol: string, fetchImpl: typeof globalTh
   }
 }
 
-/** 从东方财富动态抓取机构研究报告精选。 */
-export async function fetchCnReports(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').ResearchReportItem[]> {
+/** 从东方财富动态抓取机构研究报告精选（共享 fetchCnReportList，不重复打上游）。 */
+export async function fetchCnReports(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch, reportList?: Array<Record<string, unknown>>): Promise<import('@dsh-trading/api').ResearchReportItem[]> {
   try {
-    const { canonical } = normalizeCnSymbol(symbol)
-    const code = canonical.split('.')[0]!
-    const url = `https://reportapi.eastmoney.com/report/list?industryCode=*&pageSize=10&industry=*&rating=&ratingChange=&beginTime=&endTime=&pageNo=1&fields=&qType=0&orgCode=&code=${code}`
-    const res = await fetchImpl(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        Referer: 'https://data.eastmoney.com/',
-      },
-    })
-    if (!res.ok) return []
-    const json = await res.json() as { data?: Array<Record<string, unknown>> }
-    const rawList = json.data
-    if (!Array.isArray(rawList)) return []
+    const rawList = reportList ?? await fetchCnReportList(symbol, fetchImpl)
+    if (rawList === undefined) return []
 
     return rawList.map((r, idx) => ({
       id: String(r.infoCode || `report_${idx}`),
       title: String(r.title || '个股研究报告'),
       orgName: String(r.orgSName || r.orgName || '机构研报'),
       author: Array.isArray(r.author) ? r.author.join(', ').replace(/^\d+\./, '') : String(r.researcher || r.author || ''),
-      rating: String(r.emRatingName || r.rating || '买入'),
+      // 缺评级 → undefined（UI 已守卫）；绝不兜底「买入」伪造投资评级。
+      rating: typeof r.emRatingName === 'string' && r.emRatingName !== '' ? r.emRatingName : (typeof r.rating === 'string' && r.rating !== '' ? r.rating : undefined),
       publishDate: String(r.publishDate || '').slice(0, 10),
-      summary: String(r.summary || r.coreView || `${r.orgSName || ''}发布《${r.title || ''}》，投资评级为【${r.emRatingName || '买入'}】。`),
+      summary: typeof r.summary === 'string' && r.summary !== '' ? r.summary : (typeof r.coreView === 'string' && r.coreView !== '' ? r.coreView : undefined),
       url: r.infoCode ? `https://data.eastmoney.com/report/zw_stock.jshtml?infocode=${r.infoCode}` : undefined,
     }))
   } catch {
@@ -467,14 +470,8 @@ export async function fetchCnMainOperations(symbol: string, fetchImpl: typeof gl
   try {
     const { canonical } = normalizeCnSymbol(symbol)
     const url = `https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FN_MAINOP&columns=ALL&filter=(SECUCODE%3D%22${canonical}%22)&pageNumber=1&pageSize=30&sortTypes=-1&sortColumns=REPORT_DATE`
-    const res = await fetchImpl(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        Referer: 'https://emweb.securities.eastmoney.com/',
-      },
-    })
-    if (!res.ok) return []
-    const json = await res.json() as { result?: { data?: Array<Record<string, unknown>> } }
+    const json = await fetchJsonUpstream<{ result?: { data?: Array<Record<string, unknown>> } }>(url, fetchImpl)
+    if (json === undefined) return []
     const rawList = json.result?.data
     if (!Array.isArray(rawList) || rawList.length === 0) return []
 
@@ -512,14 +509,8 @@ export async function fetchCnCorporateActions(symbol: string, fetchImpl: typeof 
     const { canonical } = normalizeCnSymbol(symbol)
     const code = canonical.split('.')[0]!
     const url = `https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_SHAREBONUS_DET&columns=ALL&filter=(SECURITY_CODE%3D%22${code}%22)&pageNumber=1&pageSize=20&sortTypes=-1&sortColumns=REPORT_DATE`
-    const res = await fetchImpl(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        Referer: 'https://emweb.securities.eastmoney.com/',
-      },
-    })
-    if (!res.ok) return { dividends: [], splits: [] }
-    const json = await res.json() as { result?: { data?: Array<Record<string, unknown>> } }
+    const json = await fetchJsonUpstream<{ result?: { data?: Array<Record<string, unknown>> } }>(url, fetchImpl)
+    if (json === undefined) return { dividends: [], splits: [] }
     const rawList = json.result?.data
     if (!Array.isArray(rawList)) return { dividends: [], splits: [] }
 
@@ -565,14 +556,8 @@ export async function fetchCnEfficiency(symbol: string, fetchImpl: typeof global
   try {
     const { canonical } = normalizeCnSymbol(symbol)
     const url = `https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_MAINFINADATA&columns=ALL&filter=(SECUCODE%3D%22${canonical}%22)&pageNumber=1&pageSize=5&sortTypes=-1&sortColumns=REPORT_DATE`
-    const res = await fetchImpl(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        Referer: 'https://emweb.securities.eastmoney.com/',
-      },
-    })
-    if (!res.ok) return undefined
-    const json = await res.json() as { result?: { data?: Array<Record<string, unknown>> } }
+    const json = await fetchJsonUpstream<{ result?: { data?: Array<Record<string, unknown>> } }>(url, fetchImpl)
+    if (json === undefined) return undefined
     const d = json.result?.data?.[0]
     if (!d) return undefined
 
@@ -601,26 +586,26 @@ export async function fetchCnShareholdersData(symbol: string, fetchImpl: typeof 
   try {
     const { canonical } = normalizeCnSymbol(symbol)
     const url = `https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_EH_FREEHOLDERS&columns=ALL&filter=(SECUCODE%3D%22${canonical}%22)&pageNumber=1&pageSize=10&sortTypes=-1&sortColumns=END_DATE`
-    const res = await fetchImpl(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        Referer: 'https://emweb.securities.eastmoney.com/',
-      },
-    })
-    if (!res.ok) return { shareholders: [], institutionalHoldings: [], insiderTrades: [] }
-    const json = await res.json() as { result?: { data?: Array<Record<string, unknown>> } }
+    const json = await fetchJsonUpstream<{ result?: { data?: Array<Record<string, unknown>> } }>(url, fetchImpl)
+    if (json === undefined) return { shareholders: [], institutionalHoldings: [], insiderTrades: [] }
     const rawList = json.result?.data
     if (!Array.isArray(rawList)) return { shareholders: [], institutionalHoldings: [], insiderTrades: [] }
 
     const shareholders: import('@dsh-trading/api').ShareholderItem[] = []
     const institutionalHoldings: import('@dsh-trading/api').InstitutionalHoldingItem[] = []
+    // 2026-09-02 整改：HOLD_NUM_CHANGE 是「较上期持股变动股数」，用它构造增减持行
+    // （changeShares=变动量，0/缺省不产行）——原实现把当前持股总量当变动股数，
+    // 「十大流通股东」被伪装成「股东增减持明细」。
     const insiderTrades: import('@dsh-trading/api').InsiderTradeItem[] = []
 
     for (const r of rawList) {
       const name = String(r.HOLDER_NAME ?? '--')
       const shares = typeof r.HOLD_NUM === 'number' ? r.HOLD_NUM : undefined
       const ratio = typeof r.FREE_HOLDNUM_RATIO === 'number' ? r.FREE_HOLDNUM_RATIO : (typeof r.HOLD_RATIO === 'number' ? r.HOLD_RATIO : undefined)
-      const change = r.HOLD_NUM_CHANGE !== undefined && r.HOLD_NUM_CHANGE !== null ? String(r.HOLD_NUM_CHANGE) : '不变'
+      const changeNum = typeof r.HOLD_NUM_CHANGE === 'number' ? r.HOLD_NUM_CHANGE : undefined
+      const change = changeNum === undefined
+        ? '不变'
+        : (changeNum > 0 ? `增持 ${changeNum.toLocaleString()} 股` : changeNum < 0 ? `减持 ${Math.abs(changeNum).toLocaleString()} 股` : '不变')
       const orgType = String(r.HOLDER_TYPE || (r.IS_HOLDORG === '1' ? '机构投资者' : '一般股东'))
       const marketCap = typeof r.HOLDER_MARKET_CAP === 'number' ? r.HOLDER_MARKET_CAP : undefined
 
@@ -637,13 +622,16 @@ export async function fetchCnShareholdersData(symbol: string, fetchImpl: typeof 
         })
       }
 
-      insiderTrades.push({
-        holderName: name,
-        changeType: change,
-        changeShares: shares ?? 0,
-        postHoldingRatio: ratio,
-        date: r.UPDATE_DATE ? String(r.UPDATE_DATE).slice(0, 10) : undefined,
-      })
+      // 仅当确有披露的期间变动时才产出行，且 changeShares 是变动股数而非持股总量。
+      if (changeNum !== undefined && changeNum !== 0) {
+        insiderTrades.push({
+          holderName: name,
+          changeType: changeNum > 0 ? '增持' : '减持',
+          changeShares: Math.abs(changeNum),
+          postHoldingRatio: ratio,
+          date: r.UPDATE_DATE ? String(r.UPDATE_DATE).slice(0, 10) : undefined,
+        })
+      }
     }
 
     return { shareholders, institutionalHoldings, insiderTrades }
@@ -657,14 +645,8 @@ export async function fetchCnHoldersSummary(symbol: string, fetchImpl: typeof gl
   try {
     const { canonical } = normalizeCnSymbol(symbol)
     const url = `https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_EH_HOLDERNUM&columns=ALL&filter=(SECUCODE%3D%22${canonical}%22)&pageNumber=1&pageSize=5&sortTypes=-1&sortColumns=END_DATE`
-    const res = await fetchImpl(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        Referer: 'https://emweb.securities.eastmoney.com/',
-      },
-    })
-    if (!res.ok) return undefined
-    const json = await res.json() as { result?: { data?: Array<Record<string, unknown>> } }
+    const json = await fetchJsonUpstream<{ result?: { data?: Array<Record<string, unknown>> } }>(url, fetchImpl)
+    if (json === undefined) return undefined
     const first = json.result?.data?.[0]
     if (!first) return undefined
 
@@ -690,13 +672,15 @@ export async function fetchCnShareholders(symbol: string, fetchImpl: typeof glob
 /** 获取完整 A 股基本面数据包（估值 + 多期财务矩阵 + 深度简况 + 股东 + 预测 + 研报 + 经营 + 分红 + 送转）。 */
 export async function fetchCnFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FundamentalsPackage> {
   const { canonical } = normalizeCnSymbol(symbol)
+  // reportapi 列表只取一次，喂预测聚合与研报精选两个解析器（整改：原各自打同一 URL）。
+  const reportList = await fetchCnReportList(symbol, fetchImpl)
   const [quoteRes, matrix, profile, shData, forecast, reports, mainOperations, actions, holderSummary, efficiency] = await Promise.all([
     fetchCnFundamentals({ symbol, fetch: fetchImpl }),
     fetchCnFinancialMatrix(symbol, fetchImpl),
     fetchCnCompanyProfile(symbol, fetchImpl),
     fetchCnShareholdersData(symbol, fetchImpl),
-    fetchCnForecast(symbol, fetchImpl),
-    fetchCnReports(symbol, fetchImpl),
+    fetchCnForecast(symbol, fetchImpl, reportList),
+    fetchCnReports(symbol, fetchImpl, reportList),
     fetchCnMainOperations(symbol, fetchImpl),
     fetchCnCorporateActions(symbol, fetchImpl),
     fetchCnHoldersSummary(symbol, fetchImpl),
@@ -716,11 +700,7 @@ export async function fetchCnFundamentalsPackage(symbol: string, fetchImpl: type
     symbol: canonical,
     stock,
     matrix,
-    profile: profile ?? (stock ? {
-      symbol: canonical,
-      name: stock.name,
-      description: `${stock.name ?? canonical}（A股上市公司），包含每股指标、盈利能力、成长能力与现金流等多期财务指标。`,
-    } : undefined),
+    profile,
     shareholders: shData.shareholders,
     institutionalHoldings: shData.institutionalHoldings,
     insiderTrades: shData.insiderTrades,

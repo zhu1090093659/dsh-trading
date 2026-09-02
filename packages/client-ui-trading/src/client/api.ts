@@ -50,20 +50,6 @@ export async function fetchKlines(market: MarketId, symbol: string, interval: st
 }
 
 /**
- * 基本面快照（2026-09-02 基本面页签）。连接器未实现 getFundamentals（us/crypto）
- * 或取数失败 → null：面板降级为行情派生数据（日K 52 周高低），不报错横幅。
- */
-export async function fetchFundamentals(market: MarketId, symbol: string): Promise<StockFundamentals | null> {
-  try {
-    const query = new URLSearchParams({ market, symbol })
-    const wire = await getJson<{ ok: boolean; fundamentals: StockFundamentals }>(`/dshtrading/api/fundamentals?${query.toString()}`)
-    return wire.fundamentals ?? null
-  } catch {
-    return null
-  }
-}
-
-/**
  * 衍生品指标快照（issue #38，crypto 专属）。连接器未实现 getDerivatives（现货/股票
  * 数据源）或取数失败 → null：面板整体隐藏，不报错横幅。
  */

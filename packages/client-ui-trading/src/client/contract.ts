@@ -125,8 +125,6 @@ export type MarketLocaleKey =
   | 'range.downDays'
   | 'range.closePanel'
   | 'stage.quote'
-  | 'stage.quote.chart'
-  | 'stage.fundamentals'
   | 'stage.strategy'
   | 'stage.knowledge'
   | 'indicator.picker'

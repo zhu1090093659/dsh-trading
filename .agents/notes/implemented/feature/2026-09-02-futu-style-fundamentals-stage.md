@@ -41,3 +41,25 @@
 - 668 个测试用例全部绿灯通过；
 - 全量 44 个 workspace 包 `pnpm build` 构建成功；
 - 真实 A 股标的（紫光股份 000938.SZ）全链路数据验证通过。
+
+---
+
+## 4. 审查整改记录（2026-09-02，主 agent 接管 PR #46 后整改合并）
+
+协作者初版经 findings-first 审查（2 High / 7 Medium / 5 Low）后，由主 agent 在 `fix/46-futu-fundamentals` 分支整改并直接合并（owner 指令「不等作者」）。整改项与证据：
+
+| 级别 | 问题 | 整改 |
+|---|---|---|
+| H1 | QuoteStage 两个 useMemo 位于 early return 之后 → 首次选中标的 React hooks 崩溃 | 随死代码组一并删除 |
+| H2 | 遗留死代码 effect 每次切标的白发 11 路上游请求 | 删除死代码组（quoteSubTab/fundamentals state+effect/fiftyTwoWeek/FundamentalsPane 文件/死 locale key） |
+| H3 | 取数失败保留上一标的财务数据（B 代码显示 A 财务） | effect 入口先清 data/选中态，错误路径保持空态 |
+| M1 | 与 main 4 处内容冲突 | rebase 到 main（#38/#39/#40 之上），冲突逐个裁决：保留 main 盘口/交易台 + PR 基本面 |
+| M2 | us/crypto 基本面永远走不通（桥前置 getFundamentals 检查） | 桥重构：pkg 下钻不依赖 getFundamentals；快照与 pkg 并行、各自失败只降级自己；骨架包（上游全败的空壳）不算实质数据，不压过快照；双失败才 TRADING_NOT_IMPLEMENTED |
+| M3 | 编造数据（缺评级兜底「买入」/预测零值/52周水位按 PE 分档/股东快照伪装增减持/缺值画 0 柱/无数据编安心文案） | 全部改为诚实降级：评级缺省 undefined、未知评级不入档、52周假水位指针移除、insiderTrades 用 HOLD_NUM_CHANGE 变动量且无变动不产行、图表缺值跳过、文案只说「未获取到」 |
+| M4 | 无超时 + reportapi 重复请求 + 无缓存 | kit 层统一 `AbortSignal.timeout(10s)`（对齐 connector-tencent）；reportapi 列表共享一次（fetchCnReportList 哨兵）；桥 5min TTL + in-flight 去重（symbols() 先例） |
+| M5 | 假浏览器 UA + 伪造 Referer（踩 replication.md 敌意自动化边界）；CoinCap 未入 ToS 表 | 全部改最小 `User-Agent: Mozilla/5.0`；README ToS 表补 CoinCap 行；replication.md 新增 §9 数据面定案 |
+| M6 | build 全绿但 tsc 报错（totalShares/circulatingShares 契约外字段、TS6133 死变量、TS2375） | 全部修复；`tsc --noEmit -p tsconfig.client.json` 对 PR 新增文件清零（build 用 tsdown/esbuild 不查类型，门禁建议补 tsc——待 CI 任务） |
+| M7 | 零测试零 spike 证据 | 新增 kit-cn fundamentals-package.test.ts（6 用例：UA/超时/去重/评级/增减持）、kit-us fundamentals-validate.test.ts（3 用例：ticker 白名单/超时）、bridge.test.ts fundamentals 组重写（缓存+去重直证）；spike 真实网络证据 `spikes/impl-fundamentals-EVIDENCE.json`（东财 F10 + reportapi PASS，CoinCap 本出口 TLS 不可达已注明） |
+| L1-L5 | US symbol 裸插值 / 期间键重复分支 / 死 locale key / website 无 scheme 白名单 / Yahoo 'Recent' 期间键塌缩 | 全部修复（US ticker 正则白名单 + encodeURIComponent；formatReportPeriod 修；死 key 删；website 仅 https? 放行；endDate 缺行剔除+期间键去重） |
+
+验证基线：`pnpm -r build` 全绿；`pnpm test` 全绿（新增 9 用例）；桥 fundamentals 组 4 用例含 TTL/in-flight 去重直证。Issue #36 的范围偏差（单端点替代 overview/financial-reports 双端点、FundamentalsStage 内联替代独立视图包）按更简实现采纳，未回填 issue 拆解。

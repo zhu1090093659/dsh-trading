@@ -560,10 +560,32 @@ export class TradingBridge {
   /** 按市场拉 kit 基本面数据包；kit 未覆盖或上游失败 → undefined（不算错误）。 */
   async #fetchPkg(market: MarketId, symbol: string): Promise<FundamentalsPackage | undefined> {
     try {
-      if (market === 'cn') return await fetchCnFundamentalsPackage(symbol)
-      if (market === 'hk') return await fetchHkFundamentalsPackage(symbol)
-      if (market === 'us') return await fetchUsFundamentalsPackage(symbol)
-      if (market === 'crypto') return await fetchCryptoFundamentalsPackage(symbol)
+      const pkg = market === 'cn' ? await fetchCnFundamentalsPackage(symbol)
+        : market === 'hk' ? await fetchHkFundamentalsPackage(symbol)
+        : market === 'us' ? await fetchUsFundamentalsPackage(symbol)
+        : market === 'crypto' ? await fetchCryptoFundamentalsPackage(symbol)
+        : undefined
+      // 骨架包（全部上游失败时 kit 仍返回 market/symbol + 空数组）不算数据：
+      // 只有携带实质下钻（matrix/stock/profile 详情/股东等任一）才压过快照，
+      // 否则快照字段会被空骨架挤到 stock 子对象里丢掉顶层估值字段。
+      if (pkg === undefined) return undefined
+      const hasSubstance = pkg.matrix !== undefined
+        || pkg.stock !== undefined
+        || pkg.crypto !== undefined
+        || pkg.profile?.description !== undefined
+        || pkg.profile?.industry !== undefined
+        || (pkg.shareholders?.length ?? 0) > 0
+        || (pkg.reports?.length ?? 0) > 0
+        || (pkg.mainOperations?.length ?? 0) > 0
+        || (pkg.dividends?.length ?? 0) > 0
+        || pkg.forecast !== undefined
+        || pkg.holderSummary !== undefined
+        || pkg.efficiency !== undefined
+        || (pkg.insiderTrades?.length ?? 0) > 0
+        || (pkg.institutionalHoldings?.length ?? 0) > 0
+        || (pkg.dividends?.length ?? 0) > 0
+        || (pkg.splits?.length ?? 0) > 0
+      return hasSubstance ? pkg : undefined
     } catch {
       // 下钻失败不阻断快照：调用方以 snapshot 兜底
     }
