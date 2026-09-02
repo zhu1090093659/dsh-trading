@@ -33,9 +33,14 @@ import css from './quote-stage.module.css'
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
 const TICKER_POLL_MS = 5000
 const KLINE_RESYNC_MS = 30000
-const KLINE_LIMIT = 500
-// 日K参考（头部昨收 + 基本面页签 52 周高低派生）：260 根 ≈ 一年交易日。
-const DAILY_LIMIT = 260
+// 盘中周期 K 线根数按市场区分：crypto 取 300——OKX 单请求上限 300，图表每 30s
+// resync 一次，不触发游标翻页、不放大限频消耗；其余市场取 500。日 K 深度需求由
+// 1d 分支单独走 DAILY_LIMIT。
+const KLINE_LIMIT_DEFAULT = 500
+const KLINE_LIMIT_BY_MARKET: Partial<Record<MarketId, number>> = { crypto: 300 }
+const klineLimit = (market: MarketId): number => KLINE_LIMIT_BY_MARKET[market] ?? KLINE_LIMIT_DEFAULT
+// 日 K（头部参考 + 日线图表）：750 根 ≈ 三年交易日；OKX 超出单请求 300 的部分由连接器 after 游标翻页补足。
+const DAILY_LIMIT = 750
 
 const INTERVAL_KEY: Record<string, MarketLocaleKey> = {
   '1m': 'interval.1m',
@@ -159,7 +164,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     const request = `${market}:${symbol}:${chartInterval}`
     requestRef.current = request
     try {
-      const rows = await fetchKlines(market, symbol, chartInterval, KLINE_LIMIT)
+      const rows = await fetchKlines(market, symbol, chartInterval, chartInterval === '1d' ? DAILY_LIMIT : klineLimit(market))
       if (requestRef.current !== request) return
       setKlines(rows)
       setKError(null)

@@ -102,7 +102,7 @@ describe('YahooRestClient.getKlines', () => {
       closeTime: Date.UTC(2026, 7, 26) + 86_400_000 - 1,
     })
     expect(klines[1]!.close).toBe(319.7)
-    expect(requests[0]!.url).toContain('https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1y')
+    expect(requests[0]!.url).toContain('https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=3y')
     expect(requests[0]!.ua).toBe('Mozilla/5.0')
   })
 
@@ -134,7 +134,7 @@ describe('YahooRestClient.getKlines', () => {
 
   it('maps HTTP 429 to TRADING_RATE_LIMITED and other non-OK to TRADING_EXCHANGE_ERROR', async () => {
     const { impl } = stubFetch([
-      { match: 'range=1y', body: 'rate limited', status: 429 },
+      { match: 'range=3y', body: 'rate limited', status: 429 },
     ])
     const client = new YahooRestClient({ fetchImpl: impl })
     await expect(client.getKlines('AAPL', '1d')).rejects.toMatchObject({ code: 'TRADING_RATE_LIMITED' })

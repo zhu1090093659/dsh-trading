@@ -516,36 +516,55 @@ export class OkxRestClient {
     }
   }
 
-  /** K 线：GET /api/v5/market/candles（limit 最大 300；响应新→旧，翻转为旧→新）。 */
+  /** K 线：GET /api/v5/market/candles（单请求上限 300，超出走 after 游标翻页；响应新→旧，翻转为旧→新）。 */
   async getKlines(instId: string, interval: Interval, limit = 100): Promise<Kline[]> {
     const id = normalizeOkxSymbol(instId)
     const bar = toBar(interval)
-    if (!Number.isInteger(limit) || limit < 1 || limit > 300) {
-      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX klines: limit must be an integer within 1..300, got ${limit}`)
+    if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX klines: limit must be an integer within 1..1000, got ${limit}`)
     }
-    const rows = await this.request('/api/v5/market/candles', { query: { instId: id, bar, limit: String(limit) } })
-    if (!Array.isArray(rows)) {
-      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX klines for ${id}: unexpected response shape`)
+    // 单请求上限 300；limit 更大时按 after 游标向前翻页补足（每页 min(剩余,300)
+    // 根，游标 = 已收最旧一根的 openTime，OKX 返回严格早于该 ts 的记录），直到
+    // 取满、上游返回不足一页（窗口耗尽）或空页。candles 端点可回看深度随 bar
+    // 档位而定（日线约 1440 根），近三年日 K（~750 根）在该窗口内。
+    const collected: Kline[] = []
+    const seenOpenTimes = new Set<number>()
+    let cursor: number | undefined
+    while (collected.length < limit) {
+      const pageSize = Math.min(limit - collected.length, 300)
+      const query: Record<string, string> = { instId: id, bar, limit: String(pageSize) }
+      if (cursor !== undefined) query.after = String(cursor)
+      const rows = await this.request('/api/v5/market/candles', { query })
+      if (!Array.isArray(rows)) {
+        throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX klines for ${id}: unexpected response shape`)
+      }
+      if (rows.length === 0) break
+      // 行结构 [ts, o, h, l, c, vol, volCcy, volCcyQuote, confirm]；confirm='0' 为未收盘 bar。
+      // 响应新→旧；跨页去重兜底（游标翻页本应严格更旧）。
+      for (const row of rows) {
+        if (!Array.isArray(row) || row.length < 6) {
+          throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX klines: malformed row for ${id}`)
+        }
+        const openTime = num(row[0])
+        const open = num(row[1])
+        const high = num(row[2])
+        const low = num(row[3])
+        const close = num(row[4])
+        const volume = num(row[5])
+        if (openTime === undefined || open === undefined || high === undefined || low === undefined
+          || close === undefined || volume === undefined) {
+          throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX klines: malformed row values for ${id}`)
+        }
+        if (seenOpenTimes.has(openTime)) continue
+        seenOpenTimes.add(openTime)
+        collected.push({ openTime, open, high, low, close, volume, closeTime: openTime + barDurationMs(bar) - 1 })
+      }
+      if (rows.length < pageSize) break
+      const oldest = num((rows[rows.length - 1] as unknown[])[0])
+      if (oldest === undefined) break
+      cursor = oldest
     }
-    const step = barDurationMs(bar)
-    // 行结构 [ts, o, h, l, c, vol, volCcy, volCcyQuote, confirm]；confirm='0' 为未收盘 bar。
-    const parsed = rows.map((row) => {
-      if (!Array.isArray(row) || row.length < 6) {
-        throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX klines: malformed row for ${id}`)
-      }
-      const openTime = num(row[0])
-      const open = num(row[1])
-      const high = num(row[2])
-      const low = num(row[3])
-      const close = num(row[4])
-      const volume = num(row[5])
-      if (openTime === undefined || open === undefined || high === undefined || low === undefined
-        || close === undefined || volume === undefined) {
-        throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX klines: malformed row values for ${id}`)
-      }
-      return { openTime, open, high, low, close, volume, closeTime: openTime + step - 1 } satisfies Kline
-    })
-    return parsed.reverse()
+    return collected.reverse()
   }
 
   /** 资金费率：GET /api/v5/public/funding-rate（仅 SWAP；10 次/2s）。 */

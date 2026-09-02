@@ -87,14 +87,14 @@ export function isSupportedInterval(value: Interval): boolean {
   return INTERVAL_TO_YAHOO.has(value)
 }
 
-/** 每个 interval 的默认取数窗口（1m 上限 7 天；日线以上给足年化历史）。 */
+/** 每个 interval 的默认取数窗口（1m 上限 7 天；日线给足近三年——服务层再按 limit 截尾）。 */
 const RANGE_BY_INTERVAL: ReadonlyMap<Interval, string> = new Map([
   ['1m', '7d'],
   ['5m', '1mo'],
   ['15m', '1mo'],
   ['30m', '1mo'],
   ['1h', '3mo'],
-  ['1d', '1y'],
+  ['1d', '3y'],
   ['1w', '5y'],
   ['1M', '10y'],
 ])

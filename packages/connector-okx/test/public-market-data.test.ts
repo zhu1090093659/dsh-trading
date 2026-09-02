@@ -29,6 +29,11 @@ function client(fetchImpl: typeof fetch, extra = {}): OkxRestClient {
   return new OkxRestClient({ baseUrl: 'https://okx.test', fetchImpl, clockSync: false, clockOffsetMs: 0, ...extra })
 }
 
+/** 合成 OKX candles 行（新→旧，from 起每根递减 1000ms）：[ts, o, h, l, c, vol, volCcy, volCcyQuote, confirm]。 */
+function klineRows(from: number, count: number): string[][] {
+  return Array.from({ length: count }, (_, i) => [String(from - i * 1000), '1', '2', '0.5', '1.5', '10', '0', '0', '1'])
+}
+
 describe('getTicker', () => {
   it('解析 last/bid/ask/vol24h（SPOT 的 24h 量取 vol24h=base 币量）', async () => {
     const { fetchImpl, requests } = routeMock(() => okResponse({
@@ -92,9 +97,33 @@ describe('getKlines 与 bar 映射', () => {
     expect(klines[1]?.openTime).toBe(1_700_003_600_000)
   })
 
-  it('limit > 300 拒绝（OKX candles 上限 300，与 Binance 的 1000 不同）', async () => {
+  it('limit > 300 按 after 游标向前翻页补足（每页 ≤300，游标=已收最旧一根 openTime），跨页合并旧→新', async () => {
+    const { fetchImpl, requests } = routeMock((req) => {
+      const after = new URL(req.url).searchParams.get('after')
+      return okResponse({ code: '0', data: after === null ? klineRows(500_000, 300) : klineRows(200_000, 200) })
+    })
+    const klines = await client(fetchImpl).getKlines('BTC-USDT', '1h', 500)
+    expect(requests).toHaveLength(2)
+    expect(requests[0]!.url).toContain('limit=300')
+    expect(requests[1]!.url).toContain('after=201000')
+    expect(klines).toHaveLength(500)
+    expect(klines[0]!.openTime).toBe(1_000)
+    expect(klines[499]!.openTime).toBe(500_000)
+  })
+
+  it('上游窗口耗尽（某页返回不足一页）即停，返回已取得的根数', async () => {
+    const { fetchImpl, requests } = routeMock((req) => {
+      const after = new URL(req.url).searchParams.get('after')
+      return okResponse({ code: '0', data: after === null ? klineRows(500_000, 300) : klineRows(200_000, 100) })
+    })
+    const klines = await client(fetchImpl).getKlines('BTC-USDT', '1h', 600)
+    expect(requests).toHaveLength(2)
+    expect(klines).toHaveLength(400)
+  })
+
+  it('limit > 1000 拒绝（分页补足也有总量上限，与桥层协议帽一致）', async () => {
     const { fetchImpl } = routeMock(() => okResponse({ code: '0', data: [] }))
-    await expect(client(fetchImpl).getKlines('BTC-USDT', '1m', 301)).rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
+    await expect(client(fetchImpl).getKlines('BTC-USDT', '1m', 1001)).rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
   })
 })
 

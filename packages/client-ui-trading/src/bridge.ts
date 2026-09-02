@@ -76,8 +76,8 @@ export function createBridgeHost(services: {
 /** 单次批量报价的 symbols 封顶（保护公共端点，超出部分直接拒绝）。 */
 export const MAX_SYMBOLS = 32
 
-/** 单次 K 线 limit 封顶。 */
-export const MAX_KLINE_LIMIT = 500
+/** 单次 K 线 limit 封顶（与 Binance/Bybit 单请求上限对齐；OKX 超出 300 的部分由连接器 after 游标翻页补足）。 */
+export const MAX_KLINE_LIMIT = 1000
 
 /** 宿主面：桥对 cordis ctx 的最小依赖（便于单测注入假件）。 */
 export interface BridgeHost {
