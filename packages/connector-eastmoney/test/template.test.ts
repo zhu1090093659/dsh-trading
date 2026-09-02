@@ -71,6 +71,7 @@ describe('EastmoneyRestClient.getTicker', () => {
     expect(urls[0]).toContain('f60')
     expect(ticker).toEqual({
       symbol: '600519.SH',
+      name: '贵州茅台',
       price: 1750.5,
       volume: 25000,
       timestamp: 1725000000000,

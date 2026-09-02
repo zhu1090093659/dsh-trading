@@ -3,4 +3,4 @@
  * （@dsh-trading/router/catalog，instruments_search 工具与桥共用），本模块
  * 保留为再导出垫片，既有导入路径不破坏。
  */
-export { SYMBOL_CATALOG, getMergedCatalog, searchSymbols, setDynamicCatalog, searchAllMarkets, type CatalogEntry, type CatalogMarket, type Suggestion } from '@dsh-trading/router/catalog'
+export { SYMBOL_CATALOG, getMergedCatalog, searchSymbols, setDynamicCatalog, updateDynamicCatalog, searchAllMarkets, type CatalogEntry, type CatalogMarket, type Suggestion } from '@dsh-trading/router/catalog'

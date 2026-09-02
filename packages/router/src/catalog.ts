@@ -224,15 +224,38 @@ export const SYMBOL_CATALOG: Record<CatalogMarket, CatalogEntry[]> = {
 const dynamicCatalogs = new Map<CatalogMarket, CatalogEntry[]>()
 
 /** 注入某市场的动态标的全集（由桥端点拉取并入）。 */
-export function setDynamicCatalog(market: CatalogMarket, entries: Array<{ symbol: string; name?: string }>): void {
+export function setDynamicCatalog(market: CatalogMarket, entries: Array<{ symbol: string; name?: string; pinyin?: string }>): void {
   const normalized: CatalogEntry[] = entries.map((e) => ({
     symbol: e.symbol,
     name: e.name ?? e.symbol,
+    pinyin: e.pinyin,
   }))
   dynamicCatalogs.set(market, normalized)
 }
 
-/** 获取静态快照 ∪ 动态全集融合后的标的列表（静态优先保留中文名）。 */
+/** 累加/增量更新某市场的动态标的名称（由实时行情查询或联想补齐触发）。 */
+export function updateDynamicCatalog(market: CatalogMarket, entries: Array<{ symbol: string; name?: string; pinyin?: string }>): void {
+  const existing = dynamicCatalogs.get(market) ?? []
+  const map = new Map<string, CatalogEntry>()
+  for (const e of existing) {
+    map.set(e.symbol.toUpperCase(), e)
+  }
+  for (const e of entries) {
+    if (!e.symbol || !e.name) continue
+    const sym = e.symbol.toUpperCase()
+    // 忽略占位符名字，如 "000938" 或 "000938 (A股)"
+    if (e.name === e.symbol || /\(A股\)|\(港股\)/.test(e.name)) continue
+    const old = map.get(sym)
+    map.set(sym, {
+      symbol: e.symbol,
+      name: e.name,
+      pinyin: e.pinyin ?? old?.pinyin,
+    })
+  }
+  dynamicCatalogs.set(market, Array.from(map.values()))
+}
+
+/** 获取静态快照 ∪ 动态全集融合后的标的列表（静态优先保留中文名，动态补充新标的）。 */
 export function getMergedCatalog(market: CatalogMarket): CatalogEntry[] {
   const staticList = SYMBOL_CATALOG[market] ?? []
   const dynamicList = dynamicCatalogs.get(market) ?? []
@@ -280,13 +303,17 @@ export function searchSymbols(market: CatalogMarket, query: string, limit = 8): 
     const suffix = code.startsWith('6') || code.startsWith('9') ? 'SH' : 'SZ'
     const canonical = `${code}.${suffix}`
     if (!scored.some(s => s.entry.symbol === canonical)) {
-      scored.push({ entry: { symbol: canonical, name: `${code} (A股)` }, score: 1.5 })
+      const existing = catalog.find(c => c.symbol.toUpperCase() === canonical)
+      const name = existing?.name && existing.name !== existing.symbol ? existing.name : `${code} (A股)`
+      scored.push({ entry: { symbol: canonical, name }, score: 1.5 })
     }
   } else if (market === 'hk' && /^\d{1,5}(\.HK)?$/i.test(q)) {
     const num = q.replace(/\.HK$/i, '')
     const canonical = `${num.padStart(5, '0')}.HK`
     if (!scored.some(s => s.entry.symbol === canonical)) {
-      scored.push({ entry: { symbol: canonical, name: `${canonical} (港股)` }, score: 1.5 })
+      const existing = catalog.find(c => c.symbol.toUpperCase() === canonical)
+      const name = existing?.name && existing.name !== existing.symbol ? existing.name : `${canonical} (港股)`
+      scored.push({ entry: { symbol: canonical, name }, score: 1.5 })
     }
   }
 
@@ -322,13 +349,17 @@ export function searchAllMarkets(query: string, limit = 8): Suggestion[] {
       const suffix = code.startsWith('6') || code.startsWith('9') ? 'SH' : 'SZ'
       const canonical = `${code}.${suffix}`
       if (!all.some(s => s.entry.symbol === canonical)) {
-        all.push({ entry: { symbol: canonical, name: `${code} (A股)`, market: 'cn' }, score: 1.5 })
+        const existing = catalog.find(c => c.symbol.toUpperCase() === canonical)
+        const name = existing?.name && existing.name !== existing.symbol ? existing.name : `${code} (A股)`
+        all.push({ entry: { symbol: canonical, name, market: 'cn' }, score: 1.5 })
       }
     } else if (market === 'hk' && /^\d{1,5}(\.HK)?$/i.test(q)) {
       const num = q.replace(/\.HK$/i, '')
       const canonical = `${num.padStart(5, '0')}.HK`
       if (!all.some(s => s.entry.symbol === canonical)) {
-        all.push({ entry: { symbol: canonical, name: `${canonical} (港股)`, market: 'hk' }, score: 1.5 })
+        const existing = catalog.find(c => c.symbol.toUpperCase() === canonical)
+        const name = existing?.name && existing.name !== existing.symbol ? existing.name : `${canonical} (港股)`
+        all.push({ entry: { symbol: canonical, name, market: 'hk' }, score: 1.5 })
       }
     }
   }

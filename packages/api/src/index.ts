@@ -30,6 +30,8 @@ export type Interval =
 export interface Ticker {
   /** 交易对符号，**市场规范词汇**（docs/symbol-vocabulary.md：crypto=BTCUSDT，us=AAPL，cn=600519.SH，hk=00700.HK）。 */
   readonly symbol: string
+  /** 标的/公司名称（如“紫光股份”、“苹果”、“腾讯控股”；部分数据源可缺省）。 */
+  readonly name?: string
   /** 最新成交价。 */
   readonly price: number
   /** 最优买价（部分数据源可缺省）。 */

@@ -303,9 +303,11 @@ export class YahooRestClient {
     if (timestamp === undefined) {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Yahoo ticker for ${sym}: no timestamp in meta and no bars`)
     }
+    const name = (result.meta as { shortName?: string; longName?: string }).shortName ?? (result.meta as { shortName?: string; longName?: string }).longName
     const volume = result.meta.regularMarketVolume ?? last?.volume
     return {
       symbol: sym,
+      ...(name ? { name } : {}),
       price,
       timestamp,
       ...(volume !== undefined ? { volume } : {}),

@@ -248,12 +248,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const intervals = MARKET_INTERVALS[market] ?? ['1d']
   const color = directionColor(stats.pct ?? 0, colorMode)
 
+  const rawName = instrument?.name
+  const isPlaceholderName = !rawName || rawName === symbol || /\(A股\)|\(港股\)/.test(rawName)
+  const tickerName = (ticker as { name?: string })?.name
+  const displayName = (!isPlaceholderName ? rawName : (tickerName || rawName || symbol))
+
   return (
     <div className={css.root} data-dshtrading-quote-stage="">
       {/* 顶部报价头 */}
       <div className={css.header}>
         <div className={css.ident}>
-          <span className={css.name}>{instrument?.name ?? (ticker as { name?: string })?.name ?? symbol}</span>
+          <span className={css.name}>{displayName}</span>
           <span className={css.code}>{symbol}</span>
           <span className={css.marketTag}>{t(TAB_KEY[market])}</span>
         </div>

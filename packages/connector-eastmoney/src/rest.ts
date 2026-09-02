@@ -175,8 +175,11 @@ export class EastmoneyRestClient {
     const prevClose = parseScaledHundred(d.f60)
     const changePercent = parseScaledHundred(d.f170)
 
+    const name = typeof d.f58 === 'string' && d.f58.trim() ? d.f58.trim() : undefined
+
     return {
       symbol: canonical,
+      ...(name ? { name } : {}),
       price,
       volume: volume > 0 ? volume : 0,
       timestamp,

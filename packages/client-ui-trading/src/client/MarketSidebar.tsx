@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers } from './api.ts'
-import { searchAllMarkets, searchSymbols, setDynamicCatalog } from './symbol-catalog.ts'
+import { searchAllMarkets, searchSymbols, setDynamicCatalog, updateDynamicCatalog } from './symbol-catalog.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { colorModeStore } from './color-mode.ts'
@@ -114,6 +114,43 @@ export function MarketSidebar({
     [tab, draft, catalogVersion],
   )
 
+  // 智能动态补齐搜索标的真实名称（如 000938 未收录时，异步拉取行情拿到“紫光股份”并刷新联想）
+  useEffect(() => {
+    const raw = draft.trim().toUpperCase()
+    if (!raw) return
+
+    const candidatesToEnrich: Array<{ market: MarketId; symbol: string }> = []
+    for (const sug of suggestions) {
+      if (sug.name && (sug.name === sug.symbol || /\(A股\)|\(港股\)/.test(sug.name))) {
+        candidatesToEnrich.push({ market: sug.market, symbol: sug.symbol })
+      }
+    }
+
+    if (candidatesToEnrich.length === 0) return
+
+    let cancelled = false
+    const timer = setTimeout(() => {
+      for (const item of candidatesToEnrich) {
+        fetchTickers(item.market, [item.symbol])
+          .then((res) => {
+            if (cancelled) return
+            const outcome = res[item.symbol]
+            const ticker = outcome && outcome.ok ? outcome.ticker : undefined
+            if (ticker?.name && ticker.name !== item.symbol && !/\(A股\)|\(港股\)/.test(ticker.name)) {
+              updateDynamicCatalog(item.market, [{ symbol: item.symbol, name: ticker.name }])
+              setCatalogVersion((v) => v + 1)
+            }
+          })
+          .catch(() => {})
+      }
+    }, 180)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [draft, suggestions])
+
   // 参考序列（日K收盘 → 迷你走势 + 昨收）：逐标的惰性拉一次，TTL 内复用。
   useEffect(() => {
     if (rows.length === 0) return
@@ -141,7 +178,7 @@ export function MarketSidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowsKey])
 
-  // 最新价批量轮询：按市场分组，每市场每拍一次请求。
+  // 最新价批量轮询：按市场分组，每市场每拍一次请求，并自动回填标的真实中文名称。
   usePoll(async () => {
     if (rows.length === 0) return
     const byMarket = new Map<MarketId, string[]>()
@@ -151,15 +188,38 @@ export function MarketSidebar({
       byMarket.set(row.market, list)
     }
     const next: Record<string, Ticker> = {}
+    const dynamicUpdates: Map<MarketId, Array<{ symbol: string; name: string }>> = new Map()
+
     await Promise.all([...byMarket.entries()].map(async ([market, symbols]) => {
       try {
         const outcome = await fetchTickers(market, symbols)
         for (const [symbol, result] of Object.entries(outcome)) {
-          if (result.ok) next[rowKey(market, symbol)] = result.ticker
+          if (result.ok) {
+            next[rowKey(market, symbol)] = result.ticker
+            if (result.ticker.name && result.ticker.name !== symbol && !/\(A股\)|\(港股\)/.test(result.ticker.name)) {
+              const list = dynamicUpdates.get(market) ?? []
+              list.push({ symbol, name: result.ticker.name })
+              dynamicUpdates.set(market, list)
+
+              // 若自选列表中此标的名字为空或为占位符，自动更新自选名称
+              const existingRow = rows.find((r) => r.market === market && r.symbol === symbol)
+              if (existingRow && (!existingRow.name || existingRow.name === symbol || /\(A股\)|\(港股\)/.test(existingRow.name))) {
+                addInstrument(market, { market, symbol, name: result.ticker.name })
+              }
+            }
+          }
         }
       } catch { /* 桥暂不可用，下轮再试 */ }
     }))
+
     if (Object.keys(next).length > 0) setPrices(current => ({ ...current, ...next }))
+
+    if (dynamicUpdates.size > 0) {
+      for (const [m, entries] of dynamicUpdates.entries()) {
+        updateDynamicCatalog(m, entries)
+      }
+      setCatalogVersion((v) => v + 1)
+    }
   }, PRICE_POLL_MS, [rowsKey])
 
   const tabs: { id: MarketTab; label: string }[] = [
@@ -327,7 +387,14 @@ export function MarketSidebar({
                     onClick={() => { selectInstrument(row) }}
                   >
                     <span className={css.idents}>
-                      <span className={css.name}>{row.name ?? (ticker as { name?: string })?.name ?? row.symbol}</span>
+                      <span className={css.name}>
+                        {(() => {
+                          const rowRaw = row.name
+                          const isPlaceholder = !rowRaw || rowRaw === row.symbol || /\(A股\)|\(港股\)/.test(rowRaw)
+                          const tickName = (ticker as { name?: string })?.name
+                          return !isPlaceholder ? rowRaw : (tickName || rowRaw || row.symbol)
+                        })()}
+                      </span>
                       <span className={css.codeRow}>
                         <span className={css.code}>{row.symbol}</span>
                         {tab === 'watch' && <span className={css.marketTag}>{t(TAB_KEY[row.market])}</span>}
