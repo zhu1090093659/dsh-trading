@@ -84,8 +84,10 @@ export async function fetchCnFundamentals(options: CnFundamentalsOptions): Promi
     const limitDownPrice = num(fields[48])
     const peStatic = num(fields[52])
     const peTtm = num(fields[53]) ?? peDynamic
-    const fiftyTwoWeekHigh = num(fields[68])
-    const fiftyTwoWeekLow = num(fields[69])
+    // 52 周高低在 f67/f68（2026-09-02 实测 sh600519，88 字段，
+    // spikes/impl-cn-hk/r4-fundamentals/；旧值 68/69 比真实行多算一个空位）。
+    const fiftyTwoWeekHigh = num(fields[67])
+    const fiftyTwoWeekLow = num(fields[68])
 
     const data: StockFundamentals = {
       symbol: canonical,

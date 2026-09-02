@@ -25,7 +25,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
-import type { Disposable, Interval, Kline, MarketDataService, Ticker } from '@dsh-trading/api'
+import type { Disposable, Interval, Kline, MarketDataService, StockFundamentals, Ticker } from '@dsh-trading/api'
 import {
   INTERVAL_VOCABULARY,
   type TencentMarket,
@@ -100,6 +100,11 @@ export class TencentMarketDataService extends Service implements MarketDataServi
 
   getTicker(symbol: string): Promise<TencentTicker> {
     return this.client.getTicker(symbol)
+  }
+
+  /** 基本面快照（同一报价行解析，MarketDataService 可选契约 2026-09-02）。 */
+  getFundamentals(symbol: string): Promise<StockFundamentals> {
+    return this.client.getFundamentals(symbol)
   }
 
   getKlines(symbol: string, interval: Interval, limit?: number): Promise<Kline[]> {

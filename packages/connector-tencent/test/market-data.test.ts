@@ -201,6 +201,40 @@ describe('TencentRestClient.getTicker (hk)', () => {
   })
 })
 
+describe('TencentRestClient.getFundamentals', () => {
+  it('parses cn fundamentals from the same quote line (52w range at f67/f68, r4 live evidence)', async () => {
+    const { impl, urls } = stubFetch([{ match: 'qt.gtimg.cn', body: gbkResponse(CN_TICKER_TEMPLATE, CN_NAME_GBK) }])
+    const result = await client('cn', { fetchImpl: impl }).getFundamentals('600519')
+    expect(urls[0]).toBe('https://qt.gtimg.cn/q=sh600519')
+    expect(result.symbol).toBe('600519.SH')
+    expect(result.name).toBe('贵州茅台')
+    expect(result.marketCap).toBe(1_621_856_000_000)
+    expect(result.floatMarketCap).toBe(1_621_856_000_000)
+    expect(result.peTtm).toBe(19.7)
+    expect(result.peDynamic).toBe(19.92)
+    expect(result.pb).toBe(6.46)
+    expect(result.turnoverRate).toBe(0.13)
+    expect(result.fiftyTwoWeekHigh).toBe(1539.98)
+    expect(result.fiftyTwoWeekLow).toBe(1151.01)
+  })
+
+  it('parses hk fundamentals with the hk field layout and percent dividend yield', async () => {
+    const { impl } = stubFetch([{ match: 'qt.gtimg.cn', body: gbkResponse(HK_TICKER_TEMPLATE, HK_NAME_GBK) }])
+    const result = await client('hk', { fetchImpl: impl }).getFundamentals('00700')
+    expect(result.symbol).toBe('00700.HK')
+    expect(result.marketCap).toBe(4_143_752_410_000) // 41437.5241 亿港元
+    expect(result.floatMarketCap).toBe(4_143_752_410_000)
+    expect(result.peTtm).toBe(15.28)
+    expect(result.peDynamic).toBe(16.65)
+    expect(result.pb).toBe(3.18)
+    // 腾讯 wire 给百分比数值（1.17 = 1.17%），契约语义是小数 → 0.0117。
+    expect(result.dividendYield).toBeCloseTo(0.0117, 6)
+    expect(result.turnoverRate).toBe(0.3)
+    expect(result.fiftyTwoWeekHigh).toBe(677.7)
+    expect(result.fiftyTwoWeekLow).toBe(411)
+  })
+})
+
 describe('TencentRestClient.getKlines', () => {
   it('parses cn day klines with the open-close-high-low-volume field order', async () => {
     const { impl, urls } = stubFetch([{ match: 'fqkline/get', body: CN_KLINE_JSON }])

@@ -24,7 +24,7 @@
  * @module @dsh-trading/connector-tencent/rest
  */
 
-import type { Interval, Kline, Ticker, TradingErrorCode } from '@dsh-trading/api'
+import type { Interval, Kline, StockFundamentals, Ticker, TradingErrorCode } from '@dsh-trading/api'
 
 /* ------------------------------------------------------------------ */
 /* 错误载体（api 包词汇的运行时映射，与 connector-stooq 同构）               */
@@ -322,6 +322,65 @@ function parseHkTicker(fields: string[], timestamp: number): TencentTicker {
   }
 }
 
+/** 基本面快照 = api 契约形（币种单位由市场决定：cn=CNY，hk=HKD，展示层标注）。 */
+export type TencentFundamentals = StockFundamentals
+
+/**
+ * cn 基本面字段布局（与 parseCnTicker 同一行报价；字段号 2026-09-02 实测
+ * spikes/impl-cn-hk/r4-fundamentals/ 核对）：38=换手率% 39=动态PE 44=流通市值(亿)
+ * 45=总市值(亿) 46=PB 52=静态PE 53=PE(TTM) **67=52周高 68=52周低**。
+ * 注意：kit-cn/fundamentals 的 68/69 与其实测夹具自洽，但夹具比真实响应多一个空字段
+ * （真实行 53 之后只有两个空位，52 周高在 67）——本解析器以 r4 原始字节证据为准。
+ * 字段缺省（指数/ETF）时 num() 置 undefined 后整字段省略。
+ */
+function parseCnFundamentals(fields: string[], timestamp: number): TencentFundamentals {
+  const peDynamic = num(fields[39])
+  const peTtm = num(fields[53]) ?? peDynamic
+  const totalMarketCapYi = num(fields[45])
+  const floatMarketCapYi = num(fields[44])
+  return {
+    symbol: '',
+    name: fields[1] ?? '',
+    ...(totalMarketCapYi !== undefined ? { marketCap: totalMarketCapYi * 100_000_000 } : {}),
+    ...(floatMarketCapYi !== undefined ? { floatMarketCap: floatMarketCapYi * 100_000_000 } : {}),
+    ...(peTtm !== undefined ? { peTtm } : {}),
+    ...(peDynamic !== undefined ? { peDynamic } : {}),
+    ...(num(fields[46]) !== undefined ? { pb: num(fields[46]) } : {}),
+    ...(num(fields[38]) !== undefined ? { turnoverRate: num(fields[38]) } : {}),
+    ...(num(fields[67]) !== undefined ? { fiftyTwoWeekHigh: num(fields[67]) } : {}),
+    ...(num(fields[68]) !== undefined ? { fiftyTwoWeekLow: num(fields[68]) } : {}),
+    timestamp,
+  }
+}
+
+/**
+ * hk 基本面字段布局（与 parseHkTicker 同一行报价，字段号对齐 kit-hk/fundamentals 实测）：
+ * 39=动态PE 44=总市值(亿港元) 45=流通市值(亿港元) 47=股息率(百分比数值) 48=52周高 49=52周低
+ * 57=PE(TTM) 58=PB 59=换手率%。
+ */
+function parseHkFundamentals(fields: string[], timestamp: number): TencentFundamentals {
+  const peDynamic = num(fields[39])
+  const peTtm = num(fields[57]) ?? peDynamic
+  const totalMarketCapYi = num(fields[44])
+  const floatMarketCapYi = num(fields[45])
+  const dividendYieldPercent = num(fields[47])
+  return {
+    symbol: '',
+    name: fields[1] ?? '',
+    ...(totalMarketCapYi !== undefined ? { marketCap: totalMarketCapYi * 100_000_000 } : {}),
+    ...(floatMarketCapYi !== undefined ? { floatMarketCap: floatMarketCapYi * 100_000_000 } : {}),
+    ...(peTtm !== undefined ? { peTtm } : {}),
+    ...(peDynamic !== undefined ? { peDynamic } : {}),
+    ...(num(fields[58]) !== undefined ? { pb: num(fields[58]) } : {}),
+    // 契约语义是小数（0.015 = 1.5%）；腾讯 wire 给的是百分比数值（1.17 = 1.17%）。
+    ...(dividendYieldPercent !== undefined ? { dividendYield: dividendYieldPercent / 100 } : {}),
+    ...(num(fields[59]) !== undefined ? { turnoverRate: num(fields[59]) } : {}),
+    ...(num(fields[48]) !== undefined ? { fiftyTwoWeekHigh: num(fields[48]) } : {}),
+    ...(num(fields[49]) !== undefined ? { fiftyTwoWeekLow: num(fields[49]) } : {}),
+    timestamp,
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* 腾讯行情客户端（无凭证、可注入 fetch，便于单测）                            */
 /* ------------------------------------------------------------------ */
@@ -405,10 +464,11 @@ export class TencentRestClient {
   }
 
   /**
-   * 最新行情快照。**GBK 解码**（响应 charset=GBK，UTF-8 直接乱码）；未知代码返回
-   * `v_pv_none="1"` 之类短 body，按 TRADING_UNSUPPORTED_SYMBOL 上报。
+   * 报价行取数（getTicker/getFundamentals 共用）：**GBK 解码**（响应 charset=GBK，
+   * UTF-8 直接乱码）；未知代码返回 `v_pv_none="1"` 之类短 body，按
+   * TRADING_UNSUPPORTED_SYMBOL 上报。返回 `~` 分隔字段数组 + 行情时间戳。
    */
-  async getTicker(symbol: string): Promise<TencentTicker> {
+  async #fetchQuoteFields(symbol: string): Promise<{ fields: string[]; timestamp: number; sym: string }> {
     const sym = normalizeSymbol(this.#market, symbol)
     const url = `${this.#quoteBaseUrl}/q=${this.#quoteWireCode(sym)}`
     const bytes = await this.#requestArrayBuffer(url)
@@ -430,8 +490,26 @@ export class TencentRestClient {
     const timestamp = this.#market === 'hk'
       ? wallTimeToEpochMs(fields[30] ?? '', 'Asia/Hong_Kong')
       : wallTimeToEpochMs(fields[30] ?? '', 'Asia/Shanghai')
+    return { fields, timestamp, sym }
+  }
+
+  /**
+   * 最新行情快照（同一报价行含基本面字段，getFundamentals 零额外请求成本地解析）。
+   */
+  async getTicker(symbol: string): Promise<TencentTicker> {
+    const { fields, timestamp, sym } = await this.#fetchQuoteFields(symbol)
     const parsed = this.#market === 'hk' ? parseHkTicker(fields, timestamp) : parseCnTicker(fields, timestamp)
     // 输出一律规范形（响应体 fields[2] 是裸代码，交易所信息在请求时的 wire 前缀里）。
+    return { ...parsed, symbol: toCanonicalTencentSymbol(this.#market, sym) }
+  }
+
+  /**
+   * 基本面与估值快照：与 getTicker 同一行报价（字段布局见 parseCnFundamentals /
+   * parseHkFundamentals 注释），无额外端点。估值字段缺省（指数/ETF）时整字段省略。
+   */
+  async getFundamentals(symbol: string): Promise<TencentFundamentals> {
+    const { fields, timestamp, sym } = await this.#fetchQuoteFields(symbol)
+    const parsed = this.#market === 'hk' ? parseHkFundamentals(fields, timestamp) : parseCnFundamentals(fields, timestamp)
     return { ...parsed, symbol: toCanonicalTencentSymbol(this.#market, sym) }
   }
 

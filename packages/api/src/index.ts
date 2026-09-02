@@ -213,6 +213,13 @@ export interface MarketDataService {
    * 可选方法：无公开全集端点的数据源（如 tencent/yahoo/stooq）可缺省或由桥/前端回退。
    */
   listInstruments?(): Promise<Array<{ symbol: string; name?: string }>>
+  /**
+   * 标的基本面与估值快照（GUI「基本面」页签用，2026-09-02）。
+   * 可选方法：仅当数据源在同一公共端点里携带基本面字段时实现
+   * （腾讯行情行 cn/hk 已实现）；未实现的市场由消费方降级为派生数据（日K 52 周高低）。
+   * 输出 `symbol` 一律市场规范词汇（docs/symbol-vocabulary.md）。
+   */
+  getFundamentals?(symbol: string): Promise<StockFundamentals>
 }
 
 /**

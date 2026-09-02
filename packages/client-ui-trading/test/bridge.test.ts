@@ -123,6 +123,37 @@ describe('TradingBridge.symbols', () => {
   })
 })
 
+describe('TradingBridge.fundamentals（2026-09-02 基本面页签）', () => {
+  it('透传注册表解析出服务的 getFundamentals', async () => {
+    const service = fakeService({
+      getFundamentals: async (symbol: string) => ({
+        symbol, name: '贵州茅台', marketCap: 1_621_856_000_000, peTtm: 19.7,
+        fiftyTwoWeekHigh: 1539.98, fiftyTwoWeekLow: 1151.01, timestamp: 1234,
+      }),
+    })
+    const bridge = new TradingBridge(fakeHost({ tradingCnMarketData: service }))
+    const search = new URLSearchParams({ market: 'cn', symbol: '600519.SH' })
+    const { status, payload } = await dispatchBridgeRequest(bridge, 'GET', '/fundamentals', search)
+    expect(status).toBe(200)
+    expect(payload).toMatchObject({ ok: true, fundamentals: { symbol: '600519.SH', peTtm: 19.7 } })
+  })
+
+  it('连接器未实现 getFundamentals → TRADING_NOT_IMPLEMENTED 业务错误（前端降级派生数据）', async () => {
+    const bridge = new TradingBridge(fakeHost({ tradingUsMarketData: fakeService() }))
+    const search = new URLSearchParams({ market: 'us', symbol: 'AAPL' })
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/fundamentals', search))
+      .rejects.toMatchObject({ code: 'TRADING_NOT_IMPLEMENTED' })
+  })
+
+  it('未知市场 400；缺 symbol 400', async () => {
+    const bridge = new TradingBridge(fakeHost({ tradingCnMarketData: fakeService() }))
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/fundamentals', new URLSearchParams({ market: 'jp', symbol: 'X' })))
+      .rejects.toBeInstanceOf(BridgeProtocolError)
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/fundamentals', new URLSearchParams({ market: 'cn' })))
+      .rejects.toBeInstanceOf(BridgeProtocolError)
+  })
+})
+
 describe('dispatchBridgeRequest', () => {
   const bridge = new TradingBridge(fakeHost({
     tradingCryptoMarketData: fakeService({

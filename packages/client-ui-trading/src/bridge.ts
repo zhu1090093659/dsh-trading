@@ -13,7 +13,7 @@
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
-import type { Interval, Kline, MarketDataService, Ticker } from '@dsh-trading/api'
+import type { Interval, Kline, MarketDataService, StockFundamentals, Ticker } from '@dsh-trading/api'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/indicators'
 import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
@@ -125,6 +125,11 @@ export interface SymbolInfoWire {
 
 export interface SymbolsWire {
   symbols: SymbolInfoWire[]
+}
+
+export interface FundamentalsWire {
+  ok: true
+  fundamentals: StockFundamentals
 }
 
 export interface CustomIndicatorsWire {
@@ -240,9 +245,28 @@ export class TradingBridge {
     }
   }
 
+  /**
+   * 标的基本面快照（GUI「基本面」页签，2026-09-02）：单 symbol 透传注册表解析出的
+   * 行情服务。连接器未实现可选 getFundamentals（us/crypto 数据源不携带基本面字段）
+   * → 业务错误 TRADING_NOT_IMPLEMENTED（HTTP 200 + ok:false），前端降级为派生数据。
+   */
+  async fundamentals(market: string, symbol: string): Promise<FundamentalsWire> {
+    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const trimmed = symbol.trim()
+    if (trimmed === '') throw new BridgeProtocolError(400, 'fundamentals: symbol is required')
+    const service = this.host.getMarketService(market)
+    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    if (typeof service.getFundamentals !== 'function') {
+      throw Object.assign(
+        new Error(`market ${market} provider does not implement fundamentals — derived data only`),
+        { code: 'TRADING_NOT_IMPLEMENTED' },
+      )
+    }
+    return { ok: true, fundamentals: await service.getFundamentals(trimmed) }
+  }
+
   /** 自定义指标列表。 */
-  async customIndicators(): Promise<CustomIndicatorsWire> {
-    const store = this.host.customIndicatorsStore
+  async customIndicators(): Promise<CustomIndicatorsWire> {    const store = this.host.customIndicatorsStore
     if (store === undefined) return { ok: true, indicators: [] }
     const indicators = await store.list()
     return { ok: true, indicators }
@@ -430,6 +454,11 @@ export async function dispatchBridgeRequest(
       case '/symbols': {
         const market = search.get('market') ?? ''
         return { status: 200, payload: await bridge.symbols(market) }
+      }
+      case '/fundamentals': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return { status: 200, payload: await bridge.fundamentals(market, symbol) }
       }
       case '/indicators/custom': {
         return { status: 200, payload: await bridge.customIndicators() }
