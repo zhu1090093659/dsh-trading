@@ -5,9 +5,10 @@
  * （base 拥有该共享行）。职责：
  * - provide `tradingKnowledgeCards` 服务（file store 单实例：桥 GET 与
  *   knowledge_ingest/search 共享同一缓存）；
- * - host 平面注册 `knowledge_ingest` / `knowledge_search`（从 kit/client-ui-trading
- *   双注册收口）+ `knowledge_graph`（新增——buildGraph 的只读包装）；
- * - 写成功 emit tradingEvents('knowledge')（issue #30 通道）。
+ * - host 平面注册 `knowledge_ingest` / `knowledge_search` / `knowledge_get` /
+ *   `knowledge_delete`（从 kit/client-ui-trading 双注册收口）+ `knowledge_graph`
+ *   （buildGraph 的只读结构概要包装）；
+ * - 写/删成功 emit tradingEvents('knowledge')（issue #30 通道）。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
@@ -15,9 +16,14 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import os from 'node:os'
 import path from 'node:path'
 import { buildGraph } from './graph.ts'
-import type { KnowledgeCard, KnowledgeCardStore } from './types.ts'
+import type { KnowledgeCardStore } from './types.ts'
 import { createFileKnowledgeCardStore } from './knowledge-fs.ts'
-import { createKnowledgeIngestTool, createKnowledgeSearchTool } from './tool.ts'
+import {
+  createKnowledgeDeleteTool,
+  createKnowledgeGetTool,
+  createKnowledgeIngestTool,
+  createKnowledgeSearchTool,
+} from './tool.ts'
 
 // 桥经本子路径取 file store（knowledge/tool 同款再导出先例）。
 export { createFileKnowledgeCardStore }
@@ -45,14 +51,15 @@ export interface KnowledgeGraphToolOptions {
   store: KnowledgeCardStore
 }
 
-/** knowledge_graph 工厂（issue #33 新增；只读包装 buildGraph）。 */
+/** knowledge_graph 工厂（issue #33 新增；只读结构概要，不倾倒全量 label）。 */
 export function createKnowledgeGraphTool(options: KnowledgeGraphToolOptions) {
   const { store } = options
   return defineTool({
     name: 'knowledge_graph',
     description:
-      'Build the knowledge graph over the persisted knowledge cards (nodes = cards, edges = shared tags and authors). '
-      + 'Read-only: returns node labels plus edge counts for a structural overview of the library.',
+      'Build a structural overview of the persisted knowledge cards (nodes = cards, edges = shared tags/authors/related). '
+      + 'Read-only: returns counts, top topic clusters and credibility distribution. '
+      + 'For concrete card content use knowledge_search / knowledge_get instead.',
     parameters: {},
     output: {
       schema: { type: 'string' },
@@ -61,12 +68,26 @@ export function createKnowledgeGraphTool(options: KnowledgeGraphToolOptions) {
     async execute() {
       const cards = await store.list()
       const data = buildGraph(cards)
+      // 知识库增大后全量 label 倾倒是无差别 token 消耗：结构发现收敛为
+      // 聚类 top-N + 可信度分布；具体内容一律走 knowledge_search / knowledge_get。
+      const clusterCounts = new Map<string, number>()
+      const credibility = { high: 0, medium: 0, low: 0 }
+      for (const card of cards) {
+        const cluster = card.tags[0] ?? '未分类'
+        clusterCounts.set(cluster, (clusterCounts.get(cluster) ?? 0) + 1)
+        credibility[card.credibility] += 1
+      }
+      const topClusters = [...clusterCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([cluster, count]) => ({ cluster, count }))
       return JSON.stringify({
         ok: true,
         cards: cards.length,
         nodeCount: data.nodes.length,
-        edgeCount: data.edges.length,
-        nodeLabels: data.nodes.map((n: { label?: string }) => n.label ?? ''),
+        edgeCount: data.links.length,
+        topClusters,
+        credibility,
       })
     },
   })
@@ -87,11 +108,14 @@ export function registerKnowledgeTools(ctx: Context, deps: KnowledgePluginDeps):
     const register = (tool: ReturnType<typeof defineTool>) => {
       if (tools.get(tool.name) === undefined) tools.register(tool)
     }
-    register(createKnowledgeIngestTool({
-      store: deps.store,
+    register(createKnowledgeIngestTool(deps.store, {
       onWritten: () => events()?.emit('knowledge'),
     }))
     register(createKnowledgeSearchTool(deps.store))
+    register(createKnowledgeGetTool(deps.store))
+    register(createKnowledgeDeleteTool(deps.store, {
+      onWritten: () => events()?.emit('knowledge'),
+    }))
     register(createKnowledgeGraphTool({ store: deps.store }))
   })
 }
