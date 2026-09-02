@@ -603,17 +603,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           >
             {t('orderbook.toggle')}
           </button>
-          {/* 新闻情报流页签入口（issue #37） */}
-          <button
-            type="button"
-            className={css.pickerButton}
-            data-active={stageTab === 'news' ? 'true' : undefined}
-            aria-pressed={stageTab === 'news'}
-            title="查看新闻情报流"
-            onClick={() => { setStageTab('news') }}
-          >
-            新闻
-          </button>
           {/* 策略信号标记开关（issue #41） */}
           <button
             type="button"
