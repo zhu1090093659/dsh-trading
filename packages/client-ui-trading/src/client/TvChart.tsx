@@ -19,8 +19,9 @@ import {
   AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart,
 } from 'lightweight-charts'
 import type {
-  IChartApi, ISeriesApi, MouseEventParams, SeriesType, Time, UTCTimestamp,
+  IChartApi, ISeriesApi, LogicalRange, MouseEventParams, SeriesType, Time, UTCTimestamp,
 } from 'lightweight-charts'
+import type { BarPrice, PriceFormatCustom } from 'lightweight-charts'
 import { fmtAxis, fmtCompact, priceDigits } from './format.ts'
 import { getColorPalette, type ColorMode } from './color-mode.ts'
 import type { IndicatorOutput } from '@dsh-trading/indicators'
@@ -81,6 +82,26 @@ export function toBar(kline: Kline): TvBar {
   }
 }
 
+/**
+ * 右轴价格格式（2026-09-02 相对涨跌幅轴）：镜像序列的数值仍是**价位**，仅
+ * 标签经本 formatter 换算为相对参考价的百分比——两轴刻度行逐行对齐的关键。
+ * 参考价从 refPriceRef 惰性读取（滚动/缩放时经 applyOptions 换新对象强制重绘）。
+ * 负数带负号、正数不带正号（同花顺式）。
+ */
+function mirrorPercentFormat(refPriceRef: { current: number | null }): PriceFormatCustom {
+  return {
+    type: 'custom',
+    minMove: 0.01,
+    formatter: (price: BarPrice): string => {
+      const ref = refPriceRef.current
+      const value = Number(price)
+      if (ref === null || !Number.isFinite(ref) || ref <= 0 || !Number.isFinite(value)) return ''
+      const pct = (value - ref) / ref * 100
+      return `${pct.toFixed(2)}%`
+    },
+  }
+}
+
 export function toVolume(kline: Kline, colorMode: ColorMode = 'red-up'): TvVolume {
   const up = kline.close >= kline.open
   const palette = getColorPalette(colorMode)
@@ -128,6 +149,12 @@ export function getChartThemeOptions(dark: boolean) {
       grid: {
         vertLines: { color: '#1e222d' },
         horzLines: { color: '#1e222d' },
+      },
+      leftPriceScale: {
+        visible: true,
+        borderColor: '#2a2e39',
+        scaleMargins: { top: 0.08, bottom: 0.08 },
+        entireTextOnly: true,
       },
       rightPriceScale: {
         borderColor: '#2a2e39',
@@ -177,6 +204,15 @@ export function getChartThemeOptions(dark: boolean) {
       vertLines: { color: '#f5f6f8' },
       horzLines: { color: '#f0f2f5' },
     },
+    // 双价格轴（2026-09-02）：左轴=价格（蜡烛+主图指标），右轴=相对涨跌幅
+    // （镜像序列把刻度值钉在与左轴相同的价位上，标签经 formatter 换算成百分比，
+    // 两轴刻度行逐行对齐——同花顺式）。scaleMargins 必须两轴一致，包络范围才同映射。
+    leftPriceScale: {
+      visible: true,
+      borderColor: '#e5e7eb',
+      scaleMargins: { top: 0.08, bottom: 0.08 },
+      entireTextOnly: true,
+    },
     rightPriceScale: {
       borderColor: '#e5e7eb',
       scaleMargins: { top: 0.08, bottom: 0.08 },
@@ -217,6 +253,13 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
   const chartRef = useRef<IChartApi | null>(null)
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null)
+  /** 右轴镜像序列（透明）：top/bottom 钉范围，close 供轴上百分比徽标。 */
+  const mirrorTopRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const mirrorBottomRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const mirrorCloseRef = useRef<ISeriesApi<'Line'> | null>(null)
+  /** 右轴百分比参考价（可视区最左一根K线收盘；null = 未定）。 */
+  const refPriceRef = useRef<number | null>(null)
+  const mirrorFormatRafRef = useRef(0)
   /** 主图/副图各一张序列表：groupKey → outputKey → series（结构 diff 用）。 */
   const mainRefs = useRef(new Map<string, Map<string, ISeriesApi<SeriesType>>>())
   const subRefs = useRef(new Map<string, Map<string, ISeriesApi<SeriesType>>>())
@@ -244,6 +287,17 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     }
   }, [])
 
+  /** 参考价变化后 rAF 去抖刷新镜像 formatter（新 formatter 对象强制轴重绘）。 */
+  const scheduleMirrorFormatRefresh = (): void => {
+    cancelAnimationFrame(mirrorFormatRafRef.current)
+    mirrorFormatRafRef.current = requestAnimationFrame(() => {
+      const format = mirrorPercentFormat(refPriceRef)
+      for (const series of [mirrorTopRef.current, mirrorBottomRef.current, mirrorCloseRef.current]) {
+        series?.applyOptions({ priceFormat: format })
+      }
+    })
+  }
+
   // ---- 图表生命周期（仅挂载/卸载各一次） ----
   useEffect(() => {
     const container = containerRef.current
@@ -266,6 +320,8 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
 
     const initialPalette = getColorPalette(propsRef.current.colorMode)
     const candles = chart.addSeries(CandlestickSeries, {
+      // 左轴承载价格（蜡烛 + 主图叠加指标都在 left）；右轴留给百分比镜像序列。
+      priceScaleId: 'left',
       upColor: initialPalette.upColor,
       downColor: initialPalette.downColor,
       borderUpColor: initialPalette.upColor,
@@ -285,6 +341,41 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       lastValueVisible: false,
     }, 1)
     volumeRef.current = volume
+
+    // 右轴镜像序列（主图 pane）：三根透明 LineSeries 把右轴数值范围钉在与左轴
+    // 完全相同的价位集合上（最高/最低包络对齐蜡烛+主图指标的 autoscale 范围，
+    // 收盘序列负责轴上当前价百分比徽标）。百分比只出现在标签 formatter 里——
+    // 两侧刻度行因此逐行对齐（同花顺式右轴）。
+    const mirrorBase = () => ({
+      color: 'rgba(0,0,0,0)',
+      lineWidth: 1 as const,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+      priceFormat: mirrorPercentFormat(refPriceRef),
+    })
+    mirrorTopRef.current = chart.addSeries(LineSeries, { ...mirrorBase() }, 0)
+    mirrorBottomRef.current = chart.addSeries(LineSeries, { ...mirrorBase() }, 0)
+    mirrorCloseRef.current = chart.addSeries(LineSeries, {
+      ...mirrorBase(),
+      lastValueVisible: true,
+    }, 0)
+
+    // 参考价 = 可视区最左一根K线收盘：滚动/缩放/换数据时经 visibleLogicalRange
+    // 事件重算，rAF 去抖后刷新镜像 formatter（新对象强制轴重绘）。
+    const syncRefPrice = (): void => {
+      const barsNow = propsRef.current.bars
+      if (barsNow.length === 0) return
+      const range: LogicalRange | null = chart.timeScale().getVisibleLogicalRange()
+      if (range === null) return
+      const index = Math.min(barsNow.length - 1, Math.max(0, Math.ceil(range.from)))
+      const close = barsNow[index]?.close
+      if (close === undefined || !Number.isFinite(close) || close <= 0) return
+      if (close === refPriceRef.current) return
+      refPriceRef.current = close
+      scheduleMirrorFormatRefresh()
+    }
+    chart.timeScale().subscribeVisibleLogicalRangeChange(syncRefPrice)
 
     applyStretch(chart)
 
@@ -318,6 +409,11 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       chartRef.current = null
       candleRef.current = null
       volumeRef.current = null
+      mirrorTopRef.current = null
+      mirrorBottomRef.current = null
+      mirrorCloseRef.current = null
+      refPriceRef.current = null
+      cancelAnimationFrame(mirrorFormatRafRef.current)
     }
   }, [])
 
@@ -376,6 +472,46 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       volume.update(volumes[index] as TvVolume)
     }
   }, [bars, volumes, dataKey, props.colorMode])
+
+  // ---- 右轴镜像数据：top/bottom 包络 = 蜡烛高低 ∪ 主图指标输出（与左轴
+  // autoscale 范围完全一致，两轴刻度行对齐的前提），close 序列驱动百分比徽标。
+  // 全量 setData：160 根 × 3 序列，30s resync / 5s 尾随合并的节奏下成本可忽略。
+  useEffect(() => {
+    const top = mirrorTopRef.current
+    const bottom = mirrorBottomRef.current
+    const badge = mirrorCloseRef.current
+    if (top === null || bottom === null || badge === null) return
+    const topData: Array<{ time: UTCTimestamp; value: number }> = []
+    const bottomData: Array<{ time: UTCTimestamp; value: number }> = []
+    const closeData: Array<{ time: UTCTimestamp; value: number }> = []
+    for (let index = 0; index < bars.length; index++) {
+      const bar = bars[index]
+      if (bar === undefined) continue
+      let high = bar.high
+      let low = bar.low
+      for (const group of mainOverlays) {
+        for (const output of group.outputs) {
+          const value = output.values[index]
+          if (value === undefined || !Number.isFinite(value)) continue
+          if (value > high) high = value
+          if (value < low) low = value
+        }
+      }
+      topData.push({ time: bar.time, value: high })
+      bottomData.push({ time: bar.time, value: low })
+      closeData.push({ time: bar.time, value: bar.close })
+    }
+    top.setData(topData)
+    bottom.setData(bottomData)
+    badge.setData(closeData)
+    // 徽标底色跟随最新一根K线方向（与左轴价格徽标同款着色逻辑）。
+    const last = bars[bars.length - 1]
+    const prev = bars[bars.length - 2]
+    if (last !== undefined && prev !== undefined) {
+      const palette = getColorPalette(propsRef.current.colorMode)
+      badge.applyOptions({ priceLineColor: last.close >= prev.close ? palette.upColor : palette.downColor })
+    }
+  }, [bars, mainOverlays, props.colorMode])
 
   // ---- 指标序列：结构 diff + 数据同步 ----
   useEffect(() => {
@@ -504,8 +640,11 @@ function syncIndicators(
 }
 
 function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: number): ISeriesApi<SeriesType> {
+  // 主图叠加（pane 0）与蜡烛同住左轴价格刻度；副图 pane 保持各自默认右轴。
+  const priceScaleId = paneIndex === 0 ? { priceScaleId: 'left' as const } : {}
   if (output.kind === 'histogram') {
     return chart.addSeries(HistogramSeries, {
+      ...priceScaleId,
       color: output.color,
       priceLineVisible: false,
       lastValueVisible: false,
@@ -514,6 +653,7 @@ function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: numb
   }
   if (output.kind === 'area') {
     return chart.addSeries(AreaSeries, {
+      ...priceScaleId,
       lineColor: output.color,
       topColor: output.topColor ?? output.color,
       bottomColor: output.bottomColor ?? 'transparent',
@@ -525,6 +665,7 @@ function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: numb
     }, paneIndex)
   }
   return chart.addSeries(LineSeries, {
+    ...priceScaleId,
     color: output.color,
     lineWidth: (output.lineWidth ?? 1.2) as 1 | 2 | 3 | 4,
     priceLineVisible: false,
