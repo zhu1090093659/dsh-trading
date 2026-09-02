@@ -33,6 +33,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import type {
   AccountBalance,
+  DerivativesData,
   Disposable,
   Interval,
   Kline,
@@ -56,6 +57,7 @@ import {
   normalizeOkxSymbol,
   normalizeSize,
   toCanonicalOkxSymbol,
+  toOkxSwapInstId,
 } from './rest.js'
 
 export * from './rest.js'
@@ -232,6 +234,58 @@ export class OkxMarketDataService extends Service implements MarketDataService {
   /** OKX 专属扩展（MarketDataService 契约之外）：SWAP 资金费率。 */
   getFundingRate(instId: string) {
     return this.client.getFundingRate(instId)
+  }
+
+  /**
+   * 衍生品指标快照（api 可选契约 getDerivatives，issue #38）：聚合 OKX 公共端点
+   * （funding-rate / open-interest / rubik 多空账户比 / rubik taker 买卖量）。
+   * 现货输入经 toOkxSwapInstId 升到对应永续（GUI 选中 BTCUSDT 也能看合约指标）。
+   * 任一子查询失败只降级该字段（undefined，面板按缺格隐藏）；全部失败才抛
+   * 结构化错误（桥层转 ok:false，前端不弹横幅）。
+   */
+  async getDerivatives(symbol: string): Promise<DerivativesData> {
+    const swapId = toOkxSwapInstId(symbol)
+    const ccy = swapId.split('-')[0] ?? ''
+    const unavailable: string[] = []
+    const collect = <T>(label: string, task: Promise<T>): Promise<T | undefined> =>
+      task.catch((error) => {
+        unavailable.push(`${label}: ${error instanceof Error ? error.message : String(error)}`)
+        return undefined
+      })
+
+    const [funding, interest, ratio, taker] = await Promise.all([
+      collect('funding', this.client.getFundingRate(swapId)),
+      collect('open-interest', this.client.getOpenInterest(swapId)),
+      ccy === '' ? Promise.resolve(undefined) : collect('long-short-ratio', this.client.getLongShortAccountRatio(ccy)),
+      ccy === '' ? Promise.resolve(undefined) : collect('taker-volume', this.client.getContractTakerVolume(ccy)),
+    ])
+
+    const fundingRate = funding?.fundingRate
+    // 契约语义（DerivativesData.openInterest）：base 币数或张数——优先币数（oiCcy），
+    // 上游没回填时退张数（oi）；价值面单独走 openInterestValue（oiUsd）。
+    const openInterest = interest?.oiCcy ?? interest?.oi
+    const openInterestValue = interest?.oiUsd
+    const longShortRatio = ratio?.ratio
+    const takerBuySellRatio = taker !== undefined && taker.sellVol > 0 ? taker.buyVol / taker.sellVol : undefined
+
+    if (fundingRate === undefined && openInterest === undefined && openInterestValue === undefined
+      && longShortRatio === undefined && takerBuySellRatio === undefined) {
+      throw new TradingServiceError(
+        'TRADING_EXCHANGE_ERROR',
+        `OKX derivatives for ${swapId}: all sub-queries failed`
+          + (unavailable.length > 0 ? ` (${unavailable.join('; ')})` : ''),
+      )
+    }
+    return {
+      symbol: toCanonicalOkxSymbol(swapId),
+      source: 'okx',
+      ...(openInterest !== undefined ? { openInterest } : {}),
+      ...(openInterestValue !== undefined ? { openInterestValue } : {}),
+      ...(longShortRatio !== undefined ? { longShortRatio } : {}),
+      ...(takerBuySellRatio !== undefined ? { takerBuySellRatio } : {}),
+      ...(fundingRate !== undefined ? { fundingRate } : {}),
+      timestamp: interest?.ts ?? funding?.fundingTime ?? Date.now(),
+    }
   }
 
   subscribeTicker(instId: string, cb: (ticker: Ticker) => void, options?: SubscribeTickerOptions): Disposable {

@@ -8,6 +8,9 @@ import type { CustomIndicatorRecord } from '@dsh-trading/indicators'
 import type { KnowledgeCard } from '@dsh-trading/knowledge'
 import type { CustomStrategyRecord } from '@dsh-trading/strategies'
 
+/** 衍生品指标快照（issue #38）：node 半桥透传 @dsh-trading/api 的 DerivativesData。 */
+export type { DerivativesData } from './types.ts'
+
 export class BridgeError extends Error {
   constructor(readonly status: number, message: string) {
     super(message)
@@ -57,6 +60,20 @@ export async function fetchFundamentals(market: MarketId, symbol: string): Promi
     const query = new URLSearchParams({ market, symbol })
     const wire = await getJson<{ ok: boolean; fundamentals: StockFundamentals }>(`/dshtrading/api/fundamentals?${query.toString()}`)
     return wire.fundamentals ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 衍生品指标快照（issue #38，crypto 专属）。连接器未实现 getDerivatives（现货/股票
+ * 数据源）或取数失败 → null：面板整体隐藏，不报错横幅。
+ */
+export async function fetchDerivatives(market: MarketId, symbol: string): Promise<DerivativesData | null> {
+  try {
+    const query = new URLSearchParams({ market, symbol })
+    const wire = await getJson<{ ok: boolean; derivatives: DerivativesData }>(`/dshtrading/api/derivatives?${query.toString()}`)
+    return wire.derivatives ?? null
   } catch {
     return null
   }

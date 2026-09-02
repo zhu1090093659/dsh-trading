@@ -13,7 +13,7 @@
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
-import type { Interval, Kline, MarketDataService, StockFundamentals, Ticker } from '@dsh-trading/api'
+import type { DerivativesData, Interval, Kline, MarketDataService, StockFundamentals, Ticker } from '@dsh-trading/api'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/indicators'
 import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
@@ -130,6 +130,11 @@ export interface SymbolsWire {
 export interface FundamentalsWire {
   ok: true
   fundamentals: StockFundamentals
+}
+
+export interface DerivativesWire {
+  ok: true
+  derivatives: DerivativesData
 }
 
 export interface CustomIndicatorsWire {
@@ -263,6 +268,26 @@ export class TradingBridge {
       )
     }
     return { ok: true, fundamentals: await service.getFundamentals(trimmed) }
+  }
+
+  /**
+   * 衍生品指标快照（GUI「衍生品」面板，issue #38）：单 symbol 透传注册表解析出的
+   * 行情服务。连接器未实现可选 getDerivatives（现货/股票数据源）→ 业务错误
+   * TRADING_NOT_IMPLEMENTED（HTTP 200 + ok:false），前端直接隐藏面板（不降级）。
+   */
+  async derivatives(market: string, symbol: string): Promise<DerivativesWire> {
+    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const trimmed = symbol.trim()
+    if (trimmed === '') throw new BridgeProtocolError(400, 'derivatives: symbol is required')
+    const service = this.host.getMarketService(market)
+    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    if (typeof service.getDerivatives !== 'function') {
+      throw Object.assign(
+        new Error(`market ${market} provider does not implement derivatives — spot market`),
+        { code: 'TRADING_NOT_IMPLEMENTED' },
+      )
+    }
+    return { ok: true, derivatives: await service.getDerivatives(trimmed) }
   }
 
   /** 自定义指标列表。 */
@@ -459,6 +484,11 @@ export async function dispatchBridgeRequest(
         const market = search.get('market') ?? ''
         const symbol = search.get('symbol') ?? ''
         return { status: 200, payload: await bridge.fundamentals(market, symbol) }
+      }
+      case '/derivatives': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return { status: 200, payload: await bridge.derivatives(market, symbol) }
       }
       case '/indicators/custom': {
         return { status: 200, payload: await bridge.customIndicators() }

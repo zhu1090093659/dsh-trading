@@ -1,0 +1,66 @@
+/* DerivativesPane —— 衍生品指标条（issue #38；与 quote-stage/fundamentals 同族 token：--dsw-futu-*）。 */
+
+.root {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 2px 2px 6px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.title {
+  flex: none;
+  display: flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-secondary, #4a5060);
+  padding: 0 4px 0 2px;
+  white-space: nowrap;
+}
+
+.cell {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--dsw-futu-bg-subtle, #f5f6f8);
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 0;
+}
+
+.cellLabel {
+  font-size: 11px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cellValue {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cellSub {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  white-space: nowrap;
+}
+
+.footer {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  font-size: 10.5px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  white-space: nowrap;
+  padding-bottom: 2px;
+}

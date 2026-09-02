@@ -154,6 +154,37 @@ describe('TradingBridge.fundamentals（2026-09-02 基本面页签）', () => {
   })
 })
 
+describe('TradingBridge.derivatives（issue #38 衍生品面板）', () => {
+  it('透传注册表解析出服务的 getDerivatives', async () => {
+    const service = fakeService({
+      getDerivatives: async (symbol: string) => ({
+        symbol: `${symbol}-SWAP`, source: 'binance', openInterest: 80_000.5,
+        fundingRate: 0.0001, longShortRatio: 1.1, timestamp: 1234,
+      }),
+    })
+    const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: service }))
+    const search = new URLSearchParams({ market: 'crypto', symbol: 'BTCUSDT' })
+    const { status, payload } = await dispatchBridgeRequest(bridge, 'GET', '/derivatives', search)
+    expect(status).toBe(200)
+    expect(payload).toMatchObject({ ok: true, derivatives: { symbol: 'BTCUSDT-SWAP', source: 'binance', openInterest: 80_000.5 } })
+  })
+
+  it('连接器未实现 getDerivatives（现货/股票数据源）→ TRADING_NOT_IMPLEMENTED（前端隐藏面板）', async () => {
+    const bridge = new TradingBridge(fakeHost({ tradingUsMarketData: fakeService() }))
+    const search = new URLSearchParams({ market: 'us', symbol: 'AAPL' })
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/derivatives', search))
+      .rejects.toMatchObject({ code: 'TRADING_NOT_IMPLEMENTED' })
+  })
+
+  it('未知市场 400；缺 symbol 400', async () => {
+    const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: fakeService() }))
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/derivatives', new URLSearchParams({ market: 'jp', symbol: 'X' })))
+      .rejects.toBeInstanceOf(BridgeProtocolError)
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/derivatives', new URLSearchParams({ market: 'crypto' })))
+      .rejects.toBeInstanceOf(BridgeProtocolError)
+  })
+})
+
 describe('dispatchBridgeRequest', () => {
   const bridge = new TradingBridge(fakeHost({
     tradingCryptoMarketData: fakeService({
