@@ -115,10 +115,14 @@ export interface StockFundamentals {
   readonly floatMarketCap?: number
   /** 滚动市盈率 PE (TTM)。 */
   readonly peTtm?: number
+  /** 静态市盈率 PE (静)。 */
+  readonly peStatic?: number
   /** 动态/预测市盈率 Forward / Dynamic PE。 */
   readonly peDynamic?: number
   /** 市净率 PB。 */
   readonly pb?: number
+  /** 市销率 PS。 */
+  readonly ps?: number
   /** 每股收益 EPS。 */
   readonly eps?: number
   /** 每股净资产 BPS。 */
@@ -127,6 +131,12 @@ export interface StockFundamentals {
   readonly dividendYield?: number
   /** 换手率（小数或百分比）。 */
   readonly turnoverRate?: number
+  /** 振幅（百分比）。 */
+  readonly amplitudePercent?: number
+  /** 涨停价（A 股适用）。 */
+  readonly limitUpPrice?: number
+  /** 跌停价（A 股适用）。 */
+  readonly limitDownPrice?: number
   /** 52 周最高价。 */
   readonly fiftyTwoWeekHigh?: number
   /** 52 周最低价。 */
@@ -164,6 +174,208 @@ export interface TradeTick {
   /** 主动方向：buy=主动买（外盘）、sell=主动卖（内盘）；数据源缺方向时 unknown。 */
   readonly side: 'buy' | 'sell' | 'unknown'
   readonly timestamp: number
+}
+
+/** 单期财务指标数值与同比变动。 */
+export interface FinancialCell {
+  /** 指标数值（如 14.18 元 或 19.02%）。 */
+  readonly value?: number
+  /** 同比增长率（百分比，如 -3.69 表示 -3.69%，+522.77 表示 +522.77%）。 */
+  readonly changePercent?: number
+}
+
+/** 单个财务指标行（多期序列）。 */
+export interface FinancialIndicatorRow {
+  readonly id: string
+  readonly name: string
+  readonly unit?: string
+  /** 期别映射 -> 该期读数与同比（key 对应 periods 数组中的元素，如 '2025/H1'）。 */
+  readonly values: Record<string, FinancialCell>
+}
+
+/** 财务指标大类分组（如“每股指标”、“盈利能力”、“现金流量”等）。 */
+export interface FinancialReportGroup {
+  readonly id: string
+  readonly title: string
+  readonly rows: FinancialIndicatorRow[]
+}
+
+/** 历史多期财务报表与指标矩阵（富途牛牛同款）。 */
+export interface FinancialReportMatrix {
+  /** 币种（如 CNY / HKD / USD）。 */
+  readonly currency: string
+  /** 最新报告期标题（如 "2026财年H1 财报"）。 */
+  readonly latestReportTitle?: string
+  /** 报告期有序列表（由远及近，如 ['2024/H1', '2024/Q3', '2024/FY', '2025/H1', '2025/Q3', '2025/FY', '2026/Q1', '2026/H1']）。 */
+  readonly periods: string[]
+  /** 分组列表。 */
+  readonly groups: FinancialReportGroup[]
+}
+
+/** 股东持股信息行。 */
+export interface ShareholderItem {
+  readonly name: string
+  readonly shares?: number
+  readonly ratio?: number
+  readonly change?: string
+}
+
+/** 公司/标的简况信息。 */
+export interface CompanyProfile {
+  readonly symbol: string
+  readonly name?: string
+  readonly fullName?: string
+  readonly nameEn?: string
+  readonly industry?: string
+  readonly sector?: string
+  readonly legalRepresentative?: string
+  readonly chairman?: string
+  readonly generalManager?: string
+  readonly boardSecretary?: string
+  readonly registeredCapital?: string
+  readonly address?: string
+  readonly businessScope?: string
+  readonly employeeCount?: string
+  readonly description?: string
+  readonly listingDate?: string
+  readonly website?: string
+  readonly executives?: Array<{ name: string; title: string }>
+}
+
+/** 机构盈利预测与目标价一致预期（富途 预测）。 */
+export interface ForecastSummary {
+  readonly epsCurrentYear?: number
+  readonly epsNextYear?: number
+  readonly revenueGrowthAvg?: number
+  readonly netProfitGrowthAvg?: number
+  readonly targetPriceAvg?: number
+  readonly buyRatingCount?: number
+  readonly holdRatingCount?: number
+  readonly sellRatingCount?: number
+  readonly totalOrgs?: number
+  readonly items?: Array<{
+    readonly year: string
+    readonly eps: number
+    readonly revenue: number
+    readonly netProfit: number
+    readonly orgCount?: number
+  }>
+}
+
+/** 研报精选（富途 晨星研报/券商研报）。 */
+export interface ResearchReportItem {
+  readonly id: string
+  readonly title: string
+  readonly orgName: string
+  readonly author?: string
+  readonly rating?: string
+  readonly publishDate: string
+  readonly summary?: string
+  readonly url?: string
+}
+
+/** 主营构成（富途 经营分析/主营构成）。 */
+export interface MainOperationSegment {
+  readonly segmentName: string
+  readonly classification: 'product' | 'industry' | 'region'
+  readonly revenue: number
+  readonly revenueRatio: number
+  readonly grossProfit?: number
+  readonly grossMargin?: number
+}
+
+/** 经营效率指标（富途 经营分析/经营效率）。 */
+export interface OperatingEfficiency {
+  readonly inventoryTurnoverDays?: number
+  readonly accountsReceivableTurnoverDays?: number
+  readonly operatingCycleDays?: number
+  readonly totalAssetTurnover?: number
+  readonly netProfitMargin?: number
+  readonly grossProfitMargin?: number
+  readonly currentRatio?: number
+  readonly quickRatio?: number
+  readonly roe?: number
+}
+
+/** 股东增减持 / 内部人交易（富途 聪明钱/股东增减持）。 */
+export interface InsiderTradeItem {
+  readonly holderName: string
+  readonly changeType: '增持' | '减持' | '不变' | '新进' | string
+  readonly changeShares: number
+  readonly changeRatio?: number
+  readonly postHoldingRatio?: number
+  readonly date?: string
+  readonly averagePrice?: number
+}
+
+/** 机构持股明细（富途 聪明钱/机构持股）。 */
+export interface InstitutionalHoldingItem {
+  readonly orgName?: string
+  readonly orgType: string
+  readonly orgCount?: number
+  readonly holdingShares: number
+  readonly holdingRatio: number
+  readonly marketCap?: number
+  readonly change?: string
+  readonly changeRatio?: number
+}
+
+/** 分红派息方案（富途 公司行动/分红派息）。 */
+export interface DividendItem {
+  readonly planYear: string
+  readonly dividendPlan: string
+  readonly cashDividend?: number
+  readonly exDividendDate?: string
+  readonly dividendDate?: string
+  readonly recordDate?: string
+  readonly dividendYield?: number
+}
+
+/** 股份回购方案（富途 公司行动/回购）。 */
+export interface BuybackItem {
+  readonly date: string
+  readonly buybackAmount?: number
+  readonly buybackShares?: number
+  readonly priceRange?: string
+  readonly status: string
+}
+
+/** 拆股并股 / 送转（富途 公司行动/拆股并股）。 */
+export interface SplitItem {
+  readonly date: string
+  readonly ratio: string
+  readonly description: string
+}
+
+/** 股东户数与筹码集中度（富途 聪明钱）。 */
+export interface HolderNumSummary {
+  readonly totalHolders?: number
+  readonly totalHoldersChangeRatio?: number
+  readonly avgFreeShares?: number
+  readonly avgHoldAmount?: number
+  readonly concentration?: string
+  readonly reportDate?: string
+}
+
+/** 聚合基本面数据包（供 Bridge 端点向前端全量交付）。 */
+export interface FundamentalsPackage {
+  readonly market: string
+  readonly symbol: string
+  readonly stock?: StockFundamentals
+  readonly crypto?: CryptoFundamentals
+  readonly matrix?: FinancialReportMatrix
+  readonly profile?: CompanyProfile
+  readonly shareholders?: ShareholderItem[]
+  readonly forecast?: ForecastSummary
+  readonly reports?: ResearchReportItem[]
+  readonly mainOperations?: MainOperationSegment[]
+  readonly efficiency?: OperatingEfficiency
+  readonly insiderTrades?: InsiderTradeItem[]
+  readonly institutionalHoldings?: InstitutionalHoldingItem[]
+  readonly holderSummary?: HolderNumSummary
+  readonly dividends?: DividendItem[]
+  readonly buybacks?: BuybackItem[]
+  readonly splits?: SplitItem[]
 }
 
 export type PositionSide = 'long' | 'short'

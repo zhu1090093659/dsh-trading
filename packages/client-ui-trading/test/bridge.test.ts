@@ -16,6 +16,12 @@ import {
   type BridgeHost,
 } from '../src/bridge.ts'
 
+// 基本面 pkg 下钻（kit-cn/hk/us/crypto）在单测里绝不触网：全局 fetch 桩，
+// kit 层 fetchJsonUpstream 拿到 rejection 后按契约静默降级（snapshot 兜底）。
+vi.stubGlobal('fetch', vi.fn(async () => {
+  throw new Error('bridge.test must not hit network')
+}))
+
 function fakeService(overrides: Partial<MarketDataService> = {}): MarketDataService {
   return {
     getTicker: async (symbol) => ({
@@ -123,8 +129,12 @@ describe('TradingBridge.symbols', () => {
   })
 })
 
-describe('TradingBridge.fundamentals（2026-09-02 基本面页签）', () => {
-  it('透传注册表解析出服务的 getFundamentals', async () => {
+describe('TradingBridge.fundamentals（2026-09-02 基本面页签，整改后语义）', () => {
+  // 整改（2026-09-02）：pkg 下钻不再要求连接器实现 getFundamentals（us/crypto 可达）；
+  // 快照与 pkg 并行、各自失败只降级自己；双失败才 TRADING_NOT_IMPLEMENTED；
+  // 5min TTL + in-flight 去重。kit 下钻在本测试环境走真实网络语义（无网则 catch 降级），
+  // 快照路径断言不依赖 pkg 成败。
+  it('快照可用（连接器实现 getFundamentals）→ 直接返回快照', async () => {
     const service = fakeService({
       getFundamentals: async (symbol: string) => ({
         symbol, name: '贵州茅台', marketCap: 1_621_856_000_000, peTtm: 19.7,
@@ -138,7 +148,7 @@ describe('TradingBridge.fundamentals（2026-09-02 基本面页签）', () => {
     expect(payload).toMatchObject({ ok: true, fundamentals: { symbol: '600519.SH', peTtm: 19.7 } })
   })
 
-  it('连接器未实现 getFundamentals → TRADING_NOT_IMPLEMENTED 业务错误（前端降级派生数据）', async () => {
+  it('连接器未实现 getFundamentals 且 pkg 下钻不可用 → TRADING_NOT_IMPLEMENTED（诚实空态）', async () => {
     const bridge = new TradingBridge(fakeHost({ tradingUsMarketData: fakeService() }))
     const search = new URLSearchParams({ market: 'us', symbol: 'AAPL' })
     await expect(dispatchBridgeRequest(bridge, 'GET', '/fundamentals', search))
@@ -151,6 +161,26 @@ describe('TradingBridge.fundamentals（2026-09-02 基本面页签）', () => {
       .rejects.toBeInstanceOf(BridgeProtocolError)
     await expect(dispatchBridgeRequest(bridge, 'GET', '/fundamentals', new URLSearchParams({ market: 'cn' })))
       .rejects.toBeInstanceOf(BridgeProtocolError)
+  })
+
+  it('TTL 缓存 + in-flight 去重：同键并发/连续调用只打一轮快照上游', async () => {
+    let calls = 0
+    const service = fakeService({
+      getFundamentals: async (symbol: string) => {
+        calls++
+        return { symbol, peTtm: 20, timestamp: 1 }
+      },
+    })
+    const bridge = new TradingBridge(fakeHost({ tradingCnMarketData: service }))
+    const search = new URLSearchParams({ market: 'cn', symbol: '600519.SH' })
+    const [a, b] = await Promise.all([
+      dispatchBridgeRequest(bridge, 'GET', '/fundamentals', search),
+      dispatchBridgeRequest(bridge, 'GET', '/fundamentals', search),
+    ])
+    await dispatchBridgeRequest(bridge, 'GET', '/fundamentals', search)
+    expect(a.payload).toMatchObject({ ok: true })
+    expect(b.payload).toMatchObject({ ok: true })
+    expect(calls).toBe(1)
   })
 })
 

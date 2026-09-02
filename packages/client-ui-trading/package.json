@@ -33,6 +33,10 @@
     "@dsh-trading/strategies": "workspace:^",
     "@dsh-trading/router": "workspace:^",
     "@dsh-trading/watchlist": "workspace:^",
+    "@dsh-trading/kit-cn": "workspace:^",
+    "@dsh-trading/kit-hk": "workspace:^",
+    "@dsh-trading/kit-us": "workspace:^",
+    "@dsh-trading/kit-crypto": "workspace:^",
     "lightweight-charts": "^5.2.1",
     "@dsh-trading/client-ui-strategies": "workspace:^",
     "@dsh-trading/client-ui-knowledge": "workspace:^"

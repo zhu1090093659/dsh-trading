@@ -542,7 +542,7 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'chat.fold': 'Fold conversation panel',
       'chat.expand': 'Expand conversation panel',
       'chat.resize': 'Drag to resize conversation panel (double-click to reset, arrow keys to nudge)',
-      'stage.quote': 'Chart',
+      'stage.quote': 'Quote',
       'stage.strategy': 'Strategies',
       'stage.knowledge': 'Knowledge',
       'indicator.picker': 'Indicators',

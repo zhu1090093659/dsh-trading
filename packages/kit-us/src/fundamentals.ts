@@ -30,6 +30,18 @@ const YAHOO_QUOTE_URL = 'https://query1.finance.yahoo.com/v7/finance/quote'
 const YAHOO_CHART_URL = 'https://query2.finance.yahoo.com/v8/finance/chart'
 const YAHOO_UA = 'Mozilla/5.0'
 
+/** 上游超时（2026-09-02 整改）：对齐 connector 模式，防挂起拖死桥请求。 */
+const UPSTREAM_TIMEOUT_MS = 10_000
+
+/** US ticker 白名单校验（2026-09-02 整改）：CN/HK 有严格正则，US 原先裸插值进 URL path。 */
+export function normalizeUsSymbol(input: string): string {
+  const sym = input.trim().toUpperCase()
+  if (!/^[A-Z0-9.\-^=]{1,12}$/.test(sym)) {
+    throw new Error(`us_get_fundamentals: invalid US symbol ${JSON.stringify(input)} — expected e.g. AAPL, BRK.B, ^GSPC`)
+  }
+  return sym
+}
+
 interface YahooQuoteItem {
   symbol: string
   shortName?: string
@@ -53,7 +65,7 @@ interface YahooQuoteItem {
 
 export async function fetchUsFundamentals(options: UsFundamentalsOptions): Promise<UsFundamentalsResult> {
   const fetchImpl = options.fetch ?? globalThis.fetch
-  const symbol = options.symbol.trim().toUpperCase()
+  const symbol = normalizeUsSymbol(options.symbol)
   const unavailable: string[] = []
 
   // 1. 尝试 Yahoo quote 端点获取详细估值与财务数据
@@ -65,6 +77,7 @@ export async function fetchUsFundamentals(options: UsFundamentalsOptions): Promi
         accept: 'application/json',
         'user-agent': YAHOO_UA,
       },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     })
     if (response.ok) {
       const json = (await response.json()) as {
@@ -111,6 +124,7 @@ export async function fetchUsFundamentals(options: UsFundamentalsOptions): Promi
     const chartUrl = `${YAHOO_CHART_URL}/${encodeURIComponent(symbol)}?interval=1d`
     const chartRes = await fetchImpl(chartUrl, {
       headers: { accept: 'application/json', 'user-agent': YAHOO_UA },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     })
     if (chartRes.ok) {
       const cJson = (await chartRes.json()) as {
@@ -156,6 +170,141 @@ export async function fetchUsFundamentals(options: UsFundamentalsOptions): Promi
   }
 
   return { unavailable }
+}
+
+/** 从 Yahoo Finance quoteSummary 动态拉取美股多期财务报表与指标矩阵。 */
+export async function fetchUsFinancialMatrix(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<{ matrix?: import('@dsh-trading/api').FinancialReportMatrix; profile?: import('@dsh-trading/api').CompanyProfile }> {
+  try {
+    const sym = normalizeUsSymbol(symbol)
+    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=financialData,defaultKeyStatistics,incomeStatementHistoryQuarterly,balanceSheetHistoryQuarterly,cashflowStatementHistoryQuarterly,assetProfile`
+    const res = await fetchImpl(url, {
+      headers: {
+        accept: 'application/json',
+        'user-agent': YAHOO_UA,
+      },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    })
+    if (!res.ok) return {}
+    const json = await res.json() as {
+      quoteSummary?: {
+        result?: Array<{
+          assetProfile?: {
+            sector?: string
+            industry?: string
+            longBusinessSummary?: string
+            website?: string
+            companyOfficers?: Array<{ name: string; title: string }>
+          }
+          incomeStatementHistoryQuarterly?: {
+            incomeStatementHistory?: Array<{
+              endDate?: { fmt?: string }
+              totalRevenue?: { raw?: number }
+              grossProfit?: { raw?: number }
+              netIncome?: { raw?: number }
+              operatingIncome?: { raw?: number }
+            }>
+          }
+          balanceSheetHistoryQuarterly?: {
+            balanceSheetStatements?: Array<{
+              endDate?: { fmt?: string }
+              totalAssets?: { raw?: number }
+              totalLiab?: { raw?: number }
+              totalStockholderEquity?: { raw?: number }
+            }>
+          }
+          cashflowStatementHistoryQuarterly?: {
+            cashflowStatements?: Array<{
+              endDate?: { fmt?: string }
+              totalCashFromOperatingActivities?: { raw?: number }
+            }>
+          }
+        }>
+      }
+    }
+
+    const item = json.quoteSummary?.result?.[0]
+    if (!item) return {}
+
+    const profile: import('@dsh-trading/api').CompanyProfile = {
+      symbol: sym,
+      industry: item.assetProfile?.industry,
+      sector: item.assetProfile?.sector,
+      description: item.assetProfile?.longBusinessSummary,
+      website: typeof item.assetProfile?.website === 'string' && /^https?:/i.test(item.assetProfile.website) ? item.assetProfile.website : undefined,
+      executives: item.assetProfile?.companyOfficers?.slice(0, 5).map(o => ({ name: o.name, title: o.title })),
+    }
+
+    const incomes = item.incomeStatementHistoryQuarterly?.incomeStatementHistory ?? []
+    if (incomes.length === 0) return { profile }
+
+    const sortedIncomes = [...incomes].filter(i => i.endDate?.fmt)
+    const periods = sortedIncomes.map(i => i.endDate!.fmt!.slice(0, 7).replace('-', '/'))
+    // 期间键去重（L5 整改）：endDate 缺失行已剔除，剩余重复键也不得互相覆盖。
+    for (let i = 1; i < periods.length; i++) {
+      if (periods[i] === periods[i - 1]) periods[i] = `${periods[i]}#${i}`
+    }
+    const latestPeriod = periods[periods.length - 1] ?? ''
+    const latestReportTitle = latestPeriod ? `${latestPeriod} 季报` : undefined
+
+    const revValues: Record<string, import('@dsh-trading/api').FinancialCell> = {}
+    const netValues: Record<string, import('@dsh-trading/api').FinancialCell> = {}
+    const grossMarginValues: Record<string, import('@dsh-trading/api').FinancialCell> = {}
+
+    sortedIncomes.forEach((inc, idx) => {
+      const p = periods[idx]!
+      const rev = inc.totalRevenue?.raw
+      const net = inc.netIncome?.raw
+      const gross = inc.grossProfit?.raw
+      revValues[p] = { value: rev }
+      netValues[p] = { value: net }
+      const margin = (rev && gross) ? (gross / rev) * 100 : undefined
+      grossMarginValues[p] = { value: margin }
+    })
+
+    const groups: import('@dsh-trading/api').FinancialReportGroup[] = [
+      {
+        id: 'profitability',
+        title: '盈利与收益能力',
+        rows: [
+          { id: 'gross_margin', name: '毛利率', unit: '%', values: grossMarginValues },
+          { id: 'revenue', name: '营业总收入', unit: 'USD', values: revValues },
+          { id: 'net_income', name: '净利润', unit: 'USD', values: netValues },
+        ],
+      },
+    ]
+
+    const matrix: import('@dsh-trading/api').FinancialReportMatrix = {
+      currency: 'USD',
+      latestReportTitle,
+      periods,
+      groups,
+    }
+
+    return { matrix, profile }
+  } catch {
+    return {}
+  }
+}
+
+/** 获取完整美股基本面数据包。 */
+export async function fetchUsFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FundamentalsPackage> {
+  const sym = normalizeUsSymbol(symbol)
+  const [quoteRes, { matrix, profile }] = await Promise.all([
+    fetchUsFundamentals({ symbol: sym, fetch: fetchImpl }),
+    fetchUsFinancialMatrix(sym, fetchImpl),
+  ])
+
+  return {
+    market: 'us',
+    symbol: sym,
+    stock: quoteRes.data,
+    matrix,
+    profile: {
+      symbol: sym,
+      name: quoteRes.data?.name ?? sym,
+      ...profile,
+    },
+  }
 }
 
 export function renderUsFundamentals(result: UsFundamentalsResult, requestedSymbol: string): string {

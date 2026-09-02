@@ -115,3 +115,15 @@
 5. **符号规范化双市场收敛**：cn 接受 `600519/SH600519/sh600519`（6/9 开头→sh，0/3 开头→sz；北交所 4/8 不支持）；hk 接受 `00700/700`（1-5 位数字左补零 5 位）。规范化在客户端层完成，place_order 参数校验只做宽松检查（§3 与 §7-5 的分层结论照旧）。
 6. **ToS 口径**：腾讯公共行情端点无 key、**无官方授权**——包 README 与工具 description 均写明「公开端点、无官方授权、个人使用边界自负」，不缓存不再分发（铁律 #5）。真实网络验证：`node spikes/impl-cn-hk/r3-real-network-verify.mjs`，cn 茅台 + hk 腾讯各 1 次，PASS 2/2（`r3-verify-*.json`）。
 7. 基线：9 包/49 用例（§7 末）→ 本切片 +5 包（connector-tencent/kit-cn/kit-hk/cn/hk）+24 用例；`pnpm -r build`/`pnpm -r test` 全绿。§5 六项验收按任务分工留主 agent。
+
+---
+
+## 9. 基本面下钻数据面（2026-09-02，issue #36 富途风格基本面工作台）
+
+新增 kit 级下钻取数（非 connector）：kit-cn 东财 F10/数据中心、kit-hk 东财港股 F10、kit-us Yahoo quoteSummary、kit-crypto CoinCap。审查整改定案（协作者初版 → 主 agent 整改合并）：
+
+1. **数据源边界（UA/Referer）**：东财/腾讯/Yahoo/CoinCap 全部走「最小 `User-Agent: Mozilla/5.0`」模式（§7.1 Yahoo 先例）；**不做浏览器伪装、不伪造 Referer**（§6 stooq 敌意自动化边界同样适用于 F10 爬取端点）。
+2. **上游超时强制**：kit 层所有下钻 fetch 必须带 `AbortSignal.timeout(10_000)`（对齐 connector-tencent 模式）；桥层 `/fundamentals` 另有 5 分钟 TTL + in-flight 去重（同 `symbols()` 先例）——F10 是无 SLA 爬取端点，无超时会把桥请求拖死。
+3. **零假数据纪律**：缺评级不兜底「买入」、缺营收/净利预测不填 0、持股快照不得伪装成增减持流水、无数据文案只说「未获取到」不说「保持稳定/健康」。宁可空态，不可编造（交易工具信任底线）。
+4. **快照与下钻解耦**：桥 `/fundamentals` 的 pkg 取数不要求连接器实现 `getFundamentals`（us/crypto 由此可达）；快照可选增强，双失败才 `TRADING_NOT_IMPLEMENTED`。
+5. **CoinCap 已入 README ToS 表**（个人使用边界、不批量抓取）。

@@ -82,6 +82,46 @@
   font-weight: 600;
 }
 
+/* 富途牛牛风格行情二级 Sub-Tab 导航（图表 | 基本面） */
+.subTabNav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-left: 16px;
+}
+
+.subTabBtn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 4px 2px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s ease;
+}
+
+.subTabBtn:hover {
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.subTabBtn[data-active="true"] {
+  color: var(--dsw-futu-accent, #3275f5);
+}
+
+.subTabBtn[data-active="true"]::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: var(--dsw-futu-accent, #3275f5);
+  border-radius: 2px;
+}
+
 .meta {
   margin-left: auto;
   display: flex;

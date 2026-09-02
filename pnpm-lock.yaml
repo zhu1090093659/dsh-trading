@@ -332,6 +332,18 @@ importers:
       '@dsh-trading/indicators':
         specifier: workspace:^
         version: link:../indicators
+      '@dsh-trading/kit-cn':
+        specifier: workspace:^
+        version: link:../kit-cn
+      '@dsh-trading/kit-crypto':
+        specifier: workspace:^
+        version: link:../kit-crypto
+      '@dsh-trading/kit-hk':
+        specifier: workspace:^
+        version: link:../kit-hk
+      '@dsh-trading/kit-us':
+        specifier: workspace:^
+        version: link:../kit-us
       '@dsh-trading/knowledge':
         specifier: workspace:^
         version: link:../knowledge

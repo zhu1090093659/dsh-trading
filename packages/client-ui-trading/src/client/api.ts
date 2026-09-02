@@ -3,7 +3,8 @@
  * half registers the route behind the browser-auth fence; same-origin fetch
  * carries the auth cookie by default).
  */
-import type { AccountBalance, DerivativesData, Kline, MarketId, MarketInfo, Order, Orderbook, Position, StockFundamentals, TickerOutcome, TradeFill, TradeTick } from './types.ts'
+import type { AccountBalance, DerivativesData, Kline, MarketId, MarketInfo, Order, Orderbook, Position, TickerOutcome, TradeFill, TradeTick } from './types.ts'
+import type { FundamentalsPackage } from '@dsh-trading/api'
 import type { CustomIndicatorRecord } from '@dsh-trading/indicators'
 import type { KnowledgeCard } from '@dsh-trading/knowledge'
 import type { CustomStrategyRecord } from '@dsh-trading/strategies'
@@ -46,20 +47,6 @@ export async function fetchKlines(market: MarketId, symbol: string, interval: st
   const query = new URLSearchParams({ market, symbol, interval, limit: String(limit) })
   const wire = await getJson<{ klines: Kline[] }>(`/dshtrading/api/klines?${query.toString()}`)
   return Array.isArray(wire.klines) ? wire.klines : []
-}
-
-/**
- * 基本面快照（2026-09-02 基本面页签）。连接器未实现 getFundamentals（us/crypto）
- * 或取数失败 → null：面板降级为行情派生数据（日K 52 周高低），不报错横幅。
- */
-export async function fetchFundamentals(market: MarketId, symbol: string): Promise<StockFundamentals | null> {
-  try {
-    const query = new URLSearchParams({ market, symbol })
-    const wire = await getJson<{ ok: boolean; fundamentals: StockFundamentals }>(`/dshtrading/api/fundamentals?${query.toString()}`)
-    return wire.fundamentals ?? null
-  } catch {
-    return null
-  }
 }
 
 /**
@@ -401,6 +388,18 @@ export function subscribeTradingEvents(handlers: TradingEventHandlers): () => vo
   }
 }
 
+/** 拉取标的综合基本面与多期财务矩阵数据（Issue #36，富途牛牛风格工作台数据源）。 */
+export async function fetchFundamentals(market: MarketId, symbol: string): Promise<FundamentalsPackage | undefined> {
+  try {
+    const query = new URLSearchParams({ market, symbol })
+    const wire = await getJson<{ ok: boolean; fundamentals?: FundamentalsPackage }>(`/dshtrading/api/fundamentals?${query.toString()}`)
+    return wire.fundamentals
+  } catch (err) {
+    console.warn(`[dsh-trading] fetchFundamentals ${market}/${symbol} failed:`, err)
+    return undefined
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* tradingBridge client 服务（issue #34 / P5）                              */
 /* ------------------------------------------------------------------ */
@@ -421,6 +420,7 @@ export interface TradingBridgeService {
   fetchKlines: typeof fetchKlines
   fetchCustomStrategies: typeof fetchCustomStrategies
   fetchKnowledgeCards: typeof fetchKnowledgeCards
+  fetchFundamentals: typeof fetchFundamentals
   subscribeTradingEvents: typeof subscribeTradingEvents
 }
 
@@ -430,6 +430,7 @@ export function createTradingBridgeService(): TradingBridgeService {
     fetchKlines,
     fetchCustomStrategies,
     fetchKnowledgeCards,
+    fetchFundamentals,
     subscribeTradingEvents,
   }
 }
