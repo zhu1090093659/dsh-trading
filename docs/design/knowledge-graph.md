@@ -81,7 +81,10 @@ packages/knowledge/src/
 两个工具（注册模式对齐 #19 `indicator_author`：`ctx.inject(['tools'])`，宿主全局唯一）：
 
 - `knowledge_ingest`：入参 = 卡片内容（id/时间戳由工具生成）。校验：必填字段、`source.url` 白名单（bilibili.com / b23.tv / mp.weixin.qq.com / manual）、`credibility` 枚举、`related` 必须指向已存在卡片。**去重键 = source.url**：已存在则 update（保留 id/createdAt），返回 `{ status: 'created' | 'updated', id }`；
-- `knowledge_search`：`{ query?, tags?, author?, sourceType?, credibility?, limit?=20 }`，v1 = 大小写不敏感子串匹配（title/summary/coreClaims/tags）+ 过滤，按 updatedAt 倒序。
+- `knowledge_search`：`{ query?, tags?, cluster?, author?, sourceType?, credibility?, limit?=20, detail?='summary' }`，大小写不敏感子串匹配（title/summary/coreClaims/tags）+ 过滤；有关键词时按字段命中相关度排序（tags > title > coreClaims > summary/author，同分按 updatedAt 倒序），无关键词按 updatedAt 倒序；`detail="full"` 附核心论点/事实核查/经验/边界全文（上限 20 张）（2026-09-02 演进，见 Agent Note 2026-09-02-journal-agents-knowledge-recall）；
+- `knowledge_get`（2026-09-02 新增）：按 id 读单卡全文，id 来自 search 结果或分析引用标注；
+- `knowledge_delete`（2026-09-02 新增）：证伪下架——删除卡片并自动清理其他卡片指向它的 `related` 引用，输出回显被删卡片论点留痕；配套 knowledge-curation skill 的 Retraction SOP；
+- **两级检索**（2026-09-02 同日定稿）：`knowledge_graph` 作第一级返回主体（聚类键 = 卡片首个标签）全量分布，`knowledge_search { cluster }` 作第二级按主体钻取，`knowledge_get` 读全文——先主体后知识点，避免百卡级全库扫描。
 
 ### 新 Skill：`.agents/skills/knowledge-curation/SKILL.md`（五段论）
 

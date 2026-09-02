@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { createMemoryKnowledgeCardStore } from '../src/store-memory.ts'
-import { createKnowledgeIngestTool, createKnowledgeSearchTool } from '../src/tool.ts'
+import {
+  createKnowledgeDeleteTool,
+  createKnowledgeGetTool,
+  createKnowledgeIngestTool,
+  createKnowledgeSearchTool,
+} from '../src/tool.ts'
+import type { KnowledgeCard } from '../src/types.ts'
 
 function createSampleIngestArgs(url: string, title = '周期股景气度拐点研判') {
   return {
@@ -109,5 +115,154 @@ describe('Knowledge Agent Tools', () => {
     // 4. 可信度过滤
     const credRes = await (searchTool as any).execute({ credibility: 'high' })
     expect(credRes).toContain('半导体周期分析')
+  })
+
+  it('knowledge_search ranks field-hit relevance above recency', async () => {
+    const mkCard = (id: string, title: string, summary: string, updatedAt: string): KnowledgeCard => ({
+      id,
+      title,
+      summary,
+      source: { type: 'manual', url: `manual:${id}`, author: '手工' },
+      credibility: 'medium',
+      coreClaims: [],
+      factCheck: { verified: [], discrepancies: [], unverifiable: [] },
+      takeaways: [],
+      boundaries: [],
+      tags: ['宏观'],
+      createdAt: updatedAt,
+      updatedAt,
+    })
+    // 老卡标题命中「美联储」，新卡仅摘要命中——相关度应压过时间序。
+    const titleHit = mkCard('kc_title_hit', '美联储加息路径研判', '利率与流动性框架。', '2026-08-01T00:00:00.000Z')
+    const summaryHit = mkCard('kc_summary_hit', '黄金配置逻辑', '美联储降息预期下的避险需求。', '2026-09-01T00:00:00.000Z')
+    const store = createMemoryKnowledgeCardStore([summaryHit, titleHit])
+    const searchTool = createKnowledgeSearchTool(store)
+
+    const res = await (searchTool as any).execute({ query: '美联储' })
+    expect(res.indexOf('kc_title_hit')).toBeGreaterThan(-1)
+    expect(res.indexOf('kc_title_hit')).toBeLessThan(res.indexOf('kc_summary_hit'))
+  })
+
+  it('knowledge_search detail=full returns claims and takeaways, summary mode does not', async () => {
+    const store = createMemoryKnowledgeCardStore()
+    const ingestTool = createKnowledgeIngestTool(store)
+    const searchTool = createKnowledgeSearchTool(store)
+
+    await (ingestTool as any).execute(createSampleIngestArgs('https://www.bilibili.com/video/BV_full', '半导体周期分析'))
+
+    const summaryRes = await (searchTool as any).execute({ query: '半导体' })
+    expect(summaryRes).not.toContain('核心论点:')
+
+    const fullRes = await (searchTool as any).execute({ query: '半导体', detail: 'full' })
+    expect(fullRes).toContain('核心论点:')
+    expect(fullRes).toContain('资本开支连续三年负增长')
+    expect(fullRes).toContain('可复用经验:')
+    expect(fullRes).toContain('适用边界:')
+  })
+
+  it('knowledge_get returns full card by id and errors on missing id', async () => {
+    const store = createMemoryKnowledgeCardStore()
+    const ingestTool = createKnowledgeIngestTool(store)
+    const getTool = createKnowledgeGetTool(store)
+
+    await (ingestTool as any).execute(createSampleIngestArgs('https://www.bilibili.com/video/BV_get'))
+    const id = (await store.list())[0]!.id
+
+    const res = await (getTool as any).execute({ id })
+    expect(res).toContain('周期股景气度拐点研判')
+    expect(res).toContain('核心论点:')
+    expect(res).toContain('资本开支连续三年负增长')
+
+    expect(await (getTool as any).execute({ id: 'kc_missing' })).toContain('未找到卡片')
+    await expect((getTool as any).execute({})).rejects.toThrow()
+  })
+
+  it('knowledge_search caps detail=full at 20 results even with a higher limit', async () => {
+    const mkCard = (id: string): KnowledgeCard => ({
+      id,
+      title: `宏观卡片 ${id}`,
+      summary: '宏观主题摘要。',
+      source: { type: 'manual', url: `manual:${id}`, author: '手工' },
+      credibility: 'medium',
+      coreClaims: [],
+      factCheck: { verified: [], discrepancies: [], unverifiable: [] },
+      takeaways: [],
+      boundaries: [],
+      tags: ['宏观'],
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    })
+    const store = createMemoryKnowledgeCardStore(Array.from({ length: 25 }, (_, i) => mkCard(`kc_bulk_${String(i).padStart(2, '0')}`)))
+    const searchTool = createKnowledgeSearchTool(store)
+
+    const fullRes = await (searchTool as any).execute({ query: '宏观', detail: 'full', limit: 50 })
+    const fullHits = fullRes.match(/- \[kc_/g) ?? []
+    expect(fullHits.length).toBe(20)
+
+    const summaryRes = await (searchTool as any).execute({ query: '宏观', limit: 50 })
+    const summaryHits = summaryRes.match(/- \[kc_/g) ?? []
+    expect(summaryHits.length).toBe(25)
+  })
+
+  it('knowledge_search filters by cluster (first tag) for two-level drill-down', async () => {
+    const store = createMemoryKnowledgeCardStore()
+    const ingestTool = createKnowledgeIngestTool(store)
+    const searchTool = createKnowledgeSearchTool(store)
+
+    await (ingestTool as any).execute(createSampleIngestArgs('https://www.bilibili.com/video/BV_c1', '周期主体卡片'))
+    await (ingestTool as any).execute({
+      ...createSampleIngestArgs('https://mp.weixin.qq.com/s/wx_c2', '宏观主体卡片'),
+      sourceType: 'wechat',
+      sourceUrl: 'https://mp.weixin.qq.com/s/wx_c2',
+      tagsJson: JSON.stringify(['红利', '宏观']),
+    })
+
+    // 主体 = 首标签精确匹配：周期主体只命中第一张
+    const clusterRes = await (searchTool as any).execute({ cluster: '周期' })
+    expect(clusterRes).toContain('周期主体卡片')
+    expect(clusterRes).not.toContain('宏观主体卡片')
+
+    // 「宏观」是第二张卡的第二标签而非主体——cluster 不命中
+    const notClusterRes = await (searchTool as any).execute({ cluster: '宏观' })
+    expect(notClusterRes).toContain('未搜索到')
+
+    // tags 过滤仍按任意标签命中
+    const tagsRes = await (searchTool as any).execute({ tags: '宏观' })
+    expect(tagsRes).toContain('宏观主体卡片')
+  })
+
+  it('knowledge_delete removes a card, cleans dangling related references and fires the event callback', async () => {
+    const store = createMemoryKnowledgeCardStore()
+    const ingestTool = createKnowledgeIngestTool(store)
+
+    await (ingestTool as any).execute(createSampleIngestArgs('https://www.bilibili.com/video/BV_del_target', '待证伪卡片'))
+    const targetId = (await store.list())[0]!.id
+
+    await (ingestTool as any).execute({
+      ...createSampleIngestArgs('https://www.bilibili.com/video/BV_ref', '引用卡片'),
+      relatedJson: JSON.stringify([targetId]),
+    })
+
+    let emitted = 0
+    const deleteTool = createKnowledgeDeleteTool(store, { onWritten: () => { emitted += 1 } })
+
+    const result = await (deleteTool as any).execute({ id: targetId, reason: '核心论点被证伪' })
+    expect(result).toContain('已删除卡片')
+    expect(result).toContain('待证伪卡片')
+    expect(result).toContain('核心论点被证伪')
+    expect(emitted).toBe(1)
+
+    const list = await store.list()
+    expect(list).toHaveLength(1)
+    expect(list[0]!.title).toBe('引用卡片')
+    expect(list[0]!.related ?? []).toHaveLength(0)
+  })
+
+  it('knowledge_delete errors on missing id and without required id', async () => {
+    const store = createMemoryKnowledgeCardStore()
+    const deleteTool = createKnowledgeDeleteTool(store)
+
+    expect(await (deleteTool as any).execute({ id: 'kc_missing' })).toContain('未找到卡片')
+    await expect((deleteTool as any).execute({})).rejects.toThrow()
   })
 })
