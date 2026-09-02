@@ -24,7 +24,7 @@
  * @module @dsh-trading/connector-tencent/rest
  */
 
-import type { Interval, Kline, StockFundamentals, Ticker, TradingErrorCode } from '@dsh-trading/api'
+import type { Interval, Kline, Orderbook, OrderbookLevel, StockFundamentals, Ticker, TradingErrorCode } from '@dsh-trading/api'
 
 /* ------------------------------------------------------------------ */
 /* 错误载体（api 包词汇的运行时映射，与 connector-stooq 同构）               */
@@ -322,6 +322,35 @@ function parseHkTicker(fields: string[], timestamp: number): TencentTicker {
   }
 }
 
+/**
+ * cn 五档盘口解析（issue #39）。字段布局（v_sh600519，与 parseCnTicker 同一行）：
+ * 9=买一价 10=买一量(**手**) … 17=买五价 18=买五量；19=卖一价 20=卖一量 … 27=卖五价
+ * 28=卖五量。档位全 0/缺省时该档丢弃——全部无效时返回空档位（消费方显示空态，
+ * 盘后/集合竞价外时段属正常），不抛错。
+ */
+export function parseCnOrderbook(fields: string[], timestamp: number): Orderbook {
+  const bids: OrderbookLevel[] = []
+  const asks: OrderbookLevel[] = []
+  // 买档：价 fields[9,11,13,15,17]，量 fields[10,12,14,16,18]（手 → 股 ×100）。
+  for (let i = 0; i < 5; i++) {
+    const price = num(fields[9 + i * 2])
+    const amountLots = num(fields[10 + i * 2])
+    if (price !== undefined && amountLots !== undefined && price > 0 && amountLots > 0) {
+      bids.push({ price, amount: amountLots * 100 })
+    }
+  }
+  // 卖档：价 fields[19,21,23,25,27]，量 fields[20,22,24,26,28]（手 → 股 ×100）。
+  for (let i = 0; i < 5; i++) {
+    const price = num(fields[19 + i * 2])
+    const amountLots = num(fields[20 + i * 2])
+    if (price !== undefined && amountLots !== undefined && price > 0 && amountLots > 0) {
+      asks.push({ price, amount: amountLots * 100 })
+    }
+  }
+  // 行内保证：bids 降序（买一在前）、asks 升序（卖一在前）——腾讯行天然按档位排布。
+  return { symbol: '', bids, asks, timestamp }
+}
+
 /** 基本面快照 = api 契约形（币种单位由市场决定：cn=CNY，hk=HKD，展示层标注）。 */
 export type TencentFundamentals = StockFundamentals
 
@@ -510,6 +539,24 @@ export class TencentRestClient {
   async getFundamentals(symbol: string): Promise<TencentFundamentals> {
     const { fields, timestamp, sym } = await this.#fetchQuoteFields(symbol)
     const parsed = this.#market === 'hk' ? parseHkFundamentals(fields, timestamp) : parseCnFundamentals(fields, timestamp)
+    return { ...parsed, symbol: toCanonicalTencentSymbol(this.#market, sym) }
+  }
+
+  /**
+   * 盘口快照（api 可选契约 getOrderbook，issue #39）：与 getTicker 同一行报价的
+   * 五档字段（cn 布局 fields 9-28，见 parseCnOrderbook）。**hk 结构性不支持**——
+   * r_hk 行买卖档位全 0（2026-08-31 实测，parseHkTicker 注释），直接按
+   * TRADING_NOT_IMPLEMENTED 上报，桥层转 ok:false（前端显示「未提供」而非空盘口）。
+   */
+  async getOrderbook(symbol: string): Promise<Orderbook> {
+    if (this.#market === 'hk') {
+      throw new TradingServiceError(
+        'TRADING_NOT_IMPLEMENTED',
+        'Tencent HK orderbook: r_hk quote row carries no five-level depth (all-zero fields) — orderbook unavailable for hk',
+      )
+    }
+    const { fields, timestamp, sym } = await this.#fetchQuoteFields(symbol)
+    const parsed = parseCnOrderbook(fields, timestamp)
     return { ...parsed, symbol: toCanonicalTencentSymbol(this.#market, sym) }
   }
 

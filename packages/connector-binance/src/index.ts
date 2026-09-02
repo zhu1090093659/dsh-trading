@@ -17,7 +17,7 @@ import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
-import type { DerivativesData, Disposable, Interval, Kline, MarketDataService, Ticker } from '@dsh-trading/api'
+import type { DerivativesData, Disposable, Interval, Kline, MarketDataService, Orderbook, Ticker, TradeTick } from '@dsh-trading/api'
 import { BinanceRestClient, INTERVAL_VOCABULARY, TradingServiceError, normalizeBinanceFuturesSymbol } from './rest.js'
 import type { BinanceRestOptions } from './rest.js'
 
@@ -117,6 +117,19 @@ export class BinanceMarketDataService extends Service implements MarketDataServi
     tick()
     const timer = setInterval(tick, ms)
     return { dispose: () => clearInterval(timer) }
+  }
+
+  /**
+   * 盘口快照（api 可选契约 getOrderbook，issue #39）：现货 depth 20 档透传，
+   * SWAP/原生输入归一到现货词汇（盘口跟图表标的走）。
+   */
+  async getOrderbook(symbol: string): Promise<Orderbook> {
+    return this.client.getOrderbook(symbol)
+  }
+
+  /** 最近逐笔成交（api 可选契约 getRecentTrades，issue #39），时间升序。 */
+  async getRecentTrades(symbol: string, limit = 50): Promise<TradeTick[]> {
+    return this.client.getRecentTrades(symbol, limit)
   }
 
   /**

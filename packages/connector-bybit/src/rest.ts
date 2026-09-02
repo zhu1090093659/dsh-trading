@@ -8,9 +8,12 @@ import type {
   Interval,
   Kline,
   Order,
+  Orderbook,
+  OrderbookLevel,
   OrderRequest,
   Position,
   Ticker,
+  TradeTick,
   TradingErrorCode,
 } from '@dsh-trading/api'
 
@@ -228,6 +231,74 @@ export class BybitRestClient {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Bybit account ratio for ${sym}: missing/invalid buyRatio/sellRatio`)
     }
     return { buyRatio, sellRatio }
+  }
+
+  /* -- 盘口与逐笔（issue #39）---------------------------------------------- */
+
+  /** orderbook 档位行 [price, size] → OrderbookLevel。 */
+  #parseBookRow(row: unknown): OrderbookLevel | undefined {
+    if (!Array.isArray(row) || row.length < 2) return undefined
+    const price = num(row[0])
+    const amount = num(row[1])
+    if (price === undefined || amount === undefined || price <= 0 || amount <= 0) return undefined
+    return { price, amount }
+  }
+
+  /**
+   * 盘口快照：GET /v5/market/orderbook?category=spot（limit=25）。
+   * v5 盘口字段是缩写 `result.b`（bids 降序）/ `result.a`（asks 升序）——不是
+   * bids/asks 全称（2026-09-02 真实响应实证，spikes/impl-orderbook-ticks/bybit-orderbook-raw.json）。
+   */
+  async getOrderbook(symbol: string): Promise<Orderbook> {
+    const sym = normalizeCryptoSymbol(symbol)
+    const data = await this.requestJson<{
+      retCode: number
+      retMsg: string
+      result?: { b?: unknown[]; a?: unknown[]; ts?: number }
+    }>(`/v5/market/orderbook?category=spot&symbol=${sym}&limit=25`)
+    if (data.retCode !== 0 || !Array.isArray(data.result?.b) || !Array.isArray(data.result?.a)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Bybit orderbook for ${sym}: unexpected response shape`)
+    }
+    const bids = (data.result.b as unknown[]).map(row => this.#parseBookRow(row)).filter((l): l is OrderbookLevel => l !== undefined)
+    const asks = (data.result.a as unknown[]).map(row => this.#parseBookRow(row)).filter((l): l is OrderbookLevel => l !== undefined)
+    return { symbol: sym, bids, asks, timestamp: num(data.result.ts) ?? Date.now() }
+  }
+
+  /** recent-trade 行 → TradeTick（side 即 taker 方向，Bybit 大写词汇；响应新→旧 → 反转升序）。 */
+  #parseTradeRow(row: Record<string, unknown>, symbol: string): TradeTick {
+    const price = num(row.price)
+    const amount = num(row.size)
+    if (price === undefined || amount === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Bybit trades for ${symbol}: malformed trade row`)
+    }
+    const rawSide = typeof row.side === 'string' ? row.side.toLowerCase() : ''
+    const side = rawSide === 'buy' || rawSide === 'sell' ? rawSide : 'unknown'
+    return {
+      id: String(row.execId ?? ''),
+      symbol,
+      price,
+      amount,
+      side,
+      timestamp: num(row.time) ?? Date.now(),
+    }
+  }
+
+  /** 最近逐笔成交：GET /v5/market/recent-trade?category=spot（响应新→旧 → 反转升序）。 */
+  async getRecentTrades(symbol: string, limit = 50): Promise<TradeTick[]> {
+    const sym = normalizeCryptoSymbol(symbol)
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 50, 60))
+    const data = await this.requestJson<{
+      retCode: number
+      retMsg: string
+      result?: { list?: Array<Record<string, unknown>> }
+    }>(`/v5/market/recent-trade?category=spot&symbol=${sym}&limit=${capped}`)
+    if (data.retCode !== 0 || !data.result?.list) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Bybit trades for ${sym}: unexpected response shape`)
+    }
+    const symbolOut = sym
+    return (data.result.list as Array<Record<string, unknown>>)
+      .map(row => this.#parseTradeRow(row, symbolOut))
+      .reverse()
   }
 
   async getBalance(): Promise<AccountBalance> {

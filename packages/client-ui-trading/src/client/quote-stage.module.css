@@ -498,6 +498,21 @@
   position: relative;
 }
 
+/* 盘口竖栏布局（issue #39）：图表列 + 右侧可折叠盘口列（图表页签专属） */
+.chartRow {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+}
+
+.chartColumn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* 底部指标词条带（富途式横向词条） */
 .quickIndicatorBar {
   display: flex;

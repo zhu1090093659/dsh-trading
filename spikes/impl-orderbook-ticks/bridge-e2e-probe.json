@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-09-02T07:24:00.122Z",
+  "binance": {
+    "orderbook": {
+      "status": 200,
+      "ok": true,
+      "summary": {
+        "symbol": "BTCUSDT",
+        "bid1": {
+          "price": 77637.74,
+          "amount": 1.8883
+        },
+        "ask1": {
+          "price": 77637.75,
+          "amount": 1.80704
+        },
+        "levels": [
+          20,
+          20
+        ]
+      }
+    },
+    "trades": {
+      "status": 200,
+      "ok": true,
+      "summary": {
+        "count": 10,
+        "first": {
+          "id": "6646686648",
+          "symbol": "BTCUSDT",
+          "price": 77637.75,
+          "amount": 0.00011,
+          "side": "buy",
+          "timestamp": 1788333838515
+        },
+        "last": {
+          "id": "6646686657",
+          "symbol": "BTCUSDT",
+          "price": 77637.75,
+          "amount": 0.02577,
+          "side": "buy",
+          "timestamp": 1788333840784
+        }
+      }
+    }
+  },
+  "tencentCn": {
+    "orderbook": {
+      "status": 200,
+      "ok": true,
+      "summary": {
+        "symbol": "600519.SH",
+        "bid1": null,
+        "ask1": null,
+        "levels": [
+          0,
+          0
+        ]
+      }
+    }
+  }
+}

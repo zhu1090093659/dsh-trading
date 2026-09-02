@@ -13,7 +13,7 @@
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
-import type { DerivativesData, Interval, Kline, MarketDataService, StockFundamentals, Ticker } from '@dsh-trading/api'
+import type { DerivativesData, Interval, Kline, MarketDataService, Orderbook, StockFundamentals, Ticker, TradeTick } from '@dsh-trading/api'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/indicators'
 import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
@@ -136,6 +136,19 @@ export interface DerivativesWire {
   ok: true
   derivatives: DerivativesData
 }
+
+export interface OrderbookWire {
+  ok: true
+  orderbook: Orderbook
+}
+
+export interface TradesWire {
+  ok: true
+  trades: TradeTick[]
+}
+
+/** 桥端逐笔上限（保护公共端点；GUI 流水只展示最近一段）。 */
+export const MAX_TRADES_LIMIT = 100
 
 export interface CustomIndicatorsWire {
   ok: true
@@ -288,6 +301,49 @@ export class TradingBridge {
       )
     }
     return { ok: true, derivatives: await service.getDerivatives(trimmed) }
+  }
+
+  /**
+   * 盘口快照（GUI「盘口」竖栏，issue #39）：单 symbol 透传。连接器未实现可选
+   * getOrderbook（yahoo/stooq/腾讯 r_hk）→ TRADING_NOT_IMPLEMENTED 业务错误，
+   * 前端竖栏显示「该市场未提供盘口」。
+   */
+  async orderbook(market: string, symbol: string): Promise<OrderbookWire> {
+    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const trimmed = symbol.trim()
+    if (trimmed === '') throw new BridgeProtocolError(400, 'orderbook: symbol is required')
+    const service = this.host.getMarketService(market)
+    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    if (typeof service.getOrderbook !== 'function') {
+      throw Object.assign(
+        new Error(`market ${market} provider does not implement orderbook`),
+        { code: 'TRADING_NOT_IMPLEMENTED' },
+      )
+    }
+    return { ok: true, orderbook: await service.getOrderbook(trimmed) }
+  }
+
+  /**
+   * 最近逐笔成交（GUI「分笔」流水，issue #39）：透传 limit（服务端封顶）。
+   * 未实现可选 getRecentTrades（腾讯沪深行情行无逐笔端点）→ TRADING_NOT_IMPLEMENTED。
+   */
+  async trades(market: string, symbol: string, rawLimit: string | null): Promise<TradesWire> {
+    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const trimmed = symbol.trim()
+    if (trimmed === '') throw new BridgeProtocolError(400, 'trades: symbol is required')
+    const limit = rawLimit === null || rawLimit === undefined ? undefined : Number(rawLimit)
+    if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0 || limit > MAX_TRADES_LIMIT)) {
+      throw new BridgeProtocolError(400, `trades: limit must be an integer in 1..${MAX_TRADES_LIMIT}`)
+    }
+    const service = this.host.getMarketService(market)
+    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    if (typeof service.getRecentTrades !== 'function') {
+      throw Object.assign(
+        new Error(`market ${market} provider does not implement recent trades`),
+        { code: 'TRADING_NOT_IMPLEMENTED' },
+      )
+    }
+    return { ok: true, trades: await service.getRecentTrades(trimmed, limit) }
   }
 
   /** 自定义指标列表。 */
@@ -489,6 +545,16 @@ export async function dispatchBridgeRequest(
         const market = search.get('market') ?? ''
         const symbol = search.get('symbol') ?? ''
         return { status: 200, payload: await bridge.derivatives(market, symbol) }
+      }
+      case '/orderbook': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return { status: 200, payload: await bridge.orderbook(market, symbol) }
+      }
+      case '/trades': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return { status: 200, payload: await bridge.trades(market, symbol, search.get('limit')) }
       }
       case '/indicators/custom': {
         return { status: 200, payload: await bridge.customIndicators() }

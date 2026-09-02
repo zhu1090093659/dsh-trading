@@ -1,0 +1,149 @@
+{
+  "timestamp": "2026-09-02T07:28:24.525Z",
+  "crypto": {
+    "binance": {
+      "depth": {
+        "ok": true,
+        "summary": {
+          "symbol": "BTCUSDT",
+          "bid1": {
+            "price": 77609.42,
+            "amount": 1.64145
+          },
+          "ask1": {
+            "price": 77609.43,
+            "amount": 3.01977
+          },
+          "levels": [
+            20,
+            20
+          ]
+        }
+      },
+      "trades": {
+        "ok": true,
+        "summary": {
+          "count": 5,
+          "first": {
+            "id": "6646692781",
+            "symbol": "BTCUSDT",
+            "price": 77609.42,
+            "amount": 0.00071,
+            "side": "sell",
+            "timestamp": 1788334102593
+          },
+          "last": {
+            "id": "6646692785",
+            "symbol": "BTCUSDT",
+            "price": 77609.42,
+            "amount": 0.0047,
+            "side": "sell",
+            "timestamp": 1788334105039
+          }
+        }
+      }
+    },
+    "okx": {
+      "depth": {
+        "ok": true,
+        "summary": {
+          "symbol": "BTCUSDT",
+          "bid1": {
+            "price": 77608.3,
+            "amount": 0.41051873
+          },
+          "ask1": {
+            "price": 77608.4,
+            "amount": 0.43725629
+          },
+          "levels": [
+            20,
+            20
+          ]
+        }
+      },
+      "trades": {
+        "ok": true,
+        "summary": {
+          "count": 5,
+          "first": {
+            "id": "1052212777",
+            "symbol": "BTCUSDT",
+            "price": 77608.3,
+            "amount": 0.08877611,
+            "side": "sell",
+            "timestamp": 1788334091698
+          },
+          "last": {
+            "id": "1052212781",
+            "symbol": "BTCUSDT",
+            "price": 77608.4,
+            "amount": 0.0002577,
+            "side": "buy",
+            "timestamp": 1788334103759
+          }
+        }
+      }
+    },
+    "bybit": {
+      "depth": {
+        "ok": true,
+        "summary": {
+          "symbol": "BTCUSDT",
+          "bid1": {
+            "price": 77609.7,
+            "amount": 0.315086
+          },
+          "ask1": {
+            "price": 77609.8,
+            "amount": 0.137882
+          },
+          "levels": [
+            25,
+            25
+          ]
+        }
+      },
+      "trades": {
+        "ok": true,
+        "summary": {
+          "count": 5,
+          "first": {
+            "id": "2290000001202466345",
+            "symbol": "BTCUSDT",
+            "price": 77609.7,
+            "amount": 0.00337,
+            "side": "sell",
+            "timestamp": 1788334085504
+          },
+          "last": {
+            "id": "2290000001202466349",
+            "symbol": "BTCUSDT",
+            "price": 77609.8,
+            "amount": 0.001469,
+            "side": "buy",
+            "timestamp": 1788334104827
+          }
+        }
+      }
+    }
+  },
+  "tencent": {
+    "cn": {
+      "ok": true,
+      "note": "sh600519 五档（盘后可能为空档位）",
+      "bid1": null,
+      "ask1": null,
+      "levels": [
+        0,
+        0
+      ],
+      "symbol": "600519.SH"
+    },
+    "hk": {
+      "ok": false,
+      "code": "TRADING_NOT_IMPLEMENTED",
+      "error": "Tencent HK orderbook: r_hk quote row carries no five-level depth (all-zero fields) — orderbook unavailable for hk"
+    }
+  }
+}

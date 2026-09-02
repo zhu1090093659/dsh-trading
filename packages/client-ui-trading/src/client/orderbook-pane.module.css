@@ -1,0 +1,176 @@
+/* OrderbookPane —— 盘口与分笔竖栏（issue #39；与 quote-stage 同族 token：--dsw-futu-*）。 */
+
+.root {
+  flex: none;
+  width: 232px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 2px 4px 0;
+  overflow: hidden;
+}
+
+.head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-secondary, #4a5060);
+}
+
+.close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  padding: 2px 4px;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scrollbar-width: thin;
+}
+
+.degraded {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  background: var(--dsw-futu-bg-subtle, #f5f6f8);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+/* 力道比（内盘/外盘）：两段填充条 + 两端数值。 */
+.depthMeter {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.meterBar {
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+}
+
+.meterBuy {
+  height: 100%;
+  background: var(--dsw-futu-up, #e64545);
+}
+
+.meterSell {
+  height: 100%;
+  background: var(--dsw-futu-down, #2dbd85);
+}
+
+.levels {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.level {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.levelBar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  opacity: 0.14;
+}
+
+.levelPrice {
+  position: relative;
+  font-weight: 600;
+}
+
+.levelAmount {
+  position: relative;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.level.asks .levelBar {
+  background: var(--dsw-futu-down, #2dbd85);
+}
+
+.level.asks .levelPrice {
+  color: var(--dsw-futu-down, #2dbd85);
+}
+
+.level.bids .levelBar {
+  background: var(--dsw-futu-up, #e64545);
+}
+
+.level.bids .levelPrice {
+  color: var(--dsw-futu-up, #e64545);
+}
+
+.spread {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  font-size: 10.5px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  font-variant-numeric: tabular-nums;
+}
+
+.sectionTitle {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-secondary, #4a5060);
+  border-top: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  padding-top: 6px;
+}
+
+.trades {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.trade {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 4px;
+  padding: 1px 6px;
+}
+
+.trade .time {
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  font-size: 10px;
+}
+
+.trade .amount {
+  text-align: right;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}

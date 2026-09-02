@@ -24,7 +24,10 @@ import { createHmac } from 'node:crypto'
 import type {
   Interval,
   Kline,
+  Orderbook,
+  OrderbookLevel,
   Ticker,
+  TradeTick,
   TradingErrorCode,
 } from '@dsh-trading/api'
 
@@ -606,8 +609,60 @@ export class OkxRestClient {
     }
   }
 
-  /** 未平仓合约量：GET /api/v5/public/open-interest（仅 SWAP；oi=张、oiCcy=币、oiUsd=USD）。 */
-  async getOpenInterest(instId: string): Promise<OkxOpenInterest> {
+  /* -- 盘口与逐笔（issue #39）---------------------------------------------- */
+
+  /** books 档位行 [price, size, liqOrders, numOrders] → OrderbookLevel。 */
+  #parseBookRow(row: unknown): OrderbookLevel | undefined {
+    if (!Array.isArray(row) || row.length < 2) return undefined
+    const price = num(row[0])
+    const amount = num(row[1])
+    if (price === undefined || amount === undefined || price <= 0 || amount <= 0) return undefined
+    return { price, amount }
+  }
+
+  /** 盘口快照：GET /api/v5/market/books（sz=20 档；bids 降序 / asks 升序，OKX 原生序）。 */
+  async getOrderbook(instId: string): Promise<Orderbook> {
+    const id = normalizeOkxSymbol(instId)
+    const rows = await this.request('/api/v5/market/books', { query: { instId: id, sz: '20' } })
+    const d = rows[0] as Record<string, unknown> | undefined
+    if (d === undefined || !Array.isArray(d.bids) || !Array.isArray(d.asks)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX books for ${id}: unexpected response shape`)
+    }
+    const bids = (d.bids as unknown[]).map(row => this.#parseBookRow(row)).filter((l): l is OrderbookLevel => l !== undefined)
+    const asks = (d.asks as unknown[]).map(row => this.#parseBookRow(row)).filter((l): l is OrderbookLevel => l !== undefined)
+    const ts = num(d.ts) ?? Date.now()
+    return { symbol: toCanonicalOkxSymbol(id), bids, asks, timestamp: ts }
+  }
+
+  /** trades 行 → TradeTick（side 即 taker 方向；OKX 响应新→旧，反转为升序）。 */
+  #parseTradeRow(row: unknown, symbol: string): TradeTick {
+    const d = row as Record<string, unknown>
+    const price = num(d.px)
+    const amount = num(d.sz)
+    if (price === undefined || amount === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX trades for ${symbol}: malformed trade row`)
+    }
+    const side = d.side === 'buy' || d.side === 'sell' ? d.side : 'unknown'
+    return {
+      id: str(d.tradeId) ?? '',
+      symbol,
+      price,
+      amount,
+      side,
+      timestamp: num(d.ts) ?? Date.now(),
+    }
+  }
+
+  /** 最近逐笔成交：GET /api/v5/market/trades（响应新→旧 → 反转为时间升序）。 */
+  async getRecentTrades(instId: string, limit = 50): Promise<TradeTick[]> {
+    const id = normalizeOkxSymbol(instId)
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 50, 100))
+    const rows = await this.request('/api/v5/market/trades', { query: { instId: id, limit: String(capped) } })
+    const symbol = toCanonicalOkxSymbol(id)
+    return rows.map(row => this.#parseTradeRow(row, symbol)).reverse()
+  }
+
+  /** 未平仓合约量：GET /api/v5/public/open-interest（仅 SWAP；oi=张、oiCcy=币、oiUsd=USD）。 */  async getOpenInterest(instId: string): Promise<OkxOpenInterest> {
     const id = normalizeOkxSymbol(instId)
     if (!id.endsWith('-SWAP')) {
       throw new TradingServiceError(

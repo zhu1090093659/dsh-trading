@@ -41,9 +41,11 @@ import type {
   Order,
   OrderRequest,
   OrderStatus,
+  Orderbook,
   Position,
   Ticker,
   TradeService,
+  TradeTick,
 } from '@dsh-trading/api'
 import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
 import {
@@ -234,6 +236,16 @@ export class OkxMarketDataService extends Service implements MarketDataService {
   /** OKX 专属扩展（MarketDataService 契约之外）：SWAP 资金费率。 */
   getFundingRate(instId: string) {
     return this.client.getFundingRate(instId)
+  }
+
+  /** 盘口快照（api 可选契约 getOrderbook，issue #39）：books 20 档透传。 */
+  getOrderbook(symbol: string): Promise<Orderbook> {
+    return this.client.getOrderbook(symbol)
+  }
+
+  /** 最近逐笔成交（api 可选契约 getRecentTrades，issue #39），时间升序。 */
+  getRecentTrades(symbol: string, limit = 50): Promise<TradeTick[]> {
+    return this.client.getRecentTrades(symbol, limit)
   }
 
   /**

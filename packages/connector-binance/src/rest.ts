@@ -11,7 +11,10 @@
 import type {
   Interval,
   Kline,
+  Orderbook,
+  OrderbookLevel,
   Ticker,
+  TradeTick,
   TradingErrorCode,
 } from '@dsh-trading/api'
 
@@ -167,6 +170,44 @@ function parseKlineRow(row: unknown, symbol: string): Kline {
   return { openTime, open, high, low, close, volume, closeTime }
 }
 
+/** depth 档位行 [price, quantity] → OrderbookLevel（字符串数值，宽容解析）。 */
+function parseDepthLevel(row: unknown): OrderbookLevel | undefined {
+  if (!Array.isArray(row) || row.length < 2) return undefined
+  const price = num(row[0])
+  const amount = num(row[1])
+  if (price === undefined || amount === undefined || price <= 0 || amount <= 0) return undefined
+  return { price, amount }
+}
+
+/** depth 响应（bids 降序 / asks 升序，Binance 原生序）→ Orderbook。 */
+function parseDepthBody(body: unknown, symbol: string): Orderbook {
+  const d = body as { bids?: unknown; asks?: unknown }
+  if (!Array.isArray(d?.bids) || !Array.isArray(d?.asks)) {
+    throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance depth for ${symbol}: unexpected response shape`)
+  }
+  const bids = d.bids.map(parseDepthLevel).filter((l): l is OrderbookLevel => l !== undefined)
+  const asks = d.asks.map(parseDepthLevel).filter((l): l is OrderbookLevel => l !== undefined)
+  return { symbol, bids, asks, timestamp: Date.now() }
+}
+
+/** 逐笔成交行（/api/v3/trades）→ TradeTick（isBuyerMaker=true → taker 是卖方）。 */
+function parseTradeRow(row: unknown, symbol: string): TradeTick {
+  const d = row as Record<string, unknown>
+  const price = num(d.price)
+  const amount = num(d.qty)
+  if (price === undefined || amount === undefined) {
+    throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance trades for ${symbol}: malformed trade row`)
+  }
+  return {
+    id: String(d.id ?? ''),
+    symbol,
+    price,
+    amount,
+    side: d.isBuyerMaker === true ? 'sell' : d.isBuyerMaker === false ? 'buy' : 'unknown',
+    timestamp: num(d.time) ?? Date.now(),
+  }
+}
+
 export class BinanceRestClient {
   readonly #baseUrl: string
   readonly #fapiBaseUrl: string
@@ -278,8 +319,27 @@ export class BinanceRestClient {
     return result
   }
 
-  /* -- USDT-M 合约公共端点（fapi，无凭证；issue #38 衍生品面板底料）---------- */
+  /* -- 盘口与逐笔（issue #39）---------------------------------------------- */
 
+  /** 盘口快照：GET /api/v3/depth（limit=20 档；bids 降序 / asks 升序，Binance 原生序）。 */
+  async getOrderbook(symbol: string): Promise<Orderbook> {
+    const sym = normalizeBinanceFuturesSymbol(symbol)
+    const body = await this.#request('/api/v3/depth', { symbol: sym, limit: '20' })
+    return parseDepthBody(body, sym)
+  }
+
+  /** 最近逐笔成交：GET /api/v3/trades（时间升序；isBuyerMaker=true → 主动卖）。 */
+  async getRecentTrades(symbol: string, limit = 50): Promise<TradeTick[]> {
+    const sym = normalizeBinanceFuturesSymbol(symbol)
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 50, 100))
+    const body = await this.#request('/api/v3/trades', { symbol: sym, limit: String(capped) })
+    if (!Array.isArray(body)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance trades for ${sym}: unexpected response shape`)
+    }
+    return body.map((row) => parseTradeRow(row, sym))
+  }
+
+  /* -- USDT-M 合约公共端点（fapi，无凭证；issue #38 衍生品面板底料）---------- */
   /** 未平仓合约量：GET /fapi/v1/openInterest（openInterest 以 base 币计，time=快照 ms）。 */
   async getFuturesOpenInterest(symbol: string): Promise<{ openInterest: number; time: number }> {
     const sym = normalizeBinanceFuturesSymbol(symbol)

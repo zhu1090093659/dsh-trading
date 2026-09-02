@@ -16,9 +16,11 @@ import type {
   MarketDataService,
   Order,
   OrderRequest,
+  Orderbook,
   Position,
   Ticker,
   TradeService,
+  TradeTick,
 } from '@dsh-trading/api'
 import {
   BybitRestClient,
@@ -81,6 +83,16 @@ export class BybitMarketDataService extends Service implements MarketDataService
     tick()
     const timer = setInterval(tick, ms)
     return { dispose: () => clearInterval(timer) }
+  }
+
+  /** 盘口快照（api 可选契约 getOrderbook，issue #39）：spot orderbook 25 档透传。 */
+  async getOrderbook(symbol: string): Promise<Orderbook> {
+    return this.client.getOrderbook(symbol)
+  }
+
+  /** 最近逐笔成交（api 可选契约 getRecentTrades，issue #39），时间升序。 */
+  async getRecentTrades(symbol: string, limit = 50): Promise<TradeTick[]> {
+    return this.client.getRecentTrades(symbol, limit)
   }
 
   /**
