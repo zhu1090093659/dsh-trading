@@ -125,6 +125,41 @@ function clampNumber(value: number | undefined, fallback: number, min: number, m
   return Math.min(Math.max(Math.trunc(value), min), max)
 }
 
+async function fetchEastmoneyHkAnnouncements(fetchImpl: typeof globalThis.fetch, rawSymbol: string, limit: number): Promise<NewsItem[]> {
+  const clean = rawSymbol.trim().replace(/\.HK$/i, '').padStart(5, '0')
+  if (!/^\d{5}$/.test(clean)) return []
+  const url = new URL('https://np-anotice-stock.eastmoney.com/api/security/ann')
+  url.searchParams.set('page_size', String(Math.max(limit, 20)))
+  url.searchParams.set('page_index', '1')
+  url.searchParams.set('ann_type', 'H')
+  url.searchParams.set('client_source', 'web')
+  url.searchParams.set('stock_list', clean)
+  try {
+    const response = await fetchImpl(url, { headers: { accept: 'application/json', 'user-agent': UA } })
+    if (!response.ok) return []
+    const parsed: unknown = JSON.parse(await response.text())
+    const list = (parsed as { data?: { list?: Array<{ art_code?: string; title_ch?: string; title?: string; display_time?: string; notice_date?: string }> } }).data?.list
+    if (!Array.isArray(list)) return []
+    const items: NewsItem[] = []
+    for (const it of list) {
+      const title = it.title_ch || it.title
+      if (!title || !it.art_code) continue
+      const timeStr = it.display_time || it.notice_date || ''
+      const ts = parseHkShowTime(timeStr.slice(0, 19))
+      items.push({
+        source: 'eastmoney-announcement',
+        title,
+        url: `https://data.eastmoney.com/notices/detail/${clean}/${encodeURIComponent(it.art_code)}.html`,
+        publishedAt: Number.isFinite(ts) ? new Date(ts).toISOString() : new Date().toISOString(),
+        relatedCodes: [`116.${clean}`],
+      })
+    }
+    return items
+  } catch {
+    return []
+  }
+}
+
 export async function aggregateNews(options: AggregateNewsOptions = {}): Promise<AggregateNewsResult> {
   const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis)
   const now = options.now ?? Date.now()
@@ -132,14 +167,21 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
   const windowMs = windowHours * 3_600_000
   const limit = clampNumber(options.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
 
-  const results = await Promise.allSettled([fetchEastmoneyHk(fetchImpl, limit)])
+  const fetchers: Promise<NewsItem[]>[] = [fetchEastmoneyHk(fetchImpl, limit)]
+  if (options.symbol && options.symbol.trim()) {
+    fetchers.push(fetchEastmoneyHkAnnouncements(fetchImpl, options.symbol, limit))
+  }
+
+  const results = await Promise.allSettled(fetchers)
 
   const items: NewsItem[] = []
   const unavailable: string[] = []
   for (const result of results) {
     if (result.status === 'fulfilled') {
       for (const item of result.value) {
-        if (!inWindow(item.publishedAt, now, windowMs)) continue
+        // 公告放宽时间窗（上市公司公告 7 天内均有效展示），媒体快讯按 24h 时间窗
+        const maxAge = item.source === 'eastmoney-announcement' ? 7 * 24 * 3_600_000 : windowMs
+        if (!inWindow(item.publishedAt, now, maxAge)) continue
         if (!matchesSymbol(item, options.symbol)) continue
         items.push(item)
       }

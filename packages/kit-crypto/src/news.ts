@@ -11,7 +11,7 @@
  * 每源独立容错：单源失败不炸整体，失败源在 `unavailable` 中注明（工具输出可见），fail-soft。
  */
 /** 已接入的新闻来源（EVIDENCE 分级总表：A 级打底/媒体面 + B 级 CryptoPanic 自备 key）。 */
-export type NewsSource = 'binance' | 'okx' | 'coindesk' | 'theblock' | 'cryptopanic'
+export type NewsSource = 'binance' | 'okx' | 'coindesk' | 'theblock' | 'cointelegraph' | 'decrypt' | 'cryptopanic'
 
 export interface NewsItem {
   /** 来源名（铁律 #5 的来源标注；同时是「引用给 Agent 可以、再分发不行」的边界提醒落点）。 */
@@ -49,6 +49,8 @@ const DSHTRADING_API = 'https://www.binance.com/bapi/composite/v1/public/cms/art
 const OKX_ANNOUNCEMENT_URL = 'https://www.okx.com/api/v5/support/announcements'
 const COINDESK_RSS_URL = 'https://www.coindesk.com/arc/outboundfeeds/rss/'
 const THEBLOCK_RSS_URL = 'https://www.theblock.co/rss.xml'
+const COINTELEGRAPH_RSS_URL = 'https://cointelegraph.com/rss'
+const DECRYPT_RSS_URL = 'https://decrypt.co/feed'
 const CRYPTOPANIC_API_URL = 'https://cryptopanic.com/api/free/v1/posts/'
 
 const DEFAULT_WINDOW_HOURS = 24
@@ -239,6 +241,8 @@ function inWindow(publishedAt: string, nowMs: number, windowMs: number): boolean
 
 function matchesSymbol(item: NewsItem, tokens: string[]): boolean {
   if (tokens.length === 0) return true
+  // 币安与欧易的交易所官方公告属于平台级重大事件，在公告流中予以保留展示
+  if (item.source === 'binance' || item.source === 'okx') return true
   const title = item.title.toUpperCase()
   return tokens.some((t) => title.includes(t))
 }
@@ -258,6 +262,8 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
     fetchOkxNews(fetchImpl),
     fetchRssNews(fetchImpl, 'coindesk', COINDESK_RSS_URL),
     fetchRssNews(fetchImpl, 'theblock', THEBLOCK_RSS_URL),
+    fetchRssNews(fetchImpl, 'cointelegraph', COINTELEGRAPH_RSS_URL),
+    fetchRssNews(fetchImpl, 'decrypt', DECRYPT_RSS_URL),
   ]
   if (options.cryptoPanicKey && options.cryptoPanicKey.trim()) {
     // CryptoPanic currencies 参数用币种代码（BTC/ETH/SOL，不含报价/合约后缀）。

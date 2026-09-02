@@ -51,7 +51,17 @@ function relativeTime(isoString: string): string {
 
 function getSourceType(source: string): string {
   const lower = source.toLowerCase()
-  if (lower.includes('exchange') || lower.includes('announcement') || lower.includes('交易所') || lower.includes('公告')) return 'exchange'
+  if (
+    lower.includes('exchange') ||
+    lower.includes('announcement') ||
+    lower.includes('sec-edgar') ||
+    lower.includes('binance') ||
+    lower.includes('okx') ||
+    lower.includes('交易所') ||
+    lower.includes('公告')
+  ) {
+    return 'exchange'
+  }
   if (lower.includes('rss')) return 'rss'
   return 'media'
 }
@@ -59,6 +69,15 @@ function getSourceType(source: string): string {
 function formatSourceLabel(source: string): string {
   if (source === 'eastmoney-announcement') return '公司公告'
   if (source === 'eastmoney') return '东方财富'
+  if (source === 'sec-edgar') return 'SEC 披露'
+  if (source === 'binance') return '币安公告'
+  if (source === 'okx') return '欧易公告'
+  if (source === 'coindesk') return 'CoinDesk'
+  if (source === 'theblock') return 'The Block'
+  if (source === 'cointelegraph') return 'CoinTelegraph'
+  if (source === 'decrypt') return 'Decrypt'
+  if (source.toLowerCase().includes('yahoo')) return 'Yahoo 财经'
+  if (source.toLowerCase().includes('google')) return 'Google 新闻'
   return source
 }
 
@@ -73,9 +92,9 @@ export function NewsFeedPane({ items, unavailable, fallback, fullHeight = false,
 
   const filteredItems = items === null ? null : (
     filterType === 'exchange'
-      ? items.filter(it => getSourceType(it.source) === 'exchange' || it.title.includes('公告') || it.title.includes('提示') || it.title.includes('决议') || it.title.includes('报告'))
+      ? items.filter(it => getSourceType(it.source) === 'exchange')
       : filterType === 'media'
-        ? items.filter(it => getSourceType(it.source) !== 'exchange' && it.source !== 'eastmoney-announcement')
+        ? items.filter(it => getSourceType(it.source) !== 'exchange')
         : items
   )
 

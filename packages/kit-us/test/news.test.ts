@@ -3,7 +3,7 @@
  * mock fetch，不触真实网络。覆盖：两源聚合/倒序/截尾、symbol 过滤、时间窗、单源容错、RSS 解析。
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { aggregateNews, parseGoogleNewsRss } from '../src/news.ts'
+import { aggregateNews, parseGoogleNewsRss, parseSecEdgarAtom } from '../src/news.ts'
 import { createGetNewsTool } from '../src/index.ts'
 
 const NOW = Date.parse('2026-08-30T20:00:00Z')
@@ -39,6 +39,7 @@ function allSourcesOk() {
   return mockFetchByUrl({
     'finance.yahoo.com': () => jsonResp(yahooJson),
     'news.google.com': () => textResp(googleRss),
+    'sec.gov': () => textResp('<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>8-K - Current report</title><link href="https://www.sec.gov/Archives/edgar/data/320193/000032019326000001/aapl-20260830.htm"/><updated>2026-08-30T19:30:00Z</updated></entry></feed>'),
   })
 }
 
@@ -85,6 +86,23 @@ describe('parseGoogleNewsRss（RSS 2.0 解析）', () => {
     expect(items).toHaveLength(2)
     expect(items[0].source).toBe('MarketWatch')
     expect(items[0].url).toBe('https://news.google.com/rss/articles/a')
+  })
+})
+
+describe('parseSecEdgarAtom（SEC EDGAR 披露流解析）', () => {
+  it('解析 entry 中的 8-K/10-Q 标题、直达链接与更新时间', () => {
+    const secAtom = `<feed xmlns="http://www.w3.org/2005/Atom">
+      <entry>
+        <title>8-K - Current report</title>
+        <link href="https://www.sec.gov/Archives/edgar/data/320193/aapl.htm"/>
+        <updated>2026-08-30T19:30:00Z</updated>
+      </entry>
+    </feed>`
+    const items = parseSecEdgarAtom(secAtom)
+    expect(items).toHaveLength(1)
+    expect(items[0].source).toBe('sec-edgar')
+    expect(items[0].title).toBe('8-K - Current report')
+    expect(items[0].url).toBe('https://www.sec.gov/Archives/edgar/data/320193/aapl.htm')
   })
 })
 
