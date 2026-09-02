@@ -24,4 +24,8 @@ jobs:
       # 解析；不再克隆/构建 DSH 源码 checkout 或重定向 overrides（2026-08-30 切 npm 世代）。
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
+      # 棘轮门禁（PR #46 实证：tsdown/esbuild build 不做类型检查）：tsc --noEmit
+      # 错误数不得超过 scripts/typecheck-baseline.json 基线，只许降不许升。
+      # 依赖 build 先产出 lib/*.d.ts，否则 TS2307 噪音会让计数漂移。
+      - run: node scripts/typecheck-gate.mjs
       - run: pnpm -r test

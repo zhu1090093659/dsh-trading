@@ -8,6 +8,10 @@
     "declaration": true,
     "sourceMap": true,
     "skipLibCheck": true,
+    // 全仓源码惯用 .ts/.tsx 扩展导入（tsdown/esbuild 原生支持）；tsc 仅以 --noEmit
+    // 门禁形态运行（typecheck-gate），该选项在 noEmit 下才合法——若未来改用 tsc
+    // 产出物，需连带审视此开关。
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,

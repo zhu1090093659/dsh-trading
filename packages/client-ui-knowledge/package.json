@@ -23,7 +23,7 @@
   "scripts": {
     "bundle": "tsdown && tsdown --config tsdown.client.config.mjs",
     "build": "tsdown && tsdown --config tsdown.client.config.mjs",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@dsh-trading/knowledge": "workspace:^",
