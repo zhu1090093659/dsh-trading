@@ -133,6 +133,76 @@
   background: var(--dsw-futu-text-primary, #1a1e24);
 }
 
+/* 区间统计按钮激活态（与技术指标按钮同族样式） */
+.pickerButton[data-active='true'] {
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+/* 区间统计浮层（chartBox 右上角，框选模式开启且有选区时显示） */
+.rangePanel {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  width: 168px;
+  background: var(--dsw-futu-bg-base, #ffffff);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(26, 30, 36, 0.1);
+  padding: 8px 10px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rangePanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.rangePanelClose {
+  appearance: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  padding: 0 2px;
+}
+
+.rangePanelClose:hover {
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.rangePanelSpan {
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  font-size: 10.5px;
+}
+
+.rangePanelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rangePanelRow > span:first-child {
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.rangePanelRow > span:last-child {
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
 /* 统计数据横栏 */
 .stats {
   display: flex;

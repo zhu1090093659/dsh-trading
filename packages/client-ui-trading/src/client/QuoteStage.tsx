@@ -11,6 +11,7 @@ import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
 import type { SendImageInput } from './fill-composer.ts'
 import { FundamentalsPane, deriveFiftyTwoWeek } from './FundamentalsPane.tsx'
+import { computeRangeStats } from './range-stats.ts'
 import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import {
@@ -107,6 +108,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [stageTab, setStageTab] = useState<'chart' | 'fundamentals'>('chart')
   const [fundamentals, setFundamentals] = useState<StockFundamentals | null>(null)
   const [fundamentalsLoading, setFundamentalsLoading] = useState(false)
+  /** 区间统计：框选模式开 + 已选逻辑下标区间（TvChart 上报，面板消费）。 */
+  const [rangeMode, setRangeMode] = useState(false)
+  const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
   /** TvChart 注册的截图回调（图表未渲染/已卸载 = null）。 */
   const captureRef = useRef<(() => TvChartCapture | null) | null>(null)
   const [clock, setClock] = useState(() => formatStatusBarClock(Date.now()))
@@ -225,6 +229,23 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
   // 基本面页签派生 52 周区间：快照缺字段（或 us/crypto 派生模式）时的兜底。
   const fiftyTwoWeek = useMemo(() => deriveFiftyTwoWeek(daily), [daily])
+
+  // 区间统计：框选模式 ESC 退出（连同清空选区）。
+  useEffect(() => {
+    if (!rangeMode) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      setRangeMode(false)
+      setRangeSelection(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [rangeMode])
+
+  const rangeStats = useMemo(
+    () => (rangeSelection !== null && klines !== null ? computeRangeStats(klines, rangeSelection.start, rangeSelection.end) : null),
+    [rangeSelection, klines],
+  )
 
   // 指标调度：klines × 激活实例 → 渲染输入
   const indicatorGroups = useMemo(() => {
@@ -416,6 +437,22 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                     : t('quote.sendToAgent')}
             </button>
           )}
+          {/* 区间统计（同花顺式框选统计；紧挨「技术指标」按钮左侧） */}
+          <button
+            type="button"
+            className={css.pickerButton}
+            data-active={rangeMode ? 'true' : undefined}
+            aria-pressed={rangeMode}
+            title={t('quote.rangeStatsHint')}
+            onClick={() => {
+              setRangeMode((open) => {
+                if (open) setRangeSelection(null)
+                return !open
+              })
+            }}
+          >
+            {t('quote.rangeStats')}
+          </button>
           <div className={css.indicatorAnchor}>
             <button
               type="button"
@@ -478,7 +515,68 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               readoutIndex={readoutIndex}
               onHoverIndex={setHoverIndex}
               onCaptureReady={(capture) => { captureRef.current = capture }}
+              rangeSelectionMode={rangeMode}
+              selection={rangeSelection}
+              onRangeSelect={setRangeSelection}
             />
+          )}
+          {rangeMode && rangeStats !== null && (
+            <div className={css.rangePanel} role="dialog" aria-label={t('quote.rangeStats')}>
+              <div className={css.rangePanelHead}>
+                <span>{t('quote.rangeStats')}</span>
+                <button
+                  type="button"
+                  className={css.rangePanelClose}
+                  aria-label={t('range.closePanel')}
+                  onClick={() => { setRangeSelection(null) }}
+                >
+                  ×
+                </button>
+              </div>
+              <div className={css.rangePanelSpan}>
+                {fmtDay(rangeStats.startTime)} ~ {fmtDay(rangeStats.endTime)}
+              </div>
+              <div className={css.rangePanelRow}>
+                <span>{t('range.change')}</span>
+                <span style={{ color: directionColor(rangeStats.changePercent, colorMode) }}>
+                  {fmtPercent(rangeStats.changePercent)}
+                </span>
+              </div>
+              <div className={css.rangePanelRow}>
+                <span>{t('range.changeAbs')}</span>
+                <span style={{ color: directionColor(rangeStats.change, colorMode) }}>
+                  {fmtChange(rangeStats.change)}
+                </span>
+              </div>
+              <div className={css.rangePanelRow}>
+                <span>{t('range.high')}</span>
+                <span>{fmtPrice(rangeStats.rangeHigh)}</span>
+              </div>
+              <div className={css.rangePanelRow}>
+                <span>{t('range.low')}</span>
+                <span>{fmtPrice(rangeStats.rangeLow)}</span>
+              </div>
+              <div className={css.rangePanelRow}>
+                <span>{t('range.amplitude')}</span>
+                <span>{fmtPercent(rangeStats.amplitudePercent)}</span>
+              </div>
+              <div className={css.rangePanelRow}>
+                <span>{t('range.volume')}</span>
+                <span>{fmtCompact(rangeStats.volume)}</span>
+              </div>
+              <div className={css.rangePanelRow}>
+                <span>{t('range.bars')}</span>
+                <span>{rangeStats.bars}</span>
+              </div>
+              <div className={css.rangePanelRow}>
+                <span>{t('range.upDays')}</span>
+                <span>{rangeStats.upBars}</span>
+              </div>
+              <div className={css.rangePanelRow}>
+                <span>{t('range.downDays')}</span>
+                <span>{rangeStats.downBars}</span>
+              </div>
+            </div>
           )}
         </div>
       ) : (
@@ -737,6 +835,13 @@ function formatStatusBarClock(ms: number): string {
   const date = new Date(ms)
   const pad = (n: number): string => String(n).padStart(2, '0')
   return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+/** YYYY-MM-DD（区间统计面板的日期跨度）。 */
+function fmtDay(ms: number): string {
+  const date = new Date(ms)
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
 function readInterval(market: MarketId): string {

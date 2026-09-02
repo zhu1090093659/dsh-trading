@@ -19,7 +19,7 @@ import {
   AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart,
 } from 'lightweight-charts'
 import type {
-  IChartApi, ISeriesApi, LogicalRange, MouseEventParams, SeriesType, Time, UTCTimestamp,
+  IChartApi, ISeriesApi, Logical, LogicalRange, MouseEventParams, SeriesType, Time, UTCTimestamp,
 } from 'lightweight-charts'
 import type { BarPrice, PriceFormatCustom } from 'lightweight-charts'
 import { fmtAxis, fmtCompact, priceDigits } from './format.ts'
@@ -60,6 +60,12 @@ export interface TvChartProps {
   readoutIndex: number | null
   /** 十字线悬停的 K 线下标（离场为 null），父级负责 OHLC 读数。 */
   onHoverIndex: (index: number | null) => void
+  /** 区间统计框选模式（2026-09-02）：true 时禁用拖拽平移/缩放，指针框选K线区间。 */
+  rangeSelectionMode?: boolean | undefined
+  /** 框选提交（逻辑下标闭区间；null = 点击清除）。 */
+  onRangeSelect?: (range: { start: number; end: number } | null) => void
+  /** 已提交的框选区间（父级持有以驱动统计面板；此处只负责高亮回显）。 */
+  selection?: { start: number; end: number } | null | undefined
   /** 图表就绪时注册截图回调、卸载时以 null 注销（「发给 Agent」用）。 */
   onCaptureReady?: (capture: (() => TvChartCapture | null) | null) => void
 }
@@ -562,11 +568,118 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
     }
   }, [mainOverlays, subIndicators, bars, props.colorMode])
 
+  // ---- 区间统计框选模式：禁用图表自身的拖拽平移/缩放，指针事件留给框选 ----
+  useEffect(() => {
+    const chart = chartRef.current
+    if (chart === null) return
+    const selecting = props.rangeSelectionMode === true
+    chart.applyOptions({ handleScroll: !selecting, handleScale: !selecting })
+  }, [props.rangeSelectionMode])
+
+  // ---- 框选指针交互：按下记起点，移动更新矩形，抬起换算逻辑下标区间提交 ----
+  const dragStartXRef = useRef<number | null>(null)
+  const [dragRect, setDragRect] = useState<{ x1: number; x2: number } | null>(null)
+
+  const handleRangePointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
+    if (propsRef.current.rangeSelectionMode !== true || event.button !== 0) return
+    const box = event.currentTarget.getBoundingClientRect()
+    const x = event.clientX - box.left
+    dragStartXRef.current = x
+    setDragRect({ x1: x, x2: x })
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const handleRangePointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
+    if (dragStartXRef.current === null) return
+    const box = event.currentTarget.getBoundingClientRect()
+    setDragRect({ x1: dragStartXRef.current, x2: event.clientX - box.left })
+  }
+
+  const handleRangePointerUp = (event: React.PointerEvent<HTMLDivElement>): void => {
+    const startX = dragStartXRef.current
+    if (startX === null) return
+    dragStartXRef.current = null
+    setDragRect(null)
+    const chart = chartRef.current
+    if (chart === null) return
+    const box = event.currentTarget.getBoundingClientRect()
+    const fromLogical = chart.timeScale().coordinateToLogical(startX)
+    const toLogical = chart.timeScale().coordinateToLogical(event.clientX - box.left)
+    if (fromLogical === null || toLogical === null) {
+      propsRef.current.onRangeSelect?.(null)
+      return
+    }
+    let start = Math.round(fromLogical)
+    let end = Math.round(toLogical)
+    if (start > end) [start, end] = [end, start]
+    const lastIndex = Math.max(propsRef.current.bars.length - 1, 0)
+    start = Math.min(lastIndex, Math.max(0, start))
+    end = Math.min(lastIndex, Math.max(0, end))
+    // 单击（无拖拽跨度）= 清除选区。
+    if (start === end) {
+      propsRef.current.onRangeSelect?.(null)
+      return
+    }
+    propsRef.current.onRangeSelect?.({ start, end })
+  }
+
+  const handleRangePointerCancel = (): void => {
+    dragStartXRef.current = null
+    setDragRect(null)
+  }
+
+  // 高亮矩形：拖拽中用像素坐标；已提交选区由逻辑下标反查坐标（布局变化经
+  // paneTops 测量 effect 的 ResizeObserver 触发重渲染重算）。
+  const selectionRect = ((): { left: number; width: number } | null => {
+    if (dragRect !== null) {
+      return { left: Math.min(dragRect.x1, dragRect.x2), width: Math.abs(dragRect.x2 - dragRect.x1) }
+    }
+    if (props.rangeSelectionMode === true && props.selection != null) {
+      const timeScale = chartRef.current?.timeScale()
+      if (timeScale === undefined) return null
+      const x1 = timeScale.logicalToCoordinate(props.selection.start as Logical)
+      const x2 = timeScale.logicalToCoordinate(props.selection.end as Logical)
+      if (x1 === null || x2 === null) return null
+      return { left: Math.min(Number(x1), Number(x2)), width: Math.abs(Number(x2) - Number(x1)) }
+    }
+    return null
+  })()
+
   const monoFont = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, sans-serif'
   const volumeReadout = readoutIndex !== null ? volumes[readoutIndex] : undefined
 
   return (
-    <div className="dshtrading-tv-chart" ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div
+      className="dshtrading-tv-chart"
+      ref={containerRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+        cursor: props.rangeSelectionMode === true ? 'crosshair' : undefined,
+      }}
+      onPointerDown={handleRangePointerDown}
+      onPointerMove={handleRangePointerMove}
+      onPointerUp={handleRangePointerUp}
+      onPointerCancel={handleRangePointerCancel}
+    >
+      {/* 框选高亮带（拖拽中 / 已提交选区） */}
+      {selectionRect !== null && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: selectionRect.left,
+            width: selectionRect.width,
+            background: 'rgba(37, 99, 235, 0.08)',
+            borderLeft: '1px solid rgba(37, 99, 235, 0.4)',
+            borderRight: '1px solid rgba(37, 99, 235, 0.4)',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
       {/* pane 1 legend：成交量读数（值按富途式蓝色着色） */}
       {paneTops[1] !== undefined && volumeReadout !== undefined && (
         <div style={{ position: 'absolute', left: 8, top: paneTops[1] + 4, zIndex: 2, pointerEvents: 'none', fontSize: 10.5, fontFamily: monoFont, color: 'var(--dsw-futu-text-secondary, #5f6672)', fontWeight: 600 }}>
