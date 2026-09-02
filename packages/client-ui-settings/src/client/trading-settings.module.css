@@ -8,7 +8,7 @@
   font-size: 13px;
 }
 
-/* 局部主题变量定义（亮色默认） */
+/* 局部主题变量定义（亮色默认，优先走宿主 dsw-alias） */
 .root {
   --sec-text-primary: var(--dsw-alias-text-primary, #1a1e24);
   --sec-text-secondary: var(--dsw-alias-text-secondary, #5f6672);
@@ -19,30 +19,19 @@
   --sec-primary: var(--dsw-alias-primary, #2563eb);
 }
 
-/* 深色模式变量注入 */
+/* 显式深色模式变量注入（仅当宿主处于深色状态时生效，绝不干扰白天模式） */
 :global(body[data-ds-dark-theme]) .root,
 :global([data-theme='dark']) .root,
 :global(:root[data-theme='dark']) .root,
-:global(html.dark) .root {
-  --sec-text-primary: #f3f4f6;
-  --sec-text-secondary: #9ca3af;
-  --sec-text-muted: #6b7280;
-  --sec-border: rgba(255, 255, 255, 0.1);
-  --sec-bg-hover: rgba(255, 255, 255, 0.06);
+:global(html.dark) .root,
+:global(body.dark) .root {
+  --sec-text-primary: var(--dsw-alias-text-primary, #f3f4f6);
+  --sec-text-secondary: var(--dsw-alias-text-secondary, #9ca3af);
+  --sec-text-muted: var(--dsw-alias-text-muted, #6b7280);
+  --sec-border: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.1));
+  --sec-bg-hover: var(--dsw-alias-fill-hover, rgba(255, 255, 255, 0.06));
   --sec-bg-active: rgba(37, 99, 235, 0.16);
   --sec-primary: #3b82f6;
-}
-
-@media (prefers-color-scheme: dark) {
-  :global(body:not([data-theme='light'])) .root {
-    --sec-text-primary: #f3f4f6;
-    --sec-text-secondary: #9ca3af;
-    --sec-text-muted: #6b7280;
-    --sec-border: rgba(255, 255, 255, 0.1);
-    --sec-bg-hover: rgba(255, 255, 255, 0.06);
-    --sec-bg-active: rgba(37, 99, 235, 0.16);
-    --sec-primary: #3b82f6;
-  }
 }
 
 .root {

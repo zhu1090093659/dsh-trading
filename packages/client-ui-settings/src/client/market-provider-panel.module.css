@@ -7,11 +7,11 @@
   padding-top: 4px;
 }
 
-/* 局部主题变量定义（亮色默认） */
+/* 局部主题变量定义（亮色默认，优先走宿主 dsw-alias） */
 .panel {
   --panel-bg-card: var(--dsw-alias-bg-l1, #ffffff);
   --panel-bg-card-hover: var(--dsw-alias-fill-hover, rgba(0, 0, 0, 0.02));
-  --panel-bg-card-selected: rgba(37, 99, 235, 0.04);
+  --panel-bg-card-selected: rgba(37, 99, 235, 0.05);
   --panel-border-card: var(--dsw-alias-border-l2, #e3e6ea);
   --panel-border-card-selected: var(--dsw-alias-primary, #2563eb);
   --panel-text-primary: var(--dsw-alias-text-primary, #1a1e24);
@@ -25,44 +25,26 @@
   --panel-btn-text: var(--dsw-alias-text-primary, #1a1e24);
 }
 
-/* 深色模式变量注入 */
+/* 显式深色模式变量注入（仅当宿主处于深色状态时生效，绝不干扰白天模式） */
 :global(body[data-ds-dark-theme]) .panel,
 :global([data-theme='dark']) .panel,
 :global(:root[data-theme='dark']) .panel,
-:global(html.dark) .panel {
-  --panel-bg-card: rgba(255, 255, 255, 0.04);
-  --panel-bg-card-hover: rgba(255, 255, 255, 0.07);
+:global(html.dark) .panel,
+:global(body.dark) .panel {
+  --panel-bg-card: var(--dsw-alias-bg-l1, rgba(255, 255, 255, 0.04));
+  --panel-bg-card-hover: var(--dsw-alias-fill-hover, rgba(255, 255, 255, 0.07));
   --panel-bg-card-selected: rgba(37, 99, 235, 0.16);
-  --panel-border-card: rgba(255, 255, 255, 0.1);
+  --panel-border-card: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.1));
   --panel-border-card-selected: #3b82f6;
-  --panel-text-primary: #f3f4f6;
-  --panel-text-secondary: #9ca3af;
-  --panel-text-muted: #6b7280;
-  --panel-bg-subtle: rgba(255, 255, 255, 0.06);
+  --panel-text-primary: var(--dsw-alias-text-primary, #f3f4f6);
+  --panel-text-secondary: var(--dsw-alias-text-secondary, #9ca3af);
+  --panel-text-muted: var(--dsw-alias-text-muted, #6b7280);
+  --panel-bg-subtle: var(--dsw-alias-fill-hover, rgba(255, 255, 255, 0.06));
   --panel-bg-input: rgba(0, 0, 0, 0.25);
-  --panel-border-input: rgba(255, 255, 255, 0.15);
+  --panel-border-input: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.15));
   --panel-btn-bg: rgba(255, 255, 255, 0.08);
   --panel-btn-border: rgba(255, 255, 255, 0.14);
-  --panel-btn-text: #e5e7eb;
-}
-
-@media (prefers-color-scheme: dark) {
-  :global(body:not([data-theme='light'])) .panel {
-    --panel-bg-card: rgba(255, 255, 255, 0.04);
-    --panel-bg-card-hover: rgba(255, 255, 255, 0.07);
-    --panel-bg-card-selected: rgba(37, 99, 235, 0.16);
-    --panel-border-card: rgba(255, 255, 255, 0.1);
-    --panel-border-card-selected: #3b82f6;
-    --panel-text-primary: #f3f4f6;
-    --panel-text-secondary: #9ca3af;
-    --panel-text-muted: #6b7280;
-    --panel-bg-subtle: rgba(255, 255, 255, 0.06);
-    --panel-bg-input: rgba(0, 0, 0, 0.25);
-    --panel-border-input: rgba(255, 255, 255, 0.15);
-    --panel-btn-bg: rgba(255, 255, 255, 0.08);
-    --panel-btn-border: rgba(255, 255, 255, 0.14);
-    --panel-btn-text: #e5e7eb;
-  }
+  --panel-btn-text: var(--dsw-alias-text-primary, #e5e7eb);
 }
 
 .currentHeader {
