@@ -220,6 +220,13 @@ export interface MarketDataService {
    * 输出 `symbol` 一律市场规范词汇（docs/symbol-vocabulary.md）。
    */
   getFundamentals?(symbol: string): Promise<StockFundamentals>
+  /**
+   * 衍生品市场指标快照（GUI「衍生品」面板用，issue #38，2026-09-02）：持仓量/
+   * 多空比/资金费等微观结构数据，crypto 永续合约市场专属。
+   * 可选方法：现货/股票数据源不实现；未实现时消费方直接隐藏面板（不降级不报错）。
+   * 入参接受规范形与连接器原生形，输出 `symbol` 一律规范词汇 SWAP 形（BTCUSDT-SWAP）。
+   */
+  getDerivatives?(symbol: string): Promise<DerivativesData>
 }
 
 /**

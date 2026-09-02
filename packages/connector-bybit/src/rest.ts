@@ -61,6 +61,12 @@ export function normalizeCryptoSymbol(raw: string): string {
   return clean
 }
 
+/** 宽松转 number（字符串/数字皆收，非有限值返回 undefined）。 */
+function num(value: unknown): number | undefined {
+  const n = typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : Number.NaN
+  return Number.isFinite(n) ? n : undefined
+}
+
 export interface BybitRestOptions {
   baseUrl?: string
   apiKey?: string
@@ -168,6 +174,60 @@ export class BybitRestClient {
         closeTime: openTime + stepMs - 1,
       }
     })
+  }
+
+  /* -- 线性合约（U 本位永续）公共端点（issue #38 衍生品面板底料）------------- */
+
+  /**
+   * 线性合约行情行：GET /v5/market/tickers?category=linear —— 单端点同时携带
+   * fundingRate（当前资金费率，小数）、openInterest（base 币计持仓量）、
+   * openInterestValue（USD 计价值）。
+   */
+  async getLinearTickerSnapshot(symbol: string): Promise<{
+    symbol: string
+    fundingRate?: number
+    openInterest?: number
+    openInterestValue?: number
+  }> {
+    const sym = normalizeCryptoSymbol(symbol)
+    const data = await this.requestJson<{
+      retCode: number
+      retMsg: string
+      result?: { list?: Array<Record<string, unknown>> }
+    }>(`/v5/market/tickers?category=linear&symbol=${sym}`)
+    if (data.retCode !== 0 || !data.result?.list || data.result.list.length === 0) {
+      throw new TradingServiceError('TRADING_UNSUPPORTED_SYMBOL', `Bybit linear tickers not found for ${sym}`)
+    }
+    const row = data.result.list[0] as Record<string, unknown>
+    const fundingRate = num(row.fundingRate)
+    const openInterest = num(row.openInterest)
+    const openInterestValue = num(row.openInterestValue)
+    return {
+      symbol: typeof row.symbol === 'string' && row.symbol ? row.symbol : sym,
+      ...(fundingRate !== undefined ? { fundingRate } : {}),
+      ...(openInterest !== undefined ? { openInterest } : {}),
+      ...(openInterestValue !== undefined ? { openInterestValue } : {}),
+    }
+  }
+
+  /** 多空账户人数比：GET /v5/market/account-ratio?category=linear（period=1h，limit=1，buyRatio/sellRatio 为账户占比）。 */
+  async getLinearAccountRatio(symbol: string): Promise<{ buyRatio: number; sellRatio: number }> {
+    const sym = normalizeCryptoSymbol(symbol)
+    const data = await this.requestJson<{
+      retCode: number
+      retMsg: string
+      result?: { list?: Array<Record<string, unknown>> }
+    }>(`/v5/market/account-ratio?category=linear&symbol=${sym}&period=1h&limit=1`)
+    if (data.retCode !== 0 || !data.result?.list || data.result.list.length === 0) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Bybit account ratio not found for ${sym}`)
+    }
+    const row = data.result.list[0] as Record<string, unknown>
+    const buyRatio = num(row.buyRatio)
+    const sellRatio = num(row.sellRatio)
+    if (buyRatio === undefined || sellRatio === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Bybit account ratio for ${sym}: missing/invalid buyRatio/sellRatio`)
+    }
+    return { buyRatio, sellRatio }
   }
 
   async getBalance(): Promise<AccountBalance> {

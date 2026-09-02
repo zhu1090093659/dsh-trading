@@ -5,12 +5,13 @@
  * 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { fetchKlines, fetchTickers, fetchFundamentals } from './api.ts'
+import { fetchKlines, fetchTickers, fetchFundamentals, fetchDerivatives } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
 import type { SendImageInput } from './fill-composer.ts'
 import { FundamentalsPane, deriveFiftyTwoWeek } from './FundamentalsPane.tsx'
+import { DerivativesPane } from './DerivativesPane.tsx'
 import { computeRangeStats } from './range-stats.ts'
 import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
@@ -23,7 +24,7 @@ import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indica
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
-import type { StockFundamentals } from './types.ts'
+import type { DerivativesData, StockFundamentals } from './types.ts'
 import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
@@ -33,6 +34,9 @@ import css from './quote-stage.module.css'
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
 const TICKER_POLL_MS = 5000
 const KLINE_RESYNC_MS = 30000
+// 衍生品指标快照轮询（issue #38）：一次刷新 = 2~5 个上游公共端点调用，取 30s
+// 对齐 K 线 resync 节奏，避免放大限频消耗（funding 8h 才变，OI 30s 粒度够看）。
+const DERIVATIVES_POLL_MS = 30000
 // 盘中周期 K 线根数按市场区分：crypto 取 300——OKX 单请求上限 300，图表每 30s
 // resync 一次，不触发游标翻页、不放大限频消耗；其余市场取 500。日 K 深度需求由
 // 1d 分支单独走 DAILY_LIMIT。
@@ -113,6 +117,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [stageTab, setStageTab] = useState<'chart' | 'fundamentals'>('chart')
   const [fundamentals, setFundamentals] = useState<StockFundamentals | null>(null)
   const [fundamentalsLoading, setFundamentalsLoading] = useState(false)
+  /** 衍生品指标快照（issue #38，crypto 专属；null = 未实现/失败 → 面板整体隐藏）。 */
+  const [derivatives, setDerivatives] = useState<DerivativesData | null>(null)
   /** 区间统计：框选模式开 + 已选逻辑下标区间（TvChart 上报，面板消费）。 */
   const [rangeMode, setRangeMode] = useState(false)
   const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
@@ -196,6 +202,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return () => { cancelled = true }
   }, [market, symbol])
 
+  // 衍生品指标轮询（issue #38，仅 crypto；现货输入由连接器升到对应永续）。
+  usePoll(async () => {
+    if (market !== 'crypto' || symbol === undefined) return
+    const data = await fetchDerivatives(market, symbol)
+    setDerivatives(data)
+  }, DERIVATIVES_POLL_MS, [market, symbol])
+
   // 换标的：立即清场
   useEffect(() => {
     setKlines(null)
@@ -204,6 +217,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setHoverIndex(null)
     setKError(null)
     setFundamentals(null)
+    setDerivatives(null)
   }, [market, symbol])
 
   // ticker 轮询：头部价格 + 尾随合并最后一根 K 线
@@ -505,85 +519,90 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
       {stageTab === 'chart' && kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
 
-      {/* 图表主舞台 / 基本面页签（互斥挂载） */}
+      {/* 图表主舞台 / 基本面页签（互斥挂载）；crypto 图表下方挂衍生品指标条（issue #38） */}
       {stageTab === 'chart' ? (
-        <div className={css.chartBox}>
-          {klines !== null && bars.length > 0 && (
-            <TvChart
-              bars={bars}
-              volumes={volumes}
-              dataKey={`${market}:${symbol}:${chartInterval}`}
-              intraday={INTRADAY_INTERVALS.has(chartInterval)}
-              colorMode={colorMode}
-              mainOverlays={mainOverlays}
-              subIndicators={subIndicators}
-              readoutIndex={readoutIndex}
-              onHoverIndex={setHoverIndex}
-              onCaptureReady={(capture) => { captureRef.current = capture }}
-              rangeSelectionMode={rangeMode}
-              selection={rangeSelection}
-              onRangeSelect={setRangeSelection}
-            />
+        <>
+          <div className={css.chartBox}>
+            {klines !== null && bars.length > 0 && (
+              <TvChart
+                bars={bars}
+                volumes={volumes}
+                dataKey={`${market}:${symbol}:${chartInterval}`}
+                intraday={INTRADAY_INTERVALS.has(chartInterval)}
+                colorMode={colorMode}
+                mainOverlays={mainOverlays}
+                subIndicators={subIndicators}
+                readoutIndex={readoutIndex}
+                onHoverIndex={setHoverIndex}
+                onCaptureReady={(capture) => { captureRef.current = capture }}
+                rangeSelectionMode={rangeMode}
+                selection={rangeSelection}
+                onRangeSelect={setRangeSelection}
+              />
+            )}
+            {rangeMode && rangeStats !== null && (
+              <div className={css.rangePanel} role="dialog" aria-label={t('quote.rangeStats')}>
+                <div className={css.rangePanelHead}>
+                  <span>{t('quote.rangeStats')}</span>
+                  <button
+                    type="button"
+                    className={css.rangePanelClose}
+                    aria-label={t('range.closePanel')}
+                    onClick={() => { setRangeSelection(null) }}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className={css.rangePanelSpan}>
+                  {fmtDay(rangeStats.startTime)} ~ {fmtDay(rangeStats.endTime)}
+                </div>
+                <div className={css.rangePanelRow}>
+                  <span>{t('range.change')}</span>
+                  <span style={{ color: directionColor(rangeStats.changePercent, colorMode) }}>
+                    {fmtPercent(rangeStats.changePercent)}
+                  </span>
+                </div>
+                <div className={css.rangePanelRow}>
+                  <span>{t('range.changeAbs')}</span>
+                  <span style={{ color: directionColor(rangeStats.change, colorMode) }}>
+                    {fmtChange(rangeStats.change)}
+                  </span>
+                </div>
+                <div className={css.rangePanelRow}>
+                  <span>{t('range.high')}</span>
+                  <span>{fmtPrice(rangeStats.rangeHigh)}</span>
+                </div>
+                <div className={css.rangePanelRow}>
+                  <span>{t('range.low')}</span>
+                  <span>{fmtPrice(rangeStats.rangeLow)}</span>
+                </div>
+                <div className={css.rangePanelRow}>
+                  <span>{t('range.amplitude')}</span>
+                  <span>{fmtPercent(rangeStats.amplitudePercent)}</span>
+                </div>
+                <div className={css.rangePanelRow}>
+                  <span>{t('range.volume')}</span>
+                  <span>{fmtCompact(rangeStats.volume)}</span>
+                </div>
+                <div className={css.rangePanelRow}>
+                  <span>{t('range.bars')}</span>
+                  <span>{rangeStats.bars}</span>
+                </div>
+                <div className={css.rangePanelRow}>
+                  <span>{t('range.upDays')}</span>
+                  <span>{rangeStats.upBars}</span>
+                </div>
+                <div className={css.rangePanelRow}>
+                  <span>{t('range.downDays')}</span>
+                  <span>{rangeStats.downBars}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          {market === 'crypto' && derivatives !== null && (
+            <DerivativesPane t={t} derivatives={derivatives} colorMode={colorMode} />
           )}
-          {rangeMode && rangeStats !== null && (
-            <div className={css.rangePanel} role="dialog" aria-label={t('quote.rangeStats')}>
-              <div className={css.rangePanelHead}>
-                <span>{t('quote.rangeStats')}</span>
-                <button
-                  type="button"
-                  className={css.rangePanelClose}
-                  aria-label={t('range.closePanel')}
-                  onClick={() => { setRangeSelection(null) }}
-                >
-                  ×
-                </button>
-              </div>
-              <div className={css.rangePanelSpan}>
-                {fmtDay(rangeStats.startTime)} ~ {fmtDay(rangeStats.endTime)}
-              </div>
-              <div className={css.rangePanelRow}>
-                <span>{t('range.change')}</span>
-                <span style={{ color: directionColor(rangeStats.changePercent, colorMode) }}>
-                  {fmtPercent(rangeStats.changePercent)}
-                </span>
-              </div>
-              <div className={css.rangePanelRow}>
-                <span>{t('range.changeAbs')}</span>
-                <span style={{ color: directionColor(rangeStats.change, colorMode) }}>
-                  {fmtChange(rangeStats.change)}
-                </span>
-              </div>
-              <div className={css.rangePanelRow}>
-                <span>{t('range.high')}</span>
-                <span>{fmtPrice(rangeStats.rangeHigh)}</span>
-              </div>
-              <div className={css.rangePanelRow}>
-                <span>{t('range.low')}</span>
-                <span>{fmtPrice(rangeStats.rangeLow)}</span>
-              </div>
-              <div className={css.rangePanelRow}>
-                <span>{t('range.amplitude')}</span>
-                <span>{fmtPercent(rangeStats.amplitudePercent)}</span>
-              </div>
-              <div className={css.rangePanelRow}>
-                <span>{t('range.volume')}</span>
-                <span>{fmtCompact(rangeStats.volume)}</span>
-              </div>
-              <div className={css.rangePanelRow}>
-                <span>{t('range.bars')}</span>
-                <span>{rangeStats.bars}</span>
-              </div>
-              <div className={css.rangePanelRow}>
-                <span>{t('range.upDays')}</span>
-                <span>{rangeStats.upBars}</span>
-              </div>
-              <div className={css.rangePanelRow}>
-                <span>{t('range.downDays')}</span>
-                <span>{rangeStats.downBars}</span>
-              </div>
-            </div>
-          )}
-        </div>
+        </>
       ) : (
         <FundamentalsPane
           t={t}

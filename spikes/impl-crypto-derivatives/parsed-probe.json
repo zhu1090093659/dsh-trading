@@ -1,0 +1,86 @@
+{
+  "okx": {
+    "open-interest": {
+      "ok": true,
+      "parsed": {
+        "instId": "BTC-USDT-SWAP",
+        "oi": 2865754.4600000093,
+        "oiCcy": 28657.544600000096,
+        "oiUsd": 2222538737.2074676,
+        "ts": 1788330011248
+      }
+    },
+    "funding-rate": {
+      "ok": true,
+      "parsed": {
+        "instId": "BTC-USDT-SWAP",
+        "fundingRate": 0.000078162813346,
+        "fundingTime": 1788336000000,
+        "nextFundingRate": 0,
+        "nextFundingTime": 1788364800000
+      }
+    },
+    "long-short-account-ratio": {
+      "ok": true,
+      "parsed": {
+        "ccy": "BTC",
+        "ratio": 1.31,
+        "ts": 1788328800000
+      }
+    },
+    "taker-volume": {
+      "ok": true,
+      "parsed": {
+        "ccy": "BTC",
+        "buyVol": 10930214.225,
+        "sellVol": 5646388.163
+      }
+    }
+  },
+  "binance": {
+    "open-interest": {
+      "ok": true,
+      "parsed": {
+        "openInterest": 108828.181,
+        "time": 1788330004704
+      }
+    },
+    "funding-rate": {
+      "ok": true,
+      "parsed": {
+        "fundingRate": 0.00007995,
+        "fundingTime": 1788307200000
+      }
+    },
+    "global-ls-ratio": {
+      "ok": true,
+      "parsed": 1.2553
+    },
+    "top-ls-ratio": {
+      "ok": true,
+      "parsed": 2.0091
+    },
+    "taker-ratio": {
+      "ok": true,
+      "parsed": 0.7986
+    }
+  },
+  "bybit": {
+    "linear-tickers": {
+      "ok": true,
+      "parsed": {
+        "symbol": "BTCUSDT",
+        "fundingRate": 0.0000938,
+        "openInterest": 54988.466,
+        "openInterestValue": 4265257349.14
+      }
+    },
+    "account-ratio": {
+      "ok": true,
+      "parsed": {
+        "buyRatio": 0.5509,
+        "sellRatio": 0.4491
+      }
+    }
+  }
+}

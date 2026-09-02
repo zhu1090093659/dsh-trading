@@ -36,11 +36,14 @@ export class TradingServiceError extends Error {
 /* ------------------------------------------------------------------ */
 
 const DEFAULT_BASE_URL = 'https://api.binance.com'
+const DEFAULT_FAPI_BASE_URL = 'https://fapi.binance.com'
 const DEFAULT_TIMEOUT_MS = 10_000
 
 export interface BinanceRestOptions {
   /** 覆盖 API base（测试/反代用），末尾不带斜杠。 */
   readonly baseUrl?: string
+  /** 覆盖 USDT-M 合约（fapi）base（测试/反代用），末尾不带斜杠。 */
+  readonly fapiBaseUrl?: string
   /** 单请求超时（ms），默认 10s。 */
   readonly timeoutMs?: number
   /** 注入 fetch 实现；缺省用全局 fetch（Node 22+ 内置）。 */
@@ -82,6 +85,15 @@ function requireSymbol(symbol: string): string {
     )
   }
   return symbol.trim().toUpperCase()
+}
+
+/**
+ * 衍生品输入归一（issue #38，与 kit-crypto/derivatives 同词汇）：规范现货、规范 SWAP、
+ * OKX 原生 SWAP 形一律归一到 fapi 词汇——BTCUSDT / BTCUSDT-SWAP / BTC-USDT-SWAP → BTCUSDT。
+ */
+export function normalizeBinanceFuturesSymbol(raw: string): string {
+  const clean = requireSymbol(raw).replace(/[-_]/g, '')
+  return clean.endsWith('SWAP') ? clean.slice(0, -4) : clean
 }
 
 /** Binance 返回数值均为字符串，宽松转 number（非有限值返回 undefined）。 */
@@ -157,19 +169,21 @@ function parseKlineRow(row: unknown, symbol: string): Kline {
 
 export class BinanceRestClient {
   readonly #baseUrl: string
+  readonly #fapiBaseUrl: string
   readonly #timeoutMs: number
   readonly #fetchImpl: typeof fetch
 
   constructor(options: BinanceRestOptions = {}) {
     this.#baseUrl = options.baseUrl ?? DEFAULT_BASE_URL
+    this.#fapiBaseUrl = options.fapiBaseUrl ?? DEFAULT_FAPI_BASE_URL
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     // 缺省经 globalThis 取 fetch：调用时解析，便于 vi.stubGlobal 等全局替换也生效。
     this.#fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
   }
 
-  async #request(path: string, params: Record<string, string>): Promise<unknown> {
+  async #request(path: string, params: Record<string, string>, base: string = this.#baseUrl): Promise<unknown> {
     const query = new URLSearchParams(params).toString()
-    const target = query ? `${this.#baseUrl}${path}?${query}` : `${this.#baseUrl}${path}`
+    const target = query ? `${base}${path}?${query}` : `${base}${path}`
     const controller = new AbortController()
     const timer = setTimeout(
       () => controller.abort(new DOMException(`request timed out after ${this.#timeoutMs}ms`, 'TimeoutError')),
@@ -262,5 +276,55 @@ export class BinanceRestClient {
       }
     }
     return result
+  }
+
+  /* -- USDT-M 合约公共端点（fapi，无凭证；issue #38 衍生品面板底料）---------- */
+
+  /** 未平仓合约量：GET /fapi/v1/openInterest（openInterest 以 base 币计，time=快照 ms）。 */
+  async getFuturesOpenInterest(symbol: string): Promise<{ openInterest: number; time: number }> {
+    const sym = normalizeBinanceFuturesSymbol(symbol)
+    const body = await this.#request('/fapi/v1/openInterest', { symbol: sym }, this.#fapiBaseUrl) as Record<string, unknown>
+    const openInterest = num(body.openInterest)
+    if (openInterest === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance futures openInterest for ${sym}: missing/invalid openInterest`)
+    }
+    return { openInterest, time: num(body.time) ?? Date.now() }
+  }
+
+  /** 最新资金费率：GET /fapi/v1/fundingRate?limit=1（[{ fundingRate, fundingTime }]，费率为小数）。 */
+  async getFuturesFundingRate(symbol: string): Promise<{ fundingRate: number; fundingTime: number }> {
+    const sym = normalizeBinanceFuturesSymbol(symbol)
+    const body = await this.#request('/fapi/v1/fundingRate', { symbol: sym, limit: '1' }, this.#fapiBaseUrl)
+    const row = (Array.isArray(body) ? body[0] : undefined) as Record<string, unknown> | undefined
+    const fundingRate = num(row?.fundingRate)
+    if (fundingRate === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance futures fundingRate for ${sym}: missing/invalid fundingRate`)
+    }
+    return { fundingRate, fundingTime: num(row?.fundingTime) ?? Date.now() }
+  }
+
+  /** 多空持仓人数比族：GET /futures/data/{globalLongShortAccountRatio|topLongShortPositionRatio}（period=1h，limit=1）。 */
+  async getFuturesLongShortRatio(kind: 'global' | 'top', symbol: string): Promise<number> {
+    const sym = normalizeBinanceFuturesSymbol(symbol)
+    const path = kind === 'global' ? '/futures/data/globalLongShortAccountRatio' : '/futures/data/topLongShortPositionRatio'
+    const body = await this.#request(path, { symbol: sym, period: '1h', limit: '1' }, this.#fapiBaseUrl)
+    const row = (Array.isArray(body) ? body[0] : undefined) as Record<string, unknown> | undefined
+    const ratio = num(row?.longShortRatio)
+    if (ratio === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance futures ${kind} long/short ratio for ${sym}: missing/invalid longShortRatio`)
+    }
+    return ratio
+  }
+
+  /** 主动买卖量比：GET /futures/data/takerlongshortRatio（period=1h，limit=1，buySellRatio=买/卖）。 */
+  async getFuturesTakerRatio(symbol: string): Promise<number> {
+    const sym = normalizeBinanceFuturesSymbol(symbol)
+    const body = await this.#request('/futures/data/takerlongshortRatio', { symbol: sym, period: '1h', limit: '1' }, this.#fapiBaseUrl)
+    const row = (Array.isArray(body) ? body[0] : undefined) as Record<string, unknown> | undefined
+    const ratio = num(row?.buySellRatio)
+    if (ratio === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance futures taker ratio for ${sym}: missing/invalid buySellRatio`)
+    }
+    return ratio
   }
 }

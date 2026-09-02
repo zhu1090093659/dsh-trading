@@ -3,7 +3,17 @@
  * envelope 错误码映射（调研 §5 表）、对时偏移缓存。
  */
 import { describe, expect, it } from 'vitest'
+import type { Context } from '@deepseek-ai/cordis'
 import { OkxRestClient, TradingServiceError, toBar } from '../src/rest.js'
+import { OkxMarketDataService } from '../src/index.js'
+
+/** Service 构造所需的最小假 ctx（dataplane.test 同款形状）。 */
+function makeServiceCtx(): Context {
+  return {
+    get: () => undefined,
+    reflect: { provide: () => {} },
+  } as unknown as Context
+}
 
 interface RecordedRequest {
   readonly url: string
@@ -250,5 +260,74 @@ describe('listInstruments', () => {
       { symbol: 'BTCUSDT', name: 'BTC/USDT' },
       { symbol: 'ETHUSDT', name: 'ETH/USDT' },
     ])
+  })
+})
+
+/* -- 衍生品端点（issue #38：open-interest + rubik 多空比/主动买卖量）--------- */
+
+/** 按路径分发的衍生品端点底料（可逐路径覆写失败形态）；rubik 端点是时间序列行（实证）。 */
+function derivativesRoutes(overrides: Record<string, { status?: number; body?: unknown }> = {}) {
+  const base: Record<string, { status?: number; body?: unknown }> = {
+    '/api/v5/public/funding-rate': { body: { code: '0', data: [{ instId: 'BTC-USDT-SWAP', fundingRate: '0.0001', fundingTime: '1700000000000' }] } },
+    '/api/v5/public/open-interest': { body: { code: '0', data: [{ instId: 'BTC-USDT-SWAP', oi: '80000', oiCcy: '800.5', oiUsd: '33621000', ts: '1700000001000' }] } },
+    '/api/v5/rubik/stat/contracts/long-short-account-ratio': { body: { code: '0', data: [['1700000002000', '1.24'], ['1699998400000', '1.22']] } },
+    '/api/v5/rubik/stat/taker-volume': { body: { code: '0', data: [['1700000003000', '2.5', '2.0'], ['1699999999000', '1.9', '2.1']] } },
+  }
+  return { ...base, ...overrides }
+}
+
+function routeByPath(routes: Record<string, { status?: number; body?: unknown }>) {
+  return routeMock((req) => {
+    const path = new URL(req.url).pathname
+    const route = routes[path]
+    if (route === undefined) throw new Error(`unexpected request: ${req.url}`)
+    return okResponse(route.body, route.status ?? 200)
+  })
+}
+
+function derivativesService(fetchImpl: typeof fetch): OkxMarketDataService {
+  const rest = new OkxRestClient({ baseUrl: 'https://okx.test', fetchImpl, clockSync: false, clockOffsetMs: 0 })
+  return new OkxMarketDataService(makeServiceCtx(), {}, rest, 'test-key')
+}
+
+describe('getDerivatives（issue #38 服务级聚合）', () => {
+  it('现货输入升到 SWAP：聚合四端点，输出规范 SWAP 形 + 币数持仓', async () => {
+    const { fetchImpl, requests } = routeByPath(derivativesRoutes())
+    const data = await derivativesService(fetchImpl).getDerivatives('BTCUSDT')
+    expect(data).toMatchObject({
+      symbol: 'BTCUSDT-SWAP',
+      source: 'okx',
+      openInterest: 800.5,
+      openInterestValue: 33621000,
+      longShortRatio: 1.24,
+      takerBuySellRatio: 1.25,
+      fundingRate: 0.0001,
+      timestamp: 1700000001000,
+    })
+    const oiUrl = requests.find(r => r.url.includes('/open-interest'))?.url ?? ''
+    expect(oiUrl).toContain('instId=BTC-USDT-SWAP')
+    expect(oiUrl).toContain('instType=SWAP')
+  })
+
+  it('单端点失败 → 该字段降级 undefined，其余字段保留', async () => {
+    const { fetchImpl } = routeByPath(derivativesRoutes({
+      '/api/v5/public/open-interest': { status: 500, body: { code: '50001', msg: 'server busy', data: [] } },
+    }))
+    const data = await derivativesService(fetchImpl).getDerivatives('BTC-USDT-SWAP')
+    expect(data.openInterest).toBeUndefined()
+    expect(data.openInterestValue).toBeUndefined()
+    expect(data.fundingRate).toBe(0.0001)
+    expect(data.longShortRatio).toBe(1.24)
+  })
+
+  it('全部端点失败 → 结构化错误（桥层转 ok:false）', async () => {
+    const { fetchImpl } = routeByPath(derivativesRoutes({
+      '/api/v5/public/funding-rate': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+      '/api/v5/public/open-interest': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+      '/api/v5/rubik/stat/contracts/long-short-account-ratio': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+      '/api/v5/rubik/stat/taker-volume': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+    }))
+    await expect(derivativesService(fetchImpl).getDerivatives('BTCUSDT'))
+      .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
   })
 })

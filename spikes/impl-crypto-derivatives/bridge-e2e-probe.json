@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-09-02T06:27:37.555Z",
+  "binance": {
+    "label": "binance BTCUSDT",
+    "status": 200,
+    "payload": {
+      "ok": true,
+      "derivatives": {
+        "symbol": "BTCUSDT-SWAP",
+        "source": "binance",
+        "openInterest": 108817.85,
+        "longShortRatio": 1.2553,
+        "topTraderLongShortRatio": 2.0091,
+        "takerBuySellRatio": 0.7986,
+        "fundingRate": 0.00007995,
+        "timestamp": 1788330456657
+      }
+    }
+  },
+  "okx": {
+    "label": "okx BTCUSDT",
+    "status": 200,
+    "payload": {
+      "ok": true,
+      "derivatives": {
+        "symbol": "BTCUSDT-SWAP",
+        "source": "okx",
+        "openInterest": 28661.177900000097,
+        "openInterestValue": 2224104538.9222174,
+        "longShortRatio": 1.3,
+        "takerBuySellRatio": 1.1966425021343452,
+        "fundingRate": 0.0000773688291923,
+        "timestamp": 1788330458496
+      }
+    }
+  },
+  "bybit": {
+    "label": "bybit BTCUSDT",
+    "status": 200,
+    "payload": {
+      "ok": true,
+      "derivatives": {
+        "symbol": "BTCUSDT-SWAP",
+        "source": "bybit",
+        "openInterest": 55005.505,
+        "openInterestValue": 4270267122.14,
+        "longShortRatio": 1.22667557336896,
+        "fundingRate": 0.0000938,
+        "timestamp": 1788330458918
+      }
+    }
+  }
+}

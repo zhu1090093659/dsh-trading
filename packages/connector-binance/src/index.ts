@@ -17,8 +17,8 @@ import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
-import type { Disposable, Interval, Kline, MarketDataService, Ticker } from '@dsh-trading/api'
-import { BinanceRestClient, INTERVAL_VOCABULARY, TradingServiceError } from './rest.js'
+import type { DerivativesData, Disposable, Interval, Kline, MarketDataService, Ticker } from '@dsh-trading/api'
+import { BinanceRestClient, INTERVAL_VOCABULARY, TradingServiceError, normalizeBinanceFuturesSymbol } from './rest.js'
 import type { BinanceRestOptions } from './rest.js'
 
 interface ToolsServiceLike {
@@ -117,6 +117,55 @@ export class BinanceMarketDataService extends Service implements MarketDataServi
     tick()
     const timer = setInterval(tick, ms)
     return { dispose: () => clearInterval(timer) }
+  }
+
+  /**
+   * 衍生品指标快照（api 可选契约 getDerivatives，issue #38）：聚合 Binance USDT-M
+   * 合约公共端点（fapi openInterest / fundingRate / futures/data 多空比族）。
+   * 任一子查询失败只降级该字段（undefined，面板按缺格隐藏）；全部失败才抛
+   * 结构化错误（桥层转 ok:false，前端不弹横幅）。输出 symbol 为规范 SWAP 形。
+   */
+  async getDerivatives(symbol: string): Promise<DerivativesData> {
+    const futuresSymbol = normalizeBinanceFuturesSymbol(symbol)
+    const unavailable: string[] = []
+    const collect = <T>(label: string, task: Promise<T>): Promise<T | undefined> =>
+      task.catch((error) => {
+        unavailable.push(`${label}: ${error instanceof Error ? error.message : String(error)}`)
+        return undefined
+      })
+
+    const [interest, funding, globalRatio, topRatio, takerRatio] = await Promise.all([
+      collect('open-interest', this.client.getFuturesOpenInterest(futuresSymbol)),
+      collect('funding', this.client.getFuturesFundingRate(futuresSymbol)),
+      collect('global-ls', this.client.getFuturesLongShortRatio('global', futuresSymbol)),
+      collect('top-ls', this.client.getFuturesLongShortRatio('top', futuresSymbol)),
+      collect('taker', this.client.getFuturesTakerRatio(futuresSymbol)),
+    ])
+
+    const openInterest = interest?.openInterest
+    const fundingRate = funding?.fundingRate
+    const longShortRatio = globalRatio
+    const topTraderLongShortRatio = topRatio
+    const takerBuySellRatio = takerRatio
+
+    if (openInterest === undefined && fundingRate === undefined && longShortRatio === undefined
+      && topTraderLongShortRatio === undefined && takerBuySellRatio === undefined) {
+      throw new TradingServiceError(
+        'TRADING_EXCHANGE_ERROR',
+        `Binance derivatives for ${futuresSymbol}: all sub-queries failed`
+          + (unavailable.length > 0 ? ` (${unavailable.join('; ')})` : ''),
+      )
+    }
+    return {
+      symbol: `${futuresSymbol}-SWAP`,
+      source: 'binance',
+      ...(openInterest !== undefined ? { openInterest } : {}),
+      ...(longShortRatio !== undefined ? { longShortRatio } : {}),
+      ...(topTraderLongShortRatio !== undefined ? { topTraderLongShortRatio } : {}),
+      ...(takerBuySellRatio !== undefined ? { takerBuySellRatio } : {}),
+      ...(fundingRate !== undefined ? { fundingRate } : {}),
+      timestamp: interest?.time ?? funding?.fundingTime ?? Date.now(),
+    }
   }
 }
 

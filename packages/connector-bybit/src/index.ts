@@ -9,6 +9,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import type {
   AccountBalance,
+  DerivativesData,
   Disposable,
   Interval,
   Kline,
@@ -24,6 +25,7 @@ import {
   type BybitRestOptions,
   INTERVAL_VOCABULARY,
   TradingServiceError,
+  normalizeCryptoSymbol,
 } from './rest.js'
 
 export * from './rest.js'
@@ -79,6 +81,50 @@ export class BybitMarketDataService extends Service implements MarketDataService
     tick()
     const timer = setInterval(tick, ms)
     return { dispose: () => clearInterval(timer) }
+  }
+
+  /**
+   * 衍生品指标快照（api 可选契约 getDerivatives，issue #38）：聚合 Bybit v5 线性合约
+   * 公共端点（tickers?category=linear 的 fundingRate/OI + account-ratio 多空比）。
+   * 任一子查询失败只降级该字段（undefined，面板按缺格隐藏）；全部失败才抛结构化错误
+   * （桥层转 ok:false，前端不弹横幅）。输出 symbol 为规范 SWAP 形（BTCUSDT-SWAP）。
+   */
+  async getDerivatives(symbol: string): Promise<DerivativesData> {
+    const sym = normalizeCryptoSymbol(symbol)
+    const unavailable: string[] = []
+    const collect = <T>(label: string, task: Promise<T>): Promise<T | undefined> =>
+      task.catch((error) => {
+        unavailable.push(`${label}: ${error instanceof Error ? error.message : String(error)}`)
+        return undefined
+      })
+
+    const [ticker, ratio] = await Promise.all([
+      collect('linear-tickers', this.client.getLinearTickerSnapshot(sym)),
+      collect('account-ratio', this.client.getLinearAccountRatio(sym)),
+    ])
+
+    const fundingRate = ticker?.fundingRate
+    const openInterest = ticker?.openInterest
+    const openInterestValue = ticker?.openInterestValue
+    const longShortRatio = ratio !== undefined && ratio.sellRatio > 0 ? ratio.buyRatio / ratio.sellRatio : undefined
+
+    if (fundingRate === undefined && openInterest === undefined && openInterestValue === undefined
+      && longShortRatio === undefined) {
+      throw new TradingServiceError(
+        'TRADING_EXCHANGE_ERROR',
+        `Bybit derivatives for ${sym}: all sub-queries failed`
+          + (unavailable.length > 0 ? ` (${unavailable.join('; ')})` : ''),
+      )
+    }
+    return {
+      symbol: `${sym}-SWAP`,
+      source: 'bybit',
+      ...(openInterest !== undefined ? { openInterest } : {}),
+      ...(openInterestValue !== undefined ? { openInterestValue } : {}),
+      ...(longShortRatio !== undefined ? { longShortRatio } : {}),
+      ...(fundingRate !== undefined ? { fundingRate } : {}),
+      timestamp: Date.now(),
+    }
   }
 }
 

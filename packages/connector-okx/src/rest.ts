@@ -281,6 +281,18 @@ export interface OkxFundingRate {
   readonly nextFundingTime?: number
 }
 
+/** OKX 未平仓合约量快照（GET /api/v5/public/open-interest，SWAP 专用）。 */
+export interface OkxOpenInterest {
+  readonly instId: string
+  /** 持仓量（张）。 */
+  readonly oi: number
+  /** 持仓量（base 币数；= 张数 × ctVal，OKX 直接回填）。 */
+  readonly oiCcy?: number
+  /** 持仓量价值（USD 计价）。 */
+  readonly oiUsd?: number
+  readonly ts: number
+}
+
 /** OKX 合约/币对规格（GET /api/v5/public/instruments；sz 单位纪律的依据，调研 §4）。 */
 export interface OkxInstrument {
   readonly instId: string
@@ -594,6 +606,73 @@ export class OkxRestClient {
     }
   }
 
+  /** 未平仓合约量：GET /api/v5/public/open-interest（仅 SWAP；oi=张、oiCcy=币、oiUsd=USD）。 */
+  async getOpenInterest(instId: string): Promise<OkxOpenInterest> {
+    const id = normalizeOkxSymbol(instId)
+    if (!id.endsWith('-SWAP')) {
+      throw new TradingServiceError(
+        'TRADING_UNSUPPORTED_SYMBOL',
+        `OKX open interest requires a perpetual swap instId (e.g. BTC-USDT-SWAP), got ${id}`,
+      )
+    }
+    const rows = await this.request('/api/v5/public/open-interest', { query: { instType: 'SWAP', instId: id } })
+    const d = rows[0] as Record<string, unknown> | undefined
+    const oi = num(d?.oi)
+    if (oi === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX open interest for ${id}: missing/invalid oi`)
+    }
+    const oiCcy = num(d?.oiCcy)
+    const oiUsd = num(d?.oiUsd)
+    const ts = num(d?.ts) ?? Date.now()
+    return {
+      instId: str(d?.instId) ?? id,
+      oi,
+      ...(oiCcy !== undefined ? { oiCcy } : {}),
+      ...(oiUsd !== undefined ? { oiUsd } : {}),
+      ts,
+    }
+  }
+
+  /**
+   * 多空账户人数比：GET /api/v5/rubik/stat/contracts/long-short-account-ratio（ccy=base 资产，period=1H）。
+   * 响应是时间序列行 `[ts, ratio]`（字符串数值，新→旧；2026-09-02 真实网络实证，
+   * spikes/impl-crypto-derivatives），取最新一行。
+   */
+  async getLongShortAccountRatio(ccy: string): Promise<{ ccy: string; ratio: number; ts?: number }> {
+    const rows = await this.request('/api/v5/rubik/stat/contracts/long-short-account-ratio', {
+      query: { ccy, period: '1H' },
+    })
+    const row = rows[0] as unknown[] | undefined
+    const ratio = Array.isArray(row) ? num(row[1]) : undefined
+    if (ratio === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX long/short account ratio for ${ccy}: missing/invalid ratio`)
+    }
+    const ts = Array.isArray(row) ? num(row[0]) : undefined
+    return {
+      ccy,
+      ratio,
+      ...(ts !== undefined ? { ts } : {}),
+    }
+  }
+
+  /**
+   * 合约主动买卖量：GET /api/v5/rubik/stat/taker-volume（ccy=base 资产，instType=CONTRACTS）。
+   * 响应是时间序列行 `[ts, buyVol, sellVol]`（字符串数值，新→旧；2026-09-02 真实网络
+   * 实证，spikes/impl-crypto-derivatives），取最新一行。
+   */
+  async getContractTakerVolume(ccy: string): Promise<{ ccy: string; buyVol: number; sellVol: number }> {
+    const rows = await this.request('/api/v5/rubik/stat/taker-volume', {
+      query: { ccy, instType: 'CONTRACTS' },
+    })
+    const row = rows[0] as unknown[] | undefined
+    const buyVol = Array.isArray(row) ? num(row[1]) : undefined
+    const sellVol = Array.isArray(row) ? num(row[2]) : undefined
+    if (buyVol === undefined || sellVol === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX taker volume for ${ccy}: missing/invalid buyVol/sellVol`)
+    }
+    return { ccy, buyVol, sellVol }
+  }
+
   /** 合约/币对规格：GET /api/v5/public/instruments（sz 纪律的 ctVal/lotSz/minSz 来源）。 */
   async getInstruments(instType: 'SPOT' | 'SWAP', instId?: string): Promise<OkxInstrument[]> {
     const rows = await this.request('/api/v5/public/instruments', {
@@ -748,4 +827,14 @@ export function toCanonicalOkxSymbol(symbol: string): string {
   const parts = id.split('-')
   if (parts[parts.length - 1] === 'SWAP') return parts.slice(0, -1).join('') + '-SWAP'
   return parts.join('')
+}
+
+/**
+ * 衍生品端点输入归一：现货与合约输入一律升到永续 SWAP instId——
+ * BTCUSDT / BTC-USDT / BTCUSDT-SWAP / BTC-USDT-SWAP → BTC-USDT-SWAP。
+ * （GUI 选中的现货标的也要能看到对应合约的衍生品指标，issue #38。）
+ */
+export function toOkxSwapInstId(input: string): string {
+  const id = normalizeOkxSymbol(input)
+  return id.endsWith('-SWAP') ? id : `${id}-SWAP`
 }
