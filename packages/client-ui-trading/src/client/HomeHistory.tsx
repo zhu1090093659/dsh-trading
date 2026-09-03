@@ -18,11 +18,12 @@
  * 历史区自身可折叠，展开态持久化 localStorage；列表默认只展示最新 3 条，
  * 其余折叠进「展开其余」页脚（展开态不持久化，回首页即复位）。
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import { readJson, writeJson } from './store.ts'
+import { IconArchive, IconFork, IconMore, IconRename } from './icons.tsx'
 import css from './home-history.module.css'
 
 const OPEN_KEY = 'dshtrading.home.history.open.v1'
@@ -36,6 +37,12 @@ export interface HomeHistoryInjected {
   openSession(sessionId: string): void
   /** 新会话（宿主 startSession：无参取当前/最近工作区）；无当前会话时的兜底恢复也走它。 */
   startNewSession(): void
+  /** 重命名（官方 session binding 显式标题通路，钉住自动生成）；失败 reject 由调用方呈报。 */
+  renameSession(sessionId: string, title: string): Promise<void>
+  /** 分叉并打开新会话（官方 increaseTitle 语义）；失败内吞 console.warn。 */
+  forkSession(sessionId: string): void
+  /** 归档会话（官方 uiWorkspace 通路，从工作区分组面隐藏）；失败内吞 console.warn。 */
+  archiveSession(sessionId: string): void
 }
 
 export type HomeHistoryProps =
@@ -66,12 +73,68 @@ function mostRecentlyActive(rows: WorkspaceRow[], byId: SessionListState['byId']
   return picked
 }
 
-export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startNewSession }: HomeHistoryProps) {
+/** 行操作菜单的估算外框（开合时钳位防出屏，非实测驱动布局）。 */
+const MENU_WIDTH = 152
+const MENU_HEIGHT = 118
+
+interface MenuState {
+  sessionId: string
+  title: string
+  x: number
+  y: number
+}
+
+interface RenameState {
+  sessionId: string
+  value: string
+}
+
+export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startNewSession, renameSession, forkSession, archiveSession }: HomeHistoryProps) {
   const sessions = useSessions((value: SessionListState) => value)
   const workspaces = useWorkspaces(value => value)
   const [open, setOpen] = useState(() => readJson<boolean>(OPEN_KEY, true))
   const [expanded, setExpanded] = useState(false)
   const [host, setHost] = useState<HTMLElement | null>(null)
+  const [menu, setMenu] = useState<MenuState | null>(null)
+  const [renaming, setRenaming] = useState<RenameState | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  // 行操作菜单：右键/行尾 ⋯ 触发，fixed 定位（面板 overflow:hidden，菜单
+  // 必须脱离文档流）。外点 / Esc / 任意滚动关闭（列表滚动后菜单不再对位）。
+  const openMenuAt = (sessionId: string, title: string, x: number, y: number): void => {
+    const cx = Math.max(8, Math.min(x, window.innerWidth - MENU_WIDTH - 8))
+    const cy = Math.max(8, Math.min(y, window.innerHeight - MENU_HEIGHT - 8))
+    setMenu({ sessionId, title, x: cx, y: cy })
+  }
+
+  useEffect(() => {
+    if (menu === null) return
+    const onPointerDown = (e: PointerEvent): void => {
+      if (menuRef.current !== null && e.target instanceof Node && menuRef.current.contains(e.target)) return
+      setMenu(null)
+    }
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMenu(null)
+    }
+    const onScroll = (): void => { setMenu(null) }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('keydown', onKeyDown)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [menu])
+
+  const commitRename = (): void => {
+    if (renaming === null) return
+    const next = renaming.value.trim()
+    const target = renaming.sessionId
+    setRenaming(null)
+    if (next === '' || next === sessions.byId[target]?.displayTitle) return
+    renameSession(target, next).catch((e: unknown) => { console.warn('[dsh-trading] session rename rejected:', e) })
+  }
 
   const blank = sessions.current !== undefined && sessions.byId[sessions.current]?.blank === true
 
@@ -233,9 +296,12 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
     ?? mostRecentlyActive(workspaceRows, sessions.byId)
     ?? workspaceRows[0]?.workspaceId
   const scopeTitle = workspaceRows.find(row => row.workspaceId === scopeWorkspace)?.title
+  // 归档集合来自宿主 workspace 快照（「归档会话」写的就是它）——不归并进来，
+  // 归档行会在列表里留尸。
+  const archivedIds = new Set<string>(workspaces.archivedSessionIds ?? [])
   const historyRows = (workspaceRows.find(row => row.workspaceId === scopeWorkspace)?.sessionIds ?? [])
     .map(id => sessions.byId[id])
-    .filter(row => row !== undefined && !row.blank && row.origin !== 'subagent')
+    .filter(row => row !== undefined && !row.blank && row.origin !== 'subagent' && !archivedIds.has(row.id))
     .sort((left, right) => right.updatedAt - left.updatedAt)
   const visibleRows = expanded ? historyRows : historyRows.slice(0, VISIBLE_ROWS)
   const hiddenCount = historyRows.length - visibleRows.length
@@ -266,19 +332,63 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
             <div id="dshtrading-home-history" className={css.list}>
               {historyRows.length === 0
                 ? <div className={css.empty}>{t('browser.historyEmpty')}</div>
-                : visibleRows.map(row => (
-                  <button
+                : visibleRows.map((row) => {
+                  const renameState = renaming !== null && renaming.sessionId === row.id ? renaming : null
+                  return (
+                  <div
                     key={row.id}
-                    type="button"
                     className={css.row}
                     data-current={row.id === sessions.current ? 'true' : undefined}
-                    title={row.displayTitle}
-                    onClick={() => { openSession(row.id) }}
+                    onContextMenu={renameState !== null ? undefined : (e) => {
+                      e.preventDefault()
+                      openMenuAt(row.id, row.displayTitle, e.clientX, e.clientY)
+                    }}
                   >
-                    <span className={css.dot} data-running={row.running ? 'true' : undefined} />
-                    <span className={css.title}>{row.displayTitle}</span>
-                  </button>
-                ))}
+                    {renameState !== null ? (
+                      <>
+                        <span className={css.dot} data-running={row.running ? 'true' : undefined} />
+                        <input
+                          className={css.renameInput}
+                          value={renameState.value}
+                          aria-label={t('browser.menu.rename')}
+                          autoFocus={true}
+                          onFocus={(e) => { e.target.select() }}
+                          onChange={(e) => { setRenaming({ sessionId: row.id, value: e.target.value }) }}
+                          onKeyDown={(e) => {
+                            if (e.nativeEvent.isComposing) return
+                            if (e.key === 'Enter') { e.preventDefault(); commitRename() }
+                            if (e.key === 'Escape') { e.preventDefault(); setRenaming(null) }
+                          }}
+                          onBlur={commitRename}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className={css.rowMain}
+                          title={row.displayTitle}
+                          onClick={() => { openSession(row.id) }}
+                        >
+                          <span className={css.dot} data-running={row.running ? 'true' : undefined} />
+                          <span className={css.title}>{row.displayTitle}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={css.rowMore}
+                          aria-label={t('browser.menu.aria')}
+                          onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            openMenuAt(row.id, row.displayTitle, rect.right - MENU_WIDTH, rect.bottom + 4)
+                          }}
+                        >
+                          <IconMore size={13} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  )
+                })}
             </div>
           )}
           {open && historyRows.length > VISIBLE_ROWS && (
@@ -295,6 +405,46 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
                 ? t('browser.showLess')
                 : t('browser.showMore').replace('{n}', String(historyRows.length - VISIBLE_ROWS))}
             </button>
+          )}
+          {menu !== null && (
+            <div ref={menuRef} className={css.menu} role="menu" style={{ left: menu.x, top: menu.y }}>
+              <button
+                type="button"
+                role="menuitem"
+                className={css.menuItem}
+                onClick={() => {
+                  setMenu(null)
+                  setRenaming({ sessionId: menu.sessionId, value: menu.title })
+                }}
+              >
+                <IconRename size={13} />
+                {t('browser.menu.rename')}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={css.menuItem}
+                onClick={() => {
+                  forkSession(menu.sessionId)
+                  setMenu(null)
+                }}
+              >
+                <IconFork size={13} />
+                {t('browser.menu.fork')}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={css.menuItem}
+                onClick={() => {
+                  archiveSession(menu.sessionId)
+                  setMenu(null)
+                }}
+              >
+                <IconArchive size={13} />
+                {t('browser.menu.archive')}
+              </button>
+            </div>
           )}
         </div>,
         host,

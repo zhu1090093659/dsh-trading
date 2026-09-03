@@ -82,14 +82,10 @@
 }
 
 .row {
-  appearance: none;
-  border: none;
-  background: transparent;
   color: inherit;
   text-align: left;
   padding: 5px 8px;
   border-radius: 6px;
-  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -103,6 +99,112 @@
 .row[data-current='true'] {
   background: var(--dsw-alias-fill-active, rgba(74, 144, 226, 0.12));
   font-weight: 600;
+}
+
+/* 行主点击区（打开会话）：占满标题轨道，按钮默认样式全部剥掉。 */
+.rowMain {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-align: left;
+}
+
+/* 行尾 ⋯：悬停/聚焦行时才显形，平时不占视觉。 */
+.rowMore {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+}
+
+.row:hover .rowMore,
+.row:focus-within .rowMore {
+  opacity: 0.55;
+}
+
+.rowMore:hover {
+  opacity: 1;
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.12));
+}
+
+/* 行内重命名输入框：顶替标题位，样式贴近行文本。 */
+.renameInput {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: inherit;
+  background: var(--dsw-futu-bg-surface, transparent);
+  border: 1px solid var(--dsw-alias-border-l2, rgba(127, 127, 127, 0.4));
+  border-radius: 4px;
+  padding: 1px 5px;
+  outline: none;
+}
+
+.renameInput:focus {
+  border-color: var(--dsw-alias-fill-active, rgba(74, 144, 226, 0.6));
+}
+
+/* 行操作菜单：fixed 定位脱离面板 overflow:hidden；外点/Esc/滚动关闭逻辑在组件内。 */
+.menu {
+  position: fixed;
+  z-index: 200;
+  width: 152px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--dsw-futu-bg-surface, #fff);
+  border: 1px solid var(--dshtrading-fusion-border, rgba(0, 0, 0, 0.12));
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  color: inherit;
+  font-size: 12.5px;
+}
+
+.menuItem {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.menuItem svg {
+  flex: none;
+  opacity: 0.7;
+}
+
+.menuItem:hover {
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
 }
 
 .dot {

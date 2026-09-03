@@ -46,9 +46,15 @@ const NS = 'dshtrading.market'
  * 不在 workspaces（纯 WorkspaceController：create/rename/archive，无导航）。 */
 export const inject = ['slots', 'locale', 'sessions', 'uiWorkspace']
 
-/** uiWorkspace 的最小结构面（startSession = 建/复用并打开会话）。 */
+/** SessionId 是 branded 类型而 dsh-session 非本包依赖（直接 import 解析不到）；
+ *  从已引入的 ISessions 面派生同一 brand，inject 面字符串 id 在边界断言一次。 */
+type SessionIdParam = Parameters<ISessions['open']>[0]
+
+/** uiWorkspace 的最小结构面（startSession = 建/复用并打开会话；
+ *  archiveSession = 官方侧栏「归档会话」同款通路，host 权威归档集随之广播）。 */
 interface WorkspaceNavigation {
   startSession(workspaceId?: string): void
+  archiveSession(sessionId: string): Promise<void>
 }
 
 /** 注册 slot + locale 字典。 */
@@ -190,6 +196,26 @@ export function apply(ctx: ClientContext): void {
     inject: () => ({
       openSession: (sessionId) => { sessions.open(sessionId) },
       startNewSession,
+      // 历史行操作菜单三件套，与官方 WorkspaceBrowser 语义对齐：
+      // rename 走 session binding 的显式标题（钉住自动生成）；fork 官方同款
+      // increaseTitle 后 open 新会话；archive 走 uiWorkspace（同 startSession
+      // 惰性解析纪律：apply 时序不保证，点击时 ctx.get）。
+      renameSession: async (sessionId: string, title: string) => {
+        const face = sessions.binding(sessionId as SessionIdParam)?.session
+        if (face === undefined) throw new Error(`unknown session "${sessionId}"`)
+        const result = await face.rename(title)
+        if (!result.ok) throw new Error(result.error.message)
+      },
+      forkSession: (sessionId: string) => {
+        sessions.fork({ sessionId: sessionId as SessionIdParam, increaseTitle: true })
+          .then((forkedId) => { sessions.open(forkedId) })
+          .catch((e: unknown) => { console.warn('[dsh-trading] session fork rejected:', e) })
+      },
+      archiveSession: (sessionId: string) => {
+        ;(ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined)
+          ?.archiveSession(sessionId)
+          .catch((e: unknown) => { console.warn('[dsh-trading] session archive rejected:', e) })
+      },
     }),
   }, HomeHistory))
 
@@ -385,6 +411,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'browser.historyEmpty': '该工作区还没有会话',
       'browser.showMore': '展开其余 {n} 条',
       'browser.showLess': '收起',
+      'browser.menu.aria': '会话操作',
+      'browser.menu.rename': '重命名',
+      'browser.menu.fork': '分叉会话',
+      'browser.menu.archive': '归档会话',
       'entry.new': '新会话',
       'entry.settings': '设置',
       'chat.fold': '折叠会话列',
@@ -541,6 +571,10 @@ function dictionaries(): Record<'zh' | 'en', Record<MarketLocaleKey, string>> {
       'browser.historyEmpty': 'No sessions in this workspace',
       'browser.showMore': 'Show {n} more',
       'browser.showLess': 'Show less',
+      'browser.menu.aria': 'Session actions',
+      'browser.menu.rename': 'Rename',
+      'browser.menu.fork': 'Fork session',
+      'browser.menu.archive': 'Archive session',
       'entry.new': 'New session',
       'entry.settings': 'Settings',
       'chat.fold': 'Fold conversation panel',

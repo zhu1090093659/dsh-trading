@@ -102,6 +102,51 @@ export function IconStrategy({ size = 32 }: { size?: number }): ReactElement {
   )
 }
 
+/** 行尾「更多操作」按钮（三个点）。 */
+export function IconMore({ size = 14 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="currentColor">
+      <circle cx="3.5" cy="8" r="1.3" />
+      <circle cx="8" cy="8" r="1.3" />
+      <circle cx="12.5" cy="8" r="1.3" />
+    </svg>
+  )
+}
+
+/** 重命名（铅笔）。 */
+export function IconRename({ size = 14 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11.5 2.8a1.6 1.6 0 0 1 2.26 2.26l-8.3 8.3-3.1.84.84-3.1z" />
+      <path d="M10.3 4.2l2.1 2.1" />
+    </svg>
+  )
+}
+
+/** 分叉会话（分支）。 */
+export function IconFork({ size = 14 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="4" cy="3.5" r="1.75" />
+      <circle cx="4" cy="12.5" r="1.75" />
+      <circle cx="12" cy="5.5" r="1.75" />
+      <path d="M4 5.25v5.5" />
+      <path d="M12 7.25c0 2.5-3 2.5-5.5 3.9" />
+    </svg>
+  )
+}
+
+/** 归档会话（盒子+下移箭头）。 */
+export function IconArchive({ size = 14 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="2.75" width="11" height="3" rx="0.75" />
+      <path d="M3.5 5.75v6a1.25 1.25 0 0 0 1.25 1.25h6.5a1.25 1.25 0 0 0 1.25-1.25v-6" />
+      <path d="M6.75 8.5h2.5" />
+    </svg>
+  )
+}
+
 /** 知识图谱网络图标。 */
 export function IconKnowledge({ size = 16 }: { size?: number }): ReactElement {
   return (
