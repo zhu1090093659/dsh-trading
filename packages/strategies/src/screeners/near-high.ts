@@ -25,7 +25,7 @@ export const nearHighScreener: ScreenerDefinition = {
     const highMax = Math.max(...windowBars.map((b) => b.high))
     if (!(highMax > 0)) return null
 
-    const close = bars[i].close
+    const close = bars[i]!.close
     const offHighPct = ((highMax - close) / highMax) * 100
     if (!(offHighPct >= 0 && offHighPct <= withinPct)) return null
 

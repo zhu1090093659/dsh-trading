@@ -30,8 +30,8 @@ export const volumeBreakoutScreener: ScreenerDefinition = {
     const avgVolume = sma(volumes, lookback)[i]
     if (avgVolume === undefined || avgVolume <= 0) return null
 
-    const close = bars[i].close
-    const volume = bars[i].volume
+    const close = bars[i]!.close
+    const volume = bars[i]!.volume
     if (!(close > priorHigh) || !(volume >= volMultiple * avgVolume)) return null
 
     const volRatio = volume / avgVolume

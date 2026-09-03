@@ -3,7 +3,7 @@
  * （SMA(短) > SMA(中) > SMA(长)），趋势结构完整的顺势筛选。
  */
 import { sma } from '@dsh-trading/indicators'
-import type { ScreenerDefinition, ScreenerMatch } from './types.ts'
+import type { ScreenerDefinition } from './types.ts'
 
 export const maBullAlignScreener: ScreenerDefinition = {
   id: 'scr.ma-bull-align',
@@ -30,7 +30,7 @@ export const maBullAlignScreener: ScreenerDefinition = {
     const s3 = sma(closes, n3)[i]
     if (s1 === undefined || s2 === undefined || s3 === undefined) return null
 
-    const close = bars[i].close
+    const close = bars[i]!.close
     if (!(close > s1 && s1 > s2 && s2 > s3)) return null
 
     const distLongPct = ((close - s3) / s3) * 100

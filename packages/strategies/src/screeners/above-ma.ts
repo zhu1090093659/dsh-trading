@@ -28,7 +28,7 @@ export const aboveMaScreener: ScreenerDefinition = {
     const maPrev = sma(closes, period)[i - slopeBars]
     if (ma === undefined || maPrev === undefined || !(maPrev > 0)) return null
 
-    const close = bars[i].close
+    const close = bars[i]!.close
     if (!(close > ma) || !(ma > maPrev)) return null
 
     const aboveMaPct = ((close - ma) / ma) * 100
