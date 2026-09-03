@@ -1,0 +1,145 @@
+name: desktop-release
+
+# 发版开关：推送 vX.Y.Z tag 即触发（唯一发布开关，tag 即版本事实源）。
+#
+# 管线做三件事：
+# 1. 硬校验 @dsh-trading/* 全家族 package.json 版本与 tag 一致——桌面安装包把
+#    workspace 包以 packed tarball 内嵌分发，版本不一致会发出"包内版本与
+#    Release 版本互相矛盾"的安装包，必须先修复版本再推 tag；
+# 2. 在 macOS（dmg+zip，arm64/x64）与 Windows（nsis+zip，x64）runner 上打包
+#    桌面版（Electron + electron-builder，按 electron-builder.yml 保持未签名）；
+# 3. 创建 GitHub Release 并附着全部安装包与 SHA256SUMS.txt。
+#
+# 本仓库不发布 npm（未授权）：桌面安装包是唯一对外分发物，没有 npm 通道，
+# 也没有"版本号不可重发"的 registry 约束；tag 构建失败可删除远端 tag 重新
+# 推送（GitHub Release 已创建时先删 Release 再删 tag）。
+#
+# 决策记录：.agents/notes/implemented/process/2026-09-03-desktop-release-pipeline.md
+# 发版操作手册：.dsh/skills/dsh-trading-release/SKILL.md
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-version:
+    name: Verify @dsh-trading/* versions match the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check family versions against tag
+        env:
+          EXPECTED_VERSION: ${{ github.ref_name }}
+        run: node scripts/verify-release-version.mjs
+
+  build-desktop:
+    name: Build desktop app (${{ matrix.os }})
+    needs: check-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            builder-args: --mac dmg zip --arm64 --x64
+            artifact: desktop-mac
+            electron-cache-path: |
+              ~/Library/Caches/electron
+              ~/Library/Caches/electron-builder
+          - os: windows-latest
+            builder-args: --win nsis zip --x64
+            artifact: desktop-win
+            electron-cache-path: |
+              ~\AppData\Local\electron\Cache
+              ~\AppData\Local\electron-builder\Cache
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4   # 版本读根 package.json 的 packageManager 字段
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # 发布门禁：与 ci.yml 同源的构建 + 测试，全绿才允许打包
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build workspace
+        run: pnpm -r build
+      - name: Test workspace
+        run: pnpm -r test
+
+      - name: Cache Electron / electron-builder binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.electron-cache-path }}
+          key: electron-${{ matrix.os }}-${{ hashFiles('desktop/package-lock.json') }}
+
+      # desktop/ 是独立 npm 工程（不在 pnpm workspace），用自身 lockfile 安装
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      # 拉取各平台 Node 发行版并把 workspace 包打包成 runtime payload
+      # （build-runtime.mjs 内部会再次执行 pnpm -r build，幂等）
+      - name: Stage desktop runtime payload
+        working-directory: desktop
+        run: npm run prepare-runtime
+
+      # 安装包版本以 tag 为准（desktop/package.json 不参与 changesets fixed 组）
+      - name: Set desktop version from tag
+        env:
+          DESKTOP_VERSION: ${{ github.ref_name }}
+        run: node scripts/set-desktop-version.mjs
+
+      - name: Package desktop app
+        working-directory: desktop
+        run: npx electron-builder ${{ matrix.builder-args }}
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.exe
+            desktop/dist/*.zip
+          if-no-files-found: error
+
+  github-release:
+    name: Create GitHub Release with desktop artifacts
+    needs: build-desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download desktop artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: dist
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/* \
+            --generate-notes \
+            --title "dsh-trading $GITHUB_REF_NAME"
