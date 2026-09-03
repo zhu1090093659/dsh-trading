@@ -214,6 +214,27 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const activeOrders = tradeMode === 'paper' ? paperTradingStore.getOrders() : tradeOrders
   const activeFills = tradeMode === 'paper' ? paperTradingStore.getFills() : tradeFills
   const paperCash = paperTradingStore.getAccount().cash
+
+  // 当前标的持仓量与可用现金计算（供下单面板精确计算 25%/50%/75%/100% 比例填单）
+  const currentPosition = useMemo(() => {
+    if (!symbol) return undefined
+    const list = activePositions ?? []
+    return list.find((p) => p.symbol.toUpperCase() === symbol.toUpperCase() && p.side === 'long')
+  }, [symbol, activePositions])
+
+  const currentPositionSize = currentPosition?.size ?? 0
+
+  const availableCash = useMemo(() => {
+    if (tradeMode === 'paper') {
+      return paperCash
+    }
+    if (!activeBalances || activeBalances.length === 0) return 0
+    const targetAsset = activeMarket === 'crypto' ? 'USDT' : activeMarket === 'us' ? 'USD' : activeMarket === 'hk' ? 'HKD' : 'CNY'
+    const found = activeBalances.find((b) => b.asset.toUpperCase() === targetAsset.toUpperCase())
+      ?? activeBalances.find((b) => /USD|USDT|CNY|HKD|CASH/i.test(b.asset))
+      ?? activeBalances[0]
+    return found ? found.free : 0
+  }, [tradeMode, paperCash, activeBalances, activeMarket])
   /** 区间统计：框选模式开 + 已选逻辑下标区间（TvChart 上报，面板消费）。 */
   const [rangeMode, setRangeMode] = useState(false)
   const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
@@ -1089,6 +1110,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                   colorMode={colorMode}
                   tradeMode={tradeMode}
                   paperCash={paperCash}
+                  availableCash={availableCash}
+                  currentPositionSize={currentPositionSize}
                   onResetPaper={() => {
                     paperTradingStore.resetAccount()
                   }}

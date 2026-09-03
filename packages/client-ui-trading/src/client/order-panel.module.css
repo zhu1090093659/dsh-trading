@@ -107,6 +107,11 @@
   color: #f59e0b;
 }
 
+.positionValue {
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+}
+
 .sideToggle {
   display: flex;
   gap: 4px;

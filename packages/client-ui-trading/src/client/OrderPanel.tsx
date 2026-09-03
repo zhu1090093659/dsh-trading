@@ -20,6 +20,8 @@ export interface OrderPanelProps {
   colorMode: ColorMode
   tradeMode?: 'live' | 'paper' | undefined
   paperCash?: number | undefined
+  availableCash?: number | undefined
+  currentPositionSize?: number | undefined
   onResetPaper?: (() => void) | undefined
   onToggleTradeMode?: ((mode: 'live' | 'paper') => void) | undefined
   onSubmit: (input: GuiOrderInput) => Promise<GuiOrderResult>
@@ -40,6 +42,80 @@ function resolveAssetUnit(symbol: string, t: (k: MarketLocaleKey) => string, mar
   return t('trade.unit.shares')
 }
 
+export interface RatioCalcParams {
+  side: 'buy' | 'sell'
+  ratio: number
+  availableCash: number
+  currentPositionSize: number
+  referencePrice: number
+  isSharesUnit: boolean
+  market?: MarketId | undefined
+  symbol: string
+}
+
+/**
+ * 快速下单比例数量计算函数：
+ * - 买入：基于可用资金计算预算（availableCash * ratio），除以现价/限价；
+ *   若为股票（A股等），必须按整手（100 股）向下取整，严禁超出可用资金；若为美股按 1 股整数向下取整；若为加密货币安全截断小数；
+ * - 卖出：严格基于当前可用持仓（currentPositionSize * ratio）；
+ *   100% 卖出全清持仓（包括零股），部分卖出按整手向下取整。
+ */
+export function calculateOrderRatioQuantity({
+  side,
+  ratio,
+  availableCash,
+  currentPositionSize,
+  referencePrice,
+  isSharesUnit,
+  market,
+  symbol,
+}: RatioCalcParams): string {
+  if (ratio <= 0) return '0'
+
+  if (side === 'buy') {
+    if (availableCash <= 0 || referencePrice <= 0) {
+      return '0'
+    }
+
+    const budget = availableCash * ratio
+    const rawQty = budget / referencePrice
+
+    if (isSharesUnit) {
+      // 股票市场：A股/港股等必须按手买入（一手=100股），美股按1股整数向下取整
+      const isCnOrHk = market === 'cn' || market === 'hk' || /\.(SH|SZ|BJ|HK)$/i.test(symbol)
+      const lotSize = isCnOrHk ? 100 : 1
+      const shares = Math.floor(rawQty / lotSize) * lotSize
+      return String(Math.max(0, shares))
+    }
+
+    // 加密货币等：向下截断适当小数位数，严禁浮点进位超出预算
+    const decimals = referencePrice >= 1000 ? 4 : referencePrice >= 1 ? 3 : 2
+    const factor = Math.pow(10, decimals)
+    const qty = Math.floor(rawQty * factor) / factor
+    return String(Math.max(0, qty))
+  }
+
+  // 卖出：严格基于当前可用持仓
+  if (currentPositionSize <= 0) return '0'
+
+  if (ratio >= 1) {
+    // 100% 清仓卖出：支持零股一次性全部清仓
+    return String(currentPositionSize)
+  }
+
+  if (isSharesUnit) {
+    const isCnOrHk = market === 'cn' || market === 'hk' || /\.(SH|SZ|BJ|HK)$/i.test(symbol)
+    const lotSize = isCnOrHk ? 100 : 1
+    const shares = Math.floor((currentPositionSize * ratio) / lotSize) * lotSize
+    return String(Math.max(0, shares))
+  }
+
+  const decimals = referencePrice >= 1000 ? 4 : 2
+  const factor = Math.pow(10, decimals)
+  const qty = Math.floor(currentPositionSize * ratio * factor) / factor
+  return String(Math.max(0, qty))
+}
+
 export function OrderPanel({
   t,
   symbol,
@@ -48,6 +124,8 @@ export function OrderPanel({
   colorMode,
   tradeMode = 'live',
   paperCash,
+  availableCash,
+  currentPositionSize = 0,
   onResetPaper,
   onToggleTradeMode,
   onSubmit,
@@ -125,19 +203,25 @@ export function OrderPanel({
       })
   }
 
-  // 快捷比例填单
+  // 快捷比例填单：买入按可用资金计算最大可买，卖出按当前持仓计算最大可卖
   const applyRatio = (ratio: number) => {
-    // 若为股票，按 100 股一手向上取整；若为加密货币，按常规颗粒度
-    if (unit === t('trade.unit.shares')) {
-      const base = 100
-      setQuantity(String(Math.max(base, Math.round(base * ratio * 4))))
-    } else {
-      const base = 1
-      setQuantity(String(Number((base * ratio).toFixed(3))))
-    }
+    const refPrice = type === 'limit' && Number(price) > 0 ? Number(price) : (suggestedPrice ?? 0)
+    const qtyStr = calculateOrderRatioQuantity({
+      side,
+      ratio,
+      availableCash: effectiveCash,
+      currentPositionSize,
+      referencePrice: refPrice,
+      isSharesUnit: unit === t('trade.unit.shares'),
+      market,
+      symbol,
+    })
+    setQuantity(qtyStr)
   }
 
   const actionText = side === 'buy' ? t('trade.buy') : t('trade.sell')
+
+  const effectiveCash = availableCash ?? (tradeMode === 'paper' ? (paperCash ?? 100000) : 0)
 
   return (
     <div className={css.root} data-dshtrading-order-panel="">
@@ -192,15 +276,21 @@ export function OrderPanel({
         </button>
       </div>
 
-      {/* 模拟模式下显示可用资金 */}
-      {tradeMode === 'paper' && (
-        <div className={css.availableRow}>
-          <span>{t('trade.paper.available')}</span>
-          <span className={css.availableValue}>
-            {(paperCash ?? 100000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </span>
-        </div>
-      )}
+      {/* 资金/持仓动态提示行：买入显示可用资金，卖出显示当前持仓 */}
+      <div className={css.availableRow}>
+        <span>
+          {side === 'buy'
+            ? tradeMode === 'paper'
+              ? t('trade.paper.available')
+              : t('trade.drawer.available')
+            : t('trade.positions')}
+        </span>
+        <span className={side === 'buy' ? css.availableValue : css.positionValue}>
+          {side === 'buy'
+            ? effectiveCash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : `${currentPositionSize.toLocaleString('en-US')} ${unit}`}
+        </span>
+      </div>
 
       <div className={css.sideToggle} role="tablist" aria-label="order side">
         <button
