@@ -10,9 +10,6 @@ const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
 
-/** Default URL an already-running dsh web instance listens on. */
-const DEFAULT_GUI_URL = 'http://127.0.0.1:3080';
-
 /** Marker file written into a profile directory this app seeded itself. */
 const SEED_MARKER = '.dsh-desktop-seed.json';
 
@@ -187,7 +184,6 @@ function parseShasums(text) {
 }
 
 module.exports = {
-  DEFAULT_GUI_URL,
   SEED_MARKER,
   RUNTIME_STAMP,
   resolveRuntimePaths,

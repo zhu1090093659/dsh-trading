@@ -3,13 +3,13 @@
 /**
  * DeepSeek Harness desktop — Electron main process.
  *
- * The app owns one dsh host child process: it seeds $DSH_HOME/profiles/web
- * from the bundled profile when needed, spawns the bundled Node runtime on a
- * free loopback port, waits for the GUI, and loads the tokenized URL the host
- * prints. When a GUI already answers on the default URL, the app hands that
- * URL to the system browser (whose cookie jar already holds the session) and
- * quits: the auth fence issues a per-process token this app cannot obtain
- * retroactively, and two web hosts on one $DSH_HOME are never started.
+ * The app owns one dsh host child process: it seeds $DSH_HOME/profiles/
+ * trading-web from the bundled profile when needed, spawns the bundled Node
+ * runtime on a free loopback port, waits for the GUI, and loads the tokenized
+ * URL the host prints. The app always starts its own host: a probe cannot
+ * tell which profile an already-running GUI serves, so attaching to one would
+ * hand off to an unrelated instance (this bug shipped once — the probe hit a
+ * plain web GUI on port 3080 and the app opened the user's own DSH Web).
  */
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
@@ -18,20 +18,17 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {
-  DEFAULT_GUI_URL,
   resolveRuntimePaths,
   resolveDshHome,
   readStampFile,
   profileAction,
   applyProfileSeed,
-  probeGui,
   findFreePort,
   waitForGui,
   parseTokenUrlLine,
 } = require('./runtime.cjs');
 
 const READY_TIMEOUT_MS = 180000;
-const ATTACH_PROBE_MS = 1500;
 const LOG_TAIL_LINES = 200;
 /** The host prints its tokenized GUI URL on this stdout line. */
 
@@ -175,13 +172,6 @@ async function boot() {
   const runtime = resolveRuntimePaths(resourcesRoot(), process.platform, process.arch, app.isPackaged);
   const home = resolveDshHome(process.env, os.homedir());
   pushLogLine('[desktop] dsh home: ' + home);
-
-  if (process.env.DSH_DESKTOP_NO_ATTACH === undefined && await probeGui(DEFAULT_GUI_URL, ATTACH_PROBE_MS)) {
-    pushLogLine('[desktop] a GUI already answers at ' + DEFAULT_GUI_URL + ' — handing off to the system browser');
-    await shell.openExternal(DEFAULT_GUI_URL);
-    setImmediate(() => app.quit());
-    return;
-  }
 
   if (!fs.existsSync(runtime.nodeBin)) throw new Error('bundled Node runtime is missing: ' + runtime.nodeBin);
   if (!fs.existsSync(runtime.hostBin)) throw new Error('bundled dsh host is missing: ' + runtime.hostBin);

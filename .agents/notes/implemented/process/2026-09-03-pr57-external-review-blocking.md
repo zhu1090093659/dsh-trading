@@ -30,3 +30,5 @@ Status: implemented
 - PR #57 在贡献者逐项修复（至少第 2、3 项）且 owner 对 GUI 实盘通道作出裁决前不得合并；hithink「官方」来源与 ToS 表条目是合并前置项。
 - **owner 裁决（2026-09-03，会话内明确）**：GUI 实盘下单通道**放行**——PR #57 的默认 `dryRun: false` 设计被 owner 批准，铁律 #3 在 GUI 面的服务缝解释从「GUI 结构上无实盘通道」更新为「GUI 实盘通道经 liveTrading 显式开关放行，审批闸门仅覆盖 agent 工具面」。issue #40 的旧架构记录与 TradeDesk/bridge 头注释需在 PR 修复提交中同步改写，保持文档与行为一致；实盘下单二次确认作为 UX 建议留给贡献者，不作为合并阻塞项。
 - 后续 review 该 PR 更新时按「反馈更新 PR」通道：只评审新增提交是否逐项回应本 review，不重复已确认合格的部分。
+- **2026-09-03 复查（贡献者推送 b78a219/c02f19e）**：新增 emoji 移除与仓位比例算法修复（含 order-ratio 13 测试）质量合格，但四项阻塞全部未回应；在更新后 head 复跑，`quote-stage.smoke.test.tsx` 2 例 localStorage 崩溃依旧复现。已留评论逐项列出（issuecomment-5523283531），PR 维持 CHANGES_REQUESTED 不合并。
+- **2026-09-03 二次复查（6ab895f/3d68047，含 merge origin/main@ef4d9e8）**：三项行为级阻塞全部确认修复——alpaca cancelOrder 恢复 fail-closed；QuoteStage tradeMode 包 try/catch 后本地 161 用例全绿、全仓 `pnpm -r test` 无失败；hithink 920→BJ 映射修正、README 重写、ToS 表加 `HiThink (Fuyao)` 行。剩余合并前小项：TradeDesk 头注释与已放行的 GUI 实盘行为相反、PR 描述「90 天窗口」与代码 7 天口径冲突、龙虎榜宣称（connectors-guide + DragonTigerItem 类型 + sentiment 头注释）无实现，以及 README `HITHINK_API_KEY` 与 `HITHINK_FINANCE_API_KEY` 口径。已留评论（issuecomment-5523492970），修完即可 approve 合并。
