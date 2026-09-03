@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'">
-<title>DeepSeek Harness — startup problem</title>
+<title>DSH Trading — startup problem</title>
 <style>
   html, body { height: 100%; margin: 0; }
   body {
@@ -41,7 +41,7 @@
     window.desktop.onError((payload) => {
       document.getElementById('message').textContent = payload.message;
       document.getElementById('log').textContent = payload.log || '(no host output captured)';
-      document.title = 'DeepSeek Harness — startup problem';
+      document.title = 'DSH Trading — startup problem';
     });
   </script>
 </body>

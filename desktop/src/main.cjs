@@ -133,7 +133,7 @@ function createWindow() {
     height: 900,
     minWidth: 960,
     minHeight: 600,
-    title: 'DeepSeek Harness',
+    title: 'DSH Trading',
     backgroundColor: '#0b1220',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -143,6 +143,9 @@ function createWindow() {
       spellcheck: false,
     },
   });
+  // The bundled web frontend keeps the host's own brand in document.title;
+  // the shell window is branded DSH Trading and must not inherit it.
+  window.on('page-title-updated', (event) => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url) && !/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(url)) {
       void shell.openExternal(url);
