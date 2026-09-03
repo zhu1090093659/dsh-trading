@@ -28,5 +28,5 @@ Status: implemented
 ## Consequences
 
 - PR #57 在贡献者逐项修复（至少第 2、3 项）且 owner 对 GUI 实盘通道作出裁决前不得合并；hithink「官方」来源与 ToS 表条目是合并前置项。
-- GUI 是否可成为实盘下单通道（含二次确认形态）升级为 owner 决策项，裁决后需更新 issue #40 关联架构记录与 TradeDesk/bridge 注释，保持文档与行为一致。
+- **owner 裁决（2026-09-03，会话内明确）**：GUI 实盘下单通道**放行**——PR #57 的默认 `dryRun: false` 设计被 owner 批准，铁律 #3 在 GUI 面的服务缝解释从「GUI 结构上无实盘通道」更新为「GUI 实盘通道经 liveTrading 显式开关放行，审批闸门仅覆盖 agent 工具面」。issue #40 的旧架构记录与 TradeDesk/bridge 头注释需在 PR 修复提交中同步改写，保持文档与行为一致；实盘下单二次确认作为 UX 建议留给贡献者，不作为合并阻塞项。
 - 后续 review 该 PR 更新时按「反馈更新 PR」通道：只评审新增提交是否逐项回应本 review，不重复已确认合格的部分。
