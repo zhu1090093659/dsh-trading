@@ -156,3 +156,41 @@ describe('BinanceMarketDataService 衍生品扩展（issue #54）', () => {
       .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
   })
 })
+
+
+/** issue #54 评审修复回归：funding 端点失败时 premiumIndex.lastFundingRate 兜底（L5①）。 */
+describe('BinanceMarketDataService 评审修复回归（issue #54 review）', () => {
+  it('fundingRate 端点失败 → fundingRate 取 premiumIndex.lastFundingRate 兜底', async () => {
+    const { impl } = stubFetch({
+      ...FULL_ROUTES,
+      '/fapi/v1/fundingRate': { status: 500, body: { code: -1000, msg: 'internal' } },
+      '/fapi/v1/premiumIndex': {
+        body: {
+          symbol: 'BTCUSDT', markPrice: '42001.5', indexPrice: '42000.1',
+          lastFundingRate: '0.00008', nextFundingTime: 1700028800000, time: 1700000002000,
+        },
+      },
+    })
+    const data = await service(impl).getDerivatives('BTCUSDT')
+    expect(data.fundingRate).toBe(0.00008)
+    expect(data.markPrice).toBe(42001.5)
+    expect(data.nextFundingTime).toBe(1700028800000)
+  })
+
+  it('全失败守卫计入新字段：旧五项全挂但 premiumIndex 成功 → 返回基差数据不误抛', async () => {
+    const { impl } = stubFetch({
+      '/fapi/v1/openInterest': { status: 500, body: { code: -1000, msg: 'x' } },
+      '/fapi/v1/fundingRate': { status: 500, body: { code: -1000, msg: 'x' } },
+      '/futures/data/globalLongShortAccountRatio': { status: 500, body: { code: -1000, msg: 'x' } },
+      '/futures/data/topLongShortPositionRatio': { status: 500, body: { code: -1000, msg: 'x' } },
+      '/futures/data/takerlongshortRatio': { status: 500, body: { code: -1000, msg: 'x' } },
+      '/fapi/v1/premiumIndex': {
+        body: { symbol: 'BTCUSDT', markPrice: '42001.5', indexPrice: '42000.1', nextFundingTime: 1700028800000, time: 1700000002000 },
+      },
+    })
+    const data = await service(impl).getDerivatives('BTCUSDT')
+    expect(data.markPrice).toBe(42001.5)
+    expect(data.indexPrice).toBe(42000.1)
+    expect(data.openInterest).toBeUndefined()
+  })
+})

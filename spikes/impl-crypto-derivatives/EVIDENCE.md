@@ -45,8 +45,10 @@
 - 验证方法同上（lib 产物直连真实端点）：`run-derivatives-history-probe.mjs` →
   `parsed-history-probe.json`（三家 11 项新子查询，全部 OK；标的 HYPEUSDT）。
 - 实测要点：
-  - OKX `funding-rate` 的 `nextFundingRate` 可能为 **空字符串**（num() 解析不到即缺省，
-    前端按格隐藏）——预测费率是「有就显示」字段，不作存在性假设。
+  - OKX `funding-rate` 的 `nextFundingRate` 可能为 **空字符串**——初版文字误称
+    「num() 解析不到即缺省」，实际 Number('')===0 会编造 0（评审 M1 揭露，UI 实测
+    「预测费率 0.0000%」复现）；已修：三家连接器 num() 统一空串→undefined，
+    预测费率真正成为「有就显示」字段，不作存在性假设。
   - OKX rubik `open-interest-history` 必须传 `instId`（传 ccy 报 50014），行结构
     `[ts, oi张, oiCcy币, oiUsd]` 新→旧，取第 3 列与快照 oiCcy 同语义。
   - OKX 指数价在 `market/index-tickers`（现货指数 instId，如 HYPE-USDT），与

@@ -57,3 +57,17 @@ OI/费率/多空比全是时间点裸数字；OKX 响应里已解析的 `nextFun
 - OKX `nextFundingRate` 空字符串语义以 spikes/impl-crypto-derivatives/EVIDENCE.md
   2026-09-03 追加节为准。
 - 页签激活才拉历史：盯盘停在图表页签时历史端点零消耗。
+
+## Review remediation（PR #55 评审，三路并行焦点）
+
+- **M1**：三家 num() 统一空串→undefined（Number('')===0 会编造预测费率 0.0000% /
+  倒计时 1970；spike 自述与实际行为矛盾，已据修复改 EVIDENCE）。
+- **M2**：bybit normalizeCryptoSymbol 先剥 -SWAP 后缀（规范形入参此前 100% 失败，
+  存量缺陷被新方法复制；修复对现货端点零影响）。
+- **M3**：衍生品快照/历史轮询补 requestRef 竞态守卫（对齐 K 线模式）。
+- **L1**：全失败守卫计入 mark/index/nextFunding 新字段（不误抛已到手的基差数据）。
+- **L2**：历史「加载中 vs 不可用」分态（historyLoaded），不可用提示真正可渲染。
+- **L3**：渲染期 viewTab 归一（非 crypto 市场不再闪公告帧）。
+- **L4**：oiChange24h 历史不足 24h 时该行隐藏，不拿「上市以来」冒充 24h。
+- **L5**：补 binance funding 兜底、okx OI 张数兜底、bybit SWAP 入参等回归测试；
+  okx 基底路由表登记 mark/index 端点（happy-path 不再靠吞错静默通过）。

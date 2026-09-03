@@ -160,3 +160,25 @@ describe('BybitMarketDataService 衍生品扩展（issue #54）', () => {
       .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
   })
 })
+
+
+/** issue #54 评审修复回归：M2 规范 SWAP 入参剥 -SWAP 后缀。 */
+describe('BybitMarketDataService 评审修复回归（issue #54 review）', () => {
+  it('规范 SWAP 形输入（BTCUSDT-SWAP）→ 请求按 BTCUSDT 发出，快照与历史同纪律', async () => {
+    const { impl, urls } = stubFetch(FULL_ROUTES)
+    const data = await service(impl).getDerivatives('BTCUSDT-SWAP')
+    expect(data.symbol).toBe('BTCUSDT-SWAP')
+    expect(urls.every(url => url.includes('symbol=BTCUSDT&') || url.includes('symbol=BTCUSDT'))).toBe(true)
+    expect(urls.some(url => url.includes('BTCUSDTSWAP'))).toBe(false)
+
+    const hist = stubFetch({
+      '/v5/market/funding/history': {
+        body: { retCode: 0, result: { list: [{ symbol: 'BTCUSDT', fundingRate: '0.0001', fundingRateTimestamp: '1700000000000' }] } },
+      },
+      '/v5/market/open-interest': { status: 500, body: { retCode: 10001, retMsg: 'error' } },
+    })
+    const history = await service(hist.impl).getDerivativesHistory('BTCUSDT-SWAP')
+    expect(history.symbol).toBe('BTCUSDT-SWAP')
+    expect(hist.urls.every(url => !url.includes('BTCUSDTSWAP'))).toBe(true)
+  })
+})

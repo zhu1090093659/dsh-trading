@@ -102,6 +102,9 @@ export function normalizeBinanceFuturesSymbol(raw: string): string {
 
 /** Binance 返回数值均为字符串，宽松转 number（非有限值返回 undefined）。 */
 function num(value: unknown): number | undefined {
+  // 空串不是 0（Number('')===0 的 JS 坑）：上游「未发布」字段（如 OKX nextFundingRate）
+  // 用空串表达，必须缺省而非编造 0（issue #54 评审 M1，spikes EVIDENCE 实证）。
+  if (value === '') return undefined
   const n = typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : Number.NaN
   return Number.isFinite(n) ? n : undefined
 }

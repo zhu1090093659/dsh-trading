@@ -60,13 +60,18 @@ export function parseIntervalMs(interval: Interval): number {
 }
 
 export function normalizeCryptoSymbol(raw: string): string {
-  const clean = raw.trim().toUpperCase().replace(/[-_/]/g, '')
+  // 先剥衍生品规范后缀 -SWAP（契约：入参接受规范形 BTCUSDT-SWAP 与原生形 BTCUSDT，
+  // issue #54 评审 M2）——不剥会被分隔符清理揉成 BTCUSDTSWAP，Bybit 查无此标的。
+  const clean = raw.trim().toUpperCase().replace(/-SWAP$/, '').replace(/[-_/]/g, '')
   if (!clean) throw new TradingServiceError('TRADING_INVALID_ARGUMENT', 'Symbol cannot be empty')
   return clean
 }
 
 /** 宽松转 number（字符串/数字皆收，非有限值返回 undefined）。 */
 function num(value: unknown): number | undefined {
+  // 空串不是 0（Number('')===0 的 JS 坑）：上游「未发布」字段（如 OKX nextFundingRate）
+  // 用空串表达，必须缺省而非编造 0（issue #54 评审 M1，spikes EVIDENCE 实证）。
+  if (value === '') return undefined
   const n = typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : Number.NaN
   return Number.isFinite(n) ? n : undefined
 }

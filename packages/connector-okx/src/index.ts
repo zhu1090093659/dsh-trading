@@ -290,8 +290,11 @@ export class OkxMarketDataService extends Service implements MarketDataService {
     const markPrice = mark?.markPrice
     const indexPrice = index?.indexPrice
 
+    // 全失败守卫计入全部产出字段（评审 L1）：旧五项全挂但 mark/index 成功时
+    // 仍应返回基差数据，而不是误抛把已到手的字段一起丢掉。
     if (fundingRate === undefined && openInterest === undefined && openInterestValue === undefined
-      && longShortRatio === undefined && takerBuySellRatio === undefined) {
+      && longShortRatio === undefined && takerBuySellRatio === undefined
+      && markPrice === undefined && indexPrice === undefined) {
       throw new TradingServiceError(
         'TRADING_EXCHANGE_ERROR',
         `OKX derivatives for ${swapId}: all sub-queries failed`

@@ -272,6 +272,9 @@ function derivativesRoutes(overrides: Record<string, { status?: number; body?: u
     '/api/v5/public/open-interest': { body: { code: '0', data: [{ instId: 'BTC-USDT-SWAP', oi: '80000', oiCcy: '800.5', oiUsd: '33621000', ts: '1700000001000' }] } },
     '/api/v5/rubik/stat/contracts/long-short-account-ratio': { body: { code: '0', data: [['1700000002000', '1.24'], ['1699998400000', '1.22']] } },
     '/api/v5/rubik/stat/taker-volume': { body: { code: '0', data: [['1700000003000', '2.5', '2.0'], ['1699999999000', '1.9', '2.1']] } },
+    // issue #54 评审 L5：基底路由表登记新端点，happy-path 不再靠 collect 吞错静默通过。
+    '/api/v5/public/mark-price': { body: { code: '0', data: [{ instId: 'BTC-USDT-SWAP', markPx: '42001.5', ts: '1700000002000' }] } },
+    '/api/v5/market/index-tickers': { body: { code: '0', data: [{ instId: 'BTC-USDT', idxPx: '42000.1', ts: '1700000002000' }] } },
   }
   return { ...base, ...overrides }
 }
@@ -326,6 +329,8 @@ describe('getDerivatives（issue #38 服务级聚合）', () => {
       '/api/v5/public/open-interest': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
       '/api/v5/rubik/stat/contracts/long-short-account-ratio': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
       '/api/v5/rubik/stat/taker-volume': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+      '/api/v5/public/mark-price': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+      '/api/v5/market/index-tickers': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
     }))
     await expect(derivativesService(fetchImpl).getDerivatives('BTCUSDT'))
       .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
@@ -402,5 +407,51 @@ describe('getDerivativesHistory（issue #54）', () => {
     })
     await expect(derivativesService(down.fetchImpl).getDerivativesHistory('BTCUSDT'))
       .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
+  })
+})
+
+
+/** issue #54 评审修复回归：M1 空串缺省 + L1 守卫计入新字段 + L5③ OI 张数兜底。 */
+describe('getDerivatives 评审修复回归（issue #54 review）', () => {
+  it('M1：nextFundingRate/nextFundingTime 为空串 → 字段缺省（不编造 0/1970）', async () => {
+    const { fetchImpl } = routeByPath(derivativesRoutes({
+      '/api/v5/public/funding-rate': {
+        body: {
+          code: '0',
+          data: [{
+            instId: 'BTC-USDT-SWAP', fundingRate: '0.0001', fundingTime: '1700000000000',
+            nextFundingRate: '', nextFundingTime: '',
+          }],
+        },
+      },
+    }))
+    const data = await derivativesService(fetchImpl).getDerivatives('BTCUSDT')
+    expect(data.fundingRate).toBe(0.0001)
+    expect(data.nextFundingRate).toBeUndefined()
+    expect(data.nextFundingTime).toBeUndefined()
+  })
+
+  it('L1：旧子查询全挂但 mark/index 成功 → 返回基差数据不误抛', async () => {
+    const { fetchImpl } = routeByPath(derivativesRoutes({
+      '/api/v5/public/funding-rate': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+      '/api/v5/public/open-interest': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+      '/api/v5/rubik/stat/contracts/long-short-account-ratio': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+      '/api/v5/rubik/stat/taker-volume': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+    }))
+    const data = await derivativesService(fetchImpl).getDerivatives('BTCUSDT')
+    expect(data.markPrice).toBe(42001.5)
+    expect(data.indexPrice).toBe(42000.1)
+    expect(data.fundingRate).toBeUndefined()
+  })
+
+  it('L5③：OI 历史行缺 oiCcy 列 → 退张数（oi）', async () => {
+    const { fetchImpl } = routeByPath({
+      '/api/v5/public/funding-rate-history': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+      '/api/v5/rubik/stat/contracts/open-interest-history': {
+        body: { code: '0', data: [['1700000001000', '160100'], ['1699999000000', '159000']] },
+      },
+    })
+    const history = await derivativesService(fetchImpl).getDerivativesHistory('BTCUSDT')
+    expect(history.openInterest?.map(p => p.value)).toEqual([159000, 160100])
   })
 })

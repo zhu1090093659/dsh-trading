@@ -165,8 +165,11 @@ export class BinanceMarketDataService extends Service implements MarketDataServi
     const indexPrice = premium?.indexPrice
     const nextFundingTime = premium?.nextFundingTime
 
+    // 全失败守卫计入全部产出字段（评审 L1）：mark/index/nextFundingTime 成功
+    // 即不算全失败（基差卡仍有数据可显示）。
     if (openInterest === undefined && fundingRate === undefined && longShortRatio === undefined
-      && topTraderLongShortRatio === undefined && takerBuySellRatio === undefined) {
+      && topTraderLongShortRatio === undefined && takerBuySellRatio === undefined
+      && markPrice === undefined && indexPrice === undefined && nextFundingTime === undefined) {
       throw new TradingServiceError(
         'TRADING_EXCHANGE_ERROR',
         `Binance derivatives for ${futuresSymbol}: all sub-queries failed`

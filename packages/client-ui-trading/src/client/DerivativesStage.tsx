@@ -7,8 +7,9 @@
  * 3. 多空比卡：多空人数比 / 大户多空比 / 主动买卖比（>1 偏多语义沿用快照条）；
  * 4. 基差卡：标记价格 / 指数价格 / 基差 %（(mark-index)/index，正=永续升水）。
  *
- * 降级纪律（与快照条同族）：字段缺省 → 对应行隐藏；history 为 null（连接器未实现
- * getDerivativesHistory 或失败）→ 趋势区显示「无历史序列」提示，快照读数不受影响。
+ * 降级纪律（与快照条同族）：字段缺省 → 对应行隐藏；历史首个应答落地后仍无该序列
+ * （连接器未实现 getDerivativesHistory 或失败）→ 趋势区显示「无历史序列」提示；
+ * 首个应答在途（historyLoaded=false）→ 趋势区留白等待，不闪烁提示（评审 L2）。
  */
 import { useEffect, useState } from 'react'
 import { Sparkline } from './Sparkline.tsx'
@@ -26,6 +27,8 @@ export interface DerivativesStageProps {
   derivatives: DerivativesData | null
   /** 历史序列（页签激活才拉，5min 节奏；null = 未实现/失败）。 */
   history: DerivativesHistory | null
+  /** 首个历史应答是否已落地（评审 L2：区分「加载中」与「不可用」）。 */
+  historyLoaded: boolean
   colorMode: ColorMode
 }
 
@@ -39,23 +42,24 @@ function useNowMs(): number {
   return now
 }
 
-/** 24h 持仓变化：历史序列末点 vs 24h 前最近采样点（数据不足 → undefined 该行隐藏）。 */
+/** 24h 持仓变化：历史序列末点 vs 24h 前最近采样点；找不到 ≤cutoff 的采样点
+ * （次新永续，历史不足 24h）→ undefined 该行隐藏——不拿「上市以来变化」冒充
+ * 24h 标签（issue #54 评审 L4）。 */
 function oiChange24h(points: DerivativesPoint[] | undefined): number | undefined {
   if (points === undefined || points.length < 2) return undefined
   const last = points[points.length - 1] as DerivativesPoint
   const cutoff = last.time - 24 * 3600 * 1000
-  // 从后往前找第一个 ≤ cutoff 的点；找不到就用序列首点（近似）。
+  // 从后往前找第一个 ≤ cutoff 的点。
   let base: DerivativesPoint | undefined
   for (let i = points.length - 2; i >= 0; i -= 1) {
     const p = points[i] as DerivativesPoint
     if (p.time <= cutoff) { base = p; break }
   }
-  base = base ?? (points[0] as DerivativesPoint)
-  if (base.value <= 0 || base.time === last.time) return undefined
+  if (base === undefined || base.value <= 0 || base.time === last.time) return undefined
   return (last.value - base.value) / base.value * 100
 }
 
-export function DerivativesStage({ t, derivatives, history, colorMode }: DerivativesStageProps): React.JSX.Element {
+export function DerivativesStage({ t, derivatives, history, historyLoaded, colorMode }: DerivativesStageProps): React.JSX.Element {
   const now = useNowMs()
 
   if (derivatives === null && history === null) {
@@ -109,7 +113,7 @@ export function DerivativesStage({ t, derivatives, history, colorMode }: Derivat
             <span className={css.trendLabel}>{t('derivatives.fundingHistory')}</span>
           </div>
         ) : (
-          history !== null && <div className={css.noHistory}>{t('derivatives.historyUnavailable')}</div>
+          historyLoaded && <div className={css.noHistory}>{t('derivatives.historyUnavailable')}</div>
         )}
       </section>
 
@@ -143,7 +147,7 @@ export function DerivativesStage({ t, derivatives, history, colorMode }: Derivat
             <span className={css.trendLabel}>{t('derivatives.oiTrend')}</span>
           </div>
         ) : (
-          history !== null && <div className={css.noHistory}>{t('derivatives.historyUnavailable')}</div>
+          historyLoaded && <div className={css.noHistory}>{t('derivatives.historyUnavailable')}</div>
         )}
       </section>
 

@@ -121,6 +121,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     : inferMarketFromSymbol(instrument?.symbol)
   const symbol = instrument?.symbol
   const activeMarket: MarketId = market ?? 'crypto'
+  // 渲染期页签归一（issue #54 评审 L3）：衍生品页签是 crypto 专属，切到非 crypto
+  // 市场时渲染直接按图表页签处理——不等 useEffect 纠偏（paint 后才跑会闪一帧公告）。
+  const viewTab = stageTab === 'derivatives' && market !== 'crypto' ? 'chart' : stageTab
 
   const colorMode = useSyncExternalStore(colorModeStore.subscribe, colorModeStore.getSnapshot)
 
@@ -146,6 +149,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [derivatives, setDerivatives] = useState<DerivativesData | null>(null)
   /** 衍生品历史序列（issue #54；页签激活才拉；null = 未实现/失败 → 趋势卡隐藏）。 */
   const [derivativesHistory, setDerivativesHistory] = useState<DerivativesHistory | null>(null)
+  /** 历史首个应答是否已落地（区分「加载中」与「不可用」，评审 L2）。 */
+  const [derivativesHistoryLoaded, setDerivativesHistoryLoaded] = useState(false)
   /** 盘口竖栏（issue #39）：开关跨标的/会话记忆；数据 null = 数据源未提供（降级提示）。 */
   const [orderbookOpen, setOrderbookOpen] = useState<boolean>(() => readOrderbookOpen())
   const [orderbook, setOrderbook] = useState<Orderbook | null>(null)
@@ -239,17 +244,29 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   }, [market, symbol])
 
   // 衍生品指标轮询（issue #38，仅 crypto；现货输入由连接器升到对应永续）。
+  // 竞态守卫（issue #54 评审 M3）：换标的后在途响应丢弃，不覆盖新标的 state。
+  const derivativesRequestRef = useRef('')
   usePoll(async () => {
     if (market !== 'crypto' || symbol === undefined) return
+    const request = `${market}:${symbol}`
+    derivativesRequestRef.current = request
     const data = await fetchDerivatives(market, symbol)
+    if (derivativesRequestRef.current !== request) return
     setDerivatives(data)
   }, DERIVATIVES_POLL_MS, [market, symbol])
 
   // 衍生品历史序列轮询（issue #54，仅 crypto + 衍生品页签激活）。
+  // 竞态守卫同款：5min 周期下旧标的慢响应可挂很久，必须丢弃（评审 M3）。
+  const derivativesHistoryRequestRef = useRef('')
   usePoll(async () => {
     if (stageTab !== 'derivatives' || market !== 'crypto' || symbol === undefined) return
+    const request = `${market}:${symbol}`
+    derivativesHistoryRequestRef.current = request
     const history = await fetchDerivativesHistory(market, symbol)
+    if (derivativesHistoryRequestRef.current !== request) return
     setDerivativesHistory(history)
+    // L2：首个应答落地（无论成败）即离开「加载中」，null 从此可读作「不可用」。
+    setDerivativesHistoryLoaded(true)
   }, DERIVATIVES_HISTORY_POLL_MS, [stageTab, market, symbol])
 
   // 盘口/分笔轮询（issue #39）：竖栏打开 + 图表页签时才拉，省上游配额。
@@ -331,6 +348,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setKError(null)
     setDerivatives(null)
     setDerivativesHistory(null)
+    setDerivativesHistoryLoaded(false)
     setOrderbook(null)
     setTrades(null)
     setNewsItems(null)
@@ -663,7 +681,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       </div>
 
       {/* 统计行情概览（图表页签专属：基本面页签有自己的信息网格） */}
-      {stageTab === 'chart' && (
+      {viewTab === 'chart' && (
         <div className={css.stats}>
           <span className={css.stat}><label>{t('quote.prevClose')}</label>{fmtPrice(readoutPrevClose)}</span>
           <span className={css.stat}><label>{t('quote.open')}</label>{fmtPrice(readoutCandle?.open)}</span>
@@ -674,7 +692,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       )}
 
       {/* 周期胶囊条 + 指标弹层按钮（图表页签） */}
-      {stageTab === 'chart' && (
+      {viewTab === 'chart' && (
         <div className={css.toolbar}>
           <div className={css.intervalTabs} role="tablist" aria-label="interval">
             {intervals.map(entry => (
@@ -824,17 +842,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
       {/* 主图指标悬停/最新读数分量（各分量独立着色）。VOL/MACD 等副图指标
           的读数在 TvChart 各自 pane 内渲染，不进主图读数行。 */}
-      {stageTab === 'chart' && mainOverlays.length > 0 && (
+      {viewTab === 'chart' && mainOverlays.length > 0 && (
         <div className={css.indicatorReadout}>
           {mainOverlays.flatMap(group => outputReadouts(group, readoutIndex))}
         </div>
       )}
 
-      {stageTab === 'chart' && kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
+      {viewTab === 'chart' && kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
 
       {/* 图表主舞台 / 基本面页签（互斥挂载）；crypto 图表下方挂衍生品指标条（issue #38），
           右侧可折叠盘口竖栏（issue #39） */}
-      {stageTab === 'chart' ? (
+      {viewTab === 'chart' ? (
         <div className={css.chartRow}>
           <div className={css.chartColumn}>
             <div className={css.chartBox}>
@@ -962,15 +980,15 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             />
           )}
         </div>
-      ) : stageTab === 'derivatives' && market === 'crypto' ? (
+      ) : viewTab === 'derivatives' ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <DerivativesStage t={t} derivatives={derivatives} history={derivativesHistory} colorMode={colorMode} />
+          <DerivativesStage t={t} derivatives={derivatives} history={derivativesHistory} historyLoaded={derivativesHistoryLoaded} colorMode={colorMode} />
         </div>
-      ) : stageTab === 'fundamentals' ? (
+      ) : viewTab === 'fundamentals' ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <FundamentalsStage t={t} useSelection={useSelection} />
         </div>
-      ) : stageTab === 'news' ? (
+      ) : viewTab === 'news' ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <NewsFeedPane
             items={newsItems}
@@ -995,7 +1013,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       )}
 
       {/* 交易工作台底栏（issue #40，crypto 图表页签专属，默认折叠） */}
-      {stageTab === 'chart' && market === 'crypto' && tradeDeskOpen && (
+      {viewTab === 'chart' && market === 'crypto' && tradeDeskOpen && (
         <TradeDesk
           t={t}
           symbol={symbol}
