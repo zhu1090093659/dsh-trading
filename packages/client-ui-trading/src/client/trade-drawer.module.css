@@ -1,4 +1,4 @@
-﻿/* TradeDrawer —— 底部全宽资产与委托抽屉 */
+/* TradeDrawer —— 底部全宽资产与委托抽屉 */
 
 .root {
   flex: none;
@@ -27,6 +27,33 @@
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.paperBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  margin-right: 4px;
+}
+
+.resetBtn {
+  background: transparent;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: all 0.15s ease;
+}
+
+.resetBtn:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
 }
 
 .tabBtn {

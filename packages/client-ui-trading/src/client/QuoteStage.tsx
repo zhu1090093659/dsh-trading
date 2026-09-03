@@ -21,6 +21,7 @@ import { DerivativesStage } from './DerivativesStage.tsx'
 import { OrderbookPane } from './OrderbookPane.tsx'
 import { OrderPanel } from './OrderPanel.tsx'
 import { TradeDrawer } from './TradeDrawer.tsx'
+import { paperTradingStore } from './paper-trading-store.ts'
 import { computeRangeStats } from './range-stats.ts'
 import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
@@ -169,6 +170,50 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [tradeBalances, setTradeBalances] = useState<AccountBalance[] | null>(null)
   const [tradeOrders, setTradeOrders] = useState<Order[] | null>(null)
   const [tradeFills, setTradeFills] = useState<TradeFill[] | null>(null)
+
+  /** 全局交易模式：'live' 实盘 vs 'paper' 模拟盘（默认从 localStorage 读取，缺省 live） */
+  const [tradeMode, setTradeMode] = useState<'live' | 'paper'>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const stored = window.localStorage.getItem('dshtrading:trade:mode')
+      if (stored === 'paper' || stored === 'live') return stored
+    }
+    return 'live'
+  })
+
+  // 监听模拟账本变动
+  const [, setPaperTick] = useState(0)
+  useEffect(() => {
+    return paperTradingStore.subscribe(() => {
+      setPaperTick((t) => t + 1)
+    })
+  }, [])
+
+  const handleToggleTradeMode = (mode: 'live' | 'paper') => {
+    setTradeMode(mode)
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('dshtrading:trade:mode', mode)
+    }
+    if (mode === 'paper') {
+      // 切换到模拟盘时，若交易台未开，自动打开方便体验
+      if (!tradeDeskOpen) {
+        setTradeDeskOpen(true)
+        writeTradeDeskOpen(true)
+      }
+    }
+  }
+
+  // 标的行情价格变动时实时更新模拟持仓浮盈
+  useEffect(() => {
+    if (ticker?.price && symbol) {
+      paperTradingStore.updatePrices({ [symbol]: ticker.price })
+    }
+  }, [ticker?.price, symbol])
+
+  const activePositions = tradeMode === 'paper' ? paperTradingStore.getPositions() : tradePositions
+  const activeBalances = tradeMode === 'paper' ? paperTradingStore.getBalances() : tradeBalances
+  const activeOrders = tradeMode === 'paper' ? paperTradingStore.getOrders() : tradeOrders
+  const activeFills = tradeMode === 'paper' ? paperTradingStore.getFills() : tradeFills
+  const paperCash = paperTradingStore.getAccount().cash
   /** 区间统计：框选模式开 + 已选逻辑下标区间（TvChart 上报，面板消费）。 */
   const [rangeMode, setRangeMode] = useState(false)
   const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
@@ -312,8 +357,25 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     await refreshTradeDesk(activeMarket)
   }, TRADE_DESK_POLL_MS, [stageTab, activeMarket])
 
-  const onSubmitGuiOrder = (input: Parameters<typeof placeGuiOrder>[1]) =>
-    placeGuiOrder(activeMarket, input).then((res) => {
+  const onSubmitGuiOrder = async (input: Parameters<typeof placeGuiOrder>[1]): Promise<Awaited<ReturnType<typeof placeGuiOrder>>> => {
+    if (tradeMode === 'paper') {
+      try {
+        const curPrice = ticker?.price ?? 0
+        const order = paperTradingStore.placeOrder({
+          symbol: input.symbol,
+          side: input.side,
+          type: input.type,
+          quantity: input.quantity,
+          ...(input.price !== undefined ? { price: input.price } : {}),
+          currentPrice: curPrice,
+        })
+        setTradeDrawerOpen(true)
+        return { order }
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) }
+      }
+    }
+    return placeGuiOrder(activeMarket, input).then((res) => {
       // 下单成功（真交易）→ 自动展开底栏看最新委托，并立即刷新账户面。
       if (res.order) {
         setTradeDrawerOpen(true)
@@ -321,6 +383,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       }
       return res
     })
+  }
 
   // 衍生品页签是 crypto 专属：切到非 crypto 市场时自动回图表页签（issue #54）。
   useEffect(() => {
@@ -776,6 +839,30 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                     : t('quote.sendToAgent')}
             </button>
           )}
+          {/* 全局交易模式切换胶囊（实盘 vs 模拟盘 Demo） */}
+          <div className={css.tradeModeToggle} role="radiogroup" aria-label="trading mode">
+            <button
+              type="button"
+              className={css.tradeModeBtn}
+              data-active={tradeMode === 'live' ? 'true' : undefined}
+              aria-checked={tradeMode === 'live'}
+              onClick={() => handleToggleTradeMode('live')}
+              title={t('trade.mode.live')}
+            >
+              ⚡ {t('trade.mode.live')}
+            </button>
+            <button
+              type="button"
+              className={css.tradeModeBtn}
+              data-paper="true"
+              data-active={tradeMode === 'paper' ? 'true' : undefined}
+              aria-checked={tradeMode === 'paper'}
+              onClick={() => handleToggleTradeMode('paper')}
+              title={t('trade.mode.paper')}
+            >
+              🧪 {t('trade.mode.paper')}
+            </button>
+          </div>
           {/* 交易工作台开关（issue #40；支持接入了交易注册面的各市场） */}
           <button
             type="button"
@@ -1023,6 +1110,11 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                   market={activeMarket}
                   suggestedPrice={ticker?.price}
                   colorMode={colorMode}
+                  tradeMode={tradeMode}
+                  paperCash={paperCash}
+                  onResetPaper={() => {
+                    paperTradingStore.resetAccount()
+                  }}
                   onSubmit={onSubmitGuiOrder}
                   onClose={() => {
                     setTradeDeskOpen(false)
@@ -1069,11 +1161,15 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       {viewTab === 'chart' && (
         <TradeDrawer
           t={t}
-          positions={tradePositions}
-          balances={tradeBalances}
-          orders={tradeOrders}
-          fills={tradeFills}
+          positions={activePositions}
+          balances={activeBalances}
+          orders={activeOrders}
+          fills={activeFills}
           colorMode={colorMode}
+          tradeMode={tradeMode}
+          onResetPaper={() => {
+            paperTradingStore.resetAccount()
+          }}
           isOpen={tradeDrawerOpen}
           onToggle={setTradeDrawerOpen}
           onCancelOrder={onCancelGuiOrder}

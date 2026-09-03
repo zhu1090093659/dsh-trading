@@ -18,6 +18,9 @@ export interface OrderPanelProps {
   market?: MarketId | undefined
   suggestedPrice?: number | undefined
   colorMode: ColorMode
+  tradeMode?: 'live' | 'paper' | undefined
+  paperCash?: number | undefined
+  onResetPaper?: (() => void) | undefined
   onSubmit: (input: GuiOrderInput) => Promise<GuiOrderResult>
   onClose?: (() => void) | undefined
 }
@@ -42,6 +45,9 @@ export function OrderPanel({
   market,
   suggestedPrice,
   colorMode,
+  tradeMode = 'live',
+  paperCash,
+  onResetPaper,
   onSubmit,
   onClose,
 }: OrderPanelProps): React.JSX.Element {
@@ -135,13 +141,44 @@ export function OrderPanel({
     <div className={css.root} data-dshtrading-order-panel="">
       <div className={css.titleRow}>
         <span>{t('trade.sideOrder')}</span>
-        <span className={css.liveTag}>{t('trade.liveChannel')}</span>
-        {onClose !== undefined && (
-          <button type="button" className={css.closeBtn} onClick={onClose} title={t('trade.close')}>
-            ×
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          {tradeMode === 'paper' ? (
+            <>
+              <span className={css.paperTag}>{t('trade.paper.tag')}</span>
+              {onResetPaper !== undefined && (
+                <button
+                  type="button"
+                  className={css.resetBtn}
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && window.confirm(t('trade.paper.resetConfirm'))) {
+                      onResetPaper()
+                    }
+                  }}
+                  title={t('trade.paper.reset')}
+                >
+                  ↺ {t('trade.paper.reset')}
+                </button>
+              )}
+            </>
+          ) : (
+            <span className={css.liveTag}>{t('trade.liveChannel')}</span>
+          )}
+          {onClose !== undefined && (
+            <button type="button" className={css.closeBtn} onClick={onClose} title={t('trade.close')}>
+              ×
+            </button>
+          )}
+        </div>
       </div>
+
+      {tradeMode === 'paper' && (
+        <div className={css.availableRow}>
+          <span>{t('trade.paper.available')}</span>
+          <span className={css.availableValue}>
+            {(paperCash ?? 100000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        </div>
+      )}
 
       <div className={css.sideToggle} role="tablist" aria-label="order side">
         <button
@@ -254,11 +291,16 @@ export function OrderPanel({
       <button
         type="button"
         className={css.submitBtn}
+        data-paper={tradeMode === 'paper' ? 'true' : undefined}
         disabled={submitting || quantity === '' || (type === 'limit' && price === '')}
         style={{ background: activeColor }}
         onClick={submit}
       >
-        {submitting ? t('trade.submitting') : `${actionText} ${symbol}`}
+        {submitting
+          ? t('trade.submitting')
+          : tradeMode === 'paper'
+            ? `${side === 'buy' ? t('trade.paper.buyAction') : t('trade.paper.sellAction')} ${symbol}`
+            : `${actionText} ${symbol}`}
       </button>
 
       {feedback && (

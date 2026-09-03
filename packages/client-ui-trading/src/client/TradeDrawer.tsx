@@ -19,6 +19,8 @@ export interface TradeDrawerProps {
   orders: Order[] | null
   fills: TradeFill[] | null
   colorMode: ColorMode
+  tradeMode?: 'live' | 'paper' | undefined
+  onResetPaper?: (() => void) | undefined
   isOpen: boolean
   onToggle: (open: boolean) => void
   onCancelOrder?: (orderId: string, symbol?: string) => Promise<boolean>
@@ -31,6 +33,8 @@ export function TradeDrawer({
   orders,
   fills,
   colorMode,
+  tradeMode = 'live',
+  onResetPaper,
   isOpen,
   onToggle,
   onCancelOrder,
@@ -53,6 +57,9 @@ export function TradeDrawer({
     <div className={css.root} data-dshtrading-trade-drawer="" style={{ maxHeight: isOpen ? '220px' : '28px' }}>
       <div className={css.bar}>
         <div className={css.tabs} role="tablist">
+          {tradeMode === 'paper' && (
+            <span className={css.paperBadge}>🧪 {t('trade.paper.drawerTag')}</span>
+          )}
           <button
             type="button"
             role="tab"
@@ -99,6 +106,20 @@ export function TradeDrawer({
         </div>
 
         <div className={css.actions}>
+          {tradeMode === 'paper' && onResetPaper !== undefined && (
+            <button
+              type="button"
+              className={css.resetBtn}
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.confirm(t('trade.paper.resetConfirm'))) {
+                  onResetPaper()
+                }
+              }}
+              title={t('trade.paper.reset')}
+            >
+              ↺ {t('trade.paper.reset')}
+            </button>
+          )}
           <button
             type="button"
             className={css.toggleBtn}

@@ -1,4 +1,4 @@
-﻿/* OrderPanel —— 旗舰级专业交易下单面板（对齐 OKX / Binance 桌面端） */
+/* OrderPanel —— 旗舰级专业交易下单面板（对齐 OKX / Binance 桌面端） */
 
 .root {
   flex: none;
@@ -30,6 +30,46 @@
   background: rgba(45, 189, 133, 0.15);
   color: #2dbd85;
   letter-spacing: 0.5px;
+}
+
+.paperTag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  letter-spacing: 0.5px;
+}
+
+.resetBtn {
+  background: transparent;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: all 0.15s ease;
+}
+
+.resetBtn:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+}
+
+.availableRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--dsw-futu-text-muted, #787b86);
+  padding: 0 2px;
+}
+
+.availableValue {
+  font-weight: 600;
+  color: #f59e0b;
 }
 
 .sideToggle {
