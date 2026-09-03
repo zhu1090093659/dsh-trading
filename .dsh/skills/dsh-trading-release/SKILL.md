@@ -151,6 +151,13 @@ gh run list --workflow=desktop-release.yml   # 查历史
   再删 tag 重推；产物有实质缺陷且已有用户下载时，发下一个补丁版本并在
   Release notes 说明，而不是静默重推。
 
+- **org mention 误入 Contributors（v0.1.0 实证）**：提交主题里的 `@组织名`（如
+  "switch DSH SDK to official npm @deepseek-ai ..."）会在自动 notes 里被链接成
+  org mention，GitHub 把它列进 Release 的 Contributors 侧栏（方形 org 头像）。
+  发版提交避免在 commit subject 写裸 `@org`；notes 已生成时用
+  `gh release edit vX.Y.Z --notes-file` 把误入的 mention 用反引号转义，
+  转义后侧栏即消失（v0.1.0 已这样修复）。
+
 ## 5. 发布后验证（必须逐项执行）
 
 ```sh
