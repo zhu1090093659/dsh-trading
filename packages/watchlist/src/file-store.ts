@@ -61,9 +61,14 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
     return cache
   }
 
+  /** 仅在 enqueue 队列内调用：写盘不能二次入队（外层已持队，内层 enqueue 会自等死锁）。 */
+  function writeNow(map: WatchlistsMap): Promise<void> {
+    return safeAtomicWrite(filePath, JSON.stringify(map, null, 2))
+  }
+
   async function flush(map: WatchlistsMap): Promise<void> {
     return enqueue(async () => {
-      await safeAtomicWrite(filePath, JSON.stringify(map, null, 2))
+      await writeNow(map)
     })
   }
 
@@ -75,24 +80,30 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
       cache = { ...next }
       await flush(cache)
     },
+    // 读改写全程入队串行化（issue #58）：此前只有写盘排队，两个并发 add 都从
+    // 同一旧态计算 next，后写覆盖先写丢更新；工具与 GUI 桥并发写时真实发生。
     async add(market, instrument) {
-      const map = await load()
-      const rows = map[market] ?? []
-      if (rows.some(row => row.symbol === instrument.symbol)) return false
-      const next = { ...map, [market]: [...rows, { ...instrument }] }
-      cache = next
-      await flush(next)
-      return true
+      return enqueue(async () => {
+        const map = await load()
+        const rows = map[market] ?? []
+        if (rows.some(row => row.symbol === instrument.symbol)) return false
+        const next = { ...map, [market]: [...rows, { ...instrument }] }
+        cache = next
+        await writeNow(next)
+        return true
+      })
     },
     async remove(market, symbol) {
-      const map = await load()
-      const rows = map[market] ?? []
-      const nextRows = rows.filter(row => row.symbol !== symbol)
-      if (nextRows.length === rows.length) return false
-      const next = { ...map, [market]: nextRows }
-      cache = next
-      await flush(next)
-      return true
+      return enqueue(async () => {
+        const map = await load()
+        const rows = map[market] ?? []
+        const nextRows = rows.filter(row => row.symbol !== symbol)
+        if (nextRows.length === rows.length) return false
+        const next = { ...map, [market]: nextRows }
+        cache = next
+        await writeNow(next)
+        return true
+      })
     },
   }
 }

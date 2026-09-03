@@ -133,3 +133,38 @@ describe('watchlist_* tools', () => {
     expect(onSelectionChanged).toHaveBeenCalledTimes(3)
   })
 })
+
+describe('file store 并发读改写（issue #58）', () => {
+  it('并发 add 全部落盘不丢更新（RMW 全程入队串行化）', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-watchlist-'))
+    const filePath = join(dir, 'watchlists.json')
+    const store = createFileWatchlistStore(filePath)
+    const results = await Promise.all([
+      store.add('us', { market: 'us', symbol: 'AAPL' }),
+      store.add('us', { market: 'us', symbol: 'NVDA' }),
+      store.add('us', { market: 'us', symbol: 'MSFT' }),
+      store.add('crypto', { market: 'crypto', symbol: 'BTCUSDT' }),
+    ])
+    expect(results).toEqual([true, true, true, true])
+    // 新实例（空缓存）从盘上读：修复前最后一个 flush 用旧态整行覆盖，先写行丢失。
+    const reread = createFileWatchlistStore(filePath)
+    const list = await reread.list()
+    expect(list.us?.map(r => r.symbol).sort()).toEqual(['AAPL', 'MSFT', 'NVDA'])
+    expect(list.crypto?.map(r => r.symbol)).toEqual(['BTCUSDT'])
+    const files = await readdir(dir)
+    expect(files.filter(f => f.includes('.tmp.'))).toEqual([])
+  })
+
+  it('并发 add 同一 symbol 仍按去重语义只落一行', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-watchlist-'))
+    const filePath = join(dir, 'watchlists.json')
+    const store = createFileWatchlistStore(filePath)
+    const results = await Promise.all([
+      store.add('us', { market: 'us', symbol: 'AAPL' }),
+      store.add('us', { market: 'us', symbol: 'AAPL' }),
+    ])
+    expect(results.filter(Boolean)).toHaveLength(1)
+    const list = await store.list()
+    expect(list.us).toHaveLength(1)
+  })
+})

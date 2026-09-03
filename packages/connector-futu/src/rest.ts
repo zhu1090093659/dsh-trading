@@ -214,11 +214,13 @@ export class FutuRestClient {
   }
 
   async getBalance(_credentials?: FutuCredentials): Promise<AccountBalance> {
-    const data = await this.request<{ cash?: number; totalAssets?: number; currency?: string }>('/api/trd/get-funds')
+    const data = await this.request<{ cash?: number; frozenCash?: number; totalAssets?: number; currency?: string }>('/api/trd/get-funds')
+    // 契约形状 AccountBalance { asset, free, locked }（issue #58）：此前返回
+    // currency/available/total 三键，消费方按 .free/.locked 读全为 undefined。
     return {
-      currency: data.currency ?? 'HKD',
-      available: Number(data.cash ?? 0),
-      total: Number(data.totalAssets ?? 0),
+      asset: data.currency ?? 'HKD',
+      free: Number(data.cash ?? 0),
+      locked: Number(data.frozenCash ?? 0),
     }
   }
 
@@ -234,14 +236,17 @@ export class FutuRestClient {
     })
 
     const id = data.orderId ?? data.orderID ?? `futu-${Date.now()}`
+    // 真实回执：side/type 落 OrderSide/OrderType 契约词汇，dryRun 显式回带 false
+    // （回执必须显式回带，防 dry-run 语义丢失；issue #58）。
     return {
       id,
       symbol: canonical,
-      side: req.side,
-      type: req.type,
+      side: req.side === 'SELL' ? 'sell' : 'buy',
+      type: req.type === 'LIMIT' ? 'limit' : 'market',
       quantity: req.quantity,
       price: req.price,
       status: 'new',
+      dryRun: false,
       timestamp: Date.now(),
     }
   }

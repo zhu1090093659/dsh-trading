@@ -274,10 +274,11 @@ export function createPlaceOrderTool(deps: { marketData: Pick<MarketDataService,
       }
       const order = await deps.trade.placeOrder({
         symbol: args.symbol,
-        side: args.side,
-        type: args.type,
+        side: args.side === 'SELL' ? 'sell' : 'buy',
+        type: args.type === 'LIMIT' ? 'limit' : 'market',
         quantity: args.quantity,
         price: args.price,
+        dryRun: false,
       })
       return JSON.stringify(order)
     },
