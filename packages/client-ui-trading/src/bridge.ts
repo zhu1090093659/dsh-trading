@@ -13,7 +13,7 @@
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
-import type { AccountBalance, DerivativesData, FundamentalsPackage, Interval, Kline, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
+import type { AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, Interval, Kline, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
 import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dsh-trading/kit-cn'
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dsh-trading/kit-hk'
 import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dsh-trading/kit-us'
@@ -168,6 +168,11 @@ export interface FundamentalsWire {
 export interface DerivativesWire {
   ok: true
   derivatives: DerivativesData
+}
+
+export interface DerivativesHistoryWire {
+  ok: true
+  history: DerivativesHistory
 }
 
 export interface OrderbookWire {
@@ -370,6 +375,26 @@ export class TradingBridge {
       )
     }
     return { ok: true, derivatives: await service.getDerivatives(trimmed) }
+  }
+
+  /**
+   * 衍生品历史序列（GUI「衍生品」页签趋势卡，issue #54）：单 symbol 透传。
+   * 连接器未实现可选 getDerivativesHistory → TRADING_NOT_IMPLEMENTED 业务错误
+   * （HTTP 200 + ok:false），前端隐藏趋势卡、保留快照读数（与快照同纪律）。
+   */
+  async derivativesHistory(market: string, symbol: string): Promise<DerivativesHistoryWire> {
+    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const trimmed = symbol.trim()
+    if (trimmed === '') throw new BridgeProtocolError(400, 'derivatives history: symbol is required')
+    const service = this.host.getMarketService(market)
+    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    if (typeof service.getDerivativesHistory !== 'function') {
+      throw Object.assign(
+        new Error(`market ${market} provider does not implement derivatives history`),
+        { code: 'TRADING_NOT_IMPLEMENTED' },
+      )
+    }
+    return { ok: true, history: await service.getDerivativesHistory(trimmed) }
   }
 
   /**
@@ -814,6 +839,11 @@ export async function dispatchBridgeRequest(
         const market = search.get('market') ?? ''
         const symbol = search.get('symbol') ?? ''
         return { status: 200, payload: await bridge.derivatives(market, symbol) }
+      }
+      case '/derivatives/history': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return { status: 200, payload: await bridge.derivativesHistory(market, symbol) }
       }
       case '/orderbook': {
         const market = search.get('market') ?? ''

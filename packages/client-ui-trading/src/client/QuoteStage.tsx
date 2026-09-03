@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
-  fetchKlines, fetchTickers, fetchDerivatives, fetchOrderbook, fetchRecentTrades,
+  fetchKlines, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiDryRunOrder,
 } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
@@ -15,6 +15,7 @@ import { composeQuoteMessage } from './compose-quote.ts'
 import type { SendImageInput } from './fill-composer.ts'
 import { FundamentalsStage } from './FundamentalsStage.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
+import { DerivativesStage } from './DerivativesStage.tsx'
 import { OrderbookPane } from './OrderbookPane.tsx'
 import { TradeDesk } from './TradeDesk.tsx'
 import { computeRangeStats } from './range-stats.ts'
@@ -22,14 +23,14 @@ import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import {
   INTRADAY_INTERVALS, changePercent, directionColor,
-  fmtChange, fmtClock, fmtCompact, fmtPercent, fmtPrice,
+  fmtChange, fmtClock, fmtCompact, fmtFundingRate, fmtPercent, fmtPrice,
 } from './format.ts'
 import { indicators, isCustomIndicator } from './indicator-registry.ts'
 import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indicators'
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
-import type { AccountBalance, DerivativesData, Order, Orderbook, Position, TradeFill, TradeTick } from './types.ts'
+import type { AccountBalance, DerivativesData, DerivativesHistory, Order, Orderbook, Position, TradeFill, TradeTick } from './types.ts'
 import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
@@ -52,6 +53,9 @@ const KLINE_RESYNC_MS = 30000
 // 衍生品指标快照轮询（issue #38）：一次刷新 = 2~5 个上游公共端点调用，取 30s
 // 对齐 K 线 resync 节奏，避免放大限频消耗（funding 8h 才变，OI 30s 粒度够看）。
 const DERIVATIVES_POLL_MS = 30000
+// 衍生品历史序列（issue #54，页签趋势卡）：8h 一期的费率与 1D OI 变化极慢，
+// 5min 节奏足够；仅页签激活时拉取，省上游配额。
+const DERIVATIVES_HISTORY_POLL_MS = 300000
 // 盘口/分笔轮询（issue #39）：竖栏打开才拉；一次刷新 = depth + trades 两请求，
 // 4s 在「盯盘时效」与公共端点限频之间取衡。
 const ORDERBOOK_POLL_MS = 4000
@@ -117,6 +121,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     : inferMarketFromSymbol(instrument?.symbol)
   const symbol = instrument?.symbol
   const activeMarket: MarketId = market ?? 'crypto'
+  // 渲染期页签归一（issue #54 评审 L3）：衍生品页签是 crypto 专属，切到非 crypto
+  // 市场时渲染直接按图表页签处理——不等 useEffect 纠偏（paint 后才跑会闪一帧公告）。
+  const viewTab = stageTab === 'derivatives' && market !== 'crypto' ? 'chart' : stageTab
 
   const colorMode = useSyncExternalStore(colorModeStore.subscribe, colorModeStore.getSnapshot)
 
@@ -137,9 +144,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
   const [sendState, setSendState] = useState<SendState>('idle')
   /** 行情板块页签（图表 | 基本面 | 新闻 | 公告）：跨标的保持。 */
-  const [stageTab, setStageTab] = useState<'chart' | 'fundamentals' | 'news' | 'announcements'>('chart')
+  const [stageTab, setStageTab] = useState<'chart' | 'derivatives' | 'fundamentals' | 'news' | 'announcements'>('chart')
   /** 衍生品指标快照（issue #38，crypto 专属；null = 未实现/失败 → 面板整体隐藏）。 */
   const [derivatives, setDerivatives] = useState<DerivativesData | null>(null)
+  /** 衍生品历史序列（issue #54；页签激活才拉；null = 未实现/失败 → 趋势卡隐藏）。 */
+  const [derivativesHistory, setDerivativesHistory] = useState<DerivativesHistory | null>(null)
+  /** 历史首个应答是否已落地（区分「加载中」与「不可用」，评审 L2）。 */
+  const [derivativesHistoryLoaded, setDerivativesHistoryLoaded] = useState(false)
   /** 盘口竖栏（issue #39）：开关跨标的/会话记忆；数据 null = 数据源未提供（降级提示）。 */
   const [orderbookOpen, setOrderbookOpen] = useState<boolean>(() => readOrderbookOpen())
   const [orderbook, setOrderbook] = useState<Orderbook | null>(null)
@@ -233,11 +244,30 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   }, [market, symbol])
 
   // 衍生品指标轮询（issue #38，仅 crypto；现货输入由连接器升到对应永续）。
+  // 竞态守卫（issue #54 评审 M3）：换标的后在途响应丢弃，不覆盖新标的 state。
+  const derivativesRequestRef = useRef('')
   usePoll(async () => {
     if (market !== 'crypto' || symbol === undefined) return
+    const request = `${market}:${symbol}`
+    derivativesRequestRef.current = request
     const data = await fetchDerivatives(market, symbol)
+    if (derivativesRequestRef.current !== request) return
     setDerivatives(data)
   }, DERIVATIVES_POLL_MS, [market, symbol])
+
+  // 衍生品历史序列轮询（issue #54，仅 crypto + 衍生品页签激活）。
+  // 竞态守卫同款：5min 周期下旧标的慢响应可挂很久，必须丢弃（评审 M3）。
+  const derivativesHistoryRequestRef = useRef('')
+  usePoll(async () => {
+    if (stageTab !== 'derivatives' || market !== 'crypto' || symbol === undefined) return
+    const request = `${market}:${symbol}`
+    derivativesHistoryRequestRef.current = request
+    const history = await fetchDerivativesHistory(market, symbol)
+    if (derivativesHistoryRequestRef.current !== request) return
+    setDerivativesHistory(history)
+    // L2：首个应答落地（无论成败）即离开「加载中」，null 从此可读作「不可用」。
+    setDerivativesHistoryLoaded(true)
+  }, DERIVATIVES_HISTORY_POLL_MS, [stageTab, market, symbol])
 
   // 盘口/分笔轮询（issue #39）：竖栏打开 + 图表页签时才拉，省上游配额。
   usePoll(async () => {
@@ -281,6 +311,34 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       return order
     })
 
+  // 衍生品页签是 crypto 专属：切到非 crypto 市场时自动回图表页签（issue #54）。
+  useEffect(() => {
+    if (stageTab === 'derivatives' && market !== 'crypto') setStageTab('chart')
+  }, [stageTab, market])
+
+  // 「分析资金面」（issue #54）：把衍生品快照上下文填进会话输入框（只填不发）。
+  const onAnalyzeDerivatives = (): void => {
+    if (fillComposer === undefined || derivatives === null || symbol === undefined) return
+    const d = derivatives
+    const parts = [
+      `请分析 ${d.symbol} 永续合约的资金面与多空拥挤度（数据源 ${d.source}）：`,
+      d.openInterest !== undefined
+        ? `- 持仓量 ${fmtCompact(d.openInterest)}${d.openInterestValue !== undefined ? `（约 ${fmtCompact(d.openInterestValue)} USD）` : ''}`
+        : undefined,
+      d.fundingRate !== undefined
+        ? `- 资金费率 ${fmtFundingRate(d.fundingRate)}（${d.fundingRate > 0 ? '多头付资金' : d.fundingRate < 0 ? '空头付资金' : '中性'}）${d.nextFundingRate !== undefined ? `，预测下期 ${fmtFundingRate(d.nextFundingRate)}` : ''}`
+        : undefined,
+      d.longShortRatio !== undefined ? `- 多空人数比 ${d.longShortRatio.toFixed(2)}` : undefined,
+      d.topTraderLongShortRatio !== undefined ? `- 大户多空比 ${d.topTraderLongShortRatio.toFixed(2)}` : undefined,
+      d.takerBuySellRatio !== undefined ? `- 主动买卖比 ${d.takerBuySellRatio.toFixed(2)}` : undefined,
+      d.markPrice !== undefined && d.indexPrice !== undefined && d.indexPrice > 0
+        ? `- 基差 ${fmtPercent((d.markPrice - d.indexPrice) / d.indexPrice * 100)}（标记 ${fmtPrice(d.markPrice)} / 指数 ${fmtPrice(d.indexPrice)}）`
+        : undefined,
+      '请结合费率走向、OI 变化与多空比给出拥挤度判断和风险提示（不构成投资建议）。',
+    ].filter((line): line is string => line !== undefined)
+    void fillComposer(parts.join('\n'))
+  }
+
   // 换标的：立即清场
   useEffect(() => {
     setKlines(null)
@@ -289,6 +347,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setHoverIndex(null)
     setKError(null)
     setDerivatives(null)
+    setDerivativesHistory(null)
+    setDerivativesHistoryLoaded(false)
     setOrderbook(null)
     setTrades(null)
     setNewsItems(null)
@@ -572,6 +632,18 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           >
             {t('quote.tab.chart')}
           </button>
+          {market === 'crypto' && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={stageTab === 'derivatives'}
+              className={css.stageTab}
+              data-active={stageTab === 'derivatives' ? 'true' : undefined}
+              onClick={() => { setStageTab('derivatives') }}
+            >
+              {t('quote.tab.derivatives')}
+            </button>
+          )}
           <button
             type="button"
             role="tab"
@@ -609,7 +681,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       </div>
 
       {/* 统计行情概览（图表页签专属：基本面页签有自己的信息网格） */}
-      {stageTab === 'chart' && (
+      {viewTab === 'chart' && (
         <div className={css.stats}>
           <span className={css.stat}><label>{t('quote.prevClose')}</label>{fmtPrice(readoutPrevClose)}</span>
           <span className={css.stat}><label>{t('quote.open')}</label>{fmtPrice(readoutCandle?.open)}</span>
@@ -620,7 +692,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       )}
 
       {/* 周期胶囊条 + 指标弹层按钮（图表页签） */}
-      {stageTab === 'chart' && (
+      {viewTab === 'chart' && (
         <div className={css.toolbar}>
           <div className={css.intervalTabs} role="tablist" aria-label="interval">
             {intervals.map(entry => (
@@ -770,17 +842,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
       {/* 主图指标悬停/最新读数分量（各分量独立着色）。VOL/MACD 等副图指标
           的读数在 TvChart 各自 pane 内渲染，不进主图读数行。 */}
-      {stageTab === 'chart' && mainOverlays.length > 0 && (
+      {viewTab === 'chart' && mainOverlays.length > 0 && (
         <div className={css.indicatorReadout}>
           {mainOverlays.flatMap(group => outputReadouts(group, readoutIndex))}
         </div>
       )}
 
-      {stageTab === 'chart' && kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
+      {viewTab === 'chart' && kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
 
       {/* 图表主舞台 / 基本面页签（互斥挂载）；crypto 图表下方挂衍生品指标条（issue #38），
           右侧可折叠盘口竖栏（issue #39） */}
-      {stageTab === 'chart' ? (
+      {viewTab === 'chart' ? (
         <div className={css.chartRow}>
           <div className={css.chartColumn}>
             <div className={css.chartBox}>
@@ -885,7 +957,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             )}
             </div>
             {market === 'crypto' && derivatives !== null && (
-              <DerivativesPane t={t} derivatives={derivatives} colorMode={colorMode} />
+              <DerivativesPane
+                t={t}
+                derivatives={derivatives}
+                colorMode={colorMode}
+                onOpenStage={() => { setStageTab('derivatives') }}
+                onAnalyze={fillComposer !== undefined ? onAnalyzeDerivatives : undefined}
+              />
             )}
           </div>
           {orderbookOpen && (
@@ -902,11 +980,15 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             />
           )}
         </div>
-      ) : stageTab === 'fundamentals' ? (
+      ) : viewTab === 'derivatives' ? (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <DerivativesStage t={t} derivatives={derivatives} history={derivativesHistory} historyLoaded={derivativesHistoryLoaded} colorMode={colorMode} />
+        </div>
+      ) : viewTab === 'fundamentals' ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <FundamentalsStage t={t} useSelection={useSelection} />
         </div>
-      ) : stageTab === 'news' ? (
+      ) : viewTab === 'news' ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <NewsFeedPane
             items={newsItems}
@@ -931,7 +1013,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       )}
 
       {/* 交易工作台底栏（issue #40，crypto 图表页签专属，默认折叠） */}
-      {stageTab === 'chart' && market === 'crypto' && tradeDeskOpen && (
+      {viewTab === 'chart' && market === 'crypto' && tradeDeskOpen && (
         <TradeDesk
           t={t}
           symbol={symbol}

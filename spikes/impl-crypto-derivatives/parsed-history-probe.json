@@ -1,0 +1,156 @@
+{
+  "fetchedAt": "2026-09-03T03:00:32.256Z",
+  "symbol": "HYPEUSDT",
+  "results": {
+    "okx.fundingRate(含next)": {
+      "ok": true,
+      "value": {
+        "instId": "HYPE-USDT-SWAP",
+        "fundingRate": 0.0000196992818708,
+        "fundingTime": 1788422400000,
+        "nextFundingRate": 0,
+        "nextFundingTime": 1788451200000
+      }
+    },
+    "okx.markPrice": {
+      "ok": true,
+      "value": {
+        "instId": "HYPE-USDT-SWAP",
+        "markPrice": 82.215,
+        "ts": 1788404433185
+      }
+    },
+    "okx.indexPrice": {
+      "ok": true,
+      "value": {
+        "instId": "HYPE-USDT",
+        "indexPrice": 82.269,
+        "ts": 1788404431106
+      }
+    },
+    "okx.fundingRateHistory(30)": {
+      "ok": true,
+      "value": [
+        {
+          "time": 1788336000000,
+          "value": 0.0000261526678637
+        },
+        {
+          "time": 1788364800000,
+          "value": 0.0000304405234642
+        },
+        {
+          "time": 1788393600000,
+          "value": -9.04770941e-8
+        }
+      ]
+    },
+    "okx.openInterestHistory(30)": {
+      "ok": true,
+      "value": [
+        {
+          "time": 1788192000000,
+          "value": 1391350.9
+        },
+        {
+          "time": 1788278400000,
+          "value": 1412188.2
+        },
+        {
+          "time": 1788364800000,
+          "value": 1399479.5
+        }
+      ]
+    },
+    "binance.premiumIndex": {
+      "ok": true,
+      "value": {
+        "markPrice": 82.21877857,
+        "indexPrice": 82.27907143,
+        "lastFundingRate": 0.00003641,
+        "nextFundingTime": 1788408000000,
+        "time": 1788404433000
+      }
+    },
+    "binance.fundingRateHistory(30)": {
+      "ok": true,
+      "value": [
+        {
+          "time": 1788364800005,
+          "value": 0.00002804
+        },
+        {
+          "time": 1788379200000,
+          "value": -5.6e-7
+        },
+        {
+          "time": 1788393600000,
+          "value": -0.00002939
+        }
+      ]
+    },
+    "binance.openInterestHistory(30d)": {
+      "ok": true,
+      "value": [
+        {
+          "time": 1788220800000,
+          "value": 4645337.54
+        },
+        {
+          "time": 1788307200000,
+          "value": 4667918.37
+        },
+        {
+          "time": 1788393600000,
+          "value": 4469538.74
+        }
+      ]
+    },
+    "bybit.linearTicker(扩展字段)": {
+      "ok": true,
+      "value": {
+        "symbol": "HYPEUSDT",
+        "fundingRate": -0.00002443,
+        "openInterest": 3442382.44,
+        "openInterestValue": 283039568.98,
+        "nextFundingTime": 1788422400000,
+        "markPrice": 82.222,
+        "indexPrice": 82.271
+      }
+    },
+    "bybit.fundingHistory(30)": {
+      "ok": true,
+      "value": [
+        {
+          "time": 1788336000000,
+          "value": -0.00001562
+        },
+        {
+          "time": 1788364800000,
+          "value": 0.00002058
+        },
+        {
+          "time": 1788393600000,
+          "value": -0.00003665
+        }
+      ]
+    },
+    "bybit.openInterestHistory(30d)": {
+      "ok": true,
+      "value": [
+        {
+          "time": 1788220800000,
+          "value": 3686131.66
+        },
+        {
+          "time": 1788307200000,
+          "value": 3533348.16
+        },
+        {
+          "time": 1788393600000,
+          "value": 3448422.92
+        }
+      ]
+    }
+  }
+}

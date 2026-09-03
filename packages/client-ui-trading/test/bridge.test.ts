@@ -609,3 +609,38 @@ describe('errorPayload', () => {
     expect(errorPayload('boom')).toEqual({ code: 'TRADING_UNKNOWN', message: 'boom' })
   })
 })
+
+
+describe('TradingBridge.derivativesHistory（issue #54 衍生品页签趋势卡）', () => {
+  it('/derivatives/history 透传注册表解析出服务的 getDerivativesHistory', async () => {
+    const service = fakeService({
+      getDerivativesHistory: async (symbol: string) => ({
+        symbol: `${symbol}-SWAP`, source: 'okx',
+        fundingRates: [{ time: 1000, value: 0.0001 }, { time: 2000, value: 0.0002 }],
+        openInterest: [{ time: 1000, value: 795.3 }, { time: 2000, value: 801.5 }],
+      }),
+    })
+    const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: service }))
+    const search = new URLSearchParams({ market: 'crypto', symbol: 'BTCUSDT' })
+    const { status, payload } = await dispatchBridgeRequest(bridge, 'GET', '/derivatives/history', search)
+    expect(status).toBe(200)
+    expect(payload).toMatchObject({ ok: true, history: { symbol: 'BTCUSDT-SWAP', source: 'okx' } })
+    const history = (payload as { history: { fundingRates: Array<{ time: number; value: number }> } }).history
+    expect(history.fundingRates).toEqual([{ time: 1000, value: 0.0001 }, { time: 2000, value: 0.0002 }])
+  })
+
+  it('连接器未实现 getDerivativesHistory → TRADING_NOT_IMPLEMENTED（前端隐藏趋势卡）', async () => {
+    const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: fakeService() }))
+    const search = new URLSearchParams({ market: 'crypto', symbol: 'BTCUSDT' })
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/derivatives/history', search))
+      .rejects.toMatchObject({ code: 'TRADING_NOT_IMPLEMENTED' })
+  })
+
+  it('未知市场 400；缺 symbol 400', async () => {
+    const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: fakeService() }))
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/derivatives/history', new URLSearchParams({ market: 'jp', symbol: 'X' })))
+      .rejects.toBeInstanceOf(BridgeProtocolError)
+    await expect(dispatchBridgeRequest(bridge, 'GET', '/derivatives/history', new URLSearchParams({ market: 'crypto' })))
+      .rejects.toBeInstanceOf(BridgeProtocolError)
+  })
+})

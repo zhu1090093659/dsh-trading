@@ -3,7 +3,7 @@
  * half registers the route behind the browser-auth fence; same-origin fetch
  * carries the auth cookie by default).
  */
-import type { AccountBalance, DerivativesData, Kline, MarketId, MarketInfo, Order, Orderbook, Position, TickerOutcome, TradeFill, TradeTick } from './types.ts'
+import type { AccountBalance, DerivativesData, DerivativesHistory, Kline, MarketId, MarketInfo, Order, Orderbook, Position, TickerOutcome, TradeFill, TradeTick } from './types.ts'
 import type { FundamentalsPackage } from '@dsh-trading/api'
 import type { CustomIndicatorRecord } from '@dsh-trading/indicators'
 import type { KnowledgeCard } from '@dsh-trading/knowledge'
@@ -58,6 +58,20 @@ export async function fetchDerivatives(market: MarketId, symbol: string): Promis
     const query = new URLSearchParams({ market, symbol })
     const wire = await getJson<{ ok: boolean; derivatives: DerivativesData }>(`/dshtrading/api/derivatives?${query.toString()}`)
     return wire.derivatives ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 衍生品历史序列（issue #54，「衍生品」页签趋势卡）。连接器未实现
+ * getDerivativesHistory 或取数失败 → null：趋势卡隐藏、快照读数保留。
+ */
+export async function fetchDerivativesHistory(market: MarketId, symbol: string): Promise<DerivativesHistory | null> {
+  try {
+    const query = new URLSearchParams({ market, symbol })
+    const wire = await getJson<{ ok: boolean; history: DerivativesHistory }>(`/dshtrading/api/derivatives/history?${query.toString()}`)
+    return wire.history ?? null
   } catch {
     return null
   }

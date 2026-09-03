@@ -72,6 +72,25 @@ export function fmtAxis(ms: number, intraday: boolean): string {
 
 export const INTRADAY_INTERVALS: ReadonlySet<string> = new Set(['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h'])
 
+/** 资金费率结算倒计时（issue #54）：>1h 显示 "7h 32m"，<1h 显示 "32m 10s"；过期返回 undefined。 */
+export function fmtCountdown(targetMs: number | undefined, nowMs: number): string | undefined {
+  if (targetMs === undefined || !Number.isFinite(targetMs)) return undefined
+  const remain = targetMs - nowMs
+  if (remain <= 0) return undefined
+  const totalSec = Math.floor(remain / 1000)
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return h > 0 ? `${h}h ${pad(m)}m` : `${pad(m)}m ${pad(s)}s`
+}
+
+/** 资金费率百分比（小数 → 4 位百分比字符串，如 0.0001 → "0.0100%"）。 */
+export function fmtFundingRate(rate: number | undefined): string {
+  if (rate === undefined || !Number.isFinite(rate)) return '—'
+  return `${(rate * 100).toFixed(4)}%`
+}
+
 /**
  * Change percent vs a reference close: (price - ref) / ref * 100.
  * Undefined when the reference is unusable (missing/non-positive).
