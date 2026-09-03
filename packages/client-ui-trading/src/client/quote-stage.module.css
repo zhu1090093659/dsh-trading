@@ -316,47 +316,7 @@
   gap: 6px;
 }
 
-.tradeModeToggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  background: var(--dsw-futu-bg-subtle, #1e222d);
-  border: 1px solid var(--dsw-futu-border-subtle, #2a2e39);
-  border-radius: 14px;
-  padding: 2px;
-  box-sizing: border-box;
-}
 
-.tradeModeBtn {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--dsw-futu-text-muted, #787b86);
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 12px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-}
-
-.tradeModeBtn:hover {
-  color: var(--dsw-futu-text-primary, #d1d4dc);
-}
-
-.tradeModeBtn[data-active='true'] {
-  background: var(--dsw-futu-bg-card, #262b3e);
-  color: #2dbd85;
-  font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-.tradeModeBtn[data-paper='true'][data-active='true'] {
-  background: rgba(245, 158, 11, 0.18);
-  color: #f59e0b;
-  font-weight: 600;
-}
 
 /* 指标选择弹层 */
 .indicatorAnchor {

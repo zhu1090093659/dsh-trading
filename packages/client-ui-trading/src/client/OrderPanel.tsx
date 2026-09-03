@@ -21,6 +21,7 @@ export interface OrderPanelProps {
   tradeMode?: 'live' | 'paper' | undefined
   paperCash?: number | undefined
   onResetPaper?: (() => void) | undefined
+  onToggleTradeMode?: ((mode: 'live' | 'paper') => void) | undefined
   onSubmit: (input: GuiOrderInput) => Promise<GuiOrderResult>
   onClose?: (() => void) | undefined
 }
@@ -48,6 +49,7 @@ export function OrderPanel({
   tradeMode = 'live',
   paperCash,
   onResetPaper,
+  onToggleTradeMode,
   onSubmit,
   onClose,
 }: OrderPanelProps): React.JSX.Element {
@@ -139,29 +141,23 @@ export function OrderPanel({
 
   return (
     <div className={css.root} data-dshtrading-order-panel="">
+      {/* 标题栏：简洁利落 */}
       <div className={css.titleRow}>
-        <span>{t('trade.sideOrder')}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          {tradeMode === 'paper' ? (
-            <>
-              <span className={css.paperTag}>{t('trade.paper.tag')}</span>
-              {onResetPaper !== undefined && (
-                <button
-                  type="button"
-                  className={css.resetBtn}
-                  onClick={() => {
-                    if (typeof window !== 'undefined' && window.confirm(t('trade.paper.resetConfirm'))) {
-                      onResetPaper()
-                    }
-                  }}
-                  title={t('trade.paper.reset')}
-                >
-                  ↺ {t('trade.paper.reset')}
-                </button>
-              )}
-            </>
-          ) : (
-            <span className={css.liveTag}>{t('trade.liveChannel')}</span>
+        <span className={css.panelTitle}>{t('trade.sideOrder')}</span>
+        <div className={css.headerRight}>
+          {tradeMode === 'paper' && onResetPaper !== undefined && (
+            <button
+              type="button"
+              className={css.resetBtn}
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.confirm(t('trade.paper.resetConfirm'))) {
+                  onResetPaper()
+                }
+              }}
+              title={t('trade.paper.reset')}
+            >
+              {t('trade.paper.reset')}
+            </button>
           )}
           {onClose !== undefined && (
             <button type="button" className={css.closeBtn} onClick={onClose} title={t('trade.close')}>
@@ -171,6 +167,32 @@ export function OrderPanel({
         </div>
       </div>
 
+      {/* 切换按钮（放在交易选项上面）：[ 实盘交易 | 模拟交易 ] */}
+      <div className={css.modeToggle} role="tablist" aria-label="trading mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tradeMode === 'live'}
+          className={css.modeBtn}
+          data-active={tradeMode === 'live' ? 'true' : undefined}
+          onClick={() => onToggleTradeMode?.('live')}
+        >
+          {t('trade.mode.live')}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tradeMode === 'paper'}
+          className={css.modeBtn}
+          data-paper="true"
+          data-active={tradeMode === 'paper' ? 'true' : undefined}
+          onClick={() => onToggleTradeMode?.('paper')}
+        >
+          {t('trade.mode.paper')}
+        </button>
+      </div>
+
+      {/* 模拟模式下显示可用资金 */}
       {tradeMode === 'paper' && (
         <div className={css.availableRow}>
           <span>{t('trade.paper.available')}</span>

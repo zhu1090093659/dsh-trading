@@ -58,7 +58,7 @@ export function TradeDrawer({
       <div className={css.bar}>
         <div className={css.tabs} role="tablist">
           {tradeMode === 'paper' && (
-            <span className={css.paperBadge}>🧪 {t('trade.paper.drawerTag')}</span>
+            <span className={css.paperBadge}>{t('trade.paper.drawerTag')}</span>
           )}
           <button
             type="button"
@@ -117,7 +117,7 @@ export function TradeDrawer({
               }}
               title={t('trade.paper.reset')}
             >
-              ↺ {t('trade.paper.reset')}
+              {t('trade.paper.reset')}
             </button>
           )}
           <button

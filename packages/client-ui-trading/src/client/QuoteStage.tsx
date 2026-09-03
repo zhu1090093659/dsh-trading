@@ -839,30 +839,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                     : t('quote.sendToAgent')}
             </button>
           )}
-          {/* 全局交易模式切换胶囊（实盘 vs 模拟盘 Demo） */}
-          <div className={css.tradeModeToggle} role="radiogroup" aria-label="trading mode">
-            <button
-              type="button"
-              className={css.tradeModeBtn}
-              data-active={tradeMode === 'live' ? 'true' : undefined}
-              aria-checked={tradeMode === 'live'}
-              onClick={() => handleToggleTradeMode('live')}
-              title={t('trade.mode.live')}
-            >
-              ⚡ {t('trade.mode.live')}
-            </button>
-            <button
-              type="button"
-              className={css.tradeModeBtn}
-              data-paper="true"
-              data-active={tradeMode === 'paper' ? 'true' : undefined}
-              aria-checked={tradeMode === 'paper'}
-              onClick={() => handleToggleTradeMode('paper')}
-              title={t('trade.mode.paper')}
-            >
-              🧪 {t('trade.mode.paper')}
-            </button>
-          </div>
+
           {/* 交易工作台开关（issue #40；支持接入了交易注册面的各市场） */}
           <button
             type="button"
@@ -1115,6 +1092,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                   onResetPaper={() => {
                     paperTradingStore.resetAccount()
                   }}
+                  onToggleTradeMode={handleToggleTradeMode}
                   onSubmit={onSubmitGuiOrder}
                   onClose={() => {
                     setTradeDeskOpen(false)
