@@ -14,7 +14,7 @@
 
 </div>
 
-**dsh-trading** is an agent-native trading terminal built on [DeepSeek Harness (DSH)](https://github.com/deepseek-ai). It fuses the three-column workflow of professional trading software — watchlist dock, interactive chart stage, order book — with a deeply-integrated AI agent that sees what you see, analyzes with institutional-grade playbooks, and can route real orders through explicit, human-gated safety controls.
+**dsh-trading** is an agent-native trading terminal built on [DeepSeek Harness (DSH)](https://github.com/deepseek-ai). It pairs the three-column workflow of professional trading software — watchlist, interactive chart, order book — with an AI agent that sees what you see, works from institutional-grade playbooks, and can route real orders through explicit, human-gated controls.
 
 Crypto, US equities, China A-shares, and Hong Kong stocks. One terminal. One agent. Nineteen connectors. Zero vendor lock-in: every key stays on your machine.
 
@@ -32,14 +32,14 @@ Most "AI trading" tools bolt a chat box onto a chart. dsh-trading inverts the re
 
 - **The agent has hands — gated ones.** Market data, order books, derivatives positioning, news, and order placement are native tools. Orders default to **dry-run simulation**; live routing requires an explicit `liveTrading: true` opt-in *and* an interactive approval for every order. In headless environments it fails closed. Nothing executes behind your back.
 
-- **The agent went to school.** Domain knowledge ships as bundled skills, not vibes: pre-trade risk checklists for every market ([crypto](.agents/skills/crypto-risk-checklist/SKILL.md) · [US](.agents/skills/us-risk-checklist/SKILL.md) · [CN](.agents/skills/cn-risk-checklist/SKILL.md) · [HK](.agents/skills/hk-risk-checklist/SKILL.md)), a five-step [crypto instrument analysis framework](.agents/skills/crypto-instrument-analysis/SKILL.md), a full [company analysis playbook](.agents/skills/company-analysis/SKILL.md), and a [trading journal discipline](.agents/skills/trading-notes-setup/SKILL.md) that dual-tracks what the agent did versus what you did — append-only, auditable.
+- **The agent went to school.** Domain knowledge ships as bundled skills, not vibes: pre-trade risk checklists for every market ([crypto](.agents/skills/crypto-risk-checklist/SKILL.md) · [US](.agents/skills/us-risk-checklist/SKILL.md) · [CN](.agents/skills/cn-risk-checklist/SKILL.md) · [HK](.agents/skills/hk-risk-checklist/SKILL.md)), a five-step [crypto instrument analysis framework](.agents/skills/crypto-instrument-analysis/SKILL.md), a full [company analysis playbook](.agents/skills/company-analysis/SKILL.md), and a [trading journal discipline](.agents/skills/trading-notes-setup/SKILL.md) that dual-tracks what the agent did versus what you did, append-only and auditable.
 
 - **One process, four trading desks.** Session-level presets (`crypto-trader`, `us-trader`, `cn-trader`, `hk-trader`) give each market its own tools, persona, and memory — isolated per session, coexisting in a single DSH process.
 
 ## A terminal that trades like software, not a toy
 
 - **Center-stage charting.** Lightweight Charts v5 with multi-timeframe switching (5m to weekly), MA / EMA / BOLL / MACD / RSI / KDJ / SuperTrend with visual parameter editing, strategy signal markers, knowledge-event pins, and drag-to-measure range statistics.
-- **Real market depth.** Live order book with buy/sell pressure bars, tick-by-tick trades, and a derivatives cockpit — open interest, funding rates with settlement countdown, long/short ratios, taker flow — with one-click *fund-flow analysis* handed to the agent.
+- **Real market depth.** Live order book with buy/sell pressure bars, tick-by-tick trades, and a derivatives cockpit covering open interest, funding rates with settlement countdown, long/short ratios, and taker flow, with one-click *fund-flow analysis* handed to the agent.
 - **Cross-market watchlist.** Crypto perps next to AAPL next to 牧原股份, with sparklines and real-time quotes. Your whole risk universe in one dock.
 
 ## One terminal, every market

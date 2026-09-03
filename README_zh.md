@@ -14,7 +14,7 @@
 
 </div>
 
-**dsh-trading** 是构建在 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai) 之上的 **Agent 原生交易终端**。它把专业交易软件的三栏工作流——自选列表、交互式图表、盘口——与一个深度集成的 AI Agent 融为一体：Agent 能看到你正在看的行情，用机构级的分析范式做研究，并且在显式的人类审批闸门下路由真实订单。
+**dsh-trading** 是构建在 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai) 之上的 **Agent 原生交易终端**。它把专业交易软件的三栏工作流——自选列表、交互式图表、盘口——与一个深度集成的 AI Agent 融为一体：Agent 看得到你正在看的行情，按机构级的分析范式做研究，要下真实订单时，每一笔都得过显式的人工审批闸门。
 
 加密货币、美股、A 股、港股。一个终端，一个 Agent，19+ 连接器，零供应商锁定——所有密钥都留在你自己的机器上。
 
