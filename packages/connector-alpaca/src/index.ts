@@ -16,8 +16,10 @@ import type {
   MarketDataService,
   Order,
   OrderRequest,
+  Orderbook,
   Position,
   Ticker,
+  TradeFill,
   TradeService,
 } from '@dsh-trading/api'
 import {
@@ -162,6 +164,11 @@ export class AlpacaMarketDataService extends Service implements MarketDataServic
     return this.client.listInstruments(creds)
   }
 
+  async getOrderbook(symbol: string): Promise<Orderbook> {
+    const creds = await this.getCredentials()
+    return this.client.getOrderbook(symbol, creds)
+  }
+
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void, options?: { intervalMs?: number }): Disposable {
     const ms = Math.max(options?.intervalMs ?? 5_000, 500)
     const tick = (): void => {
@@ -196,10 +203,13 @@ export class AlpacaTradeService extends Service implements TradeService {
     return this.client.getBalance(creds)
   }
 
+  async getBalances(): Promise<AccountBalance[]> {
+    const creds = await this.getCredentials()
+    const b = await this.client.getBalance(creds)
+    return [b]
+  }
+
   async placeOrder(order: OrderRequest): Promise<Order> {
-    // 服务缝闸门（P0 · 铁律 #3 修订版 [S4]）：三态检查下推到服务实现内第一步——
-    // 绕过工具层直调本服务（动态包宿主半等）同样 fail-closed；工具层
-    // evaluateOrderGate + base 审批闸门保留（双保险），三态语义与工具层一致。
     const requestedDryRun = order.dryRun ?? true
     if (!requestedDryRun && !this.config.liveTrading) {
       throw new TradingServiceError(
@@ -209,7 +219,6 @@ export class AlpacaTradeService extends Service implements TradeService {
       )
     }
     if (requestedDryRun || this.config.dryRun) {
-      // 闸门 ②：本地模拟回执（工具层另有带市价参照的富回执）。
       return {
         id: `dry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         symbol: order.symbol,
@@ -222,19 +231,17 @@ export class AlpacaTradeService extends Service implements TradeService {
         timestamp: Date.now(),
       }
     }
-    // 闸门 ③：live（dryRun=false 且 liveTrading=true）→ 真实下单。
     const creds = await this.getCredentials()
     return this.client.placeOrder(creds, {
       symbol: order.symbol,
-      side: order.side,
-      type: order.type,
+      side: order.side.toUpperCase() as 'BUY' | 'SELL',
+      type: order.type.toUpperCase() as 'MARKET' | 'LIMIT',
       quantity: order.quantity,
       price: order.price,
     })
   }
 
-  async cancelOrder(orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
-    // 服务缝闸门（P0）：撤单是会改变交易所真实状态的实盘动作，与真实下单同门槛。
+  async cancelOrder(orderId: string, _symbol?: string): Promise<void> {
     if (!this.config.liveTrading || this.config.dryRun) {
       throw new TradingServiceError(
         'TRADING_LIVE_TRADING_DISABLED',
@@ -242,15 +249,39 @@ export class AlpacaTradeService extends Service implements TradeService {
       )
     }
     const creds = await this.getCredentials()
-    return this.client.cancelOrder(creds, orderId)
+    await this.client.cancelOrder(creds, orderId)
+  }
+
+  async getOrder(_symbol: string, id: string): Promise<Order> {
+    const creds = await this.getCredentials()
+    return this.client.getOrder(creds, id)
   }
 
   async getPositions(): Promise<Position[]> {
-    return []
+    try {
+      const creds = await this.getCredentials()
+      return await this.client.getPositions(creds)
+    } catch {
+      return []
+    }
   }
 
-  async getOrders(): Promise<Order[]> {
-    return []
+  async listOpenOrders(symbol?: string): Promise<Order[]> {
+    try {
+      const creds = await this.getCredentials()
+      return await this.client.listOpenOrders(creds, symbol)
+    } catch {
+      return []
+    }
+  }
+
+  async listTradeFills(symbol?: string, limit?: number): Promise<TradeFill[]> {
+    try {
+      const creds = await this.getCredentials()
+      return await this.client.listTradeFills(creds, symbol, limit)
+    } catch {
+      return []
+    }
   }
 }
 

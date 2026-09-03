@@ -71,6 +71,7 @@ export const PROVIDER_VOCABULARY = [
   'futu',
   'longbridge',
   'tiger',
+  'hithink',
 ] as const
 export type Provider = (typeof PROVIDER_VOCABULARY)[number]
 

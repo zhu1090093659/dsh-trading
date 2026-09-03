@@ -176,3 +176,24 @@
   border-radius: 6px;
   padding: 6px 10px;
 }
+
+.cancelBtn {
+  background: transparent;
+  border: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  border-radius: 4px;
+  color: var(--dsw-futu-text-secondary, #4a5060);
+  padding: 1px 6px;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  border-color: var(--dsw-futu-down, #2dbd85);
+  color: var(--dsw-futu-down, #2dbd85);
+}
+
+.cancelBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

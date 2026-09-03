@@ -1,0 +1,180 @@
+/* TradeDrawer —— 底部全宽资产与委托抽屉 */
+
+.root {
+  flex: none;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--dsw-futu-bg-card, #131722);
+  border-top: 1px solid var(--dsw-futu-border-subtle, #2a2e39);
+  transition: max-height 0.2s ease;
+  overflow: hidden;
+}
+
+.bar {
+  flex: none;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  background: var(--dsw-futu-bg-subtle, #1e222d);
+  border-bottom: 1px solid var(--dsw-futu-border-subtle, #2a2e39);
+  user-select: none;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.paperBadge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  margin-right: 4px;
+}
+
+.resetBtn {
+  background: transparent;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: all 0.15s ease;
+}
+
+.resetBtn:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+}
+
+.tabBtn {
+  border: none;
+  background: transparent;
+  color: var(--dsw-futu-text-muted, #787b86);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 2px;
+  position: relative;
+  transition: color 0.15s ease;
+}
+
+.tabBtn:hover {
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+}
+
+.tabBtn[data-active='true'] {
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+  font-weight: 600;
+}
+
+.tabBtn[data-active='true']::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--dsw-futu-primary, #2962ff);
+  border-radius: 1px;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-left: 4px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggleBtn {
+  border: none;
+  background: transparent;
+  color: var(--dsw-futu-text-muted, #787b86);
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.toggleBtn:hover {
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+}
+
+.content {
+  height: 160px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 12px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--dsw-futu-text-muted, #787b86);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--dsw-futu-border-subtle, #2a2e39);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 5px 8px;
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--dsw-futu-text-muted, #787b86);
+  font-size: 11.5px;
+}
+
+.cancelBtn {
+  background: transparent;
+  border: 1px solid var(--dsw-futu-border-subtle, #2a2e39);
+  border-radius: 3px;
+  color: var(--dsw-futu-text-secondary, #9da4b4);
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancelBtn:hover:not(:disabled) {
+  border-color: #e64545;
+  color: #e64545;
+}
+
+.cancelBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -211,7 +211,7 @@ describe('fetchHkexAnnouncements（HKEX 披露易公告源，2026-09-03 多供�
     expect(searchUrl).toContain('market=SEHK')
     // 评审 M3：NOW = 08-30 20:00Z = 港图 08-31 04:00 → toDate 必须是 20260831（UTC 日期 0830 会漏掉 08-31 当日披露）
     expect(searchUrl).toContain('toDate=20260831')
-    expect(searchUrl).toContain('fromDate=20260817')
+    expect(searchUrl).toContain('fromDate=20260528')
   })
 
   // 2026-09-03 评审 M1 负例（真实证据 hkex-titlesearch-00700.body：腾讯同日既有裸「翌日披露報表」

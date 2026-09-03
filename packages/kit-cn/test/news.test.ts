@@ -327,9 +327,9 @@ describe('fetchCninfoAnnouncements（巨潮公告源，2026-09-03 多供应商�
       if (url.includes('topSearch')) return jsonResp({ keyBoardList: [{ code: '600519', orgId: 'gssh0600519' }] })
       return jsonResp({ data: { list: [] } })
     }) as unknown as typeof globalThis.fetch
-    // NOW = 2026-08-30T20:00:00Z = 东八区 08-31 04:00 → seDate 上界必须是 2026-08-31（UTC 日期 08-30 会漏掉 08-31 当日公告）；下界为 14 天前
+    // NOW = 2026-08-30T20:00:00Z = 东八区 08-31 04:00 → seDate 上界必须是 2026-08-31（UTC 日期 08-30 会漏掉 08-31 当日公告）；下界为 95 天前
     await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '600519' })
-    expect(decodeURIComponent(bodies.at(-1)!)).toContain('seDate=2026-08-17~2026-08-31')
+    expect(decodeURIComponent(bodies.at(-1)!)).toContain('seDate=2026-05-28~2026-08-31')
   })
 
   it('评审 M4：北交所代码（8 开头）不查询巨潮，不发任何请求', async () => {

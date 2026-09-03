@@ -12,8 +12,6 @@
 
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import os from 'node:os'
-import path from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import {
@@ -27,9 +25,14 @@ import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
 import type { MarketDataService } from '@dsh-trading/api'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchCnFundamentals, renderCnFundamentals } from './fundamentals.js'
+import {
+  fetchCnAuctionStrength,
+  fetchCnLimitUpPool,
+} from './sentiment.js'
 
 export * from './fundamentals.js'
 export * from './news.js'
+export * from './sentiment.js'
 
 // ── skill provider（host 面 skill 全局可见即可，本切片不改 skill 作用域） ─────────
 
@@ -143,6 +146,8 @@ export function apply(ctx: Context, _config: Config): void {
 
   const newsTool = createGetNewsTool()
   const fundamentalsTool = createGetFundamentalsTool()
+  const limitUpTool = createGetLimitUpPoolTool()
+  const auctionTool = createGetAuctionStrengthTool()
 
   const tools = ctx.tools as unknown as {
     register(definition: { name: string }): unknown
@@ -162,13 +167,15 @@ export function apply(ctx: Context, _config: Config): void {
 
   registerOnce(newsTool)
   registerOnce(fundamentalsTool)
+  registerOnce(limitUpTool)
+  registerOnce(auctionTool)
 
   // issue #33 收口：indicator_author / knowledge_ingest / knowledge_search 已迁移至
   // @dsh-trading/indicators/plugin 与 @dsh-trading/knowledge/plugin（base patch 行，
   // host 平面单点注册）；kit 保留市场专属工具与 skill provider，不再重复注册。
 
   // issue #33：cn_get_indicators 接入（计算库市场无关；行情 registry-first，老部署回退市场键）。
-  const serviceGetter = ctx as unknown as { get?: (key: string) => unknown }
+  const serviceGetter = ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }
   const registry = serviceGetter.get?.('tradingMarketDataRegistry', false) as
     | { active(m: string): { service: MarketDataService } | undefined }
     | undefined
@@ -258,7 +265,7 @@ export function createGetNewsTool() {
 
 /* ── cn_get_fundamentals：A 股基本面工具（WS3） ───────────────────────────────── */
 
-export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.fetch; skipCache?: boolean } = {}) {
   return defineTool({
     name: 'cn_get_fundamentals',
     description:
@@ -280,8 +287,93 @@ export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.f
       if (!symbol) {
         throw new Error('cn_get_fundamentals: symbol parameter is required (e.g. 600519.SS or 600519)')
       }
-      const result = await fetchCnFundamentals({ symbol, fetch: options.fetch })
+      const result = await fetchCnFundamentals({
+        symbol,
+        ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
+        skipCache: options.skipCache ?? (options.fetch !== undefined),
+      })
       return renderCnFundamentals(result, symbol)
+    },
+  })
+}
+
+/* ── cn_get_limit_up_pool：A 股涨跌停池工具（同花顺数据源） ─────────────────── */
+
+export function createGetLimitUpPoolTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+  return defineTool({
+    name: 'cn_get_limit_up_pool',
+    description:
+      '获取 A 股当日涨停股票池、连板天梯、封单金额与题材涨停原因（同花顺数据源，需配置 HITHINK_FINANCE_API_KEY）。',
+    parameters: {
+      page: { type: 'number', description: '页码，默认 1' },
+      size: { type: 'number', description: '每页条数，默认 50' },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { page?: number; size?: number }
+      try {
+        const pool = await fetchCnLimitUpPool(
+          {
+            ...(args.page !== undefined ? { page: args.page } : {}),
+            ...(args.size !== undefined ? { size: args.size } : {}),
+          },
+          options.fetch !== undefined ? { fetchImpl: options.fetch } : {},
+        )
+        if (pool.length === 0) return 'cn_get_limit_up_pool: 当前无涨停条目或非交易时间。'
+        const lines = [
+          `A 股涨停池共 ${pool.length} 只股票（按涨停时间排序）：`,
+          ...pool.map(p => `- ${p.name} (${p.symbol}): 现价 ￥${p.price} (+${p.changePercent}%), ${p.consecutiveBoards ?? 1} 连板, 封单 ￥${((p.limitOrderAmount ?? 0) / 100000000).toFixed(2)} 亿, 原因: ${p.sectorConcept ?? '无'}`),
+        ]
+        return lines.join('\n')
+      } catch (err) {
+        return `cn_get_limit_up_pool 获取失败: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  })
+}
+
+/* ── cn_get_auction_strength：A 股集合竞价快照工具（同花顺数据源） ─────────── */
+
+export function createGetAuctionStrengthTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+  return defineTool({
+    name: 'cn_get_auction_strength',
+    description:
+      '获取 A 股标的早盘集合竞价匹配量、未匹配金额与强弱基准（同花顺数据源，需配置 HITHINK_FINANCE_API_KEY）。',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'A 股股票代码，如 600519.SH 或 600519',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      if (!symbol) throw new Error('cn_get_auction_strength: symbol parameter is required')
+      try {
+        const auction = await fetchCnAuctionStrength(
+          symbol,
+          options.fetch !== undefined ? { fetchImpl: options.fetch } : {},
+        )
+        if (!auction) return `cn_get_auction_strength: 暂无 ${symbol} 集合竞价快照数据（非竞价时间或未配置 HITHINK_FINANCE_API_KEY）。`
+        return [
+          `标的 ${auction.symbol} 集合竞价快照：`,
+          `- 匹配价格: ￥${auction.matchPrice ?? 'N/A'}`,
+          `- 匹配数量: ${auction.matchVolume ?? 'N/A'} 股`,
+          `- 未匹配数量: ${auction.unmatchedVolume ?? 'N/A'} 股 (${auction.unmatchedSide === 'buy' ? '买单多' : '卖单多'})`,
+          `- 竞价强弱指数: ${auction.strengthIndex ?? 'N/A'}`,
+          `- 竞价阶段: ${auction.stage ?? 'N/A'}`,
+        ].join('\n')
+      } catch (err) {
+        return `cn_get_auction_strength 获取失败: ${err instanceof Error ? err.message : String(err)}`
+      }
     },
   })
 }

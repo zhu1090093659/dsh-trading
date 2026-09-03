@@ -1,0 +1,325 @@
+/* OrderPanel —— 旗舰级专业交易下单面板（对齐 OKX / Binance 桌面端） */
+
+.root {
+  flex: none;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--dsw-futu-bg-card, #131722);
+  border-top: 1px solid var(--dsw-futu-border-subtle, #2a2e39);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+}
+
+.panelTitle {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.resetBtn {
+  background: transparent;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.resetBtn:hover {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: #f59e0b;
+}
+
+/* 切换按钮（放在交易选项上方）：实盘 vs 模拟盘 */
+.modeToggle {
+  display: flex;
+  gap: 4px;
+  background: var(--dsw-futu-bg-subtle, #1e222d);
+  border-radius: 6px;
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+.modeBtn {
+  flex: 1;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-futu-text-muted, #787b86);
+  padding: 5px 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modeBtn:hover {
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+}
+
+.modeBtn[data-active='true'] {
+  background: var(--dsw-futu-bg-card, #262b3e);
+  color: #2dbd85;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.modeBtn[data-paper='true'][data-active='true'] {
+  background: rgba(245, 158, 11, 0.18);
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.availableRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--dsw-futu-text-muted, #787b86);
+  padding: 0 2px;
+}
+
+.availableValue {
+  font-weight: 600;
+  color: #f59e0b;
+}
+
+.positionValue {
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+}
+
+.sideToggle {
+  display: flex;
+  gap: 4px;
+  background: var(--dsw-futu-bg-subtle, #1e222d);
+  border-radius: 6px;
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+.toggleBtn {
+  flex: 1;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-futu-text-muted, #787b86);
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.toggleBtn[data-active='true'] {
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.typeToggle {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.typeBtn {
+  flex: 1;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--dsw-futu-text-muted, #787b86);
+  padding: 4px 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.typeBtn[data-active='true'] {
+  background: var(--dsw-futu-bg-subtle, #1e222d);
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--dsw-futu-text-muted, #787b86);
+}
+
+.inputWrapper {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--dsw-futu-border-subtle, #2a2e39);
+  border-radius: 4px;
+  background: var(--dsw-futu-bg-subtle, #1e222d);
+  padding: 0 8px;
+  height: 32px;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.inputWrapper:focus-within {
+  border-color: var(--dsw-futu-primary, #2962ff);
+  background: rgba(30, 34, 45, 0.9);
+}
+
+.inputWrapper input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.unit {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dsw-futu-text-secondary, #9da4b4);
+  padding-left: 6px;
+  user-select: none;
+}
+
+.marketHint {
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed var(--dsw-futu-border-subtle, #2a2e39);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--dsw-futu-text-muted, #787b86);
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* 仓位比例快捷按钮栏 */
+.ratioRow {
+  display: flex;
+  gap: 4px;
+}
+
+.ratioBtn {
+  flex: 1;
+  border: 1px solid var(--dsw-futu-border-subtle, #2a2e39);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--dsw-futu-text-muted, #787b86);
+  padding: 3px 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ratioBtn:hover {
+  border-color: var(--dsw-futu-border-active, #4a5060);
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.estRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--dsw-futu-text-muted, #787b86);
+  padding: 0 2px;
+}
+
+.estValue {
+  font-weight: 600;
+  color: var(--dsw-futu-text-secondary, #9da4b4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 下单大按钮 —— 100% 全宽拉满 */
+.submitBtn {
+  width: 100%;
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 0;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.submitBtn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.submitBtn:active:not(:disabled) {
+  filter: brightness(0.95);
+}
+
+.submitBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.2);
+}
+
+.receipt {
+  font-size: 11px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  word-break: break-all;
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.receipt[data-state='success'] {
+  background: rgba(45, 189, 133, 0.12);
+  border: 1px solid rgba(45, 189, 133, 0.25);
+  color: #2dbd85;
+}
+
+.receipt[data-state='error'] {
+  background: rgba(230, 69, 69, 0.12);
+  border: 1px solid rgba(230, 69, 69, 0.25);
+  color: #e64545;
+}

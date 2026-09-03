@@ -411,6 +411,9 @@ importers:
       '@dsh-trading/connector-eastmoney':
         specifier: workspace:*
         version: link:../connector-eastmoney
+      '@dsh-trading/connector-hithink':
+        specifier: workspace:*
+        version: link:../connector-hithink
       '@dsh-trading/connector-qmt':
         specifier: workspace:*
         version: link:../connector-qmt
@@ -615,6 +618,28 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: '>=0.1.2-alpha.1'
         version: 0.1.2-alpha.2(290f14751751470ef92e8daa730528cd)
+      '@deepseek-ai/schemastery':
+        specifier: '>=3.18.0'
+        version: 3.18.2
+      '@dsh-trading/api':
+        specifier: workspace:^
+        version: link:../api
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.12)
+
+  packages/connector-hithink:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: '>=4.0.0'
+        version: 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
+      '@deepseek-ai/dsh-tools':
+        specifier: '>=0.1.2-alpha.1'
+        version: 0.1.2-alpha.3(290f14751751470ef92e8daa730528cd)
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
@@ -1026,6 +1051,12 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
+      '@dsh-trading/api':
+        specifier: workspace:*
+        version: link:../api
+      '@dsh-trading/connector-hithink':
+        specifier: workspace:*
+        version: link:../connector-hithink
       '@dsh-trading/indicators':
         specifier: workspace:*
         version: link:../indicators
@@ -1033,9 +1064,6 @@ importers:
         specifier: workspace:*
         version: link:../knowledge
     devDependencies:
-      '@dsh-trading/api':
-        specifier: workspace:*
-        version: link:../api
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)

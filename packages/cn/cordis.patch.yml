@@ -40,6 +40,10 @@
       name: '@dsh-trading/connector-qmt/dataplane'
       config:
         enabled: true
+    - id: dsh-trading-cn-dataplane-hithink
+      name: '@dsh-trading/connector-hithink/dataplane'
+      config:
+        enabled: true
 
 
 

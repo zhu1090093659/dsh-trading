@@ -95,7 +95,7 @@ dsh --profile trading-web
 | 市场 | 默认数据源 | 边界 |
 |---|---|---|
 | 美股 | Yahoo Finance / Alpaca | Yahoo 公共端点（个人使用边界）；Alpaca 官方模拟/实盘 API |
-| A 股 | 腾讯财经 / 东方财富 | 公共端点；实盘经本地 MiniQMT 券商网关 |
+| A 股 | 腾讯财经 / 东方财富 / HiThink (同花顺/问财平台) | 公共端点；HiThink REST API 获取估值基本面与竞价；实盘经本地 MiniQMT 券商网关 |
 | 港股 | 腾讯港股 / 长桥 | 公共端点；持牌券商 OpenAPI/网关执行 |
 | 加密 | Binance / OKX | 官方 API；OKX 支持自带密钥的模拟盘 |
 | 加密基本面 | CoinCap | 公共 REST，仅个人使用——不再分发、不批量抓取 |

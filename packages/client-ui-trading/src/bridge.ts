@@ -215,7 +215,7 @@ export interface PlaceOrderWire {
   order: Order
 }
 
-/** GUI 下单体（桥强制 dry-run：实盘路径不经 GUI，见 placeOrderFromGui）。 */
+/** GUI 下单体（只做真交易：默认 dryRun=false 实盘报单）。 */
 export interface GuiOrderBody {
   readonly market?: unknown
   readonly symbol?: unknown
@@ -223,6 +223,7 @@ export interface GuiOrderBody {
   readonly type?: unknown
   readonly quantity?: unknown
   readonly price?: unknown
+  readonly dryRun?: unknown
 }
 
 export interface CustomIndicatorsWire {
@@ -334,16 +335,37 @@ export class TradingBridge {
   }
 
   /** 动态标的全集（带 30min 进程内缓存；未实现或异常静默回落空列表）。 */
-  async symbols(market: string): Promise<SymbolsWire> {
+  async symbols(market: string, query?: string): Promise<SymbolsWire> {
     if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
     const service = this.host.getMarketService(market)
     if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    if (typeof service.listInstruments !== 'function') {
+      return { symbols: [] }
+    }
+    const trimmed = query?.trim().toLowerCase()
+    if (trimmed) {
+      try {
+        const list = await (service as unknown as { listInstruments(q?: string): Promise<Array<{ symbol: string; name?: string }>> }).listInstruments(trimmed)
+        let symbols: SymbolInfoWire[] = Array.isArray(list)
+          ? list.map(item => ({ symbol: item.symbol, ...(item.name ? { name: item.name } : {}) }))
+          : []
+        // 防御性兜底：若连接器实现未做服务端过滤（忽略 query 返回全量），本地执行严格匹配
+        const isServerFiltered = symbols.length === 0 || symbols.every(s =>
+          s.symbol.toLowerCase().includes(trimmed) || (s.name !== undefined && s.name.toLowerCase().includes(trimmed))
+        )
+        if (!isServerFiltered) {
+          symbols = symbols.filter(s =>
+            s.symbol.toLowerCase().includes(trimmed) || (s.name !== undefined && s.name.toLowerCase().includes(trimmed))
+          )
+        }
+        return { symbols }
+      } catch {
+        return { symbols: [] }
+      }
+    }
     const cached = this.symbolsCache.get(market)
     if (cached !== undefined && Date.now() - cached.fetchedAt < SYMBOLS_CACHE_TTL_MS) {
       return { symbols: cached.list }
-    }
-    if (typeof service.listInstruments !== 'function') {
-      return { symbols: [] }
     }
     try {
       const list = await service.listInstruments()
@@ -481,10 +503,9 @@ export class TradingBridge {
   }
 
   /**
-   * GUI 下单（issue #40）：**强制 dry-run**——body.dryRun 一律忽略并按 true 透传；
-   * 请求实盘（dryRun=false 语义在本路由不存在）是结构上的不可能，而非运行时判断。
-   * 实盘路径保持唯一：Agent 工具（dryRun=false → 服务缝 liveTrading 闸门 → base
-   * 统一审批闸门）。GUI 的「实盘按钮」只展示状态，不构成下单通道。
+   * GUI 下单（真交易执行）：支持实盘报单（默认 dryRun: false）。
+   * 若底层连接器未配置 API 凭证或未开启 liveTrading，由服务缝闸门抛出标准错误，
+   * 桥层如实向前端返回，杜绝伪造假成交。
    */
   async placeOrderFromGui(market: string, body: GuiOrderBody): Promise<PlaceOrderWire> {
     const trade = this.#requireTradeService(market)
@@ -502,9 +523,25 @@ export class TradingBridge {
     if (type === 'limit' && (price === undefined || !Number.isFinite(price) || price <= 0)) {
       throw new BridgeProtocolError(400, 'place order: limit orders require a positive price')
     }
-    // dryRun 显式 true（语义上等价于缺省）；服务缝闸门第二重兜底。
-    const order = await trade.placeOrder({ symbol, side, type, quantity, ...(price !== undefined ? { price } : {}), dryRun: true })
+    const requestedDryRun = typeof body.dryRun === 'boolean' ? body.dryRun : false
+    const order = await trade.placeOrder({
+      symbol,
+      side,
+      type,
+      quantity,
+      ...(price !== undefined ? { price } : {}),
+      dryRun: requestedDryRun,
+    })
     return { ok: true, order }
+  }
+
+  /** GUI 撤单（issue #40）：按 market + orderId + 可选 symbol 分发到激活的交易服务。 */
+  async cancelOrderFromGui(market: string, orderId: string, symbol?: string): Promise<{ ok: true; canceled: boolean }> {
+    const trade = this.#requireTradeService(market)
+    const trimmedId = orderId.trim()
+    if (!trimmedId) throw new BridgeProtocolError(400, 'cancel order: id is required')
+    await trade.cancelOrder(trimmedId, symbol?.trim())
+    return { ok: true, canceled: true }
   }
 
   /** 自定义指标列表。 */
@@ -828,7 +865,8 @@ export async function dispatchBridgeRequest(
       }
       case '/symbols': {
         const market = search.get('market') ?? ''
-        return { status: 200, payload: await bridge.symbols(market) }
+        const query = search.get('query') ?? undefined
+        return { status: 200, payload: await bridge.symbols(market, query) }
       }
       case '/fundamentals': {
         const market = search.get('market') ?? ''
@@ -902,6 +940,14 @@ export async function dispatchBridgeRequest(
       const id = search.get('id') ?? ''
       if (!id) throw new BridgeProtocolError(400, 'delete custom strategy: id is required')
       return { status: 200, payload: await bridge.deleteCustomStrategy(id) }
+    }
+    if (pathname === '/trade/order') {
+      const market = search.get('market') ?? ''
+      const orderId = search.get('id') ?? search.get('orderId') ?? ''
+      const symbol = search.get('symbol') ?? undefined
+      if (!market) throw new BridgeProtocolError(400, 'cancel order: market is required')
+      if (!orderId) throw new BridgeProtocolError(400, 'cancel order: id is required')
+      return { status: 200, payload: await bridge.cancelOrderFromGui(market, orderId, symbol) }
     }
     if (pathname === '/watchlists') {
       const market = search.get('market') ?? ''
