@@ -50,6 +50,25 @@ function extract(archive, destDir) {
   execFileSync('tar', ['-xf', archive, '-C', destDir], { stdio: 'inherit' });
 }
 
+// cpSync(…, dereference: true) does not copy symlink content on current
+// Node: it recreates the link with the target RESOLVED TO AN ABSOLUTE PATH,
+// so bin/npm ends up pointing into the throwaway temp dir and dangles
+// inside the packaged app. The official node dists only use RELATIVE
+// symlinks (bin/npm -> ../lib/node_modules/...), so copy them verbatim.
+function copyTreePreservingSymlinks(src, dest) {
+  const stat = fs.lstatSync(src);
+  if (stat.isSymbolicLink()) {
+    fs.symlinkSync(fs.readlinkSync(src), dest);
+    return;
+  }
+  if (stat.isDirectory()) {
+    fs.mkdirSync(dest, { recursive: true });
+    for (const entry of fs.readdirSync(src)) copyTreePreservingSymlinks(path.join(src, entry), path.join(dest, entry));
+    return;
+  }
+  fs.copyFileSync(src, dest);
+}
+
 async function main() {
   const version = process.argv[2] ?? DEFAULT_NODE_VERSION;
   const base = 'https://nodejs.org/dist/' + version;
@@ -83,7 +102,7 @@ async function main() {
 
     fs.rmSync(outDir, { recursive: true, force: true });
     fs.mkdirSync(outRoot, { recursive: true });
-    fs.cpSync(path.join(unpackDir, entries[0]), outDir, { recursive: true, dereference: true });
+    copyTreePreservingSymlinks(path.join(unpackDir, entries[0]), outDir);
     fs.writeFileSync(marker, version + '\n');
     fs.rmSync(tmp, { recursive: true, force: true });
     console.log('[fetch-node] staged ' + target.os + '-' + target.cpu + ' -> ' + path.relative(desktopDir, outDir));

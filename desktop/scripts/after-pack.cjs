@@ -44,6 +44,12 @@ exports.default = async function afterPack(context) {
     if (fs.statSync(source).isFile()) {
       fs.copyFileSync(source, dest);
       console.log('  • afterPack copied ' + path.basename(source));
+    } else if (path.basename(source).startsWith('node-')) {
+      // The Node distribution keeps official RELATIVE bin symlinks; cpSync
+      // would rewrite them to absolute build-machine paths (dangling inside
+      // the app), so copy the tree verbatim instead.
+      copyTreePreservingSymlinks(source, dest);
+      console.log('  • afterPack copied ' + path.basename(source) + ' (' + duKb(dest) + ' MB)');
     } else {
       fs.cpSync(source, dest, { recursive: true, dereference: true });
       console.log('  • afterPack copied ' + path.basename(source) + ' (' + duKb(dest) + ' MB)');
@@ -66,8 +72,39 @@ exports.default = async function afterPack(context) {
   for (const tree of ['host', 'profile-trading']) {
     walk(path.join(destRoot, tree), path.join(destRoot, tree));
   }
-  if (offenders.length > 0) throw new Error('afterPack: packed runtime contains symlinks: ' + offenders.slice(0, 5).join(', '));
+  // The node dir is allowed to carry symlinks, but only RELATIVE ones that
+  // resolve inside the packed app (the official dist layout).
+  const nodeDir = path.join(destRoot, 'node');
+  if (fs.existsSync(nodeDir)) {
+    const walkLinks = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isSymbolicLink()) {
+          const target = fs.readlinkSync(full);
+          if (path.isAbsolute(target) || !fs.existsSync(path.resolve(path.dirname(full), target))) {
+            offenders.push(path.relative(destRoot, full) + ' -> ' + target);
+          }
+        } else if (entry.isDirectory()) walkLinks(full);
+      }
+    };
+    walkLinks(nodeDir);
+  }
+  if (offenders.length > 0) throw new Error('afterPack: packed runtime has broken/absolute symlinks: ' + offenders.slice(0, 5).join(', '));
 };
+
+function copyTreePreservingSymlinks(src, dest) {
+  const stat = fs.lstatSync(src);
+  if (stat.isSymbolicLink()) {
+    fs.symlinkSync(fs.readlinkSync(src), dest);
+    return;
+  }
+  if (stat.isDirectory()) {
+    fs.mkdirSync(dest, { recursive: true });
+    for (const entry of fs.readdirSync(src)) copyTreePreservingSymlinks(path.join(src, entry), path.join(dest, entry));
+    return;
+  }
+  fs.copyFileSync(src, dest);
+}
 
 function duKb(dir) {
   let bytes = 0;
