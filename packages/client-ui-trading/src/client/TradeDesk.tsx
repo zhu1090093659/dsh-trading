@@ -31,15 +31,17 @@ export interface TradeDeskProps {
   colorMode: ColorMode
   onClose: () => void
   onSubmit: (input: GuiOrderInput) => Promise<Order | null>
+  onCancel?: (orderId: string, symbol?: string) => Promise<boolean>
 }
 
-export function TradeDesk({ t, symbol, positions, balances, orders, fills, colorMode, onClose, onSubmit }: TradeDeskProps): React.JSX.Element {
+export function TradeDesk({ t, symbol, positions, balances, orders, fills, colorMode, onClose, onSubmit, onCancel }: TradeDeskProps): React.JSX.Element {
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
   const [type, setType] = useState<'market' | 'limit'>('market')
   const [quantity, setQuantity] = useState('')
   const [price, setPrice] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [receipt, setReceipt] = useState<string | null>(null)
+  const [cancelingId, setCancelingId] = useState<string | null>(null)
 
   const submit = (): void => {
     const qty = Number(quantity)
@@ -163,7 +165,15 @@ export function TradeDesk({ t, symbol, positions, balances, orders, fills, color
                 : (
                   <table className={css.table}>
                     <thead>
-                      <tr><th>{t('trade.symbol')}</th><th>{t('trade.side')}</th><th>{t('trade.type')}</th><th>{t('trade.price')}</th><th>{t('trade.size')}</th><th>{t('trade.filled')}</th></tr>
+                      <tr>
+                        <th>{t('trade.symbol')}</th>
+                        <th>{t('trade.side')}</th>
+                        <th>{t('trade.type')}</th>
+                        <th>{t('trade.price')}</th>
+                        <th>{t('trade.size')}</th>
+                        <th>{t('trade.filled')}</th>
+                        {onCancel && <th>{t('trade.action')}</th>}
+                      </tr>
                     </thead>
                     <tbody>
                       {orders.map((order, index) => (
@@ -174,6 +184,28 @@ export function TradeDesk({ t, symbol, positions, balances, orders, fills, color
                           <td>{order.price !== undefined ? fmtPrice(order.price) : '—'}</td>
                           <td>{order.quantity}</td>
                           <td>{order.filledQuantity ?? 0}</td>
+                          {onCancel && (
+                            <td>
+                              <button
+                                type="button"
+                                className={css.cancelBtn}
+                                disabled={cancelingId === order.id}
+                                onClick={() => {
+                                  setCancelingId(order.id)
+                                  setReceipt(null)
+                                  void onCancel(order.id, order.symbol)
+                                    .then((ok) => {
+                                      setReceipt(ok ? t('trade.cancelSuccess') : t('trade.cancelFailed'))
+                                    })
+                                    .finally(() => {
+                                      setCancelingId(null)
+                                    })
+                                }}
+                              >
+                                {cancelingId === order.id ? t('trade.canceling') : t('trade.cancel')}
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

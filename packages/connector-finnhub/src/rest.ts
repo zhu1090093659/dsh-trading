@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @dsh-trading/connector-finnhub/rest
  * Finnhub 美股/外汇/加密 REST 客户端（支持 Quote 与 Candles）。
  */
@@ -10,6 +10,7 @@ import type {
   Order,
   OrderRequest,
   Position,
+  StockFundamentals,
   Ticker,
   TradingErrorCode,
 } from '@dsh-trading/api'
@@ -167,6 +168,26 @@ export class FinnhubRestClient {
       `/company-news?symbol=${sym}&from=${from}&to=${today}`,
     )
     return Array.isArray(data) ? data.slice(0, 10) : []
+  }
+
+  async getFundamentals(symbol: string): Promise<StockFundamentals> {
+    const sym = normalizeUsSymbol(symbol)
+    const data = await this.requestJson<{ metric?: Record<string, number> }>(
+      `/stock/metric?symbol=${sym}&metric=all`,
+    ).catch(() => ({ metric: undefined }))
+
+    const m = data?.metric ?? {}
+    return {
+      symbol: sym,
+      peTtm: m.peNormalizedAnnual ?? m.peTTM ?? m.peBasicExclExtraTTM,
+      pb: m.pbAnnual ?? m.pbTTM,
+      ps: m.psTTM ?? m.psAnnual,
+      dividendYield: m.dividendYieldIndicatedAnnual,
+      fiftyTwoWeekHigh: m['52WeekHigh'],
+      fiftyTwoWeekLow: m['52WeekLow'],
+      marketCap: m.marketCapitalization ? m.marketCapitalization * 1_000_000 : undefined,
+      timestamp: Date.now(),
+    }
   }
 
   async listInstruments(query?: string): Promise<Array<{ symbol: string; name: string }>> {

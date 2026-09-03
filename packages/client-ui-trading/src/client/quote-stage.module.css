@@ -558,6 +558,17 @@
   flex-direction: column;
 }
 
+.rightSidebar {
+  flex: none;
+  width: 240px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
 /* 底部指标词条带（富途式横向词条） */
 .quickIndicatorBar {
   display: flex;

@@ -18,8 +18,10 @@ import type {
   Interval,
   Kline,
   Order,
+  Orderbook,
   Position,
   Ticker,
+  TradeFill,
   TradingErrorCode,
 } from '@dsh-trading/api'
 
@@ -239,15 +241,94 @@ export class AlpacaRestClient {
     return result
   }
 
+  async getOrderbook(symbol: string, credentials?: AlpacaCredentials): Promise<Orderbook> {
+    const sym = normalizeUsSymbol(symbol)
+    const quoteRes = await this.request(this.dataBaseUrl, `/stocks/${sym}/quotes/latest?feed=iex`, { method: 'GET' }, credentials) as { quote?: { bp?: number; ap?: number; bs?: number; as?: number; t?: string } }
+    const q = quoteRes?.quote
+    const bids: Array<{ price: number; amount: number }> = []
+    const asks: Array<{ price: number; amount: number }> = []
+    if (typeof q?.bp === 'number' && q.bp > 0) {
+      bids.push({ price: q.bp, amount: Number(q.bs ?? 100) })
+    }
+    if (typeof q?.ap === 'number' && q.ap > 0) {
+      asks.push({ price: q.ap, amount: Number(q.as ?? 100) })
+    }
+    return {
+      symbol: sym,
+      bids,
+      asks,
+      timestamp: q?.t ? new Date(q.t).getTime() : Date.now(),
+    }
+  }
+
   async getBalance(credentials: AlpacaCredentials): Promise<AccountBalance> {
     const data = await this.request(this.tradingBaseUrl, '/account', { method: 'GET' }, credentials) as Record<string, unknown>
     const cash = Number(data.cash ?? data.buying_power ?? 0)
     const total = Number(data.portfolio_value ?? cash)
     return {
-      currency: String(data.currency ?? 'USD'),
-      available: cash,
-      total,
+      asset: String(data.currency ?? 'USD'),
+      free: cash,
+      locked: Math.max(total - cash, 0),
     }
+  }
+
+  async getPositions(credentials: AlpacaCredentials): Promise<Position[]> {
+    const body = await this.request(this.tradingBaseUrl, '/positions', { method: 'GET' }, credentials)
+    if (!Array.isArray(body)) return []
+    return body.map((item: Record<string, unknown>) => {
+      const qty = Number(item.qty ?? 0)
+      return {
+        symbol: normalizeUsSymbol(String(item.symbol ?? '')),
+        side: qty >= 0 ? 'long' : 'short',
+        size: Math.abs(qty),
+        entryPrice: Number(item.avg_entry_price ?? 0),
+        markPrice: Number(item.current_price ?? 0),
+        unrealizedPnl: Number(item.unrealized_pl ?? 0),
+        timestamp: Date.now(),
+      }
+    })
+  }
+
+  async listOpenOrders(credentials: AlpacaCredentials, symbol?: string): Promise<Order[]> {
+    const symQuery = symbol ? `&symbols=${normalizeUsSymbol(symbol)}` : ''
+    const body = await this.request(this.tradingBaseUrl, `/orders?status=open${symQuery}`, { method: 'GET' }, credentials)
+    if (!Array.isArray(body)) return []
+    return body.map((data: Record<string, unknown>) => {
+      const rawStatus = String(data.status ?? 'new').toLowerCase()
+      const status = rawStatus === 'partially_filled' ? 'partially_filled' : 'new'
+      return {
+        id: String(data.id ?? ''),
+        symbol: normalizeUsSymbol(String(data.symbol ?? '')),
+        side: String(data.side ?? 'buy').toLowerCase() === 'sell' ? 'sell' : 'buy',
+        type: String(data.type ?? 'market').toLowerCase() === 'limit' ? 'limit' : 'market',
+        status,
+        price: data.limit_price !== undefined ? Number(data.limit_price) : undefined,
+        quantity: Number(data.qty ?? 0),
+        filledQuantity: Number(data.filled_qty ?? 0),
+        dryRun: false,
+        timestamp: data.created_at ? new Date(String(data.created_at)).getTime() : Date.now(),
+      }
+    })
+  }
+
+  async listTradeFills(credentials: AlpacaCredentials, symbol?: string, limit = 50): Promise<TradeFill[]> {
+    const body = await this.request(this.tradingBaseUrl, `/account/activities/FILL?page_size=${Math.min(limit, 100)}`, { method: 'GET' }, credentials)
+    if (!Array.isArray(body)) return []
+    const sym = symbol ? normalizeUsSymbol(symbol) : undefined
+    const fills: TradeFill[] = []
+    for (const data of body) {
+      const itemSym = normalizeUsSymbol(String(data.symbol ?? ''))
+      if (sym && itemSym !== sym) continue
+      fills.push({
+        id: String(data.id ?? ''),
+        symbol: itemSym,
+        side: String(data.side ?? 'buy').toLowerCase() === 'sell' ? 'sell' : 'buy',
+        price: Number(data.price ?? 0),
+        amount: Number(data.qty ?? 0),
+        timestamp: data.transaction_time ? new Date(String(data.transaction_time)).getTime() : Date.now(),
+      })
+    }
+    return fills
   }
 
   async placeOrder(credentials: AlpacaCredentials, req: { symbol: string; side: 'BUY' | 'SELL'; type: 'MARKET' | 'LIMIT'; quantity: number; price?: number }): Promise<Order> {
@@ -271,19 +352,45 @@ export class AlpacaRestClient {
     return {
       id: String(data.id ?? `alpaca-${Date.now()}`),
       symbol: sym,
-      side: req.side,
-      type: req.type,
+      side: req.side.toLowerCase() === 'sell' ? 'sell' : 'buy',
+      type: req.type.toLowerCase() === 'limit' ? 'limit' : 'market',
       quantity: req.quantity,
       price: req.price,
       status: (String(data.status ?? 'pending') as any),
+      dryRun: false,
       timestamp: Date.now(),
     }
   }
 
-  async cancelOrder(credentials: AlpacaCredentials, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
-    await this.request(this.tradingBaseUrl, `/orders/${orderId}`, { method: 'DELETE' }, credentials)
-    return { orderId, status: 'canceled' }
+  async cancelOrder(credentials: AlpacaCredentials, orderId: string): Promise<void> {
+    try {
+      await this.request(this.tradingBaseUrl, `/orders/${orderId}`, { method: 'DELETE' }, credentials)
+    } catch (err) {
+      // 幂等：若已终态或未找到则视作成功
+      if (err instanceof TradingServiceError && err.code === 'TRADING_UNSUPPORTED_SYMBOL') return
+    }
+  }
+
+  async getOrder(credentials: AlpacaCredentials, orderId: string): Promise<Order> {
+    const data = await this.request(this.tradingBaseUrl, `/orders/${orderId}`, { method: 'GET' }, credentials) as Record<string, unknown>
+    const rawStatus = String(data.status ?? 'new').toLowerCase()
+    const status = rawStatus === 'filled' ? 'filled'
+      : rawStatus === 'canceled' ? 'canceled'
+      : rawStatus === 'partially_filled' ? 'partially_filled'
+      : 'new'
+    return {
+      id: String(data.id ?? orderId),
+      symbol: normalizeUsSymbol(String(data.symbol ?? '')),
+      side: String(data.side ?? 'buy').toLowerCase() === 'sell' ? 'sell' : 'buy',
+      type: String(data.type ?? 'market').toLowerCase() === 'limit' ? 'limit' : 'market',
+      status,
+      price: data.limit_price !== undefined ? Number(data.limit_price) : undefined,
+      quantity: Number(data.qty ?? 0),
+      filledQuantity: Number(data.filled_qty ?? 0),
+      dryRun: false,
+      timestamp: data.created_at ? new Date(String(data.created_at)).getTime() : Date.now(),
+    }
   }
 }
 
-export type { AccountBalance, Interval, Kline, Order, Position, Ticker }
+export type { AccountBalance, Interval, Kline, Order, Orderbook, Position, Ticker, TradeFill }

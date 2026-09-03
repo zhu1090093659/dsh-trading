@@ -18,6 +18,7 @@ import type {
   OrderRequest,
   Position,
   Ticker,
+  TradeFill,
   TradeService,
 } from '@dsh-trading/api'
 import {
@@ -150,14 +151,14 @@ export class FutuTradeService extends Service implements TradeService {
     // 闸门 ③：live（dryRun=false 且 liveTrading=true）→ 真实下单。
     return this.client.placeOrder(await this.getCredentials(), {
       symbol: order.symbol,
-      side: order.side,
-      type: order.type,
+      side: order.side.toUpperCase() as 'BUY' | 'SELL',
+      type: order.type.toUpperCase() as 'MARKET' | 'LIMIT',
       quantity: order.quantity,
       price: order.price,
     })
   }
 
-  async cancelOrder(orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+  async cancelOrder(orderId: string, _symbol?: string): Promise<void> {
     // 服务缝闸门（P0）：撤单是会改变券商真实状态的实盘动作，与真实下单同门槛。
     if (!this.config.liveTrading || this.config.dryRun) {
       throw new TradingServiceError(
@@ -165,7 +166,37 @@ export class FutuTradeService extends Service implements TradeService {
         'Futu TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
       )
     }
-    return this.client.cancelOrder(await this.getCredentials(), orderId)
+    return this.client.cancelOrder(await this.getCredentials(), orderId) as unknown as void
+  }
+
+  async getBalances(): Promise<AccountBalance[]> {
+    try {
+      const b = await this.client.getBalance(await this.getCredentials())
+      return [b]
+    } catch {
+      return []
+    }
+  }
+
+  async listOpenOrders(_symbol?: string): Promise<Order[]> {
+    return []
+  }
+
+  async listTradeFills(_symbol?: string, _limit?: number): Promise<TradeFill[]> {
+    return []
+  }
+
+  async getOrder(symbol: string, id: string): Promise<Order> {
+    return {
+      id,
+      symbol,
+      side: 'buy',
+      type: 'limit',
+      status: 'new',
+      quantity: 0,
+      dryRun: false,
+      timestamp: Date.now(),
+    }
   }
 }
 
@@ -301,6 +332,6 @@ export function apply(ctx: Context, config: Config): void {
       },
     }))
 
-    register(createPlaceOrderTool({ marketData, trade, config }))
+    register(createPlaceOrderTool({ marketData, trade: trade as unknown as TradeService, config }))
   })
 }

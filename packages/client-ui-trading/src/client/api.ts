@@ -154,34 +154,61 @@ export interface GuiOrderInput {
   side: 'buy' | 'sell'
   type: 'market' | 'limit'
   quantity: number
-  price?: number
+  price?: number | undefined
+}
+
+export interface GuiOrderResult {
+  order?: Order
+  error?: string
 }
 
 /**
- * GUI 下单（dry-run 专用）：桥强制 dryRun=true，返回模拟回执。网络/校验失败 → null。
+ * GUI 实盘下单（只做真交易）：直接打到连接器报单。返回订单或失败原因。
  */
-export async function placeGuiDryRunOrder(market: MarketId, input: GuiOrderInput): Promise<Order | null> {
+export async function placeGuiOrder(market: MarketId, input: GuiOrderInput): Promise<GuiOrderResult> {
   try {
     const response = await fetch(`/dshtrading/api/trade/order?market=${market}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, dryRun: false }),
     })
-    if (!response.ok) return null
-    const wire = await response.json() as { ok?: boolean; order?: Order; code?: string; message?: string }
-    if (wire.ok !== true || wire.order === undefined) {
+    const wire = await response.json().catch(() => ({})) as { ok?: boolean; order?: Order; code?: string; message?: string }
+    if (!response.ok || wire.ok !== true || wire.order === undefined) {
+      const msg = wire.message || wire.code || 'Order rejected or service not mounted'
       console.warn('[dsh-trading] gui order rejected:', wire.code, wire.message)
-      return null
+      return { error: msg }
     }
-    return wire.order
-  } catch {
-    return null
+    return { order: wire.order }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Network request failed' }
   }
 }
 
-/** 动态全集标的名册（Issue #15）：未支持或失败时回退空数组。 */
-export async function fetchSymbols(market: MarketId): Promise<Array<{ symbol: string; name?: string }>> {
-  const query = new URLSearchParams({ market })
+/** 兼容别名 */
+export async function placeGuiDryRunOrder(market: MarketId, input: GuiOrderInput): Promise<Order | null> {
+  const res = await placeGuiOrder(market, input)
+  return res.order ?? null
+}
+
+/** GUI 撤单（issue #40）：DELETE /trade/order?market&id&symbol */
+export async function cancelGuiOrder(market: MarketId, orderId: string, symbol?: string): Promise<boolean> {
+  try {
+    const query = new URLSearchParams({ market, id: orderId, ...(symbol ? { symbol } : {}) })
+    const response = await fetch(`/dshtrading/api/trade/order?${query.toString()}`, {
+      method: 'DELETE',
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean; canceled?: boolean }
+    return wire.ok === true && wire.canceled === true
+  } catch {
+    return false
+  }
+}
+
+/** 动态全集标的名册（Issue #15）：可传 q 进行上游在线检索。未支持或失败时回退空数组。 */
+export async function fetchSymbols(market: MarketId, q?: string): Promise<Array<{ symbol: string; name?: string }>> {
+  const query = new URLSearchParams({ market, ...(q ? { query: q } : {}) })
   const wire = await getJson<{ symbols: Array<{ symbol: string; name?: string }> }>(`/dshtrading/api/symbols?${query.toString()}`)
   return Array.isArray(wire.symbols) ? wire.symbols : []
 }

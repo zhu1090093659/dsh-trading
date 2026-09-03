@@ -297,26 +297,6 @@ export function searchSymbols(market: CatalogMarket, query: string, limit = 8): 
     if (score >= 0) scored.push({ entry, score })
   }
 
-  // 纯数字股票代码智能推导（如输入 002745、600000 等不在静态字典中的 A 股/港股）
-  if (market === 'cn' && /^\d{6}(\.(SH|SZ))?$/i.test(q)) {
-    const code = q.slice(0, 6)
-    const suffix = code.startsWith('6') || code.startsWith('9') ? 'SH' : 'SZ'
-    const canonical = `${code}.${suffix}`
-    if (!scored.some(s => s.entry.symbol === canonical)) {
-      const existing = catalog.find(c => c.symbol.toUpperCase() === canonical)
-      const name = existing?.name && existing.name !== existing.symbol ? existing.name : `${code} (A股)`
-      scored.push({ entry: { symbol: canonical, name }, score: 1.5 })
-    }
-  } else if (market === 'hk' && /^\d{1,5}(\.HK)?$/i.test(q)) {
-    const num = q.replace(/\.HK$/i, '')
-    const canonical = `${num.padStart(5, '0')}.HK`
-    if (!scored.some(s => s.entry.symbol === canonical)) {
-      const existing = catalog.find(c => c.symbol.toUpperCase() === canonical)
-      const name = existing?.name && existing.name !== existing.symbol ? existing.name : `${canonical} (港股)`
-      scored.push({ entry: { symbol: canonical, name }, score: 1.5 })
-    }
-  }
-
   return scored.sort((a, b) => a.score - b.score).slice(0, limit).map((s) => s.entry)
 }
 
@@ -342,25 +322,6 @@ export function searchAllMarkets(query: string, limit = 8): Suggestion[] {
       else if (name && name.includes(q)) score = 2
       else if (symbol.includes(q) || pinyinList.some(p => p.includes(q))) score = 3
       if (score >= 0) all.push({ entry: { ...entry, market }, score })
-    }
-    // A股 / 港股代码推导
-    if (market === 'cn' && /^\d{6}(\.(SH|SZ))?$/i.test(q)) {
-      const code = q.slice(0, 6)
-      const suffix = code.startsWith('6') || code.startsWith('9') ? 'SH' : 'SZ'
-      const canonical = `${code}.${suffix}`
-      if (!all.some(s => s.entry.symbol === canonical)) {
-        const existing = catalog.find(c => c.symbol.toUpperCase() === canonical)
-        const name = existing?.name && existing.name !== existing.symbol ? existing.name : `${code} (A股)`
-        all.push({ entry: { symbol: canonical, name, market: 'cn' }, score: 1.5 })
-      }
-    } else if (market === 'hk' && /^\d{1,5}(\.HK)?$/i.test(q)) {
-      const num = q.replace(/\.HK$/i, '')
-      const canonical = `${num.padStart(5, '0')}.HK`
-      if (!all.some(s => s.entry.symbol === canonical)) {
-        const existing = catalog.find(c => c.symbol.toUpperCase() === canonical)
-        const name = existing?.name && existing.name !== existing.symbol ? existing.name : `${canonical} (港股)`
-        all.push({ entry: { symbol: canonical, name, market: 'hk' }, score: 1.5 })
-      }
     }
   }
   return all.sort((a, b) => a.score - b.score).slice(0, limit).map(s => s.entry)

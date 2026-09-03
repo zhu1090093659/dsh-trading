@@ -16,6 +16,7 @@ import type {
   Order,
   OrderRequest,
   Position,
+  StockFundamentals,
   Ticker,
   TradeService,
 } from '@dsh-trading/api'
@@ -77,6 +78,10 @@ export class FinnhubMarketDataService extends Service implements MarketDataServi
     return this.client.listInstruments(query)
   }
 
+  async getFundamentals(symbol: string): Promise<StockFundamentals> {
+    return this.client.getFundamentals(symbol)
+  }
+
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void, options?: { intervalMs?: number }): Disposable {
     const ms = Math.max(options?.intervalMs ?? 5_000, 1_000)
     const tick = (): void => {
@@ -136,7 +141,7 @@ export class FinnhubTradeService extends Service implements TradeService {
     return this.client.placeOrder(undefined, order)
   }
 
-  async cancelOrder(orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+  async cancelOrder(orderId: string, _symbol?: string): Promise<void> {
     // 服务缝闸门（P0）：撤单是会改变交易所/券商真实状态的实盘动作，与真实下单同门槛
     // （liveTrading 显式开启且未强制模拟），防「经撤单接口绕过下单闸门」。
     if (!this.config.liveTrading || this.config.dryRun) {
@@ -145,7 +150,7 @@ export class FinnhubTradeService extends Service implements TradeService {
         'Finnhub TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
       )
     }
-    return this.client.cancelOrder(undefined, orderId)
+    return this.client.cancelOrder(undefined, orderId) as unknown as void
   }
 
   async getPositions(): Promise<Position[]> {
@@ -175,6 +180,8 @@ export function apply(ctx: Context, config: Config): void {
   const apiKey = creds?.apiKey || process.env[config.apiKeyRef]
   const marketData = new FinnhubMarketDataService(ctx, { apiKey })
   const trade = new FinnhubTradeService(ctx, { apiKey , config })
+  void marketData
+  void trade
 
   ctx.inject(['tools'], (ctx) => {
     const tools = ctx.tools as unknown as { register(d: unknown): void; get(n: string): unknown }

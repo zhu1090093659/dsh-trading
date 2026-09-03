@@ -1,23 +1,18 @@
-/* DerivativesPane —— 衍生品指标条（issue #38；与 quote-stage/fundamentals 同族 token：--dsw-futu-*）。 */
+/* DerivativesPane —— 顶部轻量合约衍生品指标条（对齐 Binance / OKX 顶部行情栏） */
 
-.root {
-  flex: none;
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  padding: 2px 2px 6px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 8px;
+  border-left: 1px solid var(--dsw-futu-border-subtle, #2a2e39);
 }
 
-.title {
-  flex: none;
-  display: flex;
+.item {
+  display: inline-flex;
   align-items: center;
   font-size: 11.5px;
-  font-weight: 600;
-  color: var(--dsw-futu-text-secondary, #4a5060);
-  padding: 0 4px 0 2px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -78,19 +73,20 @@
   white-space: nowrap;
 }
 
-.cellSub {
-  font-size: 10.5px;
-  font-weight: 400;
-  color: var(--dsw-futu-text-muted, #8e95a3);
-  white-space: nowrap;
+.item label {
+  color: var(--dsw-futu-text-muted, #787b86);
+  margin-right: 4px;
 }
 
-.footer {
-  flex: none;
-  display: flex;
-  align-items: flex-end;
-  font-size: 10.5px;
-  color: var(--dsw-futu-text-muted, #8e95a3);
-  white-space: nowrap;
-  padding-bottom: 2px;
+.value {
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary, #d1d4dc);
+}
+
+.subTag {
+  font-size: 10px;
+  padding: 0 3px;
+  border-radius: 2px;
+  margin-left: 4px;
+  opacity: 0.85;
 }

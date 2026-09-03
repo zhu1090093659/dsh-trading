@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * i18n audit gate for the dsh-trading monorepo (ported from dsh-web scripts/i18n-audit.mjs).
  *

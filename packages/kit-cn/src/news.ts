@@ -56,7 +56,7 @@ const MAX_LIMIT = 50
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (dsh-trading/cn_get_news)'
 /** 下钻 fetch 统一 10s 超时（docs/replication.md §9；上游挂起不得拖垮 60s 轮询链）。 */
 const UPSTREAM_TIMEOUT_MS = 10_000
-/** 公告时间窗放宽：上市公司公告 7 天内有效展示（媒体快讯仍按 24h 窗）。 */
+/** 公告时间窗放宽：上市公司公告 7 天内有效（法定披露低频，媒体快讯 24h 窗）。 */
 const ANNOUNCEMENT_MAX_AGE_MS = 7 * 24 * 3_600_000
 /** 巨潮公告检索请求窗：宽于 7 天过滤窗，避免日期边界裁剪（seDate 日精度）。 */
 const CNINFO_REQUEST_WINDOW_MS = 14 * 24 * 3_600_000

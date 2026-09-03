@@ -7,7 +7,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   fetchKlines, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
-  fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiDryRunOrder,
+  fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiOrder,
+  cancelGuiOrder,
 } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
@@ -18,7 +19,8 @@ import { FundamentalsStage } from './FundamentalsStage.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
 import { DerivativesStage } from './DerivativesStage.tsx'
 import { OrderbookPane } from './OrderbookPane.tsx'
-import { TradeDesk } from './TradeDesk.tsx'
+import { OrderPanel } from './OrderPanel.tsx'
+import { TradeDrawer } from './TradeDrawer.tsx'
 import { computeRangeStats } from './range-stats.ts'
 import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
@@ -161,6 +163,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [trades, setTrades] = useState<TradeTick[] | null>(null)
   /** 交易工作台（issue #40）：默认关（安全敏感面）；只读数据 null = 服务未挂载/凭证缺失。 */
   const [tradeDeskOpen, setTradeDeskOpen] = useState<boolean>(() => readTradeDeskOpen())
+  /** 底部全宽资产与委托抽屉：默认折叠状态栏，支持展开与切换 Tabs。 */
+  const [tradeDrawerOpen, setTradeDrawerOpen] = useState<boolean>(false)
   const [tradePositions, setTradePositions] = useState<Position[] | null>(null)
   const [tradeBalances, setTradeBalances] = useState<AccountBalance[] | null>(null)
   const [tradeOrders, setTradeOrders] = useState<Order[] | null>(null)
@@ -288,30 +292,34 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     }
   }, ORDERBOOK_POLL_MS, [orderbookOpen, stageTab, market, symbol])
 
-  // 交易台只读轮询（issue #40，仅 crypto + 面板打开）：positions 为主探针——
+  // 交易台只读轮询（issue #40，面板打开时）：positions 为主探针——
   // 服务未注册（400）或凭证缺失（ok:false）都置 null，分区按语义降级。
-  usePoll(async () => {
-    if (!tradeDeskOpen || stageTab !== 'chart' || market !== 'crypto') return
+  const refreshTradeDesk = async (m: MarketId = activeMarket) => {
     const [positionRows, balanceRows, orderRows, fillRows] = await Promise.all([
-      fetchTradePositions(market),
-      fetchTradeBalances(market),
-      fetchTradeOpenOrders(market),
-      fetchTradeFills(market),
+      fetchTradePositions(m),
+      fetchTradeBalances(m),
+      fetchTradeOpenOrders(m),
+      fetchTradeFills(m),
     ])
     setTradePositions(positionRows)
     setTradeBalances(balanceRows)
     setTradeOrders(orderRows)
     setTradeFills(fillRows)
-  }, TRADE_DESK_POLL_MS, [tradeDeskOpen, stageTab, market])
+  }
 
-  const onSubmitGuiOrder = (input: Parameters<typeof placeGuiDryRunOrder>[1]) =>
-    placeGuiDryRunOrder('crypto', input).then((order) => {
-      // 下单成功（模拟）→ 立即刷新只读面，不等下一轮轮询。
-      if (order !== null && market === 'crypto') {
-        void fetchTradePositions(market).then(setTradePositions)
-        void fetchTradeOpenOrders(market).then(setTradeOrders)
+  usePoll(async () => {
+    if (stageTab !== 'chart') return
+    await refreshTradeDesk(activeMarket)
+  }, TRADE_DESK_POLL_MS, [stageTab, activeMarket])
+
+  const onSubmitGuiOrder = (input: Parameters<typeof placeGuiOrder>[1]) =>
+    placeGuiOrder(activeMarket, input).then((res) => {
+      // 下单成功（真交易）→ 自动展开底栏看最新委托，并立即刷新账户面。
+      if (res.order) {
+        setTradeDrawerOpen(true)
+        void refreshTradeDesk(activeMarket)
       }
-      return order
+      return res
     })
 
   // 衍生品页签是 crypto 专属：切到非 crypto 市场时自动回图表页签（issue #54）。
@@ -340,6 +348,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     ].filter((line): line is string => line !== undefined)
     const body = t('derivatives.analyzeBody', { symbol: d.symbol, source: d.source, lines: parts.join('\n') })
     void fillComposer(body)
+  }
+
+  const onCancelGuiOrder = async (orderId: string, sym?: string): Promise<boolean> => {
+    const ok = await cancelGuiOrder(activeMarket, orderId, sym)
+    if (ok) {
+      void refreshTradeDesk(activeMarket)
+    }
+    return ok
   }
 
   // 换标的：立即清场
@@ -751,23 +767,21 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                     : t('quote.sendToAgent')}
             </button>
           )}
-          {/* 交易工作台开关（issue #40；仅 crypto——交易注册面当前只有加密连接器注册） */}
-          {market === 'crypto' && (
-            <button
-              type="button"
-              className={css.pickerButton}
-              data-active={tradeDeskOpen ? 'true' : undefined}
-              aria-pressed={tradeDeskOpen}
-              onClick={() => {
-                setTradeDeskOpen((open) => {
-                  writeTradeDeskOpen(!open)
-                  return !open
-                })
-              }}
-            >
-              {t('trade.toggle')}
-            </button>
-          )}
+          {/* 交易工作台开关（issue #40；支持接入了交易注册面的各市场） */}
+          <button
+            type="button"
+            className={css.pickerButton}
+            data-active={tradeDeskOpen ? 'true' : undefined}
+            aria-pressed={tradeDeskOpen}
+            onClick={() => {
+              setTradeDeskOpen((open) => {
+                writeTradeDeskOpen(!open)
+                return !open
+              })
+            }}
+          >
+            {t('trade.toggle')}
+          </button>
           {/* 盘口竖栏开关（issue #39；紧挨区间统计左侧） */}
           <button
             type="button"
@@ -987,18 +1001,36 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               />
             )}
           </div>
-          {orderbookOpen && (
-            <OrderbookPane
-              t={t}
-              orderbook={orderbook}
-              trades={trades}
-              orderbookLoading={orderbookLoading}
-              colorMode={colorMode}
-              onClose={() => {
-                setOrderbookOpen(false)
-                writeOrderbookOpen(false)
-              }}
-            />
+          {(orderbookOpen || tradeDeskOpen) && (
+            <div className={css.rightSidebar}>
+              {orderbookOpen && (
+                <OrderbookPane
+                  t={t}
+                  orderbook={orderbook}
+                  trades={trades}
+                  orderbookLoading={orderbookLoading}
+                  colorMode={colorMode}
+                  onClose={() => {
+                    setOrderbookOpen(false)
+                    writeOrderbookOpen(false)
+                  }}
+                />
+              )}
+              {tradeDeskOpen && (
+                <OrderPanel
+                  t={t}
+                  symbol={symbol ?? ''}
+                  market={activeMarket}
+                  suggestedPrice={ticker?.price}
+                  colorMode={colorMode}
+                  onSubmit={onSubmitGuiOrder}
+                  onClose={() => {
+                    setTradeDeskOpen(false)
+                    writeTradeDeskOpen(false)
+                  }}
+                />
+              )}
+            </div>
           )}
         </div>
       ) : viewTab === 'derivatives' ? (
@@ -1033,21 +1065,18 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         </div>
       )}
 
-      {/* 交易工作台底栏（issue #40，crypto 图表页签专属，默认折叠） */}
-      {viewTab === 'chart' && market === 'crypto' && tradeDeskOpen && (
-        <TradeDesk
+      {/* 底部全宽资产与委托抽屉（图表页签专属，支持一键折叠展开） */}
+      {viewTab === 'chart' && (
+        <TradeDrawer
           t={t}
-          symbol={symbol}
           positions={tradePositions}
           balances={tradeBalances}
           orders={tradeOrders}
           fills={tradeFills}
           colorMode={colorMode}
-          onClose={() => {
-            setTradeDeskOpen(false)
-            writeTradeDeskOpen(false)
-          }}
-          onSubmit={onSubmitGuiOrder}
+          isOpen={tradeDrawerOpen}
+          onToggle={setTradeDrawerOpen}
+          onCancelOrder={onCancelGuiOrder}
         />
       )}
 
