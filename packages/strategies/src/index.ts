@@ -1,6 +1,7 @@
 /**
  * @dsh-trading/strategies — 交易策略与纯函数回测内核：
- * 策略契约类型 + 纯函数回测引擎 + 6 个参考范式策略（短线/波段/长线）。
+ * 策略契约类型 + 纯函数回测引擎 + 6 个参考范式策略（短线/波段/长线）
+ * + 5 个内置选股器（单时点截面筛选，ScreenerDefinition）。
  *
  * 纯库包，零运行时依赖，可直接在浏览器或 Node 端打包执行。
  */
@@ -33,6 +34,14 @@ export {
   compileStrategySource,
   type StrategyValidationResult,
 } from './validate.ts'
+
+export {
+  screenerParadigms,
+  getScreenerById,
+  type ScreenerColumnSpec,
+  type ScreenerDefinition,
+  type ScreenerMatch,
+} from './screeners/index.ts'
 
 export {
   strategyParadigms,
