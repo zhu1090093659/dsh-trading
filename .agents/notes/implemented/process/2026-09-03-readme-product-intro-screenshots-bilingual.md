@@ -21,6 +21,8 @@ Status: implemented
 
 ## Consequences
 
+- 2026-09-03 补充：新增海报 banner（中文版 `docs/banners/banner-zh.jpg` 入 README_zh，英文版 `banner-en.jpg` 入 README），置于 H1 之下、tagline 之上。
+
 - `README.md`（英文）+ `README_zh.md`（中文）为双门面，结构变更需双语同步。
 - `docs/screenshots/` 成为 README 图片来源；UI 大改版时需重拍。
 - 旧记录 [2026-08-31-slogan-and-readme-brand-revamp](2026-08-31-slogan-and-readme-brand-revamp.md) 中的 README 结构决策被本记录取代（Slogan 与元数据部分仍有效）。

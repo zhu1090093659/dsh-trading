@@ -1,7 +1,9 @@
 # dsh-trading
 
+![dsh-trading —— 你的下一个交易终端，也可以是你的 AI Agent](docs/banners/banner-zh.jpg)
+
 > **你的下一个交易终端，也可以是你的 AI Agent。**
-> *不做待割的韭菜，只做日常的交易者。*
+> *没有小韭菜，只有小股民*
 
 [![DSH 基线](https://img.shields.io/badge/DSH%20Baseline-0.1.2--alpha.1-blue.svg)](https://github.com/deepseek-ai)
 [![市场](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK-green.svg)](#一个终端全市场覆盖)

@@ -1,5 +1,7 @@
 # dsh-trading
 
+![dsh-trading — Your next trading terminal, and your AI Agent](docs/banners/banner-en.jpg)
+
 > **Your next trading terminal can also be your AI agent.**
 > *No chumps for the slaughter, just everyday traders.*
 
