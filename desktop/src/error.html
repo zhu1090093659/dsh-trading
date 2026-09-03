@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'">
+<title>DeepSeek Harness — startup problem</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #0b1220; color: #dbe4f5; padding: 40px; box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  .message { color: #f2a6a6; font-size: 14px; margin-bottom: 16px; }
+  pre {
+    background: #111a2e; border: 1px solid #24314f; border-radius: 8px;
+    padding: 12px; font-size: 12px; line-height: 1.5; overflow: auto;
+    max-height: 50vh; white-space: pre-wrap; word-break: break-all; color: #9db1d6;
+  }
+  .actions { margin-top: 16px; display: flex; gap: 12px; }
+  button {
+    background: #1d2a47; color: #dbe4f5; border: 1px solid #34507f;
+    border-radius: 6px; padding: 8px 18px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { background: #263a63; }
+</style>
+</head>
+<body>
+  <h1>The dsh host could not start</h1>
+  <div class="message" id="message"></div>
+  <pre id="log"></pre>
+  <div class="actions">
+    <button id="retry">Retry</button>
+    <button id="reveal">Reveal log file</button>
+    <button id="quit">Quit</button>
+  </div>
+  <script>
+    document.getElementById('retry').addEventListener('click', () => window.desktop.retry());
+    document.getElementById('reveal').addEventListener('click', () => window.desktop.revealLog());
+    document.getElementById('quit').addEventListener('click', () => window.desktop.quit());
+    window.desktop.onError((payload) => {
+      document.getElementById('message').textContent = payload.message;
+      document.getElementById('log').textContent = payload.log || '(no host output captured)';
+      document.title = 'DeepSeek Harness — startup problem';
+    });
+  </script>
+</body>
+</html>
