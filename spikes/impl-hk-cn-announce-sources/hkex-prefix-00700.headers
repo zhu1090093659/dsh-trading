@@ -1,0 +1,19 @@
+access-control-allow-origin: https://sc.hkexnews.hk
+cache-control: private, no-store, no-cache, must-revalidate
+connection: keep-alive
+content-length: 93
+content-security-policy: frame-ancestors 'self' http://sc.hkexnews.hk; frame-src 'self' http://sc.hkexnews.hk;
+content-type: application/javascript;charset=utf-8
+date: Thu, 03 Sep 2026 00:17:22 GMT
+permissions-policy: camera=()
+pragma: no-cache
+referrer-policy: strict-origin-when-cross-origin
+set-cookie: TS4e849b71027=08754bc291ab20003f4e65f6691ce4eb35dee988f963c171bc7addf604fba2b3c5c6c65041a9506008a120f3311130005999953c6c7cea1b401480db9ec4cc62ac6fe6dc4091e4eade001cec9761ca06b08d04af43f48ee6797c58261d5cba7c; Path=/
+set-cookie: bm_s=YAAQLe8hF1T18mCgAQAAl5qgZAZD5LZ83xDeW/0f3eNny++Q97V8Bn9fqOhOdumDf0WPwdkl7H7OBSeRlwRF9qS+NUZzrUjBDNDLFEgCtvgbbpG5bcZDOjXPqdRbc/kwo8VU2A9vY1THxx6pasJBsgRCFKLaQOprUQIwtEl/FT2xzheQ/0bWIpKnkwnTYm1J2PWIF7fp0RxM5m7ZFQeTNrXvs9XJlanJLyHMV5c+fdlJCLA7aP53f7CBda3uPqn7K6iDQjTtUG33AfameF7ovYNmbxVuS9baD0YGHqD7dlGdCbMfpi+10Wp8HbHjUhmAsFilSATIJamjTT6BZALwtBVVglZtPqy8Y0ciNzOeHYJfvEOZe4HCo/RwhNNJklgKnT0zzBzS9gS1f5wy9IdOKxGEoZL3oBJGBKiNguCG3M+gi2u3RvlYEAxXow5bhxBIt80pIoodlEyr1F7cw8JUrdSKLVh+lUfoA6/s3z8U/0eYwhyTqdyDy+/tB1sKKZwqXryJh+3IgKayGN8qnOdLYWnBlcGVi5ZshfNpJAyFDnRoDJLPWndBIiG1HWdOQD/6DD3MYsK9WrLrooUiSJeTLkAUkdbOLc/bYx4pWrspSBVYAEtMnsnQzcGiiPAK7cNEh/E6RQqlHXzCEIRc/2yaAI5aiLf3yTyPSVL9nyPG04kksKXts6Oj8JAXgzZrRqiSk0QuWtUBsSOBVJdzlPmZoUwo4BZOb5nvHGBgIYjQPNJVYNhXtPF8+5C2Owx+9usq5EZ71M8EpilFqL3xm4/aAe6hVwDIFWgXWJx9M1uPCh7/Ns+W1VNEFkGrnKZWx0749dMFtDtwYOg5GmwkTwTLUwAeSheXw9nauzS8a/8gtfoDrkmax8HsGHXulunTWiaotGceswZYT0vrJ1s7bVWX/x6DypxwDwm4/dr7G10dL37n1auUc4BHcbExhkGHkbfitKqUzMO9oofQW9k6FPa7MYUcUdYFhG3rh/LWd26vbmI41cR5T0rRog==; Domain=.hkexnews.hk; Path=/; Expires=Sun, 04 Oct 2026 00:17:22 GMT; Max-Age=2678400; Secure; HttpOnly
+set-cookie: bm_so=B8DA46EC016AE343D6AC07DE8948012675031CD7EFD06FEC529665CB0FBEC446~YAAQLe8hF1X18mCgAQAAl5qgZAgBqXe9X1IyyBMXO9yyuXLLrwLK6NZrieoqqsi250jzzXeKUpSwZoQvzKpUMXVDCyrbrM+sXlJo6/8PU6/ju2xh+FAeMJT5JPvDEo/pfm6IoeR1TLc93DKDkWJGWBnCZlRZX6LJUr4JiCjgjNx7OqSDUluvNSiNSi9NTh5WkrNIJKksYE7B55T2bJaVgeUJgZAqtUL0KYRGM6R27fbydYX1wihH+AyGCIzIt03jTjj1mXRYosch6SJyYCCnYgY9PmgOiREMmMBzH1zTVWXkJtrl+E+yoHqidIvBRpG1hpqC+SavIqHzBL9PyNDi0C8QafnxYL5a6zqYjUMlO9ZGZQOuurvb8YqEWxvOcntGCqLHbC/qVLFO+kA9hA2Rq4yr1UvH7aH1SSgLMo/fTQji2RCrTHcWqhpQOmKGIcvemUlxatDfv8jfRlVO6cIX7HdJ0Qg=; Domain=.hkexnews.hk; Path=/; Expires=Fri, 04 Sep 2026 00:17:22 GMT; Max-Age=86400; Secure
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-frame-options: SAMEORIGIN, ALLOW-FROM https://sc.hkexnews.hk/
+x-xss-protection: 1; mode=block
+
+HTTP 200 — 85B in 3731ms

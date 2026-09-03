@@ -1,0 +1,17 @@
+access-control-allow-credentials: true
+access-control-allow-headers: X-Requested-With
+access-control-allow-methods: GET, POST, OPTIONS
+access-control-allow-origin: http://www.cninfo.com.cn
+connection: keep-alive
+content-encoding: gzip
+content-security-policy: default-src *;style-src 'self' 'unsafe-inline' *.cninfo.com.cn *.szse.cn ;script-src 'self' 'unsafe-inline' 'unsafe-eval' *.cninfo.com.cn *.szse.cn;img-src * *.cninfo.com.cn *.szse.cn data:;worker-src * *.cninfo.com.cn *.szse.cn blob:;font-src 'self' *.cninfo.com.cn *.szse.cn data:;
+content-type: application/json;charset=UTF-8
+date: Thu, 03 Sep 2026 00:17:06 GMT
+set-cookie: JSESSIONID=B8B1013844793EC96E08550B43E08B68; Path=/new; HttpOnly
+set-cookie: JSESSIONID=B8B1013844793EC96E08550B43E08B68;Path=/new;HttpOnly
+set-cookie: SF_cookie_4=17470996; path=/
+transfer-encoding: chunked
+x-via: 1.1 PSgdsztwgdln156:16 (Cdn Cache Server V2.0)
+x-ws-request-id: 6a98bc82_PSgdsztwgdln156_21447-52557
+
+HTTP 200 — 11861B in 66ms
