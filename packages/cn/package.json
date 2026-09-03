@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/cn",
   "description": "CN (A-share) market bundle for dsh-trading: host-plane cn-trader preset installer + insert-only aggregation of the Tencent connector (market=cn instance) and cn kit rows (design rule #1)",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

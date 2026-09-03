@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/dsh-i18n",
   "description": "Central language-pack plugin for the dsh-trading trading GUI: registers Simplified Chinese (zh-CN) as a selectable language in the host Settings → General → Language row and carries the zh-CN dictionaries for all dshtrading locale namespaces. Source packages own their zh/en dictionaries (typed register); this plugin is the single home for additional languages — adding language #3 = importing its dictionary module and one register line.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

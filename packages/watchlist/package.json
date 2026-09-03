@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/watchlist",
   "description": "Host-side watchlist + selection stores for dsh-trading: multi-list file store (~/.dsh/watchlists.json), selection store (~/.dsh/selection.json), and cross-market watchlist_* tools (watchlist_list/add/remove/select) on the host plane",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

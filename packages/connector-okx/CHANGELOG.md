@@ -1,0 +1,8 @@
+# @dshtrading/connector-okx
+
+## 0.1.1
+
+### Patch Changes
+
+- @dshtrading/api@0.1.1
+- @dshtrading/indicators@0.1.1

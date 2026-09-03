@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/kit-us",
   "description": "US market toolkit plugin for dsh-trading: US risk checklist skill provider and US news / fundamentals tools; runs as a us-trader preset row (session-scoped)",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

@@ -1,6 +1,6 @@
 {
   "name": "dsh-trading-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "DSH Trading desktop app: an Electron shell that bundles a standalone Node runtime, the dsh host, and a preinstalled trading-web profile, so the trading GUI runs with zero preinstalled tooling.",
   "main": "src/main.cjs",

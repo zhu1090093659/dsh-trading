@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/client-ui-settings",
   "description": "Trading settings section for the dsh web client: market → provider routing (dshtrading namespace). Browser half is a dsh.client bundle; node half is the host row placeholder.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

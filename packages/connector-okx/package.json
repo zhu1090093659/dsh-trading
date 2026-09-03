@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-okx",
   "description": "OKX market connector plugin for dsh-trading: public market data + signed demo/live trading (R1-R3), mutual-exclusion activation with connector-binance",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-stooq",
   "description": "US market connector plugin for dsh-trading: public market data from Stooq CSV endpoints implementing the @dshtrading/api contracts (no key; personal/non-commercial use per stooq.com terms)",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

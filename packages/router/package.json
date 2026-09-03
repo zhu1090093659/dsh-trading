@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/router",
   "description": "Market routing for dsh-trading: user settings namespace dshtrading (markets.<market>.provider) + tradingMarketRouter service consulted by connectors at apply time",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",
