@@ -366,8 +366,10 @@ export class AlpacaRestClient {
     try {
       await this.request(this.tradingBaseUrl, `/orders/${orderId}`, { method: 'DELETE' }, credentials)
     } catch (err) {
-      // 幂等：若已终态或未找到则视作成功
+      // 幂等：仅 404（订单不存在/已终态）视作撤销成功；401/429/网络/5xx 等
+      // 一律原样上抛，上层不得误报撤单成功（issue #58）。
       if (err instanceof TradingServiceError && err.code === 'TRADING_UNSUPPORTED_SYMBOL') return
+      throw err
     }
   }
 

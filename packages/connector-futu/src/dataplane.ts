@@ -16,6 +16,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService, TradeRegistry } from '@dshtrading/api'
 import {
   FutuMarketDataService,
+  FutuRestClient,
   FutuTradeService,
   TRADING_HK_MARKET_DATA_KEY,
   TRADING_HK_TRADE_KEY,
@@ -59,10 +60,12 @@ export function apply(ctx: Context, config: Config): void {
   const tradeRegistry = resolveTradeRegistry(ctx)
   if (tradeRegistry !== undefined) {
     const tradeInner = ctx.isolate(TRADING_HK_TRADE_KEY)
+    // 现行构造签名 (ctx, { client, config }, serviceName?)（issue #58）：旧调用传
+    // { gatewayUrl, config } + getCredentials 函数，options.client 为 undefined，
+    // 交易面一调用即崩；gatewayUrl 经 FutuRestClient 传入。
     const trade = new FutuTradeService(
       tradeInner,
-      { gatewayUrl: config.gatewayUrl, config },
-      async () => ({ unlockPwd: process.env[config.unlockPwdRef] }),
+      { client: new FutuRestClient({ gatewayUrl: config.gatewayUrl }), config },
     )
     ctx.effect(() => tradeRegistry.register(MARKET, ROUTER_PROVIDER, trade))
   }

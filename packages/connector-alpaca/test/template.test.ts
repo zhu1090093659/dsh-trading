@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import type { TradeService } from '@dshtrading/api'
 import {
   AlpacaRestClient,
   INTERVAL_VOCABULARY,
   TradingServiceError,
   normalizeUsSymbol,
 } from '../src/rest.js'
+import { createPlaceOrderTool, type Config } from '../src/index.js'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -177,3 +179,92 @@ describe('AlpacaRestClient.placeOrder / getBalance', () => {
 })
 
 
+
+describe('AlpacaRestClient.cancelOrder（issue #58）', () => {
+  const creds = { key: 'test_k', secret: 'test_s' }
+
+  it('404（订单不存在/已终态）幂等视作成功', async () => {
+    const { impl } = stubFetch([
+      { match: '/orders/ord-1', body: { message: 'not found' }, status: 404 },
+    ])
+    const client = new AlpacaRestClient({ fetchImpl: impl })
+    await expect(client.cancelOrder(creds, 'ord-1')).resolves.toBeUndefined()
+  })
+
+  it('429 限流原样上抛，不得误报撤单成功', async () => {
+    const { impl } = stubFetch([
+      { match: '/orders/ord-2', body: { message: 'too many requests' }, status: 429 },
+    ])
+    const client = new AlpacaRestClient({ fetchImpl: impl })
+    await expect(client.cancelOrder(creds, 'ord-2')).rejects.toMatchObject({ code: 'TRADING_RATE_LIMITED' })
+  })
+
+  it('401 认证失败原样上抛', async () => {
+    const { impl } = stubFetch([
+      { match: '/orders/ord-3', body: { message: 'bad key' }, status: 401 },
+    ])
+    const client = new AlpacaRestClient({ fetchImpl: impl })
+    await expect(client.cancelOrder(creds, 'ord-3')).rejects.toMatchObject({ code: 'TRADING_AUTH_FAILED' })
+  })
+
+  it('网络错误原样上抛', async () => {
+    const impl = (async () => {
+      throw new Error('network down')
+    }) as typeof fetch
+    const client = new AlpacaRestClient({ fetchImpl: impl })
+    await expect(client.cancelOrder(creds, 'ord-4')).rejects.toThrow('network down')
+  })
+})
+
+describe('us_place_order 工具 live 路径（issue #58）', () => {
+  const config = {
+    enabled: true,
+    env: 'live',
+    dryRun: false,
+    liveTrading: true,
+    apiKeyRef: 'K',
+    secretRef: 'S',
+    demoApiKeyRef: 'DK',
+    demoSecretRef: 'DS',
+  } as Config
+
+  it('过 live 闸门后以 OrderRequest 契约调服务：小写 side/type + dryRun:false', async () => {
+    const calls: Array<Record<string, unknown>> = []
+    const trade = {
+      placeOrder: async (order: Record<string, unknown>) => {
+        calls.push(order)
+        return { id: 'live-1', dryRun: false, status: 'new', ...order }
+      },
+    } as unknown as TradeService
+    const tool = createPlaceOrderTool({
+      marketData: { getTicker: async () => { throw new Error('live 路径不得查询参照价') } },
+      trade,
+      config,
+    })
+    const out = JSON.parse(String(await tool.execute({
+      symbol: 'AAPL', side: 'SELL', type: 'LIMIT', quantity: 10, price: 220, dryRun: false,
+    }))) as { id: string; dryRun: boolean }
+    expect(out.id).toBe('live-1')
+    expect(out.dryRun).toBe(false)
+    expect(calls[0]).toMatchObject({
+      symbol: 'AAPL',
+      side: 'sell',
+      type: 'limit',
+      quantity: 10,
+      price: 220,
+      dryRun: false,
+    })
+  })
+
+  it('liveTrading=false 时 dryRun:false 仍在工具闸门被拒', async () => {
+    const tool = createPlaceOrderTool({
+      marketData: { getTicker: async () => { throw new Error('unreachable') } },
+      config: { ...config, liveTrading: false },
+    })
+    const out = JSON.parse(String(await tool.execute({
+      symbol: 'AAPL', side: 'BUY', type: 'MARKET', quantity: 1, dryRun: false,
+    }))) as { status: string; code: string }
+    expect(out.status).toBe('rejected')
+    expect(out.code).toBe('TRADING_LIVE_TRADING_DISABLED')
+  })
+})

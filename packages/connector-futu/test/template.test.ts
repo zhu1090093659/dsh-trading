@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { TradeService } from '@dshtrading/api'
 import {
   FutuRestClient,
   INTERVAL_VOCABULARY,
@@ -6,6 +7,7 @@ import {
   normalizeHkSymbol,
   toFutuSecurity,
 } from '../src/rest.js'
+import { createPlaceOrderTool, type Config } from '../src/index.js'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -120,20 +122,20 @@ describe('FutuRestClient.getKlines', () => {
 })
 
 describe('FutuRestClient.getBalance / placeOrder', () => {
-  it('获取港股资产账户余额', async () => {
+  it('获取港股资产账户余额（AccountBalance 契约形状，issue #58）', async () => {
     const { impl } = stubFetch([
-      { match: '/api/trd/get-funds', body: { retType: 0, data: { currency: 'HKD', cash: 200000, totalAssets: 500000 } } },
+      { match: '/api/trd/get-funds', body: { retType: 0, data: { currency: 'HKD', cash: 200000, frozenCash: 50000, totalAssets: 500000 } } },
     ])
     const client = new FutuRestClient({ fetchImpl: impl })
     const balance = await client.getBalance()
     expect(balance).toEqual({
-      currency: 'HKD',
-      available: 200000,
-      total: 500000,
+      asset: 'HKD',
+      free: 200000,
+      locked: 50000,
     })
   })
 
-  it('港股下单并返回 Order', async () => {
+  it('港股下单并返回 Order（小写 side/type + dryRun:false 回带，issue #58）', async () => {
     const { impl, urls } = stubFetch([
       { match: '/api/trd/place-order', body: { retType: 0, data: { orderId: 'futu-ord-999' } } },
     ])
@@ -150,9 +152,49 @@ describe('FutuRestClient.getBalance / placeOrder', () => {
     expect(order).toMatchObject({
       id: 'futu-ord-999',
       symbol: '00700.HK',
-      side: 'BUY',
+      side: 'buy',
+      type: 'limit',
       quantity: 100,
       price: 380,
+      dryRun: false,
+    })
+  })
+})
+
+describe('hk_place_order 工具 live 路径（issue #58）', () => {
+  const config = {
+    enabled: true,
+    gatewayUrl: 'http://127.0.0.1:11111',
+    dryRun: false,
+    liveTrading: true,
+    unlockPwdRef: 'FUTU_UNLOCK_PWD',
+  } as Config
+
+  it('过 live 闸门后以 OrderRequest 契约调服务：小写 side/type + dryRun:false', async () => {
+    const calls: Array<Record<string, unknown>> = []
+    const trade = {
+      placeOrder: async (order: Record<string, unknown>) => {
+        calls.push(order)
+        return { id: 'live-hk-1', dryRun: false, status: 'new', ...order }
+      },
+    } as unknown as TradeService
+    const tool = createPlaceOrderTool({
+      marketData: { getTicker: async () => { throw new Error('live 路径不得查询参照价') } },
+      trade,
+      config,
+    })
+    const out = JSON.parse(String(await tool.execute({
+      symbol: '00700.HK', side: 'SELL', type: 'LIMIT', quantity: 100, price: 380, dryRun: false,
+    }))) as { id: string; dryRun: boolean }
+    expect(out.id).toBe('live-hk-1')
+    expect(out.dryRun).toBe(false)
+    expect(calls[0]).toMatchObject({
+      symbol: '00700.HK',
+      side: 'sell',
+      type: 'limit',
+      quantity: 100,
+      price: 380,
+      dryRun: false,
     })
   })
 })
