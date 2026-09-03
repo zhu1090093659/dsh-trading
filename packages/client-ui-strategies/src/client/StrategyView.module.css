@@ -80,6 +80,17 @@
   background: var(--dsw-futu-bg-surface-active);
 }
 
+/* 扫描进行中锁定选股器卡片（ScreenerPane）：禁点击与 hover 反馈 */
+.strategyCard[data-disabled='true'] {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.strategyCard[data-disabled='true']:hover {
+  border-color: var(--dsw-futu-border-subtle);
+  background: var(--dsw-futu-bg-surface);
+}
+
 .cardTitle {
   font-size: 13.5px;
   font-weight: 600;

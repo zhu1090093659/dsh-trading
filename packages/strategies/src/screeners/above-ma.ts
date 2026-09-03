@@ -24,8 +24,9 @@ export const aboveMaScreener: ScreenerDefinition = {
     if (i < period + slopeBars - 1) return null
 
     const closes = bars.map((b) => b.close)
-    const ma = sma(closes, period)[i]
-    const maPrev = sma(closes, period)[i - slopeBars]
+    const maSeries = sma(closes, period)
+    const ma = maSeries[i]
+    const maPrev = maSeries[i - slopeBars]
     if (ma === undefined || maPrev === undefined || !(maPrev > 0)) return null
 
     const close = bars[i]!.close

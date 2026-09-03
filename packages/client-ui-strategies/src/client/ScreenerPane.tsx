@@ -5,8 +5,8 @@
  *   3. 扫描进度条 + 命中结果表（代码/名称/现价/动态指标列/信号说明）
  *
  * 扫描调度在本层：名册 fetchSymbols（桥 30min 缓存）→ 截断到扫描池上限 →
- * 受限并发逐标的拉 300 根日 K → 纯函数 evaluate。数据不足的标的由契约
- * 返回 null 静默跳过；单标的失败只计数不中断扫描。
+ * 受限并发逐标的拉 500 根日 K → 纯函数 evaluate。数据不足的标的由契约
+ * 返回 null 静默跳过；单标的失败（含空 K 线响应）只计数不中断扫描。
  */
 import { useMemo, useRef, useState } from 'react'
 import {
@@ -38,8 +38,13 @@ const SCAN_CONCURRENCY = 5
 const SCAN_LIMIT_MIN = 50
 const SCAN_LIMIT_MAX = 800
 
-/** 单次扫描的日 K 窗口（≈14 个月，覆盖最长参数 250 日窗口 + 斜率余量）。 */
-const SCAN_KLINE_LIMIT = 300
+/**
+ * 单次扫描的日 K 窗口。必须覆盖全部内置选股器在参数上限下的数据需求，
+ * 否则 evaluate 对所有标的返回 null（数据不足），扫描会以「零命中」的
+ * 假阴性收场：near-high 最长（window 上限 500），above-ma 次之
+ * （period 300 + slopeBars 60 - 1 = 359）。
+ */
+const SCAN_KLINE_LIMIT = 500
 
 interface ScanRow {
   readonly symbol: string
@@ -67,9 +72,11 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
   const [stored] = useState<ScreenerStateStored>(() => readJson<ScreenerStateStored>(SCREENER_STORE_KEY, DEFAULT_STORED))
   const [selectedId, setSelectedId] = useState<string>(stored.screenerId ?? DEFAULT_STORED.screenerId)
   const [paramsMap, setParamsMap] = useState<Record<string, Record<string, number>>>(stored.paramsMap ?? {})
-  const [scanLimit, setScanLimit] = useState<number>(
-    Math.min(SCAN_LIMIT_MAX, Math.max(SCAN_LIMIT_MIN, stored.scanLimit ?? DEFAULT_STORED.scanLimit)),
-  )
+  const [scanLimit, setScanLimit] = useState<number>(() => {
+    const raw = stored.scanLimit
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULT_STORED.scanLimit
+    return Math.min(SCAN_LIMIT_MAX, Math.max(SCAN_LIMIT_MIN, raw))
+  })
 
   const currentScreener = useMemo<ScreenerDefinition>(() => {
     return screenerParadigms.find((s) => s.id === selectedId) ?? screenerParadigms[0]!
@@ -99,6 +106,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
   }
 
   const handleScanLimitChange = (value: number) => {
+    if (!Number.isFinite(value)) return
     const clamped = Math.min(SCAN_LIMIT_MAX, Math.max(SCAN_LIMIT_MIN, Math.round(value)))
     setScanLimit(clamped)
     persist({ screenerId: selectedId, paramsMap, scanLimit: clamped })
@@ -126,6 +134,13 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
     setProgress({ done: 0, total: 0, hits: 0, failed: 0 })
     setUniverseSize(null)
     try {
+      // 能力预检：宿主 tradingBridge 提供方若为旧版（无 fetchSymbols），
+      // 落到「名册不可用」的诚实降级文案，而非泛化的 TypeError 报错。
+      if (typeof bridge.fetchSymbols !== 'function') {
+        setErrorMsg(t('sv.screener.noUniverse'))
+        setScanning(false)
+        return
+      }
       const universe = await bridge.fetchSymbols(market)
       if (runIdRef.current !== runId) return
       if (!universe || universe.length === 0) {
@@ -160,6 +175,10 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
                   reason: match.reason,
                 })
               }
+            } else {
+              // 空响应（如上游静默返回 []）也按失败计：否则整体断供会被
+              // 误报成「扫描成功、零命中」。
+              failed += 1
             }
           } catch {
             failed += 1
@@ -173,7 +192,9 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
 
       await Promise.all(Array.from({ length: Math.min(SCAN_CONCURRENCY, capped.length) }, () => worker()))
       if (runIdRef.current !== runId) return
-      if (hits.length === 0 && failed > 0) {
+      // 有失败就明示（含空响应计数），不再被「已有命中」掩盖——命中与失败
+      // 并存时用户仍需知道覆盖面有缺口。
+      if (failed > 0) {
         setErrorMsg(`${t('sv.error.failed')} (${failed}/${capped.length})`)
       }
     } catch (e) {
@@ -186,14 +207,16 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
 
   return (
     <>
-      {/* 选股器卡片 */}
+      {/* 选股器卡片（扫描中锁定：行数据按运行时捕获的选股器评估，
+          中途切换会造成表头/指标列/信号说明与行内容错位） */}
       <div className={css.strategyCards}>
         {screenerParadigms.map((screener) => (
           <div
             key={screener.id}
             className={css.strategyCard}
             data-active={screener.id === selectedId ? 'true' : undefined}
-            onClick={() => setSelectedId(screener.id)}
+            data-disabled={scanning ? 'true' : undefined}
+            onClick={() => { if (!scanning) setSelectedId(screener.id) }}
           >
             <div className={css.cardTitle}>{screener.name}</div>
             <div className={css.cardSummary}>{screener.summary}</div>
@@ -212,6 +235,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
               min={p.min}
               max={p.max}
               step={p.step}
+              disabled={scanning}
               value={currentParams[p.key] ?? p.default}
               onChange={(e) => {
                 const numVal = parseFloat(e.target.value)
@@ -229,6 +253,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
             min={SCAN_LIMIT_MIN}
             max={SCAN_LIMIT_MAX}
             step={50}
+            disabled={scanning}
             value={scanLimit}
             onChange={(e) => {
               const numVal = parseFloat(e.target.value)

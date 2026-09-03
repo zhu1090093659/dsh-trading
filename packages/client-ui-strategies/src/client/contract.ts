@@ -36,7 +36,6 @@ export type StrategyLocaleKey =
   | 'sv.trades.exitReason'
   | 'sv.empty.hint'
   | 'sv.screener.run'
-  | 'sv.screener.running'
   | 'sv.screener.stop'
   | 'sv.screener.scanLimit'
   | 'sv.screener.universePrefix'

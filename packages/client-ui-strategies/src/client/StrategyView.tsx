@@ -88,7 +88,9 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
     return readJson<StrategyStateStored>(STRATEGY_STORE_KEY, DEFAULT_STORED)
   })
 
-  const [section, setSection] = useState<StrategySection>(stored.section ?? 'quant')
+  // section 白名单：旧存档缺省 quant；手改出的脏值回落 quant，避免渲染出
+  // 「头部选择器隐藏但量化内容还在」的半套 UI
+  const [section, setSection] = useState<StrategySection>(stored.section === 'screener' ? 'screener' : 'quant')
   const [horizon, setHorizon] = useState<StrategyHorizon>(stored.horizon ?? 'short')
   const [selectedId, setSelectedId] = useState<string>(stored.strategyId ?? 'donchian-breakout')
   const [paramsMap, setParamsMap] = useState<Record<string, Record<string, number>>>(stored.paramsMap ?? {})
@@ -276,7 +278,10 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
       chartApiRef.current = null
       seriesApiRef.current = null
     }
-  }, [result])
+    // 依赖含 section：图表容器在量化分支内，切到选股分区会卸载容器。
+    // 不跟随 section 的话，切回量化后挂载的是新容器而 effect 不重跑——
+    // result 还在、权益曲线却空白，旧 chart 实例还挂在 ref 上失联。
+  }, [result, section])
 
   const horizonStrategies = useMemo(() => {
     return allStrategies.filter((s) => s.horizon === horizon)
