@@ -1,6 +1,6 @@
 # Agent Note: issue #58 实盘语义与 watchlist 并发持久化修复
 
-Status: implemented (PR 待审查批准)
+Status: implemented（PR #61 已自审自合并，owner 授权；merge commit e5a9cef，issue #58 已关）
 
 ## Problem
 
