@@ -121,9 +121,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     : inferMarketFromSymbol(instrument?.symbol)
   const symbol = instrument?.symbol
   const activeMarket: MarketId = market ?? 'crypto'
-  // 渲染期页签归一（issue #54 评审 L3）：衍生品页签是 crypto 专属，切到非 crypto
-  // 市场时渲染直接按图表页签处理——不等 useEffect 纠偏（paint 后才跑会闪一帧公告）。
-  const viewTab = stageTab === 'derivatives' && market !== 'crypto' ? 'chart' : stageTab
 
   const colorMode = useSyncExternalStore(colorModeStore.subscribe, colorModeStore.getSnapshot)
 
@@ -145,6 +142,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [sendState, setSendState] = useState<SendState>('idle')
   /** 行情板块页签（图表 | 基本面 | 新闻 | 公告）：跨标的保持。 */
   const [stageTab, setStageTab] = useState<'chart' | 'derivatives' | 'fundamentals' | 'news' | 'announcements'>('chart')
+  // 渲染期页签归一（issue #54 评审 L3）：衍生品页签是 crypto 专属，切到非 crypto
+  // 市场时渲染直接按图表页签处理——不等 useEffect 纠偏（paint 后才跑会闪一帧公告）。
+  const viewTab = stageTab === 'derivatives' && market !== 'crypto' ? 'chart' : stageTab
   /** 衍生品指标快照（issue #38，crypto 专属；null = 未实现/失败 → 面板整体隐藏）。 */
   const [derivatives, setDerivatives] = useState<DerivativesData | null>(null)
   /** 衍生品历史序列（issue #54；页签激活才拉；null = 未实现/失败 → 趋势卡隐藏）。 */
