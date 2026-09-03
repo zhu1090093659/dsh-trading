@@ -63,6 +63,8 @@ function getSourceType(source: string): string {
 function formatSourceLabel(source: string): string {
   if (source === 'eastmoney-announcement') return '公司公告'
   if (source === 'eastmoney') return '东方财富'
+  if (source === 'hkex-announcement') return '港交所披露'
+  if (source === 'cninfo-announcement') return '巨潮公告'
   if (source === 'sec-edgar') return 'SEC 披露'
   if (source === 'binance') return '币安公告'
   if (source === 'okx') return '欧易公告'
