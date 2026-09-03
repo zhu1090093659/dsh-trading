@@ -22,6 +22,7 @@
 
 import { createHmac } from 'node:crypto'
 import type {
+  DerivativesPoint,
   Interval,
   Kline,
   Orderbook,
@@ -607,6 +608,73 @@ export class OkxRestClient {
       ...(nextFundingRate !== undefined ? { nextFundingRate } : {}),
       ...(nextFundingTime !== undefined ? { nextFundingTime } : {}),
     }
+  }
+
+  /* -- 衍生品扩展（issue #54：基差卡 + 费率/OI 趋势卡底料） ------------------- */
+
+  /** 标记价格：GET /api/v5/public/mark-price（仅 SWAP；2026-09-03 真实网络实证）。 */
+  async getMarkPrice(instId: string): Promise<{ instId: string; markPrice: number; ts: number }> {
+    const id = normalizeOkxSymbol(instId)
+    const rows = await this.request('/api/v5/public/mark-price', { query: { instType: 'SWAP', instId: id } })
+    const d = rows[0] as Record<string, unknown> | undefined
+    const markPrice = num(d?.markPx)
+    if (markPrice === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX mark price for ${id}: missing/invalid markPx`)
+    }
+    return { instId: str(d?.instId) ?? id, markPrice, ts: num(d?.ts) ?? Date.now() }
+  }
+
+  /**
+   * 指数价格：GET /api/v5/market/index-tickers（现货指数成分 instId，如 HYPE-USDT；
+   * 与永续 markPx 配对算基差。2026-09-03 真实网络实证）。
+   */
+  async getIndexPrice(instId: string): Promise<{ instId: string; indexPrice: number; ts: number }> {
+    const id = normalizeOkxSymbol(instId)
+    const rows = await this.request('/api/v5/market/index-tickers', { query: { instId: id } })
+    const d = rows[0] as Record<string, unknown> | undefined
+    const indexPrice = num(d?.idxPx)
+    if (indexPrice === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX index price for ${id}: missing/invalid idxPx`)
+    }
+    return { instId: str(d?.instId) ?? id, indexPrice, ts: num(d?.ts) ?? Date.now() }
+  }
+
+  /** 资金费率历史：GET /api/v5/public/funding-rate-history（响应新→旧 → 反转为升序）。 */
+  async getFundingRateHistory(instId: string, limit = 30): Promise<DerivativesPoint[]> {
+    const id = normalizeOkxSymbol(instId)
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 30, 100))
+    const rows = await this.request('/api/v5/public/funding-rate-history', {
+      query: { instId: id, limit: String(capped) },
+    })
+    const points: DerivativesPoint[] = []
+    for (const row of rows) {
+      const d = row as Record<string, unknown>
+      const time = num(d.fundingTime)
+      const value = num(d.fundingRate)
+      if (time !== undefined && value !== undefined) points.push({ time, value })
+    }
+    return points.reverse()
+  }
+
+  /**
+   * OI 历史：GET /api/v5/rubik/stat/contracts/open-interest-history（period=1D）。
+   * 响应是时间序列行 `[ts, oi张, oiCcy币, oiUsd]`（字符串数值，新→旧；
+   * 2026-09-03 真实网络实证）；取值列与快照同纪律——优先币数（oiCcy），退张数。
+   */
+  async getOpenInterestHistory(instId: string, limit = 30): Promise<DerivativesPoint[]> {
+    const id = normalizeOkxSymbol(instId)
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 30, 100))
+    const rows = await this.request('/api/v5/rubik/stat/contracts/open-interest-history', {
+      query: { instId: id, period: '1D', limit: String(capped) },
+    })
+    const points: DerivativesPoint[] = []
+    for (const row of rows) {
+      if (!Array.isArray(row)) continue
+      const time = num(row[0])
+      const value = num(row[2]) ?? num(row[1])
+      if (time !== undefined && value !== undefined) points.push({ time, value })
+    }
+    return points.reverse()
   }
 
   /* -- 盘口与逐笔（issue #39）---------------------------------------------- */

@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
-  fetchKlines, fetchTickers, fetchDerivatives, fetchOrderbook, fetchRecentTrades,
+  fetchKlines, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiDryRunOrder,
 } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
@@ -15,6 +15,7 @@ import { composeQuoteMessage } from './compose-quote.ts'
 import type { SendImageInput } from './fill-composer.ts'
 import { FundamentalsStage } from './FundamentalsStage.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
+import { DerivativesStage } from './DerivativesStage.tsx'
 import { OrderbookPane } from './OrderbookPane.tsx'
 import { TradeDesk } from './TradeDesk.tsx'
 import { computeRangeStats } from './range-stats.ts'
@@ -22,14 +23,14 @@ import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import {
   INTRADAY_INTERVALS, changePercent, directionColor,
-  fmtChange, fmtClock, fmtCompact, fmtPercent, fmtPrice,
+  fmtChange, fmtClock, fmtCompact, fmtFundingRate, fmtPercent, fmtPrice,
 } from './format.ts'
 import { indicators, isCustomIndicator } from './indicator-registry.ts'
 import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indicators'
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
-import type { AccountBalance, DerivativesData, Order, Orderbook, Position, TradeFill, TradeTick } from './types.ts'
+import type { AccountBalance, DerivativesData, DerivativesHistory, Order, Orderbook, Position, TradeFill, TradeTick } from './types.ts'
 import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
@@ -52,6 +53,9 @@ const KLINE_RESYNC_MS = 30000
 // 衍生品指标快照轮询（issue #38）：一次刷新 = 2~5 个上游公共端点调用，取 30s
 // 对齐 K 线 resync 节奏，避免放大限频消耗（funding 8h 才变，OI 30s 粒度够看）。
 const DERIVATIVES_POLL_MS = 30000
+// 衍生品历史序列（issue #54，页签趋势卡）：8h 一期的费率与 1D OI 变化极慢，
+// 5min 节奏足够；仅页签激活时拉取，省上游配额。
+const DERIVATIVES_HISTORY_POLL_MS = 300000
 // 盘口/分笔轮询（issue #39）：竖栏打开才拉；一次刷新 = depth + trades 两请求，
 // 4s 在「盯盘时效」与公共端点限频之间取衡。
 const ORDERBOOK_POLL_MS = 4000
@@ -137,9 +141,11 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
   const [sendState, setSendState] = useState<SendState>('idle')
   /** 行情板块页签（图表 | 基本面 | 新闻 | 公告）：跨标的保持。 */
-  const [stageTab, setStageTab] = useState<'chart' | 'fundamentals' | 'news' | 'announcements'>('chart')
+  const [stageTab, setStageTab] = useState<'chart' | 'derivatives' | 'fundamentals' | 'news' | 'announcements'>('chart')
   /** 衍生品指标快照（issue #38，crypto 专属；null = 未实现/失败 → 面板整体隐藏）。 */
   const [derivatives, setDerivatives] = useState<DerivativesData | null>(null)
+  /** 衍生品历史序列（issue #54；页签激活才拉；null = 未实现/失败 → 趋势卡隐藏）。 */
+  const [derivativesHistory, setDerivativesHistory] = useState<DerivativesHistory | null>(null)
   /** 盘口竖栏（issue #39）：开关跨标的/会话记忆；数据 null = 数据源未提供（降级提示）。 */
   const [orderbookOpen, setOrderbookOpen] = useState<boolean>(() => readOrderbookOpen())
   const [orderbook, setOrderbook] = useState<Orderbook | null>(null)
@@ -239,6 +245,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setDerivatives(data)
   }, DERIVATIVES_POLL_MS, [market, symbol])
 
+  // 衍生品历史序列轮询（issue #54，仅 crypto + 衍生品页签激活）。
+  usePoll(async () => {
+    if (stageTab !== 'derivatives' || market !== 'crypto' || symbol === undefined) return
+    const history = await fetchDerivativesHistory(market, symbol)
+    setDerivativesHistory(history)
+  }, DERIVATIVES_HISTORY_POLL_MS, [stageTab, market, symbol])
+
   // 盘口/分笔轮询（issue #39）：竖栏打开 + 图表页签时才拉，省上游配额。
   usePoll(async () => {
     if (!orderbookOpen || stageTab !== 'chart' || market === undefined || symbol === undefined) return
@@ -281,6 +294,34 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       return order
     })
 
+  // 衍生品页签是 crypto 专属：切到非 crypto 市场时自动回图表页签（issue #54）。
+  useEffect(() => {
+    if (stageTab === 'derivatives' && market !== 'crypto') setStageTab('chart')
+  }, [stageTab, market])
+
+  // 「分析资金面」（issue #54）：把衍生品快照上下文填进会话输入框（只填不发）。
+  const onAnalyzeDerivatives = (): void => {
+    if (fillComposer === undefined || derivatives === null || symbol === undefined) return
+    const d = derivatives
+    const parts = [
+      `请分析 ${d.symbol} 永续合约的资金面与多空拥挤度（数据源 ${d.source}）：`,
+      d.openInterest !== undefined
+        ? `- 持仓量 ${fmtCompact(d.openInterest)}${d.openInterestValue !== undefined ? `（约 ${fmtCompact(d.openInterestValue)} USD）` : ''}`
+        : undefined,
+      d.fundingRate !== undefined
+        ? `- 资金费率 ${fmtFundingRate(d.fundingRate)}（${d.fundingRate > 0 ? '多头付资金' : d.fundingRate < 0 ? '空头付资金' : '中性'}）${d.nextFundingRate !== undefined ? `，预测下期 ${fmtFundingRate(d.nextFundingRate)}` : ''}`
+        : undefined,
+      d.longShortRatio !== undefined ? `- 多空人数比 ${d.longShortRatio.toFixed(2)}` : undefined,
+      d.topTraderLongShortRatio !== undefined ? `- 大户多空比 ${d.topTraderLongShortRatio.toFixed(2)}` : undefined,
+      d.takerBuySellRatio !== undefined ? `- 主动买卖比 ${d.takerBuySellRatio.toFixed(2)}` : undefined,
+      d.markPrice !== undefined && d.indexPrice !== undefined && d.indexPrice > 0
+        ? `- 基差 ${fmtPercent((d.markPrice - d.indexPrice) / d.indexPrice * 100)}（标记 ${fmtPrice(d.markPrice)} / 指数 ${fmtPrice(d.indexPrice)}）`
+        : undefined,
+      '请结合费率走向、OI 变化与多空比给出拥挤度判断和风险提示（不构成投资建议）。',
+    ].filter((line): line is string => line !== undefined)
+    void fillComposer(parts.join('\n'))
+  }
+
   // 换标的：立即清场
   useEffect(() => {
     setKlines(null)
@@ -289,6 +330,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setHoverIndex(null)
     setKError(null)
     setDerivatives(null)
+    setDerivativesHistory(null)
     setOrderbook(null)
     setTrades(null)
     setNewsItems(null)
@@ -572,6 +614,18 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           >
             {t('quote.tab.chart')}
           </button>
+          {market === 'crypto' && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={stageTab === 'derivatives'}
+              className={css.stageTab}
+              data-active={stageTab === 'derivatives' ? 'true' : undefined}
+              onClick={() => { setStageTab('derivatives') }}
+            >
+              {t('quote.tab.derivatives')}
+            </button>
+          )}
           <button
             type="button"
             role="tab"
@@ -885,7 +939,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             )}
             </div>
             {market === 'crypto' && derivatives !== null && (
-              <DerivativesPane t={t} derivatives={derivatives} colorMode={colorMode} />
+              <DerivativesPane
+                t={t}
+                derivatives={derivatives}
+                colorMode={colorMode}
+                onOpenStage={() => { setStageTab('derivatives') }}
+                onAnalyze={fillComposer !== undefined ? onAnalyzeDerivatives : undefined}
+              />
             )}
           </div>
           {orderbookOpen && (
@@ -901,6 +961,10 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               }}
             />
           )}
+        </div>
+      ) : stageTab === 'derivatives' && market === 'crypto' ? (
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <DerivativesStage t={t} derivatives={derivatives} history={derivativesHistory} colorMode={colorMode} />
         </div>
       ) : stageTab === 'fundamentals' ? (
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>

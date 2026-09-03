@@ -9,6 +9,7 @@
  */
 
 import type {
+  DerivativesPoint,
   Interval,
   Kline,
   Orderbook,
@@ -386,5 +387,77 @@ export class BinanceRestClient {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance futures taker ratio for ${sym}: missing/invalid buySellRatio`)
     }
     return ratio
+  }
+
+  /* -- 衍生品扩展（issue #54：基差卡 + 费率/OI 趋势卡底料）---------- */
+
+  /**
+   * 标记/指数价格与下期结算：GET /fapi/v1/premiumIndex —— 单端点同时携带
+   * markPrice / indexPrice / lastFundingRate / nextFundingTime
+   * （2026-09-03 真实网络实证，spikes/impl-crypto-derivatives）。
+   */
+  async getFuturesPremiumIndex(symbol: string): Promise<{
+    markPrice?: number
+    indexPrice?: number
+    lastFundingRate?: number
+    nextFundingTime?: number
+    time: number
+  }> {
+    const sym = normalizeBinanceFuturesSymbol(symbol)
+    const body = await this.#request('/fapi/v1/premiumIndex', { symbol: sym }, this.#fapiBaseUrl) as Record<string, unknown>
+    const time = num(body.time)
+    if (time === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance premiumIndex for ${sym}: missing/invalid time`)
+    }
+    const markPrice = num(body.markPrice)
+    const indexPrice = num(body.indexPrice)
+    const lastFundingRate = num(body.lastFundingRate)
+    const nextFundingTime = num(body.nextFundingTime)
+    return {
+      ...(markPrice !== undefined ? { markPrice } : {}),
+      ...(indexPrice !== undefined ? { indexPrice } : {}),
+      ...(lastFundingRate !== undefined ? { lastFundingRate } : {}),
+      ...(nextFundingTime !== undefined ? { nextFundingTime } : {}),
+      time,
+    }
+  }
+
+  /** 资金费率历史：GET /fapi/v1/fundingRate（时间升序；value 为小数费率）。 */
+  async getFuturesFundingRateHistory(symbol: string, limit = 30): Promise<DerivativesPoint[]> {
+    const sym = normalizeBinanceFuturesSymbol(symbol)
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 30, 100))
+    const body = await this.#request('/fapi/v1/fundingRate', { symbol: sym, limit: String(capped) }, this.#fapiBaseUrl)
+    if (!Array.isArray(body)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance funding history for ${sym}: unexpected response shape`)
+    }
+    const points: DerivativesPoint[] = []
+    for (const row of body) {
+      const d = row as Record<string, unknown>
+      const time = num(d.fundingTime)
+      const value = num(d.fundingRate)
+      if (time !== undefined && value !== undefined) points.push({ time, value })
+    }
+    return points
+  }
+
+  /**
+   * OI 历史：GET /futures/data/openInterestHist（period=1d；sumOpenInterest 为 base 币数，
+   * 与快照 openInterest 同语义。2026-09-03 真实网络实证）。响应时间升序。
+   */
+  async getFuturesOpenInterestHistory(symbol: string, limit = 30): Promise<DerivativesPoint[]> {
+    const sym = normalizeBinanceFuturesSymbol(symbol)
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 30, 30))
+    const body = await this.#request('/futures/data/openInterestHist', { symbol: sym, period: '1d', limit: String(capped) }, this.#fapiBaseUrl)
+    if (!Array.isArray(body)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance OI history for ${sym}: unexpected response shape`)
+    }
+    const points: DerivativesPoint[] = []
+    for (const row of body) {
+      const d = row as Record<string, unknown>
+      const time = num(d.timestamp)
+      const value = num(d.sumOpenInterest)
+      if (time !== undefined && value !== undefined) points.push({ time, value })
+    }
+    return points
   }
 }

@@ -331,3 +331,76 @@ describe('getDerivatives（issue #38 服务级聚合）', () => {
       .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
   })
 })
+
+
+/** issue #54：mark/index/funding 扩展字段 + 历史序列聚合。 */
+describe('getDerivatives 扩展字段（issue #54）', () => {
+  it('nextFundingRate/nextFundingTime/markPrice/indexPrice 进快照（基差卡 + 倒计时底料）', async () => {
+    const { fetchImpl } = routeByPath(derivativesRoutes({
+      '/api/v5/public/funding-rate': {
+        body: {
+          code: '0',
+          data: [{
+            instId: 'BTC-USDT-SWAP', fundingRate: '0.0001', fundingTime: '1700000000000',
+            nextFundingRate: '0.00012', nextFundingTime: '1700028800000',
+          }],
+        },
+      },
+      '/api/v5/public/mark-price': { body: { code: '0', data: [{ instId: 'BTC-USDT-SWAP', markPx: '42001.5', ts: '1700000002000' }] } },
+      '/api/v5/market/index-tickers': { body: { code: '0', data: [{ instId: 'BTC-USDT', idxPx: '42000.1', ts: '1700000002000' }] } },
+    }))
+    const data = await derivativesService(fetchImpl).getDerivatives('BTCUSDT')
+    expect(data.nextFundingRate).toBe(0.00012)
+    expect(data.nextFundingTime).toBe(1700028800000)
+    expect(data.markPrice).toBe(42001.5)
+    expect(data.indexPrice).toBe(42000.1)
+  })
+})
+
+describe('getDerivativesHistory（issue #54）', () => {
+  const HISTORY_ROUTES: Record<string, { status?: number; body?: unknown }> = {
+    '/api/v5/public/funding-rate-history': {
+      body: {
+        code: '0',
+        data: [
+          { instId: 'BTC-USDT-SWAP', fundingRate: '0.0002', fundingTime: '1700000002000' },
+          { instId: 'BTC-USDT-SWAP', fundingRate: '0.0001', fundingTime: '1700000000000' },
+        ],
+      },
+    },
+    '/api/v5/rubik/stat/contracts/open-interest-history': {
+      body: {
+        code: '0',
+        data: [
+          ['1700000001000', '160100', '801.5', '33600000'],
+          ['1699999000000', '159000', '795.3', '33400000'],
+        ],
+      },
+    },
+  }
+
+  it('费率历史 + OI 历史反转为时间升序（OI 取币数列）', async () => {
+    const { fetchImpl } = routeByPath(HISTORY_ROUTES)
+    const history = await derivativesService(fetchImpl).getDerivativesHistory('BTCUSDT')
+    expect(history.symbol).toBe('BTCUSDT-SWAP')
+    expect(history.fundingRates?.map(p => p.time)).toEqual([1700000000000, 1700000002000])
+    expect(history.openInterest?.map(p => p.value)).toEqual([795.3, 801.5])
+  })
+
+  it('单序列失败 → 该字段缺省；全失败 → 结构化错误', async () => {
+    const partial = routeByPath({
+      ...HISTORY_ROUTES,
+      '/api/v5/public/funding-rate-history': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+    })
+    const history = await derivativesService(partial.fetchImpl).getDerivativesHistory('BTC-USDT-SWAP')
+    expect(history.fundingRates).toBeUndefined()
+    expect(history.openInterest).toHaveLength(2)
+
+    const down = routeByPath({
+      '/api/v5/public/funding-rate-history': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+      '/api/v5/rubik/stat/contracts/open-interest-history': { status: 500, body: { code: '50001', msg: 'x', data: [] } },
+    })
+    await expect(derivativesService(down.fetchImpl).getDerivativesHistory('BTCUSDT'))
+      .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
+  })
+})

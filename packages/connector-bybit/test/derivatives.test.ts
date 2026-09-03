@@ -81,3 +81,82 @@ describe('BybitMarketDataService.getDerivatives', () => {
       .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
   })
 })
+
+
+/** issue #54：tickers 同行扩展字段 + 历史序列聚合。 */
+describe('BybitMarketDataService 衍生品扩展（issue #54）', () => {
+  it('tickers 行携带 nextFundingTime/markPrice/indexPrice → 进快照（基差卡底料）', async () => {
+    const { impl } = stubFetch({
+      '/v5/market/tickers': {
+        body: {
+          retCode: 0,
+          result: {
+            list: [{
+              symbol: 'BTCUSDT', fundingRate: '0.0001', openInterest: '79500.3',
+              openInterestValue: '3340000000', nextFundingTime: '1700028800000',
+              markPrice: '42001.5', indexPrice: '42000.1',
+            }],
+          },
+        },
+      },
+      '/v5/market/account-ratio': {
+        body: { retCode: 0, result: { list: [{ symbol: 'BTCUSDT', buyRatio: '0.55', sellRatio: '0.45' }] } },
+      },
+    })
+    const data = await service(impl).getDerivatives('BTCUSDT')
+    expect(data.nextFundingTime).toBe(1700028800000)
+    expect(data.markPrice).toBe(42001.5)
+    expect(data.indexPrice).toBe(42000.1)
+  })
+
+  it('getDerivativesHistory：费率历史 + OI 历史反转为时间升序', async () => {
+    const { impl } = stubFetch({
+      '/v5/market/funding/history': {
+        body: {
+          retCode: 0,
+          result: {
+            list: [
+              { symbol: 'BTCUSDT', fundingRate: '0.0002', fundingRateTimestamp: '1700000002000' },
+              { symbol: 'BTCUSDT', fundingRate: '0.0001', fundingRateTimestamp: '1700000000000' },
+            ],
+          },
+        },
+      },
+      '/v5/market/open-interest': {
+        body: {
+          retCode: 0,
+          result: {
+            list: [
+              { openInterest: '80100.5', timestamp: '1700000001000' },
+              { openInterest: '79500.3', timestamp: '1699999000000' },
+            ],
+          },
+        },
+      },
+    })
+    const history = await service(impl).getDerivativesHistory('BTCUSDT')
+    expect(history.symbol).toBe('BTCUSDT-SWAP')
+    expect(history.fundingRates?.map(p => p.time)).toEqual([1700000000000, 1700000002000])
+    expect(history.fundingRates?.map(p => p.value)).toEqual([0.0001, 0.0002])
+    expect(history.openInterest?.map(p => p.value)).toEqual([79500.3, 80100.5])
+  })
+
+  it('getDerivativesHistory：单端点失败 → 该序列缺省；全失败 → 结构化错误', async () => {
+    const partial = stubFetch({
+      '/v5/market/funding/history': { status: 500, body: { retCode: 10001, retMsg: 'error' } },
+      '/v5/market/open-interest': {
+        body: { retCode: 0, result: { list: [{ openInterest: '79500.3', timestamp: '1699999000000' }] } },
+      },
+    })
+    const history = await service(partial.impl).getDerivativesHistory('BTCUSDT')
+    expect(history.fundingRates).toBeUndefined()
+    expect(history.openInterest).toHaveLength(1)
+
+    const down = stubFetch({
+      '/v5/market/funding/history': { status: 500, body: { retCode: 10001, retMsg: 'error' } },
+      '/v5/market/open-interest': { status: 500, body: { retCode: 10001, retMsg: 'error' } },
+    })
+    await expect(service(down.impl).getDerivativesHistory('BTCUSDT'))
+      .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
+  })
+})
