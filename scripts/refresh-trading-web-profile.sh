@@ -29,6 +29,10 @@ echo "== 停止运行中的 trading-web 实例 =="
 pgrep -f "profile trading-web" | xargs kill 2>/dev/null || true
 sleep 1
 
+echo "== Profile 配置预检（死路径/身份漂移/闭包缺口，失败即中止）=="
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$SCRIPT_DIR/profile-config-preflight.sh" trading-web
+
 echo "== 刷新 @dshtrading 包副本 =="
 if [ "$#" -gt 0 ]; then
   for pkg in "$@"; do rm -rf "$PROFILE/node_modules/@dshtrading/$pkg"; done
