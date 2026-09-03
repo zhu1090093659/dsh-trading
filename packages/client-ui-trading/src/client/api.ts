@@ -454,6 +454,7 @@ export interface TradingBridgeService {
   fetchKnowledgeCards: typeof fetchKnowledgeCards
   fetchFundamentals: typeof fetchFundamentals
   fetchNews: typeof fetchNews
+  fetchSymbols: typeof fetchSymbols
   subscribeTradingEvents: typeof subscribeTradingEvents
 }
 
@@ -465,6 +466,7 @@ export function createTradingBridgeService(): TradingBridgeService {
     fetchKnowledgeCards,
     fetchFundamentals,
     fetchNews,
+    fetchSymbols,
     subscribeTradingEvents,
   }
 }

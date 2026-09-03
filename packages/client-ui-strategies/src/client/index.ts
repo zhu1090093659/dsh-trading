@@ -36,6 +36,7 @@ interface StageViewsService {
 interface BridgeService {
   fetchKlines(market: string, symbol: string, interval: string, limit: number): Promise<unknown[]>
   fetchCustomStrategies(): Promise<Array<Record<string, unknown>>>
+  fetchSymbols(market: string): Promise<Array<{ symbol: string; name?: string }>>
   subscribeTradingEvents(handlers: Record<string, () => void>): () => void
 }
 
@@ -54,6 +55,8 @@ export function apply(ctx: ClientContext): void {
         faces.tradingBridge.fetchKlines(market, symbol, interval, limit) as never,
       fetchCustomStrategies: () =>
         faces.tradingBridge.fetchCustomStrategies() as never,
+      fetchSymbols: (market) =>
+        faces.tradingBridge.fetchSymbols(market) as never,
       subscribeTradingEvents: (handlers) => faces.tradingBridge.subscribeTradingEvents(handlers),
     }
     faces.tradingStageViews.register({
@@ -88,6 +91,8 @@ export function apply(ctx: ClientContext): void {
 function dictionaries(): Record<'zh' | 'en', Record<StrategyLocaleKey, string>> {
   return {
     zh: {
+      'sv.section.screener': '选股策略',
+      'sv.section.quant': '量化策略',
       'sv.horizon.short': '短线交易',
       'sv.horizon.swing': '波段操作',
       'sv.horizon.long': '长线投资',
@@ -116,8 +121,25 @@ function dictionaries(): Record<'zh' | 'en', Record<StrategyLocaleKey, string>> 
       'sv.trades.netReturn': '单笔净收益率',
       'sv.trades.exitReason': '离场原因',
       'sv.empty.hint': '选择上方策略与参数后，点击「运行回测」查看绩效与权益曲线',
+      'sv.screener.run': '运行选股',
+      'sv.screener.stop': '停止',
+      'sv.screener.scanLimit': '扫描池上限',
+      'sv.screener.universePrefix': '标的名册',
+      'sv.screener.scanned': '已扫描',
+      'sv.screener.hits': '命中',
+      'sv.screener.failed': '失败',
+      'sv.screener.noUniverse': '当前数据源未提供标的全集，选股功能不可用（Binance/OKX 等提供名册的连接器可用）',
+      'sv.screener.noHits': '扫描完成：没有标的满足当前条件',
+      'sv.screener.scanning': '扫描中，命中将实时出现在下方...',
+      'sv.screener.emptyHint': '选择上方选股器与参数后，点击「运行选股」扫描全市场标的',
+      'sv.screener.col.symbol': '代码',
+      'sv.screener.col.name': '名称',
+      'sv.screener.col.price': '现价',
+      'sv.screener.col.reason': '信号说明',
     },
     en: {
+      'sv.section.screener': 'Screener',
+      'sv.section.quant': 'Quantitative',
       'sv.horizon.short': 'Short-term',
       'sv.horizon.swing': 'Swing',
       'sv.horizon.long': 'Long-term',
@@ -146,6 +168,21 @@ function dictionaries(): Record<'zh' | 'en', Record<StrategyLocaleKey, string>> 
       'sv.trades.netReturn': 'Net Return',
       'sv.trades.exitReason': 'Exit Reason',
       'sv.empty.hint': 'Select a strategy and parameters above, then click "Run Backtest"',
+      'sv.screener.run': 'Scan',
+      'sv.screener.stop': 'Stop',
+      'sv.screener.scanLimit': 'Scan Cap',
+      'sv.screener.universePrefix': 'Universe',
+      'sv.screener.scanned': 'Scanned',
+      'sv.screener.hits': 'Hits',
+      'sv.screener.failed': 'Failed',
+      'sv.screener.noUniverse': 'This data source does not provide a symbol universe; screening is unavailable (connectors like Binance/OKX do)',
+      'sv.screener.noHits': 'Scan finished: no symbols match the current criteria',
+      'sv.screener.scanning': 'Scanning, hits appear below in real time...',
+      'sv.screener.emptyHint': 'Pick a screener and parameters above, then click "Scan" to screen the market',
+      'sv.screener.col.symbol': 'Symbol',
+      'sv.screener.col.name': 'Name',
+      'sv.screener.col.price': 'Price',
+      'sv.screener.col.reason': 'Signal',
     },
   }
 }
