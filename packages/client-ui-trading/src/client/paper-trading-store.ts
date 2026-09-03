@@ -24,7 +24,7 @@ const STORAGE_KEY = 'dshtrading:paper:account:v1'
 const DEFAULT_INITIAL_CASH = 100_000
 
 function loadStoredAccount(): PaperAccount {
-  if (typeof window === 'undefined' || !window.localStorage) {
+  if (typeof window === 'undefined' || typeof window.localStorage?.getItem !== 'function') {
     return {
       cash: DEFAULT_INITIAL_CASH,
       initialCash: DEFAULT_INITIAL_CASH,
@@ -60,7 +60,7 @@ function loadStoredAccount(): PaperAccount {
 }
 
 function saveStoredAccount(account: PaperAccount): void {
-  if (typeof window === 'undefined' || !window.localStorage) return
+  if (typeof window === 'undefined' || typeof window.localStorage?.setItem !== 'function') return
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(account))
   } catch {

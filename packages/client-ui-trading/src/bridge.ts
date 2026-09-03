@@ -342,13 +342,22 @@ export class TradingBridge {
     if (typeof service.listInstruments !== 'function') {
       return { symbols: [] }
     }
-    const trimmed = query?.trim()
+    const trimmed = query?.trim().toLowerCase()
     if (trimmed) {
       try {
         const list = await (service as unknown as { listInstruments(q?: string): Promise<Array<{ symbol: string; name?: string }>> }).listInstruments(trimmed)
-        const symbols: SymbolInfoWire[] = Array.isArray(list)
+        let symbols: SymbolInfoWire[] = Array.isArray(list)
           ? list.map(item => ({ symbol: item.symbol, ...(item.name ? { name: item.name } : {}) }))
           : []
+        // 防御性兜底：若连接器实现未做服务端过滤（忽略 query 返回全量），本地执行严格匹配
+        const isServerFiltered = symbols.length === 0 || symbols.every(s =>
+          s.symbol.toLowerCase().includes(trimmed) || (s.name !== undefined && s.name.toLowerCase().includes(trimmed))
+        )
+        if (!isServerFiltered) {
+          symbols = symbols.filter(s =>
+            s.symbol.toLowerCase().includes(trimmed) || (s.name !== undefined && s.name.toLowerCase().includes(trimmed))
+          )
+        }
         return { symbols }
       } catch {
         return { symbols: [] }

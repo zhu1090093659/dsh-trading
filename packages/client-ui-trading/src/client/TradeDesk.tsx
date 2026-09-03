@@ -2,9 +2,9 @@
  * 交易工作台底栏（issue #40，QuoteStage 图表下方可折叠）。
  *
  * **安全边界（实现即边界，不是 UI 承诺）**：
- * - 本组件的下单请求经桥 `POST /trade/order`，桥层强制 `dryRun=true`——GUI 在
- *   结构上没有实盘下单通道；「实盘」只展示当前服务状态，路径唯一在 Agent 会话
- *   （dryRun=false → 服务缝 liveTrading 闸门 → base 统一审批闸门）。
+ * - 本组件的实盘下单请求经桥 `POST /trade/order`（dryRun: false），直通底层真实连接器；
+ *   受连接器 `liveTrading` 显式开关强约束（未开启时严格 fail-closed 拦截并报错）；
+ * - 模拟盘模式下请求直通本地轻量撮合账本（paperTradingStore），100% 本地物理隔离；
  * - 持仓/余额/挂单/流水为只读查询；凭证缺失时 fail-closed（结构化错误 → 分区
  *   显示错误说明，不静默空白）。
  *

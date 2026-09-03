@@ -51,10 +51,10 @@ const UPSTREAM_TIMEOUT_MS = 10_000
 const HK_MARKET_ID = '116.'
 /** 港股关键词（无关联代码时仍判为港股相关）。 */
 const HK_KEYWORDS = ['港股', '港交所', '香港', '恒指', '恒生']
-/** 公告放宽时间窗：上市公司公告 7 天内有效（媒体快讯仍按 24h 窗）。 */
-const ANNOUNCEMENT_MAX_AGE_MS = 7 * 24 * 3_600_000
-/** HKEX 公告检索请求窗：宽于 7 天过滤窗，避免时区/日期边界裁剪（DATE_TIME 港图时间）。 */
-const HKEX_REQUEST_WINDOW_MS = 14 * 24 * 3_600_000
+/** 公告放宽时间窗：上市公司公告 90 天（一季度）内有效（媒体快讯仍按 24h 窗）。 */
+const ANNOUNCEMENT_MAX_AGE_MS = 90 * 24 * 3_600_000
+/** HKEX 公告检索请求窗：宽于 90 天过滤窗，避免时区/日期边界裁剪（DATE_TIME 港图时间）。 */
+const HKEX_REQUEST_WINDOW_MS = 95 * 24 * 3_600_000
 
 interface EastmoneyItem {
   title?: string

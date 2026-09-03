@@ -174,7 +174,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   /** 全局交易模式：'live' 实盘 vs 'paper' 模拟盘（默认从 localStorage 读取，缺省 live） */
   const [tradeMode, setTradeMode] = useState<'live' | 'paper'>(() => {
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
+      if (typeof window !== 'undefined' && typeof window.localStorage?.getItem === 'function') {
         const stored = window.localStorage.getItem('dshtrading:trade:mode')
         if (stored === 'paper' || stored === 'live') return stored
       }
@@ -195,7 +195,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const handleToggleTradeMode = (mode: 'live' | 'paper') => {
     setTradeMode(mode)
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
+      if (typeof window !== 'undefined' && typeof window.localStorage?.setItem === 'function') {
         window.localStorage.setItem('dshtrading:trade:mode', mode)
       }
     } catch {
