@@ -243,7 +243,10 @@ export class AlpacaTradeService extends Service implements TradeService {
 
   async cancelOrder(orderId: string, _symbol?: string): Promise<void> {
     if (!this.config.liveTrading || this.config.dryRun) {
-      return
+      throw new TradingServiceError(
+        'TRADING_LIVE_TRADING_DISABLED',
+        'Alpaca TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
+      )
     }
     const creds = await this.getCredentials()
     await this.client.cancelOrder(creds, orderId)

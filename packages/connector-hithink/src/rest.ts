@@ -59,10 +59,10 @@ export function normalizeThsCode(input: string): string {
   const codeMatch = /^(\d{6})$/.exec(raw)
   if (codeMatch && codeMatch[1]) {
     const code = codeMatch[1]
-    const suffix = code.startsWith('6') || code.startsWith('9') || code.startsWith('688')
-      ? 'SH'
-      : code.startsWith('8') || code.startsWith('4') || code.startsWith('920')
-        ? 'BJ'
+    const suffix = code.startsWith('920') || code.startsWith('8') || code.startsWith('4')
+      ? 'BJ'
+      : code.startsWith('6') || code.startsWith('900')
+        ? 'SH'
         : 'SZ'
     return `${code}.${suffix}`
   }

@@ -13,6 +13,7 @@ describe('HiThink 连接器与代码规范化', () => {
     expect(normalizeThsCode('000001')).toBe('000001.SZ')
     expect(normalizeThsCode('300750')).toBe('300750.SZ')
     expect(normalizeThsCode('830946')).toBe('830946.BJ')
+    expect(normalizeThsCode('920002')).toBe('920002.BJ')
     expect(normalizeThsCode('sh600519')).toBe('600519.SH')
     expect(normalizeThsCode('SZ000001')).toBe('000001.SZ')
     expect(normalizeThsCode('600519.SH')).toBe('600519.SH')

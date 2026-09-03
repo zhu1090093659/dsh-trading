@@ -1,34 +1,31 @@
-# @dsh-trading/connector-template
+# @dsh-trading/connector-hithink
 
-**本包是脚手架源，不是可安装的连接器**：不入任何 bundle 依赖，仅在 `pnpm -r build/test`
-基线内保证可编译、冒烟测试绿。真实接入用生成器：
+HiThink (同花顺/问财开放平台 OpenAPI) A 股连接器，提供基本面数据、估值快照、集合竞价与特色选股数据。
 
-```sh
-node scripts/new-connector.mjs --slug bybit --title Bybit --market crypto
+## 能力边界
+
+- **数据服务 (`MarketDataService`)**：
+  - `getTicker(symbol)`：实时行情快照与最新量价；
+  - `getStockFundamentals(symbol)`：总市值、流通市值、市盈率 (PE-TTM/动/静)、市净率 (PB)、市销率 (PS)、股息率；
+  - `getAuctionSnapshot(symbol)`：早盘集合竞价匹配量、未匹配量与竞价强弱；
+  - `getLimitUpPool(date?)`：连板池、封单量与炸板分析；
+- **交易服务 (`TradeService`)**：
+  - 不提供直接委托下单通道（A 股实盘执行由本地 MiniQMT 负责，遵循铁律 #3 统一安全闸门）。
+
+## 配置项 (Config)
+
+```json
+{
+  "enabled": true,
+  "apiKey": "ref:env/HITHINK_API_KEY",
+  "baseUrl": "https://fuyao.aicubes.cn/openapi/v1"
+}
 ```
 
-生成后按 [docs/connector-playbook.md](../../docs/connector-playbook.md) 的填写顺序
-（src/rest.ts 头部清单 7 项）实现 TODO。每个 TODO 的参照段都在 connector-okx
-（packages/connector-okx/），它是本仓第一个真实 TradeService 连接器。
+- `apiKey`：同花顺/问财开放平台认证 Token（遵循 BYOK 铁律 #5，仅支持 ref 引用或环境变量 `HITHINK_API_KEY`）；
+- `baseUrl`：开放平台端点网关。
 
-## 结构
+## 合规与条款边界 (ToS Compliance)
 
-- `src/rest.ts` —— 错误载体（TradingServiceError）+ 通用请求管线（超时/错误映射/
-  模拟盘头/注入 fetch）直接可用；签名与端点 TODO。
-- `src/index.ts` —— Config（enabled/env/dryRun/liveTrading + 三 ref 凭证组）、
-  闸门三态判定、凭证解析（BYOK + 环境变量回落）、MarketDataService/TradeService 骨架、
-  7 个市场前缀工具注册（duplicate-safe）、apply（enabled=false 静默退出）。
-- `test/template.test.ts` —— 结构冒烟 7 用例。
-
-## Token
-
-`hithink`（slug）/ `HiThink`（title）/ `HITHINK`（ref 前缀）/
-`cn`（工具前缀）/ `Cn`（服务键 infix）。token 未展开也可编译；
-生成器保证全部替换。
-
-## 注意（勿改的坑）
-
-- 服务类用 TS 编译期 `private`（禁 ECMAScript `#`，realm 代理会炸）。
-- 工具名 = 市场前缀 + 语义词（不带交易所名）——base 闸门正则只认市场前缀。
-- 行 id = `dsh-trading-<market>-connector-<slug>`，全仓唯一（insert-only 铁律 #1）。
-- 凭证只进 ref，绝不内置/落日志（铁律 #3/#5）。
+- **个人使用**：仅供用户自主鉴权后获取个人看盘与研报所需数据；
+- **严禁再分发 (铁律 #4)**：不缓存转售、不批量扒取、不落地再分发原始行情。
