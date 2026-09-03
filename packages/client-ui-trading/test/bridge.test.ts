@@ -544,7 +544,7 @@ describe('TradingBridge.news（issue #37 新闻聚合；2026-09-02 评审 M3/M6 
     await expect(bridge.news('jp', 'AAPL', null)).rejects.toThrowError(/unknown market/)
   })
 
-  it('有媒体快讯 → 不触发回退，registry 聚合器结果透传', async () => {
+  it('有媒体快讯 → registry 聚合器结果透传', async () => {
     let calls = 0
     const aggregator: NewsAggregator = async () => {
       calls++
@@ -554,17 +554,15 @@ describe('TradingBridge.news（issue #37 新闻聚合；2026-09-02 评审 M3/M6 
     const wire = await bridge.news('us', 'AAPL', '10')
     expect(calls).toBe(1)
     expect(wire.ok).toBe(true)
-    expect(wire.fallback).toBe(false)
     expect(wire.items).toHaveLength(1)
     expect(wire.items[0]?.source).toBe('yahoo')
   })
 
-  it('仅剩公告（sec-edgar）→ 触发宏观回退：合并按时间倒序 + 按 limit 截尾', async () => {
+  it('仅剩公告（sec-edgar）→ 原样保留公告，不回退大盘要闻（2026-09-03 owner 裁决）', async () => {
     let calls = 0
     const aggregator: NewsAggregator = async (options) => {
       calls++
       if (options?.symbol !== undefined) {
-        // 24h 内只有官方披露（公告类不算媒体新闻），且是旧于宏观要闻的时间戳
         return { items: [item('sec-edgar', '8-K filing', '2026-09-01T09:00:00Z')], unavailable: [] }
       }
       return {
@@ -577,10 +575,21 @@ describe('TradingBridge.news（issue #37 新闻聚合；2026-09-02 评审 M3/M6 
     }
     const bridge = new TradingBridge(newsHost(aggregator))
     const wire = await bridge.news('us', 'AAPL', '2')
-    expect(calls).toBe(2)
-    expect(wire.fallback).toBe(true)
-    // 倒序重排（12:00 > 09:01 的 8-K > 08:00）+ 截尾到 limit=2 → 旧公告被裁掉
-    expect(wire.items.map(it => it.title)).toEqual(['macro newest', 'macro mid'])
+    expect(calls).toBe(1)
+    expect(wire.items.map(it => it.title)).toEqual(['8-K filing'])
+  })
+
+  it('无任何相关内容 → 空列表透传（前端展示空态，不兜底市场要闻）', async () => {
+    let calls = 0
+    const aggregator: NewsAggregator = async () => {
+      calls++
+      return { items: [], unavailable: [] }
+    }
+    const bridge = new TradingBridge(newsHost(aggregator))
+    const wire = await bridge.news('us', 'AAPL', '10')
+    expect(calls).toBe(1)
+    expect(wire.items).toEqual([])
+    expect(wire.unavailable).toEqual([])
   })
 
   it('公告源挂掉 → unavailable 注明，不与「暂无公告」混淆', async () => {
@@ -588,7 +597,6 @@ describe('TradingBridge.news（issue #37 新闻聚合；2026-09-02 评审 M3/M6 
     const bridge = new TradingBridge(newsHost(aggregator))
     const wire = await bridge.news('us', 'AAPL', null)
     expect(wire.unavailable).toEqual(['eastmoney-announcement: HTTP 503'])
-    expect(wire.fallback).toBe(false)
     expect(wire.items).toEqual([])
   })
 })

@@ -160,7 +160,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   // ── 新闻与公告（issue #37）────────────────────────────────────
   const [newsItems, setNewsItems] = useState<ClientNewsItem[] | null>(null)
   const [newsUnavailable, setNewsUnavailable] = useState<string[]>([])
-  const [newsFallback, setNewsFallback] = useState<boolean>(false)
 
   // ── K 线标记（issue #41）──────────────────────────────────────
   const [markerStore] = useState(() => createMarkerStateStore())
@@ -294,7 +293,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setTrades(null)
     setNewsItems(null)
     setNewsUnavailable([])
-    setNewsFallback(false)
     setMarkerHover(null)
   }, [market, symbol])
 
@@ -325,7 +323,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       if (result !== null) {
         setNewsItems(result.items)
         setNewsUnavailable(result.unavailable)
-        setNewsFallback(Boolean(result.fallback))
       }
     } catch { /* 下轮重试 */ }
   }, NEWS_POLL_MS, [market, symbol, stageTab, markerState.showKnowledgeEvents])
@@ -914,7 +911,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           <NewsFeedPane
             items={newsItems}
             unavailable={newsUnavailable}
-            fallback={newsFallback}
             fullHeight
             filterType="media"
             t={t}
@@ -926,7 +922,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           <NewsFeedPane
             items={newsItems}
             unavailable={newsUnavailable}
-            fallback={false}
             fullHeight
             filterType="exchange"
             t={t}

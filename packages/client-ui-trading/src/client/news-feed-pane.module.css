@@ -13,14 +13,6 @@
   border-top: none;
 }
 
-.fallbackBanner {
-  padding: 5px 12px;
-  font-size: 11px;
-  color: var(--dsw-futu-text-secondary, #5f6672);
-  background: var(--dsw-futu-bg-subtle, #f5f6f8);
-  border-bottom: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
-}
-
 .list {
   list-style: none;
   margin: 0;
