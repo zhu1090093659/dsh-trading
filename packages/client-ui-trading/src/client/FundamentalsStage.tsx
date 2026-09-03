@@ -577,6 +577,7 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                               selectedIndicatorId={selectedIndicatorId}
                               onToggleGroup={() => toggleGroup(group.id)}
                               onSelectIndicator={(id) => setSelectedIndicatorId(id)}
+                              formatValue={fv}
                             />
                           )
                         })}
@@ -1338,6 +1339,7 @@ function GroupFragment({
   selectedIndicatorId,
   onToggleGroup,
   onSelectIndicator,
+  formatValue,
 }: {
   group: FinancialReportGroup
   periods: string[]
@@ -1345,6 +1347,8 @@ function GroupFragment({
   selectedIndicatorId: string
   onToggleGroup: () => void
   onSelectIndicator: (id: string) => void
+  /** 数值单位 locale 贯通（评审 M2）：顶层组件的 fv 借道传入。 */
+  formatValue: (val: number | undefined, unit?: string, isRatio?: boolean) => string
 }) {
   return (
     <>
@@ -1373,7 +1377,7 @@ function GroupFragment({
               const changeInfo = formatChange(cell?.changePercent)
               return (
                 <td key={p}>
-                  <div className={css.cellValue}>{fv(cell?.value, row.unit)}</div>
+                  <div className={css.cellValue}>{formatValue(cell?.value, row.unit)}</div>
                   {cell?.changePercent !== undefined && (
                     <div className={`${css.cellChange} ${changeInfo.cls}`}>{changeInfo.text}</div>
                   )}

@@ -320,26 +320,26 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   }, [stageTab, market])
 
   // 「分析资金面」（issue #54）：把衍生品快照上下文填进会话输入框（只填不发）。
+  // 骨架走词典（derivatives.analyzeBody + 各行标签键）；行值为纯数字/代码，无文案。
   const onAnalyzeDerivatives = (): void => {
     if (fillComposer === undefined || derivatives === null || symbol === undefined) return
     const d = derivatives
     const parts = [
-      `请分析 ${d.symbol} 永续合约的资金面与多空拥挤度（数据源 ${d.source}）：`,
       d.openInterest !== undefined
-        ? `- 持仓量 ${fmtCompact(d.openInterest)}${d.openInterestValue !== undefined ? `（约 ${fmtCompact(d.openInterestValue)} USD）` : ''}`
+        ? `- ${t('derivatives.oi')} ${fmtCompact(d.openInterest, numLocale)}${d.openInterestValue !== undefined ? ` (${fmtCompact(d.openInterestValue, numLocale)} USD)` : ''}`
         : undefined,
       d.fundingRate !== undefined
-        ? `- 资金费率 ${fmtFundingRate(d.fundingRate)}（${d.fundingRate > 0 ? '多头付资金' : d.fundingRate < 0 ? '空头付资金' : '中性'}）${d.nextFundingRate !== undefined ? `，预测下期 ${fmtFundingRate(d.nextFundingRate)}` : ''}`
+        ? `- ${t('derivatives.funding')} ${fmtFundingRate(d.fundingRate)}${d.nextFundingRate !== undefined ? ` (${t('derivatives.predicted')} ${fmtFundingRate(d.nextFundingRate)})` : ''}`
         : undefined,
-      d.longShortRatio !== undefined ? `- 多空人数比 ${d.longShortRatio.toFixed(2)}` : undefined,
-      d.topTraderLongShortRatio !== undefined ? `- 大户多空比 ${d.topTraderLongShortRatio.toFixed(2)}` : undefined,
-      d.takerBuySellRatio !== undefined ? `- 主动买卖比 ${d.takerBuySellRatio.toFixed(2)}` : undefined,
+      d.longShortRatio !== undefined ? `- ${t('derivatives.longShort')} ${d.longShortRatio.toFixed(2)}` : undefined,
+      d.topTraderLongShortRatio !== undefined ? `- ${t('derivatives.topLongShort')} ${d.topTraderLongShortRatio.toFixed(2)}` : undefined,
+      d.takerBuySellRatio !== undefined ? `- ${t('derivatives.taker')} ${d.takerBuySellRatio.toFixed(2)}` : undefined,
       d.markPrice !== undefined && d.indexPrice !== undefined && d.indexPrice > 0
-        ? `- 基差 ${fmtPercent((d.markPrice - d.indexPrice) / d.indexPrice * 100)}（标记 ${fmtPrice(d.markPrice)} / 指数 ${fmtPrice(d.indexPrice)}）`
+        ? `- ${t('derivatives.basis')} ${fmtPercent((d.markPrice - d.indexPrice) / d.indexPrice * 100)} (${t('derivatives.markPrice')} ${fmtPrice(d.markPrice)} / ${t('derivatives.indexPrice')} ${fmtPrice(d.indexPrice)})`
         : undefined,
-      '请结合费率走向、OI 变化与多空比给出拥挤度判断和风险提示（不构成投资建议）。',
     ].filter((line): line is string => line !== undefined)
-    void fillComposer(parts.join('\n'))
+    const body = t('derivatives.analyzeBody', { symbol: d.symbol, source: d.source, lines: parts.join('\n') })
+    void fillComposer(body)
   }
 
   // 换标的：立即清场
@@ -571,7 +571,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     }
     // exactOptionalPropertyTypes：undefined 字段直接剔除而非显式传 undefined。
     // deltaWrap 用 '|' 作分隔哨兵拆包裹符对（词典值单字符串无法表达成对括号）。
-    const [deltaOpen, deltaClose] = t('compose.deltaWrap').split('|')
+    const [deltaOpen = '(', deltaClose = ')'] = t('compose.deltaWrap').split('|')
     const copy: QuoteMessageCopy = {
       opener: t('compose.opener'),
       prevClose: t('compose.prevClose'),
@@ -983,7 +983,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 derivatives={derivatives}
                 colorMode={colorMode}
                 onOpenStage={() => { setStageTab('derivatives') }}
-                onAnalyze={fillComposer !== undefined ? onAnalyzeDerivatives : undefined}
+                {...(fillComposer !== undefined ? { onAnalyze: onAnalyzeDerivatives } : {})}
               />
             )}
           </div>

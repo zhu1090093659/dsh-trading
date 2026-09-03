@@ -149,6 +149,29 @@ export function stripComments(source) {
     if (ch === '/' && next === '*') { push('block-comment'); comments.push({ start: i, end: -1 }); out[i] = ' '; out[i + 1] = ' '; i += 2; continue }
     if (ch === "'" || ch === '"') { push(ch); i += 1; continue }
     if (ch === '`') { push('template'); i += 1; continue }
+    if (ch === '/') {
+      // Regex literal: consume to the unescaped closing slash so `\/\/` inside a
+      // regex never reads as a line comment (which would comment-blank the rest
+      // of the line and hide real CJK — the one desync shape that hides copy).
+      // Heuristic: a `/` opens a regex unless the previous non-space char is one of
+      // ( , = : [ ! & | ? { ; or start — i.e. an operator/division position.
+      let p = i - 1
+      while (p >= 0 && /\s/.test(source[p])) p -= 1
+      const prev = p >= 0 ? source[p] : '='
+      if ('(,=:[!&|?{;'.includes(prev) || p < 0) {
+        push('regex')
+        i += 1
+        while (i < source.length) {
+          if (source[i] === '\\') { i += 2; continue }
+          if (source[i] === '[') { i += 1; while (i < source.length && source[i] !== ']') { if (source[i] === '\\') i += 1; i += 1 } i += 1; continue }
+          if (source[i] === '/') { i += 1; break }
+          if (source[i] === '\n') break // unterminated: recover at line end
+          i += 1
+        }
+        stack.pop()
+        continue
+      }
+    }
     i += 1
   }
   return { code: out.join(''), comments }
@@ -165,15 +188,25 @@ export function stripComments(source) {
 export function scanCjk(source) {
   const { code, comments } = stripComments(source)
   const lines = code.split('\n')
-  const rawLines = source.split('\n')
   const leadingEnd = firstCodeOffset(code)
   const fileExempt = comments.some((c) => c.start < leadingEnd && source.slice(c.start, c.end).includes(ALLOW_MARKER))
   if (fileExempt) return { hits: [], fileExempt: true, allowedLines: [] }
+  // Line-level exemptions: the marker must sit in a comment span overlapping
+  // the line (review L5: a raw-line substring match let a string literal
+  // containing "i18n-allow:" exempt its own CJK content).
+  const commentLines = new Set()
+  for (const c of comments) {
+    const text = source.slice(c.start, c.end)
+    if (!text.includes(ALLOW_MARKER)) continue
+    const startLine = source.slice(0, c.start).split('\n').length - 1
+    const endLine = source.slice(0, Math.max(c.start, c.end - 1)).split('\n').length - 1
+    for (let ln = startLine; ln <= endLine; ln += 1) commentLines.add(ln)
+  }
   const hits = []
   const allowedLines = []
   for (let idx = 0; idx < lines.length; idx += 1) {
     if (!CJK_RE.test(lines[idx])) continue
-    if (rawLines[idx] !== undefined && rawLines[idx].includes(ALLOW_MARKER)) {
+    if (commentLines.has(idx)) {
       allowedLines.push(idx + 1)
       continue
     }
@@ -263,11 +296,12 @@ async function importTs(absolutePath) {
 export function deriveNamespace(entrySource) {
   const ident = /locale\.register\(\s*([A-Za-z_$][\w$]*)\s*,/.exec(entrySource)
   if (ident !== null) {
-    const decl = new RegExp(`(?:const|let|var)\\s+${ident[1]}\\s*=\\s*'([^']+)'`).exec(entrySource)
-    return decl?.[1]
+    const decl = new RegExp(`(?:const|let|var)\\s+${ident[1]}\\s*=\\s*(['"])([^'"]+)\\1`).exec(entrySource)
+    return decl?.[2]
   }
-  const literal = /locale\.register\(\s*'([^']+)'\s*,/.exec(entrySource)
-  return literal?.[1]
+  // Both quote styles (review L5: a double-quoted register literal crashed the gate).
+  const literal = /locale\.register\(\s*(['"])([^'"]+)\1\s*,/.exec(entrySource)
+  return literal?.[2]
 }
 
 /** Load every audited package: zh/en dictionaries plus derived ns. */

@@ -83,7 +83,9 @@ export async function fillComposerWithQuote(deps: FillComposerDeps, text: string
   if (current === undefined) {
     throw new Error('no session available to fill the composer (start a session first)')
   }
-  const facade = deps.conversation?.input.shell(current)
+  const conversation = deps.conversation
+  if (conversation === undefined) throw new Error('conversation service unavailable — cannot fill the composer')
+  const facade = conversation.input.shell(current)
   if (facade === undefined) throw new Error('conversation service unavailable — cannot fill the composer')
 
   const { phase, draft } = facade.state.getSnapshot()
@@ -92,9 +94,9 @@ export async function fillComposerWithQuote(deps: FillComposerDeps, text: string
   }
   // 截图先落草稿图注册表再挂 id；提交中 addImages 自己也会拒（双保险）。
   if (image !== undefined) {
-    const [attachment] = deps.conversation.createDraftImages([dataUrlToFile(image.dataUrl, image.name ?? 'chart.png')])
+    const [attachment] = conversation.createDraftImages([dataUrlToFile(image.dataUrl, image.name ?? 'chart.png')])
     if (attachment !== undefined && !facade.addImages([attachment.id])) {
-      deps.conversation.releaseDraftImage?.(attachment.id)
+      conversation.releaseDraftImage?.(attachment.id)
       console.warn('[dsh-trading] composer refused image (busy) — filling text only')
     }
   }

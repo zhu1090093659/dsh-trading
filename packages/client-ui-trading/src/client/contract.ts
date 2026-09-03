@@ -331,6 +331,7 @@ export type MarketLocaleKey =
   | 'derivatives.oiTrend'
   | 'derivatives.historyUnavailable'
   | 'derivatives.analyze'
+  | 'derivatives.analyzeBody'
   | 'derivatives.analyzeHint'
   | 'derivatives.perpSource'
   | 'derivatives.hint.oi'

@@ -23,6 +23,11 @@ import { readJson, writeJson, type SelectionState } from './shell-faces.ts'
 import { IconStrategy } from './icons.tsx'
 import { ScreenerPane } from './ScreenerPane.tsx'
 import type { StrategyLocaleKey } from './contract.ts'
+import {
+  strategyName, strategySummary, paramLabel,
+  exitReasonText,
+} from './strategy-locale.ts'
+export { strategyName, strategySummary, paramLabel, exitReasonText } from './strategy-locale.ts'
 import css from './StrategyView.module.css'
 
 type StrategySection = 'screener' | 'quant'
@@ -530,59 +535,3 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
   )
 }
 
-/**
- * 内置策略/选股器的展示文案词典映射：键约定 strat.<id>[.summary/.param.<key>/
- * .reason.<kind>]/scr.<id>[.summary/.param.<key>/.col.<key>/.reason]。
- * 词典优先，miss 回退定义自带值——自定义策略（用户 author，单语）自动走回退，
- * host 纯库（packages/strategies）零 locale 依赖。
- */
-export function strategyName(def: { id: string; name: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
-  return t(`strat.${def.id}` as StrategyLocaleKey) !== `strat.${def.id}` ? t(`strat.${def.id}` as StrategyLocaleKey) : def.name
-}
-
-export function strategySummary(def: { id: string; summary: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
-  const key = `strat.${def.id}.summary` as StrategyLocaleKey
-  return t(key) !== key ? t(key) : def.summary
-}
-
-export function paramLabel(def: { id: string }, param: { key: string; label: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
-  const key = `strat.${def.id}.param.${param.key}` as StrategyLocaleKey
-  return t(key) !== key ? t(key) : param.label
-}
-
-export function screenerName(def: { id: string; name: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
-  const key = `${def.id}` as StrategyLocaleKey
-  return t(key) !== key ? t(key) : def.name
-}
-
-export function screenerSummary(def: { id: string; summary: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
-  const key = `${def.id}.summary` as StrategyLocaleKey
-  return t(key) !== key ? t(key) : def.summary
-}
-
-export function screenerParamLabel(def: { id: string }, param: { key: string; label: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
-  const key = `${def.id}.param.${param.key}` as StrategyLocaleKey
-  return t(key) !== key ? t(key) : param.label
-}
-
-export function screenerColumnLabel(def: { id: string }, col: { key: string; label: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
-  const key = `${def.id}.col.${col.key}` as StrategyLocaleKey
-  return t(key) !== key ? t(key) : col.label
-}
-
-/** 交易流水的离场原因：词典键优先（内置范式，en 下走当语模板），回退 zh 原文
- *  （自定义策略无 reasonKey）。momentum 的 {cause} 槽是稳定枚举键，先翻译成
- *  当语文案再进模板插值。 */
-export function exitReasonText(
-  tr: { exitReason: string; exitReasonKey?: string; exitReasonParams?: Readonly<Record<string, string | number>> },
-  t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string,
-): string {
-  if (tr.exitReasonKey === undefined) return tr.exitReason
-  const params: Record<string, unknown> = { ...(tr.exitReasonParams ?? {}) }
-  if (typeof params.cause === 'string' && ['momentumNegative', 'belowBaseline'].includes(params.cause)) {
-    const causeKey = `strat.momentum-12m.cause.${params.cause}` as StrategyLocaleKey
-    params.cause = t(causeKey) !== causeKey ? t(causeKey) : params.cause
-  }
-  const text = t(tr.exitReasonKey as StrategyLocaleKey, params)
-  return text !== tr.exitReasonKey ? text : tr.exitReason
-}

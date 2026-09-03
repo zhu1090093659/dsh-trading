@@ -71,11 +71,18 @@ export function DerivativesPane({ t, derivatives, colorMode, onOpenStage, onAnal
         key: 'funding',
         label: t('derivatives.funding'),
         value: fmtFundingRate(derivatives.fundingRate),
-        sub: [
-          derivatives.nextFundingRate !== undefined ? `${t('derivatives.predicted')} ${fmtFundingRate(derivatives.nextFundingRate)}` : undefined,
-          countdown !== undefined ? `${t('derivatives.countdown')} ${countdown}` : undefined,
-        ].filter((part): part is string => part !== undefined).join(' · ')
-          || (derivatives.fundingRate > 0 ? t('derivatives.fundingPositive') : derivatives.fundingRate < 0 ? t('derivatives.fundingNegative') : undefined),
+        // exactOptionalPropertyTypes：sub 先归并为 string | undefined，再按需展开——
+        // 直写 `sub: a || b || undefined` 会把 undefined 摊进对象字面量类型。
+        ...((): { sub?: string } => {
+          const parts = [
+            derivatives.nextFundingRate !== undefined ? `${t('derivatives.predicted')} ${fmtFundingRate(derivatives.nextFundingRate)}` : undefined,
+            countdown !== undefined ? `${t('derivatives.countdown')} ${countdown}` : undefined,
+          ].filter((part): part is string => part !== undefined)
+          if (parts.length > 0) return { sub: parts.join(' · ') }
+          if (derivatives.fundingRate > 0) return { sub: t('derivatives.fundingPositive') }
+          if (derivatives.fundingRate < 0) return { sub: t('derivatives.fundingNegative') }
+          return {}
+        })(),
         color: directionColor(derivatives.fundingRate, colorMode),
         hint: t('derivatives.hint.funding'),
       }

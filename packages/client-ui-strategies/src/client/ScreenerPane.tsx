@@ -15,7 +15,7 @@ import {
   type ScreenerDefinition,
 } from '@dsh-trading/strategies'
 import { readJson, writeJson } from './shell-faces.ts'
-import { screenerName, screenerSummary, screenerParamLabel, screenerColumnLabel } from './StrategyView.tsx'
+import { screenerName, screenerSummary, screenerParamLabel, screenerColumnLabel, screenerReason } from './strategy-locale.ts'
 import type { StrategyLocaleKey } from './contract.ts'
 import css from './StrategyView.module.css'
 
@@ -335,7 +335,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
                     {currentScreener.columns.map((col) => (
                       <td key={col.key}>{formatMetric(row.metrics[col.key] ?? NaN, col.format)}</td>
                     ))}
-                    <td className={css.reasonCell}>{row.reasonKey !== undefined && t(row.reasonKey as StrategyLocaleKey, row.reasonParams) !== row.reasonKey ? t(row.reasonKey as StrategyLocaleKey, row.reasonParams) : row.reason}</td>
+                    <td className={css.reasonCell}>{screenerReason(row, t)}</td>
                   </tr>
                 ))
               )}
