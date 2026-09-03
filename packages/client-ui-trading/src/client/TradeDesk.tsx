@@ -2,9 +2,9 @@
  * 交易工作台底栏（issue #40，QuoteStage 图表下方可折叠）。
  *
  * **安全边界（实现即边界，不是 UI 承诺）**：
- * - 本组件的下单请求经桥 `POST /trade/order`，桥层强制 `dryRun=true`——GUI 在
- *   结构上没有实盘下单通道；「实盘」只展示当前服务状态，路径唯一在 Agent 会话
- *   （dryRun=false → 服务缝 liveTrading 闸门 → base 统一审批闸门）。
+ * - 本组件的实盘下单请求经桥 `POST /trade/order`（dryRun: false），直通底层真实连接器；
+ *   受连接器 `liveTrading` 显式开关强约束（未开启时严格 fail-closed 拦截并报错）；
+ * - 模拟盘模式下请求直通本地轻量撮合账本（paperTradingStore），100% 本地物理隔离；
  * - 持仓/余额/挂单/流水为只读查询；凭证缺失时 fail-closed（结构化错误 → 分区
  *   显示错误说明，不静默空白）。
  *
@@ -31,15 +31,17 @@ export interface TradeDeskProps {
   colorMode: ColorMode
   onClose: () => void
   onSubmit: (input: GuiOrderInput) => Promise<Order | null>
+  onCancel?: (orderId: string, symbol?: string) => Promise<boolean>
 }
 
-export function TradeDesk({ t, symbol, positions, balances, orders, fills, colorMode, onClose, onSubmit }: TradeDeskProps): React.JSX.Element {
+export function TradeDesk({ t, symbol, positions, balances, orders, fills, colorMode, onClose, onSubmit, onCancel }: TradeDeskProps): React.JSX.Element {
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
   const [type, setType] = useState<'market' | 'limit'>('market')
   const [quantity, setQuantity] = useState('')
   const [price, setPrice] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [receipt, setReceipt] = useState<string | null>(null)
+  const [cancelingId, setCancelingId] = useState<string | null>(null)
 
   const submit = (): void => {
     const qty = Number(quantity)
@@ -163,7 +165,15 @@ export function TradeDesk({ t, symbol, positions, balances, orders, fills, color
                 : (
                   <table className={css.table}>
                     <thead>
-                      <tr><th>{t('trade.symbol')}</th><th>{t('trade.side')}</th><th>{t('trade.type')}</th><th>{t('trade.price')}</th><th>{t('trade.size')}</th><th>{t('trade.filled')}</th></tr>
+                      <tr>
+                        <th>{t('trade.symbol')}</th>
+                        <th>{t('trade.side')}</th>
+                        <th>{t('trade.type')}</th>
+                        <th>{t('trade.price')}</th>
+                        <th>{t('trade.size')}</th>
+                        <th>{t('trade.filled')}</th>
+                        {onCancel && <th>{t('trade.action')}</th>}
+                      </tr>
                     </thead>
                     <tbody>
                       {orders.map((order, index) => (
@@ -174,6 +184,28 @@ export function TradeDesk({ t, symbol, positions, balances, orders, fills, color
                           <td>{order.price !== undefined ? fmtPrice(order.price) : '—'}</td>
                           <td>{order.quantity}</td>
                           <td>{order.filledQuantity ?? 0}</td>
+                          {onCancel && (
+                            <td>
+                              <button
+                                type="button"
+                                className={css.cancelBtn}
+                                disabled={cancelingId === order.id}
+                                onClick={() => {
+                                  setCancelingId(order.id)
+                                  setReceipt(null)
+                                  void onCancel(order.id, order.symbol)
+                                    .then((ok) => {
+                                      setReceipt(ok ? t('trade.cancelSuccess') : t('trade.cancelFailed'))
+                                    })
+                                    .finally(() => {
+                                      setCancelingId(null)
+                                    })
+                                }}
+                              >
+                                {cancelingId === order.id ? t('trade.canceling') : t('trade.cancel')}
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

@@ -291,10 +291,10 @@ describe('TradingBridge.trade/*（issue #40 交易台：只读 + 强制 dry-run�
     expect(fillWire).toMatchObject({ ok: true, fills: [{ id: 'f1' }] })
   })
 
-  it('POST /trade/order：placeOrder 收到强制 dryRun=true（即便 body 夹带其他语义）', async () => {
+  it('POST /trade/order：默认发起实盘报单（dryRun: false）；可显式指定', async () => {
     const placeOrder = vi.fn(async (req: { dryRun?: boolean }) => ({
-      id: 'dry-1', symbol: req.symbol, side: req.side, type: req.type,
-      status: 'filled' as const, quantity: req.quantity, dryRun: true as const, timestamp: 1,
+      id: 'ord-live-1', symbol: req.symbol, side: req.side, type: req.type,
+      status: 'filled' as const, quantity: req.quantity, dryRun: req.dryRun ?? false, timestamp: 1,
     }))
     const bridge = new TradingBridge(tradeHost(tradeService({ placeOrder: placeOrder as never })))
     const { payload } = await dispatchBridgeRequest(
@@ -302,8 +302,8 @@ describe('TradingBridge.trade/*（issue #40 交易台：只读 + 强制 dry-run�
       new URLSearchParams({ market: 'crypto' }),
       { symbol: 'BTCUSDT-SWAP', side: 'buy', type: 'limit', quantity: 0.02, price: 42000 },
     )
-    expect(payload).toMatchObject({ ok: true, order: { dryRun: true, symbol: 'BTCUSDT-SWAP' } })
-    expect(placeOrder).toHaveBeenCalledWith(expect.objectContaining({ symbol: 'BTCUSDT-SWAP', dryRun: true, price: 42000 }))
+    expect(payload).toMatchObject({ ok: true, order: { dryRun: false, symbol: 'BTCUSDT-SWAP' } })
+    expect(placeOrder).toHaveBeenCalledWith(expect.objectContaining({ symbol: 'BTCUSDT-SWAP', dryRun: false, price: 42000 }))
   })
 
   it('limit 单缺价格 → 400；数量非法 → 400；交易服务未注册 → 400', async () => {
@@ -318,6 +318,28 @@ describe('TradingBridge.trade/*（issue #40 交易台：只读 + 强制 dry-run�
     )).rejects.toMatchObject({ status: 400 })
     await expect(dispatchBridgeRequest(
       bridge, 'GET', '/trade/positions', new URLSearchParams({ market: 'us' }),
+    )).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('DELETE /trade/order：调用 cancelOrder 成功返回 { ok: true, canceled: true }', async () => {
+    const cancelOrder = vi.fn(async (_id: string, _sym?: string) => {})
+    const bridge = new TradingBridge(tradeHost(tradeService({ cancelOrder })))
+    const { status, payload } = await dispatchBridgeRequest(
+      bridge, 'DELETE', '/trade/order',
+      new URLSearchParams({ market: 'crypto', id: 'ord-123', symbol: 'BTCUSDT' }),
+    )
+    expect(status).toBe(200)
+    expect(payload).toEqual({ ok: true, canceled: true })
+    expect(cancelOrder).toHaveBeenCalledWith('ord-123', 'BTCUSDT')
+  })
+
+  it('DELETE /trade/order：缺 market 或缺 id → 400', async () => {
+    const bridge = new TradingBridge(tradeHost(tradeService()))
+    await expect(dispatchBridgeRequest(
+      bridge, 'DELETE', '/trade/order', new URLSearchParams({ market: 'crypto' }),
+    )).rejects.toMatchObject({ status: 400 })
+    await expect(dispatchBridgeRequest(
+      bridge, 'DELETE', '/trade/order', new URLSearchParams({ id: 'ord-1' }),
     )).rejects.toMatchObject({ status: 400 })
   })
 })

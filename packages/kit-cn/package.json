@@ -22,6 +22,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@dsh-trading/api": "workspace:*",
+    "@dsh-trading/connector-hithink": "workspace:*",
     "@dsh-trading/indicators": "workspace:*",
     "@dsh-trading/knowledge": "workspace:*"
   },
@@ -33,7 +35,6 @@
   },
   "devDependencies": {
     "tsdown": "^0.22.0",
-    "vitest": "^3.0.0",
-    "@dsh-trading/api": "workspace:*"
+    "vitest": "^3.0.0"
   }
 }

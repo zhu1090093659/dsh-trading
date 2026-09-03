@@ -7,7 +7,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   fetchKlines, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
-  fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiDryRunOrder,
+  fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiOrder,
+  cancelGuiOrder,
 } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
@@ -18,7 +19,9 @@ import { FundamentalsStage } from './FundamentalsStage.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
 import { DerivativesStage } from './DerivativesStage.tsx'
 import { OrderbookPane } from './OrderbookPane.tsx'
-import { TradeDesk } from './TradeDesk.tsx'
+import { OrderPanel } from './OrderPanel.tsx'
+import { TradeDrawer } from './TradeDrawer.tsx'
+import { paperTradingStore } from './paper-trading-store.ts'
 import { computeRangeStats } from './range-stats.ts'
 import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
@@ -161,10 +164,85 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [trades, setTrades] = useState<TradeTick[] | null>(null)
   /** 交易工作台（issue #40）：默认关（安全敏感面）；只读数据 null = 服务未挂载/凭证缺失。 */
   const [tradeDeskOpen, setTradeDeskOpen] = useState<boolean>(() => readTradeDeskOpen())
+  /** 底部全宽资产与委托抽屉：默认折叠状态栏，支持展开与切换 Tabs。 */
+  const [tradeDrawerOpen, setTradeDrawerOpen] = useState<boolean>(false)
   const [tradePositions, setTradePositions] = useState<Position[] | null>(null)
   const [tradeBalances, setTradeBalances] = useState<AccountBalance[] | null>(null)
   const [tradeOrders, setTradeOrders] = useState<Order[] | null>(null)
   const [tradeFills, setTradeFills] = useState<TradeFill[] | null>(null)
+
+  /** 全局交易模式：'live' 实盘 vs 'paper' 模拟盘（默认从 localStorage 读取，缺省 live） */
+  const [tradeMode, setTradeMode] = useState<'live' | 'paper'>(() => {
+    try {
+      if (typeof window !== 'undefined' && typeof window.localStorage?.getItem === 'function') {
+        const stored = window.localStorage.getItem('dshtrading:trade:mode')
+        if (stored === 'paper' || stored === 'live') return stored
+      }
+    } catch {
+      /* 浏览器隐私模式或无头测试环境安全降级 */
+    }
+    return 'live'
+  })
+
+  // 监听模拟账本变动
+  const [, setPaperTick] = useState(0)
+  useEffect(() => {
+    return paperTradingStore.subscribe(() => {
+      setPaperTick((t) => t + 1)
+    })
+  }, [])
+
+  const handleToggleTradeMode = (mode: 'live' | 'paper') => {
+    setTradeMode(mode)
+    try {
+      if (typeof window !== 'undefined' && typeof window.localStorage?.setItem === 'function') {
+        window.localStorage.setItem('dshtrading:trade:mode', mode)
+      }
+    } catch {
+      /* 忽略存储异常 */
+    }
+    if (mode === 'paper') {
+      // 切换到模拟盘时，若交易台未开，自动打开方便体验
+      if (!tradeDeskOpen) {
+        setTradeDeskOpen(true)
+        writeTradeDeskOpen(true)
+      }
+    }
+  }
+
+  // 标的行情价格变动时实时更新模拟持仓浮盈
+  useEffect(() => {
+    if (ticker?.price && symbol) {
+      paperTradingStore.updatePrices({ [symbol]: ticker.price })
+    }
+  }, [ticker?.price, symbol])
+
+  const activePositions = tradeMode === 'paper' ? paperTradingStore.getPositions() : tradePositions
+  const activeBalances = tradeMode === 'paper' ? paperTradingStore.getBalances() : tradeBalances
+  const activeOrders = tradeMode === 'paper' ? paperTradingStore.getOrders() : tradeOrders
+  const activeFills = tradeMode === 'paper' ? paperTradingStore.getFills() : tradeFills
+  const paperCash = paperTradingStore.getAccount().cash
+
+  // 当前标的持仓量与可用现金计算（供下单面板精确计算 25%/50%/75%/100% 比例填单）
+  const currentPosition = useMemo(() => {
+    if (!symbol) return undefined
+    const list = activePositions ?? []
+    return list.find((p) => p.symbol.toUpperCase() === symbol.toUpperCase() && p.side === 'long')
+  }, [symbol, activePositions])
+
+  const currentPositionSize = currentPosition?.size ?? 0
+
+  const availableCash = useMemo(() => {
+    if (tradeMode === 'paper') {
+      return paperCash
+    }
+    if (!activeBalances || activeBalances.length === 0) return 0
+    const targetAsset = activeMarket === 'crypto' ? 'USDT' : activeMarket === 'us' ? 'USD' : activeMarket === 'hk' ? 'HKD' : 'CNY'
+    const found = activeBalances.find((b) => b.asset.toUpperCase() === targetAsset.toUpperCase())
+      ?? activeBalances.find((b) => /USD|USDT|CNY|HKD|CASH/i.test(b.asset))
+      ?? activeBalances[0]
+    return found ? found.free : 0
+  }, [tradeMode, paperCash, activeBalances, activeMarket])
   /** 区间统计：框选模式开 + 已选逻辑下标区间（TvChart 上报，面板消费）。 */
   const [rangeMode, setRangeMode] = useState(false)
   const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
@@ -288,31 +366,53 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     }
   }, ORDERBOOK_POLL_MS, [orderbookOpen, stageTab, market, symbol])
 
-  // 交易台只读轮询（issue #40，仅 crypto + 面板打开）：positions 为主探针——
+  // 交易台只读轮询（issue #40，面板打开时）：positions 为主探针——
   // 服务未注册（400）或凭证缺失（ok:false）都置 null，分区按语义降级。
-  usePoll(async () => {
-    if (!tradeDeskOpen || stageTab !== 'chart' || market !== 'crypto') return
+  const refreshTradeDesk = async (m: MarketId = activeMarket) => {
     const [positionRows, balanceRows, orderRows, fillRows] = await Promise.all([
-      fetchTradePositions(market),
-      fetchTradeBalances(market),
-      fetchTradeOpenOrders(market),
-      fetchTradeFills(market),
+      fetchTradePositions(m),
+      fetchTradeBalances(m),
+      fetchTradeOpenOrders(m),
+      fetchTradeFills(m),
     ])
     setTradePositions(positionRows)
     setTradeBalances(balanceRows)
     setTradeOrders(orderRows)
     setTradeFills(fillRows)
-  }, TRADE_DESK_POLL_MS, [tradeDeskOpen, stageTab, market])
+  }
 
-  const onSubmitGuiOrder = (input: Parameters<typeof placeGuiDryRunOrder>[1]) =>
-    placeGuiDryRunOrder('crypto', input).then((order) => {
-      // 下单成功（模拟）→ 立即刷新只读面，不等下一轮轮询。
-      if (order !== null && market === 'crypto') {
-        void fetchTradePositions(market).then(setTradePositions)
-        void fetchTradeOpenOrders(market).then(setTradeOrders)
+  usePoll(async () => {
+    if (stageTab !== 'chart') return
+    await refreshTradeDesk(activeMarket)
+  }, TRADE_DESK_POLL_MS, [stageTab, activeMarket])
+
+  const onSubmitGuiOrder = async (input: Parameters<typeof placeGuiOrder>[1]): Promise<Awaited<ReturnType<typeof placeGuiOrder>>> => {
+    if (tradeMode === 'paper') {
+      try {
+        const curPrice = ticker?.price ?? 0
+        const order = paperTradingStore.placeOrder({
+          symbol: input.symbol,
+          side: input.side,
+          type: input.type,
+          quantity: input.quantity,
+          ...(input.price !== undefined ? { price: input.price } : {}),
+          currentPrice: curPrice,
+        })
+        setTradeDrawerOpen(true)
+        return { order }
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) }
       }
-      return order
+    }
+    return placeGuiOrder(activeMarket, input).then((res) => {
+      // 下单成功（真交易）→ 自动展开底栏看最新委托，并立即刷新账户面。
+      if (res.order) {
+        setTradeDrawerOpen(true)
+        void refreshTradeDesk(activeMarket)
+      }
+      return res
     })
+  }
 
   // 衍生品页签是 crypto 专属：切到非 crypto 市场时自动回图表页签（issue #54）。
   useEffect(() => {
@@ -340,6 +440,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     ].filter((line): line is string => line !== undefined)
     const body = t('derivatives.analyzeBody', { symbol: d.symbol, source: d.source, lines: parts.join('\n') })
     void fillComposer(body)
+  }
+
+  const onCancelGuiOrder = async (orderId: string, sym?: string): Promise<boolean> => {
+    const ok = await cancelGuiOrder(activeMarket, orderId, sym)
+    if (ok) {
+      void refreshTradeDesk(activeMarket)
+    }
+    return ok
   }
 
   // 换标的：立即清场
@@ -706,6 +814,15 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           <span className={css.stat}><label>{t('quote.high')}</label>{fmtPrice(readoutCandle?.high)}</span>
           <span className={css.stat}><label>{t('quote.low')}</label>{fmtPrice(readoutCandle?.low)}</span>
           <span className={css.stat}><label>{t('quote.volume')}</label>{fmtCompact(readoutCandle?.volume, numLocale)}</span>
+          {market === 'crypto' && derivatives !== null && (
+            <DerivativesPane
+              t={t}
+              derivatives={derivatives}
+              colorMode={colorMode}
+              onOpenStage={() => { setStageTab('derivatives') }}
+              {...(fillComposer !== undefined ? { onAnalyze: onAnalyzeDerivatives } : {})}
+            />
+          )}
         </div>
       )}
 
@@ -751,23 +868,22 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                     : t('quote.sendToAgent')}
             </button>
           )}
-          {/* 交易工作台开关（issue #40；仅 crypto——交易注册面当前只有加密连接器注册） */}
-          {market === 'crypto' && (
-            <button
-              type="button"
-              className={css.pickerButton}
-              data-active={tradeDeskOpen ? 'true' : undefined}
-              aria-pressed={tradeDeskOpen}
-              onClick={() => {
-                setTradeDeskOpen((open) => {
-                  writeTradeDeskOpen(!open)
-                  return !open
-                })
-              }}
-            >
-              {t('trade.toggle')}
-            </button>
-          )}
+
+          {/* 交易工作台开关（issue #40；支持接入了交易注册面的各市场） */}
+          <button
+            type="button"
+            className={css.pickerButton}
+            data-active={tradeDeskOpen ? 'true' : undefined}
+            aria-pressed={tradeDeskOpen}
+            onClick={() => {
+              setTradeDeskOpen((open) => {
+                writeTradeDeskOpen(!open)
+                return !open
+              })
+            }}
+          >
+            {t('trade.toggle')}
+          </button>
           {/* 盘口竖栏开关（issue #39；紧挨区间统计左侧） */}
           <button
             type="button"
@@ -977,28 +1093,45 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               />
             )}
             </div>
-            {market === 'crypto' && derivatives !== null && (
-              <DerivativesPane
-                t={t}
-                derivatives={derivatives}
-                colorMode={colorMode}
-                onOpenStage={() => { setStageTab('derivatives') }}
-                {...(fillComposer !== undefined ? { onAnalyze: onAnalyzeDerivatives } : {})}
-              />
-            )}
           </div>
-          {orderbookOpen && (
-            <OrderbookPane
-              t={t}
-              orderbook={orderbook}
-              trades={trades}
-              orderbookLoading={orderbookLoading}
-              colorMode={colorMode}
-              onClose={() => {
-                setOrderbookOpen(false)
-                writeOrderbookOpen(false)
-              }}
-            />
+          {(orderbookOpen || tradeDeskOpen) && (
+            <div className={css.rightSidebar}>
+              {orderbookOpen && (
+                <OrderbookPane
+                  t={t}
+                  orderbook={orderbook}
+                  trades={trades}
+                  orderbookLoading={orderbookLoading}
+                  colorMode={colorMode}
+                  onClose={() => {
+                    setOrderbookOpen(false)
+                    writeOrderbookOpen(false)
+                  }}
+                />
+              )}
+              {tradeDeskOpen && (
+                <OrderPanel
+                  t={t}
+                  symbol={symbol ?? ''}
+                  market={activeMarket}
+                  suggestedPrice={ticker?.price}
+                  colorMode={colorMode}
+                  tradeMode={tradeMode}
+                  paperCash={paperCash}
+                  availableCash={availableCash}
+                  currentPositionSize={currentPositionSize}
+                  onResetPaper={() => {
+                    paperTradingStore.resetAccount()
+                  }}
+                  onToggleTradeMode={handleToggleTradeMode}
+                  onSubmit={onSubmitGuiOrder}
+                  onClose={() => {
+                    setTradeDeskOpen(false)
+                    writeTradeDeskOpen(false)
+                  }}
+                />
+              )}
+            </div>
           )}
         </div>
       ) : viewTab === 'derivatives' ? (
@@ -1033,21 +1166,22 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         </div>
       )}
 
-      {/* 交易工作台底栏（issue #40，crypto 图表页签专属，默认折叠） */}
-      {viewTab === 'chart' && market === 'crypto' && tradeDeskOpen && (
-        <TradeDesk
+      {/* 底部全宽资产与委托抽屉（图表页签专属，支持一键折叠展开） */}
+      {viewTab === 'chart' && (
+        <TradeDrawer
           t={t}
-          symbol={symbol}
-          positions={tradePositions}
-          balances={tradeBalances}
-          orders={tradeOrders}
-          fills={tradeFills}
+          positions={activePositions}
+          balances={activeBalances}
+          orders={activeOrders}
+          fills={activeFills}
           colorMode={colorMode}
-          onClose={() => {
-            setTradeDeskOpen(false)
-            writeTradeDeskOpen(false)
+          tradeMode={tradeMode}
+          onResetPaper={() => {
+            paperTradingStore.resetAccount()
           }}
-          onSubmit={onSubmitGuiOrder}
+          isOpen={tradeDrawerOpen}
+          onToggle={setTradeDrawerOpen}
+          onCancelOrder={onCancelGuiOrder}
         />
       )}
 

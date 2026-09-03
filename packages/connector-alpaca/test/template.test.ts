@@ -127,16 +127,30 @@ describe('AlpacaRestClient.listInstruments', () => {
 })
 
 describe('AlpacaRestClient.placeOrder / getBalance', () => {
-  it('获取账户余额并映射为 AccountBalance', async () => {
+  it('获取账户余额并映射为标准 AccountBalance', async () => {
     const { impl } = stubFetch([
       { match: '/account', body: { currency: 'USD', cash: '50000.00', portfolio_value: '120000.00' } },
     ])
     const client = new AlpacaRestClient({ fetchImpl: impl })
     const balance = await client.getBalance({ key: 'test_k', secret: 'test_s' })
     expect(balance).toEqual({
-      currency: 'USD',
-      available: 50000,
-      total: 120000,
+      asset: 'USD',
+      free: 50000,
+      locked: 70000,
+    })
+  })
+
+  it('获取最新买卖盘口生成 Orderbook', async () => {
+    const { impl } = stubFetch([
+      { match: '/stocks/AAPL/quotes/latest', body: { quote: { bp: 220.1, ap: 220.2, bs: 200, as: 150, t: '2026-08-28T15:00:00Z' } } },
+    ])
+    const client = new AlpacaRestClient({ fetchImpl: impl })
+    const book = await client.getOrderbook('AAPL')
+    expect(book).toEqual({
+      symbol: 'AAPL',
+      bids: [{ price: 220.1, amount: 200 }],
+      asks: [{ price: 220.2, amount: 150 }],
+      timestamp: new Date('2026-08-28T15:00:00Z').getTime(),
     })
   })
 
@@ -155,10 +169,11 @@ describe('AlpacaRestClient.placeOrder / getBalance', () => {
     expect(order).toMatchObject({
       id: 'alpaca-ord-123',
       symbol: 'AAPL',
-      side: 'BUY',
+      side: 'buy',
       quantity: 10,
       price: 220,
     })
   })
 })
+
 

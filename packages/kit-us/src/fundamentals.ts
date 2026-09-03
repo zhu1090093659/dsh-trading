@@ -63,12 +63,84 @@ interface YahooQuoteItem {
   fullExchangeName?: string
 }
 
+interface UsCacheEntry<T> {
+  data: T
+  expiresAt: number
+}
+
+const usFundamentalsCache = new Map<string, UsCacheEntry<UsFundamentalsResult>>()
+const US_FUNDAMENTALS_TTL_MS = 5 * 60 * 1000 // 5 分钟快照缓存
+
 export async function fetchUsFundamentals(options: UsFundamentalsOptions): Promise<UsFundamentalsResult> {
   const fetchImpl = options.fetch ?? globalThis.fetch
   const symbol = normalizeUsSymbol(options.symbol)
   const unavailable: string[] = []
 
-  // 1. 尝试 Yahoo quote 端点获取详细估值与财务数据
+  // 1. 检查本地内存缓存
+  const cached = usFundamentalsCache.get(symbol)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data
+  }
+
+  // 2. Tier 1: 若配置了 FMP_API_KEY，优先调用 FMP 商业级高精接口
+  const fmpApiKey = process.env.FMP_API_KEY
+  if (fmpApiKey) {
+    try {
+      const fmpUrl = `https://financialmodelingprep.com/api/v3/profile/${encodeURIComponent(symbol)}?apikey=${fmpApiKey}`
+      const fmpRes = await fetchImpl(fmpUrl, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      })
+      if (fmpRes.ok) {
+        const list = (await fmpRes.json()) as Array<{
+          symbol: string
+          companyName?: string
+          mktCap?: number
+          beta?: number
+          volAvg?: number
+          range?: string
+          changes?: number
+          currency?: string
+          exchangeShortName?: string
+        }>
+        const p = list?.[0]
+        if (p) {
+          let fiftyTwoWeekLow: number | undefined
+          let fiftyTwoWeekHigh: number | undefined
+          if (p.range) {
+            const parts = p.range.split('-')
+            if (parts.length === 2) {
+              fiftyTwoWeekLow = Number(parts[0])
+              fiftyTwoWeekHigh = Number(parts[1])
+            }
+          }
+          const data: StockFundamentals = {
+            symbol: p.symbol ?? symbol,
+            ...(p.companyName ? { name: p.companyName } : {}),
+            ...(p.mktCap !== undefined ? { marketCap: p.mktCap } : {}),
+            ...(Number.isFinite(fiftyTwoWeekHigh) ? { fiftyTwoWeekHigh } : {}),
+            ...(Number.isFinite(fiftyTwoWeekLow) ? { fiftyTwoWeekLow } : {}),
+            timestamp: Date.now(),
+          }
+          const result: UsFundamentalsResult = {
+            data,
+            ...(p.beta !== undefined ? { beta: p.beta } : {}),
+            ...(p.volAvg !== undefined ? { avgVolume3Month: p.volAvg } : {}),
+            ...(p.currency ? { currency: p.currency } : {}),
+            ...(p.exchangeShortName ? { exchange: p.exchangeShortName } : {}),
+            unavailable,
+          }
+          usFundamentalsCache.set(symbol, { data: result, expiresAt: Date.now() + US_FUNDAMENTALS_TTL_MS })
+          return result
+        }
+      }
+    } catch (err) {
+      unavailable.push(`fmp-official: ${err instanceof Error ? err.message : String(err)}`)
+      // 失败平滑降级走 Yahoo
+    }
+  }
+
+  // 3. Tier 2: 尝试 Yahoo quote 端点获取详细估值与财务数据
   try {
     const url = new URL(YAHOO_QUOTE_URL)
     url.searchParams.set('symbols', symbol)
@@ -172,10 +244,17 @@ export async function fetchUsFundamentals(options: UsFundamentalsOptions): Promi
   return { unavailable }
 }
 
+const usMatrixCache = new Map<string, UsCacheEntry<{ matrix?: import('@dsh-trading/api').FinancialReportMatrix; profile?: import('@dsh-trading/api').CompanyProfile }>>()
+const US_MATRIX_TTL_MS = 24 * 60 * 60 * 1000 // 24 小时财报长效缓存
+
 /** 从 Yahoo Finance quoteSummary 动态拉取美股多期财务报表与指标矩阵。 */
 export async function fetchUsFinancialMatrix(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<{ matrix?: import('@dsh-trading/api').FinancialReportMatrix; profile?: import('@dsh-trading/api').CompanyProfile }> {
   try {
     const sym = normalizeUsSymbol(symbol)
+    const cached = usMatrixCache.get(sym)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data
+    }
     const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=financialData,defaultKeyStatistics,incomeStatementHistoryQuarterly,balanceSheetHistoryQuarterly,cashflowStatementHistoryQuarterly,assetProfile`
     const res = await fetchImpl(url, {
       headers: {
@@ -280,7 +359,9 @@ export async function fetchUsFinancialMatrix(symbol: string, fetchImpl: typeof g
       groups,
     }
 
-    return { matrix, profile }
+    const result = { matrix, profile }
+    usMatrixCache.set(sym, { data: result, expiresAt: Date.now() + US_MATRIX_TTL_MS })
+    return result
   } catch {
     return {}
   }

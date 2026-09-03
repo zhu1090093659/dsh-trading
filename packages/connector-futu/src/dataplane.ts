@@ -13,8 +13,14 @@
  * 必须 restate——整行替换语义），见 docs/connector-playbook.md §4。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { MarketDataService } from '@dsh-trading/api'
-import { FutuMarketDataService, TRADING_HK_MARKET_DATA_KEY, type Config } from './index.js'
+import type { MarketDataService, TradeRegistry } from '@dsh-trading/api'
+import {
+  FutuMarketDataService,
+  FutuTradeService,
+  TRADING_HK_MARKET_DATA_KEY,
+  TRADING_HK_TRADE_KEY,
+  type Config,
+} from './index.js'
 
 export const inject: string[] = []
 
@@ -27,6 +33,11 @@ interface MarketDataRegistryLike {
 function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undefined {
   const candidate = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketDataRegistry', false)
   return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
+}
+
+function resolveTradeRegistry(ctx: Context): TradeRegistry | undefined {
+  const candidate = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingTradeRegistry', false)
+  return candidate !== undefined ? (candidate as TradeRegistry) : undefined
 }
 
 /** 本连接器的路由 provider slug（路由层词汇 = 交易所 slug，docs/exchange-routing.md §2.2）。 */
@@ -44,4 +55,16 @@ export function apply(ctx: Context, config: Config): void {
   const inner = ctx.isolate(TRADING_HK_MARKET_DATA_KEY)
   const service = new FutuMarketDataService(inner)
   ctx.effect(() => registry.register(MARKET, ROUTER_PROVIDER, service))
+
+  const tradeRegistry = resolveTradeRegistry(ctx)
+  if (tradeRegistry !== undefined) {
+    const tradeInner = ctx.isolate(TRADING_HK_TRADE_KEY)
+    const trade = new FutuTradeService(
+      tradeInner,
+      { gatewayUrl: config.gatewayUrl, config },
+      async () => ({ unlockPwd: process.env[config.unlockPwdRef] }),
+    )
+    ctx.effect(() => tradeRegistry.register(MARKET, ROUTER_PROVIDER, trade))
+  }
 }
+

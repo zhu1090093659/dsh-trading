@@ -1,96 +1,95 @@
-/* DerivativesPane —— 衍生品指标条（issue #38；与 quote-stage/fundamentals 同族 token：--dsw-futu-*）。 */
+/* DerivativesPane —— 顶部轻量合约衍生品指标条（对齐 Binance / OKX 顶部行情栏单行胶囊） */
 
 .root {
-  flex: none;
-  display: flex;
-  align-items: stretch;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  padding: 2px 2px 6px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  padding-left: 12px;
+  margin-left: 4px;
+  border-left: 1px solid var(--dsw-futu-border-subtle, rgba(255, 255, 255, 0.12));
+  flex-wrap: nowrap;
+  font-size: 11.5px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .title {
-  flex: none;
-  display: flex;
-  align-items: center;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--dsw-futu-text-secondary, #4a5060);
-  padding: 0 4px 0 2px;
-  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dsw-futu-text-muted, #787b86);
+  letter-spacing: 0.5px;
+  margin-right: 2px;
 }
 
 .cell {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: var(--dsw-futu-bg-subtle, #f5f6f8);
-  border: none;
-  border-radius: 8px;
-  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--dsw-futu-bg-subtle, rgba(255, 255, 255, 0.04));
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 3px 6px;
   min-width: 0;
   font: inherit;
-  text-align: left;
-}
-
-/* 格子即入口（issue #54）：可点击态给悬停反馈；无 onOpenStage 时保持纯展示。 */
-.cell[data-clickable="true"] {
   cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
 }
 
 .cell[data-clickable="true"]:hover {
-  background: var(--dsw-futu-bg-hover, #eceef2);
-}
-
-.analyze {
-  flex: none;
-  align-self: center;
-  border: 1px solid var(--dsw-futu-border, #e5e7eb);
-  background: transparent;
-  border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
-  color: var(--dsw-futu-text-secondary, #4a5060);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.analyze:hover {
-  color: var(--dsw-futu-accent, #176bff);
-  border-color: var(--dsw-futu-accent, #176bff);
+  background: var(--dsw-futu-bg-hover, rgba(255, 255, 255, 0.08));
+  border-color: var(--dsw-futu-border, rgba(255, 255, 255, 0.15));
 }
 
 .cellLabel {
   font-size: 11px;
   color: var(--dsw-futu-text-muted, #8e95a3);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .cellValue {
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 600;
-  color: var(--dsw-futu-text-primary, #1a1e24);
+  color: var(--dsw-futu-text-primary, #d1d4dc);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .cellSub {
-  font-size: 10.5px;
-  font-weight: 400;
-  color: var(--dsw-futu-text-muted, #8e95a3);
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: var(--dsw-futu-bg-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-futu-text-secondary, #9ca3af);
+  margin-left: 2px;
+  opacity: 0.9;
+}
+
+.analyze {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dsw-futu-accent, #3b82f6);
+  cursor: pointer;
   white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.analyze:hover {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: var(--dsw-futu-accent, #3b82f6);
 }
 
 .footer {
-  flex: none;
-  display: flex;
-  align-items: flex-end;
   font-size: 10.5px;
-  color: var(--dsw-futu-text-muted, #8e95a3);
+  color: var(--dsw-futu-text-muted, #64748b);
+  opacity: 0.8;
   white-space: nowrap;
-  padding-bottom: 2px;
+  margin-left: 4px;
 }

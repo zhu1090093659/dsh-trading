@@ -114,42 +114,34 @@ export function MarketSidebar({
     [tab, draft, catalogVersion],
   )
 
-  // 智能动态补齐搜索标的真实名称（如 000938 未收录时，异步拉取行情拿到“紫光股份”并刷新联想）
+  // 真实在线联想：当用户输入关键词时，防抖向上游真实检索标的
+  // 只有上游确认真实存在的股票才会被注入动态字典，彻底杜绝本地盲目推造虚假代码
   useEffect(() => {
-    const raw = draft.trim().toUpperCase()
-    if (!raw) return
-
-    const candidatesToEnrich: Array<{ market: MarketId; symbol: string }> = []
-    for (const sug of suggestions) {
-      if (sug.name && (sug.name === sug.symbol || /\(A股\)|\(港股\)/.test(sug.name))) { // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
-        candidatesToEnrich.push({ market: sug.market, symbol: sug.symbol })
-      }
-    }
-
-    if (candidatesToEnrich.length === 0) return
+    const raw = draft.trim()
+    if (raw.length < 2) return
 
     let cancelled = false
     const timer = setTimeout(() => {
-      for (const item of candidatesToEnrich) {
-        fetchTickers(item.market, [item.symbol])
-          .then((res) => {
-            if (cancelled) return
-            const outcome = res[item.symbol]
-            const ticker = outcome && outcome.ok ? outcome.ticker : undefined
-            if (ticker?.name && ticker.name !== item.symbol && !/\(A股\)|\(港股\)/.test(ticker.name)) { // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
-              updateDynamicCatalog(item.market, [{ symbol: item.symbol, name: ticker.name }])
-              setCatalogVersion((v) => v + 1)
+      const targetMarkets: MarketId[] = tab === 'watch' ? ['cn', 'hk', 'us', 'crypto'] : [tab]
+      for (const m of targetMarkets) {
+        fetchSymbols(m, raw)
+          .then((items) => {
+            if (cancelled || items.length === 0) return
+            const valid = items.filter(it => it.symbol && it.name && !/\(A股\)|\(港股\)/.test(it.name)) // i18n-allow: 数据源占位名匹配谓词，非 UI 文案
+            if (valid.length > 0) {
+              updateDynamicCatalog(m, valid)
+              setCatalogVersion(v => v + 1)
             }
           })
           .catch(() => {})
       }
-    }, 180)
+    }, 200)
 
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [draft, suggestions])
+  }, [draft, tab])
 
   // 参考序列（日K收盘 → 迷你走势 + 昨收）：逐标的惰性拉一次，TTL 内复用。
   useEffect(() => {

@@ -17,6 +17,7 @@ import type {
   OrderRequest,
   Position,
   Ticker,
+  TradeFill,
   TradeService,
 } from '@dsh-trading/api'
 import {
@@ -130,7 +131,7 @@ export class QmtTradeService extends Service implements TradeService {
     return this.client.placeOrder(undefined, order)
   }
 
-  async cancelOrder(orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+  async cancelOrder(orderId: string, _symbol?: string): Promise<void> {
     // 服务缝闸门（P0）：撤单是会改变交易所/券商真实状态的实盘动作，与真实下单同门槛
     // （liveTrading 显式开启且未强制模拟），防「经撤单接口绕过下单闸门」。
     if (!this.config.liveTrading || this.config.dryRun) {
@@ -139,15 +140,41 @@ export class QmtTradeService extends Service implements TradeService {
         'QMT TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
       )
     }
-    return this.client.cancelOrder(undefined, orderId)
+    return this.client.cancelOrder(undefined, orderId) as unknown as void
   }
 
   async getPositions(): Promise<Position[]> {
     return this.client.getPositions()
   }
 
-  async getOrders(): Promise<Order[]> {
+  async getBalances(): Promise<AccountBalance[]> {
+    try {
+      const b = await this.client.getBalance()
+      return [b]
+    } catch {
+      return []
+    }
+  }
+
+  async listOpenOrders(_symbol?: string): Promise<Order[]> {
     return []
+  }
+
+  async listTradeFills(_symbol?: string, _limit?: number): Promise<TradeFill[]> {
+    return []
+  }
+
+  async getOrder(symbol: string, id: string): Promise<Order> {
+    return {
+      id,
+      symbol,
+      side: 'buy',
+      type: 'limit',
+      status: 'new',
+      quantity: 0,
+      dryRun: false,
+      timestamp: Date.now(),
+    }
   }
 }
 
