@@ -64,7 +64,7 @@ npm run dist:win       # dist/*.exe（nsis）+ *.zip（可从 macOS 交叉构建
 
 ## 已知限制
 
-- **未签名构建**：macOS 首次打开会有 Gatekeeper 警告（右键 → 打开，或 `xattr -dr com.apple.quarantine`）；Windows 有 SmartScreen 提示（更多信息 → 仍要运行）。签名与公证是后续计划。
+- **未签名构建**：macOS 首次打开会被 Gatekeeper 拦截，且 macOS 15+ 已移除"右键 → 打开"绕过。放行方式：**系统设置 → 隐私与安全性 → "仍要打开"**（首次被拦后出现），或清除隔离属性：`xattr -cr "/Applications/DSH Trading.app"`。Windows 有 SmartScreen 提示（更多信息 → 仍要运行）。签名与公证是后续计划。
 - **需要 pnpm 的应用内插件安装**（如 `dsh plugin add` 流程）在内置环境中不可用；资产式安装是纯文件拷贝，不受影响。
 - **Windows arm64 与 Linux** 暂不构建；运行时布局已支持后续加入。
 - 全新机器首次启动会花几秒钟把预装 profile 拷贝进 `~/.dsh`（一次性）。

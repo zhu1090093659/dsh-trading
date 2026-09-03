@@ -64,7 +64,7 @@ The host version is pinned in `runtime/host/package.json`; the trading payload v
 
 ## Known limitations
 
-- **Unsigned builds**: macOS shows the Gatekeeper warning on first open (right-click → Open, or `xattr -dr com.apple.quarantine`); Windows shows SmartScreen (More info → Run anyway). Signing and notarization are a planned follow-up.
+- **Unsigned builds**: macOS Gatekeeper blocks the first open and macOS 15+ no longer offers the right-click → Open bypass. Either use **System Settings → Privacy & Security → "Open Anyway"** (appears after the first blocked attempt), or clear the quarantine flag: `xattr -cr "/Applications/DSH Trading.app"`. Windows shows SmartScreen (More info → Run anyway). Signing and notarization are a planned follow-up.
 - **In-app plugin installs that shell out to pnpm** (for example `dsh plugin add` flows) do not work in the bundled environment; asset-style installs are plain file copies and do work.
 - **Windows arm64 and Linux** are not built; the runtime layout already covers adding them.
 - First launch on a fresh machine spends a few seconds copying the preinstalled profile into `~/.dsh` (one-time).
