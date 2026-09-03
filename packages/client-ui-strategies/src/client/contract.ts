@@ -5,6 +5,8 @@
  */
 
 export type StrategyLocaleKey =
+  | 'sv.section.screener'
+  | 'sv.section.quant'
   | 'sv.error.noKlines'
   | 'sv.error.failed'
   | 'sv.horizon.short'
@@ -33,6 +35,21 @@ export type StrategyLocaleKey =
   | 'sv.trades.netReturn'
   | 'sv.trades.exitReason'
   | 'sv.empty.hint'
+  | 'sv.screener.run'
+  | 'sv.screener.stop'
+  | 'sv.screener.scanLimit'
+  | 'sv.screener.universePrefix'
+  | 'sv.screener.scanned'
+  | 'sv.screener.hits'
+  | 'sv.screener.failed'
+  | 'sv.screener.noUniverse'
+  | 'sv.screener.noHits'
+  | 'sv.screener.scanning'
+  | 'sv.screener.emptyHint'
+  | 'sv.screener.col.symbol'
+  | 'sv.screener.col.name'
+  | 'sv.screener.col.price'
+  | 'sv.screener.col.reason'
 
 declare module '@deepseek-ai/dsh-client-locale/client' {
   interface LocaleNamespaceMap {
