@@ -722,6 +722,15 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           <span className={css.stat}><label>{t('quote.high')}</label>{fmtPrice(readoutCandle?.high)}</span>
           <span className={css.stat}><label>{t('quote.low')}</label>{fmtPrice(readoutCandle?.low)}</span>
           <span className={css.stat}><label>{t('quote.volume')}</label>{fmtCompact(readoutCandle?.volume, numLocale)}</span>
+          {market === 'crypto' && derivatives !== null && (
+            <DerivativesPane
+              t={t}
+              derivatives={derivatives}
+              colorMode={colorMode}
+              onOpenStage={() => { setStageTab('derivatives') }}
+              {...(fillComposer !== undefined ? { onAnalyze: onAnalyzeDerivatives } : {})}
+            />
+          )}
         </div>
       )}
 
@@ -991,15 +1000,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               />
             )}
             </div>
-            {market === 'crypto' && derivatives !== null && (
-              <DerivativesPane
-                t={t}
-                derivatives={derivatives}
-                colorMode={colorMode}
-                onOpenStage={() => { setStageTab('derivatives') }}
-                {...(fillComposer !== undefined ? { onAnalyze: onAnalyzeDerivatives } : {})}
-              />
-            )}
           </div>
           {(orderbookOpen || tradeDeskOpen) && (
             <div className={css.rightSidebar}>

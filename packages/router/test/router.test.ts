@@ -63,6 +63,7 @@ describe('dshtrading schema（用户设置一级）', () => {
       'finnhub',
       'fmp',
       'futu',
+      'hithink',
       'ibkr',
       'longbridge',
       'okx',

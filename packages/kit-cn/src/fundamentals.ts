@@ -13,6 +13,7 @@ import type { StockFundamentals } from '@dsh-trading/api'
 export interface CnFundamentalsOptions {
   symbol: string
   fetch?: typeof globalThis.fetch
+  skipCache?: boolean
 }
 
 export interface CnFundamentalsResult {
@@ -67,11 +68,68 @@ function num(val: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
+import { HiThinkRestClient } from '@dsh-trading/connector-hithink'
+
+interface CacheEntry<T> {
+  data: T
+  expiresAt: number
+}
+
+const fundamentalsCache = new Map<string, CacheEntry<CnFundamentalsResult>>()
+const matrixCache = new Map<string, CacheEntry<import('@dsh-trading/api').FinancialReportMatrix | undefined>>()
+
+const FUNDAMENTALS_TTL_MS = 5 * 60 * 1000 // 5 分钟快照缓存
+const MATRIX_TTL_MS = 24 * 60 * 60 * 1000 // 24 小时财报长效缓存
+
+export function clearCnFundamentalsCache(): void {
+  fundamentalsCache.clear()
+  matrixCache.clear()
+}
+
 export async function fetchCnFundamentals(options: CnFundamentalsOptions): Promise<CnFundamentalsResult> {
   const fetchImpl = options.fetch ?? globalThis.fetch
   const { wire, canonical } = normalizeCnSymbol(options.symbol)
   const unavailable: string[] = []
 
+  // 1. 检查本地缓存（除非明确指定 skipCache）
+  if (!options.skipCache) {
+    const cached = fundamentalsCache.get(canonical)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data
+    }
+  }
+
+  // 2. Tier 1: 若配置了同花顺官方 Key (HITHINK_FINANCE_API_KEY)，优先调用官方高精度估值端点
+  const hithinkApiKey = process.env.HITHINK_FINANCE_API_KEY
+  if (hithinkApiKey) {
+    try {
+      const client = new HiThinkRestClient({ apiKey: hithinkApiKey, fetchImpl })
+      const [hithinkFund, hithinkTicker] = await Promise.all([
+        client.getStockFundamentals(canonical),
+        client.getTicker(canonical).catch(() => undefined),
+      ])
+
+      const result: CnFundamentalsResult = {
+        data: {
+          symbol: canonical,
+          peTtm: hithinkFund.peTtm,
+          peDynamic: hithinkFund.peDynamic,
+          pb: hithinkFund.pb,
+          ps: hithinkFund.ps,
+          timestamp: hithinkFund.timestamp,
+        },
+        unavailable,
+      }
+
+      fundamentalsCache.set(canonical, { data: result, expiresAt: Date.now() + FUNDAMENTALS_TTL_MS })
+      return result
+    } catch (err) {
+      unavailable.push(`hithink-official: ${err instanceof Error ? err.message : String(err)}`)
+      // 失败自动降级到 Tier 2
+    }
+  }
+
+  // 3. Tier 2: 免密公共源保底（直连腾讯行情）
   try {
     const url = `${TENCENT_QUOTE_BASE}${wire}`
     const res = await fetchImpl(url)
@@ -120,7 +178,7 @@ export async function fetchCnFundamentals(options: CnFundamentalsOptions): Promi
       timestamp: Date.now(),
     }
 
-    return {
+    const result: CnFundamentalsResult = {
       data,
       amplitudePercent,
       limitUpPrice,
@@ -128,6 +186,9 @@ export async function fetchCnFundamentals(options: CnFundamentalsOptions): Promi
       peStatic,
       unavailable,
     }
+
+    fundamentalsCache.set(canonical, { data: result, expiresAt: Date.now() + FUNDAMENTALS_TTL_MS })
+    return result
   } catch (err) {
     unavailable.push(`tencent-quote: ${err instanceof Error ? err.message : String(err)}`)
     return { unavailable }
@@ -177,6 +238,13 @@ export interface EastmoneyReportRow {
 export async function fetchCnFinancialMatrix(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FinancialReportMatrix | undefined> {
   try {
     const { canonical, wire } = normalizeCnSymbol(symbol)
+
+    // 检查长效缓存
+    const cached = matrixCache.get(canonical)
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data
+    }
+
     const code = canonical.split('.')[0]!
     const prefix = wire.slice(0, 2).toUpperCase() // 'SZ' | 'SH'
     const fullCode = `${prefix}${code}`
@@ -278,12 +346,14 @@ export async function fetchCnFinancialMatrix(symbol: string, fetchImpl: typeof g
       },
     ]
 
-    return {
+    const matrixResult = {
       currency: 'CNY',
       latestReportTitle,
       periods,
       groups,
     }
+    matrixCache.set(canonical, { data: matrixResult, expiresAt: Date.now() + MATRIX_TTL_MS })
+    return matrixResult
   } catch {
     return undefined
   }

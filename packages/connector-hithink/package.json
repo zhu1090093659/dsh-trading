@@ -1,6 +1,6 @@
 {
-  "name": "@dsh-trading/kit-cn",
-  "description": "China A-share toolkit plugin for dsh-trading: CN risk checklist skill provider and CN fast-news / fundamentals tools; runs as a cn-trader preset row (session-scoped)",
+  "name": "@dsh-trading/connector-hithink",
+  "description": "【模板】交易所连接器插件脚手架：HiThink（hithink）v2 插件骨架 —— 市场数据服务 + 交易服务 + 三态闸门 + BYOK 凭证 ref。生成器：node scripts/new-connector.mjs --slug <exchange>",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -10,11 +10,14 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./dataplane": {
+      "types": "./lib/dataplane.d.ts",
+      "default": "./lib/dataplane.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
-    "lib",
-    "assets"
+    "lib"
   ],
   "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
@@ -22,14 +25,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/api": "workspace:*",
-    "@dsh-trading/connector-hithink": "workspace:*",
-    "@dsh-trading/indicators": "workspace:*",
-    "@dsh-trading/knowledge": "workspace:*"
+    "@dsh-trading/api": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
-    "@deepseek-ai/dsh-skill": ">=0.1.2-alpha.1",
     "@deepseek-ai/dsh-tools": ">=0.1.2-alpha.1",
     "@deepseek-ai/schemastery": ">=3.18.0"
   },

@@ -393,6 +393,56 @@ export interface HolderNumSummary {
   readonly reportDate?: string
 }
 
+/** 集合竞价快照与强弱基准（同花顺 A 股竞价数据面）。 */
+export interface AuctionSnapshot {
+  readonly symbol: string
+  readonly matchPrice?: number
+  readonly matchVolume?: number
+  readonly unmatchedVolume?: number
+  readonly unmatchedSide?: 'buy' | 'sell'
+  readonly strengthIndex?: number
+  readonly stage?: 'call' | 'final'
+  readonly timestamp: number
+}
+
+/** 涨跌停池与连板天梯条目（同花顺特色短线数据面）。 */
+export interface LimitUpPoolItem {
+  readonly symbol: string
+  readonly name: string
+  readonly price: number
+  readonly changePercent: number
+  readonly limitType: 'up' | 'down' | 'broken'
+  readonly firstLimitTime?: string
+  readonly lastLimitTime?: string
+  readonly limitOrderVolume?: number
+  readonly limitOrderAmount?: number
+  readonly consecutiveBoards?: number
+  readonly breakCount?: number
+  readonly sectorConcept?: string
+}
+
+/** 龙虎榜席位与机构明细条目（同花顺特色资金数据面）。 */
+export interface DragonTigerItem {
+  readonly symbol: string
+  readonly name: string
+  readonly closePrice: number
+  readonly changePercent: number
+  readonly reason: string
+  readonly netBuyAmount: number
+  readonly buyAmount: number
+  readonly sellAmount: number
+  readonly institutionalNetBuy?: number
+  readonly topBrokers?: Array<{
+    readonly rank: number
+    readonly brokerName: string
+    readonly type: 'buy' | 'sell'
+    readonly buyAmount: number
+    readonly sellAmount: number
+    readonly isInstitutional: boolean
+  }>
+  readonly tradeDate: string
+}
+
 /** 聚合基本面数据包（供 Bridge 端点向前端全量交付）。 */
 export interface FundamentalsPackage {
   readonly market: string
@@ -412,6 +462,9 @@ export interface FundamentalsPackage {
   readonly dividends?: DividendItem[]
   readonly buybacks?: BuybackItem[]
   readonly splits?: SplitItem[]
+  readonly auction?: AuctionSnapshot
+  readonly limitUpItem?: LimitUpPoolItem
+  readonly dragonTiger?: DragonTigerItem
 }
 
 export type PositionSide = 'long' | 'short'
