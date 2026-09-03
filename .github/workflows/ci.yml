@@ -20,8 +20,8 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
-      # SDK（@deepseek-ai/* 0.1.2-alpha.2）由 npm 官方源解析，lockfile 已含全部
-      # 解析；不再克隆/构建 DSH 源码 checkout 或重定向 overrides（2026-08-30 切 npm 世代）。
+      # SDK（@deepseek-ai/*）由 npm 官方源解析，cohort 版本由 lockfile + pnpm-workspace.yaml 的
+      # minimumReleaseAgeExclude 钉定；不再克隆/构建 DSH 源码 checkout 或重定向 overrides。
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
       # 棘轮门禁（PR #46 实证：tsdown/esbuild build 不做类型检查）：tsc --noEmit

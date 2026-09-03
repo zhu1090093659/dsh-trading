@@ -44,7 +44,7 @@ const DIRECT_TRADING_PACKAGES = [
 ];
 /** Registry package carried alongside the trading bundles. */
 const REGISTRY_DEPENDENCIES = {
-  '@deepseek-ai/dsh-web-search-exa': '0.1.2-alpha.2',
+  '@deepseek-ai/dsh-web-search-exa': '0.1.2-rc.1',
 };
 /** Profile bundles: the official web surface plus the trading market bundles. */
 const PROFILE_BUNDLES = [
