@@ -4,7 +4,7 @@
  * 入场：收盘价站上 SMA200 牛市生命线，全仓持有。
  * 出场：收盘价跌破 SMA200 熊市防线，空仓避险。
  */
-import { sma } from '@dsh-trading/indicators'
+import { sma } from '@dshtrading/indicators'
 import type { StrategyDefinition, StrategySignal } from '../types.ts'
 
 export const smaBaselineStrategy: StrategyDefinition = {

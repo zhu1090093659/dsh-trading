@@ -18,7 +18,7 @@ import {
   type StrategyDefinition,
   type BacktestResult,
   type Kline,
-} from '@dsh-trading/strategies'
+} from '@dshtrading/strategies'
 import { readJson, writeJson, type SelectionState } from './shell-faces.ts'
 import { IconStrategy } from './icons.tsx'
 import { ScreenerPane } from './ScreenerPane.tsx'

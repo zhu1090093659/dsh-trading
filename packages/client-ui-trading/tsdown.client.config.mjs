@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import { transform } from 'lightningcss'
 
-const ID = '@dsh-trading/client-ui-trading'
+const ID = '@dshtrading/client-ui-trading'
 
 // 平台种子词（packages/client/web/src/seed.ts）：浏览器 require 只解析这 8 个 +
 // 各插件自身 factory。本包运行时 import 的 SDK 值只有 ui-slots（resolveSlotLabel）。

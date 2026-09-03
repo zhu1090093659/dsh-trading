@@ -3,7 +3,7 @@
  * appears in the host cordis.yml / Loader; the browser half owns the section
  * through exports["./client"], discovered from the package.json dsh.client
  * declaration. The page edits the dshtrading namespace owned by
- * @dsh-trading/router (registered on the Host), so this package registers no
+ * @dshtrading/router (registered on the Host), so this package registers no
  * namespace of its own.
  */
 

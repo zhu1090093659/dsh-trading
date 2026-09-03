@@ -9,7 +9,7 @@
  *   组合时必须恰好激活一个。为防御误配置，工具注册走 duplicate-safe 路径：名字已被
  *   占用时跳过并 log（dsh-tools 对重复名直接抛错会炸 boot）。
  * - **交易服务分离**：okx 额外 provide `tradingCryptoTrade`（api 包 TradeService 的
- *   第一个真实实现；类型增强声明在 @dsh-trading/api）。
+ *   第一个真实实现；类型增强声明在 @dshtrading/api）。
  *
  * 三态环境语义（主 agent 裁决，映射铁律 #3 三段闸门）：
  * - dryRun=true（缺省）→ 本地模拟回执，不发任何请求；
@@ -24,7 +24,7 @@
  * ctx.credentials.resolve() 解析（换 key 无需重启），未命中 → TRADING_CREDENTIALS_MISSING
  * 带 ref 名。
  *
- * @module @dsh-trading/connector-okx
+ * @module @dshtrading/connector-okx
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -48,8 +48,8 @@ import type {
   TradeService,
   TradeFill,
   TradeTick,
-} from '@dsh-trading/api'
-import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
+} from '@dshtrading/api'
+import { createGetIndicatorsTool } from '@dshtrading/indicators/tool'
 import {
   BAR_MAP,
   type OkxCredentials,
@@ -116,7 +116,7 @@ export const inject = ['tools']
 /* 凭证解析（三 ref，BYOK）                                                 */
 /* ------------------------------------------------------------------ */
 
-/** ctx 服务键（与 @dsh-trading/api 的 Context 模块增强一致）。 */
+/** ctx 服务键（与 @dshtrading/api 的 Context 模块增强一致）。 */
 export const TRADING_CRYPTO_MARKET_DATA_KEY = 'tradingCryptoMarketData'
 export const TRADING_CRYPTO_TRADE_KEY = 'tradingCryptoTrade'
 
@@ -876,7 +876,7 @@ export interface PlaceOrderToolDeps {
 /**
  * crypto_place_order 工具工厂（独立导出便于单测三态闸门矩阵）。
  *
- * 审批不在这里做：dryRun!==true 的调用由 @dsh-trading/base 的 gate 插件在
+ * 审批不在这里做：dryRun!==true 的调用由 @dshtrading/base 的 gate 插件在
  * `tools/pre-execute` waterfall 统一 ask（headless 下 ask=deny，fail-closed）；
  * 工具内不再重复调 ctx.approval。
  */
@@ -1036,7 +1036,7 @@ export function apply(ctx: Context, config: Config): void {
   // inject：等行情服务就绪后注册公共面工具；工具只面向服务接口，不直连 REST。
   ctx.inject(['tradingCryptoMarketData'], () => {
     // WS1b（docs/analysis-roadmap.md #2）：指标计算工具——共享工厂，K 线走本 connector
-    // 行情服务（路由选中的数据源），计算走 @dsh-trading/indicators。
+    // 行情服务（路由选中的数据源），计算走 @dshtrading/indicators。
     registerTool(ctx, createGetIndicatorsTool({ marketData, providerLabel: 'okx' }), log)
     registerTool(ctx, defineTool({
       name: 'crypto_get_ticker',

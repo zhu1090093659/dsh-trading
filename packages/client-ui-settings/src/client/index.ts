@@ -6,7 +6,7 @@
  * one tab registration (MarketProviderPanel). A new market = a new tab
  * registration, no section changes; a new exchange = a provider candidate
  * line in trading-settings-controller. The dshtrading namespace is owned by
- * @dsh-trading/router on the Host.
+ * @dshtrading/router on the Host.
  */
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'

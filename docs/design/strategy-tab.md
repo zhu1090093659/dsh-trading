@@ -49,7 +49,7 @@ packages/strategies/src/
 契约草案（实现时可微调字段名，语义不得偏移）：
 
 ```ts
-import type { Kline } from '@dsh-trading/indicators'
+import type { Kline } from '@dshtrading/indicators'
 
 export type StrategyHorizon = 'short' | 'swing' | 'long'
 export type SignalAction = 'entry' | 'exit'
@@ -80,7 +80,7 @@ export interface StrategyDefinition {
 }
 ```
 
-复用声明：`Kline` 类型与 `sma/ema/rsi/bollinger/stdev` 数学函数一律从 `@dsh-trading/indicators` 导入，**禁止复制实现**。
+复用声明：`Kline` 类型与 `sma/ema/rsi/bollinger/stdev` 数学函数一律从 `@dshtrading/indicators` 导入，**禁止复制实现**。
 
 ### 3.2 回测引擎（`engine.ts`）成交假设（写死成文，保证可复现）
 

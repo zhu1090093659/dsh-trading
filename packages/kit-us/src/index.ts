@@ -7,7 +7,7 @@
  *   3. indicator_author 创作工具（Issue #19）；
  *   4. knowledge_ingest 与 knowledge_search 知识库工具（Issue #24）。
  *
- * @module @dsh-trading/kit-us
+ * @module @dshtrading/kit-us
  */
 
 import { readFile } from 'node:fs/promises'
@@ -21,8 +21,8 @@ import {
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
-import type { MarketDataService } from '@dsh-trading/api'
+import { createGetIndicatorsTool } from '@dshtrading/indicators/tool'
+import type { MarketDataService } from '@dshtrading/api'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchUsFundamentals, renderUsFundamentals } from './fundamentals.js'
 
@@ -162,7 +162,7 @@ export function apply(ctx: Context, _config: Config): void {
   registerOnce(fundamentalsTool)
 
   // issue #33 收口：indicator_author / knowledge_ingest / knowledge_search 已迁移至
-  // @dsh-trading/indicators/plugin 与 @dsh-trading/knowledge/plugin（base patch 行，
+  // @dshtrading/indicators/plugin 与 @dshtrading/knowledge/plugin（base patch 行，
   // host 平面单点注册）；kit 保留市场专属工具与 skill provider，不再重复注册。
 
   // issue #33：us_get_indicators 接入（计算库市场无关；行情 registry-first，老部署回退市场键）。

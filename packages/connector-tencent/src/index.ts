@@ -4,7 +4,7 @@
  *
  *   - 同一个插件包（插件名 `dsh-trading-tencent`，export const name）被挂载两次，
  *     preset 行用**不同行 id**（`dsh-trading-cn-connector` / `dsh-trading-hk-connector`）
- *     指向**同一 bare 包名**（`@dsh-trading/connector-tencent`），以 `config.market`
+ *     指向**同一 bare 包名**（`@dshtrading/connector-tencent`），以 `config.market`
  *     分流 cn/hk（行 id 即命名空间——不同 id 即两个独立实例，互不整行替换）；
  *   - provide 服务键按实例分流：cn → `tradingCnMarketData`，hk → `tradingHkMarketData`
  *     （api 包 Context 模块增强统一声明两个键）；
@@ -18,14 +18,14 @@
  * 合规（README 铁律 #5）：腾讯公共行情端点，无 key、无官方授权；个人使用边界自负
  * （详见 src/rest.ts 头注与 README 数据源节）。
  *
- * @module @dsh-trading/connector-tencent
+ * @module @dshtrading/connector-tencent
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
-import type { Disposable, Interval, Kline, MarketDataService, Orderbook, StockFundamentals, Ticker } from '@dsh-trading/api'
+import type { Disposable, Interval, Kline, MarketDataService, Orderbook, StockFundamentals, Ticker } from '@dshtrading/api'
 import {
   INTERVAL_VOCABULARY,
   type TencentMarket,
@@ -250,7 +250,7 @@ export interface PlaceOrderToolDeps {
 /**
  * <market>_place_order 工具工厂（独立导出便于单测三条闸门路径）。
  *
- * 审批不在这里做：dryRun!==true 的调用由 @dsh-trading/base 的 gate 插件在
+ * 审批不在这里做：dryRun!==true 的调用由 @dshtrading/base 的 gate 插件在
  * `tools/pre-execute` waterfall 统一 ask（S4：headless 下 ask=deny，fail-closed）。
  */
 export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {

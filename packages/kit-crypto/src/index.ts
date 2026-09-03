@@ -9,7 +9,7 @@
  *   5. indicator_author 创作工具（Issue #19）；
  *   6. knowledge_ingest 与 knowledge_search 知识库工具（Issue #24）。
  *
- * @module @dsh-trading/kit-crypto
+ * @module @dshtrading/kit-crypto
  */
 
 import { readFile } from 'node:fs/promises'
@@ -264,7 +264,7 @@ export function apply(ctx: Context, _config: Config): void {
   registerOnce(createGetFundamentalsTool())
 
   // issue #33 收口：indicator_author / knowledge_ingest / knowledge_search 已迁移至
-  // @dsh-trading/indicators/plugin 与 @dsh-trading/knowledge/plugin（base patch 行，
+  // @dshtrading/indicators/plugin 与 @dshtrading/knowledge/plugin（base patch 行，
   // host 平面单点注册）；crypto_get_indicators 由 connector-binance/okx 注册，kit 不重复。
 
   // 新闻聚合器注册到 host 面注册表（Issue #37）。

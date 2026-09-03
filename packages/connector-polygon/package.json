@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/connector-polygon",
+  "name": "@dshtrading/connector-polygon",
   "description": "【模板】交易所连接器插件脚手架：Polygon（polygon）v2 插件骨架 —— 市场数据服务 + 交易服务 + 三态闸门 + BYOK 凭证 ref。生成器：node scripts/new-connector.mjs --slug <exchange>",
   "version": "0.1.0",
   "type": "module",
@@ -25,7 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/api": "workspace:^"
+    "@dshtrading/api": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

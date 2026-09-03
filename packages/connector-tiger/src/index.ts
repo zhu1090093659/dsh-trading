@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-tiger
+ * @dshtrading/connector-tiger
  * 老虎证券 (Tiger Trade) 港美股连接器插件。
  */
 
@@ -18,7 +18,7 @@ import type {
   Position,
   Ticker,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   INTERVAL_VOCABULARY,
   TigerRestClient,

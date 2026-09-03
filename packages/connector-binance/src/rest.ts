@@ -1,11 +1,11 @@
 /**
  * Binance 公共 REST 客户端（dsh-trading crypto 切片）。
  *
- * 独立于插件 glue：仅依赖 @dsh-trading/api 的类型词汇，无 cordis/dsh-tools 运行时依赖，
+ * 独立于插件 glue：仅依赖 @dshtrading/api 的类型词汇，无 cordis/dsh-tools 运行时依赖，
  * 便于单测与脚本直接消费（fetch 可注入）。数据面：api.binance.com 公共 REST（/api/v3），
  * 全局 fetch（Node 22+ 内置），AbortController 10s 超时，零凭证（铁律 #3：公共行情无需 key）。
  *
- * @module @dsh-trading/connector-binance/rest
+ * @module @dshtrading/connector-binance/rest
  */
 
 import type {
@@ -17,7 +17,7 @@ import type {
   Ticker,
   TradeTick,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 /* ------------------------------------------------------------------ */
 /* 错误载体（api 包词汇的运行时映射）                                      */

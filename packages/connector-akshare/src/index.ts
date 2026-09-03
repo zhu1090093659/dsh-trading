@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-akshare
+ * @dshtrading/connector-akshare
  * AkShare A 股宏观与量化另类数据插件（提供 tradingCnMarketData 与行业资金流工具）。
  */
 
@@ -13,7 +13,7 @@ import type {
   Kline,
   MarketDataService,
   Ticker,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   AkshareRestClient,
   type AkshareRestOptions,

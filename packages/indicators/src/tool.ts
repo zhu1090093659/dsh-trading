@@ -7,7 +7,7 @@ import { validateCustomIndicatorNode } from './validate-node.ts'
 export { createFileCustomIndicatorStore } from './custom-fs.ts'
 export { validateCustomIndicatorNode, nodeVmComputeRunner } from './validate-node.ts'
 
-/** 最小行情服务面（结构类型——与 @dsh-trading/api 的 MarketDataService 兼容）。 */
+/** 最小行情服务面（结构类型——与 @dshtrading/api 的 MarketDataService 兼容）。 */
 export interface IndicatorsMarketDataLike {
   getKlines(symbol: string, interval: string, limit?: number): Promise<Kline[]>
 }

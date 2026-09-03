@@ -4,7 +4,7 @@ import type {
   FinancialReportGroup,
   FundamentalsPackage,
   StockFundamentals,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import { fetchFundamentals } from './api.ts'
 import { readJson, type SelectionState } from './store.ts'
 import { scaleLocaleOf } from './format.ts'

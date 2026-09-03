@@ -6,10 +6,10 @@
  *   - 遇 rate limit (401/429) 时自动降级到稳定无 key 的 Yahoo v8 chart meta 端点，
  *     提供公司名称、52 周高低区间、交易所、最新收盘价与成交量参考。
  *
- * @module @dsh-trading/kit-us/fundamentals
+ * @module @dshtrading/kit-us/fundamentals
  */
 
-import type { StockFundamentals } from '@dsh-trading/api'
+import type { StockFundamentals } from '@dshtrading/api'
 
 export interface UsFundamentalsOptions {
   symbol: string
@@ -244,11 +244,11 @@ export async function fetchUsFundamentals(options: UsFundamentalsOptions): Promi
   return { unavailable }
 }
 
-const usMatrixCache = new Map<string, UsCacheEntry<{ matrix?: import('@dsh-trading/api').FinancialReportMatrix; profile?: import('@dsh-trading/api').CompanyProfile }>>()
+const usMatrixCache = new Map<string, UsCacheEntry<{ matrix?: import('@dshtrading/api').FinancialReportMatrix; profile?: import('@dshtrading/api').CompanyProfile }>>()
 const US_MATRIX_TTL_MS = 24 * 60 * 60 * 1000 // 24 小时财报长效缓存
 
 /** 从 Yahoo Finance quoteSummary 动态拉取美股多期财务报表与指标矩阵。 */
-export async function fetchUsFinancialMatrix(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<{ matrix?: import('@dsh-trading/api').FinancialReportMatrix; profile?: import('@dsh-trading/api').CompanyProfile }> {
+export async function fetchUsFinancialMatrix(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<{ matrix?: import('@dshtrading/api').FinancialReportMatrix; profile?: import('@dshtrading/api').CompanyProfile }> {
   try {
     const sym = normalizeUsSymbol(symbol)
     const cached = usMatrixCache.get(sym)
@@ -304,7 +304,7 @@ export async function fetchUsFinancialMatrix(symbol: string, fetchImpl: typeof g
     const item = json.quoteSummary?.result?.[0]
     if (!item) return {}
 
-    const profile: import('@dsh-trading/api').CompanyProfile = {
+    const profile: import('@dshtrading/api').CompanyProfile = {
       symbol: sym,
       industry: item.assetProfile?.industry,
       sector: item.assetProfile?.sector,
@@ -325,9 +325,9 @@ export async function fetchUsFinancialMatrix(symbol: string, fetchImpl: typeof g
     const latestPeriod = periods[periods.length - 1] ?? ''
     const latestReportTitle = latestPeriod ? `${latestPeriod} 季报` : undefined
 
-    const revValues: Record<string, import('@dsh-trading/api').FinancialCell> = {}
-    const netValues: Record<string, import('@dsh-trading/api').FinancialCell> = {}
-    const grossMarginValues: Record<string, import('@dsh-trading/api').FinancialCell> = {}
+    const revValues: Record<string, import('@dshtrading/api').FinancialCell> = {}
+    const netValues: Record<string, import('@dshtrading/api').FinancialCell> = {}
+    const grossMarginValues: Record<string, import('@dshtrading/api').FinancialCell> = {}
 
     sortedIncomes.forEach((inc, idx) => {
       const p = periods[idx]!
@@ -340,7 +340,7 @@ export async function fetchUsFinancialMatrix(symbol: string, fetchImpl: typeof g
       grossMarginValues[p] = { value: margin }
     })
 
-    const groups: import('@dsh-trading/api').FinancialReportGroup[] = [
+    const groups: import('@dshtrading/api').FinancialReportGroup[] = [
       {
         id: 'profitability',
         title: '盈利与收益能力',
@@ -352,7 +352,7 @@ export async function fetchUsFinancialMatrix(symbol: string, fetchImpl: typeof g
       },
     ]
 
-    const matrix: import('@dsh-trading/api').FinancialReportMatrix = {
+    const matrix: import('@dshtrading/api').FinancialReportMatrix = {
       currency: 'USD',
       latestReportTitle,
       periods,
@@ -368,7 +368,7 @@ export async function fetchUsFinancialMatrix(symbol: string, fetchImpl: typeof g
 }
 
 /** 获取完整美股基本面数据包。 */
-export async function fetchUsFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FundamentalsPackage> {
+export async function fetchUsFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').FundamentalsPackage> {
   const sym = normalizeUsSymbol(symbol)
   const [quoteRes, { matrix, profile }] = await Promise.all([
     fetchUsFundamentals({ symbol: sym, fetch: fetchImpl }),

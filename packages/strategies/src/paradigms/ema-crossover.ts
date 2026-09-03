@@ -4,7 +4,7 @@
  * 入场：EMA(fast) 上穿 EMA(slow) 金叉做多。
  * 出场：EMA(fast) 下穿 EMA(slow) 死叉离场。
  */
-import { ema } from '@dsh-trading/indicators'
+import { ema } from '@dshtrading/indicators'
 import type { StrategyDefinition, StrategySignal } from '../types.ts'
 
 export const emaCrossoverStrategy: StrategyDefinition = {

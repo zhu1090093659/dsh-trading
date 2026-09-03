@@ -10,7 +10,7 @@
  * 口径（模块解析噪音已在引入本门禁时修零，不做错误码豁免）：
  *   - TS5097（.ts 扩展导入）→ tsconfig.base.json allowImportingTsExtensions
  *   - TS17004（client .tsx 扫进 server tsconfig）→ 各包 tsconfig.json include 收紧到 server 入口
- *   - TS2307 → kit 四包与 strategies 补 @dsh-trading/api type-only devDep；client 包补
+ *   - TS2307 → kit 四包与 strategies 补 @dshtrading/api type-only devDep；client 包补
  *     CSS Modules 环境声明（src/client/modules.d.ts）与 @deepseek-ai/dsh-client-ui-tool
  *     类型 devDep（cohort 精确钉版）；api 补 cordis type-only import 锚定 augmentation
  * 基线在 `pnpm -r build` 之后的干净环境取（依赖包 lib/*.d.ts 必须先就位），

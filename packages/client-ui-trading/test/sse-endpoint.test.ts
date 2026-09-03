@@ -8,7 +8,7 @@ import { EventEmitter } from 'node:events'
 import { Context as CordisContext } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { apply } from '../src/index.ts'
-import { TradingEventsService } from '@dsh-trading/eventbus'
+import { TradingEventsService } from '@dshtrading/eventbus'
 
 interface Route {
   kind: string

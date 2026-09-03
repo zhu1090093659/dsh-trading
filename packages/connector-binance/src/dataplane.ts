@@ -9,7 +9,7 @@
  * 无注册表的老部署 → 回退 2026-08-30 前形态：router consult 互斥激活 + 直接 provide。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService } from '@dshtrading/api'
 import {
   BinanceMarketDataService,
   ROUTER_PROVIDER,

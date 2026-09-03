@@ -80,7 +80,7 @@ const DSH_SDK_PATHS = {
   '@deepseek-ai/dsh-util-values': ['@deepseek-ai', 'dsh-util-values'],
 }
 
-/** 本仓全部可安装包（@dsh-trading/*）：全量钉版——钉了未安装的包惰性无害，
+/** 本仓全部可安装包（@dshtrading/*）：全量钉版——钉了未安装的包惰性无害，
  *  漏钉已安装的包才是坑 #15。顺带收集各包 peer 声明的 SDK 依赖名。 */
 async function listPackages() {
   const dir = join(ROOT, 'packages')
@@ -89,7 +89,7 @@ async function listPackages() {
     if (!entry.isDirectory()) continue
     try {
       const pkg = JSON.parse(await readFile(join(dir, entry.name, 'package.json'), 'utf8'))
-      if (typeof pkg.name === 'string' && pkg.name.startsWith('@dsh-trading/')) {
+      if (typeof pkg.name === 'string' && pkg.name.startsWith('@dshtrading/')) {
         for (const dep of Object.keys(pkg.peerDependencies ?? {})) {
           if (dep.startsWith('@deepseek-ai/')) sdkPeers.add(dep)
         }
@@ -151,9 +151,9 @@ async function syncProfile(profileDir, packages) {
       }
     }
     // SDK override 行指向不存在目录 → 重写到 DSH 本体现路径（值带引号/不带引号两种 YAML 形态都认）。
-    const quoted = line.match(/^ {2}'((?:@dsh-trading|@deepseek-ai)\/[^']+)': '(?:file|link):([^']+)'/)
+    const quoted = line.match(/^ {2}'((?:@dshtrading|@deepseek-ai)\/[^']+)': '(?:file|link):([^']+)'/)
     const unquoted = quoted === null
-      ? line.match(/^ {2}'((?:@dsh-trading|@deepseek-ai)\/[^']+)': (?:file|link):(\S+)$/)
+      ? line.match(/^ {2}'((?:@dshtrading|@deepseek-ai)\/[^']+)': (?:file|link):(\S+)$/)
       : null
     const row = quoted ?? (unquoted === null ? null : [null, unquoted[1], unquoted[2]])
     if (row !== null && !existsSync(row[2])) {
@@ -176,7 +176,7 @@ async function syncProfile(profileDir, packages) {
   }).filter((line) => line !== null).join('\n')
 
   const existing = new Set(
-    [...next.matchAll(/^ {2}'((?:@dsh-trading|@deepseek-ai)\/[^']+)':/gm)].map((m) => m[1]),
+    [...next.matchAll(/^ {2}'((?:@dshtrading|@deepseek-ai)\/[^']+)':/gm)].map((m) => m[1]),
   )
   const missing = expectedLines(packages).filter((line) => {
     const key = line.match(/^ {2}'([^']+)'/)?.[1]
@@ -224,7 +224,7 @@ if (profiles.length === 0) {
 }
 
 const packages = await listPackages()
-console.log(`found ${packages.length} @dsh-trading packages${DRY ? ' (dry-run)' : ''}`)
+console.log(`found ${packages.length} @dshtrading packages${DRY ? ' (dry-run)' : ''}`)
 for (const name of profiles) {
   const result = await syncProfile(join(DSH_HOME, 'profiles', name), packages)
   if (result.skipped) { console.log(`[${name}] skipped: ${result.skipped}`); continue }

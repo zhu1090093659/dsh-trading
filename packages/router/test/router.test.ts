@@ -29,7 +29,7 @@ import {
   type Config as ConfigType,
   type Provider,
 } from '../src/index.js'
-import type { MarketDataService, NewsAggregator } from '@dsh-trading/api'
+import type { MarketDataService, NewsAggregator } from '@dshtrading/api'
 
 const ENTRY: ConfigType = { markets: { ...DEFAULT_MARKETS } }
 

@@ -1,8 +1,8 @@
 /**
- * @dsh-trading/strategies/plugin —— 策略 Agent 产出管线 host 半插件
+ * @dshtrading/strategies/plugin —— 策略 Agent 产出管线 host 半插件
  * （issue #31 / P2，dataplane 行同款先例：subpath 插件模块）。
  *
- * patch 行：id `dsh-trading-strategies` / name `@dsh-trading/strategies/plugin`
+ * patch 行：id `dsh-trading-strategies` / name `@dshtrading/strategies/plugin`
  * （base 拥有该共享行——策略引擎市场无关，铁律 #4）。
  *
  * 职责：
@@ -17,7 +17,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import os from 'node:os'
 import path from 'node:path'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService } from '@dshtrading/api'
 import { getStrategyById, run } from './index.ts'
 import { createFileCustomStrategyStore } from './custom-fs.ts'
 import type { CustomStrategyRecord, CustomStrategyStore } from './custom.ts'

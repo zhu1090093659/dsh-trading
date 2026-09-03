@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/crypto",
+  "name": "@dshtrading/crypto",
   "description": "Crypto market bundle for dsh-trading: host-plane crypto-trader preset installer + insert-only aggregation of the binance/okx connectors (mutual-exclusion activation) and crypto kit rows (design rule #1)",
   "version": "0.1.0",
   "type": "module",
@@ -29,11 +29,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/connector-binance": "workspace:*",
-    "@dsh-trading/connector-bybit": "workspace:*",
-    "@dsh-trading/connector-ccxt": "workspace:*",
-    "@dsh-trading/connector-okx": "workspace:*",
-    "@dsh-trading/kit-crypto": "workspace:*"
+    "@dshtrading/connector-binance": "workspace:*",
+    "@dshtrading/connector-bybit": "workspace:*",
+    "@dshtrading/connector-ccxt": "workspace:*",
+    "@dshtrading/connector-okx": "workspace:*",
+    "@dshtrading/kit-crypto": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

@@ -100,7 +100,7 @@ API key 安全（`#overview-api-key-creation-api-key-security`）：
 | `GET /api/v5/public/time` | 无 | —（对时用） | `#overview-rest-authentication-making-requests`（50102 说明处） |
 | `GET /api/v5/public/instruments` | `instType=SPOT/SWAP/...`；返回 `lotSz/minSz/tickSz/ctVal/ctValCcy/settleCcy` | （本节未抄录，实现时查）`#get-instruments` | — |
 
-`bar` 词汇（candles 文档）：`1m/3m/5m/15m/30m/1H/2H/4H` + UTC+8 开盘的 `6H/12H/1D/2D/3D/1W/1M/3M` + UTC 版 `6Hutc/.../3Mutc`。**与 `@dsh-trading/api` 的 `Interval`（Binance 词汇 `1h/4h/1d/1w/1M`）大小写不同**，连接器需内置映射表（`1h→1H`、`1d→1Dutc` 或 `1D`，选择口径实现期定，标「待验证」UTC 口径的产品取舍）。
+`bar` 词汇（candles 文档）：`1m/3m/5m/15m/30m/1H/2H/4H` + UTC+8 开盘的 `6H/12H/1D/2D/3D/1W/1M/3M` + UTC 版 `6Hutc/.../3Mutc`。**与 `@dshtrading/api` 的 `Interval`（Binance 词汇 `1h/4h/1d/1w/1M`）大小写不同**，连接器需内置映射表（`1h→1H`、`1d→1Dutc` 或 `1D`，选择口径实现期定，标「待验证」UTC 口径的产品取舍）。
 
 ### 3.2 私有（需四头认证；打 demo 时加 `x-simulated-trading: 1`）
 
@@ -137,9 +137,9 @@ API key 安全（`#overview-api-key-creation-api-key-security`）：
 - SPOT 响应含 `baseCcy`/`quoteCcy`；SWAP/FUTURES 含 `settleCcy`（保证金/结算币）与 `ctVal`（一张合约含多少币）、`ctValCcy`。
 - **数量单位坑（三处）**：
   1. **SPOT 市价单的 `sz` 单位看 `tgtCcy`**：缺省 buy 按**计价币金额**（想买 0.01 BTC 得传约「1000 USDT」，不是 0.01）。limit 单恒为 base 币数。建议连接器**显式传 `tgtCcy`**（第一期固定 `base_ccy` 并在工具描述里写明），消除方向歧义。
-  2. **SWAP 的 `sz` 单位是「张」**：币数 = `sz × ctVal`。订单响应 `accFillSz` 文档明示「SPOT/MARGIN 单位是 base 币，FUTURES/SWAP/OPTION 单位是张」。映射到 `@dsh-trading/api` 的 `Order.quantity`（币数语义）时连接器必须做张↔币换算，`ctVal` 从 `GET /api/v5/public/instruments` 取。
+  2. **SWAP 的 `sz` 单位是「张」**：币数 = `sz × ctVal`。订单响应 `accFillSz` 文档明示「SPOT/MARGIN 单位是 base 币，FUTURES/SWAP/OPTION 单位是张」。映射到 `@dshtrading/api` 的 `Order.quantity`（币数语义）时连接器必须做张↔币换算，`ctVal` 从 `GET /api/v5/public/instruments` 取。
   3. **精度簇**：`lotSz`（步进）/`minSz`（最小）/`tickSz`（价格步进），下单前本地校验，省一次 51000 往返。
-- `@dsh-trading/api` `Ticker.symbol` 词汇建议：连接器对外暴露 OKX 原生 `instId`（带连字符），工具参数同样收 `instId`，不搞符号翻译层——跨连接器词汇不统一的问题交给 §8 的「单连接器激活」方案回避。
+- `@dshtrading/api` `Ticker.symbol` 词汇建议：连接器对外暴露 OKX 原生 `instId`（带连字符），工具参数同样收 `instId`，不搞符号翻译层——跨连接器词汇不统一的问题交给 §8 的「单连接器激活」方案回避。
 
 ## 5. 错误码词汇与映射
 
@@ -147,7 +147,7 @@ API key 安全（`#overview-api-key-creation-api-key-security`）：
 
 响应包络：`{"code":"0","msg":"","data":[...]}`，`code` 为字符串。`"0"` 成功；`"1"` 操作失败；`"2"` 批量操作部分成功（批量端点的 `data[]` 内每单另有 `sCode`/`sMsg`，如 `51008` 带 `subCode`）。HTTP 状态码独立表达（400/401/429 等）。错误码段：REST 从 50000 到 59999，公共类 50000–53999。
 
-映射到 `@dsh-trading/api` 的 `TradingErrorCode`（`packages/api/src/index.ts`）：
+映射到 `@dshtrading/api` 的 `TradingErrorCode`（`packages/api/src/index.ts`）：
 
 | OKX code | 文档消息（摘要） | HTTP | → TradingErrorCode |
 |---|---|---|---|
@@ -215,8 +215,8 @@ passphraseRef: OKX_PASSPHRASE
 
 ### 8.1 与 connector-binance 的关系：并存
 
-- 新包 `@dsh-trading/connector-okx`（行 id `dsh-trading-crypto-connector-okx`，市场命名空间唯一，insert-only 铁律 #1 不冲突），与 connector-binance **并存于 crypto 市场**，不做替代——两所用户群不同，OKX 的 demo 盘能力未来也可能反哺 binance 的 testnet 接入。
-- crypto bundle（`@dsh-trading/crypto`）依赖面同时加两者（依赖安装载体），**但默认只激活一个数据面**。
+- 新包 `@dshtrading/connector-okx`（行 id `dsh-trading-crypto-connector-okx`，市场命名空间唯一，insert-only 铁律 #1 不冲突），与 connector-binance **并存于 crypto 市场**，不做替代——两所用户群不同，OKX 的 demo 盘能力未来也可能反哺 binance 的 testnet 接入。
+- crypto bundle（`@dshtrading/crypto`）依赖面同时加两者（依赖安装载体），**但默认只激活一个数据面**。
 
 ### 8.2 工具命名冲突与解决方案
 
@@ -236,7 +236,7 @@ passphraseRef: OKX_PASSPHRASE
 2. **R2 签名与只读账户**：四头签名客户端、三 ref 凭证接入、balance/positions；错误码映射表落地（§5）。
 3. **R3 demo 下单闭环（核心验收）**：`env='demo'` 强制 `x-simulated-trading: 1`；place/cancel/get-order；三段闸门 + base 审批联动；`sz` 单位换算（instruments 缓存 `ctVal/lotSz/minSz`）。
 4. **R4 live**：`env='live'` 显式解锁 + 用户手册（权限只勾 Read+Trade、IP 白名单与 14 天过期提示、passphrase 不可找回）。
-5. 同步产物：`@dsh-trading/api` 增加 `tradingCryptoTrade`（若走 C）；kit-crypto 的 crypto-risk-checklist skill 补 OKX demo 使用法。
+5. 同步产物：`@dshtrading/api` 增加 `tradingCryptoTrade`（若走 C）；kit-crypto 的 crypto-risk-checklist skill 补 OKX demo 使用法。
 
 ### 8.4 待验证清单（实现期第一件事）
 

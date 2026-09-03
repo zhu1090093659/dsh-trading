@@ -4,7 +4,7 @@
  * 入场：收盘价跌破布林线下轨（超卖错杀）。
  * 出场：收盘价回归至布林带中轨（均线目标位平仓）。
  */
-import { bollinger } from '@dsh-trading/indicators'
+import { bollinger } from '@dshtrading/indicators'
 import type { StrategyDefinition, StrategySignal } from '../types.ts'
 
 export const bollingerReversionStrategy: StrategyDefinition = {

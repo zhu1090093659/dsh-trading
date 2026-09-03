@@ -5,7 +5,7 @@
  *（见其 dataplane.ts 头注）。OKX 模拟盘/实盘由 env 配置区分，行情面公共无凭证。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { MarketDataService, TradeRegistry } from '@dsh-trading/api'
+import type { MarketDataService, TradeRegistry } from '@dshtrading/api'
 import {
   OkxMarketDataService,
   OkxRestClient,

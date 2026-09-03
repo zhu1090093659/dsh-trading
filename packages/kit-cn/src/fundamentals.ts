@@ -5,10 +5,10 @@
  *   - https://qt.gtimg.cn/q=sh600519 / sz000001
  *   - 解析市值、流通市值、动态市盈率、市盈率 TTM、市净率 PB、换手率、振幅、涨跌停价、52周区间。
  *
- * @module @dsh-trading/kit-cn/fundamentals
+ * @module @dshtrading/kit-cn/fundamentals
  */
 
-import type { StockFundamentals } from '@dsh-trading/api'
+import type { StockFundamentals } from '@dshtrading/api'
 
 export interface CnFundamentalsOptions {
   symbol: string
@@ -68,7 +68,7 @@ function num(val: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-import { HiThinkRestClient } from '@dsh-trading/connector-hithink'
+import { HiThinkRestClient } from '@dshtrading/connector-hithink'
 
 interface CacheEntry<T> {
   data: T
@@ -76,7 +76,7 @@ interface CacheEntry<T> {
 }
 
 const fundamentalsCache = new Map<string, CacheEntry<CnFundamentalsResult>>()
-const matrixCache = new Map<string, CacheEntry<import('@dsh-trading/api').FinancialReportMatrix | undefined>>()
+const matrixCache = new Map<string, CacheEntry<import('@dshtrading/api').FinancialReportMatrix | undefined>>()
 
 const FUNDAMENTALS_TTL_MS = 5 * 60 * 1000 // 5 分钟快照缓存
 const MATRIX_TTL_MS = 24 * 60 * 60 * 1000 // 24 小时财报长效缓存
@@ -235,7 +235,7 @@ export interface EastmoneyReportRow {
 }
 
 /** 从东方财富 F10 动态拉取近 8 期真实财务报表矩阵（主：ZYZBAjaxNew，备：数据中心）。 */
-export async function fetchCnFinancialMatrix(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FinancialReportMatrix | undefined> {
+export async function fetchCnFinancialMatrix(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').FinancialReportMatrix | undefined> {
   try {
     const { canonical, wire } = normalizeCnSymbol(symbol)
 
@@ -292,8 +292,8 @@ export async function fetchCnFinancialMatrix(symbol: string, fetchImpl: typeof g
       yoyKey?: keyof EastmoneyReportRow,
       unit?: string,
       isRatio = false,
-    ): import('@dsh-trading/api').FinancialIndicatorRow => {
-      const values: Record<string, import('@dsh-trading/api').FinancialCell> = {}
+    ): import('@dshtrading/api').FinancialIndicatorRow => {
+      const values: Record<string, import('@dshtrading/api').FinancialCell> = {}
       list.forEach((r, idx) => {
         const p = periods[idx]!
         const rawVal = r[valKey]
@@ -307,7 +307,7 @@ export async function fetchCnFinancialMatrix(symbol: string, fetchImpl: typeof g
       return { id, name, unit, values }
     }
 
-    const groups: import('@dsh-trading/api').FinancialReportGroup[] = [
+    const groups: import('@dshtrading/api').FinancialReportGroup[] = [
       {
         id: 'per_share',
         title: '每股指标',
@@ -360,7 +360,7 @@ export async function fetchCnFinancialMatrix(symbol: string, fetchImpl: typeof g
 }
 
 /** 从东方财富动态抓取公司详细概况与高管信息。 */
-export async function fetchCnCompanyProfile(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').CompanyProfile | undefined> {
+export async function fetchCnCompanyProfile(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').CompanyProfile | undefined> {
   try {
     const { canonical, wire } = normalizeCnSymbol(symbol)
     const code = canonical.split('.')[0]!
@@ -432,7 +432,7 @@ function classifyRating(rating: string): 'buy' | 'hold' | 'sell' | 'other' {
 }
 
 /** 从机构研报与公开数据中聚合机构盈利预测（revenue/netProfit 上游不提供 → 不产出假零值）。 */
-export async function fetchCnForecast(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch, reportList?: Array<Record<string, unknown>>): Promise<import('@dsh-trading/api').ForecastSummary | undefined> {
+export async function fetchCnForecast(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch, reportList?: Array<Record<string, unknown>>): Promise<import('@dshtrading/api').ForecastSummary | undefined> {
   try {
     const list = reportList ?? await fetchCnReportList(symbol, fetchImpl)
     if (list === undefined || list.length === 0) return undefined
@@ -514,7 +514,7 @@ export async function fetchCnForecast(symbol: string, fetchImpl: typeof globalTh
 }
 
 /** 从东方财富动态抓取机构研究报告精选（共享 fetchCnReportList，不重复打上游）。 */
-export async function fetchCnReports(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch, reportList?: Array<Record<string, unknown>>): Promise<import('@dsh-trading/api').ResearchReportItem[]> {
+export async function fetchCnReports(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch, reportList?: Array<Record<string, unknown>>): Promise<import('@dshtrading/api').ResearchReportItem[]> {
   try {
     const rawList = reportList ?? await fetchCnReportList(symbol, fetchImpl)
     if (rawList === undefined) return []
@@ -536,7 +536,7 @@ export async function fetchCnReports(symbol: string, fetchImpl: typeof globalThi
 }
 
 /** 从东方财富动态抓取主营构成。 */
-export async function fetchCnMainOperations(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').MainOperationSegment[]> {
+export async function fetchCnMainOperations(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').MainOperationSegment[]> {
   try {
     const { canonical } = normalizeCnSymbol(symbol)
     const url = `https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FN_MAINOP&columns=ALL&filter=(SECUCODE%3D%22${canonical}%22)&pageNumber=1&pageSize=30&sortTypes=-1&sortColumns=REPORT_DATE`
@@ -572,8 +572,8 @@ export async function fetchCnMainOperations(symbol: string, fetchImpl: typeof gl
 
 /** 从东方财富动态抓取分红派息与拆股送转方案。 */
 export async function fetchCnCorporateActions(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<{
-  dividends: import('@dsh-trading/api').DividendItem[]
-  splits: import('@dsh-trading/api').SplitItem[]
+  dividends: import('@dshtrading/api').DividendItem[]
+  splits: import('@dshtrading/api').SplitItem[]
 }> {
   try {
     const { canonical } = normalizeCnSymbol(symbol)
@@ -584,8 +584,8 @@ export async function fetchCnCorporateActions(symbol: string, fetchImpl: typeof 
     const rawList = json.result?.data
     if (!Array.isArray(rawList)) return { dividends: [], splits: [] }
 
-    const dividends: import('@dsh-trading/api').DividendItem[] = []
-    const splits: import('@dsh-trading/api').SplitItem[] = []
+    const dividends: import('@dshtrading/api').DividendItem[] = []
+    const splits: import('@dshtrading/api').SplitItem[] = []
 
     for (const r of rawList) {
       const planYear = String(r.REPORT_DATE || r.PLAN_NOTICE_DATE || '').slice(0, 4)
@@ -622,7 +622,7 @@ export async function fetchCnCorporateActions(symbol: string, fetchImpl: typeof 
 }
 
 /** 从东方财富动态抓取经营效率指标。 */
-export async function fetchCnEfficiency(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').OperatingEfficiency | undefined> {
+export async function fetchCnEfficiency(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').OperatingEfficiency | undefined> {
   try {
     const { canonical } = normalizeCnSymbol(symbol)
     const url = `https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_FINANCE_MAINFINADATA&columns=ALL&filter=(SECUCODE%3D%22${canonical}%22)&pageNumber=1&pageSize=5&sortTypes=-1&sortColumns=REPORT_DATE`
@@ -649,9 +649,9 @@ export async function fetchCnEfficiency(symbol: string, fetchImpl: typeof global
 
 /** 从东方财富动态抓取十大流通股东、机构持股与股东变动。 */
 export async function fetchCnShareholdersData(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<{
-  shareholders: import('@dsh-trading/api').ShareholderItem[]
-  institutionalHoldings: import('@dsh-trading/api').InstitutionalHoldingItem[]
-  insiderTrades: import('@dsh-trading/api').InsiderTradeItem[]
+  shareholders: import('@dshtrading/api').ShareholderItem[]
+  institutionalHoldings: import('@dshtrading/api').InstitutionalHoldingItem[]
+  insiderTrades: import('@dshtrading/api').InsiderTradeItem[]
 }> {
   try {
     const { canonical } = normalizeCnSymbol(symbol)
@@ -661,12 +661,12 @@ export async function fetchCnShareholdersData(symbol: string, fetchImpl: typeof 
     const rawList = json.result?.data
     if (!Array.isArray(rawList)) return { shareholders: [], institutionalHoldings: [], insiderTrades: [] }
 
-    const shareholders: import('@dsh-trading/api').ShareholderItem[] = []
-    const institutionalHoldings: import('@dsh-trading/api').InstitutionalHoldingItem[] = []
+    const shareholders: import('@dshtrading/api').ShareholderItem[] = []
+    const institutionalHoldings: import('@dshtrading/api').InstitutionalHoldingItem[] = []
     // 2026-09-02 整改：HOLD_NUM_CHANGE 是「较上期持股变动股数」，用它构造增减持行
     // （changeShares=变动量，0/缺省不产行）——原实现把当前持股总量当变动股数，
     // 「十大流通股东」被伪装成「股东增减持明细」。
-    const insiderTrades: import('@dsh-trading/api').InsiderTradeItem[] = []
+    const insiderTrades: import('@dshtrading/api').InsiderTradeItem[] = []
 
     for (const r of rawList) {
       const name = String(r.HOLDER_NAME ?? '--')
@@ -711,7 +711,7 @@ export async function fetchCnShareholdersData(symbol: string, fetchImpl: typeof 
 }
 
 /** 从东方财富动态抓取股东户数与筹码集中度。 */
-export async function fetchCnHoldersSummary(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').HolderNumSummary | undefined> {
+export async function fetchCnHoldersSummary(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').HolderNumSummary | undefined> {
   try {
     const { canonical } = normalizeCnSymbol(symbol)
     const url = `https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_F10_EH_HOLDERNUM&columns=ALL&filter=(SECUCODE%3D%22${canonical}%22)&pageNumber=1&pageSize=5&sortTypes=-1&sortColumns=END_DATE`
@@ -734,13 +734,13 @@ export async function fetchCnHoldersSummary(symbol: string, fetchImpl: typeof gl
 }
 
 /** 兼容旧接口别名。 */
-export async function fetchCnShareholders(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').ShareholderItem[]> {
+export async function fetchCnShareholders(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').ShareholderItem[]> {
   const res = await fetchCnShareholdersData(symbol, fetchImpl)
   return res.shareholders
 }
 
 /** 获取完整 A 股基本面数据包（估值 + 多期财务矩阵 + 深度简况 + 股东 + 预测 + 研报 + 经营 + 分红 + 送转）。 */
-export async function fetchCnFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FundamentalsPackage> {
+export async function fetchCnFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').FundamentalsPackage> {
   const { canonical } = normalizeCnSymbol(symbol)
   // reportapi 列表只取一次，喂预测聚合与研报精选两个解析器（整改：原各自打同一 URL）。
   const reportList = await fetchCnReportList(symbol, fetchImpl)

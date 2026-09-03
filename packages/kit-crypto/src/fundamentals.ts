@@ -11,10 +11,10 @@
  *   - Binance 24hr Ticker 公共 REST：https://api.binance.com/api/v3/ticker/24hr
  *     - 24h 交易量、成交笔数、价格涨跌幅补充
  *
- * @module @dsh-trading/kit-crypto/fundamentals
+ * @module @dshtrading/kit-crypto/fundamentals
  */
 
-import type { CryptoFundamentals } from '@dsh-trading/api'
+import type { CryptoFundamentals } from '@dshtrading/api'
 import { extractBaseAsset, normalizeBinanceFuturesSymbol } from './derivatives.js'
 
 export interface CryptoFundamentalsOptions {
@@ -175,7 +175,7 @@ export async function fetchCryptoFundamentals(options: CryptoFundamentalsOptions
 }
 
 /** 获取完整加密资产基本面数据包。 */
-export async function fetchCryptoFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FundamentalsPackage> {
+export async function fetchCryptoFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').FundamentalsPackage> {
   const quoteRes = await fetchCryptoFundamentals({ symbol, fetch: fetchImpl })
   const base = extractBaseAsset(symbol)
 

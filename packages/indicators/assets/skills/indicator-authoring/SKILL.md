@@ -5,7 +5,7 @@ description: 指标创作指南：自然语言生成符合注册表契约的自�
 
 # 指标创作指南（Indicator Authoring Guide）
 
-当用户在会话列中用自然语言提出编写或添加技术指标的需求时（例如："帮我写一个 TD9 指标"、"帮我写一个 SuperTrend 指标"、"给 OBV 加一个 34 天均线"），请遵循本指南生成符合 `@dsh-trading/indicators` 契约规范的 JavaScript 纯函数代码，并调用 `indicator_author` 工具进行沙箱校验与落库。
+当用户在会话列中用自然语言提出编写或添加技术指标的需求时（例如："帮我写一个 TD9 指标"、"帮我写一个 SuperTrend 指标"、"给 OBV 加一个 34 天均线"），请遵循本指南生成符合 `@dshtrading/indicators` 契约规范的 JavaScript 纯函数代码，并调用 `indicator_author` 工具进行沙箱校验与落库。
 
 ---
 

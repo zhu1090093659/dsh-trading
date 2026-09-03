@@ -5,7 +5,7 @@
  *   ∪ 内置静态字典（catalog）兜底，按 query 子串过滤。
  */
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService } from '@dshtrading/api'
 import { SYMBOL_CATALOG } from './catalog.ts'
 
 export const MARKETS: readonly string[] = ['crypto', 'us', 'cn', 'hk']

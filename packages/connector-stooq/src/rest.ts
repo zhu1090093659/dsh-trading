@@ -1,7 +1,7 @@
 /**
  * Stooq 公共 CSV 客户端（dsh-trading us 切片）。
  *
- * 独立于插件 glue：仅依赖 @dsh-trading/api 的类型词汇，无 cordis/dsh-tools 运行时依赖，
+ * 独立于插件 glue：仅依赖 @dshtrading/api 的类型词汇，无 cordis/dsh-tools 运行时依赖，
  * 便于单测与脚本直接消费（fetch 可注入）。
  *
  * 数据面（2026-08-31 实测，证据 spikes/impl-us/REPORT.md）：
@@ -17,10 +17,10 @@
  * 合规（README 铁律 #5）：免费公开端点、无 key；个人/非商业使用边界以 stooq.com 条款
  * 为准（https://stooq.com/q/dl/ 页脚与 Terms）；本仓不缓存/不再分发行情数据。
  *
- * @module @dsh-trading/connector-stooq/rest
+ * @module @dshtrading/connector-stooq/rest
  */
 
-import type { Interval, Kline, MarketDataService, Ticker, TradingErrorCode } from '@dsh-trading/api'
+import type { Interval, Kline, MarketDataService, Ticker, TradingErrorCode } from '@dshtrading/api'
 
 /* ------------------------------------------------------------------ */
 /* 错误载体（api 包词汇的运行时映射）                                      */

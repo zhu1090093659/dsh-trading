@@ -2,7 +2,7 @@
  * 牛熊线之上：现价站上长期均线且均线自身斜率向上——与量化「200 日均线
  * 牛熊择时基线」同源的长线标的筛选（Faber GTAA 的截面版）。
  */
-import { sma } from '@dsh-trading/indicators'
+import { sma } from '@dshtrading/indicators'
 import type { ScreenerDefinition } from './types.ts'
 
 export const aboveMaScreener: ScreenerDefinition = {

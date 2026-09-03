@@ -1,5 +1,5 @@
 ﻿/**
- * @dsh-trading/connector-fmp/rest
+ * @dshtrading/connector-fmp/rest
  * Financial Modeling Prep 美股 REST 客户端（支持行情与基本面）。
  */
 
@@ -12,7 +12,7 @@ import type {
   Position,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

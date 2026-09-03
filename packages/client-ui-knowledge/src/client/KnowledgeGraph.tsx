@@ -13,7 +13,7 @@
  */
 import { useEffect, useImperativeHandle, useRef, forwardRef } from 'react'
 import ForceGraph, { type ForceGraphInstance } from 'force-graph'
-import type { KnowledgeCard, KnowledgeGraphData, KnowledgeGraphNode, KnowledgeGraphLink } from '@dsh-trading/knowledge'
+import type { KnowledgeCard, KnowledgeGraphData, KnowledgeGraphNode, KnowledgeGraphLink } from '@dshtrading/knowledge'
 
 // 中性柔和主题色板（避免使用涨跌红绿色）
 const CLUSTER_COLORS = [

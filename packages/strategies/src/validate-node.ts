@@ -3,7 +3,7 @@
  * 的 validate-node.ts——issue #31 规格：Node 侧 vm 沙箱 + 超时熔断）。
  */
 import * as vm from 'node:vm'
-import type { Kline } from '@dsh-trading/indicators'
+import type { Kline } from '@dshtrading/indicators'
 import { validateCustomStrategy, type StrategyValidationResult } from './validate.ts'
 import type { StrategySignal } from './types.ts'
 

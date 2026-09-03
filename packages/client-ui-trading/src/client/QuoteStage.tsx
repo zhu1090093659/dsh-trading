@@ -30,7 +30,7 @@ import {
   fmtChange, fmtClock, fmtCompact, fmtFundingRate, fmtPercent, fmtPrice, scaleLocaleOf,
 } from './format.ts'
 import { indicators, isCustomIndicator } from './indicator-registry.ts'
-import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indicators'
+import type { IndicatorDefinition, IndicatorInstance } from '@dshtrading/indicators'
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'

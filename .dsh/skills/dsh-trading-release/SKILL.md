@@ -1,6 +1,6 @@
 ---
 name: dsh-trading-release
-description: Release the dsh-trading monorepo — run pre-release gates, bump the unified @dsh-trading/* family version via changesets, commit and tag vX.Y.Z on main, push the tag that triggers the desktop-release GitHub Actions pipeline (builds the Electron desktop app for macOS arm64/x64 and Windows x64), and verify the GitHub Release artifacts. No npm publishing (unauthorized). Defaults an unspecified target to the next patch after the previous published release. Use when the user asks to 发布/发版/release/bump 版本/publish a new version of dsh-trading or the desktop app, or to build/repair the desktop release pipeline.
+description: Release the dsh-trading monorepo — run pre-release gates, bump the unified @dshtrading/* family version via changesets, commit and tag vX.Y.Z on main, push the tag that triggers the desktop-release GitHub Actions pipeline (builds the Electron desktop app for macOS arm64/x64 and Windows x64), and verify the GitHub Release artifacts. No npm publishing (unauthorized). Defaults an unspecified target to the next patch after the previous published release. Use when the user asks to 发布/发版/release/bump 版本/publish a new version of dsh-trading or the desktop app, or to build/repair the desktop release pipeline.
 whenToUse: The user wants to release dsh-trading (发布新版、发个版本、release、打 tag、发桌面安装包、desktop release), change the release pipeline (.github/workflows/desktop-release.yml、发版脚本、发版流程), or recover from a failed release run (tag 与包版本不一致、桌面打包失败、Release 产物缺失). Not for routine commits, docs/notes changes, connector development, or CI changes unrelated to releasing.
 ---
 
@@ -16,15 +16,15 @@ Windows nsis/zip）→ GitHub Release 自动创建并附着产物 → 发布后�
 ## 仓库事实（先读，决定每一步怎么做）
 
 - 仓库：zhu1090093659/dsh-trading（**PUBLIC**），本机路径 /Users/zcl/code/dsh-trading。
-- **版本策略：@dsh-trading/* 全家族统一版本**，由 changesets fixed 组管理
-  （.changeset/config.json 的 fixed: [["@dsh-trading/*"]]）。tag vX.Y.Z 即版本
+- **版本策略：@dshtrading/* 全家族统一版本**，由 changesets fixed 组管理
+  （.changeset/config.json 的 fixed: [["@dshtrading/*"]]）。tag vX.Y.Z 即版本
   事实源，发布管线用 scripts/verify-release-version.mjs 硬校验全家族（当前
   45 个包，以脚本输出为准，不在技能中手抄数量）版本等于 tag 版本。
 - desktop/package.json（Electron 桌面壳，private）**不参与 changesets**，版本
   由管线在打包前按 tag 重写（scripts/set-desktop-version.mjs），安装包文件名
   dsh-trading-desktop-${version}-<mac|win>-<arch>.* 跟随 tag。发版提交时建议
   顺手把它对齐到目标版本，但不作硬性要求。
-- **npm 通道（2026-09-03 起授权）**：发布 @dsh-trading/* 全家族到
+- **npm 通道（2026-09-03 起授权）**：发布 @dshtrading/* 全家族到
   registry.npmjs.org，仓库 secret NPM_TOKEN（automation token），管线 job
   `npm-publish` 由 workflow env NPM_PUBLISH_ENABLED 门控（'false' 时退回仅
   桌面发布）。发布脚本 scripts/publish-npm.mjs 按 workspace 依赖拓扑序逐包
@@ -118,7 +118,7 @@ git push origin "vX.Y.Z"            # 推送 tag 即触发桌面打包管线（�
 推送 v* tag 后 GitHub Actions 自动执行，三个 job：
 
 1. **check-version**（ubuntu）：scripts/verify-release-version.mjs 硬校验
-   @dsh-trading/* 全家族版本 = tag 版本；不一致即中止，无任何构建产物。
+   @dshtrading/* 全家族版本 = tag 版本；不一致即中止，无任何构建产物。
 2. **npm-publish**（ubuntu，与 build-desktop 并行）：同源门禁（install/build/
    test）→ scripts/publish-npm.mjs 幂等发布全家族（NPM_PUBLISH_ENABLED 门控）；
 3. **build-desktop**（matrix：macos-latest + windows-latest）：pnpm install →
@@ -142,7 +142,7 @@ gh run list --workflow=desktop-release.yml   # 查历史
 - npm 部分发布失败（网络、scope 权限、token 过期）→ 脚本已跳过成功包，修好
   后重推同一 tag 会只补发缺的包；**同版本号换代码是禁止的**（npm 不可变），
   换代码必须 bump。token 过期到 repo Settings → Secrets → Actions 更新
-  NPM_TOKEN；scope 权限问题找 npm 账号（@dsh-trading scope 的所有者）确认。
+  NPM_TOKEN；scope 权限问题找 npm 账号（@dshtrading scope 的所有者）确认。
 - 发出去的坏包（内容错误但版本已占用）→ `npm deprecate` + 下一补丁版本，
   不尝试覆盖。
 - prepare-runtime 失败（Node 发行版下载超时、host closure pnpm install 失败）
@@ -174,8 +174,8 @@ gh run list --workflow=desktop-release.yml   # 查历史
 ## 5. 发布后验证（必须逐项执行）
 
 ```sh
-npm view @dsh-trading/all version        # 期望 = X.Y.Z
-npm view @dsh-trading/base version       # 期望 = X.Y.Z
+npm view @dshtrading/all version        # 期望 = X.Y.Z
+npm view @dshtrading/base version       # 期望 = X.Y.Z
 gh release view "vX.Y.Z" --json assets --jq '.assets[].name'
 # 期望资产（7 个）：dsh-trading-desktop-X.Y.Z-mac-{arm64,x64}.{dmg,zip} +
 # dsh-trading-desktop-X.Y.Z-win-x64.{exe,zip} + SHA256SUMS.txt

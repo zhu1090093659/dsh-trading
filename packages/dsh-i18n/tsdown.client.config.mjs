@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import { transform } from 'lightningcss'
 
-const ID = '@dsh-trading/dsh-i18n'
+const ID = '@dshtrading/dsh-i18n'
 
-// 本包浏览器半只 value-import @dsh-trading/*/locales 纯数据模块（打进 bundle）
+// 本包浏览器半只 value-import @dshtrading/*/locales 纯数据模块（打进 bundle）
 // 与 SDK 类型面（type-only，零产物引用）——SDK 一律 external。
 const EXTERNALS = new Set([
   '@deepseek-ai/cordis',

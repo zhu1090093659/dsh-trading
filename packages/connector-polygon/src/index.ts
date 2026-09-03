@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-polygon
+ * @dshtrading/connector-polygon
  * Polygon.io (Massive) 美股高频连接器插件（提供 tradingUsMarketData 与 us_* 工具）。
  */
 
@@ -18,7 +18,7 @@ import type {
   Position,
   Ticker,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   INTERVAL_VOCABULARY,
   PolygonRestClient,

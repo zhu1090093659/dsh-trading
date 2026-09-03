@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/indicators",
+  "name": "@dshtrading/indicators",
   "description": "Technical indicator core library for dsh-trading: pure math kernel, indicator definition types, registry factory and preset definitions. Pure library (not a dsh bundle) — consumed by client-ui-trading (UI + local registry) and client-ui-indicators (preset provider plugin).",
   "version": "0.1.0",
   "type": "module",

@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-eastmoney/rest
+ * @dshtrading/connector-eastmoney/rest
  * 东方财富 A 股公开 REST 行情客户端（免密公共源）。
  */
 
@@ -8,7 +8,7 @@ import type {
   Kline,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

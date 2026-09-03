@@ -1,5 +1,5 @@
 ﻿/**
- * @dsh-trading/connector-polygon/rest
+ * @dshtrading/connector-polygon/rest
  * Polygon.io (Massive) 美股/全球高频 REST 客户端。
  */
 
@@ -12,7 +12,7 @@ import type {
   Position,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

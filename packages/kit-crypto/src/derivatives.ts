@@ -14,10 +14,10 @@
  * 符号词汇（docs/symbol-vocabulary.md）：
  *   - 宽容接受市场规范形（`BTCUSDT` / `BTCUSDT-SWAP`）与原生形（`BTC-USDT-SWAP`）。
  *
- * @module @dsh-trading/kit-crypto/derivatives
+ * @module @dshtrading/kit-crypto/derivatives
  */
 
-import type { DerivativesData } from '@dsh-trading/api'
+import type { DerivativesData } from '@dshtrading/api'
 
 export interface DerivativesFetchOptions {
   symbol: string

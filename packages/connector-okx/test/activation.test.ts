@@ -7,7 +7,7 @@
  */
 import { Context as CordisContext } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import { apply as applyBinance } from '@dsh-trading/connector-binance'
+import { apply as applyBinance } from '@dshtrading/connector-binance'
 import { apply as applyOkx, type Config } from '../src/index.js'
 
 

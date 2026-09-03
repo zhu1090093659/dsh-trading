@@ -67,7 +67,7 @@ const tokens = new Map([
 ])
 
 // package.json 的 name 以 slug 重写（模板内同理替换，但 name 必须与目录一致）。
-const pkgName = `@dsh-trading/connector-${slug}`
+const pkgName = `@dshtrading/connector-${slug}`
 console.log(`generating ${pkgName} (title=${title}, market=${market}, env prefix=${envPrefix})`)
 
 const targetDir = join(ROOT, 'packages', `connector-${slug}`)
@@ -130,4 +130,4 @@ console.log('  1. pnpm install && pnpm --filter %s build (fill rest.ts TODOs in 
 console.log('  2. Fill src/index.ts TODOs (resolveCredentials ref counts; tool descriptions; unit conversion)')
 console.log('  3. Real-network verification per docs/connector-playbook.md (evidence to spikes/impl-<slug>/)')
 console.log('  4. Wire into the market bundle: packages/%s { dependencies + assets/preset/%s-trader/agent.cordis.yml isolate group + cordis.patch.yml dataplane row (registry mode) }', market, market)
-console.log('  5. Sync overrides line into every profile that installs @dsh-trading/* (docs/replication.md pitfall #15)')
+console.log('  5. Sync overrides line into every profile that installs @dshtrading/* (docs/replication.md pitfall #15)')

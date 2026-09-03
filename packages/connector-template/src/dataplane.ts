@@ -3,7 +3,7 @@
  * 只提供行情服务、不注册工具、不 provide 交易服务（交易面需要凭证与审批闸门，
  * 留在 preset 平面）。
  *
- * 常态（宿主有 tradingMarketDataRegistry，@dsh-trading/router 提供）：enabled=false
+ * 常态（宿主有 tradingMarketDataRegistry，@dshtrading/router 提供）：enabled=false
  * 硬关；否则在 isolate realm 内构造服务（不占 host 根市场键，多连接器并存无互斥
  * 冲突）并 register(__MARKET__, '__EXCHANGE_SLUG__')——激活裁决推迟到消费方按路由
  * 当前值惰性解析（GUI 行情桥每请求解析，settings 切换交易所即刻生效）。
@@ -13,7 +13,7 @@
  * 必须 restate——整行替换语义），见 docs/connector-playbook.md §4。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService } from '@dshtrading/api'
 import { __EXCHANGE__MarketDataService, TRADING_MARKET_DATA_KEY, type Config } from './index.js'
 
 export const inject: string[] = []

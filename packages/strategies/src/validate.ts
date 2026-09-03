@@ -20,7 +20,7 @@ import {
   workerComputeRunner,
   type AsyncComputeRunner,
   type Kline,
-} from '@dsh-trading/indicators'
+} from '@dshtrading/indicators'
 import type {
   StrategyHorizon,
   StrategyParamSpec,

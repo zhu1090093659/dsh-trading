@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/root",
+  "name": "@dshtrading/root",
   "version": "0.1.0",
   "description": "Your next trading terminal can also be DSH. Full-market (Crypto/US/CN/HK) modular AI trading terminal and plugin ecosystem on DeepSeek Harness.",
   "private": true,

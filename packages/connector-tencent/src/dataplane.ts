@@ -6,7 +6,7 @@
  * 只提供行情服务、不注册任何工具——工具面留在 preset 平面（会话隔离铁律）。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService } from '@dshtrading/api'
 import { TencentMarketDataService, marketDataKey, type Config } from './index.ts'
 export const inject: string[] = []
 

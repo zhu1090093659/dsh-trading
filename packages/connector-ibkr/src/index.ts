@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-ibkr
+ * @dshtrading/connector-ibkr
  * Interactive Brokers (盈透证券) 美股/全球连接器插件。
  */
 
@@ -18,7 +18,7 @@ import type {
   Position,
   Ticker,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   IbkrRestClient,
   type IbkrRestOptions,

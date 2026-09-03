@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/base — 市场无关核心 bundle（README 架构决策：共享行唯一拥有者）。
+ * @dshtrading/base — 市场无关核心 bundle（README 架构决策：共享行唯一拥有者）。
  *
  * 本切片承载两块实质内容：
  *   1. `dsh-trading-base-gate` 插件（本模块）：统一审批监听器 —— 挂在
@@ -19,7 +19,7 @@
  * 本闸门的实盘请求必然被拒，绝不静默放行。实盘的第一道闸门是连接器/kit 的
  * 显式 `liveTrading` 开关；approval 只覆盖交互形态（S4 铁律 3 修订）。
  *
- * @module @dsh-trading/base
+ * @module @dshtrading/base
  */
 
 import type { Context } from '@deepseek-ai/cordis'

@@ -1,7 +1,7 @@
 /**
  * 策略契约与回测数据模型（对齐 docs/design/strategy-tab.md §3.1）。
  */
-import type { Kline } from '@dsh-trading/indicators'
+import type { Kline } from '@dshtrading/indicators'
 
 export type { Kline }
 

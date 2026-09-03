@@ -12,12 +12,12 @@
  * auth cookie），未认证一律 401/403。数据面公共端点、无凭证、不缓存（铁律 #5）。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { MarketDataService } from '@dsh-trading/api'
-import type { TradingEventsService } from '@dsh-trading/eventbus'
-import { createFileCustomIndicatorStore } from '@dsh-trading/indicators/plugin'
-import { createFileKnowledgeCardStore } from '@dsh-trading/knowledge/plugin'
-import { createFileCustomStrategyStore } from '@dsh-trading/strategies/plugin'
-import { createFileSelectionStore, createFileWatchlistStore } from '@dsh-trading/watchlist/plugin'
+import type { MarketDataService } from '@dshtrading/api'
+import type { TradingEventsService } from '@dshtrading/eventbus'
+import { createFileCustomIndicatorStore } from '@dshtrading/indicators/plugin'
+import { createFileKnowledgeCardStore } from '@dshtrading/knowledge/plugin'
+import { createFileCustomStrategyStore } from '@dshtrading/strategies/plugin'
+import { createFileSelectionStore, createFileWatchlistStore } from '@dshtrading/watchlist/plugin'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
@@ -67,12 +67,12 @@ export function apply(ctx: Context): void {
   const serviceGet = (key: string): unknown =>
     (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.(key, false)
   const customIndicatorsService = serviceGet('tradingCustomIndicators') as
-    | { store?: import('@dsh-trading/indicators').CustomIndicatorStore }
+    | { store?: import('@dshtrading/indicators').CustomIndicatorStore }
     | undefined
   const customIndicatorsStore = customIndicatorsService?.store
     ?? createFileCustomIndicatorStore(path.join(os.homedir(), '.dsh', 'indicators', 'custom.json'))
   const knowledgeService = serviceGet('tradingKnowledgeCards') as
-    | { store?: import('@dsh-trading/knowledge').KnowledgeCardStore }
+    | { store?: import('@dshtrading/knowledge').KnowledgeCardStore }
     | undefined
   const knowledgeStore = knowledgeService?.store
     ?? createFileKnowledgeCardStore(path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json'))
@@ -91,7 +91,7 @@ export function apply(ctx: Context): void {
     (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingEvents', false) as TradingEventsService | undefined
 
   // issue #33 收口：indicator_author / knowledge_ingest / knowledge_search 的注册
-  // 已迁移至 @dsh-trading/indicators/plugin 与 @dsh-trading/knowledge/plugin
+  // 已迁移至 @dshtrading/indicators/plugin 与 @dshtrading/knowledge/plugin
   // （base patch 行，host 平面），emit 接线随迁；本插件不再重复注册。
 
   ctx.inject(['webServer', 'connection'], (webCtx) => {

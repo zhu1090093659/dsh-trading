@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/kit-cn",
+  "name": "@dshtrading/kit-cn",
   "description": "China A-share toolkit plugin for dsh-trading: CN risk checklist skill provider and CN fast-news / fundamentals tools; runs as a cn-trader preset row (session-scoped)",
   "version": "0.1.0",
   "type": "module",
@@ -22,10 +22,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/api": "workspace:*",
-    "@dsh-trading/connector-hithink": "workspace:*",
-    "@dsh-trading/indicators": "workspace:*",
-    "@dsh-trading/knowledge": "workspace:*"
+    "@dshtrading/api": "workspace:*",
+    "@dshtrading/connector-hithink": "workspace:*",
+    "@dshtrading/indicators": "workspace:*",
+    "@dshtrading/knowledge": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

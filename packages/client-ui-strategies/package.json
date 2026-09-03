@@ -1,6 +1,6 @@
 {
-  "name": "@dsh-trading/client-ui-strategies",
-  "description": "Strategy stage view plugin for dsh-trading (issue #34 / P5): registers the 中栏「策略」tab via the tradingStageViews service — horizon segmented control, strategy cards, backtest runner with equity curve and trade log. Engine comes from the @dsh-trading/strategies pure library; bridge access goes through the shell's tradingBridge service (ctx.inject only, no cross-package module imports).",
+  "name": "@dshtrading/client-ui-strategies",
+  "description": "Strategy stage view plugin for dsh-trading (issue #34 / P5): registers the 中栏「策略」tab via the tradingStageViews service — horizon segmented control, strategy cards, backtest runner with equity curve and trade log. Engine comes from the @dshtrading/strategies pure library; bridge access goes through the shell's tradingBridge service (ctx.inject only, no cross-package module imports).",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -30,7 +30,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/strategies": "workspace:^",
+    "@dshtrading/strategies": "workspace:^",
     "lightweight-charts": "^5.2.1"
   },
   "peerDependencies": {

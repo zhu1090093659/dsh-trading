@@ -2,22 +2,22 @@
  * Binance 连接器插件（dsh-trading crypto 切片）：真实 MarketDataService。
  *
  * 能力三角色：
- * - 声明：ctx 键 `tradingCryptoMarketData` 由 @dsh-trading/api 的模块增强统一声明；
+ * - 声明：ctx 键 `tradingCryptoMarketData` 由 @dshtrading/api 的模块增强统一声明；
  * - provide：BinanceMarketDataService（Service 基类，随插件 fiber 自动注销）；
  * - inject：工具经 ctx.inject 等待服务就绪后注册，一律经服务执行，不直连 REST。
  *
- * REST 数据面见 ./rest.ts（可独立单测/脚本消费）；错误词汇映射 @dsh-trading/api
+ * REST 数据面见 ./rest.ts（可独立单测/脚本消费）；错误词汇映射 @dshtrading/api
  * 的 TradingErrorCode（TradingServiceError.code）。
  *
- * @module @dsh-trading/connector-binance
+ * @module @dshtrading/connector-binance
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
-import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
-import type { DerivativesData, DerivativesHistory, Disposable, Interval, Kline, MarketDataService, Orderbook, Ticker, TradeTick } from '@dsh-trading/api'
+import { createGetIndicatorsTool } from '@dshtrading/indicators/tool'
+import type { DerivativesData, DerivativesHistory, Disposable, Interval, Kline, MarketDataService, Orderbook, Ticker, TradeTick } from '@dshtrading/api'
 import { BinanceRestClient, INTERVAL_VOCABULARY, TradingServiceError, normalizeBinanceFuturesSymbol } from './rest.js'
 import type { BinanceRestOptions } from './rest.js'
 
@@ -74,7 +74,7 @@ export const inject = ['tools']
 /* MarketDataService（provide 到市场命名空间 ctx 键）                      */
 /* ------------------------------------------------------------------ */
 
-/** ctx 服务键：与 @dsh-trading/api 的 Context 模块增强一致（市场命名空间）。 */
+/** ctx 服务键：与 @dshtrading/api 的 Context 模块增强一致（市场命名空间）。 */
 export const TRADING_CRYPTO_MARKET_DATA_KEY = 'tradingCryptoMarketData'
 
 export interface SubscribeTickerOptions {
@@ -368,7 +368,7 @@ export interface PlaceOrderToolDeps {
 /**
  * crypto_place_order 工具工厂（独立导出便于单测三条闸门路径）。
  *
- * 审批不在这里做：dryRun!==true 的调用由 @dsh-trading/base 的 gate 插件在
+ * 审批不在这里做：dryRun!==true 的调用由 @dshtrading/base 的 gate 插件在
  * `tools/pre-execute` waterfall 统一 ask（S4：headless 下 ask=deny，fail-closed）；
  * 工具内不再重复调 ctx.approval。
  */
@@ -500,7 +500,7 @@ export function apply(ctx: Context, config: Config): void {
     const register = (tool: ReturnType<typeof defineTool>) => registerTool(ctx, tool, log)
 
     // WS1b（docs/analysis-roadmap.md #2）：指标计算工具——共享工厂，K 线走本 connector
-    // 行情服务（路由选中的数据源），计算走 @dsh-trading/indicators。
+    // 行情服务（路由选中的数据源），计算走 @dshtrading/indicators。
     register(createGetIndicatorsTool({ marketData, providerLabel: 'binance' }))
 
     register(

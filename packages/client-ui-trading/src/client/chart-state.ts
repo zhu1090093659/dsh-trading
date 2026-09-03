@@ -9,7 +9,7 @@
  * 收敛在 toggle/setParams 写入边界（定义未知时原样落盘：桥接前选择器没有
  * 该 id 的可点行，此分支 UI 不可达，防御手改 localStorage）。
  */
-import type { IndicatorInstance, IndicatorRegistry } from '@dsh-trading/indicators'
+import type { IndicatorInstance, IndicatorRegistry } from '@dshtrading/indicators'
 import { createObservable, readJson, writeJson } from './store.ts'
 import type { WritableObservable } from './store.ts'
 

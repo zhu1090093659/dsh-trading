@@ -3,7 +3,7 @@
  *
  * 通过本地或远程 FutuOpenD 网关进行交互（默认 http://127.0.0.1:11111）。
  *
- * @module @dsh-trading/connector-futu/rest
+ * @module @dshtrading/connector-futu/rest
  */
 
 import type {
@@ -14,7 +14,7 @@ import type {
   Position,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

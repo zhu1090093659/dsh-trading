@@ -1,6 +1,6 @@
 {
-  "name": "@dsh-trading/connector-tencent",
-  "description": "CN + HK dual-market connector plugin for dsh-trading: public market data from Tencent quote/kline endpoints implementing the @dsh-trading/api contracts (single package, per-instance market split; no key, no official authorization — personal use boundary at your own discretion)",
+  "name": "@dshtrading/connector-tencent",
+  "description": "CN + HK dual-market connector plugin for dsh-trading: public market data from Tencent quote/kline endpoints implementing the @dshtrading/api contracts (single package, per-instance market split; no key, no official authorization — personal use boundary at your own discretion)",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -25,7 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/api": "workspace:^"
+    "@dshtrading/api": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

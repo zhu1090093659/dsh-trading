@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-hithink
+ * @dshtrading/connector-hithink
  * 同花顺官方金融数据服务 REST 客户端实现。
  *
  * 协议基线：
@@ -8,7 +8,7 @@
  *   - 响应信封: { code: 0, message: 'success', data: ... }
  *   - 标的规范: 完整 thscode（如 600519.SH, 000001.SZ, 300750.SZ, 688981.SH）
  *
- * @module @dsh-trading/connector-hithink/rest
+ * @module @dshtrading/connector-hithink/rest
  */
 
 import type {
@@ -17,7 +17,7 @@ import type {
   StockFundamentals,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import type {
   HiThinkAuctionData,
   HiThinkEnvelope,

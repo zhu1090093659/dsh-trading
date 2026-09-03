@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-tushare
+ * @dshtrading/connector-tushare
  * Tushare Pro A 股量化连接器插件（提供 tradingCnMarketData 与 cn_* 分析工具）。
  */
 
@@ -18,7 +18,7 @@ import type {
   Position,
   Ticker,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   TushareRestClient,
   type TushareRestOptions,

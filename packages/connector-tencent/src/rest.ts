@@ -1,7 +1,7 @@
 /**
  * 腾讯公共行情客户端（dsh-trading cn+hk 双市场切片）——单包双市场的数据面。
  *
- * 独立于插件 glue：仅依赖 @dsh-trading/api 的类型词汇，无 cordis/dsh-tools 运行时依赖，
+ * 独立于插件 glue：仅依赖 @dshtrading/api 的类型词汇，无 cordis/dsh-tools 运行时依赖，
  * 便于单测与脚本直接消费（fetch 可注入）。
  *
  * 数据面（2026-08-31 本出口实测，原始证据 spikes/impl-cn-hk/r1-*.raw / r2-*.json）：
@@ -21,10 +21,10 @@
  * 合规（README 铁律 #5）：腾讯公共行情端点、无 key、无官方授权；个人使用边界自负，
  * 本仓不缓存、不再分发行情数据（详见 README 数据源节）。
  *
- * @module @dsh-trading/connector-tencent/rest
+ * @module @dshtrading/connector-tencent/rest
  */
 
-import type { Interval, Kline, Orderbook, OrderbookLevel, StockFundamentals, Ticker, TradingErrorCode } from '@dsh-trading/api'
+import type { Interval, Kline, Orderbook, OrderbookLevel, StockFundamentals, Ticker, TradingErrorCode } from '@dshtrading/api'
 
 /* ------------------------------------------------------------------ */
 /* 错误载体（api 包词汇的运行时映射，与 connector-stooq 同构）               */

@@ -10,7 +10,7 @@ import {
   type SettingsScopeSnapshotLike,
 } from '../src/client/trading-settings-controller.js'
 
-describe('@dsh-trading/client-ui-settings node half', () => {
+describe('@dshtrading/client-ui-settings node half', () => {
   it('node apply 为空操作（surface 占位，浏览器半是唯一实现）', () => {
     expect(typeof apply).toBe('function')
     // 直接调用不抛（任何 ctx 均可——空 apply）。

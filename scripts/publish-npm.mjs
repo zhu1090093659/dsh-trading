@@ -2,11 +2,11 @@
 'use strict';
 
 /**
- * Publish every publishable @dsh-trading/* workspace package to npm.
+ * Publish every publishable @dshtrading/* workspace package to npm.
  *
  * Requires npm auth (CI: NODE_AUTH_TOKEN via actions/setup-node registry-url;
  * local: your own npm login). Publishing order is topological over the
- * @dsh-trading/* workspace dependency graph so dependents never precede
+ * @dshtrading/* workspace dependency graph so dependents never precede
  * their dependencies. Uses pnpm publish so workspace:* ranges are replaced
  * with real versions in the packed manifest.
  *
@@ -38,7 +38,7 @@ for (const entry of fs.readdirSync(packagesDir, { withFileTypes: true })) {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   if (typeof manifest.name !== 'string' || manifest.private === true) continue;
   const deps = { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.optionalDependencies };
-  const workspaceDeps = Object.keys(deps).filter((n) => n.startsWith('@dsh-trading/') && String(deps[n]).startsWith('workspace:'));
+  const workspaceDeps = Object.keys(deps).filter((n) => n.startsWith('@dshtrading/') && String(deps[n]).startsWith('workspace:'));
   packages.set(manifest.name, { dir, version: manifest.version, workspaceDeps });
 }
 

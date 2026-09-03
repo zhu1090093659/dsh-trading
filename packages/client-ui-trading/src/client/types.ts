@@ -1,9 +1,9 @@
 /**
  * Client-half shared types. Wire shapes mirror the node-half bridge
- * (src/bridge.ts) and @dsh-trading/api's data contracts — type-only imports,
+ * (src/bridge.ts) and @dshtrading/api's data contracts — type-only imports,
  * erased at bundle time (the client half must not require non-seed modules).
  */
-import type { AccountBalance, DerivativesData, DerivativesHistory, DerivativesPoint, Kline, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeTick } from '@dsh-trading/api'
+import type { AccountBalance, DerivativesData, DerivativesHistory, DerivativesPoint, Kline, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeTick } from '@dshtrading/api'
 
 /** Markets served by the bridge (subset = installed connector set). */
 export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'

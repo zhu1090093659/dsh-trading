@@ -1,7 +1,7 @@
 /**
  * OKX REST 客户端（dsh-trading okx 切片 R1-R3）。
  *
- * 独立于插件 glue：仅依赖 @dsh-trading/api 类型词汇 + node:crypto（HMAC-SHA256），
+ * 独立于插件 glue：仅依赖 @dshtrading/api 类型词汇 + node:crypto（HMAC-SHA256），
  * 无 cordis/dsh-tools 运行时依赖；fetch 可注入，便于单测与脚本直接消费。
  *
  * 数据面（docs/okx-integration.md §2/§3，2026-08-31 调研）：
@@ -17,7 +17,7 @@
  * - 时差 >30s 即 50102：首个签名请求前先 GET /api/v5/public/time 对时并缓存偏移，
  *   收到 50102 时重对时并重试一次。
  *
- * @module @dsh-trading/connector-okx/rest
+ * @module @dshtrading/connector-okx/rest
  */
 
 import { createHmac } from 'node:crypto'
@@ -30,7 +30,7 @@ import type {
   Ticker,
   TradeTick,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 /* ------------------------------------------------------------------ */
 /* 错误载体（api 包词汇的运行时映射）                                      */

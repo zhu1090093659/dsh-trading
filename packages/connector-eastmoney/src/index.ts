@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-eastmoney
+ * @dshtrading/connector-eastmoney
  * 东方财富 A 股连接器插件（提供 tradingCnMarketData 与 cn_* 行情工具）。
  */
 
@@ -13,7 +13,7 @@ import type {
   Kline,
   MarketDataService,
   Ticker,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   EastmoneyRestClient,
   type EastmoneyRestOptions,

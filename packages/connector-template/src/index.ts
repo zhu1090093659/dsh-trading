@@ -24,7 +24,7 @@
  *
  * 生成器：node scripts/new-connector.mjs --slug bybit --title Bybit
  *
- * @module @dsh-trading/connector-__EXCHANGE_SLUG__
+ * @module @dshtrading/connector-__EXCHANGE_SLUG__
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -43,7 +43,7 @@ import type {
   Position,
   Ticker,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   type ExchangeCredentials,
   type ExchangeRestOptions,
@@ -114,7 +114,7 @@ export const Config: Schema<Config> = Schema.object({
 export const inject = ['tools']
 
 /* ------------------------------------------------------------------ */
-/* 服务键（与 @dsh-trading/api 的 Context 模块增强一致）                      */
+/* 服务键（与 @dshtrading/api 的 Context 模块增强一致）                      */
 /* ------------------------------------------------------------------ */
 
 /** 行情服务键（api 增强：trading<Market>MarketData）。 */
@@ -328,7 +328,7 @@ export class __EXCHANGE__TradeService extends Service implements TradeService {
 
   /**
    * 撤单。若交易所按 (symbol, id) 双键定位，api 契约的 cancelOrder(id) 单参形态
-   * 不够时扩展第二可选参数（@dsh-trading/api R3 先例）。
+   * 不够时扩展第二可选参数（@dshtrading/api R3 先例）。
    * TODO: 撤单幂等化——交易所的「已终态」错误码视作成功（参照 OKX 51400/51603）。
    */
   async cancelOrder(id: string, symbol?: string): Promise<void> {
@@ -564,7 +564,7 @@ export interface PlaceOrderToolDeps {
 /**
  * <market>_place_order 工具工厂（独立导出便于单测三态闸门矩阵）。
  *
- * 审批不在这里做：dryRun!==true 的调用由 @dsh-trading/base 的 gate 插件在
+ * 审批不在这里做：dryRun!==true 的调用由 @dshtrading/base 的 gate 插件在
  * `tools/pre-execute` waterfall 统一 ask（headless 下 ask=deny，fail-closed）；
  * 工具内不再重复调 ctx.approval。
  */

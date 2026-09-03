@@ -1,5 +1,5 @@
 ﻿import type { Context } from '@deepseek-ai/cordis'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService } from '@dshtrading/api'
 import { TigerMarketDataService, TRADING_HK_MARKET_DATA_KEY, type Config } from './index.js'
 
 export const inject: string[] = []

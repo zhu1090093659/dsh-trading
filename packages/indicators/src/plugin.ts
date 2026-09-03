@@ -1,7 +1,7 @@
 /**
- * @dsh-trading/indicators/plugin —— 指标能力 host 半插件（issue #33 / P4）。
+ * @dshtrading/indicators/plugin —— 指标能力 host 半插件（issue #33 / P4）。
  *
- * patch 行：id `dsh-trading-indicators` / name `@dsh-trading/indicators/plugin`
+ * patch 行：id `dsh-trading-indicators` / name `@dshtrading/indicators/plugin`
  * （base 拥有该共享行）。职责：
  * - provide `tradingCustomIndicators` 服务（file store 单实例：桥 GET/DELETE 与
  *   indicator_author 共享同一缓存，避免双实例 stale-flush 分裂）；

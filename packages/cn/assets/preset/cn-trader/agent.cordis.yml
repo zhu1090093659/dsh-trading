@@ -1,13 +1,13 @@
 # cn-trader agent preset —— dsh-trading cn 切片（实装形态抄 us-trader）。
 #
-# 本文件由 @dsh-trading/cn 的 dsh-trading-cn-installer 插件（bundle host 面常驻行）在
+# 本文件由 @dshtrading/cn 的 dsh-trading-cn-installer 插件（bundle host 面常驻行）在
 # apply() 时幂等自安装到市场自有 preset root（默认 ~/.dsh-trading-presets/cn-trader；
-# agent-presets 行需把该 root 配进 roots，统一配置归 @dsh-trading/base）。插件卸载不
+# agent-presets 行需把该 root 配进 roots，统一配置归 @dshtrading/base）。插件卸载不
 # 删除已安装目录；升级/重装后再次 apply 即恢复一致，行不可解析时只会得到带原因的
 # broken 行，无进程崩溃（S3 REPORT broken 语义）。
 #
 # **单包双市场多实例模式（手册 §8，本仓新模式）**：connector 行 name 指向
-# @dsh-trading/connector-tencent（cn/hk 共用同一插件包），行 id 用市场命名空间的
+# @dshtrading/connector-tencent（cn/hk 共用同一插件包），行 id 用市场命名空间的
 # dsh-trading-cn-connector（hk preset 用 dsh-trading-hk-connector——不同 id 即不同
 # 实例，行 id 即命名空间），config.market=cn 分流。provide 服务键 tradingCnMarketData，
 # 组行 isolate 键 = 服务名（官方 standard preset 挂载硬规则；不包组则被
@@ -39,35 +39,35 @@
   config:
     # 同包双实例：行 id 市场命名空间，name 指向共用插件包，market 分流。
     - id: dsh-trading-cn-connector
-      name: '@dsh-trading/connector-tencent'
+      name: '@dshtrading/connector-tencent'
       config:
         market: cn
         dryRun: true
         liveTrading: false
 
     - id: dsh-trading-cn-connector-eastmoney
-      name: '@dsh-trading/connector-eastmoney'
+      name: '@dshtrading/connector-eastmoney'
       config:
         enabled: true
         dryRun: true
         liveTrading: false
 
     - id: dsh-trading-cn-connector-tushare
-      name: '@dsh-trading/connector-tushare'
+      name: '@dshtrading/connector-tushare'
       config:
         enabled: true
         dryRun: true
         liveTrading: false
 
     - id: dsh-trading-cn-connector-akshare
-      name: '@dsh-trading/connector-akshare'
+      name: '@dshtrading/connector-akshare'
       config:
         enabled: true
         dryRun: true
         liveTrading: false
 
     - id: dsh-trading-cn-connector-qmt
-      name: '@dsh-trading/connector-qmt'
+      name: '@dshtrading/connector-qmt'
       config:
         enabled: true
         dryRun: true
@@ -77,7 +77,7 @@
 
 
 - id: dsh-trading-cn-kit
-  name: '@dsh-trading/kit-cn'
+  name: '@dshtrading/kit-cn'
   config:
     dryRun: true
     liveTrading: false

@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/base",
+  "name": "@dshtrading/base",
   "description": "Market-agnostic core bundle for dsh-trading: sole owner of shared cordis rows — unified order/cancel approval gate plugin and the agent-presets row (unified preset root ~/.dsh-trading-presets)",
   "version": "0.1.0",
   "type": "module",
@@ -30,18 +30,18 @@
   "dependencies": {
     "@deepseek-ai/dsh-agent-presets": ">=0.1.2-alpha.1",
     "@deepseek-ai/dsh-tool-cordis": ">=0.1.2-alpha.3",
-    "@dsh-trading/api": "workspace:^",
-    "@dsh-trading/client-ui-indicators": "workspace:^",
-    "@dsh-trading/client-ui-knowledge": "workspace:^",
-    "@dsh-trading/client-ui-settings": "workspace:^",
-    "@dsh-trading/client-ui-strategies": "workspace:^",
-    "@dsh-trading/client-ui-trading": "workspace:^",
-    "@dsh-trading/eventbus": "workspace:^",
-    "@dsh-trading/indicators": "workspace:^",
-    "@dsh-trading/knowledge": "workspace:^",
-    "@dsh-trading/router": "workspace:^",
-    "@dsh-trading/strategies": "workspace:^",
-    "@dsh-trading/watchlist": "workspace:^"
+    "@dshtrading/api": "workspace:^",
+    "@dshtrading/client-ui-indicators": "workspace:^",
+    "@dshtrading/client-ui-knowledge": "workspace:^",
+    "@dshtrading/client-ui-settings": "workspace:^",
+    "@dshtrading/client-ui-strategies": "workspace:^",
+    "@dshtrading/client-ui-trading": "workspace:^",
+    "@dshtrading/eventbus": "workspace:^",
+    "@dshtrading/indicators": "workspace:^",
+    "@dshtrading/knowledge": "workspace:^",
+    "@dshtrading/router": "workspace:^",
+    "@dshtrading/strategies": "workspace:^",
+    "@dshtrading/watchlist": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

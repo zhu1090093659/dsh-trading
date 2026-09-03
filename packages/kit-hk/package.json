@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/kit-hk",
+  "name": "@dshtrading/kit-hk",
   "description": "Hong Kong market toolkit plugin for dsh-trading: HK risk checklist skill provider and HK fast-news (degraded) / fundamentals tools; runs as an hk-trader preset row (session-scoped)",
   "version": "0.1.0",
   "type": "module",
@@ -22,8 +22,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/indicators": "workspace:*",
-    "@dsh-trading/knowledge": "workspace:*"
+    "@dshtrading/indicators": "workspace:*",
+    "@dshtrading/knowledge": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
@@ -34,6 +34,6 @@
   "devDependencies": {
     "tsdown": "^0.22.0",
     "vitest": "^3.0.0",
-    "@dsh-trading/api": "workspace:*"
+    "@dshtrading/api": "workspace:*"
   }
 }

@@ -4,7 +4,7 @@
  * + presetDefinitions 注册（模拟指标插件桥接后的状态）。
  */
 import { describe, expect, it } from 'vitest'
-import { createIndicatorRegistry, presetDefinitions } from '@dsh-trading/indicators'
+import { createIndicatorRegistry, presetDefinitions } from '@dshtrading/indicators'
 import { createChartStateStore } from '../src/client/chart-state.ts'
 
 function makeStore() {

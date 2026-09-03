@@ -2,7 +2,7 @@
  * 均线多头排列：现价站上三线，且短中期均线自上而下依次压制
  * （SMA(短) > SMA(中) > SMA(长)），趋势结构完整的顺势筛选。
  */
-import { sma } from '@dsh-trading/indicators'
+import { sma } from '@dshtrading/indicators'
 import type { ScreenerDefinition } from './types.ts'
 
 export const maBullAlignScreener: ScreenerDefinition = {

@@ -6,10 +6,10 @@
 # 新建会话生效）。连接器 apply 时 consult tradingMarketRouter 服务，与设置不符的
 # 行静默退出；无需配置互斥（路由即裁决）。本文件不再有"改 enabled 切交易所"的手工步骤。
 #
-# 本文件由 @dsh-trading/crypto 的 dsh-trading-crypto-installer 插件（bundle host 面
+# 本文件由 @dshtrading/crypto 的 dsh-trading-crypto-installer 插件（bundle host 面
 # 常驻行）在 apply() 时幂等自安装到市场自有 preset root
 # （默认 ~/.dsh-trading-presets/crypto-trader；agent-presets 行需把该 root 配进 roots，
-# 统一配置归 @dsh-trading/base）。插件卸载不删除已安装目录；升级/重装后再次 apply 即
+# 统一配置归 @dshtrading/base）。插件卸载不删除已安装目录；升级/重装后再次 apply 即
 # 恢复一致，行不可解析时只会得到带原因的 broken 行，无进程崩溃（S3 REPORT broken 语义）。
 #
 # 组合形态对照官方 standard preset（@deepseek-ai/dsh-agent-presets 内 standard/）：
@@ -41,7 +41,7 @@
     tradingCryptoMarketData: true
   config:
     - id: dsh-trading-crypto-connector-binance
-      name: '@dsh-trading/connector-binance'
+      name: '@dshtrading/connector-binance'
       config:
         enabled: true
         dryRun: true
@@ -55,7 +55,7 @@
     tradingCryptoTrade: true
   config:
     - id: dsh-trading-crypto-connector-okx
-      name: '@dsh-trading/connector-okx'
+      name: '@dshtrading/connector-okx'
       config:
         enabled: true
         env: demo
@@ -70,7 +70,7 @@
     tradingCryptoTrade: true
   config:
     - id: dsh-trading-crypto-connector-bybit
-      name: '@dsh-trading/connector-bybit'
+      name: '@dshtrading/connector-bybit'
       config:
         enabled: true
         dryRun: true
@@ -84,7 +84,7 @@
     tradingCryptoTrade: true
   config:
     - id: dsh-trading-crypto-connector-ccxt
-      name: '@dsh-trading/connector-ccxt'
+      name: '@dshtrading/connector-ccxt'
       config:
         enabled: true
         dryRun: true
@@ -92,7 +92,7 @@
 
 
 - id: dsh-trading-crypto-kit
-  name: '@dsh-trading/kit-crypto'
+  name: '@dshtrading/kit-crypto'
   config:
     dryRun: true
     liveTrading: false

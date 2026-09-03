@@ -1,4 +1,4 @@
-# @dsh-trading/connector-template
+# @dshtrading/connector-template
 
 **本包是脚手架源，不是可安装的连接器**：不入任何 bundle 依赖，仅在 `pnpm -r build/test`
 基线内保证可编译、冒烟测试绿。真实接入用生成器：

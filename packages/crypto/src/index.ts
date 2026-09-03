@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/crypto — crypto 市场 bundle。包承载两块实质内容：
+ * @dshtrading/crypto — crypto 市场 bundle。包承载两块实质内容：
  *
  *   1. `cordis.patch.yml`（由 package.json 的 `dsh.bundle.patch` 声明）：insert-only
  *      聚合本 bundle 的 host 面常驻行（铁律 #1）。connector/kit 两行在 preset 的
@@ -9,7 +9,7 @@
  *      ——kit 行在 preset 平面，preset 不存在时 kit.apply() 永不运行，鸡生蛋
  *      （2026-08-29 主 agent 结构性修复）；bundle 行常驻，boot 即自安装，与会话无关。
  *
- * @module @dsh-trading/crypto
+ * @module @dshtrading/crypto
  */
 
 import { createHash } from 'node:crypto'

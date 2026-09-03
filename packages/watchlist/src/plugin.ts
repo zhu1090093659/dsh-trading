@@ -1,7 +1,7 @@
 /**
- * @dsh-trading/watchlist/plugin —— 自选股 Agent 工具 host 半插件（issue #32 / P3）。
+ * @dshtrading/watchlist/plugin —— 自选股 Agent 工具 host 半插件（issue #32 / P3）。
  *
- * patch 行：id `dsh-trading-watchlist` / name `@dsh-trading/watchlist/plugin`
+ * patch 行：id `dsh-trading-watchlist` / name `@dshtrading/watchlist/plugin`
  * （base 拥有该共享行）。host 平面注册 4 工具（全会话可见，owner 裁决 D4）：
  * - `watchlist_list`：全市场自选行（只读）——合并用户定制行与市场种子行
  *   （seeds.ts 单源，与 GUI 左栏展示一致；2026-09-02 agent 可见性修复）。

@@ -8,7 +8,7 @@
  *   4. 空态引导与状态持久化 (dshtrading.knowledge.view.v1)
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { buildGraph, type KnowledgeCard, type KnowledgeGraphData } from '@dsh-trading/knowledge'
+import { buildGraph, type KnowledgeCard, type KnowledgeGraphData } from '@dshtrading/knowledge'
 import { readJson, writeJson } from './shell-faces.ts'
 import { IconKnowledge, IconSearch } from './icons.tsx'
 import { KnowledgeGraph, type KnowledgeGraphHandle } from './KnowledgeGraph.tsx'

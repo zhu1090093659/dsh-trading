@@ -10,7 +10,7 @@ import type { WritableObservable } from './store.ts'
 
 const MARKER_KEY = 'dshtrading.markers.v1'
 
-/* ── 策略信号标记数据（从 @dsh-trading/strategies 的 BacktestResult 提取） ── */
+/* ── 策略信号标记数据（从 @dshtrading/strategies 的 BacktestResult 提取） ── */
 
 /** 图表标记用的信号点（轻量子集，不含完整 BacktestResult）。 */
 export interface ChartSignalMarker {
@@ -36,7 +36,7 @@ export interface ChartTradeRecord {
   readonly exitReason: string
 }
 
-/* ── 知识事件标记数据（从 @dsh-trading/knowledge 的 KnowledgeCard 提取） ── */
+/* ── 知识事件标记数据（从 @dshtrading/knowledge 的 KnowledgeCard 提取） ── */
 
 /** 图表标记用的知识事件点。 */
 export interface ChartKnowledgeMarker {

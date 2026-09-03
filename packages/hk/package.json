@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/hk",
+  "name": "@dshtrading/hk",
   "description": "HK (Hong Kong) market bundle for dsh-trading: host-plane hk-trader preset installer + insert-only aggregation of the Tencent connector (market=hk instance) and hk kit rows (design rule #1)",
   "version": "0.1.0",
   "type": "module",
@@ -28,11 +28,11 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "@dsh-trading/connector-futu": "workspace:*",
-    "@dsh-trading/connector-longbridge": "workspace:*",
-    "@dsh-trading/connector-tencent": "workspace:*",
-    "@dsh-trading/connector-tiger": "workspace:*",
-    "@dsh-trading/kit-hk": "workspace:*"
+    "@dshtrading/connector-futu": "workspace:*",
+    "@dshtrading/connector-longbridge": "workspace:*",
+    "@dshtrading/connector-tencent": "workspace:*",
+    "@dshtrading/connector-tiger": "workspace:*",
+    "@dshtrading/kit-hk": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

@@ -11,10 +11,10 @@ import { describe, expect, it } from 'vitest'
 import { Context as CordisContext } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { apply } from '../src/index.ts'
-import { KnowledgeCardsService } from '@dsh-trading/knowledge/plugin'
-import { CustomIndicatorsService } from '@dsh-trading/indicators/plugin'
-import { createMemoryKnowledgeCardStore } from '@dsh-trading/knowledge'
-import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
+import { KnowledgeCardsService } from '@dshtrading/knowledge/plugin'
+import { CustomIndicatorsService } from '@dshtrading/indicators/plugin'
+import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
+import { createMemoryCustomIndicatorStore } from '@dshtrading/indicators'
 
 interface Route {
   kind: string

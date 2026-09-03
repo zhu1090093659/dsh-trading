@@ -16,8 +16,8 @@
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { IndicatorRegistry } from '@dsh-trading/indicators'
-import { validateCustomIndicatorAsync } from '@dsh-trading/indicators'
+import type { IndicatorRegistry } from '@dshtrading/indicators'
+import { validateCustomIndicatorAsync } from '@dshtrading/indicators'
 import { createSelectionStore, createWatchlistStore } from './store.ts'
 import { createChartStateStore } from './chart-state.ts'
 import { indicators, markCustomIndicator, unmarkCustomIndicator } from './indicator-registry.ts'

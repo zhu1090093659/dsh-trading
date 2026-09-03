@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-longbridge
+ * @dshtrading/connector-longbridge
  * 长桥 (Longbridge) 港股连接器插件（提供 tradingHkMarketData 与 hk_* 工具）。
  */
 
@@ -18,7 +18,7 @@ import type {
   Position,
   Ticker,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   LongbridgeRestClient,
   type LongbridgeRestOptions,

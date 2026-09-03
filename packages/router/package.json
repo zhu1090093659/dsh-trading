@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/router",
+  "name": "@dshtrading/router",
   "description": "Market routing for dsh-trading: user settings namespace dshtrading (markets.<market>.provider) + tradingMarketRouter service consulted by connectors at apply time",
   "version": "0.1.0",
   "type": "module",
@@ -25,7 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/api": "workspace:^"
+    "@dshtrading/api": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

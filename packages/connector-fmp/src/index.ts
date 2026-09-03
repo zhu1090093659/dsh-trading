@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-fmp
+ * @dshtrading/connector-fmp
  * Financial Modeling Prep 美股连接器插件（提供 tradingUsMarketData 与 us_* 交易/基本面工具）。
  */
 
@@ -18,7 +18,7 @@ import type {
   Position,
   Ticker,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   FmpRestClient,
   type FmpRestOptions,

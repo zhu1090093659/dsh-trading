@@ -17,10 +17,10 @@
  */
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import { zh as marketZh } from '@dsh-trading/client-ui-trading/locales'
-import { zh as settingsZh } from '@dsh-trading/client-ui-settings/locales'
-import { zh as strategiesZh } from '@dsh-trading/client-ui-strategies/locales'
-import { zh as knowledgeZh } from '@dsh-trading/client-ui-knowledge/locales'
+import { zh as marketZh } from '@dshtrading/client-ui-trading/locales'
+import { zh as settingsZh } from '@dshtrading/client-ui-settings/locales'
+import { zh as strategiesZh } from '@dshtrading/client-ui-strategies/locales'
+import { zh as knowledgeZh } from '@dshtrading/client-ui-knowledge/locales'
 
 /** Required services：宿主 locale 服务（语言目录 + 词典注册表）。 */
 export const inject = ['locale']

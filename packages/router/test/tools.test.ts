@@ -3,7 +3,7 @@
  * missing 状态）、静态字典检索、动态全集并集与失败兜底、market 过滤与截断。
  */
 import { describe, expect, it } from 'vitest'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService } from '@dshtrading/api'
 import { SYMBOL_CATALOG } from '../src/catalog.ts'
 import { createInstrumentsSearchTool, createRoutingGetTool, type RouterToolServices } from '../src/tools.ts'
 

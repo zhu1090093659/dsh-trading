@@ -3,4 +3,4 @@
 # id 全仓唯一（dsh-trading-dsh-i18n），insert 在任何宿主都安全。
 - insert:
     - id: dsh-trading-dsh-i18n
-      name: '@dsh-trading/dsh-i18n'
+      name: '@dshtrading/dsh-i18n'

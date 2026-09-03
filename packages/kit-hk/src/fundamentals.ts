@@ -5,10 +5,10 @@
  *   - https://qt.gtimg.cn/q=r_hk00700
  *   - 解析总市值/流通市值、市盈率 TTM、动态市盈率、市净率 PB、股息率、换手率、振幅、52周区间等。
  *
- * @module @dsh-trading/kit-hk/fundamentals
+ * @module @dshtrading/kit-hk/fundamentals
  */
 
-import type { StockFundamentals } from '@dsh-trading/api'
+import type { StockFundamentals } from '@dshtrading/api'
 
 export interface HkFundamentalsOptions {
   symbol: string
@@ -139,7 +139,7 @@ export function formatHkReportPeriod(dateStr: string): string {
 }
 
 /** 从东财/公开端点动态拉取港股多期财务指标。 */
-export async function fetchHkFinancialMatrix(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FinancialReportMatrix | undefined> {
+export async function fetchHkFinancialMatrix(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').FinancialReportMatrix | undefined> {
   try {
     const { code5 } = normalizeHkSymbol(symbol)
     const url = `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_HKF10_FN_MAININDICATOR&columns=ALL&filter=(SECUCODE%3D%22${code5}.HK%22)&pageNumber=1&pageSize=8&sortTypes=-1&sortColumns=REPORT_DATE`
@@ -159,8 +159,8 @@ export async function fetchHkFinancialMatrix(symbol: string, fetchImpl: typeof g
       valKey: string,
       yoyKey?: string,
       unit?: string,
-    ): import('@dsh-trading/api').FinancialIndicatorRow => {
-      const values: Record<string, import('@dsh-trading/api').FinancialCell> = {}
+    ): import('@dshtrading/api').FinancialIndicatorRow => {
+      const values: Record<string, import('@dshtrading/api').FinancialCell> = {}
       list.forEach((r, idx) => {
         const p = periods[idx]!
         const rawVal = r[valKey]
@@ -174,7 +174,7 @@ export async function fetchHkFinancialMatrix(symbol: string, fetchImpl: typeof g
       return { id, name, unit, values }
     }
 
-    const groups: import('@dsh-trading/api').FinancialReportGroup[] = [
+    const groups: import('@dshtrading/api').FinancialReportGroup[] = [
       {
         id: 'per_share',
         title: '每股指标',
@@ -216,7 +216,7 @@ export async function fetchHkFinancialMatrix(symbol: string, fetchImpl: typeof g
 }
 
 /** 获取完整港股基本面数据包。 */
-export async function fetchHkFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dsh-trading/api').FundamentalsPackage> {
+export async function fetchHkFundamentalsPackage(symbol: string, fetchImpl: typeof globalThis.fetch = globalThis.fetch): Promise<import('@dshtrading/api').FundamentalsPackage> {
   const { canonical } = normalizeHkSymbol(symbol)
   const [quoteRes, matrix] = await Promise.all([
     fetchHkFundamentals({ symbol, fetch: fetchImpl }),

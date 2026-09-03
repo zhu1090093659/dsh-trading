@@ -23,7 +23,7 @@
  *      现货市价单计价币陷阱（OKX 现货市价 buy 缺省按计价币金额——最大坑，见
  *      connector-okx normalizeSize / tgtCcy: base_ccy）。
  *
- * @module @dsh-trading/connector-__EXCHANGE_SLUG__/rest
+ * @module @dshtrading/connector-__EXCHANGE_SLUG__/rest
  */
 
 import type {
@@ -34,7 +34,7 @@ import type {
   Position,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 /* ------------------------------------------------------------------ */
 /* 错误载体（api 包词汇的运行时映射）                                      */
@@ -182,7 +182,7 @@ export class ExchangeRestClient {
 
   async getOrder(_symbol: string, _orderId: string, _credentials: ExchangeCredentials): Promise<JsonRecord[]> {
     // TODO: GET /trade/order 查单（若按 (symbol, id) 双键定位，api 契约的
-    //      cancelOrder(id) 单参形态不够时扩展第二可选参数——@dsh-trading/api R3 先例）。
+    //      cancelOrder(id) 单参形态不够时扩展第二可选参数——@dshtrading/api R3 先例）。
     throw new TradingServiceError('TRADING_EXCHANGE_ERROR', 'TODO(connector): implement getOrder — see connector-okx/src/rest.ts')
   }
 

@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Release gate: every @dsh-trading/* package version must equal the release
+ * Release gate: every @dshtrading/* package version must equal the release
  * tag version. The desktop installer carries the workspace packages as
  * packed tarballs, so a mismatch would ship installers whose internal
  * package versions disagree with the release version.
@@ -33,13 +33,13 @@ for (const entry of fs.readdirSync(packagesDir, { withFileTypes: true }).sort((a
   const manifestPath = path.join(packagesDir, entry.name, 'package.json');
   if (!fs.existsSync(manifestPath)) continue;
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  if (typeof manifest.name !== 'string' || !manifest.name.startsWith('@dsh-trading/')) continue;
+  if (typeof manifest.name !== 'string' || !manifest.name.startsWith('@dshtrading/')) continue;
   checked.push(manifest.name + '@' + manifest.version);
   if (manifest.version !== expected) mismatches.push(manifest.name + ' = ' + manifest.version);
 }
 
 if (checked.length === 0) {
-  console.error('verify-release-version: no @dsh-trading/* packages found under packages/ — aborting');
+  console.error('verify-release-version: no @dshtrading/* packages found under packages/ — aborting');
   process.exit(1);
 }
 
@@ -50,4 +50,4 @@ if (mismatches.length > 0) {
   process.exit(1);
 }
 
-console.log('verify-release-version: ' + checked.length + ' @dsh-trading/* packages all at ' + expected);
+console.log('verify-release-version: ' + checked.length + ' @dshtrading/* packages all at ' + expected);

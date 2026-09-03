@@ -1,6 +1,6 @@
 {
-  "name": "@dsh-trading/client-ui-knowledge",
-  "description": "Knowledge-base stage view plugin for dsh-trading (issue #34 / P5): registers the 中栏「知识库」tab via the tradingStageViews service — Obsidian-style force-directed knowledge graph with search/tag/author/credibility filters and a card detail drawer. Graph logic comes from the @dsh-trading/knowledge pure library; bridge access goes through the shell's tradingBridge service (ctx.inject only, no cross-package module imports).",
+  "name": "@dshtrading/client-ui-knowledge",
+  "description": "Knowledge-base stage view plugin for dsh-trading (issue #34 / P5): registers the 中栏「知识库」tab via the tradingStageViews service — Obsidian-style force-directed knowledge graph with search/tag/author/credibility filters and a card detail drawer. Graph logic comes from the @dshtrading/knowledge pure library; bridge access goes through the shell's tradingBridge service (ctx.inject only, no cross-package module imports).",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -30,7 +30,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@dsh-trading/knowledge": "workspace:^",
+    "@dshtrading/knowledge": "workspace:^",
     "force-graph": "^1.51.0"
   },
   "peerDependencies": {

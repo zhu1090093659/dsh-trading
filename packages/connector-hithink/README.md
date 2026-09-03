@@ -1,4 +1,4 @@
-# @dsh-trading/connector-hithink
+# @dshtrading/connector-hithink
 
 HiThink (同花顺/问财开放平台 OpenAPI) A 股连接器，提供基本面数据、估值快照、集合竞价与特色选股数据。
 

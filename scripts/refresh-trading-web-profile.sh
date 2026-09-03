@@ -10,7 +10,7 @@
 #   纯文本回复不走工具调度，因此「能聊天、一干活就崩」。
 #
 # 用法：scripts/refresh-trading-web-profile.sh [pkg ...]
-#   无参数 = 刷新全部 @dsh-trading 包副本；带参数 = 只刷新指定包（如 client-ui-trading）。
+#   无参数 = 刷新全部 @dshtrading 包副本；带参数 = 只刷新指定包（如 client-ui-trading）。
 # 前置：先在仓库跑 pnpm build。脚本会停掉运行中的 trading-web 实例。
 
 set -euo pipefail
@@ -29,16 +29,16 @@ echo "== 停止运行中的 trading-web 实例 =="
 pgrep -f "profile trading-web" | xargs kill 2>/dev/null || true
 sleep 1
 
-echo "== 刷新 @dsh-trading 包副本 =="
+echo "== 刷新 @dshtrading 包副本 =="
 if [ "$#" -gt 0 ]; then
-  for pkg in "$@"; do rm -rf "$PROFILE/node_modules/@dsh-trading/$pkg"; done
+  for pkg in "$@"; do rm -rf "$PROFILE/node_modules/@dshtrading/$pkg"; done
 else
-  rm -rf "$PROFILE"/node_modules/@dsh-trading/*
+  rm -rf "$PROFILE"/node_modules/@dshtrading/*
 fi
 dsh plugin --profile trading-web install
 
 echo "== 恢复宿主核心包单一实例 symlink（pnpm install 会重新物化影子拷贝，必须重挂）=="
-# 递归处理：包括嵌套 node_modules 里的残留拷贝（如 @dsh-trading/knowledge 下的 dsh-tools）。
+# 递归处理：包括嵌套 node_modules 里的残留拷贝（如 @dshtrading/knowledge 下的 dsh-tools）。
 for pkg in "${CORE_PKGS[@]}"; do
   while IFS= read -r shadow; do
     rm -rf "$shadow"

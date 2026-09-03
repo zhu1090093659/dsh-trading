@@ -47,19 +47,19 @@ importers:
 
   packages/all:
     dependencies:
-      '@dsh-trading/base':
+      '@dshtrading/base':
         specifier: workspace:*
         version: link:../base
-      '@dsh-trading/cn':
+      '@dshtrading/cn':
         specifier: workspace:*
         version: link:../cn
-      '@dsh-trading/crypto':
+      '@dshtrading/crypto':
         specifier: workspace:*
         version: link:../crypto
-      '@dsh-trading/hk':
+      '@dshtrading/hk':
         specifier: workspace:*
         version: link:../hk
-      '@dsh-trading/us':
+      '@dshtrading/us':
         specifier: workspace:*
         version: link:../us
     devDependencies:
@@ -93,40 +93,40 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
-      '@dsh-trading/client-ui-indicators':
+      '@dshtrading/client-ui-indicators':
         specifier: workspace:^
         version: link:../client-ui-indicators
-      '@dsh-trading/client-ui-knowledge':
+      '@dshtrading/client-ui-knowledge':
         specifier: workspace:^
         version: link:../client-ui-knowledge
-      '@dsh-trading/client-ui-settings':
+      '@dshtrading/client-ui-settings':
         specifier: workspace:^
         version: link:../client-ui-settings
-      '@dsh-trading/client-ui-strategies':
+      '@dshtrading/client-ui-strategies':
         specifier: workspace:^
         version: link:../client-ui-strategies
-      '@dsh-trading/client-ui-trading':
+      '@dshtrading/client-ui-trading':
         specifier: workspace:^
         version: link:../client-ui-trading
-      '@dsh-trading/eventbus':
+      '@dshtrading/eventbus':
         specifier: workspace:^
         version: link:../eventbus
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:^
         version: link:../indicators
-      '@dsh-trading/knowledge':
+      '@dshtrading/knowledge':
         specifier: workspace:^
         version: link:../knowledge
-      '@dsh-trading/router':
+      '@dshtrading/router':
         specifier: workspace:^
         version: link:../router
-      '@dsh-trading/strategies':
+      '@dshtrading/strategies':
         specifier: workspace:^
         version: link:../strategies
-      '@dsh-trading/watchlist':
+      '@dshtrading/watchlist':
         specifier: workspace:^
         version: link:../watchlist
     devDependencies:
@@ -142,7 +142,7 @@ importers:
       '@deepseek-ai/cordis':
         specifier: '>=4.0.0'
         version: 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:^
         version: link:../indicators
     devDependencies:
@@ -167,7 +167,7 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: '>=0.1.2-alpha.1'
         version: 0.1.2-alpha.2(@deepseek-ai/cordis@4.0.2)
-      '@dsh-trading/knowledge':
+      '@dshtrading/knowledge':
         specifier: workspace:^
         version: link:../knowledge
       force-graph:
@@ -219,7 +219,7 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: '>=0.1.2-alpha.1'
         version: 0.1.2-alpha.2(@deepseek-ai/cordis@4.0.2)
-      '@dsh-trading/router':
+      '@dshtrading/router':
         specifier: workspace:^
         version: link:../router
     devDependencies:
@@ -250,7 +250,7 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: '>=0.1.2-alpha.1'
         version: 0.1.2-alpha.2(@deepseek-ai/cordis@4.0.2)
-      '@dsh-trading/strategies':
+      '@dshtrading/strategies':
         specifier: workspace:^
         version: link:../strategies
       lightweight-charts:
@@ -320,43 +320,43 @@ importers:
       '@deepseek-ai/dsh-client-ui-workspace':
         specifier: '>=0.1.2-alpha.1'
         version: 0.1.2-alpha.2(@deepseek-ai/cordis@4.0.2)
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
-      '@dsh-trading/client-ui-knowledge':
+      '@dshtrading/client-ui-knowledge':
         specifier: workspace:^
         version: link:../client-ui-knowledge
-      '@dsh-trading/client-ui-strategies':
+      '@dshtrading/client-ui-strategies':
         specifier: workspace:^
         version: link:../client-ui-strategies
-      '@dsh-trading/eventbus':
+      '@dshtrading/eventbus':
         specifier: workspace:^
         version: link:../eventbus
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:^
         version: link:../indicators
-      '@dsh-trading/kit-cn':
+      '@dshtrading/kit-cn':
         specifier: workspace:^
         version: link:../kit-cn
-      '@dsh-trading/kit-crypto':
+      '@dshtrading/kit-crypto':
         specifier: workspace:^
         version: link:../kit-crypto
-      '@dsh-trading/kit-hk':
+      '@dshtrading/kit-hk':
         specifier: workspace:^
         version: link:../kit-hk
-      '@dsh-trading/kit-us':
+      '@dshtrading/kit-us':
         specifier: workspace:^
         version: link:../kit-us
-      '@dsh-trading/knowledge':
+      '@dshtrading/knowledge':
         specifier: workspace:^
         version: link:../knowledge
-      '@dsh-trading/router':
+      '@dshtrading/router':
         specifier: workspace:^
         version: link:../router
-      '@dsh-trading/strategies':
+      '@dshtrading/strategies':
         specifier: workspace:^
         version: link:../strategies
-      '@dsh-trading/watchlist':
+      '@dshtrading/watchlist':
         specifier: workspace:^
         version: link:../watchlist
       lightweight-charts:
@@ -405,25 +405,25 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/connector-akshare':
+      '@dshtrading/connector-akshare':
         specifier: workspace:*
         version: link:../connector-akshare
-      '@dsh-trading/connector-eastmoney':
+      '@dshtrading/connector-eastmoney':
         specifier: workspace:*
         version: link:../connector-eastmoney
-      '@dsh-trading/connector-hithink':
+      '@dshtrading/connector-hithink':
         specifier: workspace:*
         version: link:../connector-hithink
-      '@dsh-trading/connector-qmt':
+      '@dshtrading/connector-qmt':
         specifier: workspace:*
         version: link:../connector-qmt
-      '@dsh-trading/connector-tencent':
+      '@dshtrading/connector-tencent':
         specifier: workspace:*
         version: link:../connector-tencent
-      '@dsh-trading/connector-tushare':
+      '@dshtrading/connector-tushare':
         specifier: workspace:*
         version: link:../connector-tushare
-      '@dsh-trading/kit-cn':
+      '@dshtrading/kit-cn':
         specifier: workspace:*
         version: link:../kit-cn
     devDependencies:
@@ -442,7 +442,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -464,7 +464,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -486,10 +486,10 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:^
         version: link:../indicators
     devDependencies:
@@ -511,7 +511,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -533,7 +533,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -555,7 +555,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -577,7 +577,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -599,7 +599,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -621,7 +621,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -643,7 +643,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -665,7 +665,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -687,7 +687,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -709,14 +709,14 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:^
         version: link:../indicators
     devDependencies:
-      '@dsh-trading/connector-binance':
+      '@dshtrading/connector-binance':
         specifier: workspace:^
         version: link:../connector-binance
       tsdown:
@@ -737,7 +737,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -759,7 +759,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -781,7 +781,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -803,7 +803,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -825,7 +825,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -847,7 +847,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -869,7 +869,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -891,7 +891,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -910,19 +910,19 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/connector-binance':
+      '@dshtrading/connector-binance':
         specifier: workspace:*
         version: link:../connector-binance
-      '@dsh-trading/connector-bybit':
+      '@dshtrading/connector-bybit':
         specifier: workspace:*
         version: link:../connector-bybit
-      '@dsh-trading/connector-ccxt':
+      '@dshtrading/connector-ccxt':
         specifier: workspace:*
         version: link:../connector-ccxt
-      '@dsh-trading/connector-okx':
+      '@dshtrading/connector-okx':
         specifier: workspace:*
         version: link:../connector-okx
-      '@dsh-trading/kit-crypto':
+      '@dshtrading/kit-crypto':
         specifier: workspace:*
         version: link:../kit-crypto
     devDependencies:
@@ -935,16 +935,16 @@ importers:
 
   packages/dsh-i18n:
     dependencies:
-      '@dsh-trading/client-ui-knowledge':
+      '@dshtrading/client-ui-knowledge':
         specifier: workspace:^
         version: link:../client-ui-knowledge
-      '@dsh-trading/client-ui-settings':
+      '@dshtrading/client-ui-settings':
         specifier: workspace:^
         version: link:../client-ui-settings
-      '@dsh-trading/client-ui-strategies':
+      '@dshtrading/client-ui-strategies':
         specifier: workspace:^
         version: link:../client-ui-strategies
-      '@dsh-trading/client-ui-trading':
+      '@dshtrading/client-ui-trading':
         specifier: workspace:^
         version: link:../client-ui-trading
     devDependencies:
@@ -982,19 +982,19 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/connector-futu':
+      '@dshtrading/connector-futu':
         specifier: workspace:*
         version: link:../connector-futu
-      '@dsh-trading/connector-longbridge':
+      '@dshtrading/connector-longbridge':
         specifier: workspace:*
         version: link:../connector-longbridge
-      '@dsh-trading/connector-tencent':
+      '@dshtrading/connector-tencent':
         specifier: workspace:*
         version: link:../connector-tencent
-      '@dsh-trading/connector-tiger':
+      '@dshtrading/connector-tiger':
         specifier: workspace:*
         version: link:../connector-tiger
-      '@dsh-trading/kit-hk':
+      '@dshtrading/kit-hk':
         specifier: workspace:*
         version: link:../kit-hk
     devDependencies:
@@ -1008,7 +1008,7 @@ importers:
         specifier: '>=4.0.0'
         version: 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
     devDependencies:
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:^
         version: link:../indicators
       tsdown:
@@ -1051,16 +1051,16 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:*
         version: link:../api
-      '@dsh-trading/connector-hithink':
+      '@dshtrading/connector-hithink':
         specifier: workspace:*
         version: link:../connector-hithink
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:*
         version: link:../indicators
-      '@dsh-trading/knowledge':
+      '@dshtrading/knowledge':
         specifier: workspace:*
         version: link:../knowledge
     devDependencies:
@@ -1085,14 +1085,14 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:*
         version: link:../indicators
-      '@dsh-trading/knowledge':
+      '@dshtrading/knowledge':
         specifier: workspace:*
         version: link:../knowledge
     devDependencies:
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:*
         version: link:../api
       tsdown:
@@ -1116,14 +1116,14 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:*
         version: link:../indicators
-      '@dsh-trading/knowledge':
+      '@dshtrading/knowledge':
         specifier: workspace:*
         version: link:../knowledge
     devDependencies:
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:*
         version: link:../api
       tsdown:
@@ -1147,14 +1147,14 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:*
         version: link:../indicators
-      '@dsh-trading/knowledge':
+      '@dshtrading/knowledge':
         specifier: workspace:*
         version: link:../knowledge
     devDependencies:
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:*
         version: link:../api
       tsdown:
@@ -1203,7 +1203,7 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
     devDependencies:
@@ -1222,11 +1222,11 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: '>=0.1.2-alpha.1'
         version: 0.1.2-alpha.3(290f14751751470ef92e8daa730528cd)
-      '@dsh-trading/indicators':
+      '@dshtrading/indicators':
         specifier: workspace:*
         version: link:../indicators
     devDependencies:
-      '@dsh-trading/api':
+      '@dshtrading/api':
         specifier: workspace:*
         version: link:../api
       tsdown:
@@ -1247,25 +1247,25 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
-      '@dsh-trading/connector-alpaca':
+      '@dshtrading/connector-alpaca':
         specifier: workspace:*
         version: link:../connector-alpaca
-      '@dsh-trading/connector-finnhub':
+      '@dshtrading/connector-finnhub':
         specifier: workspace:*
         version: link:../connector-finnhub
-      '@dsh-trading/connector-fmp':
+      '@dshtrading/connector-fmp':
         specifier: workspace:*
         version: link:../connector-fmp
-      '@dsh-trading/connector-ibkr':
+      '@dshtrading/connector-ibkr':
         specifier: workspace:*
         version: link:../connector-ibkr
-      '@dsh-trading/connector-polygon':
+      '@dshtrading/connector-polygon':
         specifier: workspace:*
         version: link:../connector-polygon
-      '@dsh-trading/connector-yahoo':
+      '@dshtrading/connector-yahoo':
         specifier: workspace:*
         version: link:../connector-yahoo
-      '@dsh-trading/kit-us':
+      '@dshtrading/kit-us':
         specifier: workspace:*
         version: link:../kit-us
     devDependencies:

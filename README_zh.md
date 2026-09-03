@@ -66,9 +66,9 @@
 
 ```sh
 # 安装到独立 DSH profile（按需选择市场）
-dsh plugin --profile trading-web add @dsh-trading/base @dsh-trading/crypto @dsh-trading/us
+dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtrading/us
 # …或全市场一次装齐
-dsh plugin --profile trading-web add @dsh-trading/base @dsh-trading/crypto @dsh-trading/us @dsh-trading/cn @dsh-trading/hk
+dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtrading/us @dshtrading/cn @dshtrading/hk
 
 # 启动终端
 dsh --profile trading-web
@@ -81,11 +81,11 @@ dsh --profile trading-web
 基于 [Cordis](https://github.com/cordisjs) 微内核的分层生态，让市场之间可组合而不互相踩踏：
 
 ```
-@dsh-trading/base          ← 核心：账户/订单/报价契约、审批闸门、三栏 GUI 外壳
-├── @dsh-trading/crypto    ← Binance / OKX / Bybit / CCXT + Skills + 预设
-├── @dsh-trading/us        ← Yahoo / Alpaca / FMP / Finnhub / Polygon / IBKR + Skills + 预设
-├── @dsh-trading/cn        ← 腾讯 / 东财 / Tushare / AkShare / MiniQMT + Skills + 预设
-└── @dsh-trading/hk        ← 腾讯港股 / 长桥 / 富途 / 老虎 + Skills + 预设
+@dshtrading/base          ← 核心：账户/订单/报价契约、审批闸门、三栏 GUI 外壳
+├── @dshtrading/crypto    ← Binance / OKX / Bybit / CCXT + Skills + 预设
+├── @dshtrading/us        ← Yahoo / Alpaca / FMP / Finnhub / Polygon / IBKR + Skills + 预设
+├── @dshtrading/cn        ← 腾讯 / 东财 / Tushare / AkShare / MiniQMT + Skills + 预设
+└── @dshtrading/hk        ← 腾讯港股 / 长桥 / 富途 / 老虎 + Skills + 预设
 ```
 
 六条设计铁律守护生态：bundle 补丁只允许 insert-only · 知识进 Skill 而非硬编码 · 下单双轨闸门 · 共享代码须 ≥2 个市场需要才能上 base · 数据零再分发 · GUI 外壳可替换、数据契约不可破坏。

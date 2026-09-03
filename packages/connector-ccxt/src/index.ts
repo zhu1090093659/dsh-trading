@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-ccxt
+ * @dshtrading/connector-ccxt
  * CCXT 跨所加密通用连接器插件（提供 tradingCryptoMarketData 与多所聚合工具）。
  */
 
@@ -18,7 +18,7 @@ import type {
   Position,
   Ticker,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   CcxtRestClient,
   type CcxtRestOptions,

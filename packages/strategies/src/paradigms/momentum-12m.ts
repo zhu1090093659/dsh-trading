@@ -4,7 +4,7 @@
  * 入场：近 12 个月（约 250 根日 K）累计收益 > 0 且价格高于年线，强动量做多。
  * 出场：动量转负或价格跌破年线，动量衰竭离场。
  */
-import { sma } from '@dsh-trading/indicators'
+import { sma } from '@dshtrading/indicators'
 import type { StrategyDefinition, StrategySignal } from '../types.ts'
 
 export const momentum12mStrategy: StrategyDefinition = {

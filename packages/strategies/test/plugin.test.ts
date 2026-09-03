@@ -3,7 +3,7 @@
  * 事件回调）、范式∪自定义解析、行情缺席/空 K 线/未知策略的可读错误。
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { MarketDataService } from '@dsh-trading/api'
+import type { MarketDataService } from '@dshtrading/api'
 import { strategyParadigms } from '../src/index.ts'
 import { createMemoryCustomStrategyStore } from '../src/custom.ts'
 import {

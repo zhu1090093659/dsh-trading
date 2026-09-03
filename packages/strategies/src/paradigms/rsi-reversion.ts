@@ -4,7 +4,7 @@
  * 入场：RSI(2) < 10 极端超卖入场。
  * 出场：RSI(2) > 60 快速反弹获利了结。
  */
-import { rsi } from '@dsh-trading/indicators'
+import { rsi } from '@dshtrading/indicators'
 import type { StrategyDefinition, StrategySignal } from '../types.ts'
 
 export const rsiReversionStrategy: StrategyDefinition = {

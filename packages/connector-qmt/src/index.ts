@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-qmt
+ * @dshtrading/connector-qmt
  * 迅投 MiniQMT A 股券商实盘交易连接器插件。
  */
 
@@ -19,7 +19,7 @@ import type {
   Ticker,
   TradeFill,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   INTERVAL_VOCABULARY,
   QmtRestClient,

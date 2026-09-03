@@ -12,17 +12,17 @@
 ## 包清单与依赖 DAG
 
 ```
-@dsh-trading/api            纯类型包：IAccount/IOrderBook/IQuote 等服务契约、订单/持仓类型、错误词汇
+@dshtrading/api            纯类型包：IAccount/IOrderBook/IQuote 等服务契约、订单/持仓类型、错误词汇
       ▲
-@dsh-trading/base           bundle（dsh.bundle.patch）：市场无关行——组合管理工具、风控原语工具、
+@dshtrading/base           bundle（dsh.bundle.patch）：市场无关行——组合管理工具、风控原语工具、
       │                     统一 preset root 配置 [S3]、credentials 引用约定 [S4]
       ▲
-@dsh-trading/connector-binance   插件：公共行情（REST+WS），实现 api 契约；凭证经 ctx.credentials（BYOK）[S4]
+@dshtrading/connector-binance   插件：公共行情（REST+WS），实现 api 契约；凭证经 ctx.credentials（BYOK）[S4]
       ▲
-@dsh-trading/kit-crypto     插件：crypto 专属工具（资金费率、持仓量等）+ skill provider [S2]
+@dshtrading/kit-crypto     插件：crypto 专属工具（资金费率、持仓量等）+ skill provider [S2]
       │                     + preset 自安装逻辑（crypto-trader）[S3]
       ▲
-@dsh-trading/crypto         bundle：依赖安装载体（preset 行从 profile node_modules 解析，S3 坑 3）；
+@dshtrading/crypto         bundle：依赖安装载体（preset 行从 profile node_modules 解析，S3 坑 3）；
                             工具行在 preset 平面（agent.cordis.yml），不在本层 insert（2026-08-29 修订：
                             preset 级会话隔离；行 id 定稿 dsh-trading-<market>-*）
 ```
@@ -31,7 +31,7 @@
 
 ## 关键接口草案
 
-### 服务契约（@dsh-trading/api）
+### 服务契约（@dshtrading/api）
 ```ts
 interface MarketDataService {   // 由连接器实现，ctx 键按市场命名空间：ctx.tradingCrypto 等
   getTicker(symbol: string): Promise<Ticker>
@@ -55,7 +55,7 @@ interface TradeService {
 2. dryRun=false 的每次调用前 `ctx.approval.request({...})`，无应答者自动拒绝（fail-closed，官方语义）
 3. API key 一律 `ctx.credentials` 按名引用，settings/配置里只存引用名
 
-### Skill（随 @dsh-trading/kit-crypto 分发）[S2]
+### Skill（随 @dshtrading/kit-crypto 分发）[S2]
 - `crypto-funding-rate-basis`：资金费率套利分析框架
 - `crypto-risk-checklist`：加密合约风控检查清单
 （切片期各 1 篇即可，验证机制为主）
@@ -73,7 +73,7 @@ S4 预备调查确认：官方 schedule 仅是「会话内提醒」，不构成�
 ## 执行顺序（每步都是子 agent 任务，我审查）
 
 1. 脚手架落地（依 S5 TEMPLATES）：根 workspace + 5 包骨架
-2. @dsh-trading/api + base 最小 bundle，装进 spike-s1 同款 scratch profile 验证分层
+2. @dshtrading/api + base 最小 bundle，装进 spike-s1 同款 scratch profile 验证分层
 3. connector-binance：getTicker 打通（公共接口，无需凭证）
 4. kit-crypto：skill provider + preset 自安装（依 S2/S3 结论）
 5. crypto bundle 聚合 + 端到端验收（见 README 验收标准）

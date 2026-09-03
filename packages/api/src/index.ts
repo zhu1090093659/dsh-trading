@@ -1,11 +1,11 @@
 /**
- * @dsh-trading/api — 纯类型契约包（crypto-slice-plan §关键接口草案）。
+ * @dshtrading/api — 纯类型契约包（crypto-slice-plan §关键接口草案）。
  *
  * 零运行时、零依赖：服务契约由连接器实现（ctx 键按市场命名空间，如 ctx.tradingCrypto），
  * 消费方只依赖这里的类型。交易安全闸门（铁律 #3）在类型层面体现为
  * OrderRequest.dryRun 默认 true、错误词汇含 LIVE_TRADING_DISABLED / APPROVAL_DENIED。
  *
- * @module @dsh-trading/api
+ * @module @dshtrading/api
  */
 
 // cordis Context augmentation 的解析锚点：无此 type-only import，TS2664 下 augmentation 整体失效。
@@ -681,7 +681,7 @@ declare module '@deepseek-ai/cordis' {
      */
     tradingCryptoTrade: TradeService
     /**
-     * 交易服务注册表（issue #40 GUI 交易台，@dsh-trading/api 类型声明）：
+     * 交易服务注册表（issue #40 GUI 交易台，@dshtrading/api 类型声明）：
      * 与 tradingMarketDataRegistry 同构的宿主平面注册面——交易连接器 host 面数据行
      * 注册，GUI 桥按路由当前值惰性解析。**注册不改变安全语义**：placeOrder 的
      * 服务缝闸门（dryRun 缺省 true + liveTrading 显式开关）随服务实例生效；
@@ -689,18 +689,18 @@ declare module '@deepseek-ai/cordis' {
      */
     tradingTradeRegistry: TradeRegistry
     /**
-     * 市场路由服务（R5 2026-08-29 补齐，@dsh-trading/router 提供）：
+     * 市场路由服务（R5 2026-08-29 补齐，@dshtrading/router 提供）：
      * 连接器 apply 时 consult activeProvider(market) 决定是否激活——用户设置
      * dshtrading.markets.<market>.provider 选谁谁激活（docs/exchange-routing.md）。
      */
     tradingMarketRouter: MarketRouterService
     /**
-     * 行情服务注册表（2026-08-30 注册表模式定稿，@dsh-trading/router 同插件提供）：
+     * 行情服务注册表（2026-08-30 注册表模式定稿，@dshtrading/router 同插件提供）：
      * 连接器 host 面数据行注册，GUI 行情桥按路由当前值惰性解析（热切换）。
      */
     tradingMarketDataRegistry: MarketDataRegistry
     /**
-     * 新闻聚合器注册表（Issue #37，@dsh-trading/router 同插件提供）：
+     * 新闻聚合器注册表（Issue #37，@dshtrading/router 同插件提供）：
      * 各市场 Kit apply 时注册 aggregateNews 纯函数，GUI 行情桥按市场获取。
      */
     tradingNewsRegistry: TradingNewsRegistry

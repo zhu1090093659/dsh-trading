@@ -1,6 +1,6 @@
 /**
  * 选股策略面板（一级「选股策略」分区的内容视图）：
- *   1. 选股器卡列表（内置名册，@dsh-trading/strategies 纯函数）
+ *   1. 选股器卡列表（内置名册，@dshtrading/strategies 纯函数）
  *   2. 参数 + 扫描池上限 + 运行/停止条
  *   3. 扫描进度条 + 命中结果表（代码/名称/现价/动态指标列/信号说明）
  *
@@ -13,7 +13,7 @@ import {
   screenerParadigms,
   type Kline,
   type ScreenerDefinition,
-} from '@dsh-trading/strategies'
+} from '@dshtrading/strategies'
 import { readJson, writeJson } from './shell-faces.ts'
 import { screenerName, screenerSummary, screenerParamLabel, screenerColumnLabel, screenerReason } from './strategy-locale.ts'
 import type { StrategyLocaleKey } from './contract.ts'

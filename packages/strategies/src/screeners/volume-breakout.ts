@@ -2,7 +2,7 @@
  * 放量突破：收盘价创 lookback 日新高，且成交量 ≥ 均量的 volMultiple 倍——
  * 突破有效性的量能确认（无量突破不入选）。量比口径跨市场可比（比值无量纲）。
  */
-import { sma } from '@dsh-trading/indicators'
+import { sma } from '@dshtrading/indicators'
 import type { ScreenerDefinition } from './types.ts'
 
 export const volumeBreakoutScreener: ScreenerDefinition = {

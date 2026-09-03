@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/watchlist —— host 侧自选股与选中标的存储（issue #32 / P3）。
+ * @dshtrading/watchlist —— host 侧自选股与选中标的存储（issue #32 / P3）。
  *
  * 背景：自选股原先只存浏览器 localStorage（dshtrading.watchlist.v1），node 半的
  * Agent 触达不了——四块能力中 Agent 工具面唯一完全空白的一块。owner 2026-08-31
@@ -17,7 +17,7 @@
  * 词汇纪律：symbol 用市场规范形（docs/symbol-vocabulary.md），本包不做归一化
  * （写入方负责——工具参数与桥端点均原样落盘）。
  *
- * @module @dsh-trading/watchlist
+ * @module @dshtrading/watchlist
  */
 
 /** 跨市场标的行（market 为市场词汇 slug：crypto | us | cn | hk，开放新市场）。 */

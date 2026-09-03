@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/eventbus",
+  "name": "@dshtrading/eventbus",
   "description": "In-process invalidation event bus for dsh-trading: tradingEvents cordis service (emit/subscribe/per-store revision), zero HTTP, zero business data",
   "version": "0.1.0",
   "type": "module",

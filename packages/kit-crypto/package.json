@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/kit-crypto",
+  "name": "@dshtrading/kit-crypto",
   "description": "Crypto toolkit plugin for dsh-trading: market-specific tools and bundled trading skills (skill provider); runs as a crypto-trader preset row (session-scoped)",
   "version": "0.1.0",
   "type": "module",
@@ -22,8 +22,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/indicators": "workspace:*",
-    "@dsh-trading/knowledge": "workspace:*"
+    "@dshtrading/indicators": "workspace:*",
+    "@dshtrading/knowledge": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
@@ -34,6 +34,6 @@
   "devDependencies": {
     "tsdown": "^0.22.0",
     "vitest": "^3.0.0",
-    "@dsh-trading/api": "workspace:*"
+    "@dshtrading/api": "workspace:*"
   }
 }

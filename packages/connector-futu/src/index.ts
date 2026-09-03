@@ -1,7 +1,7 @@
 /**
  * Futu (富途 OpenD) 连接器插件（dsh-trading hk 切片）：MarketDataService 与 TradeService。
  *
- * @module @dsh-trading/connector-futu
+ * @module @dshtrading/connector-futu
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -20,7 +20,7 @@ import type {
   Ticker,
   TradeFill,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   type FutuCredentials,
   type FutuRestOptions,

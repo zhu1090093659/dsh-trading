@@ -1,6 +1,6 @@
-# @dsh-trading/connector-yahoo
+# @dshtrading/connector-yahoo
 
-dsh-trading us 切片市场连接器：经 **Yahoo Finance v8 chart API**（`query1.finance.yahoo.com/v8/finance/chart/...`）实现 `@dsh-trading/api` 的 `MarketDataService` 契约（ctx 键 `tradingUsMarketData`），并提供 `us_get_ticker` / `us_get_klines` / `us_place_order` 三工具（下单三段闸门与 connector-stooq/binance 同构）。
+dsh-trading us 切片市场连接器：经 **Yahoo Finance v8 chart API**（`query1.finance.yahoo.com/v8/finance/chart/...`）实现 `@dshtrading/api` 的 `MarketDataService` 契约（ctx 键 `tradingUsMarketData`），并提供 `us_get_ticker` / `us_get_klines` / `us_place_order` 三工具（下单三段闸门与 connector-stooq/binance 同构）。
 
 ## 数据源状态：已实证（2026-08-29）
 

@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/strategies — 交易策略与纯函数回测内核：
+ * @dshtrading/strategies — 交易策略与纯函数回测内核：
  * 策略契约类型 + 纯函数回测引擎 + 6 个参考范式策略（短线/波段/长线）
  * + 5 个内置选股器（单时点截面筛选，ScreenerDefinition）。
  *

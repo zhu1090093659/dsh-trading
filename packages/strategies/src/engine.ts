@@ -3,7 +3,7 @@
  *
  * 保证确定性、无副作用、浏览器端与 Node 端同构执行。
  */
-import type { Kline } from '@dsh-trading/indicators'
+import type { Kline } from '@dshtrading/indicators'
 import type {
   BacktestMetrics,
   BacktestOptions,

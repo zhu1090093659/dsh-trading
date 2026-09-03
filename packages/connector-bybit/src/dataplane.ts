@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { MarketDataService, TradeRegistry } from '@dsh-trading/api'
+import type { MarketDataService, TradeRegistry } from '@dshtrading/api'
 import {
   BybitMarketDataService,
   BybitTradeService,

@@ -2,7 +2,7 @@
  * Stooq 连接器插件（dsh-trading us 切片）：真实 MarketDataService。
  *
  * 能力三角色（与 connector-binance 同构）：
- * - 声明：ctx 键 `tradingUsMarketData` 由 @dsh-trading/api 的模块增强统一声明；
+ * - 声明：ctx 键 `tradingUsMarketData` 由 @dshtrading/api 的模块增强统一声明；
  * - provide：StooqMarketDataService（Service 基类，随插件 fiber 自动注销）；
  * - inject：工具经 ctx.inject 等待服务就绪后注册，一律经服务执行，不直连 HTTP。
  *
@@ -13,14 +13,14 @@
  * 合规（README 铁律 #5）：Stooq 免费公开 CSV 端点、无 key、本仓不缓存不再分发；
  * 个人/非商业使用边界以 stooq.com 条款为准（详见 src/rest.ts 头注与 README 数据源节）。
  *
- * @module @dsh-trading/connector-stooq
+ * @module @dshtrading/connector-stooq
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
-import type { Disposable, Interval, Kline, MarketDataService, Ticker } from '@dsh-trading/api'
+import type { Disposable, Interval, Kline, MarketDataService, Ticker } from '@dshtrading/api'
 import {
   INTERVAL_VOCABULARY,
   type StooqRestOptions,
@@ -56,7 +56,7 @@ export const inject = ['tools']
 /* MarketDataService（provide 到市场命名空间 ctx 键）                      */
 /* ------------------------------------------------------------------ */
 
-/** ctx 服务键：与 @dsh-trading/api 的 Context 模块增强一致（市场命名空间）。 */
+/** ctx 服务键：与 @dshtrading/api 的 Context 模块增强一致（市场命名空间）。 */
 export const TRADING_US_MARKET_DATA_KEY = 'tradingUsMarketData'
 
 export interface SubscribeTickerOptions {
@@ -228,7 +228,7 @@ export interface PlaceOrderToolDeps {
 /**
  * us_place_order 工具工厂（独立导出便于单测三条闸门路径）。
  *
- * 审批不在这里做：dryRun!==true 的调用由 @dsh-trading/base 的 gate 插件在
+ * 审批不在这里做：dryRun!==true 的调用由 @dshtrading/base 的 gate 插件在
  * `tools/pre-execute` waterfall 统一 ask（S4：headless 下 ask=deny，fail-closed）。
  */
 export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {

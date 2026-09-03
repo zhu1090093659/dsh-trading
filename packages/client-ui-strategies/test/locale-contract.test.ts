@@ -7,8 +7,8 @@
  * 附：StrategyView 查表 miss 回退 helper 与 momentum {cause} 枚举预翻译单测。
  */
 import { describe, expect, it } from 'vitest'
-import { run, strategyParadigms, screenerParadigms } from '@dsh-trading/strategies'
-import type { Kline } from '@dsh-trading/strategies'
+import { run, strategyParadigms, screenerParadigms } from '@dshtrading/strategies'
+import type { Kline } from '@dshtrading/strategies'
 import { zh, en } from '../src/client/locales.ts'
 import type { StrategyLocaleKey } from '../src/client/contract.ts'
 import { strategyName, exitReasonText } from '../src/client/StrategyView.tsx'

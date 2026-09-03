@@ -1,7 +1,7 @@
 /**
  * Yahoo Finance v8 chart API 客户端（dsh-trading us 切片，任务 G 数据面切换）。
  *
- * 独立于插件 glue：仅依赖 @dsh-trading/api 的类型词汇，无 cordis/dsh-tools 运行时依赖，
+ * 独立于插件 glue：仅依赖 @dshtrading/api 的类型词汇，无 cordis/dsh-tools 运行时依赖，
  * 便于单测与脚本直接消费（fetch 可注入）。
  *
  * 数据面（2026-08-29 本出口实测，证据 spikes/impl-us-yahoo/）：
@@ -18,10 +18,10 @@
  * 以 Yahoo 服务条款为准（https://legal.yahoo.com/terms-of-use/）；无凭证、本仓不缓存
  * 不再分发行情数据。
  *
- * @module @dsh-trading/connector-yahoo/rest
+ * @module @dshtrading/connector-yahoo/rest
  */
 
-import type { Interval, Kline, Ticker, TradingErrorCode } from '@dsh-trading/api'
+import type { Interval, Kline, Ticker, TradingErrorCode } from '@dshtrading/api'
 
 /* ------------------------------------------------------------------ */
 /* 错误载体（api 包词汇的运行时映射，与 connector-stooq 同构）                */

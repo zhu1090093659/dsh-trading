@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/eventbus —— 失效信号事件总线（host 面，市场无关共享行，base 拥有）。
+ * @dshtrading/eventbus —— 失效信号事件总线（host 面，市场无关共享行，base 拥有）。
  *
  * 职责（issue #30 / P1，设计文档 §3.3/§5.1）：
  * - provide `tradingEvents` cordis 服务：能力包工具/桥写入状态后 `emit(store)`，
@@ -12,7 +12,7 @@
  * 生命周期：Service 随插件 fiber 注册，base patch 行挂载即提供；headless 宿主
  * 同样可用（桥不挂载时只是没有 HTTP 出口，emit 照常工作）。
  *
- * @module @dsh-trading/eventbus
+ * @module @dshtrading/eventbus
  */
 
 import type { Context } from '@deepseek-ai/cordis'

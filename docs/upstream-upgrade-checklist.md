@@ -41,7 +41,7 @@
 
 - [ ] bundle patch 语义（insert/同 id 覆盖、parsePatchList 数组形状、duplicate id 抛错）
   —— vendor/loader + vendor/include；
-- [ ] reconcilePlugins 层栈规则（直接依赖才入栈——`@dsh-trading/all` 限制是否解除）；
+- [ ] reconcilePlugins 层栈规则（直接依赖才入栈——`@dshtrading/all` 限制是否解除）；
 - [ ] agent-presets 行位置（web-app vs base/headless 宿主差异）与 roots 配置键名；
 - [ ] cordis:group isolate 挂载规则（preset 服务键）；Context.isolate/reflect.provide
   语义（注册表模式依赖）；

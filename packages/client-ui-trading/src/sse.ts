@@ -10,7 +10,7 @@
  * 只写信号不写业务数据——客户端收到后 refetch 既有 REST（幂等，revision 判重）。
  */
 import type { ServerResponse } from 'node:http'
-import type { TradingEventListener } from '@dsh-trading/eventbus'
+import type { TradingEventListener } from '@dshtrading/eventbus'
 
 /** 心跳间隔（issue 规格：15s）。 */
 export const SSE_HEARTBEAT_MS = 15_000

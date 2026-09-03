@@ -1,7 +1,7 @@
 /**
  * Alpaca 连接器插件（dsh-trading us 切片）：MarketDataService 与 TradeService。
  *
- * @module @dsh-trading/connector-alpaca
+ * @module @dshtrading/connector-alpaca
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -21,7 +21,7 @@ import type {
   Ticker,
   TradeFill,
   TradeService,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   type AlpacaCredentials,
   type AlpacaRestOptions,

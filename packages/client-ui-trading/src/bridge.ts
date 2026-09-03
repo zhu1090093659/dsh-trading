@@ -13,26 +13,26 @@
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  */
-import type { AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, Interval, Kline, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dsh-trading/api'
-import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dsh-trading/kit-cn'
-import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dsh-trading/kit-hk'
-import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dsh-trading/kit-us'
-import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dsh-trading/kit-crypto'
-import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dsh-trading/indicators'
-import { createMemoryCustomIndicatorStore } from '@dsh-trading/indicators'
-import type { KnowledgeCard, KnowledgeCardStore } from '@dsh-trading/knowledge'
-import { createMemoryKnowledgeCardStore } from '@dsh-trading/knowledge'
-import type { CustomStrategyRecord, CustomStrategyStore } from '@dsh-trading/strategies'
-import { createMemoryCustomStrategyStore } from '@dsh-trading/strategies'
-import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from '@dsh-trading/watchlist'
-import { createMemorySelectionStore, createMemoryWatchlistStore } from '@dsh-trading/watchlist'
+import type { AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, Interval, Kline, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
+import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dshtrading/kit-cn'
+import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dshtrading/kit-hk'
+import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dshtrading/kit-us'
+import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dshtrading/kit-crypto'
+import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dshtrading/indicators'
+import { createMemoryCustomIndicatorStore } from '@dshtrading/indicators'
+import type { KnowledgeCard, KnowledgeCardStore } from '@dshtrading/knowledge'
+import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
+import type { CustomStrategyRecord, CustomStrategyStore } from '@dshtrading/strategies'
+import { createMemoryCustomStrategyStore } from '@dshtrading/strategies'
+import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from '@dshtrading/watchlist'
+import { createMemorySelectionStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
 
 /** 本桥支持的市场（与连接器服务键一一对应）。 */
 export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
 
 export const MARKET_IDS: readonly MarketId[] = ['crypto', 'us', 'cn', 'hk']
 
-/** market → Context 服务键（@dsh-trading/api 的 Context 增强）。 */
+/** market → Context 服务键（@dshtrading/api 的 Context 增强）。 */
 export const MARKET_SERVICE_KEYS: Record<MarketId, string> = {
   crypto: 'tradingCryptoMarketData',
   us: 'tradingUsMarketData',
@@ -40,7 +40,7 @@ export const MARKET_SERVICE_KEYS: Record<MarketId, string> = {
   hk: 'tradingHkMarketData',
 }
 
-/** 注册表服务的最小形状（鸭式，与 @dsh-trading/router 的 MarketDataRegistryLike 同构）。 */
+/** 注册表服务的最小形状（鸭式，与 @dshtrading/router 的 MarketDataRegistryLike 同构）。 */
 export interface MarketDataRegistryLike {
   active(market: string): { provider: string; service: MarketDataService } | undefined
 }

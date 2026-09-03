@@ -1,5 +1,5 @@
 ﻿/**
- * @dsh-trading/connector-ccxt/rest
+ * @dshtrading/connector-ccxt/rest
  * CCXT 跨所加密通用 REST 客户端。
  */
 
@@ -12,7 +12,7 @@ import type {
   Position,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

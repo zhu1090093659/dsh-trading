@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/strategies",
+  "name": "@dshtrading/strategies",
   "description": "Trading strategies kernel for dsh-trading: pure math backtesting engine, strategy contracts, and 6 reference paradigms (short, swing, long). Pure library (zero runtime dependencies, browser-packable).",
   "version": "0.1.0",
   "type": "module",
@@ -25,7 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/indicators": "workspace:*"
+    "@dshtrading/indicators": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
@@ -35,6 +35,6 @@
     "tsdown": "^0.22.0",
     "vitest": "^3.0.0",
     "typescript": "^5.5.0",
-    "@dsh-trading/api": "workspace:*"
+    "@dshtrading/api": "workspace:*"
   }
 }

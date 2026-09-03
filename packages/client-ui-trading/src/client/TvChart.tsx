@@ -3,7 +3,7 @@
  *
  * 结构：pane 0 = 蜡烛 + 主图叠加指标；pane 1 = 成交量；pane 2+ = 每个
  * 副图指标独占一 pane（v5 原生 panes）。渲染层对指标实现零感知，只消费
- * 注册表 compute 的输出（@dsh-trading/indicators 注册表）。
+ * 注册表 compute 的输出（@dshtrading/indicators 注册表）。
  *
  * pane 内 legend：VOL（pane 1）与副图指标（pane 2+）的读数以绝对定位
  * overlay 显示在各自 pane 左上角（悬停跟随 readoutIndex，离场回落最新值）；
@@ -24,7 +24,7 @@ import type {
 import type { BarPrice, PriceFormatCustom } from 'lightweight-charts'
 import { fmtAxis, fmtCompact, priceDigits } from './format.ts'
 import { getColorPalette, type ColorMode } from './color-mode.ts'
-import type { IndicatorOutput } from '@dsh-trading/indicators'
+import type { IndicatorOutput } from '@dshtrading/indicators'
 import type { Kline } from './types.ts'
 
 export interface TvBar {

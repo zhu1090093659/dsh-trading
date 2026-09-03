@@ -5,7 +5,7 @@
  * 无信号序列、无回测语义。扫描调度（名册拉取/并发/进度）在视图层，
  * 本包只承载可独立单测的筛选逻辑。
  */
-import type { Kline } from '@dsh-trading/indicators'
+import type { Kline } from '@dshtrading/indicators'
 import type { StrategyParamSpec } from '../types.ts'
 
 export type { Kline }

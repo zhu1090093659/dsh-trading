@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/router —— 市场/数据源路由插件（host 面，市场无关共享行，base 拥有）。
+ * @dshtrading/router —— 市场/数据源路由插件（host 面，市场无关共享行，base 拥有）。
  *
  * 职责（docs/exchange-routing.md §2 定稿）：
  * - 注册 `dshtrading` settings namespace（用户设置一级：markets.<market>.provider），
@@ -17,7 +17,7 @@
  * - provider enum = 全仓候选集（binance/okx/yahoo/stooq/tencent），新交易所 = enum 加候选；
  * - 数据/交易分离（tradeProvider）字段预留不实现（铁律 #4：两个市场真实需要才做）。
  *
- * @module @dsh-trading/router
+ * @module @dshtrading/router
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -31,7 +31,7 @@ import type {
   MarketDataService,
   MarketRouterService as MarketRouterServiceContract,
   NewsAggregator,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import { createInstrumentsSearchTool, createRoutingGetTool, type RouterToolServices } from './tools.ts'
 
 /**
@@ -183,7 +183,7 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
   }
 }
 
-/** SDK 服务键（与 @dsh-trading/api 的 Context 模块增强一致）。 */
+/** SDK 服务键（与 @dshtrading/api 的 Context 模块增强一致）。 */
 export const TRADING_MARKET_ROUTER_KEY = 'tradingMarketRouter'
 
 /* ------------------------------------------------------------------ */
@@ -242,7 +242,7 @@ export class MarketDataRegistryService extends Service implements MarketDataRegi
   }
 }
 
-/** 注册表服务键（与 @dsh-trading/api 的 Context 模块增强一致）。 */
+/** 注册表服务键（与 @dshtrading/api 的 Context 模块增强一致）。 */
 export const TRADING_MARKET_DATA_REGISTRY_KEY = 'tradingMarketDataRegistry'
 
 /** 连接器/桥侧最小形状（不定死接口）。 */

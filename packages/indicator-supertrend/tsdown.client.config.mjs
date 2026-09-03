@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import { transform } from 'lightningcss'
 
-const ID = '@dsh-trading/indicator-supertrend'
+const ID = '@dshtrading/indicator-supertrend'
 
 const PLATFORM_EXTERNALS = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/cordis',

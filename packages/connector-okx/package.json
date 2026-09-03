@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/connector-okx",
+  "name": "@dshtrading/connector-okx",
   "description": "OKX market connector plugin for dsh-trading: public market data + signed demo/live trading (R1-R3), mutual-exclusion activation with connector-binance",
   "version": "0.1.0",
   "type": "module",
@@ -25,8 +25,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/api": "workspace:^",
-    "@dsh-trading/indicators": "workspace:^"
+    "@dshtrading/api": "workspace:^",
+    "@dshtrading/indicators": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
@@ -34,7 +34,7 @@
     "@deepseek-ai/schemastery": ">=3.18.0"
   },
   "devDependencies": {
-    "@dsh-trading/connector-binance": "workspace:^",
+    "@dshtrading/connector-binance": "workspace:^",
     "tsdown": "^0.22.0",
     "vitest": "^3.0.0"
   }

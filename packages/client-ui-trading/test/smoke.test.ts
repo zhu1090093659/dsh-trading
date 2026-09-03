@@ -56,7 +56,7 @@ function makeCtx(options: { rejection?: number } = {}): {
   return { ctx: ctx as never, registered }
 }
 
-describe('@dsh-trading/client-ui-trading node half', () => {
+describe('@dshtrading/client-ui-trading node half', () => {
   it('apply 经 ctx.inject 注册 /dshtrading/api 前缀路由', () => {
     const { ctx, registered } = makeCtx()
     apply(ctx)

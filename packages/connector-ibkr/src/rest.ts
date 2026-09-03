@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-ibkr/rest
+ * @dshtrading/connector-ibkr/rest
  * Interactive Brokers (盈透证券) Client Portal Gateway REST 客户端。
  */
 
@@ -12,7 +12,7 @@ import type {
   Position,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

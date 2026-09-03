@@ -1,5 +1,5 @@
 ﻿/**
- * @dsh-trading/connector-tushare/rest
+ * @dshtrading/connector-tushare/rest
  * Tushare Pro A 股 REST 客户端（支持日/分钟线与估值财务分析）。
  */
 
@@ -12,7 +12,7 @@ import type {
   Position,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

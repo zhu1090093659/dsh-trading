@@ -1,8 +1,8 @@
-# @dsh-trading/connector-tencent
+# @dshtrading/connector-tencent
 
 > **状态：已实证（本出口可用）**。2026-08-31 实测：报价（qt.gtimg.cn）与日/周/月 K（web.ifzq.gtimg.cn fqkline/hkfqkline）从本开发出口均可返回真实数据，cn（贵州茅台）+ hk（腾讯控股）真实网络验证 PASS 2/2，证据 `spikes/impl-cn-hk/REPORT.md` 与 `r1/r2/r3-*` 原始文件。
 
-dsh-trading **cn+hk 双市场切片**市场连接器：经腾讯公共行情端点实现 `@dsh-trading/api` 的 `MarketDataService` 契约，并提供 `<market>_get_ticker` / `<market>_get_klines` / `<market>_place_order` 三工具（下单三段闸门与 connector-binance/connector-stooq 同构）。
+dsh-trading **cn+hk 双市场切片**市场连接器：经腾讯公共行情端点实现 `@dshtrading/api` 的 `MarketDataService` 契约，并提供 `<market>_get_ticker` / `<market>_get_klines` / `<market>_place_order` 三工具（下单三段闸门与 connector-binance/connector-stooq 同构）。
 
 ## 单包双市场（多实例模式）
 

@@ -4,6 +4,6 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependents": "always",
-  "fixed": [["@dsh-trading/*"]],
+  "fixed": [["@dshtrading/*"]],
   "ignore": []
 }

@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-hithink
+ * @dshtrading/connector-hithink
  * 同花顺官方金融数据服务 API 契约与内部数据类型。
  */
 

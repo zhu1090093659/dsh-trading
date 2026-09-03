@@ -66,9 +66,9 @@ Most "AI trading" tools bolt a chat box onto a chart. dsh-trading inverts the re
 
 ```sh
 # Install into a dedicated DSH profile (pick your markets)
-dsh plugin --profile trading-web add @dsh-trading/base @dsh-trading/crypto @dsh-trading/us
+dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtrading/us
 # …or all four markets
-dsh plugin --profile trading-web add @dsh-trading/base @dsh-trading/crypto @dsh-trading/us @dsh-trading/cn @dsh-trading/hk
+dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtrading/us @dshtrading/cn @dshtrading/hk
 
 # Launch the terminal
 dsh --profile trading-web
@@ -81,11 +81,11 @@ Then open the printed URL: watchlist on the left, charts in the middle, your age
 A [Cordis](https://github.com/cordisjs) microkernel ecosystem, layered so markets compose instead of collide:
 
 ```
-@dsh-trading/base          ← core: account/order/quote contracts, approval gate, 3-column GUI shell
-├── @dsh-trading/crypto    ← Binance / OKX / Bybit / CCXT + skills + preset
-├── @dsh-trading/us        ← Yahoo / Alpaca / FMP / Finnhub / Polygon / IBKR + skills + preset
-├── @dsh-trading/cn        ← Tencent / Eastmoney / Tushare / AkShare / MiniQMT + skills + preset
-└── @dsh-trading/hk        ← Tencent HK / Longbridge / Futu / Tiger + skills + preset
+@dshtrading/base          ← core: account/order/quote contracts, approval gate, 3-column GUI shell
+├── @dshtrading/crypto    ← Binance / OKX / Bybit / CCXT + skills + preset
+├── @dshtrading/us        ← Yahoo / Alpaca / FMP / Finnhub / Polygon / IBKR + skills + preset
+├── @dshtrading/cn        ← Tencent / Eastmoney / Tushare / AkShare / MiniQMT + skills + preset
+└── @dshtrading/hk        ← Tencent HK / Longbridge / Futu / Tiger + skills + preset
 ```
 
 Six invariants keep the ecosystem honest: insert-only bundle patches · knowledge lives in skills, not code · dual-track order gates · shared code earns its place in base (≥2 markets) · zero data re-distribution · the GUI shell is replaceable, the data contracts are not.

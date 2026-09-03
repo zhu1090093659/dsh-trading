@@ -1,7 +1,7 @@
 /**
- * @dsh-trading/knowledge/plugin —— 知识能力 host 半插件（issue #33 / P4）。
+ * @dshtrading/knowledge/plugin —— 知识能力 host 半插件（issue #33 / P4）。
  *
- * patch 行：id `dsh-trading-knowledge` / name `@dsh-trading/knowledge/plugin`
+ * patch 行：id `dsh-trading-knowledge` / name `@dshtrading/knowledge/plugin`
  * （base 拥有该共享行）。职责：
  * - provide `tradingKnowledgeCards` 服务（file store 单实例：桥 GET 与
  *   knowledge_ingest/search 共享同一缓存）；

@@ -1,6 +1,6 @@
 {
-  "name": "@dsh-trading/connector-yahoo",
-  "description": "US market connector plugin for dsh-trading: public market data from the Yahoo Finance v8 chart API implementing the @dsh-trading/api contracts (unofficial API, no key; personal use per Yahoo terms of use)",
+  "name": "@dshtrading/connector-yahoo",
+  "description": "US market connector plugin for dsh-trading: public market data from the Yahoo Finance v8 chart API implementing the @dshtrading/api contracts (unofficial API, no key; personal use per Yahoo terms of use)",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -25,7 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/api": "workspace:^"
+    "@dshtrading/api": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

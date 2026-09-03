@@ -6,13 +6,13 @@
  * Deliberately framework-free and dependency-free of SDK runtime code (no
  * @deepseek-ai/dsh-client-store import): these modules are unit-tested under
  * vitest, where seed-module resolution is unavailable. The only workspace
- * import is the watchlist seed table (@dsh-trading/watchlist, pure data) —
+ * import is the watchlist seed table (@dshtrading/watchlist, pure data) —
  * bundled inline by the client build; Agent 工具同源（见 seeds.ts）。Both stores
  * persist to localStorage (durable across reloads; single-user local app — no
  * server sync by design).
  */
 import type { Instrument, MarketId } from './types.ts'
-import { WATCHLIST_SEEDS } from '@dsh-trading/watchlist'
+import { WATCHLIST_SEEDS } from '@dshtrading/watchlist'
 
 /** Minimal observable face — matches the slot kit's HostObservable contract. */
 export interface Observable<T> {
@@ -189,7 +189,7 @@ export function createWatchlistStore(): WatchlistStore {
   }
 }
 
-/** Seed rows per market（SSOT 在 @dsh-trading/watchlist：agent 的 watchlist_list
+/** Seed rows per market（SSOT 在 @dshtrading/watchlist：agent 的 watchlist_list
  * 合并视图与 GUI 左栏展示同源，2026-09-02 agent 可见性修复）。 */
 export const DEFAULT_WATCHLISTS = WATCHLIST_SEEDS as unknown as Record<MarketId, Instrument[]>
 

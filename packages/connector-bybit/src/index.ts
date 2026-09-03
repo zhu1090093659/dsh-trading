@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-bybit
+ * @dshtrading/connector-bybit
  * Bybit 加密货币连接器插件（提供 tradingCryptoMarketData 与 crypto_* 工具）。
  */
 
@@ -23,7 +23,7 @@ import type {
   TradeFill,
   TradeService,
   TradeTick,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   BybitRestClient,
   type BybitRestOptions,

@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-finnhub/rest
+ * @dshtrading/connector-finnhub/rest
  * Finnhub 美股/外汇/加密 REST 客户端（支持 Quote 与 Candles）。
  */
 
@@ -13,7 +13,7 @@ import type {
   StockFundamentals,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

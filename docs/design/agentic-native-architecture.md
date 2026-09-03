@@ -37,7 +37,7 @@
 **非目标（Out of scope）**
 
 - 实盘自动下单循环 / 策略托管执行（不变：策略层永不直接触发 `place_order`，铁律 #3）；
-- 破坏数据层契约（铁律 #6：`/dshtrading/api` 桥、`dshtrading` settings、`tradingMarketRouter`/`tradingMarketDataRegistry`、`@dsh-trading/api` 类型全部向后兼容，SSE 为纯增量新增）；
+- 破坏数据层契约（铁律 #6：`/dshtrading/api` 桥、`dshtrading` settings、`tradingMarketRouter`/`tradingMarketDataRegistry`、`@dshtrading/api` 类型全部向后兼容，SSE 为纯增量新增）；
 - 宏分析工具（roadmap Q2 定稿不变：框架是知识不是代码）；
 - 修改官方 remote 事件白名单 / root 接管宿主 UI。
 
@@ -84,16 +84,16 @@ Bundle（分发面）    base patch insert 行挂载，sync-profile-overrides �
 
 | 包 | 类型 | 职责 |
 |---|---|---|
-| `packages/eventbus` → `@dsh-trading/eventbus` | 插件（node 半） | provide `tradingEvents` 服务：`emit(store, payload)` / `subscribe(fn)` / per-store revision 自增。零 HTTP、零数据（P1） |
-| `packages/watchlist` → `@dsh-trading/watchlist` | 双面插件 | host 侧自选股 file store（`~/.dsh/watchlists.json`，仿 `custom-fs.ts` 原子写）+ 选中标的 selection store（`~/.dsh/selection.json`）+ `./plugin` 子路径注册 `watchlist_list/add/remove/select` 工具（P3） |
-| `packages/client-ui-strategies` → `@dsh-trading/client-ui-strategies` | client 插件 | 策略视图从 client-ui-trading 拆出，`ctx.inject(['tradingStageViews'])` 注册中栏「策略」tab；引擎经 `@dsh-trading/strategies` 纯库子路径 import（P5） |
-| `packages/client-ui-knowledge` → `@dsh-trading/client-ui-knowledge` | client 插件 | 知识库视图拆出，同上注册「知识库」tab（P5） |
+| `packages/eventbus` → `@dshtrading/eventbus` | 插件（node 半） | provide `tradingEvents` 服务：`emit(store, payload)` / `subscribe(fn)` / per-store revision 自增。零 HTTP、零数据（P1） |
+| `packages/watchlist` → `@dshtrading/watchlist` | 双面插件 | host 侧自选股 file store（`~/.dsh/watchlists.json`，仿 `custom-fs.ts` 原子写）+ 选中标的 selection store（`~/.dsh/selection.json`）+ `./plugin` 子路径注册 `watchlist_list/add/remove/select` 工具（P3） |
+| `packages/client-ui-strategies` → `@dshtrading/client-ui-strategies` | client 插件 | 策略视图从 client-ui-trading 拆出，`ctx.inject(['tradingStageViews'])` 注册中栏「策略」tab；引擎经 `@dshtrading/strategies` 纯库子路径 import（P5） |
+| `packages/client-ui-knowledge` → `@dshtrading/client-ui-knowledge` | client 插件 | 知识库视图拆出，同上注册「知识库」tab（P5） |
 
 ### 4.2 既有包职责调整
 
 | 包 | 调整 |
 |---|---|
-| `packages/strategies` | main 保持纯库导出（浏览器打包零影响）；新增 `./plugin` 子路径（node 半插件：custom strategy store 落 `~/.dsh/strategies/custom.json` + `strategy_author` / `strategy_backtest` 工具 + 写后 emit）。patch 行 `name: '@dsh-trading/strategies/plugin'`（dataplane 行同款先例）（P2） |
+| `packages/strategies` | main 保持纯库导出（浏览器打包零影响）；新增 `./plugin` 子路径（node 半插件：custom strategy store 落 `~/.dsh/strategies/custom.json` + `strategy_author` / `strategy_backtest` 工具 + 写后 emit）。patch 行 `name: '@dshtrading/strategies/plugin'`（dataplane 行同款先例）（P2） |
 | `packages/indicators` | 新增 `./plugin` 子路径：`indicator_author` 从 kit/client-ui-trading 双注册收口至此；`<market>_get_indicators` 纳入自定义指标；新增 `indicator_delete`（P4） |
 | `packages/knowledge` | 新增 `./plugin` 子路径：`knowledge_ingest/search` 收口至此；新增 `knowledge_graph`（可选）（P4） |
 | `packages/client-ui-trading` | 保留 shell（dock / quote 视图 / session rail / 桥）；`MIDDLE_VIEWS` 常量升格为 `tradingStageViews` client 服务（开放注册面）；桥新增 SSE endpoint 与 `/strategies/custom`、`/watchlists` 端点；strategy/knowledge 视图代码迁出（P1/P2/P3/P5） |
@@ -180,9 +180,9 @@ Bundle（分发面）    base patch insert 行挂载，sync-profile-overrides �
 | Phase | 内容 | 交付物 | 依赖 |
 |---|---|---|---|
 | **P0** | 服务缝闸门下推 | 各交易 connector（okx/binance/bybit/ccxt/alpaca/ibkr/qmt/futu/longbridge/tiger）TradeService 实现内三态检查 + 单测 + dry-run spike 证据 | 无（安全前置） |
-| **P1** | SSE 基建 | `@dsh-trading/eventbus` 包 + 桥 `GET /dshtrading/api/events` + 客户端订阅替换三处一次性 fetch + 指标/知识上屏实时化 + 自定义指标删除 UI 入口 | 无 |
+| **P1** | SSE 基建 | `@dshtrading/eventbus` 包 + 桥 `GET /dshtrading/api/events` + 客户端订阅替换三处一次性 fetch + 指标/知识上屏实时化 + 自定义指标删除 UI 入口 | 无 |
 | **P2** | 策略管线 | strategies `./plugin` + custom store + `strategy_author`/`strategy_backtest` + 桥 `/strategies/custom` + StrategyView 名册合并 + 信号校验器 | P1（上屏实时性） |
-| **P3** | 自选股升位 | `@dsh-trading/watchlist` 包 + 桥端点 + 导入迁移 + 4 工具 + MarketSidebar 改造（host SSOT） | P1 |
+| **P3** | 自选股升位 | `@dshtrading/watchlist` 包 + 桥端点 + 导入迁移 + 4 工具 + MarketSidebar 改造（host SSOT） | P1 |
 | **P4** | 工具面补齐 | get_indicators 铺满四市场并纳入自定义指标 + `indicator_delete` + `instruments_search` + `routing_get` + kit 双注册收口到能力包 `./plugin` | P1、P2 |
 | **P5** | UI 插件化收口 | `tradingStageViews` 注册面 + client-ui-strategies / client-ui-knowledge 拆包 + toolview 富卡片 | P2、P3 |
 | **P6** | dsh-tool-cordis 开放 | base 挂行 + `dynamic-capabilities` skill（使用场景与安全边界指南）+ 动态包激活提示 UI | **P0** |

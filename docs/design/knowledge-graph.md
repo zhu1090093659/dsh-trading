@@ -61,7 +61,7 @@ packages/knowledge/src/
 ```
 
 - 文件存储：`~/.dsh/knowledge/cards.json`，**tmp+rename 原子写**、错误日志 + rethrow——实现模式逐行对齐 `packages/indicators/src/custom-fs.ts`（#19 先例）；
-- node 子路径 `@dsh-trading/knowledge/tool` 承载工具与 file store（对齐 `@dsh-trading/indicators/tool`）。
+- node 子路径 `@dshtrading/knowledge/tool` 承载工具与 file store（对齐 `@dshtrading/indicators/tool`）。
 
 ### 图构建（`graph.ts`）
 

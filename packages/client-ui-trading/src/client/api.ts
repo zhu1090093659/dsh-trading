@@ -4,10 +4,10 @@
  * carries the auth cookie by default).
  */
 import type { AccountBalance, DerivativesData, DerivativesHistory, Kline, MarketId, MarketInfo, Order, Orderbook, Position, TickerOutcome, TradeFill, TradeTick } from './types.ts'
-import type { FundamentalsPackage } from '@dsh-trading/api'
-import type { CustomIndicatorRecord } from '@dsh-trading/indicators'
-import type { KnowledgeCard } from '@dsh-trading/knowledge'
-import type { CustomStrategyRecord } from '@dsh-trading/strategies'
+import type { FundamentalsPackage } from '@dshtrading/api'
+import type { CustomIndicatorRecord } from '@dshtrading/indicators'
+import type { KnowledgeCard } from '@dshtrading/knowledge'
+import type { CustomStrategyRecord } from '@dshtrading/strategies'
 
 export class BridgeError extends Error {
   constructor(readonly status: number, message: string) {
@@ -406,7 +406,7 @@ export async function putHostSelection(instrument: { market: string; symbol: str
 }
 
 /**
- * store 词汇（v1）：镜像 host 半 @dsh-trading/eventbus 的 TradingEventStore.
+ * store 词汇（v1）：镜像 host 半 @dshtrading/eventbus 的 TradingEventStore.
  * 浏览器半不 import node 包（避免把 cordis 拖进 client bundle）——词汇是封闭
  * 小集合，镜像漂移的代价是 handler 不触发（降级为现状），可接受。
  */

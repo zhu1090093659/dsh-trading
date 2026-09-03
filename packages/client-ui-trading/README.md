@@ -1,4 +1,4 @@
-# @dsh-trading/client-ui-trading
+# @dshtrading/client-ui-trading
 
 交易 GUI 壳（专业交易软件的三栏式架构载体），dsh web 宿主双面包插件：
 
@@ -20,8 +20,8 @@
 
 ## 指标系统（3.1 插件化）
 
-- 指标 definition（类型 + math + 预置）在纯库 `@dsh-trading/indicators`；预置
-  MA/EMA/BOLL/MACD/RSI/KDJ 由 `@dsh-trading/client-ui-indicators` 插件在
+- 指标 definition（类型 + math + 预置）在纯库 `@dshtrading/indicators`；预置
+  MA/EMA/BOLL/MACD/RSI/KDJ 由 `@dshtrading/client-ui-indicators` 插件在
   client 上下文 provide 为 `tradingIndicators` 服务（cordis reflect.provide）。
 - 本包持有本地注册表（`indicator-registry.ts` 单例）+ 可选桥接（`ctx.inject`
   服务可用才合并 definition）；插件未安装时行情视图零指标正常工作。

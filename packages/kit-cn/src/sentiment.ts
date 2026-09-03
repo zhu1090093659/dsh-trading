@@ -6,11 +6,11 @@
  *   - 集合竞价快照与竞价强弱指标
  *   - 龙虎榜契约类型预留（取数实现规划中）
  *
- * @module @dsh-trading/kit-cn/sentiment
+ * @module @dshtrading/kit-cn/sentiment
  */
 
-import type { AuctionSnapshot, LimitUpPoolItem } from '@dsh-trading/api'
-import { HiThinkRestClient, normalizeThsCode } from '@dsh-trading/connector-hithink'
+import type { AuctionSnapshot, LimitUpPoolItem } from '@dshtrading/api'
+import { HiThinkRestClient, normalizeThsCode } from '@dshtrading/connector-hithink'
 
 export interface SentimentOptions {
   apiKey?: string | undefined

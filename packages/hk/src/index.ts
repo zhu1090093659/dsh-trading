@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/hk — hk 市场 bundle。包承载两块实质内容（实装形态抄 @dsh-trading/us）：
+ * @dshtrading/hk — hk 市场 bundle。包承载两块实质内容（实装形态抄 @dshtrading/us）：
  *
  *   1. `cordis.patch.yml`（由 package.json 的 `dsh.bundle.patch` 声明）：insert-only
  *      聚合本 bundle 的 host 面常驻行（铁律 #1）。connector/kit 两行在 preset 的
@@ -11,7 +11,7 @@
  * cn/hk 是**同一个 connector-tencent 插件包的两个实例**（单包双市场，手册 §8）：
  * 本 bundle 的 preset 行挂 market=hk 实例（提供 tradingHkMarketData + hk_* 工具）。
  *
- * @module @dsh-trading/hk
+ * @module @dshtrading/hk
  */
 
 import { createHash } from 'node:crypto'

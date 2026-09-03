@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-akshare/rest
+ * @dshtrading/connector-akshare/rest
  * AkShare A 股宏观与量化另类数据 REST 客户端。
  */
 
@@ -8,7 +8,7 @@ import type {
   Kline,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

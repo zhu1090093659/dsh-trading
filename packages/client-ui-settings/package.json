@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/client-ui-settings",
+  "name": "@dshtrading/client-ui-settings",
   "description": "Trading settings section for the dsh web client: market → provider routing (dshtrading namespace). Browser half is a dsh.client bundle; node half is the host row placeholder.",
   "version": "0.1.0",
   "type": "module",
@@ -30,7 +30,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/router": "workspace:^"
+    "@dshtrading/router": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

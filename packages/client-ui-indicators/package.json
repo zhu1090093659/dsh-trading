@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/client-ui-indicators",
+  "name": "@dshtrading/client-ui-indicators",
   "description": "Technical indicator provider plugin for dsh-trading: provides the tradingIndicators service (IndicatorRegistry with six presets MA/EMA/BOLL/MACD/RSI/KDJ) on the client context. Community indicators consume the same service via ctx.inject. Node half is a host loader placeholder; the browser half owns the service.",
   "version": "0.1.0",
   "type": "module",
@@ -25,7 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/indicators": "workspace:^"
+    "@dshtrading/indicators": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0"

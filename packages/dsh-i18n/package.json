@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/dsh-i18n",
+  "name": "@dshtrading/dsh-i18n",
   "description": "Central language-pack plugin for the dsh-trading trading GUI: registers Simplified Chinese (zh-CN) as a selectable language in the host Settings → General → Language row and carries the zh-CN dictionaries for all dshtrading locale namespaces. Source packages own their zh/en dictionaries (typed register); this plugin is the single home for additional languages — adding language #3 = importing its dictionary module and one register line.",
   "version": "0.1.0",
   "type": "module",
@@ -25,10 +25,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/client-ui-trading": "workspace:^",
-    "@dsh-trading/client-ui-settings": "workspace:^",
-    "@dsh-trading/client-ui-strategies": "workspace:^",
-    "@dsh-trading/client-ui-knowledge": "workspace:^"
+    "@dshtrading/client-ui-trading": "workspace:^",
+    "@dshtrading/client-ui-settings": "workspace:^",
+    "@dshtrading/client-ui-strategies": "workspace:^",
+    "@dshtrading/client-ui-knowledge": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

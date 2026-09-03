@@ -12,12 +12,12 @@
  * 安装时行情视图零指标正常工作。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { createIndicatorRegistry, presetDefinitions } from '@dsh-trading/indicators'
+import { createIndicatorRegistry, presetDefinitions } from '@dshtrading/indicators'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** dsh-trading 技术指标注册表（社区指标经 ctx.inject 消费后 register）。 */
-    tradingIndicators: import('@dsh-trading/indicators').IndicatorRegistry
+    tradingIndicators: import('@dshtrading/indicators').IndicatorRegistry
   }
 }
 

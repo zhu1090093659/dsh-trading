@@ -1,6 +1,6 @@
 {
-  "name": "@dsh-trading/connector-stooq",
-  "description": "US market connector plugin for dsh-trading: public market data from Stooq CSV endpoints implementing the @dsh-trading/api contracts (no key; personal/non-commercial use per stooq.com terms)",
+  "name": "@dshtrading/connector-stooq",
+  "description": "US market connector plugin for dsh-trading: public market data from Stooq CSV endpoints implementing the @dshtrading/api contracts (no key; personal/non-commercial use per stooq.com terms)",
   "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
@@ -21,7 +21,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dsh-trading/api": "workspace:^"
+    "@dshtrading/api": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

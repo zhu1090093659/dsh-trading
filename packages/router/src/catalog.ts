@@ -7,7 +7,7 @@
  * 词汇纪律：symbol 一律市场规范词汇（docs/symbol-vocabulary.md）。
  *
  * 纯数据模块（零依赖，浏览器/Node 双端安全）。
- * @module @dsh-trading/router/catalog
+ * @module @dshtrading/router/catalog
  */
 
 /** 市场词汇（与 api MarketId 同词汇；本地定义保持本模块零依赖）。 */

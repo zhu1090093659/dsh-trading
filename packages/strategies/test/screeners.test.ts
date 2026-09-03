@@ -3,7 +3,7 @@
  * 返回 null 三条线全覆盖（契约：evaluate 是无 IO 纯函数）。
  */
 import { describe, expect, it } from 'vitest'
-import type { Kline } from '@dsh-trading/indicators'
+import type { Kline } from '@dshtrading/indicators'
 import {
   screenerParadigms,
   getScreenerById,

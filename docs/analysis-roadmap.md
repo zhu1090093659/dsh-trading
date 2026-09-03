@@ -9,7 +9,7 @@
 
 | # | 问题 | 定稿 | 理由 |
 |---|---|---|---|
-| Q1 | 技术指标放哪层 | **共享纯函数包** `@dsh-trading/indicators`：GUI 指标注册表的 compute 抽出，GUI 与 Agent 工具共用 | 一次维护两边一致；符合铁律 #6（数据层契约不动） |
+| Q1 | 技术指标放哪层 | **共享纯函数包** `@dshtrading/indicators`：GUI 指标注册表的 compute 抽出，GUI 与 Agent 工具共用 | 一次维护两边一致；符合铁律 #6（数据层契约不动） |
 | Q2 | 定性分析编排 | **基础工具 + skill 知识**（铁律 #2 哲学的延伸），不做宏分析工具 | 分析框架是知识不是代码；宏工具会让模型退化为播报员，框架调整还得改代码 |
 | Q3 | 新闻数据源 | **A 打底（无 key 公共源：交易所公告/RSS）+ B 增强（CryptoPanic 等免费层，用户自备 key，settings 加字段、无 key 优雅降级）**；先 spike 验证可达性 | 铁律 #5（不内置 key）；B 源覆盖好但必须有合规获取路径 |
 | Q4 | 推进方式 | 规划文档 → 推 GitHub（private）→ 按本文件建 issue → 协作者认领 | 任务自包含、验收明确才可外发 |
@@ -19,7 +19,7 @@
 ### WS1 技术指标共享包 + Agent 指标工具
 
 **做什么**：
-1. 新包 `@dsh-trading/indicators`：从 `client-ui-trading/src/client/indicator-registry.ts` 抽出
+1. 新包 `@dshtrading/indicators`：从 `client-ui-trading/src/client/indicator-registry.ts` 抽出
    纯函数 compute（MA/EMA/BOLL/MACD/RSI/KDJ）+ 参数 schema + 定义注册表；零 DOM/浏览器依赖。
 2. `client-ui-trading` 改为依赖共享包（注册表外壳留在 UI 包：pane/渲染逻辑不抽）。
 3. kit 侧新增 `<market>_get_indicators` 工具（crypto 先行）：入参 symbol + interval + 指标
@@ -41,7 +41,7 @@ Binance/OKX 公告页（RSS 或 HTML 列表）、主流加密媒体 RSS（CoinDe
 （原始响应 + EVIDENCE.md，replication 手册纪律）。产出：源清单（可达/字段/更新频率/ToS
 风险分级）+ 推荐接入面。
 
-**WS2b 新闻工具实现**（依赖 WS2a）：新增 `@dsh-trading/connector-news-crypto`（命名/形态
+**WS2b 新闻工具实现**（依赖 WS2a）：新增 `@dshtrading/connector-news-crypto`（命名/形态
 以 spike 结论为准——若源都是 RSS 聚合，可能是 kit 内薄工具而非完整连接器，手册生成器
 是否需要 news 类模板也在 spike 里回答）。工具面：`<market>_get_news`（入参 symbol/币种
 过滤 + 时间窗 + 条数上限），输出带来源名 + 发布时间 + 链接（Agent 引用溯源用）。

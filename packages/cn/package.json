@@ -1,5 +1,5 @@
 {
-  "name": "@dsh-trading/cn",
+  "name": "@dshtrading/cn",
   "description": "CN (A-share) market bundle for dsh-trading: host-plane cn-trader preset installer + insert-only aggregation of the Tencent connector (market=cn instance) and cn kit rows (design rule #1)",
   "version": "0.1.0",
   "type": "module",
@@ -28,13 +28,13 @@
     "build": "tsdown"
   },
   "dependencies": {
-    "@dsh-trading/connector-akshare": "workspace:*",
-    "@dsh-trading/connector-eastmoney": "workspace:*",
-    "@dsh-trading/connector-hithink": "workspace:*",
-    "@dsh-trading/connector-qmt": "workspace:*",
-    "@dsh-trading/connector-tencent": "workspace:*",
-    "@dsh-trading/connector-tushare": "workspace:*",
-    "@dsh-trading/kit-cn": "workspace:*"
+    "@dshtrading/connector-akshare": "workspace:*",
+    "@dshtrading/connector-eastmoney": "workspace:*",
+    "@dshtrading/connector-hithink": "workspace:*",
+    "@dshtrading/connector-qmt": "workspace:*",
+    "@dshtrading/connector-tencent": "workspace:*",
+    "@dshtrading/connector-tushare": "workspace:*",
+    "@dshtrading/kit-cn": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

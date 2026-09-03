@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Ticker } from '@dsh-trading/api'
+import type { Ticker } from '@dshtrading/api'
 import { type Config, type PlaceOrderArgs, buildDryRunReceipt, createPlaceOrderTool, evaluateOrderGate } from '../src/index.js'
 
 const TICKER: Ticker = {

@@ -1,8 +1,8 @@
 # us-trader agent preset —— dsh-trading us 切片（实装形态抄 crypto-trader）。
 #
-# 本文件由 @dsh-trading/us 的 dsh-trading-us-installer 插件（bundle host 面常驻行）在
+# 本文件由 @dshtrading/us 的 dsh-trading-us-installer 插件（bundle host 面常驻行）在
 # apply() 时幂等自安装到市场自有 preset root（默认 ~/.dsh-trading-presets/us-trader；
-# agent-presets 行需把该 root 配进 roots，统一配置归 @dsh-trading/base）。插件卸载不
+# agent-presets 行需把该 root 配进 roots，统一配置归 @dshtrading/base）。插件卸载不
 # 删除已安装目录；升级/重装后再次 apply 即恢复一致，行不可解析时只会得到带原因的
 # broken 行，无进程崩溃（S3 REPORT broken 语义）。
 #
@@ -38,7 +38,7 @@
     tradingUsMarketData: true
   config:
     - id: dsh-trading-us-connector-yahoo
-      name: '@dsh-trading/connector-yahoo'
+      name: '@dshtrading/connector-yahoo'
       config:
         enabled: true
         dryRun: true
@@ -52,7 +52,7 @@
     tradingUsTrade: true
   config:
     - id: dsh-trading-us-connector-alpaca
-      name: '@dsh-trading/connector-alpaca'
+      name: '@dshtrading/connector-alpaca'
       config:
         enabled: true
         env: demo
@@ -67,7 +67,7 @@
     tradingUsTrade: true
   config:
     - id: dsh-trading-us-connector-fmp
-      name: '@dsh-trading/connector-fmp'
+      name: '@dshtrading/connector-fmp'
       config:
         enabled: true
         dryRun: true
@@ -81,7 +81,7 @@
     tradingUsTrade: true
   config:
     - id: dsh-trading-us-connector-finnhub
-      name: '@dsh-trading/connector-finnhub'
+      name: '@dshtrading/connector-finnhub'
       config:
         enabled: true
         dryRun: true
@@ -95,7 +95,7 @@
     tradingUsTrade: true
   config:
     - id: dsh-trading-us-connector-polygon
-      name: '@dsh-trading/connector-polygon'
+      name: '@dshtrading/connector-polygon'
       config:
         enabled: true
         dryRun: true
@@ -109,7 +109,7 @@
     tradingUsTrade: true
   config:
     - id: dsh-trading-us-connector-ibkr
-      name: '@dsh-trading/connector-ibkr'
+      name: '@dshtrading/connector-ibkr'
       config:
         enabled: true
         dryRun: true
@@ -119,7 +119,7 @@
 
 
 - id: dsh-trading-us-kit
-  name: '@dsh-trading/kit-us'
+  name: '@dshtrading/kit-us'
   config:
     dryRun: true
     liveTrading: false

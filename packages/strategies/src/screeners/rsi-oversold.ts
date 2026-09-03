@@ -2,7 +2,7 @@
  * RSI 超卖：RSI(period) 跌入阈值以下的逆势关注筛选——超卖≠见底，
  * 定位是「值得盯的反转候选池」，命中理由里明示是逆势信号。
  */
-import { rsi } from '@dsh-trading/indicators'
+import { rsi } from '@dshtrading/indicators'
 import type { ScreenerDefinition } from './types.ts'
 
 export const rsiOversoldScreener: ScreenerDefinition = {

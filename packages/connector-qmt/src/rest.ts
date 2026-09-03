@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-qmt/rest
+ * @dshtrading/connector-qmt/rest
  * 迅投 MiniQMT A 股券商实盘交易与行情客户端。
  */
 
@@ -12,7 +12,7 @@ import type {
   Position,
   Ticker,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

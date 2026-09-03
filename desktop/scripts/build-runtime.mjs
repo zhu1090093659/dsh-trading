@@ -8,7 +8,7 @@
  *    are not published to npm, the installer carries them as packed tarballs);
  * 2. pack every workspace package into runtime/profile-trading/vendor/;
  * 3. generate the profile manifest (direct dependencies point at the local
- *    tarballs, overrides pin the whole @dsh-trading/* closure to them) and
+ *    tarballs, overrides pin the whole @dshtrading/* closure to them) and
  *    pnpm-install it with a hoisted, multi-platform layout;
  * 4. pnpm-install the pinned @deepseek-ai/dsh host closure;
  * 5. stage both trees into desktop/resources/runtime/ for electron-builder's
@@ -34,13 +34,13 @@ const stagingRoot = path.join(desktopDir, 'resources', 'runtime');
 
 /** Direct profile dependencies mirroring the live trading-web profile. */
 const DIRECT_TRADING_PACKAGES = [
-  '@dsh-trading/base',
-  '@dsh-trading/crypto',
-  '@dsh-trading/us',
-  '@dsh-trading/cn',
-  '@dsh-trading/hk',
-  '@dsh-trading/indicator-supertrend',
-  '@dsh-trading/dsh-i18n',
+  '@dshtrading/base',
+  '@dshtrading/crypto',
+  '@dshtrading/us',
+  '@dshtrading/cn',
+  '@dshtrading/hk',
+  '@dshtrading/indicator-supertrend',
+  '@dshtrading/dsh-i18n',
 ];
 /** Registry package carried alongside the trading bundles. */
 const REGISTRY_DEPENDENCIES = {
@@ -50,11 +50,11 @@ const REGISTRY_DEPENDENCIES = {
 const PROFILE_BUNDLES = [
   '@deepseek-ai/dsh-base',
   '@deepseek-ai/dsh-web-app',
-  '@dsh-trading/base',
-  '@dsh-trading/crypto',
-  '@dsh-trading/us',
-  '@dsh-trading/cn',
-  '@dsh-trading/hk',
+  '@dshtrading/base',
+  '@dshtrading/crypto',
+  '@dshtrading/us',
+  '@dshtrading/cn',
+  '@dshtrading/hk',
 ];
 
 const HOST_PACKAGE = '@deepseek-ai/dsh';
@@ -149,7 +149,7 @@ function writeProfileManifest(profileDir, tarballs) {
     '    - x64',
     '    - arm64',
     '',
-    '# Every @dsh-trading/* package resolves to the packed workspace tarball;',
+    '# Every @dshtrading/* package resolves to the packed workspace tarball;',
     '# registry dependencies install from npm.',
     'overrides:',
     ...Object.entries(overrides).map(([name, spec]) => '  \'' + name + '\': \'' + spec + '\''),
@@ -207,7 +207,7 @@ function stage(sourceDir, destDir, names, nodeModules = true) {
 function assertRuntimeEntrypoints() {
   const hostBin = path.join(stagingRoot, 'host', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
   if (!fs.existsSync(hostBin)) throw new Error('staged host is missing ' + path.relative(desktopDir, hostBin));
-  for (const bundle of PROFILE_BUNDLES.filter((name) => name.startsWith('@dsh-trading/'))) {
+  for (const bundle of PROFILE_BUNDLES.filter((name) => name.startsWith('@dshtrading/'))) {
     const patch = path.join(stagingRoot, 'profile-trading', 'node_modules', ...bundle.split('/'), 'cordis.patch.yml');
     if (!fs.existsSync(patch)) throw new Error('staged profile is missing the ' + bundle + ' bundle patch');
   }

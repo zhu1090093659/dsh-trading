@@ -40,7 +40,7 @@ node scripts/new-connector.mjs --slug bybit --title Bybit --market crypto
 - 安全：目标目录已存在默认拒绝（`--yes` 覆盖）；任何未替换 token 收尾报错终止，
   不会生成半展开包。
 - 生成器**不跑** install/build。生成后第一步：
-  `pnpm install && pnpm --filter @dsh-trading/connector-<slug> build`。
+  `pnpm install && pnpm --filter @dshtrading/connector-<slug> build`。
 
 > 模板包本身（`packages/connector-template`）也在 `pnpm -r build/test` 基线内，
 > 仅作脚手架源，**不入任何 bundle 依赖**——不要把它加进 `<market>/package.json`。
@@ -70,7 +70,7 @@ connector-okx 的对应实现段：
 - **仅行情（无交易面）**：删 TradeService 类、`trading<Market>Trade` 服务键、交易面五个
   工具与 `ctx.inject([TRADING_TRADE_KEY])` 块；Config 保留 dryRun/liveTrading（下单三
   路径语义属于市场统一面，虽然当前市场没有真交易也要留——us/cn/hk 先例如此）。
-- **契约扩展**：需要服务键/方法扩展时改 `@dsh-trading/api` 的模块增强声明（类型层，
+- **契约扩展**：需要服务键/方法扩展时改 `@dshtrading/api` 的模块增强声明（类型层，
   零运行时；replication §7.4）。**不得**在 api 里加运行时东西。
 
 ---
@@ -79,7 +79,7 @@ connector-okx 的对应实现段：
 
 | 对象 | 形态（crypto/bybit 例） | 出处/强制理由 |
 |---|---|---|
-| npm 包名 | `@dsh-trading/connector-bybit` | TEMPLATES §8 |
+| npm 包名 | `@dshtrading/connector-bybit` | TEMPLATES §8 |
 | 插件名 = 行 id | `dsh-trading-crypto-connector-bybit` | insert-only 铁律 #1；全仓唯一 |
 | 工具名 | `crypto_get_ticker` / `crypto_place_order`（市场前缀 + 语义词，**无交易所名**） | README 定稿 2；闸门正则只认市场前缀 |
 | 闸门正则 | `/^(?:crypto|us|cn|hk)_(?:place|cancel)_order$/ ` | base 已含四市场；**新市场才扩**，新交易所不动 |
@@ -107,7 +107,7 @@ connector-okx 的对应实现段：
     tradingCryptoTrade: true      # 有交易面的连接器才加
   config:
     - id: dsh-trading-crypto-connector-bybit
-      name: '@dsh-trading/connector-bybit'
+      name: '@dshtrading/connector-bybit'
       config:
         enabled: false            # 互斥激活默认关（okx 先例）
         env: demo
@@ -125,7 +125,7 @@ connector-okx 的对应实现段：
 
 ```yaml
     - id: dsh-trading-<market>-dataplane-<slug>
-      name: '@dsh-trading/connector-<slug>/dataplane'
+      name: '@dshtrading/connector-<slug>/dataplane'
       config:
         enabled: true
 ```

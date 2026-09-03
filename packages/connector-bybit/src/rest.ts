@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-bybit/rest
+ * @dshtrading/connector-bybit/rest
  * Bybit API v5 REST 客户端（支持公共行情与现货/衍生品交易）。
  */
 
@@ -16,7 +16,7 @@ import type {
   Ticker,
   TradeTick,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

@@ -1,4 +1,4 @@
-# @dsh-trading/dsh-i18n — 中心化 i18n 语言包
+# @dshtrading/dsh-i18n — 中心化 i18n 语言包
 
 dsh-trading 交易 GUI 的中心语言包插件（范式对标 dsh-web `packages/dsh-i18n`）：注册「简体中文」（zh-CN）进宿主 Settings → General → Language 语言目录，并为全部 `dshtrading.*` locale 命名空间注册 zh-CN 词典。宿主内置 zh（中文）/ en（English）两种语言由各源包 typed register 持有，本包只承载**额外语言**。
 
@@ -8,7 +8,7 @@ dsh-trading 交易 GUI 的中心语言包插件（范式对标 dsh-web `packages
 - **浏览器半**（`src/client/index.ts`）：
   - `ctx.locale.addLanguage({ id: 'zh-CN', label: '简体中文', fallback: 'zh' })`——语言目录注册（label 按目标语言自述）；
   - 逐命名空间 `ctx.locale.register(ns, 'zh-CN', dict)`——untyped 单语言 overload（zh/en 由源包持有，(ns, locale) 单一占主语义允许语言包补位）；逐项 try/catch，目录项被占主时静默降级不阻塞其余命名空间。
-- **词典来源**：构建期直接 `import '@dsh-trading/client-ui-*/locales'`（各源包 `src/client/locales.ts` 纯数据模块，tsdown 打进本包 client bundle）——**zh-CN ≡ zh 零拷贝零漂移**；源包键位变更由 typed register 编译期校验 + `pnpm i18n:check` 门禁兜底。新增语言 = import 新词典模块 + `PACKAGES`/`LANGUAGES` 各加一项。
+- **词典来源**：构建期直接 `import '@dshtrading/client-ui-*/locales'`（各源包 `src/client/locales.ts` 纯数据模块，tsdown 打进本包 client bundle）——**zh-CN ≡ zh 零拷贝零漂移**；源包键位变更由 typed register 编译期校验 + `pnpm i18n:check` 门禁兜底。新增语言 = import 新词典模块 + `PACKAGES`/`LANGUAGES` 各加一项。
 
 ## 维护契约（强制）
 

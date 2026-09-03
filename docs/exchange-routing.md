@@ -50,7 +50,7 @@
       cn:     { provider: tencent }     ← 单候选（占位，为将来多源预留）
       hk:     { provider: tencent }
               ↓（settings-file 经 base 挂载，web/headless 一致）
-@dsh-trading/base（host 面）
+@dshtrading/base（host 面）
   - settings（官方行，base 拥有）
   - dsh-trading-market-router（新增：本包提供）
       ctx.inject(['settings']) → installSettingsSection(ctx, dshtrading, schema, defaults, hooks)
@@ -123,7 +123,7 @@ export const Config: Schema<Config> = Schema.object({
 ## 3. 服务接口
 
 ```ts
-// @dsh-trading/router 导出；类型增强在 @dsh-trading/api（Context 模块增强，零运行时）
+// @dshtrading/router 导出；类型增强在 @dshtrading/api（Context 模块增强，零运行时）
 export interface MarketRouterService {
   /** 某市场当前激活的 provider slug（设置 resolved：用户层赢，缺省 base 默认）。 */
   activeProvider(market: string): string | undefined
@@ -192,7 +192,7 @@ export function apply(ctx: Context, config: Config): void {
 
 ### 6.2 外部复刻的最小面（dsh-trading 侧）
 
-`packages/client-ui-trading/`（新包，`@dsh-trading/client-ui-trading`，dsh.client 声明的**双面包**）：
+`packages/client-ui-trading/`（新包，`@dshtrading/client-ui-trading`，dsh.client 声明的**双面包**）：
 
 1. **`tsdown.client.external.ts`**：复刻 `clientConfig` 的核心——cjs/browser/outDir lib/
    entryFileNames lib/client.js/clean:false/sourcemap/define（NODE_ENV + import.meta.env
@@ -205,7 +205,7 @@ export function apply(ctx: Context, config: Config): void {
    provider 选择（enum：binance/okx/yahoo/stooq/tencent）→ `ctx.remote.settings.update(ns, patch, rev)`
    写回（expectedRevision 防漂移）。
 3. **node 半 `src/index.ts`**：空 apply（行占位，让 loader 在 profile 层次里看到包）。
-4. **接线**：web/bundle 层的 patch —— **`@dsh-trading/base` 的 cordis.patch.yml insert
+4. **接线**：web/bundle 层的 patch —— **`@dshtrading/base` 的 cordis.patch.yml insert
    `dsh-trading-client-ui-trading` 行**（host 面，base 拥有市场无关行；web 宿主生效；
    headless 无 UI 无碍——行在 patch 中解析为包，absent row warn+skip 语义已有）。
 5. **`dsh.client` 声明**：inject 含 `@deepseek-ai/dsh-client-ui-settings`（settings
@@ -214,7 +214,7 @@ export function apply(ctx: Context, config: Config): void {
 ### 6.3 实现状态（2026-08-29 交付）
 
 **已交付**：
-- `@dsh-trading/client-ui-settings`（双面包）：node 半空 apply；浏览器半注册
+- `@dshtrading/client-ui-settings`（双面包）：node 半空 apply；浏览器半注册
   `settings.section` id=trading（『交易』一级菜单）——市场卡（crypto/us/cn/hk）×
   provider 单选（binance/okx/yahoo/stooq/tencent）× 保存（path mutation + revision
   防漂移）/重置（unset 回 base）/『新建会话生效』提示；文案 zh/en 双语；

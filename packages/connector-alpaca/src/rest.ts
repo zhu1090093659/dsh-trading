@@ -10,7 +10,7 @@
  *  - APCA-API-KEY-ID: key
  *  - APCA-API-SECRET-KEY: secret
  *
- * @module @dsh-trading/connector-alpaca/rest
+ * @module @dshtrading/connector-alpaca/rest
  */
 
 import type {
@@ -23,7 +23,7 @@ import type {
   Ticker,
   TradeFill,
   TradingErrorCode,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode

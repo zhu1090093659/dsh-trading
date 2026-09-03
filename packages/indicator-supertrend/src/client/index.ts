@@ -1,6 +1,6 @@
 /**
  * 超级趋势（社区指标示例/spike，client 半）：证明第三方指标插件可以只经
- * tradingIndicators 服务接入——本包不依赖 @dsh-trading/indicators 的运行时
+ * tradingIndicators 服务接入——本包不依赖 @dshtrading/indicators 的运行时
  * （ATR 本地实现，类型 type-only import），不注册任何 slot，与行情壳零耦合。
  *
  * 接入方式 = ctx.inject(['tradingIndicators'], …)（服务可用时回调才触发；
@@ -9,7 +9,7 @@
  * i18n-allow: 独立示例插件，指标标题/参数文案本期不进词典（与预置指标中文 title 同口径）。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { IndicatorDefinition, Kline, Series } from '@dsh-trading/indicators'
+import type { IndicatorDefinition, Kline, Series } from '@dshtrading/indicators'
 
 /** Wilder 平滑 ATR（本地实现：社区指标自带数学内核的形态）。 */
 function atr(highs: readonly number[], lows: readonly number[], closes: readonly number[], period: number): Series {

@@ -1,5 +1,5 @@
 /**
- * @dsh-trading/connector-hithink
+ * @dshtrading/connector-hithink
  * 同花顺官方金融数据服务 (HiThink-Tech) A 股连接器插件。
  */
 
@@ -15,7 +15,7 @@ import type {
   MarketDataService,
   StockFundamentals,
   Ticker,
-} from '@dsh-trading/api'
+} from '@dshtrading/api'
 import {
   HiThinkRestClient,
   type HiThinkRestOptions,

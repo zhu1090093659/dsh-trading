@@ -3,8 +3,8 @@
  * 参数校验、请求分发路由与协议错误。宿主面全部用假件（不触网）。
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { MarketDataService, NewsAggregator } from '@dsh-trading/api'
-import { createMemoryCustomStrategyStore } from '@dsh-trading/strategies'
+import type { MarketDataService, NewsAggregator } from '@dshtrading/api'
+import { createMemoryCustomStrategyStore } from '@dshtrading/strategies'
 import {
   BridgeProtocolError,
   MARKET_SERVICE_KEYS,
@@ -251,7 +251,7 @@ describe('TradingBridge.orderbook + trades（issue #39 盘口竖栏）', () => {
 })
 
 describe('TradingBridge.trade/*（issue #40 交易台：只读 + 强制 dry-run）', () => {
-  function tradeService(overrides: Partial<import('@dsh-trading/api').TradeService> = {}): import('@dsh-trading/api').TradeService {
+  function tradeService(overrides: Partial<import('@dshtrading/api').TradeService> = {}): import('@dshtrading/api').TradeService {
     return {
       placeOrder: async (req) => ({
         id: 'dry-1', symbol: req.symbol, side: req.side, type: req.type,
@@ -266,7 +266,7 @@ describe('TradingBridge.trade/*（issue #40 交易台：只读 + 强制 dry-run�
     }
   }
 
-  function tradeHost(service: import('@dsh-trading/api').TradeService | undefined): BridgeHost {
+  function tradeHost(service: import('@dshtrading/api').TradeService | undefined): BridgeHost {
     return {
       getMarketService: market => market === 'crypto' ? fakeService() : undefined,
       activeProvider: () => 'okx',
