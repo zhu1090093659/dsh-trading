@@ -39,6 +39,8 @@ export const volumeBreakoutScreener: ScreenerDefinition = {
     return {
       metrics: { volRatio, breakoutPct },
       reason: `放量 ${volRatio.toFixed(2)} 倍突破 ${lookback} 日高点`,
+      reasonKey: 'scr.volume-breakout.reason',
+      reasonParams: { ratio: volRatio.toFixed(2), n: lookback },
     }
   },
 }

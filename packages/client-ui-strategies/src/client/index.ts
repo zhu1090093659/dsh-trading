@@ -13,9 +13,9 @@ import type { ComponentType } from 'react'
 import type { ToolCallOwnerProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import { StrategyView } from './StrategyView.tsx'
 import { StrategyBacktestCard, StrategyAuthorCard } from './toolview.tsx'
-import type { StrategyLocaleKey } from './contract.ts'
 import './contract.ts'
 
+import { en, zh } from './locales.ts'
 const NS = 'dshtrading.strategies'
 
 /** Required services：slot/locale 官方服务 + 视图注册面 + 桥面（后两者由
@@ -42,7 +42,7 @@ interface BridgeService {
 
 export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
-  ctx.effect(() => ctx.locale.register(NS, dictionaries()), 'dsh-trading-strategies-view: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-trading-strategies-view: dictionaries')
 
   // 中栏「策略」tab：视图组件在 render 闭包里捕获 t 与桥（服务就绪后注册，
   // 依赖时序由 cordis inject 解析保证）。
@@ -85,104 +85,4 @@ export function apply(ctx: ClientContext): void {
     key: 'strategy_author',
     locale: NS,
   }, StrategyAuthorCard as unknown as ComponentType<ToolCallOwnerProps & { t: (key: string) => string }>))
-}
-
-/** 文案字典：locale.register 契约 = { zh, en }。 */
-function dictionaries(): Record<'zh' | 'en', Record<StrategyLocaleKey, string>> {
-  return {
-    zh: {
-      'sv.section.screener': '选股策略',
-      'sv.section.quant': '量化策略',
-      'sv.horizon.short': '短线交易',
-      'sv.horizon.swing': '波段操作',
-      'sv.horizon.long': '长线投资',
-      'sv.run': '运行回测',
-      'sv.running': '回测计算中...',
-      'sv.symbolLabel': '标的:',
-      'sv.intervalDaily': '(日K)',
-      'sv.error.noKlines': '未能获取到该标的的 K 线数据，无法执行回测',
-      'sv.error.failed': '策略计算异常',
-      'sv.metrics.totalReturn': '累计收益率',
-      'sv.metrics.cagr': '年化复合增长率 (CAGR)',
-      'sv.metrics.maxDrawdown': '最大回撤 (MDD)',
-      'sv.metrics.sharpe': '夏普比率 (Sharpe)',
-      'sv.metrics.winRate': '胜率 (Win Rate)',
-      'sv.metrics.profitFactor': '盈亏比 (Profit Factor)',
-      'sv.metrics.tradeCount': '交易笔数',
-      'sv.metrics.tradeUnit': '笔',
-      'sv.metrics.exposure': '市场暴露度 (Exposure)',
-      'sv.trades.title': '交易明细流水',
-      'sv.trades.empty': '回测区间内未触发交易信号',
-      'sv.trades.entryTime': '开仓时间',
-      'sv.trades.exitTime': '平仓时间',
-      'sv.trades.entryPrice': '开仓均价',
-      'sv.trades.exitPrice': '平仓均价',
-      'sv.trades.holdingBars': '持仓根数',
-      'sv.trades.netReturn': '单笔净收益率',
-      'sv.trades.exitReason': '离场原因',
-      'sv.empty.hint': '选择上方策略与参数后，点击「运行回测」查看绩效与权益曲线',
-      'sv.screener.run': '运行选股',
-      'sv.screener.stop': '停止',
-      'sv.screener.scanLimit': '扫描池上限',
-      'sv.screener.universePrefix': '标的名册',
-      'sv.screener.scanned': '已扫描',
-      'sv.screener.hits': '命中',
-      'sv.screener.failed': '失败',
-      'sv.screener.noUniverse': '当前数据源未提供标的全集，选股功能不可用（Binance/OKX 等提供名册的连接器可用）',
-      'sv.screener.noHits': '扫描完成：没有标的满足当前条件',
-      'sv.screener.scanning': '扫描中，命中将实时出现在下方...',
-      'sv.screener.emptyHint': '选择上方选股器与参数后，点击「运行选股」扫描全市场标的',
-      'sv.screener.col.symbol': '代码',
-      'sv.screener.col.name': '名称',
-      'sv.screener.col.price': '现价',
-      'sv.screener.col.reason': '信号说明',
-    },
-    en: {
-      'sv.section.screener': 'Screener',
-      'sv.section.quant': 'Quantitative',
-      'sv.horizon.short': 'Short-term',
-      'sv.horizon.swing': 'Swing',
-      'sv.horizon.long': 'Long-term',
-      'sv.run': 'Run Backtest',
-      'sv.running': 'Running...',
-      'sv.symbolLabel': 'Symbol & Interval:',
-      'sv.intervalDaily': '(Daily)',
-      'sv.error.noKlines': 'Failed to fetch klines for this symbol, cannot run backtest',
-      'sv.error.failed': 'Strategy compute error',
-      'sv.metrics.totalReturn': 'Total Return',
-      'sv.metrics.cagr': 'CAGR',
-      'sv.metrics.maxDrawdown': 'Max Drawdown',
-      'sv.metrics.sharpe': 'Sharpe Ratio',
-      'sv.metrics.winRate': 'Win Rate',
-      'sv.metrics.profitFactor': 'Profit Factor',
-      'sv.metrics.tradeCount': 'Trades',
-      'sv.metrics.tradeUnit': 'trades',
-      'sv.metrics.exposure': 'Market Exposure',
-      'sv.trades.title': 'Trade Log',
-      'sv.trades.empty': 'No trades generated in the backtest period',
-      'sv.trades.entryTime': 'Entry Time',
-      'sv.trades.exitTime': 'Exit Time',
-      'sv.trades.entryPrice': 'Entry Price',
-      'sv.trades.exitPrice': 'Exit Price',
-      'sv.trades.holdingBars': 'Holding Bars',
-      'sv.trades.netReturn': 'Net Return',
-      'sv.trades.exitReason': 'Exit Reason',
-      'sv.empty.hint': 'Select a strategy and parameters above, then click "Run Backtest"',
-      'sv.screener.run': 'Scan',
-      'sv.screener.stop': 'Stop',
-      'sv.screener.scanLimit': 'Scan Cap',
-      'sv.screener.universePrefix': 'Universe',
-      'sv.screener.scanned': 'Scanned',
-      'sv.screener.hits': 'Hits',
-      'sv.screener.failed': 'Failed',
-      'sv.screener.noUniverse': 'This data source does not provide a symbol universe; screening is unavailable (connectors like Binance/OKX do)',
-      'sv.screener.noHits': 'Scan finished: no symbols match the current criteria',
-      'sv.screener.scanning': 'Scanning, hits appear below in real time...',
-      'sv.screener.emptyHint': 'Pick a screener and parameters above, then click "Scan" to screen the market',
-      'sv.screener.col.symbol': 'Symbol',
-      'sv.screener.col.name': 'Name',
-      'sv.screener.col.price': 'Price',
-      'sv.screener.col.reason': 'Signal',
-    },
-  }
 }

@@ -29,6 +29,8 @@ export const rsiOversoldScreener: ScreenerDefinition = {
     return {
       metrics: { rsi: value },
       reason: `RSI(${period}) = ${value.toFixed(1)}，进入超卖区（逆势信号）`,
+      reasonKey: 'scr.rsi-oversold.reason',
+      reasonParams: { period, val: value.toFixed(1) },
     }
   },
 }

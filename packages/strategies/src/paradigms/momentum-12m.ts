@@ -39,6 +39,8 @@ export const momentum12mStrategy: StrategyDefinition = {
           direction: 'long',
           price: currentClose,
           reason: `近 ${lookback} 周期动量为正 (+${(momentumReturn * 100).toFixed(1)}%) 且位于均线 (${currentSma.toFixed(2)}) 之上，确认强动量`,
+          reasonKey: 'strat.momentum-12m.reason.entry',
+          reasonParams: { n: lookback, pct: (momentumReturn * 100).toFixed(1), sma: currentSma.toFixed(2) },
         })
         inPosition = true
       } else if (inPosition && (momentumReturn <= 0 || currentClose < currentSma)) {
@@ -50,6 +52,8 @@ export const momentum12mStrategy: StrategyDefinition = {
           direction: 'flat',
           price: currentClose,
           reason: `${exitCause} (${(momentumReturn * 100).toFixed(1)}% / SMA ${currentSma.toFixed(2)})，动量衰减平仓`,
+          reasonKey: 'strat.momentum-12m.reason.exit',
+          reasonParams: { cause: momentumReturn <= 0 ? 'momentumNegative' : 'belowBaseline', pct: (momentumReturn * 100).toFixed(1), sma: currentSma.toFixed(2) },
         })
         inPosition = false
       }

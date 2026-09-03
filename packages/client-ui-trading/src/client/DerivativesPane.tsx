@@ -10,13 +10,13 @@
  * 语义注记：fundingRate 为小数（0.0001 = 0.01%），正费率=多头付资金（多头拥挤），
  * 颜色随涨跌语义（directionColor）；多空比/主动买卖比 >1 偏多。
  */
-import { fmtCompact, directionColor } from './format.ts'
+import { fmtCompact, directionColor, scaleLocaleOf } from './format.ts'
 import type { ColorMode } from './color-mode.ts'
 import type { DerivativesData } from './types.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import css from './derivatives-pane.module.css'
 
-export type DerivativesTranslate = (key: MarketLocaleKey) => string
+export type DerivativesTranslate = (key: MarketLocaleKey, params?: Record<string, unknown>) => string
 
 export interface DerivativesPaneProps {
   t: DerivativesTranslate
@@ -26,22 +26,21 @@ export interface DerivativesPaneProps {
 }
 
 export function DerivativesPane({ t, derivatives, colorMode }: DerivativesPaneProps): React.JSX.Element {
+  const numLocale = scaleLocaleOf(t)
   const cells: Array<{ key: string; label: string; value: string; sub?: string; color?: string } | null> = [
     // 持仓量：base 币数（okx oiCcy / binance fapi openInterest / bybit linear openInterest 同语义）。
     derivatives.openInterest !== undefined
       ? {
         key: 'oi',
         label: t('derivatives.oi'),
-        value: fmtCompact(derivatives.openInterest),
-        color: undefined,
+        value: fmtCompact(derivatives.openInterest, numLocale),
       }
       : null,
     derivatives.openInterestValue !== undefined
       ? {
         key: 'oiValue',
         label: t('derivatives.oiValue'),
-        value: `${fmtCompact(derivatives.openInterestValue)} USD`,
-        color: undefined,
+        value: `${fmtCompact(derivatives.openInterestValue, numLocale)} USD`,
       }
       : null,
     // 资金费率：小数 → 百分比（4 位小数），正=多头付资金（颜色随涨跌语义）。
@@ -50,7 +49,7 @@ export function DerivativesPane({ t, derivatives, colorMode }: DerivativesPanePr
         key: 'funding',
         label: t('derivatives.funding'),
         value: `${(derivatives.fundingRate * 100).toFixed(4)}%`,
-        sub: derivatives.fundingRate > 0 ? t('derivatives.fundingPositive') : derivatives.fundingRate < 0 ? t('derivatives.fundingNegative') : undefined,
+        ...(derivatives.fundingRate !== 0 ? { sub: derivatives.fundingRate > 0 ? t('derivatives.fundingPositive') : t('derivatives.fundingNegative') } : {}),
         color: directionColor(derivatives.fundingRate, colorMode),
       }
       : null,
@@ -90,7 +89,7 @@ function ratioCell(
     key,
     label,
     value: ratio.toFixed(2),
-    sub: ratio > 1 ? t('derivatives.ratioLong') : ratio < 1 ? t('derivatives.ratioShort') : undefined,
+    ...(ratio !== 1 ? { sub: ratio > 1 ? t('derivatives.ratioLong') : t('derivatives.ratioShort') } : {}),
     color: directionColor(ratio - 1, colorMode),
   }
 }

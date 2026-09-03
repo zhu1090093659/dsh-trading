@@ -12,6 +12,7 @@ import {
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
+import type { QuoteMessageCopy } from './compose-quote.ts'
 import type { SendImageInput } from './fill-composer.ts'
 import { FundamentalsStage } from './FundamentalsStage.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
@@ -22,7 +23,7 @@ import { IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import {
   INTRADAY_INTERVALS, changePercent, directionColor,
-  fmtChange, fmtClock, fmtCompact, fmtPercent, fmtPrice,
+  fmtChange, fmtClock, fmtCompact, fmtPercent, fmtPrice, scaleLocaleOf,
 } from './format.ts'
 import { indicators, isCustomIndicator } from './indicator-registry.ts'
 import type { IndicatorDefinition, IndicatorInstance } from '@dsh-trading/indicators'
@@ -80,7 +81,7 @@ const INTERVAL_KEY: Record<string, MarketLocaleKey> = {
   '1M': 'interval.1M',
 }
 
-export type Translate = (key: MarketLocaleKey) => string
+export type Translate = (key: MarketLocaleKey, params?: Record<string, unknown>) => string
 
 export type UseStoreState<TState> = <TSelected>(selector: (state: TState) => TSelected) => TSelected
 
@@ -119,6 +120,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const activeMarket: MarketId = market ?? 'crypto'
 
   const colorMode = useSyncExternalStore(colorModeStore.subscribe, colorModeStore.getSnapshot)
+  // 数值紧凑单位 locale（亿/万 vs K/M/B）：词典哨兵键判定，随语言切换响应。
+  const numLocale = scaleLocaleOf(t)
 
   const instances = useChart(state => state.instances)
   // 指标名册修订号：插件晚于首帧合并 definition 时触发重渲染。
@@ -420,21 +423,21 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             time: bar.time,
             action: 'entry',
             price: bar.close,
-            reason: `EMA(12/26) 金叉买入价 ${cur}${bar.close.toFixed(2)}`,
+            reason: t('marker.signal.entryReason', { cur, price: bar.close.toFixed(2) }),
           })
         } else if (prevDiff >= 0 && diff < 0) {
           signals.push({
             time: bar.time,
             action: 'exit',
             price: bar.close,
-            reason: `EMA(12/26) 死叉卖出价 ${cur}${bar.close.toFixed(2)}`,
+            reason: t('marker.signal.exitReason', { cur, price: bar.close.toFixed(2) }),
           })
         }
       }
       prevDiff = diff
     }
     return signals.length > 0 ? signals : undefined
-  }, [bars])
+  }, [bars, t])
 
   // 知识事件标记数据（issue #41）：从当前标的的官方公告与知识事件中提取，按时间柱精准锚定（同 K 线柱去重聚合，避免边缘挤压）。
   const knowledgeMarkers = useMemo<readonly ChartKnowledgeMarkerInput[] | undefined>(() => {
@@ -476,13 +479,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     for (const [time, info] of barMap.entries()) {
       markers.push({
         time,
-        title: info.count > 1 ? `${info.title} (等${info.count}条)` : info.title,
+        title: info.count > 1 ? t('marker.knowledge.batched', { title: info.title, count: String(info.count) }) : info.title,
         cardId: info.url,
         credibility: 'high',
       })
     }
     return markers.length > 0 ? markers : undefined
-  }, [newsItems, bars])
+  }, [newsItems, bars, t])
 
   // 发给 Agent：先截图（画布只在图表挂载期间可取），再把文本 + PNG 填入
   // 会话输入框（不自动发送——用户大概率还要补自己的 prompt）。
@@ -507,7 +510,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       withScreenshot: capture !== null,
     }
     // exactOptionalPropertyTypes：undefined 字段直接剔除而非显式传 undefined。
-    const text = composeQuoteMessage(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as unknown as Parameters<typeof composeQuoteMessage>[0])
+    const copy: QuoteMessageCopy = {
+      opener: t('compose.opener'),
+      prevClose: t('compose.prevClose'),
+      priceLine: t('compose.priceLine'),
+      candleLine: t('compose.candleLine'),
+      indicatorsLine: t('compose.indicatorsLine'),
+      listSeparator: t('compose.listSeparator'),
+      withScreenshotTail: t('compose.withScreenshot'),
+      withoutScreenshotTail: t('compose.withoutScreenshot'),
+    }
+    const text = composeQuoteMessage(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as unknown as Parameters<typeof composeQuoteMessage>[0], copy)
     setSendState('sending')
     void fillComposer(text, capture === null ? undefined : {
       dataUrl: capture.dataUrl,
@@ -542,7 +555,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const color = directionColor(stats.pct ?? 0, colorMode)
 
   const rawName = instrument?.name
-  const isPlaceholderName = !rawName || rawName === symbol || /\(A股\)|\(港股\)/.test(rawName)
+  const isPlaceholderName = !rawName || rawName === symbol || /\(A股\)|\(港股\)/.test(rawName) // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
   const tickerName = (ticker as { name?: string })?.name
   const displayName = (!isPlaceholderName ? rawName : (tickerName || rawName || symbol))
 
@@ -615,7 +628,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           <span className={css.stat}><label>{t('quote.open')}</label>{fmtPrice(readoutCandle?.open)}</span>
           <span className={css.stat}><label>{t('quote.high')}</label>{fmtPrice(readoutCandle?.high)}</span>
           <span className={css.stat}><label>{t('quote.low')}</label>{fmtPrice(readoutCandle?.low)}</span>
-          <span className={css.stat}><label>{t('quote.volume')}</label>{fmtCompact(readoutCandle?.volume)}</span>
+          <span className={css.stat}><label>{t('quote.volume')}</label>{fmtCompact(readoutCandle?.volume, numLocale)}</span>
         </div>
       )}
 
@@ -699,10 +712,10 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             className={css.pickerButton}
             data-active={markerState.showSignals ? 'true' : undefined}
             aria-pressed={markerState.showSignals}
-            title="策略信号标记"
+            title={t('marker.signal.toggleTitle')}
             onClick={() => markerStore.toggleSignals()}
           >
-            信号
+            {t('marker.signal.toggle')}
           </button>
           {/* 知识事件图钉开关（issue #41） */}
           <button
@@ -710,10 +723,10 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             className={css.pickerButton}
             data-active={markerState.showKnowledgeEvents ? 'true' : undefined}
             aria-pressed={markerState.showKnowledgeEvents}
-            title="知识事件图钉"
+            title={t('marker.knowledge.toggleTitle')}
             onClick={() => markerStore.toggleKnowledgeEvents()}
           >
-            事件
+            {t('marker.knowledge.toggle')}
           </button>
           {/* 区间统计（同花顺式框选统计；紧挨「技术指标」按钮左侧） */}
             <button
@@ -776,7 +789,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         </div>
       )}
 
-      {stageTab === 'chart' && kError !== null && <div className={css.error}>{t('quote.loadFailed')}：{kError}</div>}
+      {stageTab === 'chart' && kError !== null && <div className={css.error}>{t('quote.loadFailedColon', { error: kError })}</div>}
 
       {/* 图表主舞台 / 基本面页签（互斥挂载）；crypto 图表下方挂衍生品指标条（issue #38），
           右侧可折叠盘口竖栏（issue #39） */}
@@ -802,6 +815,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 signalMarkers={markerState.showSignals ? signalMarkers : undefined}
                 knowledgeMarkers={markerState.showKnowledgeEvents ? knowledgeMarkers : undefined}
                 onMarkerHover={setMarkerHover}
+                markerTexts={{ entry: t('trade.buy'), exit: t('trade.sell') }}
+                numLocale={numLocale}
               />
             )}
             {rangeMode && rangeStats !== null && (
@@ -846,7 +861,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 </div>
                 <div className={css.rangePanelRow}>
                   <span>{t('range.volume')}</span>
-                  <span>{fmtCompact(rangeStats.volume)}</span>
+                  <span>{fmtCompact(rangeStats.volume, numLocale)}</span>
                 </div>
                 <div className={css.rangePanelRow}>
                   <span>{t('range.bars')}</span>
@@ -870,6 +885,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 y={markerHover.y}
                 containerWidth={markerHover.containerWidth}
                 containerHeight={markerHover.containerHeight}
+                t={t}
                 signal={markerHover.signal ? {
                   action: markerHover.signal.action,
                   price: markerHover.signal.price,
@@ -983,7 +999,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           const color = directionColor(pct ?? 0, colorMode)
           return (
             <span key={def.symbol} className={css.indexGroup}>
-              <span className={css.indexName}>{def.name}</span>
+              <span className={css.indexName}>{t(def.nameKey)}</span>
               {price !== undefined ? (
                 <span style={{ color, fontWeight: 600 }}>
                   {fmtPrice(price)} {fmtPercent(pct)}

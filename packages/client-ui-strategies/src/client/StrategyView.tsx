@@ -65,7 +65,7 @@ function formatDate(timestamp: number): string {
 export type UseStoreState<TState> = <TSelected>(selector: (state: TState) => TSelected) => TSelected
 
 export interface StrategyViewProps {
-  t: (key: StrategyLocaleKey) => string
+  t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string
   /** 中栏活动视图 id（tradingStageViews.render 透传；本视图固定 strategy，未用）。 */
   view?: string
   /** 桥面（shell 的 tradingBridge 服务；未注入时空跑——视图静默空态）。 */
@@ -349,8 +349,8 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
                   data-active={strat.id === selectedId ? 'true' : undefined}
                   onClick={() => setSelectedId(strat.id)}
                 >
-                  <div className={css.cardTitle}>{strat.name}</div>
-                  <div className={css.cardSummary}>{strat.summary}</div>
+                  <div className={css.cardTitle}>{strategyName(strat, t)}</div>
+                  <div className={css.cardSummary}>{strategySummary(strat, t)}</div>
                 </div>
               ))}
             </div>
@@ -367,7 +367,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
       <div className={css.configBar}>
         {currentStrategy.params.map((p) => (
           <div key={p.key} className={css.paramGroup}>
-            <label className={css.paramLabel}>{p.label}:</label>
+            <label className={css.paramLabel}>{paramLabel(currentStrategy, p, t)}:</label>
             <input
               type="number"
               className={css.paramInput}
@@ -507,7 +507,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
                         <td className={tr.returnPercent >= 0 ? css.trendUp : css.trendDown}>
                           {formatPercent(tr.returnPercent, true)}
                         </td>
-                        <td className={css.reasonCell}>{tr.exitReason}</td>
+                        <td className={css.reasonCell}>{exitReasonText(tr, t)}</td>
                       </tr>
                     ))
                   )}
@@ -528,4 +528,61 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
       )}
     </div>
   )
+}
+
+/**
+ * 内置策略/选股器的展示文案词典映射：键约定 strat.<id>[.summary/.param.<key>/
+ * .reason.<kind>]/scr.<id>[.summary/.param.<key>/.col.<key>/.reason]。
+ * 词典优先，miss 回退定义自带值——自定义策略（用户 author，单语）自动走回退，
+ * host 纯库（packages/strategies）零 locale 依赖。
+ */
+export function strategyName(def: { id: string; name: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
+  return t(`strat.${def.id}` as StrategyLocaleKey) !== `strat.${def.id}` ? t(`strat.${def.id}` as StrategyLocaleKey) : def.name
+}
+
+export function strategySummary(def: { id: string; summary: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
+  const key = `strat.${def.id}.summary` as StrategyLocaleKey
+  return t(key) !== key ? t(key) : def.summary
+}
+
+export function paramLabel(def: { id: string }, param: { key: string; label: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
+  const key = `strat.${def.id}.param.${param.key}` as StrategyLocaleKey
+  return t(key) !== key ? t(key) : param.label
+}
+
+export function screenerName(def: { id: string; name: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
+  const key = `${def.id}` as StrategyLocaleKey
+  return t(key) !== key ? t(key) : def.name
+}
+
+export function screenerSummary(def: { id: string; summary: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
+  const key = `${def.id}.summary` as StrategyLocaleKey
+  return t(key) !== key ? t(key) : def.summary
+}
+
+export function screenerParamLabel(def: { id: string }, param: { key: string; label: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
+  const key = `${def.id}.param.${param.key}` as StrategyLocaleKey
+  return t(key) !== key ? t(key) : param.label
+}
+
+export function screenerColumnLabel(def: { id: string }, col: { key: string; label: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
+  const key = `${def.id}.col.${col.key}` as StrategyLocaleKey
+  return t(key) !== key ? t(key) : col.label
+}
+
+/** 交易流水的离场原因：词典键优先（内置范式，en 下走当语模板），回退 zh 原文
+ *  （自定义策略无 reasonKey）。momentum 的 {cause} 槽是稳定枚举键，先翻译成
+ *  当语文案再进模板插值。 */
+export function exitReasonText(
+  tr: { exitReason: string; exitReasonKey?: string; exitReasonParams?: Readonly<Record<string, string | number>> },
+  t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string,
+): string {
+  if (tr.exitReasonKey === undefined) return tr.exitReason
+  const params: Record<string, unknown> = { ...(tr.exitReasonParams ?? {}) }
+  if (typeof params.cause === 'string' && ['momentumNegative', 'belowBaseline'].includes(params.cause)) {
+    const causeKey = `strat.momentum-12m.cause.${params.cause}` as StrategyLocaleKey
+    params.cause = t(causeKey) !== causeKey ? t(causeKey) : params.cause
+  }
+  const text = t(tr.exitReasonKey as StrategyLocaleKey, params)
+  return text !== tr.exitReasonKey ? text : tr.exitReason
 }

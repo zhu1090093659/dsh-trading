@@ -22,8 +22,13 @@ export interface ScreenerColumnSpec {
 export interface ScreenerMatch {
   /** 动态指标值（key 对应 columns 声明） */
   readonly metrics: Readonly<Record<string, number>>
-  /** 人话解释，UI 直接展示（如「放量 2.3 倍突破 20 日高点」） */
+  /** 人话解释，UI 直接展示（zh 单语原文，回退用） */
   readonly reason: string
+  /** reason 的词典键（client-ui-strategies 词典约定 scr.<id>.reason），
+   *  视图按当前语言渲染 t(reasonKey, reasonParams)；缺省回退 reason 原文。 */
+  readonly reasonKey?: string
+  /** reasonKey 的 {placeholder} 插值参数。 */
+  readonly reasonParams?: Readonly<Record<string, string | number>>
 }
 
 export interface ScreenerDefinition {

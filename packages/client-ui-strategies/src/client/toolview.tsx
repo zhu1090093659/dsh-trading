@@ -11,7 +11,11 @@
  */
 import type { ToolCallOwnerProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import { parseStrategyBacktestPayload, parseStrategyAuthorText, type ParsedBacktestCard } from './toolview-parse.ts'
+import type { StrategyLocaleKey } from './contract.ts'
 import css from './toolview.module.css'
+
+/** 卡片文案 t（keyed slot 声明 locale: NS 后由框架注入 owner props）。 */
+type CardProps = ToolCallOwnerProps & { t?: (key: StrategyLocaleKey) => string }
 
 /** 从 owner.block 取（argsRaw, result 文本）。RunningToolCall 无 result → null。 */
 function readCall(block: ToolCallOwnerProps['block']): { argsRaw: string; resultText: string | null; isError: boolean } {
@@ -58,19 +62,20 @@ function EquitySparkline({ values, isPositive }: { values: number[]; isPositive:
   )
 }
 
-const METRIC_CELL: ReadonlyArray<{ key: keyof ParsedBacktestCard; label: string; suffix?: string; plus?: boolean }> = [
-  { key: 'totalReturn', label: '累计收益率', suffix: '%', plus: true },
-  { key: 'cagr', label: '年化 (CAGR)', suffix: '%', plus: true },
-  { key: 'maxDrawdown', label: '最大回撤', suffix: '%' },
-  { key: 'sharpe', label: '夏普' },
-  { key: 'winRate', label: '胜率', suffix: '%' },
-  { key: 'profitFactor', label: '盈亏比' },
-  { key: 'tradeCount', label: '交易笔数' },
-  { key: 'exposure', label: '暴露度', suffix: '%' },
+const METRIC_CELL: ReadonlyArray<{ key: keyof ParsedBacktestCard; labelKey: StrategyLocaleKey; suffix?: string; plus?: boolean }> = [
+  { key: 'totalReturn', labelKey: 'sv.metrics.totalReturn', suffix: '%', plus: true },
+  { key: 'cagr', labelKey: 'sv.metrics.cagr', suffix: '%', plus: true },
+  { key: 'maxDrawdown', labelKey: 'sv.metrics.maxDrawdown', suffix: '%' },
+  { key: 'sharpe', labelKey: 'sv.metrics.sharpe' },
+  { key: 'winRate', labelKey: 'sv.metrics.winRate', suffix: '%' },
+  { key: 'profitFactor', labelKey: 'sv.metrics.profitFactor' },
+  { key: 'tradeCount', labelKey: 'sv.metrics.tradeCount' },
+  { key: 'exposure', labelKey: 'sv.metrics.exposure', suffix: '%' },
 ]
 
 /** strategy_backtest 卡：头部（策略名 + 标的 + 区间）+ sparkline + 8 指标 mini 网格。 */
-export function StrategyBacktestCard({ block }: ToolCallOwnerProps) {
+export function StrategyBacktestCard(props: CardProps) {
+  const { block, t } = props
   const call = readCall(block)
   if (call.isError || call.resultText === null) return null
   const payload = parseStrategyBacktestPayload(call.resultText)
@@ -89,7 +94,7 @@ export function StrategyBacktestCard({ block }: ToolCallOwnerProps) {
       <div className={css.metrics}>
         {METRIC_CELL.map(cell => (
           <div key={cell.key} className={css.metric}>
-            <span className={css.metricLabel}>{cell.label}</span>
+            <span className={css.metricLabel}>{t !== undefined ? t(cell.labelKey) : cell.labelKey}</span>
             <span
               className={css.metricValue}
               data-tone={cell.key === 'totalReturn' || cell.key === 'cagr' ? (payload[cell.key] as number | null) >= 0 ? 'up' : 'down' : undefined}
@@ -104,7 +109,7 @@ export function StrategyBacktestCard({ block }: ToolCallOwnerProps) {
 }
 
 /** strategy_author 卡：成功 = 标题 + id/horizon/参数摘要；失败 = 原因高亮。 */
-export function StrategyAuthorCard({ block }: ToolCallOwnerProps) {
+export function StrategyAuthorCard({ block, t }: CardProps) {
   const call = readCall(block)
   if (call.resultText === null) return null
   const parsed = parseStrategyAuthorText(call.resultText)
@@ -114,7 +119,7 @@ export function StrategyAuthorCard({ block }: ToolCallOwnerProps) {
     return (
       <div className={css.card} data-dshtrading-toolview="strategy-author" data-ok="false">
         <div className={css.head}>
-          <span className={css.title}>策略校验未通过</span>
+          <span className={css.title}>{t !== undefined ? t('sv.author.failed') : 'Validation failed'}</span>
         </div>
         <div className={css.reason}>{parsed.reason}</div>
       </div>

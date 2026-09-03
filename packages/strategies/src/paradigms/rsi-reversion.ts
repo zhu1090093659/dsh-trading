@@ -39,6 +39,8 @@ export const rsiReversionStrategy: StrategyDefinition = {
           direction: 'long',
           price: bars[i].close,
           reason: `RSI(${period}) 达到极端超卖值 (${val.toFixed(1)} < ${enterThresh})，触发反弹买入`,
+          reasonKey: 'strat.rsi-reversion.reason.entry',
+          reasonParams: { period, val: val.toFixed(1), thresh: enterThresh },
         })
         inPosition = true
       } else if (inPosition && val > exitThresh) {
@@ -49,6 +51,8 @@ export const rsiReversionStrategy: StrategyDefinition = {
           direction: 'flat',
           price: bars[i].close,
           reason: `RSI(${period}) 回升至目标位 (${val.toFixed(1)} > ${exitThresh})，止盈离场`,
+          reasonKey: 'strat.rsi-reversion.reason.exit',
+          reasonParams: { period, val: val.toFixed(1), thresh: exitThresh },
         })
         inPosition = false
       }

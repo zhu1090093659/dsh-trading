@@ -8,9 +8,9 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ComponentType } from 'react'
 import { KnowledgeView } from './KnowledgeView.tsx'
-import type { KnowledgeLocaleKey } from './contract.ts'
 import './contract.ts'
 
+import { en, zh } from './locales.ts'
 const NS = 'dshtrading.knowledge'
 
 /** Required services：slot/locale 官方服务 + 视图注册面 + 桥面（后两者由
@@ -35,7 +35,7 @@ interface BridgeService {
 
 export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
-  ctx.effect(() => ctx.locale.register(NS, dictionaries()), 'dsh-trading-knowledge-view: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-trading-knowledge-view: dictionaries')
 
   // 中栏「知识库」tab：视图组件在 render 闭包里捕获 t 与桥。
   // bridge/t 必须 apply 期只建一次（引用稳定）：render 闭包里每次新建字面量会让
@@ -58,80 +58,4 @@ export function apply(ctx: ClientContext): void {
       }),
     })
   })
-}
-
-/** 文案字典：locale.register 契约 = { zh, en }。 */
-function dictionaries(): Record<'zh' | 'en', Record<KnowledgeLocaleKey, string>> {
-  return {
-    zh: {
-      'kv.search.placeholder': '搜索卡片标题、摘要、标签...',
-      'kv.filter.tag': '主题标签',
-      'kv.filter.allTags': '全部标签',
-      'kv.filter.author': '来源作者',
-      'kv.filter.allAuthors': '全部作者',
-      'kv.filter.credibility': '可信度',
-      'kv.filter.allCredibility': '全部评级',
-      'kv.filter.sourceType': '来源平台',
-      'kv.filter.allSourceTypes': '全部平台',
-      'kv.filter.reset': '重置筛选',
-      'kv.credibility.high': '高可信度 (High)',
-      'kv.credibility.medium': '中可信度 (Medium)',
-      'kv.credibility.low': '低可信度 (Low)',
-      'kv.sourceType.bilibili': 'B站 (Bilibili)',
-      'kv.sourceType.wechat': '微信公众号 (WeChat)',
-      'kv.sourceType.manual': '手工录入 (Manual)',
-      'kv.empty.hint': '知识库暂无内容。把 B 站视频或公众号文章链接发给助手，说「沉淀到知识库」即可入库。',
-      'kv.empty.filtered': '未找到匹配当前筛选条件的知识卡片',
-      'kv.stats.cards': '张卡片',
-      'kv.stats.clusters': '个主题簇',
-      'kv.drawer.title': '知识卡片详情',
-      'kv.drawer.coreClaims': '核心论点',
-      'kv.drawer.factCheck': '事实核查 (三桶分类)',
-      'kv.drawer.verified': '经核实真实 (Verified)',
-      'kv.drawer.discrepancies': '有出入/夸大 (Discrepancies)',
-      'kv.drawer.unverifiable': '无法核实 (Unverifiable)',
-      'kv.drawer.takeaways': '可复用分析经验',
-      'kv.drawer.boundaries': '适用边界与避坑',
-      'kv.drawer.tickers': '关联标的',
-      'kv.drawer.related': '关联卡片',
-      'kv.drawer.openSource': '打开原始链接',
-      'kv.drawer.publishedAt': '发布日期',
-      'kv.drawer.author': '来源作者',
-    },
-    en: {
-      'kv.search.placeholder': 'Search title, summary, tags...',
-      'kv.filter.tag': 'Topic Tag',
-      'kv.filter.allTags': 'All Tags',
-      'kv.filter.author': 'Author',
-      'kv.filter.allAuthors': 'All Authors',
-      'kv.filter.credibility': 'Credibility',
-      'kv.filter.allCredibility': 'All Credibility',
-      'kv.filter.sourceType': 'Platform',
-      'kv.filter.allSourceTypes': 'All Platforms',
-      'kv.filter.reset': 'Reset',
-      'kv.credibility.high': 'High',
-      'kv.credibility.medium': 'Medium',
-      'kv.credibility.low': 'Low',
-      'kv.sourceType.bilibili': 'Bilibili',
-      'kv.sourceType.wechat': 'WeChat',
-      'kv.sourceType.manual': 'Manual',
-      'kv.empty.hint': 'No knowledge cards yet. Send a Bilibili video or WeChat article link to the assistant and say "Save to knowledge base" to ingest.',
-      'kv.empty.filtered': 'No knowledge cards match the current filter criteria',
-      'kv.stats.cards': 'Cards',
-      'kv.stats.clusters': 'Clusters',
-      'kv.drawer.title': 'Knowledge Card Details',
-      'kv.drawer.coreClaims': 'Core Claims',
-      'kv.drawer.factCheck': 'Fact Check (3 Buckets)',
-      'kv.drawer.verified': 'Verified',
-      'kv.drawer.discrepancies': 'Discrepancies',
-      'kv.drawer.unverifiable': 'Unverifiable',
-      'kv.drawer.takeaways': 'Reusable Takeaways',
-      'kv.drawer.boundaries': 'Boundaries & Pitfalls',
-      'kv.drawer.tickers': 'Related Tickers',
-      'kv.drawer.related': 'Related Cards',
-      'kv.drawer.openSource': 'Open Original URL',
-      'kv.drawer.publishedAt': 'Published At',
-      'kv.drawer.author': 'Author',
-    },
-  }
 }

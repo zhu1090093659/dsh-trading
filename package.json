@@ -12,6 +12,8 @@
     "sync:skills": "node scripts/sync-skills.mjs",
     "build": "pnpm sync:skills && pnpm -r build",
     "test": "vitest run --passWithNoTests",
+    "i18n:check": "node scripts/i18n-audit.mjs --check",
+    "i18n:report": "node scripts/i18n-audit.mjs --report",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "pnpm build && changeset publish"

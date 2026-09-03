@@ -16,7 +16,12 @@ export interface StrategySignal {
   /** v1 只有 long/flat 两态（不做做空）；预留词汇避免后续破坏性变更 */
   readonly direction: 'long' | 'flat'
   readonly price: number      // 确认时收盘价（展示用；成交价由 engine 决定）
-  readonly reason: string     // 人话解释，UI 直接展示（如 'EMA20 上穿 EMA60'）
+  readonly reason: string     // 人话解释，UI 直接展示（如 'EMA20 上穿 EMA60'；zh 单语）
+  /** reason 的词典键（client-ui-strategies 词典约定 strat.<id>.reason.<kind>），
+   *  视图按当前语言渲染 t(reasonKey, reasonParams)；缺省回退 reason 原文。 */
+  readonly reasonKey?: string
+  /** reasonKey 的 {placeholder} 插值参数（数值/枚举，与语言无关）。 */
+  readonly reasonParams?: Readonly<Record<string, string | number>>
 }
 
 export interface StrategyParamSpec {
@@ -48,7 +53,10 @@ export interface TradeRecord {
   readonly returnPercent: number // 扣除手续费后的净收益率 %，如 5.2 代表 +5.2%
   readonly profit: number        // 绝对金额盈亏
   readonly holdingBars: number   // 持仓 K 线根数
-  readonly exitReason: string    // 平仓原因
+  readonly exitReason: string    // 平仓原因（zh 单语原文，回退用）
+  /** exitReason 的词典键 + 插值参数（来自离场 signal 的 reasonKey/Params）。 */
+  readonly exitReasonKey?: string
+  readonly exitReasonParams?: Readonly<Record<string, string | number>>
 }
 
 export interface EquityPoint {

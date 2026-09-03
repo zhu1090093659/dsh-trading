@@ -3,6 +3,8 @@
  * 把行情头的快照统计 + 当前 K 线读数 + 已开指标压成一段 agent 可直接
  * 读懂的上下文文本。截图是否附上只影响尾注（图是 model 侧视觉输入，
  * 文本始终自足）。
+  *
+ * i18n-allow: 默认文案常量与 zh 词典同源（copy 面由词典注入，缺省仅向后兼容）。
  */
 import { fmtChange, fmtCompact, fmtPercent, fmtPrice } from './format.ts'
 import type { Kline } from './types.ts'
@@ -22,26 +24,60 @@ export interface QuoteMessageInput {
   withScreenshot: boolean
 }
 
-export function composeQuoteMessage(input: QuoteMessageInput): string {
+/** composeQuoteMessage 的文案面（由 QuoteStage 用词典值注入，保持纯函数可测）。 */
+export interface QuoteMessageCopy {
+  /** 开场句（已含 {title} 槽）。 */
+  opener: string
+  /** 昨收后缀（含 {price} 槽；change 缺失时用）。 */
+  prevClose: string
+  /** 现价行前缀（后接价格 + 变化括注）。 */
+  priceLine: string
+  /** 当根 K 线行（各槽已按 en 语序排布，值由调用方填）。 */
+  candleLine: string
+  /** 已开指标前缀（{titles} 槽，分隔符由词典决定）。 */
+  indicatorsLine: string
+  listSeparator: string
+  withScreenshotTail: string
+  withoutScreenshotTail: string
+}
+
+export function composeQuoteMessage(input: QuoteMessageInput, copy?: QuoteMessageCopy): string {
+  const c = copy ?? ZH_COPY
   const title = [input.name ?? input.symbol, input.symbol, input.marketLabel, input.intervalLabel]
     .filter(part => part !== '')
     .filter((part, index, all) => all.indexOf(part) === index)
     .join(' · ')
-  const lines: string[] = [`看一下我正在看的行情：${title}`]
+  const lines: string[] = [c.opener.replace('{title}', title)]
   if (input.price !== undefined) {
     const delta = input.change !== undefined
       ? `（${fmtChange(input.change)}${input.pct !== undefined ? ` / ${fmtPercent(input.pct)}` : ''}）`
       : ''
-    const prev = input.prevClose !== undefined ? `，昨收 ${fmtPrice(input.prevClose)}` : ''
-    lines.push(`现价 ${fmtPrice(input.price)}${delta}${prev}`)
+    const prev = input.prevClose !== undefined ? `，${c.prevClose.replace('{price}', fmtPrice(input.prevClose))}` : ''
+    lines.push(`${c.priceLine} ${fmtPrice(input.price)}${delta}${prev}`)
   }
   if (input.candle !== undefined) {
     lines.push(
-      `当根K线 开 ${fmtPrice(input.candle.open)} 高 ${fmtPrice(input.candle.high)} `
-      + `低 ${fmtPrice(input.candle.low)} 收 ${fmtPrice(input.candle.close)} 量 ${fmtCompact(input.candle.volume)}`,
+      c.candleLine
+        .replace('{open}', fmtPrice(input.candle.open))
+        .replace('{high}', fmtPrice(input.candle.high))
+        .replace('{low}', fmtPrice(input.candle.low))
+        .replace('{close}', fmtPrice(input.candle.close))
+        .replace('{volume}', fmtCompact(input.candle.volume, 'zh')),
     )
   }
-  if (input.indicatorTitles.length > 0) lines.push(`已开启指标：${input.indicatorTitles.join('、')}`)
-  lines.push(input.withScreenshot ? '随消息附当前图表截图，请结合分析。' : '请结合当前行情继续分析。')
+  if (input.indicatorTitles.length > 0) lines.push(`${c.indicatorsLine.replace('{titles}', input.indicatorTitles.join(c.listSeparator))}`)
+  lines.push(input.withScreenshot ? c.withScreenshotTail : c.withoutScreenshotTail)
   return lines.join('\n')
+}
+
+/** 默认中文文案（向后兼容：不传 copy 时行为与历史版本一致）。 */
+const ZH_COPY: QuoteMessageCopy = {
+  opener: '看一下我正在看的行情：{title}',
+  prevClose: '昨收 {price}',
+  priceLine: '现价',
+  candleLine: '当根K线 开 {open} 高 {high} 低 {low} 收 {close} 量 {volume}',
+  indicatorsLine: '已开启指标：{titles}',
+  listSeparator: '、',
+  withScreenshotTail: '随消息附当前图表截图，请结合分析。',
+  withoutScreenshotTail: '请结合当前行情继续分析。',
 }

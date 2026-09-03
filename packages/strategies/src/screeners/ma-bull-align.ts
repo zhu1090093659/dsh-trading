@@ -37,6 +37,8 @@ export const maBullAlignScreener: ScreenerDefinition = {
     return {
       metrics: { distLongPct },
       reason: `现价站上三线且 SMA(${n1}) > SMA(${n2}) > SMA(${n3})，多头排列`,
+      reasonKey: 'scr.ma-bull-align.reason',
+      reasonParams: { n1, n2, n3 },
     }
   },
 }

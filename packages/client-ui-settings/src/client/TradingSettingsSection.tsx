@@ -6,6 +6,7 @@
  * no section changes (官方 settings.plugins.tab 模式).
  */
 import { useEffect, useId, useRef, useState } from 'react'
+import type {} from './contract/locale-keys.ts'
 import type {
   HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'

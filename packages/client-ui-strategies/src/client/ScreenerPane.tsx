@@ -15,6 +15,7 @@ import {
   type ScreenerDefinition,
 } from '@dsh-trading/strategies'
 import { readJson, writeJson } from './shell-faces.ts'
+import { screenerName, screenerSummary, screenerParamLabel, screenerColumnLabel } from './StrategyView.tsx'
 import type { StrategyLocaleKey } from './contract.ts'
 import css from './StrategyView.module.css'
 
@@ -52,6 +53,8 @@ interface ScanRow {
   readonly price: number
   readonly metrics: Readonly<Record<string, number>>
   readonly reason: string
+  readonly reasonKey?: string
+  readonly reasonParams?: Readonly<Record<string, string | number>>
 }
 
 function formatMetric(val: number, format?: 'percent' | 'number'): string {
@@ -60,7 +63,7 @@ function formatMetric(val: number, format?: 'percent' | 'number'): string {
 }
 
 export interface ScreenerPaneProps {
-  t: (key: StrategyLocaleKey) => string
+  t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string
   market: string
   bridge: {
     fetchKlines: (market: string, symbol: string, interval: string, limit: number) => Promise<Kline[]>
@@ -173,6 +176,8 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
                   price: bars[bars.length - 1]!.close,
                   metrics: match.metrics,
                   reason: match.reason,
+                  ...(match.reasonKey !== undefined ? { reasonKey: match.reasonKey } : {}),
+                  ...(match.reasonParams !== undefined ? { reasonParams: match.reasonParams } : {}),
                 })
               }
             } else {
@@ -218,8 +223,8 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
             data-disabled={scanning ? 'true' : undefined}
             onClick={() => { if (!scanning) setSelectedId(screener.id) }}
           >
-            <div className={css.cardTitle}>{screener.name}</div>
-            <div className={css.cardSummary}>{screener.summary}</div>
+            <div className={css.cardTitle}>{screenerName(screener, t)}</div>
+            <div className={css.cardSummary}>{screenerSummary(screener, t)}</div>
           </div>
         ))}
       </div>
@@ -228,7 +233,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
       <div className={css.configBar}>
         {currentScreener.params.map((p) => (
           <div key={p.key} className={css.paramGroup}>
-            <label className={css.paramLabel}>{p.label}:</label>
+            <label className={css.paramLabel}>{screenerParamLabel(currentScreener, p, t)}:</label>
             <input
               type="number"
               className={css.paramInput}
@@ -305,7 +310,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
                 <th>{t('sv.screener.col.name')}</th>
                 <th>{t('sv.screener.col.price')}</th>
                 {currentScreener.columns.map((col) => (
-                  <th key={col.key}>{col.label}</th>
+                  <th key={col.key}>{screenerColumnLabel(currentScreener, col, t)}</th>
                 ))}
                 <th>{t('sv.screener.col.reason')}</th>
               </tr>
@@ -330,7 +335,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
                     {currentScreener.columns.map((col) => (
                       <td key={col.key}>{formatMetric(row.metrics[col.key] ?? NaN, col.format)}</td>
                     ))}
-                    <td className={css.reasonCell}>{row.reason}</td>
+                    <td className={css.reasonCell}>{row.reasonKey !== undefined && t(row.reasonKey as StrategyLocaleKey, row.reasonParams) !== row.reasonKey ? t(row.reasonKey as StrategyLocaleKey, row.reasonParams) : row.reason}</td>
                   </tr>
                 ))
               )}
