@@ -173,7 +173,7 @@ dsh --profile trading-web
 This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
 
 - **Noncommercial use** — personal study, research, hobby projects, and use by noncommercial organizations (as defined in the license) — is free.
-- **Commercial use requires prior written authorization** from the project owner. To obtain a commercial license, please open a GitHub issue or contact the repository owner.
+- **Commercial use requires prior written authorization** from the project owner. To obtain a commercial license, please open a GitHub issue or contact <chunlinzhu666@gmail.com>.
 
-> 本项目采用 [PolyForm Noncommercial 1.0.0](LICENSE) 许可：个人学习、研究、兴趣项目等非商业用途免费使用；**任何商业用途须事先取得项目所有者的书面授权**，请通过 GitHub Issue 或仓库所有者联系方式洽谈商用许可。
+> 本项目采用 [PolyForm Noncommercial 1.0.0](LICENSE) 许可：个人学习、研究、兴趣项目等非商业用途免费使用；**任何商业用途须事先取得项目所有者的书面授权**，请通过 [chunlinzhu666@gmail.com](mailto:chunlinzhu666@gmail.com) 或 GitHub Issue 洽谈商用许可。
 

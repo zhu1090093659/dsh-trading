@@ -28,7 +28,8 @@ CC BY-NC 4.0（为内容设计，缺专利授权与源码条款）；纯 Apache 
 
 - 本仓许可不再是 OSI 语义的开源协议（source-available），对外表述统一为
   「非商业免费 + 商用需授权」，README 不再自称 open source license。
-- README 商用联系方式目前仅 GitHub Issue；owner 后续可补充专用邮箱或商务页。
+- README 商用联系方式：GitHub Issue + 商务邮箱 chunlinzhu666@gmail.com
+  （owner 2026-09-03 指定）。
 - 历史贡献：MIT 允许再许可，既有贡献纳入新许可分发合法；未来新接受的第三方
   贡献需贡献者知晓以本许可授权。
 - `spikes/` 下历史实验包的 MIT 字段与提及有意保留不改——spike 是裁决史原始
