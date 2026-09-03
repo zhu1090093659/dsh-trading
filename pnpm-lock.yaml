@@ -366,18 +366,30 @@ importers:
       '@deepseek-ai/dsh-client-ui-tool':
         specifier: 0.1.2-alpha.3
         version: 0.1.2-alpha.3(@deepseek-ai/cordis@4.0.2)
+      '@testing-library/dom':
+        specifier: ^10.4.1
+        version: 10.4.1
+      '@testing-library/react':
+        specifier: ^16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31
       '@types/react-dom':
         specifier: ~18.3.7
         version: 18.3.7(@types/react@18.3.31)
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1
       lightningcss:
         specifier: ^1.0.0
         version: 1.33.0
       react:
         specifier: ^18.2.0
         version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)

@@ -91,3 +91,106 @@ describe('BinanceMarketDataService.getDerivatives', () => {
       .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
   })
 })
+
+
+/** issue #54：premiumIndex 扩展字段 + 历史序列聚合。 */
+describe('BinanceMarketDataService 衍生品扩展（issue #54）', () => {
+  const EXT_ROUTES: Record<string, { status?: number; body?: unknown }> = {
+    ...FULL_ROUTES,
+    '/fapi/v1/premiumIndex': {
+      body: {
+        symbol: 'BTCUSDT', markPrice: '42001.5', indexPrice: '42000.1',
+        lastFundingRate: '0.0001', nextFundingTime: 1700028800000, time: 1700000002000,
+      },
+    },
+  }
+
+  it('premiumIndex → markPrice/indexPrice/nextFundingTime 进快照（基差卡底料）', async () => {
+    const { impl } = stubFetch(EXT_ROUTES)
+    const data = await service(impl).getDerivatives('BTCUSDT')
+    expect(data.markPrice).toBe(42001.5)
+    expect(data.indexPrice).toBe(42000.1)
+    expect(data.nextFundingTime).toBe(1700028800000)
+  })
+
+  it('getDerivativesHistory：fundingRate 历史 + openInterestHist 聚合为升序点列', async () => {
+    const { impl } = stubFetch({
+      '/fapi/v1/fundingRate': {
+        body: [
+          { symbol: 'BTCUSDT', fundingRate: '0.0001', fundingTime: 1700000000000 },
+          { symbol: 'BTCUSDT', fundingRate: '0.0002', fundingTime: 1700000002000 },
+        ],
+      },
+      '/futures/data/openInterestHist': {
+        body: [
+          { symbol: 'BTCUSDT', sumOpenInterest: '79500.3', sumOpenInterestValue: '3340000000', timestamp: 1699999000000 },
+          { symbol: 'BTCUSDT', sumOpenInterest: '80100.5', sumOpenInterestValue: '3360000000', timestamp: 1700000001000 },
+        ],
+      },
+    })
+    const history = await service(impl).getDerivativesHistory('BTCUSDT')
+    expect(history.symbol).toBe('BTCUSDT-SWAP')
+    expect(history.fundingRates).toEqual([
+      { time: 1700000000000, value: 0.0001 },
+      { time: 1700000002000, value: 0.0002 },
+    ])
+    expect(history.openInterest?.map(p => p.value)).toEqual([79500.3, 80100.5])
+  })
+
+  it('getDerivativesHistory：单端点失败 → 该序列缺省；全失败 → 结构化错误', async () => {
+    const partial = stubFetch({
+      '/fapi/v1/fundingRate': { status: 500, body: { code: -1000, msg: 'internal' } },
+      '/futures/data/openInterestHist': {
+        body: [{ symbol: 'BTCUSDT', sumOpenInterest: '79500.3', timestamp: 1699999000000 }],
+      },
+    })
+    const history = await service(partial.impl).getDerivativesHistory('BTCUSDT')
+    expect(history.fundingRates).toBeUndefined()
+    expect(history.openInterest).toHaveLength(1)
+
+    const down = stubFetch({
+      '/fapi/v1/fundingRate': { status: 500, body: { code: -1000, msg: 'internal' } },
+      '/futures/data/openInterestHist': { status: 500, body: { code: -1000, msg: 'internal' } },
+    })
+    await expect(service(down.impl).getDerivativesHistory('BTCUSDT'))
+      .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
+  })
+})
+
+
+/** issue #54 评审修复回归：funding 端点失败时 premiumIndex.lastFundingRate 兜底（L5①）。 */
+describe('BinanceMarketDataService 评审修复回归（issue #54 review）', () => {
+  it('fundingRate 端点失败 → fundingRate 取 premiumIndex.lastFundingRate 兜底', async () => {
+    const { impl } = stubFetch({
+      ...FULL_ROUTES,
+      '/fapi/v1/fundingRate': { status: 500, body: { code: -1000, msg: 'internal' } },
+      '/fapi/v1/premiumIndex': {
+        body: {
+          symbol: 'BTCUSDT', markPrice: '42001.5', indexPrice: '42000.1',
+          lastFundingRate: '0.00008', nextFundingTime: 1700028800000, time: 1700000002000,
+        },
+      },
+    })
+    const data = await service(impl).getDerivatives('BTCUSDT')
+    expect(data.fundingRate).toBe(0.00008)
+    expect(data.markPrice).toBe(42001.5)
+    expect(data.nextFundingTime).toBe(1700028800000)
+  })
+
+  it('全失败守卫计入新字段：旧五项全挂但 premiumIndex 成功 → 返回基差数据不误抛', async () => {
+    const { impl } = stubFetch({
+      '/fapi/v1/openInterest': { status: 500, body: { code: -1000, msg: 'x' } },
+      '/fapi/v1/fundingRate': { status: 500, body: { code: -1000, msg: 'x' } },
+      '/futures/data/globalLongShortAccountRatio': { status: 500, body: { code: -1000, msg: 'x' } },
+      '/futures/data/topLongShortPositionRatio': { status: 500, body: { code: -1000, msg: 'x' } },
+      '/futures/data/takerlongshortRatio': { status: 500, body: { code: -1000, msg: 'x' } },
+      '/fapi/v1/premiumIndex': {
+        body: { symbol: 'BTCUSDT', markPrice: '42001.5', indexPrice: '42000.1', nextFundingTime: 1700028800000, time: 1700000002000 },
+      },
+    })
+    const data = await service(impl).getDerivatives('BTCUSDT')
+    expect(data.markPrice).toBe(42001.5)
+    expect(data.indexPrice).toBe(42000.1)
+    expect(data.openInterest).toBeUndefined()
+  })
+})

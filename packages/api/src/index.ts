@@ -80,8 +80,41 @@ export interface DerivativesData {
   readonly takerBuySellRatio?: number
   /** 最新资金费率（小数，如 0.0001 表示 0.01%）。 */
   readonly fundingRate?: number
+  /** 预测（下一期）资金费率（小数；交易所未发布预测时缺省，issue #54）。 */
+  readonly nextFundingRate?: number
+  /** 下一期资金费率结算时间（epoch ms，GUI 倒计时用，issue #54）。 */
+  readonly nextFundingTime?: number
+  /** 标记价格（Mark Price，永续合约；issue #54 基差卡用）。 */
+  readonly markPrice?: number
+  /** 指数价格（Index Price，现货指数；与 markPrice 配对计算基差）。 */
+  readonly indexPrice?: number
   /** 快照时间（epoch ms）。 */
   readonly timestamp: number
+}
+
+/** 衍生品时序数据点（资金费率历史 / OI 历史共用词汇，issue #54）。 */
+export interface DerivativesPoint {
+  /** 采样时间（epoch ms）。 */
+  readonly time: number
+  /** 采样值（费率序列为小数费率；OI 序列单位与快照 openInterest 同语义）。 */
+  readonly value: number
+}
+
+/**
+ * 衍生品历史序列（GUI「衍生品」页签趋势卡用，issue #54）：
+ * 资金费率历史 + 未平仓量历史，时间一律升序（旧→新，与 K 线序列同向）。
+ * 可选方法 getDerivativesHistory 的返回面；任一序列不可得时该字段缺省，
+ * 消费方按卡降级（隐藏趋势图、保留快照读数）。
+ */
+export interface DerivativesHistory {
+  /** 交易对符号，市场规范词汇（如 BTCUSDT-SWAP）。 */
+  readonly symbol: string
+  /** 数据来源（如 binance / okx）。 */
+  readonly source: string
+  /** 资金费率历史（时间升序，value 为小数费率）。 */
+  readonly fundingRates?: DerivativesPoint[]
+  /** OI 历史（时间升序，value 单位与 DerivativesData.openInterest 同语义）。 */
+  readonly openInterest?: DerivativesPoint[]
 }
 
 /** 加密标的代币经济学与基本面快照。 */
@@ -488,6 +521,13 @@ export interface MarketDataService {
    * 入参接受规范形与连接器原生形，输出 `symbol` 一律规范词汇 SWAP 形（BTCUSDT-SWAP）。
    */
   getDerivatives?(symbol: string): Promise<DerivativesData>
+  /**
+   * 衍生品历史序列（GUI「衍生品」页签趋势卡用，issue #54）：资金费率历史 +
+   * OI 历史，时间升序。可选方法：无公开历史端点的数据源不实现；未实现或失败
+   * 时消费方隐藏趋势图、保留快照读数（与快照同族的降级纪律）。
+   * 入参接受规范形与连接器原生形，输出 symbol 一律规范词汇 SWAP 形。
+   */
+  getDerivativesHistory?(symbol: string): Promise<DerivativesHistory>
   /**
    * 盘口快照（GUI「盘口」竖栏用，issue #39）：档位词汇见 Orderbook。可选方法：
    * 数据源无盘口能力时不实现（如 stooq/yahoo、腾讯 r_hk 港股行档位全 0）。

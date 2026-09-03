@@ -34,6 +34,7 @@ import Schema from '@deepseek-ai/schemastery'
 import type {
   AccountBalance,
   DerivativesData,
+  DerivativesHistory,
   Disposable,
   Interval,
   Kline,
@@ -258,6 +259,8 @@ export class OkxMarketDataService extends Service implements MarketDataService {
    */
   async getDerivatives(symbol: string): Promise<DerivativesData> {
     const swapId = toOkxSwapInstId(symbol)
+    // 现货指数 instId（HYPE-USDT-SWAP → HYPE-USDT）：基差卡的指数价来源（issue #54）。
+    const spotId = swapId.replace(/-SWAP$/, '')
     const ccy = swapId.split('-')[0] ?? ''
     const unavailable: string[] = []
     const collect = <T>(label: string, task: Promise<T>): Promise<T | undefined> =>
@@ -266,23 +269,32 @@ export class OkxMarketDataService extends Service implements MarketDataService {
         return undefined
       })
 
-    const [funding, interest, ratio, taker] = await Promise.all([
+    const [funding, interest, ratio, taker, mark, index] = await Promise.all([
       collect('funding', this.client.getFundingRate(swapId)),
       collect('open-interest', this.client.getOpenInterest(swapId)),
       ccy === '' ? Promise.resolve(undefined) : collect('long-short-ratio', this.client.getLongShortAccountRatio(ccy)),
       ccy === '' ? Promise.resolve(undefined) : collect('taker-volume', this.client.getContractTakerVolume(ccy)),
+      collect('mark-price', this.client.getMarkPrice(swapId)),
+      collect('index-price', this.client.getIndexPrice(spotId)),
     ])
 
     const fundingRate = funding?.fundingRate
+    const nextFundingRate = funding?.nextFundingRate
+    const nextFundingTime = funding?.nextFundingTime
     // 契约语义（DerivativesData.openInterest）：base 币数或张数——优先币数（oiCcy），
     // 上游没回填时退张数（oi）；价值面单独走 openInterestValue（oiUsd）。
     const openInterest = interest?.oiCcy ?? interest?.oi
     const openInterestValue = interest?.oiUsd
     const longShortRatio = ratio?.ratio
     const takerBuySellRatio = taker !== undefined && taker.sellVol > 0 ? taker.buyVol / taker.sellVol : undefined
+    const markPrice = mark?.markPrice
+    const indexPrice = index?.indexPrice
 
+    // 全失败守卫计入全部产出字段（评审 L1）：旧五项全挂但 mark/index 成功时
+    // 仍应返回基差数据，而不是误抛把已到手的字段一起丢掉。
     if (fundingRate === undefined && openInterest === undefined && openInterestValue === undefined
-      && longShortRatio === undefined && takerBuySellRatio === undefined) {
+      && longShortRatio === undefined && takerBuySellRatio === undefined
+      && markPrice === undefined && indexPrice === undefined) {
       throw new TradingServiceError(
         'TRADING_EXCHANGE_ERROR',
         `OKX derivatives for ${swapId}: all sub-queries failed`
@@ -297,7 +309,45 @@ export class OkxMarketDataService extends Service implements MarketDataService {
       ...(longShortRatio !== undefined ? { longShortRatio } : {}),
       ...(takerBuySellRatio !== undefined ? { takerBuySellRatio } : {}),
       ...(fundingRate !== undefined ? { fundingRate } : {}),
+      ...(nextFundingRate !== undefined ? { nextFundingRate } : {}),
+      ...(nextFundingTime !== undefined ? { nextFundingTime } : {}),
+      ...(markPrice !== undefined ? { markPrice } : {}),
+      ...(indexPrice !== undefined ? { indexPrice } : {}),
       timestamp: interest?.ts ?? funding?.fundingTime ?? Date.now(),
+    }
+  }
+
+  /**
+   * 衍生品历史序列（api 可选契约 getDerivativesHistory，issue #54）：
+   * funding-rate-history + rubik open-interest-history 双端点聚合并发拉取，
+   * 任一失败只降级该序列（字段缺省 → 对应趋势卡隐藏），全部失败才抛结构化错误。
+   */
+  async getDerivativesHistory(symbol: string): Promise<DerivativesHistory> {
+    const swapId = toOkxSwapInstId(symbol)
+    const unavailable: string[] = []
+    const collect = <T>(label: string, task: Promise<T>): Promise<T | undefined> =>
+      task.catch((error) => {
+        unavailable.push(`${label}: ${error instanceof Error ? error.message : String(error)}`)
+        return undefined
+      })
+
+    const [fundingRates, openInterest] = await Promise.all([
+      collect('funding-history', this.client.getFundingRateHistory(swapId, 30)),
+      collect('oi-history', this.client.getOpenInterestHistory(swapId, 30)),
+    ])
+
+    if (fundingRates === undefined && openInterest === undefined) {
+      throw new TradingServiceError(
+        'TRADING_EXCHANGE_ERROR',
+        `OKX derivatives history for ${swapId}: all sub-queries failed`
+          + (unavailable.length > 0 ? ` (${unavailable.join('; ')})` : ''),
+      )
+    }
+    return {
+      symbol: toCanonicalOkxSymbol(swapId),
+      source: 'okx',
+      ...(fundingRates !== undefined && fundingRates.length > 0 ? { fundingRates } : {}),
+      ...(openInterest !== undefined && openInterest.length > 0 ? { openInterest } : {}),
     }
   }
 

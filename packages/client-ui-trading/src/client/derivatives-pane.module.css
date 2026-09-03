@@ -27,9 +27,39 @@
   flex-direction: column;
   gap: 2px;
   background: var(--dsw-futu-bg-subtle, #f5f6f8);
+  border: none;
   border-radius: 8px;
   padding: 6px 10px;
   min-width: 0;
+  font: inherit;
+  text-align: left;
+}
+
+/* 格子即入口（issue #54）：可点击态给悬停反馈；无 onOpenStage 时保持纯展示。 */
+.cell[data-clickable="true"] {
+  cursor: pointer;
+}
+
+.cell[data-clickable="true"]:hover {
+  background: var(--dsw-futu-bg-hover, #eceef2);
+}
+
+.analyze {
+  flex: none;
+  align-self: center;
+  border: 1px solid var(--dsw-futu-border, #e5e7eb);
+  background: transparent;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--dsw-futu-text-secondary, #4a5060);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.analyze:hover {
+  color: var(--dsw-futu-accent, #176bff);
+  border-color: var(--dsw-futu-accent, #176bff);
 }
 
 .cellLabel {

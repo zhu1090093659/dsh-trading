@@ -10,6 +10,7 @@ import Schema from '@deepseek-ai/schemastery'
 import type {
   AccountBalance,
   DerivativesData,
+  DerivativesHistory,
   Disposable,
   Interval,
   Kline,
@@ -135,7 +136,44 @@ export class BybitMarketDataService extends Service implements MarketDataService
       ...(openInterestValue !== undefined ? { openInterestValue } : {}),
       ...(longShortRatio !== undefined ? { longShortRatio } : {}),
       ...(fundingRate !== undefined ? { fundingRate } : {}),
+      ...(ticker?.nextFundingTime !== undefined ? { nextFundingTime: ticker.nextFundingTime } : {}),
+      ...(ticker?.markPrice !== undefined ? { markPrice: ticker.markPrice } : {}),
+      ...(ticker?.indexPrice !== undefined ? { indexPrice: ticker.indexPrice } : {}),
       timestamp: Date.now(),
+    }
+  }
+
+  /**
+   * 衍生品历史序列（api 可选契约 getDerivativesHistory，issue #54）：
+   * funding/history + open-interest 双端点聚合并发拉取，任一失败只降级该序列
+   * （字段缺省 → 对应趋势卡隐藏），全部失败才抛结构化错误。
+   */
+  async getDerivativesHistory(symbol: string): Promise<DerivativesHistory> {
+    const sym = normalizeCryptoSymbol(symbol)
+    const unavailable: string[] = []
+    const collect = <T>(label: string, task: Promise<T>): Promise<T | undefined> =>
+      task.catch((error) => {
+        unavailable.push(`${label}: ${error instanceof Error ? error.message : String(error)}`)
+        return undefined
+      })
+
+    const [fundingRates, openInterest] = await Promise.all([
+      collect('funding-history', this.client.getLinearFundingHistory(sym, 30)),
+      collect('oi-history', this.client.getLinearOpenInterestHistory(sym, 30)),
+    ])
+
+    if (fundingRates === undefined && openInterest === undefined) {
+      throw new TradingServiceError(
+        'TRADING_EXCHANGE_ERROR',
+        `Bybit derivatives history for ${sym}: all sub-queries failed`
+          + (unavailable.length > 0 ? ` (${unavailable.join('; ')})` : ''),
+      )
+    }
+    return {
+      symbol: `${sym}-SWAP`,
+      source: 'bybit',
+      ...(fundingRates !== undefined && fundingRates.length > 0 ? { fundingRates } : {}),
+      ...(openInterest !== undefined && openInterest.length > 0 ? { openInterest } : {}),
     }
   }
 }

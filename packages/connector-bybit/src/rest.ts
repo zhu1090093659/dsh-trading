@@ -4,6 +4,7 @@
  */
 
 import type {
+  DerivativesPoint,
   AccountBalance,
   Interval,
   Kline,
@@ -59,13 +60,18 @@ export function parseIntervalMs(interval: Interval): number {
 }
 
 export function normalizeCryptoSymbol(raw: string): string {
-  const clean = raw.trim().toUpperCase().replace(/[-_/]/g, '')
+  // 先剥衍生品规范后缀 -SWAP（契约：入参接受规范形 BTCUSDT-SWAP 与原生形 BTCUSDT，
+  // issue #54 评审 M2）——不剥会被分隔符清理揉成 BTCUSDTSWAP，Bybit 查无此标的。
+  const clean = raw.trim().toUpperCase().replace(/-SWAP$/, '').replace(/[-_/]/g, '')
   if (!clean) throw new TradingServiceError('TRADING_INVALID_ARGUMENT', 'Symbol cannot be empty')
   return clean
 }
 
 /** 宽松转 number（字符串/数字皆收，非有限值返回 undefined）。 */
 function num(value: unknown): number | undefined {
+  // 空串不是 0（Number('')===0 的 JS 坑）：上游「未发布」字段（如 OKX nextFundingRate）
+  // 用空串表达，必须缺省而非编造 0（issue #54 评审 M1，spikes EVIDENCE 实证）。
+  if (value === '') return undefined
   const n = typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : Number.NaN
   return Number.isFinite(n) ? n : undefined
 }
@@ -191,6 +197,9 @@ export class BybitRestClient {
     fundingRate?: number
     openInterest?: number
     openInterestValue?: number
+    nextFundingTime?: number
+    markPrice?: number
+    indexPrice?: number
   }> {
     const sym = normalizeCryptoSymbol(symbol)
     const data = await this.requestJson<{
@@ -205,11 +214,18 @@ export class BybitRestClient {
     const fundingRate = num(row.fundingRate)
     const openInterest = num(row.openInterest)
     const openInterestValue = num(row.openInterestValue)
+    // issue #54：同行还携带 nextFundingTime / markPrice / indexPrice（基差卡 + 倒计时底料）。
+    const nextFundingTime = num(row.nextFundingTime)
+    const markPrice = num(row.markPrice)
+    const indexPrice = num(row.indexPrice)
     return {
       symbol: typeof row.symbol === 'string' && row.symbol ? row.symbol : sym,
       ...(fundingRate !== undefined ? { fundingRate } : {}),
       ...(openInterest !== undefined ? { openInterest } : {}),
       ...(openInterestValue !== undefined ? { openInterestValue } : {}),
+      ...(nextFundingTime !== undefined ? { nextFundingTime } : {}),
+      ...(markPrice !== undefined ? { markPrice } : {}),
+      ...(indexPrice !== undefined ? { indexPrice } : {}),
     }
   }
 
@@ -231,6 +247,55 @@ export class BybitRestClient {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Bybit account ratio for ${sym}: missing/invalid buyRatio/sellRatio`)
     }
     return { buyRatio, sellRatio }
+  }
+
+
+  /* -- 衍生品扩展（issue #54：费率/OI 趋势卡底料）------------------------- */
+
+  /** 资金费率历史：GET /v5/market/funding/history?category=linear（响应新→旧 → 反转升序）。 */
+  async getLinearFundingHistory(symbol: string, limit = 30): Promise<DerivativesPoint[]> {
+    const sym = normalizeCryptoSymbol(symbol)
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 30, 100))
+    const data = await this.requestJson<{
+      retCode: number
+      retMsg: string
+      result?: { list?: Array<Record<string, unknown>> }
+    }>(`/v5/market/funding/history?category=linear&symbol=${sym}&limit=${capped}`)
+    if (data.retCode !== 0 || !Array.isArray(data.result?.list)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Bybit funding history for ${sym}: ${data.retMsg}`)
+    }
+    const points: DerivativesPoint[] = []
+    for (const row of data.result.list) {
+      const time = num(row.fundingRateTimestamp)
+      const value = num(row.fundingRate)
+      if (time !== undefined && value !== undefined) points.push({ time, value })
+    }
+    return points.reverse()
+  }
+
+  /**
+   * OI 历史：GET /v5/market/open-interest?category=linear&intervalTime=1d
+   * （openInterest 为 base 币数，与快照同语义；响应新→旧 → 反转升序。
+   * 2026-09-03 真实网络实证，spikes/impl-crypto-derivatives）。
+   */
+  async getLinearOpenInterestHistory(symbol: string, limit = 30): Promise<DerivativesPoint[]> {
+    const sym = normalizeCryptoSymbol(symbol)
+    const capped = Math.max(1, Math.min(Math.floor(limit) || 30, 50))
+    const data = await this.requestJson<{
+      retCode: number
+      retMsg: string
+      result?: { list?: Array<Record<string, unknown>> }
+    }>(`/v5/market/open-interest?category=linear&symbol=${sym}&intervalTime=1d&limit=${capped}`)
+    if (data.retCode !== 0 || !Array.isArray(data.result?.list)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Bybit OI history for ${sym}: ${data.retMsg}`)
+    }
+    const points: DerivativesPoint[] = []
+    for (const row of data.result.list) {
+      const time = num(row.timestamp)
+      const value = num(row.openInterest)
+      if (time !== undefined && value !== undefined) points.push({ time, value })
+    }
+    return points.reverse()
   }
 
   /* -- 盘口与逐笔（issue #39）---------------------------------------------- */

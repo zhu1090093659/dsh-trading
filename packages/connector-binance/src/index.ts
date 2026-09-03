@@ -17,7 +17,7 @@ import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { createGetIndicatorsTool } from '@dsh-trading/indicators/tool'
-import type { DerivativesData, Disposable, Interval, Kline, MarketDataService, Orderbook, Ticker, TradeTick } from '@dsh-trading/api'
+import type { DerivativesData, DerivativesHistory, Disposable, Interval, Kline, MarketDataService, Orderbook, Ticker, TradeTick } from '@dsh-trading/api'
 import { BinanceRestClient, INTERVAL_VOCABULARY, TradingServiceError, normalizeBinanceFuturesSymbol } from './rest.js'
 import type { BinanceRestOptions } from './rest.js'
 
@@ -147,22 +147,29 @@ export class BinanceMarketDataService extends Service implements MarketDataServi
         return undefined
       })
 
-    const [interest, funding, globalRatio, topRatio, takerRatio] = await Promise.all([
+    const [interest, funding, globalRatio, topRatio, takerRatio, premium] = await Promise.all([
       collect('open-interest', this.client.getFuturesOpenInterest(futuresSymbol)),
       collect('funding', this.client.getFuturesFundingRate(futuresSymbol)),
       collect('global-ls', this.client.getFuturesLongShortRatio('global', futuresSymbol)),
       collect('top-ls', this.client.getFuturesLongShortRatio('top', futuresSymbol)),
       collect('taker', this.client.getFuturesTakerRatio(futuresSymbol)),
+      collect('premium-index', this.client.getFuturesPremiumIndex(futuresSymbol)),
     ])
 
     const openInterest = interest?.openInterest
-    const fundingRate = funding?.fundingRate
+    const fundingRate = funding?.fundingRate ?? premium?.lastFundingRate
     const longShortRatio = globalRatio
     const topTraderLongShortRatio = topRatio
     const takerBuySellRatio = takerRatio
+    const markPrice = premium?.markPrice
+    const indexPrice = premium?.indexPrice
+    const nextFundingTime = premium?.nextFundingTime
 
+    // 全失败守卫计入全部产出字段（评审 L1）：mark/index/nextFundingTime 成功
+    // 即不算全失败（基差卡仍有数据可显示）。
     if (openInterest === undefined && fundingRate === undefined && longShortRatio === undefined
-      && topTraderLongShortRatio === undefined && takerBuySellRatio === undefined) {
+      && topTraderLongShortRatio === undefined && takerBuySellRatio === undefined
+      && markPrice === undefined && indexPrice === undefined && nextFundingTime === undefined) {
       throw new TradingServiceError(
         'TRADING_EXCHANGE_ERROR',
         `Binance derivatives for ${futuresSymbol}: all sub-queries failed`
@@ -177,7 +184,44 @@ export class BinanceMarketDataService extends Service implements MarketDataServi
       ...(topTraderLongShortRatio !== undefined ? { topTraderLongShortRatio } : {}),
       ...(takerBuySellRatio !== undefined ? { takerBuySellRatio } : {}),
       ...(fundingRate !== undefined ? { fundingRate } : {}),
+      ...(nextFundingTime !== undefined ? { nextFundingTime } : {}),
+      ...(markPrice !== undefined ? { markPrice } : {}),
+      ...(indexPrice !== undefined ? { indexPrice } : {}),
       timestamp: interest?.time ?? funding?.fundingTime ?? Date.now(),
+    }
+  }
+
+  /**
+   * 衍生品历史序列（api 可选契约 getDerivativesHistory，issue #54）：
+   * /fapi/v1/fundingRate + /futures/data/openInterestHist 双端点聚合并发拉取，
+   * 任一失败只降级该序列（字段缺省 → 对应趋势卡隐藏），全部失败才抛结构化错误。
+   */
+  async getDerivativesHistory(symbol: string): Promise<DerivativesHistory> {
+    const futuresSymbol = normalizeBinanceFuturesSymbol(symbol)
+    const unavailable: string[] = []
+    const collect = <T>(label: string, task: Promise<T>): Promise<T | undefined> =>
+      task.catch((error) => {
+        unavailable.push(`${label}: ${error instanceof Error ? error.message : String(error)}`)
+        return undefined
+      })
+
+    const [fundingRates, openInterest] = await Promise.all([
+      collect('funding-history', this.client.getFuturesFundingRateHistory(futuresSymbol, 30)),
+      collect('oi-history', this.client.getFuturesOpenInterestHistory(futuresSymbol, 30)),
+    ])
+
+    if (fundingRates === undefined && openInterest === undefined) {
+      throw new TradingServiceError(
+        'TRADING_EXCHANGE_ERROR',
+        `Binance derivatives history for ${futuresSymbol}: all sub-queries failed`
+          + (unavailable.length > 0 ? ` (${unavailable.join('; ')})` : ''),
+      )
+    }
+    return {
+      symbol: `${futuresSymbol}-SWAP`,
+      source: 'binance',
+      ...(fundingRates !== undefined && fundingRates.length > 0 ? { fundingRates } : {}),
+      ...(openInterest !== undefined && openInterest.length > 0 ? { openInterest } : {}),
     }
   }
 }

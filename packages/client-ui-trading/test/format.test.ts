@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  changePercent, directionColor, fmtChange, fmtCompact, fmtPercent, fmtPrice,
+  changePercent, directionColor, fmtChange, fmtCompact, fmtCountdown, fmtFundingRate, fmtPercent, fmtPrice,
 } from '../src/client/format.ts'
 
 describe('fmtPrice', () => {
@@ -50,5 +50,23 @@ describe('changePercent', () => {
     expect(changePercent(undefined, 100)).toBeUndefined()
     expect(changePercent(100, undefined)).toBeUndefined()
     expect(changePercent(100, 0)).toBeUndefined()
+  })
+})
+
+/** issue #54：结算倒计时与资金费率格式。 */
+describe('fmtCountdown / fmtFundingRate', () => {
+  it('>1h 显示 h+m；<1h 显示 m+s；过期/缺省 → undefined', () => {
+    const now = 1700000000000
+    expect(fmtCountdown(now + (7 * 3600 + 32 * 60) * 1000, now)).toBe('7h 32m')
+    expect(fmtCountdown(now + (32 * 60 + 10) * 1000, now)).toBe('32m 10s')
+    expect(fmtCountdown(now - 1000, now)).toBeUndefined()
+    expect(fmtCountdown(undefined, now)).toBeUndefined()
+    expect(fmtCountdown(Number.NaN, now)).toBeUndefined()
+  })
+
+  it('小数费率 → 4 位百分比；缺省 → —', () => {
+    expect(fmtFundingRate(0.0001)).toBe('0.0100%')
+    expect(fmtFundingRate(-0.00002911)).toBe('-0.0029%')
+    expect(fmtFundingRate(undefined)).toBe('—')
   })
 })

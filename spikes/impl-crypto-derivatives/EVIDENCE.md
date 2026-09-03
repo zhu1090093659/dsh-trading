@@ -37,3 +37,24 @@
 - 多空比口径各家不同：Binance global=账户比、top=大户持仓比；OKX rubik=账户比
   （无公开大户持仓比）；Bybit account-ratio=账户比。GUI 按字段各自呈现，不做跨所对齐。
 - 证据文件仅作 spike 落库（铁律 #5：工具实现不缓存不再分发，公共统计按需拉取）。
+
+---
+
+# Issue #54 追加证据：衍生品页签扩展字段与历史序列（2026-09-03）
+
+- 验证方法同上（lib 产物直连真实端点）：`run-derivatives-history-probe.mjs` →
+  `parsed-history-probe.json`（三家 11 项新子查询，全部 OK；标的 HYPEUSDT）。
+- 实测要点：
+  - OKX `funding-rate` 的 `nextFundingRate` 可能为 **空字符串**——初版文字误称
+    「num() 解析不到即缺省」，实际 Number('')===0 会编造 0（评审 M1 揭露，UI 实测
+    「预测费率 0.0000%」复现）；已修：三家连接器 num() 统一空串→undefined，
+    预测费率真正成为「有就显示」字段，不作存在性假设。
+  - OKX rubik `open-interest-history` 必须传 `instId`（传 ccy 报 50014），行结构
+    `[ts, oi张, oiCcy币, oiUsd]` 新→旧，取第 3 列与快照 oiCcy 同语义。
+  - OKX 指数价在 `market/index-tickers`（现货指数 instId，如 HYPE-USDT），与
+    `public/mark-price`（SWAP instId）配对出基差。
+  - Binance `premiumIndex` 单端点携带 markPrice/indexPrice/lastFundingRate/nextFundingTime，
+    是基差卡 + 结算倒计时的唯一请求。
+  - Bybit linear `tickers` 单端点已携带 fundingRate/nextFundingTime/markPrice/indexPrice/
+    openInterest/openInterestValue，快照零新增请求；历史走 `funding/history` 与
+    `open-interest?intervalTime=1d`（响应均新→旧，实现内反转升序）。
