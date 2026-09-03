@@ -1,9 +1,9 @@
 /**
  * 格式化与涨跌幅纯函数单测。
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
-  changePercent, directionColor, fmtChange, fmtCompact, fmtCountdown, fmtFundingRate, fmtPercent, fmtPrice,
+  changePercent, directionColor, fmtChange, fmtCompact, fmtCountdown, fmtFundingRate, fmtPercent, fmtPrice, scaleLocaleOf,
 } from '../src/client/format.ts'
 
 describe('fmtPrice', () => {
@@ -13,6 +13,24 @@ describe('fmtPrice', () => {
     expect(fmtPrice(0.001234)).toBe('0.001234')
     expect(fmtPrice(undefined)).toBe('—')
     expect(fmtPrice(Number.NaN)).toBe('—')
+  })
+})
+
+/** 评审 L2：哨兵判定健壮性——两个哨兵值都识别，未知值告警回落 en。 */
+describe('scaleLocaleOf', () => {
+  it("哨兵 '万' → zh；'B' → en", () => {
+    expect(scaleLocaleOf(() => '万')).toBe('zh')
+    expect(scaleLocaleOf(() => 'B')).toBe('en')
+  })
+  it('未知值（键位 miss / 词典改词）→ 告警回落 en，不静默翻转', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(scaleLocaleOf(() => 'fundamentals.scale')).toBe('en')
+      expect(scaleLocaleOf(() => '万倍')).toBe('en')
+      expect(warn).toHaveBeenCalledTimes(2)
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 

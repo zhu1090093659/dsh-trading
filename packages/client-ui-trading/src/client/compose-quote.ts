@@ -6,7 +6,7 @@
   *
  * i18n-allow: 默认文案常量与 zh 词典同源（copy 面由词典注入，缺省仅向后兼容）。
  */
-import { fmtChange, fmtCompact, fmtPercent, fmtPrice } from './format.ts'
+import { fmtChange, fmtCompact, fmtPercent, fmtPrice, type CompactLocale } from './format.ts'
 import type { Kline } from './types.ts'
 
 export interface QuoteMessageInput {
@@ -37,6 +37,12 @@ export interface QuoteMessageCopy {
   /** 已开指标前缀（{titles} 槽，分隔符由词典决定）。 */
   indicatorsLine: string
   listSeparator: string
+  /** 涨跌括注包裹符（zh 全角（）/ en 半角 ()），评审 M3：标点随语言走。 */
+  deltaWrap: [string, string]
+  /** 昨收前连接符（zh 全角逗号 / en 半角逗号+空格）。 */
+  prevSep: string
+  /** 紧凑数值单位体系（亿/万 ↔ B/M/K），评审 M3：量槽不再硬编码 zh。 */
+  volumeLocale: CompactLocale
   withScreenshotTail: string
   withoutScreenshotTail: string
 }
@@ -50,9 +56,9 @@ export function composeQuoteMessage(input: QuoteMessageInput, copy?: QuoteMessag
   const lines: string[] = [c.opener.replace('{title}', title)]
   if (input.price !== undefined) {
     const delta = input.change !== undefined
-      ? `（${fmtChange(input.change)}${input.pct !== undefined ? ` / ${fmtPercent(input.pct)}` : ''}）`
+      ? `${c.deltaWrap[0]}${fmtChange(input.change)}${input.pct !== undefined ? ` / ${fmtPercent(input.pct)}` : ''}${c.deltaWrap[1]}`
       : ''
-    const prev = input.prevClose !== undefined ? `，${c.prevClose.replace('{price}', fmtPrice(input.prevClose))}` : ''
+    const prev = input.prevClose !== undefined ? `${c.prevSep}${c.prevClose.replace('{price}', fmtPrice(input.prevClose))}` : ''
     lines.push(`${c.priceLine} ${fmtPrice(input.price)}${delta}${prev}`)
   }
   if (input.candle !== undefined) {
@@ -62,7 +68,7 @@ export function composeQuoteMessage(input: QuoteMessageInput, copy?: QuoteMessag
         .replace('{high}', fmtPrice(input.candle.high))
         .replace('{low}', fmtPrice(input.candle.low))
         .replace('{close}', fmtPrice(input.candle.close))
-        .replace('{volume}', fmtCompact(input.candle.volume, 'zh')),
+        .replace('{volume}', fmtCompact(input.candle.volume, c.volumeLocale)),
     )
   }
   if (input.indicatorTitles.length > 0) lines.push(`${c.indicatorsLine.replace('{titles}', input.indicatorTitles.join(c.listSeparator))}`)
@@ -78,6 +84,9 @@ const ZH_COPY: QuoteMessageCopy = {
   candleLine: '当根K线 开 {open} 高 {high} 低 {low} 收 {close} 量 {volume}',
   indicatorsLine: '已开启指标：{titles}',
   listSeparator: '、',
+  deltaWrap: ['（', '）'],
+  prevSep: '，',
+  volumeLocale: 'zh',
   withScreenshotTail: '随消息附当前图表截图，请结合分析。',
   withoutScreenshotTail: '请结合当前行情继续分析。',
 }

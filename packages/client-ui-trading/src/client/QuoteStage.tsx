@@ -570,6 +570,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       withScreenshot: capture !== null,
     }
     // exactOptionalPropertyTypes：undefined 字段直接剔除而非显式传 undefined。
+    // deltaWrap 用 '|' 作分隔哨兵拆包裹符对（词典值单字符串无法表达成对括号）。
+    const [deltaOpen, deltaClose] = t('compose.deltaWrap').split('|')
     const copy: QuoteMessageCopy = {
       opener: t('compose.opener'),
       prevClose: t('compose.prevClose'),
@@ -577,6 +579,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       candleLine: t('compose.candleLine'),
       indicatorsLine: t('compose.indicatorsLine'),
       listSeparator: t('compose.listSeparator'),
+      deltaWrap: [deltaOpen, deltaClose],
+      prevSep: t('compose.prevSep'),
+      volumeLocale: numLocale,
       withScreenshotTail: t('compose.withScreenshot'),
       withoutScreenshotTail: t('compose.withoutScreenshot'),
     }

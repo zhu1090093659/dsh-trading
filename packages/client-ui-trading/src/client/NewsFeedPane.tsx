@@ -70,6 +70,10 @@ const SOURCE_LABEL_KEY: Record<string, MarketLocaleKey> = {
   'sec-edgar': 'news.source.secEdgar',
   'binance': 'news.source.binance',
   'okx': 'news.source.okx',
+  'coindesk': 'news.source.coindesk',
+  'theblock': 'news.source.theblock',
+  'cointelegraph': 'news.source.cointelegraph',
+  'decrypt': 'news.source.decrypt',
 }
 
 function formatSourceLabel(source: string, t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string): string {

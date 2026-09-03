@@ -24,15 +24,18 @@ export interface FundamentalsStageProps {
 export type NumberScaleLocale = 'zh' | 'en'
 
 /** locale-aware 大数缩写：formatVal/formatCompact 等共用（en 走 B/M/K，与
- * format.ts fmtCompact 的 zh 分支同口径换算基准）。 */
+ * format.ts fmtCompact 的 zh 分支同口径换算基准）。zh 千亿档单列（评审 L3：
+ * 1e11 归入万亿会把 5e11 显示成 0.50 万亿，与主流行情软件的千亿档不符）；
+ * zh/en 对称去尾零。 */
 export function formatScaled(value: number | undefined, locale: NumberScaleLocale, decimals = 2): string {
   if (value === undefined || Number.isNaN(value)) return '--'
   const abs = Math.abs(value)
   const trim = (text: string): string => text.includes('.') ? text.replace(/\.?0+$/, '') : text
   if (locale === 'zh') {
-    if (abs >= 1e12) return `${(value / 1e12).toFixed(decimals)} 万亿` // i18n-allow: zh 数值单位常量（locale 数据）
-    if (abs >= 1e8) return `${(value / 1e8).toFixed(decimals)} 亿` // i18n-allow: zh 数值单位常量（locale 数据）
-    if (abs >= 1e4) return `${(value / 1e4).toFixed(decimals)} 万` // i18n-allow: zh 数值单位常量（locale 数据）
+    if (abs >= 1e12) return `${trim((value / 1e12).toFixed(decimals))} 万亿` // i18n-allow: zh 数值单位常量（locale 数据）
+    if (abs >= 1e11) return `${trim((value / 1e11).toFixed(decimals))} 千亿` // i18n-allow: zh 数值单位常量（locale 数据）
+    if (abs >= 1e8) return `${trim((value / 1e8).toFixed(decimals))} 亿` // i18n-allow: zh 数值单位常量（locale 数据）
+    if (abs >= 1e4) return `${trim((value / 1e4).toFixed(decimals))} 万` // i18n-allow: zh 数值单位常量（locale 数据）
     return Number.isInteger(value) ? String(value) : value.toFixed(decimals)
   }
   if (abs >= 1e12) return `${trim((value / 1e12).toFixed(decimals))}T`
@@ -80,6 +83,20 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
   // 数值单位 locale 跟随界面语言（词典哨兵键判定）：zh → 亿/万，en → B/M/K。
   const numLocale = scaleLocaleOf(t)
   const fv = (val: number | undefined, unit?: string, isRatio = false): string => formatVal(val, unit, isRatio, numLocale)
+  /** CNY 大额金额 → locale 模板值：数值侧换算（zh /1e8 亿，en /1e6 M），
+   *  词典模板只挂单位后缀（fund.unit.yiCny = '¥{n}亿' / '¥{n}M'）——单位换算
+   *  不靠模板字符串拼接（评审 M1：'¥{n}00M' 曾把金额错示 100 倍）。 */
+  const yiCny = (amount: number): string => t('fund.unit.yiCny', {
+    n: (amount / (numLocale === 'zh' ? 1e8 : 1e6)).toFixed(2),
+  })
+  /** 持股均价：zh /1e4 万，en /1e3 K（fund.unit.wanCny = '¥{n}万' / '¥{n}K'）。 */
+  const wanCny = (amount: number): string => t('fund.unit.wanCny', {
+    n: (amount / (numLocale === 'zh' ? 1e4 : 1e3)).toFixed(2),
+  })
+  /** 户数：zh /1e4 万户，en /1e3 K accounts（fund.unit.holders）。 */
+  const holdersWan = (count: number): string => t('fund.unit.holders', {
+    n: (count / (numLocale === 'zh' ? 1e4 : 1e3)).toFixed(2),
+  })
   const hookInstrument = useSelection?.(s => s.instrument)
   // localStorage 镜像只在缺失 hook 面时读一次（useEffect 每渲染 JSON.parse 是浪费）。
   const [storedInstrument] = useState(() => readJson<Instrument | null>('dshtrading.selection.v1', null))
@@ -809,14 +826,14 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                       {filteredSegments.map(seg => (
                         <tr key={seg.segmentName + seg.classification} className={css.indicatorRow}>
                           <td><strong>{seg.segmentName}</strong></td>
-                          <td>{formatVal(seg.revenue)}</td>
+                          <td>{fv(seg.revenue)}</td>
                           <td>
                             <div className={css.ratioBarWrap}>
                               <div className={css.ratioBar} style={{ width: `${Math.min(100, Math.max(2, seg.revenueRatio))}%` }} />
                               <span>{seg.revenueRatio.toFixed(2)}%</span>
                             </div>
                           </td>
-                          <td>{seg.grossProfit ? formatVal(seg.grossProfit) : '--'}</td>
+                          <td>{seg.grossProfit ? fv(seg.grossProfit) : '--'}</td>
                           <td style={{ color: seg.grossMargin && seg.grossMargin > 0 ? 'var(--futu-up)' : 'inherit' }}>
                             {seg.grossMargin ? `${seg.grossMargin.toFixed(2)}%` : '--'}
                           </td>
@@ -917,7 +934,7 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                   <div className={css.forecastStatBox}>
                     <span className={css.gridLabel}>{t('fund.holders.totalHolders')}</span>
                     <span className={css.pillValue} style={{ fontSize: 16, color: 'var(--futu-accent)' }}>
-                      {holderSummary.totalHolders ? t('fund.unit.holders', { n: (holderSummary.totalHolders / 10_000).toFixed(2) }) : '--'}
+                      {holderSummary.totalHolders ? holdersWan(holderSummary.totalHolders) : '--'}
                     </span>
                   </div>
                   <div className={css.forecastStatBox}>
@@ -929,7 +946,7 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                   <div className={css.forecastStatBox}>
                     <span className={css.gridLabel}>{t('fund.holders.avgValue')}</span>
                     <span className={css.pillValue} style={{ fontSize: 16 }}>
-                      {holderSummary.avgHoldAmount ? t('fund.unit.wanCny', { n: (holderSummary.avgHoldAmount / 10_000).toFixed(2) }) : '--'}
+                      {holderSummary.avgHoldAmount ? wanCny(holderSummary.avgHoldAmount) : '--'}
                     </span>
                   </div>
                   <div className={css.forecastStatBox}>
@@ -1067,7 +1084,7 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                             <td><span className={css.reportRating}>{inst.orgType}</span></td>
                             <td>{inst.holdingShares ? fv(inst.holdingShares) : '--'}</td>
                             <td>{inst.holdingRatio ? `${inst.holdingRatio.toFixed(2)}%` : '--'}</td>
-                            <td>{inst.marketCap ? t('fund.unit.yiCny', { n: (inst.marketCap / 100_000_000).toFixed(2) }) : '--'}</td>
+                            <td>{inst.marketCap ? yiCny(inst.marketCap) : '--'}</td>
                             <td>
                               {isUp ? (
                                 <span className={css.changeTagUp}>{inst.change}</span>
@@ -1255,7 +1272,7 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                       {buybacks.map((bb, idx) => (
                         <tr key={bb.date + idx} className={css.indicatorRow}>
                           <td><strong>{bb.date}</strong></td>
-                          <td>{bb.buybackAmount ? t('fund.unit.yiCny', { n: (bb.buybackAmount / 100_000_000).toFixed(2) }) : '--'}</td>
+                          <td>{bb.buybackAmount ? yiCny(bb.buybackAmount) : '--'}</td>
                           <td>{bb.buybackShares ? fv(bb.buybackShares) : '--'}</td>
                           <td>{bb.priceRange ?? '--'}</td>
                           <td><span className={css.reportRating}>{bb.status}</span></td>
@@ -1356,7 +1373,7 @@ function GroupFragment({
               const changeInfo = formatChange(cell?.changePercent)
               return (
                 <td key={p}>
-                  <div className={css.cellValue}>{formatVal(cell?.value, row.unit)}</div>
+                  <div className={css.cellValue}>{fv(cell?.value, row.unit)}</div>
                   {cell?.changePercent !== undefined && (
                     <div className={`${css.cellChange} ${changeInfo.cls}`}>{changeInfo.text}</div>
                   )}

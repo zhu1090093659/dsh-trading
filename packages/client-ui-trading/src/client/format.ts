@@ -52,10 +52,16 @@ export function compactLocaleOf(localeId: string): CompactLocale {
 /**
  * 词典哨兵键（dshtrading.market 'fundamentals.scale'）→ 数值单位 locale。
  * t 不携带 active locale 元数据，UI 层从词典值判定（zh 值固定 '万'，en 固定 'B'）；
- * 该键只作哨兵，不在 UI 渲染。
+ * 该键只作哨兵，不在 UI 渲染。两个哨兵值都识别（评审 L2：只认 '万' 时，词典
+ * 改词/键位 miss 返回 key 本身会把 zh 静默翻成 en 单位）；未知值告警并回落 en
+ * （B/M/K 是国际默认，对 zh 用户是可读降级）。
  */
 export function scaleLocaleOf(t: (key: 'fundamentals.scale', params?: Record<string, unknown>) => string): CompactLocale {
-  return t('fundamentals.scale') === '万' ? 'zh' : 'en' // i18n-allow: 哨兵值与 zh 词典字面量比对
+  const value = t('fundamentals.scale')
+  if (value === '万') return 'zh' // i18n-allow: 哨兵值与 zh 词典字面量比对
+  if (value === 'B') return 'en'
+  console.warn(`[dsh-trading] unexpected fundamentals.scale sentinel: ${JSON.stringify(value)}; falling back to en units`)
+  return 'en'
 }
 
 /** Compact volume (locale-aware units, matching the reference UI). */
