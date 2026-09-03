@@ -1,179 +1,112 @@
 # dsh-trading
 
-> **Your next trading terminal can also be DSH**  
+> **Your next trading terminal can also be your AI agent.**
 > *No chumps for the slaughter, just everyday traders.*
 
 [![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.1.2--alpha.1-blue.svg)](https://github.com/deepseek-ai)
-[![Markets](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK-green.svg)](#-multi-market-coverage--19-active-connectors)
-[![Connectors](https://img.shields.io/badge/Connectors-19%20Active-orange.svg)](docs/connectors-guide.md)
-[![Architecture](https://img.shields.io/badge/Architecture-Cordis%20Microkernel-purple.svg)](#-architecture--layering-mechanism)
+[![Markets](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK-green.svg)](#one-terminal-every-market)
+[![Connectors](https://img.shields.io/badge/Connectors-19%2B-orange.svg)](docs/connectors-guide.md)
 [![License](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-lightgrey.svg)](LICENSE)
 
-`dsh-trading` is a modular, full-market AI trading terminal and plugin ecosystem built on **DeepSeek Harness (DSH)**.
+**dsh-trading** is an agent-native trading terminal built on [DeepSeek Harness (DSH)](https://github.com/deepseek-ai). It fuses the three-column workflow of professional trading software — watchlist dock, interactive chart stage, order book — with a deeply-integrated AI agent that sees what you see, analyzes with institutional-grade playbooks, and can route real orders through explicit, human-gated safety controls.
 
-It combines the **three-column GUI experience of professional trading software** with deep reasoning AI agents, multi-market automated execution, comprehensive technical indicators, and strict, verifiable risk-control gates — seamlessly uniting conversational investment research with live terminal workflows.
+Crypto, US equities, China A-shares, and Hong Kong stocks. One terminal. One agent. Nineteen connectors. Zero vendor lock-in: every key stays on your machine.
 
----
-
-## 🌟 Core Architecture & Highlights
-
-```
-+---------------------------------------------------------------------------------------------------+
-|                                     DSH Trading Ecosystem Overview                                |
-+---------------------------------------------------------------------------------------------------+
-|  [3-Column GUI]      Left: Multi-Market Dock  |  Center: Lightweight Charts v5 + TA  |  Right: Agent Rail |
-|  [Full Markets]      Crypto (4 exchanges)   |  US Equities (6 sources/brokers)     |  CN / HK Markets   |
-|  [Agent-Native]      Session Preset Isolation |  Conversational Market Analysis      |  Risk Checklists   |
-|  [Dual Safety Gates] Default Dry-Run Mode   |  Explicit liveTrading Toggle         |  BYOK Key Custody  |
-|  [Cordis Microkernel] Insert-Only Bundles   |  Open Setting Hot-Routing            |  Zero Host Hacks   |
-+---------------------------------------------------------------------------------------------------+
-```
-
-### 1. Professional Three-Column Trading GUI
-- **Center Stage Charting Engine**: Built with high-performance **Lightweight Charts v5**, supporting multi-timeframe switching (intraday minutes to daily/weekly); equipped with MA, EMA, BOLL, MACD, RSI, KDJ, and SuperTrend technical indicators, visual parameter customization, and third-party indicator hot-plugging.
-- **Left Market & Watchlist Dock**: Rapid switching across markets (Watchlist / Crypto / US / CN / HK), mini Sparkline price trends, real-time bid/ask quotes, and localized persistent storage.
-- **Right Session Rail & Hero Fusion**: Native AI agent conversation panel docked on the right rail; historical sessions seamlessly merged with the Hero Composer launcher, supporting collapsible distraction-free workflows.
-
-### 2. Multi-Market Coverage & 19+ Active Connectors
-- **Crypto**: Binance, OKX (Paper / Live), Bybit, CCXT (100+ exchanges aggregation).
-- **US Equities (US)**: Yahoo Finance (public), Alpaca (Paper / Live), FMP, Finnhub, Polygon.io, Interactive Brokers (IBKR Client Portal Gateway).
-- **China A-Shares (CN)**: Tencent Finance (public), Eastmoney (public), Tushare Pro, AkShare, MiniQMT (broker gateway).
-- **Hong Kong Stocks (HK)**: Tencent HK (public), Longbridge OpenAPI, Futu OpenD Gateway, Tiger Trade OpenAPI.
-- See the comprehensive onboarding guide in [Connectors Guide (docs/connectors-guide.md)](docs/connectors-guide.md).
-
-### 3. Agent-Native Intelligence & Domain Knowledge (Skills)
-- **Session-Level Preset Isolation**: Dedicated presets per market (`crypto-trader`, `us-trader`, `cn-trader`, `hk-trader`), isolating tools and memory per session within the same process.
-- **Bundled Domain Knowledge**: Pre-packaged risk checklists, qualitative analysis frameworks, and research skills ([cn-risk-checklist](.agents/skills/cn-risk-checklist/SKILL.md), [hk-risk-checklist](.agents/skills/hk-risk-checklist/SKILL.md), [us-risk-checklist](.agents/skills/us-risk-checklist/SKILL.md), [crypto-risk-checklist](.agents/skills/crypto-risk-checklist/SKILL.md), [crypto-instrument-analysis](.agents/skills/crypto-instrument-analysis/SKILL.md), [company-analysis](.agents/skills/company-analysis/SKILL.md), [content-insight](.agents/skills/content-insight/SKILL.md), [trading-notes-setup](.agents/skills/trading-notes-setup/SKILL.md)).
-- **Trading Journal**: Each market preset's persona instructs the agent to check the workspace for a `.trading-journal/` directory at session start — if missing, remind the user and scaffold it via the [trading-notes-setup](.agents/skills/trading-notes-setup/SKILL.md) skill; the journal dual-tracks what the agent did (`agent/`) and what the human did (`human/`), append-only per month.
-
-### 4. Strict Safety Gates & Privacy (BYOK)
-- **Dual-Track Order Approval**: Order placement and cancellation tools operate in Dry-run simulation by default. Live order routing requires an explicit `liveTrading: true` configuration and triggers DSH interactive approval prompts (fails closed in headless environments).
-- **Bring Your Own Key (BYOK)**: All API credentials remain on your local machine or in environment variables. No secrets are bundled, relayed, or uploaded.
+![dsh-trading terminal — watchlist, chart stage with indicators, order book and derivatives panel](docs/screenshots/terminal-overview.png)
 
 ---
 
-## 🏛️ Architecture & Layering Mechanism
+## Why agent-native?
 
-`dsh-trading` leverages the Cordis microkernel extension architecture provided by DSH:
+Most "AI trading" tools bolt a chat box onto a chart. dsh-trading inverts the relationship: **the agent is a first-class citizen of the terminal**, and the terminal is the agent's body.
 
-| Layer | Mechanism | Project Implementation |
-|---|---|---|
-| **Functional Unit** | Cordis Plugin (npm package) | Connectors, toolkits, UI views, indicator extensions, automation |
-| **Distribution Unit** | **Bundle Package** (`dsh.bundle.patch` + `cordis.patch.yml`) | One bundle per market; `@dsh-trading/base` hosts market-agnostic core abstractions |
-| **Deployment Unit** | Profile (`$DSH_HOME/profiles/<name>`) | User runtime environment; isolated profiles available for live execution |
-| **Session Behavior** | Agent Preset | One preset per market, allowing multi-market sessions to co-exist in one process |
-| **Knowledge Unit** | Skill (`SKILL.md` via package provider) | Trading rules and methodologies distributed alongside market packages |
+- **The agent sees your screen.** One click on *Send to Agent* packages the symbol you're watching — live quote, current candle, active indicators, and a screenshot of the chart itself — straight into the conversation. No copy-pasting numbers into a chatbot.
 
-```
-@dsh-trading/base          ← Core abstractions: account/order/quote interfaces, approval gate, 3-column GUI, preset root
-├── @dsh-trading/crypto    ← Crypto bundle: Binance / OKX / Bybit / CCXT + Skills + Presets
-├── @dsh-trading/us        ← US bundle: Yahoo / Alpaca / FMP / Finnhub / Polygon / IBKR + Skills + Presets
-├── @dsh-trading/cn        ← CN bundle: Tencent / Eastmoney / Tushare / AkShare / MiniQMT + Skills + Presets
-└── @dsh-trading/hk        ← HK bundle: Tencent / Longbridge / Futu OpenD / Tiger + Skills + Presets
-@dsh-trading/all           ← Meta bundle declaration
-```
+![Send to Agent — chart snapshot and quote context injected into the composer](docs/screenshots/chart-to-agent.png)
 
----
+- **The agent has hands — gated ones.** Market data, order books, derivatives positioning, news, and order placement are native tools. Orders default to **dry-run simulation**; live routing requires an explicit `liveTrading: true` opt-in *and* an interactive approval for every order. In headless environments it fails closed. Nothing executes behind your back.
 
-## 🛡️ Six Invariant Design Rules
+- **The agent went to school.** Domain knowledge ships as bundled skills, not vibes: pre-trade risk checklists for every market ([crypto](.agents/skills/crypto-risk-checklist/SKILL.md) · [US](.agents/skills/us-risk-checklist/SKILL.md) · [CN](.agents/skills/cn-risk-checklist/SKILL.md) · [HK](.agents/skills/hk-risk-checklist/SKILL.md)), a five-step [crypto instrument analysis framework](.agents/skills/crypto-instrument-analysis/SKILL.md), a full [company analysis playbook](.agents/skills/company-analysis/SKILL.md), and a [trading journal discipline](.agents/skills/trading-notes-setup/SKILL.md) that dual-tracks what the agent did versus what you did — append-only, auditable.
 
-1. **Insert-only Patch**: Market bundles may only insert new plugin rows under their own unique namespaces. Replacing rows belonging to base or other markets is strictly forbidden.
-2. **Decoupled Knowledge & Code**: Market regulations, analytical frameworks, and risk checklists must live in skills, not hardcoded into plugin logic.
-3. **Dual-Track Trading Safety Gate**: Order placement and cancellation default to dry-run simulations. Live trading requires explicit configuration (`liveTrading: true`) and interactive approval (fail-closed in headless mode).
-4. **Base Anti-Corruption**: Capabilities are only hoisted to `@dsh-trading/base` when required by $\ge 2$ markets, preventing premature abstraction.
-5. **Data Compliance & Zero Re-distribution**: Users bring their own API keys. No market data is cached for external re-distribution; local private caching for backtesting is permitted.
-6. **Replaceable GUI Shell, Inviolable Data Layer**: The `client-ui-*` frontend presentation layer may be refactored or rewritten as host UI evolves, but core data layer contracts (`/dshtrading/api` bridge, `dshtrading` settings namespace, `tradingMarketRouter` / `tradingMarketDataRegistry`, `@dsh-trading/api` types) must remain backward-compatible and intact.
+- **One process, four trading desks.** Session-level presets (`crypto-trader`, `us-trader`, `cn-trader`, `hk-trader`) give each market its own tools, persona, and memory — isolated per session, coexisting in a single DSH process.
 
----
+## A terminal that trades like software, not a toy
 
-## 📊 Package Inventory & Responsibilities
+- **Center-stage charting.** Lightweight Charts v5 with multi-timeframe switching (5m to weekly), MA / EMA / BOLL / MACD / RSI / KDJ / SuperTrend with visual parameter editing, strategy signal markers, knowledge-event pins, and drag-to-measure range statistics.
+- **Real market depth.** Live order book with buy/sell pressure bars, tick-by-tick trades, and a derivatives cockpit — open interest, funding rates with settlement countdown, long/short ratios, taker flow — with one-click *fund-flow analysis* handed to the agent.
+- **Cross-market watchlist.** Crypto perps next to AAPL next to 牧原股份, with sparklines and real-time quotes. Your whole risk universe in one dock.
 
-| Package | Type | Responsibility |
-|---|---|---|
-| `packages/api` | Type Contract | Market data and trading service interfaces, standard Ticker/Kline, error vocabulary (zero runtime deps) |
-| `packages/base` | Core Bundle | Sole owner of shared rows: unified approval gate plugin + agent-presets root row + GUI shell mount |
-| `packages/router` | Router Plugin | Registers `dshtrading` settings namespace, provides `tradingMarketRouter` & `tradingMarketDataRegistry` (hot-switching) |
-| `packages/indicators` | TA Core | Pure math computation kernel for technical indicators (MA/EMA/BOLL/MACD/RSI/KDJ/SuperTrend) and definitions |
-| `packages/client-ui-indicators` | UI Plugin | Client-side indicator provider registering built-in indicators into `tradingIndicators` service |
-| `packages/client-ui-settings` | UI Plugin | Injects the "Settings → Trading" top-level section and per-market provider routing panels |
-| `packages/client-ui-trading` | GUI Terminal Shell | Professional three-column trading GUI: Left watchlist dock, center Lightweight Charts stage, right session rail & HTTP bridge |
-| `packages/connector-*` (16 pkgs) | Connector Plugins | REST / WebSocket / Gateway implementations for all global exchanges and data providers |
-| `packages/kit-*` (4 pkgs) | Market Toolkits | Market-specific tools (funding rates, news) and risk checklist skill providers |
-| `packages/crypto / us / cn / hk` | Market Bundles | Market dependency aggregation packages and automated preset installers |
+## One terminal, every market
 
----
+| Market | Connectors |
+|---|---|
+| **Crypto** | Binance, OKX (Paper/Live), Bybit, CCXT (100+ exchanges) |
+| **US Equities** | Yahoo Finance, Alpaca (Paper/Live), FMP, Finnhub, Polygon.io, Interactive Brokers |
+| **China A-Shares** | Tencent Finance, Eastmoney, Tushare Pro, AkShare, MiniQMT broker gateway |
+| **Hong Kong** | Tencent HK, Longbridge OpenAPI, Futu OpenD, Tiger OpenAPI |
 
-## ⚖️ Data Sources & Terms of Service (ToS)
+**Hot-swappable data planes.** Settings → Trading routes each market to any installed provider; the quote panel re-routes on save, agent sessions pick it up on the next conversation — no restarts, no config archaeology.
 
-| Market | Default Source | Authorization & ToS Boundary |
-|---|---|---|
-| **US Equities** | Yahoo Finance / Alpaca | Yahoo is a public endpoint (individual usage boundary; see connector-yahoo README); Alpaca provides official Paper/Live APIs |
-| **China A-Shares** | Tencent Finance / Eastmoney | Public endpoints; live execution connects locally to broker MiniQMT gateway |
-| **Hong Kong Stocks** | Tencent HK / Longbridge | Tencent is a public endpoint; Longbridge, Futu, and Tiger provide licensed broker OpenAPI / Gateway connections |
-| **Crypto** | Binance / OKX | Official Binance and OKX APIs; OKX supports simulated paper trading accounts with BYOK keys |
-| **Crypto fundamentals drill-down** | CoinCap | Public REST endpoint (`api.coincap.io`), individual usage boundary only — no redistribution, no bulk scraping (issue #36, 2026-09-02) |
+![Provider routing — per-market exchange selection with BYOK credential slots](docs/screenshots/provider-routing.png)
 
----
+## Safety and privacy, by construction
 
-## 🚀 Quick Start & Usage
+1. **Dry-run by default.** Every order/cancel tool simulates unless you explicitly flip `liveTrading: true`.
+2. **Human gate on every live order.** DSH's approval layer intercepts live routing; headless mode fails closed.
+3. **BYOK.** API keys live in your environment variables or local config. Nothing is bundled, relayed, or uploaded.
+4. **No data re-distribution.** Market data is fetched for you, under each provider's ToS; nothing is cached for resale or sharing.
 
-### 1. Install to a DSH Profile
+## Quick start
 
 ```sh
-# Install base core along with selected markets (e.g. Crypto and US Equities)
+# Install into a dedicated DSH profile (pick your markets)
 dsh plugin --profile trading-web add @dsh-trading/base @dsh-trading/crypto @dsh-trading/us
-
-# Or install all markets at once
+# …or all four markets
 dsh plugin --profile trading-web add @dsh-trading/base @dsh-trading/crypto @dsh-trading/us @dsh-trading/cn @dsh-trading/hk
-```
 
-### 2. Launch the Trading Terminal
-
-```sh
-# Launch dedicated Web trading terminal profile
-dsh --profile trading-web
-
-# Or launch in headless development mode
-dsh --profile trading-dev
-```
-
-After starting:
-1. Open the DSH Web interface in your browser to access the three-column trading terminal (Left: Watchlist, Center: Interactive Charts, Right: AI Agent).
-2. When creating a new conversation, pick `crypto-trader`, `us-trader`, `cn-trader`, or `hk-trader` from the Presets list.
-3. Click "Settings → Trading" in the sidebar or session rail to switch market data/exchange providers on the fly (instant hot-reload).
-
-### 3. Hot Refresh During Development
-
-```sh
-# Rebuild packages
-pnpm -r build
-
-# Clear profile node_modules cache and restart
-rm -rf ~/.dsh/profiles/trading-web/node_modules/@dsh-trading/*
-pnpm install --prefix ~/.dsh/profiles/trading-web
+# Launch the terminal
 dsh --profile trading-web
 ```
 
----
+Then open the printed URL: watchlist on the left, charts in the middle, your agent on the right. New conversation → pick a market preset → ask it what it sees.
 
-## 📚 Documentation Index & Roadmap
+## How it's built
 
-- 📖 **Connectors Onboarding & Configuration Guide**: [docs/connectors-guide.md](docs/connectors-guide.md)
-- 📖 **New Connector Standard Playbook**: [docs/connector-playbook.md](docs/connector-playbook.md)
-- 📖 **Skills Architecture & Integration Guide**: [docs/skills-guide.md](docs/skills-guide.md)
-- 📖 **Market Canonical Symbol Vocabulary**: [docs/symbol-vocabulary.md](docs/symbol-vocabulary.md)
-- 📖 **Exchange Routing & Dataplane Architecture**: [docs/exchange-routing.md](docs/exchange-routing.md)
-- 🗺️ **Qualitative Analysis & Quant Roadmap**: [docs/analysis-roadmap.md](docs/analysis-roadmap.md)
-- 📜 **Architecture Decision Log & Spike Reviews**: [spikes/REVIEW-LOG.md](spikes/REVIEW-LOG.md)
+A [Cordis](https://github.com/cordisjs) microkernel ecosystem, layered so markets compose instead of collide:
 
----
+```
+@dsh-trading/base          ← core: account/order/quote contracts, approval gate, 3-column GUI shell
+├── @dsh-trading/crypto    ← Binance / OKX / Bybit / CCXT + skills + preset
+├── @dsh-trading/us        ← Yahoo / Alpaca / FMP / Finnhub / Polygon / IBKR + skills + preset
+├── @dsh-trading/cn        ← Tencent / Eastmoney / Tushare / AkShare / MiniQMT + skills + preset
+└── @dsh-trading/hk        ← Tencent HK / Longbridge / Futu / Tiger + skills + preset
+```
 
-## 📄 License
+Six invariants keep the ecosystem honest: insert-only bundle patches · knowledge lives in skills, not code · dual-track order gates · shared code earns its place in base (≥2 markets) · zero data re-distribution · the GUI shell is replaceable, the data contracts are not.
 
-This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+## Data sources & terms
 
-- **Noncommercial use** — personal study, research, hobby projects, and use by noncommercial organizations (as defined in the license) — is free.
-- **Commercial use requires prior written authorization** from the project owner. To obtain a commercial license, please open a GitHub issue or contact <chunlinzhu666@gmail.com>.
+| Market | Default source | Boundary |
+|---|---|---|
+| US | Yahoo Finance / Alpaca | Yahoo public endpoint (individual use); Alpaca official Paper/Live APIs |
+| CN | Tencent Finance / Eastmoney | Public endpoints; live execution via local MiniQMT gateway |
+| HK | Tencent HK / Longbridge | Public endpoint; licensed broker OpenAPI/Gateway for execution |
+| Crypto | Binance / OKX | Official APIs; OKX paper trading with your own keys |
+| Crypto fundamentals | CoinCap | Public REST, individual use only — no redistribution, no bulk scraping |
 
-> 本项目采用 [PolyForm Noncommercial 1.0.0](LICENSE) 许可：个人学习、研究、兴趣项目等非商业用途免费使用；**任何商业用途须事先取得项目所有者的书面授权**，请通过 [chunlinzhu666@gmail.com](mailto:chunlinzhu666@gmail.com) 或 GitHub Issue 洽谈商用许可。
+## Documentation
 
+- 📖 [Connectors onboarding & configuration](docs/connectors-guide.md)
+- 📖 [New connector playbook](docs/connector-playbook.md)
+- 📖 [Skills architecture](docs/skills-guide.md)
+- 📖 [Symbol vocabulary](docs/symbol-vocabulary.md)
+- 📖 [Exchange routing & data plane](docs/exchange-routing.md)
+- 🗺️ [Analysis & quant roadmap](docs/analysis-roadmap.md)
+- 📜 [Architecture decision log](spikes/REVIEW-LOG.md)
+- 🇨🇳 [中文介绍](README_zh.md)
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE) — free for personal study, research, and noncommercial use. **Commercial use requires prior written authorization**: open a GitHub issue or contact <chunlinzhu666@gmail.com>.
+
+> 本项目采用 [PolyForm Noncommercial 1.0.0](LICENSE) 许可：非商业用途免费；商业用途须事先取得书面授权（[chunlinzhu666@gmail.com](mailto:chunlinzhu666@gmail.com) 或 GitHub Issue）。
