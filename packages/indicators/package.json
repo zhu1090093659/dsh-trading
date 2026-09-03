@@ -24,7 +24,7 @@
     "lib",
     "assets"
   ],
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run"

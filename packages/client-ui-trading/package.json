@@ -19,7 +19,7 @@
   "files": [
     "lib"
   ],
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "bundle": "tsdown && tsdown --config tsdown.client.config.mjs",
     "build": "tsdown && tsdown --config tsdown.client.config.mjs",

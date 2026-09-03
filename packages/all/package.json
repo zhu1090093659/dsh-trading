@@ -17,7 +17,7 @@
     "lib",
     "cordis.patch.yml"
   ],
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
