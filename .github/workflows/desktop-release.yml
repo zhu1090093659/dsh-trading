@@ -123,6 +123,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # gh release create 需要仓库上下文（确定 repo、生成 notes），必须先 checkout
+      - uses: actions/checkout@v4
+
       - name: Download desktop artifacts
         uses: actions/download-artifact@v4
         with:
