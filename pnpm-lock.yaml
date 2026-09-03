@@ -111,6 +111,9 @@ importers:
       '@dshtrading/client-ui-trading':
         specifier: workspace:^
         version: link:../client-ui-trading
+      '@dshtrading/dsh-i18n':
+        specifier: workspace:^
+        version: link:../dsh-i18n
       '@dshtrading/eventbus':
         specifier: workspace:^
         version: link:../eventbus

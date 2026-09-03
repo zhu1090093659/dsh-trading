@@ -81,6 +81,9 @@
     # Settings → General 语言目录，并为全部 dshtrading.* 命名空间注册 zh-CN
     # 词典（构建期 import 各 UI 包 locales.ts 纯数据模块，zh-CN ≡ zh 零漂移）。
     # 纯浏览器半语言包（dsh-web dsh-i18n 范式），headless 宿主空 apply 无害。
+    # 包名解析依赖本包 dependencies 里的 @dshtrading/dsh-i18n（进 profile 安装
+    # 闭包，S3 坑 3 同款；缺行 = npm 新装 profile 启动即 ERR_MODULE_NOT_FOUND，
+    # issue #60 实测）。
     - id: dsh-trading-dsh-i18n
       name: '@dshtrading/dsh-i18n'
 
