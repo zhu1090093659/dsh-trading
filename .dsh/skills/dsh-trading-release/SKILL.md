@@ -155,7 +155,7 @@ gh run list --workflow=desktop-release.yml   # 查历史
 
 ```sh
 gh release view "vX.Y.Z" --json assets --jq '.assets[].name'
-# 期望资产（8 个）：dsh-trading-desktop-X.Y.Z-mac-{arm64,x64}.{dmg,zip} +
+# 期望资产（7 个）：dsh-trading-desktop-X.Y.Z-mac-{arm64,x64}.{dmg,zip} +
 # dsh-trading-desktop-X.Y.Z-win-x64.{exe,zip} + SHA256SUMS.txt
 gh release view "vX.Y.Z" --json body --jq .body      # 自动 notes 已生成
 gh run list --workflow=desktop-release.yml           # 全部成功
