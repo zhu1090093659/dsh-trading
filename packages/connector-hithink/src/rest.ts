@@ -76,7 +76,7 @@ export class HiThinkRestClient {
   private readonly timeoutMs: number
 
   constructor(options: HiThinkRestOptions = {}) {
-    this.apiKey = options.apiKey ?? process.env.HITHINK_FINANCE_API_KEY
+    this.apiKey = options.apiKey ?? process.env.HITHINK_FINANCE_API_KEY ?? process.env.HITHINK_API_KEY
     this.baseUrl = (options.baseUrl ?? 'https://fuyao.aicubes.cn').replace(/\/+$/, '')
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
     this.timeoutMs = options.timeoutMs ?? 10_000

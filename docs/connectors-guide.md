@@ -10,7 +10,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **东方财富 (`eastmoney`)** | 免密公共行情 | 无需配置 | [eastmoney.com](https://www.eastmoney.com) | 免密开箱即用，支持 1m~1M 分钟 K 线与五档盘口（纯行情，无交易通道） |
 | **腾讯行情 (`tencent`)** | 免密公共行情 | 无需配置 | [finance.qq.com](https://finance.qq.com) | 免密开箱即用，支持分时与前复权 K 线 |
-| **同花顺 (`hithink`)** | 官方 AI/量化服务 | `HITHINK_FINANCE_API_KEY` | [fuyao.aicubes.cn](https://fuyao.aicubes.cn/) | 官方标准化 REST API，支持估值快照（PE/PB/PS/PCF）、集合竞价强弱、涨跌停池、连板天梯、龙虎榜席位与代码消歧 |
+| **同花顺/问财平台 (`hithink`)** | 问财开放数据服务 | `HITHINK_FINANCE_API_KEY` | [fuyao.aicubes.cn](https://fuyao.aicubes.cn/) | REST API，支持估值快照（PE/PB/PS）、早盘集合竞价强弱、涨跌停池连板数据（龙虎榜契约类型已预留，取数规划中）；需配置 Token |
 | **Tushare Pro (`tushare`)** | 商业/量化社区 | `TUSHARE_TOKEN` | [tushare.pro/register](https://tushare.pro/register) | 免费注册送积分，可获取 PE/PB 估值指标与分钟线 |
 | **AkShare (`akshare`)** | 开源量化/宏观数据 | 免密 / `AKSHARE_API_URL` | [akshare.xyz](https://akshare.xyz) | 支持行业板块资金流排行与宏观指标（注：交易所自 2024-08 已停发实时北向资金，北向接口已下线；纯数据源，无交易通道） |
 | **迅投 MiniQMT (`qmt`)** | 券商实盘网关 | `QMT_GATEWAY_URL` (默认 `http://127.0.0.1:5800`)<br>`QMT_ACCOUNT_ID` | 联系开户券商申请 (如国金/华泰/中信/银河) | 需在本机运行券商提供的 MiniQMT 客户端与本地 RPC/HTTP 网关桥（见下方契约说明）；支持真实可用资金查询、股票委托申报与撤单 |

@@ -17,12 +17,12 @@ HiThink (同花顺/问财开放平台 OpenAPI) A 股连接器，提供基本面�
 ```json
 {
   "enabled": true,
-  "apiKey": "ref:env/HITHINK_API_KEY",
+  "apiKey": "ref:env/HITHINK_FINANCE_API_KEY",
   "baseUrl": "https://fuyao.aicubes.cn/openapi/v1"
 }
 ```
 
-- `apiKey`：同花顺/问财开放平台认证 Token（遵循 BYOK 铁律 #5，仅支持 ref 引用或环境变量 `HITHINK_API_KEY`）；
+- `apiKey`：同花顺/问财开放平台认证 Token（遵循 BYOK 铁律 #5，仅支持 ref 引用或环境变量 `HITHINK_FINANCE_API_KEY`）；
 - `baseUrl`：开放平台端点网关。
 
 ## 合规与条款边界 (ToS Compliance)
