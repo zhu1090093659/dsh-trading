@@ -19,7 +19,7 @@ import type { MarketLocaleKey } from './contract.ts'
 
 /** 视图组件收到的运行时面：t 为 dshtrading.market 词典的翻译函数。 */
 export interface StageViewProps {
-  t: (key: MarketLocaleKey) => string
+  t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string
   /** 中栏当前视图 id（useSyncExternalStore 驱动的响应式值）。 */
   view: string
 }

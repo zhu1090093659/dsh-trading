@@ -40,6 +40,8 @@ export const bollingerReversionStrategy: StrategyDefinition = {
           direction: 'long',
           price: currentClose,
           reason: `收盘价 (${currentClose.toFixed(2)}) 跌破布林下轨 (${currentLower.toFixed(2)})，触发波段均值回归`,
+          reasonKey: 'strat.bollinger-reversion.reason.entry',
+          reasonParams: { close: currentClose.toFixed(2), band: currentLower.toFixed(2) },
         })
         inPosition = true
       } else if (inPosition && currentClose >= currentMid) {
@@ -50,6 +52,8 @@ export const bollingerReversionStrategy: StrategyDefinition = {
           direction: 'flat',
           price: currentClose,
           reason: `收盘价 (${currentClose.toFixed(2)}) 成功回归至布林中轨 (${currentMid.toFixed(2)})，完成目标止盈`,
+          reasonKey: 'strat.bollinger-reversion.reason.exit',
+          reasonParams: { close: currentClose.toFixed(2), mid: currentMid.toFixed(2) },
         })
         inPosition = false
       }

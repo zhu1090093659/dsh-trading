@@ -134,6 +134,8 @@ export function run(
             profit,
             holdingBars,
             exitReason: prevSignal.reason,
+            ...(prevSignal.reasonKey !== undefined ? { exitReasonKey: prevSignal.reasonKey } : {}),
+            ...(prevSignal.reasonParams !== undefined ? { exitReasonParams: prevSignal.reasonParams } : {}),
           })
 
           cash = netCash

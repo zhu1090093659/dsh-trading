@@ -14,6 +14,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from './contract/locale-keys.ts'
 import type { SettingsSectionInjected } from './contract/slots.ts'
 import {
   createTradingSettingsStore,
@@ -24,6 +25,7 @@ import {
 import { TradingSettingsSection, type TradingSettingsSectionInjected, type TradingMarketTabEntry } from './TradingSettingsSection.tsx'
 import { MarketProviderPanel } from './MarketProviderPanel.tsx'
 
+import { en, zh } from './locales.ts'
 /** 本面板/字符串翻译的 locale namespace。 */
 const NS = 'dshtrading.settings'
 
@@ -41,7 +43,7 @@ const MARKET_TABS: readonly { id: string; order: number; key: string }[] = [
 /** 注册『交易』设置一级菜单（tab 容器）+ 每市场面板。 */
 export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
-  ctx.effect(() => ctx.locale.register(NS, dictionaries()), 'dsh-trading-settings: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-trading-settings: dictionaries')
 
   const scope = ctx.settingsScope.bind<TradingSettings>({ namespace: 'dshtrading' })
   const store = createTradingSettingsStore(scope)
@@ -155,78 +157,4 @@ export function apply(ctx: ClientContext): void {
       }, MarketProviderPanel)
     }
   })
-}
-
-/** 文案字典：locale.register 契约 = { zh: Record<Key, string>, en: Record<Key, string> }。 */
-function dictionaries() {
-  return {
-    zh: {
-      'nav': '交易',
-      'lead': '选择每个市场使用的数据/交易所提供方。行情面板保存即生效；Agent 会话于新建会话生效（切换不中断当前会话）。',
-      'tabs': '市场',
-      'empty': '没有可配置的市场。',
-      'save': '保存',
-      'discard': '放弃',
-      'saved': '已保存',
-      'saveFailed': '保存失败',
-      'current': '当前：{{provider}}',
-      'default': '默认',
-      'custom': '自定义（{{provider}}，由第三方连接器提供）',
-      'newsKeyLabel': 'CryptoPanic API Key（可选）——新闻工具 crypto_get_news 的 B 增强源；留空则用公共源。',
-      'newsKeyPlaceholder': '粘贴 CryptoPanic free API token（私钥，仅本地存储）',
-      'newsSaved': '已保存',
-      'newsSaveFailed': '保存失败',
-      'colorMode.label': '涨跌配色',
-      'colorMode.redUp': '红涨绿跌（国内习惯）',
-      'colorMode.greenUp': '绿涨红跌（国际习惯）',
-      'market.crypto': '加密货币',
-      'market.us': '美国股票',
-      'market.cn': '中国 A 股',
-      'market.hk': '香港股票',
-      'credential.btn': '配置 API 凭证',
-      'credential.btnFold': '收起配置',
-      'credential.configured': '已配置凭证',
-      'credential.notConfigured': '未配置',
-      'credential.save': '保存凭证',
-      'credential.delete': '清除/删除凭证',
-      'credential.saved': 'API 凭证已保存',
-      'credential.deleted': 'API 凭证已删除',
-      'credential.saveFailed': '凭证保存失败',
-      'credential.deleteFailed': '凭证清除失败',
-    },
-    en: {
-      'nav': 'Trading',
-      'lead': 'Choose the data/exchange provider for each market. Quote panels take effect immediately; agent sessions pick it up in new sessions (running sessions are not interrupted).',
-      'tabs': 'Markets',
-      'empty': 'No configurable markets.',
-      'save': 'Save',
-      'discard': 'Discard',
-      'saved': 'Saved',
-      'saveFailed': 'Save failed',
-      'current': 'Current: {{provider}}',
-      'default': 'default',
-      'custom': 'Custom ({{provider}}, provided by a third-party connector)',
-      'newsKeyLabel': 'CryptoPanic API key (optional) — B-source enrichment for the crypto_get_news tool; leave empty to use public sources.',
-      'newsKeyPlaceholder': 'Paste a CryptoPanic free API token (stored locally only)',
-      'newsSaved': 'Saved',
-      'newsSaveFailed': 'Save failed',
-      'colorMode.label': 'Price Color Scheme',
-      'colorMode.redUp': 'Red Up / Green Down (Chinese)',
-      'colorMode.greenUp': 'Green Up / Red Down (International)',
-      'market.crypto': 'Crypto',
-      'market.us': 'US Stocks',
-      'market.cn': 'China A-shares',
-      'market.hk': 'Hong Kong',
-      'credential.btn': 'Configure API Credentials',
-      'credential.btnFold': 'Hide Configuration',
-      'credential.configured': 'Configured',
-      'credential.notConfigured': 'Not Configured',
-      'credential.save': 'Save Credentials',
-      'credential.delete': 'Clear / Delete Credentials',
-      'credential.saved': 'API Credentials saved',
-      'credential.deleted': 'API Credentials cleared',
-      'credential.saveFailed': 'Failed to save credentials',
-      'credential.deleteFailed': 'Failed to clear credentials',
-    },
-  }
 }

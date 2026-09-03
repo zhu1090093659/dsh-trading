@@ -27,7 +27,7 @@ export interface NewsFeedPaneProps {
   /** 过滤类型：仅公告（exchange）、仅媒体快讯（media）或全部资讯（all） */
   filterType?: 'exchange' | 'media' | 'all' | undefined
   /** 国际化翻译函数 */
-  t: (key: MarketLocaleKey) => string
+  t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string
   /** 发给 Agent 分析 */
   fillComposer?: ((text: string) => Promise<void>) | undefined
 }
@@ -38,20 +38,21 @@ function openExternal(url: string): void {
   window.open(url, '_blank', 'noopener')
 }
 
-function relativeTime(isoString: string): string {
+/** 相对时间（locale 词典驱动：news.time.* 键，n 为数量占位）。 */
+function relativeTime(isoString: string, t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string): string {
   const time = new Date(isoString).getTime()
   if (Number.isNaN(time)) return ''
   const diff = Date.now() - time
   const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
+  if (minutes < 1) return t('news.time.justNow')
+  if (minutes < 60) return t('news.time.minutesAgo', { n: String(minutes) })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}小时前`
+  if (hours < 24) return t('news.time.hoursAgo', { n: String(hours) })
   const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}天前`
+  if (days < 30) return t('news.time.daysAgo', { n: String(days) })
   const months = Math.floor(days / 30)
-  if (months < 12) return `${months}个月前`
-  return `${Math.floor(months / 12)}年前`
+  if (months < 12) return t('news.time.monthsAgo', { n: String(months) })
+  return t('news.time.yearsAgo', { n: String(Math.floor(months / 12)) })
 }
 
 function getSourceType(source: string): string {
@@ -60,24 +61,31 @@ function getSourceType(source: string): string {
   return 'media'
 }
 
-function formatSourceLabel(source: string): string {
-  if (source === 'eastmoney-announcement') return '公司公告'
-  if (source === 'eastmoney') return '东方财富'
-  if (source === 'hkex-announcement') return '港交所披露'
-  if (source === 'cninfo-announcement') return '巨潮公告'
-  if (source === 'sec-edgar') return 'SEC 披露'
-  if (source === 'binance') return '币安公告'
-  if (source === 'okx') return '欧易公告'
-  if (source === 'coindesk') return 'CoinDesk'
-  if (source === 'theblock') return 'The Block'
-  if (source === 'cointelegraph') return 'CoinTelegraph'
-  if (source === 'decrypt') return 'Decrypt'
-  if (source.toLowerCase().includes('yahoo')) return 'Yahoo 财经'
-  if (source.toLowerCase().includes('google')) return 'Google 新闻'
+/** 数据源 → 显示名（词典键驱动；未收录的源 id 原样展示）。 */
+const SOURCE_LABEL_KEY: Record<string, MarketLocaleKey> = {
+  'eastmoney-announcement': 'news.source.eastmoneyAnnouncement',
+  'eastmoney': 'news.source.eastmoney',
+  'hkex-announcement': 'news.source.hkexAnnouncement',
+  'cninfo-announcement': 'news.source.cninfoAnnouncement',
+  'sec-edgar': 'news.source.secEdgar',
+  'binance': 'news.source.binance',
+  'okx': 'news.source.okx',
+  'coindesk': 'news.source.coindesk',
+  'theblock': 'news.source.theblock',
+  'cointelegraph': 'news.source.cointelegraph',
+  'decrypt': 'news.source.decrypt',
+}
+
+function formatSourceLabel(source: string, t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string): string {
+  const key = SOURCE_LABEL_KEY[source]
+  if (key !== undefined) return t(key)
+  const lower = source.toLowerCase()
+  if (lower.includes('yahoo')) return t('news.source.yahoo')
+  if (lower.includes('google')) return t('news.source.google')
   return source
 }
 
-export function NewsFeedPane({ items, unavailable, fullHeight = false, filterType = 'all', fillComposer }: NewsFeedPaneProps): React.JSX.Element {
+export function NewsFeedPane({ items, unavailable, fullHeight = false, filterType = 'all', t, fillComposer }: NewsFeedPaneProps): React.JSX.Element {
   const [, setNow] = useState(Date.now())
   
   // 每分钟更新一次相对时间
@@ -99,7 +107,7 @@ export function NewsFeedPane({ items, unavailable, fullHeight = false, filterTyp
   if (filteredItems === null) {
     return (
       <div className={rootClass} data-dshtrading-news-feed="">
-        <div className={css.empty}>{filterType === 'exchange' ? '公告源未就绪' : '新闻源未激活'}</div>
+        <div className={css.empty}>{filterType === 'exchange' ? t('news.empty.exchangeNotReady') : t('news.empty.mediaNotActive')}</div>
       </div>
     )
   }
@@ -107,7 +115,7 @@ export function NewsFeedPane({ items, unavailable, fullHeight = false, filterTyp
   if (filteredItems.length === 0) {
     return (
       <div className={rootClass} data-dshtrading-news-feed="">
-        <div className={css.empty}>{filterType === 'exchange' ? '暂无相关公告' : '暂无相关新闻'}</div>
+        <div className={css.empty}>{filterType === 'exchange' ? t('news.empty.noAnnouncements') : t('news.empty.noNews')}</div>
       </div>
     )
   }
@@ -118,22 +126,22 @@ export function NewsFeedPane({ items, unavailable, fullHeight = false, filterTyp
         {filteredItems.map((item, index) => (
           <li key={`${item.url}-${index}`} className={css.item} onClick={() => openExternal(item.url)}>
             <span className={css.source} data-type={getSourceType(item.source)}>
-              {formatSourceLabel(item.source)}
+              {formatSourceLabel(item.source, t)}
             </span>
             <span className={css.title} title={item.title}>
               {item.title}
             </span>
             <span className={css.time}>
-              {relativeTime(item.publishedAt)}
+              {relativeTime(item.publishedAt, t)}
             </span>
             {fillComposer !== undefined && (
-              <button 
-                className={css.sendBtn} 
+              <button
+                className={css.sendBtn}
                 onClick={(e) => {
                   e.stopPropagation()
                   fillComposer(`📰 ${item.title}\n${item.url}`).catch(console.error)
                 }}
-                title="发送给 Agent 分析"
+                title={t('news.sendToAgentTitle')}
               >
                 ↦ Agent
               </button>
@@ -143,7 +151,7 @@ export function NewsFeedPane({ items, unavailable, fullHeight = false, filterTyp
       </ul>
       {unavailable !== undefined && unavailable.length > 0 && (
         <div className={css.degraded}>
-          部分数据源不可用: {unavailable.join(', ')}
+          {t('news.degraded', { sources: unavailable.join(', ') })}
         </div>
       )}
     </div>

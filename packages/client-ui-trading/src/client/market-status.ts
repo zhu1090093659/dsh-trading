@@ -8,30 +8,31 @@ import type { MarketId } from './types.ts'
 
 export interface MarketIndexDef {
   readonly symbol: string
-  readonly name: string
+  /** 指数显示名词典键（dshtrading.market，渲染处 t() 解析）。 */
+  readonly nameKey: MarketLocaleKey
 }
 
 /** 各市场默认核心大盘指数 */
 export const MARKET_INDICES: Record<MarketId, MarketIndexDef[]> = {
   cn: [
-    { symbol: 'sh000001', name: '上证指数' },
-    { symbol: 'sz399001', name: '深证成指' },
-    { symbol: 'sz399006', name: '创业板指' },
+    { symbol: 'sh000001', nameKey: 'index.shComposite' },
+    { symbol: 'sz399001', nameKey: 'index.szComponent' },
+    { symbol: 'sz399006', nameKey: 'index.chinext' },
   ],
   hk: [
-    { symbol: 'HSI', name: '恒生指数' },
-    { symbol: 'HSTECH', name: '恒生科技' },
-    { symbol: 'HSCEI', name: '国企指数' },
+    { symbol: 'HSI', nameKey: 'index.hangSeng' },
+    { symbol: 'HSTECH', nameKey: 'index.hangSengTech' },
+    { symbol: 'HSCEI', nameKey: 'index.hscei' },
   ],
   us: [
-    { symbol: '^GSPC', name: '标普500' },
-    { symbol: '^IXIC', name: '纳斯达克' },
-    { symbol: '^DJI', name: '道琼斯' },
+    { symbol: '^GSPC', nameKey: 'index.sp500' },
+    { symbol: '^IXIC', nameKey: 'index.nasdaq' },
+    { symbol: '^DJI', nameKey: 'index.dowJones' },
   ],
   crypto: [
-    { symbol: 'BTCUSDT', name: 'BTC' },
-    { symbol: 'ETHUSDT', name: 'ETH' },
-    { symbol: 'SOLUSDT', name: 'SOL' },
+    { symbol: 'BTCUSDT', nameKey: 'index.btc' },
+    { symbol: 'ETHUSDT', nameKey: 'index.eth' },
+    { symbol: 'SOLUSDT', nameKey: 'index.sol' },
   ],
 }
 

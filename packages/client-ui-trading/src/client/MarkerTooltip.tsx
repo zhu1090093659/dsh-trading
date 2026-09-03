@@ -1,4 +1,5 @@
 import * as React from 'react'
+import type { MarketLocaleKey } from './contract.ts'
 import css from './marker-tooltip.module.css'
 
 export interface SignalTooltipData {
@@ -34,9 +35,11 @@ export interface MarkerTooltipProps {
   signal?: SignalTooltipData | undefined
   /** 知识事件数据（与 signal 互斥） */
   knowledge?: KnowledgeTooltipData | undefined
+  /** 行情词典翻译函数（dshtrading.market）。 */
+  t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string
 }
 
-export function MarkerTooltip({ x, y, containerWidth, containerHeight, signal, knowledge }: MarkerTooltipProps): React.JSX.Element | null {
+export function MarkerTooltip({ x, y, containerWidth, containerHeight, signal, knowledge, t }: MarkerTooltipProps): React.JSX.Element | null {
   if (!signal && !knowledge) return null
 
   // 智能定位：X/Y 任一轴越界时向另一侧翻转，并钳在容器内。
@@ -56,17 +59,17 @@ export function MarkerTooltip({ x, y, containerWidth, containerHeight, signal, k
 
   return (
     <div className={css.tooltip} style={style}>
-      {signal && <SignalContent signal={signal} />}
-      {knowledge && <KnowledgeContent knowledge={knowledge} />}
+      {signal && <SignalContent signal={signal} t={t} />}
+      {knowledge && <KnowledgeContent knowledge={knowledge} t={t} />}
     </div>
   )
 }
 
-function SignalContent({ signal }: { signal: SignalTooltipData }): React.JSX.Element {
+function SignalContent({ signal, t }: { signal: SignalTooltipData; t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string }): React.JSX.Element {
   const isEntry = signal.action === 'entry'
   const headerClass = isEntry ? css.headerEntry : css.headerExit
   const headerIcon = isEntry ? '🟢' : '🔴'
-  const headerText = isEntry ? '买入信号' : '卖出信号'
+  const headerText = isEntry ? t('tooltip.signal.entry') : t('tooltip.signal.exit')
 
   return (
     <>
@@ -74,32 +77,32 @@ function SignalContent({ signal }: { signal: SignalTooltipData }): React.JSX.Ele
         {headerIcon} {headerText} · {signal.reason}
       </div>
       <div className={css.row}>
-        <span className={css.label}>价格</span>
+        <span className={css.label}>{t('tooltip.label.price')}</span>
         <span className={css.value}>{signal.price}</span>
       </div>
       <div className={css.row}>
-        <span className={css.label}>时间</span>
+        <span className={css.label}>{t('tooltip.label.time')}</span>
         <span className={css.value}>{new Date(signal.time).toLocaleString()}</span>
       </div>
-      
+
       {signal.trade && (
         <>
           <hr className={css.divider} />
           <div className={css.row}>
-            <span className={css.label}>收益率</span>
+            <span className={css.label}>{t('tooltip.label.return')}</span>
             <span className={`${css.value} ${signal.trade.returnPercent >= 0 ? css.profit : css.loss}`}>
               {signal.trade.returnPercent > 0 ? '+' : ''}{signal.trade.returnPercent.toFixed(2)}%
             </span>
           </div>
           <div className={css.row}>
-            <span className={css.label}>盈亏</span>
+            <span className={css.label}>{t('tooltip.label.profit')}</span>
             <span className={`${css.value} ${signal.trade.profit >= 0 ? css.profit : css.loss}`}>
               {signal.trade.profit > 0 ? '+' : ''}{signal.trade.profit.toFixed(2)}
             </span>
           </div>
           <div className={css.row}>
-            <span className={css.label}>持仓</span>
-            <span className={css.value}>{signal.trade.holdingBars} 根</span>
+            <span className={css.label}>{t('tooltip.label.holding')}</span>
+            <span className={css.value}>{t('tooltip.unit.bars', { n: String(signal.trade.holdingBars) })}</span>
           </div>
         </>
       )}
@@ -107,8 +110,8 @@ function SignalContent({ signal }: { signal: SignalTooltipData }): React.JSX.Ele
   )
 }
 
-function KnowledgeContent({ knowledge }: { knowledge: KnowledgeTooltipData }): React.JSX.Element {
-  const badgeClass = 
+function KnowledgeContent({ knowledge, t }: { knowledge: KnowledgeTooltipData; t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string }): React.JSX.Element {
+  const badgeClass =
     knowledge.credibility === 'high' ? css.badgeHigh :
     knowledge.credibility === 'medium' ? css.badgeMedium :
     css.badgeLow
@@ -118,15 +121,15 @@ function KnowledgeContent({ knowledge }: { knowledge: KnowledgeTooltipData }): R
     knowledge.credibility === 'medium' ? '⚠️' :
     '❌'
 
-  const badgeText = 
-    knowledge.credibility === 'high' ? '高可信度' :
-    knowledge.credibility === 'medium' ? '中可信度' :
-    '低可信度'
+  const badgeText =
+    knowledge.credibility === 'high' ? t('tooltip.credibility.high') :
+    knowledge.credibility === 'medium' ? t('tooltip.credibility.medium') :
+    t('tooltip.credibility.low')
 
   return (
     <>
       <div className={`${css.header} ${css.headerKnowledge}`}>
-        📌 知识事件
+        📌 {t('tooltip.knowledge.header')}
       </div>
       <div className={css.row}>
         <span className={css.label}>{knowledge.title}</span>

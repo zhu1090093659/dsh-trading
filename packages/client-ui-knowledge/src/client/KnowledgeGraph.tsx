@@ -23,6 +23,9 @@ const CLUSTER_COLORS = [
 
 const TAG_HUB_COLOR = '#7c8aa0'
 
+/** 无标签卡片的簇哨兵（纯数据分组值，不做 UI 展示——配色哈希与计数用）。 */
+const UNTAGGED_CLUSTER = 'untagged'
+
 function getClusterColor(cluster: string): string {
   let hash = 0
   for (let i = 0; i < cluster.length; i++) {
@@ -183,7 +186,7 @@ export const KnowledgeGraph = forwardRef<KnowledgeGraphHandle, KnowledgeGraphPro
           ctx.globalAlpha = 0.15
         }
 
-        const color = hub ? TAG_HUB_COLOR : getClusterColor(node.cluster ?? '未分类')
+        const color = hub ? TAG_HUB_COLOR : getClusterColor(node.cluster ?? UNTAGGED_CLUSTER)
 
         if (hub) {
           // 标签 hub：空心环（与卡片实心圆形成视觉层级）

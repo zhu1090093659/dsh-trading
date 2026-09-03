@@ -5,6 +5,8 @@
  *
  * 接入方式 = ctx.inject(['tradingIndicators'], …)（服务可用时回调才触发；
  * cordis 依赖解析保证晚于提供方 provide）→ register(definition) 上榜。
+  *
+ * i18n-allow: 独立示例插件，指标标题/参数文案本期不进词典（与预置指标中文 title 同口径）。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { IndicatorDefinition, Kline, Series } from '@dsh-trading/indicators'

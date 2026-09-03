@@ -32,6 +32,8 @@ export const nearHighScreener: ScreenerDefinition = {
     return {
       metrics: { offHighPct },
       reason: `距 ${window} 日高点仅 ${offHighPct.toFixed(2)}%，处于突破前夜`,
+      reasonKey: 'scr.near-high.reason',
+      reasonParams: { n: window, pct: offHighPct.toFixed(2) },
     }
   },
 }

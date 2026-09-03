@@ -50,6 +50,8 @@ export const emaCrossoverStrategy: StrategyDefinition = {
           direction: 'long',
           price: bars[i].close,
           reason: `EMA(${fastP}) (${currFast.toFixed(2)}) 上穿 EMA(${slowP}) (${currSlow.toFixed(2)}) 形成金叉`,
+          reasonKey: 'strat.ema-crossover.reason.entry',
+          reasonParams: { fastP, fast: currFast.toFixed(2), slowP, slow: currSlow.toFixed(2) },
         })
         inPosition = true
       }
@@ -62,6 +64,8 @@ export const emaCrossoverStrategy: StrategyDefinition = {
           direction: 'flat',
           price: bars[i].close,
           reason: `EMA(${fastP}) (${currFast.toFixed(2)}) 下穿 EMA(${slowP}) (${currSlow.toFixed(2)}) 形成死叉`,
+          reasonKey: 'strat.ema-crossover.reason.exit',
+          reasonParams: { fastP, fast: currFast.toFixed(2), slowP, slow: currSlow.toFixed(2) },
         })
         inPosition = false
       }

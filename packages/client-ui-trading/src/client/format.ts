@@ -41,13 +41,42 @@ export function fmtChange(value: number | undefined): string {
   return `${sign}${fmtPrice(Math.abs(value))}`
 }
 
-/** Compact volume: 万/亿 (Chinese convention, matching the reference UI). */
-export function fmtCompact(value: number | undefined): string {
+/** Compact volume locale: zh = 万/亿 (Chinese convention), en = K/M/B. */
+export type CompactLocale = 'zh' | 'en'
+
+/** Active locale id → compact-unit locale（未知 id 回落 zh，与现网中文口径一致）。 */
+export function compactLocaleOf(localeId: string): CompactLocale {
+  return localeId.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
+/**
+ * 词典哨兵键（dshtrading.market 'fundamentals.scale'）→ 数值单位 locale。
+ * t 不携带 active locale 元数据，UI 层从词典值判定（zh 值固定 '万'，en 固定 'B'）；
+ * 该键只作哨兵，不在 UI 渲染。两个哨兵值都识别（评审 L2：只认 '万' 时，词典
+ * 改词/键位 miss 返回 key 本身会把 zh 静默翻成 en 单位）；未知值告警并回落 en
+ * （B/M/K 是国际默认，对 zh 用户是可读降级）。
+ */
+export function scaleLocaleOf(t: (key: 'fundamentals.scale', params?: Record<string, unknown>) => string): CompactLocale {
+  const value = t('fundamentals.scale')
+  if (value === '万') return 'zh' // i18n-allow: 哨兵值与 zh 词典字面量比对
+  if (value === 'B') return 'en'
+  console.warn(`[dsh-trading] unexpected fundamentals.scale sentinel: ${JSON.stringify(value)}; falling back to en units`)
+  return 'en'
+}
+
+/** Compact volume (locale-aware units, matching the reference UI). */
+export function fmtCompact(value: number | undefined, locale: CompactLocale = 'zh'): string {
   if (value === undefined || !Number.isFinite(value)) return '—'
   const abs = Math.abs(value)
-  if (abs >= 1e8) return `${trimZeros((value / 1e8).toFixed(2))}亿`
-  if (abs >= 1e4) return `${trimZeros((value / 1e4).toFixed(2))}万`
-  if (abs >= 1000) return `${trimZeros((value / 1000).toFixed(2))}K`
+  if (locale === 'zh') {
+    if (abs >= 1e8) return `${trimZeros((value / 1e8).toFixed(2))}亿` // i18n-allow: zh 数值单位常量（locale 数据）
+    if (abs >= 1e4) return `${trimZeros((value / 1e4).toFixed(2))}万` // i18n-allow: zh 数值单位常量（locale 数据）
+    if (abs >= 1000) return `${trimZeros((value / 1000).toFixed(2))}K`
+    return trimZeros(value.toFixed(2))
+  }
+  if (abs >= 1e9) return `${trimZeros((value / 1e9).toFixed(2))}B`
+  if (abs >= 1e6) return `${trimZeros((value / 1e6).toFixed(2))}M`
+  if (abs >= 1e3) return `${trimZeros((value / 1e3).toFixed(2))}K`
   return trimZeros(value.toFixed(2))
 }
 

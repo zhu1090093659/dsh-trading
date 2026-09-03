@@ -7,6 +7,7 @@ import type {
 } from '@dsh-trading/api'
 import { fetchFundamentals } from './api.ts'
 import { readJson, type SelectionState } from './store.ts'
+import { scaleLocaleOf } from './format.ts'
 import type { Instrument, MarketId } from './types.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import css from './fundamentals-stage.module.css'
@@ -14,9 +15,40 @@ import css from './fundamentals-stage.module.css'
 export type UseStoreState<TState> = <TSelected>(selector: (state: TState) => TSelected) => TSelected
 
 export interface FundamentalsStageProps {
-  /** 预留：本页签文案暂为内置中文（富途工作台语义密集，先不进 locale 词典）。 */
-  t?: (key: MarketLocaleKey) => string
+  /** 行情词典翻译函数（dshtrading.market，shell 注入）。 */
+  t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string
   useSelection?: UseStoreState<SelectionState>
+}
+
+/** 数值紧凑单位（zh = 亿/万 中文惯例；en = B/M/K）。 */
+export type NumberScaleLocale = 'zh' | 'en'
+
+/** locale-aware 大数缩写：formatVal/formatCompact 等共用（en 走 B/M/K，与
+ * format.ts fmtCompact 的 zh 分支同口径换算基准）。zh 千亿档单列（评审 L3：
+ * 1e11 归入万亿会把 5e11 显示成 0.50 万亿，与主流行情软件的千亿档不符）；
+ * zh/en 对称去尾零。 */
+export function formatScaled(value: number | undefined, locale: NumberScaleLocale, decimals = 2): string {
+  if (value === undefined || Number.isNaN(value)) return '--'
+  const abs = Math.abs(value)
+  const trim = (text: string): string => text.includes('.') ? text.replace(/\.?0+$/, '') : text
+  if (locale === 'zh') {
+    if (abs >= 1e12) return `${trim((value / 1e12).toFixed(decimals))} 万亿` // i18n-allow: zh 数值单位常量（locale 数据）
+    if (abs >= 1e11) return `${trim((value / 1e11).toFixed(decimals))} 千亿` // i18n-allow: zh 数值单位常量（locale 数据）
+    if (abs >= 1e8) return `${trim((value / 1e8).toFixed(decimals))} 亿` // i18n-allow: zh 数值单位常量（locale 数据）
+    if (abs >= 1e4) return `${trim((value / 1e4).toFixed(decimals))} 万` // i18n-allow: zh 数值单位常量（locale 数据）
+    return Number.isInteger(value) ? String(value) : value.toFixed(decimals)
+  }
+  if (abs >= 1e12) return `${trim((value / 1e12).toFixed(decimals))}T`
+  if (abs >= 1e9) return `${trim((value / 1e9).toFixed(decimals))}B`
+  if (abs >= 1e6) return `${trim((value / 1e6).toFixed(decimals))}M`
+  if (abs >= 1e3) return `${trim((value / 1e3).toFixed(decimals))}K`
+  return Number.isInteger(value) ? String(value) : value.toFixed(decimals)
+}
+
+function formatVal(val: number | undefined, unit?: string, isRatio = false, locale: NumberScaleLocale = 'zh'): string {
+  if (val === undefined || Number.isNaN(val)) return '--'
+  if (isRatio || unit === '%') return `${val.toFixed(2)}%`
+  return formatScaled(val, locale)
 }
 
 export type NavSubCategory =
@@ -38,15 +70,6 @@ export type NavSubCategory =
   | 'action_buybacks'
   | 'action_splits'
 
-function formatVal(val: number | undefined, unit?: string, isRatio = false): string {
-  if (val === undefined || Number.isNaN(val)) return '--'
-  if (isRatio || unit === '%') return `${val.toFixed(2)}%`
-  if (Math.abs(val) >= 100_000_000_000) return `${(val / 100_000_000_000).toFixed(2)} 千亿`
-  if (Math.abs(val) >= 100_000_000) return `${(val / 100_000_000).toFixed(2)} 亿`
-  if (Math.abs(val) >= 10_000) return `${(val / 10_000).toFixed(2)} 万`
-  return Number.isInteger(val) ? String(val) : val.toFixed(2)
-}
-
 function formatChange(change: number | undefined): { text: string; cls: string } {
   if (change === undefined || Number.isNaN(change)) return { text: '--', cls: css.valNeutral }
   const sign = change > 0 ? '+' : ''
@@ -56,7 +79,24 @@ function formatChange(change: number | undefined): { text: string; cls: string }
   return { text, cls: css.valNeutral }
 }
 
-export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
+export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
+  // 数值单位 locale 跟随界面语言（词典哨兵键判定）：zh → 亿/万，en → B/M/K。
+  const numLocale = scaleLocaleOf(t)
+  const fv = (val: number | undefined, unit?: string, isRatio = false): string => formatVal(val, unit, isRatio, numLocale)
+  /** CNY 大额金额 → locale 模板值：数值侧换算（zh /1e8 亿，en /1e6 M），
+   *  词典模板只挂单位后缀（fund.unit.yiCny = '¥{n}亿' / '¥{n}M'）——单位换算
+   *  不靠模板字符串拼接（评审 M1：'¥{n}00M' 曾把金额错示 100 倍）。 */
+  const yiCny = (amount: number): string => t('fund.unit.yiCny', {
+    n: (amount / (numLocale === 'zh' ? 1e8 : 1e6)).toFixed(2),
+  })
+  /** 持股均价：zh /1e4 万，en /1e3 K（fund.unit.wanCny = '¥{n}万' / '¥{n}K'）。 */
+  const wanCny = (amount: number): string => t('fund.unit.wanCny', {
+    n: (amount / (numLocale === 'zh' ? 1e4 : 1e3)).toFixed(2),
+  })
+  /** 户数：zh /1e4 万户，en /1e3 K accounts（fund.unit.holders）。 */
+  const holdersWan = (count: number): string => t('fund.unit.holders', {
+    n: (count / (numLocale === 'zh' ? 1e4 : 1e3)).toFixed(2),
+  })
   const hookInstrument = useSelection?.(s => s.instrument)
   // localStorage 镜像只在缺失 hook 面时读一次（useEffect 每渲染 JSON.parse 是浪费）。
   const [storedInstrument] = useState(() => readJson<Instrument | null>('dshtrading.selection.v1', null))
@@ -180,7 +220,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
   if (!symbol) {
     return (
       <div className={css.emptyState}>
-        <span>请在左侧自选栏选择标的以查看基本面与多期财报档案</span>
+        <span>{t('fund.page.empty')}</span>
       </div>
     )
   }
@@ -189,7 +229,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
     return (
       <div className={css.loadingState}>
         <div className={css.spinner} />
-        <span>正在从官方数据源动态拉取 {symbol} 财务与估值矩阵...</span>
+        <span>{t('fund.page.loading', { symbol })}</span>
       </div>
     )
   }
@@ -206,49 +246,49 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
         <div className={css.valuationPills}>
           {stock?.peTtm !== undefined && (
             <div className={css.pillItem}>
-              <span className={css.pillLabel}>PE(TTM):</span>
+              <span className={css.pillLabel}>{t('fund.pill.peTtm')}</span>
               <span className={css.pillValue}>{stock.peTtm.toFixed(2)}</span>
             </div>
           )}
           {stock?.peDynamic !== undefined && (
             <div className={css.pillItem}>
-              <span className={css.pillLabel}>动态PE:</span>
+              <span className={css.pillLabel}>{t('fund.pill.peDynamic')}</span>
               <span className={css.pillValue}>{stock.peDynamic.toFixed(2)}</span>
             </div>
           )}
           {stock?.pb !== undefined && (
             <div className={css.pillItem}>
-              <span className={css.pillLabel}>PB:</span>
+              <span className={css.pillLabel}>{t('fund.pill.pb')}</span>
               <span className={css.pillValue}>{stock.pb.toFixed(2)}</span>
             </div>
           )}
           {stock?.marketCap !== undefined && (
             <div className={css.pillItem}>
-              <span className={css.pillLabel}>总市值:</span>
-              <span className={css.pillValue}>{formatVal(stock.marketCap)}</span>
+              <span className={css.pillLabel}>{t('fund.pill.marketCap')}</span>
+              <span className={css.pillValue}>{fv(stock.marketCap)}</span>
             </div>
           )}
           {stock?.dividendYield !== undefined && (
             <div className={css.pillItem}>
-              <span className={css.pillLabel}>股息率:</span>
+              <span className={css.pillLabel}>{t('fund.pill.dividendYield')}</span>
               <span className={css.pillValue}>{(stock.dividendYield * (stock.dividendYield < 1 ? 100 : 1)).toFixed(2)}%</span>
             </div>
           )}
           {stock?.turnoverRate !== undefined && (
             <div className={css.pillItem}>
-              <span className={css.pillLabel}>换手:</span>
+              <span className={css.pillLabel}>{t('fund.pill.turnover')}</span>
               <span className={css.pillValue}>{stock.turnoverRate.toFixed(2)}%</span>
             </div>
           )}
           {crypto?.marketCapUsd !== undefined && (
             <div className={css.pillItem}>
-              <span className={css.pillLabel}>流通市值:</span>
-              <span className={css.pillValue}>${formatVal(crypto.marketCapUsd)}</span>
+              <span className={css.pillLabel}>{t('fund.pill.floatCap')}</span>
+              <span className={css.pillValue}>${fv(crypto.marketCapUsd)}</span>
             </div>
           )}
           {crypto?.rank !== undefined && (
             <div className={css.pillItem}>
-              <span className={css.pillLabel}>全球排名:</span>
+              <span className={css.pillLabel}>{t('fund.pill.rank')}</span>
               <span className={css.pillValue}>#{crypto.rank}</span>
             </div>
           )}
@@ -262,7 +302,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {/* 1. 财务 */}
           <div className={css.navGroupTitle}>
             <span className={css.navGroupDot} />
-            <span>财务</span>
+            <span>{t('fund.nav.financials')}</span>
           </div>
           <button
             type="button"
@@ -271,7 +311,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('financials_key')}
           >
             {activeNav === 'financials_key' && <span className={css.navDotActive} />}
-            <span>关键指标</span>
+            <span>{t('fund.nav.key')}</span>
           </button>
           <button
             type="button"
@@ -280,7 +320,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('financials_income')}
           >
             {activeNav === 'financials_income' && <span className={css.navDotActive} />}
-            <span>利润表</span>
+            <span>{t('fund.nav.income')}</span>
           </button>
           <button
             type="button"
@@ -289,7 +329,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('financials_balance')}
           >
             {activeNav === 'financials_balance' && <span className={css.navDotActive} />}
-            <span>资产负债表</span>
+            <span>{t('fund.nav.balance')}</span>
           </button>
           <button
             type="button"
@@ -298,13 +338,13 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('financials_cashflow')}
           >
             {activeNav === 'financials_cashflow' && <span className={css.navDotActive} />}
-            <span>现金流量表</span>
+            <span>{t('fund.nav.cashflow')}</span>
           </button>
 
           {/* 2. 预测 */}
           <div className={css.navGroupTitle} style={{ marginTop: 6 }}>
             <span className={css.navGroupDot} />
-            <span>预测</span>
+            <span>{t('fund.nav.forecast')}</span>
           </div>
           <button
             type="button"
@@ -313,13 +353,13 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('forecast')}
           >
             {activeNav === 'forecast' && <span className={css.navDotActive} />}
-            <span>盈利预测</span>
+            <span>{t('fund.nav.forecastItem')}</span>
           </button>
 
           {/* 3. 晨星研报 */}
           <div className={css.navGroupTitle} style={{ marginTop: 6 }}>
             <span className={css.navGroupDot} />
-            <span>晨星研报</span>
+            <span>{t('fund.nav.reports')}</span>
           </div>
           <button
             type="button"
@@ -328,13 +368,13 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('reports')}
           >
             {activeNav === 'reports' && <span className={css.navDotActive} />}
-            <span>机构研报</span>
+            <span>{t('fund.nav.reportsItem')}</span>
           </button>
 
           {/* 4. 估值 */}
           <div className={css.navGroupTitle} style={{ marginTop: 6 }}>
             <span className={css.navGroupDot} />
-            <span>估值</span>
+            <span>{t('fund.nav.valuation')}</span>
           </div>
           <button
             type="button"
@@ -343,13 +383,13 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('valuation')}
           >
             {activeNav === 'valuation' && <span className={css.navDotActive} />}
-            <span>估值分析</span>
+            <span>{t('fund.nav.valuationItem')}</span>
           </button>
 
           {/* 5. 经营分析 */}
           <div className={css.navGroupTitle} style={{ marginTop: 6 }}>
             <span className={css.navGroupDot} />
-            <span>经营分析</span>
+            <span>{t('fund.nav.biz')}</span>
           </div>
           <button
             type="button"
@@ -358,7 +398,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('biz_segments')}
           >
             {activeNav === 'biz_segments' && <span className={css.navDotActive} />}
-            <span>主营构成</span>
+            <span>{t('fund.nav.bizSegments')}</span>
           </button>
           <button
             type="button"
@@ -367,13 +407,13 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('biz_efficiency')}
           >
             {activeNav === 'biz_efficiency' && <span className={css.navDotActive} />}
-            <span>经营效率</span>
+            <span>{t('fund.nav.bizEfficiency')}</span>
           </button>
 
           {/* 6. 聪明钱 */}
           <div className={css.navGroupTitle} style={{ marginTop: 6 }}>
             <span className={css.navGroupDot} />
-            <span>聪明钱</span>
+            <span>{t('fund.nav.smartMoney')}</span>
           </div>
           <button
             type="button"
@@ -382,7 +422,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('smart_shareholders')}
           >
             {activeNav === 'smart_shareholders' && <span className={css.navDotActive} />}
-            <span>股东持股</span>
+            <span>{t('fund.nav.shareholders')}</span>
           </button>
           <button
             type="button"
@@ -391,7 +431,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('smart_insider')}
           >
             {activeNav === 'smart_insider' && <span className={css.navDotActive} />}
-            <span>股东增减持</span>
+            <span>{t('fund.nav.insider')}</span>
           </button>
           <button
             type="button"
@@ -400,13 +440,13 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('smart_institutional')}
           >
             {activeNav === 'smart_institutional' && <span className={css.navDotActive} />}
-            <span>机构持股</span>
+            <span>{t('fund.nav.institutional')}</span>
           </button>
 
           {/* 7. 简况 */}
           <div className={css.navGroupTitle} style={{ marginTop: 6 }}>
             <span className={css.navGroupDot} />
-            <span>简况</span>
+            <span>{t('fund.nav.profile')}</span>
           </div>
           <button
             type="button"
@@ -415,7 +455,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('profile_overview')}
           >
             {activeNav === 'profile_overview' && <span className={css.navDotActive} />}
-            <span>公司概况</span>
+            <span>{t('fund.nav.profileOverview')}</span>
           </button>
           <button
             type="button"
@@ -424,13 +464,13 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('profile_executives')}
           >
             {activeNav === 'profile_executives' && <span className={css.navDotActive} />}
-            <span>公司高管</span>
+            <span>{t('fund.nav.profileExecutives')}</span>
           </button>
 
           {/* 8. 公司行动 */}
           <div className={css.navGroupTitle} style={{ marginTop: 6 }}>
             <span className={css.navGroupDot} />
-            <span>公司行动</span>
+            <span>{t('fund.nav.actions')}</span>
           </div>
           <button
             type="button"
@@ -439,7 +479,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('action_dividends')}
           >
             {activeNav === 'action_dividends' && <span className={css.navDotActive} />}
-            <span>分红派息</span>
+            <span>{t('fund.nav.dividends')}</span>
           </button>
           <button
             type="button"
@@ -448,7 +488,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('action_buybacks')}
           >
             {activeNav === 'action_buybacks' && <span className={css.navDotActive} />}
-            <span>回购</span>
+            <span>{t('fund.nav.buybacks')}</span>
           </button>
           <button
             type="button"
@@ -457,7 +497,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
             onClick={() => switchNav('action_splits')}
           >
             {activeNav === 'action_splits' && <span className={css.navDotActive} />}
-            <span>拆股并股</span>
+            <span>{t('fund.nav.splits')}</span>
           </button>
         </div>
 
@@ -472,7 +512,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                   <div className={css.chartHeader}>
                     <div className={css.reportLink}>
                       <span className={css.reportIcon}>📄</span>
-                      <span>{matrix.latestReportTitle ?? `${matrix.periods[matrix.periods.length - 1]} 财报`} &gt;</span>
+                      <span>{matrix.latestReportTitle ?? t('fund.chart.reportTitle', { period: matrix.periods[matrix.periods.length - 1] ?? '' })} &gt;</span>
                     </div>
                     <div className={css.chartControls}>
                       <div
@@ -481,7 +521,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                         role="button"
                         tabIndex={0}
                       >
-                        <span>显示同比: {showYoY ? '开' : '关'}</span>
+                        <span>{t('fund.chart.showYoy', { state: showYoY ? t('fund.switch.on') : t('fund.switch.off') })}</span>
                       </div>
                     </div>
                   </div>
@@ -494,7 +534,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                     {showYoY && (
                       <div className={css.legendLine}>
                         <span className={css.legendLineBox} />
-                        <span>同比增长率 (%)</span>
+                        <span>{t('fund.chart.yoyLegend')}</span>
                       </div>
                     )}
                   </div>
@@ -512,14 +552,14 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
               {matrix && matrix.periods.length > 0 ? (
                 <div className={css.tableCard}>
                   <div className={css.tableHeaderBar}>
-                    <span>币种: {matrix.currency}</span>
-                    <span>点击指标行可在上方图表联动查看趋势</span>
+                    <span>{t('fund.matrix.currency', { currency: matrix.currency })}</span>
+                    <span>{t('fund.matrix.clickHint')}</span>
                   </div>
                   <div className={css.tableScrollWrap}>
                     <table className={css.matrixTable}>
                       <thead>
                         <tr>
-                          <th>指标名称</th>
+                          <th>{t('fund.matrix.indicator')}</th>
                           {matrix.periods.map(p => (
                             <th key={p}>{p}</th>
                           ))}
@@ -537,6 +577,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                               selectedIndicatorId={selectedIndicatorId}
                               onToggleGroup={() => toggleGroup(group.id)}
                               onSelectIndicator={(id) => setSelectedIndicatorId(id)}
+                              formatValue={fv}
                             />
                           )
                         })}
@@ -546,9 +587,9 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                 </div>
               ) : (
                 <div className={css.infoCard}>
-                  <span className={css.cardTitle}>财务数据提示</span>
+                  <span className={css.cardTitle}>{t('fund.matrix.emptyTitle')}</span>
                   <p className={css.descText}>
-                    当前标的暂未生成多期标准财报矩阵（可能为加密数字资产或该市场未提供公开季报端点），请参考估值与公司简况面板。
+                    {t('fund.matrix.emptyHint')}
                   </p>
                 </div>
               )}
@@ -559,35 +600,35 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'forecast' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>机构盈利预测与评级一致预期</span>
-                <span className={css.cardSubNote}>聚合券商研报盈利预测（EPS/营收/净利）与评级统计</span>
+                <span>{t('fund.forecast.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.forecast.subtitle')}</span>
               </div>
 
               {forecast?.items && forecast.items.length > 0 ? (
                 <>
                   <div className={css.forecastGrid}>
                     <div className={css.forecastStatBox}>
-                      <span className={css.gridLabel}>当年预期 EPS</span>
+                      <span className={css.gridLabel}>{t('fund.forecast.epsCurrent')}</span>
                       <span className={css.pillValue} style={{ fontSize: 18, color: 'var(--futu-accent)' }}>
                         {forecast.epsCurrentYear !== undefined ? `¥${forecast.epsCurrentYear.toFixed(2)}` : '--'}
                       </span>
                     </div>
                     <div className={css.forecastStatBox}>
-                      <span className={css.gridLabel}>次年预期 EPS</span>
+                      <span className={css.gridLabel}>{t('fund.forecast.epsNext')}</span>
                       <span className={css.pillValue} style={{ fontSize: 18, color: 'var(--futu-orange)' }}>
                         {forecast.epsNextYear !== undefined ? `¥${forecast.epsNextYear.toFixed(2)}` : '--'}
                       </span>
                     </div>
                     <div className={css.forecastStatBox}>
-                      <span className={css.gridLabel}>一致预期目标价</span>
+                      <span className={css.gridLabel}>{t('fund.forecast.targetPrice')}</span>
                       <span className={css.pillValue} style={{ fontSize: 18 }}>
                         {forecast.targetPriceAvg !== undefined ? `¥${forecast.targetPriceAvg.toFixed(2)}` : '--'}
                       </span>
                     </div>
                     <div className={css.forecastStatBox}>
-                      <span className={css.gridLabel}>覆盖机构数</span>
+                      <span className={css.gridLabel}>{t('fund.forecast.orgCount')}</span>
                       <span className={css.pillValue} style={{ fontSize: 18 }}>
-                        {forecast.totalOrgs ?? forecast.items.length} 家
+                        {forecast.totalOrgs ?? forecast.items.length} {t('fund.unit.orgs')}
                       </span>
                     </div>
                   </div>
@@ -596,11 +637,11 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                     <table className={css.matrixTable}>
                       <thead>
                         <tr>
-                          <th>预测年度</th>
-                          <th>每股收益 EPS (元)</th>
-                          <th>营业收入 (亿元)</th>
-                          <th>归母净利润 (亿元)</th>
-                          <th>预测机构数</th>
+                          <th>{t('fund.forecast.col.year')}</th>
+                          <th>{t('fund.forecast.col.eps')}</th>
+                          <th>{t('fund.forecast.col.revenue')}</th>
+                          <th>{t('fund.forecast.col.netProfit')}</th>
+                          <th>{t('fund.forecast.col.orgs')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -608,9 +649,9 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                           <tr key={item.year} className={css.indicatorRow}>
                             <td><strong>{item.year}</strong></td>
                             <td style={{ color: 'var(--futu-accent)', fontWeight: 600 }}>¥{item.eps.toFixed(2)}</td>
-                            <td>{formatVal(item.revenue * 100_000_000)}</td>
-                            <td>{formatVal(item.netProfit * 100_000_000)}</td>
-                            <td>{item.orgCount ?? '--'} 家</td>
+                            <td>{fv(item.revenue * 100_000_000)}</td>
+                            <td>{fv(item.netProfit * 100_000_000)}</td>
+                            <td>{item.orgCount ?? '--'} {t('fund.unit.orgs')}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -619,7 +660,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                 </>
               ) : (
                 <p className={css.descText}>
-                  当前标的暂未公开主流券商一致盈利预测数据，请关注公司定期公告与业绩快报。
+                  {t('fund.forecast.empty')}
                 </p>
               )}
             </div>
@@ -629,8 +670,8 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'reports' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>机构研究报告精选</span>
-                <span className={css.cardSubNote}>券商机构最新深度调研、盈利预测与投资评级</span>
+                <span>{t('fund.reports.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.reports.subtitle')}</span>
               </div>
 
               {reports && reports.length > 0 ? (
@@ -650,13 +691,13 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                         ) : rep.title}
                       </div>
                       {rep.summary && <p className={css.reportSummary}>{rep.summary}</p>}
-                      {rep.author && <div className={css.reportAuthor}>分析师: {rep.author}</div>}
+                      {rep.author && <div className={css.reportAuthor}>{t('fund.reports.analyst', { author: rep.author })}</div>}
                     </div>
                   ))}
                 </div>
               ) : (
                 <p className={css.descText}>
-                  暂未检索到该标的的公开机构研报，您可在对话框向 Agent 提问进行个股深度财务核查。
+                  {t('fund.reports.empty')}
                 </p>
               )}
             </div>
@@ -666,8 +707,8 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'valuation' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>估值核心诊断与历史分位</span>
-                <span className={css.cardSubNote}>基于多周期市盈率、市净率与价格区间综合诊断</span>
+                <span>{t('fund.valuation.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.valuation.subtitle')}</span>
               </div>
 
               {/* 52 周区间与 PE 评注：价格未进入本组件（基本面快照无现价字段），
@@ -675,52 +716,52 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
               {stock?.fiftyTwoWeekLow !== undefined && stock?.fiftyTwoWeekHigh !== undefined && (
                 <div className={css.rangeGaugeWrap}>
                   <div className={css.rangePointerInfo}>
-                    <span>52 周价格区间</span>
+                    <span>{t('fund.valuation.range52w')}</span>
                     <span>
                       {stock.fiftyTwoWeekLow.toFixed(2)} ~ {stock.fiftyTwoWeekHigh.toFixed(2)}
                     </span>
                   </div>
                   <div className={css.rangeGaugeLabels}>
-                    <span>52周最低: {stock.fiftyTwoWeekLow.toFixed(2)}</span>
+                    <span>{t('fund.valuation.low52w', { price: stock.fiftyTwoWeekLow.toFixed(2) })}</span>
                     <span>
-                      估值评注: {stock.peTtm !== undefined ? (stock.peTtm < 15 ? '🟢 相对低估' : stock.peTtm < 30 ? '🟡 估值合理' : '🔴 相对偏高') : '评估中'}
+                      {t('fund.valuation.peNote', { note: stock.peTtm !== undefined ? (stock.peTtm < 15 ? t('fund.valuation.undervalued') : stock.peTtm < 30 ? t('fund.valuation.fair') : t('fund.valuation.overvalued')) : t('fund.valuation.assessing') })}
                     </span>
-                    <span>52周最高: {stock.fiftyTwoWeekHigh.toFixed(2)}</span>
+                    <span>{t('fund.valuation.high52w', { price: stock.fiftyTwoWeekHigh.toFixed(2) })}</span>
                   </div>
                 </div>
               )}
 
               <div className={css.gridCols}>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>滚动市盈率 PE (TTM)</span>
+                  <span className={css.gridLabel}>{t('fund.valuation.peTtm')}</span>
                   <span className={css.gridValue}>{stock?.peTtm !== undefined ? stock.peTtm.toFixed(2) : '--'}</span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>动态市盈率 PE (动)</span>
+                  <span className={css.gridLabel}>{t('fund.valuation.peDynamic')}</span>
                   <span className={css.gridValue}>{stock?.peDynamic !== undefined ? stock.peDynamic.toFixed(2) : '--'}</span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>静态市盈率 PE (静)</span>
+                  <span className={css.gridLabel}>{t('fund.valuation.peStatic')}</span>
                   <span className={css.gridValue}>{stock?.peStatic !== undefined ? stock.peStatic.toFixed(2) : '--'}</span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>市净率 PB</span>
+                  <span className={css.gridLabel}>{t('fund.valuation.pb')}</span>
                   <span className={css.gridValue}>{stock?.pb !== undefined ? stock.pb.toFixed(2) : '--'}</span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>总市值</span>
-                  <span className={css.gridValue}>{formatVal(stock?.marketCap)}</span>
+                  <span className={css.gridLabel}>{t('fund.valuation.marketCap')}</span>
+                  <span className={css.gridValue}>{fv(stock?.marketCap)}</span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>流通市值</span>
-                  <span className={css.gridValue}>{formatVal(stock?.floatMarketCap)}</span>
+                  <span className={css.gridLabel}>{t('fund.valuation.floatCap')}</span>
+                  <span className={css.gridValue}>{fv(stock?.floatMarketCap)}</span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>股息率 (TTM)</span>
+                  <span className={css.gridLabel}>{t('fund.valuation.dividendYield')}</span>
                   <span className={css.gridValue}>{stock?.dividendYield !== undefined ? `${(stock.dividendYield * (stock.dividendYield < 1 ? 100 : 1)).toFixed(2)}%` : '--'}</span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>换手率</span>
+                  <span className={css.gridLabel}>{t('fund.valuation.turnover')}</span>
                   <span className={css.gridValue}>{stock?.turnoverRate !== undefined ? `${stock.turnoverRate.toFixed(2)}%` : '--'}</span>
                 </div>
               </div>
@@ -731,8 +772,8 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'biz_segments' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>主营业务构成分析</span>
-                <span className={css.cardSubNote}>按产品、行业及地区分类拆解业务收入与毛利率结构</span>
+                <span>{t('fund.segments.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.segments.subtitle')}</span>
               </div>
 
               <div className={css.tabButtonGroup} style={{ marginBottom: 12 }}>
@@ -742,7 +783,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                   data-active={segmentFilter === 'all'}
                   onClick={() => setSegmentFilter('all')}
                 >
-                  全部
+                  {t('fund.segments.all')}
                 </button>
                 <button
                   type="button"
@@ -750,7 +791,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                   data-active={segmentFilter === 'product'}
                   onClick={() => setSegmentFilter('product')}
                 >
-                  按产品
+                  {t('fund.segments.byProduct')}
                 </button>
                 <button
                   type="button"
@@ -758,7 +799,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                   data-active={segmentFilter === 'industry'}
                   onClick={() => setSegmentFilter('industry')}
                 >
-                  按行业
+                  {t('fund.segments.byIndustry')}
                 </button>
                 <button
                   type="button"
@@ -766,7 +807,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                   data-active={segmentFilter === 'region'}
                   onClick={() => setSegmentFilter('region')}
                 >
-                  按地区
+                  {t('fund.segments.byRegion')}
                 </button>
               </div>
 
@@ -775,25 +816,25 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                   <table className={css.matrixTable}>
                     <thead>
                       <tr>
-                        <th>主营分类 / 项目</th>
-                        <th>主营收入 (元)</th>
-                        <th>收入占比</th>
-                        <th>主营利润 (元)</th>
-                        <th>毛利率</th>
+                        <th>{t('fund.segments.col.segment')}</th>
+                        <th>{t('fund.segments.col.revenue')}</th>
+                        <th>{t('fund.segments.col.revenueRatio')}</th>
+                        <th>{t('fund.segments.col.profit')}</th>
+                        <th>{t('fund.segments.col.grossMargin')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredSegments.map(seg => (
                         <tr key={seg.segmentName + seg.classification} className={css.indicatorRow}>
                           <td><strong>{seg.segmentName}</strong></td>
-                          <td>{formatVal(seg.revenue)}</td>
+                          <td>{fv(seg.revenue)}</td>
                           <td>
                             <div className={css.ratioBarWrap}>
                               <div className={css.ratioBar} style={{ width: `${Math.min(100, Math.max(2, seg.revenueRatio))}%` }} />
                               <span>{seg.revenueRatio.toFixed(2)}%</span>
                             </div>
                           </td>
-                          <td>{seg.grossProfit ? formatVal(seg.grossProfit) : '--'}</td>
+                          <td>{seg.grossProfit ? fv(seg.grossProfit) : '--'}</td>
                           <td style={{ color: seg.grossMargin && seg.grossMargin > 0 ? 'var(--futu-up)' : 'inherit' }}>
                             {seg.grossMargin ? `${seg.grossMargin.toFixed(2)}%` : '--'}
                           </td>
@@ -804,7 +845,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                 </div>
               ) : (
                 <p className={css.descText}>
-                  暂未获取到当期详细主营构成拆解明细，请参考利润表营业收入科目。
+                  {t('fund.segments.empty')}
                 </p>
               )}
             </div>
@@ -814,54 +855,54 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'biz_efficiency' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>运营与周转效率</span>
-                <span className={css.cardSubNote}>存货周转天数、应收账款周转天数、营业周期与盈利质量</span>
+                <span>{t('fund.efficiency.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.efficiency.subtitle')}</span>
               </div>
               <div className={css.gridCols}>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>存货周转天数</span>
+                  <span className={css.gridLabel}>{t('fund.efficiency.inventoryDays')}</span>
                   <span className={css.gridValue} style={{ color: 'var(--futu-accent)', fontWeight: 600 }}>
-                    {efficiency?.inventoryTurnoverDays ? `${efficiency.inventoryTurnoverDays.toFixed(1)} 天` : '--'}
+                    {efficiency?.inventoryTurnoverDays ? t('fund.unit.days', { n: efficiency.inventoryTurnoverDays.toFixed(1) }) : '--'}
                   </span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>应收账款周转天数</span>
+                  <span className={css.gridLabel}>{t('fund.efficiency.receivableDays')}</span>
                   <span className={css.gridValue} style={{ color: 'var(--futu-accent)', fontWeight: 600 }}>
-                    {efficiency?.accountsReceivableTurnoverDays ? `${efficiency.accountsReceivableTurnoverDays.toFixed(1)} 天` : '--'}
+                    {efficiency?.accountsReceivableTurnoverDays ? t('fund.unit.days', { n: efficiency.accountsReceivableTurnoverDays.toFixed(1) }) : '--'}
                   </span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>净营业周期</span>
+                  <span className={css.gridLabel}>{t('fund.efficiency.operatingCycle')}</span>
                   <span className={css.gridValue}>
-                    {efficiency?.operatingCycleDays ? `${efficiency.operatingCycleDays.toFixed(1)} 天` : '--'}
+                    {efficiency?.operatingCycleDays ? t('fund.unit.days', { n: efficiency.operatingCycleDays.toFixed(1) }) : '--'}
                   </span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>总资产周转率</span>
+                  <span className={css.gridLabel}>{t('fund.efficiency.assetTurnover')}</span>
                   <span className={css.gridValue}>
-                    {efficiency?.totalAssetTurnover ? `${efficiency.totalAssetTurnover.toFixed(2)} 次` : '--'}
+                    {efficiency?.totalAssetTurnover ? t('fund.unit.times', { n: efficiency.totalAssetTurnover.toFixed(2) }) : '--'}
                   </span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>销售毛利率</span>
+                  <span className={css.gridLabel}>{t('fund.efficiency.grossMargin')}</span>
                   <span className={css.gridValue}>
                     {efficiency?.grossProfitMargin ? `${efficiency.grossProfitMargin.toFixed(2)}%` : '--'}
                   </span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>销售净利率</span>
+                  <span className={css.gridLabel}>{t('fund.efficiency.netMargin')}</span>
                   <span className={css.gridValue}>
                     {efficiency?.netProfitMargin ? `${efficiency.netProfitMargin.toFixed(2)}%` : '--'}
                   </span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>流动比率</span>
+                  <span className={css.gridLabel}>{t('fund.efficiency.currentRatio')}</span>
                   <span className={css.gridValue}>
                     {efficiency?.currentRatio ? efficiency.currentRatio.toFixed(2) : '--'}
                   </span>
                 </div>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>速动比率</span>
+                  <span className={css.gridLabel}>{t('fund.efficiency.quickRatio')}</span>
                   <span className={css.gridValue}>
                     {efficiency?.quickRatio ? efficiency.quickRatio.toFixed(2) : '--'}
                   </span>
@@ -869,9 +910,13 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
               </div>
               <p className={css.descText} style={{ marginTop: 14 }}>
                 {efficiency?.inventoryTurnoverDays !== undefined && efficiency?.accountsReceivableTurnoverDays !== undefined ? (
-                  `本期存货周转天数约为 ${efficiency.inventoryTurnoverDays.toFixed(1)} 天，应收账款周转天数约为 ${efficiency.accountsReceivableTurnoverDays.toFixed(1)} 天，净营业周期为 ${efficiency.operatingCycleDays !== undefined ? efficiency.operatingCycleDays.toFixed(1) : '--'} 天。`
+                  t('fund.efficiency.summary', {
+                    inventory: efficiency.inventoryTurnoverDays.toFixed(1),
+                    receivable: efficiency.accountsReceivableTurnoverDays.toFixed(1),
+                    cycle: efficiency.operatingCycleDays !== undefined ? efficiency.operatingCycleDays.toFixed(1) : '--',
+                  })
                 ) : (
-                  '经营效率明细数据暂未获取到（数据源未覆盖该报告期），不做推断性描述。'
+                  t('fund.efficiency.empty')
                 )}
               </p>
             </div>
@@ -881,34 +926,34 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'smart_shareholders' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>十大流通股东穿透表</span>
-                <span className={css.cardSubNote}>核心机构、战略股东、股东户数与筹码集中度</span>
+                <span>{t('fund.holders.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.holders.subtitle')}</span>
               </div>
 
               {holderSummary && (
                 <div className={css.forecastGrid} style={{ marginBottom: 14 }}>
                   <div className={css.forecastStatBox}>
-                    <span className={css.gridLabel}>股东总户数</span>
+                    <span className={css.gridLabel}>{t('fund.holders.totalHolders')}</span>
                     <span className={css.pillValue} style={{ fontSize: 16, color: 'var(--futu-accent)' }}>
-                      {holderSummary.totalHolders ? `${(holderSummary.totalHolders / 10_000).toFixed(2)} 万户` : '--'}
+                      {holderSummary.totalHolders ? holdersWan(holderSummary.totalHolders) : '--'}
                     </span>
                   </div>
                   <div className={css.forecastStatBox}>
-                    <span className={css.gridLabel}>户均持股数</span>
+                    <span className={css.gridLabel}>{t('fund.holders.avgShares')}</span>
                     <span className={css.pillValue} style={{ fontSize: 16 }}>
-                      {holderSummary.avgFreeShares ? `${holderSummary.avgFreeShares.toLocaleString()} 股` : '--'}
+                      {holderSummary.avgFreeShares ? t('fund.unit.shares', { n: holderSummary.avgFreeShares.toLocaleString() }) : '--'}
                     </span>
                   </div>
                   <div className={css.forecastStatBox}>
-                    <span className={css.gridLabel}>户均持股市值</span>
+                    <span className={css.gridLabel}>{t('fund.holders.avgValue')}</span>
                     <span className={css.pillValue} style={{ fontSize: 16 }}>
-                      {holderSummary.avgHoldAmount ? `¥${(holderSummary.avgHoldAmount / 10_000).toFixed(2)} 万元` : '--'}
+                      {holderSummary.avgHoldAmount ? wanCny(holderSummary.avgHoldAmount) : '--'}
                     </span>
                   </div>
                   <div className={css.forecastStatBox}>
-                    <span className={css.gridLabel}>筹码集中度</span>
+                    <span className={css.gridLabel}>{t('fund.holders.concentration')}</span>
                     <span className={css.pillValue} style={{ fontSize: 16, color: 'var(--futu-orange)' }}>
-                      {holderSummary.concentration ?? '适中'}
+                      {holderSummary.concentration ?? t('fund.holders.moderate')}
                     </span>
                   </div>
                 </div>
@@ -918,11 +963,11 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                   <table className={css.matrixTable}>
                     <thead>
                       <tr>
-                        <th style={{ width: 40 }}>排名</th>
-                        <th>股东名称</th>
-                        <th>持股数 (股)</th>
-                        <th>占流通股比</th>
-                        <th>持股变动</th>
+                        <th style={{ width: 40 }}>{t('fund.holders.col.rank')}</th>
+                        <th>{t('fund.holders.col.name')}</th>
+                        <th>{t('fund.holders.col.shares')}</th>
+                        <th>{t('fund.holders.col.ratio')}</th>
+                        <th>{t('fund.holders.col.change')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -933,7 +978,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                           <tr key={sh.name}>
                             <td><span className={css.holderRank}>{idx + 1}</span></td>
                             <td className={css.holderName}>{sh.name}</td>
-                            <td>{sh.shares !== undefined ? formatVal(sh.shares) : '--'}</td>
+                            <td>{sh.shares !== undefined ? fv(sh.shares) : '--'}</td>
                             <td>{sh.ratio !== undefined ? `${sh.ratio.toFixed(2)}%` : '--'}</td>
                             <td>
                               {isUp ? (
@@ -941,7 +986,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                               ) : isDown ? (
                                 <span className={css.changeTagDown}>{sh.change}</span>
                               ) : (
-                                <span className={css.changeTagFlat}>{sh.change || '不变'}</span>
+                                <span className={css.changeTagFlat}>{sh.change || t('fund.holders.unchanged')}</span>
                               )}
                             </td>
                           </tr>
@@ -952,7 +997,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                 </div>
               ) : (
                 <p className={css.descText}>
-                  当前标的暂未公开当期十大流通股东穿透名录，可参考流通市值与换手率变动。
+                  {t('fund.holders.empty')}
                 </p>
               )}
             </div>
@@ -962,25 +1007,25 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'smart_insider' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>重要股东及高管持股变动明细</span>
-                <span className={css.cardSubNote}>主要股东、董监高近期持股变动与交易记录</span>
+                <span>{t('fund.insider.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.insider.subtitle')}</span>
               </div>
               {insiderTrades && insiderTrades.length > 0 ? (
                 <div className={css.tableScrollWrap}>
                   <table className={css.matrixTable}>
                     <thead>
                       <tr>
-                        <th>股东全称</th>
-                        <th>变动类型</th>
-                        <th>持股数量 (股)</th>
-                        <th>持股比例</th>
-                        <th>披露日期</th>
+                        <th>{t('fund.insider.col.holder')}</th>
+                        <th>{t('fund.insider.col.type')}</th>
+                        <th>{t('fund.insider.col.shares')}</th>
+                        <th>{t('fund.insider.col.ratio')}</th>
+                        <th>{t('fund.insider.col.date')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {insiderTrades.map((it, idx) => {
-                        const isUp = it.changeType.includes('+') || it.changeType === '新进' || it.changeType.includes('增')
-                        const isDown = it.changeType.includes('-') || it.changeType.includes('减')
+                        const isUp = it.changeType.includes('+') || it.changeType === '新进' || it.changeType.includes('增') // i18n-allow: 数据源中文枚举值匹配谓词，非 UI 文案
+                        const isDown = it.changeType.includes('-') || it.changeType.includes('减') // i18n-allow: 数据源中文枚举值匹配谓词，非 UI 文案
                         return (
                           <tr key={it.holderName + idx} className={css.indicatorRow}>
                             <td className={css.holderName}>{it.holderName}</td>
@@ -993,7 +1038,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                                 <span className={css.changeTagFlat}>{it.changeType}</span>
                               )}
                             </td>
-                            <td>{it.changeShares ? formatVal(it.changeShares) : '--'}</td>
+                            <td>{it.changeShares ? fv(it.changeShares) : '--'}</td>
                             <td>{it.postHoldingRatio !== undefined ? `${it.postHoldingRatio.toFixed(2)}%` : '--'}</td>
                             <td>{it.date ?? '--'}</td>
                           </tr>
@@ -1004,7 +1049,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                 </div>
               ) : (
                 <p className={css.descText}>
-                  暂无股东增减持明细数据（数据源未覆盖或该报告期无披露记录）。
+                  {t('fund.insider.empty')}
                 </p>
               )}
             </div>
@@ -1014,20 +1059,20 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'smart_institutional' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>机构投资者持仓分布</span>
-                <span className={css.cardSubNote}>投资公司、公募基金、外资QFII、保险资管等机构持股汇总</span>
+                <span>{t('fund.institutional.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.institutional.subtitle')}</span>
               </div>
               {institutionalHoldings && institutionalHoldings.length > 0 ? (
                 <div className={css.tableScrollWrap}>
                   <table className={css.matrixTable}>
                     <thead>
                       <tr>
-                        <th>机构全称</th>
-                        <th>机构类型</th>
-                        <th>持股数 (股)</th>
-                        <th>占流通股比</th>
-                        <th>持股市值 (元)</th>
-                        <th>本期变动</th>
+                        <th>{t('fund.institutional.col.org')}</th>
+                        <th>{t('fund.institutional.col.type')}</th>
+                        <th>{t('fund.institutional.col.shares')}</th>
+                        <th>{t('fund.institutional.col.ratio')}</th>
+                        <th>{t('fund.institutional.col.value')}</th>
+                        <th>{t('fund.institutional.col.change')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1038,16 +1083,16 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                           <tr key={inst.orgName ?? String(idx)} className={css.indicatorRow}>
                             <td className={css.holderName}>{inst.orgName}</td>
                             <td><span className={css.reportRating}>{inst.orgType}</span></td>
-                            <td>{inst.holdingShares ? formatVal(inst.holdingShares) : '--'}</td>
+                            <td>{inst.holdingShares ? fv(inst.holdingShares) : '--'}</td>
                             <td>{inst.holdingRatio ? `${inst.holdingRatio.toFixed(2)}%` : '--'}</td>
-                            <td>{inst.marketCap ? `¥${(inst.marketCap / 100_000_000).toFixed(2)} 亿` : '--'}</td>
+                            <td>{inst.marketCap ? yiCny(inst.marketCap) : '--'}</td>
                             <td>
                               {isUp ? (
                                 <span className={css.changeTagUp}>{inst.change}</span>
                               ) : isDown ? (
                                 <span className={css.changeTagDown}>{inst.change}</span>
                               ) : (
-                                <span className={css.changeTagFlat}>{inst.change || '不变'}</span>
+                                <span className={css.changeTagFlat}>{inst.change || t('fund.holders.unchanged')}</span>
                               )}
                             </td>
                           </tr>
@@ -1058,7 +1103,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                 </div>
               ) : (
                 <p className={css.descText}>
-                  机构持股总数与持仓明细已在十大流通股东穿透中体现，涵盖主流公募及指数基金。
+                  {t('fund.institutional.empty')}
                 </p>
               )}
             </div>
@@ -1068,46 +1113,46 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'profile_overview' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>标的档案与公司基本概况</span>
-                <span className={css.cardSubNote}>法定代表、管理团队、注册资本与官方渠道</span>
+                <span>{t('fund.profile.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.profile.subtitle')}</span>
               </div>
               <div className={css.gridCols}>
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>公司全称</span>
+                  <span className={css.gridLabel}>{t('fund.profile.fullName')}</span>
                   <span className={css.gridValue}>{profile?.fullName ?? profile?.name ?? stock?.name ?? symbol}</span>
                 </div>
                 {profile?.nameEn && (
                   <div className={css.gridItem}>
-                    <span className={css.gridLabel}>英文名称</span>
+                    <span className={css.gridLabel}>{t('fund.profile.nameEn')}</span>
                     <span className={css.gridValue}>{profile.nameEn}</span>
                   </div>
                 )}
                 {profile?.industry && (
                   <div className={css.gridItem}>
-                    <span className={css.gridLabel}>所属行业</span>
+                    <span className={css.gridLabel}>{t('fund.profile.industry')}</span>
                     <span className={css.gridValue}>{profile.industry}</span>
                   </div>
                 )}
                 {profile?.registeredCapital && (
                   <div className={css.gridItem}>
-                    <span className={css.gridLabel}>注册资本</span>
+                    <span className={css.gridLabel}>{t('fund.profile.registeredCapital')}</span>
                     <span className={css.gridValue}>{profile.registeredCapital}</span>
                   </div>
                 )}
                 {profile?.employeeCount && (
                   <div className={css.gridItem}>
-                    <span className={css.gridLabel}>员工规模</span>
+                    <span className={css.gridLabel}>{t('fund.profile.employees')}</span>
                     <span className={css.gridValue}>{profile.employeeCount}</span>
                   </div>
                 )}
                 {profile?.address && (
                   <div className={css.gridItem}>
-                    <span className={css.gridLabel}>办公 / 注册地址</span>
+                    <span className={css.gridLabel}>{t('fund.profile.address')}</span>
                     <span className={css.gridValue} style={{ fontSize: 12 }}>{profile.address}</span>
                   </div>
                 )}
                 <div className={css.gridItem}>
-                  <span className={css.gridLabel}>官方网站</span>
+                  <span className={css.gridLabel}>{t('fund.profile.website')}</span>
                   <span className={css.gridValue}>
                     {profile?.website ? (
                       <a href={profile.website} target="_blank" rel="noreferrer" style={{ color: 'var(--futu-accent)', textDecoration: 'none' }}>
@@ -1119,9 +1164,9 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
               </div>
 
               <div>
-                <span className={css.gridLabel} style={{ display: 'block', marginBottom: 6 }}>公司简介与历史沿革:</span>
+                <span className={css.gridLabel} style={{ display: 'block', marginBottom: 6 }}>{t('fund.profile.description')}</span>
                 <p className={css.descText}>
-                  {profile?.description ?? `${symbol} 公司详细业务介绍与产业历史。`}
+                  {profile?.description ?? t('fund.profile.descriptionFallback', { symbol })}
                 </p>
               </div>
             </div>
@@ -1131,31 +1176,31 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'profile_executives' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>管理团队与高管名录</span>
-                <span className={css.cardSubNote}>董事长、总经理、财务总监及核心董监高</span>
+                <span>{t('fund.executives.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.executives.subtitle')}</span>
               </div>
               <div className={css.gridCols}>
                 {profile?.chairman && (
                   <div className={css.gridItem}>
-                    <span className={css.gridLabel}>董事长</span>
+                    <span className={css.gridLabel}>{t('fund.executives.chairman')}</span>
                     <span className={css.gridValue} style={{ fontWeight: 600 }}>{profile.chairman}</span>
                   </div>
                 )}
                 {profile?.generalManager && (
                   <div className={css.gridItem}>
-                    <span className={css.gridLabel}>总经理 / CEO</span>
+                    <span className={css.gridLabel}>{t('fund.executives.generalManager')}</span>
                     <span className={css.gridValue} style={{ fontWeight: 600 }}>{profile.generalManager}</span>
                   </div>
                 )}
                 {profile?.legalRepresentative && (
                   <div className={css.gridItem}>
-                    <span className={css.gridLabel}>法定代表人</span>
+                    <span className={css.gridLabel}>{t('fund.executives.legalRep')}</span>
                     <span className={css.gridValue}>{profile.legalRepresentative}</span>
                   </div>
                 )}
                 {profile?.boardSecretary && (
                   <div className={css.gridItem}>
-                    <span className={css.gridLabel}>董事会秘书</span>
+                    <span className={css.gridLabel}>{t('fund.executives.boardSecretary')}</span>
                     <span className={css.gridValue}>{profile.boardSecretary}</span>
                   </div>
                 )}
@@ -1167,19 +1212,19 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'action_dividends' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>历年分红派息记录</span>
-                <span className={css.cardSubNote}>历次利润分配方案、除权除息日与股息分红</span>
+                <span>{t('fund.dividends.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.dividends.subtitle')}</span>
               </div>
               {dividends && dividends.length > 0 ? (
                 <div className={css.tableScrollWrap}>
                   <table className={css.matrixTable}>
                     <thead>
                       <tr>
-                        <th>方案年度</th>
-                        <th>分配方案</th>
-                        <th>每股派现 (元)</th>
-                        <th>除权除息日</th>
-                        <th>股权登记日</th>
+                        <th>{t('fund.dividends.col.year')}</th>
+                        <th>{t('fund.dividends.col.plan')}</th>
+                        <th>{t('fund.dividends.col.cash')}</th>
+                        <th>{t('fund.dividends.col.exDate')}</th>
+                        <th>{t('fund.dividends.col.recordDate')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1199,7 +1244,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                 </div>
               ) : (
                 <p className={css.descText}>
-                  暂未获取到公开历史分红派息方案记录。
+                  {t('fund.dividends.empty')}
                 </p>
               )}
             </div>
@@ -1209,27 +1254,27 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'action_buybacks' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>股份回购方案与股本管理</span>
-                <span className={css.cardSubNote}>公司股份回购方案、回购资金规模、股本结构与实施状态</span>
+                <span>{t('fund.buybacks.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.buybacks.subtitle')}</span>
               </div>
               {buybacks && buybacks.length > 0 ? (
                 <div className={css.tableScrollWrap}>
                   <table className={css.matrixTable}>
                     <thead>
                       <tr>
-                        <th>公告日期</th>
-                        <th>回购规模 / 金额</th>
-                        <th>回购股份 (股)</th>
-                        <th>价格区间</th>
-                        <th>当前状态</th>
+                        <th>{t('fund.buybacks.col.date')}</th>
+                        <th>{t('fund.buybacks.col.amount')}</th>
+                        <th>{t('fund.buybacks.col.shares')}</th>
+                        <th>{t('fund.buybacks.col.priceRange')}</th>
+                        <th>{t('fund.buybacks.col.status')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {buybacks.map((bb, idx) => (
                         <tr key={bb.date + idx} className={css.indicatorRow}>
                           <td><strong>{bb.date}</strong></td>
-                          <td>{bb.buybackAmount ? `¥${(bb.buybackAmount / 100_000_000).toFixed(2)} 亿元` : '--'}</td>
-                          <td>{bb.buybackShares ? formatVal(bb.buybackShares) : '--'}</td>
+                          <td>{bb.buybackAmount ? yiCny(bb.buybackAmount) : '--'}</td>
+                          <td>{bb.buybackShares ? fv(bb.buybackShares) : '--'}</td>
                           <td>{bb.priceRange ?? '--'}</td>
                           <td><span className={css.reportRating}>{bb.status}</span></td>
                         </tr>
@@ -1239,7 +1284,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                 </div>
               ) : (
                 <p className={css.descText}>
-                  暂无回购记录数据（数据源未覆盖或该标的确实未公告回购），以下字段留空以待数据补齐；不做推测性描述。
+                  {t('fund.buybacks.empty')}
                 </p>
               )}
             </div>
@@ -1249,17 +1294,17 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
           {activeNav === 'action_splits' && (
             <div className={css.infoCard}>
               <div className={css.cardTitle}>
-                <span>拆股、并股与送转股历史</span>
-                <span className={css.cardSubNote}>历次股本拆分、送股与公积金转增股本记录</span>
+                <span>{t('fund.splits.title')}</span>
+                <span className={css.cardSubNote}>{t('fund.splits.subtitle')}</span>
               </div>
               {splits && splits.length > 0 ? (
                 <div className={css.tableScrollWrap}>
                   <table className={css.matrixTable}>
                     <thead>
                       <tr>
-                        <th>除权除息日</th>
-                        <th>送转股方案</th>
-                        <th>实施说明与进度</th>
+                        <th>{t('fund.splits.col.date')}</th>
+                        <th>{t('fund.splits.col.ratio')}</th>
+                        <th>{t('fund.splits.col.description')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1275,7 +1320,7 @@ export function FundamentalsStage({ useSelection }: FundamentalsStageProps) {
                 </div>
               ) : (
                 <p className={css.descText}>
-                  暂无拆股并股或送转股记录数据（数据源未覆盖或该标的确实无相关事件）。
+                  {t('fund.splits.empty')}
                 </p>
               )}
             </div>
@@ -1294,6 +1339,7 @@ function GroupFragment({
   selectedIndicatorId,
   onToggleGroup,
   onSelectIndicator,
+  formatValue,
 }: {
   group: FinancialReportGroup
   periods: string[]
@@ -1301,6 +1347,8 @@ function GroupFragment({
   selectedIndicatorId: string
   onToggleGroup: () => void
   onSelectIndicator: (id: string) => void
+  /** 数值单位 locale 贯通（评审 M2）：顶层组件的 fv 借道传入。 */
+  formatValue: (val: number | undefined, unit?: string, isRatio?: boolean) => string
 }) {
   return (
     <>
@@ -1329,7 +1377,7 @@ function GroupFragment({
               const changeInfo = formatChange(cell?.changePercent)
               return (
                 <td key={p}>
-                  <div className={css.cellValue}>{formatVal(cell?.value, row.unit)}</div>
+                  <div className={css.cellValue}>{formatValue(cell?.value, row.unit)}</div>
                   {cell?.changePercent !== undefined && (
                     <div className={`${css.cellChange} ${changeInfo.cls}`}>{changeInfo.text}</div>
                   )}

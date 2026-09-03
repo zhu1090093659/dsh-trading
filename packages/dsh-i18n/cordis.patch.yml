@@ -1,0 +1,6 @@
+# dsh-i18n 独立 patch：可单独安装（dsh plugin add link:…/packages/dsh-i18n），
+# 也可经 packages/base/cordis.patch.yml 的 insert 行随 base bundle 常驻。
+# id 全仓唯一（dsh-trading-dsh-i18n），insert 在任何宿主都安全。
+- insert:
+    - id: dsh-trading-dsh-i18n
+      name: '@dsh-trading/dsh-i18n'

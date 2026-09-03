@@ -1,7 +1,7 @@
 # dsh-trading
 
 > **Your next trading terminal can also be DSH**  
-> *你的下一个交易终端，也可以是 DSH*
+> *No chumps for the slaughter, just everyday traders.*
 
 [![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.1.2--alpha.1-blue.svg)](https://github.com/deepseek-ai)
 [![Markets](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK-green.svg)](#-multi-market-coverage--19-active-connectors)

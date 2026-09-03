@@ -35,6 +35,8 @@ export const smaBaselineStrategy: StrategyDefinition = {
           direction: 'long',
           price: currentClose,
           reason: `收盘价 (${currentClose.toFixed(2)}) 站上长期基线 SMA(${period}) (${currentSma.toFixed(2)})，确立多头趋势`,
+          reasonKey: 'strat.sma-baseline.reason.entry',
+          reasonParams: { close: currentClose.toFixed(2), period, sma: currentSma.toFixed(2) },
         })
         inPosition = true
       } else if (inPosition && currentClose < currentSma) {
@@ -45,6 +47,8 @@ export const smaBaselineStrategy: StrategyDefinition = {
           direction: 'flat',
           price: currentClose,
           reason: `收盘价 (${currentClose.toFixed(2)}) 跌破长期基线 SMA(${period}) (${currentSma.toFixed(2)})，转入防御避险`,
+          reasonKey: 'strat.sma-baseline.reason.exit',
+          reasonParams: { close: currentClose.toFixed(2), period, sma: currentSma.toFixed(2) },
         })
         inPosition = false
       }

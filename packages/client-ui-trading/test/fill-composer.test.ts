@@ -161,4 +161,37 @@ describe('composeQuoteMessage', () => {
     })
     expect(text).toBe('看一下我正在看的行情：BTCUSDT · 加密货币 · 5分\n请结合当前行情继续分析。')
   })
+
+  /** 评审 M3：en 语境消息不得混入 zh 单位与全角标点。 */
+  it('en copy：量槽走 en 单位（B/M/K），括注/连接符随词典', () => {
+    const text = composeQuoteMessage({
+      name: 'Apple',
+      symbol: 'AAPL',
+      marketLabel: 'US',
+      intervalLabel: '1D',
+      price: 325.13,
+      change: 8.28,
+      pct: 2.61,
+      prevClose: 316.85,
+      candle: { openTime: 0, open: 316.98, high: 327.3, low: 314.74, close: 325.13, volume: 5_243_240_000, closeTime: 86400000 },
+      indicatorTitles: ['EMA', 'MACD'],
+      withScreenshot: false,
+    }, {
+      opener: 'Take a look at what I\'m watching: {title}',
+      prevClose: 'prev close {price}',
+      priceLine: 'Last',
+      candleLine: 'Current bar O {open} H {high} L {low} C {close} V {volume}',
+      indicatorsLine: 'Indicators on: {titles}',
+      listSeparator: ', ',
+      deltaWrap: [' (', ')'],
+      prevSep: ', ',
+      volumeLocale: 'en',
+      withScreenshotTail: 'The current chart screenshot is attached — please factor it in.',
+      withoutScreenshotTail: 'Please continue the analysis from the quote context.',
+    })
+    expect(text).toContain('Take a look at what I\'m watching: Apple · AAPL · US · 1D')
+    expect(text).toContain('Last 325.13 (+8.28 / +2.61%), prev close 316.85')
+    expect(text).toContain('V 5.24B')
+    expect(text).not.toMatch(/[（），、]/)
+  })
 })

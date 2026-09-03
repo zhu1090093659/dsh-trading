@@ -44,6 +44,8 @@ export const donchianBreakoutStrategy: StrategyDefinition = {
           direction: 'long',
           price: currentClose,
           reason: `收盘价 (${currentClose.toFixed(2)}) 突破前 ${n1} 根最高价 (${highestHigh.toFixed(2)})`,
+          reasonKey: 'strat.donchian-breakout.reason.entry',
+          reasonParams: { close: currentClose.toFixed(2), n: n1, high: highestHigh.toFixed(2) },
         })
         inPosition = true
       } else if (inPosition && currentClose < lowestLow) {
@@ -54,6 +56,8 @@ export const donchianBreakoutStrategy: StrategyDefinition = {
           direction: 'flat',
           price: currentClose,
           reason: `收盘价 (${currentClose.toFixed(2)}) 跌破前 ${n2} 根最低价 (${lowestLow.toFixed(2)})`,
+          reasonKey: 'strat.donchian-breakout.reason.exit',
+          reasonParams: { close: currentClose.toFixed(2), n: n2, low: lowestLow.toFixed(2) },
         })
         inPosition = false
       }

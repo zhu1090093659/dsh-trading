@@ -908,6 +908,34 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.12)
 
+  packages/dsh-i18n:
+    dependencies:
+      '@dsh-trading/client-ui-knowledge':
+        specifier: workspace:^
+        version: link:../client-ui-knowledge
+      '@dsh-trading/client-ui-settings':
+        specifier: workspace:^
+        version: link:../client-ui-settings
+      '@dsh-trading/client-ui-strategies':
+        specifier: workspace:^
+        version: link:../client-ui-strategies
+      '@dsh-trading/client-ui-trading':
+        specifier: workspace:^
+        version: link:../client-ui-trading
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
+      '@deepseek-ai/dsh-client-locale':
+        specifier: 0.1.2-alpha.3
+        version: 0.1.2-alpha.3(@deepseek-ai/cordis@4.0.2)
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.12)
+
   packages/eventbus:
     dependencies:
       '@deepseek-ai/cordis':
@@ -1499,6 +1527,11 @@ packages:
 
   '@deepseek-ai/dsh-client-locale@0.1.2-alpha.2':
     resolution: {integrity: sha512-YDALYBD+iYU3GAAdL0ce2edcKURGe8jTk452ZSmDTGaUqd4TUBsB304yt2HjSzAyzoL3R7t2f4aKrVtAWbY1Rg==}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.2
+
+  '@deepseek-ai/dsh-client-locale@0.1.2-alpha.3':
+    resolution: {integrity: sha512-DPpPzn76TEdCV8z12u4f61DMObwpyZhYfthrHJZXY+eHmI/fYlA9lGYQqvcSizFNJfRY+4avrvDOm5eNonHLYw==}
     peerDependencies:
       '@deepseek-ai/cordis': ^4.0.2
 
@@ -4041,6 +4074,11 @@ snapshots:
       - '@deepseek-ai/dsh-invariants'
 
   '@deepseek-ai/dsh-client-locale@0.1.2-alpha.2(@deepseek-ai/cordis@4.0.2)':
+    dependencies:
+      '@deepseek-ai/cordis': 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
+      '@deepseek-ai/schemastery': 3.18.2
+
+  '@deepseek-ai/dsh-client-locale@0.1.2-alpha.3(@deepseek-ai/cordis@4.0.2)':
     dependencies:
       '@deepseek-ai/cordis': 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
       '@deepseek-ai/schemastery': 3.18.2

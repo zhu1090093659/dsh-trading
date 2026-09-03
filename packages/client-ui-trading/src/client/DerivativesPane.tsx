@@ -15,13 +15,13 @@
  * 语义注记：fundingRate 为小数（0.0001 = 0.01%），正费率=多头付资金（多头拥挤），
  * 颜色随涨跌语义（directionColor）；多空比/主动买卖比 >1 偏多。
  */
-import { fmtCompact, fmtCountdown, fmtFundingRate, directionColor } from './format.ts'
+import { fmtCompact, fmtCountdown, fmtFundingRate, directionColor, scaleLocaleOf } from './format.ts'
 import type { ColorMode } from './color-mode.ts'
 import type { DerivativesData } from './types.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import css from './derivatives-pane.module.css'
 
-export type DerivativesTranslate = (key: MarketLocaleKey) => string
+export type DerivativesTranslate = (key: MarketLocaleKey, params?: Record<string, unknown>) => string
 
 export interface DerivativesPaneProps {
   t: DerivativesTranslate
@@ -44,6 +44,7 @@ interface Cell {
 }
 
 export function DerivativesPane({ t, derivatives, colorMode, onOpenStage, onAnalyze }: DerivativesPaneProps): React.JSX.Element {
+  const numLocale = scaleLocaleOf(t)
   const countdown = fmtCountdown(derivatives.nextFundingTime, Date.now())
   const cells: Array<Cell | null> = [
     // 持仓量：base 币数（okx oiCcy / binance fapi openInterest / bybit linear openInterest 同语义）。
@@ -51,7 +52,7 @@ export function DerivativesPane({ t, derivatives, colorMode, onOpenStage, onAnal
       ? {
         key: 'oi',
         label: t('derivatives.oi'),
-        value: fmtCompact(derivatives.openInterest),
+        value: fmtCompact(derivatives.openInterest, numLocale),
         hint: t('derivatives.hint.oi'),
       }
       : null,
@@ -59,7 +60,7 @@ export function DerivativesPane({ t, derivatives, colorMode, onOpenStage, onAnal
       ? {
         key: 'oiValue',
         label: t('derivatives.oiValue'),
-        value: `${fmtCompact(derivatives.openInterestValue)} USD`,
+        value: `${fmtCompact(derivatives.openInterestValue, numLocale)} USD`,
         hint: t('derivatives.hint.oiValue'),
       }
       : null,
@@ -70,11 +71,18 @@ export function DerivativesPane({ t, derivatives, colorMode, onOpenStage, onAnal
         key: 'funding',
         label: t('derivatives.funding'),
         value: fmtFundingRate(derivatives.fundingRate),
-        sub: [
-          derivatives.nextFundingRate !== undefined ? `${t('derivatives.predicted')} ${fmtFundingRate(derivatives.nextFundingRate)}` : undefined,
-          countdown !== undefined ? `${t('derivatives.countdown')} ${countdown}` : undefined,
-        ].filter((part): part is string => part !== undefined).join(' · ')
-          || (derivatives.fundingRate > 0 ? t('derivatives.fundingPositive') : derivatives.fundingRate < 0 ? t('derivatives.fundingNegative') : undefined),
+        // exactOptionalPropertyTypes：sub 先归并为 string | undefined，再按需展开——
+        // 直写 `sub: a || b || undefined` 会把 undefined 摊进对象字面量类型。
+        ...((): { sub?: string } => {
+          const parts = [
+            derivatives.nextFundingRate !== undefined ? `${t('derivatives.predicted')} ${fmtFundingRate(derivatives.nextFundingRate)}` : undefined,
+            countdown !== undefined ? `${t('derivatives.countdown')} ${countdown}` : undefined,
+          ].filter((part): part is string => part !== undefined)
+          if (parts.length > 0) return { sub: parts.join(' · ') }
+          if (derivatives.fundingRate > 0) return { sub: t('derivatives.fundingPositive') }
+          if (derivatives.fundingRate < 0) return { sub: t('derivatives.fundingNegative') }
+          return {}
+        })(),
         color: directionColor(derivatives.fundingRate, colorMode),
         hint: t('derivatives.hint.funding'),
       }
@@ -128,7 +136,7 @@ function ratioCell(
     key,
     label,
     value: ratio.toFixed(2),
-    sub: ratio > 1 ? t('derivatives.ratioLong') : ratio < 1 ? t('derivatives.ratioShort') : undefined,
+    ...(ratio !== 1 ? { sub: ratio > 1 ? t('derivatives.ratioLong') : t('derivatives.ratioShort') } : {}),
     color: directionColor(ratio - 1, colorMode),
     hint,
   }

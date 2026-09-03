@@ -11,6 +11,6 @@ export function isAnnouncementSource(source: string): boolean {
   const lower = source.toLowerCase()
   return lower.includes('announcement')
     || lower.includes('exchange')
-    || lower.includes('公告')
-    || lower.includes('交易所')
+    || lower.includes('公告') // i18n-allow: 数据源名称关键词匹配谓词，非 UI 文案
+    || lower.includes('交易所') // i18n-allow: 数据源中文关键词匹配谓词，非 UI 文案
 }

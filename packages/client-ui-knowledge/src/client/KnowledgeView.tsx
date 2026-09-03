@@ -189,11 +189,11 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
     setSelectedTag((prev) => (prev === tag ? '' : tag))
   }, [])
 
-  // 统计主题簇数量
+  // 统计主题簇数量（'untagged' = 无标签卡片的簇哨兵，与 KnowledgeGraph 同值）
   const clusterCount = useMemo(() => {
     const clusters = new Set<string>()
     for (const c of filteredCards) {
-      clusters.add(c.tags[0] ?? '未分类')
+      clusters.add(c.tags[0] ?? 'untagged')
     }
     return clusters.size
   }, [filteredCards])

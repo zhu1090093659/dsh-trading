@@ -121,7 +121,7 @@ export function MarketSidebar({
 
     const candidatesToEnrich: Array<{ market: MarketId; symbol: string }> = []
     for (const sug of suggestions) {
-      if (sug.name && (sug.name === sug.symbol || /\(A股\)|\(港股\)/.test(sug.name))) {
+      if (sug.name && (sug.name === sug.symbol || /\(A股\)|\(港股\)/.test(sug.name))) { // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
         candidatesToEnrich.push({ market: sug.market, symbol: sug.symbol })
       }
     }
@@ -136,7 +136,7 @@ export function MarketSidebar({
             if (cancelled) return
             const outcome = res[item.symbol]
             const ticker = outcome && outcome.ok ? outcome.ticker : undefined
-            if (ticker?.name && ticker.name !== item.symbol && !/\(A股\)|\(港股\)/.test(ticker.name)) {
+            if (ticker?.name && ticker.name !== item.symbol && !/\(A股\)|\(港股\)/.test(ticker.name)) { // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
               updateDynamicCatalog(item.market, [{ symbol: item.symbol, name: ticker.name }])
               setCatalogVersion((v) => v + 1)
             }
@@ -196,14 +196,14 @@ export function MarketSidebar({
         for (const [symbol, result] of Object.entries(outcome)) {
           if (result.ok) {
             next[rowKey(market, symbol)] = result.ticker
-            if (result.ticker.name && result.ticker.name !== symbol && !/\(A股\)|\(港股\)/.test(result.ticker.name)) {
+            if (result.ticker.name && result.ticker.name !== symbol && !/\(A股\)|\(港股\)/.test(result.ticker.name)) { // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
               const list = dynamicUpdates.get(market) ?? []
               list.push({ symbol, name: result.ticker.name })
               dynamicUpdates.set(market, list)
 
               // 若自选列表中此标的名字为空或为占位符，自动更新自选名称
               const existingRow = rows.find((r) => r.market === market && r.symbol === symbol)
-              if (existingRow && (!existingRow.name || existingRow.name === symbol || /\(A股\)|\(港股\)/.test(existingRow.name))) {
+              if (existingRow && (!existingRow.name || existingRow.name === symbol || /\(A股\)|\(港股\)/.test(existingRow.name))) { // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
                 addInstrument(market, { market, symbol, name: result.ticker.name })
               }
             }
@@ -390,7 +390,7 @@ export function MarketSidebar({
                       <span className={css.name}>
                         {(() => {
                           const rowRaw = row.name
-                          const isPlaceholder = !rowRaw || rowRaw === row.symbol || /\(A股\)|\(港股\)/.test(rowRaw)
+                          const isPlaceholder = !rowRaw || rowRaw === row.symbol || /\(A股\)|\(港股\)/.test(rowRaw) // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
                           const tickName = (ticker as { name?: string })?.name
                           return !isPlaceholder ? rowRaw : (tickName || rowRaw || row.symbol)
                         })()}

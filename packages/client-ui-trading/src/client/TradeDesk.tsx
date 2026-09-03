@@ -19,7 +19,7 @@ import type { MarketLocaleKey } from './contract.ts'
 import type { GuiOrderInput } from './api.ts'
 import css from './trade-desk.module.css'
 
-export type TradeDeskTranslate = (key: MarketLocaleKey) => string
+export type TradeDeskTranslate = (key: MarketLocaleKey, params?: Record<string, unknown>) => string
 
 export interface TradeDeskProps {
   t: TradeDeskTranslate

@@ -37,6 +37,8 @@ export const aboveMaScreener: ScreenerDefinition = {
     return {
       metrics: { aboveMaPct, maSlopePct },
       reason: `现价高于 SMA(${period}) ${aboveMaPct.toFixed(2)}%，均线 ${slopeBars} 日斜率 +${maSlopePct.toFixed(2)}%`,
+      reasonKey: 'scr.above-ma.reason',
+      reasonParams: { period, above: aboveMaPct.toFixed(2), slope: slopeBars, slopePct: maSlopePct.toFixed(2) },
     }
   },
 }

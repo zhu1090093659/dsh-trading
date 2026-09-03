@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from './contract/slots.ts'
 import type {
   CredentialField,
   TradingSettingsState,
 } from './trading-settings-controller.ts'
 import { PROVIDER_CREDENTIAL_SPECS, PROVIDER_LABELS } from './trading-settings-controller.ts'
+import type {} from './contract/locale-keys.ts'
 import css from './market-provider-panel.module.css'
 
 /** SnapshotStore 面（hooks 注入）。 */
@@ -39,10 +42,13 @@ export type MarketProviderPanelProps =
   & PropsLocale<'dshtrading.settings'>
   & InjectFace<MarketProviderPanelInjected>
 
+/** PropsLocale 在无宿主 merge 的独立编译里不落 t 座位（既有债），本地兜底。 */
+type PanelT = (key: string, params?: Record<string, unknown>) => string
+
 const TYPE_LABEL: Record<string, string> = {
-  public: '免密公共源',
-  gateway: '本地网关',
-  commercial: '商业 API',
+  public: 'type.public',
+  gateway: 'type.gateway',
+  commercial: 'type.commercial',
 }
 
 function ProviderCredentialCard(props: {
@@ -52,7 +58,7 @@ function ProviderCredentialCard(props: {
   writable: boolean
   onSave: (fields: Record<string, string>) => Promise<void>
   onDelete: () => Promise<void>
-  t: (key: string) => string
+  t: (key: string, params?: Record<string, unknown>) => string
 }) {
   const { providerId, spec, currentValues = {}, writable, onSave, onDelete, t } = props
   const [open, setOpen] = useState(false)
@@ -123,13 +129,13 @@ function ProviderCredentialCard(props: {
               const isPass = field.secret && !showSecret[field.key]
               return (
                 <div key={field.key} className={css.fieldRow}>
-                  <label className={css.fieldLabel}>{field.label}</label>
+                  <label className={css.fieldLabel}>{t(field.label)}</label>
                   <div className={css.inputWrapper}>
                     <input
                       type={isPass ? 'password' : 'text'}
                       className={css.credInput}
                       value={fields[field.key] ?? ''}
-                      placeholder={field.placeholder}
+                      placeholder={field.placeholder !== undefined ? t(field.placeholder) : undefined}
                       disabled={!writable || saving}
                       onChange={(e) => setFields({ ...fields, [field.key]: e.target.value })}
                     />
@@ -138,7 +144,7 @@ function ProviderCredentialCard(props: {
                         type="button"
                         className={css.eyeBtn}
                         onClick={() => setShowSecret((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
-                        title={showSecret[field.key] ? '隐藏' : '显示'}
+                        title={showSecret[field.key] ? t('field.action.hide') : t('field.action.show')}
                       >
                         {showSecret[field.key] ? '🙈' : '👁️'}
                       </button>
@@ -177,7 +183,7 @@ function ProviderCredentialCard(props: {
 
 /** Render one market's provider radio group with save/reset (+ WS2c news key, crypto only). */
 export function MarketProviderPanel({
-  t,
+  t: tProp,
   useController,
   market,
   setProvider,
@@ -187,6 +193,9 @@ export function MarketProviderPanel({
   setNewsKey,
   resetNewsKey,
 }: MarketProviderPanelProps) {
+  // PropsLocale 的 t 座位在无宿主 merge 的独立编译下解析为 never（既有债 20 处
+  // TS2349 的根因）。本地遮蔽：运行时框架注入 t，签名与 SDK Translate 对齐。
+  const t = tProp as unknown as PanelT
   const state = useController((value: TradingSettingsState) => value)
   const resolved = state.resolved[market]
   const overridden = state.overridden[market]
@@ -299,9 +308,9 @@ export function MarketProviderPanel({
                   disabled={!writable || saving}
                   onChange={() => setDraft(provider.id)}
                 />
-                <span className={css.cardTitle}>{provider.label}</span>
+                <span className={css.cardTitle}>{t(provider.label)}</span>
                 {provider.type && (
-                  <span className={css.typeBadge}>{TYPE_LABEL[provider.type] ?? provider.type}</span>
+                  <span className={css.typeBadge}>{t(TYPE_LABEL[provider.type] ?? provider.type)}</span>
                 )}
               </div>
 
@@ -316,13 +325,13 @@ export function MarketProviderPanel({
                         className={css.link}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        官方指引与文档 ↗
+                        {t('provider.docsLink')} ↗
                       </a>
                     </div>
                   )}
                   {provider.env && (
                     <div className={css.envBox}>
-                      环境变量：<code>{provider.env}</code>
+                      {t('provider.envPrefix')}<code>{provider.env}</code>
                     </div>
                   )}
                 </div>

@@ -107,6 +107,10 @@ export interface TvChartProps {
   knowledgeMarkers?: readonly ChartKnowledgeMarkerInput[] | undefined
   /** 悬停标记时回调（null = 离开标记区域；父级负责渲染 Tooltip）。 */
   onMarkerHover?: (info: MarkerHoverInfo | null) => void
+  /** 信号标记图上的短文案（买入/卖出，词典驱动）。 */
+  markerTexts?: { entry: string; exit: string } | undefined
+  /** 数值紧凑单位 locale（zh = 亿/万，en = K/M/B；缺省 zh 现网口径）。 */
+  numLocale?: 'zh' | 'en' | undefined
 }
 
 /** 一次图表截图（PNG data URL + 像素尺寸，回显/命名用）。 */
@@ -554,7 +558,7 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
           position: s.action === 'entry' ? 'belowBar' : 'aboveBar',
           color: s.action === 'entry' ? '#22c55e' : '#ef4444',
           shape: s.action === 'entry' ? 'arrowUp' : 'arrowDown',
-          text: s.action === 'entry' ? '买入' : '卖出',
+          text: s.action === 'entry' ? (props.markerTexts?.entry ?? 'Buy') : (props.markerTexts?.exit ?? 'Sell'),
         })
         meta.push({ index: indexOfTime.get(t as number) ?? -1, signal: s })
       }
@@ -798,7 +802,7 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
       {/* pane 1 legend：成交量读数（值按富途式蓝色着色） */}
       {paneTops[1] !== undefined && volumeReadout !== undefined && (
         <div style={{ position: 'absolute', left: 8, top: paneTops[1] + 4, zIndex: 2, pointerEvents: 'none', fontSize: 10.5, fontFamily: monoFont, color: 'var(--dsw-futu-text-secondary, #5f6672)', fontWeight: 600 }}>
-          VOL: <span style={{ color: '#2563eb' }}>{fmtCompact(volumeReadout.value)}</span>
+          VOL: <span style={{ color: '#2563eb' }}>{fmtCompact(volumeReadout.value, props.numLocale ?? 'zh')}</span>
         </div>
       )}
       {/* pane 2+ legend：副图指标读数（分量按输出色着色，组名打头） */}

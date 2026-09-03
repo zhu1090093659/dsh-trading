@@ -23,6 +23,11 @@ import { readJson, writeJson, type SelectionState } from './shell-faces.ts'
 import { IconStrategy } from './icons.tsx'
 import { ScreenerPane } from './ScreenerPane.tsx'
 import type { StrategyLocaleKey } from './contract.ts'
+import {
+  strategyName, strategySummary, paramLabel,
+  exitReasonText,
+} from './strategy-locale.ts'
+export { strategyName, strategySummary, paramLabel, exitReasonText } from './strategy-locale.ts'
 import css from './StrategyView.module.css'
 
 type StrategySection = 'screener' | 'quant'
@@ -65,7 +70,7 @@ function formatDate(timestamp: number): string {
 export type UseStoreState<TState> = <TSelected>(selector: (state: TState) => TSelected) => TSelected
 
 export interface StrategyViewProps {
-  t: (key: StrategyLocaleKey) => string
+  t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string
   /** 中栏活动视图 id（tradingStageViews.render 透传；本视图固定 strategy，未用）。 */
   view?: string
   /** 桥面（shell 的 tradingBridge 服务；未注入时空跑——视图静默空态）。 */
@@ -349,8 +354,8 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
                   data-active={strat.id === selectedId ? 'true' : undefined}
                   onClick={() => setSelectedId(strat.id)}
                 >
-                  <div className={css.cardTitle}>{strat.name}</div>
-                  <div className={css.cardSummary}>{strat.summary}</div>
+                  <div className={css.cardTitle}>{strategyName(strat, t)}</div>
+                  <div className={css.cardSummary}>{strategySummary(strat, t)}</div>
                 </div>
               ))}
             </div>
@@ -367,7 +372,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
       <div className={css.configBar}>
         {currentStrategy.params.map((p) => (
           <div key={p.key} className={css.paramGroup}>
-            <label className={css.paramLabel}>{p.label}:</label>
+            <label className={css.paramLabel}>{paramLabel(currentStrategy, p, t)}:</label>
             <input
               type="number"
               className={css.paramInput}
@@ -507,7 +512,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
                         <td className={tr.returnPercent >= 0 ? css.trendUp : css.trendDown}>
                           {formatPercent(tr.returnPercent, true)}
                         </td>
-                        <td className={css.reasonCell}>{tr.exitReason}</td>
+                        <td className={css.reasonCell}>{exitReasonText(tr, t)}</td>
                       </tr>
                     ))
                   )}
@@ -529,3 +534,4 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
     </div>
   )
 }
+

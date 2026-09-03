@@ -16,6 +16,7 @@ import type {
 
 export interface ProviderMeta {
   id: string
+  /** 显示名词典键（dshtrading.settings，渲染处 t() 解析）。 */
   label: string
   url?: string
   env?: string
@@ -23,91 +24,93 @@ export interface ProviderMeta {
   markets: readonly string[]
 }
 
-/** provider 候选显示名与指引（slug + 显示名 + 官网/API Key 申请链接 + 环境变量 + 支持市场；值与 router PROVIDER_VOCABULARY 对齐）。 */
+/** provider 候选显示名与指引（词典键 + 官网/API Key 申请链接 + 环境变量 + 支持市场；值与 router PROVIDER_VOCABULARY 对齐）。 */
 export const PROVIDER_LABELS: readonly Readonly<ProviderMeta>[] = [
-  { id: 'binance', label: 'Binance (币安)', url: 'https://binance.com/en/binance-api', env: 'BINANCE_API_KEY', type: 'public', markets: ['crypto'] },
-  { id: 'okx', label: 'OKX (欧易)', url: 'https://okx.com/docs-v5/zh/', env: 'OKX_API_KEY', type: 'public', markets: ['crypto'] },
-  { id: 'bybit', label: 'Bybit', url: 'https://bybit.com/en/api-overview', env: 'BYBIT_API_KEY', type: 'public', markets: ['crypto'] },
-  { id: 'ccxt', label: 'CCXT (跨所聚合 100+)', url: 'https://ccxt.com', env: 'CCXT_API_KEY', type: 'public', markets: ['crypto'] },
-  { id: 'yahoo', label: 'Yahoo Finance', url: 'https://finance.yahoo.com', type: 'public', markets: ['us', 'hk'] },
-  { id: 'alpaca', label: 'Alpaca', url: 'https://alpaca.markets', env: 'ALPACA_API_KEY', type: 'commercial', markets: ['us'] },
-  { id: 'fmp', label: 'FMP (Financial Modeling Prep)', url: 'https://site.financialmodelingprep.com/developer', env: 'FMP_API_KEY', type: 'commercial', markets: ['us'] },
-  { id: 'finnhub', label: 'Finnhub', url: 'https://finnhub.io/register', env: 'FINNHUB_API_KEY', type: 'commercial', markets: ['us'] },
-  { id: 'polygon', label: 'Polygon.io (Massive)', url: 'https://polygon.io', env: 'POLYGON_API_KEY', type: 'commercial', markets: ['us'] },
-  { id: 'ibkr', label: 'IBKR (盈透证券)', url: 'https://interactivebrokers.com/campus/ibkr-api-page/cpapi/', env: 'IBKR_GATEWAY_URL', type: 'gateway', markets: ['us', 'hk'] },
-  { id: 'stooq', label: 'Stooq', url: 'https://stooq.com', type: 'public', markets: ['us'] },
-  { id: 'tencent', label: '腾讯 (Tencent)', url: 'https://finance.qq.com', type: 'public', markets: ['cn', 'hk'] },
-  { id: 'eastmoney', label: '东方财富 (Eastmoney)', url: 'https://eastmoney.com', type: 'public', markets: ['cn', 'hk'] },
-  { id: 'tushare', label: 'Tushare Pro', url: 'https://tushare.pro/register', env: 'TUSHARE_TOKEN', type: 'commercial', markets: ['cn', 'hk', 'us'] },
-  { id: 'akshare', label: 'AkShare (宏观/另类量化)', url: 'https://akshare.xyz', env: 'AKSHARE_API_URL', type: 'public', markets: ['cn', 'hk'] },
-  { id: 'qmt', label: 'MiniQMT (迅投券商实盘)', url: 'http://127.0.0.1:5800', env: 'QMT_GATEWAY_URL', type: 'gateway', markets: ['cn'] },
-  { id: 'futu', label: 'Futu (富途 OpenD)', url: 'https://futunn.com/download/open-api', env: 'FUTU_HOST', type: 'gateway', markets: ['hk', 'us', 'cn'] },
-  { id: 'longbridge', label: 'Longbridge (长桥)', url: 'https://open.longportapp.com', env: 'LONGBRIDGE_APP_KEY', type: 'commercial', markets: ['hk', 'us'] },
-  { id: 'tiger', label: 'Tiger Trade (老虎证券)', url: 'https://developer.itigerup.com', env: 'TIGER_ID', type: 'commercial', markets: ['hk', 'us', 'cn'] },
+  { id: 'binance', label: 'provider.binance', url: 'https://binance.com/en/binance-api', env: 'BINANCE_API_KEY', type: 'public', markets: ['crypto'] },
+  { id: 'okx', label: 'provider.okx', url: 'https://okx.com/docs-v5/zh/', env: 'OKX_API_KEY', type: 'public', markets: ['crypto'] },
+  { id: 'bybit', label: 'provider.bybit', url: 'https://bybit.com/en/api-overview', env: 'BYBIT_API_KEY', type: 'public', markets: ['crypto'] },
+  { id: 'ccxt', label: 'provider.ccxt', url: 'https://ccxt.com', env: 'CCXT_API_KEY', type: 'public', markets: ['crypto'] },
+  { id: 'yahoo', label: 'provider.yahoo', url: 'https://finance.yahoo.com', type: 'public', markets: ['us', 'hk'] },
+  { id: 'alpaca', label: 'provider.alpaca', url: 'https://alpaca.markets', env: 'ALPACA_API_KEY', type: 'commercial', markets: ['us'] },
+  { id: 'fmp', label: 'provider.fmp', url: 'https://site.financialmodelingprep.com/developer', env: 'FMP_API_KEY', type: 'commercial', markets: ['us'] },
+  { id: 'finnhub', label: 'provider.finnhub', url: 'https://finnhub.io/register', env: 'FINNHUB_API_KEY', type: 'commercial', markets: ['us'] },
+  { id: 'polygon', label: 'provider.polygon', url: 'https://polygon.io', env: 'POLYGON_API_KEY', type: 'commercial', markets: ['us'] },
+  { id: 'ibkr', label: 'provider.ibkr', url: 'https://interactivebrokers.com/campus/ibkr-api-page/cpapi/', env: 'IBKR_GATEWAY_URL', type: 'gateway', markets: ['us', 'hk'] },
+  { id: 'stooq', label: 'provider.stooq', url: 'https://stooq.com', type: 'public', markets: ['us'] },
+  { id: 'tencent', label: 'provider.tencent', url: 'https://finance.qq.com', type: 'public', markets: ['cn', 'hk'] },
+  { id: 'eastmoney', label: 'provider.eastmoney', url: 'https://eastmoney.com', type: 'public', markets: ['cn', 'hk'] },
+  { id: 'tushare', label: 'provider.tushare', url: 'https://tushare.pro/register', env: 'TUSHARE_TOKEN', type: 'commercial', markets: ['cn', 'hk', 'us'] },
+  { id: 'akshare', label: 'provider.akshare', url: 'https://akshare.xyz', env: 'AKSHARE_API_URL', type: 'public', markets: ['cn', 'hk'] },
+  { id: 'qmt', label: 'provider.qmt', url: 'http://127.0.0.1:5800', env: 'QMT_GATEWAY_URL', type: 'gateway', markets: ['cn'] },
+  { id: 'futu', label: 'provider.futu', url: 'https://futunn.com/download/open-api', env: 'FUTU_HOST', type: 'gateway', markets: ['hk', 'us', 'cn'] },
+  { id: 'longbridge', label: 'provider.longbridge', url: 'https://open.longportapp.com', env: 'LONGBRIDGE_APP_KEY', type: 'commercial', markets: ['hk', 'us'] },
+  { id: 'tiger', label: 'provider.tiger', url: 'https://developer.itigerup.com', env: 'TIGER_ID', type: 'commercial', markets: ['hk', 'us', 'cn'] },
 ]
 
 export interface CredentialField {
   key: string
+  /** 字段显示名词典键（dshtrading.settings，渲染处 t() 解析）。 */
   label: string
+  /** 输入框占位词典键（可缺省；渲染处 t() 解析）。 */
   placeholder?: string
   secret?: boolean
 }
 
 export const PROVIDER_CREDENTIAL_SPECS: Record<string, readonly CredentialField[]> = {
   binance: [
-    { key: 'apiKey', label: 'API Key', placeholder: 'BINANCE_API_KEY (留空走免密公共行情)', secret: true },
-    { key: 'apiSecret', label: 'API Secret', placeholder: 'BINANCE_API_SECRET', secret: true },
+    { key: 'apiKey', label: 'field.label.apiKey', placeholder: 'field.placeholder.binanceKey', secret: true },
+    { key: 'apiSecret', label: 'field.label.apiSecret', placeholder: 'field.placeholder.binanceSecret', secret: true },
   ],
   okx: [
-    { key: 'apiKey', label: 'API Key', placeholder: 'OKX_API_KEY (留空走免密公共行情)', secret: true },
-    { key: 'secretKey', label: 'Secret Key', placeholder: 'OKX_SECRET_KEY', secret: true },
-    { key: 'passphrase', label: 'Passphrase', placeholder: 'OKX_PASSPHRASE', secret: true },
+    { key: 'apiKey', label: 'field.label.apiKey', placeholder: 'field.placeholder.okxKey', secret: true },
+    { key: 'secretKey', label: 'field.label.secretKey', placeholder: 'field.placeholder.okxSecret', secret: true },
+    { key: 'passphrase', label: 'field.label.passphrase', placeholder: 'field.placeholder.okxPassphrase', secret: true },
   ],
   bybit: [
-    { key: 'apiKey', label: 'API Key', placeholder: 'BYBIT_API_KEY (留空走免密公共行情)', secret: true },
-    { key: 'apiSecret', label: 'API Secret', placeholder: 'BYBIT_API_SECRET', secret: true },
+    { key: 'apiKey', label: 'field.label.apiKey', placeholder: 'field.placeholder.bybitKey', secret: true },
+    { key: 'apiSecret', label: 'field.label.apiSecret', placeholder: 'field.placeholder.bybitSecret', secret: true },
   ],
   ccxt: [
-    { key: 'apiKey', label: 'API Key', placeholder: 'CCXT_API_KEY', secret: true },
-    { key: 'apiSecret', label: 'API Secret', placeholder: 'CCXT_API_SECRET', secret: true },
+    { key: 'apiKey', label: 'field.label.apiKey', placeholder: 'field.placeholder.ccxtKey', secret: true },
+    { key: 'apiSecret', label: 'field.label.apiSecret', placeholder: 'field.placeholder.ccxtSecret', secret: true },
   ],
   alpaca: [
-    { key: 'apiKey', label: 'API Key', placeholder: 'ALPACA_API_KEY', secret: true },
-    { key: 'secretKey', label: 'Secret Key', placeholder: 'ALPACA_SECRET_KEY', secret: true },
+    { key: 'apiKey', label: 'field.label.apiKey', placeholder: 'field.placeholder.alpacaKey', secret: true },
+    { key: 'secretKey', label: 'field.label.secretKey', placeholder: 'field.placeholder.alpacaSecret', secret: true },
   ],
   fmp: [
-    { key: 'apiKey', label: 'API Key', placeholder: 'FMP_API_KEY', secret: true },
+    { key: 'apiKey', label: 'field.label.apiKey', placeholder: 'field.placeholder.fmpKey', secret: true },
   ],
   finnhub: [
-    { key: 'apiKey', label: 'API Key', placeholder: 'FINNHUB_API_KEY', secret: true },
+    { key: 'apiKey', label: 'field.label.apiKey', placeholder: 'field.placeholder.finnhubKey', secret: true },
   ],
   polygon: [
-    { key: 'apiKey', label: 'API Key', placeholder: 'POLYGON_API_KEY', secret: true },
+    { key: 'apiKey', label: 'field.label.apiKey', placeholder: 'field.placeholder.polygonKey', secret: true },
   ],
   tushare: [
-    { key: 'token', label: 'Pro Token', placeholder: 'TUSHARE_TOKEN', secret: true },
+    { key: 'token', label: 'field.label.token', placeholder: 'field.placeholder.tushareToken', secret: true },
   ],
   akshare: [
-    { key: 'apiUrl', label: 'HTTP 服务地址', placeholder: 'http://127.0.0.1:8080 (默认内置)' },
+    { key: 'apiUrl', label: 'field.label.apiUrl', placeholder: 'field.placeholder.akshareUrl' },
   ],
   qmt: [
-    { key: 'gatewayUrl', label: 'MiniQMT 服务地址', placeholder: 'http://127.0.0.1:5800' },
+    { key: 'gatewayUrl', label: 'field.label.qmtUrl', placeholder: 'field.placeholder.qmtUrl' },
   ],
   futu: [
-    { key: 'host', label: 'OpenD IP', placeholder: '127.0.0.1' },
-    { key: 'port', label: 'OpenD 端口', placeholder: '11111' },
+    { key: 'host', label: 'field.label.futuHost', placeholder: 'field.placeholder.futuHost' },
+    { key: 'port', label: 'field.label.futuPort', placeholder: 'field.placeholder.futuPort' },
   ],
   ibkr: [
-    { key: 'gatewayUrl', label: 'CP Gateway 地址', placeholder: 'https://localhost:5000' },
+    { key: 'gatewayUrl', label: 'field.label.ibkrUrl', placeholder: 'field.placeholder.ibkrUrl' },
   ],
   longbridge: [
-    { key: 'appKey', label: 'App Key', placeholder: 'LONGBRIDGE_APP_KEY', secret: true },
-    { key: 'appSecret', label: 'App Secret', placeholder: 'LONGBRIDGE_APP_SECRET', secret: true },
-    { key: 'accessToken', label: 'Access Token', placeholder: 'LONGBRIDGE_ACCESS_TOKEN', secret: true },
+    { key: 'appKey', label: 'field.label.appKey', placeholder: 'field.placeholder.longbridgeAppKey', secret: true },
+    { key: 'appSecret', label: 'field.label.appSecret', placeholder: 'field.placeholder.longbridgeAppSecret', secret: true },
+    { key: 'accessToken', label: 'field.label.accessToken', placeholder: 'field.placeholder.longbridgeAccessToken', secret: true },
   ],
   tiger: [
-    { key: 'tigerId', label: 'Tiger ID', placeholder: 'TIGER_ID' },
-    { key: 'privateKey', label: 'RSA 私钥', placeholder: 'TIGER_PRIVATE_KEY', secret: true },
+    { key: 'tigerId', label: 'field.label.tigerId', placeholder: 'field.placeholder.tigerId' },
+    { key: 'privateKey', label: 'field.label.tigerPrivateKey', placeholder: 'field.placeholder.tigerPrivateKey', secret: true },
   ],
 }
 

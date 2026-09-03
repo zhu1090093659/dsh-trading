@@ -10,13 +10,13 @@
  *
  * 纪律：纯展示组件，轮询在 QuoteStage（fetch 失败静默保留上一帧）。
  */
-import { directionColor, fmtPrice } from './format.ts'
+import { directionColor, fmtPrice, scaleLocaleOf } from './format.ts'
 import type { ColorMode } from './color-mode.ts'
 import type { Orderbook, TradeTick } from './types.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import css from './orderbook-pane.module.css'
 
-export type OrderbookTranslate = (key: MarketLocaleKey) => string
+export type OrderbookTranslate = (key: MarketLocaleKey, params?: Record<string, unknown>) => string
 
 export interface OrderbookPaneProps {
   t: OrderbookTranslate
@@ -32,6 +32,8 @@ export interface OrderbookPaneProps {
 const MAX_LEVELS = 10
 
 export function OrderbookPane({ t, orderbook, trades, orderbookLoading, colorMode, onClose }: OrderbookPaneProps): React.JSX.Element {
+  // 档位/成交量紧凑单位 locale（亿/万 vs B/M）：词典哨兵键判定。
+  const numLocale = scaleLocaleOf(t)
   const degraded = orderbook === null && !orderbookLoading
 
   const buyVolume = orderbook?.bids.reduce((sum, level) => sum + level.amount, 0) ?? 0
@@ -78,13 +80,13 @@ export function OrderbookPane({ t, orderbook, trades, orderbookLoading, colorMod
             )}
             <div className={css.levels}>
               {askLevels.map((level, index) => (
-                <LevelRow key={`a${index}`} kind="asks" level={level} max={maxLevelAmount} />
+                <LevelRow key={`a${index}`} kind="asks" level={level} max={maxLevelAmount} numLocale={numLocale} />
               ))}
               {spread !== undefined && (
                 <div className={css.spread}>{t('orderbook.spread')} {fmtPrice(spread)}</div>
               )}
               {bidLevels.map((level, index) => (
-                <LevelRow key={`b${index}`} kind="bids" level={level} max={maxLevelAmount} />
+                <LevelRow key={`b${index}`} kind="bids" level={level} max={maxLevelAmount} numLocale={numLocale} />
               ))}
             </div>
           </>
@@ -104,7 +106,7 @@ export function OrderbookPane({ t, orderbook, trades, orderbookLoading, colorMod
                   >
                     {fmtPrice(trade.price)}
                   </span>
-                  <span className={css.amount}>{compactAmount(trade.amount)}</span>
+                  <span className={css.amount}>{compactAmount(trade.amount, numLocale)}</span>
                 </div>
               ))}
             </div>
@@ -120,22 +122,31 @@ function LevelRow(props: {
   kind: 'bids' | 'asks'
   level: { price: number; amount: number }
   max: number
+  numLocale: 'zh' | 'en'
 }): React.JSX.Element {
-  const { kind, level, max } = props
+  const { kind, level, max, numLocale } = props
   const width = `${Math.min(100, (level.amount / (max || 1)) * 100).toFixed(1)}%`
   return (
     <div className={`${css.level} ${css[kind]}`}>
       <span className={css.levelBar} style={{ width }} />
       <span className={css.levelPrice}>{fmtPrice(level.price)}</span>
-      <span className={css.levelAmount}>{compactAmount(level.amount)}</span>
+      <span className={css.levelAmount}>{compactAmount(level.amount, numLocale)}</span>
     </div>
   )
 }
 
-/** 档位/成交量紧凑展示（≥1万缩写；股票单位=股、crypto=币）。 */
-function compactAmount(value: number): string {
+/** 档位/成交量紧凑展示（locale 单位：zh ≥1万/亿缩写；en K/M；股票单位=股、crypto=币）。 */
+function compactAmount(value: number, locale: 'zh' | 'en'): string {
   if (!Number.isFinite(value)) return '—'
-  if (Math.abs(value) >= 100_000_000) return `${(value / 100_000_000).toFixed(2)}亿`
-  if (Math.abs(value) >= 10_000) return `${(value / 10_000).toFixed(2)}万`
+  const abs = Math.abs(value)
+  if (locale === 'zh') {
+    if (abs >= 100_000_000) return `${(value / 100_000_000).toFixed(2)}亿` // i18n-allow: zh 数值单位常量（locale 数据）
+    if (abs >= 10_000) return `${(value / 10_000).toFixed(2)}万` // i18n-allow: zh 数值单位常量（locale 数据）
+  }
+  if (locale === 'en') {
+    if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
+    if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
+    if (abs >= 1_000) return `${(value / 1_000).toFixed(2)}K`
+  }
   return value % 1 === 0 ? String(value) : value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
 }

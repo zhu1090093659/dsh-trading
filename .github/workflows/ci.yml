@@ -28,4 +28,7 @@ jobs:
       # 错误数不得超过 scripts/typecheck-baseline.json 基线，只许降不许升。
       # 依赖 build 先产出 lib/*.d.ts，否则 TS2307 噪音会让计数漂移。
       - run: node scripts/typecheck-gate.mjs
+      # i18n 门禁（PR #56 评审 H2）：zh/en 键位对齐 + {placeholder} 对齐 +
+      # client CJK 扫描 + dsh-i18n 中心包漂移。读各包 lib 产物，必须在 build 后。
+      - run: pnpm i18n:check
       - run: pnpm -r test
