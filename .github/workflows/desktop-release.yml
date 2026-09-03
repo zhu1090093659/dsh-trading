@@ -175,11 +175,16 @@ jobs:
           cd dist
           sha256sum ./* > SHA256SUMS.txt
 
+      # notes = 固定安装提示前缀（.github/release-preamble.md）+ 自动生成段落；
+      # gh 不允许 --notes-file 与 --generate-notes 同用，因此先调 API 生成再拼接
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          gh api "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="$GITHUB_REF_NAME" --jq .body > "$RUNNER_TEMP/generated.md"
+          cat .github/release-preamble.md "$RUNNER_TEMP/generated.md" > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" \
             dist/* \
-            --generate-notes \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             --title "dsh-trading $GITHUB_REF_NAME"

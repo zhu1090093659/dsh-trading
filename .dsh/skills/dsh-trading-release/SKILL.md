@@ -131,6 +131,7 @@ git push origin "vX.Y.Z"            # 推送 tag 即触发桌面打包管线（�
    desktop 版本 → electron-builder 打包。mac 产物：dmg + zip（arm64/x64 各
    一套）；win 产物：nsis 安装器 + zip（x64）。
 4. **github-release**（ubuntu，needs 两路全绿）：汇总产物，生成 SHA256SUMS.txt，
+   notes = `.github/release-preamble.md`（macOS xattr 放行提示，勿删）+ 自动生成段落，
    `gh release create --generate-notes` 创建 Release 并附着全部文件。
 
 关注与排障：
