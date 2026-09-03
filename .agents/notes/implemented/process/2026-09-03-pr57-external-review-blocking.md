@@ -30,3 +30,4 @@ Status: implemented
 - PR #57 在贡献者逐项修复（至少第 2、3 项）且 owner 对 GUI 实盘通道作出裁决前不得合并；hithink「官方」来源与 ToS 表条目是合并前置项。
 - **owner 裁决（2026-09-03，会话内明确）**：GUI 实盘下单通道**放行**——PR #57 的默认 `dryRun: false` 设计被 owner 批准，铁律 #3 在 GUI 面的服务缝解释从「GUI 结构上无实盘通道」更新为「GUI 实盘通道经 liveTrading 显式开关放行，审批闸门仅覆盖 agent 工具面」。issue #40 的旧架构记录与 TradeDesk/bridge 头注释需在 PR 修复提交中同步改写，保持文档与行为一致；实盘下单二次确认作为 UX 建议留给贡献者，不作为合并阻塞项。
 - 后续 review 该 PR 更新时按「反馈更新 PR」通道：只评审新增提交是否逐项回应本 review，不重复已确认合格的部分。
+- **2026-09-03 复查（贡献者推送 b78a219/c02f19e）**：新增 emoji 移除与仓位比例算法修复（含 order-ratio 13 测试）质量合格，但四项阻塞全部未回应；在更新后 head 复跑，`quote-stage.smoke.test.tsx` 2 例 localStorage 崩溃依旧复现。已留评论逐项列出（issuecomment-5523283531），PR 维持 CHANGES_REQUESTED 不合并。
