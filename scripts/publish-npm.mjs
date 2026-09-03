@@ -88,7 +88,10 @@ for (const name of order) {
     console.log(String(output).split('\n').slice(-2).join('\n'));
     published.push(name + '@' + pkg.version);
   } catch (err) {
-    failed.push(name + '@' + pkg.version + ': ' + String(err.stderr || err.message).split('\n').slice(-3).join(' | '));
+    // pnpm writes publish errors to stdout; keep both plus the exit code.
+    const detail = [String(err.stdout ?? ''), String(err.stderr ?? ''), String(err.message ?? '')]
+      .join('\n').trim().split('\n').slice(-4).join(' | ');
+    failed.push(name + '@' + pkg.version + ': ' + detail);
   }
 }
 
