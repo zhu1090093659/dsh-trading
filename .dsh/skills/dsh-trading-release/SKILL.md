@@ -16,6 +16,9 @@ Windows nsis/zip）→ GitHub Release 自动创建并附着产物 → 发布后�
 ## 仓库事实（先读，决定每一步怎么做）
 
 - 仓库：zhu1090093659/dsh-trading（**PUBLIC**），本机路径 /Users/zcl/code/dsh-trading。
+- **npm scope 是 @dshtrading/***（2026-09-03 定，org 名 dsh-trading 已被占；
+  见 .agents/notes/implemented/architecture/2026-09-03-npm-scope-dshtrading-rename.md），
+  品牌名 dsh-trading（桌面 productName/appId/安装包文件名）不受影响。
 - **版本策略：@dshtrading/* 全家族统一版本**，由 changesets fixed 组管理
   （.changeset/config.json 的 fixed: [["@dshtrading/*"]]）。tag vX.Y.Z 即版本
   事实源，发布管线用 scripts/verify-release-version.mjs 硬校验全家族（当前
