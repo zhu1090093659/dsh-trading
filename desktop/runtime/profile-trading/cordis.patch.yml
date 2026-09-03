@@ -1,0 +1,3 @@
+# User patch layer for the trading-web profile seeded by the desktop app.
+# Applied after every bundle layer; the app preserves this file on reseed.
+[]

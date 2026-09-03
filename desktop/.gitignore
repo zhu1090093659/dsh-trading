@@ -1,0 +1,10 @@
+node_modules/
+dist/
+resources/runtime/
+# Generated profile seed: manifests, lockfile and packed tarballs are rebuilt
+# by scripts/build-runtime.mjs from the workspace packages.
+runtime/profile-trading/vendor/
+runtime/profile-trading/package.json
+runtime/profile-trading/pnpm-workspace.yaml
+runtime/profile-trading/pnpm-lock.yaml
+*.log

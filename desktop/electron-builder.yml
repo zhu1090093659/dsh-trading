@@ -1,0 +1,53 @@
+# electron-builder configuration for the DeepSeek Harness desktop app.
+# Unsigned on purpose: internal/local distribution only (see desktop/README.md
+# Known limitations). Code signing and notarization are a separate follow-up.
+appId: com.dsh-trading.desktop
+productName: DSH Trading
+copyright: Copyright (c) DeepSeek Harness Contributors
+
+directories:
+  buildResources: resources
+  output: dist
+
+# The app itself is plain CommonJS plus two HTML pages; no native rebuilds.
+npmRebuild: false
+asar: true
+
+files:
+  - package.json
+  - src/**
+
+# The runtime payload ships unpacked next to the app:
+#   runtime/node-<os>-<arch> -> runtime/node   (per-platform Node distribution)
+#   runtime/host             -> runtime/host   (@deepseek-ai/dsh + closure)
+#   runtime/profile-trading      -> runtime/profile-trading (preinstalled web profile)
+# The staged runtime payload (bundled Node, host closure, preinstalled
+# profile) is copied by the afterPack hook: electron-builder's
+# extraResources applies gitignore filtering and silently drops every
+# node_modules tree.
+afterPack: scripts/after-pack.cjs
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+  identity: null
+  gatekeeperAssess: false
+  hardenedRuntime: false
+  artifactName: dsh-trading-desktop-${version}-mac-${arch}.${ext}
+
+win:
+  target:
+    - nsis
+    - zip
+  artifactName: dsh-trading-desktop-${version}-win-${arch}.${ext}
+
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  shortcutName: DSH Trading
+
+dmg:
+  writeUpdateInfo: false

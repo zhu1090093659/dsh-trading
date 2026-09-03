@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> 注：README 结构与 Slogan 标头已被 [2026-09-03-readme-product-intro-screenshots-bilingual](2026-09-03-readme-product-intro-screenshots-bilingual.md) 取代（产品介绍化 + 双语拆分）；本记录的 Slogan 定位与元数据部分仍有效。
+
 ## Problem
 
 随着项目从最初的单个垂直切片（Crypto）演进为涵盖 A股、美股、港股、加密货币四大市场、19 个现役连接器、拥有专业交易软件三栏式 GUI 界面与原生 Agent 投研风控的完整交易终端生态，原有的 `README.md` 与仓库元数据缺少统一有力的品牌标语（Slogan）与模块化视觉呈现层次。

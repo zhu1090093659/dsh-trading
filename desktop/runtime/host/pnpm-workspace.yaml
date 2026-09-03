@@ -1,0 +1,33 @@
+packages:
+  - .
+
+# Real-file layout: the staged node_modules must survive being shipped inside
+# an installer and copied into $DSH_HOME, so pnpm symlinks are not allowed.
+nodeLinker: hoisted
+# The host payload must match an npm global install's closure: several host
+# packages (for example dsh-app-boot) import non-optional peers directly, so
+# peers install here. (Profiles keep autoInstallPeers off — their SDK rows
+# resolve through the profile tree instead.)
+autoInstallPeers: true
+ignoreWorkspaceRootCheck: true
+
+# node-pty ships prebuilt binaries for every target in one package; sharp and
+# lightningcss resolve per-platform optional dependencies, so the install must
+# cover every OS/arch the desktop app ships.
+supportedArchitectures:
+  os:
+    - darwin
+    - win32
+  cpu:
+    - x64
+    - arm64
+
+# Install scripts of the official host closure. node-pty checks its shipped
+# prebuilds; koffi ships per-platform binaries in one package; protobufjs and
+# @google/genai run benign postinstalls.
+allowBuilds:
+  '@deepseek-ai/dsh-subprocess-local': true
+  '@google/genai': true
+  koffi: true
+  node-pty: true
+  protobufjs: true
