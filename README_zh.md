@@ -111,6 +111,11 @@ dsh --profile trading-web
 - 📜 [架构决策与 Spike 裁决史](spikes/REVIEW-LOG.md)
 - 🇺🇸 [English README](README.md)
 
+## 友情链接
+
+- [dsh-web](https://github.com/zhu1090093659/dsh-web)
+- [LINUX DO](https://linux.do)
+
 ## 许可证
 
 本项目采用 [PolyForm Noncommercial 1.0.0](LICENSE) 许可：个人学习、研究、兴趣项目等非商业用途免费使用；**任何商业用途须事先取得项目所有者的书面授权**，请通过 [chunlinzhu666@gmail.com](mailto:chunlinzhu666@gmail.com) 或 GitHub Issue 洽谈商用许可。

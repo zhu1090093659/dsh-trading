@@ -111,6 +111,11 @@ Six invariants keep the ecosystem honest: insert-only bundle patches · knowledg
 - 📜 [Architecture decision log](spikes/REVIEW-LOG.md)
 - 🇨🇳 [中文介绍](README_zh.md)
 
+## Friendly Links
+
+- [dsh-web](https://github.com/zhu1090093659/dsh-web)
+- [LINUX DO](https://linux.do)
+
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE) — free for personal study, research, and noncommercial use. **Commercial use requires prior written authorization**: open a GitHub issue or contact <chunlinzhu666@gmail.com>.
