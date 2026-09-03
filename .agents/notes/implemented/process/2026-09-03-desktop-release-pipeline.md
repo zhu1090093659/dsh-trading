@@ -56,4 +56,8 @@ Status: implemented
 - 管线引入新的外部依赖面：Node 发行版下载（fetch-node.mjs，带 SHASUMS256
   校验）、Electron/electron-builder 二进制（已加 actions/cache）。这些步骤
   失败时的排障路径写入 skill 第 3 节。
+- 首次运行（v0.1.0）即暴露 Windows 路径问题：build-runtime.mjs 的
+  spawnSync('pnpm') 在 Windows 上无法解析 pnpm.cmd shim（ENOENT），修复为
+  win32 下 spawn 带 shell:true（args 均为固定常量或 CI 上的无空格绝对路径，
+  不引入注入面）；mac job 首跑即绿，验证了 mac 链路端到端可用。
 - 后续若引入代码签名/公证，是独立决策，须新增 Agent Note 并同步 skill。

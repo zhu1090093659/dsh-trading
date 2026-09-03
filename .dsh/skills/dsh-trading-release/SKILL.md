@@ -134,6 +134,9 @@ gh run list --workflow=desktop-release.yml   # 查历史
   **删除远端 tag 重新推送**（发布未走 npm，无版本占用副作用）。
 - prepare-runtime 失败（Node 发行版下载超时、host closure pnpm install 失败）
   → 多为网络抖动，直接重跑 failed jobs；连续失败按 CI 自愈四步归因。
+- Windows 上 `spawnSync pnpm ENOENT` → pnpm 是 .cmd shim，spawn 必须带
+  shell（build-runtime.mjs 已用平台化 spawnOptions 修复；新增子进程调用时
+  记得复用它）。
 - electron-builder 打包失败 → 检查 desktop/electron-builder.yml 与
   scripts/after-pack.cjs 的 runtime staging 约定（runtime payload 必须由
   afterPack hook 复制，extraResources 会丢 node_modules）。

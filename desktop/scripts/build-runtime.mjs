@@ -65,10 +65,15 @@ function readPackageManifest(dir) {
   return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
 }
 
+// Windows resolves pnpm through a .cmd shim, which spawnSync cannot execute
+// without a shell (ENOENT). shell:true is only needed there; args are all
+// fixed constants or space-free absolute paths on CI, never user input.
+const spawnOptions = { env: { ...process.env }, shell: process.platform === 'win32' };
+
 function run(command, args, cwd) {
   // stdio is piped and relayed: inheriting a non-TTY stdout can stall pnpm's
   // progress renderer in background job contexts.
-  const output = execFileSync(command, args, { cwd, env: { ...process.env }, maxBuffer: 64 * 1024 * 1024 });
+  const output = execFileSync(command, args, { cwd, ...spawnOptions, maxBuffer: 64 * 1024 * 1024 });
   const text = String(output);
   console.log(text.split('\n').slice(-4).join('\n'));
 }
@@ -90,7 +95,7 @@ function packWorkspacePackages(vendorDir) {
     console.log('[build-runtime] pnpm pack ' + manifest.name);
     const output = execFileSync('pnpm', ['pack', '--pack-destination', vendorDir], {
       cwd: dir,
-      env: { ...process.env },
+      ...spawnOptions,
       maxBuffer: 16 * 1024 * 1024,
     });
     // pnpm pack prints the absolute tarball path; keep the basename only.
