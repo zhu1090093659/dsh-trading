@@ -5,10 +5,14 @@
 > **你的下一个交易终端，也可以是你的 AI Agent。**
 > *没有小韭菜，只有小股民*
 
+<div align="center">
+
 [![DSH 基线](https://img.shields.io/badge/DSH%20Baseline-0.1.2--alpha.1-blue.svg)](https://github.com/deepseek-ai)
 [![市场](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK-green.svg)](#一个终端全市场覆盖)
 [![连接器](https://img.shields.io/badge/Connectors-19%2B-orange.svg)](docs/connectors-guide.md)
 [![许可](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-lightgrey.svg)](LICENSE)
+
+</div>
 
 **dsh-trading** 是构建在 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai) 之上的 **Agent 原生交易终端**。它把专业交易软件的三栏工作流——自选列表、交互式图表、盘口——与一个深度集成的 AI Agent 融为一体：Agent 能看到你正在看的行情，用机构级的分析范式做研究，并且在显式的人类审批闸门下路由真实订单。
 
