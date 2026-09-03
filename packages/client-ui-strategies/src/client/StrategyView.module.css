@@ -167,6 +167,40 @@
   padding: 4px 0;
 }
 
+/* 选股扫描进度与名册信息（ScreenerPane） */
+.scanMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--dsw-futu-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.progressWrap {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--dsw-futu-bg-surface-hover);
+  overflow: hidden;
+  min-width: 120px;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--dsw-futu-border-active);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+
+.nameCell {
+  font-family: var(--dsw-futu-font-sans, inherit);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .metricsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));

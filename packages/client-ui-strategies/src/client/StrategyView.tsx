@@ -1,11 +1,12 @@
 /**
  * 策略板块主视图（对齐 docs/design/strategy-tab.md §3.4 与 Review 规范）。
  *
- * 结构（自上而下）：
- *   1. 周期分段控件（短线 | 波段 | 长线）
- *   2. 策略卡列表（选中高亮）
- *   3. 参数配置与回测控制栏（参数输入 + 标的周期 + 运行回测）
- *   4. 结果区：8 指标卡 + 权益曲线 (lightweight-charts) + 交易明细流水表
+ * 结构（自上而下，两级分区）：
+ *   1. 分区分段控件（选股策略 | 量化策略）
+ *   2a. 选股策略 → ScreenerPane（内置选股器卡 + 参数/扫描池 + 进度 + 命中表）
+ *   2b. 量化策略 → 周期分段控件（短线 | 波段 | 长线）+ 策略卡列表
+ *       + 参数配置与回测控制栏（参数输入 + 标的周期 + 运行回测）
+ *       + 结果区：8 指标卡 + 权益曲线 (lightweight-charts) + 交易明细流水表
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createChart, ColorType, AreaSeries, type IChartApi, type ISeriesApi } from 'lightweight-charts'
@@ -20,10 +21,14 @@ import {
 } from '@dsh-trading/strategies'
 import { readJson, writeJson, type SelectionState } from './shell-faces.ts'
 import { IconStrategy } from './icons.tsx'
+import { ScreenerPane } from './ScreenerPane.tsx'
 import type { StrategyLocaleKey } from './contract.ts'
 import css from './StrategyView.module.css'
 
+type StrategySection = 'screener' | 'quant'
+
 interface StrategyStateStored {
+  section?: StrategySection
   strategyId: string
   paramsMap: Record<string, Record<string, number>>
   horizon: StrategyHorizon
@@ -61,10 +66,13 @@ export type UseStoreState<TState> = <TSelected>(selector: (state: TState) => TSe
 
 export interface StrategyViewProps {
   t: (key: StrategyLocaleKey) => string
+  /** 中栏活动视图 id（tradingStageViews.render 透传；本视图固定 strategy，未用）。 */
+  view?: string
   /** 桥面（shell 的 tradingBridge 服务；未注入时空跑——视图静默空态）。 */
   bridge: {
     fetchKlines: (market: string, symbol: string, interval: string, limit: number) => Promise<Kline[]>
     fetchCustomStrategies: () => Promise<Array<{ id: string; title: string; horizon: string; summary: string; paramsJson: string; computeSource: string }>>
+    fetchSymbols: (market: string) => Promise<Array<{ symbol: string; name?: string }>>
     subscribeTradingEvents: (handlers: { strategies?: () => void }) => () => void
   }
   useSelection?: UseStoreState<SelectionState>
@@ -80,6 +88,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
     return readJson<StrategyStateStored>(STRATEGY_STORE_KEY, DEFAULT_STORED)
   })
 
+  const [section, setSection] = useState<StrategySection>(stored.section ?? 'quant')
   const [horizon, setHorizon] = useState<StrategyHorizon>(stored.horizon ?? 'short')
   const [selectedId, setSelectedId] = useState<string>(stored.strategyId ?? 'donchian-breakout')
   const [paramsMap, setParamsMap] = useState<Record<string, Record<string, number>>>(stored.paramsMap ?? {})
@@ -147,9 +156,9 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
 
   // 同步持久化
   useEffect(() => {
-    const nextState: StrategyStateStored = { strategyId: selectedId, paramsMap, horizon }
+    const nextState: StrategyStateStored = { section, strategyId: selectedId, paramsMap, horizon }
     writeJson(STRATEGY_STORE_KEY, nextState)
-  }, [selectedId, paramsMap, horizon])
+  }, [section, selectedId, paramsMap, horizon])
 
   // 切换 horizon 时自动选择该分类下的第一个策略
   const switchHorizon = (h: StrategyHorizon) => {
@@ -275,52 +284,81 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
 
   return (
     <div className={css.root} data-dshtrading-strategy-view="">
-      {/* 1. 周期分段与策略选择 */}
+      {/* 1. 分区分段控件（选股策略 | 量化策略） */}
       <div className={css.header}>
         <div className={css.horizonSelector} role="tablist">
           <button
             type="button"
             className={css.horizonBtn}
-            data-active={horizon === 'short' ? 'true' : undefined}
-            onClick={() => switchHorizon('short')}
+            data-active={section === 'screener' ? 'true' : undefined}
+            onClick={() => setSection('screener')}
           >
-            {t('sv.horizon.short')}
+            {t('sv.section.screener')}
           </button>
           <button
             type="button"
             className={css.horizonBtn}
-            data-active={horizon === 'swing' ? 'true' : undefined}
-            onClick={() => switchHorizon('swing')}
+            data-active={section === 'quant' ? 'true' : undefined}
+            onClick={() => setSection('quant')}
           >
-            {t('sv.horizon.swing')}
-          </button>
-          <button
-            type="button"
-            className={css.horizonBtn}
-            data-active={horizon === 'long' ? 'true' : undefined}
-            onClick={() => switchHorizon('long')}
-          >
-            {t('sv.horizon.long')}
+            {t('sv.section.quant')}
           </button>
         </div>
 
-        {/* 策略卡片 */}
-        <div className={css.strategyCards}>
-          {horizonStrategies.map((strat) => (
-            <div
-              key={strat.id}
-              className={css.strategyCard}
-              data-active={strat.id === selectedId ? 'true' : undefined}
-              onClick={() => setSelectedId(strat.id)}
-            >
-              <div className={css.cardTitle}>{strat.name}</div>
-              <div className={css.cardSummary}>{strat.summary}</div>
+        {section === 'quant' && (
+          <>
+            {/* 2b-1. 周期分段与策略选择 */}
+            <div className={css.horizonSelector} role="tablist">
+              <button
+                type="button"
+                className={css.horizonBtn}
+                data-active={horizon === 'short' ? 'true' : undefined}
+                onClick={() => switchHorizon('short')}
+              >
+                {t('sv.horizon.short')}
+              </button>
+              <button
+                type="button"
+                className={css.horizonBtn}
+                data-active={horizon === 'swing' ? 'true' : undefined}
+                onClick={() => switchHorizon('swing')}
+              >
+                {t('sv.horizon.swing')}
+              </button>
+              <button
+                type="button"
+                className={css.horizonBtn}
+                data-active={horizon === 'long' ? 'true' : undefined}
+                onClick={() => switchHorizon('long')}
+              >
+                {t('sv.horizon.long')}
+              </button>
             </div>
-          ))}
-        </div>
+
+            {/* 策略卡片 */}
+            <div className={css.strategyCards}>
+              {horizonStrategies.map((strat) => (
+                <div
+                  key={strat.id}
+                  className={css.strategyCard}
+                  data-active={strat.id === selectedId ? 'true' : undefined}
+                  onClick={() => setSelectedId(strat.id)}
+                >
+                  <div className={css.cardTitle}>{strat.name}</div>
+                  <div className={css.cardSummary}>{strat.summary}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
-      {/* 2. 参数调节与运行条 */}
+      {section === 'screener' ? (
+        /* 2a. 选股策略面板 */
+        <ScreenerPane t={t} market={market} bridge={stableBridge} />
+      ) : (
+        <>
+          {/* 2b-2. 参数调节与运行条 */}
       <div className={css.configBar}>
         {currentStrategy.params.map((p) => (
           <div key={p.key} className={css.paramGroup}>
@@ -480,6 +518,8 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
           </div>
           <div>{t('sv.empty.hint')}</div>
         </div>
+      )}
+        </>
       )}
     </div>
   )
