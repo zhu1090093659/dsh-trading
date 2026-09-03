@@ -195,14 +195,14 @@ describe('HiThinkRestClient', () => {
     expect(auction?.stage).toBe('final')
   })
 
-  it('错误处理：401 映射为 AUTH_FAILED，429 映射为 RATE_LIMITED', async () => {
+  it('错误处理：401 映射为 TRADING_AUTH_FAILED，429 映射为 TRADING_RATE_LIMITED', async () => {
     const authErrorFetch = vi.fn().mockResolvedValue({ ok: false, status: 401 })
     const clientAuth = new HiThinkRestClient({ fetchImpl: authErrorFetch as unknown as typeof fetch })
     await expect(clientAuth.getTicker('600519')).rejects.toThrow(TradingServiceError)
-    await expect(clientAuth.getTicker('600519')).rejects.toMatchObject({ code: 'AUTH_FAILED' })
+    await expect(clientAuth.getTicker('600519')).rejects.toMatchObject({ code: 'TRADING_AUTH_FAILED' })
 
     const rateLimitFetch = vi.fn().mockResolvedValue({ ok: false, status: 429 })
     const clientRate = new HiThinkRestClient({ fetchImpl: rateLimitFetch as unknown as typeof fetch })
-    await expect(clientRate.getTicker('600519')).rejects.toMatchObject({ code: 'RATE_LIMITED' })
+    await expect(clientRate.getTicker('600519')).rejects.toMatchObject({ code: 'TRADING_RATE_LIMITED' })
   })
 })

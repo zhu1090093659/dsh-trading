@@ -12,8 +12,8 @@ import type { StockFundamentals } from '@dsh-trading/api'
 
 export interface CnFundamentalsOptions {
   symbol: string
-  fetch?: typeof globalThis.fetch
-  skipCache?: boolean
+  fetch?: typeof globalThis.fetch | undefined
+  skipCache?: boolean | undefined
 }
 
 export interface CnFundamentalsResult {

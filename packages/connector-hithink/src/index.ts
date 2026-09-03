@@ -19,7 +19,6 @@ import type {
 import {
   HiThinkRestClient,
   type HiThinkRestOptions,
-  normalizeThsCode,
   TradingServiceError,
 } from './rest.js'
 
@@ -56,8 +55,8 @@ export class HiThinkMarketDataService extends Service implements MarketDataServi
     return this.client.getTicker(symbol)
   }
 
-  async getKlines(symbol: string, interval: Interval = '1d', limit: number = 100): Promise<Kline[]> {
-    return this.client.getKlines(symbol, interval, limit)
+  async getKlines(_symbol: string, _interval: Interval = '1d', _limit: number = 100): Promise<Kline[]> {
+    throw new TradingServiceError('TRADING_NOT_IMPLEMENTED', 'HiThink K-lines not supported yet')
   }
 
   async getStockFundamentals(symbol: string): Promise<StockFundamentals> {
@@ -94,5 +93,5 @@ export class HiThinkMarketDataService extends Service implements MarketDataServi
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
   const apiKey = process.env[config.apiKeyRef]
-  new HiThinkMarketDataService(ctx, { apiKey })
+  new HiThinkMarketDataService(ctx, apiKey ? { apiKey } : {})
 }

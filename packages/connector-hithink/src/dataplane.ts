@@ -20,11 +20,12 @@ export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
   const apiKey = process.env[config.apiKeyRef]
   const registry = resolveMarketDataRegistry(ctx)
+  const opts = apiKey ? { apiKey } : {}
   if (registry === undefined) {
-    new HiThinkMarketDataService(ctx, { apiKey })
+    new HiThinkMarketDataService(ctx, opts)
     return
   }
   const inner = ctx.isolate(TRADING_CN_MARKET_DATA_KEY)
-  const service = new HiThinkMarketDataService(inner, { apiKey })
+  const service = new HiThinkMarketDataService(inner, opts)
   ctx.effect(() => registry.register(MARKET, ROUTER_PROVIDER, service))
 }

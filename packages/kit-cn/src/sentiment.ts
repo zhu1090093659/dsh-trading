@@ -13,13 +13,13 @@ import type { AuctionSnapshot, LimitUpPoolItem } from '@dsh-trading/api'
 import { HiThinkRestClient, normalizeThsCode } from '@dsh-trading/connector-hithink'
 
 export interface SentimentOptions {
-  apiKey?: string
-  fetchImpl?: typeof globalThis.fetch
+  apiKey?: string | undefined
+  fetchImpl?: typeof globalThis.fetch | undefined
 }
 
 /** 获取当期 A 股涨跌停池与连板股票。 */
 export async function fetchCnLimitUpPool(
-  queryOptions: { dateMs?: number; page?: number; size?: number } = {},
+  queryOptions: { dateMs?: number | undefined; page?: number | undefined; size?: number | undefined } = {},
   sentimentOptions: SentimentOptions = {},
 ): Promise<LimitUpPoolItem[]> {
   const apiKey = sentimentOptions.apiKey ?? process.env.HITHINK_FINANCE_API_KEY
@@ -28,9 +28,13 @@ export async function fetchCnLimitUpPool(
   }
   const client = new HiThinkRestClient({
     apiKey,
-    fetchImpl: sentimentOptions.fetchImpl,
+    ...(sentimentOptions.fetchImpl !== undefined ? { fetchImpl: sentimentOptions.fetchImpl } : {}),
   })
-  return client.getLimitUpPool(queryOptions)
+  return client.getLimitUpPool({
+    ...(queryOptions.dateMs !== undefined ? { dateMs: queryOptions.dateMs } : {}),
+    ...(queryOptions.page !== undefined ? { page: queryOptions.page } : {}),
+    ...(queryOptions.size !== undefined ? { size: queryOptions.size } : {}),
+  })
 }
 
 /** 获取近 30 个交易日连板天梯矩阵。 */
@@ -41,7 +45,7 @@ export async function fetchCnLimitUpLadder(sentimentOptions: SentimentOptions = 
   }
   const client = new HiThinkRestClient({
     apiKey,
-    fetchImpl: sentimentOptions.fetchImpl,
+    ...(sentimentOptions.fetchImpl !== undefined ? { fetchImpl: sentimentOptions.fetchImpl } : {}),
   })
   return client.getLimitUpLadder()
 }
@@ -57,7 +61,7 @@ export async function fetchCnAuctionStrength(
   }
   const client = new HiThinkRestClient({
     apiKey,
-    fetchImpl: sentimentOptions.fetchImpl,
+    ...(sentimentOptions.fetchImpl !== undefined ? { fetchImpl: sentimentOptions.fetchImpl } : {}),
   })
   const thscode = normalizeThsCode(symbol)
   return client.getAuctionSnapshot(thscode)

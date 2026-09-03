@@ -116,18 +116,18 @@ export async function fetchUsFundamentals(options: UsFundamentalsOptions): Promi
           }
           const data: StockFundamentals = {
             symbol: p.symbol ?? symbol,
-            name: p.companyName,
-            marketCap: p.mktCap,
-            fiftyTwoWeekHigh: Number.isFinite(fiftyTwoWeekHigh) ? fiftyTwoWeekHigh : undefined,
-            fiftyTwoWeekLow: Number.isFinite(fiftyTwoWeekLow) ? fiftyTwoWeekLow : undefined,
+            ...(p.companyName ? { name: p.companyName } : {}),
+            ...(p.mktCap !== undefined ? { marketCap: p.mktCap } : {}),
+            ...(Number.isFinite(fiftyTwoWeekHigh) ? { fiftyTwoWeekHigh } : {}),
+            ...(Number.isFinite(fiftyTwoWeekLow) ? { fiftyTwoWeekLow } : {}),
             timestamp: Date.now(),
           }
           const result: UsFundamentalsResult = {
             data,
-            beta: p.beta,
-            avgVolume3Month: p.volAvg,
-            currency: p.currency,
-            exchange: p.exchangeShortName,
+            ...(p.beta !== undefined ? { beta: p.beta } : {}),
+            ...(p.volAvg !== undefined ? { avgVolume3Month: p.volAvg } : {}),
+            ...(p.currency ? { currency: p.currency } : {}),
+            ...(p.exchangeShortName ? { exchange: p.exchangeShortName } : {}),
             unavailable,
           }
           usFundamentalsCache.set(symbol, { data: result, expiresAt: Date.now() + US_FUNDAMENTALS_TTL_MS })

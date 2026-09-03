@@ -12,8 +12,6 @@
 
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import os from 'node:os'
-import path from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import {
@@ -168,7 +166,7 @@ export function apply(ctx: Context, _config: Config): void {
   // host 平面单点注册）；kit 保留市场专属工具与 skill provider，不再重复注册。
 
   // issue #33：us_get_indicators 接入（计算库市场无关；行情 registry-first，老部署回退市场键）。
-  const serviceGetter = ctx as unknown as { get?: (key: string) => unknown }
+  const serviceGetter = ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }
   const registry = serviceGetter.get?.('tradingMarketDataRegistry', false) as
     | { active(m: string): { service: MarketDataService } | undefined }
     | undefined

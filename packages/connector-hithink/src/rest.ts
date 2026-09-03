@@ -13,8 +13,6 @@
 
 import type {
   AuctionSnapshot,
-  Interval,
-  Kline,
   LimitUpPoolItem,
   StockFundamentals,
   Ticker,
@@ -42,10 +40,10 @@ export class TradingServiceError extends Error {
 }
 
 export interface HiThinkRestOptions {
-  apiKey?: string
-  baseUrl?: string
-  fetchImpl?: typeof fetch
-  timeoutMs?: number
+  apiKey?: string | undefined
+  baseUrl?: string | undefined
+  fetchImpl?: typeof fetch | undefined
+  timeoutMs?: number | undefined
 }
 
 /** 规范化输入为标准 thscode（如 600519 -> 600519.SH, sz000001 -> 000001.SZ）。 */
@@ -72,7 +70,7 @@ export function normalizeThsCode(input: string): string {
 }
 
 export class HiThinkRestClient {
-  private readonly apiKey?: string
+  private readonly apiKey?: string | undefined
   private readonly baseUrl: string
   private readonly fetchImpl: typeof fetch
   private readonly timeoutMs: number
@@ -109,7 +107,7 @@ export class HiThinkRestClient {
       })
     } catch (err) {
       throw new TradingServiceError(
-        'NETWORK_TIMEOUT',
+        'TRADING_NETWORK',
         `HiThink request failed (${url.pathname}): ${err instanceof Error ? err.message : String(err)}`,
         err,
       )
@@ -117,26 +115,26 @@ export class HiThinkRestClient {
 
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) {
-        throw new TradingServiceError('AUTH_FAILED', `HiThink authentication failed (HTTP ${res.status}). Check HITHINK_FINANCE_API_KEY.`)
+        throw new TradingServiceError('TRADING_AUTH_FAILED', `HiThink authentication failed (HTTP ${res.status}). Check HITHINK_FINANCE_API_KEY.`)
       }
       if (res.status === 429) {
-        throw new TradingServiceError('RATE_LIMITED', `HiThink rate limited (HTTP 429). Retry later.`)
+        throw new TradingServiceError('TRADING_RATE_LIMITED', `HiThink rate limited (HTTP 429). Retry later.`)
       }
-      throw new TradingServiceError('NETWORK_ERROR', `HiThink upstream error (HTTP ${res.status})`)
+      throw new TradingServiceError('TRADING_NETWORK', `HiThink upstream error (HTTP ${res.status})`)
     }
 
     const json = (await res.json()) as HiThinkEnvelope<T>
     if (json.code !== 0) {
       if (json.code === 2001 || json.code === 2003) {
-        throw new TradingServiceError('AUTH_FAILED', `HiThink auth error (${json.code}): ${json.message}`)
+        throw new TradingServiceError('TRADING_AUTH_FAILED', `HiThink auth error (${json.code}): ${json.message}`)
       }
       if (json.code === 4001) {
-        throw new TradingServiceError('RATE_LIMITED', `HiThink rate limited (${json.code}): ${json.message}`)
+        throw new TradingServiceError('TRADING_RATE_LIMITED', `HiThink rate limited (${json.code}): ${json.message}`)
       }
       if (json.code === 3001) {
-        throw new TradingServiceError('INSTRUMENT_NOT_FOUND', `HiThink ticker not found (${json.code}): ${json.message}`)
+        throw new TradingServiceError('TRADING_UNSUPPORTED_SYMBOL', `HiThink ticker not found (${json.code}): ${json.message}`)
       }
-      throw new TradingServiceError('UNKNOWN_ERROR', `HiThink API error (${json.code}): ${json.message}`)
+      throw new TradingServiceError('TRADING_UNKNOWN', `HiThink API error (${json.code}): ${json.message}`)
     }
 
     return json.data as T
@@ -151,17 +149,17 @@ export class HiThinkRestClient {
 
     const item = data?.item?.[0]
     if (!item) {
-      throw new TradingServiceError('INSTRUMENT_NOT_FOUND', `HiThink: no quote found for ${symbol} (${thscode})`)
+      throw new TradingServiceError('TRADING_UNSUPPORTED_SYMBOL', `HiThink: no quote found for ${symbol} (${thscode})`)
     }
 
     const price = item.last_price ?? item.prev_price ?? 0
     return {
       symbol: thscode,
       price,
-      prevClose: item.prev_price,
-      changePercent: item.price_change_ratio_pct,
-      volume: item.volume,
-      timestamp: data.timestamp ?? Date.now(),
+      ...(item.prev_price !== undefined ? { prevClose: item.prev_price } : {}),
+      ...(item.price_change_ratio_pct !== undefined ? { changePercent: item.price_change_ratio_pct } : {}),
+      ...(item.volume !== undefined ? { volume: item.volume } : {}),
+      timestamp: data?.timestamp ?? Date.now(),
     }
   }
 
@@ -187,10 +185,10 @@ export class HiThinkRestClient {
 
     return {
       symbol: thscode,
-      peTtm: valItem?.pe_ttm ?? undefined,
-      peDynamic: valItem?.pe_mrq ?? undefined,
-      pb: valItem?.pb_mrq ?? undefined,
-      ps: valItem?.ps_ttm ?? undefined,
+      ...(typeof valItem?.pe_ttm === 'number' ? { peTtm: valItem.pe_ttm } : {}),
+      ...(typeof valItem?.pe_mrq === 'number' ? { peDynamic: valItem.pe_mrq } : {}),
+      ...(typeof valItem?.pb_mrq === 'number' ? { pb: valItem.pb_mrq } : {}),
+      ...(typeof valItem?.ps_ttm === 'number' ? { ps: valItem.ps_ttm } : {}),
       timestamp: tickerVal?.timestamp ?? Date.now(),
     }
   }
@@ -198,7 +196,7 @@ export class HiThinkRestClient {
   /** 获取今日或指定日期涨跌停池。 */
   async getLimitUpPool(options: { dateMs?: number; page?: number; size?: number } = {}): Promise<LimitUpPoolItem[]> {
     const data = await this.request<HiThinkLimitUpPoolData>('/api/a-share/special-data/limit-up-pool', {
-      date_ms: options.dateMs,
+      ...(options.dateMs !== undefined ? { date_ms: options.dateMs } : {}),
       page: options.page ?? 1,
       size: options.size ?? 50,
       sort_field: 'limit_up_time',
@@ -211,11 +209,11 @@ export class HiThinkRestClient {
       name: item.name,
       price: item.last_price,
       changePercent: item.price_change_ratio_pct,
-      limitType: 'up',
-      firstLimitTime: item.limit_up_time,
-      limitOrderAmount: item.seal_money,
-      consecutiveBoards: item.continue_day_cnt,
-      sectorConcept: item.limit_up_reason,
+      limitType: 'up' as const,
+      ...(item.limit_up_time !== undefined ? { firstLimitTime: item.limit_up_time } : {}),
+      ...(item.seal_money !== undefined ? { limitOrderAmount: item.seal_money } : {}),
+      ...(item.continue_day_cnt !== undefined ? { consecutiveBoards: item.continue_day_cnt } : {}),
+      ...(item.limit_up_reason !== undefined ? { sectorConcept: item.limit_up_reason } : {}),
     }))
   }
 
@@ -233,41 +231,34 @@ export class HiThinkRestClient {
     const item = data?.item?.[0]
     if (!item) return undefined
 
+    const unmatchedSide = item.unmatched_side === 'buy' || item.unmatched_side === 'sell'
+      ? item.unmatched_side
+      : undefined
+    const stage = item.stage === 'call' || item.stage === 'final'
+      ? item.stage
+      : undefined
+
     return {
       symbol: thscode,
-      matchPrice: item.match_price,
-      matchVolume: item.match_volume,
-      unmatchedVolume: item.unmatched_volume,
-      unmatchedSide: item.unmatched_side === 'buy' || item.unmatched_side === 'sell' ? item.unmatched_side : undefined,
-      strengthIndex: item.strength_index,
-      stage: item.stage === 'call' || item.stage === 'final' ? item.stage : undefined,
-      timestamp: data.timestamp ?? Date.now(),
+      ...(item.match_price !== undefined ? { matchPrice: item.match_price } : {}),
+      ...(item.match_volume !== undefined ? { matchVolume: item.match_volume } : {}),
+      ...(item.unmatched_volume !== undefined ? { unmatchedVolume: item.unmatched_volume } : {}),
+      ...(unmatchedSide !== undefined ? { unmatchedSide } : {}),
+      ...(item.strength_index !== undefined ? { strengthIndex: item.strength_index } : {}),
+      ...(stage !== undefined ? { stage } : {}),
+      timestamp: data?.timestamp ?? Date.now(),
     }
   }
 
-  /** 标的代码与名称搜索消歧。 */
-  async searchTickers(query: string): Promise<HiThinkTickerSearchData['item']> {
-    const data = await this.request<HiThinkTickerSearchData>('/api/meta/tickers/search', {
-      q: query,
-      limit: 10,
+  /** 模糊搜索股票代码与全称（消歧）。 */
+  async searchTickers(keyword: string): Promise<Array<{ symbol: string; name: string }>> {
+    const data = await this.request<HiThinkTickerSearchData>('/api/a-share/instruments/search', {
+      keyword: keyword.trim(),
     })
-    return data?.item ?? []
-  }
-
-  /** 获取 K 线数据（日线保底适配）。 */
-  async getKlines(symbol: string, _interval: Interval = '1d', _limit: number = 100): Promise<Kline[]> {
-    // HiThink 公开版重点在于行情快照与全市场 dump，日 K 线由快照兜底
-    const ticker = await this.getTicker(symbol)
-    return [
-      {
-        openTime: ticker.timestamp,
-        open: ticker.prevClose ?? ticker.price,
-        high: ticker.price,
-        low: ticker.price,
-        close: ticker.price,
-        volume: ticker.volume ?? 0,
-        closeTime: ticker.timestamp,
-      },
-    ]
+    const list = data?.item ?? []
+    return list.map((item) => ({
+      symbol: item.thscode,
+      name: item.name,
+    }))
   }
 }

@@ -12,8 +12,6 @@
 
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import os from 'node:os'
-import path from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import {
@@ -29,7 +27,6 @@ import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchCnFundamentals, renderCnFundamentals } from './fundamentals.js'
 import {
   fetchCnAuctionStrength,
-  fetchCnLimitUpLadder,
   fetchCnLimitUpPool,
 } from './sentiment.js'
 
@@ -178,7 +175,7 @@ export function apply(ctx: Context, _config: Config): void {
   // host 平面单点注册）；kit 保留市场专属工具与 skill provider，不再重复注册。
 
   // issue #33：cn_get_indicators 接入（计算库市场无关；行情 registry-first，老部署回退市场键）。
-  const serviceGetter = ctx as unknown as { get?: (key: string) => unknown }
+  const serviceGetter = ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }
   const registry = serviceGetter.get?.('tradingMarketDataRegistry', false) as
     | { active(m: string): { service: MarketDataService } | undefined }
     | undefined
@@ -292,7 +289,7 @@ export function createGetFundamentalsTool(options: { fetch?: typeof globalThis.f
       }
       const result = await fetchCnFundamentals({
         symbol,
-        fetch: options.fetch,
+        ...(options.fetch !== undefined ? { fetch: options.fetch } : {}),
         skipCache: options.skipCache ?? (options.fetch !== undefined),
       })
       return renderCnFundamentals(result, symbol)
@@ -318,7 +315,13 @@ export function createGetLimitUpPoolTool(options: { fetch?: typeof globalThis.fe
     async execute(raw) {
       const args = (raw ?? {}) as { page?: number; size?: number }
       try {
-        const pool = await fetchCnLimitUpPool({ page: args.page, size: args.size }, { fetchImpl: options.fetch })
+        const pool = await fetchCnLimitUpPool(
+          {
+            ...(args.page !== undefined ? { page: args.page } : {}),
+            ...(args.size !== undefined ? { size: args.size } : {}),
+          },
+          options.fetch !== undefined ? { fetchImpl: options.fetch } : {},
+        )
         if (pool.length === 0) return 'cn_get_limit_up_pool: 当前无涨停条目或非交易时间。'
         const lines = [
           `A 股涨停池共 ${pool.length} 只股票（按涨停时间排序）：`,
@@ -355,7 +358,10 @@ export function createGetAuctionStrengthTool(options: { fetch?: typeof globalThi
       const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
       if (!symbol) throw new Error('cn_get_auction_strength: symbol parameter is required')
       try {
-        const auction = await fetchCnAuctionStrength(symbol, { fetchImpl: options.fetch })
+        const auction = await fetchCnAuctionStrength(
+          symbol,
+          options.fetch !== undefined ? { fetchImpl: options.fetch } : {},
+        )
         if (!auction) return `cn_get_auction_strength: 暂无 ${symbol} 集合竞价快照数据（非竞价时间或未配置 HITHINK_FINANCE_API_KEY）。`
         return [
           `标的 ${auction.symbol} 集合竞价快照：`,
