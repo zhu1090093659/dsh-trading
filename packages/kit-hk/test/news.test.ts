@@ -199,7 +199,7 @@ describe('fetchHkexAnnouncements（HKEX 披露易公告源，2026-09-03 多供�
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       urls.push(String(input))
       if (String(input).includes('titleSearchServlet')) return textResp('{"result":"[]"}')
-      if (String(input).includes('prefix.do')) return textResp('callback({"stockInfo":[{"stockId":7609}]});')
+      if (String(input).includes('prefix.do')) return textResp('callback({"stockInfo":[{"stockId":7609,"code":"00700"}]});')
       return jsonResp({ data: { list: [] } })
     }) as unknown as typeof globalThis.fetch
     await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '00700', limit: 20 })
@@ -209,5 +209,121 @@ describe('fetchHkexAnnouncements（HKEX 披露易公告源，2026-09-03 多供�
     expect(searchUrl).toContain('toDate=')
     expect(searchUrl).toContain('rowRange=20')
     expect(searchUrl).toContain('market=SEHK')
+    // 评审 M3：NOW = 08-30 20:00Z = 港图 08-31 04:00 → toDate 必须是 20260831（UTC 日期 0830 会漏掉 08-31 当日披露）
+    expect(searchUrl).toContain('toDate=20260831')
+    expect(searchUrl).toContain('fromDate=20260817')
+  })
+
+  // 2026-09-03 评审 M1 负例（真实证据 hkex-titlesearch-00700.body：腾讯同日既有裸「翌日披露報表」
+  // 也有「翌日披露報表 - 已發行股份變動及股份購回」，是两份不同文件）
+  it('评审 M1 负例：裸类别短标题「翌日披露报表」（恰 6 字）与长标题同日跨源不判重', async () => {
+    const emBare = { data: { list: [{ art_code: 'H2', title: '腾讯控股:翌日披露报表', display_time: '2026-08-26 18:00:00' }] } }
+    const hkexFull = {
+      result: JSON.stringify([
+        { TITLE: '翌日披露報表 - 已發行股份變動及股份購回', DATE_TIME: '26/08/2026 18:02', FILE_LINK: '/listedco/listconews/sehk/2026/0826/a.pdf', STOCK_CODE: '00700' },
+      ]),
+    }
+    const { items } = await aggregateNews({
+      fetch: hkRouteFetch({ emAnn: jsonResp(emBare), search: textResp(JSON.stringify(hkexFull)) }),
+      now: NOW,
+      symbol: '00700',
+    })
+    expect(items.filter((i) => i.title.includes('翌日披露'))).toHaveLength(2)
+  })
+
+  it('评审 M1 负例：同族不同文件「已发行股份变动」vs「变动及股份购回」同日跨源不判重', async () => {
+    const emVariant = { data: { list: [{ art_code: 'H3', title: '腾讯控股:翌日披露报表 - [其他]', display_time: '2026-08-26 18:00:00' }] } }
+    const hkexVariant = {
+      result: JSON.stringify([
+        { TITLE: '翌日披露報表 - 已發行股份變動及股份購回', DATE_TIME: '26/08/2026 18:02', FILE_LINK: '/listedco/listconews/sehk/2026/0826/a.pdf', STOCK_CODE: '00700' },
+      ]),
+    }
+    const { items } = await aggregateNews({
+      fetch: hkRouteFetch({ emAnn: jsonResp(emVariant), search: textResp(JSON.stringify(hkexVariant)) }),
+      now: NOW,
+      symbol: '00700',
+    })
+    expect(items.filter((i) => i.title.includes('翌日披露'))).toHaveLength(2)
+  })
+
+  it('评审 M2：prefix.do 无精确 code 命中 → throw 进 unavailable，不用首条兜底', async () => {
+    const prefix = textResp('callback({"stockInfo":[{"stockId":1,"code":"09999","name":"其他公司"}]});')
+    const { unavailable, items } = await aggregateNews({
+      fetch: hkRouteFetch({ emAnn: jsonResp(emAnnSameDisclosure), prefix }),
+      now: NOW,
+      symbol: '00700',
+    })
+    expect(unavailable.some((u) => u.includes('hkex'))).toBe(true)
+    expect(items.every((i) => i.source !== 'hkex-announcement')).toBe(true)
+  })
+
+  it('评审 M2 第二道守卫：HKEX 条目 STOCK_CODE 与请求代码不符 → 丢弃', async () => {
+    const wrongCompany = { result: JSON.stringify([{ TITLE: '其他公司披露', DATE_TIME: '26/08/2026 18:02', FILE_LINK: '/x.pdf', STOCK_CODE: '09999' }]) }
+    const { items } = await aggregateNews({
+      fetch: hkRouteFetch({ emAnn: jsonResp(emAnnSameDisclosure), search: textResp(JSON.stringify(wrongCompany)) }),
+      now: NOW,
+      symbol: '00700',
+    })
+    expect(items.every((i) => i.source !== 'hkex-announcement')).toBe(true)
+  })
+
+  it('评审 M2 第二道守卫放行：STOCK_CODE 含多个代码（`00700<br/>80700`）→ 00700 开头即保留', async () => {
+    const multiCode = { result: JSON.stringify([{ TITLE: '翌日披露報表', DATE_TIME: '26/08/2026 18:02', FILE_LINK: '/y.pdf', STOCK_CODE: '00700<br/>80700' }]) }
+    const { items } = await aggregateNews({
+      fetch: hkRouteFetch({ emAnn: jsonResp({ data: { list: [] } }), search: textResp(JSON.stringify(multiCode)) }),
+      now: NOW,
+      symbol: '00700',
+    })
+    expect(items.filter((i) => i.source === 'hkex-announcement')).toHaveLength(1)
+  })
+
+  it('评审 L1：stockId lookup 失败后负缓存——TTL 内重试不再发 prefix.do 请求', async () => {
+    let prefixCalls = 0
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('prefix.do')) { prefixCalls++; return failResp(503) }
+      return jsonResp({ data: { list: [] } })
+    }) as unknown as typeof globalThis.fetch
+    await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '00700' })
+    await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '00700' })
+    expect(prefixCalls).toBe(1)
+  })
+
+  it('评审 L1：并发首次轮询同标的 → in-flight 合并，prefix.do 只发一次', async () => {
+    let prefixCalls = 0
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('prefix.do')) {
+        prefixCalls++
+        await new Promise((r) => setTimeout(r, 10))
+        return textResp('callback({"stockInfo":[{"stockId":7609,"code":"00700","name":"騰訊控股"}]});')
+      }
+      if (url.includes('titleSearchServlet')) return textResp('{"result":"[]"}')
+      return jsonResp({ data: { list: [] } })
+    }) as unknown as typeof globalThis.fetch
+    const [a, b] = await Promise.all([
+      aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '00700' }),
+      aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '00700' }),
+    ])
+    expect(prefixCalls).toBe(1)
+    expect(a.items).toEqual(b.items)
+  })
+
+  it('评审 L2：HKEX 200 坏 JSON / 坏嵌套 result → unavailable 带 hkex-announcement 前缀', async () => {
+    const badBody: Resp = { ok: true, status: 200, text: async () => '<html>not json</html>' }
+    const { unavailable: u1 } = await aggregateNews({
+      fetch: hkRouteFetch({ emAnn: jsonResp(emAnnSameDisclosure), search: badBody }),
+      now: NOW,
+      symbol: '00700',
+    })
+    expect(u1.some((u) => u.startsWith('hkex-announcement:'))).toBe(true)
+    // 外层合法但嵌套 result 不是 JSON 字符串 → 同样带前缀
+    const badNested: Resp = { ok: true, status: 200, text: async () => JSON.stringify({ result: '{broken' }) }
+    const { unavailable: u2 } = await aggregateNews({
+      fetch: hkRouteFetch({ emAnn: jsonResp(emAnnSameDisclosure), search: badNested }),
+      now: NOW,
+      symbol: '00700',
+    })
+    expect(u2.some((u) => u.startsWith('hkex-announcement:'))).toBe(true)
   })
 })

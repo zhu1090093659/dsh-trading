@@ -7,7 +7,9 @@
  *
  * 公告双源（2026-09-03，多供应商冗余裁决；spikes/impl-hk-cn-announce-sources/ EVIDENCE）：
  * 东财 ann_type=H（主源，秒级时间）+ HKEX 披露易 titleSearchServlet（备份源），allSettled 并行 +
- * 跨源去重（归一化标题共同前缀 ≥6 字且 ±24h 内视为同一条披露，繁体经映射表转简体后比对）。
+ * 跨源去重（±24h 内：归一化标题全文等值，或共同前缀 ≥6 字且共同后缀 ≥2 字——
+ * 2026-09-03 评审 M1 收紧：裸类别短标题/严格前缀对/泛化日期头同日不同文件不判重，
+ * 失败方向宁漏勿误，繁体经映射表转简体后比对）。
  *
  * 铁律 #5：只引 title/showTime/链接（元数据），不取 summary/正文，不再分发。每源失败 fail-soft。
  */
@@ -179,12 +181,19 @@ async function fetchEastmoneyHkAnnouncements(fetchImpl: typeof globalThis.fetch,
 /**
  * 股票代码 → HKEX stockId 内码 memo。prefix.do 冷请求 ~3.7s，stockId 是稳定静态
  * 映射（kit 层参考数据，非行情缓存，不违铁律 #5 桥无状态语义）；仅缓存成功值。
+ * 失败负缓存 5 分钟（评审 L1）+ in-flight promise 合并并发（评审 L1）。
  */
 const hkexStockIdMemo = new Map<string, number>()
+const hkexStockIdFailureMemo = new Map<string, number>()
+const hkexStockIdInflight = new Map<string, Promise<number>>()
+/** 失败负缓存 TTL：5 分钟内不重试失败的 stockId lookup。 */
+const LOOKUP_FAILURE_TTL_MS = 5 * 60_000
 
 /** 清空 HKEX stockId memo（单测隔离用；生产运行期不需要调用）。 */
 export function resetHkexAnnouncementMemo(): void {
   hkexStockIdMemo.clear()
+  hkexStockIdFailureMemo.clear()
+  hkexStockIdInflight.clear()
 }
 
 /** HKEX 披露易 DATE_TIME：`DD/MM/YYYY HH:MM`（日/月倒序，港图时间东八区）→ 毫秒。 */
@@ -205,34 +214,68 @@ interface HkexTitleRow {
 async function fetchHkexStockId(fetchImpl: typeof globalThis.fetch, code: string): Promise<number> {
   const cached = hkexStockIdMemo.get(code)
   if (cached !== undefined) return cached
+  const failedAt = hkexStockIdFailureMemo.get(code)
+  if (failedAt !== undefined && Date.now() - failedAt < LOOKUP_FAILURE_TTL_MS) {
+    throw new Error('hkex: lookup recently failed (negative cache, retry later)')
+  }
+  let inflight = hkexStockIdInflight.get(code)
+  if (inflight === undefined) {
+    inflight = fetchHkexStockIdUncached(fetchImpl, code).finally(() => { hkexStockIdInflight.delete(code) })
+    hkexStockIdInflight.set(code, inflight)
+  }
+  return inflight
+}
+
+async function fetchHkexStockIdUncached(fetchImpl: typeof globalThis.fetch, code: string): Promise<number> {
   const url = new URL(`${HKEX_BASE}/search/prefix.do`)
   url.searchParams.set('callback', 'callback')
   url.searchParams.set('lang', 'ZH')
   url.searchParams.set('type', 'A')
   url.searchParams.set('name', code)
   url.searchParams.set('market', 'SEHK')
-  const response = await fetchImpl(url, { headers: { accept: '*/*', 'user-agent': UA }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
+  let response: Response
+  try {
+    response = await fetchImpl(url, { headers: { accept: '*/*', 'user-agent': UA }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
+  } catch (err) {
+    hkexStockIdFailureMemo.set(code, Date.now())
+    throw err
+  }
   if (!response.ok) {
     const body = await response.text().catch(() => '')
+    hkexStockIdFailureMemo.set(code, Date.now())
     throw new Error(`hkex: HTTP ${response.status}${body ? ` — ${body.slice(0, 160)}` : ''}`)
   }
-  // JSONP：callback({...}) → 剥壳取 stockId；优先精确匹配 code，退化取首条。
-  const parsed: unknown = JSON.parse((await response.text()).replace(/^callback\(/, '').replace(/\);\s*$/, ''))
+  // JSONP：callback({...}) → 剥壳取 stockId。评审 L2：坏 JSON 带来源前缀，不裸 SyntaxError。
+  const text = await response.text()
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text.replace(/^callback\(/, '').replace(/\);\s*$/, ''))
+  } catch {
+    hkexStockIdFailureMemo.set(code, Date.now())
+    throw new Error('hkex: unexpected payload (invalid JSONP)')
+  }
   const list = (parsed as { stockInfo?: Array<{ stockId?: number; code?: string }> }).stockInfo
-  const hit = Array.isArray(list)
-    ? (list.find((it) => it.code === code) ?? list[0])
-    : undefined
-  if (typeof hit?.stockId !== 'number') throw new Error('hkex: unexpected payload (expected stockInfo[].stockId)')
+  // 评审 M2：去掉 `?? list[0]` 模糊兜底——prefix.do 的非精确命中可能是另一家上市主体，
+  // 错 stockId 进 memo 后其公告带本标的 relatedCodes 下发，属零假数据红线；未命中直接 throw（fail-soft 可重试）。
+  const hit = Array.isArray(list) ? list.find((it) => it.code === code) : undefined
+  if (typeof hit?.stockId !== 'number') {
+    hkexStockIdFailureMemo.set(code, Date.now())
+    throw new Error('hkex: unexpected payload (expected stockInfo[].stockId for exact code match)')
+  }
   hkexStockIdMemo.set(code, hit.stockId)
   return hit.stockId
 }
 
-async function fetchHkexAnnouncements(fetchImpl: typeof globalThis.fetch, rawSymbol: string, limit: number): Promise<NewsItem[]> {
+/** 请求窗日期串（YYYYMMDD，东八区日历日，评审 M3：HKEX fromDate/toDate 按港图 +08:00 日界截窗，UTC 日期会在每天 00:00–07:59 漏掉当日披露）。 */
+function ymdHkCompact(ms: number): string {
+  return new Date(ms + 8 * 3_600_000).toISOString().slice(0, 10).replace(/-/g, '')
+}
+
+async function fetchHkexAnnouncements(fetchImpl: typeof globalThis.fetch, rawSymbol: string, limit: number, nowMs: number): Promise<NewsItem[]> {
   const clean = rawSymbol.trim().replace(/\.HK$/i, '').padStart(5, '0')
   if (!/^\d{5}$/.test(clean)) return []
   const stockId = await fetchHkexStockId(fetchImpl, clean)
-  const now = Date.now()
-  const ymd = (ms: number): string => new Date(ms).toISOString().slice(0, 10).replace(/-/g, '')
+  const now = nowMs
   const url = new URL(`${HKEX_BASE}/search/titleSearchServlet.do`)
   url.searchParams.set('sortDir', '0')
   url.searchParams.set('sortByOptions', 'DateTime')
@@ -240,8 +283,8 @@ async function fetchHkexAnnouncements(fetchImpl: typeof globalThis.fetch, rawSym
   url.searchParams.set('market', 'SEHK')
   url.searchParams.set('stockId', String(stockId))
   url.searchParams.set('documentType', '-1')
-  url.searchParams.set('fromDate', ymd(now - HKEX_REQUEST_WINDOW_MS))
-  url.searchParams.set('toDate', ymd(now))
+  url.searchParams.set('fromDate', ymdHkCompact(now - HKEX_REQUEST_WINDOW_MS))
+  url.searchParams.set('toDate', ymdHkCompact(now))
   url.searchParams.set('title', '')
   url.searchParams.set('searchType', '1')
   url.searchParams.set('t1code', '-2')
@@ -254,16 +297,30 @@ async function fetchHkexAnnouncements(fetchImpl: typeof globalThis.fetch, rawSym
     const body = await response.text().catch(() => '')
     throw new Error(`hkex-announcement: HTTP ${response.status}${body ? ` — ${body.slice(0, 160)}` : ''}`)
   }
-  const parsed: unknown = JSON.parse(await response.text())
+  // 评审 L2：坏 JSON 带来源前缀，不裸 SyntaxError。
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(await response.text())
+  } catch {
+    throw new Error('hkex-announcement: unexpected payload (invalid JSON)')
+  }
   // 外层 JSON 的 result 是 JSON 编码的字符串，需二次 parse（spike EVIDENCE 解析坑）。
   const result = (parsed as { result?: string | unknown[] }).result
-  const rows: unknown[] = typeof result === 'string'
-    ? JSON.parse(result)
-    : Array.isArray(result) ? result : []
+  let rows: unknown[]
+  try {
+    rows = typeof result === 'string'
+      ? JSON.parse(result)
+      : Array.isArray(result) ? result : []
+  } catch {
+    throw new Error('hkex-announcement: unexpected payload (invalid nested result JSON)')
+  }
   if (!Array.isArray(rows)) throw new Error('hkex-announcement: unexpected payload (expected result[])')
   const items: NewsItem[] = []
   for (const row of rows as HkexTitleRow[]) {
     if (!row.TITLE || !row.FILE_LINK) continue
+    // 评审 M2 第二道守卫：发射前核对 STOCK_CODE 以请求代码开头（真实数据形如 `00700<br/>80700`），
+    // 防止上游返回错公司条目冒充本标的披露。
+    if (typeof row.STOCK_CODE === 'string' && !row.STOCK_CODE.startsWith(clean)) continue
     const ts = parseHkexDateTime(row.DATE_TIME ?? '')
     // 解析失败丢弃该条，绝不回退「现在」——虚假新鲜事件会恒过时间窗并钉到最新 K 线。
     if (!Number.isFinite(ts)) continue
@@ -309,7 +366,15 @@ function normalizeAnnouncementTitle(title: string): string {
   return converted.replace(/[\s\p{P}\p{S}]+/gu, '')
 }
 
-/** 公告标题以类别开头（翌日披露报表/中期报告…），繁简转换与括注差异使全文等值不可靠；归一化后共同前缀 ≥6 字视为同类别。 */
+/**
+ * 公告标题以类别开头（翌日披露报表/中期报告…），繁简转换与括注差异使全文等值不可靠。
+ * 前缀判重的收紧口径（2026-09-03 评审 M1）：共同前缀 ≥6 字之外还要求**共同后缀 ≥2 字**。
+ * 真实误删对因此被排除（证据 hkex-titlesearch-00700.body）：裸类别 `翌日披露报表`（恰 6 字）vs
+ * 长标题（长边结尾不同）、同族不同文件（`…已发行股份变动` vs `…变动及股份购回`，中段分叉）、
+ * 泛化日期头（`截至二零二六年七月…月报表` vs `截至二零二六年六月三十日…业绩公布`）。仍能兜住
+ * 真实变体对（同一文件两源的括注/繁简/措辞差异，头尾主体一致）——失败方向只剩漏去重
+ * （重复展示），不是误删（宁漏勿误）。
+ */
 function isCrossSourceDup(a: NewsItem, b: NewsItem): boolean {
   if (a.source === b.source) return false
   if (!a.source.includes('announcement') || !b.source.includes('announcement')) return false
@@ -323,9 +388,15 @@ function isCrossSourceDup(a: NewsItem, b: NewsItem): boolean {
   if (na.length === 0 || nb.length === 0) return false
   if (na === nb) return true
   const n = Math.min(na.length, nb.length)
+  if (n < 8) return false
   let common = 0
   while (common < n && na[common] === nb[common]) common++
-  return common >= 6
+  if (common < 6) return false
+  // 短边被长边整体覆盖（严格前缀，如 `…报告` vs `…报告摘要`）不判重：无法区分同一文件的两种呈现与两个文件。
+  if (na.startsWith(nb) || nb.startsWith(na)) return false
+  let suffix = 0
+  while (suffix < n - common && na[na.length - 1 - suffix] === nb[nb.length - 1 - suffix]) suffix++
+  return suffix >= 2
 }
 
 function dedupeCrossSourceAnnouncements(items: NewsItem[]): NewsItem[] {
@@ -348,7 +419,7 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
   if (options.symbol && options.symbol.trim()) {
     // 公告双源并行（2026-09-03 多供应商冗余）：东财 ann_type=H 主源 + HKEX 披露易备份源。
     fetchers.push(fetchEastmoneyHkAnnouncements(fetchImpl, options.symbol, limit))
-    fetchers.push(fetchHkexAnnouncements(fetchImpl, options.symbol, limit))
+    fetchers.push(fetchHkexAnnouncements(fetchImpl, options.symbol, limit, now))
   }
 
   const results = await Promise.allSettled(fetchers)

@@ -234,4 +234,156 @@ describe('fetchCninfoAnnouncements（巨潮公告源，2026-09-03 多供应商�
     })
     expect(items.filter((i) => i.title.includes('回购'))).toHaveLength(2)
   })
+
+  // 2026-09-03 评审 M1 负例：收紧前共同前缀 ≥6 字即判重，这两类同日不同文件会被误删。
+  it('评审 M1 负例：同日「报告」vs「报告摘要」（前缀 10 字）→ 不去重，两份都保留', async () => {
+    const emReport = { data: { list: [{ art_code: 'R1', title: '贵州茅台:2026年半年度报告', display_time: '2026-08-25 21:00:00' }] } }
+    const cninfoAbstract = {
+      announcements: [
+        { secCode: '600519', announcementTitle: '2026年半年度报告摘要', announcementTime: Date.parse('2026-08-25T00:00:00+08:00'), adjunctUrl: 'finalpage/2026-08-25/999.PDF' },
+      ],
+    }
+    const { items } = await aggregateNews({
+      fetch: cnRouteFetch({ emAnn: jsonResp(emReport), cninfo: jsonResp(cninfoAbstract) }),
+      now: NOW,
+      symbol: '600519',
+    })
+    const reports = items.filter((i) => i.title.includes('半年度报告'))
+    expect(reports).toHaveLength(2)
+  })
+
+  it('评审 M1 负例：裸类别短标题（归一化恰 6 字）跨源不判重', async () => {
+    // 「关于回购的公告」归一化后 7 字 vs「回购公告」4 字 → 共同前缀 4 < 6 不判重；
+    // 再验一对同日 6 字短标题（如「股东大会议案」vs「股东大会通知」前缀 5 字）——均低于阈值保留。
+    const em = { data: { list: [{ art_code: 'S1', title: '贵州茅台:股东大会通知', display_time: '2026-08-25 09:00:00' }] } }
+    const cninfo = {
+      announcements: [
+        { secCode: '600519', announcementTitle: '股东大会决议公告', announcementTime: Date.parse('2026-08-25T00:00:00+08:00'), adjunctUrl: 'finalpage/2026-08-25/777.PDF' },
+      ],
+    }
+    const { items } = await aggregateNews({
+      fetch: cnRouteFetch({ emAnn: jsonResp(em), cninfo: jsonResp(cninfo) }),
+      now: NOW,
+      symbol: '600519',
+    })
+    expect(items.filter((i) => i.title.includes('股东大会'))).toHaveLength(2)
+  })
+
+  it('评审 M1 正例不变：同日同一长标题的截断变体（前缀占短边过半且长边继续）仍判重', async () => {
+    // 东财带括注完整标题 vs 巨潮截断标题，归一化后 common=11 ≥ 6 且占短边(11) 100%、长边继续延展
+    const em = { data: { list: [{ art_code: 'L1', title: '贵州茅台:关于为全资子公司提供担保的公告', display_time: '2026-08-25 09:00:00' }] } }
+    const cninfo = {
+      announcements: [
+        { secCode: '600519', announcementTitle: '关于为全资子公司提供担保的公告', announcementTime: Date.parse('2026-08-25T00:00:00+08:00'), adjunctUrl: 'finalpage/2026-08-25/555.PDF' },
+      ],
+    }
+    const { items } = await aggregateNews({
+      fetch: cnRouteFetch({ emAnn: jsonResp(em), cninfo: jsonResp(cninfo) }),
+      now: NOW,
+      symbol: '600519',
+    })
+    expect(items.filter((i) => i.title.includes('担保'))).toHaveLength(1)
+  })
+
+  it('评审 M2：topSearch 无精确 code 命中 → throw 进 unavailable，不用首条兜底、不进 memo', async () => {
+    const topSearch = jsonResp({ keyBoardList: [{ code: '999999', orgId: 'wrong-company' }] })
+    const { unavailable, items } = await aggregateNews({
+      fetch: cnRouteFetch({ emAnn: jsonResp(emAnnFix), topSearch }),
+      now: NOW,
+      symbol: '600519',
+    })
+    expect(unavailable.some((u) => u.includes('cninfo'))).toBe(true)
+    expect(items.every((i) => i.source !== 'cninfo-announcement')).toBe(true)
+    // 失败不进 memo（仅负缓存）：重置 memo 后重试，成功路径不受污染
+    resetCninfoAnnouncementMemo()
+    const ok = jsonResp({ keyBoardList: [{ code: '600519', orgId: 'gssh0600519' }] })
+    const retried = await aggregateNews({
+      fetch: cnRouteFetch({ emAnn: jsonResp(emAnnFix), topSearch: ok, cninfo: jsonResp(cninfoAnn) }),
+      now: NOW,
+      symbol: '600519',
+    })
+    expect(retried.items.some((i) => i.source === 'cninfo-announcement')).toBe(true)
+  })
+
+  it('评审 M2 第二道守卫：巨潮条目 secCode 与请求代码不符 → 丢弃', async () => {
+    const wrongCompany = {
+      announcements: [
+        { secCode: '999999', announcementTitle: '其他公司公告', announcementTime: Date.parse('2026-08-25T00:00:00+08:00'), adjunctUrl: 'finalpage/2026-08-25/888.PDF' },
+      ],
+    }
+    const { items } = await aggregateNews({
+      fetch: cnRouteFetch({ emAnn: jsonResp(emAnnFix), cninfo: jsonResp(wrongCompany) }),
+      now: NOW,
+      symbol: '600519',
+    })
+    expect(items.every((i) => i.source !== 'cninfo-announcement')).toBe(true)
+  })
+
+  it('评审 M3：seDate 窗上界按东八区日历日（UTC 晚间 20:00 → +08 已是次日）', async () => {
+    const bodies: string[] = []
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('hisAnnouncement')) bodies.push(String(init?.body))
+      if (url.includes('topSearch')) return jsonResp({ keyBoardList: [{ code: '600519', orgId: 'gssh0600519' }] })
+      return jsonResp({ data: { list: [] } })
+    }) as unknown as typeof globalThis.fetch
+    // NOW = 2026-08-30T20:00:00Z = 东八区 08-31 04:00 → seDate 上界必须是 2026-08-31（UTC 日期 08-30 会漏掉 08-31 当日公告）；下界为 14 天前
+    await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '600519' })
+    expect(decodeURIComponent(bodies.at(-1)!)).toContain('seDate=2026-08-17~2026-08-31')
+  })
+
+  it('评审 M4：北交所代码（8 开头）不查询巨潮，不发任何请求', async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      // 东财公告源对 BJ 代码照常请求（fail-soft 语义），巨潮源必须零请求
+      expect(String(input).includes('cninfo.com.cn')).toBe(false)
+      if (String(input).includes('np-anotice')) return failResp(503)
+      return jsonResp({ data: { fastNewsList: [] } })
+    }) as unknown as typeof globalThis.fetch
+    const { items, unavailable } = await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '830799' })
+    // 巨潮源跳过（无 cninfo 不可用注记）；东财源照常 fail-soft 进 unavailable
+    expect(unavailable.some((u) => u.includes('cninfo'))).toBe(false)
+    expect(unavailable.some((u) => u.includes('eastmoney-announcement'))).toBe(true)
+    expect(items.every((i) => i.source !== 'cninfo-announcement')).toBe(true)
+  })
+
+  it('评审 L2：巨潮 200 坏 JSON → unavailable 带 cninfo-announcement 前缀', async () => {
+    const badBody: Resp = { ok: true, status: 200, text: async () => '<html>not json</html>' }
+    const { unavailable } = await aggregateNews({
+      fetch: cnRouteFetch({ emAnn: jsonResp(emAnnFix), cninfo: badBody }),
+      now: NOW,
+      symbol: '600519',
+    })
+    expect(unavailable.some((u) => u.startsWith('cninfo-announcement:'))).toBe(true)
+  })
+
+  it('评审 L1：lookup 失败后负缓存——TTL 内重试不再发 topSearch 请求', async () => {
+    let topSearchCalls = 0
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('topSearch')) { topSearchCalls++; return failResp(503) }
+      return jsonResp({ data: { list: [] } })
+    }) as unknown as typeof globalThis.fetch
+    await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '600519' })
+    await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '600519' })
+    expect(topSearchCalls).toBe(1)
+  })
+
+  it('评审 L1：并发首次轮询同标的 → in-flight 合并，topSearch 只发一次', async () => {
+    let topSearchCalls = 0
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('topSearch')) {
+        topSearchCalls++
+        await new Promise((r) => setTimeout(r, 10))
+        return jsonResp({ keyBoardList: [{ code: '600519', orgId: 'gssh0600519' }] })
+      }
+      return jsonResp({ announcements: [] })
+    }) as unknown as typeof globalThis.fetch
+    const [a, b] = await Promise.all([
+      aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '600519' }),
+      aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '600519' }),
+    ])
+    expect(topSearchCalls).toBe(1)
+    expect(a.items).toEqual(b.items)
+  })
 })

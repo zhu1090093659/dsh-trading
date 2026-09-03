@@ -10,7 +10,9 @@
  *
  * 公告双源（2026-09-03，多供应商冗余裁决；spikes/impl-hk-cn-announce-sources/ EVIDENCE）：
  * 东财公告接口（主源，秒级时间）+ 巨潮资讯 hisAnnouncement（备份源，沪深分列），allSettled 并行 +
- * 跨源去重（归一化标题共同前缀 ≥6 字且 ±24h 内视为同一条披露）。
+ * 跨源去重（±24h 内：归一化标题全文等值，或共同前缀 ≥6 字且共同后缀 ≥2 字——
+ * 2026-09-03 评审 M1 收紧：裸类别短标题/「摘要」类严格前缀/泛化日期头（截至二零二六年…）
+ * 同日不同文件不判重，失败方向宁漏勿误）。
  */
 export type NewsSource = 'eastmoney' | 'eastmoney-announcement' | 'cninfo-announcement'
 
@@ -146,33 +148,72 @@ async function fetchEastmoneyAnnouncements(fetchImpl: typeof globalThis.fetch, r
 
 /* -- 巨潮资讯公告源（spikes/impl-hk-cn-announce-sources/ EVIDENCE，A 级；沪深分列）-- */
 
-/** 股票代码 → 巨潮 orgId memo（topSearch 联想接口 ~236ms，orgId 是稳定静态映射；仅缓存成功值）。 */
+/** 股票代码 → 巨潮 orgId memo（topSearch 联想接口 ~236ms，orgId 是稳定静态映射；仅缓存成功值）。
+ * 失败负缓存 5 分钟（评审 L1）：上游故障期间不再每轮 60s 轮询重付 10s 超时尾延迟。
+ * 并发合并：in-flight promise 共享（评审 L1），同标的首轮并发轮询只发一次 lookup。
+ */
 const cninfoOrgIdMemo = new Map<string, string>()
+const cninfoOrgIdFailureMemo = new Map<string, number>()
+const cninfoOrgIdInflight = new Map<string, Promise<string>>()
+/** 失败负缓存 TTL：5 分钟内不重试失败的 orgId lookup。 */
+const LOOKUP_FAILURE_TTL_MS = 5 * 60_000
 
 /** 清空巨潮 orgId memo（单测隔离用；生产运行期不需要调用）。 */
 export function resetCninfoAnnouncementMemo(): void {
   cninfoOrgIdMemo.clear()
+  cninfoOrgIdFailureMemo.clear()
+  cninfoOrgIdInflight.clear()
 }
 
 async function fetchCninfoOrgId(fetchImpl: typeof globalThis.fetch, code: string): Promise<string> {
   const cached = cninfoOrgIdMemo.get(code)
   if (cached !== undefined) return cached
+  const failedAt = cninfoOrgIdFailureMemo.get(code)
+  if (failedAt !== undefined && Date.now() - failedAt < LOOKUP_FAILURE_TTL_MS) {
+    throw new Error('cninfo: lookup recently failed (negative cache, retry later)')
+  }
+  let inflight = cninfoOrgIdInflight.get(code)
+  if (inflight === undefined) {
+    inflight = fetchCninfoOrgIdUncached(fetchImpl, code).finally(() => { cninfoOrgIdInflight.delete(code) })
+    cninfoOrgIdInflight.set(code, inflight)
+  }
+  return inflight
+}
+
+async function fetchCninfoOrgIdUncached(fetchImpl: typeof globalThis.fetch, code: string): Promise<string> {
   const url = new URL(`${CNINFO_BASE}/new/information/topSearch/detailOfQuery`)
   url.searchParams.set('keyWord', code)
   url.searchParams.set('maxSecNum', '10')
   url.searchParams.set('maxListNum', '5')
   // POST 无 body：服务端要求 Content-Length 存在（裸 POST 无该头返回 411），undici 对空串 body 发 Content-Length: 0。
-  const response = await fetchImpl(url, { method: 'POST', body: '', headers: { accept: '*/*', 'user-agent': UA }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
+  let response: Response
+  try {
+    response = await fetchImpl(url, { method: 'POST', body: '', headers: { accept: '*/*', 'user-agent': UA }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) })
+  } catch (err) {
+    cninfoOrgIdFailureMemo.set(code, Date.now())
+    throw err
+  }
   if (!response.ok) {
     const body = await response.text().catch(() => '')
+    cninfoOrgIdFailureMemo.set(code, Date.now())
     throw new Error(`cninfo: HTTP ${response.status}${body ? ` — ${body.slice(0, 160)}` : ''}`)
   }
-  const parsed: unknown = JSON.parse(await response.text())
+  const text = await response.text().catch((err: unknown) => { throw err instanceof Error ? err : new Error(String(err)) })
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    cninfoOrgIdFailureMemo.set(code, Date.now())
+    throw new Error('cninfo: unexpected payload (invalid JSON)')
+  }
   const list = (parsed as { keyBoardList?: Array<{ code?: string; orgId?: string }> }).keyBoardList
-  const hit = Array.isArray(list)
-    ? (list.find((it) => it.code === code) ?? list[0])
-    : undefined
-  if (typeof hit?.orgId !== 'string' || hit.orgId.length === 0) throw new Error('cninfo: unexpected payload (expected keyBoardList[].orgId)')
+  // 评审 M2：去掉 `?? list[0]` 模糊兜底——联想接口的非精确命中可能是另一家公司，
+  // 错 orgId 进 memo 后其公告带本标的 relatedCodes 下发，属零假数据红线；未命中直接 throw（fail-soft 可重试）。
+  const hit = Array.isArray(list) ? list.find((it) => it.code === code) : undefined
+  if (typeof hit?.orgId !== 'string' || hit.orgId.length === 0) {
+    cninfoOrgIdFailureMemo.set(code, Date.now())
+    throw new Error('cninfo: unexpected payload (expected keyBoardList[].orgId for exact code match)')
+  }
   cninfoOrgIdMemo.set(code, hit.orgId)
   return hit.orgId
 }
@@ -184,14 +225,20 @@ interface CninfoAnnouncement {
   adjunctUrl?: string
 }
 
-async function fetchCninfoAnnouncements(fetchImpl: typeof globalThis.fetch, rawSymbol: string, limit: number): Promise<NewsItem[]> {
+/** 请求窗日期串（YYYY-MM-DD，东八区日历日，评审 M3：巨潮 seDate 按 +08:00 日精度截窗，UTC 日期会在每天 00:00–07:59 漏掉当日公告）。 */
+function ymdHk(ms: number): string {
+  return new Date(ms + 8 * 3_600_000).toISOString().slice(0, 10)
+}
+
+async function fetchCninfoAnnouncements(fetchImpl: typeof globalThis.fetch, rawSymbol: string, limit: number, nowMs: number): Promise<NewsItem[]> {
   const stockCode = rawSymbol.trim().replace(/\.(SH|SZ|BJ)$/i, '')
   if (!/^\d{6}$/.test(stockCode)) return []
-  const orgId = await fetchCninfoOrgId(fetchImpl, stockCode)
-  const now = Date.now()
-  const ymd = (ms: number): string => new Date(ms).toISOString().slice(0, 10)
-  // 沪深分列（spike EVIDENCE）：6 开头沪市 column=sse，其余（0/3 开头）深市 column=szse。
+  // 沪深分列（spike EVIDENCE）：6 开头沪市 column=sse，0/3 开头深市 column=szse。
+  // 评审 M4：北交所（43/83/87/92 开头，spike 未验证其列归属）不查询——走 szse 恒返空且与真实无公告不可区分，宁缺勿错。
+  if (!/^(6|0|3)/.test(stockCode)) return []
   const column = stockCode.startsWith('6') ? 'sse' : 'szse'
+  const orgId = await fetchCninfoOrgId(fetchImpl, stockCode)
+  const now = nowMs
   const form = new URLSearchParams({
     pageNum: '1',
     pageSize: String(Math.max(limit, 20)),
@@ -203,7 +250,7 @@ async function fetchCninfoAnnouncements(fetchImpl: typeof globalThis.fetch, rawS
     secid: '',
     category: '',
     trade: '',
-    seDate: `${ymd(now - CNINFO_REQUEST_WINDOW_MS)}~${ymd(now)}`,
+    seDate: `${ymdHk(now - CNINFO_REQUEST_WINDOW_MS)}~${ymdHk(now)}`,
     sortName: '',
     sortType: '',
     isHLtitle: 'true',
@@ -223,7 +270,13 @@ async function fetchCninfoAnnouncements(fetchImpl: typeof globalThis.fetch, rawS
     const body = await response.text().catch(() => '')
     throw new Error(`cninfo-announcement: HTTP ${response.status}${body ? ` — ${body.slice(0, 160)}` : ''}`)
   }
-  const parsed: unknown = JSON.parse(await response.text())
+  // 评审 L2：坏 JSON 也要带来源前缀进 unavailable，不能裸 SyntaxError 无归因。
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(await response.text())
+  } catch {
+    throw new Error('cninfo-announcement: unexpected payload (invalid JSON)')
+  }
   // 窗内无公告时该字段是 null（合法空），只有出现非数组非空的形状才算异常。
   const raw = (parsed as { announcements?: CninfoAnnouncement[] | null }).announcements
   if (raw !== null && raw !== undefined && !Array.isArray(raw)) throw new Error('cninfo-announcement: unexpected payload (expected announcements[])')
@@ -231,6 +284,8 @@ async function fetchCninfoAnnouncements(fetchImpl: typeof globalThis.fetch, rawS
   const items: NewsItem[] = []
   for (const it of list) {
     if (!it.announcementTitle || !it.adjunctUrl) continue
+    // 评审 M2 第二道守卫：发射前核对 secCode === 请求代码，防止上游返回错公司条目冒充本标的披露。
+    if (typeof it.secCode === 'string' && it.secCode !== stockCode) continue
     // announcementTime 只有日精度（00:00+08 的 epoch ms）；解析失败丢弃该条，绝不回退「现在」。
     const ts = typeof it.announcementTime === 'number' && Number.isFinite(it.announcementTime) ? it.announcementTime : NaN
     if (!Number.isFinite(ts)) continue
@@ -252,7 +307,15 @@ function normalizeAnnouncementTitle(title: string): string {
   return title.replace(/^[^：:]*[：:]\s*/, '').replace(/[\s\p{P}\p{S}]+/gu, '')
 }
 
-/** 公告标题以类别开头（H股公告/关于回购/半年度报告…），两边括注与措辞差异使全文等值不可靠；归一化后共同前缀 ≥6 字视为同类别。 */
+/**
+ * 公告标题以类别开头（H股公告/关于回购/半年度报告…），两边括注与措辞差异使全文等值不可靠。
+ * 前缀判重的收紧口径（2026-09-03 评审 M1）：共同前缀 ≥6 字之外还要求**共同后缀 ≥2 字**。
+ * 三类真实误删对因此被排除：裸类别短标题（`翌日披露报表` 恰 6 字 vs 长标题，长边结尾不同）、
+ * 严格前缀对（`…半年度报告` vs `…半年度报告摘要`，短边被长边整体覆盖无共同后缀）、
+ * 泛化日期头（`截至二零二六年七月…月报表` vs `截至二零二六年六月三十日…业绩公布`，尾部不吻合）。
+ * 仍能兜住真实变体对（同一文件在两源的括注/繁简/措辞差异，头尾主体一致）——失败方向只剩
+ * 漏去重（重复展示），不是误删（宁漏勿误）。
+ */
 function isCrossSourceDup(a: NewsItem, b: NewsItem): boolean {
   if (a.source === b.source) return false
   if (!a.source.includes('announcement') || !b.source.includes('announcement')) return false
@@ -266,9 +329,15 @@ function isCrossSourceDup(a: NewsItem, b: NewsItem): boolean {
   if (na.length === 0 || nb.length === 0) return false
   if (na === nb) return true
   const n = Math.min(na.length, nb.length)
+  if (n < 8) return false
   let common = 0
   while (common < n && na[common] === nb[common]) common++
-  return common >= 6
+  if (common < 6) return false
+  // 短边被长边整体覆盖（严格前缀，如 `…报告` vs `…报告摘要`）不判重：无法区分同一文件的两种呈现与两个文件。
+  if (na.startsWith(nb) || nb.startsWith(na)) return false
+  let suffix = 0
+  while (suffix < n - common && na[na.length - 1 - suffix] === nb[nb.length - 1 - suffix]) suffix++
+  return suffix >= 2
 }
 
 function dedupeCrossSourceAnnouncements(items: NewsItem[]): NewsItem[] {
@@ -319,7 +388,7 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
   if (options.symbol) {
     // 公告双源并行（2026-09-03 多供应商冗余）：东财公告主源 + 巨潮备份源。
     tasks.push(fetchEastmoneyAnnouncements(fetchImpl, options.symbol, limit))
-    tasks.push(fetchCninfoAnnouncements(fetchImpl, options.symbol, limit))
+    tasks.push(fetchCninfoAnnouncements(fetchImpl, options.symbol, limit, now))
   }
 
   const results = await Promise.allSettled(tasks)
