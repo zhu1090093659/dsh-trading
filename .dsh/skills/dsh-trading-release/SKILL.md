@@ -24,9 +24,14 @@ Windows nsis/zip）→ GitHub Release 自动创建并附着产物 → 发布后�
   由管线在打包前按 tag 重写（scripts/set-desktop-version.mjs），安装包文件名
   dsh-trading-desktop-${version}-<mac|win>-<arch>.* 跟随 tag。发版提交时建议
   顺手把它对齐到目标版本，但不作硬性要求。
-- **不发布 npm**：本仓库未授权 npm 发布，没有任何 npm 通道；桌面安装包 +
-  SHA256SUMS.txt 是 GitHub Release 的全部产物。这也意味着同一版本号可以修复
-  后重推（与 dsh-web 的"版本号永不复用"相反），规则见第 4 节。
+- **npm 通道（2026-09-03 起授权）**：发布 @dsh-trading/* 全家族到
+  registry.npmjs.org，仓库 secret NPM_TOKEN（automation token），管线 job
+  `npm-publish` 由 workflow env NPM_PUBLISH_ENABLED 门控（'false' 时退回仅
+  桌面发布）。发布脚本 scripts/publish-npm.mjs 按 workspace 依赖拓扑序逐包
+  `pnpm publish`（workspace:* 由 pnpm 替换为真实版本），registry 已存在的
+  精确版本自动跳过——删 tag 重推修 CI 是安全的。
+- **npm 版本不可变**：同版本号换代码重推被禁止，包内容变更必须 bump；
+  发出去的坏包只能 deprecate + 下一补丁版本，与 dsh-web 纪律一致。
 - **分支模型**：只有 main（默认分支），无 dev 集成分支。发版 tag 一律从 main
   打。分支策略遵循仓库 AGENTS.md 交付流分级：大改动先 PR 合入 main，CI/文档
   小改可直推；tag 必须打在包含全部待发布内容的 main 提交上。
@@ -114,14 +119,16 @@ git push origin "vX.Y.Z"            # 推送 tag 即触发桌面打包管线（�
 
 1. **check-version**（ubuntu）：scripts/verify-release-version.mjs 硬校验
    @dsh-trading/* 全家族版本 = tag 版本；不一致即中止，无任何构建产物。
-2. **build-desktop**（matrix：macos-latest + windows-latest）：pnpm install →
+2. **npm-publish**（ubuntu，与 build-desktop 并行）：同源门禁（install/build/
+   test）→ scripts/publish-npm.mjs 幂等发布全家族（NPM_PUBLISH_ENABLED 门控）；
+3. **build-desktop**（matrix：macos-latest + windows-latest）：pnpm install →
    pnpm -r build → pnpm -r test（与 ci.yml 同源的发布门禁）→ desktop 内
    npm ci → npm run prepare-runtime（拉取 Node 发行版 + 把 workspace 包打包
    成 runtime payload，内部含再次 pnpm -r build，幂等）→ 按 tag 重写
    desktop 版本 → electron-builder 打包。mac 产物：dmg + zip（arm64/x64 各
    一套）；win 产物：nsis 安装器 + zip（x64）。
-3. **github-release**（ubuntu）：汇总两平台产物，生成 SHA256SUMS.txt，`gh
-   release create --generate-notes` 创建 Release 并附着全部文件。
+4. **github-release**（ubuntu，needs 两路全绿）：汇总产物，生成 SHA256SUMS.txt，
+   `gh release create --generate-notes` 创建 Release 并附着全部文件。
 
 关注与排障：
 
@@ -131,7 +138,13 @@ gh run list --workflow=desktop-release.yml   # 查历史
 ```
 
 - 版本不一致失败 → 本地把家族版本修到 tag 版本（第 1 节），amend/新提交后
-  **删除远端 tag 重新推送**（发布未走 npm，无版本占用副作用）。
+  **删除远端 tag 重新推送**（npm 侧会跳过已发布包，无重发风险）。
+- npm 部分发布失败（网络、scope 权限、token 过期）→ 脚本已跳过成功包，修好
+  后重推同一 tag 会只补发缺的包；**同版本号换代码是禁止的**（npm 不可变），
+  换代码必须 bump。token 过期到 repo Settings → Secrets → Actions 更新
+  NPM_TOKEN；scope 权限问题找 npm 账号（@dsh-trading scope 的所有者）确认。
+- 发出去的坏包（内容错误但版本已占用）→ `npm deprecate` + 下一补丁版本，
+  不尝试覆盖。
 - prepare-runtime 失败（Node 发行版下载超时、host closure pnpm install 失败）
   → 多为网络抖动，直接重跑 failed jobs；连续失败按 CI 自愈四步归因。
 - Windows 上 `spawnSync pnpm ENOENT` → pnpm 是 .cmd shim，spawn 必须带
@@ -161,6 +174,8 @@ gh run list --workflow=desktop-release.yml   # 查历史
 ## 5. 发布后验证（必须逐项执行）
 
 ```sh
+npm view @dsh-trading/all version        # 期望 = X.Y.Z
+npm view @dsh-trading/base version       # 期望 = X.Y.Z
 gh release view "vX.Y.Z" --json assets --jq '.assets[].name'
 # 期望资产（7 个）：dsh-trading-desktop-X.Y.Z-mac-{arm64,x64}.{dmg,zip} +
 # dsh-trading-desktop-X.Y.Z-win-x64.{exe,zip} + SHA256SUMS.txt
@@ -176,7 +191,9 @@ Trading、runtime/host 与 profile-trading 正常加载。
 
 - tag 即版本事实源：先 bump 家族版本、全绿，再打 tag；管线版本校验是最后
   防线，不是唯一防线。
-- 不发布 npm：任何"顺手 publish"的操作都是越权；npm 变更需求必须先征得授权。
+- npm 发布只走管线（tag 触发）；手工 publish 只用于管线事故的定向补发。
+  token 只存 GitHub secret，绝不进仓库文件；对话/日志中出现过的 token 用完
+  应轮换。
 - 发版前必须本地全量门禁通过；桌面改动必须 desktop 内 npm test 也通过。
 - 每次非平凡的发版流程/管线变更，同一变更内补 Agent Note
   （.agents/notes/implemented/process/）并更新本 skill。

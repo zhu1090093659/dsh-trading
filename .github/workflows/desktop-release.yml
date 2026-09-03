@@ -2,17 +2,22 @@ name: desktop-release
 
 # 发版开关：推送 vX.Y.Z tag 即触发（唯一发布开关，tag 即版本事实源）。
 #
-# 管线做三件事：
+# 管线做四件事：
 # 1. 硬校验 @dsh-trading/* 全家族 package.json 版本与 tag 一致——桌面安装包把
 #    workspace 包以 packed tarball 内嵌分发，版本不一致会发出"包内版本与
 #    Release 版本互相矛盾"的安装包，必须先修复版本再推 tag；
 # 2. 在 macOS（dmg+zip，arm64/x64）与 Windows（nsis+zip，x64）runner 上打包
 #    桌面版（Electron + electron-builder，按 electron-builder.yml 保持未签名）；
-# 3. 创建 GitHub Release 并附着全部安装包与 SHA256SUMS.txt。
+# 3. 发布 @dsh-trading/* 全家族到 npm（NPM_TOKEN secret；NPM_PUBLISH_ENABLED
+#    可整体关闭 npm 通道，关闭时 tag 推送退回仅桌面发布）；
+# 4. npm 与桌面两路都成功后，创建 GitHub Release 并附着全部安装包与
+#    SHA256SUMS.txt（任一路失败不创建 Release，保持发版 all-or-nothing）。
 #
-# 本仓库不发布 npm（未授权）：桌面安装包是唯一对外分发物，没有 npm 通道，
-# 也没有"版本号不可重发"的 registry 约束；tag 构建失败可删除远端 tag 重新
-# 推送（GitHub Release 已创建时先删 Release 再删 tag）。
+# npm 通道幂等：已存在于 registry 的精确版本（name@version）跳过不重发，
+# 因此删除 tag 重推修 CI 是安全的；但同版本号换代码重推被禁止——任何包内容
+# 变更必须走版本 bump（npm 版本不可变）。
+# 失败恢复：部分包已上 registry 时不要重推同一 tag 的"全部重发"幻想，脚本
+# 会自动跳过已发布包继续；发现坏包走 deprecate + 下一补丁版本。
 #
 # 决策记录：.agents/notes/implemented/process/2026-09-03-desktop-release-pipeline.md
 # 发版操作手册：.dsh/skills/dsh-trading-release/SKILL.md
@@ -24,6 +29,11 @@ on:
 
 permissions:
   contents: write
+
+env:
+  # npm 发布通道开关（2026-09-03 用户授权发布 @dsh-trading/*）。置 'false' 时
+  # tag 推送只做桌面发布，不触碰 npm。决策记录见 .agents/notes/ 对应 note。
+  NPM_PUBLISH_ENABLED: 'true'
 
 concurrency:
   group: desktop-release-${{ github.ref }}
@@ -41,6 +51,33 @@ jobs:
         env:
           EXPECTED_VERSION: ${{ github.ref_name }}
         run: node scripts/verify-release-version.mjs
+
+  npm-publish:
+    name: Publish @dsh-trading/* to npm
+    needs: check-version
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      # 与 build-desktop 同源的发布门禁：npm 产物同样必须全绿
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+      - run: pnpm -r test
+
+      # 幂等发布：registry 已存在的精确版本跳过（见脚本头注释）
+      - name: Publish packages (skip versions already on the registry)
+        if: env.NPM_PUBLISH_ENABLED == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish-npm.mjs
 
   build-desktop:
     name: Build desktop app (${{ matrix.os }})
@@ -119,7 +156,7 @@ jobs:
 
   github-release:
     name: Create GitHub Release with desktop artifacts
-    needs: build-desktop
+    needs: [npm-publish, build-desktop]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -136,7 +173,7 @@ jobs:
       - name: Generate SHA256 checksums
         run: |
           cd dist
-          sha256sum * > SHA256SUMS.txt
+          sha256sum ./* > SHA256SUMS.txt
 
       - name: Create GitHub Release
         env:

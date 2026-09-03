@@ -22,9 +22,14 @@ Status: implemented
 - 版本事实源 = tag。changesets fixed 组（@dsh-trading/*）负责统一 bump；
   desktop/package.json 不参与 changesets，版本由管线按 tag 重写，安装包文件
   名自动跟随。
-- 不发布 npm：本仓库未授权 npm 发布，桌面安装包是唯一对外分发物。因此没有
-  "版本号不可重发"约束——管线失败（Release 未创建）时删 tag 重推即可；
-  Release 已创建后需先删 Release 再删 tag。
+- npm 发布通道（2026-09-03 用户授权，原"不发布 npm"决策作废）：desktop-release.yml
+  增加 npm-publish job——同源门禁后按 workspace 依赖拓扑序幂等发布 45 个
+  @dsh-trading/* 包（scripts/publish-npm.mjs：registry 已存在的精确版本跳过，
+  pnpm publish 替换 workspace:*），token 存 GitHub secret NPM_TOKEN（凭据
+  只进 secret，不进仓库文件），workflow env NPM_PUBLISH_ENABLED 可一键关闭
+  npm 通道退回仅桌面发布。npm 与桌面并行、两路全绿才创建 Release（保持
+  all-or-nothing）。npm 版本不可变 ⇒ 同版本换代码禁止，坏包走 deprecate +
+  下一补丁；删 tag 重推安全（幂等跳过）。
 - 新增 `.dsh/skills/dsh-trading-release/SKILL.md`（骨架移植自 dsh-web 的
   dsh-web-release skill：tag 即事实源 + 硬校验 + tag 触发管线 + 发布后验证；
   内容按本仓重写：changesets bump、无 npm 通道、同 tag 修复重推规则、
