@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { LedgerLockedError, TasksLedger } from '../src/tasks/ledger.ts'
-import { nextRunAtMs } from '../src/tasks/schedule.ts'
+import { nextRunAtMs } from '../src/client/tasks-schedule.ts'
 
 const T0 = new Date(2026, 0, 1, 9, 0, 30).getTime()
 

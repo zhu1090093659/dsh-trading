@@ -1,14 +1,14 @@
 /**
  * 定时任务桥客户端：/dshtrading/api/tasks 子面的同源 fetch 封装。
  *
- * 类型与 cron 纯函数直接复用 node 半的 tasks 协议模块（同包内纯 TS、零 node
- * 依赖，浏览器可安全打包；区别于对 @dshtrading/api 的跨包镜像策略，见
- * types.ts 头注——那里是「浏览器装不到的外部包」，这里是本包源码）。
+ * 类型与 cron 纯函数复用同包的 tasks 协议模块（纯 TS、零 node 依赖，浏览器
+ * 可安全打包；与宿主半 src/tasks/ 共享同一份，文件放 src/client/ 下是因为
+ * client tsconfig 的 rootDir 限制，见 2026-09-04 CI 棘轮修复 note）。
  */
 import {
   type TasksAction,
   type TasksSnapshot,
-} from '../tasks/protocol.ts'
+} from './tasks-protocol.ts'
 import { BridgeError } from './api.ts'
 
 /** 元数据面（工作区/预设名册 + 确认门基准）。 */

@@ -200,8 +200,19 @@ function boundedString(value: unknown, max: number): value is string {
   return typeof value === 'string' && value.length <= max
 }
 
-function optionalBoundedString(value: unknown, max: number): boolean {
+/** undefined 或有界字符串。 */
+function optionalBoundedString(value: unknown, max: number): value is string | undefined {
   return value === undefined || boundedString(value, max)
+}
+
+/** undefined / null 或有界字符串（补丁语义：null 显式清除钉住字段）。 */
+function optionalBoundedStringOrNull(value: unknown, max: number): value is string | null | undefined {
+  return value === undefined || value === null || boundedString(value, max)
+}
+
+/** undefined 或「有界且非空白」字符串（标题语义）。 */
+function optionalBoundedNonEmptyString(value: unknown, max: number): value is string | undefined {
+  return value === undefined || (boundedString(value, max) && value.trim() !== '')
 }
 
 /** 校验并收敛 schedule 输入；非法返回 undefined。 */
@@ -218,17 +229,24 @@ export function parseNewTaskInput(value: unknown): NewTaskInput | undefined {
   if (row === undefined || !exactKeys(row, ['title', 'prompt', 'workspaceId', 'agentPreset', 'permission', 'schedule'])) return undefined
   if (!boundedString(row.title, TITLE_MAX) || row.title.trim() === '') return undefined
   if (!boundedString(row.prompt, PROMPT_MAX)) return undefined
-  if (!optionalBoundedString(row.workspaceId, PIN_MAX)) return undefined
-  if (!optionalBoundedString(row.agentPreset, PIN_MAX)) return undefined
-  if (row.permission !== undefined && !isTaskPermission(row.permission)) return undefined
-  if (row.schedule !== undefined && scheduleInput(row.schedule) === undefined) return undefined
+  // 先收窄到局部量再收敛对象：exactOptionalPropertyTypes 下可选属性不接受显式 undefined。
+  const workspaceId: unknown = row.workspaceId
+  if (!optionalBoundedString(workspaceId, PIN_MAX)) return undefined
+  const agentPreset: unknown = row.agentPreset
+  if (!optionalBoundedString(agentPreset, PIN_MAX)) return undefined
+  const permission: unknown = row.permission
+  if (permission !== undefined) {
+    if (!isTaskPermission(permission)) return undefined
+  }
+  const schedule = row.schedule === undefined ? undefined : scheduleInput(row.schedule)
+  if (row.schedule !== undefined && schedule === undefined) return undefined
   return {
     title: row.title,
     prompt: row.prompt,
-    ...(row.workspaceId === undefined ? {} : { workspaceId: row.workspaceId }),
-    ...(row.agentPreset === undefined ? {} : { agentPreset: row.agentPreset }),
-    ...(row.permission === undefined ? {} : { permission: row.permission }),
-    ...(row.schedule === undefined ? {} : { schedule: scheduleInput(row.schedule) }),
+    ...(workspaceId === undefined ? {} : { workspaceId }),
+    ...(agentPreset === undefined ? {} : { agentPreset }),
+    ...(permission === undefined ? {} : { permission }),
+    ...(schedule === undefined ? {} : { schedule }),
   }
 }
 
@@ -236,21 +254,27 @@ export function parseNewTaskInput(value: unknown): NewTaskInput | undefined {
 export function parseTaskUpdatePatch(value: unknown): TaskUpdatePatch | undefined {
   const row = record(value)
   if (row === undefined || !exactKeys(row, ['title', 'prompt', 'workspaceId', 'agentPreset', 'permission', 'schedule'])) return undefined
-  if (row.title !== undefined && !(boundedString(row.title, TITLE_MAX) && row.title.trim() !== '')) return undefined
-  if (row.prompt !== undefined && !boundedString(row.prompt, PROMPT_MAX)) return undefined
-  for (const key of ['workspaceId', 'agentPreset'] as const) {
-    const item = row[key]
-    if (item !== undefined && item !== null && !boundedString(item, PIN_MAX)) return undefined
+  const title: unknown = row.title
+  if (title !== undefined && !optionalBoundedNonEmptyString(title, TITLE_MAX)) return undefined
+  const prompt: unknown = row.prompt
+  if (prompt !== undefined && !optionalBoundedString(prompt, PROMPT_MAX)) return undefined
+  const workspaceId: unknown = row.workspaceId
+  if (!optionalBoundedStringOrNull(workspaceId, PIN_MAX)) return undefined
+  const agentPreset: unknown = row.agentPreset
+  if (!optionalBoundedStringOrNull(agentPreset, PIN_MAX)) return undefined
+  const permission: unknown = row.permission
+  if (permission !== undefined && permission !== null) {
+    if (!isTaskPermission(permission)) return undefined
   }
-  if (row.permission !== undefined && row.permission !== null && !isTaskPermission(row.permission)) return undefined
-  if (row.schedule !== undefined && scheduleInput(row.schedule) === undefined) return undefined
+  const schedule = row.schedule === undefined ? undefined : scheduleInput(row.schedule)
+  if (row.schedule !== undefined && schedule === undefined) return undefined
   return {
-    ...(row.title === undefined ? {} : { title: row.title }),
-    ...(row.prompt === undefined ? {} : { prompt: row.prompt }),
-    ...(row.workspaceId === undefined ? {} : { workspaceId: row.workspaceId }),
-    ...(row.agentPreset === undefined ? {} : { agentPreset: row.agentPreset }),
-    ...(row.permission === undefined ? {} : { permission: row.permission }),
-    ...(row.schedule === undefined ? {} : { schedule: scheduleInput(row.schedule) }),
+    ...(title === undefined ? {} : { title }),
+    ...(prompt === undefined ? {} : { prompt }),
+    ...(workspaceId === undefined || workspaceId === null ? {} : { workspaceId }),
+    ...(agentPreset === undefined || agentPreset === null ? {} : { agentPreset }),
+    ...(permission === undefined || permission === null ? {} : { permission }),
+    ...(schedule === undefined ? {} : { schedule }),
   }
 }
 

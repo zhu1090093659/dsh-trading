@@ -3,7 +3,7 @@
  * nextRunAtMs 的关键时间语义（严格晚于、分钟粒度、闰日可达、不可能日期）。
  */
 import { describe, expect, it } from 'vitest'
-import { isValidCron, nextRunAtMs, parseCron } from '../src/tasks/schedule.ts'
+import { isValidCron, nextRunAtMs, parseCron } from '../src/client/tasks-schedule.ts'
 
 const AT = (...args: Parameters<typeof Date>) => new Date(...args).getTime()
 

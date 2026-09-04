@@ -6,7 +6,7 @@
  * 信号 + 15 秒兜底轮询驱动刷新，关浏览器不影响宿主调度。
  */
 import { useCallback, useEffect, useState } from 'react'
-import { isValidCron, nextRunAtMs } from '../tasks/schedule.ts'
+import { isValidCron, nextRunAtMs } from './tasks-schedule.ts'
 import {
   permissionPending,
   TASK_PERMISSIONS,
@@ -14,7 +14,7 @@ import {
   type TaskRecord,
   type TasksAction,
   type TasksSnapshot,
-} from '../tasks/protocol.ts'
+} from './tasks-protocol.ts'
 import { subscribeTradingEvents } from './api.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { fetchTasksMeta, fetchTasksSnapshot, postTaskAction, type TasksMeta } from './tasks-api.ts'
@@ -242,7 +242,7 @@ function TaskEditor({ t, meta, task, onDone, onCancel }: TaskEditorProps) {
     const schedule = { enabled: scheduleEnabled, cron }
     try {
       if (task === undefined) {
-        const input: import('../tasks/protocol.ts').NewTaskInput = {
+        const input: import('./tasks-protocol.ts').NewTaskInput = {
           title: title.trim(),
           prompt,
           schedule,

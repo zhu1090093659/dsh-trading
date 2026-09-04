@@ -13,7 +13,7 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import {
   DEFAULT_SESSION_PERMISSION,
   hasOpenExecution,
@@ -30,8 +30,8 @@ import {
   type TasksSchedulerSnapshot,
   type TasksSnapshot,
   type TaskUpdatePatch,
-} from './protocol.ts'
-import { isValidCron, nextRunAtMs } from './schedule.ts'
+} from '../client/tasks-protocol.ts'
+import { isValidCron, nextRunAtMs } from '../client/tasks-schedule.ts'
 
 /** 账本磁盘文档形状。 */
 interface LedgerDocument {
@@ -105,7 +105,7 @@ function processAlive(pid: number): boolean {
 }
 
 /** 武装定时规则：启用且表达式合法 → 计算下次运行；禁用 → 保留表达式、清到期。 */
-function armSchedule(rule: { enabled: boolean; cron: string }, now: number): ScheduleRule | undefined {
+function armSchedule(rule: { enabled: boolean; cron: string }, now: number): ScheduleRule {
   if (!rule.enabled) {
     return { enabled: false, cron: rule.cron, nextRunAt: undefined, lastTriggeredAt: undefined }
   }
@@ -414,7 +414,7 @@ export class TasksLedger {
     next.recentRequests.push({ requestId: envelope.requestId, fingerprint })
     const openedRun = this.applyTo(next, envelope.action, now)
     this.commit(next)
-    return { snapshot: this.snapshot(), openedRun }
+    return { snapshot: this.snapshot(), ...(openedRun === undefined ? {} : { openedRun }) }
   }
 
   /** 动作分发（调用方已克隆文档；纯段，无 IO）。 */
@@ -553,7 +553,8 @@ export class TasksLedger {
   }
 
   /** 调度器快照字段（tick 时间/错误）。 */
-  updateScheduler(patch: { lastTickAt?: number; error?: string }): void {
+  // error 显式允许 undefined：tick 成功时用它清空上次错误（缺省=无错误）。
+  updateScheduler(patch: { lastTickAt?: number; error?: string | undefined }): void {
     this.mutate(document => {
       document.scheduler = {
         timeZone: document.scheduler.timeZone,

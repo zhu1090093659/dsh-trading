@@ -8,11 +8,10 @@
  */
 import { TasksLedger, TaskActionError, type AppliedAction } from './ledger.ts'
 import {
-  DEFAULT_SESSION_PERMISSION,
   type TaskPermission,
   type TasksActionEnvelope,
   type TasksSnapshot,
-} from './protocol.ts'
+} from '../client/tasks-protocol.ts'
 import { TasksRunner, SessionLaunchError, type SessionCommandDispatcher, type SessionGateway } from './runner.ts'
 
 /** 宿主工作区名册面（meta + runner 校验共用；name 可缺省）。 */

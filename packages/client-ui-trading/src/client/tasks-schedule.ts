@@ -41,18 +41,20 @@ export function parseCron(expr: string): CronSchedule | null {
   if (fields.length !== 5) return null
   const sets: Set<number>[] = []
   for (let index = 0; index < 5; index++) {
-    const [min, max] = FIELD_RANGES[index]
+    const bounds = FIELD_RANGES[index]
+    const field = fields[index]
     const set = new Set<number>()
-    if (!parseField(fields[index], min, max, set)) return null
+    if (bounds === undefined || field === undefined || !parseField(field, bounds[0], bounds[1], set)) return null
     sets.push(set)
   }
   const weekdays = new Set<number>()
-  for (const day of sets[4]) weekdays.add(day === 7 ? 0 : day)
+  // 不变式：fields.length === 5 已验证，上方循环恰好 push 5 个字段集，索引必存在。
+  for (const day of sets[4]!) weekdays.add(day === 7 ? 0 : day)
   return {
-    minutes: sets[0],
-    hours: sets[1],
-    days: sets[2],
-    months: sets[3],
+    minutes: sets[0]!,
+    hours: sets[1]!,
+    days: sets[2]!,
+    months: sets[3]!,
     weekdays,
     // 只有字面 '*' 算未受限：显式全枚举（如 '1-31'）仍是受限字段，必须参与
     // 日/周的 OR 语义，不能塌缩成通配。
@@ -157,14 +159,14 @@ function parseField(field: string, min: number, max: number, out: Set<number>): 
   }
   for (const part of field.split(',')) {
     if (part === '') return false
-    const [range, stepRaw] = part.split('/')
+    const [range = '', stepRaw] = part.split('/')
     let low: number
     let high: number
     if (range === '*') {
       low = min
       high = max
     } else if (range.includes('-')) {
-      const [a, b] = range.split('-')
+      const [a = '', b = ''] = range.split('-')
       if (a === '' || b === '' || !isDigits(a) || !isDigits(b)) return false
       low = Number(a)
       high = Number(b)

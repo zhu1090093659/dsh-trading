@@ -32,7 +32,7 @@ import {
 } from './bridge.ts'
 import { attachEventStream } from './sse.ts'
 import { TaskActionError } from './tasks/ledger.ts'
-import { TASKS_ACTION_BYTES_LIMIT, parseTasksEnvelope } from './tasks/protocol.ts'
+import { TASKS_ACTION_BYTES_LIMIT, parseTasksEnvelope } from './client/tasks-protocol.ts'
 import { TradingTasksService } from './tasks/service.ts'
 import type { SessionCommandDispatcher, SessionGateway } from './tasks/runner.ts'
 
