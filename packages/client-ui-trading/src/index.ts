@@ -39,7 +39,8 @@ import type { SessionCommandDispatcher, SessionGateway } from './tasks/runner.ts
 
 /** webServer / connection 的最小结构面（避免对本仓未安装的宿主包产生类型依赖）。 */
 interface WebServerLike {
-  register(route: { kind: 'exact' | 'prefix'; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void> }): void
+  /** 宿主 rc.1 语义：register 返回路由注销器（ctx.effect 挂接，插件停止时注销）。 */
+  register(route: { kind: 'exact' | 'prefix'; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void> }): () => void
 }
 
 interface ConnectionLike {
@@ -297,7 +298,8 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
 
 function errorPayloadOf(error: unknown): { code: string; message: string } {
   if (error instanceof Error) {
-    const code = typeof (error as { code?: unknown }).code === 'string' ? (error as { code: string }).code : 'TRADING_UNKNOWN'
+    const raw = (error as { code?: unknown }).code
+    const code = typeof raw === 'string' ? raw : 'TRADING_UNKNOWN'
     return { code, message: error.message }
   }
   return { code: 'TRADING_UNKNOWN', message: String(error) }

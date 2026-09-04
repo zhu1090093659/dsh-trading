@@ -25,17 +25,21 @@ import type { TradingTasksService } from './service.ts'
 import {
   parseTasksEnvelope,
   TASK_PERMISSIONS,
-  type TaskPermission,
   type TasksAction,
   type TasksActionEnvelope,
   type TaskUpdatePatch,
 } from '../client/tasks-protocol.ts'
 
-/** 工具统一输出投影（JSON 串；knowledge 工具同款）。 */
+/**
+ * 工具统一输出投影（JSON 串；knowledge 工具同款）。返回类型必须保字面量
+ * （`as const`）：defineTool 的 output schema 泛型 O 靠字面量推断收窄
+ * （StringLiteralValueSchemaSpec），在此处拓宽成 `type: string` 会让 execute
+ * 的返回通道坍缩成 never 而全线类型报错。
+ */
 function textOutput() {
   return {
-    schema: { type: 'string' },
-    render: (_args: unknown, value: string) => [{ type: 'text', text: value }],
+    schema: { type: 'string' } as const,
+    render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }],
   }
 }
 

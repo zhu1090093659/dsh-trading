@@ -289,9 +289,8 @@ export const FUNDAMENTALS_CACHE_TTL_MS = 5 * 60 * 1000
 /** 从 Error 上提取结构化错误词汇（连接器按 TradingError 形状附加 code）。 */
 export function errorPayload(error: unknown): { code: string; message: string } {
   if (error instanceof Error) {
-    const code = typeof (error as { code?: unknown }).code === 'string'
-      ? (error as { code: string }).code
-      : 'TRADING_UNKNOWN'
+    const raw = (error as { code?: unknown }).code
+    const code = typeof raw === 'string' ? raw : 'TRADING_UNKNOWN'
     return { code, message: error.message }
   }
   return { code: 'TRADING_UNKNOWN', message: String(error) }
