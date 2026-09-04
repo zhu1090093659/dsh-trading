@@ -33,3 +33,11 @@ export {
   type CustomIndicatorRecord,
   type CustomIndicatorStore,
 } from './custom.ts'
+export {
+  clampActivationParams,
+  createMemoryChartActivationStore,
+  defaultActivationInstance,
+  resolveIndicatorSpec,
+  type ChartActivationStore,
+  type IndicatorSpecLike,
+} from './chart-activations.ts'

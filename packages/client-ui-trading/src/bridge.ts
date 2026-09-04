@@ -18,8 +18,8 @@ import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@d
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dshtrading/kit-hk'
 import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dshtrading/kit-us'
 import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dshtrading/kit-crypto'
-import type { CustomIndicatorRecord, CustomIndicatorStore } from '@dshtrading/indicators'
-import { createMemoryCustomIndicatorStore } from '@dshtrading/indicators'
+import type { ChartActivationStore, CustomIndicatorRecord, CustomIndicatorStore, IndicatorInstance } from '@dshtrading/indicators'
+import { clampActivationParams, createMemoryChartActivationStore, createMemoryCustomIndicatorStore, resolveIndicatorSpec } from '@dshtrading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dshtrading/knowledge'
 import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord, CustomStrategyStore } from '@dshtrading/strategies'
@@ -69,6 +69,8 @@ export function createBridgeHost(services: {
   router?: { activeProvider(market: string): string | undefined } | undefined
   legacy(market: MarketId): MarketDataService | undefined
   customIndicatorsStore?: CustomIndicatorStore | undefined
+  /** 图表激活名册 store（issue #63，可选）。 */
+  chartActivationsStore?: ChartActivationStore | undefined
   knowledgeStore?: KnowledgeCardStore | undefined
   strategyStore?: CustomStrategyStore | undefined
   watchlistStore?: WatchlistStore | undefined
@@ -87,6 +89,7 @@ export function createBridgeHost(services: {
     getTradeService: market => services.tradeRegistry?.active(market)?.service,
     activeProvider: market => services.registry?.active(market)?.provider ?? services.router?.activeProvider(market),
     customIndicatorsStore: services.customIndicatorsStore ?? createMemoryCustomIndicatorStore(),
+    chartActivationsStore: services.chartActivationsStore ?? createMemoryChartActivationStore(),
     knowledgeStore: services.knowledgeStore ?? createMemoryKnowledgeCardStore(),
     strategyStore: services.strategyStore ?? createMemoryCustomStrategyStore(),
     watchlistStore: services.watchlistStore ?? createMemoryWatchlistStore(),
@@ -110,6 +113,8 @@ export interface BridgeHost {
   activeProvider(market: MarketId): string | undefined
   /** 自定义指标存储（可选）。 */
   customIndicatorsStore?: CustomIndicatorStore
+  /** 图表激活名册存储（可选，issue #63）。 */
+  chartActivationsStore?: ChartActivationStore
   /** 知识卡片存储（可选）。 */
   knowledgeStore?: KnowledgeCardStore
   /** 自定义策略存储（可选，issue #31）。 */
@@ -229,6 +234,19 @@ export interface GuiOrderBody {
 export interface CustomIndicatorsWire {
   ok: true
   indicators: CustomIndicatorRecord[]
+}
+
+/** 图表激活名册 wire（issue #63）。 */
+export interface ChartActivationsWire {
+  ok: true
+  instances: IndicatorInstance[]
+}
+
+/** 图表激活写入的业务拒绝（未知指标 id 等；协议错误仍走 BridgeProtocolError）。 */
+export interface ChartActivationRejectedWire {
+  ok: false
+  code: 'TRADING_UNKNOWN_INDICATOR'
+  message: string
 }
 
 export interface KnowledgeCardsWire {
@@ -776,6 +794,71 @@ export class TradingBridge {
     return { ok: true, imported: true }
   }
 
+  /* ---------------------------------------------------------------- */
+  /* 图表激活名册（issue #63）：host store 为 SSOT，localStorage 降级镜像  */
+  /* ---------------------------------------------------------------- */
+
+  /** 全量读取激活名册（GET /chart/indicators）。 */
+  async chartActivations(): Promise<ChartActivationsWire> {
+    const store = this.host.chartActivationsStore
+    if (store === undefined) return { ok: true, instances: [] }
+    return { ok: true, instances: await store.list() }
+  }
+
+  /**
+   * 挂载/更新一个激活实例（PUT /chart/indicators，body { id, params? }）：
+   * id 必须能解析为预置或自定义指标（未知 id 业务拒绝——与 GUI 可渲染集合同源）；
+   * params 按 schema clamp，缺失键取 schema 默认值。
+   */
+  async putChartActivation(body: unknown): Promise<ChartActivationsWire | ChartActivationRejectedWire> {
+    const store = this.host.chartActivationsStore
+    const raw = (body ?? {}) as { id?: unknown; params?: unknown }
+    const id = typeof raw.id === 'string' ? raw.id.trim() : ''
+    if (!id) throw new BridgeProtocolError(400, 'chart activation body requires string id')
+    const spec = await resolveIndicatorSpec(id, this.host.customIndicatorsStore)
+    if (spec === undefined) {
+      return {
+        ok: false,
+        code: 'TRADING_UNKNOWN_INDICATOR',
+        message: 'unknown indicator id ' + JSON.stringify(id) + ' — presets and authored custom ids only (see indicator_list)',
+      }
+    }
+    const overrides: Record<string, number> = {}
+    if (typeof raw.params === 'object' && raw.params !== null && !Array.isArray(raw.params)) {
+      for (const [key, value] of Object.entries(raw.params as Record<string, unknown>)) {
+        if (typeof value === 'number' && Number.isFinite(value)) overrides[key] = value
+      }
+    }
+    const params = clampActivationParams(spec.params, overrides)
+    const instance: IndicatorInstance = { id, params }
+    if (store !== undefined) await store.activate(instance)
+    return { ok: true, instances: store !== undefined ? await store.list() : [instance] }
+  }
+
+  /** 摘除一个激活实例（DELETE /chart/indicators?id=）。 */
+  async removeChartActivation(id: string): Promise<{ ok: boolean; removed: boolean; instances: IndicatorInstance[] }> {
+    const store = this.host.chartActivationsStore
+    if (store === undefined) return { ok: true, removed: false, instances: [] }
+    const removed = await store.deactivate(id)
+    return { ok: true, removed, instances: await store.list() }
+  }
+
+  /**
+   * 一次性迁移导入（POST /chart/indicators/import）：host 非空拒绝（幂等，防重复导入）。
+   * 客户端把 localStorage 存量激活名册搬进 host SSOT（issue #32 watchlist 同款）。
+   */
+  async importChartActivations(body: unknown): Promise<{ ok: boolean; imported: boolean; reason?: string }> {
+    const store = this.host.chartActivationsStore
+    if (store === undefined) return { ok: false, imported: false, reason: 'chart activation store is not mounted' }
+    const existing = await store.list()
+    if (existing.length > 0) {
+      return { ok: false, imported: false, reason: 'host chart activation store is not empty — migration already done (idempotent guard)' }
+    }
+    const instances = parseChartInstances(body)
+    await store.replaceAll(instances)
+    return { ok: true, imported: true }
+  }
+
   /** 读取选中标的（GET /selection）。 */
   async selection(): Promise<{ ok: boolean; instrument: WatchlistInstrument | null }> {
     const store = this.host.selectionStore
@@ -841,6 +924,32 @@ function parseInstrumentBody(body: unknown): WatchlistInstrument {
     symbol,
     ...(typeof raw.name === 'string' && raw.name ? { name: raw.name } : {}),
   }
+}
+
+/**
+ * 激活名册迁移导入的形状校验（{ instances: [...] } 或裸数组）：坏形行丢弃、
+ * params 只收有限数字（host 侧参数 clamp 在 put 语义里，迁移保真原样搬运）。
+ */
+function parseChartInstances(body: unknown): IndicatorInstance[] {
+  const raw = typeof body === 'object' && body !== null && Array.isArray((body as { instances?: unknown }).instances)
+    ? (body as { instances: unknown[] }).instances
+    : Array.isArray(body)
+      ? body
+      : []
+  const out: IndicatorInstance[] = []
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) continue
+    const id = (item as { id?: unknown }).id
+    const params = (item as { params?: unknown }).params
+    if (typeof id !== 'string' || id.trim() === '') continue
+    if (typeof params !== 'object' || params === null) continue
+    const clean: Record<string, number> = {}
+    for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+      if (typeof value === 'number' && Number.isFinite(value)) clean[key] = value
+    }
+    out.push({ id, params: clean })
+  }
+  return out
 }
 
 /** 请求分发：把 (method, pathname, searchParams) 路由到桥方法，返回 (status, payload)。 */
@@ -912,6 +1021,9 @@ export async function dispatchBridgeRequest(
       case '/indicators/custom': {
         return { status: 200, payload: await bridge.customIndicators() }
       }
+      case '/chart/indicators': {
+        return { status: 200, payload: await bridge.chartActivations() }
+      }
       case '/knowledge/cards': {
         return { status: 200, payload: await bridge.knowledgeCards() }
       }
@@ -939,6 +1051,11 @@ export async function dispatchBridgeRequest(
       const id = search.get('id') ?? ''
       if (!id) throw new BridgeProtocolError(400, 'delete custom indicator: id is required')
       return { status: 200, payload: await bridge.deleteCustomIndicator(id) }
+    }
+    if (pathname === '/chart/indicators') {
+      const id = search.get('id') ?? ''
+      if (!id) throw new BridgeProtocolError(400, 'delete chart activation: id is required')
+      return { status: 200, payload: await bridge.removeChartActivation(id) }
     }
     if (pathname === '/strategies/custom') {
       const id = search.get('id') ?? ''
@@ -969,6 +1086,9 @@ export async function dispatchBridgeRequest(
     if (pathname === '/selection') {
       return { status: 200, payload: await bridge.putSelection(body) }
     }
+    if (pathname === '/chart/indicators') {
+      return { status: 200, payload: await bridge.putChartActivation(body) }
+    }
     throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }
 
@@ -981,6 +1101,9 @@ export async function dispatchBridgeRequest(
     }
     if (pathname === '/watchlists/import') {
       return { status: 200, payload: await bridge.importWatchlists(body) }
+    }
+    if (pathname === '/chart/indicators/import') {
+      return { status: 200, payload: await bridge.importChartActivations(body) }
     }
     throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }

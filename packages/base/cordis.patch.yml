@@ -59,9 +59,10 @@
     - id: dsh-trading-watchlist
       name: '@dshtrading/watchlist/plugin'
 
-    # 指标能力收口（issue #33 / P4）：provide tradingCustomIndicators 单实例 store 服务
-    # （桥与工具共享缓存），indicator_author/indicator_delete host 平面注册；
-    # 写后 emit tradingEvents('indicators')。
+    # 指标能力收口（issue #33 / P4；issue #63 扩展）：provide tradingCustomIndicators /
+    # tradingChartActivations 单实例 store 服务（桥与工具共享缓存），indicator_author/
+    # indicator_delete 与 indicator_list/indicator_activate/indicator_deactivate host 平面
+    # 注册；写后 emit tradingEvents('indicators'|'chart')。
     - id: dsh-trading-indicators
       name: '@dshtrading/indicators/plugin'
 

@@ -33,6 +33,7 @@ import { ChatResizeHandle } from './ChatResizeHandle.tsx'
 import { foldStore, marketFoldStore } from './fold-store.ts'
 import { deleteCustomIndicator, fetchCustomIndicators, subscribeTradingEvents } from './api.ts'
 import { wireHostWatchlistSync } from './host-watchlist-sync.ts'
+import { wireHostChartSync } from './host-chart-sync.ts'
 import './tokens.css'
 import './shell-pad.css'
 import { en, zh } from './locales.ts'
@@ -169,6 +170,11 @@ export function apply(ctx: ClientContext): void {
   // 自选股 host SSOT 同步（issue #32）：启动同步 + 一次性迁移 + 变更 host-first
   // 接管（add/remove/select 写 host 成功后才更新本地）+ SSE 双通道刷新。
   wireHostWatchlistSync({ watchlists, selection })
+
+  // 图表激活名册 host SSOT 同步（issue #63）：agent 经 indicator_activate/
+  // deactivate 写 host → SSE 'chart' → 图表即时点亮；GUI 挂载/摘除/调参同样
+  // host-first（桥不可用时本地镜像维持现状，不劣于升级前）。
+  wireHostChartSync({ chart })
 
   // 左侧停靠：自选面板（官方浮层通道；支持展开与折叠态 MarketRail）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({

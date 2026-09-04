@@ -14,7 +14,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dshtrading/api'
 import type { TradingEventsService } from '@dshtrading/eventbus'
-import { createFileCustomIndicatorStore } from '@dshtrading/indicators/plugin'
+import { createFileChartActivationStore, createFileCustomIndicatorStore } from '@dshtrading/indicators/plugin'
 import { createFileKnowledgeCardStore } from '@dshtrading/knowledge/plugin'
 import { createFileCustomStrategyStore } from '@dshtrading/strategies/plugin'
 import { createFileSelectionStore, createFileWatchlistStore } from '@dshtrading/watchlist/plugin'
@@ -71,6 +71,12 @@ export function apply(ctx: Context): void {
     | undefined
   const customIndicatorsStore = customIndicatorsService?.store
     ?? createFileCustomIndicatorStore(path.join(os.homedir(), '.dsh', 'indicators', 'custom.json'))
+  // issue #63：图表激活名册 store 单实例（Service 解包同上；服务缺席 → 回退自建）。
+  const chartActivationsService = serviceGet('tradingChartActivations') as
+    | { store?: import('@dshtrading/indicators').ChartActivationStore }
+    | undefined
+  const chartActivationsStore = chartActivationsService?.store
+    ?? createFileChartActivationStore(path.join(os.homedir(), '.dsh', 'indicators', 'chart.json'))
   const knowledgeService = serviceGet('tradingKnowledgeCards') as
     | { store?: import('@dshtrading/knowledge').KnowledgeCardStore }
     | undefined
@@ -106,6 +112,7 @@ export function apply(ctx: Context): void {
       router: webCtx.get('tradingMarketRouter', false) as { activeProvider(m: string): string | undefined } | undefined,
       legacy: market => webCtx.get(MARKET_SERVICE_KEYS[market]) as MarketDataService | undefined,
       customIndicatorsStore,
+      chartActivationsStore,
       knowledgeStore,
       strategyStore,
       watchlistStore,
@@ -156,6 +163,10 @@ export function apply(ctx: Context): void {
           // 发布点接线（issue #30/#31/#32）：写成功 → 对应 store 失效信号。
           if (status === 200 && (payload as { ok?: unknown } | undefined)?.ok === true) {
             if (req.method === 'DELETE' && sub === '/indicators/custom') eventsOf()?.emit('indicators')
+            // issue #63：GUI 写激活名册成功 → 'chart' 失效信号（工具写入侧在
+            // indicators/plugin emit，本处只接 GUI 桥写入，避免双 emit）。
+            if ((req.method === 'PUT' || req.method === 'DELETE') && sub === '/chart/indicators') eventsOf()?.emit('chart')
+            if (req.method === 'POST' && sub === '/chart/indicators/import') eventsOf()?.emit('chart')
             if (req.method === 'DELETE' && sub === '/strategies/custom') eventsOf()?.emit('strategies')
             if ((req.method === 'PUT' || req.method === 'POST' || req.method === 'DELETE')
               && (sub === '/watchlists' || sub === '/watchlists/import')) eventsOf()?.emit('watchlists')

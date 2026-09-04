@@ -5,7 +5,7 @@
  */
 import type { AccountBalance, DerivativesData, DerivativesHistory, Kline, MarketId, MarketInfo, Order, Orderbook, Position, TickerOutcome, TradeFill, TradeTick } from './types.ts'
 import type { FundamentalsPackage } from '@dshtrading/api'
-import type { CustomIndicatorRecord } from '@dshtrading/indicators'
+import type { CustomIndicatorRecord, IndicatorInstance } from '@dshtrading/indicators'
 import type { KnowledgeCard } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord } from '@dshtrading/strategies'
 
@@ -432,6 +432,68 @@ export async function putHostSelection(instrument: { market: string; symbol: str
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* 图表激活名册 host SSOT（issue #63）                                      */
+/* ------------------------------------------------------------------ */
+
+/** 全量读取 host 激活名册（GET /chart/indicators）。 */
+export async function fetchChartActivations(): Promise<IndicatorInstance[]> {
+  try {
+    const wire = await getJson<{ ok: boolean; instances: IndicatorInstance[] }>('/dshtrading/api/chart/indicators')
+    return Array.isArray(wire.instances) ? wire.instances : []
+  } catch {
+    return []
+  }
+}
+
+/** 挂载/更新一个激活实例（PUT /chart/indicators；未知 id → ok:false，转 false）。 */
+export async function putChartActivation(id: string, params?: Record<string, number>): Promise<boolean> {
+  try {
+    const response = await fetch('/dshtrading/api/chart/indicators', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, ...(params !== undefined ? { params } : {}) }),
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean }
+    return wire.ok === true
+  } catch {
+    return false
+  }
+}
+
+/** 摘除一个激活实例（DELETE /chart/indicators?id=）。 */
+export async function removeChartActivation(id: string): Promise<boolean> {
+  try {
+    const query = new URLSearchParams({ id })
+    const response = await fetch(`/dshtrading/api/chart/indicators?${query.toString()}`, {
+      method: 'DELETE',
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean }
+    return wire.ok === true
+  } catch {
+    return false
+  }
+}
+
+/** 一次性迁移导入本地激活名册（POST /chart/indicators/import；host 非空拒绝 → false）。 */
+export async function importChartActivations(instances: IndicatorInstance[]): Promise<boolean> {
+  try {
+    const response = await fetch('/dshtrading/api/chart/indicators/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ instances }),
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean; imported?: boolean }
+    return wire.ok === true && wire.imported === true
+  } catch {
+    return false
+  }
+}
+
 /**
  * store 词汇（v1）：镜像 host 半 @dshtrading/eventbus 的 TradingEventStore.
  * 浏览器半不 import node 包（避免把 cordis 拖进 client bundle）——词汇是封闭
@@ -444,6 +506,7 @@ export type TradingEventStoreName =
   | 'watchlists'
   | 'selection'
   | 'routing'
+  | 'chart'
 
 type TradingEventHandlers = Partial<Record<TradingEventStoreName, () => void>>
 
