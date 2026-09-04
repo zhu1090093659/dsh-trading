@@ -3,10 +3,10 @@
  * 几何 = [自选停靠右缘, 对话列左缘/右缘竖条左缘] 之间的整块区域，
  * 内容复用 MiddleStage（3.0 起中栏 = 视图注册表：行情 | 量化）。
  *
- * 对话列显隐由「是否有当前会话」驱动（官方会话 UI 整列移到右侧，
- * 审批卡在 composer 链随列可见，无会话时不存在可审批请求）：
- * 本组件把该状态写到 body[data-dshtrading-chat]，shell-pad.css 据此
- * 展开/收起栅格第 2 轨道（对话列）。
+ * 对话列显隐由折叠开关驱动（官方会话 UI 整列移到右侧，审批卡在
+ * composer 链随列可见）；轨道宽度 = 用户拖拽值，由 ChatResizeHandle
+ * 写 body 内联 --dshtrading-chat-user-w、shell-pad.css 规则 3 消费，
+ * 本组件不参与宽度链路（d0dc77e 前曾写 body[data-dshtrading-chat]，已废）。
  *
  * 几何测量：frame（div:has(> [data-shell-overlay])，rtl 后子元素顺序
  * [会话浏览器, 对话列, 工具详情, overlayLayer]）+ 自选停靠面板，

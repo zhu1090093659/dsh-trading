@@ -34,10 +34,12 @@ div:has(> [data-shell-overlay])[data-details-collapsed] {
   --dshtrading-details-w: 0px !important;
 }
 
-/* 有当前会话 → 对话列轨道展开（用户拖拽宽度，默认 380px）。
-   --dshtrading-chat-user-w 由 ChatResizeHandle 写在 body 内联（拖拽路径
-   不进 React 状态），经继承进 frame；折叠态被规则 9 的 !important 压住。 */
-body[data-dshtrading-chat='on'] div:has(> [data-shell-overlay]) {
+/* 对话列轨道 = 用户拖拽宽度（默认 380px）。--dshtrading-chat-user-w 由
+   ChatResizeHandle 写在 body 内联（拖拽路径不进 React 状态），经继承进
+   frame；手柄退场（无当前会话/折叠）即移除该变量，轨道回落默认值。
+   不挂 body 属性门控：属性写入者已在 d0dc77e 重构中删除，门控失效会令
+   拖拽宽度永不生效；折叠态由规则 9 的 !important 压住，无需在此区分。 */
+div:has(> [data-shell-overlay]) {
   --dshtrading-chat-w: var(--dshtrading-chat-user-w, 380px);
 }
 
