@@ -116,8 +116,8 @@ export function registerIndicatorsTools(ctx: Context, deps: IndicatorsPluginDeps
     register(createAuthorIndicatorTool({
       store: deps.store,
       chartStore: deps.chartStore,
-      onWritten: () => events()?.emit('indicators'),
-      onActivated: () => events()?.emit('chart'),
+      onWritten: () => { events()?.emit('indicators') },
+      onActivated: () => { events()?.emit('chart') },
     }))
     register(createIndicatorDeleteTool({
       store: deps.store,
@@ -128,8 +128,8 @@ export function registerIndicatorsTools(ctx: Context, deps: IndicatorsPluginDeps
       const chartTools = createChartActivationTools({
         customStore: deps.store,
         chartStore: deps.chartStore,
-        onWritten: () => events()?.emit('chart'),
-        onDeleted: () => events()?.emit('chart'),
+        onWritten: () => { events()?.emit('chart') },
+        onDeleted: () => { events()?.emit('chart') },
       })
       register(chartTools.list)
       register(chartTools.activate)

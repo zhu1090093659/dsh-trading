@@ -141,7 +141,7 @@ export interface AuthorIndicatorToolOptions {
   /** 可选：指标成功落盘后的回调（issue #30：事件总线 emit('indicators') 的接线点）。 */
   onWritten?: (record: CustomIndicatorRecord) => void
   /** 可选：图表激活名册 store（issue #63「创作即上图」路径；缺席时 activate 请求降级说明）。 */
-  chartStore?: ChartActivationStore
+  chartStore?: ChartActivationStore | undefined
   /** 可选：创作即上图成功后的回调（plugin 接线 emit('chart')，GUI 实时同步）。 */
   onActivated?: (id: string) => void
 }

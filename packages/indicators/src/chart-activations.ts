@@ -81,7 +81,13 @@ export async function resolveIndicatorSpec(id: string, customStore?: CustomIndic
   if (customStore !== undefined) {
     const record = await customStore.get(id)
     if (record !== undefined) {
-      return { id: record.id, title: record.title, pane: record.pane, params: record.params, description: record.description }
+      return {
+        id: record.id,
+        title: record.title,
+        pane: record.pane,
+        params: record.params,
+        ...(record.description !== undefined ? { description: record.description } : {}),
+      }
     }
   }
   return undefined

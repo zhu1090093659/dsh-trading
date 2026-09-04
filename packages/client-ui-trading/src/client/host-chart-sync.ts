@@ -13,7 +13,6 @@
  * 实例对 UI 天然不可见（选择器按 definition 名册渲染），注册表就位后自动生效。
  * host 写入边界的 clamp 已在桥与工具层完成，客户端照单全收。
  */
-import type { IndicatorInstance } from '@dshtrading/indicators'
 import type { ChartStateStore } from './chart-state.ts'
 import { indicators } from './indicator-registry.ts'
 import {
