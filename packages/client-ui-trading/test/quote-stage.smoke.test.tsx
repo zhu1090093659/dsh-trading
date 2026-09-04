@@ -9,7 +9,9 @@
  *   基本面页签仅非 crypto 出现（加密资产无标准财报，2026-09-04）；
  * - DerivativesStage 全量数据渲染（基差/倒计时/24h 变化/历史 sparkline 标签）与
  *   「历史不可用」降级提示；
- * - DerivativesPane 格子点击 → onOpenStage、「分析资金面」→ onAnalyze。
+ * - DerivativesPane 格子点击 → onOpenStage（快照发送入口已收敛到统一「发送给 Agent」按钮）；
+ * - 统一「发送给 Agent」入口：fillComposer 注入 → 报价头主按钮 + 下拉菜单，
+ *   行情快照可一键填入，资金面快照项仅在衍生品快照在位时出现。
  *
  * @vitest-environment jsdom
  */
@@ -118,6 +120,28 @@ describe('QuoteStage 渲染冒烟（TDZ 网）', () => {
       expect(container.querySelector('[data-dshtrading-fundamentals]')).toBeTruthy()
     })
   })
+
+  it('统一发送入口：报价头常驻主按钮，下拉菜单行情快照可一键填入（2026-09-04）', async () => {
+    const fillComposer = vi.fn(async () => {})
+    const { container, getByText, queryByText } = render(
+      <QuoteStage {...quoteStageProps('crypto')} fillComposer={fillComposer} />,
+    )
+    // 主按钮在报价头渲染（t 直出 key）
+    expect(getByText('quote.sendToAgent')).toBeTruthy()
+    // 打开下拉菜单：行情快照项在位；衍生品快照未到（桥 500）→ 资金面项隐藏
+    fireEvent.click(container.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement)
+    expect(getByText('quote.sendMenuSnapshot')).toBeTruthy()
+    expect(queryByText('quote.sendMenuFunding')).toBeNull()
+    // 点击行情快照 → fillComposer 恰被调用一次（只填不发语义由 fill-composer 测试覆盖）
+    fireEvent.click(getByText('quote.sendMenuSnapshot'))
+    await waitFor(() => { expect(fillComposer).toHaveBeenCalledTimes(1) })
+  })
+
+  it('未注入 fillComposer → 统一发送入口整体不渲染', () => {
+    const { queryByText, container } = render(<QuoteStage {...quoteStageProps('crypto')} />)
+    expect(queryByText('quote.sendToAgent')).toBeNull()
+    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull()
+  })
 })
 
 describe('DerivativesStage 渲染冒烟', () => {
@@ -166,18 +190,17 @@ describe('DerivativesStage 渲染冒烟', () => {
 })
 
 describe('DerivativesPane 渲染冒烟（入口化）', () => {
-  it('格子点击 → onOpenStage；分析按钮 → onAnalyze', () => {
+  it('格子点击 → onOpenStage；纯展示无发送按钮（入口已收敛到统一按钮）', () => {
     const onOpenStage = vi.fn()
-    const onAnalyze = vi.fn()
-    const { container, getByText } = render(
-      <DerivativesPane t={t} derivatives={SNAPSHOT} colorMode="red-up" onOpenStage={onOpenStage} onAnalyze={onAnalyze} />,
+    const { container, getByText, queryByText } = render(
+      <DerivativesPane t={t} derivatives={SNAPSHOT} colorMode="red-up" onOpenStage={onOpenStage} />,
     )
     const oiCell = getByText('derivatives.oi').closest('button')
     expect(oiCell).toBeTruthy()
     fireEvent.click(oiCell as HTMLButtonElement)
     expect(onOpenStage).toHaveBeenCalledTimes(1)
-    fireEvent.click(getByText('derivatives.analyze'))
-    expect(onAnalyze).toHaveBeenCalledTimes(1)
+    // 「分析资金面」按钮已随入口收敛移除（2026-09-04）
+    expect(queryByText('derivatives.analyze')).toBeNull()
     // 预测费率有值时副行展示；资金费率格式化
     expect(container.textContent).toContain('0.0150%')
     expect(container.textContent).toContain('HYPEUSDT-SWAP · okx')

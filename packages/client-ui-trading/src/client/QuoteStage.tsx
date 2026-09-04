@@ -23,7 +23,7 @@ import { OrderPanel } from './OrderPanel.tsx'
 import { TradeDrawer } from './TradeDrawer.tsx'
 import { paperTradingStore } from './paper-trading-store.ts'
 import { computeRangeStats } from './range-stats.ts'
-import { IconIndicators, IconSend } from './icons.tsx'
+import { IconChevronDown, IconIndicators, IconSend } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import {
   INTRADAY_INTERVALS, changePercent, directionColor,
@@ -146,6 +146,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
   const [sendState, setSendState] = useState<SendState>('idle')
+  // 统一「发送给 Agent」下拉菜单开合（2026-09-04 入口收敛）。
+  const [sendMenuOpen, setSendMenuOpen] = useState(false)
   /** 行情板块页签（图表 | 基本面 | 新闻 | 公告）：跨标的保持。 */
   const [stageTab, setStageTab] = useState<'chart' | 'derivatives' | 'fundamentals' | 'news' | 'announcements'>('chart')
   // 渲染期页签归一（issue #54 评审 L3）：衍生品页签是 crypto 专属，切到非 crypto
@@ -431,10 +433,28 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     if (stageTab === 'fundamentals' && market === 'crypto') setStageTab('chart')
   }, [stageTab, market])
 
-  // 「分析资金面」（issue #54）：把衍生品快照上下文填进会话输入框（只填不发）。
+  // 统一填入反馈（2026-09-04 入口收敛）：sending/sent/error 状态由「发送给 Agent」
+  // 按钮整体承载，行情快照与资金面快照共用同一套反馈。
+  const runFill = (text: string, image?: SendImageInput): void => {
+    if (fillComposer === undefined || sendState === 'sending') return
+    setSendState('sending')
+    void fillComposer(text, image)
+      .then(() => {
+        setSendState('sent')
+        window.setTimeout(() => { setSendState('idle') }, 2000)
+      })
+      .catch((error: unknown) => {
+        console.warn('[dsh-trading] fill composer from quote failed:', error)
+        setSendState('error')
+        window.setTimeout(() => { setSendState('idle') }, 2600)
+      })
+  }
+
+  // 「资金面快照」（原衍生品条「分析资金面」，issue #54；2026-09-04 收敛进统一
+  // 「发送给 Agent」下拉菜单）：把衍生品快照上下文填进会话输入框（只填不发）。
   // 骨架走词典（derivatives.analyzeBody + 各行标签键）；行值为纯数字/代码，无文案。
-  const onAnalyzeDerivatives = (): void => {
-    if (fillComposer === undefined || derivatives === null || symbol === undefined) return
+  const onSendFunding = (): void => {
+    if (derivatives === null || symbol === undefined) return
     const d = derivatives
     const parts = [
       d.openInterest !== undefined
@@ -451,7 +471,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         : undefined,
     ].filter((line): line is string => line !== undefined)
     const body = t('derivatives.analyzeBody', { symbol: d.symbol, source: d.source, lines: parts.join('\n') })
-    void fillComposer(body)
+    runFill(body)
   }
 
   const onCancelGuiOrder = async (orderId: string, sym?: string): Promise<boolean> => {
@@ -667,8 +687,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return markers.length > 0 ? markers : undefined
   }, [newsItems, bars, t])
 
-  // 发给 Agent：先截图（画布只在图表挂载期间可取），再把文本 + PNG 填入
-  // 会话输入框（不自动发送——用户大概率还要补自己的 prompt）。
+  // 行情快照（统一「发送给 Agent」入口主按钮）：先截图（画布只在图表挂载期间
+  // 可取），再把文本 + PNG 填入会话输入框（不自动发送——用户大概率还要补 prompt）。
   // market/symbol 在函数体内收窄（闭包对 TS 不透传 narrowing），先落成常量。
   const onSendToAgent = (): void => {
     if (fillComposer === undefined || sendState === 'sending') return
@@ -706,22 +726,12 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       withoutScreenshotTail: t('compose.withoutScreenshot'),
     }
     const text = composeQuoteMessage(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as unknown as Parameters<typeof composeQuoteMessage>[0], copy)
-    setSendState('sending')
-    void fillComposer(text, capture === null ? undefined : {
+    runFill(text, capture === null ? undefined : {
       dataUrl: capture.dataUrl,
       name: `${activeSymbol}-${chartInterval}.png`,
       width: capture.width,
       height: capture.height,
     })
-      .then(() => {
-        setSendState('sent')
-        window.setTimeout(() => { setSendState('idle') }, 2000)
-      })
-      .catch((error: unknown) => {
-        console.warn('[dsh-trading] fill composer from quote failed:', error)
-        setSendState('error')
-        window.setTimeout(() => { setSendState('idle') }, 2600)
-      })
   }
 
   // 空态：未选择标的（空态之后的渲染路径依赖 market/symbol 非空，提前收窄）。
@@ -819,6 +829,74 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         <span className={css.meta}>
           {ticker !== null && <span>{t('quote.updated')} {fmtClock(ticker.timestamp)}</span>}
         </span>
+        {/* 统一「发送给 Agent」入口（2026-09-04 收敛）：报价头常驻，所有页签可见。
+            主按钮一键填行情快照；下拉菜单承载资金面快照（crypto 且快照在位）——
+            取代图表工具栏「发给 Agent」与衍生品条「分析资金面」双入口。 */}
+        {fillComposer !== undefined && (
+          <div className={css.sendWrap}>
+            <button
+              type="button"
+              className={css.sendButton}
+              data-state={sendState === 'idle' ? undefined : sendState}
+              disabled={sendState === 'sending'}
+              title={t('quote.sendToAgentHint')}
+              onClick={onSendToAgent}
+            >
+              <IconSend size={13} />
+              {sendState === 'sent'
+                ? t('quote.sendSent')
+                : sendState === 'error'
+                  ? t('quote.sendFailed')
+                  : sendState === 'sending'
+                    ? t('quote.sendSending')
+                    : t('quote.sendToAgent')}
+            </button>
+            <button
+              type="button"
+              className={css.sendCaret}
+              aria-expanded={sendMenuOpen}
+              aria-haspopup="menu"
+              aria-label={t('quote.sendMenuOpen')}
+              title={t('quote.sendMenuOpen')}
+              onClick={() => { setSendMenuOpen(open => !open) }}
+            >
+              <IconChevronDown size={11} />
+            </button>
+            {sendMenuOpen && (
+              <>
+                <button type="button" className={css.sendBackdrop} aria-label={t('quote.sendMenuOpen')} onClick={() => { setSendMenuOpen(false) }} />
+                <div className={css.sendMenu} role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={css.sendMenuItem}
+                    title={t('quote.sendToAgentHint')}
+                    onClick={() => {
+                      setSendMenuOpen(false)
+                      onSendToAgent()
+                    }}
+                  >
+                    {t('quote.sendMenuSnapshot')}
+                  </button>
+                  {market === 'crypto' && derivatives !== null && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={css.sendMenuItem}
+                      title={t('quote.sendFundingHint')}
+                      onClick={() => {
+                        setSendMenuOpen(false)
+                        onSendFunding()
+                      }}
+                    >
+                      {t('quote.sendMenuFunding')}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 统计行情概览（图表页签专属：基本面页签有自己的信息网格） */}
@@ -835,7 +913,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               derivatives={derivatives}
               colorMode={colorMode}
               onOpenStage={() => { setStageTab('derivatives') }}
-              {...(fillComposer !== undefined ? { onAnalyze: onAnalyzeDerivatives } : {})}
             />
           )}
         </div>
@@ -864,26 +941,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           </div>
 
         <div className={css.toolbarActions}>
-          {fillComposer !== undefined && (
-            <button
-              type="button"
-              className={css.sendButton}
-              data-state={sendState === 'idle' ? undefined : sendState}
-              disabled={sendState === 'sending'}
-              title={t('quote.sendToAgentHint')}
-              onClick={onSendToAgent}
-            >
-              <IconSend size={13} />
-              {sendState === 'sent'
-                ? t('quote.sendSent')
-                : sendState === 'error'
-                  ? t('quote.sendFailed')
-                  : sendState === 'sending'
-                    ? t('quote.sendSending')
-                    : t('quote.sendToAgent')}
-            </button>
-          )}
-
           {/* 交易工作台开关（issue #40；支持接入了交易注册面的各市场） */}
           <button
             type="button"

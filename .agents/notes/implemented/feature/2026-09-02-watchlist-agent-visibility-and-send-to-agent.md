@@ -14,7 +14,7 @@ owner 2026-09-02 实测暴露两处「行情插件数据对 Agent 不透明」�
 1. **种子表上收为共享单源**（新 `@dsh-trading/watchlist/src/seeds.ts`）：`WATCHLIST_SEEDS` + `effectiveWatchlistRows`（定制行优先、未定制回落种子，与客户端 `rowsFor` 同构）+ `watchlistRowSource`；client `store.ts` 的 `DEFAULT_WATCHLISTS` 改为再导出（client bundle 把纯数据模块内联，tsdown alwaysBundle 路径，实测 `贵州茅台` 在产物中）。
 2. **`watchlist_list` 输出合并视图**：`watchlists` = 各市场有效展示行（与 GUI 左栏一致），新增 `sources[market] = 'custom' | 'seed'`；描述改写为权威口径——"this list IS what the user sees"，指示 agent 在用户提到任何标的（名称或代码）时**先调本工具**，并标注展示名↔代码映射（苹果 → AAPL / us）。
 3. **`watchlist_select` 名称解析走合并视图**（`effectiveWatchlistRows` 查找），种子行同样复用展示名，与 list 契约闭环。
-4. **「发给 Agent」按钮**（QuoteStage 工具栏右侧，与指标选择器同组 `css.toolbarActions`）——**只填入会话输入框，不自动提交**（owner 2026-09-02 复审裁决：首版直接 `session.prompt` 启动分析过了头，用户大概率还要补自己的 prompt，发送必须由用户自己按）：
+4. **「发给 Agent」按钮**（QuoteStage 工具栏右侧，与指标选择器同组 `css.toolbarActions`；2026-09-04 起入口迁至报价头统一「发送给 Agent」分体按钮，见 [unified-send-to-agent-entry](2026-09-04-unified-send-to-agent-entry.md)）——**只填入会话输入框，不自动提交**（owner 2026-09-02 复审裁决：首版直接 `session.prompt` 启动分析过了头，用户大概率还要补自己的 prompt，发送必须由用户自己按）：
    - 文本上下文：`compose-quote.ts` 纯函数组装（名称·代码·市场·周期 + 现价/涨跌/昨收 + 十字线读数 K 线 OHLCV + 已开指标），截图有无只影响尾注；
    - 图表截图：TvChart `onCaptureReady` 注册 `chart.takeScreenshot()` 回调（v5 覆盖主图+副图 pane，白底、不含十字线），挂载注册/卸载置 null，QuoteStage 经 `captureRef` 消费；
    - 落地通道（模块改名 `fill-composer.ts`，编排纯函数零 SDK runtime import）：根服务 `ctx.get('conversation')`（ConversationController）的 `createDraftImages([file])` 把截图注册成 browser-owned 草稿图 → per-session `input.shell(sessionId)` facade 的 `addImages(ids)` 挂图、`setDraft(text)` 写草稿——`setDraft` 是整稿替换，先读 `state.draft` 非空时以空行拼接追加，绝不覆盖用户已打内容；**绝不调 `submit()`**；composer 提交中（`phase !== 'plain'`）拒绝写入（防与乐观提交竞态），`addImages` 被拒时回收草稿图、文本照填；

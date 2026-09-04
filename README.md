@@ -39,7 +39,7 @@ Most "AI trading" tools bolt a chat box onto a chart. dsh-trading inverts the re
 ## A terminal that trades like software, not a toy
 
 - **Center-stage charting.** Lightweight Charts v5 with multi-timeframe switching (5m to weekly), MA / EMA / BOLL / MACD / RSI / KDJ / SuperTrend with visual parameter editing, strategy signal markers, knowledge-event pins, and drag-to-measure range statistics.
-- **Real market depth.** Live order book with buy/sell pressure bars, tick-by-tick trades, and a derivatives cockpit covering open interest, funding rates with settlement countdown, long/short ratios, and taker flow, with one-click *fund-flow analysis* handed to the agent.
+- **Real market depth.** Live order book with buy/sell pressure bars, tick-by-tick trades, and a derivatives cockpit covering open interest, funding rates with settlement countdown, long/short ratios, and taker flow, with quote and fund-flow snapshots handed to the agent via the unified *send to agent* button (fills the composer, never auto-sends).
 - **Cross-market watchlist.** Crypto perps next to AAPL next to 牧原股份, with sparklines and real-time quotes. Your whole risk universe in one dock.
 
 ## One terminal, every market
