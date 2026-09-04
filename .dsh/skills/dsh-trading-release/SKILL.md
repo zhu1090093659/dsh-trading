@@ -188,8 +188,13 @@ gh run list --workflow=desktop-release.yml           # 全部成功
 git ls-remote --tags origin | grep "vX.Y.Z"          # tag 已在远端
 ```
 
-本地抽查安装包（macOS）：下载 dmg 安装后启动，确认托盘/窗口品牌为 DSH
-Trading、runtime/host 与 profile-trading 正常加载。
+本地抽查安装包（macOS）：下载 dmg 安装后启动；界面验证按仓库约定走
+「宿主 HTTP + 无头 Chrome 截图」（2026-09-04 起，不做全屏桌面截图）：进程树出现
+`runtime/node ... bin.js --profile trading-web` 即 runtime/host 与 profile-trading
+加载成功；从 `~/Library/Logs/dsh-trading-desktop/dsh-host.log` 取 tokenized URL，
+curl 确认托管 UI 可达（401 = host 已起待鉴权），再 headless Chrome `--timeout`
+截图确认 trading GUI 完整渲染。详见
+[ui-verification note](../../../.agents/notes/implemented/process/2026-09-04-ui-verification-hosted-http-headless-chrome.md)。
 
 ## 6. 纪律
 
