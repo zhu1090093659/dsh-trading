@@ -6,6 +6,7 @@
  *
  * 覆盖：
  * - QuoteStage 在 crypto/us 两种市场下渲染不抛错；衍生品页签仅 crypto 出现；
+ *   基本面页签仅非 crypto 出现（加密资产无标准财报，2026-09-04）；
  * - DerivativesStage 全量数据渲染（基差/倒计时/24h 变化/历史 sparkline 标签）与
  *   「历史不可用」降级提示；
  * - DerivativesPane 格子点击 → onOpenStage、「分析资金面」→ onAnalyze。
@@ -13,7 +14,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import type { DerivativesData, DerivativesHistory } from '../src/client/types.ts'
 
 // TvChart 依赖 lightweight-charts（canvas 族 API 在 jsdom 不可用）：冒烟只关心
@@ -101,6 +102,21 @@ describe('QuoteStage 渲染冒烟（TDZ 网）', () => {
     const { queryByText, container } = render(<QuoteStage {...quoteStageProps('us')} />)
     expect(queryByText('quote.tab.derivatives')).toBeNull()
     expect(container.textContent).toContain('AAPL')
+  })
+
+  it('crypto 标的：基本面页签不渲染（加密资产无标准财报，2026-09-04）', () => {
+    const { queryByText, container } = render(<QuoteStage {...quoteStageProps('crypto')} />)
+    expect(queryByText('quote.tab.fundamentals')).toBeNull()
+    expect(container.textContent).toContain('HYPEUSDT')
+  })
+
+  it('us 标的：基本面页签存在且可切换到基本面工作台', async () => {
+    const { getByText, container } = render(<QuoteStage {...quoteStageProps('us')} />)
+    fireEvent.click(getByText('quote.tab.fundamentals'))
+    // 桥请求被断网桩 500 → 挂载 spinner → 降级渲染工作台根节点，不崩溃
+    await waitFor(() => {
+      expect(container.querySelector('[data-dshtrading-fundamentals]')).toBeTruthy()
+    })
   })
 })
 

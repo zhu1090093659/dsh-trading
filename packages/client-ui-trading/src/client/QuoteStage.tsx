@@ -150,7 +150,12 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [stageTab, setStageTab] = useState<'chart' | 'derivatives' | 'fundamentals' | 'news' | 'announcements'>('chart')
   // 渲染期页签归一（issue #54 评审 L3）：衍生品页签是 crypto 专属，切到非 crypto
   // 市场时渲染直接按图表页签处理——不等 useEffect 纠偏（paint 后才跑会闪一帧公告）。
-  const viewTab = stageTab === 'derivatives' && market !== 'crypto' ? 'chart' : stageTab
+  // 基本面页签反向收敛（2026-09-04）：加密资产无标准财报矩阵，crypto 不再展示基本面，
+  // 残留的 fundamentals 页签同样渲染期归一到图表。
+  const viewTab =
+    (stageTab === 'derivatives' && market !== 'crypto') || (stageTab === 'fundamentals' && market === 'crypto')
+      ? 'chart'
+      : stageTab
   /** 衍生品指标快照（issue #38，crypto 专属；null = 未实现/失败 → 面板整体隐藏）。 */
   const [derivatives, setDerivatives] = useState<DerivativesData | null>(null)
   /** 衍生品历史序列（issue #54；页签激活才拉；null = 未实现/失败 → 趋势卡隐藏）。 */
@@ -414,9 +419,11 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     })
   }
 
-  // 衍生品页签是 crypto 专属：切到非 crypto 市场时自动回图表页签（issue #54）。
+  // 页签市场归一（issue #54 + 2026-09-04 基本面收敛）：衍生品是 crypto 专属，基本面是
+  // 非 crypto 专属（加密资产无标准财报）——切市场越界时自动回图表页签。
   useEffect(() => {
     if (stageTab === 'derivatives' && market !== 'crypto') setStageTab('chart')
+    if (stageTab === 'fundamentals' && market === 'crypto') setStageTab('chart')
   }, [stageTab, market])
 
   // 「分析资金面」（issue #54）：把衍生品快照上下文填进会话输入框（只填不发）。
@@ -746,7 +753,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           <span>{fmtChange(stats.change)}</span>
           <span>{fmtPercent(stats.pct)}</span>
         </span>
-        {/* 行情板块页签：图表 | 基本面 | 新闻 | 公告（富途牛牛式，页签随报价头同行） */}
+        {/* 行情板块页签：图表 | 基本面 | 新闻 | 公告（富途牛牛式，页签随报价头同行）；
+            衍生品仅 crypto（issue #54），基本面仅非 crypto（加密资产无标准财报，2026-09-04） */}
         <div className={css.stageTabs} role="tablist" aria-label="quote section">
           <button
             type="button"
@@ -770,16 +778,18 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               {t('quote.tab.derivatives')}
             </button>
           )}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={stageTab === 'fundamentals'}
-            className={css.stageTab}
-            data-active={stageTab === 'fundamentals' ? 'true' : undefined}
-            onClick={() => { setStageTab('fundamentals') }}
-          >
-            {t('quote.tab.fundamentals')}
-          </button>
+          {market !== 'crypto' && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={stageTab === 'fundamentals'}
+              className={css.stageTab}
+              data-active={stageTab === 'fundamentals' ? 'true' : undefined}
+              onClick={() => { setStageTab('fundamentals') }}
+            >
+              {t('quote.tab.fundamentals')}
+            </button>
+          )}
           <button
             type="button"
             role="tab"
