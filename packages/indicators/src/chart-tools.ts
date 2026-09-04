@@ -179,6 +179,10 @@ export function createIndicatorDeactivateTool(options: IndicatorDeactivateToolOp
 export interface ChartToolDeps {
   customStore?: CustomIndicatorStore | undefined
   chartStore: ChartActivationStore
+  /** 可选：挂载/调参成功后的回调（plugin 接线 emit('chart')，GUI 实时同步）。 */
+  onWritten?: () => void
+  /** 可选：摘除成功后的回调（plugin 接线 emit('chart')）。 */
+  onDeleted?: () => void
 }
 
 /** 便捷工厂：一次创建三个激活名册工具。 */

@@ -40,7 +40,7 @@ export const TRADING_CHART_ACTIVATIONS_KEY = 'tradingChartActivations'
 
 /** tradingEvents 的最小发布面（鸭式；总线缺席时静默降级）。 */
 export interface TradingEventsPublisher {
-  emit(store: 'indicators'): void
+  emit(store: 'indicators' | 'chart'): void
 }
 
 /** 默认存储路径：~/.dsh/indicators/custom.json（与 client-ui-trading 旧路径一致）。 */
@@ -117,6 +117,7 @@ export function registerIndicatorsTools(ctx: Context, deps: IndicatorsPluginDeps
       store: deps.store,
       chartStore: deps.chartStore,
       onWritten: () => events()?.emit('indicators'),
+      onActivated: () => events()?.emit('chart'),
     }))
     register(createIndicatorDeleteTool({
       store: deps.store,
@@ -127,6 +128,8 @@ export function registerIndicatorsTools(ctx: Context, deps: IndicatorsPluginDeps
       const chartTools = createChartActivationTools({
         customStore: deps.store,
         chartStore: deps.chartStore,
+        onWritten: () => events()?.emit('chart'),
+        onDeleted: () => events()?.emit('chart'),
       })
       register(chartTools.list)
       register(chartTools.activate)

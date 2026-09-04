@@ -6,7 +6,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import {
   clampActivationParams,
   createMemoryChartActivationStore,
@@ -141,6 +141,16 @@ describe('图表激活工具族（indicator_list / activate / deactivate）', ()
     // required 缺失由 dsh-tools 框架校验拦截（execute 内同名校验为防御性冗余）。
     await expect(deactivate.execute({})).rejects.toThrow(/missing required property/)
   })
+
+  it('emit 接线：activate/deactivate 回调经便捷工厂透传（回归：漏接导致 GUI 不实时）', async () => {
+    const onWritten = vi.fn()
+    const onDeleted = vi.fn()
+    const tools = createChartActivationTools({ chartStore: createMemoryChartActivationStore(), onWritten, onDeleted })
+    await tools.activate.execute({ id: 'ma' })
+    expect(onWritten).toHaveBeenCalledTimes(1)
+    await tools.deactivate.execute({ id: 'ma' })
+    expect(onDeleted).toHaveBeenCalledWith('ma', true)
+  })
 })
 
 describe('indicator_author「创作即上图」（issue #63）', () => {
@@ -171,5 +181,18 @@ describe('indicator_author「创作即上图」（issue #63）', () => {
     const out = String(await noChart.execute({ ...AUTHOR_ARGS, activate: true }))
     expect(out).toContain('no chart activation store is available')
     expect(await store.get('authored_i')).toBeDefined()
+  })
+
+  it('onActivated 回调：创作即上图成功后触发（emit 接线点；缺省上图不触发）', async () => {
+    const store = createMemoryCustomIndicatorStore()
+    const chartStore = createMemoryChartActivationStore()
+    const onActivated = vi.fn()
+    await createAuthorIndicatorTool({ store, chartStore, onActivated }).execute({ ...AUTHOR_ARGS, activate: true })
+    expect(onActivated).toHaveBeenCalledTimes(1)
+    expect(onActivated).toHaveBeenCalledWith('authored_i')
+
+    const silent = vi.fn()
+    await createAuthorIndicatorTool({ store, chartStore, onActivated: silent }).execute({ ...AUTHOR_ARGS, id: 'authored_ii' })
+    expect(silent).not.toHaveBeenCalled()
   })
 })

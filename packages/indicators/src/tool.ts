@@ -142,10 +142,12 @@ export interface AuthorIndicatorToolOptions {
   onWritten?: (record: CustomIndicatorRecord) => void
   /** 可选：图表激活名册 store（issue #63「创作即上图」路径；缺席时 activate 请求降级说明）。 */
   chartStore?: ChartActivationStore
+  /** 可选：创作即上图成功后的回调（plugin 接线 emit('chart')，GUI 实时同步）。 */
+  onActivated?: (id: string) => void
 }
 
 export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
-  const { store, onWritten, chartStore } = options
+  const { store, onWritten, chartStore, onActivated } = options
 
   return defineTool({
     name: 'indicator_author',
@@ -251,6 +253,7 @@ export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
             params: result.record.params,
           })
           await chartStore.activate(instance)
+          onActivated?.(result.record.id)
           activatedNote = ' The indicator has also been mounted on the chart with its default parameters (see indicator_deactivate to unmount).'
         } else {
           activatedNote = ' Note: activate was requested but no chart activation store is available in this deployment — mount it later via indicator_activate.'
