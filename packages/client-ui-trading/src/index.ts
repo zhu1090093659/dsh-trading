@@ -32,6 +32,7 @@ import {
 } from './bridge.ts'
 import { attachEventStream } from './sse.ts'
 import { TaskActionError } from './tasks/ledger.ts'
+import { registerTasksTools } from './tasks/tools.ts'
 import { TASKS_ACTION_BYTES_LIMIT, parseTasksEnvelope } from './client/tasks-protocol.ts'
 import { TradingTasksService } from './tasks/service.ts'
 import type { SessionCommandDispatcher, SessionGateway } from './tasks/runner.ts'
@@ -151,6 +152,8 @@ export function apply(ctx: Context): void {
     }
     const tasks = tasksService
     if (tasks !== undefined) {
+      // agent 工具面与 HTTP 面同源：服务存在 = 工具存在（headless 宿主两者皆无）。
+      registerTasksTools(ctx, tasks)
       ctx.effect(() => {
         tasks.start()
         return () => { tasks.dispose() }

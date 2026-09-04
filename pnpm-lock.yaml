@@ -378,6 +378,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-workspace':
         specifier: 0.1.2-rc.1
         version: 0.1.2-rc.1(@deepseek-ai/cordis@4.0.2)
+      '@deepseek-ai/dsh-tools':
+        specifier: 0.1.2-rc.1
+        version: 0.1.2-rc.1(de5e1ff2d608fbe22667925341ad1dfc)
       '@dshtrading/api':
         specifier: workspace:^
         version: link:../api

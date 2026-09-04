@@ -250,7 +250,14 @@ export function parseNewTaskInput(value: unknown): NewTaskInput | undefined {
   }
 }
 
-/** 校验并收敛更新补丁；非法返回 undefined。 */
+/**
+ * 校验并收敛更新补丁；非法返回 undefined。
+ *
+ * 显式 null 必须原样保留在补丁里——清除钉住字段的语义由 ledger.applyPatch
+ * 落实（patch.workspaceId === null → delete），这里若丢弃 null，UI 编辑器
+ * 发出的清除动作会在桥层被静默吞掉（2026-09-04 实证回归，随 agent 工具
+ * 面一并修复）。
+ */
 export function parseTaskUpdatePatch(value: unknown): TaskUpdatePatch | undefined {
   const row = record(value)
   if (row === undefined || !exactKeys(row, ['title', 'prompt', 'workspaceId', 'agentPreset', 'permission', 'schedule'])) return undefined
@@ -271,9 +278,9 @@ export function parseTaskUpdatePatch(value: unknown): TaskUpdatePatch | undefine
   return {
     ...(title === undefined ? {} : { title }),
     ...(prompt === undefined ? {} : { prompt }),
-    ...(workspaceId === undefined || workspaceId === null ? {} : { workspaceId }),
-    ...(agentPreset === undefined || agentPreset === null ? {} : { agentPreset }),
-    ...(permission === undefined || permission === null ? {} : { permission }),
+    ...(workspaceId === undefined ? {} : { workspaceId }),
+    ...(agentPreset === undefined ? {} : { agentPreset }),
+    ...(permission === undefined ? {} : { permission }),
     ...(schedule === undefined ? {} : { schedule }),
   }
 }
