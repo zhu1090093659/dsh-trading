@@ -1,4 +1,12 @@
-/* SessionRail —— 右缘常驻会话竖条（富途牛牛式右侧垂直图标条）。 */
+/* SessionRail —— 右缘常驻会话竖条（富途牛牛式右侧垂直图标条）。
+ *
+ * 视觉打磨（2026-09-04）：
+ * - 竖条底色用 bg-surface 表面层级，与左侧自选列表同层，不再裸用 bg-base；
+ * - 激活态（折叠生效/后续功能页签）走 accent 蓝：图标着色 + accent-subtle
+ *   底 + 左缘 2px 指示条，给出明确的「对话列已收起」视觉锚点；
+ * - 按钮三态分层：默认 secondary 灰 → hover 加深底 + 图标微放大 → 激活 accent；
+ * - 节奏对齐：按钮 32px、顶 padding 12px、gap 4px、分隔线 24px 与按钮中线对齐。
+ */
 
 .rail {
   position: fixed;
@@ -9,9 +17,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 10px 0;
-  background: var(--dsw-futu-bg-base, #ffffff);
+  gap: 4px;
+  padding: 12px 0;
+  background: var(--dsw-futu-bg-surface, #f7f8fa);
   border-left: 1px solid var(--dsw-futu-border-default, #e3e6ea);
   z-index: 40;
   box-sizing: border-box;
@@ -30,24 +38,50 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s, color 0.15s;
+  position: relative;
+  transition: background 0.15s ease, color 0.15s ease;
   flex: none;
 }
 
+.button svg {
+  transition: transform 0.15s ease;
+}
+
 .button:hover {
-  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.05));
+  background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
   color: var(--dsw-futu-text-primary, #1a1e24);
 }
 
+.button:hover svg {
+  transform: scale(1.06);
+}
+
+/* 激活态（折叠生效 / 后续功能页签激活）：accent 蓝 + 左缘指示条。 */
 .button[aria-pressed='true'],
 .button[data-active='true'] {
-  background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
-  color: var(--dsw-futu-text-primary, #1a1e24);
+  background: var(--dsw-futu-accent-subtle, rgba(37, 99, 235, 0.08));
+  color: var(--dsw-futu-accent, #2563eb);
+}
+
+.button[aria-pressed='true']::before,
+.button[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--dsw-futu-accent, #2563eb);
 }
 
 /* 折叠态把面板图标水平镜像（折叠折线朝右缘），提示点击向左展开会话列。 */
 .button[aria-pressed='true'] svg {
   transform: scaleX(-1);
+}
+
+.button[aria-pressed='true']:hover svg {
+  transform: scaleX(-1) scale(1.06);
 }
 
 .button:focus-visible {
@@ -56,7 +90,7 @@
 }
 
 .divider {
-  width: 20px;
+  width: 24px;
   height: 1px;
   margin: 4px 0;
   flex: none;
