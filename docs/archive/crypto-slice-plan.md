@@ -7,7 +7,7 @@
 打通「一条命令安装 crypto 市场包 → 会话级 preset 隔离 → 行情工具可用 → 下单 dry-run+审批」全链路。
 **非目标**：UI 面板（后置）、实盘交易、回测引擎、多交易所（先 Binance 一家）。
 
-> **2026-08-31 更新**：本切片的范围控制已完成使命。「回测引擎」non-goal 由 [docs/design/strategy-tab.md](design/strategy-tab.md) 方向性取代——回测以纯函数浏览器端本地形态进入路线图；「实盘交易」non-goal 不变（铁律 #3）。决策记录见 `.agents/notes/implemented/architecture/2026-08-31-strategy-tab-and-knowledge-base.md`。
+> **2026-08-31 更新**：本切片的范围控制已完成使命。「回测引擎」non-goal 由 [docs/design/strategy-tab.md](../design/strategy-tab.md) 方向性取代——回测以纯函数浏览器端本地形态进入路线图；「实盘交易」non-goal 不变（铁律 #3）。决策记录见 `.agents/notes/implemented/architecture/2026-08-31-strategy-tab-and-knowledge-base.md`。
 
 ## 包清单与依赖 DAG
 

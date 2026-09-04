@@ -4,10 +4,10 @@ Archived: 2026-09-04
 Status: implemented
 
 （2026-08-30 同日补充：右栏最终整体退役、历史并入 hero 融合容器，见
-[右栏退役](../architecture/2026-08-30-right-rail-retire-hero-fusion.md)——本篇的
+[右栏退役](../../implemented/architecture/2026-08-30-right-rail-retire-hero-fusion.md)——本篇的
 「右栏只留历史会话列表」形态已被取代，「剔冗余入口」的裁决与理由仍有效。
 新会话/折叠/设置入口其后进一步收敛为右缘会话竖条，见
-[会话竖条](../architecture/2026-08-30-session-rail-vertical-toolbar.md)。）
+[会话竖条](../../implemented/architecture/2026-08-30-session-rail-vertical-toolbar.md)。）
 
 ## Problem
 

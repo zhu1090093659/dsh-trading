@@ -12,7 +12,7 @@ Implemented: 2026-09-01（P0–P6 全部交付，issue #29–#35 关闭）
 3. 系统性缺口是「Agent 写状态 → 已打开 UI 刷新」通道：官方 remote 事件白名单不可扩展，现状靠刷新页面。
 4. 安全缺口：dsh-tool-cordis 动态包可 inject TradeService 绕过工具层闸门（现三态检查在工具层）。
 
-需要一份覆盖拆包粒度、UI 通知通道、存储升位、工具可见性、动态能力开放的总体决策。完整设计见 [docs/design/agentic-native-architecture.md](../../../docs/design/agentic-native-architecture.md)。
+需要一份覆盖拆包粒度、UI 通知通道、存储升位、工具可见性、动态能力开放的总体决策。完整设计见 [docs/design/agentic-native-architecture.md](../../../../docs/design/agentic-native-architecture.md)。
 
 ## Decision
 

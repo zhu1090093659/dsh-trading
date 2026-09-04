@@ -14,7 +14,7 @@ Status: implemented
 `QuoteStage` 读数行的 开/高/低/量 取自 `readoutCandle`（= `klines[readoutIndex]`，
 `readoutIndex` 跟随 TvChart `subscribeCrosshairMove` 上抛的 `hoverIndex`），
 唯独 昨收 直接渲染 `stats.prevClose`（官方快照锚点 `ticker.prevClose`，
-见 [us-quote-prevclose-yahoo-anchor](2026-09-01-us-quote-prevclose-yahoo-anchor.md)）。
+见 [us-quote-prevclose-yahoo-anchor](../../implemented/bug-fix/2026-09-01-us-quote-prevclose-yahoo-anchor.md)）。
 该锚点只对「最新交易日」语义正确，对历史悬停K线恒定不变，属字段取值错位。
 
 ## Decision

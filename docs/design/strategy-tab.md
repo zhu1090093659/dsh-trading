@@ -2,7 +2,7 @@
 
 > 状态：设计定稿（待实现） · 2026-08-31
 > 决策：项目所有者（Mode 2） · 起草：agent 评审
-> 关联：[docs/design/knowledge-graph.md](knowledge-graph.md)（第三 Tab）、[docs/skills-guide.md](../skills-guide.md)（Skill SSOT）、[docs/crypto-slice-plan.md](../crypto-slice-plan.md)（旧回测 non-goal 的反转说明）
+> 关联：[docs/design/knowledge-graph.md](knowledge-graph.md)（第三 Tab）、[docs/skills-guide.md](../skills-guide.md)（Skill SSOT）、[docs/crypto-slice-plan.md](../archive/crypto-slice-plan.md)（旧回测 non-goal 的反转说明）
 
 ## 1. 背景与决策
 
@@ -10,7 +10,7 @@
    - **「量化」更名「策略」**——「量化」是工程语义，「策略」才是交易用户的心智词汇；
    - 板块内容 = **常用交易策略的参考范式**：短线、中线波段、长线投资三类，给用户可读、可跑、可改的实现参考；
    - 中栏 Tab 三分法定稿：**行情 | 策略 | 知识库**。
-2. 决策反转记录：`docs/crypto-slice-plan.md`（2026-08-29）曾把「回测引擎」列为 non-goal——那是单交易所切片期的范围控制，不是永久否定。本设计将回测收敛为**纯函数、浏览器端、单标的本地回测**，服务参考范式的教学与验证；**实盘自动化仍然不在范围内**（铁律 #3 不变，策略层永不直接触发 `place_order`）。旧文档已加指向注。
+2. 决策反转记录：`docs/archive/crypto-slice-plan.md`（2026-08-29）曾把「回测引擎」列为 non-goal——那是单交易所切片期的范围控制，不是永久否定。本设计将回测收敛为**纯函数、浏览器端、单标的本地回测**，服务参考范式的教学与验证；**实盘自动化仍然不在范围内**（铁律 #3 不变，策略层永不直接触发 `place_order`）。旧文档已加指向注。
 
 ## 2. 目标与非目标
 
@@ -132,5 +132,5 @@ export interface StrategyDefinition {
 ## 6. 参考
 
 - `packages/indicators`：包形态 / math 函数 / Kline 类型的复用来源；`client-ui-trading` 中 `TvChart.tsx`（vanilla 库 + React 外壳先例）、`api.ts`（`fetchKlines`）、`MiddleStage.tsx`（视图注册表）
-- `docs/crypto-slice-plan.md`：旧 non-goal 原文与本设计的反转关系
+- `docs/archive/crypto-slice-plan.md`：旧 non-goal 原文与本设计的反转关系
 - 五条铁律见 `README.md`；本设计不触碰铁律 #3（无下单路径）与铁律 #2（策略 SOP 全部进 skill）

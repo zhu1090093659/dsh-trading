@@ -3,7 +3,7 @@
 Archived: 2026-09-04
 Status: implemented
 
-> 注：README 结构与 Slogan 标头已被 [2026-09-03-readme-product-intro-screenshots-bilingual](2026-09-03-readme-product-intro-screenshots-bilingual.md) 取代（产品介绍化 + 双语拆分）；本记录的 Slogan 定位与元数据部分仍有效。
+> 注：README 结构与 Slogan 标头已被 [2026-09-03-readme-product-intro-screenshots-bilingual](../../implemented/process/2026-09-03-readme-product-intro-screenshots-bilingual.md) 取代（产品介绍化 + 双语拆分）；本记录的 Slogan 定位与元数据部分仍有效。
 
 ## Problem
 
