@@ -1,5 +1,6 @@
 # Agent Note: 策略回测 K 线拉取上限对齐 OKX 300 根限制与 6 大范式回测验证
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

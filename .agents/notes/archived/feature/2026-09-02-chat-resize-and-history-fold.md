@@ -1,5 +1,6 @@
 # Agent Note: 右侧栏改进——对话列拖拽调宽 + 历史会话默认三条折叠
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

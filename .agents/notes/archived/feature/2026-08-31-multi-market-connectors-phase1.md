@@ -1,8 +1,9 @@
-﻿# Agent Note: 全市场多连接器矩阵 Phase 1 交付 (Eastmoney, FMP, Finnhub, Longbridge, Bybit)
+# Agent Note: 全市场多连接器矩阵 Phase 1 交付 (Eastmoney, FMP, Finnhub, Longbridge, Bybit)
 
 - **日期**: 2026-08-31
 - **类型**: feature
 - **状态**: implemented
+Archived: 2026-09-04
 
 ## 变更背景与目标
 用户要求为 A 股、美股、港股、加密货币全市场提供丰富的连接器选择（覆盖商业付费源与免密公共量化 API），并在 UI/路由配置层允许用户自主切换。

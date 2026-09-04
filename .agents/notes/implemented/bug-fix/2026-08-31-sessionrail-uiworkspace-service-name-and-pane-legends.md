@@ -13,7 +13,7 @@ Status: implemented
 
 ### Bug 1：上一轮修复解析了错误的服务名（惰性解析方向对、目标错）
 
-`2026-08-31-dsh-alpha2-host-regression-okx-routing-and-rail.md` 的 Decision #3 把
+`../archived/bug-fix/2026-08-31-dsh-alpha2-host-regression-okx-routing-and-rail.md` 的 Decision #3 把
 服务名新旧关系**搞反了**：alpha.2 宿主 client context 里 `workspaces` 与
 `uiWorkspace` **并存**，且各有明确分工——
 

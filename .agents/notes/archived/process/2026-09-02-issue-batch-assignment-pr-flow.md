@@ -1,5 +1,6 @@
 # Agent Note: 看盘 UI 二期 #36-#41 分工落定，任务交付改走分支+PR 流
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

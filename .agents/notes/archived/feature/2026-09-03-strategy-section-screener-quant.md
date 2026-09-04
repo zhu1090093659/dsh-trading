@@ -1,5 +1,6 @@
 # Agent Note: 策略一级分区拆分 — 选股策略 | 量化策略 + 5 个内置选股器
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

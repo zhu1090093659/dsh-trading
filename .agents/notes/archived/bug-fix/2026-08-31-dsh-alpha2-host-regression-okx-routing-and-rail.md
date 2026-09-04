@@ -1,9 +1,10 @@
 # Agent Note: 宿主回归 0.1.1-rc.2 引发的 OKX 路由失效与 SessionRail 失灵（含 c3aebb5 误伤回滚）
 
+Archived: 2026-09-04
 Status: implemented
 
 > **Correction（2026-08-31 晚，见
-> [2026-08-31-sessionrail-uiworkspace-service-name-and-pane-legends.md](2026-08-31-sessionrail-uiworkspace-service-name-and-pane-legends.md)）**：
+> [2026-08-31-sessionrail-uiworkspace-service-name-and-pane-legends.md](../../implemented/bug-fix/2026-08-31-sessionrail-uiworkspace-service-name-and-pane-legends.md)）**：
 > 本文 Decision #3 对服务名新旧关系的判断**有误**——alpha.2 client context 中
 > `workspaces` 与 `uiWorkspace` 并存而非二选一；`startSession` 一直都在
 > `uiWorkspace`（UiWorkspaceService）上，`workspaces`（WorkspaceController）

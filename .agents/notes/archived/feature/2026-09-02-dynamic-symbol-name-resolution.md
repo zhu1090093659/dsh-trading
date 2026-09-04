@@ -1,5 +1,6 @@
-﻿# Agent Note: 从数据源动态获取股票/标的真实中文名称与实时回填
+# Agent Note: 从数据源动态获取股票/标的真实中文名称与实时回填
 
+Archived: 2026-09-04
 - **日期**: 2026-09-02
 - **类型**: Feature / UX Enhancement
 - **影响范围**: `@dsh-trading/api`, `@dsh-trading/router`, `@dsh-trading/connector-tencent`, `@dsh-trading/connector-eastmoney`, `@dsh-trading/connector-yahoo`, `@dsh-trading/client-ui-trading`

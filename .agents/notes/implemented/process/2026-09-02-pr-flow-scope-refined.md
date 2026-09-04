@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-[2026-09-02 分支+PR 交付流定案](2026-09-02-issue-batch-assignment-pr-flow.md)
+[2026-09-02 分支+PR 交付流定案](../../archived/process/2026-09-02-issue-batch-assignment-pr-flow.md)
 把「直推废止」写成了普遍规则，实践中被扩大适用：连 root package.json 删一个
 重复键也开了 PR（#50）。owner 2026-09-02 明确反馈：每次小改动都走 PR 太冗余
 也太复杂，流程需要定义清楚适用边界。

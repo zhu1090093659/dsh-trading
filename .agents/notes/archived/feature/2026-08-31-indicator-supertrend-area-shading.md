@@ -1,5 +1,6 @@
 # Agent Note: 超级趋势（SuperTrend）多空双色与 Area 阴影渐变填充
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

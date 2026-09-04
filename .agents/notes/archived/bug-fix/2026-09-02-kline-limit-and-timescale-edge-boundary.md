@@ -1,5 +1,6 @@
-﻿# K线数据量扩充、时间轴边界锁定与股票搜索名称自动回显
+# K线数据量扩充、时间轴边界锁定与股票搜索名称自动回显
 
+Archived: 2026-09-04
 **日期**: 2026-09-02
 **类型**: Bug Fix & UI Enhancement
 **影响模块**: `packages/client-ui-trading`, `packages/router`

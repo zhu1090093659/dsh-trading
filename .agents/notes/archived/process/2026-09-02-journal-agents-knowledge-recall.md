@@ -1,5 +1,6 @@
 # Agent Note: 交易日志骨架新增 AGENTS.md——知识召回先行守则
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

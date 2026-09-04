@@ -6,6 +6,7 @@
 > `2026-08-31-dsh-alpha2-host-regression-okx-routing-and-rail.md`
 > （含 apply 时刻捕获服务的竞态整改——inject 边不保证 apply 时序）。
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

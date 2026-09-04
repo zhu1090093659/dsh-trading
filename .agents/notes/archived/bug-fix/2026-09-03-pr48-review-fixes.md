@@ -1,5 +1,7 @@
 # Agent Note: PR #48 评审整改（news feed & chart markers，Request Changes → 合并前修复）
 
+Archived: 2026-09-04
+
 - **日期**: 2026-09-03
 - **Issue**: #37, #41（PR #48 评审回复）
 - **类型**: bug-fix（review remediation）

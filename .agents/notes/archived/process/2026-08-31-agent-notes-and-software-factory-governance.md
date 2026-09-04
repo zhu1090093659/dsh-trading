@@ -1,5 +1,6 @@
 # Agent Note: Agent Notes 与软件工厂治理体系落地
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

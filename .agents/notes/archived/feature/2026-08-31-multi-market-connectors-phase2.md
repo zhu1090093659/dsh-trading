@@ -3,6 +3,7 @@
 - **日期**: 2026-08-31
 - **类型**: feature
 - **状态**: implemented
+Archived: 2026-09-04
 
 ## 变更背景与目标
 完成第二阶段量化社区开源生态与机构级专业源的扩展，涵盖 A 股专业量化平台 Tushare Pro、A 股宏观与另类开源库 AkShare、美股高频源 Polygon.io 以及加密货币跨所聚合开源引擎 CCXT。

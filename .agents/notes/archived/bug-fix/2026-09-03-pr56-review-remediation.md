@@ -1,5 +1,7 @@
 # PR #56 评审整改（H1/M1-M3/L1-L7/H2）——2026-09-03
 
+Archived: 2026-09-04
+
 ## 背景
 
 四子代理 findings-first 评审 PR #56（feat/i18n-zh-cn）：1 High 合并风险（分支落后 main 5 提交）、1 High 门禁缺口（i18n audit 未接 CI）、3 Medium 功能 bug、7 Low。owner 指示全部修复后合并 main。

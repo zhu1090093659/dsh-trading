@@ -1,5 +1,6 @@
 # Agent Note: 行情读数行昨收跟随十字光标K线（原为恒定官方锚点）
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

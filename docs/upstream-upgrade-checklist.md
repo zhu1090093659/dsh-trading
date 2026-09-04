@@ -1,14 +1,16 @@
 # DSH 上游升级检查清单（upstream upgrade checklist）
 
-> 2026-08-30 架构评审整改 #7。版本基线铁律：DSH 本体钉 0.1.2-alpha.1（README 首节），
-> 本仓多处**复刻/寄生**宿主机制，升级宿主版本 = 逐项对照本清单。顺序：先只读抽核，
-> 再改基线，最后全量验收。
+> 2026-08-30 架构评审整改 #7；2026-09-04 基线口径更新。版本基线铁律：SDK cohort 以
+> pnpm-workspace.yaml overrides 块钉住的 npm `@deepseek-ai/*` 版本为准（现为
+> 0.1.2-rc.1，随宿主 CLI 同批升级；选择/安装/验收流程走全局 skill `dsh-sdk-upgrade`：
+> `~/.zcode/skills/dsh-sdk-upgrade/`），本仓多处**复刻/寄生**宿主机制，升级宿主版本 =
+> 逐项对照本清单。顺序：先只读抽核，再改基线，最后全量验收。
 
 ## 0. 基线变更
 
-- [ ] 核对新 tag、更新 README「版本基线」节；
-- [ ] 本机 `dsh` 与参考 checkout 同步到新版本（两处都要核实，README 口径）；
-- [ ] 本仓 `pnpm-workspace.yaml` overrides 路径指向的 checkout 随之更新。
+- [ ] 核对新版本、更新 README「版本基线」节；
+- [ ] 宿主 dsh CLI 全局升级（先于仓库 install，顺序铁律见 skill）；
+- [ ] 本仓 `pnpm-workspace.yaml` overrides 块与各包 floor 同步钉到新版本（整块替换，勿放宽 range）。
 
 ## 1. 复刻构建面（client 双面包）
 

@@ -1,5 +1,6 @@
-﻿# 自选股搜索拼音简拼支持与缺失 Market 自愈修复
+# 自选股搜索拼音简拼支持与缺失 Market 自愈修复
 
+Archived: 2026-09-04
 ## Context
 用户反馈在自选股搜索或切标的时出现：
 1. 中栏行情区报错 `K线加载失败: bridge /dshtrading/api/klines?market=&symbol=000001.SZ... failed: 400`；

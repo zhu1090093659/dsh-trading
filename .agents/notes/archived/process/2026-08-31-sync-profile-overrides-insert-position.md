@@ -3,6 +3,7 @@
 - **日期**: 2026-08-31
 - **类别**: Process / Tooling
 - **状态**: Implemented
+Archived: 2026-09-04
 - **触发**: PR #21 评审过程中为影子 profile 安装 PR 构建时实证
 
 ## 问题

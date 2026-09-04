@@ -1,5 +1,6 @@
 # Agent Note: 衍生品指标面板（issue #38）——契约可选方法 + 三家连接器 + 桥透传
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

@@ -1,5 +1,6 @@
 # Agent Note: 行情板块优化——图表/基本面页签 + 左价格/右涨跌幅双轴 + 区间统计框选
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

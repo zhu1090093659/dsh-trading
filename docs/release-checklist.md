@@ -9,7 +9,7 @@
 > **状态更新（2026-08-30）**：DSH 0.1.2-alpha.2 已发布 npm，本仓 SDK 依赖整体切换到
 > 官方 npm cohort（cordis 4.0.2 / cosmokit 1.8.3 / schemastery 3.18.2；PR #13）。
 > overrides 全部移除、干净环境 CI 全绿、README 口径已改——本节闸门**已通过**，
-> 决策细节见 `.agents/notes/implemented/process/2026-08-30-sdk-upgrade-npm-0.1.2-alpha.2.md`。
+> 决策细节见 `.agents/notes/archived/process/2026-08-30-sdk-upgrade-npm-0.1.2-alpha.2.md`。
 > 以下原始清单保留作历史口径。
 
 本仓 `pnpm-workspace.yaml` 的 overrides 把 `@deepseek-ai/*` SDK 钉到本机绝对路径

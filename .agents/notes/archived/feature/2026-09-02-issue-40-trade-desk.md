@@ -1,5 +1,6 @@
 # Agent Note: 交易工作台（issue #40）——宿主面交易注册表 + 桥强制 dry-run + 只读账户面
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

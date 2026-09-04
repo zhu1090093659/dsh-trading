@@ -6,6 +6,7 @@
 > `2026-08-31-dsh-alpha2-host-regression-okx-routing-and-rail.md` 中回滚。
 > 400 的公共根因是宿主世代回归，非本 note 所述「上游缺方法」。
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

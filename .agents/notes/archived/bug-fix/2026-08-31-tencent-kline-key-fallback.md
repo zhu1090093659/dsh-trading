@@ -1,5 +1,6 @@
 # Agent Note: 腾讯 K 线响应键回落——hk 无前权代码返回 day 而非 qfqday
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

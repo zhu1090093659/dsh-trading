@@ -1,5 +1,6 @@
 # Agent Note: 盘口与分笔竖栏（issue #39）——契约双可选方法 + crypto 三家 + 腾讯沪深五档
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

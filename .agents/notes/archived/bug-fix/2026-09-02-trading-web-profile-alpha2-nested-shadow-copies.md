@@ -1,5 +1,6 @@
 # Agent Note: trading-web profile 内嵌 0.1.2-alpha.2 影子拷贝清理（cohort check 5 项 FAIL）
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

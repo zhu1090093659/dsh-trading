@@ -1,5 +1,6 @@
 # Agent Note: SDK 依赖对齐官方 NPM 0.1.2-alpha.3 世代
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

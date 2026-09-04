@@ -1,5 +1,6 @@
 ﻿# Agent Note: 连接器与 UI 功能全面贯通（多市场交易台 + 撤单闭环 + 盘口与基本面补全）
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

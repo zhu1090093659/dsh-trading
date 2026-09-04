@@ -1,5 +1,6 @@
 # Agent Note: 双源公告 PR #53 评审整改——去重误删、假归因、UTC 窗口、BJ 跳过
 
+Archived: 2026-09-04
 Status: implemented（PR #53 合并前整改）
 
 ## Problem

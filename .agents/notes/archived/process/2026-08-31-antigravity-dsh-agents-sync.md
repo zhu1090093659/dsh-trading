@@ -1,5 +1,6 @@
 # Agent Note: DSH 与 Antigravity Agents 配置双向软链接同步
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-旧 README（见 [2026-08-31-slogan-and-readme-brand-revamp](2026-08-31-slogan-and-readme-brand-revamp.md)）本质是一份技术说明书：架构表、铁律、包清单、ToS 占据主要篇幅，对首次到访者没有回答「这个产品能给我什么」。项目已具备完整可演示的三栏终端 GUI（图表/盘口/衍生品/Agent 栏），缺少与之匹配的图文并貌的产品门面。
+旧 README（见 [2026-08-31-slogan-and-readme-brand-revamp](../../archived/process/2026-08-31-slogan-and-readme-brand-revamp.md)）本质是一份技术说明书：架构表、铁律、包清单、ToS 占据主要篇幅，对首次到访者没有回答「这个产品能给我什么」。项目已具备完整可演示的三栏终端 GUI（图表/盘口/衍生品/Agent 栏），缺少与之匹配的图文并貌的产品门面。
 
 ## Decision
 
@@ -25,4 +25,4 @@ Status: implemented
 
 - `README.md`（英文）+ `README_zh.md`（中文）为双门面，结构变更需双语同步。
 - `docs/screenshots/` 成为 README 图片来源；UI 大改版时需重拍。
-- 旧记录 [2026-08-31-slogan-and-readme-brand-revamp](2026-08-31-slogan-and-readme-brand-revamp.md) 中的 README 结构决策被本记录取代（Slogan 与元数据部分仍有效）。
+- 旧记录 [2026-08-31-slogan-and-readme-brand-revamp](../../archived/process/2026-08-31-slogan-and-readme-brand-revamp.md) 中的 README 结构决策被本记录取代（Slogan 与元数据部分仍有效）。

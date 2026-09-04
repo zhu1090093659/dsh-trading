@@ -1,5 +1,6 @@
 # Agent Note: PR #52 评审整改 — 图表分区回归 / 扫描假阴性 / 扫描中状态错位
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

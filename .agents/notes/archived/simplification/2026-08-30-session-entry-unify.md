@@ -1,5 +1,6 @@
 # Agent Note: 会话入口归一——右栏只留历史会话，新对话统一官方首页 composer
 
+Archived: 2026-09-04
 Status: implemented
 
 （2026-08-30 同日补充：右栏最终整体退役、历史并入 hero 融合容器，见

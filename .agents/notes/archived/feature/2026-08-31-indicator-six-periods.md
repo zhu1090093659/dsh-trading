@@ -1,5 +1,6 @@
 # Agent Note: 内置技术指标插件 MA / EMA 扩展支持最多 6 个周期
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

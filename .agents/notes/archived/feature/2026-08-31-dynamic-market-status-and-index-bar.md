@@ -1,5 +1,6 @@
 # Agent Note: 动态市场大盘指数与交易时段状态栏（替换硬编码 Mock 数据）
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

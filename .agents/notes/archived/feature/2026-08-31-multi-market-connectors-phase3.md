@@ -3,6 +3,7 @@
 - **日期**: 2026-08-31
 - **类型**: feature
 - **状态**: implemented
+Archived: 2026-09-04
 
 ## 变更背景与目标
 完成第三阶段机构级券商实盘网关与跨市场直连通道的扩展，打通 A 股迅投 MiniQMT 本地量化网关、美股/全球盈透证券 (Interactive Brokers) 以及港美股老虎证券 (Tiger Trade)。

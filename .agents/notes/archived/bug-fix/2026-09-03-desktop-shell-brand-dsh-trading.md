@@ -1,5 +1,6 @@
 # Agent Note: 桌面壳品牌统一为 DSH Trading（窗口标题固定 + 启动/错误页改名）
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

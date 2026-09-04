@@ -1,5 +1,6 @@
 # Agent Note: 桌面版误把自己的 DSH Web 当 trading GUI 交棒给浏览器（attach 探测移除）
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

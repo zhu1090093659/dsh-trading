@@ -5,7 +5,7 @@
 2. /Users/zcl/code/dsh-trading/docs/crypto-slice-plan.md —— 包清单权威来源（5 包：@dsh-trading/api、base、connector-binance、kit-crypto、crypto）
 3. /Users/zcl/code/dsh-trading/spikes/s5-scaffold-design/TEMPLATES.md —— 构建机制模板（怎么做的权威来源）
 4. /Users/zcl/code/dsh-trading/spikes/REVIEW-LOG.md —— spike 结论中的约束（坑与采纳建议）
-注意：包名/职责以 crypto-slice-plan.md 为准；TEMPLATES.md 的目录规划（core/connectors/skills/bundles 分组）可参考但与 slice 计划冲突时以 slice 计划为准，差异在交付说明里标注。
+注意：包名/职责以 docs/archive/crypto-slice-plan.md（已归档）为准；TEMPLATES.md 的目录规划（core/connectors/skills/bundles 分组）可参考但与 slice 计划冲突时以 slice 计划为准，差异在交付说明里标注。
 
 【环境约束（spike 实证）】
 - npm 上 @deepseek-ai/dsh-* 只有 0.0.1-rc.1（不兼容）→ 对 DSH SDK 一律 peerDependencies 声明；开发期解析用 pnpm overrides file: 指向 /Users/zcl/code/deepseek-harness/packages/...（TEMPLATES §7 方案）。DSH checkout 全程只读。

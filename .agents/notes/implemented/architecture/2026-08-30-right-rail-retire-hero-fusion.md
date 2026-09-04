@@ -7,7 +7,7 @@ Status: implemented
 按用户裁决改为竖排功能栏；本篇的折叠机制（fold-store + 轨道归零）与设置
 程序化 click 通路仍有效。）
 
-（承接同日 [会话入口归一](../simplification/2026-08-30-session-entry-unify.md)。该记录
+（承接同日 [会话入口归一](../../archived/simplification/2026-08-30-session-entry-unify.md)。该记录
 只完成了「剔冗余」；用户随后三次收口：历史搬到左边与 hero 拼一个容器 → 右栏其余
 内容（品牌头/新会话/设置）也并入左边 → 折叠与新会话放右上角、设置放左下角。本记录
 覆盖最终形态，2.5 记录中「右栏只留历史列表」的决策被本篇取代。）

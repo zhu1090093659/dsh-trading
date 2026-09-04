@@ -1,5 +1,6 @@
 # Agent Note: trading-web 补装 us/cn/hk bundle——四市场预设全部可加载
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

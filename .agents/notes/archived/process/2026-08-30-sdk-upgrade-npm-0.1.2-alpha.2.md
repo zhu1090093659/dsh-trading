@@ -1,5 +1,6 @@
 # Agent Note: SDK 依赖切到官方 NPM 0.1.2-alpha.2 世代（DSH SDK 不再 pin 源码 checkout）
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

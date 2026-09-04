@@ -1,5 +1,6 @@
 # Agent Note: 协作模式是 owner 习惯，自 README 移入决策记录
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

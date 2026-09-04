@@ -1,5 +1,6 @@
 # Agent Note: main 双向分叉 rebase 同步 — send-to-agent/双轴 × 远端主题/edge-limits 冲突裁决
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem

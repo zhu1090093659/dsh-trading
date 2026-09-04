@@ -1,5 +1,6 @@
 # Agent Note: 历史会话面板行操作菜单（重命名/分叉/归档）
 
+Archived: 2026-09-04
 Status: implemented
 
 ## Problem
