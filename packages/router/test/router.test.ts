@@ -22,6 +22,7 @@ import {
   DEFAULT_MARKETS,
   PROVIDER_VOCABULARY,
   MarketDataRegistryService,
+  TradeRegistryService,
   TradingNewsRegistryService,
   MarketRouterService,
   activeProviderOf,
@@ -29,7 +30,7 @@ import {
   type Config as ConfigType,
   type Provider,
 } from '../src/index.js'
-import type { MarketDataService, NewsAggregator } from '@dshtrading/api'
+import type { MarketDataService, NewsAggregator, TradeService } from '@dshtrading/api'
 
 const ENTRY: ConfigType = { markets: { ...DEFAULT_MARKETS } }
 
@@ -156,6 +157,67 @@ describe('MarketDataRegistryService（tradingMarketDataRegistry，2026-08-30 注
     registry.register('jp', 'jp-source', jp)
     expect(registry.active('jp')?.service).toBe(jp)
     registry.register('jp', 'jp-source-2', fakeService('jp2'))
+    expect(registry.active('jp')).toBeUndefined()
+  })
+})
+
+describe('TradeRegistryService（tradingTradeRegistry，2026-09-04 补齐 provide 方）', () => {
+  const fakeTrade = (tag: string): TradeService => ({
+    placeOrder: async (req) => ({
+      id: tag, symbol: req.symbol, side: req.side, type: req.type,
+      status: 'filled', quantity: req.quantity, dryRun: true, timestamp: 0,
+    }),
+    cancelOrder: async () => {},
+    getOrder: async (_symbol, id) => ({
+      id, symbol: _symbol, side: 'buy', type: 'limit', status: 'new', quantity: 1, dryRun: true, timestamp: 0,
+    }),
+    getPositions: async () => [],
+  })
+  const setup = () => {
+    let source: ConfigType = { markets: { ...DEFAULT_MARKETS } }
+    const router = new MarketRouterService(new CordisContext() as never, () => source)
+    const registry = new TradeRegistryService(new CordisContext() as never, router)
+    return { router, registry, setSource: (next: ConfigType) => { source = next } }
+  }
+
+  it('按路由解析激活交易服务；重复注册同 (market,provider) 不同实例抛错', () => {
+    const { registry } = setup()
+    const binance = fakeTrade('binance')
+    const okx = fakeTrade('okx')
+    registry.register('crypto', 'binance', binance)
+    registry.register('crypto', 'okx', okx)
+    expect(registry.active('crypto')?.service).toBe(binance)
+    expect(registry.list('crypto').map((e) => e.provider).sort()).toEqual(['binance', 'okx'])
+    expect(() => registry.register('crypto', 'binance', fakeTrade('binance-2'))).toThrow(/duplicate trade registration/)
+  })
+
+  it('tradeProvider 显式设置时优先于数据面 provider（数据/交易分离预留语义）', () => {
+    const { registry, setSource } = setup()
+    const binance = fakeTrade('binance')
+    const okx = fakeTrade('okx')
+    registry.register('crypto', 'binance', binance)
+    registry.register('crypto', 'okx', okx)
+    setSource({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'binance', tradeProvider: 'okx' } } })
+    expect(registry.active('crypto')?.service).toBe(okx)
+  })
+
+  it('选中了但未注册 → undefined（不静默降级）；注销函数生效', () => {
+    const { registry, setSource } = setup()
+    const binance = fakeTrade('binance')
+    const unregister = registry.register('crypto', 'binance', binance)
+    setSource({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
+    expect(registry.active('crypto')).toBeUndefined()
+    unregister()
+    setSource({ markets: { ...DEFAULT_MARKETS } })
+    expect(registry.active('crypto')).toBeUndefined()
+  })
+
+  it('router 无该市场路由：恰好一个注册项 → 零配置可用；多个 → undefined', () => {
+    const { registry } = setup()
+    const jp = fakeTrade('jp-trade')
+    registry.register('jp', 'jp-trade', jp)
+    expect(registry.active('jp')?.service).toBe(jp)
+    registry.register('jp', 'jp-trade-2', fakeTrade('jp2'))
     expect(registry.active('jp')).toBeUndefined()
   })
 })

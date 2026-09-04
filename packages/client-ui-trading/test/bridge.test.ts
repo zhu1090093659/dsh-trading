@@ -321,6 +321,16 @@ describe('TradingBridge.trade/*（issue #40 交易台：只读 + 强制 dry-run�
     )).rejects.toMatchObject({ status: 400 })
   })
 
+  it('交易服务未注册 → 400 + code TRADING_NO_TRADE_SERVICE（2026-09-04：前端区分服务未挂与凭证缺失）', async () => {
+    const bridge = new TradingBridge(tradeHost(undefined))
+    await expect(dispatchBridgeRequest(
+      bridge, 'GET', '/trade/positions', new URLSearchParams({ market: 'us' }),
+    )).rejects.toMatchObject({ status: 400, code: 'TRADING_NO_TRADE_SERVICE' })
+    await expect(dispatchBridgeRequest(
+      bridge, 'GET', '/trade/balances', new URLSearchParams({ market: 'us' }),
+    )).rejects.toMatchObject({ status: 400, code: 'TRADING_NO_TRADE_SERVICE' })
+  })
+
   it('DELETE /trade/order：调用 cancelOrder 成功返回 { ok: true, canceled: true }', async () => {
     const cancelOrder = vi.fn(async (_id: string, _sym?: string) => {})
     const bridge = new TradingBridge(tradeHost(tradeService({ cancelOrder })))

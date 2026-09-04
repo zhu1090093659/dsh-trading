@@ -164,7 +164,9 @@ export function apply(ctx: Context): void {
           sendJson(res, status, payload)
         } catch (error) {
           if (error instanceof BridgeProtocolError) {
-            sendJson(res, error.status, { ok: false, code: 'TRADING_PROTOCOL', message: error.message })
+            // error.code 可携带细分语义（如 TRADING_NO_TRADE_SERVICE，2026-09-04）；缺省回退协议错误。
+            const code = (error as { code?: string }).code ?? 'TRADING_PROTOCOL'
+            sendJson(res, error.status, { ok: false, code, message: error.message })
             return
           }
           sendJson(res, 200, { ok: false, ...errorPayloadOf(error) })

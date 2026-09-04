@@ -376,6 +376,7 @@ export type MarketLocaleKey =
   | 'trade.fills'
   | 'trade.balances'
   | 'trade.credentialHint'
+  | 'trade.noTradeService'
   | 'trade.unavailable'
   | 'trade.empty'
   | 'trade.symbol'

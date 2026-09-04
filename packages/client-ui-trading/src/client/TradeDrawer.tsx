@@ -7,6 +7,7 @@ import { useState } from 'react'
 import type { ColorMode } from './color-mode.ts'
 import type { AccountBalance, Order, Position, TradeFill } from './types.ts'
 import type { MarketLocaleKey } from './contract.ts'
+import type { TradeRowsReason } from './api.ts'
 import { directionColor, fmtPrice } from './format.ts'
 import css from './trade-drawer.module.css'
 
@@ -16,6 +17,10 @@ export interface TradeDrawerProps {
   t: TradeDrawerTranslate
   positions: Position[] | null
   balances: AccountBalance[] | null
+  /** positions null 时的语义原因：no-trade-service → 提示切 provider 而非配置凭证。 */
+  positionsReason?: TradeRowsReason
+  /** balances null 时的语义原因（同上）。 */
+  balancesReason?: TradeRowsReason
   orders: Order[] | null
   fills: TradeFill[] | null
   colorMode: ColorMode
@@ -30,6 +35,8 @@ export function TradeDrawer({
   t,
   positions,
   balances,
+  positionsReason,
+  balancesReason,
   orders,
   fills,
   colorMode,
@@ -41,6 +48,10 @@ export function TradeDrawer({
 }: TradeDrawerProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<'positions' | 'orders' | 'fills' | 'balances'>('positions')
   const [cancelingId, setCancelingId] = useState<string | null>(null)
+
+  // null 分区提示按原因区分（2026-09-04）：服务未挂 ≠ 凭证缺失，不再一律显示凭证提示。
+  const unavailableHint = (reason: TradeRowsReason | undefined): MarketLocaleKey =>
+    reason === 'no-trade-service' ? 'trade.noTradeService' : 'trade.credentialHint'
 
   const posCount = positions?.length ?? 0
   const orderCount = orders?.length ?? 0
@@ -135,7 +146,7 @@ export function TradeDrawer({
         <div className={css.content}>
           {activeTab === 'positions' && (
             positions === null ? (
-              <div className={css.empty}>{t('trade.credentialHint')}</div>
+              <div className={css.empty}>{t(unavailableHint(positionsReason))}</div>
             ) : positions.length === 0 ? (
               <div className={css.empty}>{t('trade.empty')}</div>
             ) : (
@@ -258,7 +269,7 @@ export function TradeDrawer({
 
           {activeTab === 'balances' && (
             balances === null ? (
-              <div className={css.empty}>{t('trade.credentialHint')}</div>
+              <div className={css.empty}>{t(unavailableHint(balancesReason))}</div>
             ) : balances.length === 0 ? (
               <div className={css.empty}>{t('trade.empty')}</div>
             ) : (

@@ -10,7 +10,7 @@ import type { KnowledgeCard } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord } from '@dshtrading/strategies'
 
 export class BridgeError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly code?: string) {
     super(message)
   }
 }
@@ -19,13 +19,19 @@ async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path, { headers: { accept: 'application/json' } })
   if (response.status === 401) throw new BridgeError(401, 'unauthorized')
   if (response.status === 403) throw new BridgeError(403, 'forbidden')
-  if (!response.ok) throw new BridgeError(response.status, `bridge ${path} failed: ${response.status}`)
+  if (!response.ok) {
+    // 非 2xx 也读 body（2026-09-04）：桥的协议错误带 code（如 TRADING_NO_TRADE_SERVICE），
+    // 调用方据此区分「服务未挂」与「凭证缺失」；body 非 JSON 时静默回退状态码信息。
+    const body = await response.json().catch(() => undefined) as { code?: string; message?: string } | undefined
+    const detail = typeof body?.message === 'string' && body.message !== '' ? `: ${body.message}` : ''
+    throw new BridgeError(response.status, `bridge ${path} failed: ${response.status}${detail}`, body?.code)
+  }
   const wire = await response.json() as T
   // 桥的业务错误信封是 HTTP 200 + { ok:false, code, message }；必须转成 rejection，
   // 否则调用方拿到 undefined 当成功值（会以 .map-of-undefined 之类的次生错误炸开）。
   if (wire !== null && typeof wire === 'object' && (wire as { ok?: unknown }).ok === false) {
     const business = wire as { code?: string; message?: string }
-    throw new BridgeError(200, `${business.code ?? 'TRADING_UNKNOWN'}: ${business.message ?? 'bridge business error'}`)
+    throw new BridgeError(200, `${business.code ?? 'TRADING_UNKNOWN'}: ${business.message ?? 'bridge business error'}`, business.code)
   }
   return wire
 }
@@ -109,43 +115,64 @@ export async function fetchRecentTrades(market: MarketId, symbol: string, limit 
 /* 交易台（issue #40）：只读查询 + 强制 dry-run 下单                        */
 /* ------------------------------------------------------------------ */
 
-/** 持仓快照。交易服务未挂载（桥 400）或失败 → null：交易台整体隐藏。 */
-export async function fetchTradePositions(market: MarketId): Promise<Position[] | null> {
+/**
+ * 交易只读面的不可用原因（2026-09-04）：此前 400（服务未挂）与 TRADING_CREDENTIALS_MISSING
+ * 都被吞成 null，分区一律显示「凭证未配置」——把服务缺失误导成配置问题。
+ */
+export type TradeRowsReason = 'ok' | 'no-trade-service' | 'credentials-missing' | 'unavailable'
+
+export interface TradeRowsResult<Row> {
+  /** 行数据；null = 不可用（原因见 reason）。 */
+  rows: Row[] | null
+  reason: TradeRowsReason
+}
+
+/** BridgeError → 分区语义原因映射（老部署无 code 时按 400 状态回退判服务未挂）。 */
+export function tradeRowsReasonOf(error: unknown): TradeRowsReason {
+  if (error instanceof BridgeError) {
+    if (error.code === 'TRADING_NO_TRADE_SERVICE' || error.status === 400) return 'no-trade-service'
+    if (error.code === 'TRADING_CREDENTIALS_MISSING') return 'credentials-missing'
+  }
+  return 'unavailable'
+}
+
+/** 持仓快照。交易服务未挂（400）→ no-trade-service；凭证缺失 → credentials-missing。 */
+export async function fetchTradePositions(market: MarketId): Promise<TradeRowsResult<Position>> {
   try {
     const wire = await getJson<{ ok: boolean; positions: Position[] }>(`/dshtrading/api/trade/positions?market=${market}`)
-    return Array.isArray(wire.positions) ? wire.positions : []
-  } catch {
-    return null
+    return { rows: Array.isArray(wire.positions) ? wire.positions : [], reason: 'ok' }
+  } catch (error) {
+    return { rows: null, reason: tradeRowsReasonOf(error) }
   }
 }
 
-/** 余额快照（可选面）。未实现/失败 → null。 */
-export async function fetchTradeBalances(market: MarketId): Promise<AccountBalance[] | null> {
+/** 余额快照（可选面）。未实现/失败 → unavailable；服务未挂/凭证缺失同持仓语义。 */
+export async function fetchTradeBalances(market: MarketId): Promise<TradeRowsResult<AccountBalance>> {
   try {
     const wire = await getJson<{ ok: boolean; balances: AccountBalance[] }>(`/dshtrading/api/trade/balances?market=${market}`)
-    return Array.isArray(wire.balances) ? wire.balances : []
-  } catch {
-    return null
+    return { rows: Array.isArray(wire.balances) ? wire.balances : [], reason: 'ok' }
+  } catch (error) {
+    return { rows: null, reason: tradeRowsReasonOf(error) }
   }
 }
 
-/** 当前挂单（可选面）。未实现/失败 → null。 */
-export async function fetchTradeOpenOrders(market: MarketId): Promise<Order[] | null> {
+/** 当前挂单（可选面）。未实现/失败 → unavailable（rows null）。 */
+export async function fetchTradeOpenOrders(market: MarketId): Promise<TradeRowsResult<Order>> {
   try {
     const wire = await getJson<{ ok: boolean; orders: Order[] }>(`/dshtrading/api/trade/orders?market=${market}`)
-    return Array.isArray(wire.orders) ? wire.orders : []
-  } catch {
-    return null
+    return { rows: Array.isArray(wire.orders) ? wire.orders : [], reason: 'ok' }
+  } catch (error) {
+    return { rows: null, reason: tradeRowsReasonOf(error) }
   }
 }
 
-/** 最近成交流水（可选面）。未实现/失败 → null。 */
-export async function fetchTradeFills(market: MarketId): Promise<TradeFill[] | null> {
+/** 最近成交流水（可选面）。未实现/失败 → unavailable（rows null）。 */
+export async function fetchTradeFills(market: MarketId): Promise<TradeRowsResult<TradeFill>> {
   try {
     const wire = await getJson<{ ok: boolean; fills: TradeFill[] }>(`/dshtrading/api/trade/fills?market=${market}`)
-    return Array.isArray(wire.fills) ? wire.fills : []
-  } catch {
-    return null
+    return { rows: Array.isArray(wire.fills) ? wire.fills : [], reason: 'ok' }
+  } catch (error) {
+    return { rows: null, reason: tradeRowsReasonOf(error) }
   }
 }
 

@@ -52,3 +52,7 @@ TradeService。直接把 GUI 接到实盘下单会击穿铁律 #3 的审批闸�
 - 凭证（OKX_DEMO_*）未配置的部署：交易台可开、可模拟下单、只读分区显示
   凭证提示；配置后即真实数据（带凭证实测待用户 key，见
   spikes/impl-trade-desk/EVIDENCE.md）。
+- **2026-09-04 修复**：本决策的 `TradeRegistry` 当时只交付了契约与消费方，
+  `tradingTradeRegistry` 服务从未被 provide（spike 以假注册表注入验证，真实
+  装配缺失），GUI 交易面全市场不可用且被误渲染为凭证提示——provide 方已在
+  router 插件补齐，见 [bug-fix 记录](../bug-fix/2026-09-04-trade-registry-missing-provider.md)。

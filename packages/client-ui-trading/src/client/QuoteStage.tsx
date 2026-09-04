@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import {
   fetchKlines, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiOrder,
-  cancelGuiOrder,
+  cancelGuiOrder, type TradeRowsReason,
 } from './api.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
@@ -175,6 +175,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [tradeBalances, setTradeBalances] = useState<AccountBalance[] | null>(null)
   const [tradeOrders, setTradeOrders] = useState<Order[] | null>(null)
   const [tradeFills, setTradeFills] = useState<TradeFill[] | null>(null)
+  /** 交易面不可用原因（2026-09-04）：positions 为探针，区分「市场未挂交易连接器」与「凭证缺失」。 */
+  const [tradeDataReason, setTradeDataReason] = useState<TradeRowsReason>('unavailable')
+  const [balancesDataReason, setBalancesDataReason] = useState<TradeRowsReason>('unavailable')
 
   /** 全局交易模式：'live' 实盘 vs 'paper' 模拟盘（默认从 localStorage 读取，缺省 live） */
   const [tradeMode, setTradeMode] = useState<'live' | 'paper'>(() => {
@@ -380,10 +383,12 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       fetchTradeOpenOrders(m),
       fetchTradeFills(m),
     ])
-    setTradePositions(positionRows)
-    setTradeBalances(balanceRows)
-    setTradeOrders(orderRows)
-    setTradeFills(fillRows)
+    setTradePositions(positionRows.rows)
+    setTradeDataReason(positionRows.reason)
+    setTradeBalances(balanceRows.rows)
+    setBalancesDataReason(balanceRows.reason)
+    setTradeOrders(orderRows.rows)
+    setTradeFills(fillRows.rows)
   }
 
   usePoll(async () => {
@@ -1182,6 +1187,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           t={t}
           positions={activePositions}
           balances={activeBalances}
+          positionsReason={tradeDataReason}
+          balancesReason={balancesDataReason}
           orders={activeOrders}
           fills={activeFills}
           colorMode={colorMode}

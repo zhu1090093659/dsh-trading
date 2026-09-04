@@ -31,6 +31,9 @@ import type {
   MarketDataService,
   MarketRouterService as MarketRouterServiceContract,
   NewsAggregator,
+  TradeRegistration,
+  TradeRegistry as TradeRegistryContract,
+  TradeService,
 } from '@dshtrading/api'
 import { createInstrumentsSearchTool, createRoutingGetTool, type RouterToolServices } from './tools.ts'
 
@@ -152,6 +155,16 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
     return this.source().markets[market]?.provider
   }
 
+  /**
+   * 某市场当前激活的**交易面** provider slug（TradeRegistryService 裁决用）：
+   * tradeProvider 显式设置（数据/交易分离）时优先；否则与数据面同 provider
+   * （§2.4 字段预留语义——连接器交易面 slug 与数据面一致是现状常态）。
+   */
+  activeTradeProvider(market: string): string | undefined {
+    const entry = this.source().markets[market]
+    return entry?.tradeProvider ?? entry?.provider
+  }
+
   /** 获取某提供方的 API 凭证字典（如 apiKey、apiSecret 等）。 */
   getCredential(provider: string): Record<string, string> | undefined {
     return this.source().credentials?.[provider]
@@ -249,6 +262,63 @@ export const TRADING_MARKET_DATA_REGISTRY_KEY = 'tradingMarketDataRegistry'
 export interface MarketDataRegistryLike {
   register(market: string, provider: string, service: MarketDataService): () => void
   active(market: string): MarketDataRegistration | undefined
+}
+
+/* ------------------------------------------------------------------ */
+/* TradeRegistryService（provide 到 tradingTradeRegistry，issue #40）        */
+/* ------------------------------------------------------------------ */
+
+export const TRADING_TRADE_REGISTRY_KEY = 'tradingTradeRegistry'
+
+/**
+ * 交易服务注册表（issue #40 契约的本体实现，2026-09-04 补齐缺失的 provide 方）：
+ * 与 MarketDataRegistryService 同构——连接器 dataplane 在 host 面把 TradeService
+ * 注册进本表，GUI 桥按路由当前值惰性解析。注册面本身不做安全裁决（闸门在
+ * 服务缝 placeOrder 三态 + 桥层 dry-run），与 api 包 TradeRegistry 契约注释一致。
+ *
+ * 路由裁决：markets.<m>.tradeProvider 显式设置时优先，否则回落数据面 provider
+ * （§2.4 预留语义）；选中了但未注册 → undefined（不静默降级——用户设置是权威）；
+ * router 无该市场路由且恰好一个注册项 → 返回之（新市场零配置可用）。
+ */
+export class TradeRegistryService extends Service implements TradeRegistryContract {
+  private readonly entries = new Map<string, TradeRegistration>()
+
+  constructor(ctx: Context, private readonly router: MarketRouterService) {
+    super(ctx, TRADING_TRADE_REGISTRY_KEY)
+  }
+
+  private static keyOf(market: string, provider: string): string {
+    return market + ' ' + provider
+  }
+
+  register(market: string, provider: string, service: TradeService): () => void {
+    const key = TradeRegistryService.keyOf(market, provider)
+    const existing = this.entries.get(key)
+    if (existing !== undefined && existing.service !== service) {
+      // 配置错误必须响亮：同 (market, provider) 两个交易服务实例 = bundle patch 重复挂行。
+      throw new Error('[dsh-trading-market-router] duplicate trade registration: ' + market + '/' + provider)
+    }
+    const registration: TradeRegistration = { market, provider, service }
+    this.entries.set(key, registration)
+    return () => {
+      if (this.entries.get(key) === registration) this.entries.delete(key)
+    }
+  }
+
+  active(market: string): TradeRegistration | undefined {
+    const routed = this.router.activeTradeProvider(market)
+    if (routed !== undefined) {
+      return this.entries.get(TradeRegistryService.keyOf(market, routed))
+    }
+    // router 无该市场路由（新市场键/未知市场）：恰好一个注册项 → 零配置可用；
+    // 多个注册项无法裁决 → undefined（用户须在 settings 里显式选择）。
+    const all = this.list(market)
+    return all.length === 1 ? all[0] : undefined
+  }
+
+  list(market: string): readonly TradeRegistration[] {
+    return [...this.entries.values()].filter((entry) => entry.market === market)
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -363,6 +433,9 @@ export function apply(ctx: Context, config: Config): void {
   const service = new MarketRouterService(ctx, () => effective)
   // 注册表与 router 同 fiber 提供：base patch 行零改动。
   const registry = new MarketDataRegistryService(ctx, service)
+  // 交易注册表（issue #40 契约）同 fiber 提供——2026-09-04 修复：此前只有契约与消费方、
+  // 没有 provide 方，dataplane 与桥 ctx.get 恒 undefined，抽屉永远显示凭证提示。
+  new TradeRegistryService(ctx, service)
   // 新闻注册表与 router/registry 同 fiber 提供（Issue #37）；Service 构造即自 provide。
   new TradingNewsRegistryService(ctx)
   const log = logger(ctx)

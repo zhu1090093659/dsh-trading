@@ -470,7 +470,11 @@ export class TradingBridge {
   #requireTradeService(market: string): TradeService {
     if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
     const trade = this.host.getTradeService?.(market)
-    if (trade === undefined) throw new BridgeProtocolError(400, `no trade service for market ${market}`)
+    if (trade === undefined) {
+      // 专用 code（2026-09-04）：前端据此区分「市场未挂交易连接器」与「凭证缺失」，
+      // 不再把服务未注册误导渲染成「凭证未配置或不可用」。
+      throw Object.assign(new BridgeProtocolError(400, `no trade service for market ${market}`), { code: 'TRADING_NO_TRADE_SERVICE' })
+    }
     return trade
   }
 
