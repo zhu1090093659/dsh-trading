@@ -116,6 +116,16 @@ Six invariants keep the ecosystem honest: insert-only bundle patches · knowledg
 - [dsh-web](https://github.com/zhu1090093659/dsh-web)
 - [LINUX DO](https://linux.do)
 
+## Community
+
+💬 **QQ group: DSH Trading 交流群（群号 `319737695`）** — questions, feedback, and everything dsh-trading. Scan with QQ to join:
+
+<div align="center">
+
+<img src="docs/assets/dsh-trading-qq.jpg" alt="dsh-trading QQ group QR code — group 319737695" width="280" />
+
+</div>
+
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE) — free for personal study, research, and noncommercial use. **Commercial use requires prior written authorization**: open a GitHub issue or contact <chunlinzhu666@gmail.com>.

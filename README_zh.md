@@ -116,6 +116,16 @@ dsh --profile trading-web
 - [dsh-web](https://github.com/zhu1090093659/dsh-web)
 - [LINUX DO](https://linux.do)
 
+## 社区
+
+💬 **QQ 交流群：DSH Trading 交流群（群号 `319737695`）**——使用交流、问题反馈、功能建议，QQ 扫码即可加入：
+
+<div align="center">
+
+<img src="docs/assets/dsh-trading-qq.jpg" alt="DSH Trading 交流群 QQ 群二维码，群号 319737695" width="280" />
+
+</div>
+
 ## 许可证
 
 本项目采用 [PolyForm Noncommercial 1.0.0](LICENSE) 许可：个人学习、研究、兴趣项目等非商业用途免费使用；**任何商业用途须事先取得项目所有者的书面授权**，请通过 [chunlinzhu666@gmail.com](mailto:chunlinzhu666@gmail.com) 或 GitHub Issue 洽谈商用许可。
