@@ -157,6 +157,9 @@ importers:
       '@dshtrading/client-ui-knowledge':
         specifier: workspace:^
         version: link:../client-ui-knowledge
+      '@dshtrading/client-ui-masters-quotes':
+        specifier: workspace:^
+        version: link:../client-ui-masters-quotes
       '@dshtrading/client-ui-settings':
         specifier: workspace:^
         version: link:../client-ui-settings
@@ -247,6 +250,21 @@ importers:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.12)
+
+  packages/client-ui-masters-quotes:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
+      '@deepseek-ai/dsh-client-locale':
+        specifier: 0.1.2-rc.1
+        version: 0.1.2-rc.1(@deepseek-ai/cordis@4.0.2)
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.12)

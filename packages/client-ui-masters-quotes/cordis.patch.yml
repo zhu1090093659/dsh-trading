@@ -1,0 +1,6 @@
+# client-ui-masters-quotes 独立 patch：可单独安装（dsh plugin add link:…/packages/client-ui-masters-quotes），
+# 也可经 packages/base/cordis.patch.yml 的 insert 行随 base bundle 常驻。
+# id 全仓唯一（dsh-trading-client-ui-masters-quotes），insert 在任何宿主都安全。
+- insert:
+    - id: dsh-trading-client-ui-masters-quotes
+      name: '@dshtrading/client-ui-masters-quotes'

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src/client",
+    "outDir": "lib/types/client",
+    "composite": false,
+    "lib": [
+      "es2024",
+      "dom"
+    ]
+  },
+  "include": [
+    "src/client"
+  ]
+}

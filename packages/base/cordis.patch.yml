@@ -114,6 +114,14 @@
     - id: dsh-trading-client-ui-knowledge
       name: '@dshtrading/client-ui-knowledge'
 
+    # 大师金句活动词语言包（2026-09-05）：client 半注册「中文 · 大师金句」
+    # （zh-masters，fallback zh）语言目录项 + 覆盖宿主 chat.deepDiving 单键
+    # （输入框上方轮次状态行「深度求索中...」）为利弗莫尔/巴菲特/索罗斯等
+    # 金句并定时轮换；(ns, locale) 单一占主语义下的语言包补位范式
+    # （dsh-trading-dsh-i18n 同款）。headless 宿主解析为空 apply host 行，无害。
+    - id: dsh-trading-client-ui-masters-quotes
+      name: '@dshtrading/client-ui-masters-quotes'
+
 - id: agent-presets
   name: '@deepseek-ai/dsh-agent-presets'
   config:

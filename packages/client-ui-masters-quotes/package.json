@@ -1,0 +1,45 @@
+{
+  "name": "@dshtrading/client-ui-masters-quotes",
+  "description": "Masters-quote language-pack plugin for the dsh-trading trading GUI: registers 中文 · 大师金句 (zh-masters, fallback zh) as a selectable language in the host Settings → General → Language row and overrides the single chat.deepDiving key — the turn-status activity line above the composer — with rotating quotes from Livermore, Buffett, Soros, Munger and other investing masters. All other keys fall through the per-key fallback chain to the host zh dictionaries, so the rest of the UI stays pixel-identical.",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "scripts": {
+    "build": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.2-rc.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-client-locale": "0.1.2-rc.1",
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  }
+}
