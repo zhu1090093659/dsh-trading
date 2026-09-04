@@ -9,8 +9,9 @@
  * - 单项字段缺省 → 该格隐藏（不留空位），与 FundamentalsPane 同纪律。
  *
  * 入口语义（issue #54）：格子即入口——点击任意格跳到「衍生品」页签看趋势与
- * 决策面；title tooltip 承载新用户语义解释；「分析资金面」按钮把快照上下文
- * 经 fillComposer 发给 Agent（宿主未注入 fillComposer 时按钮不渲染）。
+ * 决策面；title tooltip 承载新用户语义解释。快照上下文发给 Agent 的入口已收敛
+ * 到 QuoteStage 报价头统一的「发送给 Agent」按钮（2026-09-04），本组件纯展示 +
+ * 跳转。
  *
  * 语义注记：fundingRate 为小数（0.0001 = 0.01%），正费率=多头付资金（多头拥挤），
  * 颜色随涨跌语义（directionColor）；多空比/主动买卖比 >1 偏多。
@@ -30,8 +31,6 @@ export interface DerivativesPaneProps {
   colorMode: ColorMode
   /** 格子点击 → 跳转「衍生品」页签（issue #54；缺席时格子退化为纯展示）。 */
   onOpenStage?: () => void
-  /** 「分析资金面」→ 快照上下文发给 Agent（issue #54；fillComposer 缺席时不渲染）。 */
-  onAnalyze?: () => void
 }
 
 interface Cell {
@@ -43,7 +42,7 @@ interface Cell {
   hint: string
 }
 
-export function DerivativesPane({ t, derivatives, colorMode, onOpenStage, onAnalyze }: DerivativesPaneProps): React.JSX.Element {
+export function DerivativesPane({ t, derivatives, colorMode, onOpenStage }: DerivativesPaneProps): React.JSX.Element {
   const numLocale = scaleLocaleOf(t)
   const countdown = fmtCountdown(derivatives.nextFundingTime, Date.now())
   const cells: Array<Cell | null> = [
@@ -110,11 +109,6 @@ export function DerivativesPane({ t, derivatives, colorMode, onOpenStage, onAnal
           {entry.sub !== undefined && <span className={css.cellSub}>{entry.sub}</span>}
         </button>
       ))}
-      {onAnalyze !== undefined && (
-        <button type="button" className={css.analyze} title={t('derivatives.analyzeHint')} onClick={onAnalyze}>
-          {t('derivatives.analyze')}
-        </button>
-      )}
       <span className={css.footer} title={t('derivatives.perpSource')}>
         {derivatives.symbol} · {derivatives.source} · {new Date(derivatives.timestamp).toLocaleTimeString()}
       </span>

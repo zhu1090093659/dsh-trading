@@ -36,7 +36,8 @@ OI/费率/多空比全是时间点裸数字；OKX 响应里已解析的 `nextFun
     不占契约字段。
   - 摘要条入口化：格子变按钮，点击跳页签；title tooltip 承载语义解释；footer 标注
     规范 SWAP 符号（现货→永续映射显式化）；「分析资金面」按钮经 fillComposer 把
-    结构化快照上下文发给 Agent（只填不发）。
+    结构化快照上下文发给 Agent（只填不发；2026-09-04 起该按钮收敛进报价头统一
+    「发送给 Agent」下拉菜单，见 [unified-send-to-agent-entry](2026-09-04-unified-send-to-agent-entry.md)）。
   - 历史序列轮询 5min 且仅页签激活时拉（费率 8h 一期、OI 1D，无需快频）；
     切非 crypto 市场自动回图表页签。
 - **轮询/配额纪律**：快照沿用 30s（#38 定）；历史 5min；页签不激活零请求。

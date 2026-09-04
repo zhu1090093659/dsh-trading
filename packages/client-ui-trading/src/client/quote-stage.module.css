@@ -307,7 +307,8 @@
   background: var(--dsw-futu-text-primary, #1f2937);
 }
 
-/* 右侧动作组：发给 Agent + 指标选择弹层锚（弹层 right:0 贴组右缘）。 */
+/* 右侧动作组：工具开关 + 指标选择弹层锚（弹层 right:0 贴组右缘）；
+   「发送给 Agent」已迁至报价头常驻统一入口（2026-09-04）。 */
 .toolbarActions {
   position: relative;
   margin-left: auto;
@@ -384,6 +385,79 @@
   border-color: rgba(220, 38, 38, 0.45);
   background: rgba(220, 38, 38, 0.1);
   color: #dc2626;
+}
+
+/* 统一「发送给 Agent」入口（2026-09-04）：报价头常驻分体按钮——主按钮一键填
+   行情快照，下拉菜单承载资金面快照等上下文；状态色由 .sendButton data-state 承载。 */
+.sendWrap {
+  position: relative;
+  align-self: center;
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.sendWrap .sendButton {
+  border-radius: var(--dsw-futu-radius-md, 6px) 0 0 var(--dsw-futu-radius-md, 6px);
+}
+
+.sendCaret {
+  appearance: none;
+  border: 1px solid var(--dsw-futu-accent-border, rgba(37, 99, 235, 0.25));
+  border-left: none;
+  background: var(--dsw-futu-accent-subtle, rgba(37, 99, 235, 0.08));
+  color: var(--dsw-futu-accent-text, #2563eb);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 0 var(--dsw-futu-radius-md, 6px) var(--dsw-futu-radius-md, 6px) 0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sendCaret:hover,
+.sendCaret[aria-expanded='true'] {
+  background: var(--dsw-futu-accent, #2563eb);
+  border-color: var(--dsw-futu-accent, #2563eb);
+  color: #ffffff;
+}
+
+.sendBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+
+.sendMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: var(--dsw-futu-radius-lg, 8px);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  background: var(--dsw-futu-bg-surface, #ffffff);
+  box-shadow: var(--dsw-futu-shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.12));
+}
+
+.sendMenuItem {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  text-align: left;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-futu-radius-sm, 4px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sendMenuItem:hover {
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
 }
 
 .pickerBackdrop {
