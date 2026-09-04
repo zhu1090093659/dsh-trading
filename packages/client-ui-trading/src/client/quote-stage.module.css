@@ -422,9 +422,14 @@
 }
 
 .sendBackdrop {
+  /* 脱离式遮罩是 <button>：必须剥掉原生按钮底色/边框，否则铺满视口会盖住应用。 */
+  appearance: none;
+  background: transparent;
+  border: none;
   position: fixed;
   inset: 0;
   z-index: 39;
+  cursor: default;
 }
 
 .sendMenu {
