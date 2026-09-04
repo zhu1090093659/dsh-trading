@@ -37,6 +37,7 @@ export type TradingEventStore =
   | 'selection'
   | 'routing'
   | 'chart'
+  | 'tasks'
 
 /** 单条失效信号（桥 SSE 帧的 data 载荷形状，也是 subscribe 回调入参）。 */
 export interface TradingEvent {

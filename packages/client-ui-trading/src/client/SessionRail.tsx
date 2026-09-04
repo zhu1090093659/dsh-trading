@@ -4,23 +4,25 @@
  * - 永不隐藏：折叠只收会话列轨道（fold-store → shell-pad.css 规则 9），
  *   竖条始终占住右缘 44px（shell-pad.css 规则 8 预留的侧栏轨道），会话
  *   进行中也在——取代 2.8「右上浮动簇 + 会话头内联按钮」双入口。
- * - 结构自上而下：折叠/展开、新会话、分隔线、设置；后续功能页签在分隔线
- *   下方追加（页签面板向左展开，状态照 fold-store 模式加 store +
- *   body[data-dshtrading-*] 联动）。
+ * - 结构自上而下：折叠/展开、新会话、分隔线、功能页签（定时任务）、设置；
+ *   页签激活面板向左展开，状态走 body[data-dshtrading-*] 联动。
  * - 设置仍是程序化 click 退役侧栏列内的官方触发器（见 index.ts openSettings）。
  * - 折叠态同步 body[data-dshtrading-chat-folded] 的 effect 从旧 WindowChrome
  *   移入本组件（竖条恒挂载，单一同步点）。
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { FoldStore } from './fold-store.ts'
-import { IconFoldPanel, IconNewSession, IconSettings } from './icons.tsx'
+import { IconClock, IconFoldPanel, IconNewSession, IconSettings } from './icons.tsx'
+import { ScheduledTasksPanel } from './ScheduledTasksPanel.tsx'
 import css from './session-rail.module.css'
 
 export interface SessionRailInjected {
   startNewSession(): void
   openSettings(): void
   toggleFold(): void
+  /** 定时任务执行历史「打开会话」（官方 sessions 通路，index.ts 注入）。 */
+  openSession(sessionId: string): void
   hooks: { folded: FoldStore }
 }
 
@@ -29,13 +31,20 @@ export type SessionRailProps =
   & PropsLocale<'dshtrading.market'>
   & InjectFace<SessionRailInjected>
 
-export function SessionRail({ t, useFolded, startNewSession, openSettings, toggleFold }: SessionRailProps) {
+export function SessionRail({ t, useFolded, startNewSession, openSettings, toggleFold, openSession }: SessionRailProps) {
   const folded = useFolded(value => value)
+  // 定时任务页签（功能页签 1 号）：会话级开关（无需持久化——每次进来默认收起）。
+  const [tasksOpen, setTasksOpen] = useState(false)
 
   useEffect(() => {
     document.body.dataset.dshtradingChatFolded = folded ? 'on' : 'off'
     return () => { delete document.body.dataset.dshtradingChatFolded }
   }, [folded])
+
+  useEffect(() => {
+    document.body.dataset.dshtradingTasksOpen = tasksOpen ? 'on' : 'off'
+    return () => { delete document.body.dataset.dshtradingTasksOpen }
+  }, [tasksOpen])
 
   return (
     <div className={css.rail} data-dshtrading-rail="" role="toolbar" aria-orientation="vertical">
@@ -58,9 +67,19 @@ export function SessionRail({ t, useFolded, startNewSession, openSettings, toggl
       >
         <IconNewSession size={16} />
       </button>
-      {/* 功能页签扩展位：后续新入口（画线工具/资讯/提醒等）加在这条分隔线
-          下方，激活态面板向左展开；复用 .button 样式保持竖条节奏。 */}
+      {/* 功能页签扩展位：分隔线下方（注释见 2.9 定稿）；定时任务 = 页签 1 号，
+          激活面板向左展开，复用 .button 样式保持竖条节奏。 */}
       <div className={css.divider} aria-hidden="true" />
+      <button
+        type="button"
+        className={css.button}
+        aria-pressed={tasksOpen}
+        aria-label={t('tasks.open')}
+        title={t('tasks.open')}
+        onClick={() => { setTasksOpen(value => !value) }}
+      >
+        <IconClock size={16} />
+      </button>
       <button
         type="button"
         className={css.button}
@@ -70,6 +89,13 @@ export function SessionRail({ t, useFolded, startNewSession, openSettings, toggl
       >
         <IconSettings size={16} />
       </button>
+      {tasksOpen && (
+        <ScheduledTasksPanel
+          t={t}
+          openSession={openSession}
+          close={() => { setTasksOpen(false) }}
+        />
+      )}
     </div>
   )
 }

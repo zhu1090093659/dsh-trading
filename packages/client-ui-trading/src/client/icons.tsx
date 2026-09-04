@@ -3,6 +3,16 @@
  */
 import type { ReactElement } from 'react'
 
+/** 定时任务入口（时钟）。 */
+export function IconClock({ size = 16 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="6.25" />
+      <path d="M8 4.75V8l2.4 1.6" />
+    </svg>
+  )
+}
+
 export function IconNewSession({ size = 16 }: { size?: number }): ReactElement {
   return (
     <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">

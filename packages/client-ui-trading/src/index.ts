@@ -31,6 +31,10 @@ import {
   type TradeRegistryLike,
 } from './bridge.ts'
 import { attachEventStream } from './sse.ts'
+import { TaskActionError } from './tasks/ledger.ts'
+import { TASKS_ACTION_BYTES_LIMIT, parseTasksEnvelope } from './tasks/protocol.ts'
+import { TradingTasksService } from './tasks/service.ts'
+import type { SessionCommandDispatcher, SessionGateway } from './tasks/runner.ts'
 
 /** webServer / connection 的最小结构面（避免对本仓未安装的宿主包产生类型依赖）。 */
 interface WebServerLike {
@@ -125,6 +129,33 @@ export function apply(ctx: Context): void {
       },
     })
     const bridge = new TradingBridge(host)
+
+    // 右缘竖栏「定时任务」Host 面：文件账本 + cron 调度 + 会话 runner（web 宿主
+    // 专属；目录锁被另一个活宿主持有时降级为 503——特性不挂、宿主照跑）。宿主
+    // 服务（typertGateway/commands/workspaceRegistry）全部惰性解析：激活时序
+    // 不保证，调度/执行时才取（与 uiWorkspace 惰性纪律同款）。
+    const resolveHostService = (name: string): unknown =>
+      (webCtx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.(name, false)
+      ?? (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.(name, false)
+    let tasksService: TradingTasksService | undefined
+    try {
+      tasksService = new TradingTasksService({
+        ledgerPath: process.env.DSH_TRADING_TASKS_LEDGER ?? path.join(os.homedir(), '.dsh', 'trading-tasks', 'ledger-v1.json'),
+        gateway: () => resolveHostService('typertGateway') as SessionGateway | undefined,
+        commands: () => resolveHostService('commands') as SessionCommandDispatcher | undefined,
+        workspaces: () => resolveHostService('workspaceRegistry') as import('./tasks/service.ts').WorkspaceDirectoryLike | undefined,
+        onEvent: () => eventsOf()?.emit('tasks'),
+      })
+    } catch (error) {
+      console.error('[dsh-trading/tasks] task ledger unavailable (locked by another live host?):', error)
+    }
+    const tasks = tasksService
+    if (tasks !== undefined) {
+      ctx.effect(() => {
+        tasks.start()
+        return () => { tasks.dispose() }
+      }, 'dsh-trading-client-ui-trading: scheduled-tasks service')
+    }
     const route = {
       kind: 'prefix' as const,
       path: '/dshtrading/api',
@@ -159,6 +190,11 @@ export function apply(ctx: Context): void {
           if (req.method === 'PUT' || req.method === 'POST') {
             body = await readJsonBody(req)
           }
+          // 定时任务子面（右侧栏）：独立账本与调度，行情桥不感知。
+          if (sub === '/tasks' || sub.startsWith('/tasks/')) {
+            await handleTasksRoute(tasks, req, res, sub, body)
+            return
+          }
           const { status, payload } = await dispatchBridgeRequest(bridge, req.method ?? 'GET', sub, url.searchParams, body)
           // 发布点接线（issue #30/#31/#32）：写成功 → 对应 store 失效信号。
           if (status === 200 && (payload as { ok?: unknown } | undefined)?.ok === true) {
@@ -186,6 +222,54 @@ export function apply(ctx: Context): void {
     }
     ctx.effect(() => webServer.register(route), 'dsh-trading-client-ui-trading: /dshtrading/api route')
   })
+}
+
+/**
+ * 定时任务子面分发：GET /tasks（revision 快照）、GET /tasks/meta（确认门基准
+ * + 工作区/预设名册）、POST /tasks/action（幂等动作信封，64KiB 封顶）。
+ * 账本缺席（锁被夺/未挂）→ 503 降级，不影响行情桥。
+ */
+async function handleTasksRoute(
+  service: TradingTasksService | undefined,
+  req: IncomingMessage,
+  res: ServerResponse,
+  sub: string,
+  body: unknown,
+): Promise<void> {
+  if (service === undefined) {
+    sendJson(res, 503, { ok: false, code: 'TASKS_UNAVAILABLE', message: 'task ledger is unavailable (locked by another live host?)' })
+    return
+  }
+  if (req.method === 'GET' && sub === '/tasks') {
+    sendJson(res, 200, service.snapshot())
+    return
+  }
+  if (req.method === 'GET' && sub === '/tasks/meta') {
+    sendJson(res, 200, await service.meta())
+    return
+  }
+  if (req.method === 'POST' && sub === '/tasks/action') {
+    if (Buffer.byteLength(JSON.stringify(body ?? {}), 'utf8') > TASKS_ACTION_BYTES_LIMIT) {
+      sendJson(res, 413, { ok: false, code: 'TASKS_ACTION_TOO_LARGE', message: 'action payload exceeds 64KiB' })
+      return
+    }
+    const envelope = parseTasksEnvelope(body)
+    if (envelope === undefined) {
+      sendJson(res, 400, { ok: false, code: 'TASKS_ACTION_INVALID', message: 'invalid action envelope' })
+      return
+    }
+    try {
+      sendJson(res, 200, service.apply(envelope))
+    } catch (error) {
+      if (error instanceof TaskActionError) {
+        sendJson(res, error.status, { ok: false, code: error.code, message: error.message })
+        return
+      }
+      throw error
+    }
+    return
+  }
+  sendJson(res, 404, { ok: false, code: 'TASKS_ROUTE_NOT_FOUND', message: 'unknown tasks route: ' + sub })
 }
 
 /** JSON body 读取（PUT/POST 用；1MB 封顶，非法 JSON → 400 协议错误）。 */

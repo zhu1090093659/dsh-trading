@@ -236,6 +236,8 @@ export function apply(ctx: ClientContext): void {
       startNewSession,
       openSettings,
       toggleFold,
+      // 执行历史「打开会话」：HomeHistory 同款官方 sessions 通路。
+      openSession: (sessionId: string) => { sessions.open(sessionId as SessionIdParam) },
       hooks: { folded: chatFolded },
     }),
   }, SessionRail))

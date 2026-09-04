@@ -507,6 +507,7 @@ export type TradingEventStoreName =
   | 'selection'
   | 'routing'
   | 'chart'
+  | 'tasks'
 
 type TradingEventHandlers = Partial<Record<TradingEventStoreName, () => void>>
 
