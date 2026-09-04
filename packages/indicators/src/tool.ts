@@ -2,6 +2,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { presetDefinitions, type IndicatorDefinition } from './presets.ts'
 import type { IndicatorParamSpec, Kline } from './types.ts'
 import type { CustomIndicatorStore } from './custom.ts'
+import type { ChartActivationStore } from './chart-activations.ts'
+import { defaultActivationInstance } from './chart-activations.ts'
 import { validateCustomIndicatorNode } from './validate-node.ts'
 
 export { createFileCustomIndicatorStore } from './custom-fs.ts'
@@ -138,10 +140,14 @@ export interface AuthorIndicatorToolOptions {
   store: CustomIndicatorStore
   /** 可选：指标成功落盘后的回调（issue #30：事件总线 emit('indicators') 的接线点）。 */
   onWritten?: (record: CustomIndicatorRecord) => void
+  /** 可选：图表激活名册 store（issue #63「创作即上图」路径；缺席时 activate 请求降级说明）。 */
+  chartStore?: ChartActivationStore | undefined
+  /** 可选：创作即上图成功后的回调（plugin 接线 emit('chart')，GUI 实时同步）。 */
+  onActivated?: (id: string) => void
 }
 
 export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
-  const { store, onWritten } = options
+  const { store, onWritten, chartStore, onActivated } = options
 
   return defineTool({
     name: 'indicator_author',
@@ -182,6 +188,13 @@ export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
         type: 'string',
         description: 'Optional human-readable description or usage guidance for the indicator.',
       },
+      activate: {
+        type: 'boolean',
+        default: false,
+        description:
+          'Optionally mount the indicator onto the user\'s open chart right after successful authoring '
+          + '(issue #63 "author-and-mount" path; default false). Requires the chart activation store to be available.',
+      },
     },
     output: {
       schema: { type: 'string' },
@@ -195,6 +208,7 @@ export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
         computeSource?: unknown
         paramsJson?: unknown
         description?: unknown
+        activate?: unknown
       }
 
       let parsedParams: IndicatorParamSpec[] = []
@@ -227,10 +241,30 @@ export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
       await store.save(result.record)
       onWritten?.(result.record)
 
+      // 创作即上图（issue #63）：activate 显式请求且激活名册可用时，按 schema 默认
+      // 参数挂载；store 缺席（老部署/headless）→ 降级说明，不失败（指标已落盘）。
+      let activatedNote = ''
+      if (args.activate === true) {
+        if (chartStore !== undefined) {
+          const instance = defaultActivationInstance({
+            id: result.record.id,
+            title: result.record.title,
+            pane: result.record.pane,
+            params: result.record.params,
+          })
+          await chartStore.activate(instance)
+          onActivated?.(result.record.id)
+          activatedNote = ' The indicator has also been mounted on the chart with its default parameters (see indicator_deactivate to unmount).'
+        } else {
+          activatedNote = ' Note: activate was requested but no chart activation store is available in this deployment — mount it later via indicator_activate.'
+        }
+      }
+
       const paramSummary = result.record.params.map(p => `${p.key}=${p.default}`).join(', ')
       return (
         `[indicator_author] Successfully authored indicator "${result.record.title}" (id: ${result.record.id}, pane: ${result.record.pane}${paramSummary ? `, params: ${paramSummary}` : ''}). `
         + 'The indicator has passed 5 sandbox verification scenarios and is now persisted and available in the chart quick indicator bar.'
+        + activatedNote
       )
     },
   })

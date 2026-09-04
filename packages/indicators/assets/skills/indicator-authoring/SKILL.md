@@ -221,3 +221,15 @@ export interface IndicatorDefinition {
 ```
 
 若工具返回 `Validation failed`，请根据返回的具体报错信息调整代码（如修复长度不对齐、NaN 防护等）后重新尝试，直至落库成功。
+
+### 4.1 创作即上图（可选一步到位）
+
+`indicator_author` 支持可选参数 `activate`（布尔，默认 false）：置 true 时指标通过校验落库后会立即按 schema 默认参数挂上用户当前图表（GUI 经 SSE 即时点亮），无需再调 `indicator_activate`。适合「帮我写个 XXX 并加到图上」这类一句话需求；仅落库不上图的需求保持缺省。
+
+### 4.2 图表挂载管理（indicator_list / indicator_activate / indicator_deactivate）
+
+- `indicator_list`：枚举全部可用指标——预置与自定义（id/title/pane/参数 schema/描述）及当前激活名册（含生效参数）。创作前查重、挂载前选 id 与参数时先调它。
+- `indicator_activate`：把指标挂上用户图表。`id` 必须是预置或已创作落库的自定义指标；可选 `paramsJson`（JSON 对象，如 `{"period":14}`）覆写参数默认值，越界自动收敛到 min/max，缺失键取默认值。重复挂载同 id 即更新参数（每 id 至多一个实例）。
+- `indicator_deactivate`：从图上摘除一个实例（定义仍在指标库）；彻底删除自定义指标定义用 `indicator_delete`。
+
+典型链路：`indicator_list` 查重 → `indicator_author`（或带 `activate: true` 一步上图）→ 需要调参时 `indicator_activate` + `paramsJson` → `indicator_deactivate` 摘除。

@@ -47,3 +47,5 @@
 
 1. **编译构建**：全量 19 个 package `pnpm -r build` 100% 通过。
 2. **单元测试**：全量 `pnpm -r test` 252+ 用例全绿（涵盖坏例拦截、死循环超时熔断、TD9、SuperTrend、OBV+MA34 黄金用例、HTTP 桥端点等专项单测）。
+
+> 后续（2026-09-04）：「使用」侧最后一公里（agent 挂载/摘除/枚举图表指标）由 [indicator-agent-chart-activation](./2026-09-04-indicator-agent-chart-activation.md) 补齐，`indicator_author` 增加 `activate` 可选参数。
