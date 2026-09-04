@@ -26,21 +26,29 @@
 </style>
 </head>
 <body>
-  <h1>The dsh host could not start</h1>
+  <h1>The dsh host could not start / 后台服务启动失败</h1>
   <div class="message" id="message"></div>
   <pre id="log"></pre>
   <div class="actions">
-    <button id="retry">Retry</button>
-    <button id="reveal">Reveal log file</button>
-    <button id="quit">Quit</button>
+    <button id="vcredist" style="display: none; background: #1c4b31; border-color: #2e8b57; color: #a3f7bf; font-weight: 500;">下载 VC++ 运行库 (x64)</button>
+    <button id="retry">Retry / 重试</button>
+    <button id="reveal">Reveal log file / 查看日志</button>
+    <button id="quit">Quit / 退出</button>
   </div>
   <script>
+    const vcredistBtn = document.getElementById('vcredist');
+    vcredistBtn.addEventListener('click', () => window.desktop.openVCRedistDownload());
     document.getElementById('retry').addEventListener('click', () => window.desktop.retry());
     document.getElementById('reveal').addEventListener('click', () => window.desktop.revealLog());
     document.getElementById('quit').addEventListener('click', () => window.desktop.quit());
     window.desktop.onError((payload) => {
       document.getElementById('message').textContent = payload.message;
       document.getElementById('log').textContent = payload.log || '(no host output captured)';
+      if (payload.isMissingVCRedist) {
+        vcredistBtn.style.display = 'inline-block';
+      } else {
+        vcredistBtn.style.display = 'none';
+      }
       document.title = 'DSH Trading — startup problem';
     });
   </script>

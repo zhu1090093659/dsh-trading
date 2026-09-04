@@ -26,6 +26,7 @@ const {
   findFreePort,
   waitForGui,
   parseTokenUrlLine,
+  formatHostExitDiagnostic,
 } = require('./runtime.cjs');
 
 const READY_TIMEOUT_MS = 180000;
@@ -68,7 +69,11 @@ function childEnv(home, nodeHome) {
   // The bundled Node distribution comes first so anything the host shells out
   // to (npm, corepack) resolves against the bundled runtime, never the system.
   const nodeBinDir = process.platform === 'win32' ? nodeHome : path.join(nodeHome, 'bin');
-  env.PATH = nodeBinDir + path.delimiter + (env.PATH ?? '');
+  const currentPath = env.PATH || env.Path || '';
+  env.PATH = nodeBinDir + path.delimiter + currentPath;
+  if (process.platform === 'win32') {
+    env.Path = env.PATH;
+  }
   delete env.ELECTRON_RUN_AS_NODE;
   return env;
 }
@@ -90,6 +95,13 @@ function startHost(runtime, home, port) {
   };
   child.stdout.on('data', onData);
   child.stderr.on('data', onData);
+  child.on('error', (err) => {
+    const errText = err && err.message ? err.message : String(err);
+    pushLogLine('[desktop] host process error: ' + errText);
+    if (!quitting) {
+      void showError('后台服务进程派生失败: ' + errText);
+    }
+  });
   return child;
 }
 
@@ -161,13 +173,14 @@ function createWindow() {
   return window;
 }
 
-async function showError(message) {
+async function showError(message, extra = {}) {
   if (mainWindow === null || mainWindow.isDestroyed()) return;
   await mainWindow.loadFile(path.join(__dirname, 'error.html'));
   mainWindow.webContents.send('desktop:error', {
     message,
     log: logTail.join('\n'),
     logFile: logFilePath(),
+    isMissingVCRedist: extra.isMissingVCRedist ?? false,
   });
 }
 
@@ -197,8 +210,11 @@ async function boot() {
   let exited = false;
   child.once('exit', (code, signal) => {
     exited = true;
-    pushLogLine('[desktop] host exited: code=' + String(code) + ' signal=' + String(signal));
-    if (!quitting) void showError('The dsh host process stopped unexpectedly.');
+    const diag = formatHostExitDiagnostic(code, signal, process.platform);
+    pushLogLine('[desktop] host exited: code=' + String(code) + ' signal=' + String(signal) + ' (' + diag.message + ')');
+    if (!quitting) {
+      void showError(diag.message, { isMissingVCRedist: diag.isMissingVCRedist });
+    }
   });
   await waitForGui(port, { deadlineMs: READY_TIMEOUT_MS, isAlive: () => !exited });
   // The token URL line can land a moment after the port answers; give it a
@@ -260,6 +276,10 @@ ipcMain.on('desktop:retry', () => {
 
 ipcMain.on('desktop:reveal-log', () => {
   shell.showItemInFolder(logFilePath());
+});
+
+ipcMain.on('desktop:open-vcredist-download', () => {
+  void shell.openExternal('https://aka.ms/vs/17/release/vc_redist.x64.exe');
 });
 
 ipcMain.on('desktop:quit', () => {

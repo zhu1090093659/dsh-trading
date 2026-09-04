@@ -1,6 +1,7 @@
 node_modules/
 dist/
 resources/runtime/
+resources/redist/
 # Generated profile seed: manifests, lockfile and packed tarballs are rebuilt
 # by scripts/build-runtime.mjs from the workspace packages.
 runtime/profile-trading/vendor/

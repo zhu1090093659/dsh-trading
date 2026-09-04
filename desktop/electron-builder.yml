@@ -44,10 +44,16 @@ win:
   artifactName: dsh-trading-desktop-${version}-win-${arch}.${ext}
 
 nsis:
-  oneClick: true
+  oneClick: false
   perMachine: false
-  allowToChangeInstallationDirectory: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
   shortcutName: DSH Trading
+  installerLanguages:
+    - zh_CN
+    - en_US
+  language: 2052
+  include: resources/installer.nsh
 
 dmg:
   writeUpdateInfo: false

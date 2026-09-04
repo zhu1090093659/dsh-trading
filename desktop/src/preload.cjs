@@ -14,5 +14,6 @@ contextBridge.exposeInMainWorld('desktop', {
   },
   retry: () => ipcRenderer.send('desktop:retry'),
   revealLog: () => ipcRenderer.send('desktop:reveal-log'),
+  openVCRedistDownload: () => ipcRenderer.send('desktop:open-vcredist-download'),
   quit: () => ipcRenderer.send('desktop:quit'),
 });

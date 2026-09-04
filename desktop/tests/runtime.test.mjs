@@ -13,6 +13,7 @@ const {
   applyProfileSeed,
   parseShasums,
   parseTokenUrlLine,
+  formatHostExitDiagnostic,
   SEED_MARKER,
 } = require('../src/runtime.cjs');
 
@@ -35,7 +36,7 @@ test('resolveDshHome follows the host lookup order', () => {
   assert.equal(resolveDshHome({}, '/home/u'), path.join('/home/u', '.dsh'));
   assert.equal(resolveDshHome({ DSH_HOME: '' }, '/home/u'), path.join('/home/u', '.dsh'));
   assert.equal(resolveDshHome({ DSH_HOME: '~/custom' }, '/home/u'), path.join('/home/u', 'custom'));
-  assert.equal(resolveDshHome({ DSH_HOME: '/data/dsh' }, '/home/u'), '/data/dsh');
+  assert.equal(resolveDshHome({ DSH_HOME: '/data/dsh' }, '/home/u'), path.resolve('/data/dsh'));
 });
 
 test('profileAction seeds missing, leaves user-managed, reseeds stale', () => {
@@ -87,4 +88,25 @@ test('parseTokenUrlLine extracts the host token URL', () => {
     parseTokenUrlLine('dsh web: http://127.0.0.1:34981/?token=abc-DEF_123'),
     'http://127.0.0.1:34981/?token=abc-DEF_123');
   assert.equal(parseTokenUrlLine('[desktop] boot failed'), undefined);
+});
+
+test('formatHostExitDiagnostic detects missing VC++ redistributable on Windows', () => {
+  const winUnsigned = formatHostExitDiagnostic(3221225781, null, 'win32');
+  assert.equal(winUnsigned.isMissingVCRedist, true);
+  assert.ok(winUnsigned.message.includes('0xC0000135'));
+  assert.ok(winUnsigned.message.includes('Visual C++'));
+
+  const winSigned = formatHostExitDiagnostic(-1073741515, null, 'win32');
+  assert.equal(winSigned.isMissingVCRedist, true);
+
+  const macExit = formatHostExitDiagnostic(3221225781, null, 'darwin');
+  assert.equal(macExit.isMissingVCRedist, false);
+
+  const normalExit = formatHostExitDiagnostic(1, null, 'win32');
+  assert.equal(normalExit.isMissingVCRedist, false);
+  assert.ok(normalExit.message.includes('退出码: 1'));
+
+  const signalExit = formatHostExitDiagnostic(null, 'SIGTERM', 'darwin');
+  assert.equal(signalExit.isMissingVCRedist, false);
+  assert.ok(signalExit.message.includes('SIGTERM'));
 });

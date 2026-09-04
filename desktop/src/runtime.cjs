@@ -183,6 +183,45 @@ function parseShasums(text) {
   return map;
 }
 
+/**
+ * Analyze host process exit codes and signals to produce actionable diagnostic messages.
+ * @param {number | null} code
+ * @param {string | null} signal
+ * @param {string} [platform]
+ * @returns {{ message: string, isMissingVCRedist: boolean }}
+ */
+function formatHostExitDiagnostic(code, signal, platform = process.platform) {
+  // 0xC0000135 = 3221225781 unsigned, or -1073741515 signed 32-bit int
+  // Windows NTSTATUS STATUS_DLL_NOT_FOUND
+  const isDllNotFound = platform === 'win32' && (code === 3221225781 || code === -1073741515);
+
+  if (isDllNotFound) {
+    return {
+      message: '后台服务进程启动失败（错误代码 0xC0000135: STATUS_DLL_NOT_FOUND）。系统检测到缺少 Microsoft Visual C++ 2015-2022 运行库（x64），导致 Node.js 运行时无法加载。',
+      isMissingVCRedist: true,
+    };
+  }
+
+  if (signal !== null) {
+    return {
+      message: `后台服务进程被系统信号终止: ${signal}`,
+      isMissingVCRedist: false,
+    };
+  }
+
+  if (code !== null && code !== 0) {
+    return {
+      message: `后台服务进程异常退出，退出码: ${code}`,
+      isMissingVCRedist: false,
+    };
+  }
+
+  return {
+    message: '后台服务进程意外停止。',
+    isMissingVCRedist: false,
+  };
+}
+
 module.exports = {
   SEED_MARKER,
   RUNTIME_STAMP,
@@ -196,4 +235,5 @@ module.exports = {
   waitForGui,
   parseTokenUrlLine,
   parseShasums,
+  formatHostExitDiagnostic,
 };

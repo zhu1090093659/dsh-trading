@@ -9,8 +9,9 @@
   "scripts": {
     "start": "electron .",
     "fetch-node": "node scripts/fetch-node.mjs",
+    "fetch-redist": "node scripts/fetch-redist.mjs",
     "build-runtime": "node scripts/build-runtime.mjs",
-    "prepare-runtime": "node scripts/fetch-node.mjs && node scripts/build-runtime.mjs",
+    "prepare-runtime": "node scripts/fetch-node.mjs && node scripts/fetch-redist.mjs && node scripts/build-runtime.mjs",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --mac --win",
     "dist:mac": "electron-builder --mac dmg zip",

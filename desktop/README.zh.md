@@ -7,11 +7,14 @@
 ## 功能
 
 - 双击启动：当 `~/.dsh/profiles/trading-web` 缺失时用内置 profile 种子初始化，用内置 Node 运行时在空闲回环端口启动 dsh 宿主（`dsh --profile trading-web --no-open`），等 GUI 就绪后加载宿主打印的带 token URL（认证门每次进程启动签发一次性 token；会话 cookie 保存在应用窗口内）。
+- 自定义安装向导与路径选择：Windows NSIS 安装程序提供中英多语言安装向导（已取消静默一键安装），支持用户自由选择安装磁盘和路径。
+- 纯净机 VC++ 运行库静默集成：Windows 安装包内置 Microsoft Visual C++ 2015-2022 运行库（x64），在安装时自动检测系统 64 位注册表，若缺少则执行静默安装，彻底解决纯净设备因缺少 `vcruntime140.dll` 等运行库导致 host 服务崩溃（0xC0000135）的问题。
+- 卸载时询问清理数据：Windows 卸载向导弹出提示框，由用户决定是否一并删除用户交易数据和配置目录（`~/.dsh`）以及本地日志缓存。
 - 移交而非双宿主：当 `http://127.0.0.1:3080` 已有 dsh web GUI 在应答时，应用把该 URL 交给系统浏览器打开（用户浏览器的 cookie 已持有会话）并自行退出。绝不会在同一个 `~/.dsh` 上启动第二个 web 宿主。
 - 与已有 dsh 安装共享 `~/.dsh`：由本应用播种的 profile 带 `.dsh-desktop-seed.json` 标记，内置运行时版本变化时会被重新播种；没有该标记的 profile 视为用户自管，永不触碰。用户的 `cordis.patch.yml` 层在重新播种后保留。
 - 交易安全语义不变：下单默认 dry-run、走 base 审批闸门，与 CLI 一致（`liveTrading` 仍为显式开关）。
 - 单实例：第二次启动只会聚焦已有窗口。关闭窗口即退出应用，并优雅停止由它启动的宿主（POSIX 进程组 SIGTERM，Windows 用 `taskkill /T`，5 秒后强杀）。
-- 启动失败会进入错误页，展示宿主日志尾部，提供「重试」和「打开日志文件」按钮。完整宿主日志在 Electron `logs` 目录（`dsh-host.log`）。
+- 启动失败会进入错误页，展示精准的异常退出诊断（如针对缺少 VC++ 提供专属说明与一键下载引导）及宿主日志尾部，提供「重试」和「打开日志文件」按钮。完整宿主日志在 Electron `logs` 目录（`dsh-host.log`）。
 
 ## 仓库布局
 
