@@ -122,7 +122,7 @@ dsh --profile trading-web
 
 <div align="center">
 
-<img src="docs/assets/dsh-trading-qq.jpg" alt="DSH Trading 交流群 QQ 群二维码，群号 319737695" width="280" />
+<img src="docs/assets/dsh-trading-qq.png" alt="DSH Trading 交流群 QQ 群二维码，群号 319737695" width="280" />
 
 </div>
 

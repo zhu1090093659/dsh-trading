@@ -122,7 +122,7 @@ Six invariants keep the ecosystem honest: insert-only bundle patches · knowledg
 
 <div align="center">
 
-<img src="docs/assets/dsh-trading-qq.jpg" alt="dsh-trading QQ group QR code — group 319737695" width="280" />
+<img src="docs/assets/dsh-trading-qq.png" alt="dsh-trading QQ group QR code — group 319737695" width="280" />
 
 </div>
 
