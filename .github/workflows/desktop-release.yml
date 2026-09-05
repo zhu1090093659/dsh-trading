@@ -8,6 +8,9 @@ name: desktop-release
 #    Release 版本互相矛盾"的安装包，必须先修复版本再推 tag；
 # 2. 在 macOS（dmg+zip，arm64/x64）与 Windows（nsis+zip，x64）runner 上打包
 #    桌面版（Electron + electron-builder，按 electron-builder.yml 保持未签名）；
+#    安装包内嵌完整工具链（node + npm + pnpm 的官方 Node 发行版、dsh host
+#    闭包、预装 trading-web profile），零编程环境的机器开箱即用，打包前有
+#    工具链完整性闸门（verify-runtime-toolchain）；
 # 3. 发布 @dshtrading/* 全家族到 npm（NPM_TOKEN secret；NPM_PUBLISH_ENABLED
 #    可整体关闭 npm 通道，关闭时 tag 推送退回仅桌面发布）；
 # 4. npm 与桌面两路都成功后，创建 GitHub Release 并附着全部安装包与
@@ -128,11 +131,18 @@ jobs:
         working-directory: desktop
         run: npm ci
 
-      # 拉取各平台 Node 发行版并把 workspace 包打包成 runtime payload
-      # （build-runtime.mjs 内部会再次执行 pnpm -r build，幂等）
+      # 拉取各平台 Node 发行版、把 pnpm 装进当前平台的发行版（打包后的安装包
+      # 自带 node + npm + pnpm，零编程环境的机器开箱可用），并把 workspace 包
+      # 打包成 runtime payload（build-runtime.mjs 内部会再次执行 pnpm -r build，
+      # 幂等）
       - name: Stage desktop runtime payload
         working-directory: desktop
         run: npm run prepare-runtime
+
+      # 发布闸门：当前平台暂存的 Node 发行版必须自带 node/npm/npx/pnpm 且可执行
+      - name: Verify bundled toolchain (node/npm/pnpm)
+        working-directory: desktop
+        run: node scripts/verify-runtime-toolchain.mjs
 
       # 安装包版本以 tag 为准（desktop/package.json 不参与 changesets fixed 组）
       - name: Set desktop version from tag

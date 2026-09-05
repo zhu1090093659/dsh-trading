@@ -214,6 +214,27 @@ function assertRuntimeEntrypoints() {
   }
 }
 
+/**
+ * Report the pnpm version staged into the current platform's node
+ * distribution by stage-pnpm.mjs; informational only (best effort, undefined
+ * when the toolchain was not staged in a development checkout).
+ */
+function readBundledPnpmVersion() {
+  const candidates = process.platform === 'win32'
+    ? [path.join(stagingRoot, 'node-win32-x64', 'node_modules', 'pnpm')]
+    : [
+        path.join(stagingRoot, 'node-darwin-arm64', 'lib', 'node_modules', 'pnpm'),
+        path.join(stagingRoot, 'node-darwin-x64', 'lib', 'node_modules', 'pnpm'),
+      ];
+  const dir = candidates.find((candidate) => fs.existsSync(path.join(candidate, 'package.json')));
+  if (dir === undefined) return undefined;
+  try {
+    return 'pnpm@' + JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).version;
+  } catch {
+    return undefined;
+  }
+}
+
 function main() {
   const hostVersion = readPackageManifest(path.join(runtimeSrc, 'host')).dependencies[HOST_PACKAGE];
   buildWorkspace();
@@ -232,6 +253,7 @@ function main() {
 
   const stamp = {
     node: 'see .node-version markers under node-<os>-<cpu>',
+    pnpm: readBundledPnpmVersion(),
     host: HOST_PACKAGE + '@' + hostVersion,
     trading: DIRECT_TRADING_PACKAGES.join(', '),
     builtAt: new Date().toISOString(),

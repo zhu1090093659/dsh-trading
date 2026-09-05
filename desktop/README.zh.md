@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-一个把 dsh-trading Web GUI 变成可安装桌面应用（macOS / Windows）的 Electron 壳。安装包内置独立的 Node.js 运行时、dsh 宿主和预装好的 trading-web profile（官方 web 界面 + base 与 crypto/us/cn/hk 市场 bundle，由本仓库自有包打包而来），因此开箱即用——不需要预装 Node、npm 或 dsh CLI。
+一个把 dsh-trading Web GUI 变成可安装桌面应用（macOS / Windows）的 Electron 壳。安装包内置完整工具链——独立 Node.js 运行时（自带 npm 与 pnpm，版本跟随仓库 `packageManager` 钉住）、dsh 宿主和预装好的 trading-web profile（官方 web 界面 + base 与 crypto/us/cn/hk 市场 bundle，由本仓库自有包打包而来），因此在一台从未配置过任何编程环境的电脑上开箱即用。
 
 ## 功能
 
@@ -24,6 +24,8 @@
 | `runtime/host/` | 锁定版本的 `@deepseek-ai/dsh` 清单 + pnpm 布局（hoisted、多平台、安装 peers） |
 | `runtime/profile-trading/` | profile 种子：清单由构建脚本从 workspace 包生成 |
 | `scripts/fetch-node.mjs` | 下载并校验 sha256 的内置 Node 发行版（`resources/runtime/node-<os>-<cpu>/`） |
+| `scripts/stage-pnpm.mjs` | 把钉住版本的 pnpm 装进每个暂存 Node 发行版（按平台生成 bin shim），使安装包自带 node + npm + pnpm |
+| `scripts/verify-runtime-toolchain.mjs` | 发布闸门：当前平台每个暂存发行版的 node/npm/npx/pnpm 必须存在且可执行 |
 | `scripts/build-runtime.mjs` | 全仓构建、逐包打包、安装并暂存载荷 |
 | `resources/` | 应用图标 + 生成的运行时载荷（git 忽略） |
 
@@ -40,8 +42,7 @@ dsh-trading 的插件不发布 npm，因此 `build-runtime.mjs` 把每个 worksp
 ```sh
 cd desktop
 npm install            # electron + electron-builder
-npm run fetch-node     # 一次性下载 Node 发行版
-npm run build-runtime  # 构建 + 打包 + 安装 + 暂存载荷
+npm run prepare-runtime  # 拉取 Node 发行版 + 暂存 pnpm + 构建/打包/安装/暂存载荷
 npm run dist:mac       # dist/*.dmg + *.zip（arm64 + x64）
 npm run dist:win       # dist/*.exe（nsis）+ *.zip（可从 macOS 交叉构建）
 ```
@@ -68,7 +69,6 @@ npm run dist:win       # dist/*.exe（nsis）+ *.zip（可从 macOS 交叉构建
 ## 已知限制
 
 - **未签名构建**：macOS 首次打开会被 Gatekeeper 拦截，且 macOS 15+ 已移除"右键 → 打开"绕过。放行方式：**系统设置 → 隐私与安全性 → "仍要打开"**（首次被拦后出现），或清除隔离属性：`xattr -cr "/Applications/DSH Trading.app"`。Windows 有 SmartScreen 提示（更多信息 → 仍要运行）。签名与公证是后续计划。
-- **需要 pnpm 的应用内插件安装**（如 `dsh plugin add` 流程）在内置环境中不可用；资产式安装是纯文件拷贝，不受影响。
 - **Windows arm64 与 Linux** 暂不构建；运行时布局已支持后续加入。
 - 全新机器首次启动会花几秒钟把预装 profile 拷贝进 `~/.dsh`（一次性）。
 - 内置载荷由 workspace 检出状态构建；拉取更新后需重新构建，才能把连接器或策略更新带进安装包。
