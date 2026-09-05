@@ -727,29 +727,28 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       withoutScreenshotTail: t('compose.withoutScreenshot'),
     }
     const text = composeQuoteMessage(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as unknown as Parameters<typeof composeQuoteMessage>[0], copy)
-    // 数据位置段（2026-09-05，owner 裁决不内联数据）：告知当前图表序列的
-    // 时间范围 + 取数位置（<market>_get_klines 同参复取）+ 已开指标及参数
-    // （<market>_get_indicators 同参复算或取数后自行计算）——分析由 Agent
-    // 调工具、写代码完成；序列未就绪（klines === null）时省略整段。
+    // 数据位置段（2026-09-05，owner 裁决）：K 线数据不内联——告知当前图表
+    // 序列的时间范围 + 取数位置（<market>_get_klines 同参复取），分析由
+    // Agent 调工具、写代码完成；已开指标则直接透出计算后的当根读数（与
+    // readoutCandle 同根、图表 legend 同源同参，owner：只给参数让他复算
+    // 属多此一举）。序列未就绪（klines === null）时省略整段。
     const dataCopy: QuoteDataSectionCopy = {
       header: t('compose.data.header'),
       range: t('compose.data.range'),
       locate: t('compose.data.locate'),
       indicators: t('compose.data.indicators'),
     }
-    const dataSection = klines !== null && klines.length > 0
+    const dataSection = klines !== null && klines.length > 0 && readoutIndex !== null
       ? composeQuoteDataSection({
           market: activeMarket,
           symbol: activeSymbol,
           interval: chartInterval,
           klines,
-          indicators: instances.map(instance => ({
-            id: instance.id,
-            title: indicators.get(instance.id)?.title ?? instance.id,
-            params: instance.params,
+          indicatorReadouts: indicatorGroups.map(group => ({
+            title: group.title,
+            outputs: group.outputs.map(output => ({ key: output.key, value: output.values[readoutIndex] })),
           })),
           klinesTool: `${activeMarket}_get_klines`,
-          indicatorsTool: `${activeMarket}_get_indicators`,
         }, dataCopy)
       : ''
     runFill(dataSection === '' ? text : `${text}\n\n${dataSection}`, capture === null ? undefined : {

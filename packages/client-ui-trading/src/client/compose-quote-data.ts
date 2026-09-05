@@ -1,20 +1,22 @@
 /**
  * 「发给 Agent」数据位置段组装（纯函数，vitest 直测）：
- * 在快照摘要（compose-quote.ts）之后追加「范围 + 取数位置」——当前图表
- * 序列从多久到多久、共几根，Agent 用哪个工具、什么参数能取得同源数据。
- * owner 2026-09-05 裁决：**不内联行情数据**——分析由 Agent 调工具取数后
- * 写代码完成，消息只负责把「用户所见图表序列」精确定位（内联 CSV 方案
- * 已被否决，见 Agent Note 2026-09-05）。
+ * 在快照摘要（compose-quote.ts）之后追加「范围 + 取数位置 + 指标读数」——
+ * 当前图表序列从多久到多久、共几根，Agent 用哪个工具、什么参数能取得
+ * 同源数据；已开指标直接透出计算后的结果数值（与快照「当根K线」同根，
+ * 即图表读数行口径）。
+ *
+ * owner 2026-09-05 裁决：K 线数据**不内联**——分析由 Agent 调工具取数后
+ * 写代码完成；指标则**直接发结果**——只给参数让他复算属多此一举
+ * （内联 CSV 方案同样已否决，见 Agent Note 2026-09-05）。
  *
  * i18n-allow: 默认文案常量与 zh 词典同源（copy 面由词典注入，缺省仅向后兼容）。
  */
 import type { Kline } from './types.ts'
 
-/** 已开指标实例面（id + 显示名 + 参数）——参数随消息透出，Agent 可同参复算。 */
-export interface QuoteIndicatorInstance {
-  id: string
+/** 一个指标实例的读数面（与图表 legend 同源：output key + 当根数值）。 */
+export interface QuoteIndicatorReadout {
   title: string
-  params: Readonly<Record<string, number>>
+  outputs: ReadonlyArray<{ key: string; value: number | undefined }>
 }
 
 export interface QuoteDataSectionInput {
@@ -23,11 +25,10 @@ export interface QuoteDataSectionInput {
   /** 周期 id（与 fetchKlines / <market>_get_klines 的 INTERVAL_VOCABULARY 同一口径，如 '1d'）。 */
   interval: string
   klines: ReadonlyArray<Kline>
-  indicators: ReadonlyArray<QuoteIndicatorInstance>
+  /** 已开指标的当根读数（warm-up 未就绪的分量由组装方跳过）。 */
+  indicatorReadouts: ReadonlyArray<QuoteIndicatorReadout>
   /** K 线复取工具名（如 cn_get_klines——各市场连接器统一注册，同一路由数据源）。 */
   klinesTool: string
-  /** 指标复算工具名（如 cn_get_indicators，kit/部分连接器注册）；缺席时文案退化为「自行计算」。 */
-  indicatorsTool?: string
 }
 
 /** composeQuoteDataSection 的文案面（由 QuoteStage 用词典值注入，保持纯函数可测）。 */
@@ -37,7 +38,7 @@ export interface QuoteDataSectionCopy {
   range: string
   /** 取数位置行（{tool} {symbol} {interval} {limit} 槽）。 */
   locate: string
-  /** 指标参数行（{list} {tool} 槽；无已开指标时整行省略）。 */
+  /** 指标读数行（{list} 槽；无有效读数时整行省略）。 */
   indicators: string
 }
 
@@ -65,10 +66,17 @@ function fill(template: string, slots: Record<string, string | number>): string 
   return template.replace(/\{(\w+)\}/g, (raw, key: string) => (key in slots ? String(slots[key]) : raw))
 }
 
-/** 指标实例 → `标题(key=value, ...)`（参数原样透出，Agent 可按 schema 同参复算）。 */
-function formatInstance(instance: QuoteIndicatorInstance): string {
-  const params = Object.entries(instance.params).map(([key, value]) => `${key}=${value}`).join(', ')
-  return params === '' ? instance.title : `${instance.title}(${params})`
+/**
+ * 指标读数 → `标题 key=value, ...`（图表 legend 同款两位小数；warm-up
+ * 分量跳过，整组无有效值时整组省略）。
+ */
+function formatReadout(readout: QuoteIndicatorReadout): string | undefined {
+  const entries: string[] = []
+  for (const output of readout.outputs) {
+    if (output.value === undefined || !Number.isFinite(output.value)) continue
+    entries.push(`${output.key}=${output.value.toFixed(2)}`)
+  }
+  return entries.length > 0 ? `${readout.title} ${entries.join(', ')}` : undefined
 }
 
 export function composeQuoteDataSection(input: QuoteDataSectionInput, copy: QuoteDataSectionCopy = ZH_COPY): string {
@@ -91,12 +99,10 @@ export function composeQuoteDataSection(input: QuoteDataSectionInput, copy: Quot
     interval: input.interval,
     limit: klines.length,
   }))
-  if (input.indicators.length > 0) {
-    lines.push(fill(copy.indicators, {
-      list: input.indicators.map(formatInstance).join('; '),
-      tool: input.indicatorsTool ?? '',
-    }))
-  }
+  const readouts = input.indicatorReadouts
+    .map(formatReadout)
+    .filter((entry): entry is string => entry !== undefined)
+  if (readouts.length > 0) lines.push(fill(copy.indicators, { list: readouts.join('; ') }))
   return lines.join('\n')
 }
 
@@ -105,5 +111,5 @@ const ZH_COPY: QuoteDataSectionCopy = {
   header: '【图表数据 · 范围与取数位置（与截图同一序列）】',
   range: '范围：{range} · 共{count}根 · interval={interval} · {tz}（最新一根为进行中的当根K线）',
   locate: '取数位置：Agent 可调用 {tool} 工具（symbol={symbol}，interval={interval}，limit={limit}）取得同源序列，再用工具与代码分析。',
-  indicators: '已开指标参数：{list}；可用 {tool} 同参数复算，或取数后自行计算。',
+  indicators: '已开指标读数（与上方当根K线同根）：{list}',
 }
