@@ -76,7 +76,7 @@ export type NewHolding = Omit<Holding, 'id' | 'source' | 'importedAt' | 'updated
 ## 5. Agent 工具（holdings plugin，host 平面注册）
 
 - `holdings_stage(items: NewHolding[])`：唯一写入口。description 自带完整纪律：
-  解析券商/交易所截图 → 只 stage 不 confirm → 提醒用户「到资产抽屉确认入账」；
+  解析券商/交易所截图 → 只 stage 不 confirm → 提醒用户「到资产面板确认入账」；
   market 词汇表（crypto/us/cn/hk）与 symbol 连接器词汇要求；数字必须原样取自截图，
   不确定的字段缺省不编造；一张截图一个 account 名（用户未说明时用截图里的券商名）。
 - `holdings_list()`：只读，返回当前 staged+holdings 概要（供 agent 回答「我录入了什么」）。
@@ -106,18 +106,24 @@ export interface TaggedPosition extends Position {   // 结构扩展，契约不
 - 顶部小计：按 origin 分（真实/模拟/实盘）、按币种分；总资产 = Σ折算市值。
 - FX stale 或缺汇率 → 该币种进「未折算小计」分区，总资产仍给出但标注近似。
 
-### 6.3 UI（TradeDrawer 重构）
+### 6.3 UI（TradeDrawer 重构 → 2026-09-05 侧栏化为 HoldingsPanel）
+
+> 2026-09-05 修订：底部全宽资产抽屉（TradeDrawer）移除，改挂 QuoteStage
+> chartRow 右缘 300px 竖栏资产面板（HoldingsPanel，工具栏「资产」按钮开关，
+> `dshtrading.holdingsPanel.open` 持久化，默认开）。本节交互语义不变，
+> 展示形态由宽表格改为紧凑卡片/行列表；「手动新增」升级为面板头部常驻
+> 「+ 添加资产」主按钮。仅图表页签展示（与原抽屉一致）。
 
 - 持仓 tab：统一表，新增列「来源」（徽章：模拟/实盘/真实导入）、「账户」、「市值」；
   过滤 chips：全部/真实/模拟/实盘。imported 行支持编辑/删除（对话框）。
 - 新增「汇总」tab：聚合行可展开分账户明细；顶部基准币选择（USD/CNY/HKD，
   localStorage `dshtrading:holdings:baseCurrency`，缺省 USD）+ 总资产 + 分来源小计。
-- 待确认横幅：staged 非空时 drawer 置顶条「N 条待确认持仓」→ 确认对话框
+- 待确认横幅：staged 非空时面板置顶条「N 条待确认持仓」→ 确认对话框
   （可编辑表格：market/symbol/size/entryPrice/account/kind）→ 确认/丢弃。
 - 「导入持仓」按钮：fillComposer 填入引导文案（只填不发，与「发给 Agent」同款纪律），
   文案提示用户把截图贴进 composer；按钮 title 明示「截图将发送给当前 AI 模型解析」。
   同时提供「手动新增」对话框（同字段表单）。
-- 价格供给：drawer 展开时对全部持仓按 market 分组 fetchTickers 批量盯市，
+- 价格供给：面板展开时对全部持仓按 market 分组 fetchTickers 批量盯市，
   30s 轮询；折叠时暂停。paper 持仓维持现有 updatePrices 链路不变。
 - 委托/成交/资金 tab 语义不变（仍随 live/paper 模式）。
 

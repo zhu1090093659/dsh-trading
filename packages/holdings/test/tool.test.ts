@@ -14,7 +14,7 @@ describe('Holdings Agent Tools', () => {
       ]),
     })
     expect(result).toContain('已暂存 2 条持仓到待确认区')
-    expect(result).toContain('资产抽屉确认入账')
+    expect(result).toContain('资产面板确认入账')
     expect(result).toContain('AAPL')
     expect(result).toContain('BTCUSDT')
     const snap = await store.snapshot()

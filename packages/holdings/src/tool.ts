@@ -44,8 +44,8 @@ export function createHoldingsStageTool(store: HoldingsStore, options: HoldingsS
     name: 'holdings_stage',
     description:
       '把券商/交易所账户截图解析出的持仓条目放入统一资产台账的「待确认区」（staged），'
-      + '等待用户在资产抽屉确认入账。这是导入持仓的唯一写入口：**只 stage，绝不直接确认入账**；'
-      + '调用后必须在回复中提醒用户「持仓已放入待确认区，请到资产抽屉确认入账」。'
+      + '等待用户在资产面板确认入账。这是导入持仓的唯一写入口：**只 stage，绝不直接确认入账**；'
+      + '调用后必须在回复中提醒用户「持仓已放入待确认区，请到资产面板确认入账」。'
       + '解析纪律：'
       + '① market 用词汇表 crypto|us|cn|hk（币安/OKX 等加密所→crypto，美股券商→us，A 股→cn，港股→hk）；'
       + '② symbol 用连接器词汇（与行情 API 对齐：AAPL / 002714.SZ / BTCUSDT / 00700.HK），截图里的中文名放 name；'
@@ -142,7 +142,7 @@ export function createHoldingsStageTool(store: HoldingsStore, options: HoldingsS
       const lines: string[] = [
         `[holdings_stage] 已暂存 ${ids.length} 条持仓到待确认区（revision ${revision}，待确认区现共 ${snapshot.staged.length} 条）：`,
         ...stagedNow.map(renderHoldingLine),
-        '请提醒用户：持仓已放入待确认区，请到资产抽屉确认入账（确认前不计入正式持仓）。',
+        '请提醒用户：持仓已放入待确认区，请到资产面板确认入账（确认前不计入正式持仓）。',
       ]
       onWritten?.(ids)
       return lines.join('\n')
@@ -168,7 +168,7 @@ export function createHoldingsListTool(store: HoldingsStore) {
         `[holdings_list] revision ${snapshot.revision}：待确认区 ${snapshot.staged.length} 条 / 正式持仓 ${snapshot.holdings.length} 条`,
       ]
       if (snapshot.staged.length > 0) {
-        lines.push('待确认区（staged，等待用户在资产抽屉确认入账）：')
+        lines.push('待确认区（staged，等待用户在资产面板确认入账）：')
         lines.push(...snapshot.staged.map(renderHoldingLine))
       } else {
         lines.push('待确认区：空')
