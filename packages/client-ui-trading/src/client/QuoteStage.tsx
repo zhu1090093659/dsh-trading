@@ -13,6 +13,7 @@ import {
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
+import { composeQuoteDataSection, type QuoteDataSectionCopy } from './compose-quote-data.ts'
 import type { QuoteMessageCopy } from './compose-quote.ts'
 import type { SendImageInput } from './fill-composer.ts'
 import { FundamentalsStage } from './FundamentalsStage.tsx'
@@ -726,7 +727,30 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       withoutScreenshotTail: t('compose.withoutScreenshot'),
     }
     const text = composeQuoteMessage(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as unknown as Parameters<typeof composeQuoteMessage>[0], copy)
-    runFill(text, capture === null ? undefined : {
+    // 数据段（2026-09-05）：当前周期 K 线全序列 + 已开指标逐柱数值 + 取数位置
+    // （<market>_get_klines 复取 / <market>_get_indicators 复算）。截图只是视觉
+    // 输入，内联数据让 Agent 无需再猜再抓；序列未就绪（klines === null）时省略整段。
+    const dataCopy: QuoteDataSectionCopy = {
+      header: t('compose.data.header'),
+      locator: t('compose.data.locator'),
+      refetch: t('compose.data.refetch'),
+      indicators: t('compose.data.indicators'),
+      truncated: t('compose.data.truncated'),
+      full: t('compose.data.full'),
+      note: t('compose.data.note'),
+    }
+    const dataSection = klines !== null && klines.length > 0
+      ? composeQuoteDataSection({
+          market: activeMarket,
+          symbol: activeSymbol,
+          interval: chartInterval,
+          klines,
+          indicatorGroups,
+          klinesTool: `${activeMarket}_get_klines`,
+          indicatorsTool: `${activeMarket}_get_indicators`,
+        }, dataCopy)
+      : ''
+    runFill(dataSection === '' ? text : `${text}\n\n${dataSection}`, capture === null ? undefined : {
       dataUrl: capture.dataUrl,
       name: `${activeSymbol}-${chartInterval}.png`,
       width: capture.width,
