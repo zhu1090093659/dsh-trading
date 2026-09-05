@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/client-ui-indicators",
   "description": "Technical indicator provider plugin for dsh-trading: provides the tradingIndicators service (IndicatorRegistry with six presets MA/EMA/BOLL/MACD/RSI/KDJ) on the client context. Community indicators consume the same service via ctx.inject. Node half is a host loader placeholder; the browser half owns the service.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

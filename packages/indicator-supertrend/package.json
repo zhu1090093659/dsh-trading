@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/indicator-supertrend",
   "description": "SPIKE (community-indicator example, 2026-08-30): third-party technical indicator plugin proving the tradingIndicators service channel — injects the service and registers a Supertrend (超级趋势) definition. ATR is implemented locally (zero runtime dependency on @dshtrading/indicators); types are type-only imports. Not wired into any bundle: mounted by a profile-level cordis.patch.yml row, emulating how a real community plugin joins.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

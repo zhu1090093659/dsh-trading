@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/base",
   "description": "Market-agnostic core bundle for dsh-trading: sole owner of shared cordis rows — unified order/cancel approval gate plugin and the agent-presets row (unified preset root ~/.dsh-trading-presets)",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

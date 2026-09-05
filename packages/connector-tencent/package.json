@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-tencent",
   "description": "CN + HK dual-market connector plugin for dsh-trading: public market data from Tencent quote/kline endpoints implementing the @dshtrading/api contracts (single package, per-instance market split; no key, no official authorization — personal use boundary at your own discretion)",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

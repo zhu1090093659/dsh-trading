@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-polygon",
   "description": "【模板】交易所连接器插件脚手架：Polygon（polygon）v2 插件骨架 —— 市场数据服务 + 交易服务 + 三态闸门 + BYOK 凭证 ref。生成器：node scripts/new-connector.mjs --slug <exchange>",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

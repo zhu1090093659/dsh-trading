@@ -1,5 +1,16 @@
 # @dshtrading/all
 
+## 0.1.2
+
+### Patch Changes
+
+- 统一版本发布 v0.1.2（全家族 fixed 组同步 bump）。
+  - @dshtrading/base@0.1.2
+  - @dshtrading/cn@0.1.2
+  - @dshtrading/crypto@0.1.2
+  - @dshtrading/hk@0.1.2
+  - @dshtrading/us@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes

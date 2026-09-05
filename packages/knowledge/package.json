@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/knowledge",
   "description": "Knowledge base data plane for dsh-trading: KnowledgeCard data model, validation, graph builder, atomic file store, and knowledge_ingest / knowledge_search agent tools.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

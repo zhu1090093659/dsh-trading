@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/kit-cn",
   "description": "China A-share toolkit plugin for dsh-trading: CN risk checklist skill provider and CN fast-news / fundamentals tools; runs as a cn-trader preset row (session-scoped)",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

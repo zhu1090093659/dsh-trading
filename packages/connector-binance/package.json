@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-binance",
   "description": "Binance market connector plugin for dsh-trading: public market data over REST+WS implementing the @dshtrading/api contracts",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

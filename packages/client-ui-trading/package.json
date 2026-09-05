@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/client-ui-trading",
   "description": "Professional three-column trading terminal shell for the dsh web client: market/watchlist sidebar (shell.overlay), Lightweight Charts v5 quote stage view (MiddleStage), hero-fused session history (shadows sidebar.workspaces), session rail (fold/new/settings), and the /dshtrading/api market-data HTTP bridge on the node half.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",
