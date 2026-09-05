@@ -78,8 +78,33 @@ function childEnv(home, nodeHome) {
   return env;
 }
 
+/** Load hook shared with the host: see src/host-symbol-normalizer.mjs. */
+const HOST_SYMBOL_NORMALIZER = 'host-symbol-normalizer.mjs';
+
+/**
+ * On-disk path of the symbol-normalizing load hook, or undefined when the
+ * packaging layout does not provide it. electron-builder packs src/ into
+ * app.asar, but this hook is imported by the external bundled Node runtime,
+ * which cannot read inside the archive — asarUnpack places it next to the
+ * archive as app.asar.unpacked/, and development runs resolve unchanged.
+ */
+function hostSymbolNormalizerPath() {
+  const localPath = path.join(__dirname, HOST_SYMBOL_NORMALIZER);
+  const unpackedPath = localPath.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+  return fs.existsSync(unpackedPath) ? unpackedPath : undefined;
+}
+
 function startHost(runtime, home, port) {
-  const args = [runtime.hostBin, '--profile', 'trading-web', '--no-open', '--host', '127.0.0.1', '--port', String(port)];
+  const symbolNormalizer = hostSymbolNormalizerPath();
+  if (symbolNormalizer === undefined) {
+    pushLogLine('[desktop] symbol normalizer missing, spawning host without it');
+  } else {
+    pushLogLine('[desktop] injecting dsh scope symbol normalizer: ' + symbolNormalizer);
+  }
+  const args = [
+    ...(symbolNormalizer === undefined ? [] : ['--import', symbolNormalizer]),
+    runtime.hostBin, '--profile', 'trading-web', '--no-open', '--host', '127.0.0.1', '--port', String(port),
+  ];
   const child = spawn(runtime.nodeBin, args, {
     cwd: home,
     env: childEnv(home, runtime.nodeHome),

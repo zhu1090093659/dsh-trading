@@ -13,6 +13,12 @@ directories:
 npmRebuild: false
 asar: true
 
+# The host spawn injects src/host-symbol-normalizer.mjs into the bundled
+# Node runtime via --import; an external Node cannot import from inside the
+# archive, so the file must exist unpacked next to app.asar.
+asarUnpack:
+  - src/host-symbol-normalizer.mjs
+
 files:
   - package.json
   - src/**
