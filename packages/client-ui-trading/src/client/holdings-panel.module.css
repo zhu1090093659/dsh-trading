@@ -1,10 +1,11 @@
-/* HoldingsPanel —— 右侧栏资产面板（原底部资产抽屉的侧栏化重构，2026-09-05）。
+/* HoldingsPanel —— 右缘会话列容器的资产页签（定时任务同款模式：fixed 原位
+ * 覆盖对话列，定位与宽度吃 frame 轨道变量，见 shell-pad.css 规则 12；
+ * 2026-09-05 二版定稿，取代首版的 chartRow 300px 列）。
  *
- * 令牌契约（同 trade-drawer 时代约定，沿用）：全部颜色/圆角/阴影走 tokens.css 的
- * --dsw-futu-* 双主题令牌（:root 亮色 + body[data-ds-dark-theme] 暗色），
- * 禁止引用不存在的旧变量名（bg-card/bg-secondary/bg-tertiary/primary 一族）。
- * 仅语义琥珀（模拟盘/待确认）与非方向语义绿（实盘徽章）以本文件局部
- * --hp-* 变量承载，并随宿主暗色标记双模式取值。
+ * 令牌契约（沿用）：全部颜色/圆角/阴影走 tokens.css 的 --dsw-futu-* 双主题
+ * 令牌，禁止引用不存在的旧变量名（bg-card/bg-secondary/bg-tertiary/primary
+ * 一族）。仅语义琥珀（模拟盘/待确认）与非方向语义绿（实盘徽章）以本文件
+ * 局部 --hp-* 变量承载，并随宿主暗色标记双模式取值。
  */
 
 .root {
@@ -16,14 +17,17 @@
   --hp-green-border: rgba(22, 163, 74, 0.28);
   --hp-error: #dc2626;
 
-  flex: none;
-  width: 300px;
-  min-height: 0;
+  position: fixed;
+  top: 0;
+  right: var(--dshtrading-sidebar-w, 44px);
+  bottom: 0;
+  width: var(--dshtrading-chat-user-w, 380px);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   background: var(--dsw-futu-bg-base);
-  border: 1px solid var(--dsw-futu-border-subtle);
-  border-radius: var(--dsw-futu-radius-md);
+  border-left: 1px solid var(--dsw-futu-border-default);
+  z-index: 45;
   overflow: hidden;
   font-variant-numeric: tabular-nums;
 }
@@ -101,6 +105,30 @@ body[data-ds-dark-theme] .root,
 .addBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 交易模式切换（live/paper）：ghost 小按钮，琥珀/绿按模式着色。 */
+.modeBtn {
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--hp-green-border);
+  color: var(--hp-green);
+  border-radius: var(--dsw-futu-radius-pill);
+  padding: 1px 8px;
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+
+.modeBtn[data-mode='paper'] {
+  border-color: var(--hp-amber-border);
+  color: var(--hp-amber);
+}
+
+.modeBtn:hover {
+  background: var(--dsw-futu-bg-surface-hover);
 }
 
 .closeBtn {

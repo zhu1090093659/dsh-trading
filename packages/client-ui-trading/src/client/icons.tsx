@@ -168,3 +168,14 @@ export function IconKnowledge({ size = 16 }: { size?: number }): ReactElement {
     </svg>
   )
 }
+
+/** 资产面板入口（钱包）。 */
+export function IconWallet({ size = 16 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="12" height="9" rx="1.75" />
+      <path d="M2 6.5h12" />
+      <path d="M10.5 10.25h1.75" />
+    </svg>
+  )
+}

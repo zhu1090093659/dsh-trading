@@ -169,3 +169,11 @@ div:has(> [data-shell-overlay]) > div:nth-child(2) [role='tablist'] > button:las
 body[data-dshtrading-tasks-open='on'] div:has(> [data-shell-overlay]) > div:nth-child(2) > * {
   display: none !important;
 }
+
+/* 12) 2026-09-05 资产面板 = 会话列容器的切换页签 2 号（与定时任务同款模式、
+      二者互斥）：钱包按钮/下单联动激活时隐去对话列直接子节点，HoldingsPanel
+      （fixed，定位吃同一组轨道 var）原位覆盖。
+      body[data-dshtrading-holdings-open] 由 SessionRail effect 写入。 */
+body[data-dshtrading-holdings-open='on'] div:has(> [data-shell-overlay]) > div:nth-child(2) > * {
+  display: none !important;
+}

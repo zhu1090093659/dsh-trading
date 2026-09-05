@@ -8,18 +8,10 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import {
   fetchKlines, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiOrder,
-  cancelGuiOrder, fetchMarkets, subscribeTradingEvents,
-  fetchHoldings, fetchFx, confirmHoldings, discardHoldings, addHolding, updateHolding, removeHolding,
-  type TradeRowsReason,
+  cancelGuiOrder, type TradeRowsReason,
 } from './api.ts'
-import {
-  DEFAULT_HOLDINGS_BASE_CURRENCY, HOLDINGS_BASE_CURRENCIES, HOLDINGS_BASE_CURRENCY_KEY, HOLDINGS_MARKETS,
-  MARKET_DEFAULT_CURRENCY, holdingsPriceKey,
-} from './holdings-types.ts'
-import type {
-  FxSnapshot, Holding, HoldingsBaseCurrency, HoldingsBookSnapshot, NewHoldingInput, TaggedPosition,
-} from './holdings-types.ts'
-import type { HoldingsActions } from './HoldingsPanel.tsx'
+import { setHoldingsPanelOpen } from './holdings-store.ts'
+import { tradeModeStore, writeTradeMode } from './trade-mode-store.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
 import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
@@ -31,7 +23,6 @@ import { DerivativesPane } from './DerivativesPane.tsx'
 import { DerivativesStage } from './DerivativesStage.tsx'
 import { OrderbookPane } from './OrderbookPane.tsx'
 import { OrderPanel } from './OrderPanel.tsx'
-import { HoldingsPanel } from './HoldingsPanel.tsx'
 import { paperTradingStore } from './paper-trading-store.ts'
 import { computeRangeStats } from './range-stats.ts'
 import { IconChevronDown, IconIndicators, IconSend } from './icons.tsx'
@@ -63,7 +54,6 @@ import css from './quote-stage.module.css'
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
 const ORDERBOOK_OPEN_KEY = 'dshtrading.orderbook.open'
 const TRADE_DESK_OPEN_KEY = 'dshtrading.tradeDesk.open'
-const HOLDINGS_OPEN_KEY = 'dshtrading.holdingsPanel.open'
 const TICKER_POLL_MS = 5000
 const KLINE_RESYNC_MS = 30000
 // 衍生品指标快照轮询（issue #38）：一次刷新 = 2~5 个上游公共端点调用，取 30s
@@ -77,11 +67,6 @@ const DERIVATIVES_HISTORY_POLL_MS = 300000
 const ORDERBOOK_POLL_MS = 4000
 // 交易台只读轮询（issue #40）：15s 慢节奏（签名端点 + 个人账户面，无盯盘时效要求）。
 const TRADE_DESK_POLL_MS = 15000
-// 统一资产台账盯市轮询（issue #65 契约 §6.3）：资产面板展开才对全部持仓批量
-// fetchTickers + 四市场 live 持仓刷新，30s；折叠暂停（签名端点配额纪律）。
-const HOLDINGS_M2M_POLL_MS = 30000
-// 桥单次批量报价 symbols 封顶（镜像 node 半 bridge.ts MAX_SYMBOLS，客户端分块遵守）。
-const TICKERS_CHUNK = 32
 // 盘中周期 K 线根数按市场区分：crypto 取 300——OKX 单请求上限 300，图表每 30s
 // resync 一次，不触发游标翻页、不放大限频消耗；其余市场取 500。日 K 深度需求由
 // 1d 分支单独走 DAILY_LIMIT。
@@ -189,30 +174,19 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   /** 交易工作台（issue #40）：默认关（安全敏感面）；只读数据 null = 服务未挂载/凭证缺失。 */
   const [tradeDeskOpen, setTradeDeskOpen] = useState<boolean>(() => readTradeDeskOpen())
   /** 右侧栏资产面板（2026-09-05 起取代底部资产抽屉）：默认展开，开关跨会话记忆。 */
-  const [holdingsOpen, setHoldingsOpen] = useState<boolean>(() => readHoldingsOpen())
   const [tradePositions, setTradePositions] = useState<Position[] | null>(null)
   const [tradeBalances, setTradeBalances] = useState<AccountBalance[] | null>(null)
   const [tradeOrders, setTradeOrders] = useState<Order[] | null>(null)
   const [tradeFills, setTradeFills] = useState<TradeFill[] | null>(null)
   /** 交易面不可用原因（2026-09-04）：positions 为探针，区分「市场未挂交易连接器」与「凭证缺失」。 */
-  // positions 仍作探针以驱动 reason 分类（balances 列展示用）；持仓 tab 自身
-  // 自 issue #65 起改统一三源表，不再消费 positions 的 reason（见 HoldingsPanel props）。
+  // positions 仍作探针以驱动 reason 分类（balances 列展示用）；持仓/汇总面已
+  // 迁右缘资产面板（holdings-store 自管数据），不再消费这里的 reason。
   const [, setTradeDataReason] = useState<TradeRowsReason>('unavailable')
   const [balancesDataReason, setBalancesDataReason] = useState<TradeRowsReason>('unavailable')
 
-  /** 全局交易模式：'live' 实盘 vs 'paper' 模拟盘。issue #65 契约 §6.4 缺省翻转：
-   *  localStorage 无记录时缺省 paper（已有显式记录不动——老用户升级不受影响）。 */
-  const [tradeMode, setTradeMode] = useState<'live' | 'paper'>(() => {
-    try {
-      if (typeof window !== 'undefined' && typeof window.localStorage?.getItem === 'function') {
-        const stored = window.localStorage.getItem('dshtrading:trade:mode')
-        if (stored === 'paper' || stored === 'live') return stored
-      }
-    } catch {
-      /* 浏览器隐私模式或无头测试环境安全降级 */
-    }
-    return 'paper'
-  })
+  /** 全局交易模式（trade-mode-store 单例：右栏资产面板跨树共享同一份；
+   *  issue #65 契约 §6.4 缺省 paper 语义由 store 承载）。 */
+  const tradeMode = useSyncExternalStore(tradeModeStore.subscribe, tradeModeStore.getSnapshot)
 
   // 监听模拟账本变动
   const [paperTick, setPaperTick] = useState(0)
@@ -223,14 +197,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   }, [])
 
   const handleToggleTradeMode = (mode: 'live' | 'paper') => {
-    setTradeMode(mode)
-    try {
-      if (typeof window !== 'undefined' && typeof window.localStorage?.setItem === 'function') {
-        window.localStorage.setItem('dshtrading:trade:mode', mode)
-      }
-    } catch {
-      /* 忽略存储异常 */
-    }
+    writeTradeMode(mode)
     if (mode === 'paper') {
       // 切换到模拟盘时，若交易台未开，自动打开方便体验
       if (!tradeDeskOpen) {
@@ -252,6 +219,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const activeOrders = tradeMode === 'paper' ? paperTradingStore.getOrders() : tradeOrders
   const activeFills = tradeMode === 'paper' ? paperTradingStore.getFills() : tradeFills
   const paperCash = paperTradingStore.getAccount().cash
+  void paperTick // 模拟账本 subscribe 通知的重渲染驱动（paper 行直读 store）
 
   // 当前标的持仓量与可用现金计算（供下单面板精确计算 25%/50%/75%/100% 比例填单）
   const currentPosition = useMemo(() => {
@@ -418,192 +386,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     await refreshTradeDesk(activeMarket)
   }, TRADE_DESK_POLL_MS, [stageTab, activeMarket])
 
-  /* ── 统一资产台账（issue #65，契约 §6）──────────────────────────────
-   * 持仓 tab 改为三源统一表：paper（本地模拟账）+ live（四市场逐个拉取，
-   * 失败静默跳过）+ imported（宿主台账，SSE 'holdings' 失效信号驱动刷新）。
-   * 委托/成交/资金 tab 语义不动（仍随 tradeMode 切换数据源，见 HoldingsPanel）。
-   */
-  /** 宿主台账快照；null = 桥缺席（老部署）或未加载——imported 源降级为空。 */
-  const [holdingsBook, setHoldingsBook] = useState<HoldingsBookSnapshot | null>(null)
-  /** 四市场 live 持仓（origin='live' 已打标）；仅 drawer 展开期间拉取。 */
-  const [liveTagged, setLiveTagged] = useState<TaggedPosition[]>([])
-  /** 盯市价格表：键 `${market}:${symbol}`（契约 §6.2）。 */
-  const [m2mPrices, setM2mPrices] = useState<Record<string, number>>({})
-  /** 汇总基准币（localStorage 持久化，缺省 USD）。 */
-  const [baseCurrency, setBaseCurrencyState] = useState<HoldingsBaseCurrency>(() => readHoldingsBaseCurrency())
-  /** FX 快照；null = 桥缺席/未拉取 → 汇总折算降级为「未折算分区」。 */
-  const [fxSnapshot, setFxSnapshot] = useState<FxSnapshot | null>(null)
-  /** 各市场 provider 名（live 持仓的 account 标签）；拉一次缓存。 */
-  const providersRef = useRef<Partial<Record<MarketId, string>> | null>(null)
-
-  const reloadHoldingsBook = async (): Promise<void> => {
-    setHoldingsBook(await fetchHoldings())
-  }
-
-  // 台账首拉 + SSE 失效信号（agent 经 holdings_stage 写入 → 待确认横幅即时出现）。
-  useEffect(() => { void reloadHoldingsBook() }, [])
-  useEffect(() => subscribeTradingEvents({
-    holdings: () => { void reloadHoldingsBook() },
-  }), [])
-
-  const ensureProviders = async (): Promise<Partial<Record<MarketId, string>>> => {
-    if (providersRef.current !== null) return providersRef.current
-    try {
-      const markets = await fetchMarkets()
-      const map: Partial<Record<MarketId, string>> = {}
-      for (const info of markets) {
-        if (info.provider !== undefined && (HOLDINGS_MARKETS as readonly string[]).includes(info.id)) {
-          map[info.id as MarketId] = info.provider
-        }
-      }
-      providersRef.current = map
-    } catch {
-      /* 下轮重试（providersRef 保持 null） */
-    }
-    return providersRef.current ?? {}
-  }
-
-  // live 源（契约 §6.4）：四个市场逐个 GET /trade/positions?market=，失败静默跳过。
-  const refreshLiveTagged = async (): Promise<void> => {
-    const providers = await ensureProviders()
-    const perMarket = await Promise.all(HOLDINGS_MARKETS.map(async (m): Promise<TaggedPosition[]> => {
-      const result = await fetchTradePositions(m)
-      if (result.rows === null) return [] // 未挂交易连接器/凭证缺失/失败 → 该市场静默跳过
-      const account = providers[m] ?? m
-      return result.rows.map((p) => ({
-        ...p,
-        origin: 'live' as const,
-        kind: 'real' as const,
-        market: m,
-        account,
-        currency: MARKET_DEFAULT_CURRENCY[m],
-      }))
-    }))
-    setLiveTagged(perMarket.flat())
-  }
-
-  /** 三源组装的统一持仓行（paper → live → imported；契约 §6.1 打标规则）。 */
-  const taggedPositions = useMemo<TaggedPosition[]>(() => {
-    const paperRows = paperTradingStore.getPositions().map((p): TaggedPosition => ({
-      ...p,
-      origin: 'paper',
-      kind: 'sim',
-      market: p.market,
-      account: t('trade.holdings.paperAccount'),
-      ...(p.market === undefined ? {} : { currency: MARKET_DEFAULT_CURRENCY[p.market] }),
-    }))
-    const importedRows = (holdingsBook?.holdings ?? []).map((h: Holding): TaggedPosition => ({
-      symbol: h.symbol,
-      side: h.side,
-      size: h.size,
-      ...(h.entryPrice !== undefined ? { entryPrice: h.entryPrice } : {}),
-      timestamp: h.updatedAt,
-      origin: 'imported',
-      kind: h.kind,
-      market: h.market,
-      account: h.account,
-      holdingId: h.id,
-      ...(h.currency !== undefined ? { currency: h.currency } : {}),
-    }))
-    return [...paperRows, ...liveTagged, ...importedRows]
-    // paperTick 驱动 paper 行重读（模拟账本 subscribe 通知）。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paperTick, holdingsBook, liveTagged, t])
-
-  // 盯市目标：全部已知市场持仓去重（未知市场的旧 paper 数据不参与批量盯市，
-  // 维持原 activeMarket updatePrices 链路，契约 §6.4）。
-  const m2mTargetsKey = useMemo(() => {
-    const keys = new Set<string>()
-    for (const p of taggedPositions) {
-      if (p.market !== undefined) keys.add(holdingsPriceKey(p.market, p.symbol))
-    }
-    return [...keys].sort().join(',')
-  }, [taggedPositions])
-
-  // 面板展开：批量盯市（按市场分组、32 个/块）+ live 持仓刷新，30s 轮询；
-  // 折叠暂停（usePoll 的 deps 变化触发立即重排）。
-  usePoll(async () => {
-    if (!holdingsOpen) return
-    await refreshLiveTagged()
-    const keys = m2mTargetsKey === '' ? [] : m2mTargetsKey.split(',')
-    if (keys.length === 0) {
-      setM2mPrices({})
-      return
-    }
-    const byMarket = new Map<MarketId, string[]>()
-    for (const key of keys) {
-      const sep = key.indexOf(':')
-      const market = key.slice(0, sep) as MarketId
-      const symbol = key.slice(sep + 1)
-      const bucket = byMarket.get(market)
-      if (bucket === undefined) byMarket.set(market, [symbol])
-      else bucket.push(symbol)
-    }
-    const next: Record<string, number> = {}
-    await Promise.all([...byMarket.entries()].map(async ([m, symbols]) => {
-      for (let offset = 0; offset < symbols.length; offset += TICKERS_CHUNK) {
-        const chunk = symbols.slice(offset, offset + TICKERS_CHUNK)
-        try {
-          const outcome = await fetchTickers(m, chunk)
-          for (const sym of chunk) {
-            const result = outcome[sym]
-            if (result?.ok === true && result.ticker.price > 0) next[holdingsPriceKey(m, sym)] = result.ticker.price
-          }
-        } catch {
-          /* 单块失败不拖垮整批；下轮重试 */
-        }
-      }
-    }))
-    setM2mPrices(next)
-  }, HOLDINGS_M2M_POLL_MS, [holdingsOpen, m2mTargetsKey])
-
-  // FX 快照：面板展开且（未拉取 | 换基准币）时拉取；失败 → null（不阻断原币展示）。
-  useEffect(() => {
-    if (!holdingsOpen) return
-    let cancelled = false
-    void fetchFx(baseCurrency).then((fx) => { if (!cancelled) setFxSnapshot(fx) })
-    return () => { cancelled = true }
-  }, [holdingsOpen, baseCurrency])
-
-  const setBaseCurrency = (next: HoldingsBaseCurrency): void => {
-    setBaseCurrencyState(next)
-    writeHoldingsBaseCurrency(next)
-  }
-
-  // 台账写动作（面板确认/新增/编辑/删除）：成功 → 重拉快照（SSE 同源信号
-  // 也会触发，双保险幂等）。
-  const holdingsActions: HoldingsActions = useMemo(() => ({
-    confirm: async (ids, edits) => {
-      const revision = await confirmHoldings(ids, edits)
-      if (revision === null) return false
-      await reloadHoldingsBook()
-      return true
-    },
-    discard: async (ids) => {
-      const revision = await discardHoldings(ids)
-      if (revision === null) return false
-      await reloadHoldingsBook()
-      return true
-    },
-    add: async (item: NewHoldingInput) => {
-      const created = await addHolding(item)
-      if (created === null) return false
-      await reloadHoldingsBook()
-      return true
-    },
-    update: async (id, patch) => {
-      const revision = await updateHolding(id, patch)
-      if (revision === null) return false
-      await reloadHoldingsBook()
-      return true
-    },
-    remove: async (id) => {
-      const revision = await removeHolding(id)
-      if (revision === null) return false
-      await reloadHoldingsBook()
-      return true
-    },
-  }), [])
 
   const onSubmitGuiOrder = async (input: Parameters<typeof placeGuiOrder>[1]): Promise<Awaited<ReturnType<typeof placeGuiOrder>>> => {
     if (tradeMode === 'paper') {
@@ -618,7 +400,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           currentPrice: curPrice,
           market: activeMarket, // issue #65：模拟持仓记录市场（统一台账盯市/币种推导）
         })
-        setHoldingsOpen(true)
+        setHoldingsPanelOpen(true)
         return { order }
       } catch (err) {
         return { error: err instanceof Error ? err.message : String(err) }
@@ -627,7 +409,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return placeGuiOrder(activeMarket, input).then((res) => {
       // 下单成功（真交易）→ 自动展开资产面板看最新委托，并立即刷新账户面。
       if (res.order) {
-        setHoldingsOpen(true)
+        setHoldingsPanelOpen(true)
         void refreshTradeDesk(activeMarket)
       }
       return res
@@ -1173,21 +955,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           </div>
 
         <div className={css.toolbarActions}>
-          {/* 资产面板开关（2026-09-05 侧栏化，取代原底部抽屉折叠条） */}
-          <button
-            type="button"
-            className={css.pickerButton}
-            data-active={holdingsOpen ? 'true' : undefined}
-            aria-pressed={holdingsOpen}
-            onClick={() => {
-              setHoldingsOpen((open) => {
-                writeHoldingsOpen(!open)
-                return !open
-              })
-            }}
-          >
-            {t('trade.holdings.panel.title')}
-          </button>
           {/* 交易工作台开关（issue #40；支持接入了交易注册面的各市场） */}
           <button
             type="button"
@@ -1451,36 +1218,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 />
               )}
             </div>
-          )}
-          {/* 资产面板（2026-09-05 侧栏化）：右缘一列，取代原底部全宽抽屉；
-              盯市/持仓轮询与 FX 拉取仍由上方 usePoll/effect 按 holdingsOpen 门控 */}
-          {holdingsOpen && (
-            <HoldingsPanel
-              t={t}
-              positions={taggedPositions}
-              balances={activeBalances}
-              balancesReason={balancesDataReason}
-              orders={activeOrders}
-              fills={activeFills}
-              colorMode={colorMode}
-              tradeMode={tradeMode}
-              onResetPaper={() => {
-                paperTradingStore.resetAccount()
-              }}
-              onClose={() => {
-                setHoldingsOpen(false)
-                writeHoldingsOpen(false)
-              }}
-              onCancelOrder={onCancelGuiOrder}
-              staged={holdingsBook?.staged ?? []}
-              holdingsAvailable={holdingsBook !== null}
-              prices={m2mPrices}
-              fx={fxSnapshot}
-              baseCurrency={baseCurrency}
-              onBaseCurrencyChange={setBaseCurrency}
-              holdingsActions={holdingsActions}
-              fillComposer={fillComposer}
-            />
           )}
         </div>
       ) : viewTab === 'derivatives' ? (
@@ -1807,37 +1544,6 @@ function readTradeDeskOpen(): boolean {
 function writeTradeDeskOpen(open: boolean): void {
   try {
     localStorage.setItem(TRADE_DESK_OPEN_KEY, open ? '1' : '0')
-  } catch { /* 忽略 */ }
-}
-
-/** 资产面板开关记忆（2026-09-05 侧栏化；默认开——用户重度使用的资产面）。 */
-function readHoldingsOpen(): boolean {
-  try {
-    return localStorage.getItem(HOLDINGS_OPEN_KEY) !== '0'
-  } catch { /* 忽略 */ }
-  return true
-}
-
-function writeHoldingsOpen(open: boolean): void {
-  try {
-    localStorage.setItem(HOLDINGS_OPEN_KEY, open ? '1' : '0')
-  } catch { /* 忽略 */ }
-}
-
-/** 统一台账基准币记忆（issue #65 契约 §6.3：dshtrading:holdings:baseCurrency，缺省 USD）。 */
-function readHoldingsBaseCurrency(): HoldingsBaseCurrency {
-  try {
-    const raw = localStorage.getItem(HOLDINGS_BASE_CURRENCY_KEY)
-    if (raw !== null && (HOLDINGS_BASE_CURRENCIES as readonly string[]).includes(raw)) {
-      return raw as HoldingsBaseCurrency
-    }
-  } catch { /* 忽略 */ }
-  return DEFAULT_HOLDINGS_BASE_CURRENCY
-}
-
-function writeHoldingsBaseCurrency(base: HoldingsBaseCurrency): void {
-  try {
-    localStorage.setItem(HOLDINGS_BASE_CURRENCY_KEY, base)
   } catch { /* 忽略 */ }
 }
 

@@ -419,6 +419,8 @@ export type MarketLocaleKey =
   | 'trade.paper.totalPnl'
   | 'trade.holdings.panel.title'
   | 'trade.holdings.panel.close'
+  | 'trade.holdings.panel.open'
+  | 'trade.holdings.panel.modeHint'
   | 'trade.tab.positions'
   | 'trade.tab.summary'
   | 'trade.tab.orders'

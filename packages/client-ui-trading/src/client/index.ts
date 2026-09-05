@@ -242,6 +242,8 @@ export function apply(ctx: ClientContext): void {
       toggleFold,
       // 执行历史「打开会话」：HomeHistory 同款官方 sessions 通路。
       openSession: (sessionId: string) => { sessions.open(sessionId as SessionIdParam) },
+      // 资产面板「导入持仓」：会话输入框填入入口（只填不发）。
+      fillComposer,
       hooks: { folded: chatFolded },
     }),
   }, SessionRail))
