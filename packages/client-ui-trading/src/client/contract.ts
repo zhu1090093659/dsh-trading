@@ -510,6 +510,7 @@ export type MarketLocaleKey =
   | 'tasks.field.agentPreset'
   | 'tasks.preset.default'
   | 'tasks.field.permission'
+  | 'tasks.permission.default'
   | 'tasks.permission.pending'
   | 'tasks.permission.confirm'
   | 'tasks.action.run'

@@ -360,7 +360,9 @@ function TaskEditor({ t, meta, task, onDone, onCancel }: TaskEditorProps) {
       <label className={css.formLabel}>
         {t('tasks.field.permission')}
         <select className={css.formSelect} value={permission} onChange={event => { setPermission(event.target.value) }}>
-          <option value="">{meta === null ? 'read-only' : meta.sessionDefaultPermission}</option>
+          {/* value='' = 不显式指定（跟随会话默认）；标签拼默认值与全量枚举区分，
+              否则默认 read-only 时与 TASK_PERMISSIONS 的 read-only 文本撞车。 */}
+          <option value="">{`${t('tasks.permission.default')} (${meta === null ? 'read-only' : meta.sessionDefaultPermission})`}</option>
           {TASK_PERMISSIONS.map(item => (
             <option key={item} value={item}>{item}</option>
           ))}
