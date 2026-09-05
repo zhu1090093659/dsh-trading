@@ -31,7 +31,6 @@ import type {
 } from './holdings-types.ts'
 import type { AccountBalance, MarketId, Order, TradeFill } from './types.ts'
 import { colorModeStore } from './color-mode.ts'
-import type { ColorMode } from './color-mode.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { directionColor, fmtPrice } from './format.ts'
 import { aggregateHoldings } from './holdings-aggregate.ts'
@@ -383,7 +382,6 @@ function aggregateDegradedHint(reasons: TradeRowsReason[], t: HoldingsPanelTrans
 
 export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<PanelTab>('positions')
-  const [cancelingId, setCancelingId] = useState<string | null>(null)
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)

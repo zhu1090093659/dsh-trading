@@ -304,7 +304,6 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
     .filter(row => row !== undefined && !row.blank && row.origin !== 'subagent' && !archivedIds.has(row.id))
     .sort((left, right) => right.updatedAt - left.updatedAt)
   const visibleRows = expanded ? historyRows : historyRows.slice(0, VISIBLE_ROWS)
-  const hiddenCount = historyRows.length - visibleRows.length
 
   return (
     <>

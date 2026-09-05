@@ -182,7 +182,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   // positions 仍作探针以驱动 reason 分类（balances 列展示用）；持仓/汇总面已
   // 迁右缘资产面板（holdings-store 自管数据），不再消费这里的 reason。
   const [, setTradeDataReason] = useState<TradeRowsReason>('unavailable')
-  const [balancesDataReason, setBalancesDataReason] = useState<TradeRowsReason>('unavailable')
+  const [, setBalancesDataReason] = useState<TradeRowsReason>('unavailable')
 
   /** 全局交易模式（trade-mode-store 单例：右栏资产面板跨树共享同一份；
    *  issue #65 契约 §6.4 缺省 paper 语义由 store 承载）。 */

@@ -295,7 +295,7 @@ export function getChartThemeOptions(dark: boolean) {
 }
 
 export function TvChart(props: TvChartProps): React.JSX.Element {
-  const { bars, volumes, dataKey, intraday, mainOverlays, subIndicators, readoutIndex, onHoverIndex } = props
+  const { bars, volumes, dataKey, mainOverlays, subIndicators, readoutIndex } = props
 
   const [dark, setDark] = useState<boolean>(() => isDarkTheme())
   const containerRef = useRef<HTMLDivElement | null>(null)
