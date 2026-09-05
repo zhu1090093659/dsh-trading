@@ -1,4 +1,4 @@
-; Custom NSIS installer script for DSH Trading Desktop
+﻿; Custom NSIS installer script for DSH Trading Desktop
 ; Includes:
 ; 1. Detection and silent installation of Microsoft Visual C++ 2015-2022 Redistributable (x64)
 ; 2. Uninstallation prompt asking the user whether to clean ~/.dsh and user app data
@@ -15,7 +15,7 @@
   ${If} $0 != 1
     DetailPrint "Visual C++ Redistributable not detected. Installing..."
     InitPluginsDir
-    !ifexists "${BUILD_RESOURCES_DIR}\redist\vc_redist.x64.exe"
+    !if /FileExists "${BUILD_RESOURCES_DIR}\redist\vc_redist.x64.exe"
       File /oname=$PLUGINSDIR\vc_redist.x64.exe "${BUILD_RESOURCES_DIR}\redist\vc_redist.x64.exe"
       ExecWait '"$PLUGINSDIR\vc_redist.x64.exe" /install /quiet /norestart' $1
       DetailPrint "Visual C++ Redistributable install exited with code $1"
