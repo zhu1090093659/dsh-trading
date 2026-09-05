@@ -14,9 +14,10 @@ import {
 } from '../client/tasks-protocol.ts'
 import { TasksRunner, SessionLaunchError, type SessionCommandDispatcher, type SessionGateway } from './runner.ts'
 
-/** 宿主工作区名册面（meta + runner 校验共用；name 可缺省）。 */
+/** 宿主工作区名册面（meta + runner 校验共用）。宿主 Workspace 实体的显示名
+ *  在 title（创建时默认 basename(path)，必填）；name 留给别名面兜底。 */
 export interface WorkspaceDirectoryLike {
-  list(): readonly { id: string; name?: string }[]
+  list(): readonly { id: string; name?: string; title?: string }[]
 }
 
 export interface TasksMeta {
@@ -112,7 +113,10 @@ export class TradingTasksService {
     const directory = this.options.workspaces?.()
     const workspaces = directory === undefined
       ? []
-      : directory.list().map(item => ({ id: item.id, ...(item.name === undefined ? {} : { name: item.name }) }))
+      : directory.list().map(item => {
+          const name = item.name ?? item.title
+          return { id: item.id, ...(name === undefined ? {} : { name }) }
+        })
     const gateway = this.options.gateway()
     const agentPresets: Array<{ id: string }> = []
     if (gateway !== undefined) {

@@ -169,4 +169,30 @@ describe('TradingTasksService', () => {
       service.dispose()
     }
   })
+
+  it('meta 工作区名：宿主 Workspace 显示名在 title，name 兜底优先', async () => {
+    const fake = makeGateway()
+    const service = new TradingTasksService({
+      ledgerPath: join(dir, 'ledger-v1.json'),
+      gateway: () => fake.gateway,
+      // 宿主 WorkspaceRegistry.list() 投影：实体字段是 title（必填），无 name
+      workspaces: () => ({ list: () => [
+        { id: 'ws-1', title: 'dsh-trading' },
+        { id: 'ws-2', title: '备用', name: '别名面优先' },
+        { id: 'ws-3' },
+      ] }),
+      tickMs: 1_000,
+      pollMs: 500,
+    })
+    try {
+      const meta = await service.meta()
+      expect(meta.workspaces).toEqual([
+        { id: 'ws-1', name: 'dsh-trading' },
+        { id: 'ws-2', name: '别名面优先' },
+        { id: 'ws-3' },
+      ])
+    } finally {
+      service.dispose()
+    }
+  })
 })
