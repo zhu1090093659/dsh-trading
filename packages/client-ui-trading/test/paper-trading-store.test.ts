@@ -148,6 +148,40 @@ describe('PaperTradingStore 模拟交易引擎与本地账本', () => {
     expect(pos?.markPrice).toBe(1650)
   })
 
+  it('issue #65：placeOrder 记录 market；旧持仓加仓回补；缺省调用不带 market', () => {
+    // 缺省（旧调用形状，无 market 入参）→ 持仓 market 缺省（旧数据兼容）
+    paperTradingStore.placeOrder({
+      symbol: 'BTCUSDT',
+      side: 'buy',
+      type: 'market',
+      quantity: 0.5,
+      currentPrice: 80_000,
+    })
+    expect(paperTradingStore.getPositions()[0]?.market).toBeUndefined()
+
+    // 加仓时回补 market（旧数据兼容路径）
+    paperTradingStore.placeOrder({
+      symbol: 'BTCUSDT',
+      side: 'buy',
+      type: 'market',
+      quantity: 0.5,
+      currentPrice: 82_000,
+      market: 'crypto',
+    })
+    expect(paperTradingStore.getPositions()[0]?.market).toBe('crypto')
+
+    // 新持仓直接带 market
+    paperTradingStore.placeOrder({
+      symbol: 'AAPL',
+      side: 'buy',
+      type: 'market',
+      quantity: 10,
+      currentPrice: 200,
+      market: 'us',
+    })
+    expect(paperTradingStore.getPositions().find((p) => p.symbol === 'AAPL')?.market).toBe('us')
+  })
+
   it('一键重置：恢复出厂初始资金并清空持仓流水', () => {
     paperTradingStore.placeOrder({
       symbol: 'AAPL',

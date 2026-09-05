@@ -40,6 +40,7 @@
     "@dshtrading/client-ui-updater": "workspace:^",
     "@dshtrading/dsh-i18n": "workspace:^",
     "@dshtrading/eventbus": "workspace:^",
+    "@dshtrading/holdings": "workspace:^",
     "@dshtrading/indicators": "workspace:^",
     "@dshtrading/knowledge": "workspace:^",
     "@dshtrading/router": "workspace:^",

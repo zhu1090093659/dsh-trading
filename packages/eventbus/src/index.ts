@@ -28,6 +28,7 @@ export const name = 'dsh-trading-eventbus'
  * store 词汇（v1，封闭集合）。新 store = 本 union 加成员 + 客户端 handler 注册，
  * 事件面不开放任意字符串（防注入 & 保持可枚举）。
  * 'chart'（issue #63）：图表激活名册（挂载/摘除/调参）失效信号。
+ * 'holdings'（issue #65）：统一资产台账（staged/holdings 两区）失效信号。
  */
 export type TradingEventStore =
   | 'indicators'
@@ -38,6 +39,7 @@ export type TradingEventStore =
   | 'routing'
   | 'chart'
   | 'tasks'
+  | 'holdings'
 
 /** 单条失效信号（桥 SSE 帧的 data 载荷形状，也是 subscribe 回调入参）。 */
 export interface TradingEvent {

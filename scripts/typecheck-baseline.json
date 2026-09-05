@@ -47,6 +47,7 @@
   "packages/dsh-i18n/tsconfig.json": 0,
   "packages/eventbus/tsconfig.json": 0,
   "packages/hk/tsconfig.json": 1,
+  "packages/holdings/tsconfig.json": 0,
   "packages/indicator-supertrend/tsconfig.client.json": 3,
   "packages/indicator-supertrend/tsconfig.host.json": 0,
   "packages/indicator-supertrend/tsconfig.json": 0,

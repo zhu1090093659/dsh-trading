@@ -8,6 +8,7 @@ import type { FundamentalsPackage } from '@dshtrading/api'
 import type { CustomIndicatorRecord, IndicatorInstance } from '@dshtrading/indicators'
 import type { KnowledgeCard } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord } from '@dshtrading/strategies'
+import type { FxSnapshot, HoldingsBaseCurrency, HoldingsBookSnapshot, NewHolding, NewHoldingInput } from './holdings-types.ts'
 
 export class BridgeError extends Error {
   constructor(readonly status: number, message: string, readonly code?: string) {
@@ -508,6 +509,7 @@ export type TradingEventStoreName =
   | 'routing'
   | 'chart'
   | 'tasks'
+  | 'holdings'
 
 type TradingEventHandlers = Partial<Record<TradingEventStoreName, () => void>>
 
@@ -587,6 +589,115 @@ export async function fetchFundamentals(market: MarketId, symbol: string): Promi
   } catch (err) {
     console.warn(`[dsh-trading] fetchFundamentals ${market}/${symbol} failed:`, err)
     return undefined
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 统一资产台账（Issue #65，契约 §3）：导入持仓 CRUD + staged 待确认区 + FX   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 持仓台账快照（staged 待确认区 + holdings 正式区 + revision）。
+ * 桥缺席/老部署/失败 → null：imported 源静默降级为空，不报错横幅。
+ */
+export async function fetchHoldings(): Promise<HoldingsBookSnapshot | null> {
+  try {
+    const wire = await getJson<{ ok: true; revision: number; staged?: unknown[]; holdings?: unknown[] }>('/dshtrading/api/holdings')
+    return {
+      revision: typeof wire.revision === 'number' ? wire.revision : 0,
+      staged: Array.isArray(wire.staged) ? wire.staged as HoldingsBookSnapshot['staged'] : [],
+      holdings: Array.isArray(wire.holdings) ? wire.holdings as HoldingsBookSnapshot['holdings'] : [],
+    }
+  } catch {
+    return null
+  }
+}
+
+/** 写操作统一 POST/PUT 助手：成功 → revision；业务拒绝/网络失败 → null。 */
+async function postHoldingsJson(path: string, method: 'POST' | 'PUT', body: unknown): Promise<{ revision: number; id?: string } | null> {
+  try {
+    const response = await fetch(path, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const wire = await response.json().catch(() => ({})) as { ok?: boolean; revision?: number; id?: string; code?: string; message?: string }
+    if (!response.ok || wire.ok !== true || typeof wire.revision !== 'number') {
+      console.warn('[dsh-trading] holdings write rejected:', wire.code, wire.message)
+      return null
+    }
+    return typeof wire.id === 'string'
+      ? { revision: wire.revision, id: wire.id }
+      : { revision: wire.revision }
+  } catch {
+    return null
+  }
+}
+
+/** staged 待确认区入库（Agent 截图解析的唯一写入口；UI 不直接调，agent 工具走宿主）。 */
+export async function stageHoldings(items: NewHoldingInput[]): Promise<number | null> {
+  const res = await postHoldingsJson('/dshtrading/api/holdings/stage', 'POST', { items })
+  return res?.revision ?? null
+}
+
+/** 确认 staged 入账（可带逐条编辑）；返回新 revision。 */
+export async function confirmHoldings(ids: string[], edits?: Record<string, Partial<NewHolding>>): Promise<number | null> {
+  const res = await postHoldingsJson('/dshtrading/api/holdings/confirm', 'POST', edits === undefined ? { ids } : { ids, edits })
+  return res?.revision ?? null
+}
+
+/** 丢弃 staged 条目。 */
+export async function discardHoldings(ids: string[]): Promise<number | null> {
+  const res = await postHoldingsJson('/dshtrading/api/holdings/discard', 'POST', { ids })
+  return res?.revision ?? null
+}
+
+/** 手动新增一条导入持仓（直入正式区）；成功返回 { revision, id }。 */
+export async function addHolding(item: NewHoldingInput): Promise<{ revision: number; id: string } | null> {
+  const res = await postHoldingsJson('/dshtrading/api/holdings', 'POST', item)
+  return res !== null && typeof res.id === 'string' ? { revision: res.revision, id: res.id } : null
+}
+
+/** 编辑一条导入持仓。 */
+export async function updateHolding(id: string, patch: Partial<NewHolding>): Promise<number | null> {
+  const res = await postHoldingsJson('/dshtrading/api/holdings', 'PUT', { id, patch })
+  return res?.revision ?? null
+}
+
+/** 删除一条导入持仓（DELETE /holdings?id=）。 */
+export async function removeHolding(id: string): Promise<number | null> {
+  try {
+    const query = new URLSearchParams({ id })
+    const response = await fetch(`/dshtrading/api/holdings?${query.toString()}`, {
+      method: 'DELETE',
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) return null
+    const wire = await response.json() as { ok?: boolean; revision?: number }
+    return wire.ok === true && typeof wire.revision === 'number' ? wire.revision : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * FX 汇率快照（GET /fx?base=；rates[c] = 1 单位 c 折合多少 base）。
+ * 桥缺席/失败 → null：聚合引擎降级为「一切不折算 + 未折算分区」。
+ */
+export async function fetchFx(base: HoldingsBaseCurrency): Promise<FxSnapshot | null> {
+  try {
+    const query = new URLSearchParams({ base })
+    const wire = await getJson<{ ok: true; base: string; rates: Record<string, number>; asOf: number; stale: boolean }>(
+      `/dshtrading/api/fx?${query.toString()}`,
+    )
+    return {
+      base: (wire.base === 'CNY' || wire.base === 'HKD' ? wire.base : 'USD') as HoldingsBaseCurrency,
+      rates: wire.rates ?? {},
+      asOf: typeof wire.asOf === 'number' ? wire.asOf : 0,
+      stale: wire.stale === true,
+    }
+  } catch {
+    return null
   }
 }
 

@@ -1,0 +1,48 @@
+{
+  "name": "@dshtrading/holdings",
+  "description": "Unified holdings ledger data plane for dsh-trading (issue #65): Holding model with staged/confirmed two-zone book store (atomic file + memory), frankfurter.dev FX service with cache degradation chain, and holdings_stage / holdings_list agent tools.",
+  "version": "0.1.1",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./fx": {
+      "types": "./lib/fx.d.ts",
+      "default": "./lib/fx.js"
+    },
+    "./tool": {
+      "types": "./lib/tool.d.ts",
+      "default": "./lib/tool.js"
+    },
+    "./plugin": {
+      "types": "./lib/plugin.d.ts",
+      "default": "./lib/plugin.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-tools": "^0.1.2-alpha.2",
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}
