@@ -70,6 +70,10 @@ dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtra
 # …或全市场一次装齐
 dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtrading/us @dshtrading/cn @dshtrading/hk
 
+# 给该 profile 接上浏览器 UI（一次即可）：往 profile 清单的 dsh 核心层之后
+# 插入宿主内置 web 宿主层
+node -e "const f=require('os').homedir()+'/.dsh/profiles/trading-web/package.json',fs=require('fs'),m=JSON.parse(fs.readFileSync(f,'utf8'));m.dsh.profile.bundles.includes('@deepseek-ai/dsh-web-app')||m.dsh.profile.bundles.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(f,JSON.stringify(m,null,2)+'\n')"
+
 # 启动终端
 dsh --profile trading-web
 ```

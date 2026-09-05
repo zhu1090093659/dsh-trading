@@ -70,8 +70,15 @@
     # 闸门已落地）：cordis_inspect_* / cordis_define / cordis_run / cordis_stop /
     # cordis_undefine 7 工具进 trading profile。信任级 = bash（官方声明）；动态包
     # session-scoped、重启即散、浏览器半需人工审批；服务缝闸门兜底实盘边界。
+    # 行安全（issue #62）：tool-cordis 硬 inject dynamicCordisRunner/cordisInspect，
+    # 唯一提供方是 dsh-web-app 层的 cordis-host-runner 行；裸 dsh-base 自定义
+    # profile（quick start 补 web-app 层前的中间态）与 dsh-headless 无头 profile
+    # 缺该行，工具挂不上服务即永久 pending，宿主 assertEntriesActivated 启动即崩。
+    # 故条件禁用：宿主树存在 cordis-host-runner 行（web/desktop profile）才启用，
+    # 其余宿主降级为无动态包工具（fail-soft，与其余 client 行 headless 无害同款）。
     - id: dsh-trading-dynamic-capabilities
       name: '@deepseek-ai/dsh-tool-cordis'
+      disabled: !!js (!([...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-cordis-host-runner')))
 
     # 知识能力收口（issue #33 / P4）：provide tradingKnowledgeCards 单实例 store 服务，
     # knowledge_ingest/search/graph host 平面注册；写后 emit tradingEvents('knowledge')。

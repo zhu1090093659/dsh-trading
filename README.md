@@ -70,6 +70,10 @@ dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtra
 # …or all four markets
 dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtrading/us @dshtrading/cn @dshtrading/hk
 
+# Serve the browser UI in this profile (once): add the in-box web host layer
+# right after the dsh core layer in the profile manifest
+node -e "const f=require('os').homedir()+'/.dsh/profiles/trading-web/package.json',fs=require('fs'),m=JSON.parse(fs.readFileSync(f,'utf8'));m.dsh.profile.bundles.includes('@deepseek-ai/dsh-web-app')||m.dsh.profile.bundles.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(f,JSON.stringify(m,null,2)+'\n')"
+
 # Launch the terminal
 dsh --profile trading-web
 ```
