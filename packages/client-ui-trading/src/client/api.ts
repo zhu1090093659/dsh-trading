@@ -552,6 +552,32 @@ export function subscribeTradingEvents(handlers: TradingEventHandlers): () => vo
   }
 }
 
+/**
+ * 更新提示点（自动更新插件 @dshtrading/client-ui-updater 的桥状态）：
+ * GET /dshtrading/api/updater/state，仅取 available 布尔。桥缺席（老部署/
+ * headless 404）→ null（点永不亮，不报错横幅）。
+ */
+export interface UpdateBadgeState {
+  available: boolean
+  version?: string
+}
+
+export async function fetchUpdateBadge(): Promise<UpdateBadgeState | null> {
+  try {
+    const wire = await getJson<{
+      environment?: { supported?: boolean }
+      check?: { available?: boolean, latest?: { version?: string } }
+    }>('/dshtrading/api/updater/state')
+    if (wire.environment?.supported !== true) return { available: false }
+    return {
+      available: wire.check?.available === true,
+      ...(wire.check?.latest?.version === undefined ? {} : { version: wire.check.latest.version }),
+    }
+  } catch {
+    return null
+  }
+}
+
 /** 拉取标的综合基本面与多期财务矩阵数据（Issue #36，富途牛牛风格工作台数据源）。 */
 export async function fetchFundamentals(market: MarketId, symbol: string): Promise<FundamentalsPackage | undefined> {
   try {

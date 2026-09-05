@@ -1,0 +1,274 @@
+/* UpdaterSection —— 软件更新一级菜单页面外壳样式（支持亮色/深色自适应） */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0 24px;
+  font-size: 13px;
+
+  /* 局部主题变量定义（亮色默认，优先走宿主 dsw-alias） */
+  --upd-text-primary: var(--dsw-alias-text-primary, #1a1e24);
+  --upd-text-secondary: var(--dsw-alias-text-secondary, #5f6672);
+  --upd-text-muted: var(--dsw-alias-text-muted, #8e95a3);
+  --upd-border: var(--dsw-alias-border-l2, #e3e6ea);
+  --upd-bg-hover: var(--dsw-alias-fill-hover, rgba(0, 0, 0, 0.04));
+  --upd-bg-active: var(--dsw-alias-primary-bg, rgba(37, 99, 235, 0.06));
+  --upd-primary: var(--dsw-alias-primary, #2563eb);
+  --upd-ok: #16a34a;
+  --upd-danger: #dc2626;
+
+  color: var(--upd-text-primary);
+}
+
+/* 显式深色模式变量注入（仅当宿主处于深色状态时生效，绝不干扰白天模式） */
+:global(body[data-ds-dark-theme]) .root,
+:global([data-theme='dark']) .root,
+:global(:root[data-theme='dark']) .root,
+:global(html.dark) .root,
+:global(body.dark) .root {
+  --upd-text-primary: var(--dsw-alias-text-primary, #f3f4f6);
+  --upd-text-secondary: var(--dsw-alias-text-secondary, #9ca3af);
+  --upd-text-muted: var(--dsw-alias-text-muted, #6b7280);
+  --upd-border: var(--dsw-alias-border-l2, rgba(255, 255, 255, 0.1));
+  --upd-bg-hover: var(--dsw-alias-fill-hover, rgba(255, 255, 255, 0.06));
+  --upd-bg-active: rgba(37, 99, 235, 0.16);
+  --upd-primary: #3b82f6;
+  --upd-ok: #4ade80;
+  --upd-danger: #f87171;
+}
+
+.lead {
+  font-size: 13.5px;
+  color: var(--upd-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  padding: 10px 12px;
+  border: 1px solid var(--upd-border);
+  border-radius: 8px;
+  background: var(--upd-bg-hover);
+}
+
+.versionItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.versionLabel {
+  font-size: 11.5px;
+  color: var(--upd-text-muted);
+}
+
+.versionValue {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.statusText {
+  color: var(--upd-text-secondary);
+}
+
+.statusTextOk {
+  color: var(--upd-ok);
+}
+
+.statusTextAvailable {
+  color: var(--upd-primary);
+  font-weight: 600;
+}
+
+.statusTextError {
+  color: var(--upd-danger);
+}
+
+.availableCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--upd-primary);
+  border-radius: 8px;
+  background: var(--upd-bg-active);
+}
+
+.availableTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--upd-primary);
+}
+
+.availableMeta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--upd-text-muted);
+}
+
+.notesTitle {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--upd-text-secondary);
+}
+
+.notes {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--upd-border);
+  border-radius: 6px;
+  background: var(--upd-bg-hover);
+  color: var(--upd-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow: auto;
+  font-family: inherit;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.primaryButton {
+  appearance: none;
+  border: none;
+  border-radius: 6px;
+  background: var(--upd-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+
+.primaryButton:hover {
+  filter: brightness(1.08);
+}
+
+.primaryButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+  filter: none;
+}
+
+.secondaryButton {
+  appearance: none;
+  border: 1px solid var(--upd-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--upd-text-secondary);
+  font-size: 13px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.secondaryButton:hover {
+  background: var(--upd-bg-hover);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.link {
+  color: var(--upd-primary);
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.progressWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progressLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--upd-text-secondary);
+}
+
+.progressTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--upd-bg-hover);
+  border: 1px solid var(--upd-border);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--upd-primary);
+  border-radius: 3px;
+  transition: width 240ms ease;
+}
+
+.progressIndeterminate {
+  width: 40%;
+  animation: upd-slide 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes upd-slide {
+  from {
+    margin-left: 0;
+  }
+
+  to {
+    margin-left: 60%;
+  }
+}
+
+.doneCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--upd-ok);
+  border-radius: 8px;
+}
+
+.doneTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--upd-ok);
+}
+
+.doneMeta {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--upd-text-secondary);
+}
+
+.errorText {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--upd-danger);
+  word-break: break-word;
+}

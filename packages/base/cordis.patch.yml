@@ -114,6 +114,16 @@
     - id: dsh-trading-client-ui-knowledge
       name: '@dshtrading/client-ui-knowledge'
 
+    # 自动更新插件（2026-09-04）：设置面板一级菜单「软件更新」（settings.section
+    # order 20）+ node 半 /dshtrading/api/updater 桥（GitHub Releases 检测 +
+    # @dshtrading/* 家族增量更新）。node 半依赖 webServer/connection（headless
+    # 挂起无害）；增量通道只作用于桌面版 seeded profile（.dsh-desktop-seed.json
+    # 标记），dev/headless profile 降级为发布页链接。包名解析依赖本包
+    # dependencies 里的 @dshtrading/client-ui-updater（进 profile 安装闭包，
+    # S3 坑 3 同款）。
+    - id: dsh-trading-client-ui-updater
+      name: '@dshtrading/client-ui-updater'
+
 - id: agent-presets
   name: '@deepseek-ai/dsh-agent-presets'
   config:

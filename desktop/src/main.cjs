@@ -286,6 +286,13 @@ ipcMain.on('desktop:quit', () => {
   app.quit();
 });
 
+// Updater flow: relaunch + quit in one step (app.relaunch registers the new
+// launch; the quit then goes through the normal before-quit host teardown).
+ipcMain.on('desktop:relaunch', () => {
+  app.relaunch();
+  app.quit();
+});
+
 app.whenReady().then(() => {
   try {
     fs.mkdirSync(path.dirname(logFilePath()), { recursive: true });

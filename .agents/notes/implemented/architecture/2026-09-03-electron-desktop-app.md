@@ -33,7 +33,7 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 ## Consequences
 
 - 安装包体积大（运行时载荷约 800MB 未压缩，安装包压缩后数百 MB）：Node 发行版 × 3 目标 + 宿主闭包。内部分发可接受；裁剪留作后续有实测依据的优化。
-- 未签名构建触发 Gatekeeper / SmartScreen 提示；签名、公证与自动更新是明确后续，不在本期。
+- 未签名构建触发 Gatekeeper / SmartScreen 提示；签名、公证与自动更新是明确后续，不在本期。（2026-09-05 跟进：自动更新已落地为 @dshtrading/client-ui-updater 插件 + 发布资产增量通道，见 [2026-09-05-auto-update-plugin](../feature/2026-09-05-auto-update-plugin.md)；签名/公证仍属后续。）
 - 依赖 pnpm 的应用内插件安装不可用（内置环境无 pnpm）；资产式安装不受影响。
 - 载荷由 workspace 检出状态构建：仓库更新后需重跑 `npm run build-runtime` 才会进入安装包。
 - dsh-web 仓库保留了同构骨架（其 dev 分支）作为 Web GUI 全家桶桌面版的地基；两侧的 profile 播种与打包脚本各自维护。

@@ -28,7 +28,8 @@
     "@dshtrading/client-ui-trading": "workspace:^",
     "@dshtrading/client-ui-settings": "workspace:^",
     "@dshtrading/client-ui-strategies": "workspace:^",
-    "@dshtrading/client-ui-knowledge": "workspace:^"
+    "@dshtrading/client-ui-knowledge": "workspace:^",
+    "@dshtrading/client-ui-updater": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
