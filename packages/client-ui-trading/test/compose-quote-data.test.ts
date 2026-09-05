@@ -1,8 +1,8 @@
 /**
- * 「发给 Agent」数据段组装单测（离线纯函数）：
- * K 线全序列 CSV + 已开指标逐柱数值列 + 数据位置（复取/复算工具指引）。
- * 时间单元格用本地时区构造（new Date(y, m, d)），时区标签走同源 helper，
- * 断言与运行环境 TZ 无关。
+ * 「发给 Agent」数据位置段单测（离线纯函数）：
+ * owner 2026-09-05 裁决不内联行情数据——消息只给「范围 + 取数位置 +
+ * 已开指标参数」，分析由 Agent 调工具、写代码完成。
+ * 时区标签走同源 helper、时间用本地时区构造，断言与运行环境 TZ 无关。
  */
 import { describe, expect, it } from 'vitest'
 import { composeQuoteDataSection, timezoneLabel, type QuoteDataSectionCopy } from '../src/client/compose-quote-data.ts'
@@ -15,100 +15,56 @@ const kline = (openTime: number, close: number): Kline => ({ openTime, open: clo
 
 const COPY: QuoteDataSectionCopy = {
   header: '[data]',
-  locator: 'locator market={market} symbol={symbol} interval={interval} count={count} range={range} tz={tz}',
-  refetch: 'refetch {tool} {symbol} {interval} {limit}',
-  indicators: 'indicators {tool}',
-  truncated: 'truncated {inlined}/{count}',
-  full: 'full {count}',
-  note: 'note',
+  range: 'range {range} count={count} interval={interval} tz={tz}',
+  locate: 'locate {tool} {symbol} {interval} {limit}',
+  indicators: 'indicators {list} via {tool}',
 }
 
-const FENCE = '\u0060\u0060\u0060'
-
 describe('composeQuoteDataSection', () => {
-  it('全量：头行 + 数据位置 + 复取/复算指引 + CSV 全列（含指标，warm-up 空单元格）', () => {
-    const klines = [kline(at(2026, 9, 1), 10), kline(at(2026, 9, 2), 11), kline(at(2026, 9, 3), 12)]
+  it('全量：头行 + 范围 + 取数位置 + 已开指标参数行（limit = 根数）', () => {
     const text = composeQuoteDataSection({
       market: 'cn',
       symbol: '600519.SH',
       interval: '1d',
-      klines,
-      indicatorGroups: [{
-        id: 'ma',
-        title: 'MA',
-        outputs: [
-          { key: 'MA5', values: [undefined, 10.5, 11] },
-          { key: 'MA10', values: [undefined, undefined, 10.8] },
-        ],
-      }],
+      klines: [kline(at(2026, 9, 1), 10), kline(at(2026, 9, 2), 11), kline(at(2026, 9, 3), 12)],
+      indicators: [
+        { id: 'ma', title: 'MA', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 } },
+        { id: 'macd', title: 'MACD', params: { fast: 12, slow: 26, signal: 9 } },
+      ],
       klinesTool: 'cn_get_klines',
       indicatorsTool: 'cn_get_indicators',
     }, COPY)
     const lines = text.split('\n')
     expect(lines[0]).toBe('[data]')
-    expect(lines[1]).toBe(`locator market=cn symbol=600519.SH interval=1d count=3 range=2026-09-01 ~ 2026-09-03 tz=${timezoneLabel()}`)
-    expect(lines[2]).toBe('refetch cn_get_klines 600519.SH 1d 3')
-    expect(lines[3]).toBe('indicators cn_get_indicators')
-    expect(lines[4]).toBe('full 3')
-    expect(lines[5]).toBe('note')
-    expect(lines[6]).toBe('')
-    expect(lines[7]).toBe(`${FENCE}csv`)
-    expect(lines[8]).toBe('time,open,high,low,close,volume,MA5,MA10')
-    expect(lines[9]).toBe('2026-09-01,9,11,8,10,1010,,')
-    expect(lines[10]).toBe('2026-09-02,10,12,9,11,1011,10.5,')
-    expect(lines[11]).toBe('2026-09-03,11,13,10,12,1012,11,10.8')
-    expect(lines[12]).toBe(FENCE)
+    expect(lines[1]).toBe(`range 2026-09-01 ~ 2026-09-03 count=3 interval=1d tz=${timezoneLabel()}`)
+    expect(lines[2]).toBe('locate cn_get_klines 600519.SH 1d 3')
+    expect(lines[3]).toBe('indicators MA(n1=5, n2=10, n3=20, n4=30, n5=60, n6=120); MACD(fast=12, slow=26, signal=9) via cn_get_indicators')
   })
 
-  it('截断：maxRows 内联最近 N 根，指标列下标与全序列对齐', () => {
-    const klines = [kline(at(2026, 9, 1), 10), kline(at(2026, 9, 2), 11), kline(at(2026, 9, 3), 12), kline(at(2026, 9, 4), 13)]
-    const text = composeQuoteDataSection({
-      market: 'us',
-      symbol: 'AAPL',
-      interval: '1d',
-      klines,
-      indicatorGroups: [{ id: 'ma', title: 'MA', outputs: [{ key: 'MA2', values: [undefined, 10.5, 11.5, 12.5] }] }],
-      klinesTool: 'us_get_klines',
-      maxRows: 2,
-    }, COPY)
-    const lines = text.split('\n')
-    expect(lines[3]).toBe('truncated 2/4')
-    expect(lines[7]).toBe('time,open,high,low,close,volume,MA2')
-    expect(lines[8]).toBe('2026-09-03,11,13,10,12,1012,11.5')
-    expect(lines[9]).toBe('2026-09-04,12,14,11,13,1013,12.5')
-    expect(lines).toHaveLength(11)
-  })
-
-  it('output key 跨组撞名：列头以「指标名.key」消歧；盘中周期 time 落到时分', () => {
-    const klines = [kline(at(2026, 9, 1, 14, 30), 10)]
+  it('盘中周期：范围两端落到时分', () => {
     const text = composeQuoteDataSection({
       market: 'crypto',
       symbol: 'BTCUSDT',
       interval: '1h',
-      klines,
-      indicatorGroups: [
-        { id: 'a', title: 'Alpha', outputs: [{ key: 'line', values: [1] }] },
-        { id: 'b', title: 'Beta', outputs: [{ key: 'line', values: [2] }] },
-      ],
+      klines: [kline(at(2026, 9, 1, 8, 0), 10), kline(at(2026, 9, 1, 14, 30), 11)],
+      indicators: [],
       klinesTool: 'crypto_get_klines',
     }, COPY)
-    expect(text).toContain('time,open,high,low,close,volume,Alpha.line,Beta.line')
-    expect(text.split('\n')[8]).toBe('2026-09-01 14:30,9,11,8,10,1010,1,2')
+    expect(text.split('\n')[1]).toBe(`range 2026-09-01 08:00 ~ 2026-09-01 14:30 count=2 interval=1h tz=${timezoneLabel()}`)
   })
 
-  it('无指标：CSV 只剩基础六列；无 indicatorsTool 时省略复算行', () => {
+  it('无已开指标：指标参数行整行省略', () => {
     const text = composeQuoteDataSection({
-      market: 'hk',
-      symbol: '00700.HK',
-      interval: '1w',
-      klines: [kline(at(2026, 8, 31), 300)],
-      indicatorGroups: [],
-      klinesTool: 'hk_get_klines',
+      market: 'us',
+      symbol: 'AAPL',
+      interval: '1d',
+      klines: [kline(at(2026, 9, 4), 300)],
+      indicators: [],
+      klinesTool: 'us_get_klines',
     }, COPY)
     const lines = text.split('\n')
-    expect(lines[3]).toBe('full 1')
-    expect(lines[7]).toBe('time,open,high,low,close,volume')
-    expect(lines[8]).toBe('2026-08-31,299,301,298,300,1300')
+    expect(lines).toHaveLength(3)
+    expect(lines[2]).toBe('locate us_get_klines AAPL 1d 1')
   })
 
   it('空序列：返回空串（整段省略）', () => {
@@ -117,24 +73,25 @@ describe('composeQuoteDataSection', () => {
       symbol: '600519.SH',
       interval: '1d',
       klines: [],
-      indicatorGroups: [],
+      indicators: [],
       klinesTool: 'cn_get_klines',
     }, COPY)
     expect(text).toBe('')
   })
 
-  it('缺省 copy：回落 zh 默认文案（含数据位置与 warm-up 注记）', () => {
+  it('缺省 copy：回落 zh 默认文案（含范围、取数位置与指标参数槽）', () => {
     const text = composeQuoteDataSection({
       market: 'cn',
       symbol: '600519.SH',
       interval: '1d',
       klines: [kline(at(2026, 9, 5), 1450)],
-      indicatorGroups: [],
+      indicators: [{ id: 'ma', title: 'MA', params: { n1: 5 } }],
       klinesTool: 'cn_get_klines',
+      indicatorsTool: 'cn_get_indicators',
     })
-    expect(text).toContain('【图表数据 · 与截图同一序列，可直接用于分析】')
-    expect(text).toContain(`数据位置：market=cn · symbol=600519.SH · interval=1d · 共1根 · 2026-09-05 ~ 2026-09-05 · ${timezoneLabel()}`)
-    expect(text).toContain('cn_get_klines 工具（symbol=600519.SH，interval=1d，limit=1）')
-    expect(text).toContain('指标空值 = warm-up 未就绪')
+    expect(text).toContain('【图表数据 · 范围与取数位置（与截图同一序列）】')
+    expect(text).toContain(`范围：2026-09-05 ~ 2026-09-05 · 共1根 · interval=1d · ${timezoneLabel()}（最新一根为进行中的当根K线）`)
+    expect(text).toContain('取数位置：Agent 可调用 cn_get_klines 工具（symbol=600519.SH，interval=1d，limit=1）取得同源序列')
+    expect(text).toContain('已开指标参数：MA(n1=5)；可用 cn_get_indicators 同参数复算，或取数后自行计算。')
   })
 })

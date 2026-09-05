@@ -26,7 +26,7 @@ Crypto, US equities, China A-shares, and Hong Kong stocks. One terminal. One age
 
 Most "AI trading" tools bolt a chat box onto a chart. dsh-trading inverts the relationship: **the agent is a first-class citizen of the terminal**, and the terminal is the agent's body.
 
-- **The agent sees your screen.** One click on *Send to Agent* packages the symbol you're watching — live quote, current candle, the full kline series with per-bar values for every active indicator (as a CSV block), a data locator with refetch/recompute tool pointers, and a screenshot of the chart itself — straight into the conversation. No copy-pasting numbers into a chatbot.
+- **The agent sees your screen.** One click on *Send to Agent* packages the symbol you're watching — live quote, current candle, the chart series' time range with a fetch locator (so the agent pulls the same routed data via its own tools and analyzes it in code), the active indicators with their parameters, and a screenshot of the chart itself — straight into the conversation. No copy-pasting numbers into a chatbot.
 
 ![Send to Agent — chart snapshot and quote context injected into the composer](docs/screenshots/chart-to-agent.png)
 

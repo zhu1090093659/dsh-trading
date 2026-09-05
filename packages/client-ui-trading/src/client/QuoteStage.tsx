@@ -727,17 +727,15 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       withoutScreenshotTail: t('compose.withoutScreenshot'),
     }
     const text = composeQuoteMessage(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as unknown as Parameters<typeof composeQuoteMessage>[0], copy)
-    // 数据段（2026-09-05）：当前周期 K 线全序列 + 已开指标逐柱数值 + 取数位置
-    // （<market>_get_klines 复取 / <market>_get_indicators 复算）。截图只是视觉
-    // 输入，内联数据让 Agent 无需再猜再抓；序列未就绪（klines === null）时省略整段。
+    // 数据位置段（2026-09-05，owner 裁决不内联数据）：告知当前图表序列的
+    // 时间范围 + 取数位置（<market>_get_klines 同参复取）+ 已开指标及参数
+    // （<market>_get_indicators 同参复算或取数后自行计算）——分析由 Agent
+    // 调工具、写代码完成；序列未就绪（klines === null）时省略整段。
     const dataCopy: QuoteDataSectionCopy = {
       header: t('compose.data.header'),
-      locator: t('compose.data.locator'),
-      refetch: t('compose.data.refetch'),
+      range: t('compose.data.range'),
+      locate: t('compose.data.locate'),
       indicators: t('compose.data.indicators'),
-      truncated: t('compose.data.truncated'),
-      full: t('compose.data.full'),
-      note: t('compose.data.note'),
     }
     const dataSection = klines !== null && klines.length > 0
       ? composeQuoteDataSection({
@@ -745,7 +743,11 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           symbol: activeSymbol,
           interval: chartInterval,
           klines,
-          indicatorGroups,
+          indicators: instances.map(instance => ({
+            id: instance.id,
+            title: indicators.get(instance.id)?.title ?? instance.id,
+            params: instance.params,
+          })),
           klinesTool: `${activeMarket}_get_klines`,
           indicatorsTool: `${activeMarket}_get_indicators`,
         }, dataCopy)
