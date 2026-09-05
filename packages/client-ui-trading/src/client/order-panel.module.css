@@ -1,4 +1,18 @@
-/* OrderPanel —— 旗舰级专业交易下单面板（对齐 OKX / Binance 桌面端） */
+/* OrderPanel —— 旗舰级专业交易下单面板（对齐 OKX / Binance 桌面端）。
+ * 令牌契约：只引用 tokens.css 存在的双主题变量；语义色（实盘绿/模拟琥珀）
+ * 以局部变量随宿主暗色标记双模式取值（2026-09-05 对齐，同 trade-drawer）。
+ */
+
+.root {
+  --opn-live: #0f9f6e;
+  --opn-amber: #b45309;
+}
+
+body[data-ds-dark-theme] .root,
+[data-theme='dark'] .root {
+  --opn-live: #2dbd85;
+  --opn-amber: #f59e0b;
+}
 
 .root {
   flex: none;
@@ -7,8 +21,8 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  background: var(--dsw-futu-bg-card, #131722);
-  border-top: 1px solid var(--dsw-futu-border-subtle, #2a2e39);
+  background: var(--dsw-futu-bg-surface);
+  border-top: 1px solid var(--dsw-futu-border-subtle);
   border-radius: 6px;
   box-sizing: border-box;
 }
@@ -36,8 +50,8 @@
 
 .resetBtn {
   background: transparent;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  color: #f59e0b;
+  border: 1px solid var(--opn-amber);
+  color: var(--opn-amber);
   border-radius: 3px;
   padding: 1px 6px;
   font-size: 10.5px;
@@ -82,15 +96,15 @@
 }
 
 .modeBtn[data-active='true'] {
-  background: var(--dsw-futu-bg-card, #262b3e);
-  color: #2dbd85;
+  background: var(--dsw-futu-bg-base);
+  color: var(--opn-live);
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .modeBtn[data-paper='true'][data-active='true'] {
-  background: rgba(245, 158, 11, 0.18);
-  color: #f59e0b;
+  background: var(--opn-amber);
+  color: var(--dsw-futu-text-inverse);
   font-weight: 600;
 }
 

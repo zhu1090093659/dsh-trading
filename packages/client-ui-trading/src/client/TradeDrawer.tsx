@@ -398,15 +398,15 @@ export function TradeDrawer({
         <td style={{ color: directionColor(p.side === 'long' ? 1 : -1, colorMode) }}>
           {t(p.side === 'long' ? 'trade.long' : 'trade.short')}
         </td>
-        <td>{p.size}</td>
-        <td>{p.entryPrice !== undefined ? fmtPrice(p.entryPrice) : '—'}</td>
-        <td>{row.markPrice !== undefined ? fmtPrice(row.markPrice) : '—'}</td>
-        <td>
+        <td className={css.num}>{p.size}</td>
+        <td className={css.num}>{p.entryPrice !== undefined ? fmtPrice(p.entryPrice) : '—'}</td>
+        <td className={css.num}>{row.markPrice !== undefined ? fmtPrice(row.markPrice) : '—'}</td>
+        <td className={css.num}>
           {row.marketValue !== undefined
             ? fmtPrice(row.marketValue) + (row.currency !== undefined ? ' ' + row.currency : '')
             : '—'}
         </td>
-        <td style={row.unrealizedPnl !== undefined ? { color: directionColor(row.unrealizedPnl, colorMode) } : undefined}>
+        <td className={css.num} style={row.unrealizedPnl !== undefined ? { color: directionColor(row.unrealizedPnl, colorMode) } : undefined}>
           {row.unrealizedPnl !== undefined ? (row.unrealizedPnl >= 0 ? '+' : '') + fmtPrice(row.unrealizedPnl) : '—'}
         </td>
       </>
@@ -423,17 +423,17 @@ export function TradeDrawer({
             {row.symbol}
             {renderMarketLabel(row.market)}
           </td>
-          <td>{row.totalSize}</td>
-          <td>{row.weightedCost !== undefined ? fmtPrice(row.weightedCost) : '—'}</td>
-          <td>{row.markPrice !== undefined ? fmtPrice(row.markPrice) : '—'}</td>
-          <td>
+          <td className={css.num}>{row.totalSize}</td>
+          <td className={css.num}>{row.weightedCost !== undefined ? fmtPrice(row.weightedCost) : '—'}</td>
+          <td className={css.num}>{row.markPrice !== undefined ? fmtPrice(row.markPrice) : '—'}</td>
+          <td className={css.num}>
             {row.marketValueBase !== undefined
               ? fmtPrice(row.marketValueBase) + ' ' + aggregation.base
               : row.marketValue !== undefined
                 ? fmtPrice(row.marketValue) + (row.currency !== undefined ? ' ' + row.currency : '')
                 : '—'}
           </td>
-          <td style={row.unrealizedPnlBase !== undefined ? { color: directionColor(row.unrealizedPnlBase, colorMode) } : undefined}>
+          <td className={css.num} style={row.unrealizedPnlBase !== undefined ? { color: directionColor(row.unrealizedPnlBase, colorMode) } : undefined}>
             {row.unrealizedPnlBase !== undefined
               ? (row.unrealizedPnlBase >= 0 ? '+' : '') + fmtPrice(row.unrealizedPnlBase)
               : row.unrealizedPnl !== undefined
@@ -627,11 +627,11 @@ export function TradeDrawer({
                       <th>{t('trade.holdings.account')}</th>
                       <th>{t('trade.symbol')}</th>
                       <th>{t('trade.side')}</th>
-                      <th>{t('trade.size')}</th>
-                      <th>{t('trade.entryPrice')}</th>
-                      <th>{t('trade.holdings.markPrice')}</th>
-                      <th>{t('trade.holdings.marketValue')}</th>
-                      <th>{t('trade.unrealizedPnl')}</th>
+                      <th className={css.num}>{t('trade.size')}</th>
+                      <th className={css.num}>{t('trade.entryPrice')}</th>
+                      <th className={css.num}>{t('trade.holdings.markPrice')}</th>
+                      <th className={css.num}>{t('trade.holdings.marketValue')}</th>
+                      <th className={css.num}>{t('trade.unrealizedPnl')}</th>
                       {holdingsActions !== undefined && <th>{t('trade.action')}</th>}
                     </tr>
                   </thead>
@@ -644,7 +644,7 @@ export function TradeDrawer({
                           {holdingsActions !== undefined && (
                             <td>
                               {p.origin === 'imported' && p.holdingId !== undefined && (
-                                <>
+                                <span className={css.actionCell}>
                                   <button
                                     type="button"
                                     className={css.cancelBtn}
@@ -663,7 +663,7 @@ export function TradeDrawer({
                                   >
                                     {t('trade.holdings.delete')}
                                   </button>
-                                </>
+                                </span>
                               )}
                             </td>
                           )}
@@ -725,11 +725,11 @@ export function TradeDrawer({
                   <thead>
                     <tr>
                       <th>{t('trade.symbol')}</th>
-                      <th>{t('trade.holdings.totalSize')}</th>
-                      <th>{t('trade.holdings.weightedCost')}</th>
-                      <th>{t('trade.holdings.markPrice')}</th>
-                      <th>{t('trade.holdings.marketValue')}</th>
-                      <th>{t('trade.unrealizedPnl')}</th>
+                      <th className={css.num}>{t('trade.holdings.totalSize')}</th>
+                      <th className={css.num}>{t('trade.holdings.weightedCost')}</th>
+                      <th className={css.num}>{t('trade.holdings.markPrice')}</th>
+                      <th className={css.num}>{t('trade.holdings.marketValue')}</th>
+                      <th className={css.num}>{t('trade.unrealizedPnl')}</th>
                       <th>{t('trade.holdings.origin')}</th>
                     </tr>
                   </thead>
@@ -753,9 +753,9 @@ export function TradeDrawer({
                     <th>{t('trade.symbol')}</th>
                     <th>{t('trade.side')}</th>
                     <th>{t('trade.type')}</th>
-                    <th>{t('trade.price')}</th>
-                    <th>{t('trade.size')}</th>
-                    <th>{t('trade.filled')}</th>
+                    <th className={css.num}>{t('trade.price')}</th>
+                    <th className={css.num}>{t('trade.size')}</th>
+                    <th className={css.num}>{t('trade.filled')}</th>
                     {onCancelOrder && <th>{t('trade.action')}</th>}
                   </tr>
                 </thead>
@@ -767,9 +767,9 @@ export function TradeDrawer({
                         {t(order.side === 'buy' ? 'trade.buy' : 'trade.sell')}
                       </td>
                       <td>{t(order.type === 'market' ? 'trade.market' : 'trade.limit')}</td>
-                      <td>{order.price !== undefined ? fmtPrice(order.price) : '—'}</td>
-                      <td>{order.quantity}</td>
-                      <td>{order.filledQuantity ?? 0}</td>
+                      <td className={css.num}>{order.price !== undefined ? fmtPrice(order.price) : '—'}</td>
+                      <td className={css.num}>{order.quantity}</td>
+                      <td className={css.num}>{order.filledQuantity ?? 0}</td>
                       {onCancelOrder && (
                         <td>
                           <button
@@ -806,22 +806,22 @@ export function TradeDrawer({
                     <th>{t('trade.time')}</th>
                     <th>{t('trade.symbol')}</th>
                     <th>{t('trade.side')}</th>
-                    <th>{t('trade.price')}</th>
-                    <th>{t('trade.size')}</th>
+                    <th className={css.num}>{t('trade.price')}</th>
+                    <th className={css.num}>{t('trade.size')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {fills.slice().reverse().map((fill, idx) => (
                     <tr key={fill.id + '-' + idx}>
-                      <td style={{ color: 'var(--dsw-futu-text-muted, #787b86)' }}>
+                      <td className={css.timeCell}>
                         {new Date(fill.timestamp).toLocaleString()}
                       </td>
                       <td>{fill.symbol}</td>
                       <td style={{ color: directionColor(fill.side === 'buy' ? 1 : -1, colorMode) }}>
                         {t(fill.side === 'buy' ? 'trade.buy' : 'trade.sell')}
                       </td>
-                      <td>{fmtPrice(fill.price)}</td>
-                      <td>{fill.amount}</td>
+                      <td className={css.num}>{fmtPrice(fill.price)}</td>
+                      <td className={css.num}>{fill.amount}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -841,18 +841,18 @@ export function TradeDrawer({
                 <thead>
                   <tr>
                     <th>{t('trade.drawer.asset')}</th>
-                    <th>{t('trade.drawer.available')}</th>
-                    <th>{t('trade.drawer.locked')}</th>
-                    <th>{t('trade.drawer.total')}</th>
+                    <th className={css.num}>{t('trade.drawer.available')}</th>
+                    <th className={css.num}>{t('trade.drawer.locked')}</th>
+                    <th className={css.num}>{t('trade.drawer.total')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {balances.map((b, idx) => (
                     <tr key={b.asset + '-' + idx}>
-                      <td style={{ fontWeight: 600 }}>{b.asset}</td>
-                      <td>{fmtPrice(b.free)}</td>
-                      <td>{fmtPrice(b.locked)}</td>
-                      <td>{fmtPrice(b.free + b.locked)}</td>
+                      <td className={css.assetCell}>{b.asset}</td>
+                      <td className={css.num}>{fmtPrice(b.free)}</td>
+                      <td className={css.num}>{fmtPrice(b.locked)}</td>
+                      <td className={css.num}>{fmtPrice(b.free + b.locked)}</td>
                     </tr>
                   ))}
                 </tbody>
