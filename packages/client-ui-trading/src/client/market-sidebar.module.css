@@ -394,3 +394,46 @@
   cursor: pointer;
   margin-top: 6px;
 }
+
+/* 底部设置入口（3.0 自右缘竖条迁入）：沉底栏，列表 flex:1 自然把它压到底。 */
+.footBar {
+  flex: none;
+  border-top: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  padding: 6px 10px;
+}
+
+.settingsBtn {
+  position: relative;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-futu-radius-md, 6px);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.settingsBtn:hover {
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.05));
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+/* 设置入口更新提示点（自动更新插件点亮）：装饰性 aria-hidden 小圆点，
+   ring 用背景色描边以贴合亮/暗两态；不参与命中测试。 */
+.badgeDot {
+  position: absolute;
+  top: 4px;
+  left: 20px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px var(--dsw-futu-bg-base, #fff);
+  pointer-events: none;
+}

@@ -8,7 +8,8 @@
  * - `shell.overlay`（dshtrading-quote-pane）→ 中栏行情面板（恒渲染；
  *   对话列由宿主官方 UI 常驻右侧栏，见 shell-pad.css 2.4 布局）
  * - `shell.overlay`（dshtrading-session-rail）→ 右缘常驻会话竖条（折叠/
- *   新会话/设置，2.9 起取代窗口角标浮动簇 + 会话头内联按钮双入口）
+ *   新会话/定时任务，2.9 起取代窗口角标浮动簇 + 会话头内联按钮双入口；
+ *   设置入口 3.0 起迁往左侧 MarketDock 底部）
  * - `shell.overlay`（dshtrading-chat-resize-handle）→ 对话列左缘拖拽调宽
  *   手柄（宿主手柄在 rtl 下坐标错位被隐藏，见 shell-pad.css 规则 4）
  *
@@ -91,6 +92,7 @@ export function apply(ctx: ClientContext): void {
     // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
     // 侧栏里唯一的 [aria-haspopup=dialog]，程序化 click 走官方打开逻辑，
     // 弹层 position:fixed 盖满视口不受列位置影响。
+    // 3.0 起唯一入口在左侧自选面板底部（MarketDock 两态：展开底栏/折叠竖条）。
     document
       .querySelector<HTMLElement>("div:has(> [data-shell-overlay]) > div:nth-child(1) [aria-haspopup='dialog']")
       ?.click()
@@ -177,6 +179,7 @@ export function apply(ctx: ClientContext): void {
   wireHostChartSync({ chart })
 
   // 左侧停靠：自选面板（官方浮层通道；支持展开与折叠态 MarketRail）。
+  // 3.0 起设置入口迁驻此处底部（openSettings 程序化 click 退役列内的官方触发器）。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
     id: 'dshtrading-market-dock',
@@ -188,6 +191,7 @@ export function apply(ctx: ClientContext): void {
       removeInstrument: (market, symbol) => { watchlists.remove(market, symbol) },
       selectInstrument: (instrument) => { selection.select(instrument) },
       toggleFold: toggleMarketFold,
+      openSettings,
     }),
   }, MarketDock))
 
@@ -225,8 +229,9 @@ export function apply(ctx: ClientContext): void {
     }),
   }, HomeHistory))
 
-  // 会话竖条（shell.overlay）：右缘 44px 常驻（折叠/新会话/设置竖排），
+  // 会话竖条（shell.overlay）：右缘 44px 常驻（折叠/新会话/定时任务竖排），
   // 恒挂载——首页、会话进行中、折叠态都是同一入口，不再按状态切换入口面。
+  // 设置入口 3.0 起迁往 MarketDock 底部，不再注入 openSettings。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
     id: 'dshtrading-session-rail',
@@ -234,7 +239,6 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       startNewSession,
-      openSettings,
       toggleFold,
       // 执行历史「打开会话」：HomeHistory 同款官方 sessions 通路。
       openSession: (sessionId: string) => { sessions.open(sessionId as SessionIdParam) },

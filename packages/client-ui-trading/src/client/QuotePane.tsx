@@ -62,15 +62,21 @@ export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndic
       const chatFolded = document.body.dataset.dshtradingChatFolded === 'on'
       const rightBox = frame.children[1]?.getBoundingClientRect()
       const railBox = document.querySelector('[data-dshtrading-rail]')?.getBoundingClientRect()
-      const fallbackRight = railBox !== undefined && railBox.width > 0 ? railBox.left : frameBox.right
+      // 定时任务页签激活时面板原位覆盖对话列（轨宽不变，rightBox 测量不受
+      // 影响）；仅「折叠 + 任务」组合下面板浮在市场区右缘——此时取面板左缘
+      // 为中栏右界。纯轨道位移不触发 ResizeObserver，开合兜底靠下方两个监听。
+      const tasksBox = document.querySelector('[data-dshtrading-tasks-panel]')?.getBoundingClientRect()
+      const fallbackRight = tasksBox !== undefined && tasksBox.width > 0
+        ? tasksBox.left
+        : (railBox !== undefined && railBox.width > 0 ? railBox.left : frameBox.right)
 
       let right = fallbackRight
       if (!chatFolded) {
         if (rightBox !== undefined && rightBox.width > 0) {
           right = rightBox.left
-        } else if (railBox !== undefined && railBox.width > 0) {
+        } else {
           // 瞬态保护：未折叠时预留对话列空间（380px），避免瞬态铺满覆盖
-          right = Math.max(left, railBox.left - 380)
+          right = Math.max(left, fallbackRight - 380)
         }
       }
 
@@ -90,7 +96,7 @@ export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndic
     const rail = document.querySelector('[data-dshtrading-rail]')
     if (rail !== null) observer.observe(rail)
 
-    // 监听主题切换及折叠状态变化，立即触发重新测量
+    // 监听主题切换及折叠/任务面板开合状态变化，立即触发重新测量
     const mo = new MutationObserver(() => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(measure)
@@ -98,14 +104,27 @@ export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndic
     if (typeof document !== 'undefined') {
       mo.observe(document.body, {
         attributes: true,
-        attributeFilter: ['data-ds-dark-theme', 'data-theme', 'data-dshtrading-chat-folded'],
+        attributeFilter: ['data-ds-dark-theme', 'data-theme', 'data-dshtrading-chat-folded', 'data-dshtrading-tasks-open'],
       })
     }
+
+    // 轨道开合走宿主 grid-template-columns transition（纯位移不触发上面的
+    // ResizeObserver，body 属性突变时动画尚未推进）——过渡结束补一次重测，
+    // 中栏矩形贴合滑动终态（transitionend 冒泡到 frame，统一在此收口）。
+    // frame 是 Element：transitionend 不在其事件映射里，按 Event 收再断言。
+    const onFrameTransition = (event: Event): void => {
+      if ((event as TransitionEvent).propertyName === 'grid-template-columns') {
+        cancelAnimationFrame(raf)
+        raf = requestAnimationFrame(measure)
+      }
+    }
+    frame?.addEventListener('transitionend', onFrameTransition)
 
     window.addEventListener('resize', measure)
     return () => {
       observer.disconnect()
       mo.disconnect()
+      frame?.removeEventListener('transitionend', onFrameTransition)
       window.removeEventListener('resize', measure)
       cancelAnimationFrame(raf)
     }

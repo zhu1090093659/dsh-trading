@@ -159,3 +159,13 @@ body[data-dshtrading-chat-resizing='on'] {
 div:has(> [data-shell-overlay]) > div:nth-child(2) [role='tablist'] > button:last-child {
   display: none !important;
 }
+
+/* 11) 3.0 定时任务侧边栏 = 对话列容器的切换页签：任务面板与官方对话共用
+      同一条轨道（第 2 轨），激活时隐去对话列全部直接子节点（hero 融合容器
+      /对话流/composer 同列内容一起隐），由 fixed 的 .tasksPanel 原位覆盖
+      （定位与宽度吃 frame 的轨道 var，见 session-rail.module.css）——
+      栅格轨道零改动，QuotePane 测量不受影响。竖条时钟按钮是切换开关，
+      body[data-dshtrading-tasks-open] 由 SessionRail effect 写入。 */
+body[data-dshtrading-tasks-open='on'] div:has(> [data-shell-overlay]) > div:nth-child(2) > * {
+  display: none !important;
+}

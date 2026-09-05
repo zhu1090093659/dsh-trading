@@ -98,21 +98,28 @@
   background: var(--dsw-futu-border-default, #e3e6ea);
 }
 
-/* ── 定时任务面板（右缘竖栏功能页签 1 号：时钟按钮向左展开） ─────────────
- * 视觉延续竖条规范：surface 底、default 边、accent 激活；紧凑表单 11-13px。 */
+/* ── 定时任务面板（3.0 起为对话列容器的切换页签） ─────────────────────
+ * 与官方对话共用同一列容器：不占新轨道、不并排——面板 fixed 原位覆盖对话
+ * 列轨道（shell-pad.css 规则 11 同步隐去对话列内容）。right = 竖条预留宽、
+ * width = 对话列轨宽，两个 var 都定义在宿主 frame 上、经 overlayLayer 继承
+ * 到本组件（ChatResizeHandle 同款继承链）；宽度用 user-w 而非轨宽 var，
+ * 会话列折叠（轨宽被压 0）时任务面板仍保持用户拖拽宽度可见。
+ * 视觉随容器走：base 底、左缘 default 分隔线，无圆角无投影。 */
 
 .tasksPanel {
   position: fixed;
-  top: 12px;
-  right: 56px;
-  width: 356px;
-  max-height: calc(100vh - 24px);
+  top: 0;
+  right: var(--dshtrading-sidebar-w, 44px);
+  bottom: 0;
+  width: var(--dshtrading-chat-user-w, 380px);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  background: var(--dsw-futu-bg-surface, #fff);
-  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
-  border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(16, 24, 40, 0.16);
+  background: var(--dsw-futu-bg-base, #fff);
+  border: none;
+  border-left: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  border-radius: 0;
+  box-shadow: none;
   z-index: 45;
   overflow: hidden;
 }
@@ -440,19 +447,4 @@
 .primaryBtn:disabled {
   opacity: 0.5;
   cursor: default;
-}
-
-
-/* 设置页签更新提示点（自动更新插件点亮）：装饰性 aria-hidden 小圆点，
-   ring 用背景色描边以贴合亮/暗两态；不参与命中测试。 */
-.badgeDot {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #ef4444;
-  box-shadow: 0 0 0 2px var(--dsw-futu-bg-surface, #fff);
-  pointer-events: none;
 }

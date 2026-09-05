@@ -1,6 +1,7 @@
 /**
  * 富途式市场/自选面板（内容组件，由 MarketDock 停靠在左缘）：
- * 顶部自选分组与折叠按钮 + 胶囊市场页签 + 表头 + 三段式自选标的列表。
+ * 顶部自选分组与折叠按钮 + 胶囊市场页签 + 表头 + 三段式自选标的列表 +
+ * 底部设置入口（3.0 自右缘竖条迁入，MarketDock 注入 openSettings）。
  * 点击行 = 选中标的并切到行情模式（QuotePane 消费）；
  * 行内嵌迷你面积走势 + 最新价 + 涨跌幅（红涨绿跌）。行情批量轮询、页面隐藏时暂停。
  */
@@ -12,7 +13,7 @@ import type { MarketLocaleKey } from './contract.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { colorModeStore } from './color-mode.ts'
 import { Sparkline } from './Sparkline.tsx'
-import { IconChevronDown, IconFoldPanel } from './icons.tsx'
+import { IconChevronDown, IconFoldPanel, IconSettings } from './icons.tsx'
 import { rowsFor, type Observable, type SelectionState, type Watchlists } from './store.ts'
 import type { Instrument, MarketId, MarketInfo, ReferenceSeries, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
@@ -32,12 +33,14 @@ export interface MarketSidebarInjected {
   removeInstrument(market: MarketId, symbol: string): void
   /** 写路径：选中标的（中栏 QuotePane 消费）。 */
   selectInstrument(instrument: Instrument): void
+  /** 打开官方设置弹层（3.0 起入口在本面板底部；MarketDock 注入转发）。 */
+  openSettings(): void
 }
 
 export type MarketSidebarProps =
   PropsLocale<'dshtrading.market'>
   & InjectFace<MarketSidebarInjected>
-  & { onFold?: () => void }
+  & { onFold?: () => void; updateAvailable?: boolean }
 
 const SERIES_TTL_MS = 10 * 60 * 1000
 const PRICE_POLL_MS = 8000
@@ -57,7 +60,7 @@ export function rowKey(market: string, symbol: string): string {
 }
 
 export function MarketSidebar({
-  t, useSelection, useWatchlists, addInstrument, removeInstrument, selectInstrument, onFold,
+  t, useSelection, useWatchlists, addInstrument, removeInstrument, selectInstrument, onFold, openSettings, updateAvailable,
 }: MarketSidebarProps) {
   const selection = useSelection(value => value.instrument)
   const watchlists = useWatchlists(value => value)
@@ -415,6 +418,21 @@ export function MarketSidebar({
               })}
             </div>
           )}
+
+      {/* 底部设置入口（3.0 自右缘竖条迁入）：沉底栏 + 更新提示点。 */}
+      <div className={css.footBar}>
+        <button
+          type="button"
+          className={css.settingsBtn}
+          aria-label={t('entry.settings')}
+          title={t('entry.settings')}
+          onClick={() => { openSettings() }}
+        >
+          <IconSettings size={15} />
+          <span>{t('entry.settings')}</span>
+          {updateAvailable === true && <span className={css.badgeDot} aria-hidden="true" />}
+        </button>
+      </div>
     </div>
   )
 }

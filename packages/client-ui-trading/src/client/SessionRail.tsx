@@ -4,23 +4,23 @@
  * - 永不隐藏：折叠只收会话列轨道（fold-store → shell-pad.css 规则 9），
  *   竖条始终占住右缘 44px（shell-pad.css 规则 8 预留的侧栏轨道），会话
  *   进行中也在——取代 2.8「右上浮动簇 + 会话头内联按钮」双入口。
- * - 结构自上而下：折叠/展开、新会话、分隔线、功能页签（定时任务）、设置；
- *   页签激活面板向左展开，状态走 body[data-dshtrading-*] 联动。
- * - 设置仍是程序化 click 退役侧栏列内的官方触发器（见 index.ts openSettings）。
+ * - 结构自上而下：折叠/展开、新会话、分隔线、功能页签（定时任务）；
+ *   设置入口 3.0 起迁往左侧自选面板底部（MarketDock），竖条不再承载。
+ * - 定时任务页签（3.0）= 对话列容器的切换页签：激活时对话列内容被隐去
+ *   （shell-pad.css 规则 11），ScheduledTasksPanel 原位覆盖同一列——
+ *   与对话非并排、同一容器二选一；状态走 body[data-dshtrading-*] 联动。
  * - 折叠态同步 body[data-dshtrading-chat-folded] 的 effect 从旧 WindowChrome
  *   移入本组件（竖条恒挂载，单一同步点）。
  */
 import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { FoldStore } from './fold-store.ts'
-import { IconClock, IconFoldPanel, IconNewSession, IconSettings } from './icons.tsx'
+import { IconClock, IconFoldPanel, IconNewSession } from './icons.tsx'
 import { ScheduledTasksPanel } from './ScheduledTasksPanel.tsx'
-import { fetchUpdateBadge } from './api.ts'
 import css from './session-rail.module.css'
 
 export interface SessionRailInjected {
   startNewSession(): void
-  openSettings(): void
   toggleFold(): void
   /** 定时任务执行历史「打开会话」（官方 sessions 通路，index.ts 注入）。 */
   openSession(sessionId: string): void
@@ -32,35 +32,10 @@ export type SessionRailProps =
   & PropsLocale<'dshtrading.market'>
   & InjectFace<SessionRailInjected>
 
-export function SessionRail({ t, useFolded, startNewSession, openSettings, toggleFold, openSession }: SessionRailProps) {
+export function SessionRail({ t, useFolded, startNewSession, toggleFold, openSession }: SessionRailProps) {
   const folded = useFolded(value => value)
   // 定时任务页签（功能页签 1 号）：会话级开关（无需持久化——每次进来默认收起）。
   const [tasksOpen, setTasksOpen] = useState(false)
-  // 设置页签上的更新提示点（自动更新插件，@dshtrading/client-ui-updater）：
-  // 挂载 + 30 分钟轮询 host 快照；设置面板里的即时动作经 window 自定义事件
-  // 'dshtrading-update-available'（detail: { available: boolean }）同步翻转。
-  // 桥缺席（老部署/404）→ fetchUpdateBadge 返回 null，点永不亮。
-  const [updateAvailable, setUpdateAvailable] = useState(false)
-
-  useEffect(() => {
-    let disposed = false
-    const read = async (): Promise<void> => {
-      const badge = await fetchUpdateBadge()
-      if (!disposed && badge !== null) setUpdateAvailable(badge.available)
-    }
-    void read()
-    const timer = setInterval(() => { void read() }, 30 * 60 * 1000)
-    const onUpdateEvent = (event: Event): void => {
-      const detail = (event as CustomEvent<{ available?: boolean }>).detail
-      if (detail !== undefined && typeof detail.available === 'boolean') setUpdateAvailable(detail.available)
-    }
-    window.addEventListener('dshtrading-update-available', onUpdateEvent)
-    return () => {
-      disposed = true
-      clearInterval(timer)
-      window.removeEventListener('dshtrading-update-available', onUpdateEvent)
-    }
-  }, [])
 
   useEffect(() => {
     document.body.dataset.dshtradingChatFolded = folded ? 'on' : 'off'
@@ -89,12 +64,12 @@ export function SessionRail({ t, useFolded, startNewSession, openSettings, toggl
         className={css.button}
         aria-label={t('entry.new')}
         title={t('entry.new')}
-        onClick={startNewSession}
+        onClick={() => { setTasksOpen(false); startNewSession() }}
       >
         <IconNewSession size={16} />
       </button>
       {/* 功能页签扩展位：分隔线下方（注释见 2.9 定稿）；定时任务 = 页签 1 号，
-          激活面板向左展开，复用 .button 样式保持竖条节奏。 */}
+          激活时与对话列同容器切换（见文件头 3.0 注），复用 .button 样式保持竖条节奏。 */}
       <div className={css.divider} aria-hidden="true" />
       <button
         type="button"
@@ -106,20 +81,10 @@ export function SessionRail({ t, useFolded, startNewSession, openSettings, toggl
       >
         <IconClock size={16} />
       </button>
-      <button
-        type="button"
-        className={css.button}
-        aria-label={t('entry.settings')}
-        title={t('entry.settings')}
-        onClick={openSettings}
-      >
-        <IconSettings size={16} />
-        {updateAvailable && <span className={css.badgeDot} aria-hidden="true" />}
-      </button>
       {tasksOpen && (
         <ScheduledTasksPanel
           t={t}
-          openSession={openSession}
+          openSession={(sessionId) => { setTasksOpen(false); openSession(sessionId) }}
           close={() => { setTasksOpen(false) }}
         />
       )}

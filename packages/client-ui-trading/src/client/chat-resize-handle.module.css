@@ -18,6 +18,12 @@
   outline: none;
 }
 
+/* 定时任务页签激活（shell-pad.css 规则 11）：对话列被任务面板原位切换，
+   手柄失去锚点随之退场；复用 body 状态属性，不进 React 状态。 */
+body[data-dshtrading-tasks-open='on'] .handle {
+  display: none !important;
+}
+
 .handle::after {
   content: '';
   position: absolute;
