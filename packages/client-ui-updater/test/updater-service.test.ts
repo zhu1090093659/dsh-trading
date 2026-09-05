@@ -264,7 +264,10 @@ describe('UpdaterService.apply', () => {
     expect(existsSync(path.join(harness.profileRoot, '.dshtrading-updater'))).toBe(false)
   })
 
-  it('fails and leaves the profile untouched when the packages root is locked', async () => {
+  // chmod 0o500 的只读模拟仅 POSIX 生效（Windows/NTFS 不实施 mode bits 写位），
+  // 锁目录场景无法跨平台复现；Windows 的文件占用锁路径（EPERM/EBUSY → 有界重试 →
+  // UPDATER error）由 renameWithRetry 承载，Windows 等价用例为后续项。
+  it.skipIf(process.platform === 'win32')('fails and leaves the profile untouched when the packages root is locked', async () => {
     const harness = makeHarness({
       installed: [{ name: 'base', version: CURRENT_VERSION }],
       targetPackages: [{ name: 'base', version: TARGET_VERSION }],
