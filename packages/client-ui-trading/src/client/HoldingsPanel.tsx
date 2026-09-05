@@ -1,6 +1,10 @@
 /**
- * 资产面板（2 版，2026-09-05 定稿）：右缘会话列容器的切换页签——与定时任务
+ * 资产面板（3 版，2026-09-05）：右缘会话列容器的切换页签——与定时任务
  * 同款模式（SessionRail 竖条钱包按钮激活时原位覆盖对话列，非并排非悬浮）。
+ * 三版为殿堂级视觉升级（不改任何数据契约）：权益 hero 条常驻持仓页签顶部、
+ * 方向语义全部收进 pill（color-mix currentColor 跟随用户红涨/绿涨色板）、
+ * 卡片来源脊线 + 悬浮抬升、图标全部走 icons.tsx 矢量族、对话框 enter/leave
+ * 可逆动效（Law 3：退场播完再卸载）+ Escape 关闭。
  * 数据来自 holdings-store 单例（台账快照/live 打标持仓/盯市价格/FX），轮询
  * 由本组件驱动：挂载即拉、卸载即停（visibility 暂停由 usePoll 承担）。
  *
@@ -15,11 +19,12 @@
  *   （失败静默跳过，行打市场标签）——原抽屉按激活市场取数，侧栏化后面板
  *   是全局面，改为跨市场聚合。
  */
-import { Fragment, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { fetchTradeOpenOrders, fetchTradeFills, fetchTradeBalances } from './api.ts'
 import type { TradeRowsReason } from './api.ts'
+import { IconChevronRight, IconClose, IconPlus, IconWallet } from './icons.tsx'
 import {
-  HOLDINGS_MARKETS, MARKET_DEFAULT_CURRENCY,
+  HOLDINGS_BASE_CURRENCIES, HOLDINGS_MARKETS, MARKET_DEFAULT_CURRENCY,
 } from './holdings-types.ts'
 import type {
   Holding, NewHolding, NewHoldingInput, PositionOrigin, TaggedPosition,
@@ -86,6 +91,42 @@ interface MarketTaggedRow<T> {
 
 function OriginBadge({ origin, t }: { origin: PositionOrigin; t: HoldingsPanelTranslate }): React.JSX.Element {
   return <span className={css.originBadge} data-origin={origin}>{t(ORIGIN_BADGE_KEY[origin])}</span>
+}
+
+/** Law 3（动效归返）：open=false 时先播退场动画，播完再真正卸载。 */
+function useDelayedUnmount(open: boolean, ms = 160): boolean {
+  const [mounted, setMounted] = useState(open)
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      return
+    }
+    const timer = setTimeout(() => setMounted(false), ms)
+    return () => clearTimeout(timer)
+  }, [open, ms])
+  return mounted
+}
+
+/** Escape 关闭（对话框打开期间监听，关闭态摘除）。 */
+function useEscapeClose(open: boolean, onClose: () => void): void {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+}
+
+/** 空态（钱包矢量图标 + 文案，全部页签共用同一契约）。 */
+function EmptyHint({ text }: { text: string }): React.JSX.Element {
+  return (
+    <div className={css.empty}>
+      <IconWallet size={26} />
+      <span>{text}</span>
+    </div>
+  )
 }
 
 /** 持仓表单草稿（数字字段以字符串承载，提交时解析校验）。 */
@@ -183,20 +224,33 @@ function HoldingDraftFields({ t, draft, onChange }: {
   )
 }
 
-/** 手动新增 / 编辑持仓对话框（同字段表单，契约 §6.3）。 */
-function HoldingFormDialog({ t, title, initial, onSubmit, onClose }: {
+/** 手动新增 / 编辑持仓对话框（同字段表单，契约 §6.3）。open=false 播完退场动画后停渲染。 */
+function HoldingFormDialog({ t, title, initial, open, onSubmit, onClose }: {
   t: HoldingsPanelTranslate
   title: string
   initial: HoldingDraft
+  open: boolean
   onSubmit: (draft: HoldingDraft) => Promise<boolean>
   onClose: () => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  const mounted = useDelayedUnmount(open)
+  useEscapeClose(open, onClose)
   const [draft, setDraft] = useState<HoldingDraft>(initial)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
   const invalid = draftToNewHolding(draft) === null
+  // 组件常驻（服务退场动画）：每次重新打开都按 initial 重置会话草稿。
+  useEffect(() => {
+    if (open) {
+      setDraft(initial)
+      setBusy(false)
+      setFailed(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial 随 open 会话刷新
+  }, [open])
+  if (!mounted) return null
   return (
-    <div className={css.dialogOverlay} role="dialog" aria-label={title} onClick={onClose}>
+    <div className={css.dialogOverlay} role="dialog" aria-label={title} data-state={open ? 'open' : 'closed'} onClick={onClose}>
       <div className={css.dialog} onClick={(e) => e.stopPropagation()}>
         <div className={css.dialogTitle}>{title}</div>
         <HoldingDraftFields t={t} draft={draft} onChange={setDraft} />
@@ -225,18 +279,27 @@ function HoldingFormDialog({ t, title, initial, onSubmit, onClose }: {
   )
 }
 
-/** staged 待确认对话框（可编辑表格：market/symbol/size/entryPrice/account/kind → 确认/丢弃）。 */
-function StagedConfirmDialog({ t, staged, onClose }: {
+/** staged 待确认对话框（可编辑表格：market/symbol/size/entryPrice/account/kind → 确认/丢弃）。open=false 播完退场动画后停渲染。 */
+function StagedConfirmDialog({ t, staged, open, onClose }: {
   t: HoldingsPanelTranslate
   staged: Holding[]
+  open: boolean
   onClose: () => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  const mounted = useDelayedUnmount(open)
+  useEscapeClose(open, onClose)
   const [drafts, setDrafts] = useState<Record<string, HoldingDraft>>(() =>
     Object.fromEntries(staged.map(h => [h.id, draftFromHolding(h)])))
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
   const rows = staged.filter(h => drafts[h.id] !== undefined)
   const invalid = rows.some(h => draftToNewHolding(drafts[h.id] as HoldingDraft) === null)
+  // 组件常驻（服务退场动画）：每次重新打开都按当前 staged 重置会话草稿。
+  useEffect(() => {
+    if (open) setDrafts(Object.fromEntries(staged.map(h => [h.id, draftFromHolding(h)])))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- staged 取打开时刻快照
+  }, [open])
+  if (!mounted) return null
 
   const run = (fn: () => Promise<boolean>): void => {
     setBusy(true)
@@ -249,7 +312,7 @@ function StagedConfirmDialog({ t, staged, onClose }: {
   }
 
   return (
-    <div className={css.dialogOverlay} role="dialog" aria-label={t('trade.holdings.confirm.title')} onClick={onClose}>
+    <div className={css.dialogOverlay} role="dialog" aria-label={t('trade.holdings.confirm.title')} data-state={open ? 'open' : 'closed'} onClick={onClose}>
       <div className={css.dialog} data-wide="true" onClick={(e) => e.stopPropagation()}>
         <div className={css.dialogTitle}>{t('trade.holdings.confirm.title')}</div>
         <div className={css.confirmList}>
@@ -489,32 +552,37 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
   const renderPosCard = (row: HoldingDetailRow): React.JSX.Element => {
     const p = row.position
     return (
-      <div key={p.origin + '-' + (p.holdingId ?? p.account + '-' + p.symbol)} className={css.posCard}>
+      <div key={p.origin + '-' + (p.holdingId ?? p.account + '-' + p.symbol)} className={css.posCard} data-origin={p.origin}>
         <div className={css.posHead}>
           <OriginBadge origin={p.origin} t={t} />
           <span className={css.posSymbol}>{p.symbol}</span>
           {renderMarketLabel(p.market)}
-          <span className={css.posSide} style={{ color: directionColor(p.side === 'long' ? 1 : -1, colorMode) }}>
+          <span className={css.sidePill} style={{ color: directionColor(p.side === 'long' ? 1 : -1, colorMode) }}>
             {t(p.side === 'long' ? 'trade.long' : 'trade.short')}
           </span>
         </div>
         <div className={css.posMeta}>
           <span>{p.account}</span>
-          <span>·</span>
-          <span>{t('trade.size')} {p.size}</span>
-          <span>·</span>
-          <span>{t('trade.entryPrice')} {p.entryPrice !== undefined ? fmtPrice(p.entryPrice) : '—'}</span>
+          <span className={css.metaDot}>·</span>
+          <span>{t('trade.size')} <span className={css.num}>{p.size}</span></span>
+          <span className={css.metaDot}>·</span>
+          <span>{t('trade.entryPrice')} <span className={css.num}>{p.entryPrice !== undefined ? fmtPrice(p.entryPrice) : '—'}</span></span>
         </div>
         <div className={css.posFoot}>
-          <span>{t('trade.holdings.marketValue')}{' '}
+          <span className={css.mvLabel}>{t('trade.holdings.marketValue')}</span>
+          <span className={css.mvValue}>
             {row.marketValue !== undefined
               ? fmtPrice(row.marketValue) + (row.currency !== undefined ? ' ' + row.currency : '')
               : '—'}
           </span>
-          <span className={css.posPnl} style={row.unrealizedPnl !== undefined ? { color: directionColor(row.unrealizedPnl, colorMode) } : undefined}>
-            {t('trade.unrealizedPnl')}{' '}
-            {row.unrealizedPnl !== undefined ? (row.unrealizedPnl >= 0 ? '+' : '') + fmtPrice(row.unrealizedPnl) : '—'}
-          </span>
+          {row.unrealizedPnl !== undefined ? (
+            <span className={css.posPnl} style={{ color: directionColor(row.unrealizedPnl, colorMode) }}>
+              {t('trade.unrealizedPnl')}{' '}
+              {(row.unrealizedPnl >= 0 ? '+' : '') + fmtPrice(row.unrealizedPnl)}
+            </span>
+          ) : (
+            <span className={css.posPnl} data-na="true">{t('trade.unrealizedPnl')} —</span>
+          )}
           {p.origin === 'imported' && p.holdingId !== undefined && (
             <span className={css.posActions}>
               <button type="button" className={css.ghostBtn} onClick={() => setEditingHolding(p)}>
@@ -544,32 +612,39 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
       <Fragment key={row.key}>
         <div className={css.sumRow} onClick={() => toggleExpand(row.key)}>
           <div className={css.sumTitle}>
-            <span className={css.expandCaret}>{expanded ? '▾' : '▸'}</span>
+            <span className={css.expandCaret} data-expanded={expanded ? 'true' : undefined}><IconChevronRight size={11} /></span>
             <span className={css.posSymbol}>{row.symbol}</span>
             {renderMarketLabel(row.market)}
           </div>
           <div className={css.sumMeta}>
-            <span>{t('trade.holdings.totalSize')} {row.totalSize}</span>
-            <span>{t('trade.holdings.weightedCost')} {row.weightedCost !== undefined ? fmtPrice(row.weightedCost) : '—'}</span>
-            <span>{t('trade.holdings.markPrice')} {row.markPrice !== undefined ? fmtPrice(row.markPrice) : '—'}</span>
+            <span>{t('trade.holdings.totalSize')} <span className={css.num}>{row.totalSize}</span></span>
+            <span>{t('trade.holdings.weightedCost')} <span className={css.num}>{row.weightedCost !== undefined ? fmtPrice(row.weightedCost) : '—'}</span></span>
+            <span>{t('trade.holdings.markPrice')} <span className={css.num}>{row.markPrice !== undefined ? fmtPrice(row.markPrice) : '—'}</span></span>
           </div>
           <div className={css.sumFoot}>
-            <span>
-              {t('trade.holdings.marketValue')}{' '}
+            <span className={css.mvLabel}>{t('trade.holdings.marketValue')}</span>
+            <span className={css.mvValue}>
               {row.marketValueBase !== undefined
                 ? fmtPrice(row.marketValueBase) + ' ' + aggregation.base
                 : row.marketValue !== undefined
                   ? fmtPrice(row.marketValue) + (row.currency !== undefined ? ' ' + row.currency : '')
                   : '—'}
             </span>
-            <span style={row.unrealizedPnlBase !== undefined ? { color: directionColor(row.unrealizedPnlBase, colorMode) } : undefined}>
-              {t('trade.unrealizedPnl')}{' '}
-              {row.unrealizedPnlBase !== undefined
-                ? (row.unrealizedPnlBase >= 0 ? '+' : '') + fmtPrice(row.unrealizedPnlBase)
-                : row.unrealizedPnl !== undefined
-                  ? (row.unrealizedPnl >= 0 ? '+' : '') + fmtPrice(row.unrealizedPnl) + (row.currency !== undefined ? ' ' + row.currency : '')
-                  : '—'}
-            </span>
+            {row.unrealizedPnlBase !== undefined || row.unrealizedPnl !== undefined ? (
+              <span
+                className={css.posPnl}
+                style={{ color: directionColor(row.unrealizedPnlBase ?? row.unrealizedPnl ?? 0, colorMode) }}
+              >
+                {t('trade.unrealizedPnl')}{' '}
+                {row.unrealizedPnlBase !== undefined
+                  ? (row.unrealizedPnlBase >= 0 ? '+' : '') + fmtPrice(row.unrealizedPnlBase)
+                  : (row.unrealizedPnl !== undefined
+                    ? (row.unrealizedPnl >= 0 ? '+' : '') + fmtPrice(row.unrealizedPnl) + (row.currency !== undefined ? ' ' + row.currency : '')
+                    : '—')}
+              </span>
+            ) : (
+              <span className={css.posPnl} data-na="true">{t('trade.unrealizedPnl')} —</span>
+            )}
           </div>
           {row.origins.length > 0 && (
             <div className={css.posMeta}>
@@ -601,6 +676,10 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
 
   const staged = stagedHoldings()
   const holdingsAvailable = data.book !== null
+  // 编辑对话框退场动画期间内容保持最后快照（Law 3：卸载前内容不消失）。
+  const editingSnapshotRef = useRef<TaggedPosition | null>(null)
+  if (editingHolding !== null) editingSnapshotRef.current = editingHolding
+  const editingSnapshot = editingHolding ?? editingSnapshotRef.current
 
   return (
     <div className={css.root} data-dshtrading-holdings-panel="">
@@ -624,10 +703,11 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
             title={t('trade.holdings.add.title')}
             onClick={() => setAddOpen(true)}
           >
-            + {t('trade.holdings.add')}
+            <IconPlus size={11} />
+            {t('trade.holdings.add')}
           </button>
         )}
-        <button type="button" className={css.closeBtn} aria-label={t('trade.holdings.panel.close')} onClick={onClose}>×</button>
+        <button type="button" className={css.closeBtn} aria-label={t('trade.holdings.panel.close')} onClick={onClose}><IconClose size={13} /></button>
       </div>
 
       <div className={css.tabBar} role="tablist">
@@ -652,16 +732,27 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
 
       {staged.length > 0 && (
         <div className={css.stagedBanner} data-dshtrading-holdings-staged="">
-          <span>{t('trade.holdings.stagedBanner', { count: staged.length })}</span>
+          <span className={css.stagedText}>
+            <span className={css.stagedDot} />
+            {t('trade.holdings.stagedBanner', { count: staged.length })}
+          </span>
           <button type="button" className={css.primaryBtn} onClick={() => setConfirmOpen(true)}>
             {t('trade.holdings.stagedReview')}
           </button>
         </div>
       )}
 
-      <div className={css.body}>
+      <div className={css.body} key={activeTab}>
         {activeTab === 'positions' && (
           <>
+            {/* 权益 hero 条：总资产常驻持仓页签顶部（复用汇总聚合结果，不新增数据面）。 */}
+            <div className={css.equityStrip}>
+              <span className={css.equityLabel}>{t('trade.summary.totalAssets')}</span>
+              <span className={css.equityValue} title={aggregation.approximate ? t('trade.summary.approxHint') : undefined}>
+                {aggregation.approximate ? '≈ ' : ''}<span className={css.equityNum}>{fmtPrice(aggregation.totalBase)}</span>
+                <span className={css.equityBase}>{aggregation.base}</span>
+              </span>
+            </div>
             {/* 过滤 chips：全部/真实/模拟/实盘（按 origin，契约 §6.3） */}
             <div className={css.chips}>
               {([
@@ -717,7 +808,7 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
               </div>
             )}
             {filteredRows.length === 0 ? (
-              <div className={css.empty}>{t('trade.empty')}</div>
+              <EmptyHint text={t('trade.empty')} />
             ) : (
               filteredRows.map(renderPosCard)
             )}
@@ -772,7 +863,7 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
               )}
             </div>
             {aggregation.summaries.length === 0 ? (
-              <div className={css.empty}>{t('trade.empty')}</div>
+              <EmptyHint text={t('trade.empty')} />
             ) : (
               <>
                 <div className={css.sectionTitle}>{t('trade.summary.tab')}</div>
@@ -785,7 +876,7 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
         {activeTab === 'orders' && (
           tradeMode === 'paper' ? (
             paper.getOrders().length === 0 ? (
-              <div className={css.empty}>{t('trade.empty')}</div>
+              <EmptyHint text={t('trade.empty')} />
             ) : (
               paper.getOrders().slice().reverse().map((order, idx) => (
                 <div key={order.id + '-' + idx} className={css.listRow}>
@@ -812,8 +903,8 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
             <div className={css.empty}>…</div>
           ) : liveOrders.length === 0 ? (
             ordersReasons.every(r => r === 'no-trade-service') && ordersReasons.length > 0
-              ? <div className={css.empty}>{t('trade.noTradeService')}</div>
-              : <div className={css.empty}>{t('trade.empty')}</div>
+              ? <EmptyHint text={t('trade.noTradeService')} />
+              : <EmptyHint text={t('trade.empty')} />
           ) : (
             liveOrders.map(({ market, row: order }, idx) => (
               <div key={market + '-' + order.id + '-' + idx} className={css.listRow}>
@@ -842,7 +933,7 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
         {activeTab === 'fills' && (
           tradeMode === 'paper' ? (
             paper.getFills().length === 0 ? (
-              <div className={css.empty}>{t('trade.empty')}</div>
+              <EmptyHint text={t('trade.empty')} />
             ) : (
               paper.getFills().slice().reverse().map((fill, idx) => (
                 <div key={fill.id + '-' + idx} className={css.listRow}>
@@ -865,7 +956,7 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
           ) : liveFills === null ? (
             <div className={css.empty}>…</div>
           ) : liveFills.length === 0 ? (
-            <div className={css.empty}>{t('trade.empty')}</div>
+            <EmptyHint text={t('trade.empty')} />
           ) : (
             liveFills.map(({ market, row: fill }, idx) => (
               <div key={market + '-' + fill.id + '-' + idx} className={css.listRow}>
@@ -891,7 +982,7 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
         {activeTab === 'balances' && (
           tradeMode === 'paper' ? (
             paper.getBalances().length === 0 ? (
-              <div className={css.empty}>{t('trade.empty')}</div>
+              <EmptyHint text={t('trade.empty')} />
             ) : (
               paper.getBalances().map((b, idx) => (
                 <div key={b.asset + '-' + idx} className={css.listRow}>
@@ -911,7 +1002,7 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
           ) : liveBalances === null ? (
             <div className={css.empty}>…</div>
           ) : liveBalances.length === 0 ? (
-            <div className={css.empty}>{aggregateDegradedHint(balancesReasons, t)}</div>
+            <EmptyHint text={aggregateDegradedHint(balancesReasons, t)} />
           ) : (
             liveBalances.map(({ market, row: b }, idx) => (
               <div key={market + '-' + b.asset + '-' + idx} className={css.listRow}>
@@ -932,48 +1023,47 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
         )}
       </div>
 
-      {/* 对话框层（遮罩全局；打开后面板保持原位） */}
-      {confirmOpen && staged.length > 0 && (
-        <StagedConfirmDialog
-          t={t}
-          staged={staged}
-          onClose={() => setConfirmOpen(false)}
-        />
-      )}
-      {addOpen && (
-        <HoldingFormDialog
-          t={t}
-          title={t('trade.holdings.add.title')}
-          initial={{ market: 'crypto', symbol: '', size: '', entryPrice: '', account: '', kind: 'real' }}
-          onSubmit={(draft) => {
-            const item = draftToNewHolding(draft)
-            if (item === null) return Promise.resolve(false)
-            return holdingsActions.add(item)
-          }}
-          onClose={() => setAddOpen(false)}
-        />
-      )}
-      {editingHolding !== null && editingHolding.holdingId !== undefined && (
-        <HoldingFormDialog
-          t={t}
-          title={t('trade.holdings.edit.title')}
-          initial={{
-            market: editingHolding.market ?? 'crypto',
-            symbol: editingHolding.symbol,
-            size: String(editingHolding.size),
-            entryPrice: editingHolding.entryPrice !== undefined ? String(editingHolding.entryPrice) : '',
-            account: editingHolding.account,
-            kind: editingHolding.kind,
-          }}
-          onSubmit={(draft) => {
-            const parsed = draftToNewHolding(draft)
-            if (parsed === null) return Promise.resolve(false)
-            const patch: Partial<NewHolding> = parsed
-            return holdingsActions.update(editingHolding.holdingId as string, patch)
-          }}
-          onClose={() => setEditingHolding(null)}
-        />
-      )}
+      {/* 对话框层（遮罩全局；打开后面板保持原位；关闭播完退场动画再卸载） */}
+      <StagedConfirmDialog
+        t={t}
+        staged={staged}
+        open={confirmOpen && staged.length > 0}
+        onClose={() => setConfirmOpen(false)}
+      />
+      <HoldingFormDialog
+        t={t}
+        title={t('trade.holdings.add.title')}
+        initial={{ market: 'crypto', symbol: '', size: '', entryPrice: '', account: '', kind: 'real' }}
+        open={addOpen}
+        onSubmit={(draft) => {
+          const item = draftToNewHolding(draft)
+          if (item === null) return Promise.resolve(false)
+          return holdingsActions.add(item)
+        }}
+        onClose={() => setAddOpen(false)}
+      />
+      <HoldingFormDialog
+        key={editingSnapshot?.holdingId ?? 'edit'}
+        t={t}
+        title={t('trade.holdings.edit.title')}
+        initial={{
+          market: editingSnapshot?.market ?? 'crypto',
+          symbol: editingSnapshot?.symbol ?? '',
+          size: editingSnapshot !== null ? String(editingSnapshot.size) : '',
+          entryPrice: editingSnapshot?.entryPrice !== undefined ? String(editingSnapshot.entryPrice) : '',
+          account: editingSnapshot?.account ?? '',
+          kind: editingSnapshot?.kind ?? 'real',
+        }}
+        open={editingHolding !== null && editingHolding.holdingId !== undefined}
+        onSubmit={(draft) => {
+          const parsed = draftToNewHolding(draft)
+          const holdingId = editingSnapshot?.holdingId
+          if (parsed === null || holdingId === undefined) return Promise.resolve(false)
+          const patch: Partial<NewHolding> = parsed
+          return holdingsActions.update(holdingId, patch)
+        }}
+        onClose={() => setEditingHolding(null)}
+      />
     </div>
   )
 }

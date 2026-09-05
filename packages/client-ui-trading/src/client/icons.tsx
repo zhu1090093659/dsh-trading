@@ -169,6 +169,33 @@ export function IconKnowledge({ size = 16 }: { size?: number }): ReactElement {
   )
 }
 
+/** 关闭（×）。 */
+export function IconClose({ size = 14 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.25 4.25l7.5 7.5M11.75 4.25l-7.5 7.5" />
+    </svg>
+  )
+}
+
+/** 新增（+）。 */
+export function IconPlus({ size = 12 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3.5v9M3.5 8h9" />
+    </svg>
+  )
+}
+
+/** 右向小箭头（展开/折叠 caret，旋转承载两个方向）。 */
+export function IconChevronRight({ size = 11 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3.75 10.25 8 6 12.25" />
+    </svg>
+  )
+}
+
 /** 资产面板入口（钱包）。 */
 export function IconWallet({ size = 16 }: { size?: number }): ReactElement {
   return (
