@@ -32,6 +32,7 @@
   "dependencies": {
     "@dshtrading/api": "workspace:^",
     "@dshtrading/eventbus": "workspace:^",
+    "@dshtrading/holdings": "workspace:^",
     "@dshtrading/indicators": "workspace:^",
     "@dshtrading/knowledge": "workspace:^",
     "@dshtrading/strategies": "workspace:^",

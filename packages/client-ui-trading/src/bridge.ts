@@ -12,6 +12,7 @@
  *   TradingErrorCode 惯例）；仅协议层错误用 4xx。
  * - Issue #19：提供 /indicators/custom 端点（GET/DELETE），供前端同步自定义指标。
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
+ * - Issue #65：提供 /holdings 七个端点 + /fx 端点（统一资产台账，契约 §3/§4）。
  */
 import type { AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, Interval, Kline, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
 import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dshtrading/kit-cn'
@@ -26,6 +27,12 @@ import type { CustomStrategyRecord, CustomStrategyStore } from '@dshtrading/stra
 import { createMemoryCustomStrategyStore } from '@dshtrading/strategies'
 import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from '@dshtrading/watchlist'
 import { createMemorySelectionStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
+// 统一资产台账（issue #65）：type-only import——@dshtrading/holdings 由并行流建设，
+// 缺席时本包 vitest 不受影响（擦除）；运行时 store 走 host 注入 + 本文件内存兜底。
+import type { Holding, HoldingCurrency, NewHolding, NewHoldingInput } from '@dshtrading/holdings'
+import { createMemoryHoldingsStore } from '@dshtrading/holdings'
+import type { FxFetchLike } from '@dshtrading/holdings/fx'
+import { createFxService } from '@dshtrading/holdings/fx'
 
 /** 本桥支持的市场（与连接器服务键一一对应）。 */
 export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
@@ -75,6 +82,10 @@ export function createBridgeHost(services: {
   strategyStore?: CustomStrategyStore | undefined
   watchlistStore?: WatchlistStore | undefined
   selectionStore?: SelectionStore | undefined
+  /** 统一资产台账 store（issue #65；缺席 → 进程内内存兜底）。 */
+  holdingsStore?: HoldingsStoreLike | undefined
+  /** FX 服务（issue #65；缺席 → 桥内兜底 fetcher，契约 §4 减文件缓存）。 */
+  fetchFxRates?: FxRatesFetcher | undefined
   /** 新闻注册表（issue #37）。 */
   newsRegistry?: TradingNewsRegistryLike | undefined
   /** CryptoPanic API token 取值函数（从 router settings 获取；可选）。 */
@@ -94,6 +105,8 @@ export function createBridgeHost(services: {
     strategyStore: services.strategyStore ?? createMemoryCustomStrategyStore(),
     watchlistStore: services.watchlistStore ?? createMemoryWatchlistStore(),
     selectionStore: services.selectionStore ?? createMemorySelectionStore(),
+    holdingsStore: services.holdingsStore ?? createFallbackHoldingsStore(),
+    fetchFxRates: services.fetchFxRates,
     newsRegistry: services.newsRegistry,
     newsKey: services.newsKey,
   }
@@ -123,6 +136,10 @@ export interface BridgeHost {
   watchlistStore?: WatchlistStore
   /** 选中标的存储（可选，issue #32）。 */
   selectionStore?: SelectionStore
+  /** 统一资产台账存储（可选，issue #65；createBridgeHost 已兜底内存实现）。 */
+  holdingsStore?: HoldingsStoreLike
+  /** FX 服务（可选，issue #65；缺席 → 桥内兜底 fetcher）。 */
+  fetchFxRates?: FxRatesFetcher | undefined
   /**
    * 交易服务（可选，issue #40）：tradeRegistry 按 market 解析；未注册 → undefined
    * （交易台整体隐藏）。**安全语义**：桥只放行 dry-run 下单与只读查询——
@@ -254,6 +271,195 @@ export interface KnowledgeCardsWire {
   cards: readonly KnowledgeCard[]
 }
 
+/* -- 统一资产台账 wire 与宿主面（issue #65，契约 §2/§3/§4）------------------ */
+
+/** 台账快照（GET /holdings）。 */
+export interface HoldingsWire {
+  ok: true
+  revision: number
+  staged: Holding[]
+  holdings: Holding[]
+}
+
+/** 写成功应答（stage/confirm/discard/add/update/remove）。 */
+export interface HoldingsWriteWire {
+  ok: true
+  revision: number
+  /** 仅 POST /holdings（手动新增）携带。 */
+  id?: string
+}
+
+/** 校验失败（契约 §3：HTTP 200 + ok:false + TRADING_HOLDINGS_INVALID）。 */
+export interface HoldingsRejectedWire {
+  ok: false
+  code: 'TRADING_HOLDINGS_INVALID'
+  message: string
+}
+
+export interface HoldingsSnapshotShape {
+  revision: number
+  staged: Holding[]
+  holdings: Holding[]
+}
+
+/**
+ * 台账 store 的最小桥面（契约 §2 接口子集：snapshot/stage/confirm/discard/add/
+ * update/remove）。宿主侧由 @dshtrading/holdings 的 file store 经 cordis 服务
+ * `tradingHoldings`（Service 实例 .store 解包，knowledge 同款）注入；缺席时
+ * createBridgeHost 回退 createFallbackHoldingsStore。
+ *
+ * 写操作返回值契约未刊（设计契约缺口，已回报）：本桥按「number = 新 revision」
+ * 或「{ revision }」或「Holding（仅 add，取 id）」三种形状宽容解析，皆不可得
+ * 时回退 snapshot().revision。
+ */
+export interface HoldingsStoreLike {
+  snapshot(): HoldingsSnapshotShape | Promise<HoldingsSnapshotShape>
+  stage(items: NewHoldingInput[]): unknown
+  confirm(ids: string[], edits?: Record<string, Partial<NewHolding>>): unknown
+  discard(ids: string[]): unknown
+  add(item: NewHoldingInput): unknown
+  update(id: string, patch: Partial<NewHolding>): unknown
+  remove(id: string): unknown
+}
+
+/** FX 快照（/fx 应答有效载荷语义：rates[c] = 1 单位 c 折合多少 base）。 */
+export interface FxRatesSnapshot {
+  base: string
+  rates: Record<string, number>
+  asOf: number
+  stale: boolean
+}
+
+/** FX 服务形状（@dshtrading/holdings/fx 集成时的适配目标，函数式最小面）。 */
+export type FxRatesFetcher = (base: string) => Promise<FxRatesSnapshot>
+
+/** FX 支持的基准币（契约 §4；USDT 恒定锚定 USD，不作基准）。 */
+export const FX_BASES: readonly string[] = ['USD', 'CNY', 'HKD']
+
+const HOLDING_CURRENCIES: readonly string[] = ['USD', 'CNY', 'HKD', 'USDT']
+const HOLDING_KINDS: readonly string[] = ['real', 'sim']
+/** 单次 stage 条数封顶（截图解析量级；防滥用，契约外附加护栏）。 */
+export const MAX_HOLDINGS_STAGE_ITEMS = 100
+
+function holdingsRejected(message: string): HoldingsRejectedWire {
+  return { ok: false, code: 'TRADING_HOLDINGS_INVALID', message }
+}
+
+/**
+ * 进程内内存台账兜底（knowledge 同款「缺席回退自建」语义——台账侧由
+ * @dshtrading/holdings 专门导出的 createMemoryHoldingsStore 承载，其包注释
+ * 明言「client-ui-trading 桥兜底/单测用」）：真实部署由同包 file store
+ * （~/.dsh/holdings/book.json 原子写）经 tradingHoldings 服务注入；本兜底
+ * 刻意不碰该文件（文件格式归 holdings 包所有，双写者会互相踩格式），重启即失。
+ * §2 语义（id `hd-<ts>-<rand>`、revision 仅真实变更自增、默认值写入侧推导）
+ * 由 store-core 单一实现保证。
+ */
+export function createFallbackHoldingsStore(): HoldingsStoreLike {
+  return createMemoryHoldingsStore()
+}
+
+/**
+ * 桥内 FX 兜底服务：直接复用 @dshtrading/holdings/fx 的 createFxService
+ * （纯内存缓存，无文件层——文件缓存归 holdings 插件 ~/.dsh/holdings/
+ * fx-cache.json 所有；集成时主 agent 经 tradingHoldings 服务 .fx 注入同一
+ * 单实例替换本兜底）。语义契约 §4：frankfurter（ECB 汇率，免费无 key）→
+ * 内存缓存 1h → 恒等兜底，后两段 stale:true；取倒数归一为「1 c 折合多少
+ * base」；USDT 不入请求恒定锚 USD；fetch 超时 5s。base 白名单由 fx()
+ * 路由先行校验（400），非法 base 不会到达本服务。
+ */
+export function createFallbackFxFetcher(fetchImpl?: FxFetchLike): FxRatesFetcher {
+  const service = createFxService(fetchImpl !== undefined ? { fetchImpl } : {})
+  return async (base: string): Promise<FxRatesSnapshot> => {
+    const quote = await service.getRates(base)
+    return { base: quote.base, rates: quote.rates, asOf: quote.asOf, stale: quote.stale }
+  }
+}
+
+/** NewHoldingInput 字段校验（协议边界；失败 → TRADING_HOLDINGS_INVALID 业务错误）。
+ *  account/kind/currency 可缺省（写入侧推导默认值），对齐包侧 NewHoldingInput 接受面。 */
+export function parseNewHolding(body: unknown): NewHoldingInput | HoldingsRejectedWire {
+  if (typeof body !== 'object' || body === null) return holdingsRejected('holding must be an object')
+  const raw = body as Record<string, unknown>
+  const market = typeof raw.market === 'string' ? raw.market.trim() : ''
+  if (!isMarketId(market)) return holdingsRejected(`holding.market must be one of ${MARKET_IDS.join('/')}`)
+  const symbol = typeof raw.symbol === 'string' ? raw.symbol.trim() : ''
+  if (symbol === '') return holdingsRejected('holding.symbol is required')
+  if (raw.side !== undefined && raw.side !== 'long') return holdingsRejected("holding.side only supports 'long'")
+  const size = raw.size
+  if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) return holdingsRejected('holding.size must be a positive number')
+  const patch = parseHoldingPatch(raw)
+  if ('ok' in patch) return patch
+  return {
+    market,
+    symbol,
+    side: 'long',
+    size,
+    ...patch,
+  }
+}
+
+/**
+ * Partial<NewHolding> 校验（confirm edits / update patch 共用）：只摘契约字段，
+ * 非法值整条拒绝。market/size/side 也可出现在 patch 里（确认对话框可编辑 market）。
+ */
+export function parseHoldingPatch(body: Record<string, unknown>): Partial<NewHolding> | HoldingsRejectedWire {
+  const out: Partial<NewHolding> = {}
+  if (body.market !== undefined) {
+    const market = typeof body.market === 'string' ? body.market.trim() : ''
+    if (!isMarketId(market)) return holdingsRejected(`holding.market must be one of ${MARKET_IDS.join('/')}`)
+    out.market = market
+  }
+  if (body.symbol !== undefined) {
+    const symbol = typeof body.symbol === 'string' ? body.symbol.trim() : ''
+    if (symbol === '') return holdingsRejected('holding.symbol must be a non-empty string')
+    out.symbol = symbol
+  }
+  if (body.side !== undefined) {
+    if (body.side !== 'long') return holdingsRejected("holding.side only supports 'long'")
+    out.side = 'long'
+  }
+  if (body.size !== undefined) {
+    const size = body.size
+    if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) return holdingsRejected('holding.size must be a positive number')
+    out.size = size
+  }
+  if (body.entryPrice !== undefined) {
+    const entryPrice = body.entryPrice
+    if (typeof entryPrice !== 'number' || !Number.isFinite(entryPrice) || entryPrice <= 0) {
+      return holdingsRejected('holding.entryPrice must be a positive number')
+    }
+    out.entryPrice = entryPrice
+  }
+  if (body.currency !== undefined) {
+    const currency = typeof body.currency === 'string' ? body.currency.trim().toUpperCase() : ''
+    if (!HOLDING_CURRENCIES.includes(currency)) {
+      return holdingsRejected(`holding.currency must be one of ${HOLDING_CURRENCIES.join('/')}`)
+    }
+    out.currency = currency as HoldingCurrency
+  }
+  if (body.account !== undefined) {
+    if (typeof body.account !== 'string' || body.account.trim() === '') {
+      return holdingsRejected('holding.account must be a non-empty string')
+    }
+    out.account = body.account.trim()
+  }
+  if (body.kind !== undefined) {
+    if (typeof body.kind !== 'string' || !HOLDING_KINDS.includes(body.kind)) {
+      return holdingsRejected("holding.kind must be 'real' or 'sim'")
+    }
+    out.kind = body.kind as Holding['kind']
+  }
+  if (body.name !== undefined) {
+    if (typeof body.name !== 'string') return holdingsRejected('holding.name must be a string')
+    out.name = body.name
+  }
+  if (body.note !== undefined) {
+    if (typeof body.note !== 'string') return holdingsRejected('holding.note must be a string')
+    out.note = body.note
+  }
+  return out
+}
+
 /* -- 新闻 wire（issue #37）----------------------------------------------- */
 
 export interface NewsWire {
@@ -300,6 +506,8 @@ export class TradingBridge {
   private readonly symbolsCache = new Map<string, { list: SymbolInfoWire[]; fetchedAt: number }>()
   private readonly fundamentalsCache = new Map<string, { pkg: StockFundamentals; fetchedAt: number }>()
   private readonly fundamentalsInflight = new Map<string, Promise<StockFundamentals>>()
+  /** FX 兜底 fetcher（issue #65；host.fetchFxRates 注入正式实现时不走这里）。 */
+  readonly #fallbackFxFetcher: FxRatesFetcher = createFallbackFxFetcher()
 
   constructor(private readonly host: BridgeHost) {}
 
@@ -587,6 +795,145 @@ export class TradingBridge {
     if (store === undefined) return { ok: true, cards: [] }
     const cards = await store.list()
     return { ok: true, cards }
+  }
+
+  /* -- 统一资产台账（issue #65，契约 §3）------------------------------------ */
+
+  /** 台账快照（staged 待确认区 + holdings 正式区 + revision）。 */
+  async holdings(): Promise<HoldingsWire> {
+    const store = this.host.holdingsStore
+    if (store === undefined) return { ok: true, revision: 0, staged: [], holdings: [] }
+    const snap = await store.snapshot()
+    return { ok: true, revision: snap.revision, staged: [...snap.staged], holdings: [...snap.holdings] }
+  }
+
+  /**
+   * 写操作 revision 宽容解析（契约未刊 store 返回形状，已回报）：
+   * number / { revision } / 其它 → 回退 snapshot().revision。
+   */
+  async #holdingsRevision(result: unknown): Promise<number> {
+    if (typeof result === 'number' && Number.isFinite(result)) return result
+    if (typeof result === 'object' && result !== null) {
+      const revision = (result as { revision?: unknown }).revision
+      if (typeof revision === 'number' && Number.isFinite(revision)) return revision
+    }
+    const snap = await this.host.holdingsStore?.snapshot()
+    return snap?.revision ?? 0
+  }
+
+  #requireHoldingsStore(): HoldingsStoreLike {
+    const store = this.host.holdingsStore
+    if (store === undefined) {
+      throw Object.assign(new Error('holdings store is not mounted'), { code: 'TRADING_HOLDINGS_UNAVAILABLE' })
+    }
+    return store
+  }
+
+  /** staged 待确认区入库（Agent 截图解析唯一写入口）。 */
+  async stageHoldings(body: unknown): Promise<HoldingsWriteWire | HoldingsRejectedWire> {
+    const items = typeof body === 'object' && body !== null && Array.isArray((body as { items?: unknown }).items)
+      ? (body as { items: unknown[] }).items
+      : undefined
+    if (items === undefined) return holdingsRejected('stage: body.items must be an array')
+    if (items.length === 0) return holdingsRejected('stage: items is empty')
+    if (items.length > MAX_HOLDINGS_STAGE_ITEMS) {
+      return holdingsRejected(`stage: too many items (${items.length} > ${MAX_HOLDINGS_STAGE_ITEMS})`)
+    }
+    const parsed: NewHoldingInput[] = []
+    for (const item of items) {
+      const result = parseNewHolding(item)
+      if ('ok' in result) return result
+      parsed.push(result)
+    }
+    const store = this.#requireHoldingsStore()
+    const result = await store.stage(parsed)
+    return { ok: true, revision: await this.#holdingsRevision(result) }
+  }
+
+  /** 确认 staged 入账（可带逐条编辑）。 */
+  async confirmHoldings(body: unknown): Promise<HoldingsWriteWire | HoldingsRejectedWire> {
+    if (typeof body !== 'object' || body === null) return holdingsRejected('confirm: body must be an object')
+    const raw = body as { ids?: unknown; edits?: unknown }
+    const ids = Array.isArray(raw.ids) ? raw.ids.filter((id): id is string => typeof id === 'string' && id !== '') : []
+    if (ids.length === 0) return holdingsRejected('confirm: ids must be a non-empty string array')
+    let edits: Record<string, Partial<NewHolding>> | undefined
+    if (raw.edits !== undefined) {
+      if (typeof raw.edits !== 'object' || raw.edits === null) return holdingsRejected('confirm: edits must be an object')
+      edits = {}
+      for (const [id, patchBody] of Object.entries(raw.edits as Record<string, unknown>)) {
+        if (typeof patchBody !== 'object' || patchBody === null) return holdingsRejected(`confirm: edits[${id}] must be an object`)
+        const patch = parseHoldingPatch(patchBody as Record<string, unknown>)
+        if ('ok' in patch) return patch
+        edits[id] = patch
+      }
+    }
+    const store = this.#requireHoldingsStore()
+    const result = edits === undefined ? await store.confirm(ids) : await store.confirm(ids, edits)
+    return { ok: true, revision: await this.#holdingsRevision(result) }
+  }
+
+  /** 丢弃 staged 条目。 */
+  async discardHoldings(body: unknown): Promise<HoldingsWriteWire | HoldingsRejectedWire> {
+    if (typeof body !== 'object' || body === null) return holdingsRejected('discard: body must be an object')
+    const ids = Array.isArray((body as { ids?: unknown }).ids)
+      ? (body as { ids: unknown[] }).ids.filter((id): id is string => typeof id === 'string' && id !== '')
+      : []
+    if (ids.length === 0) return holdingsRejected('discard: ids must be a non-empty string array')
+    const store = this.#requireHoldingsStore()
+    const result = await store.discard(ids)
+    return { ok: true, revision: await this.#holdingsRevision(result) }
+  }
+
+  /** 手动新增一条导入持仓（直入正式区）。 */
+  async addHolding(body: unknown): Promise<HoldingsWriteWire | HoldingsRejectedWire> {
+    const parsed = parseNewHolding(body)
+    if ('ok' in parsed) return parsed
+    const store = this.#requireHoldingsStore()
+    const result = await store.add(parsed)
+    // add 返回形状契约未刊：对象带 id 则取之；否则回退快照末位（本地单写者语义）。
+    let id = typeof result === 'object' && result !== null ? (result as { id?: unknown }).id : undefined
+    if (typeof id !== 'string' || id === '') {
+      const snap = await store.snapshot()
+      id = snap.holdings[snap.holdings.length - 1]?.id
+    }
+    if (typeof id !== 'string' || id === '') {
+      throw Object.assign(new Error('holdings store add() did not yield an id'), { code: 'TRADING_UNKNOWN' })
+    }
+    return { ok: true, revision: await this.#holdingsRevision(result), id }
+  }
+
+  /** 编辑一条导入持仓。 */
+  async updateHolding(body: unknown): Promise<HoldingsWriteWire | HoldingsRejectedWire> {
+    if (typeof body !== 'object' || body === null) return holdingsRejected('update: body must be an object')
+    const raw = body as { id?: unknown; patch?: unknown }
+    const id = typeof raw.id === 'string' ? raw.id.trim() : ''
+    if (id === '') return holdingsRejected('update: id is required')
+    if (typeof raw.patch !== 'object' || raw.patch === null) return holdingsRejected('update: patch must be an object')
+    const patch = parseHoldingPatch(raw.patch as Record<string, unknown>)
+    if ('ok' in patch) return patch
+    const store = this.#requireHoldingsStore()
+    const result = await store.update(id, patch)
+    return { ok: true, revision: await this.#holdingsRevision(result) }
+  }
+
+  /** 删除一条导入持仓。 */
+  async removeHolding(id: string): Promise<HoldingsWriteWire | HoldingsRejectedWire> {
+    const trimmed = id.trim()
+    if (trimmed === '') return holdingsRejected('remove: id is required')
+    const store = this.#requireHoldingsStore()
+    const result = await store.remove(trimmed)
+    return { ok: true, revision: await this.#holdingsRevision(result) }
+  }
+
+  /** FX 汇率快照（契约 §3/§4；host.fetchFxRates 缺席 → 桥内兜底 fetcher）。 */
+  async fx(base: string): Promise<FxRatesSnapshot & { ok: true }> {
+    const normalized = base.trim().toUpperCase()
+    if (!FX_BASES.includes(normalized)) {
+      throw new BridgeProtocolError(400, `fx: unsupported base ${JSON.stringify(base)} (supported: ${FX_BASES.join('/')})`)
+    }
+    const fetcher = this.host.fetchFxRates ?? this.#fallbackFxFetcher
+    const snap = await fetcher(normalized)
+    return { ok: true, base: snap.base, rates: snap.rates, asOf: snap.asOf, stale: snap.stale }
   }
 
   /**
@@ -1026,6 +1373,13 @@ export async function dispatchBridgeRequest(
       case '/knowledge/cards': {
         return { status: 200, payload: await bridge.knowledgeCards() }
       }
+      case '/holdings': {
+        return { status: 200, payload: await bridge.holdings() }
+      }
+      case '/fx': {
+        // base 缺省 USD；非法 base → 400 协议错误（契约 §4）。
+        return { status: 200, payload: await bridge.fx(search.get('base') ?? 'USD') }
+      }
       case '/news': {
         const market = search.get('market') ?? ''
         if (!market) throw new BridgeProtocolError(400, 'news: market is required')
@@ -1075,6 +1429,9 @@ export async function dispatchBridgeRequest(
       if (!market || !symbol) throw new BridgeProtocolError(400, 'delete watchlist row: market and symbol are required')
       return { status: 200, payload: await bridge.removeWatchlistRow(market, symbol) }
     }
+    if (pathname === '/holdings') {
+      return { status: 200, payload: await bridge.removeHolding(search.get('id') ?? '') }
+    }
     throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }
 
@@ -1087,6 +1444,9 @@ export async function dispatchBridgeRequest(
     }
     if (pathname === '/chart/indicators') {
       return { status: 200, payload: await bridge.putChartActivation(body) }
+    }
+    if (pathname === '/holdings') {
+      return { status: 200, payload: await bridge.updateHolding(body) }
     }
     throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }
@@ -1103,6 +1463,18 @@ export async function dispatchBridgeRequest(
     }
     if (pathname === '/chart/indicators/import') {
       return { status: 200, payload: await bridge.importChartActivations(body) }
+    }
+    if (pathname === '/holdings') {
+      return { status: 200, payload: await bridge.addHolding(body) }
+    }
+    if (pathname === '/holdings/stage') {
+      return { status: 200, payload: await bridge.stageHoldings(body) }
+    }
+    if (pathname === '/holdings/confirm') {
+      return { status: 200, payload: await bridge.confirmHoldings(body) }
+    }
+    if (pathname === '/holdings/discard') {
+      return { status: 200, payload: await bridge.discardHoldings(body) }
     }
     throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }

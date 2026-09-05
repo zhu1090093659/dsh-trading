@@ -13,7 +13,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dshtrading/api'
-import type { TradingEventsService } from '@dshtrading/eventbus'
+import type { TradingEventsService, TradingEventStore } from '@dshtrading/eventbus'
 import { createFileChartActivationStore, createFileCustomIndicatorStore } from '@dshtrading/indicators/plugin'
 import { createFileKnowledgeCardStore } from '@dshtrading/knowledge/plugin'
 import { createFileCustomStrategyStore } from '@dshtrading/strategies/plugin'
@@ -50,6 +50,14 @@ interface ConnectionLike {
 
 /** 本插件不硬依赖任何服务（headless 宿主零要求）；web 面依赖在 apply 内声明。 */
 export const inject: readonly string[] = []
+
+/**
+ * holdings 失效信号 store 名（issue #65 契约 §3）。@dshtrading/eventbus 的
+ * TradingEventStore 封闭 union 由 node 半流补 'holdings' 成员；补上前这里
+ * 以常量固化词汇（运行时总线只透传字符串，SSE 帧形状不变）。
+ */
+// 'holdings' 在 issue #65 由 @dshtrading/eventbus 联合类型正式收录（并行流已落）。
+const HOLDINGS_EVENT_STORE: TradingEventStore = 'holdings'
 
 /** 发送 JSON 响应（禁缓存：行情是易变数据，代理层也不许中间层缓存）。 */
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
@@ -89,6 +97,24 @@ export function apply(ctx: Context): void {
   const knowledgeStore = knowledgeService?.store
     ?? createFileKnowledgeCardStore(path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json'))
 
+  // 统一资产台账（issue #65）：@dshtrading/holdings/plugin 提供 tradingHoldings
+  // 服务（HoldingsService 实例，.store = file store 单实例、.fx = 含文件缓存的
+  // FX 服务）——.store/.fx 双双解包注入（knowledge 同款先例）。服务缺席（老
+  // 部署）→ 两项皆 undefined：createBridgeHost 回退同包内存 store 与纯内存
+  // 缓存 FX（刻意不自建 file store/文件缓存：~/.dsh/holdings/ 两个文件格式
+  // 归 holdings 包所有，双写者互踩）。
+  const holdingsService = serviceGet('tradingHoldings') as
+    | {
+        store?: import('./bridge.ts').HoldingsStoreLike
+        fx?: { getRates(base: string): Promise<import('./bridge.ts').FxRatesSnapshot> }
+      }
+    | undefined
+  const holdingsStore = holdingsService?.store
+  const fetchFxRates: import('./bridge.ts').FxRatesFetcher | undefined =
+    holdingsService?.fx !== undefined
+      ? (base: string) => (holdingsService.fx as NonNullable<typeof holdingsService.fx>).getRates(base)
+      : undefined
+
   const strategyStorePath = path.join(os.homedir(), '.dsh', 'strategies', 'custom.json')
   const strategyStore = createFileCustomStrategyStore(strategyStorePath)
 
@@ -123,6 +149,8 @@ export function apply(ctx: Context): void {
       strategyStore,
       watchlistStore,
       selectionStore,
+      holdingsStore,
+      fetchFxRates,
       // 新闻注册表（issue #37）：各 Kit 向 host 面注册表注册 aggregateNews 纯函数。
       newsRegistry: webCtx.get('tradingNewsRegistry', false) as import('./bridge.ts').TradingNewsRegistryLike | undefined,
       newsKey: () => {
@@ -211,6 +239,10 @@ export function apply(ctx: Context): void {
             if ((req.method === 'PUT' || req.method === 'POST' || req.method === 'DELETE')
               && (sub === '/watchlists' || sub === '/watchlists/import')) eventsOf()?.emit('watchlists')
             if (req.method === 'PUT' && sub === '/selection') eventsOf()?.emit('selection')
+            // issue #65：holdings 写成功（stage/confirm/discard/add/update/remove）
+            // → 'holdings' 失效信号（契约 §3 SSE store 名；GET 读面不发）。
+            if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')
+              && (sub === '/holdings' || sub.startsWith('/holdings/'))) eventsOf()?.emit(HOLDINGS_EVENT_STORE)
           }
           sendJson(res, status, payload)
         } catch (error) {

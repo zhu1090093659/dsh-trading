@@ -10,12 +10,19 @@
  * 3. 一键出厂重置：支持随时重置模拟资产为初始 100,000 USDT/USD。
  */
 
-import type { AccountBalance, Order, Position, TradeFill } from './types.js'
+import type { AccountBalance, MarketId, Order, Position, TradeFill } from './types.js'
+
+/**
+ * 模拟持仓（issue #65 契约 §6.4）：附带下单时市场——统一资产台账按 market
+ * 分组盯市与推导币种。旧 localStorage 数据无 market → undefined（汇总显示
+ * 「未知市场」，维持原 activeMarket 盯市链路不变）。
+ */
+export type PaperPosition = Position & { market?: MarketId }
 
 export interface PaperAccount {
   cash: number
   initialCash: number
-  positions: Position[]
+  positions: PaperPosition[]
   orders: Order[]
   fills: TradeFill[]
 }
@@ -75,6 +82,8 @@ export interface PaperOrderRequest {
   quantity: number
   price?: number
   currentPrice: number
+  /** 下单时市场（issue #65；QuoteStage 传 activeMarket）。缺省 → 持仓 market 缺省。 */
+  market?: MarketId
 }
 
 class PaperTradingStore {
@@ -99,7 +108,7 @@ class PaperTradingStore {
     ]
   }
 
-  getPositions(): Position[] {
+  getPositions(): PaperPosition[] {
     return this.account.positions
   }
 
@@ -115,7 +124,7 @@ class PaperTradingStore {
    * 模拟下单撮合。
    */
   placeOrder(req: PaperOrderRequest): Order {
-    const { symbol, side, type, quantity, currentPrice } = req
+    const { symbol, side, type, quantity, currentPrice, market } = req
     if (quantity <= 0) {
       throw new Error('委托数量必须大于 0')
     }
@@ -148,6 +157,8 @@ class PaperTradingStore {
                 ...p,
                 size: totalSize,
                 entryPrice: newEntryPrice,
+                // issue #65：加仓时回补 market（旧数据无 market 的兼容路径）。
+                ...(p.market === undefined && market !== undefined ? { market } : {}),
                 timestamp: now,
               }
             : p,
@@ -162,6 +173,7 @@ class PaperTradingStore {
             entryPrice: execPrice,
             unrealizedPnl: 0,
             timestamp: now,
+            ...(market !== undefined ? { market } : {}),
           },
         ]
       }
