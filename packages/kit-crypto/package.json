@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/kit-crypto",
   "description": "Crypto toolkit plugin for dsh-trading: market-specific tools and bundled trading skills (skill provider); runs as a crypto-trader preset row (session-scoped)",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

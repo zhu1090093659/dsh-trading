@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/api",
   "description": "Pure TypeScript contracts for dsh-trading: market-data/trade service interfaces, domain types, and the shared error vocabulary",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

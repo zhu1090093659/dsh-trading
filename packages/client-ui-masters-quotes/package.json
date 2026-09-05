@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/client-ui-masters-quotes",
   "description": "Masters-quote language-pack plugin for the dsh-trading trading GUI: registers 中文 · 大师金句 (zh-masters, fallback zh) as a selectable language in the host Settings → General → Language row and overrides the single chat.deepDiving key — the turn-status activity line above the composer — with rotating quotes from Livermore, Buffett, Soros, Munger and other investing masters. All other keys fall through the per-key fallback chain to the host zh dictionaries, so the rest of the UI stays pixel-identical.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

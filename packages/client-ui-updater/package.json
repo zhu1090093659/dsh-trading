@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/client-ui-updater",
   "description": "dsh-trading auto-update plugin: GitHub Releases version check with release notes, incremental update of the @dshtrading/* plugin family inside a desktop-seeded profile (vendor payload zip, per-package swap), and the '软件更新' first-level settings section. Browser half registers the settings.section; node half registers the /dshtrading/api/updater routes and the update engine.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

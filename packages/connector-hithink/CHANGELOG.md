@@ -1,5 +1,11 @@
 # @dshtrading/connector-hithink
 
+## 0.1.3
+
+### Patch Changes
+
+- @dshtrading/api@0.1.3
+
 ## 0.1.2
 
 ### Patch Changes

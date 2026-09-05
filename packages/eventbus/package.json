@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/eventbus",
   "description": "In-process invalidation event bus for dsh-trading: tradingEvents cordis service (emit/subscribe/per-store revision), zero HTTP, zero business data",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/hk",
   "description": "HK (Hong Kong) market bundle for dsh-trading: host-plane hk-trader preset installer + insert-only aggregation of the Tencent connector (market=hk instance) and hk kit rows (design rule #1)",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",
