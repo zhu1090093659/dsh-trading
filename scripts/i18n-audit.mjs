@@ -52,6 +52,7 @@ const PACKAGES = [
   { pkg: 'client-ui-settings' },
   { pkg: 'client-ui-strategies' },
   { pkg: 'client-ui-knowledge' },
+  { pkg: 'client-ui-updater' },
 ]
 
 /** Package that carries the zh-CN dictionaries centrally (client half). */

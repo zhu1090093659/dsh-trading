@@ -84,6 +84,9 @@ importers:
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
       lightningcss:
         specifier: ^1.33.0
         version: 1.33.0
@@ -169,6 +172,9 @@ importers:
       '@dshtrading/client-ui-trading':
         specifier: workspace:^
         version: link:../client-ui-trading
+      '@dshtrading/client-ui-updater':
+        specifier: workspace:^
+        version: link:../client-ui-updater
       '@dshtrading/dsh-i18n':
         specifier: workspace:^
         version: link:../dsh-i18n
@@ -472,6 +478,43 @@ importers:
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.12)
+
+  packages/client-ui-updater:
+    dependencies:
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.2
+        version: 4.0.2(@deepseek-ai/cordis-plugin-include@1.0.7)(@deepseek-ai/cordis-plugin-loader@1.0.3)
+      '@deepseek-ai/dsh-client-locale':
+        specifier: 0.1.2-rc.1
+        version: 0.1.2-rc.1(@deepseek-ai/cordis@4.0.2)
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: 0.1.2-rc.1
+        version: 0.1.2-rc.1(@deepseek-ai/cordis@4.0.2)
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.31
+      lightningcss:
+        specifier: ^1.0.0
+        version: 1.33.0
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.12)
@@ -1026,6 +1069,9 @@ importers:
       '@dshtrading/client-ui-trading':
         specifier: workspace:^
         version: link:../client-ui-trading
+      '@dshtrading/client-ui-updater':
+        specifier: workspace:^
+        version: link:../client-ui-updater
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2
@@ -2983,6 +3029,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   fill-range@7.1.1:
     resolution: {integrity: sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg==}
@@ -5174,6 +5223,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+
+  fflate@0.8.3: {}
 
   fill-range@7.1.1:
     dependencies:

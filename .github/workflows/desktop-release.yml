@@ -144,6 +144,17 @@ jobs:
         working-directory: desktop
         run: npx electron-builder ${{ matrix.builder-args }}
 
+      # 增量更新通道：把 vendor tarballs 展开打包成 trading-update-<tag>.zip +
+      # updates-manifest-<tag>.json（trust anchor：payload sha256/bytes + 包清单），
+      # 由 GitHub Release 步骤一并发布；updater 插件按 manifest 校验后做逐包 swap。
+      # 双平台跑一次即可——payload 是纯 JS 包内容，与安装包架构无关；仅 macOS 跑，
+      # Windows 跳过（避免重复资产与 SHA256SUMS 竞争）。
+      - name: Pack incremental update payload
+        if: matrix.artifact == 'desktop-mac'
+        env:
+          UPDATE_TAG: ${{ github.ref_name }}
+        run: node scripts/pack-update-payload.mjs
+
       - name: Upload desktop artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -152,6 +163,7 @@ jobs:
             desktop/dist/*.dmg
             desktop/dist/*.exe
             desktop/dist/*.zip
+            desktop/dist/updates-manifest-*.json
           if-no-files-found: error
 
   github-release:

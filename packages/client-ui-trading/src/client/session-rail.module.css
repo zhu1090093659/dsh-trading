@@ -26,6 +26,7 @@
 }
 
 .button {
+  position: relative;
   appearance: none;
   border: none;
   background: transparent;
@@ -441,3 +442,17 @@
   cursor: default;
 }
 
+
+/* 设置页签更新提示点（自动更新插件点亮）：装饰性 aria-hidden 小圆点，
+   ring 用背景色描边以贴合亮/暗两态；不参与命中测试。 */
+.badgeDot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px var(--dsw-futu-bg-surface, #fff);
+  pointer-events: none;
+}

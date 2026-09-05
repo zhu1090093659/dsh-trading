@@ -41,6 +41,7 @@ const DIRECT_TRADING_PACKAGES = [
   '@dshtrading/hk',
   '@dshtrading/indicator-supertrend',
   '@dshtrading/dsh-i18n',
+  '@dshtrading/client-ui-updater',
 ];
 /** Registry package carried alongside the trading bundles. */
 const REGISTRY_DEPENDENCIES = {

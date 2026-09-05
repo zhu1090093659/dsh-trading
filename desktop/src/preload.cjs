@@ -16,4 +16,7 @@ contextBridge.exposeInMainWorld('desktop', {
   revealLog: () => ipcRenderer.send('desktop:reveal-log'),
   openVCRedistDownload: () => ipcRenderer.send('desktop:open-vcredist-download'),
   quit: () => ipcRenderer.send('desktop:quit'),
+  // Used by the updater settings page after an incremental update: relaunch
+  // the app so the freshly swapped profile packages are loaded by a new host.
+  relaunch: () => ipcRenderer.send('desktop:relaunch'),
 });

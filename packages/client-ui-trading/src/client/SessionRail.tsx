@@ -15,6 +15,7 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import type { FoldStore } from './fold-store.ts'
 import { IconClock, IconFoldPanel, IconNewSession, IconSettings } from './icons.tsx'
 import { ScheduledTasksPanel } from './ScheduledTasksPanel.tsx'
+import { fetchUpdateBadge } from './api.ts'
 import css from './session-rail.module.css'
 
 export interface SessionRailInjected {
@@ -35,6 +36,31 @@ export function SessionRail({ t, useFolded, startNewSession, openSettings, toggl
   const folded = useFolded(value => value)
   // 定时任务页签（功能页签 1 号）：会话级开关（无需持久化——每次进来默认收起）。
   const [tasksOpen, setTasksOpen] = useState(false)
+  // 设置页签上的更新提示点（自动更新插件，@dshtrading/client-ui-updater）：
+  // 挂载 + 30 分钟轮询 host 快照；设置面板里的即时动作经 window 自定义事件
+  // 'dshtrading-update-available'（detail: { available: boolean }）同步翻转。
+  // 桥缺席（老部署/404）→ fetchUpdateBadge 返回 null，点永不亮。
+  const [updateAvailable, setUpdateAvailable] = useState(false)
+
+  useEffect(() => {
+    let disposed = false
+    const read = async (): Promise<void> => {
+      const badge = await fetchUpdateBadge()
+      if (!disposed && badge !== null) setUpdateAvailable(badge.available)
+    }
+    void read()
+    const timer = setInterval(() => { void read() }, 30 * 60 * 1000)
+    const onUpdateEvent = (event: Event): void => {
+      const detail = (event as CustomEvent<{ available?: boolean }>).detail
+      if (detail !== undefined && typeof detail.available === 'boolean') setUpdateAvailable(detail.available)
+    }
+    window.addEventListener('dshtrading-update-available', onUpdateEvent)
+    return () => {
+      disposed = true
+      clearInterval(timer)
+      window.removeEventListener('dshtrading-update-available', onUpdateEvent)
+    }
+  }, [])
 
   useEffect(() => {
     document.body.dataset.dshtradingChatFolded = folded ? 'on' : 'off'
@@ -88,6 +114,7 @@ export function SessionRail({ t, useFolded, startNewSession, openSettings, toggl
         onClick={openSettings}
       >
         <IconSettings size={16} />
+        {updateAvailable && <span className={css.badgeDot} aria-hidden="true" />}
       </button>
       {tasksOpen && (
         <ScheduledTasksPanel

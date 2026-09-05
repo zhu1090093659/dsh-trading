@@ -25,6 +25,7 @@
     "@deepseek-ai/dsh-skill": "0.1.2-rc.1",
     "@deepseek-ai/dsh-tools": "0.1.2-rc.1",
     "@deepseek-ai/schemastery": "^3.18.2",
+    "fflate": "^0.8.2",
     "@types/node": "^24.0.0",
     "lightningcss": "^1.33.0",
     "tsdown": "^0.22.0",

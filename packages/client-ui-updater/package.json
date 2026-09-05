@@ -1,0 +1,63 @@
+{
+  "name": "@dshtrading/client-ui-updater",
+  "description": "dsh-trading auto-update plugin: GitHub Releases version check with release notes, incremental update of the @dshtrading/* plugin family inside a desktop-seeded profile (vendor payload zip, per-package swap), and the '软件更新' first-level settings section. Browser half registers the settings.section; node half registers the /dshtrading/api/updater routes and the update engine.",
+  "version": "0.1.1",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./locales": {
+      "types": "./lib/client/locales.d.ts",
+      "default": "./lib/client/locales.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "scripts": {
+    "bundle": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "build": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.2-rc.1",
+    "react": "^18.2.0",
+    "@types/react": "~18.3.1"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-client-locale": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.2-rc.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "~18.3.1",
+    "lightningcss": "^1.0.0",
+    "react": "^18.2.0",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}
