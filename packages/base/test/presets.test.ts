@@ -50,11 +50,21 @@ it('composes all 16 installed-market subsets deterministically, preserving conne
       }
       if (preset.id === 'master') {
         expect(text).toContain('provider: fork\n    toolName: researcher_subagent')
+        expect(text).toContain('toolName: trader_subagent')
         expect(text).toContain('toolName: risk_reviewer_subagent')
         expect(text).toContain('backgroundMode: one-shot')
         expect(text).toContain('你是标的分析研究员')
+        expect(text).toContain('你是统一交易员')
         expect(text).toContain('你是独立风险审查员')
-        expect((text.match(/@deepseek-ai\/dsh-tool-subagent/g) ?? [])).toHaveLength(2)
+        expect((text.match(/@deepseek-ai\/dsh-tool-subagent/g) ?? [])).toHaveLength(3)
+        expect((text.match(/你是一次性子代理/g) ?? [])).toHaveLength(3)
+        // Master orchestration: capital ledger first, then knowledge, skills and delegation.
+        expect(text).toContain('holdings_list')
+        expect(text).toContain('holdings_stage')
+        expect(text).toContain('交易计划草拟派 trader_subagent')
+        expect(text).toContain('dynamic-capabilities')
+        expect(text).toContain('strategy_backtest')
+        expect(text).toContain('knowledge-curation')
       } else {
         expect(text).not.toContain('@deepseek-ai/dsh-tool-subagent')
       }
