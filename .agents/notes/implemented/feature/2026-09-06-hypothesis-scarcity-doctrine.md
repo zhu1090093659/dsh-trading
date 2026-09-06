@@ -26,4 +26,4 @@ Status: implemented
 
 ## Consequences
 
-`presets.test.ts` 新增断言：全部预设含「不预测，只假设」「不引用卖方评级与目标价」「稀缺性」，master 另含「要验证的假设与失效信号」；base 27 例、kit-crypto 23 例全绿，两包 tsdown 构建通过；生成态 master persona 目检确认三层结构（角色文本 → DOCTRINE → EVIDENCE → JOURNAL → 市场清单）。persona 变长约 400 字/角色，属 Layer 1 静态前缀，稳定后不损害 KV Cache；DOCTRINE 文本后续改动应整段替换、避免逐句漂移。生效路径不变：宿主重启后 base 安装器幂等重写托管预设（管理戳保护用户自定义副本）；运行中会话不热更。旧四市场资产文件保持原样，其死内容人设段若未来清理属 simplification。
+`presets.test.ts` 断言锚点现为英文等价串（全部预设含 `Never predict` / `Never cite sell-side ratings or target prices` / `scarcity`，master 另含 `hypotheses to verify with invalidation signals`；2026-09-06 晚注入文本统一英文，见 [2026-09-06-english-persona-unification.md](2026-09-06-english-persona-unification.md)）。base 27 例、kit-crypto 23 例全绿，两包 tsdown 构建通过；生成态 master persona 目检确认三层结构（角色文本 → DOCTRINE → EVIDENCE → JOURNAL → 市场清单）。persona 变长约 400 字/角色，属 Layer 1 静态前缀，稳定后不损害 KV Cache；DOCTRINE 文本后续改动应整段替换、避免逐句漂移。生效路径不变：宿主重启后 base 安装器幂等重写托管预设（管理戳保护用户自定义副本）；运行中会话不热更。旧四市场资产文件保持原样，其死内容人设段若未来清理属 simplification。
