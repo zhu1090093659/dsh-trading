@@ -14,6 +14,7 @@ const {
   parseShasums,
   parseTokenUrlLine,
   formatHostExitDiagnostic,
+  toNodeImportSpecifier,
   SEED_MARKER,
 } = require('../src/runtime.cjs');
 
@@ -110,3 +111,21 @@ test('formatHostExitDiagnostic detects missing VC++ redistributable on Windows',
   assert.equal(signalExit.isMissingVCRedist, false);
   assert.ok(signalExit.message.includes('SIGTERM'));
 });
+
+test('toNodeImportSpecifier converts paths to valid file URLs safe for --import', () => {
+  assert.equal(toNodeImportSpecifier(undefined), undefined);
+
+  const localFile = path.resolve('src', 'host-symbol-normalizer.mjs');
+  const specifier = toNodeImportSpecifier(localFile);
+  assert.ok(specifier.startsWith('file://'));
+  assert.ok(specifier.includes('host-symbol-normalizer.mjs'));
+
+  if (process.platform === 'win32') {
+    const winSpec = toNodeImportSpecifier('C:\\Program Files\\App\\loader.mjs');
+    assert.equal(winSpec, 'file:///C:/Program%20Files/App/loader.mjs');
+  } else {
+    const posixSpec = toNodeImportSpecifier('/Applications/App/loader.mjs');
+    assert.equal(posixSpec, 'file:///Applications/App/loader.mjs');
+  }
+});
+

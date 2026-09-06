@@ -31,3 +31,18 @@ test('the loader ships next to main.cjs and is unpacked by electron-builder', ()
     'asarUnpack must list the loader so the external Node runtime can import it',
   );
 });
+
+test('the loader can be loaded by Node via --import using a file:// specifier', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { pathToFileURL } = await import('node:url');
+  const loaderPath = path.join(import.meta.dirname, '..', 'src', 'host-symbol-normalizer.mjs');
+  const importSpecifier = pathToFileURL(loaderPath).href;
+
+  const result = spawnSync(process.execPath, ['--import', importSpecifier, '-e', 'console.log("loader-ok")'], {
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, 'process should exit with 0, stderr: ' + result.stderr);
+  assert.match(result.stdout, /loader-ok/);
+});
+

@@ -27,6 +27,7 @@ const {
   waitForGui,
   parseTokenUrlLine,
   formatHostExitDiagnostic,
+  toNodeImportSpecifier,
 } = require('./runtime.cjs');
 
 const READY_TIMEOUT_MS = 180000;
@@ -96,13 +97,14 @@ function hostSymbolNormalizerPath() {
 
 function startHost(runtime, home, port) {
   const symbolNormalizer = hostSymbolNormalizerPath();
-  if (symbolNormalizer === undefined) {
+  const normalizerImport = toNodeImportSpecifier(symbolNormalizer);
+  if (normalizerImport === undefined) {
     pushLogLine('[desktop] symbol normalizer missing, spawning host without it');
   } else {
-    pushLogLine('[desktop] injecting dsh scope symbol normalizer: ' + symbolNormalizer);
+    pushLogLine('[desktop] injecting dsh scope symbol normalizer: ' + normalizerImport);
   }
   const args = [
-    ...(symbolNormalizer === undefined ? [] : ['--import', symbolNormalizer]),
+    ...(normalizerImport === undefined ? [] : ['--import', normalizerImport]),
     runtime.hostBin, '--profile', 'trading-web', '--no-open', '--host', '127.0.0.1', '--port', String(port),
   ];
   const child = spawn(runtime.nodeBin, args, {

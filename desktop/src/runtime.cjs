@@ -9,6 +9,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const net = require('node:net');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 /** Marker file written into a profile directory this app seeded itself. */
 const SEED_MARKER = '.dsh-desktop-seed.json';
@@ -222,6 +223,20 @@ function formatHostExitDiagnostic(code, signal, platform = process.platform) {
   };
 }
 
+/**
+ * Convert a filesystem path to a specifier safe for Node's `--import` flag.
+ * On Windows, passing raw absolute paths (e.g. C:\...) throws
+ * ERR_UNSUPPORTED_ESM_URL_SCHEME because Node treats the drive letter as a
+ * URL scheme. Converting to a file:// URL via pathToFileURL works portably
+ * on all platforms and handles spaces/special characters safely.
+ * @param {string | undefined} filePath
+ * @returns {string | undefined}
+ */
+function toNodeImportSpecifier(filePath) {
+  if (filePath === undefined) return undefined;
+  return pathToFileURL(filePath).href;
+}
+
 module.exports = {
   SEED_MARKER,
   RUNTIME_STAMP,
@@ -236,4 +251,6 @@ module.exports = {
   parseTokenUrlLine,
   parseShasums,
   formatHostExitDiagnostic,
+  toNodeImportSpecifier,
 };
+
