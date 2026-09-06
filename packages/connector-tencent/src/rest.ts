@@ -76,7 +76,13 @@ export function normalizeCnSymbol(symbol: string): string {
     )
   }
   if (m[1]) return `${m[1]}${m[2]}` // 前缀形 sh600519
-  const code = m[3]
+  const code = m[3] ?? ''
+  if (!code) {
+    throw new TradingServiceError(
+      'TRADING_UNSUPPORTED_SYMBOL',
+      `Symbol ${JSON.stringify(symbol)} is not a valid CN A-share symbol (expected 6-digit code, optionally SH/SZ prefixed)`,
+    )
+  }
   if (m[4]) return `${m[4]}${code}` // 规范形 600519.SH（后缀即交易所）
   const prefix =
     code.startsWith('6') || code.startsWith('9') || code.startsWith('5') || KNOWN_SH_INDICES.has(code)
