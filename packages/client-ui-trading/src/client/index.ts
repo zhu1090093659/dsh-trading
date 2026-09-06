@@ -227,6 +227,16 @@ export function apply(ctx: ClientContext): void {
           ?.archiveSession(sessionId)
           .catch((e: unknown) => { console.warn('[dsh-trading] session archive rejected:', e) })
       },
+      // 工作区删除（官方 WorkspaceBrowser 同款 workspaces.delete 通路：只摘注册，
+      // 会话与目录保留）。惰性解析纪律同 uiWorkspace：apply 时序不保证，点击时 get。
+      // 失败 reject 交由 HomeHistory 确认面板原位呈报。
+      deleteWorkspace: async (workspaceId: string) => {
+        const workspaces = ctx.get('workspaces') as unknown as
+          | { delete: (workspaceId: string) => Promise<void> }
+          | undefined
+        if (workspaces === undefined) throw new Error('workspaces service unavailable')
+        await workspaces.delete(workspaceId)
+      },
     }),
   }, HomeHistory))
 

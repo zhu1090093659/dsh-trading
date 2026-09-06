@@ -157,6 +157,18 @@ export function IconArchive({ size = 14 }: { size?: number }): ReactElement {
   )
 }
 
+/** 删除（垃圾桶）。 */
+export function IconTrash({ size = 14 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 4.25h10" />
+      <path d="M6.25 4.25V3.1c0-.35.29-.6.63-.6h2.24c.34 0 .63.25.63.6v1.15" />
+      <path d="M4.4 4.25l.55 8.1c.03.5.44.9.94.9h4.22c.5 0 .91-.4.94-.9l.55-8.1" />
+      <path d="M6.7 7v3.5M9.3 7v3.5" />
+    </svg>
+  )
+}
+
 /** 知识图谱网络图标。 */
 export function IconKnowledge({ size = 16 }: { size?: number }): ReactElement {
   return (

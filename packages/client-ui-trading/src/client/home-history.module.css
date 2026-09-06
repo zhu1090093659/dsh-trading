@@ -13,6 +13,12 @@
   box-sizing: border-box;
 }
 
+/* 头部容器：toggle 仍占满整行（折叠热区不变），工作区 ⋯ 按钮绝对定位在
+   右缘保留槽内（按钮不能嵌按钮，故与 toggle 成兄弟而非子元素）。 */
+.header {
+  position: relative;
+}
+
 .toggle {
   appearance: none;
   border: none;
@@ -23,7 +29,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px 6px;
+  /* 右侧 30px 是 wsMore 的保留槽，计数不与其重叠。 */
+  padding: 8px 30px 6px 12px;
   cursor: pointer;
   font-size: 12.5px;
   opacity: 0.8;
@@ -63,6 +70,33 @@
   font-size: 11px;
   opacity: 0.55;
   font-variant-numeric: tabular-nums;
+}
+
+/* 头部工作区 ⋯：本面板唯一的工作区管理入口，常驻低透明度（不可只 hover
+   显形——入口要可发现），悬停/聚焦加深。 */
+.wsMore {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.4;
+}
+
+.wsMore:hover,
+.wsMore:focus-visible {
+  opacity: 1;
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.12));
 }
 
 .list {
@@ -205,6 +239,66 @@
 
 .menuItem:hover {
   background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+/* 工作区删除确认菜单：desc（官方同款文案）+ 状态/错误行 + 取消/确认按钮排。 */
+.wsDesc {
+  padding: 4px 8px 8px;
+  font-size: 12px;
+  line-height: 18px;
+  opacity: 0.75;
+  color: inherit;
+}
+
+.wsStatus {
+  padding: 0 8px 6px;
+  font-size: 12px;
+  line-height: 18px;
+  opacity: 0.6;
+}
+
+.wsError {
+  padding: 0 8px 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary, #d4553f);
+  word-break: break-all;
+}
+
+.wsActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 2px 4px 2px;
+}
+
+.wsAction {
+  appearance: none;
+  border: 1px solid var(--dshtrading-fusion-border, rgba(0, 0, 0, 0.12));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wsAction:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.wsAction:hover:not(:disabled) {
+  background: var(--dsw-alias-fill-hover, rgba(127, 127, 127, 0.1));
+}
+
+.wsDanger {
+  color: var(--dsw-alias-state-error-primary, #d4553f);
 }
 
 .dot {

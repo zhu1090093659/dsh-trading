@@ -23,7 +23,7 @@ import { createPortal } from 'react-dom'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import { readJson, writeJson } from './store.ts'
-import { IconArchive, IconFork, IconMore, IconRename } from './icons.tsx'
+import { IconArchive, IconFork, IconMore, IconRename, IconTrash } from './icons.tsx'
 import css from './home-history.module.css'
 
 const OPEN_KEY = 'dshtrading.home.history.open.v1'
@@ -43,6 +43,8 @@ export interface HomeHistoryInjected {
   forkSession(sessionId: string): void
   /** 归档会话（官方 uiWorkspace 通路，从工作区分组面隐藏）；失败内吞 console.warn。 */
   archiveSession(sessionId: string): void
+  /** 删除工作区注册（官方 workspaces.delete 通路：只摘注册，会话与目录保留）；失败 reject 由确认面板呈报。 */
+  deleteWorkspace(workspaceId: string): Promise<void>
 }
 
 export type HomeHistoryProps =
@@ -77,6 +79,10 @@ function mostRecentlyActive(rows: WorkspaceRow[], byId: SessionListState['byId']
 const MENU_WIDTH = 152
 const MENU_HEIGHT = 118
 
+/** 工作区确认菜单：desc 文案较长，宽出会话菜单一档；高度按 desc 3 行 + 状态行 + 按钮行估。 */
+const WS_MENU_WIDTH = 248
+const WS_MENU_HEIGHT = 190
+
 interface MenuState {
   sessionId: string
   title: string
@@ -84,23 +90,36 @@ interface MenuState {
   y: number
 }
 
+/** 工作区菜单（⋯）：打开即确认面（官方删除弹窗同语义），pending 防重、失败原位呈报。 */
+interface WorkspaceMenuState {
+  workspaceId: string
+  title: string
+  x: number
+  y: number
+  pending: boolean
+  error: string | null
+}
+
 interface RenameState {
   sessionId: string
   value: string
 }
 
-export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startNewSession, renameSession, forkSession, archiveSession }: HomeHistoryProps) {
+export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startNewSession, renameSession, forkSession, archiveSession, deleteWorkspace }: HomeHistoryProps) {
   const sessions = useSessions((value: SessionListState) => value)
   const workspaces = useWorkspaces(value => value)
   const [open, setOpen] = useState(() => readJson<boolean>(OPEN_KEY, true))
   const [expanded, setExpanded] = useState(false)
   const [host, setHost] = useState<HTMLElement | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [wsMenu, setWsMenu] = useState<WorkspaceMenuState | null>(null)
   const [renaming, setRenaming] = useState<RenameState | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const wsMenuRef = useRef<HTMLDivElement | null>(null)
 
   // 行操作菜单：右键/行尾 ⋯ 触发，fixed 定位（面板 overflow:hidden，菜单
-  // 必须脱离文档流）。外点 / Esc / 任意滚动关闭（列表滚动后菜单不再对位）。
+  // 必须脱离文档流）。外点 / Esc / 任意滚动关闭（列表滚动后菜单不再对位）；
+  // 工作区菜单同机制，但 pending 中不随外点/Esc/滚动消失（官方弹窗同语义）。
   const openMenuAt = (sessionId: string, title: string, x: number, y: number): void => {
     const cx = Math.max(8, Math.min(x, window.innerWidth - MENU_WIDTH - 8))
     const cy = Math.max(8, Math.min(y, window.innerHeight - MENU_HEIGHT - 8))
@@ -108,15 +127,25 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
   }
 
   useEffect(() => {
-    if (menu === null) return
+    if (menu === null && wsMenu === null) return
     const onPointerDown = (e: PointerEvent): void => {
-      if (menuRef.current !== null && e.target instanceof Node && menuRef.current.contains(e.target)) return
+      if (e.target instanceof Node) {
+        if (menuRef.current !== null && menuRef.current.contains(e.target)) return
+        if (wsMenuRef.current !== null && wsMenuRef.current.contains(e.target)) return
+      }
       setMenu(null)
+      setWsMenu((prev) => (prev !== null && prev.pending ? prev : null))
     }
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setMenu(null)
+      if (e.key === 'Escape') {
+        setMenu(null)
+        setWsMenu((prev) => (prev !== null && prev.pending ? prev : null))
+      }
     }
-    const onScroll = (): void => { setMenu(null) }
+    const onScroll = (): void => {
+      setMenu(null)
+      setWsMenu((prev) => (prev !== null && prev.pending ? prev : null))
+    }
     document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('keydown', onKeyDown)
     window.addEventListener('scroll', onScroll, true)
@@ -125,7 +154,7 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
       document.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('scroll', onScroll, true)
     }
-  }, [menu])
+  }, [menu, wsMenu])
 
   const commitRename = (): void => {
     if (renaming === null) return
@@ -134,6 +163,25 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
     setRenaming(null)
     if (next === '' || next === sessions.byId[target]?.displayTitle) return
     renameSession(target, next).catch((e: unknown) => { console.warn('[dsh-trading] session rename rejected:', e) })
+  }
+
+  // 工作区删除确认：pending 置位防重；成功关菜单（宿主快照移除行后作用域自动
+  // 回退）；失败回 pending 并原位呈报错误。pending 期间菜单不可外点关闭。
+  const commitWsDelete = (state: WorkspaceMenuState): void => {
+    setWsMenu({ ...state, pending: true, error: null })
+    deleteWorkspace(state.workspaceId).then(() => {
+      setWsMenu(null)
+    }).catch((e: unknown) => {
+      setWsMenu((prev) => (prev !== null && prev.workspaceId === state.workspaceId && prev.pending
+        ? { ...prev, pending: false, error: e instanceof Error ? e.message : String(e) }
+        : prev))
+    })
+  }
+
+  const openWsMenuAt = (workspaceId: string, title: string, x: number, y: number): void => {
+    const cx = Math.max(8, Math.min(x, window.innerWidth - WS_MENU_WIDTH - 8))
+    const cy = Math.max(8, Math.min(y, window.innerHeight - WS_MENU_HEIGHT - 8))
+    setWsMenu({ workspaceId, title, x: cx, y: cy, pending: false, error: null })
   }
 
   const blank = sessions.current !== undefined && sessions.byId[sessions.current]?.blank === true
@@ -311,22 +359,41 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
       <div data-dshtrading-session-browser="" hidden="" />
       {host !== null && createPortal(
         <div className={css.panel}>
-          <button
-            type="button"
-            className={css.toggle}
-            aria-expanded={open}
-            aria-controls="dshtrading-home-history"
-            onClick={() => { setOpen(value => !value) }}
-          >
-            <svg className={css.chevron} viewBox="0 0 8 8" width="8" height="8" aria-hidden="true">
-              <path d="M2 1l4 3-4 3" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {t('browser.history')}
-            {scopeTitle !== undefined && (
-              <span className={css.scope} title={scopeTitle}>{scopeTitle}</span>
+          <div className={css.header}>
+            <button
+              type="button"
+              className={css.toggle}
+              aria-expanded={open}
+              aria-controls="dshtrading-home-history"
+              onClick={() => { setOpen(value => !value) }}
+            >
+              <svg className={css.chevron} viewBox="0 0 8 8" width="8" height="8" aria-hidden="true">
+                <path d="M2 1l4 3-4 3" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {t('browser.history')}
+              {scopeTitle !== undefined && (
+                <span className={css.scope} title={scopeTitle}>{scopeTitle}</span>
+              )}
+              <span className={css.count}>{historyRows.length}</span>
+            </button>
+            {/* 工作区操作入口（本面板唯一的工作区管理面；官方 WorkspaceBrowser
+                被本面板遮蔽后，删除工作区只能从这里走）。作用域工作区存在才渲染。 */}
+            {scopeWorkspace !== undefined && (
+              <button
+                type="button"
+                className={css.wsMore}
+                aria-haspopup="menu"
+                aria-label={t('browser.ws.aria').replace('{name}', scopeTitle ?? scopeWorkspace)}
+                title={t('browser.ws.aria').replace('{name}', scopeTitle ?? scopeWorkspace)}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  openWsMenuAt(scopeWorkspace, scopeTitle ?? scopeWorkspace, rect.right - WS_MENU_WIDTH, rect.bottom + 4)
+                }}
+              >
+                <IconMore size={13} />
+              </button>
             )}
-            <span className={css.count}>{historyRows.length}</span>
-          </button>
+          </div>
           {open && (
             <div id="dshtrading-home-history" className={css.list}>
               {historyRows.length === 0
@@ -443,6 +510,32 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
                 <IconArchive size={13} />
                 {t('browser.menu.archive')}
               </button>
+            </div>
+          )}
+          {wsMenu !== null && (
+            <div ref={wsMenuRef} className={css.menu} role="menu" style={{ left: wsMenu.x, top: wsMenu.y, width: WS_MENU_WIDTH }}>
+              <div className={css.wsDesc} role="note">{t('browser.ws.delete.desc').replace('{name}', wsMenu.title)}</div>
+              {wsMenu.pending && <div className={css.wsStatus} role="status">{t('browser.ws.delete.pending')}</div>}
+              {wsMenu.error !== null && <div className={css.wsError} role="alert">{wsMenu.error}</div>}
+              <div className={css.wsActions}>
+                <button
+                  type="button"
+                  className={css.wsAction}
+                  disabled={wsMenu.pending}
+                  onClick={() => { setWsMenu(null) }}
+                >
+                  {t('browser.ws.cancel')}
+                </button>
+                <button
+                  type="button"
+                  className={`${css.wsAction} ${css.wsDanger}`}
+                  disabled={wsMenu.pending}
+                  onClick={() => { commitWsDelete(wsMenu) }}
+                >
+                  <IconTrash size={13} />
+                  {t('browser.ws.delete')}
+                </button>
+              </div>
             </div>
           )}
         </div>,
