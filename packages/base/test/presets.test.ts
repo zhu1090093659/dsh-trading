@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { composePresets, installFromLoader, installPresets, isUnmodifiedManaged, MARKETS, stamp, inject, Config } from '../src/presets.js'
+import { composePresets, connectorRowsOf, installFromLoader, installPresets, isUnmodifiedManaged, MARKETS, stamp, inject, Config } from '../src/presets.js'
 import { getPresetContribution as crypto } from '../../crypto/src/index.js'
 import { getPresetContribution as us } from '../../us/src/index.js'
 import { getPresetContribution as cn } from '../../cn/src/index.js'
@@ -46,9 +46,15 @@ it('composes all 16 installed-market subsets deterministically, preserving conne
         expect(text.includes("name: '@dshtrading/base/research-tools'")).toBe(subset.length > 0)
       } else {
         for (const contribution of subset) {
-          expect(text).toContain(contribution.traderRows)
           expect(contribution.traderRows).toMatch(/^.*connector(?:-group)?\n  name: cordis:group\n  group: true\n  isolate:/)
           expect(contribution.traderRows).not.toContain('liveTrading: true')
+          if (preset.id === 'trader') {
+            // kit row is split out of the market block and rewritten with the trader whitelist (#70)
+            expect(text).toContain(connectorRowsOf(contribution.market, contribution.traderRows))
+            expect(text).toContain(`skills: ["${contribution.market}-risk-checklist","trading-strategy-paradigms","indicator-authoring","trading-notes-setup"]`)
+          } else {
+            expect(text).toContain(contribution.traderRows) // master keeps the market block verbatim (full kit catalog)
+          }
         }
         expect(text).not.toContain("name: '@dshtrading/base/research-tools'") // connector tools already registered
       }
@@ -74,6 +80,27 @@ it('composes all 16 installed-market subsets deterministically, preserving conne
       } else {
         expect(text).not.toContain('@deepseek-ai/dsh-tool-subagent')
         expect(text).not.toContain('@deepseek-ai/dsh-tool-jobs') // no delegation, no background jobs
+      }
+      // Role skill distribution (#70): the mounted base-skill row follows the persona discipline.
+      if (preset.id === 'master') {
+        expect(text).toContain("- id: dsh-trading-role-skills\n  name: '@dshtrading/base/role-skills'\n") // full pair, no whitelist
+        expect(text).not.toContain('config:\n    skills:')
+      } else if (preset.id === 'trader') {
+        expect(text).not.toContain('- id: dsh-trading-role-skills') // no base skills for the execution role
+      } else if (preset.id === 'instrument-researcher') {
+        expect(text).toContain('skills: ["company-analysis"]')
+        for (const contribution of subset) {
+          expect(text).toContain(contribution.market === 'crypto'
+            ? 'skills: ["crypto-instrument-analysis","knowledge-curation","trading-notes-setup"]'
+            : 'skills: ["knowledge-curation","trading-notes-setup"]')
+        }
+        expect(text).not.toContain('risk-checklist') // ordering discipline stays out of the research role
+      } else if (preset.id === 'risk-reviewer') {
+        for (const contribution of subset) {
+          expect(text).toContain(`skills: ["${contribution.market}-risk-checklist","trading-notes-setup"]`)
+        }
+        expect(text).not.toContain('trading-strategy-paradigms')
+        expect(text).not.toContain('indicator-authoring')
       }
     }
   }
