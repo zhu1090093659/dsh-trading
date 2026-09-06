@@ -68,4 +68,27 @@ describe('projectSnapshot（状态投射：value 优先、user presence、dict �
     const state2 = projectSnapshot(local as never)
     expect(state2.writable).toBe(false)
   })
+
+  it('credentials：缺省为空字典，有值时透传对应提供方凭证', () => {
+    const defaultState = projectSnapshot(SNAP as never)
+    expect(defaultState.credentials).toEqual({})
+
+    const withCreds = {
+      ...SNAP,
+      value: {
+        ...SNAP.value,
+        credentials: {
+          okx: { apiKey: 'my-key', secretKey: 'my-secret', passphrase: 'pass' },
+          alpaca: { apiKey: 'alpaca-k', secretKey: 'alpaca-s' },
+        },
+      },
+    }
+    const credState = projectSnapshot(withCreds as never)
+    expect(credState.credentials.okx).toEqual({
+      apiKey: 'my-key',
+      secretKey: 'my-secret',
+      passphrase: 'pass',
+    })
+    expect(credState.credentials.alpaca?.apiKey).toBe('alpaca-k')
+  })
 })

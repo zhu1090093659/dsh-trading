@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from './contract/slots.ts'
@@ -51,6 +51,8 @@ const TYPE_LABEL: Record<string, string> = {
   commercial: 'type.commercial',
 }
 
+const EMPTY_RECORD: Record<string, string> = {}
+
 function ProviderCredentialCard(props: {
   providerId: string
   spec: readonly CredentialField[]
@@ -60,26 +62,41 @@ function ProviderCredentialCard(props: {
   onDelete: () => Promise<void>
   t: (key: string, params?: Record<string, unknown>) => string
 }) {
-  const { providerId, spec, currentValues = {}, writable, onSave, onDelete, t } = props
+  const { providerId, spec, writable, onSave, onDelete, t } = props
+  const currentValues = props.currentValues ?? EMPTY_RECORD
   const [open, setOpen] = useState(false)
   const [fields, setFields] = useState<Record<string, string>>(() => ({ ...currentValues }))
   const [showSecret, setShowSecret] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const lastSyncedRef = useRef<Record<string, string>>(currentValues)
 
   useEffect(() => {
-    setFields({ ...currentValues })
+    const prev = lastSyncedRef.current
+    const allKeys = new Set([...Object.keys(prev), ...Object.keys(currentValues)])
+    let isDifferent = false
+    for (const k of allKeys) {
+      if ((prev[k] ?? '') !== (currentValues[k] ?? '')) {
+        isDifferent = true
+        break
+      }
+    }
+    if (isDifferent) {
+      lastSyncedRef.current = currentValues
+      setFields({ ...currentValues })
+    }
   }, [currentValues])
 
   const isConfigured = Object.values(currentValues).some((v) => Boolean(v && v.trim()))
   const isDirty = spec.some((s) => (fields[s.key] ?? '') !== (currentValues[s.key] ?? ''))
 
-  const handleSave = async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleSave = async (e?: React.MouseEvent | React.KeyboardEvent) => {
+    e?.stopPropagation()
     setSaving(true)
     setMsg(null)
     try {
       await onSave(fields)
+      lastSyncedRef.current = { ...fields }
       setMsg(t('credential.saved'))
     } catch (err) {
       setMsg(`${t('credential.saveFailed')}: ${String(err)}`)
@@ -94,6 +111,7 @@ function ProviderCredentialCard(props: {
     setMsg(null)
     try {
       await onDelete()
+      lastSyncedRef.current = EMPTY_RECORD
       setFields({})
       setMsg(t('credential.deleted'))
     } catch (err) {
@@ -137,7 +155,15 @@ function ProviderCredentialCard(props: {
                       value={fields[field.key] ?? ''}
                       placeholder={field.placeholder !== undefined ? t(field.placeholder) : undefined}
                       disabled={!writable || saving}
+                      autoComplete="off"
+                      spellCheck={false}
                       onChange={(e) => setFields({ ...fields, [field.key]: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && isDirty && !saving && writable) {
+                          e.preventDefault()
+                          void handleSave(e)
+                        }
+                      }}
                     />
                     {field.secret && (
                       <button
