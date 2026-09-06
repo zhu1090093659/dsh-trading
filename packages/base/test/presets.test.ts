@@ -18,12 +18,12 @@ it('uses native loader stable-tree intercept and accepts empty config', () => {
   expect(Config({})).toEqual({})
 })
 
-it('composes all 16 installed-market subsets deterministically, preserving connector realms only for trader', async () => {
+it('composes all 16 installed-market subsets deterministically, preserving connector realms for trader and master', async () => {
   const all = await contributions()
   for (let mask = 0; mask < 16; mask++) {
     const subset = all.filter((_, i) => mask & (1 << i))
     const result = composePresets(subset)
-    expect(result.map(p => p.id)).toEqual(['trader', 'instrument-researcher', 'risk-reviewer'])
+    expect(result.map(p => p.id)).toEqual(['trader', 'instrument-researcher', 'risk-reviewer', 'master'])
     expect(composePresets([...subset].reverse())).toEqual(result)
     for (const preset of result) {
       const text = preset.files['agent.cordis.yml']
@@ -37,19 +37,32 @@ it('composes all 16 installed-market subsets deterministically, preserving conne
       expect(text).toContain('*_get_fundamentals')
       expect(text).toContain('cn_get_news / hk_get_news 包含公告')
       expect(text).not.toContain("name: '@dshtrading/knowledge/plugin'") // shared host registration stays single
-      if (preset.id !== 'trader') {
+      if (preset.id === 'instrument-researcher' || preset.id === 'risk-reviewer') {
         expect(text).not.toContain("name: '@dshtrading/connector-")
         expect(text.includes("name: '@dshtrading/base/research-tools'")).toBe(subset.length > 0)
-      } else for (const contribution of subset) {
-        expect(text).toContain(contribution.traderRows)
-        expect(contribution.traderRows).toMatch(/^.*connector(?:-group)?\n  name: cordis:group\n  group: true\n  isolate:/)
-        expect(contribution.traderRows).not.toContain('liveTrading: true')
+      } else {
+        for (const contribution of subset) {
+          expect(text).toContain(contribution.traderRows)
+          expect(contribution.traderRows).toMatch(/^.*connector(?:-group)?\n  name: cordis:group\n  group: true\n  isolate:/)
+          expect(contribution.traderRows).not.toContain('liveTrading: true')
+        }
+        expect(text).not.toContain("name: '@dshtrading/base/research-tools'") // connector tools already registered
+      }
+      if (preset.id === 'master') {
+        expect(text).toContain('provider: fork\n    toolName: researcher_subagent')
+        expect(text).toContain('toolName: risk_reviewer_subagent')
+        expect(text).toContain('backgroundMode: one-shot')
+        expect(text).toContain('你是标的分析研究员')
+        expect(text).toContain('你是独立风险审查员')
+        expect((text.match(/@deepseek-ai\/dsh-tool-subagent/g) ?? [])).toHaveLength(2)
+      } else {
+        expect(text).not.toContain('@deepseek-ai/dsh-tool-subagent')
       }
     }
   }
 })
 
-it('installs three roles idempotently and removes stale market rows after uninstall', async () => {
+it('installs four roles idempotently and removes stale market rows after uninstall', async () => {
   const path = await root()
   const all = await contributions()
   expect((await installPresets(all, path)).every(r => r.wrote.length === 2)).toBe(true)
@@ -59,6 +72,10 @@ it('installs three roles idempotently and removes stale market rows after uninst
   expect(trader).toContain('@dshtrading/connector-binance')
   expect(trader).not.toContain('@dshtrading/connector-yahoo')
   expect(isUnmodifiedManaged(trader)).toBe(true)
+  expect((await readdir(path)).sort()).toEqual(['instrument-researcher', 'master', 'risk-reviewer', 'trader'])
+  const master = await readFile(join(path, 'master/preset.yml'), 'utf8')
+  expect(master).toContain('name: 大师')
+  expect(master).toContain('order: 90')
 })
 
 it.each(['no-stamp', 'modified-stamp'])('preserves %s customizations and leaves both role files untouched', async kind => {
@@ -123,7 +140,7 @@ it('uses effective enabled loader rows, not installed package reachability; hono
     { disabled: false, options: { name: '@dshtrading/connector-tencent/dataplane' } },
   ], import: imported })
   expect(imported).toHaveBeenCalledExactlyOnceWith('@dshtrading/crypto')
-  expect(await readdir(path)).toEqual(['instrument-researcher', 'risk-reviewer', 'trader'])
+  expect(await readdir(path)).toEqual(['instrument-researcher', 'master', 'risk-reviewer', 'trader'])
 })
 it('rejects conflicting roots and unreadable market assets instead of silently dropping a market', async () => {
   const imported = vi.fn(async () => { throw new Error('missing asset') })
