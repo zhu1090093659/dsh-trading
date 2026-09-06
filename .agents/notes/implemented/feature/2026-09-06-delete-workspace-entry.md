@@ -42,6 +42,21 @@ Status: implemented
 - 两段式菜单（先「删除工作区」项再确认）：多一次点击，官方弹窗本就是打开即确认面，
   直接对齐更顺，未采用。
 
+## Follow-up（2026-09-06 下午：真实点击无响应修复）
+
+用户实测「点了没反应」。复现与归因：首轮验证用的是 CDP 合成 `el.click()`（直接派发，
+**绕过 hit-testing**），坐标级真实点击（`Input.dispatchMouseEvent` + `elementFromPoint`）
+复现失败——按钮中心点命中的是官方 `composerStack`。根因：该元素虽 `position: static`，
+但是 `z-index: 1` 的 flex 子项（flex item 的 z-index 生效并创建层叠上下文），盒子下缘
+盖进本面板 header 行（重叠区 y≈505–537，恰为 header）；本 portal 容器是 static +
+z-index:auto，整层被压在下面——面板背景透明所以看得见，header 真实点击全被吃掉。
+会话行在重叠区外，故历史行一直可点，问题只炸在新增入口上。
+
+修复：portal 容器建时内联 `position: relative; z-index: 2`（同层叠上下文内盖回，
+relative 不动布局，composer 卡输入框/发送键 hit-test 复验无损）。经验沉淀：**合成
+click 测不出遮挡类回归，UI 交互验证必须走坐标级真实点击**（`elementFromPoint` +
+`Input.dispatchMouseEvent`）。
+
 ## Consequences
 
 - 删除语义 = 宿主注册级：工作区从名册移除，目录与会话记录保留，会话回落「未分组」

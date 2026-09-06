@@ -299,6 +299,12 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
 
     container = document.createElement('div')
     container.dataset.dshtradingHomeHistory = ''
+    // 官方 composerStack 是 z-index:1 的 flex 子项（透明背景），盒子下缘盖进本
+    // 面板 header 行——静态定位的本容器会被整体压在其下：面板照常可见（背景
+    // 透明）但 header 的真实点击全被吃掉（CDP 合成 click 测不出，坐标级真实
+    // 点击才暴露）。提为 relative + z-index:2 同层叠上下文内盖回，布局不变。
+    container.style.position = 'relative'
+    container.style.zIndex = '2'
     scrollBody.appendChild(container)
 
     // 只观察输入框 seat 的子树变动，绝不观察 scrollBody 以免被 container 的 portal 渲染反向触发死循环
