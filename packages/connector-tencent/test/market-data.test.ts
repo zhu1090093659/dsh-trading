@@ -95,6 +95,12 @@ describe('normalizeCnSymbol', () => {
     expect(normalizeCnSymbol('SZ000001')).toBe('sz000001')
     expect(normalizeCnSymbol('300750')).toBe('sz300750')
     expect(normalizeCnSymbol('688981')).toBe('sh688981')
+    // 知名指数代码与 5 开头基金
+    expect(normalizeCnSymbol('000688')).toBe('sh000688') // 科创50裸码
+    expect(normalizeCnSymbol('000688.SH')).toBe('sh000688') // 科创50规范代码
+    expect(normalizeCnSymbol('000001.SH')).toBe('sh000001') // 上证指数规范代码
+    expect(normalizeCnSymbol('000300.SH')).toBe('sh000300') // 沪深300规范代码
+    expect(normalizeCnSymbol('588000')).toBe('sh588000') // 科创50ETF裸码
   })
 
   it('rejects malformed codes', () => {
@@ -389,5 +395,28 @@ describe('TencentRestClient.getOrderbook（issue #39 盘口）', () => {
     const { impl } = stubFetch([{ match: 'qt.gtimg.cn', body: gbkResponse(HK_TICKER_TEMPLATE, HK_NAME_GBK) }])
     await expect(client('hk', { fetchImpl: impl }).getOrderbook('00700'))
       .rejects.toMatchObject({ code: 'TRADING_NOT_IMPLEMENTED' })
+  })
+})
+
+describe('TencentRestClient.listInstruments', () => {
+  it('searches symbols and parses smartbox hints', async () => {
+    const mockSmartboxResponse = 'v_hint="sh~000688~\\u79d1\\u521b50~kc50~ZS^sh~588000~\\u79d1\\u521b50ETF~kc50etf~ETF^hk~00700~\\u817e\\u8baf\\u63a7\\u80a1~txkg~GP"'
+    const { impl } = stubFetch([{ match: 'smartbox', body: mockSmartboxResponse }])
+    const cnClient = client('cn', { fetchImpl: impl })
+    const cnResults = await cnClient.listInstruments('科创50')
+    expect(cnResults).toHaveLength(2)
+    expect(cnResults[0]).toEqual({ symbol: '000688.SH', name: '科创50', pinyin: 'KC50' })
+    expect(cnResults[1]).toEqual({ symbol: '588000.SH', name: '科创50ETF', pinyin: 'KC50ETF' })
+
+    const hkClient = client('hk', { fetchImpl: impl })
+    const hkResults = await hkClient.listInstruments('腾讯')
+    expect(hkResults).toHaveLength(1)
+    expect(hkResults[0]).toEqual({ symbol: '00700.HK', name: '腾讯控股', pinyin: 'TXKG' })
+  })
+
+  it('returns empty array on empty query', async () => {
+    const c = client('cn')
+    expect(await c.listInstruments('')).toEqual([])
+    expect(await c.listInstruments('   ')).toEqual([])
   })
 })
