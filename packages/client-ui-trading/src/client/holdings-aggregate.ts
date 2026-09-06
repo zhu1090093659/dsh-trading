@@ -16,7 +16,11 @@
  *   rates 是否回带基准项）；fx 缺席 → 全部不折算；
  * - FX stale：仍折算（过期缓存/恒等兜底也是最佳可得），但 approximate=true——
  *   「总资产仍给出但标注近似」（§6.2）；缺汇率的币种进「未折算小计」分区，
- *   不计入总资产，approximate 同为 true。
+ *   不计入总资产，approximate 同为 true；
+ * - 浮动总盈亏（2026-09-06）：totalPnlBase = Σ 可折算 uPnL，totalCostBase =
+ *   Σ 可折算成本（entryPrice×size）；pnlRatio 只在「盈亏行集合 === 成本行集合」
+ *   时给出（每条行要么两者都有、要么都没有），避免缺成本价或缺现价的行让
+ *   分子分母口径错位——不一致时宁缺勿错（undefined，UI 显示 —）。
  */
 import type { FxSnapshot, HoldingsBaseCurrency, HoldingCurrency, PositionOrigin, TaggedPosition } from './holdings-types.ts'
 import { DEFAULT_HOLDINGS_BASE_CURRENCY, MARKET_DEFAULT_CURRENCY, holdingsPriceKey } from './holdings-types.ts'
@@ -35,6 +39,8 @@ export interface HoldingDetailRow {
   /** 浮动盈亏（原币）；无成本价且无预计算 → undefined。 */
   readonly unrealizedPnl: number | undefined
   readonly unrealizedPnlBase: number | undefined
+  /** 成本（折算基准币）= entryPrice × size；无成本价/无汇率 → undefined。 */
+  readonly costBase: number | undefined
   /** 市值是否已折算进总资产。 */
   readonly converted: boolean
 }
@@ -95,6 +101,12 @@ export interface HoldingsAggregation {
   readonly byOrigin: readonly OriginSubtotal[]
   /** 分币种小计（原币市值合计，按币种代码升序）。 */
   readonly byCurrency: readonly CurrencySubtotal[]
+  /** 浮动盈亏合计（折算基准币）= Σ 可折算 uPnL 的明细行；无可算行 → undefined。 */
+  readonly totalPnlBase: number | undefined
+  /** 持仓成本合计（折算基准币）= Σ 可折算 costBase；无可算行 → undefined。 */
+  readonly totalCostBase: number | undefined
+  /** 浮动盈亏比例 = totalPnlBase / totalCostBase；盈亏行与成本行覆盖不一致时不给。 */
+  readonly pnlRatio: number | undefined
 }
 
 /** 无有效市值持仓落入的未折算币种桶。 */
@@ -125,6 +137,7 @@ export function detailRowOf(
       : position.unrealizedPnl
   const currency = position.currency ?? (position.market === undefined ? undefined : MARKET_DEFAULT_CURRENCY[position.market])
   const marketValueBase = convert(marketValue, currency, fx)
+  const costBase = convert(position.entryPrice !== undefined ? position.entryPrice * position.size : undefined, currency, fx)
   return {
     position,
     currency,
@@ -133,6 +146,7 @@ export function detailRowOf(
     marketValueBase,
     unrealizedPnl,
     unrealizedPnlBase: convert(unrealizedPnl, currency, fx),
+    costBase,
     converted: marketValueBase !== undefined,
   }
 }
@@ -242,12 +256,22 @@ export function aggregateHoldings(
 
   // ── 顶部小计 ────────────────────────────────────────────────
   let totalBase = 0
+  let pnlBaseSum: number | undefined
+  let costBaseSum: number | undefined
+  let pnlCostCoverageMismatch = false
   const unconvertedMap = new Map<string, number>()
   const byCurrencyMap = new Map<string, number>()
   const originBuckets = new Map<PositionOrigin, { count: number; totalBase: number; unconverted: Map<string, number> }>()
   for (const row of rows) {
     const bucketKey = row.currency ?? UNKNOWN_CURRENCY_BUCKET
     if (row.marketValue !== undefined) pushAmount(byCurrencyMap, bucketKey, row.marketValue)
+    // 浮动总盈亏口径：可折算 uPnL 与可折算成本分别累加；单行只有其一 → 覆盖错位，
+    // 比例宁缺勿错（下方 pnlRatio 直接不给）。
+    const hasPnl = row.unrealizedPnlBase !== undefined
+    const hasCost = row.costBase !== undefined
+    if (hasPnl !== hasCost) pnlCostCoverageMismatch = true
+    if (hasPnl) pnlBaseSum = (pnlBaseSum ?? 0) + (row.unrealizedPnlBase as number)
+    if (hasCost) costBaseSum = (costBaseSum ?? 0) + (row.costBase as number)
     let originBucket = originBuckets.get(row.position.origin)
     if (originBucket === undefined) {
       originBucket = { count: 0, totalBase: 0, unconverted: new Map() }
@@ -288,5 +312,11 @@ export function aggregateHoldings(
     unconverted,
     byOrigin,
     byCurrency: subtotalsOf(byCurrencyMap, fx),
+    totalPnlBase: pnlBaseSum,
+    totalCostBase: costBaseSum,
+    pnlRatio:
+      !pnlCostCoverageMismatch && pnlBaseSum !== undefined && costBaseSum !== undefined && costBaseSum > 0
+        ? pnlBaseSum / costBaseSum
+        : undefined,
   }
 }

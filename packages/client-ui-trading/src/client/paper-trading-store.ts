@@ -19,12 +19,19 @@ import type { AccountBalance, MarketId, Order, Position, TradeFill } from './typ
  */
 export type PaperPosition = Position & { market?: MarketId }
 
+/**
+ * 模拟成交流水（2026-09-06 已实现盈亏）：与 PaperPosition 同款客户端扩展——
+ * 附带下单时市场，供持仓回合撮合（position-rounds）打市场标签。旧流水无
+ * market → undefined（回合按 symbol 分组，不受影响）。
+ */
+export type PaperFill = TradeFill & { market?: MarketId }
+
 export interface PaperAccount {
   cash: number
   initialCash: number
   positions: PaperPosition[]
   orders: Order[]
-  fills: TradeFill[]
+  fills: PaperFill[]
 }
 
 const STORAGE_KEY = 'dshtrading:paper:account:v1'
@@ -116,7 +123,7 @@ class PaperTradingStore {
     return this.account.orders
   }
 
-  getFills(): TradeFill[] {
+  getFills(): PaperFill[] {
     return this.account.fills
   }
 
@@ -217,7 +224,7 @@ class PaperTradingStore {
       dryRun: true,
     }
 
-    const fill: TradeFill = {
+    const fill: PaperFill = {
       id: fillId,
       symbol,
       side,
@@ -225,6 +232,7 @@ class PaperTradingStore {
       amount: quantity,
       fee: 0,
       timestamp: now,
+      ...(market !== undefined ? { market } : {}),
     }
 
     this.account.orders = [order, ...this.account.orders]

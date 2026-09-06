@@ -225,3 +225,60 @@ describe('aggregateHoldings 顶部小计与 FX 降级', () => {
     expect(agg.approximate).toBe(false)
   })
 })
+
+describe('aggregateHoldings 浮动总盈亏（2026-09-06）', () => {
+  it('全覆盖：totalPnlBase/totalCostBase/pnlRatio 同口径可算', () => {
+    const rows = [
+      pos({ symbol: 'AAPL', size: 10, origin: 'live', account: 'ibkr', market: 'us', entryPrice: 100 }), // uPnL (150-100)×10 = 500, cost 1000
+      pos({ symbol: '600519', size: 10, origin: 'imported', account: '华泰', market: 'cn', entryPrice: 1400, holdingId: 'hd-r1' }), // uPnL 1000 CNY → 140 USD, cost 14000 CNY → 1960 USD
+    ]
+    const agg = aggregateHoldings(rows, { 'us:AAPL': 150, 'cn:600519': 1500 }, FX_USD)
+    expect(agg.totalPnlBase).toBeCloseTo(500 + 140, 6)
+    expect(agg.totalCostBase).toBeCloseTo(1000 + 1960, 6)
+    expect(agg.pnlRatio).toBeCloseTo(640 / 2960, 6)
+  })
+
+  it('缺成本价但有预计算 uPnL 的行：进 totalPnlBase，但覆盖错位 → 比例不给', () => {
+    const rows = [
+      pos({ symbol: 'AAPL', size: 10, origin: 'live', account: 'ibkr', market: 'us', entryPrice: 100 }),
+      pos({ symbol: 'MSFT', size: 1, origin: 'live', account: 'ibkr', market: 'us', unrealizedPnl: 55 }), // 连接器只给 uPnL
+    ]
+    const agg = aggregateHoldings(rows, { 'us:AAPL': 150, 'us:MSFT': 400 }, FX_USD)
+    expect(agg.totalPnlBase).toBeCloseTo(500 + 55, 6)
+    expect(agg.totalCostBase).toBe(1000)
+    expect(agg.pnlRatio).toBeUndefined()
+  })
+
+  it('有成本无现价的行：进 totalCostBase，覆盖错位 → 比例不给；costBase 逐行给出', () => {
+    const rows = [
+      pos({ symbol: 'AAPL', size: 10, origin: 'live', account: 'ibkr', market: 'us', entryPrice: 100 }),
+      pos({ symbol: 'NVDA', size: 2, origin: 'imported', account: '截图', market: 'us', entryPrice: 50, holdingId: 'hd-r2' }), // 无现价
+    ]
+    const agg = aggregateHoldings(rows, { 'us:AAPL': 150 }, FX_USD)
+    expect(agg.rows[1]?.costBase).toBe(100)
+    expect(agg.totalPnlBase).toBe(500)
+    expect(agg.totalCostBase).toBe(1100)
+    expect(agg.pnlRatio).toBeUndefined()
+  })
+
+  it('无任何可算盈亏/成本 → 全 undefined；空持仓亦然', () => {
+    const noCost = aggregateHoldings(
+      [pos({ symbol: '00700', size: 100, origin: 'imported', account: '富途', market: 'hk', holdingId: 'hd-r3' })],
+      { 'hk:00700': 400 }, FX_USD,
+    )
+    expect(noCost.totalPnlBase).toBeUndefined()
+    expect(noCost.totalCostBase).toBeUndefined()
+    expect(noCost.pnlRatio).toBeUndefined()
+    const empty = aggregateHoldings([], {}, FX_USD)
+    expect(empty.totalPnlBase).toBeUndefined()
+    expect(empty.totalCostBase).toBeUndefined()
+    expect(empty.pnlRatio).toBeUndefined()
+  })
+
+  it('fx 缺席 → 全部不折算，浮动合计 undefined', () => {
+    const agg = aggregateHoldings([pos({ symbol: 'AAPL', size: 10, origin: 'live', account: 'ibkr', market: 'us', entryPrice: 100 })], { 'us:AAPL': 150 })
+    expect(agg.totalPnlBase).toBeUndefined()
+    expect(agg.totalCostBase).toBeUndefined()
+    expect(agg.pnlRatio).toBeUndefined()
+  })
+})

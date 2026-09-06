@@ -8,6 +8,12 @@
  * 数据来自 holdings-store 单例（台账快照/live 打标持仓/盯市价格/FX），轮询
  * 由本组件驱动：挂载即拉、卸载即停（visibility 暂停由 usePoll 承担）。
  *
+ * 2026-09-06 总盈亏升级：权益条在总资产旁追加「已实现」（paper 撮合流水
+ * FIFO 回合合计，convertUsdToBase 折算基准币）与「浮动」（盯市 uPnL 合计，
+ * 覆盖一致才给比例）两块；汇总页签新增「已平仓历史」分区——按标的聚合
+ * 平仓回合（回合内多段平仓累加），展开可见每轮开平均价与盈亏（可回看
+ * 「平仓后再开仓」的历史）。导入/实盘无成交流水，暂不参与已实现口径。
+ *
  * 统一资产台账语义不变（issue #65 契约 §6）：
  * - 「持仓」tab 三源统一表（paper 模拟 / live 实盘 / imported 真实导入），
  *   来源徽章 + 全部/真实/模拟/实盘过滤 chips；imported 行支持编辑/删除；
@@ -32,9 +38,11 @@ import type {
 import type { AccountBalance, MarketId, Order, TradeFill } from './types.ts'
 import { colorModeStore } from './color-mode.ts'
 import type { MarketLocaleKey } from './contract.ts'
-import { directionColor, fmtPrice } from './format.ts'
+import { directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { aggregateHoldings } from './holdings-aggregate.ts'
 import type { HoldingDetailRow, HoldingSummaryRow } from './holdings-aggregate.ts'
+import { convertUsdToBase, derivePositionRounds } from './position-rounds.ts'
+import type { SymbolRoundHistory } from './position-rounds.ts'
 import { paperTradingStore } from './paper-trading-store.ts'
 import {
   holdingsActions, holdingsBaseStore, holdingsDataStore, refreshFx, refreshLiveTagged, refreshM2mPrices,
@@ -126,6 +134,11 @@ function EmptyHint({ text }: { text: string }): React.JSX.Element {
       <span>{text}</span>
     </div>
   )
+}
+
+/** 回合时间戳 → 本地日期（已平仓历史行，日粒度足够）。 */
+function fmtDay(ts: number): string {
+  return new Date(ts).toLocaleDateString()
 }
 
 /** 持仓表单草稿（数字字段以字符串承载，提交时解析校验）。 */
@@ -523,6 +536,23 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
     [taggedPositions, data.prices, data.fx],
   )
 
+  // 已实现盈亏（2026-09-06）：paper 撮合流水 FIFO 回合（paperTick 驱动重读）。
+  // 模拟池按 USD/USDT 记账，展示前折算基准币；fx 缺席时权益条已实现块隐藏。
+  const roundsOutcome = useMemo(
+    () => {
+      void paperTick
+      return derivePositionRounds(paperTradingStore.getFills())
+    },
+    [paperTick],
+  )
+  const realizedBase = useMemo(
+    () => convertUsdToBase(roundsOutcome.totalRealizedPnl, data.fx ?? undefined),
+    [roundsOutcome, data.fx],
+  )
+  const realizedRatio = roundsOutcome.totalRealizedCost > 0
+    ? roundsOutcome.totalRealizedPnl / roundsOutcome.totalRealizedCost
+    : undefined
+
   const filteredRows = useMemo(
     () => originFilter === 'all' ? aggregation.rows : aggregation.rows.filter(row => row.position.origin === originFilter),
     [aggregation, originFilter],
@@ -672,6 +702,48 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
     )
   }
 
+  /** 已平仓历史行：按标的聚合平仓回合，展开看每轮开平均价与盈亏（模拟池 USD 口径）。 */
+  const renderHistoryRow = (h: SymbolRoundHistory): React.JSX.Element => {
+    const expandKey = 'history:' + h.key
+    const expanded = expandedKeys.has(expandKey)
+    return (
+      <Fragment key={expandKey}>
+        <div className={css.sumRow} onClick={() => toggleExpand(expandKey)}>
+          <div className={css.sumTitle}>
+            <span className={css.expandCaret} data-expanded={expanded ? 'true' : undefined}><IconChevronRight size={11} /></span>
+            <span className={css.posSymbol}>{h.symbol}</span>
+            {h.market !== undefined && renderMarketLabel(h.market)}
+            <span className={css.historyBadge}>{t('trade.holdings.history.badge')}</span>
+          </div>
+          <div className={css.sumMeta}>
+            <span>{t('trade.holdings.history.roundCount', { count: h.rounds.length })}</span>
+            <span>{t('trade.holdings.history.lastClose')} {fmtDay(h.lastCloseTs)}</span>
+          </div>
+          <div className={css.sumFoot}>
+            <span className={css.mvLabel}>{t('trade.summary.realizedPnl')}</span>
+            <span className={css.posPnl} style={{ color: directionColor(h.realizedPnl, colorMode) }}>
+              {(h.realizedPnl >= 0 ? '+' : '') + fmtPrice(h.realizedPnl)} USD
+            </span>
+            {h.realizedCost > 0 && (
+              <span className={css.equityRatio}>{fmtPercent((h.realizedPnl / h.realizedCost) * 100)}</span>
+            )}
+          </div>
+        </div>
+        {expanded && h.rounds.map((r, idx) => (
+          <div key={expandKey + '#' + idx} className={css.memberRow}>
+            <span className={css.historyRoundIdx}>#{idx + 1}</span>
+            <span>{fmtDay(r.openTs)} → {fmtDay(r.closeTs)}</span>
+            <span>{t('trade.size')} {r.closedSize}</span>
+            <span>{fmtPrice(r.avgEntry)} → {fmtPrice(r.avgExit)}</span>
+            <span style={{ color: directionColor(r.realizedPnl, colorMode) }}>
+              {(r.realizedPnl >= 0 ? '+' : '') + fmtPrice(r.realizedPnl)}
+            </span>
+          </div>
+        ))}
+      </Fragment>
+    )
+  }
+
   const staged = stagedHoldings()
   const holdingsAvailable = data.book !== null
   // 编辑对话框退场动画期间内容保持最后快照（Law 3：卸载前内容不消失）。
@@ -743,13 +815,32 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
       <div className={css.body} key={activeTab}>
         {activeTab === 'positions' && (
           <>
-            {/* 权益 hero 条：总资产常驻持仓页签顶部（复用汇总聚合结果，不新增数据面）。 */}
+            {/* 权益 hero 条：总资产常驻持仓页签顶部（复用汇总聚合结果，不新增数据面）；
+                2026-09-06 追加已实现（paper FIFO 回合合计）/浮动（盯市 uPnL 合计）总口径。 */}
             <div className={css.equityStrip}>
               <span className={css.equityLabel}>{t('trade.summary.totalAssets')}</span>
               <span className={css.equityValue} title={aggregation.approximate ? t('trade.summary.approxHint') : undefined}>
                 {aggregation.approximate ? '≈ ' : ''}<span className={css.equityNum}>{fmtPrice(aggregation.totalBase)}</span>
                 <span className={css.equityBase}>{aggregation.base}</span>
               </span>
+              {realizedBase !== undefined && (
+                <span className={css.equityPnlGroup} title={t('trade.summary.realizedHint')}>
+                  <span className={css.equityLabel}>{t('trade.summary.realizedPnl')}</span>
+                  <span className={css.equityPnl} style={{ color: directionColor(realizedBase, colorMode) }}>
+                    <span className={css.equityPnlNum}>{(realizedBase >= 0 ? '+' : '') + fmtPrice(realizedBase)}</span>
+                    {realizedRatio !== undefined && <span className={css.equityRatio}>{fmtPercent(realizedRatio * 100)}</span>}
+                  </span>
+                </span>
+              )}
+              {aggregation.totalPnlBase !== undefined && (
+                <span className={css.equityPnlGroup} title={t('trade.summary.floatingHint')}>
+                  <span className={css.equityLabel}>{t('trade.summary.floatingPnl')}</span>
+                  <span className={css.equityPnl} style={{ color: directionColor(aggregation.totalPnlBase, colorMode) }}>
+                    <span className={css.equityPnlNum}>{(aggregation.totalPnlBase >= 0 ? '+' : '') + fmtPrice(aggregation.totalPnlBase)}</span>
+                    {aggregation.pnlRatio !== undefined && <span className={css.equityRatio}>{fmtPercent(aggregation.pnlRatio * 100)}</span>}
+                  </span>
+                </span>
+              )}
             </div>
             {/* 过滤 chips：全部/真实/模拟/实盘（按 origin，契约 §6.3） */}
             <div className={css.chips}>
@@ -860,12 +951,24 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
                 </div>
               )}
             </div>
-            {aggregation.summaries.length === 0 ? (
+            {aggregation.summaries.length === 0 && roundsOutcome.bySymbol.length === 0 ? (
               <EmptyHint text={t('trade.empty')} />
             ) : (
+              aggregation.summaries.length > 0 && (
+                <>
+                  <div className={css.sectionTitle}>{t('trade.summary.tab')}</div>
+                  {aggregation.summaries.map(renderSummaryRow)}
+                </>
+              )
+            )}
+            {/* 已平仓历史（2026-09-06）：paper 撮合流水 FIFO 回合，按标的聚合；
+                持仓清零的标的也保留在此——「平仓后再开仓」可回看上一轮盈亏。 */}
+            {roundsOutcome.bySymbol.length > 0 && (
               <>
-                <div className={css.sectionTitle}>{t('trade.summary.tab')}</div>
-                {aggregation.summaries.map(renderSummaryRow)}
+                <div className={css.sectionTitle} title={t('trade.holdings.history.hint')}>
+                  {t('trade.holdings.history.title')}
+                </div>
+                {roundsOutcome.bySymbol.map(renderHistoryRow)}
               </>
             )}
           </>
