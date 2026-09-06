@@ -17,6 +17,19 @@ describe('symbol-catalog', () => {
     const maotai = searchSymbols('cn', '茅台')
     expect(maotai.length).toBeGreaterThan(0)
     expect(maotai[0]?.symbol).toBe('600519.SH')
+
+    const kc50 = searchSymbols('cn', '科创50')
+    expect(kc50.length).toBeGreaterThan(0)
+    expect(kc50[0]?.symbol).toBe('000688.SH')
+    expect(kc50[0]?.name).toBe('科创50')
+
+    const kc50Pinyin = searchSymbols('cn', 'KC50')
+    expect(kc50Pinyin.length).toBeGreaterThan(0)
+    expect(kc50Pinyin[0]?.symbol).toBe('000688.SH')
+
+    const shIndex = searchSymbols('cn', '上证指数')
+    expect(shIndex.length).toBeGreaterThan(0)
+    expect(shIndex[0]?.symbol).toBe('000001.SH')
   })
 
   it('merges dynamic catalog and allows searching new symbols', () => {

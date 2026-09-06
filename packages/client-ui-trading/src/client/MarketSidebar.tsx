@@ -54,6 +54,8 @@ const TAB_KEY: Record<MarketId, MarketLocaleKey> = {
   hk: 'tab.hk',
 }
 
+const KNOWN_SH_INDICES = new Set(['000688', '000300', '000016', '000905', '000852'])
+
 /** 标的行键（market:symbol）。 */
 export function rowKey(market: string, symbol: string): string {
   return `${market}:${symbol}`
@@ -121,7 +123,7 @@ export function MarketSidebar({
   // 只有上游确认真实存在的股票才会被注入动态字典，彻底杜绝本地盲目推造虚假代码
   useEffect(() => {
     const raw = draft.trim()
-    if (raw.length < 2) return
+    if (raw.length < 1) return
 
     let cancelled = false
     const timer = setTimeout(() => {
@@ -274,16 +276,39 @@ export function MarketSidebar({
         return (
           <form className={css.addRow} onSubmit={(event) => {
             event.preventDefault()
-            const raw = draft.trim().toUpperCase()
-            if (raw === '') return
-            const match = suggestions.find(s => s.symbol.toUpperCase() === raw || s.symbol.toUpperCase().startsWith(raw))
-            const symbol = match ? match.symbol : (
-              target === 'cn' && /^\d{6}$/.test(raw)
-                ? `${raw}.${raw.startsWith('6') || raw.startsWith('9') ? 'SH' : 'SZ'}`
-                : (target === 'hk' && /^\d{1,5}$/.test(raw) ? `${raw.padStart(5, '0')}.HK` : raw)
-            )
-            const name = match?.name
-            const market = match?.market ?? target
+            const rawDraft = draft.trim()
+            if (rawDraft === '') return
+            const raw = rawDraft.toUpperCase()
+            const match = suggestions.find(s =>
+              s.symbol.toUpperCase() === raw ||
+              (s.name && s.name.toUpperCase() === raw)
+            ) ?? suggestions.find(s =>
+              s.symbol.toUpperCase().startsWith(raw) ||
+              (s.name && s.name.toUpperCase().startsWith(raw))
+            ) ?? (suggestions.length > 0 ? suggestions[0] : undefined)
+
+            let symbol: string
+            let market: MarketId
+            let name: string | undefined
+
+            if (match) {
+              symbol = match.symbol
+              market = match.market ?? target
+              name = match.name
+            } else {
+              // 防呆：若输入包含中文但未在任何市场字典或在线检索中找到标的，杜绝将纯中文当作 symbol 提交导致后端报错
+              if (/[\u4e00-\u9fa5]/.test(rawDraft)) return
+              market = target
+              if (target === 'cn' && /^\d{6}$/.test(raw)) {
+                const isSh = raw.startsWith('6') || raw.startsWith('9') || raw.startsWith('5') || KNOWN_SH_INDICES.has(raw)
+                symbol = `${raw}.${isSh ? 'SH' : 'SZ'}`
+              } else if (target === 'hk' && /^\d{1,5}$/.test(raw)) {
+                symbol = `${raw.padStart(5, '0')}.HK`
+              } else {
+                symbol = raw
+              }
+            }
+
             const item: Instrument = { market, symbol, ...(name ? { name } : {}) }
             addInstrument(market, item)
             selectInstrument(item)

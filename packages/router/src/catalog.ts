@@ -125,6 +125,16 @@ export const SYMBOL_CATALOG: Record<CatalogMarket, CatalogEntry[]> = {
     { symbol: 'F', name: '福特', pinyin: 'F,FORD,FT,FUTE' },
   ],
   cn: [
+    { symbol: '000001.SH', name: '上证指数', pinyin: 'SZZS,SHANGZHENG,SHANGZHENGZHISHU,SZZH' },
+    { symbol: '399001.SZ', name: '深证成指', pinyin: 'SZCZ,SHENZHENGCHENGZHI' },
+    { symbol: '399006.SZ', name: '创业板指', pinyin: 'CYBZ,CHUANGYEBANZHI,CYB' },
+    { symbol: '000688.SH', name: '科创50', pinyin: 'KC50,KECHUANG50,KECHUANG,KC' },
+    { symbol: '000300.SH', name: '沪深300', pinyin: 'HS300,HUSHEN300,HS' },
+    { symbol: '000016.SH', name: '上证50', pinyin: 'SZ50,SHANGZHENG50,SZ' },
+    { symbol: '000905.SH', name: '中证500', pinyin: 'ZZ500,ZHONGZHENG500,ZZ' },
+    { symbol: '000852.SH', name: '中证1000', pinyin: 'ZZ1000,ZHONGZHENG1000' },
+    { symbol: '588000.SH', name: '科创50ETF', pinyin: 'KC50ETF,588000' },
+    { symbol: '510300.SH', name: '沪深300ETF', pinyin: 'HS300ETF,510300' },
     { symbol: '600519.SH', name: '贵州茅台', pinyin: 'GZMT,MT,GUIZHOUMAOTAI,MAOTAI' },
     { symbol: '000001.SZ', name: '平安银行', pinyin: 'PAYH,PA,PINGANYINHANG,PINGAN' },
     { symbol: '600036.SH', name: '招商银行', pinyin: 'ZSYH,ZS,ZHAOSHANGYINHANG,ZHAOSHANG' },
@@ -185,6 +195,9 @@ export const SYMBOL_CATALOG: Record<CatalogMarket, CatalogEntry[]> = {
     { symbol: '300015.SZ', name: '爱尔眼科', pinyin: 'AEYK,AE,AERYANKE,AIER' },
   ],
   hk: [
+    { symbol: 'HSI.HK', name: '恒生指数', pinyin: 'HSI,HANGSENG,HENGSHENG' },
+    { symbol: 'HSTECH.HK', name: '恒生科技指数', pinyin: 'HSTECH,HENGSHENGKEJI' },
+    { symbol: 'HSCEI.HK', name: '恒生中国企业指数', pinyin: 'HSCEI,GUOQI,HENGSHENGGUOQI' },
     { symbol: '00700.HK', name: '腾讯控股', pinyin: 'TXKG,TX,TENGXUN,TENGXUNGUFEN' },
     { symbol: '09988.HK', name: '阿里巴巴-W', pinyin: 'ALBB,ALI,ALIBABA' },
     { symbol: '03690.HK', name: '美团-W', pinyin: 'MT,MEITUAN' },
@@ -290,8 +303,8 @@ export function searchSymbols(market: CatalogMarket, query: string, limit = 8): 
     const name = entry.name ? entry.name.toUpperCase() : ''
     const pinyinList = entry.pinyin ? entry.pinyin.toUpperCase().split(',') : []
     let score = -1
-    if (symbol === q || pinyinList.includes(q)) score = 0
-    else if (symbol.startsWith(q) || pinyinList.some(p => p.startsWith(q))) score = 1
+    if (symbol === q || name === q || pinyinList.includes(q)) score = 0
+    else if (symbol.startsWith(q) || name.startsWith(q) || pinyinList.some(p => p.startsWith(q))) score = 1
     else if (name && name.includes(q)) score = 2
     else if (symbol.includes(q) || pinyinList.some(p => p.includes(q))) score = 3
     if (score >= 0) scored.push({ entry, score })
@@ -317,8 +330,8 @@ export function searchAllMarkets(query: string, limit = 8): Suggestion[] {
       const name = entry.name ? entry.name.toUpperCase() : ''
       const pinyinList = entry.pinyin ? entry.pinyin.toUpperCase().split(',') : []
       let score = -1
-      if (symbol === q || pinyinList.includes(q)) score = 0
-      else if (symbol.startsWith(q) || pinyinList.some(p => p.startsWith(q))) score = 1
+      if (symbol === q || name === q || pinyinList.includes(q)) score = 0
+      else if (symbol.startsWith(q) || name.startsWith(q) || pinyinList.some(p => p.startsWith(q))) score = 1
       else if (name && name.includes(q)) score = 2
       else if (symbol.includes(q) || pinyinList.some(p => p.includes(q))) score = 3
       if (score >= 0) all.push({ entry: { ...entry, market }, score })

@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-09-06T13:01:17.125595+00:00",
+  "target": "PR #68: @dshtrading/connector-tencent listInstruments（smartbox 智能联想）与 CN/HK 指数符号真实网络验证",
+  "checks": [
+    {
+      "name": "smartbox-search-kc50",
+      "ok": true,
+      "detail": "q=科创50 命中 sh~000688~科创50~kc50~ZS 等约10条；\\uXXXX 转义为 Unicode 码点，String.fromCharCode 解析正确；字段序 mkt~code~name~pinyin~type 与 rest.ts 解析器一致",
+      "raw_head": "v_hint=\"sh~000688~\\u79d1\\u521b50~kc50~ZS^sh~588000~\\u79d1\\u521b50ETF\\u534e\\u590f~kc50etfhx~ETF^sh~588080~\\u79d1\\u521b50ETF\\u6613\\u65b9\\u8fbe~kc50etfyfd~ETF^sh~588050~\\u79d1\\u521b50ETF\\u5de5\\u94f6~kc50etfgy~ETF^sh~588090~\\u79d1\\u521b50ETF\\u534e\\u6cf0\\u67cf\\u745"
+    },
+    {
+      "name": "smartbox-search-gzmt",
+      "ok": true,
+      "detail": "q=gzmt（拼音缩写）命中 sh~600519~贵州茅台~gzmt~GP-A",
+      "raw": "v_hint=\"sh~600519~\\u8d35\\u5dde\\u8305\\u53f0~gzmt~GP-A\""
+    },
+    {
+      "name": "quote-sh000688",
+      "ok": true,
+      "detail": "规范化后 sh000688 经 qt.gtimg.cn 返回科创50指数实时行情（收盘 1577.36，20260904161415），K 线/自选不再报 TRADING_UNSUPPORTED_SYMBOL",
+      "raw_head": "v_sh000688=\"1~科创50~000688~1577.36~1611.17~1627.95~7539251~0~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~0.00~0~~20260904161415~-33.81~-2.10~1637.10~1566.87~1577.36/7539251/7418984"
+    },
+    {
+      "name": "quote-hkHSI",
+      "ok": true,
+      "detail": "新增 HK 目录项 HSI.HK 走既有 hk 符号词汇（HK_SYMBOL_PATTERN）解析为 hkHSI，行情正常（25650.870）",
+      "raw_head": "v_hkHSI=\"100~恒生指数~HSI~25650.870~25213.310~25515.740~27685688.1141~0~0~25650.870~0~0~0~0~0~0~0~0~0~25650.870~0~0~0~0~0~0~0~0~0~0.0~2026/09/04 18:31:01~437.560~1.74~25791.380~25515.740~25650.870~2768568"
+    }
+  ]
+}

@@ -67,6 +67,8 @@ function parseScaledHundred(value: unknown): number | undefined {
   return undefined
 }
 
+const KNOWN_SH_INDICES = new Set(['000688', '000300', '000016', '000905', '000852'])
+
 /**
  * 将标准代码（如 600519.SH / 000001.SZ / 600519 / 000001）转为东财 secid。
  * 上海（60/68/51等）= 1.xxxxxx
@@ -84,7 +86,7 @@ export function toEastmoneySecid(symbol: string): { secid: string; canonical: st
     market = parts[1]
   } else if (/^\d{6}$/.test(clean)) {
     code = clean
-    if (code.startsWith('6') || code.startsWith('5') || code.startsWith('9')) {
+    if (KNOWN_SH_INDICES.has(code) || code.startsWith('6') || code.startsWith('5') || code.startsWith('9')) {
       market = 'SH'
     } else if (code.startsWith('0') || code.startsWith('3') || code.startsWith('1')) {
       market = 'SZ'
@@ -94,7 +96,7 @@ export function toEastmoneySecid(symbol: string): { secid: string; canonical: st
   }
 
   if (!market) {
-    if (code.startsWith('6') || code.startsWith('5')) market = 'SH'
+    if (KNOWN_SH_INDICES.has(code) || code.startsWith('6') || code.startsWith('5')) market = 'SH'
     else market = 'SZ'
   }
 

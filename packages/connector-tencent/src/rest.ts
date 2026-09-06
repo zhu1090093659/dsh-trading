@@ -50,13 +50,15 @@ export type TencentMarket = 'cn' | 'hk'
 
 // 规范词汇（docs/symbol-vocabulary.md）：接受 600519.SH / 600519.sh / SH600519 / 裸 6 位。
 const CN_SYMBOL_PATTERN = /^(?:(sh|sz)(\d{6})|(\d{6})(?:\.(sh|sz))?)$/
+// 常见知名上海指数代码（深交所无对应证券，裸 6 位数字时推断为 sh）
+const KNOWN_SH_INDICES = new Set(['000688', '000300', '000016', '000905', '000852'])
 // 规范词汇：接受 00700.HK（规范形）、裸 1-5 位数字（宽容输入）及 HSI/HSTECH/HSCEI 等指数代码。
 const HK_SYMBOL_PATTERN = /^(?:r_hk|hk)?([a-z0-9^]{1,10})(?:\.hk)?$/i
 
 /**
  * 规范化 A 股符号：接受 `600519` / `SH600519` / `sh600519` / `sz000001`，统一为
- * 腾讯 wire 形态小写 `<sh|sz><6位数字>`。6/9 开头→sh（沪，含科创板 688），0/3 开头→sz
- * （深，含创业板 300）。4/8 开头（北交所）不在本切片支持范围。
+ * 腾讯 wire 形态小写 `<sh|sz><6位数字>`。6/9 开头→sh（沪，含科创板 688），5 开头→sh（沪市基金/ETF），
+ * 0/3 开头→sz（深，含创业板 300；知名上海指数 000688/000300 等推断为 sh）。4/8 开头（北交所）不在本切片支持范围。
  */
 export function normalizeCnSymbol(symbol: string): string {
   if (typeof symbol !== 'string' || !symbol.trim()) {
@@ -74,9 +76,18 @@ export function normalizeCnSymbol(symbol: string): string {
     )
   }
   if (m[1]) return `${m[1]}${m[2]}` // 前缀形 sh600519
-  const code = m[3]
+  const code = m[3] ?? ''
+  if (!code) {
+    throw new TradingServiceError(
+      'TRADING_UNSUPPORTED_SYMBOL',
+      `Symbol ${JSON.stringify(symbol)} is not a valid CN A-share symbol (expected 6-digit code, optionally SH/SZ prefixed)`,
+    )
+  }
   if (m[4]) return `${m[4]}${code}` // 规范形 600519.SH（后缀即交易所）
-  const prefix = code.startsWith('6') || code.startsWith('9') ? 'sh' : 'sz' // 裸码宽容输入：按首位推断
+  const prefix =
+    code.startsWith('6') || code.startsWith('9') || code.startsWith('5') || KNOWN_SH_INDICES.has(code)
+      ? 'sh'
+      : 'sz' // 裸码宽容输入：按首位及已知上海指数推断
   return `${prefix}${code}`
 }
 
@@ -417,6 +428,7 @@ function parseHkFundamentals(fields: string[], timestamp: number): TencentFundam
 const DEFAULT_QUOTE_BASE_URL = 'https://qt.gtimg.cn'
 const DEFAULT_KLINE_BASE_URL = 'https://web.ifzq.gtimg.cn'
 const DEFAULT_MKLINE_BASE_URL = 'https://ifzq.gtimg.cn'
+const DEFAULT_SEARCH_BASE_URL = 'https://smartbox.gtimg.cn'
 const DEFAULT_TIMEOUT_MS = 10_000
 
 export interface TencentRestOptions {
@@ -426,6 +438,8 @@ export interface TencentRestOptions {
   readonly klineBaseUrl?: string
   /** 覆盖分钟 K 线 base（测试/反代用），末尾不带斜杠。 */
   readonly mklineBaseUrl?: string
+  /** 覆盖智能联想搜索 base（测试/反代用），末尾不带斜杠。 */
+  readonly searchBaseUrl?: string
   /** 单请求超时（ms），默认 10s。 */
   readonly timeoutMs?: number
   /** 注入 fetch 实现；缺省用全局 fetch（Node 22+ 内置）。 */
@@ -438,6 +452,7 @@ export class TencentRestClient {
   readonly #quoteBaseUrl: string
   readonly #klineBaseUrl: string
   readonly #mklineBaseUrl: string
+  readonly #searchBaseUrl: string
   readonly #timeoutMs: number
   readonly #fetchImpl: typeof fetch
 
@@ -446,6 +461,7 @@ export class TencentRestClient {
     this.#quoteBaseUrl = options.quoteBaseUrl ?? DEFAULT_QUOTE_BASE_URL
     this.#klineBaseUrl = options.klineBaseUrl ?? DEFAULT_KLINE_BASE_URL
     this.#mklineBaseUrl = options.mklineBaseUrl ?? DEFAULT_MKLINE_BASE_URL
+    this.#searchBaseUrl = options.searchBaseUrl ?? DEFAULT_SEARCH_BASE_URL
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     this.#fetchImpl = options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
   }
@@ -637,5 +653,68 @@ export class TencentRestClient {
       })
     }
     return klines
+  }
+
+  /**
+   * 智能联想标的列表（按名称、代码、拼音模糊检索）：
+   * 接入腾讯证券智能联想端点，统一格式输出标的 symbol、name、pinyin。
+   */
+  async listInstruments(query?: string): Promise<Array<{ symbol: string; name: string; pinyin?: string }>> {
+    const q = query?.trim()
+    if (!q) return []
+    const url = `${this.#searchBaseUrl}/s3/?t=all&q=${encodeURIComponent(q)}`
+    let text = ''
+    try {
+      const res = await this.#fetchImpl(url)
+      if (!res.ok) return []
+      text = await res.text()
+    } catch {
+      return []
+    }
+    const m = /v_hint="([^"]*)"/.exec(text)
+    if (!m || !m[1]) return []
+    const rawContent = m[1].replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    const records = rawContent.split('^').filter(Boolean)
+    const results: Array<{ symbol: string; name: string; pinyin?: string }> = []
+    const seen = new Set<string>()
+
+    for (const rec of records) {
+      const parts = rec.split('~')
+      if (parts.length < 3) continue
+      const [mkt, code, name, pinyin] = parts
+      if (!mkt || !code || !name) continue
+
+      let canonicalSymbol = ''
+      if (this.#market === 'cn') {
+        const lowerMkt = mkt.toLowerCase()
+        if (lowerMkt === 'sh') {
+          canonicalSymbol = `${code}.SH`
+        } else if (lowerMkt === 'sz') {
+          canonicalSymbol = `${code}.SZ`
+        } else if (lowerMkt === 'bj') {
+          canonicalSymbol = `${code}.BJ`
+        } else {
+          continue
+        }
+      } else if (this.#market === 'hk') {
+        if (mkt.toLowerCase() === 'hk') {
+          canonicalSymbol = /^\d+$/.test(code) ? `${code.padStart(5, '0')}.HK` : `${code.toUpperCase()}.HK`
+        } else {
+          continue
+        }
+      } else {
+        continue
+      }
+
+      if (seen.has(canonicalSymbol)) continue
+      seen.add(canonicalSymbol)
+      results.push({
+        symbol: canonicalSymbol,
+        name,
+        ...(pinyin ? { pinyin: pinyin.toUpperCase() } : {}),
+      })
+    }
+
+    return results
   }
 }
