@@ -165,6 +165,23 @@
     - id: dsh-trading-session-archive
       name: '@linxin666/dsh-session-archive'
 
+    # IM 机器人接入（2026-09-06，npm 复用社区插件 @xmanrui/dsh-im）：飞书/微信/
+    # 钉钉/企业微信/QQ/Slack/Telegram/Discord/WhatsApp 九渠道机器人接入，
+    # 单行双半：host 半（渠道连接/流式回复，凭据只进宿主受保护凭据存储）+
+    # 浏览器半（设置 → IM机器人 配置面，section order 21，与 updater 的
+    # order 20 相邻不冲突）。市场无关共享行，归 base 所有（铁律 #1）。
+    # 凭据须用户在设置面板显式配置，未配置时各渠道空闲待命，insert 不改变
+    # 交易会话数据安全面；headless 宿主 host 半 webServer 注入挂起无害
+    # （client-ui-updater 同款）。包名解析依赖本包 dependencies 里的
+    # @xmanrui/dsh-im（进 profile 安装闭包，S3 坑 3 同款）。^4.11.0：落地
+    # 时刻 4.12/4.13 尚在 pnpm minimumReleaseAge 24h 冷却期内，caret 待其
+    # 出冷却后 pnpm update 自然跟进（session-archive 同款选版纪律）。
+    # 注意：本行即内置安装，勿再对 profile 执行 `dsh plugin add
+    # @xmanrui/dsh-im`——其自带 patch（id xmanrui-dsh-im）会与本行重复
+    # 挂载同一插件，设置面二次注册。
+    - id: dsh-trading-im
+      name: '@xmanrui/dsh-im'
+
 - id: agent-presets
   name: '@deepseek-ai/dsh-agent-presets'
   config:

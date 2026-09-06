@@ -59,7 +59,8 @@
     "@dshtrading/router": "workspace:^",
     "@dshtrading/strategies": "workspace:^",
     "@dshtrading/watchlist": "workspace:^",
-    "@linxin666/dsh-session-archive": "^0.3.16"
+    "@linxin666/dsh-session-archive": "^0.3.16",
+    "@xmanrui/dsh-im": "^4.11.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
