@@ -154,6 +154,17 @@
     - id: dsh-trading-client-ui-updater
       name: '@dshtrading/client-ui-updater'
 
+    # 会话归纳管理（2026-09-06，npm 复用 dsh-web 项目同款插件）：单行同时挂
+    # host 半（会话集中清单/批量归档恢复/家族级联物理删除/自动归档与清理
+    # 策略调度器/dsh-session-archive HTTP 路由）与浏览器半（web 宿主
+    # dsh.client 模块扫描进插件名册，由本包 lib/client.js 提供）。市场无关
+    # 共享行，归 base 所有（铁律 #1）。自动归档/自动清理默认均关
+    # （DEFAULT_AUTO_CONFIG，需用户在设置面板显式开启），insert 不改变
+    # 交易会话数据安全面。包名解析依赖本包 dependencies 里的
+    # @linxin666/dsh-session-archive（进 profile 安装闭包，S3 坑 3 同款）。
+    - id: dsh-trading-session-archive
+      name: '@linxin666/dsh-session-archive'
+
 - id: agent-presets
   name: '@deepseek-ai/dsh-agent-presets'
   config:
