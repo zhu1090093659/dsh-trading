@@ -1,5 +1,27 @@
 # @dshtrading/base
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @dshtrading/client-ui-trading@0.1.4
+  - @dshtrading/api@0.1.4
+  - @dshtrading/client-ui-indicators@0.1.4
+  - @dshtrading/client-ui-knowledge@0.1.4
+  - @dshtrading/client-ui-masters-quotes@0.1.4
+  - @dshtrading/client-ui-settings@0.1.4
+  - @dshtrading/client-ui-strategies@0.1.4
+  - @dshtrading/client-ui-updater@0.1.4
+  - @dshtrading/dsh-i18n@0.1.4
+  - @dshtrading/eventbus@0.1.4
+  - @dshtrading/holdings@0.1.4
+  - @dshtrading/indicators@0.1.4
+  - @dshtrading/knowledge@0.1.4
+  - @dshtrading/router@0.1.4
+  - @dshtrading/strategies@0.1.4
+  - @dshtrading/watchlist@0.1.4
+
 ## 0.1.3
 
 ### Patch Changes

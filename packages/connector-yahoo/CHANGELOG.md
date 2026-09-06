@@ -1,5 +1,11 @@
 # @dshtrading/connector-yahoo
 
+## 0.1.4
+
+### Patch Changes
+
+- @dshtrading/api@0.1.4
+
 ## 0.1.3
 
 ### Patch Changes
