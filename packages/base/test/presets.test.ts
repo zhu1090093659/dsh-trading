@@ -36,6 +36,9 @@ it('composes all 16 installed-market subsets deterministically, preserving conne
       expect(text).toContain('knowledge_search')
       expect(text).toContain('*_get_fundamentals')
       expect(text).toContain('cn_get_news / hk_get_news 包含公告')
+      expect(text).toContain('不预测，只假设')
+      expect(text).toContain('不引用卖方评级与目标价')
+      expect(text).toContain('稀缺性')
       expect(text).not.toContain("name: '@dshtrading/knowledge/plugin'") // shared host registration stays single
       if (preset.id === 'instrument-researcher' || preset.id === 'risk-reviewer') {
         expect(text).not.toContain("name: '@dshtrading/connector-")
@@ -62,6 +65,7 @@ it('composes all 16 installed-market subsets deterministically, preserving conne
         expect(text).toContain('holdings_list')
         expect(text).toContain('holdings_stage')
         expect(text).toContain('交易计划草拟派 trader_subagent')
+        expect(text).toContain('要验证的假设与失效信号')
         expect(text).toContain('dynamic-capabilities')
         expect(text).toContain('strategy_backtest')
         expect(text).toContain('knowledge-curation')
