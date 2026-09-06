@@ -59,7 +59,10 @@ nsis:
     - zh_CN
     - en_US
   language: 2052
-  include: resources/installer.nsh
+  # 纯文件名：getResource 按 buildResourcesDir 主路径命中 desktop/resources/installer.nsh。
+  # 旧值 resources/installer.nsh 主路径必失（会拼出 resources/resources/），
+  # 一直靠 app-builder-lib 的 projectDir 回退侥幸命中（2026-09-06 整改）。
+  include: installer.nsh
 
 dmg:
   writeUpdateInfo: false

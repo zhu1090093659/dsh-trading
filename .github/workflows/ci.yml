@@ -7,10 +7,21 @@ on:
 
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        node: ['22', '24']   # engines: ^22.19.0 || >=24.0.0
+        include:
+          - os: ubuntu-latest
+            node: '22'
+          - os: ubuntu-latest
+            node: '24'
+          # Windows 信号前移（2026-09-06）：此前 Windows 只在 desktop-release
+          # tag 管线被测，v0.1.2/v0.1.4 两次都在发版当天才暴露 Windows 专属
+          # 故障（chmod 语义、CRLF 检出等）。本 entry 与发版管线同源
+          # （install+build+test）；typecheck-gate 与 i18n 门禁是平台无关的
+          # lint 级闸门，ubuntu 双节点已覆盖，Windows 不重复跑以控时长。
+          - os: windows-latest
+            node: '22'   # 与 desktop-release 管线一致
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +39,9 @@ jobs:
       # 错误数不得超过 scripts/typecheck-baseline.json 基线，只许降不许升。
       # 依赖 build 先产出 lib/*.d.ts，否则 TS2307 噪音会让计数漂移。
       - run: node scripts/typecheck-gate.mjs
+        if: matrix.os == 'ubuntu-latest'
       # i18n 门禁（PR #56 评审 H2）：zh/en 键位对齐 + {placeholder} 对齐 +
       # client CJK 扫描 + dsh-i18n 中心包漂移。读各包 lib 产物，必须在 build 后。
       - run: pnpm i18n:check
+        if: matrix.os == 'ubuntu-latest'
       - run: pnpm -r test

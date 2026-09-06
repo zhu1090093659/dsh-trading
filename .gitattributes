@@ -1,0 +1,11 @@
+# 仓库统一 LF 检出（2026-09-06 Windows 兼容整改，见 .agents/notes/implemented/process/ 同日 note）。
+# 背景：仓库此前无 .gitattributes，Windows runner 的 autocrlf 检出把文本转成
+# CRLF，任何对检出 asset 做 LF 锚定行搜索的代码都会失配（v0.1.4 四个市场
+# bundle 的 preset 行定位事故）；此处从仓库层根除该类问题。
+# 例外：
+# - spikes/ 是真实网络验证的原始响应证据，字节保真，不做任何行尾转换；
+# - .bat/.cmd 由 Windows 命令解释器消费，需要 CRLF。
+* text=auto eol=lf
+spikes/** -text
+*.bat text eol=crlf
+*.cmd text eol=crlf
