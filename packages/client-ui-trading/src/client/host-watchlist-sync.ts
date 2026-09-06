@@ -27,14 +27,14 @@ import {
 } from './api.ts'
 
 function isHostWatchlists(value: HostWatchlists): boolean {
-  return Object.values(value).some(rows => (rows?.length ?? 0) > 0)
+  return Object.keys(value).length > 0
 }
 
 /** 把 host 行映射回客户端 Watchlists（market 断言到 MarketId 词汇）。 */
 function toLocalWatchlists(host: HostWatchlists): Partial<Record<MarketId, Instrument[]>> {
   const out: Partial<Record<MarketId, Instrument[]>> = {}
   for (const [market, rows] of Object.entries(host)) {
-    if (!Array.isArray(rows) || rows.length === 0) continue
+    if (!Array.isArray(rows)) continue
     out[market as MarketId] = rows.map(row => ({
       market: row.market as MarketId,
       symbol: row.symbol,
@@ -74,7 +74,7 @@ export function wireHostWatchlistSync(options: HostWatchlistSyncOptions): () => 
         const local = watchlists.getSnapshot()
         const customized: HostWatchlists = {}
         for (const [market, rows] of Object.entries(local)) {
-          if (Array.isArray(rows) && rows.length > 0) customized[market] = rows
+          if (Array.isArray(rows)) customized[market] = rows
         }
         if (Object.keys(customized).length > 0) {
           const imported = await importHostWatchlists(customized)

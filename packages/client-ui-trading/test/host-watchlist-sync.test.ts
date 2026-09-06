@@ -113,4 +113,30 @@ describe('wireHostWatchlistSync', () => {
     await vi.waitFor(() => { expect(watchlists.getSnapshot().hk).toHaveLength(1) })
     await vi.waitFor(() => { expect(selection.getSnapshot().instrument).toMatchObject({ symbol: '00700' }) })
   })
+
+  it('启动同步与 SSE：host 包含清空列表（空数组）时正确同步并保持已定制状态', async () => {
+    const watchlists = createWatchlistStore()
+    const selection = createSelectionStore()
+    // host 端已将 us 清空为 []
+    apiMock.fetchHostWatchlists.mockResolvedValue({ us: [] })
+    wireHostWatchlistSync({ watchlists, selection })
+
+    await vi.waitFor(() => {
+      const snap = watchlists.getSnapshot()
+      expect(snap.us).toBeDefined()
+      expect(snap.us).toEqual([])
+    })
+    expect(watchlists.isCustomized('us')).toBe(true)
+    expect(watchlists.listFor('us')).toEqual([])
+
+    // SSE 触发重拉同样保持
+    apiMock.fetchHostWatchlists.mockResolvedValue({ us: [], crypto: [{ market: 'crypto', symbol: 'BTCUSDT' }] })
+    apiMock.handlers['watchlists']?.()
+    await vi.waitFor(() => {
+      const snap = watchlists.getSnapshot()
+      expect(snap.us).toEqual([])
+      expect(snap.crypto).toHaveLength(1)
+    })
+  })
 })
+

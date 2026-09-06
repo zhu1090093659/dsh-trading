@@ -52,6 +52,8 @@ export interface SelectionStore {
   set(record: SelectionRecord): Promise<void>
 }
 
+import { WATCHLIST_SEEDS } from './seeds.ts'
+
 /** 内存版自选 store（单测用）。 */
 export function createMemoryWatchlistStore(initial: WatchlistsMap = {}): WatchlistStore {
   let map: WatchlistsMap = { ...initial }
@@ -69,7 +71,8 @@ export function createMemoryWatchlistStore(initial: WatchlistsMap = {}): Watchli
       return true
     },
     async remove(market, symbol) {
-      const rows = map[market] ?? []
+      const existing = map[market]
+      const rows = Array.isArray(existing) ? existing : (WATCHLIST_SEEDS[market] ?? [])
       const next = rows.filter(row => row.symbol !== symbol)
       if (next.length === rows.length) return false
       map = { ...map, [market]: next }

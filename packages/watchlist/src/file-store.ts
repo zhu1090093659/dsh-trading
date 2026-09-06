@@ -5,6 +5,7 @@
 import { readFile, writeFile, rename, unlink, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { SelectionRecord, SelectionStore, WatchlistStore, WatchlistsMap } from './index.ts'
+import { WATCHLIST_SEEDS } from './seeds.ts'
 
 /**
  * 跨平台健壮原子写入：rename 遇 Windows EPERM/EBUSY（目标被占用）短暂退避重试；
@@ -96,7 +97,8 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
     async remove(market, symbol) {
       return enqueue(async () => {
         const map = await load()
-        const rows = map[market] ?? []
+        const existing = map[market]
+        const rows = Array.isArray(existing) ? existing : (WATCHLIST_SEEDS[market] ?? [])
         const nextRows = rows.filter(row => row.symbol !== symbol)
         if (nextRows.length === rows.length) return false
         const next = { ...map, [market]: nextRows }

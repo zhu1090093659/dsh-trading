@@ -37,15 +37,15 @@ export const WATCHLIST_SEEDS: WatchlistsMap = {
   ],
 }
 
-/** 单市场展示行：用户定制行优先；未定制（缺键/空数组）回落该市场种子。 */
+/** 单市场展示行：用户定制行优先；未定制（缺键）回落该市场种子。已定制（包括空数组）以用户定制为准。 */
 export function effectiveWatchlistRows(map: WatchlistsMap, market: string): WatchlistInstrument[] {
   const rows = map[market]
-  if (rows !== undefined && rows.length > 0) return rows
+  if (Array.isArray(rows)) return rows
   return WATCHLIST_SEEDS[market] ?? []
 }
 
-/** 单市场行来源：'custom' = 用户定制行；'seed' = 种子展示行（未定制）。 */
+/** 单市场行来源：'custom' = 用户定制行（键存在）；'seed' = 种子展示行（未定制，缺键）。 */
 export function watchlistRowSource(map: WatchlistsMap, market: string): 'custom' | 'seed' {
   const rows = map[market]
-  return rows !== undefined && rows.length > 0 ? 'custom' : 'seed'
+  return Array.isArray(rows) ? 'custom' : 'seed'
 }

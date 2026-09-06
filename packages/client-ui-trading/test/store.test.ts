@@ -59,8 +59,42 @@ describe('createWatchlistStore', () => {
     expect(second.listFor('us').some(row => row.symbol === 'TSLA')).toBe(true)
   })
 
-  it('rowsFor：定制列表优先，空回落种子', () => {
+  it('未定制状态下直接 remove 种子标的：物化定制列表并持久化', () => {
+    const store = createWatchlistStore()
+    expect(store.isCustomized('us')).toBe(false)
+    expect(store.listFor('us').map(row => row.symbol)).toContain('AAPL')
+
+    // 未定制状态下直接删除 AAPL
+    store.remove('us', 'AAPL')
+    expect(store.isCustomized('us')).toBe(true)
+    expect(store.listFor('us').map(row => row.symbol)).toEqual(['MSFT', 'NVDA', 'GOOGL'])
+
+    // 从 localStorage 恢复验证持久化
+    const reloaded = createWatchlistStore()
+    expect(reloaded.isCustomized('us')).toBe(true)
+    expect(reloaded.listFor('us').map(row => row.symbol)).toEqual(['MSFT', 'NVDA', 'GOOGL'])
+  })
+
+  it('删光自选标的后保持空列表，不复活种子', () => {
+    const store = createWatchlistStore()
+    store.remove('cn', '600519')
+    store.remove('cn', '000001')
+    store.remove('cn', '601318')
+
+    expect(store.isCustomized('cn')).toBe(true)
+    expect(store.listFor('cn')).toEqual([])
+    expect(rowsFor(store.getSnapshot(), 'cn')).toEqual([])
+
+    // 重载后依然保持空列表
+    const reloaded = createWatchlistStore()
+    expect(reloaded.isCustomized('cn')).toBe(true)
+    expect(reloaded.listFor('cn')).toEqual([])
+    expect(rowsFor(reloaded.getSnapshot(), 'cn')).toEqual([])
+  })
+
+  it('rowsFor：定制列表优先（含空数组），仅缺键回落种子', () => {
     expect(rowsFor({}, 'hk').map(row => row.symbol)).toContain('00700')
+    expect(rowsFor({ hk: [] }, 'hk')).toEqual([])
     expect(rowsFor({ hk: [{ market: 'hk', symbol: '00001', name: '长和' }] }, 'hk'))
       .toEqual([{ market: 'hk', symbol: '00001', name: '长和' }])
   })

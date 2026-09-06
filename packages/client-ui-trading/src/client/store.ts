@@ -157,12 +157,12 @@ export function createWatchlistStore(): WatchlistStore {
     ...store,
     listFor(market) {
       const rows = store.getSnapshot()[market]
-      if (rows !== undefined && rows.length > 0) return rows
+      if (Array.isArray(rows)) return rows
       return DEFAULT_WATCHLISTS[market] ?? []
     },
     isCustomized(market) {
       const rows = store.getSnapshot()[market]
-      return rows !== undefined && rows.length > 0
+      return Array.isArray(rows)
     },
     add(market, instrument) {
       const targetMarket = ['crypto', 'us', 'cn', 'hk'].includes(market) ? market : inferMarket(instrument.symbol)
@@ -181,8 +181,9 @@ export function createWatchlistStore(): WatchlistStore {
     remove(market, symbol) {
       const targetMarket = ['crypto', 'us', 'cn', 'hk'].includes(market) ? market : inferMarket(symbol)
       store.update((current) => {
-        const rows = current[targetMarket] ?? []
-        return { ...current, [targetMarket]: rows.filter(row => row.symbol !== symbol) }
+        const existing = current[targetMarket]
+        const baseRows = Array.isArray(existing) ? existing : (DEFAULT_WATCHLISTS[targetMarket] ?? [])
+        return { ...current, [targetMarket]: baseRows.filter(row => row.symbol !== symbol) }
       })
       persist()
     },
@@ -193,10 +194,10 @@ export function createWatchlistStore(): WatchlistStore {
  * 合并视图与 GUI 左栏展示同源，2026-09-02 agent 可见性修复）。 */
 export const DEFAULT_WATCHLISTS = WATCHLIST_SEEDS as unknown as Record<MarketId, Instrument[]>
 
-/** 一个市场的展示行：用户列表，未定制时回落种子列表。 */
+/** 一个市场的展示行：用户列表（若已定制，包括空数组），未定制时回落种子列表。 */
 export function rowsFor(watchlists: Watchlists, market: MarketId): Instrument[] {
   const rows = watchlists[market]
-  if (rows !== undefined && rows.length > 0) return rows
+  if (Array.isArray(rows)) return rows
   return DEFAULT_WATCHLISTS[market] ?? []
 }
 

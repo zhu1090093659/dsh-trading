@@ -83,8 +83,7 @@ export function createWatchlistListTool(deps: WatchlistToolDeps) {
       const map: WatchlistsMap = await deps.watchlists.list()
       // 合并视图 = 客户端 rowsFor 同构：定制行优先，未定制市场回落种子行
       // （seeds.ts 单一事实源）——Agent 看到的行与 GUI 左栏一致。
-      const markets = [...new Set([...Object.keys(map), ...Object.keys(WATCHLIST_SEEDS)])]
-        .filter(market => effectiveWatchlistRows(map, market).length > 0)
+      const markets = [...new Set([...Object.keys(WATCHLIST_SEEDS), ...Object.keys(map)])]
       const watchlists: WatchlistsMap = {}
       const sources: Record<string, 'custom' | 'seed'> = {}
       let total = 0

@@ -119,6 +119,55 @@ describe('watchlist_* tools', () => {
     expect(onWatchlistsChanged).toHaveBeenCalledTimes(1)
   })
 
+  it('watchlist_remove：未定制状态下可直接删除默认种子标的，剩余种子物化为 custom', async () => {
+    const { deps, onWatchlistsChanged } = makeDeps()
+    const removeTool = createWatchlistRemoveTool(deps)
+    const listTool = createWatchlistListTool(deps)
+
+    // 删除前：全部为 seed
+    const before = JSON.parse(String(await listTool.execute({}))) as {
+      sources: Record<string, string>
+      watchlists: Record<string, Array<{ symbol: string }>>
+    }
+    expect(before.sources.us).toBe('seed')
+    expect(before.watchlists.us.map(r => r.symbol)).toEqual(['AAPL', 'MSFT', 'NVDA', 'GOOGL'])
+
+    // 空库未定制状态下，直接删除 AAPL
+    const wire = JSON.parse(String(await removeTool.execute({ market: 'us', symbol: 'AAPL' }))) as { removed: boolean }
+    expect(wire.removed).toBe(true)
+    expect(onWatchlistsChanged).toHaveBeenCalledTimes(1)
+
+    // 删除后：us 变为 custom，剩余 3 行（MSFT, NVDA, GOOGL）
+    const after = JSON.parse(String(await listTool.execute({}))) as {
+      sources: Record<string, string>
+      watchlists: Record<string, Array<{ symbol: string }>>
+    }
+    expect(after.sources.us).toBe('custom')
+    expect(after.watchlists.us.map(r => r.symbol)).toEqual(['MSFT', 'NVDA', 'GOOGL'])
+
+    // 删除不存在的 symbol：返回 removed: false
+    const notFound = JSON.parse(String(await removeTool.execute({ market: 'us', symbol: 'NONEXISTENT' }))) as { removed: boolean }
+    expect(notFound.removed).toBe(false)
+  })
+
+  it('watchlist_remove：删光默认自选后保持空列表，不复活种子', async () => {
+    const { deps } = makeDeps()
+    const removeTool = createWatchlistRemoveTool(deps)
+    const listTool = createWatchlistListTool(deps)
+
+    // 陆续删光 cn 市场的 3 只默认股票
+    await removeTool.execute({ market: 'cn', symbol: '600519' })
+    await removeTool.execute({ market: 'cn', symbol: '000001' })
+    await removeTool.execute({ market: 'cn', symbol: '601318' })
+
+    const list = JSON.parse(String(await listTool.execute({}))) as {
+      sources: Record<string, string>
+      watchlists: Record<string, Array<{ symbol: string }>>
+    }
+    expect(list.sources.cn).toBe('custom')
+    expect(list.watchlists.cn).toEqual([])
+  })
+
   it('watchlist_select：自选行名称复用；种子行同名解析；未知 symbol 以裸 symbol 兜底；触发 selection 事件', async () => {
     const { deps, selection, onSelectionChanged } = makeDeps()
     await createWatchlistAddTool(deps).execute({ market: 'cn', symbol: '600519', name: '贵州茅台' })
@@ -167,4 +216,20 @@ describe('file store 并发读改写（issue #58）', () => {
     const list = await store.list()
     expect(list.us).toHaveLength(1)
   })
+
+  it('file store 空文件下直接 remove 默认种子标的持久化落盘，新实例可见定制', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-watchlist-'))
+    const filePath = join(dir, 'watchlists.json')
+    const store = createFileWatchlistStore(filePath)
+
+    // 空文件下直接从 us 删 AAPL
+    const removed = await store.remove('us', 'AAPL')
+    expect(removed).toBe(true)
+
+    // 新实例重读：us 应包含剩余 3 只股票
+    const reread = createFileWatchlistStore(filePath)
+    const list = await reread.list()
+    expect(list.us?.map(r => r.symbol)).toEqual(['MSFT', 'NVDA', 'GOOGL'])
+  })
 })
+

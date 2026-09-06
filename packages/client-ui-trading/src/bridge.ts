@@ -1131,8 +1131,7 @@ export class TradingBridge {
     const store = this.host.watchlistStore
     if (store === undefined) return { ok: false, imported: false, reason: 'watchlist store is not mounted' }
     const existing = await store.list()
-    const existingRows = Object.values(existing).reduce((sum, rows) => sum + (rows?.length ?? 0), 0)
-    if (existingRows > 0) {
+    if (Object.keys(existing).length > 0) {
       return { ok: false, imported: false, reason: 'host watchlist store is not empty — migration already done (idempotent guard)' }
     }
     const map = parseWatchlistsMap(body)
