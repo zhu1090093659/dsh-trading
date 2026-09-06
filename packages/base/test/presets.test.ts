@@ -57,6 +57,7 @@ it('composes all 16 installed-market subsets deterministically, preserving conne
         expect(text).toContain('toolName: trader_subagent')
         expect(text).toContain('toolName: risk_reviewer_subagent')
         expect(text).toContain('backgroundMode: one-shot')
+        expect(text).toContain("name: '@deepseek-ai/dsh-tool-jobs'") // background one-shot delegates need a job controller in the owner's composition
         expect(text).toContain('instrument research analyst')
         expect(text).toContain('unified trader')
         expect(text).toContain('independent risk reviewer')
@@ -72,6 +73,7 @@ it('composes all 16 installed-market subsets deterministically, preserving conne
         expect(text).toContain('knowledge-curation')
       } else {
         expect(text).not.toContain('@deepseek-ai/dsh-tool-subagent')
+        expect(text).not.toContain('@deepseek-ai/dsh-tool-jobs') // no delegation, no background jobs
       }
     }
   }
