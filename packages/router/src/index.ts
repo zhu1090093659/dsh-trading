@@ -334,7 +334,7 @@ export const TRADING_NEWS_REGISTRY_KEY = 'tradingNewsRegistry'
  * Preset 销毁时调用方执行退订函数，该市场新闻自动不可用。
  */
 export class TradingNewsRegistryService extends Service {
-  private readonly providers = new Map<string, NewsAggregator>()
+  private readonly providers = new Map<string, Map<symbol, NewsAggregator>>()
 
   constructor(ctx: Context) {
     super(ctx, TRADING_NEWS_REGISTRY_KEY)
@@ -342,13 +342,20 @@ export class TradingNewsRegistryService extends Service {
 
   /** Kit apply 时注册本市场的新闻聚合器；返回退订函数（Kit dispose 时自动清理）。 */
   register(market: string, aggregator: NewsAggregator): () => void {
-    this.providers.set(market, aggregator)
-    return () => { if (this.providers.get(market) === aggregator) this.providers.delete(market) }
+    const token = Symbol(market)
+    const registrations = this.providers.get(market) ?? new Map<symbol, NewsAggregator>()
+    registrations.set(token, aggregator)
+    this.providers.set(market, registrations)
+    return () => {
+      registrations.delete(token)
+      if (registrations.size === 0 && this.providers.get(market) === registrations) this.providers.delete(market)
+    }
   }
 
   /** Bridge 分发时取该市场的聚合器；未注册 → undefined（该市场新闻不可用）。 */
   get(market: string): NewsAggregator | undefined {
-    return this.providers.get(market)
+    const registrations = this.providers.get(market)
+    return registrations ? [...registrations.values()].at(-1) : undefined
   }
 
   /** 全部已注册市场。 */

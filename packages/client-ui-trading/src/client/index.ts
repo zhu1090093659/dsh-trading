@@ -24,7 +24,7 @@ import { createChartStateStore } from './chart-state.ts'
 import { indicators, markCustomIndicator, unmarkCustomIndicator } from './indicator-registry.ts'
 import { stageViews } from './stage-views.ts'
 import { createTradingBridgeService } from './api.ts'
-import { fillComposerWithQuote, type FillComposerFn, type ConversationDraftFace } from './fill-composer.ts'
+import { fillComposerWithQuote, guardComposerTarget, type FillComposerFn, type ConversationDraftFace } from './fill-composer.ts'
 import { OrderCard, WatchlistChipCard } from './toolview.tsx'
 import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
@@ -88,6 +88,7 @@ export function apply(ctx: ClientContext): void {
       conversation: ctx.get('conversation', false) as ConversationDraftFace | undefined,
       startSession: startNewSession,
     }, text, image)
+  fillComposer.captureTarget = () => guardComposerTarget(sessions, fillComposer)
   const openSettings = (): void => {
     // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
     // 侧栏里唯一的 [aria-haspopup=dialog]，程序化 click 走官方打开逻辑，

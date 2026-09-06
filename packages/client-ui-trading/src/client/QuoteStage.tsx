@@ -17,7 +17,7 @@ import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
 import { composeQuoteMessage } from './compose-quote.ts'
 import { composeQuoteDataSection, type QuoteDataSectionCopy } from './compose-quote-data.ts'
 import type { QuoteMessageCopy } from './compose-quote.ts'
-import type { SendImageInput } from './fill-composer.ts'
+import type { SendImageInput, FillComposerFn } from './fill-composer.ts'
 import { FundamentalsStage } from './FundamentalsStage.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
 import { DerivativesStage } from './DerivativesStage.tsx'
@@ -41,7 +41,8 @@ import { colorModeStore } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
-import { fetchNews } from './api.ts'
+import { fetchNews, fetchFundamentals } from './api.ts'
+import { composeResearchSection } from './compose-research.ts'
 import type { ClientNewsItem } from './api.ts'
 import { NewsFeedPane } from './NewsFeedPane.tsx'
 import { MarkerTooltip } from './MarkerTooltip.tsx'
@@ -103,7 +104,7 @@ export interface QuoteStageProps {
   /** 删除自定义指标（issue #30 删除入口；仅自定义行渲染按钮）。 */
   deleteIndicator: (id: string) => Promise<boolean>
   /** 行情上下文 → 会话输入框（只填入不发送；shell 注入，缺席时按钮不渲染）。 */
-  fillComposer?: (text: string, image?: SendImageInput) => Promise<void>
+  fillComposer?: FillComposerFn
 }
 
 function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
@@ -425,19 +426,43 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
   // 统一填入反馈（2026-09-04 入口收敛）：sending/sent/error 状态由「发送给 Agent」
   // 按钮整体承载，行情快照与资金面快照共用同一套反馈。
-  const runFill = (text: string, image?: SendImageInput): void => {
-    if (fillComposer === undefined || sendState === 'sending') return
+  const fillRequestRef = useRef<AbortController | null>(null)
+  const fillFeedbackRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => {
+    setSendState('idle')
+    return () => {
+      fillRequestRef.current?.abort()
+      fillRequestRef.current = null
+      clearTimeout(fillFeedbackRef.current)
+    }
+  }, [market, symbol, fillComposer])
+
+  const runFill = (text: string | ((signal: AbortSignal) => Promise<string>), image?: SendImageInput): void => {
+    if (fillComposer === undefined || fillRequestRef.current !== null) return
+    const fillTarget = fillComposer.captureTarget?.() ?? fillComposer
+    const request = new AbortController()
+    fillRequestRef.current = request
+    clearTimeout(fillFeedbackRef.current)
     setSendState('sending')
-    void fillComposer(text, image)
-      .then(() => {
-        setSendState('sent')
-        window.setTimeout(() => { setSendState('idle') }, 2000)
-      })
-      .catch((error: unknown) => {
-        console.warn('[dsh-trading] fill composer from quote failed:', error)
-        setSendState('error')
-        window.setTimeout(() => { setSendState('idle') }, 2600)
-      })
+    void (async () => {
+      try {
+        const body = typeof text === 'string' ? text : await text(request.signal)
+        if (request.signal.aborted) return
+        await fillTarget(body, image)
+        if (!request.signal.aborted) {
+          setSendState('sent')
+          fillFeedbackRef.current = setTimeout(() => { setSendState('idle') }, 2000)
+        }
+      } catch (error: unknown) {
+        if (!request.signal.aborted) {
+          console.warn('[dsh-trading] fill composer from quote failed:', error)
+          setSendState('error')
+          fillFeedbackRef.current = setTimeout(() => { setSendState('idle') }, 2600)
+        }
+      } finally {
+        if (fillRequestRef.current === request) fillRequestRef.current = null
+      }
+    })()
   }
 
   // 「资金面快照」（原衍生品条「分析资金面」，issue #54；2026-09-04 收敛进统一
@@ -677,8 +702,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return markers.length > 0 ? markers : undefined
   }, [newsItems, bars, t])
 
-  // 行情快照（统一「发送给 Agent」入口主按钮）：先截图（画布只在图表挂载期间
-  // 可取），再把文本 + PNG 填入会话输入框（不自动发送——用户大概率还要补 prompt）。
+  // 完整标的上下文：先固定行情与截图，再按点击时标的补齐新闻/公告/基本面。
+  // 只填入文本 + PNG，不自动发送；单源失败在正文标明，切标的取消旧采集。
   // market/symbol 在函数体内收窄（闭包对 TS 不透传 narrowing），先落成常量。
   const onSendToAgent = (): void => {
     if (fillComposer === undefined || sendState === 'sending') return
@@ -740,7 +765,29 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           klinesTool: `${activeMarket}_get_klines`,
         }, dataCopy)
       : ''
-    runFill(dataSection === '' ? text : `${text}\n\n${dataSection}`, capture === null ? undefined : {
+    const capturedAt = new Date().toISOString()
+    runFill(async signal => {
+      const timeout = new AbortController()
+      const timer = setTimeout(() => timeout.abort(), 15000)
+      const fetchSignal = AbortSignal.any([signal, timeout.signal])
+      try {
+        const [news, fundamentals] = await Promise.all([
+          fetchNews(activeMarket, activeSymbol, 50, fetchSignal),
+          fetchFundamentals(activeMarket, activeSymbol, fetchSignal),
+        ])
+        const research = composeResearchSection({ news, fundamentals, capturedAt }, {
+          header: t('compose.research.header'), announcements: t('compose.research.announcements'),
+          news: t('compose.research.news'), fundamentals: t('compose.research.fundamentals'),
+          unavailable: t('compose.research.unavailable'), empty: t('compose.research.empty'),
+          sourcesUnavailable: t('compose.research.sourcesUnavailable'), guidance: t('compose.research.guidance'),
+          omitted: t('compose.research.omitted'),
+        })
+        const funding = derivatives === null ? '' : `derivatives: ${JSON.stringify(derivatives)}`
+        return [text, dataSection, research, funding].filter(Boolean).join('\n\n')
+      } finally {
+        clearTimeout(timer)
+      }
+    }, capture === null ? undefined : {
       dataUrl: capture.dataUrl,
       name: `${activeSymbol}-${chartInterval}.png`,
       width: capture.width,

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { composeQuoteMessage } from '../src/client/compose-quote.ts'
-import { dataUrlToFile, fillComposerWithQuote, stripDataUrlPrefix } from '../src/client/fill-composer.ts'
+import { dataUrlToFile, fillComposerWithQuote, guardComposerTarget, stripDataUrlPrefix } from '../src/client/fill-composer.ts'
 import type { ConversationDraftFace, FillComposerDeps } from '../src/client/fill-composer.ts'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 
@@ -55,6 +55,18 @@ function makeConversation(options: { phase?: string; draft?: string; addImagesOk
 }
 
 describe('fillComposerWithQuote', () => {
+  it('异步采集固定目标：切会话后拒绝填入，原会话仍在时保留只填不发', async () => {
+    const { sessions, setCurrent } = makeSessions({ current: 'sess-1' })
+    const fill = vi.fn(async () => {})
+    const guarded = guardComposerTarget(sessions, fill)
+    setCurrent('sess-2')
+    await expect(guarded('old context')).rejects.toThrow('session changed')
+    expect(fill).not.toHaveBeenCalled()
+    const current = guardComposerTarget(sessions, fill)
+    await current('new context')
+    expect(fill).toHaveBeenCalledExactlyOnceWith('new context', undefined)
+  })
+
   it('有当前会话：setDraft 写入文本，不触发 submit', async () => {
     const { sessions } = makeSessions({ current: 'sess-1' })
     const { conversation, calls } = makeConversation()

@@ -40,7 +40,7 @@ Glued on, not grown in.
 
 dsh-trading turns that relationship upside down: **the agent is a first-class citizen of the terminal, and the terminal is the agent's body.** Four things separate it from every chatbot you've used:
 
-1. **Quotes, news, capital flow — the agent has it all.** One click on *Send to Agent*, and the symbol you're watching — live quote, current candle, the chart series' time range with a fetch locator (so the agent pulls the same routed data itself and analyzes it in code), the computed readings of your active indicators, and a screenshot of the chart — is packaged straight into the conversation. No more screenshot-copy-paste ritual.
+1. **Quotes, news, capital flow — the agent has it all.** One click on *Send to Agent*, and the symbol you're watching — live quote, current candle, the chart series' time range with a fetch locator (so the agent pulls the same routed data itself and analyzes it in code), the computed readings of your active indicators, available chart screenshot and derivatives snapshot, plus freshly requested announcements, news and a bounded fundamentals summary — is packaged into the composer without sending. Missing sources are explicit; the agent is guided to verify original disclosures and fill gaps with native research tools. No more screenshot-copy-paste ritual.
 
 ![Send to Agent — chart snapshot and quote context injected into the composer](docs/screenshots/chart-to-agent.png)
 
@@ -50,7 +50,9 @@ dsh-trading turns that relationship upside down: **the agent is a first-class ci
 
 The risk checklist runs before every entry — a discipline most veterans never sustain in ten years (usually undone by "just this once").
 
-4. **One process, four trading desks.** Session-level presets (`crypto-trader`, `us-trader`, `cn-trader`, `hk-trader`) give each market its own tools, persona, and memory — isolated per session, coexisting in a single DSH process.
+4. **One trader, three distinct roles.** `trader` (交易员) combines installed markets for trading plans and gated execution. `instrument-researcher` (标的分析研究员) investigates disclosures, fundamentals and valuation; `risk-reviewer` (风险审查员) independently reviews exposure, stress scenarios and rejection conditions. All three prioritize project knowledge, news/announcements and fundamentals. Research and risk retain read-only quotes/candles but mount no order/cancel connectors. Shared host tools remain available; role scoping is not a separate security sandbox.
+
+The base installer generates these roles from enabled market bundles, including partial-market installations. Unmodified managed legacy market presets move to a sibling `.legacy-backup` root; custom, unstamped or extended directories remain untouched. No user preset data is deleted.
 
 ## The terminal itself must be real software first
 

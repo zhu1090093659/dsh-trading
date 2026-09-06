@@ -16,8 +16,8 @@ export class BridgeError extends Error {
   }
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path, { headers: { accept: 'application/json' } })
+async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(path, { headers: { accept: 'application/json' }, ...(signal === undefined ? {} : { signal }) })
   if (response.status === 401) throw new BridgeError(401, 'unauthorized')
   if (response.status === 403) throw new BridgeError(403, 'forbidden')
   if (!response.ok) {
@@ -298,11 +298,11 @@ export interface ClientNewsResult {
  * 标的新闻（issue #37）。Kit 未注册或会话不活跃 → null：面板显示空态提示。
  * 只返回与标的相关的条目；无相关内容即空列表，无市场要闻兜底。
  */
-export async function fetchNews(market: MarketId, symbol?: string, limit = 20): Promise<ClientNewsResult | null> {
+export async function fetchNews(market: MarketId, symbol?: string, limit = 20, signal?: AbortSignal): Promise<ClientNewsResult | null> {
   try {
     const query = new URLSearchParams({ market, ...(symbol ? { symbol } : {}), limit: String(limit) })
     const wire = await getJson<{ ok: boolean; items: ClientNewsItem[]; unavailable: string[] }>(
-      `/dshtrading/api/news?${query.toString()}`,
+      `/dshtrading/api/news?${query.toString()}`, signal,
     )
     return { items: wire.items ?? [], unavailable: wire.unavailable ?? [] }
   } catch {
@@ -581,10 +581,10 @@ export async function fetchUpdateBadge(): Promise<UpdateBadgeState | null> {
 }
 
 /** 拉取标的综合基本面与多期财务矩阵数据（Issue #36，富途牛牛风格工作台数据源）。 */
-export async function fetchFundamentals(market: MarketId, symbol: string): Promise<FundamentalsPackage | undefined> {
+export async function fetchFundamentals(market: MarketId, symbol: string, signal?: AbortSignal): Promise<FundamentalsPackage | undefined> {
   try {
     const query = new URLSearchParams({ market, symbol })
-    const wire = await getJson<{ ok: boolean; fundamentals?: FundamentalsPackage }>(`/dshtrading/api/fundamentals?${query.toString()}`)
+    const wire = await getJson<{ ok: boolean; fundamentals?: FundamentalsPackage }>(`/dshtrading/api/fundamentals?${query.toString()}`, signal)
     return wire.fundamentals
   } catch (err) {
     console.warn(`[dsh-trading] fetchFundamentals ${market}/${symbol} failed:`, err)

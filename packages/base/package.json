@@ -10,11 +10,24 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./role-skills": {
+      "types": "./lib/role-skills.d.ts",
+      "default": "./lib/role-skills.js"
+    },
+    "./presets": {
+      "types": "./lib/presets.d.ts",
+      "default": "./lib/presets.js"
+    },
+    "./research-tools": {
+      "types": "./lib/research-tools.d.ts",
+      "default": "./lib/research-tools.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
+    "assets",
     "cordis.patch.yml"
   ],
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -50,6 +63,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
     "@deepseek-ai/dsh-tools": ">=0.1.2-rc.1",
+    "@deepseek-ai/dsh-skill": ">=0.1.2-rc.1",
     "@deepseek-ai/schemastery": ">=3.18.0"
   },
   "devDependencies": {

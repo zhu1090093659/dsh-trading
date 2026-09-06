@@ -29,7 +29,18 @@ export interface SendImageInput {
 }
 
 /** shell 注入的填入入口（QuotePane → MiddleStage → QuoteStage 透传）。 */
-export type FillComposerFn = (text: string, image?: SendImageInput) => Promise<void>
+export type FillComposerFn = ((text: string, image?: SendImageInput) => Promise<void>) & {
+  /** Capture a destination guard before an asynchronous collection starts. */
+  captureTarget?: () => FillComposerFn
+}
+
+export function guardComposerTarget(sessions: ISessions, fill: FillComposerFn): FillComposerFn {
+  const target = sessions.list.getSnapshot().current
+  return async (text, image) => {
+    if (sessions.list.getSnapshot().current !== target) throw new Error('composer session changed during collection — retry in the intended session')
+    await fill(text, image)
+  }
+}
 
 /** conversation 根服务最小结构面（只用草稿摄取 + input registry 两块）。 */
 export interface ConversationDraftFace {

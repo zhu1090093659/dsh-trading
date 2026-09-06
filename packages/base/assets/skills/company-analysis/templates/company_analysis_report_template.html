@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{公司名称}}公司分析报告</title>
+  <style>
+    :root {
+      --ink: #20242a;
+      --muted: #626b76;
+      --line: #d8dde5;
+      --soft: #f5f7fa;
+      --accent: #1f5f8b;
+      --accent-soft: #e7f0f7;
+      --risk: #a13f35;
+      --warn: #8a6500;
+      --good: #2f6f4e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #eef1f5;
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      line-height: 1.62;
+    }
+    .page {
+      max-width: 1180px;
+      margin: 0 auto;
+      background: #fff;
+      min-height: 100vh;
+      padding: 44px 52px 64px;
+    }
+    header {
+      border-bottom: 3px solid var(--ink);
+      padding-bottom: 22px;
+      margin-bottom: 28px;
+    }
+    .kicker {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 8px 0 10px;
+      font-size: 34px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 34px 0 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+    p { margin: 8px 0 12px; }
+    .subtitle {
+      color: var(--muted);
+      max-width: 880px;
+      margin: 0;
+    }
+    .meta-grid, .summary-grid, .chart-grid {
+      display: grid;
+      gap: 12px;
+    }
+    .meta-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      margin-top: 18px;
+    }
+    .summary-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      margin: 18px 0 22px;
+    }
+    .chart-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .meta-item, .summary-card, figure {
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 12px 14px;
+    }
+    .meta-label, .card-label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .meta-value, .card-value {
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .status {
+      display: inline-block;
+      padding: 2px 8px;
+      border: 1px solid var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 14px;
+    }
+    caption {
+      caption-side: top;
+      text-align: left;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--soft);
+      font-weight: 700;
+    }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    figure {
+      margin: 12px 0 20px;
+    }
+    figcaption {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 130px 1fr 70px;
+      gap: 10px;
+      align-items: center;
+      margin: 9px 0;
+      font-size: 13px;
+    }
+    .bar-track {
+      height: 12px;
+      background: var(--soft);
+      border: 1px solid var(--line);
+    }
+    .bar-fill {
+      display: block;
+      height: 100%;
+      background: var(--accent);
+      width: var(--w);
+    }
+    .bar-fill.good { background: var(--good); }
+    .bar-fill.warn { background: var(--warn); }
+    .bar-fill.risk { background: var(--risk); }
+    .note {
+      border-left: 3px solid var(--accent);
+      background: var(--soft);
+      padding: 12px 14px;
+      margin: 14px 0 18px;
+      color: var(--ink);
+    }
+    .risk-high { color: var(--risk); font-weight: 700; }
+    .risk-mid { color: var(--warn); font-weight: 700; }
+    .positive { color: var(--good); font-weight: 700; }
+    .source-list {
+      color: var(--muted);
+      font-size: 13px;
+      padding-left: 18px;
+    }
+    .disclaimer {
+      margin-top: 32px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    @media (max-width: 860px) {
+      .page { padding: 28px 18px 42px; }
+      .meta-grid, .summary-grid, .chart-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 27px; }
+      table { font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <article class="page">
+    <header>
+      <div class="kicker">Company Research</div>
+      <h1>{{公司名称}}公司分析报告</h1>
+      <p class="subtitle">{{一句话摘要：用事实、推断、假设和风险区分核心判断，不写投资口号。}}</p>
+      <div class="meta-grid">
+        <div class="meta-item"><span class="meta-label">公司/股票</span><span class="meta-value">{{公司名称}} / {{股票代码}}</span></div>
+        <div class="meta-item"><span class="meta-label">市场</span><span class="meta-value">{{美股/港股/A股/其他}}</span></div>
+        <div class="meta-item"><span class="meta-label">报告日期</span><span class="meta-value">{{YYYY-MM-DD}}</span></div>
+        <div class="meta-item"><span class="meta-label">分析目的</span><span class="meta-value">{{是否值得买/为何下跌/财报复盘/估值对比/建仓策略}}</span></div>
+        <div class="meta-item"><span class="meta-label">主类型</span><span class="meta-value">{{公司主类型}}</span></div>
+      </div>
+    </header>
+
+    <section id="executive-summary">
+      <h2>0. 结论先行</h2>
+      <div class="summary-grid">
+        <div class="summary-card"><span class="card-label">投资逻辑状态</span><span class="card-value status">{{增强/维持/削弱/危险}}</span></div>
+        <div class="summary-card"><span class="card-label">估值判断</span><span class="card-value">{{低估/合理/偏贵/无法判断}}</span></div>
+        <div class="summary-card"><span class="card-label">质量判断</span><span class="card-value">{{优秀/中等/较差/无法判断}}</span></div>
+        <div class="summary-card"><span class="card-label">最大风险</span><span class="card-value">{{最大风险}}</span></div>
+        <div class="summary-card"><span class="card-label">置信度</span><span class="card-value">{{高/中/低}}</span></div>
+      </div>
+      <p>{{用一段话说明主类型、主导价值来源和核心判断，明确哪些是事实、推断和假设；周期股同时写明当前周期位置、正常/强周期的边界，以及机构一致预期已覆盖到哪一档。}}</p>
+    </section>
+
+    <section id="chart-overview">
+      <h2>1. 关键图表</h2>
+      <div class="chart-grid">
+        <figure>
+          <h3>估值与价格位置</h3>
+          <div class="bar-row"><span>历史估值分位</span><div class="bar-track"><span class="bar-fill" style="--w: {{估值分位百分比}}%;"></span></div><span class="num">{{估值分位}}</span></div>
+          <div class="bar-row"><span>高点回撤</span><div class="bar-track"><span class="bar-fill risk" style="--w: {{回撤百分比}}%;"></span></div><span class="num">{{回撤}}</span></div>
+          <div class="bar-row"><span>同行相对估值</span><div class="bar-track"><span class="bar-fill warn" style="--w: {{同行估值百分比}}%;"></span></div><span class="num">{{同行位置}}</span></div>
+          <figcaption>图 1：估值、回撤和同行位置。数据口径：{{数据来源与日期}}。</figcaption>
+        </figure>
+        <figure>
+          <h3>{{主类型核心价值驱动}}</h3>
+          <div class="bar-row"><span>{{核心指标 1}}</span><div class="bar-track"><span class="bar-fill good" style="--w: {{指标1条}}%;"></span></div><span class="num">{{指标1}}</span></div>
+          <div class="bar-row"><span>{{核心指标 2}}</span><div class="bar-track"><span class="bar-fill" style="--w: {{指标2条}}%;"></span></div><span class="num">{{指标2}}</span></div>
+          <div class="bar-row"><span>{{核心指标 3}}</span><div class="bar-track"><span class="bar-fill {{指标3状态class}}" style="--w: {{指标3条}}%;"></span></div><span class="num">{{指标3}}</span></div>
+          <figcaption>图 2：按主类型选择核心指标。成长看增长/ROIC/FCF，现金流型看 FCF/分红/杠杆，周期看供需/价格/成本，金融看 ROE/资产质量，其他类型使用对应价值驱动。数据口径：{{数据来源与日期}}。</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="company-type">
+      <h2>2. 公司类型与分析路由</h2>
+      <table>
+        <thead><tr><th>项目</th><th>判断</th><th>证据与影响</th></tr></thead>
+        <tbody>
+          <tr><td>主类型</td><td>{{高质量成长/复利、成熟现金流/红利防御、周期/商品/产能、资产重估/深度价值、金融资产负债型、困境反转/重组、前盈利高不确定性、事件驱动/特殊情形}}</td><td>{{决定问题路由、评分权重和主估值方法}}</td></tr>
+          <tr><td>次类型</td><td>{{0-2 个次类型}}</td><td>{{补充检查项，不覆盖主类型}}</td></tr>
+          <tr><td>当前状态</td><td>{{高速扩张/成熟/周期底部或上行或顶部/经营恶化/反转/事件等待}}</td><td>{{状态证据}}</td></tr>
+          <tr><td>主导价值来源</td><td>{{增长再投资/FCF与股息/周期价差/NAV/ROE与资产质量/修复/里程碑/事件概率}}</td><td>{{利润、现金流和市值敏感变量}}</td></tr>
+          <tr><td>分类置信度</td><td>{{高/中/低}}</td><td>{{支持证据与缺口}}</td></tr>
+          <tr><td>最强替代分类</td><td>{{替代类型}}</td><td>{{为什么不作为主类型}}</td></tr>
+          <tr><td>类型迁移</td><td>{{无/成长转成熟/成长转周期/周期转困境/事件结束等}}</td><td>{{对估值、评分、风险和动作的影响}}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="expectation-reality">
+      <h2>3. 预期-现实框架</h2>
+      <table>
+        <thead><tr><th>项目</th><th>当前判断</th><th>核心证据</th></tr></thead>
+        <tbody>
+          <tr><td>基本面模式</td><td>{{买预期、卖现实/买现实、买预期/买现实、卖现实}}</td><td>{{证据}}</td></tr>
+          <tr><td>当前现实</td><td>{{强/弱/恶化/改善}}</td><td>{{已发生事实}}</td></tr>
+          <tr><td>市场预期</td><td>{{未启动/启动/验证中/拥挤/落空}}</td><td>{{一致预期、价格和资金证据}}</td></tr>
+          <tr><td>价格反映程度</td><td>{{不足/部分/充分/过度/无法判断}}</td><td>{{估值、走势与同业比较}}</td></tr>
+          <tr><td>当前研究阶段</td><td>{{预期试错候选/右侧确认/现实兑现/预期落空/等待}}</td><td>{{历史领先关系或确认信号}}</td></tr>
+          <tr><td>验证条件</td><td colspan="2">{{预期转为现实所需的可观察条件}}</td></tr>
+          <tr><td>失效条件</td><td colspan="2">{{原假设失败的可观察条件}}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="evidence-audit">
+      <h2>4. 证据审计</h2>
+      <table>
+        <caption>关键命题证据矩阵</caption>
+        <thead>
+          <tr>
+            <th>命题</th>
+            <th>类型</th>
+            <th>比较区间/口径</th>
+            <th>支持证据</th>
+            <th>反方证据</th>
+            <th>信源等级</th>
+            <th>证据强度</th>
+            <th>结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>主类型及主导价值来源是否成立</td><td>事实/判断</td><td>{{分部、利润、现金流、资产与核心变量}}</td><td>{{支持证据}}</td><td>{{替代分类证据}}</td><td>{{S/A/B/C/D/E}}</td><td>{{强/中/弱}}</td><td>{{结论}}</td></tr>
+          <tr><td>公司是否正在发生类型迁移</td><td>事实/预测</td><td>{{至少两个时期或关键事件前后}}</td><td>{{支持证据}}</td><td>{{反方证据}}</td><td>{{S/A/B/C/D/E}}</td><td>{{强/中/弱}}</td><td>{{结论}}</td></tr>
+          <tr><td>股价下跌来自基本面恶化还是情绪错杀</td><td>因果</td><td>{{区间/口径}}</td><td>{{支持证据}}</td><td>{{反方证据}}</td><td>{{S/A/B/C/D/E}}</td><td>{{强/中/弱}}</td><td>{{结论}}</td></tr>
+          <tr><td>当前估值是否处于历史低位</td><td>事实</td><td>{{区间/口径}}</td><td>{{支持证据}}</td><td>{{反方证据}}</td><td>{{S/A/B/C/D/E}}</td><td>{{强/中/弱}}</td><td>{{结论}}</td></tr>
+          <tr><td>现金流质量是否健康</td><td>事实/判断</td><td>{{区间/口径}}</td><td>{{支持证据}}</td><td>{{反方证据}}</td><td>{{S/A/B/C/D/E}}</td><td>{{强/中/弱}}</td><td>{{结论}}</td></tr>
+          <tr><td>成长是否可持续</td><td>预测</td><td>{{区间/口径}}</td><td>{{支持证据}}</td><td>{{反方证据}}</td><td>{{S/A/B/C/D/E}}</td><td>{{强/中/弱}}</td><td>{{结论}}</td></tr>
+          <tr><td>最大风险是否可控</td><td>判断</td><td>{{区间/口径}}</td><td>{{支持证据}}</td><td>{{反方证据}}</td><td>{{S/A/B/C/D/E}}</td><td>{{强/中/弱}}</td><td>{{结论}}</td></tr>
+          <tr><td>两个历史周期/上行段是否可比</td><td>事实/判断</td><td>{{周期边界与驱动}}</td><td>{{支持证据}}</td><td>{{反方证据}}</td><td>{{S/A/B/C/D/E}}</td><td>{{强/中/弱}}</td><td>{{结论；非周期股删除}}</td></tr>
+          <tr><td>场景名称是否已被一致预期覆盖</td><td>事实/判断</td><td>{{一致预期日期与年份}}</td><td>{{支持证据}}</td><td>{{反方证据}}</td><td>{{S/A/B/C/D/E}}</td><td>{{强/中/弱}}</td><td>{{结论；非周期股删除}}</td></tr>
+          <tr><td>股价领先景气或利润的历史关系是否成立</td><td>事实/因果</td><td>{{至少两个样本}}</td><td>{{支持证据}}</td><td>{{反方证据}}</td><td>{{S/A/B/C/D/E}}</td><td>{{强/中/弱}}</td><td>{{结论；非周期股删除}}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="cycle-repricing">
+      <h2>5. 跨周期校准与重新定价</h2>
+      <p class="note">周期股必填，非周期股删除本节。至少覆盖两个完整周期或可比上行段；当前周期未完成时明确说明。短期价格峰值与全年均价必须分列，冲击型超级周期不得混入基准。</p>
+
+      <h3>5.1 周期边界与历史对照</h3>
+      <table>
+        <thead><tr><th>周期/上行段</th><th>边界与驱动</th><th>年均价 / 短期峰值</th><th>供给变化</th><th>公司量、成本与价差</th><th>归母利润 / FCF</th><th>股价、市值与 PB</th><th>领先/滞后</th></tr></thead>
+        <tbody>
+          <tr><td>历史段 1</td><td>{{边界证据；正常/冲击}}</td><td>{{年均/峰值}}</td><td>{{供给}}</td><td>{{单位经济}}</td><td>{{利润/FCF}}</td><td>{{市场表现}}</td><td>{{月数与定义}}</td></tr>
+          <tr><td>历史段 2</td><td>{{边界证据；正常/冲击}}</td><td>{{年均/峰值}}</td><td>{{供给}}</td><td>{{单位经济}}</td><td>{{利润/FCF}}</td><td>{{市场表现}}</td><td>{{月数与定义}}</td></tr>
+          <tr><td>当前阶段</td><td>{{当前周期边界；是否完成}}</td><td>{{现实/假设}}</td><td>{{供给}}</td><td>{{单位经济}}</td><td>{{现实/能力}}</td><td>{{当前定价}}</td><td>{{研究判断}}</td></tr>
+        </tbody>
+      </table>
+
+      <h3>5.2 单位经济敏感性</h3>
+      <table>
+        <thead><tr><th>场景</th><th>有效销量/产量</th><th>单位量</th><th>实现价格</th><th>完全成本</th><th>单位价差</th><th>机械利润</th><th>归母调整项</th><th>归母利润能力</th></tr></thead>
+        <tbody>
+          <tr><td>当前现实</td><td>{{数值}}</td><td>{{数值}}</td><td>{{数值}}</td><td>{{实际成本}}</td><td>{{数值}}</td><td>{{数值}}</td><td>{{期间费用、少数股东、抵销、库存/税费}}</td><td>{{现实利润}}</td></tr>
+          <tr><td>每 1 单位价差敏感性</td><td>{{数值}}</td><td>{{数值}}</td><td colspan="3">Δ价差 = 1</td><td>{{机械增量}}</td><td>{{历史转化率}}</td><td>{{归母增量区间}}</td></tr>
+          <tr><td>正常周期</td><td>{{数值}}</td><td>{{数值}}</td><td>{{全年均价}}</td><td>{{可实现成本}}</td><td>{{数值}}</td><td>{{数值}}</td><td>{{调整项}}</td><td>{{周期利润能力}}</td></tr>
+          <tr><td>强周期</td><td>{{数值}}</td><td>{{数值}}</td><td>{{全年均价}}</td><td>{{可实现成本}}</td><td>{{数值}}</td><td>{{数值}}</td><td>{{调整项}}</td><td>{{周期利润能力}}</td></tr>
+        </tbody>
+      </table>
+
+      <h3>5.3 一致预期与场景命名审计</h3>
+      <table>
+        <thead><tr><th>一致预期数据日期/年份</th><th>利润、EPS、BVPS</th><th>原场景名</th><th>是否已被覆盖</th><th>校准后名称</th><th>超出一致预期所需条件</th></tr></thead>
+        <tbody>
+          <tr><td>{{日期/预测年度}}</td><td>{{数值}}</td><td>{{原名称}}</td><td>{{是/否}}</td><td>{{弱修复/正常上行/强周期}}</td><td>{{供给、价格、成本和销量条件}}</td></tr>
+        </tbody>
+      </table>
+
+      <h3>5.4 当前价格隐含假设</h3>
+      <table>
+        <thead><tr><th>当前价格/市值</th><th>反推方法</th><th>隐含可持续价差</th><th>隐含利润与持续期</th><th>对应场景</th><th>主要模型风险</th></tr></thead>
+        <tbody>
+          <tr><td>{{当前价格/市值与日期}}</td><td>{{PE/PB/EV/现金流或组合}}</td><td>{{隐含价差}}</td><td>{{隐含利润/持续期}}</td><td>{{弱修复/正常上行/强周期}}</td><td>{{方法依赖与不确定性}}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="logic">
+      <h2>6. 核心投资逻辑与最强反方逻辑</h2>
+      <table>
+        <thead><tr><th>逻辑</th><th>当前证据</th><th>状态</th><th>继续跟踪</th></tr></thead>
+        <tbody>
+          <tr><td>逻辑 1</td><td>{{当前证据}}</td><td>{{增强/维持/削弱}}</td><td>{{跟踪指标}}</td></tr>
+          <tr><td>逻辑 2</td><td>{{当前证据}}</td><td>{{增强/维持/削弱}}</td><td>{{跟踪指标}}</td></tr>
+          <tr><td>最强反方</td><td>{{反方证据}}</td><td>{{杀伤力：高/中/低}}</td><td>{{验证方式}}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="modules">
+      <h2>7. 八大模块分析</h2>
+      <p class="note">八大模块是通用骨架。请按主类型调整问题深度，并在评分卡使用对应权重；不得对所有公司套同一套分析配方。</p>
+      <h3>7.1 股价与估值</h3>
+      <table><thead><tr><th>问题</th><th>结论</th><th>证据口径</th></tr></thead><tbody>
+        <tr><td>股价为什么被打压</td><td>{{结论}}</td><td>{{证据}}</td></tr>
+        <tr><td>估值和同行对比</td><td>{{结论}}</td><td>{{证据}}</td></tr>
+        <tr><td>净资产结构与减值风险</td><td>{{结论}}</td><td>{{证据}}</td></tr>
+        <tr><td>历史涨幅、回撤和下跌空间</td><td>{{结论}}</td><td>{{证据}}</td></tr>
+      </tbody></table>
+
+      <h3>7.2 行情与市场</h3>
+      <table><thead><tr><th>维度</th><th>当前状态</th><th>解释</th></tr></thead><tbody>
+        <tr><td>趋势</td><td>{{上升/震荡/下跌/反弹/破位}}</td><td>{{解释}}</td></tr>
+        <tr><td>量价</td><td>{{放量/缩量}}</td><td>{{解释}}</td></tr>
+        <tr><td>资金</td><td>{{主动流入/被动流入/融资驱动/机构减仓}}</td><td>{{解释}}</td></tr>
+        <tr><td>情绪</td><td>{{冷门/分歧/过热/恐慌}}</td><td>{{解释}}</td></tr>
+      </tbody></table>
+
+      <h3>7.3 经营质量</h3>
+      <table><thead><tr><th>维度</th><th>关键指标</th><th>判断</th></tr></thead><tbody>
+        <tr><td>自由现金流</td><td>CFO - Capex</td><td>{{判断}}</td></tr>
+        <tr><td>盈利质量</td><td>CFO / 净利润</td><td>{{判断}}</td></tr>
+        <tr><td>利润率</td><td>毛利率、净利率、同行对比</td><td>{{判断}}</td></tr>
+        <tr><td>业务结构</td><td>分部占比、增速、客户集中度</td><td>{{判断}}</td></tr>
+        <tr><td>杠杆与存货</td><td>有息负债、资产负债率、存货周转</td><td>{{判断}}</td></tr>
+        <tr><td>研发与护城河</td><td>研发费用率、专利/产品转化、竞争壁垒</td><td>{{判断}}</td></tr>
+      </tbody></table>
+
+      <h3>7.4 成长性、资本配置、股东与风险</h3>
+      <table><thead><tr><th>模块</th><th>核心结论</th><th>关键证据</th><th>主要风险</th></tr></thead><tbody>
+        <tr><td>成长性与可持续性</td><td>{{结论}}</td><td>{{证据}}</td><td>{{风险}}</td></tr>
+        <tr><td>资本配置与财务健康</td><td>{{结论}}</td><td>{{证据}}</td><td>{{风险}}</td></tr>
+        <tr><td>股东与管理层</td><td>{{结论}}</td><td>{{证据}}</td><td>{{风险}}</td></tr>
+        <tr><td>风险与 ESG/合规</td><td>{{结论}}</td><td>{{证据}}</td><td>{{风险}}</td></tr>
+      </tbody></table>
+    </section>
+
+    <section id="valuation">
+      <h2>8. 估值与情景测算</h2>
+      <p>{{先说明主类型、主估值方法、情景轴、当前价格隐含假设，以及机构一致预期落在哪一档和数据日期。非周期公司通常使用下行/基准/上行三档；周期股保留 4–5 档。}}</p>
+      <table>
+        <thead><tr><th>场景</th><th>核心经营 / 价值驱动假设</th><th>关键财务 / 事件结果</th><th>与一致预期关系</th><th>估值方法与交叉</th><th>统一权益/每股价值</th><th>置信度</th></tr></thead>
+        <tbody>
+          <tr><td>失效 / 下行</td><td>{{按主类型填写增长、现金流、价差、NAV、ROE、存活、里程碑或事件假设}}</td><td>{{财务或事件结果}}</td><td>{{低于/接近/高于}}</td><td>{{方法与交叉验证}}</td><td>{{价值}}</td><td>{{置信度}}</td></tr>
+          <tr><td>基准 / 当前预期</td><td>{{主类型基准假设}}</td><td>{{财务或事件结果}}</td><td>{{低于/接近/高于}}</td><td>{{方法与交叉验证}}</td><td>{{价值}}</td><td>{{置信度}}</td></tr>
+          <tr><td>上行 / 超预期</td><td>{{主类型上行假设}}</td><td>{{财务或事件结果}}</td><td>{{超出一致预期多少}}</td><td>{{方法与交叉验证}}</td><td>{{价值}}</td><td>{{置信度}}</td></tr>
+          <tr><td>{{类型特有场景 4；不适用则删除}}</td><td>{{假设}}</td><td>{{结果}}</td><td>{{关系}}</td><td>{{方法}}</td><td>{{价值}}</td><td>{{置信度}}</td></tr>
+          <tr><td>{{类型特有尾部；不适用则删除}}</td><td>{{低概率尾部假设}}</td><td>{{结果}}</td><td>{{关系}}</td><td>{{保守方法}}</td><td>{{价值}}</td><td>低</td></tr>
+        </tbody>
+      </table>
+      <p class="note">月度或现货峰值不能直接作为全年均价；周期利润能力不是某一年度预测；不得同时使用峰值利润与高景气高估值倍数。若历史市值、PB、当前/未来 BVPS 不支持目标价，必须解释增量来自规模、成本、净资产积累还是资本结构。</p>
+
+      <h3>8.1 双重上市统一经济价值与结构性折溢价</h3>
+      <table>
+        <thead><tr><th>项目</th><th>统一经济价值</th><th>A 股/主上市地</th><th>H 股/ADR/第二上市地</th></tr></thead>
+        <tbody>
+          <tr><td>总权益价值</td><td>{{统一价值}}</td><td>{{同一权益口径}}</td><td>{{同一权益口径}}</td></tr>
+          <tr><td>每股换算</td><td>{{换算规则}}</td><td>{{每股价值}}</td><td>{{汇率/换股比后的价值}}</td></tr>
+          <tr><td>结构性折溢价</td><td>不适用</td><td>{{流动性、资金结构}}</td><td>{{流动性、税费、汇率、持有人、可转换性}}</td></tr>
+          <tr><td>市场参考价值</td><td>{{统一价值}}</td><td>{{参考区间}}</td><td>{{折溢价后区间}}</td></tr>
+        </tbody>
+      </table>
+      <p class="note">仅一个上市市场时删除 8.1；不要先分别拍两个目标价再倒推折价理由。</p>
+    </section>
+
+    <section id="scorecard">
+      <h2>9. 评分卡</h2>
+      <table>
+        <thead><tr><th>模块</th><th class="num">权重</th><th class="num">分数</th><th class="num">加权分</th><th>置信度</th><th>备注</th></tr></thead>
+        <tbody>
+          <tr><td>股价与估值</td><td class="num">{{类型权重}}</td><td class="num">{{0-5}}</td><td class="num">{{加权分}}</td><td>{{高/中/低}}</td><td>{{备注}}</td></tr>
+          <tr><td>行情与市场</td><td class="num">{{类型权重}}</td><td class="num">{{0-5}}</td><td class="num">{{加权分}}</td><td>{{高/中/低}}</td><td>{{备注}}</td></tr>
+          <tr><td>经营质量</td><td class="num">{{类型权重}}</td><td class="num">{{0-5}}</td><td class="num">{{加权分}}</td><td>{{高/中/低}}</td><td>{{备注}}</td></tr>
+          <tr><td>成长性与可持续性</td><td class="num">{{类型权重}}</td><td class="num">{{0-5}}</td><td class="num">{{加权分}}</td><td>{{高/中/低}}</td><td>{{备注}}</td></tr>
+          <tr><td>资本配置与财务健康</td><td class="num">{{类型权重}}</td><td class="num">{{0-5}}</td><td class="num">{{加权分}}</td><td>{{高/中/低}}</td><td>{{备注}}</td></tr>
+          <tr><td>股东与管理层</td><td class="num">{{类型权重}}</td><td class="num">{{0-5}}</td><td class="num">{{加权分}}</td><td>{{高/中/低}}</td><td>{{备注}}</td></tr>
+          <tr><td>风险与 ESG/合规</td><td class="num">{{类型权重}}</td><td class="num">{{0-5}}</td><td class="num">{{加权分}}</td><td>{{高/中/低}}</td><td>{{备注}}</td></tr>
+        </tbody>
+      </table>
+      <p class="note">先写明主类型和所用权重方案。证据不足时写“无法评分”；分类置信度低或关键模块无法评分时不计算总分。不同主类型公司的总分不可直接比较。</p>
+    </section>
+
+    <section id="risks">
+      <h2>10. 风险清单与跟踪指标</h2>
+      <table>
+        <thead><tr><th>风险</th><th>触发条件</th><th>影响路径</th><th>概率</th><th>影响</th><th>可跟踪指标</th></tr></thead>
+        <tbody>
+          <tr><td>{{主类型特有风险 1}}</td><td>{{触发条件}}</td><td>{{影响路径}}</td><td>{{高/中/低}}</td><td>{{高/中/低}}</td><td>{{指标}}</td></tr>
+          <tr><td>{{主类型特有风险 2}}</td><td>{{触发条件}}</td><td>{{影响路径}}</td><td>{{高/中/低}}</td><td>{{高/中/低}}</td><td>{{指标}}</td></tr>
+          <tr><td>{{资本结构或现金流风险}}</td><td>{{触发条件}}</td><td>{{影响路径}}</td><td>{{高/中/低}}</td><td>{{高/中/低}}</td><td>{{指标}}</td></tr>
+          <tr><td>{{监管/合规风险}}</td><td>{{触发条件}}</td><td>{{影响路径}}</td><td>{{高/中/低}}</td><td>{{高/中/低}}</td><td>{{指标}}</td></tr>
+          <tr><td>{{最强反方风险}}</td><td>{{触发条件}}</td><td>{{影响路径}}</td><td>{{高/中/低}}</td><td>{{高/中/低}}</td><td>{{指标}}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="action-watch">
+      <h2>11. 操作层面的观察点</h2>
+      <table>
+        <thead><tr><th>研究/动作层级</th><th>触发条件</th><th>失效条件</th><th>执行边界</th></tr></thead>
+        <tbody>
+          <tr><td>等待 / 观察</td><td>{{条件}}</td><td>{{条件}}</td><td>{{适配投资者}}</td></tr>
+          <tr><td>研究层面的预期试错候选</td><td>{{边际预期、历史领先关系与定价条件}}</td><td>{{条件}}</td><td>不等同下单计划</td></tr>
+          <tr><td>右侧确认</td><td>{{经营、行业价格和市场确认条件}}</td><td>{{条件}}</td><td>仍需完整交易计划</td></tr>
+          <tr><td>可执行交易计划（用户明确要求时填写）</td><td>{{标的、触发价、委托价、数量、有效期}}</td><td>{{失效、止损和买回条件}}</td><td>{{短线/中线/长线与风险预算}}</td></tr>
+          <tr><td>持有 / 卖现实 / 退出</td><td>{{条件}}</td><td>{{条件}}</td><td>{{适配投资者}}</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="final-judgment">
+      <h2>12. 一句话结论</h2>
+      <p><strong>{{一句话结论}}</strong></p>
+    </section>
+
+    <section id="sources">
+      <h2>13. 来源与口径</h2>
+      <ol class="source-list">
+        <li>{{公司官网/IR、财报、公告或电话会材料：文件/链接/发布日期/数据日期}}</li>
+        <li>{{监管或交易所披露：SEC EDGAR/HKEXnews/巨潮资讯/交易所公告/发布日期/数据日期}}</li>
+        <li>{{权威金融机构或金融数据商：数据项/供应方/数据日期/口径说明}}</li>
+        <li>{{公司类型识别：主导价值来源、替代分类、类型迁移与评分权重依据}}</li>
+        <li>{{周期股条件触发：周期边界、行业供需、全年均价与短期峰值、机构一致预期及其数据日期}}</li>
+      </ol>
+    </section>
+
+    <p class="disclaimer">本报告仅用于研究和决策辅助，不构成投资建议。所有结论依赖已列示数据和假设；若财报、股价、监管、行业景气或公司披露发生变化，需要重新评估。</p>
+  </article>
+</body>
+</html>

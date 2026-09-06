@@ -18,7 +18,7 @@
  *   - 其它通用基础技能                             -> base
  */
 
-import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readdir, readFile, writeFile, mkdir, cp } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -73,6 +73,16 @@ async function main() {
       if (existsSync(realPath)) {
         content = await readFile(realPath, 'utf8')
       }
+    }
+
+    // Company research references/templates/scripts are relative to its own resourceBase.
+    // Keep the flattened compatibility asset, and distribute the complete portable skill.
+    if (skillName === 'company-analysis') {
+      await cp(path.join(AGENTS_SKILLS_DIR, skillName), path.join(MARKET_PACKAGES.base, skillName), {
+        recursive: true,
+        dereference: true,
+        filter: (source) => !path.basename(source).startsWith('.'),
+      })
     }
 
     const targetDirs = resolveTargetDirs(skillName)

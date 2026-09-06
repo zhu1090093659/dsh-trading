@@ -16,7 +16,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import type { DerivativesData, DerivativesHistory } from '../src/client/types.ts'
 
 // TvChart 依赖 lightweight-charts（canvas 族 API 在 jsdom 不可用）：冒烟只关心
@@ -135,6 +135,75 @@ describe('QuoteStage 渲染冒烟（TDZ 网）', () => {
     // 点击行情快照 → fillComposer 恰被调用一次（只填不发语义由 fill-composer 测试覆盖）
     fireEvent.click(getByText('quote.sendMenuSnapshot'))
     await waitFor(() => { expect(fillComposer).toHaveBeenCalledTimes(1) })
+  })
+
+  it('默认主按钮在图表页也补齐公告、新闻与基本面，重复点击只填一次', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/news?')) return new Response(JSON.stringify({ ok: true, items: [
+        { source: 'sec-edgar', title: 'Annual disclosure', url: 'https://sec.gov/example', publishedAt: '2026-09-01' },
+        { source: 'media', title: 'Product launch', url: 'https://example.com/news', publishedAt: '2026-09-02' },
+      ], unavailable: [] }))
+      if (url.includes('/fundamentals?')) return new Response(JSON.stringify({ ok: true, fundamentals: { market: 'us', symbol: 'AAPL', profile: { symbol: 'AAPL', industry: 'Technology' } } }))
+      return new Response('{}', { status: 500 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const fillComposer = vi.fn(async () => {})
+    const { getByText } = render(<QuoteStage {...quoteStageProps('us')} fillComposer={fillComposer} />)
+    const button = getByText('quote.sendToAgent')
+    fireEvent.click(button)
+    fireEvent.click(button)
+    await waitFor(() => expect(fillComposer).toHaveBeenCalledTimes(1))
+    const body = (fillComposer.mock.calls as unknown as string[][])[0]?.[0]
+    expect(body).toContain('Annual disclosure')
+    expect(body).toContain('Product launch')
+    expect(body).toContain('Technology')
+    expect(fetchMock.mock.calls.filter(([url]) => url.includes('/fundamentals?'))).toHaveLength(1)
+  })
+
+  it('切标的取消补齐，不把旧结果填入输入框', async () => {
+    let finishNews: ((response: Response) => void) | undefined
+    vi.stubGlobal('fetch', vi.fn((url: string) => url.includes('/news?')
+      ? new Promise<Response>(resolve => { finishNews = resolve })
+      : Promise.resolve(new Response('{}', { status: 500 }))))
+    const fillComposer = vi.fn(async () => {})
+    const view = render(<QuoteStage {...quoteStageProps('us')} fillComposer={fillComposer} />)
+    fireEvent.click(view.getByText('quote.sendToAgent'))
+    view.rerender(<QuoteStage {...quoteStageProps('crypto')} fillComposer={fillComposer} />)
+    finishNews?.(new Response(JSON.stringify({ ok: true, items: [], unavailable: [] })))
+    await waitFor(() => expect(view.getByText('quote.sendToAgent')).toBeTruthy())
+    expect(fillComposer).not.toHaveBeenCalled()
+  })
+
+  it('异步补齐使用点击时捕获的 composer 目标', async () => {
+    const fill = vi.fn(async () => {})
+    const target = vi.fn(async () => {})
+    const captureTarget = vi.fn(() => target)
+    const fillComposer = Object.assign(fill, { captureTarget })
+    const view = render(<QuoteStage {...quoteStageProps('us')} fillComposer={fillComposer} />)
+    fireEvent.click(view.getByText('quote.sendToAgent'))
+    expect(captureTarget).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(target).toHaveBeenCalledTimes(1))
+    expect(fill).not.toHaveBeenCalled()
+  })
+
+  it('补齐超时仍填入行情与缺项提示，不永久停留 sending', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
+        if (url.includes('/news?') || url.includes('/fundamentals?')) return new Promise<Response>((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+        })
+        return Promise.resolve(new Response('{}', { status: 500 }))
+      }))
+      const fillComposer = vi.fn(async () => {})
+      const view = render(<QuoteStage {...quoteStageProps('us')} fillComposer={fillComposer} />)
+      fireEvent.click(view.getByText('quote.sendToAgent'))
+      expect(fillComposer).not.toHaveBeenCalled()
+      await act(async () => { await vi.advanceTimersByTimeAsync(15001) })
+      expect(fillComposer).toHaveBeenCalledTimes(1)
+      expect((fillComposer.mock.calls as unknown as string[][])[0]?.[0]).toContain('compose.research.unavailable')
+      view.unmount()
+    } finally { vi.useRealTimers() }
   })
 
   it('未注入 fillComposer → 统一发送入口整体不渲染', () => {

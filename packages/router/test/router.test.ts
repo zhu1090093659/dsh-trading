@@ -284,6 +284,23 @@ describe('TradingNewsRegistryService（tradingNewsRegistry，Issue #37）', () =
     unavailable: [],
   })
 
+  it('independent role registrations survive sibling disposal and restore previous provider', () => {
+    const registry = new TradingNewsRegistryService(new CordisContext() as never)
+    const shared = fakeAggregator('shared')
+    const other = fakeAggregator('other')
+    const first = registry.register('us', shared)
+    const second = registry.register('us', shared)
+    first()
+    first()
+    expect(registry.get('us')).toBe(shared)
+    const third = registry.register('us', other)
+    expect(registry.get('us')).toBe(other)
+    third()
+    expect(registry.get('us')).toBe(shared)
+    second()
+    expect(registry.get('us')).toBeUndefined()
+  })
+
   it('注册聚合器、get 获取、markets 列举及注销清理', () => {
     const registry = new TradingNewsRegistryService(new CordisContext() as never)
     const cryptoAgg = fakeAggregator('crypto')

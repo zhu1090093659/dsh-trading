@@ -27,6 +27,10 @@
     - id: dsh-trading-base-gate
       name: '@dshtrading/base'
 
+    # One owner composes role presets from enabled market bundle rows; no market installer races.
+    - id: dsh-trading-role-presets
+      name: '@dshtrading/base/presets'
+
     # 市场/数据源路由（2026-08-29 设置驱动单预设重构，docs/exchange-routing.md）：
     # host 面常驻，注册 dshtrading settings namespace + provide tradingMarketRouter；
     # 连接器 apply 时 consult activeProvider(market)——用户设置选谁谁激活。

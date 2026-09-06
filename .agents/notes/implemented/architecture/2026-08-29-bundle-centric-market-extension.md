@@ -17,6 +17,8 @@ Status: implemented
 
 `@dsh-trading/base` bundle 是市场无关共享行（审批闸门、agent-presets root 配置）的唯一拥有者。
 
+市场预设划分与自安装职责此后由[三角色预设与市场能力整合](2026-09-06-unified-trading-role-presets.md)取代：市场仍为发行单位，base 按启用市场统一生成交易员、研究员和风险审查员。
+
 ## Alternatives considered
 
 - **单巨插件装全部内容**：多市场并存时工具全量堆叠、无会话级隔离，preset 验收标准（普通会话不可见市场工具）无法满足——否决。

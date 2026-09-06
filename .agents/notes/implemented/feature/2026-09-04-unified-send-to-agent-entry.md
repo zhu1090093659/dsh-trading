@@ -17,6 +17,8 @@ Status: implemented
 
 ## Decision
 
+默认打包范围由 [完整标的上下文](2026-09-06-send-complete-instrument-context.md) 扩展：主按钮与首项菜单现在点击时补齐新闻、公告和基本面，不再只填行情快照；分体入口和只填不发语义保留。
+
 1. **报价头常驻分体按钮**（`css.sendWrap` = 主按钮 + caret，紧随 `.meta` 右对齐）：
    主按钮保留原「发给 Agent」一键直填行情快照的快路径（态机 idle/sending/sent/error
    原样承载于整个按钮组）；caret 打开下拉菜单（`sendBackdrop` + `sendMenu`，复用
