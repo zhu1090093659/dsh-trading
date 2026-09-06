@@ -31,3 +31,5 @@ master 是全能型多 agent 团队主导者：组合形态 = trader 的市场�
 master 委派边界如实声明：fork 子代理继承会话工具面（含下单工具可见），专员 persona 约束职责，与「角色分工不是独立安全沙箱」同一信任口径；委派工具仅 master 预设挂载，其他角色与默认会话不可见（宿主默认委派行 disabled）。子代理结论经 master 交叉核对，最终交付物是整合结论而非子代理原文。
 
 真机端到端验收（2026-09-06，trading-web 独立实例）：boot 安装器写出 master（preset.yml order 90，agent.cordis.yml 23 行合法 YAML）；经定时任务以 agentPreset=master 手动运行委派验收指令，会话头确认 `agentPreset: "master"`，转写含 `subagent/descriptor`（provider fork、one-shot、标签「AAPL 主导价值驱动类型判定」）——master 真实调用 researcher_subagent；行为链符合人设：先 knowledge_search（0 卡如实说明）、调 us_get_ticker/us_get_fundamentals/routing_get、交付整合判定并声明未执行交易。同轮修正安装器与预设副本后桌面壳重启即带 master。验收任务已删除，台账无残留。
+
+默认预设裁决（2026-09-06，owner）：base 的 agent-presets 覆盖行 `default: standard` → `default: master`——角色整合完成且 master 委派链路验收通过后，部署层新会话默认进「大师」。取代 S3 期「default 保持官方 standard、不劫持默认 preset」的过渡口径（该口径的历史语境是四市场各自预设并存的会话选择问题，统一角色后不复存在）；官方 standard 及用户创作预设仍在 roster 可选。owner 同日裁决：本机全局 `~/.dsh/settings.yaml` 的用户层覆盖 `agent-presets.default: ptc` 保留不动（用户层优先于组合层，跨 profile 生效）——因此本机 trading-web 新会话实际默认仍是 ptc，`default: master` 对无用户层覆盖的干净部署生效；headless 部署不受影响（base 该行在 headless 仅警告跳过，默认预设由部署方自行配置）。

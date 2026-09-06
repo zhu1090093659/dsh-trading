@@ -17,8 +17,11 @@
 #      警告并跳过，不致命。headless 部署需要该 root 时，由部署方在 profile 级
 #      cordis.patch.yml 自行 insert 同一行（见 README 开发期安装节；trading-dev 即如此）。
 #      roots 用市场自有目录 ~/.dsh-trading-presets（bundle 安装器自安装目的地，
-#      不混入 ~/.dsh/.agent-presets 用户创作区）；default 保持官方 standard，
-#      多市场会话并存时不劫持默认 preset。包名解析依赖本包 dependencies 里的
+#      不混入 ~/.dsh/.agent-presets 用户创作区）；default=master（owner 2026-09-06
+#      裁决：角色整合完成后，新会话默认进「大师」团队主导者，取代 S3 期
+#      default=standard 的过渡口径，见 .agents/notes/implemented/architecture/
+#      2026-09-06-unified-trading-role-presets.md；用户层 settings 仍可覆盖）。
+#      包名解析依赖本包 dependencies 里的
 #      @deepseek-ai/dsh-agent-presets（进 profile 安装闭包，S3 坑 3）。
 #
 # 脚手架阶段遗留的 insert-only 约定不变：后续共享行（组合管理/风控工具行、
@@ -154,7 +157,7 @@
 - id: agent-presets
   name: '@deepseek-ai/dsh-agent-presets'
   config:
-    default: standard
+    default: master
     roots:
       - path: ~/.dsh-trading-presets
         trust: user
