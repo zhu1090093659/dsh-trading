@@ -25,6 +25,8 @@ Status: implemented
 >   `resolveActiveView` 对失效存储视图回落 chat——因此摘除自家 quote view + CSS 藏末位
 >   tab（roster 顺序确定 [chat(0), trajectory(10)]，选择器限定会话列，左栏市场页签同名
 >   role 不可误伤）即达成，存储过 trajectory 的旧会话也可点「对话」逃回。
+>   （2026-09-06 裁决更新：轨迹视图已恢复，藏 tab 规则已删，见
+>   [2026-09-06-trajectory-view-restore.md](../feature/2026-09-06-trajectory-view-restore.md)。）
 > - **窄对话列（380px）**：ConversationRoot 内容宽度轴 clamp 下限 680px 必然横向溢出，
 >   以 `--dsh-chat-user-width: 100% !important` 压回栏宽（author important 压过其内联
 >   写入）；宽度手柄随之隐藏。scrollbody 本身 overflow-x:hidden，hero 光晕 SVG 超宽无害。

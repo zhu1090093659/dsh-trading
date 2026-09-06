@@ -153,12 +153,9 @@ body[data-dshtrading-chat-resizing='on'] {
   user-select: none;
 }
 
-/* 6) 轨迹视图退役：conversation.view 名册顺序确定 [chat(order 0),
-      trajectory(order 10)]（quote 已摘除），藏末位 tab 即藏轨迹；
-      会话列限定——左栏市场页签用同名 role，不得误伤。 */
-div:has(> [data-shell-overlay]) > div:nth-child(2) [role='tablist'] > button:last-child {
-  display: none !important;
-}
+/* 6) 轨迹视图恢复（2026-09-06 owner 裁决）：原「藏末位 tab 藏轨迹」规则已删除，
+      conversation.view 名册 [chat(order 0), trajectory(order 10)] 完整渲染，
+      会话可直接查看轨迹/系统提示词。 */
 
 /* 11) 3.0 定时任务侧边栏 = 对话列容器的切换页签：任务面板与官方对话共用
       同一条轨道（第 2 轨），激活时隐去对话列全部直接子节点（hero 融合容器
