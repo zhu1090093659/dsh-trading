@@ -1,12 +1,14 @@
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
-import { BUNDLED_SKILL_RANK, type SkillCandidate, type SkillProvider } from '@deepseek-ai/dsh-skill'
+import { BUNDLED_SKILL_RANK, type SkillCandidate, type SkillProvider, type SkillResourceBase } from '@deepseek-ai/dsh-skill'
 export const name = 'dsh-trading-role-skills'
 export const inject = ['skills']
 const companyResourceBase = { kind: 'directory', path: fileURLToPath(new URL('../assets/skills/company-analysis/', import.meta.url)) } as const
 const flatResourceBase = { kind: 'directory', path: fileURLToPath(new URL('../assets/skills/', import.meta.url)) } as const
-const CANDIDATES: SkillCandidate[] = [
+/** Concrete candidate: this provider always supplies resourceBase and a URL locator. */
+type RoleCandidate = SkillCandidate & { resourceBase: SkillResourceBase; locator: URL }
+const CANDIDATES: RoleCandidate[] = [
   {
     name: 'company-analysis',
     description: '上市公司研究：先按价值驱动分类，再核验公告财报、财务质量、估值与反方情景；含周期股跨周期校准。',

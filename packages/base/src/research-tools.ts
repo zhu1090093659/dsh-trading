@@ -5,7 +5,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Interval, MarketDataService } from '@dshtrading/api'
 export const name = 'dsh-trading-research-market-data'
 export const inject = ['tools']
-export interface Config { markets: string[] }
+export interface Config { markets: Array<'crypto' | 'us' | 'cn' | 'hk'> }
 export const Config: Schema<Config> = Schema.object({
   markets: Schema.array(Schema.union(['crypto', 'us', 'cn', 'hk'])).default([]),
 })
@@ -17,7 +17,7 @@ export function createResearchTools(market: string, getRegistry: () => Registry 
     if (!entry) throw new Error(`${market}: selected market data provider unavailable; check routing_get and installed connectors`)
     return entry
   }
-  const symbolParam = { type: 'string' as const, required: true, description: 'Market-canonical symbol, e.g. BTCUSDT / AAPL / 600519.SH / 00700.HK' }
+  const symbolParam = { type: 'string' as const, required: true as const, description: 'Market-canonical symbol, e.g. BTCUSDT / AAPL / 600519.SH / 00700.HK' }
   const output = { schema: { type: 'string' as const }, render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }] }
   return [
     defineTool({
