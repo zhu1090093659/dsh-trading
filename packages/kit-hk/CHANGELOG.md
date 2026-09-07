@@ -1,5 +1,12 @@
 # @dshtrading/kit-hk
 
+## 0.1.5
+
+### Patch Changes
+
+- @dshtrading/indicators@0.1.5
+- @dshtrading/knowledge@0.1.5
+
 ## 0.1.4
 
 ### Patch Changes

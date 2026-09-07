@@ -1,5 +1,24 @@
 # @dshtrading/client-ui-trading
 
+## 0.1.5
+
+### Patch Changes
+
+- @dshtrading/api@0.1.5
+- @dshtrading/client-ui-knowledge@0.1.5
+- @dshtrading/client-ui-strategies@0.1.5
+- @dshtrading/eventbus@0.1.5
+- @dshtrading/holdings@0.1.5
+- @dshtrading/indicators@0.1.5
+- @dshtrading/kit-cn@0.1.5
+- @dshtrading/kit-crypto@0.1.5
+- @dshtrading/kit-hk@0.1.5
+- @dshtrading/kit-us@0.1.5
+- @dshtrading/knowledge@0.1.5
+- @dshtrading/router@0.1.5
+- @dshtrading/strategies@0.1.5
+- @dshtrading/watchlist@0.1.5
+
 ## 0.1.4
 
 ### Patch Changes

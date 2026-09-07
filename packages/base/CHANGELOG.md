@@ -1,5 +1,27 @@
 # @dshtrading/base
 
+## 0.1.5
+
+### Patch Changes
+
+- Release v0.1.5: role-based built-in skill assignment (kit/role-skills whitelist); holdings panel total P&L and per-symbol round-trip history; market symbol search by Chinese name/pinyin with core CN index quotes; preset methodology iron rules for base and kit-crypto; preset injection text unified to English; native trajectory view restored in client-ui-trading; Windows compatibility fixes (LF normalization, CI windows matrix, nsis include hardening); base master-preset dsh-tool-jobs mount fix.
+  - @dshtrading/api@0.1.5
+  - @dshtrading/client-ui-indicators@0.1.5
+  - @dshtrading/client-ui-knowledge@0.1.5
+  - @dshtrading/client-ui-masters-quotes@0.1.5
+  - @dshtrading/client-ui-settings@0.1.5
+  - @dshtrading/client-ui-strategies@0.1.5
+  - @dshtrading/client-ui-trading@0.1.5
+  - @dshtrading/client-ui-updater@0.1.5
+  - @dshtrading/dsh-i18n@0.1.5
+  - @dshtrading/eventbus@0.1.5
+  - @dshtrading/holdings@0.1.5
+  - @dshtrading/indicators@0.1.5
+  - @dshtrading/knowledge@0.1.5
+  - @dshtrading/router@0.1.5
+  - @dshtrading/strategies@0.1.5
+  - @dshtrading/watchlist@0.1.5
+
 ## 0.1.4
 
 ### Patch Changes

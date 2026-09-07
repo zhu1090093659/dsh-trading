@@ -1,5 +1,11 @@
 # @dshtrading/connector-qmt
 
+## 0.1.5
+
+### Patch Changes
+
+- @dshtrading/api@0.1.5
+
 ## 0.1.4
 
 ### Patch Changes
