@@ -992,10 +992,13 @@ export class TradingBridge {
    * 删除策略（策略管理）：自定义 = 移除记录；内置范式 = 落墓碑（出厂代码不动，
    * POST /strategies/reset 可恢复），顺带丢弃该内置的覆盖记录。
    */
-  async deleteCustomStrategy(id: string): Promise<{ ok: boolean; removed: boolean; scope: 'custom' | 'builtin' }> {
+  async deleteCustomStrategy(rawId: string): Promise<{ ok: boolean; removed: boolean; scope: 'custom' | 'builtin' }> {
+    // 与 PUT 同款归一化（PUT 在 isBuiltinStrategyId 前先 trim+lowercase，两侧对称）。
+    const id = rawId.trim().toLowerCase()
     if (isBuiltinStrategyId(id)) {
       await this.host.tombstonesStore?.add(id)
-      await this.host.strategyStore?.remove(id)
+      // 内置删除丢弃覆盖记录：归档后可找回（出厂代码由墓碑/恢复语义保证）。
+      await this.host.strategyStore?.remove(id, true)
       return { ok: true, removed: true, scope: 'builtin' }
     }
     const store = this.host.strategyStore
@@ -1034,6 +1037,9 @@ export class TradingBridge {
     }
     if (overridesBuiltin) {
       await this.host.tombstonesStore?.remove(id)
+      // 上一次覆盖记录将被本次 save 顶掉：先归档删除再落盘，旧修改可找回。
+      const previousOverride = await store.get(id)
+      if (previousOverride !== undefined) await store.remove(id, true)
     }
     await store.save(result.record)
     return { ok: true, strategy: result.record, overridesBuiltin }
@@ -1056,7 +1062,8 @@ export class TradingBridge {
     if (!isBuiltinStrategyId(id)) {
       return { ok: false, code: 'TRADING_STRATEGY_NOT_BUILTIN', message: `"${id}" is not a built-in paradigm strategy id` }
     }
-    const removedOverride = await this.host.strategyStore?.remove(id) ?? false
+    // 恢复出厂丢弃覆盖记录：归档后可找回。
+    const removedOverride = await this.host.strategyStore?.remove(id, true) ?? false
     const liftedTombstone = await this.host.tombstonesStore?.remove(id) ?? false
     return { ok: true, reset: true, changed: removedOverride || liftedTombstone, removedOverride, liftedTombstone }
   }

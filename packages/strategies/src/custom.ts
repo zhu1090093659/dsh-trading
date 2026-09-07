@@ -30,7 +30,8 @@ export interface CustomStrategyStore {
   list(): Promise<CustomStrategyRecord[]>
   get(id: string): Promise<CustomStrategyRecord | undefined>
   save(record: CustomStrategyRecord): Promise<void>
-  remove(id: string): Promise<boolean>
+  /** archive = 删除前把记录归档（file 版落 .archive.jsonl；memory 版忽略）。 */
+  remove(id: string, archive?: boolean): Promise<boolean>
 }
 
 /** 内存版自定义策略存储（纯浏览器与单测用）。 */

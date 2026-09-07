@@ -61,6 +61,7 @@ export type StrategyLocaleKey =
   | 'sv.mgmt.badge.custom'
   | 'sv.mgmt.confirmDelete'
   | 'sv.mgmt.confirmOverride'
+  | 'sv.mgmt.confirmRestore'
   | 'sv.mgmt.editorTitle'
   | 'sv.mgmt.field.id'
   | 'sv.mgmt.field.title'

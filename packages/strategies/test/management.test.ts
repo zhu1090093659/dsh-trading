@@ -72,6 +72,178 @@ describe('builtinStrategySource 往返（全部内置范式）', () => {
   }
 })
 
+/**
+ * 内联数学 parity（2026-09-07 审查补强）：往返测试两侧都是内联代码，只能证明
+ * toString/compile 保真；本组测试用 indicators 包的 ema/sma/rsi/bollinger 手工
+ * 重建各范式的判定逻辑（循环起点、undefined 跳过与入场/出场谓词逐条对照源实现），
+ * 与内联版 compute 在同一序列上逐信号比对——
+ * 锁死「内联数学 ≡ indicators 数学」这一内联改写的语义前提。
+ * 比较面 = 信号核心字段（index/time/action/direction/price）；reason/reasonKey
+ * 是文案层（内联版带 i18n 插值，重建版是简化标注），不在数学等价范围内。
+ */
+function signalCore(signals: readonly { index: number; time: number; action: string; direction: string; price: number }[]): Array<Record<string, unknown>> {
+  return signals.map((s) => ({ index: s.index, time: s.time, action: s.action, direction: s.direction, price: s.price }))
+}
+
+function expectSignalsEqual(actual: unknown, expected: unknown): void {
+  expect(JSON.stringify(signalCore(actual as never))).toBe(JSON.stringify(signalCore(expected as never)))
+}
+describe('内联数学 parity：内联 compute ≡ indicators 包重建（全部 5 个指标类范式）', () => {
+  const bars = sampleBars(400)
+  const closes = bars.map((b) => b.close)
+
+  function defParams(def: StrategyDefinition): Record<string, number> {
+    const out: Record<string, number> = {}
+    for (const p of def.params) out[p.key] = p.default
+    return out
+  }
+
+  it('ema-crossover：内联 emaOf ≡ indicators.ema（SMA 种子，信号级）', async () => {
+    const { ema } = await import('@dshtrading/indicators')
+    const def = strategyParadigms.find((d) => d.id === 'ema-crossover')!
+    const params = defParams(def)
+    const fastP = Math.max(2, Math.round(params.fastPeriod ?? 20))
+    const slowP = Math.max(fastP + 1, Math.round(params.slowPeriod ?? 60))
+    const fast = ema(closes, fastP)
+    const slow = ema(closes, slowP)
+    const reference: StrategyDefinition['compute'] = (seq) => {
+      const signals = []
+      let inPosition = false
+      for (let i = 1; i < seq.length; i++) {
+        const prevFast = fast[i - 1]
+        const prevSlow = slow[i - 1]
+        const currFast = fast[i]
+        const currSlow = slow[i]
+        if (prevFast === undefined || prevSlow === undefined || currFast === undefined || currSlow === undefined) continue
+        // 谓词对照 ema-crossover.ts：金叉 prevFast<=prevSlow && currFast>currSlow；
+        // 死叉 prevFast>=prevSlow && currFast<currSlow。
+        if (!inPosition && prevFast <= prevSlow && currFast > currSlow) {
+          signals.push({ index: i, time: seq[i].openTime, action: 'entry', direction: 'long', price: seq[i].close, reason: 'golden' })
+          inPosition = true
+        } else if (inPosition && prevFast >= prevSlow && currFast < currSlow) {
+          signals.push({ index: i, time: seq[i].openTime, action: 'exit', direction: 'flat', price: seq[i].close, reason: 'dead' })
+          inPosition = false
+        }
+      }
+      return signals
+    }
+    expectSignalsEqual(def.compute(bars, params), reference(bars, params))
+  })
+
+  it('rsi-reversion：内联 rsiOf ≡ indicators.rsi（Wilder，信号级）', async () => {
+    const { rsi } = await import('@dshtrading/indicators')
+    const def = strategyParadigms.find((d) => d.id === 'rsi-reversion')!
+    const params = defParams(def)
+    const period = Math.max(2, Math.round(params.period ?? 2))
+    const enterThresh = Number(params.entryThreshold ?? 10)
+    const exitThresh = Number(params.exitThreshold ?? 60)
+    const rsiValues = rsi(closes, period)
+    const reference: StrategyDefinition['compute'] = (seq) => {
+      const signals = []
+      let inPosition = false
+      // 循环起点对照 rsi-reversion.ts：i 从 0 起（含 warm-up 位的 undefined 跳过）。
+      for (let i = 0; i < seq.length; i++) {
+        const val = rsiValues[i]
+        if (val === undefined || Number.isNaN(val)) continue
+        if (!inPosition && val < enterThresh) {
+          signals.push({ index: i, time: seq[i].openTime, action: 'entry', direction: 'long', price: seq[i].close, reason: 'oversold' })
+          inPosition = true
+        } else if (inPosition && val > exitThresh) {
+          signals.push({ index: i, time: seq[i].openTime, action: 'exit', direction: 'flat', price: seq[i].close, reason: 'rebound' })
+          inPosition = false
+        }
+      }
+      return signals
+    }
+    expectSignalsEqual(def.compute(bars, params), reference(bars, params))
+  })
+
+  it('sma-baseline：内联 smaOf ≡ indicators.sma（信号级）', async () => {
+    const { sma } = await import('@dshtrading/indicators')
+    const def = strategyParadigms.find((d) => d.id === 'sma-baseline')!
+    const params = defParams(def)
+    const period = Math.max(10, Math.round(params.period ?? 200))
+    const smaValues = sma(closes, period)
+    const reference: StrategyDefinition['compute'] = (seq) => {
+      const signals = []
+      let inPosition = false
+      // 循环起点对照 sma-baseline.ts：i 从 period-1 起。
+      for (let i = period - 1; i < seq.length; i++) {
+        const ma = smaValues[i]
+        if (ma === undefined) continue
+        if (!inPosition && seq[i].close > ma) {
+          signals.push({ index: i, time: seq[i].openTime, action: 'entry', direction: 'long', price: seq[i].close, reason: 'above' })
+          inPosition = true
+        } else if (inPosition && seq[i].close < ma) {
+          signals.push({ index: i, time: seq[i].openTime, action: 'exit', direction: 'flat', price: seq[i].close, reason: 'below' })
+          inPosition = false
+        }
+      }
+      return signals
+    }
+    expectSignalsEqual(def.compute(bars, params), reference(bars, params))
+  })
+
+  it('momentum-12m：内联 smaOf ≡ indicators.sma（信号级）', async () => {
+    const { sma } = await import('@dshtrading/indicators')
+    const def = strategyParadigms.find((d) => d.id === 'momentum-12m')!
+    const params = defParams(def)
+    const lookback = Math.max(10, Math.round(params.lookbackBars ?? 250))
+    const smaValues = sma(closes, lookback)
+    const reference: StrategyDefinition['compute'] = (seq) => {
+      const signals = []
+      let inPosition = false
+      // 循环起点与谓词对照 momentum-12m.ts：i 从 lookback 起；pastClose<=0 跳过；
+      // 入场 momentum>0 && close>sma；出场 momentum<=0 || close<sma。
+      for (let i = lookback; i < seq.length; i++) {
+        const currentClose = seq[i].close
+        const pastClose = seq[i - lookback].close
+        const currentSma = smaValues[i]
+        if (pastClose <= 0 || currentSma === undefined) continue
+        const momentumReturn = (currentClose - pastClose) / pastClose
+        if (!inPosition && momentumReturn > 0 && currentClose > currentSma) {
+          signals.push({ index: i, time: seq[i].openTime, action: 'entry', direction: 'long', price: currentClose, reason: 'momentum' })
+          inPosition = true
+        } else if (inPosition && (momentumReturn <= 0 || currentClose < currentSma)) {
+          signals.push({ index: i, time: seq[i].openTime, action: 'exit', direction: 'flat', price: currentClose, reason: 'fade' })
+          inPosition = false
+        }
+      }
+      return signals
+    }
+    expectSignalsEqual(def.compute(bars, params), reference(bars, params))
+  })
+
+  it('bollinger-reversion：内联 stdevOf/smaOf ≡ indicators.bollinger（信号级）', async () => {
+    const { bollinger } = await import('@dshtrading/indicators')
+    const def = strategyParadigms.find((d) => d.id === 'bollinger-reversion')!
+    const params = defParams(def)
+    const period = Math.max(5, Math.round(params.period ?? 20))
+    const k = Number(params.multiplier ?? 2)
+    const { mid, lower } = bollinger(closes, period, k)
+    const reference: StrategyDefinition['compute'] = (seq) => {
+      const signals = []
+      let inPosition = false
+      // 循环起点与谓词对照 bollinger-reversion.ts：i 从 period-1 起；
+      // 入场 close < lower；出场 close >= mid。
+      for (let i = period - 1; i < seq.length; i++) {
+        const currentLower = lower[i]
+        const currentMid = mid[i]
+        if (currentLower === undefined || currentMid === undefined) continue
+        if (!inPosition && seq[i].close < currentLower) {
+          signals.push({ index: i, time: seq[i].openTime, action: 'entry', direction: 'long', price: seq[i].close, reason: 'below' })
+          inPosition = true
+        } else if (inPosition && seq[i].close >= currentMid) {
+          signals.push({ index: i, time: seq[i].openTime, action: 'exit', direction: 'flat', price: seq[i].close, reason: 'mid' })
+          inPosition = false
+        }
+      }
+      return signals
+    }
+    expectSignalsEqual(def.compute(bars, params), reference(bars, params))
+  })
+})
+
 describe('applyStrategyManagement 名册合成', () => {
   const builtin = strategyParadigms[0]!
   const builtin2 = strategyParadigms[1]!
@@ -131,6 +303,32 @@ describe('墓碑存储', () => {
     await second.remove('donchian-breakout')
     const third = createFileBuiltinTombstonesStore(path)
     expect(await third.list()).toEqual(['scr.ma-bull-align'])
+  })
+})
+
+describe('覆盖记录归档（2026-09-07 审查补强：丢弃的 override 可找回）', () => {
+  it('file store remove(id, true)：记录归档到 .archive.jsonl 且从主文件消失', async () => {
+    const { createFileCustomStrategyStore, readArchivedStrategyRecords } = await import('../src/custom-fs.ts')
+    const dir = await mkdtemp(join(tmpdir(), 'strategies-archive-'))
+    const path = join(dir, 'custom.json')
+    const store = createFileCustomStrategyStore(path)
+    await store.save({
+      id: 'ema-crossover', title: '旧覆盖', horizon: 'swing', summary: 'x',
+      paramsJson: '[]', computeSource: '(bars) => []', createdAt: 1,
+    })
+    expect(await store.remove('ema-crossover', true)).toBe(true)
+    // 主文件已删；归档文件含被删记录。
+    expect(await store.get('ema-crossover')).toBeUndefined()
+    const archived = await readArchivedStrategyRecords(`${path}.archive.jsonl`)
+    expect(archived).toHaveLength(1)
+    expect(archived[0]).toMatchObject({ id: 'ema-crossover', title: '旧覆盖' })
+    // 非归档删除不写归档。
+    await store.save({
+      id: 'my-custom', title: 'x', horizon: 'swing', summary: 'x',
+      paramsJson: '[]', computeSource: '(bars) => []', createdAt: 2,
+    })
+    await store.remove('my-custom')
+    expect(await readArchivedStrategyRecords(`${path}.archive.jsonl`)).toHaveLength(1)
   })
 })
 

@@ -179,6 +179,9 @@ export function createStrategyAuthorTool(options: StrategyAuthorToolOptions) {
       const overridesBuiltin = isBuiltinStrategyId(result.record.id)
       if (overridesBuiltin) {
         // 覆盖内置 = 恢复该 id 的删除标记（墓碑 + 覆盖并存无意义，author 即「要回它」）。
+        // 上一次覆盖记录将被本次 save 顶掉：先归档删除再落盘，旧修改可找回。
+        const previousOverride = await store.get(result.record.id)
+        if (previousOverride !== undefined) await store.remove(result.record.id, true)
         await tombstones?.remove(result.record.id)
       }
       await store.save(result.record)
@@ -230,13 +233,20 @@ export async function resolveStrategyDefinition(
     } catch {
       params = []
     }
-    return {
-      id: record.id,
-      horizon: record.horizon,
-      name: record.title,
-      summary: record.summary,
-      params,
-      compute: compileStrategySource(record.computeSource),
+    try {
+      return {
+        id: record.id,
+        horizon: record.horizon,
+        name: record.title,
+        summary: record.summary,
+        params,
+        compute: compileStrategySource(record.computeSource),
+      }
+    } catch {
+      // 损坏的记录（如手改 custom.json）：与 GUI 名册同语义——回落出厂内置，
+      // 不让一次裸编译错误替换掉友好的 unknown-strategy 文案。
+      if (isBuiltinStrategyId(record.id)) return getStrategyById(record.id)
+      return undefined
     }
   }
   return getStrategyById(strategyId)
@@ -380,7 +390,8 @@ export function createStrategyDeleteTool(options: StrategyDeleteToolOptions) {
       }
       if (isBuiltinStrategyId(id)) {
         await tombstones?.add(id)
-        const discardedOverride = await store.remove(id)
+        // 内置删除丢弃覆盖记录：归档后可找回（出厂代码由墓碑/恢复语义保证）。
+        const discardedOverride = await store.remove(id, true)
         onDeleted?.(id, 'builtin', true)
         return JSON.stringify({
           ok: true,
@@ -445,7 +456,8 @@ export function createStrategyResetTool(options: StrategyResetToolOptions) {
           `strategy_reset: "${id}" is not a built-in paradigm strategy id — custom strategies have no factory default; use strategy_delete to remove them`,
         )
       }
-      const removedOverride = await store.remove(id)
+      // 恢复出厂丢弃覆盖记录：归档后可找回。
+      const removedOverride = await store.remove(id, true)
       const liftedTombstone = await tombstones?.remove(id) ?? false
       const changed = removedOverride || liftedTombstone
       onReset?.(id, changed)

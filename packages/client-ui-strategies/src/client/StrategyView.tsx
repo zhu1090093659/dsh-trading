@@ -128,7 +128,11 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
   useEffect(() => {
     if (stableBridge === undefined) return
     let cancelled = false
+    // generation 令牌：SSE 突发时同一 effect 内会并发起多个 load()，后完成的
+    // 旧响应不得覆盖新状态——只允许最新一代落 setState。
+    let generation = 0
     const load = async () => {
+      const gen = ++generation
       try {
         const rawRecords = await stableBridge.fetchCustomStrategies()
         const defs: StrategyDefinition[] = []
@@ -143,7 +147,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
         const deleted = stableBridge.fetchStrategyTombstones !== undefined
           ? await stableBridge.fetchStrategyTombstones()
           : []
-        if (cancelled) return
+        if (cancelled || gen !== generation) return
         setCustomDefs(defs)
         setRecords(validRecords)
         setTombstones(deleted)
@@ -247,6 +251,8 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
 
   const handleRestoreStrategy = async (id: string) => {
     if (stableBridge.resetStrategy === undefined) return
+    // 已修改内置 = 覆盖记录将被清除且不可恢复（出厂代码不受影响），需显式确认。
+    if (modifiedIds.has(id) && !window.confirm(t('sv.mgmt.confirmRestore'))) return
     const result = await stableBridge.resetStrategy(id)
     if (result !== null && result.ok) forgetLocalParams(id)
   }
