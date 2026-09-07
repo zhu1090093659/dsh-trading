@@ -18,6 +18,7 @@ import {
   applyScreenerManagement,
   isBuiltinScreenerId,
   builtinScreenerRecord,
+  workerComputeRunner,
   type Kline,
   type ScreenerDefinition,
   type CustomScreenerRecord,
@@ -35,6 +36,9 @@ interface ScreenerStateStored {
 }
 
 const SCREENER_STORE_KEY = 'dshtrading.screener.v1'
+
+/** 自定义选股器扫描时的单符号 Worker 超时（真实 500 根 K 线，较校验样例放宽）。 */
+const SCAN_EVAL_TIMEOUT_MS = 1000
 
 const DEFAULT_STORED: ScreenerStateStored = {
   screenerId: 'scr.ma-bull-align',
@@ -113,7 +117,11 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
   useEffect(() => {
     if (!hasManagement || stableBridge === undefined) return
     let cancelled = false
+    // generation 令牌：SSE 突发时同一 effect 内会并发起多个 load()，后完成的
+    // 旧响应不得覆盖新状态——只允许最新一代落 setState（与 StrategyView 同款）。
+    let generation = 0
     const load = async () => {
+      const gen = ++generation
       try {
         const rawRecords = await stableBridge.fetchCustomScreeners!()
         const defs: ScreenerDefinition[] = []
@@ -128,7 +136,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
         const deleted = stableBridge.fetchStrategyTombstones !== undefined
           ? await stableBridge.fetchStrategyTombstones()
           : []
-        if (cancelled) return
+        if (cancelled || gen !== generation) return
         setCustomDefs(defs)
         setRecords(validRecords)
         setTombstones(deleted)
@@ -214,6 +222,8 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
 
   const handleRestoreScreener = async (id: string) => {
     if (stableBridge.resetScreener === undefined) return
+    // 已修改内置 = 覆盖记录将被清除且不可恢复（出厂代码不受影响），需显式确认。
+    if (modifiedIds.has(id) && !window.confirm(t('sv.mgmt.confirmRestore'))) return
     const result = await stableBridge.resetScreener(id)
     if (result !== null && result.ok) forgetLocalParams(id)
   }
@@ -234,9 +244,12 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
   // 编辑器状态：null = 关闭；record = null 新建，否则编辑预填。
   const [editor, setEditor] = useState<{ initial: CustomScreenerRecord | null } | null>(null)
 
-  // 扫描状态；runId 作为取消/过期令牌（自增即作废上一轮，worker 循环自查）
+  // 扫描状态；runId 作为取消/过期令牌（自增即作废上一轮，worker 循环自查）。
+  // scanScreener：扫描开始时冻结的选股器定义——SSE 名册重载可中途换 currentScreener，
+  // 结果表（表头列 + 行数据）必须按同一份定义渲染，否则列错位（2026-09-07 审查）。
   const runIdRef = useRef(0)
   const [scanning, setScanning] = useState(false)
+  const [scanScreener, setScanScreener] = useState<ScreenerDefinition | null>(null)
   const [progress, setProgress] = useState({ done: 0, total: 0, hits: 0, failed: 0 })
   const [universeSize, setUniverseSize] = useState<number | null>(null)
   const [rows, setRows] = useState<ScanRow[]>([])
@@ -252,6 +265,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
     const runId = runIdRef.current + 1
     runIdRef.current = runId
     setScanning(true)
+    setScanScreener(currentScreener)
     setRows([])
     setErrorMsg(null)
     setProgress({ done: 0, total: 0, hits: 0, failed: 0 })
@@ -280,6 +294,17 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
       let failed = 0
       let cursor = 0
 
+      // 自定义选股器 = 用户源码 → 扫描时走 Worker 超时熔断（1000ms/符号，
+      // 远高于校验样例的 100ms：真实 500 根 K 线计算量更大）。源码从名册
+      // 合成时的 store 记录取（builtinScreenerRecord 仅用于编辑预填，不在扫描面）。
+      // 内置选股器 = 代码常量（可信任，且无源码形态）→ 维持同步直调用（旧行为）。
+      const evaluateSourceById = new Map(records.map((r) => [r.id, r.evaluateSource] as const))
+      const evalOne = async (bars: Kline[]): Promise<ReturnType<ScreenerDefinition['evaluate']>> => {
+        const source = evaluateSourceById.get(currentScreener.id)
+        if (source === undefined) return currentScreener.evaluate(bars, currentParams)
+        return (await workerComputeRunner(source, bars, currentParams, SCAN_EVAL_TIMEOUT_MS)) as never
+      }
+
       const worker = async () => {
         while (cursor < capped.length && runIdRef.current === runId) {
           const inst = capped[cursor]!
@@ -288,7 +313,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
             const bars = await bridge.fetchKlines(market, inst.symbol, '1d', SCAN_KLINE_LIMIT)
             if (runIdRef.current !== runId) return
             if (bars && bars.length > 0) {
-              const match = currentScreener.evaluate(bars, currentParams)
+              const match = await evalOne(bars)
               if (match) {
                 hits.push({
                   symbol: inst.symbol,
@@ -489,7 +514,8 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
 
           {errorMsg && <div className={css.errorMessage}>{errorMsg}</div>}
 
-          {/* 命中结果表 */}
+          {/* 命中结果表（表头按 scanScreener 冻结定义渲染，避免扫描中 SSE 名册
+              重载换列后列与行数据错位；非扫描态回落 currentScreener） */}
           <div className={css.tableSection}>
             <div className={css.tableTitle}>
               {t('sv.screener.hits')} ({rows.length})
@@ -501,8 +527,8 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
                     <th>{t('sv.screener.col.symbol')}</th>
                     <th>{t('sv.screener.col.name')}</th>
                     <th>{t('sv.screener.col.price')}</th>
-                    {currentScreener.columns.map((col) => (
-                      <th key={col.key}>{screenerColumnLabel(currentScreener, col, t)}</th>
+                    {(scanning ? scanScreener : currentScreener)?.columns.map((col) => (
+                      <th key={col.key}>{screenerColumnLabel(scanning ? scanScreener! : currentScreener, col, t)}</th>
                     ))}
                     <th>{t('sv.screener.col.reason')}</th>
                   </tr>
@@ -510,7 +536,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
                 <tbody>
                   {rows.length === 0 ? (
                     <tr>
-                      <td colSpan={4 + currentScreener.columns.length} className={css.tableEmptyCell}>
+                      <td colSpan={4 + (scanning ? scanScreener : currentScreener)!.columns.length} className={css.tableEmptyCell}>
                         {scanning
                           ? t('sv.screener.scanning')
                           : progress.total > 0 && progress.failed === 0
@@ -524,7 +550,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
                         <td>{row.symbol}</td>
                         <td className={css.nameCell}>{row.name ?? '--'}</td>
                         <td>{row.price.toFixed(2)}</td>
-                        {currentScreener.columns.map((col) => (
+                        {(scanning ? scanScreener : currentScreener)!.columns.map((col) => (
                           <td key={col.key}>{formatMetric(row.metrics[col.key] ?? NaN, col.format)}</td>
                         ))}
                         <td className={css.reasonCell}>{screenerReason(row, t)}</td>

@@ -1116,6 +1116,9 @@ export class TradingBridge {
     }
     if (overridesScreener) {
       await this.host.tombstonesStore?.remove(id)
+      // 上一次覆盖记录将被本次 save 顶掉：先归档删除再落盘，旧修改可找回。
+      const previousOverride = await store.get(id)
+      if (previousOverride !== undefined) await store.remove(id, true)
     }
     await store.save(result.record)
     return { ok: true, screener: result.record, overridesScreener }
@@ -1125,10 +1128,13 @@ export class TradingBridge {
    * 删除选股器（选股器管理）：自定义 = 移除记录；内置 = 落墓碑（恢复出厂走
    * POST /strategies/screeners/reset），顺带丢弃该内置的覆盖记录。
    */
-  async deleteCustomScreener(id: string): Promise<{ ok: boolean; removed: boolean; scope: 'custom' | 'builtin' }> {
+  async deleteCustomScreener(rawId: string): Promise<{ ok: boolean; removed: boolean; scope: 'custom' | 'builtin' }> {
+    // 与 PUT 同款归一化（与 deleteCustomStrategy 对称）。
+    const id = rawId.trim().toLowerCase()
     if (isBuiltinScreenerId(id)) {
       await this.host.tombstonesStore?.add(id)
-      await this.host.screenerStore?.remove(id)
+      // 内置删除丢弃覆盖记录：归档后可找回。
+      await this.host.screenerStore?.remove(id, true)
       return { ok: true, removed: true, scope: 'builtin' }
     }
     const store = this.host.screenerStore
@@ -1145,7 +1151,8 @@ export class TradingBridge {
     if (!isBuiltinScreenerId(id)) {
       return { ok: false, code: 'TRADING_SCREENER_NOT_BUILTIN', message: `"${id}" is not a built-in screener id` }
     }
-    const removedOverride = await this.host.screenerStore?.remove(id) ?? false
+    // 恢复出厂丢弃覆盖记录：归档后可找回。
+    const removedOverride = await this.host.screenerStore?.remove(id, true) ?? false
     const liftedTombstone = await this.host.tombstonesStore?.remove(id) ?? false
     return { ok: true, reset: true, changed: removedOverride || liftedTombstone, removedOverride, liftedTombstone }
   }

@@ -34,6 +34,10 @@ export {
   compileStrategySource,
   type StrategyValidationResult,
 } from './validate.ts'
+// 浏览器 Worker 超时 runner 再导出（indicators 同源）：选股器扫描面用——
+// 自定义 evaluate 在扫描循环里过 Worker 熔断，避免死循环卡死主线程。
+// client-ui-strategies 只依赖本包，经此拿到 runner，不引 indicators。
+export { workerComputeRunner } from '@dshtrading/indicators'
 
 // 策略管理（2026-09-07）：覆盖 + 墓碑模型的纯函数合成与内置源码导出；
 // 墓碑内存存储浏览器安全（file 版在 ./plugin，Node 侧专用）。

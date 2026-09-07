@@ -460,8 +460,33 @@ export async function validateCustomScreener(
   const defaultParamsMap: Record<string, number> = {}
   for (const p of params) defaultParamsMap[p.key] = p.default
 
-  for (const scenario of scenarioNames) {
-    const bars = sampleScenarios[scenario]
+  // 长序列样例（300 根，涨→跌→涨多 regime + 周期性放量）：5 个标准场景最长仅
+  // 30 根，长窗口选股器（如 above-ma 200 日、near-high 250 日）在短场景上合法
+  // 全 null；该场景同时暴露「数据长度 guard 笔误」（如 bars.length < 300 对真实
+  // 扫描恒跳过）。放量脉冲（i%7===5 → 5 倍量）让「放量突破」类条件在长样例上
+  // 也有命中机会（量价结构参照，非任意数据）。
+  const longScenario: Kline[] = []
+  let longPrice = 100
+  for (let i = 0; i < 300; i++) {
+    const drift = i < 100 ? 0.6 : i < 200 ? -0.5 : 0.55
+    longPrice = Math.max(1, longPrice + drift)
+    longScenario.push({
+      openTime: 1700000000000 + i * 86_400_000,
+      open: longPrice - drift / 2,
+      high: longPrice + 0.4,
+      low: longPrice - 0.4,
+      close: longPrice,
+      volume: i % 7 === 5 ? 5000 : 800,
+    })
+  }
+  type ScreenerScenarioName = keyof typeof sampleScenarios | 'long'
+  const scenarios: Array<{ name: ScreenerScenarioName; bars: Kline[] }> = [
+    ...scenarioNames.map((name) => ({ name: name as ScreenerScenarioName, bars: sampleScenarios[name] })),
+    { name: 'long' as const, bars: longScenario },
+  ]
+
+  let matchedScenario = false
+  for (const { name: scenario, bars } of scenarios) {
     let match: unknown
     try {
       const out = await runner(evaluateSource, bars, { ...defaultParamsMap }, DEFAULT_TIMEOUT_MS)
@@ -473,6 +498,13 @@ export async function validateCustomScreener(
     if (matchReason !== undefined) {
       return { ok: false, reason: matchReason }
     }
+    if (match !== null && match !== undefined) matchedScenario = true
+  }
+
+  // 全场景（含 300 根长序列）不命中 = 无用过滤器（涨/跌/震荡互斥场景 + 长窗口
+  // 皆不中，几乎必然是 guard/阈值笔误，如 bars.length < 300 一类恒跳过）。
+  if (!matchedScenario) {
+    return { ok: false, reason: '选股器在全部样例场景（上涨/下跌/震荡/跳空/短序列/300根长序列）上都返回 null——请检查入场条件（阈值方向、数据长度 guard），至少一个场景应命中' }
   }
 
   // evaluate 与 compute 同为 (bars, params) 纯函数，编译器同源；返回形状已由试算校验。

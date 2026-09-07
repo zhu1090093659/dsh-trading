@@ -575,6 +575,9 @@ export function createScreenerAuthorTool(options: ScreenerAuthorToolOptions) {
       const overridesBuiltin = isBuiltinScreenerId(result.record.id)
       if (overridesBuiltin) {
         // 覆盖内置 = 恢复该 id 的删除标记（author 即「要回它」）。
+        // 上一次覆盖记录将被本次 save 顶掉：先归档删除再落盘，旧修改可找回。
+        const previousOverride = await store.get(result.record.id)
+        if (previousOverride !== undefined) await store.remove(result.record.id, true)
         await tombstones?.remove(result.record.id)
       }
       await store.save(result.record)
@@ -632,7 +635,8 @@ export function createScreenerDeleteTool(options: ScreenerDeleteToolOptions) {
       }
       if (isBuiltinScreenerId(id)) {
         await tombstones?.add(id)
-        const discardedOverride = await store.remove(id)
+        // 内置删除丢弃覆盖记录：归档后可找回。
+        const discardedOverride = await store.remove(id, true)
         onDeleted?.(id, 'builtin', true)
         return JSON.stringify({
           ok: true,
@@ -697,7 +701,8 @@ export function createScreenerResetTool(options: ScreenerResetToolOptions) {
           `screener_reset: "${id}" is not a built-in screener id — custom screeners have no factory default; use screener_delete to remove them`,
         )
       }
-      const removedOverride = await store.remove(id)
+      // 恢复出厂丢弃覆盖记录：归档后可找回。
+      const removedOverride = await store.remove(id, true)
       const liftedTombstone = await tombstones?.remove(id) ?? false
       const changed = removedOverride || liftedTombstone
       onReset?.(id, changed)

@@ -119,6 +119,37 @@ describe('validateCustomScreener', () => {
     expect(await validateCustomScreenerNode({ ...VALID, columnsJson: '' })).toMatchObject({ ok: false })
     expect(await validateCustomScreenerNode({ ...VALID, columnsJson: '[]' })).toMatchObject({ ok: false })
   })
+
+  it('全场景（含 300 根长序列）不命中 → 拒绝（2026-09-07 审查补强：无用过滤器闸门）', async () => {
+    // guard 笔误形态：bars.length < 300 对全部样例（最长 300 根恰好不满足 < 300 之外
+    // 全部 < 300）恒跳过——注意长序列恰 300 根，< 300 为 false……但最后 1 根才成立，
+    // 299 根窗口仍可命中。用更直白的「永不命中」：close 恒为负的阈值。
+    const result = await validateCustomScreenerNode({
+      ...VALID,
+      evaluateSource: `(bars) => {
+        if (bars.length < 310) return null
+        return { metrics: { mom: 1 }, reason: 'x' }
+      }`,
+    })
+    expect(result).toMatchObject({ ok: false })
+    if (!result.ok) expect(result.reason).toContain('全部样例场景')
+  })
+
+  it('短场景全 null 但长序列命中 → 放行（长窗口选股器合法形态）', async () => {
+    // 窗口 200（above-ma 形态）：5 个短场景全 null，长序列命中。
+    const result = await validateCustomScreenerNode({
+      ...VALID,
+      columnsJson: JSON.stringify([{ key: 'above', label: '倍数' }]),
+      evaluateSource: `(bars) => {
+        if (bars.length < 200) return null
+        const close = bars[bars.length - 1].close
+        const avg = bars.slice(-200).reduce((a, b) => a + b.close, 0) / 200
+        if (!(close > avg)) return null
+        return { metrics: { above: close / avg }, reason: '站上年线' }
+      }`,
+    })
+    expect(result).toMatchObject({ ok: true })
+  })
 })
 
 describe('applyScreenerManagement 名册合成', () => {
@@ -178,5 +209,25 @@ describe('screener_author / screener_delete / screener_reset（选股器管理�
 
     // 自定义 id reset → 明确报错
     await expect(reset.execute({ id: 'scr.custom-momentum' })).rejects.toThrow('screener_delete')
+  })
+
+  it('file store remove(id, true)：选股器覆盖记录归档到 .archive.jsonl（2026-09-07 审查补强）', async () => {
+    const { mkdtemp } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { createFileCustomScreenerStore } = await import('../src/custom-screener-fs.ts')
+    const dir = await mkdtemp(join(tmpdir(), 'screeners-archive-'))
+    const path = join(dir, 'custom-screeners.json')
+    const store = createFileCustomScreenerStore(path)
+    await store.save({
+      id: 'scr.rsi-oversold', title: '旧覆盖', horizon: 'swing', summary: 'x',
+      paramsJson: '[]', columnsJson: COLUMNS, evaluateSource: VALID_SOURCE, createdAt: 1,
+    })
+    expect(await store.remove('scr.rsi-oversold', true)).toBe(true)
+    expect(await store.get('scr.rsi-oversold')).toBeUndefined()
+    const { readFile } = await import('node:fs/promises')
+    const archive = await readFile(`${path}.archive.jsonl`, 'utf8')
+    expect(archive).toContain('"id":"scr.rsi-oversold"')
+    expect(archive).toContain('旧覆盖')
   })
 })
