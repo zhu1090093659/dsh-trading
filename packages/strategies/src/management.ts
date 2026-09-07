@@ -7,14 +7,24 @@
  * 保证两侧名册一致。纯函数、零 Node 依赖，浏览器安全。
  */
 import { strategyParadigms } from './paradigms/index.ts'
+import { screenerParadigms } from './screeners/index.ts'
 import type { StrategyDefinition, StrategyParamSpec } from './types.ts'
 import type { CustomStrategyRecord } from './custom.ts'
+import type { ScreenerColumnSpec, ScreenerDefinition } from './screeners/types.ts'
+import type { CustomScreenerRecord } from './custom-screener.ts'
 
 /** 内置范式策略 id 集合（稳定词汇；选股器 id 带 'scr.' 前缀，不在此列）。 */
 export const BUILTIN_STRATEGY_IDS: ReadonlySet<string> = new Set(strategyParadigms.map((d) => d.id))
 
+/** 内置选股器 id 集合（'scr.' 前缀词汇）。 */
+export const BUILTIN_SCREENER_IDS: ReadonlySet<string> = new Set(screenerParadigms.map((d) => d.id))
+
 export function isBuiltinStrategyId(id: string): boolean {
   return BUILTIN_STRATEGY_IDS.has(id)
+}
+
+export function isBuiltinScreenerId(id: string): boolean {
+  return BUILTIN_SCREENER_IDS.has(id)
 }
 
 /**
@@ -73,6 +83,61 @@ export function builtinStrategyRecord(def: StrategyDefinition): CustomStrategyRe
     summary: def.summary,
     paramsJson: JSON.stringify(params),
     computeSource: builtinStrategySource(def),
+    createdAt: Date.now(),
+  }
+}
+
+/**
+ * 选股器名册合成（覆盖 + 墓碑，与 applyStrategyManagement 同模型）：
+ * 内置 − 墓碑，覆盖记录原位替换同 id 内置，自定义按传入顺序追加。
+ */
+export function applyScreenerManagement(
+  builtins: readonly ScreenerDefinition[],
+  defs: readonly ScreenerDefinition[],
+  deletedIds: readonly string[],
+): ScreenerDefinition[] {
+  const deleted = new Set(deletedIds)
+  const overrides = new Map<string, ScreenerDefinition>()
+  const customs: ScreenerDefinition[] = []
+  for (const def of defs) {
+    if (BUILTIN_SCREENER_IDS.has(def.id)) overrides.set(def.id, def)
+    else customs.push(def)
+  }
+  const roster: ScreenerDefinition[] = []
+  for (const builtin of builtins) {
+    if (deleted.has(builtin.id)) continue
+    roster.push(overrides.get(builtin.id) ?? builtin)
+  }
+  return [...roster, ...customs]
+}
+
+/**
+ * 内置选股器 evaluate 源码导出（GUI「编辑内置」预填用），归一化规则同
+ * builtinStrategySource：方法速记 `evaluate(bars, params) { ... }` → 箭头形态。
+ */
+export function builtinScreenerSource(def: ScreenerDefinition): string {
+  const raw = def.evaluate.toString().trim()
+  const method = raw.match(/^evaluate\s*\(([^)]*)\)\s*\{([\s\S]*)\}$/)
+  if (method !== null) return `(${method[1]}) => {${method[2]}}`
+  return raw
+}
+
+/** 内置选股器 → 可编辑记录预填（columns 序列化保真）。 */
+export function builtinScreenerRecord(def: ScreenerDefinition): CustomScreenerRecord {
+  const params: StrategyParamSpec[] = def.params.map((p) => ({
+    key: p.key, label: p.label, default: p.default, min: p.min, max: p.max, step: p.step,
+  }))
+  const columns: ScreenerColumnSpec[] = def.columns.map((c) => (
+    c.format === undefined ? { key: c.key, label: c.label } : { key: c.key, label: c.label, format: c.format }
+  ))
+  return {
+    id: def.id,
+    title: def.name,
+    horizon: 'swing',
+    summary: def.summary,
+    paramsJson: JSON.stringify(params),
+    columnsJson: JSON.stringify(columns),
+    evaluateSource: builtinScreenerSource(def),
     createdAt: Date.now(),
   }
 }

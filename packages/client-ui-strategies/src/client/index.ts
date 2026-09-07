@@ -14,6 +14,7 @@ import type { ToolCallOwnerProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import { StrategyView } from './StrategyView.tsx'
 import { StrategyBacktestCard, StrategyAuthorCard } from './toolview.tsx'
 import type { StrategyEditorSaveInput } from './StrategyEditor.tsx'
+import type { ScreenerEditorSaveInput } from './ScreenerEditor.tsx'
 import './contract.ts'
 
 import { en, zh } from './locales.ts'
@@ -44,6 +45,11 @@ interface BridgeService {
   deleteCustomStrategy?(id: string): Promise<boolean>
   resetStrategy?(id: string): Promise<{ ok: boolean; changed: boolean } | null>
   fetchStrategyTombstones?(): Promise<string[]>
+  // 选股器管理面（选股器管理；老 shell 缺席 → ScreenerPane 管理动作降级隐藏）。
+  fetchCustomScreeners?(): Promise<Array<Record<string, unknown>>>
+  saveCustomScreener?(input: ScreenerEditorSaveInput): Promise<{ ok: true } | { ok: false; reason: string } | null>
+  deleteCustomScreener?(id: string): Promise<boolean>
+  resetScreener?(id: string): Promise<{ ok: boolean; changed: boolean } | null>
 }
 
 export function apply(ctx: ClientContext): void {
@@ -69,6 +75,11 @@ export function apply(ctx: ClientContext): void {
       deleteCustomStrategy: faces.tradingBridge.deleteCustomStrategy?.bind(faces.tradingBridge),
       resetStrategy: faces.tradingBridge.resetStrategy?.bind(faces.tradingBridge),
       fetchStrategyTombstones: faces.tradingBridge.fetchStrategyTombstones?.bind(faces.tradingBridge),
+      // 选股器管理面透传。
+      fetchCustomScreeners: faces.tradingBridge.fetchCustomScreeners?.bind(faces.tradingBridge),
+      saveCustomScreener: faces.tradingBridge.saveCustomScreener?.bind(faces.tradingBridge),
+      deleteCustomScreener: faces.tradingBridge.deleteCustomScreener?.bind(faces.tradingBridge),
+      resetScreener: faces.tradingBridge.resetScreener?.bind(faces.tradingBridge),
     }
     faces.tradingStageViews.register({
       id: 'strategy',

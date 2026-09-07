@@ -24,11 +24,17 @@ import { clampActivationParams, createMemoryChartActivationStore, createMemoryCu
 import type { KnowledgeCard, KnowledgeCardStore } from '@dshtrading/knowledge'
 import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord, CustomStrategyStore } from '@dshtrading/strategies'
-import { createMemoryCustomStrategyStore, createMemoryBuiltinTombstonesStore, isBuiltinStrategyId } from '@dshtrading/strategies'
-import type { BuiltinTombstonesStore } from '@dshtrading/strategies'
-// Node 侧沙箱校验（策略管理 PUT 落盘前的 vm 熔断试算）；bridge.ts 仅 node 半加载，
-// client 打包不 import 本文件（client 半只经 api.ts 走 HTTP）。
-import { validateCustomStrategyNode } from '@dshtrading/strategies/plugin'
+import {
+  createMemoryCustomStrategyStore,
+  createMemoryBuiltinTombstonesStore,
+  createMemoryCustomScreenerStore,
+  isBuiltinStrategyId,
+  isBuiltinScreenerId,
+} from '@dshtrading/strategies'
+import type { BuiltinTombstonesStore, CustomScreenerRecord, CustomScreenerStore } from '@dshtrading/strategies'
+// Node 侧沙箱校验（策略/选股器管理 PUT 落盘前的 vm 熔断试算）；bridge.ts 仅 node 半
+// 加载，client 打包不 import 本文件（client 半只经 api.ts 走 HTTP）。
+import { validateCustomStrategyNode, validateCustomScreenerNode } from '@dshtrading/strategies/plugin'
 import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from '@dshtrading/watchlist'
 import { createMemorySelectionStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
 // 统一资产台账（issue #65）：type-only import——@dshtrading/holdings 由并行流建设，
@@ -86,6 +92,8 @@ export function createBridgeHost(services: {
   strategyStore?: CustomStrategyStore | undefined
   /** 内置策略/选股器墓碑 store（策略管理，可选）。 */
   tombstonesStore?: BuiltinTombstonesStore | undefined
+  /** 自定义选股器 store（选股器管理，可选）。 */
+  screenerStore?: CustomScreenerStore | undefined
   watchlistStore?: WatchlistStore | undefined
   selectionStore?: SelectionStore | undefined
   /** 统一资产台账 store（issue #65；缺席 → 进程内内存兜底）。 */
@@ -110,6 +118,7 @@ export function createBridgeHost(services: {
     knowledgeStore: services.knowledgeStore ?? createMemoryKnowledgeCardStore(),
     strategyStore: services.strategyStore ?? createMemoryCustomStrategyStore(),
     tombstonesStore: services.tombstonesStore ?? createMemoryBuiltinTombstonesStore(),
+    screenerStore: services.screenerStore ?? createMemoryCustomScreenerStore(),
     watchlistStore: services.watchlistStore ?? createMemoryWatchlistStore(),
     selectionStore: services.selectionStore ?? createMemorySelectionStore(),
     holdingsStore: services.holdingsStore ?? createFallbackHoldingsStore(),
@@ -141,6 +150,8 @@ export interface BridgeHost {
   strategyStore?: CustomStrategyStore
   /** 内置策略/选股器墓碑存储（可选，策略管理；createBridgeHost 已兜底内存实现）。 */
   tombstonesStore?: BuiltinTombstonesStore
+  /** 自定义选股器存储（可选，选股器管理；createBridgeHost 已兜底内存实现）。 */
+  screenerStore?: CustomScreenerStore
   /** 自选股存储（可选，issue #32）。 */
   watchlistStore?: WatchlistStore
   /** 选中标的存储（可选，issue #32）。 */
@@ -1068,6 +1079,77 @@ export class TradingBridge {
     return { ok: true, reset: true, changed: removedOverride || liftedTombstone, removedOverride, liftedTombstone }
   }
 
+  /** 自定义选股器名册（选股器管理）：返回记录（含内置覆盖记录），前端校验后并入名册。 */
+  async customScreeners(): Promise<{ ok: boolean; screeners: CustomScreenerRecord[] }> {
+    const store = this.host.screenerStore
+    if (store === undefined) return { ok: true, screeners: [] }
+    const screeners = await store.list()
+    return { ok: true, screeners }
+  }
+
+  /**
+   * 保存自定义选股器（选股器管理，PUT /strategies/screeners）：桥侧 vm 沙箱全量
+   * 校验（结构/语法/多场景试算/ScreenerMatch 形状）通过才落盘。id 命中内置选股器
+   * = 覆盖内置，必须显式带 overridesScreener 确认位，成功时顺带清除删除墓碑。
+   */
+  async saveCustomScreener(body: unknown): Promise<
+    | { ok: true; screener: CustomScreenerRecord; overridesScreener: boolean }
+    | { ok: false; code: string; message: string }
+  > {
+    const store = this.host.screenerStore
+    if (store === undefined) {
+      return { ok: false, code: 'TRADING_SCREENER_UNAVAILABLE', message: 'screener store is not mounted' }
+    }
+    const input = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>
+    const id = typeof input.id === 'string' ? input.id.trim().toLowerCase() : ''
+    const overridesScreener = isBuiltinScreenerId(id)
+    if (overridesScreener && input.overridesScreener !== true) {
+      return {
+        ok: false,
+        code: 'TRADING_SCREENER_OVERRIDE_CONFIRM',
+        message: `id "${id}" is a built-in screener — pass overridesScreener:true to confirm overriding it`,
+      }
+    }
+    const result = await validateCustomScreenerNode(input)
+    if (!result.ok) {
+      return { ok: false, code: 'TRADING_SCREENER_INVALID', message: result.reason }
+    }
+    if (overridesScreener) {
+      await this.host.tombstonesStore?.remove(id)
+    }
+    await store.save(result.record)
+    return { ok: true, screener: result.record, overridesScreener }
+  }
+
+  /**
+   * 删除选股器（选股器管理）：自定义 = 移除记录；内置 = 落墓碑（恢复出厂走
+   * POST /strategies/screeners/reset），顺带丢弃该内置的覆盖记录。
+   */
+  async deleteCustomScreener(id: string): Promise<{ ok: boolean; removed: boolean; scope: 'custom' | 'builtin' }> {
+    if (isBuiltinScreenerId(id)) {
+      await this.host.tombstonesStore?.add(id)
+      await this.host.screenerStore?.remove(id)
+      return { ok: true, removed: true, scope: 'builtin' }
+    }
+    const store = this.host.screenerStore
+    if (store === undefined) return { ok: true, removed: false, scope: 'custom' }
+    const removed = await store.remove(id)
+    return { ok: true, removed, scope: 'custom' }
+  }
+
+  /** 恢复内置选股器出厂默认（选股器管理）：清覆盖记录与墓碑；自定义 → 业务拒绝。 */
+  async resetScreener(id: string): Promise<
+    | { ok: true; reset: true; changed: boolean; removedOverride: boolean; liftedTombstone: boolean }
+    | { ok: false; code: string; message: string }
+  > {
+    if (!isBuiltinScreenerId(id)) {
+      return { ok: false, code: 'TRADING_SCREENER_NOT_BUILTIN', message: `"${id}" is not a built-in screener id` }
+    }
+    const removedOverride = await this.host.screenerStore?.remove(id) ?? false
+    const liftedTombstone = await this.host.tombstonesStore?.remove(id) ?? false
+    return { ok: true, reset: true, changed: removedOverride || liftedTombstone, removedOverride, liftedTombstone }
+  }
+
   /**
    * 标的基本面快照与多期财务矩阵（GUI「基本面」页签，2026-09-02 / Issue #36）。
    *
@@ -1535,6 +1617,9 @@ export async function dispatchBridgeRequest(
       case '/strategies/tombstones': {
         return { status: 200, payload: await bridge.builtinTombstones() }
       }
+      case '/strategies/screeners': {
+        return { status: 200, payload: await bridge.customScreeners() }
+      }
       case '/watchlists': {
         return { status: 200, payload: await bridge.watchlistRows() }
       }
@@ -1561,6 +1646,11 @@ export async function dispatchBridgeRequest(
       const id = search.get('id') ?? ''
       if (!id) throw new BridgeProtocolError(400, 'delete custom strategy: id is required')
       return { status: 200, payload: await bridge.deleteCustomStrategy(id) }
+    }
+    if (pathname === '/strategies/screeners') {
+      const id = search.get('id') ?? ''
+      if (!id) throw new BridgeProtocolError(400, 'delete screener: id is required')
+      return { status: 200, payload: await bridge.deleteCustomScreener(id) }
     }
     if (pathname === '/trade/order') {
       const market = search.get('market') ?? ''
@@ -1598,6 +1688,9 @@ export async function dispatchBridgeRequest(
     if (pathname === '/strategies/custom') {
       return { status: 200, payload: await bridge.saveCustomStrategy(body) }
     }
+    if (pathname === '/strategies/screeners') {
+      return { status: 200, payload: await bridge.saveCustomScreener(body) }
+    }
     throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }
 
@@ -1610,6 +1703,12 @@ export async function dispatchBridgeRequest(
       const id = typeof input.id === 'string' ? input.id.trim() : ''
       if (!id) throw new BridgeProtocolError(400, 'reset strategy: id is required')
       return { status: 200, payload: await bridge.resetStrategy(id) }
+    }
+    if (pathname === '/strategies/screeners/reset') {
+      const input = (typeof body === 'object' && body !== null ? body : {}) as { id?: unknown }
+      const id = typeof input.id === 'string' ? input.id.trim() : ''
+      if (!id) throw new BridgeProtocolError(400, 'reset screener: id is required')
+      return { status: 200, payload: await bridge.resetScreener(id) }
     }
     if (pathname === '/watchlists') {
       return { status: 200, payload: await bridge.addWatchlistRow(body) }

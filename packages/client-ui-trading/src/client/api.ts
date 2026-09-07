@@ -7,7 +7,7 @@ import type { AccountBalance, DerivativesData, DerivativesHistory, Kline, Market
 import type { FundamentalsPackage } from '@dshtrading/api'
 import type { CustomIndicatorRecord, IndicatorInstance } from '@dshtrading/indicators'
 import type { KnowledgeCard } from '@dshtrading/knowledge'
-import type { CustomStrategyRecord } from '@dshtrading/strategies'
+import type { CustomStrategyRecord, CustomScreenerRecord } from '@dshtrading/strategies'
 import type { FxSnapshot, HoldingsBaseCurrency, HoldingsBookSnapshot, NewHolding, NewHoldingInput } from './holdings-types.ts'
 
 export class BridgeError extends Error {
@@ -392,6 +392,80 @@ export async function fetchStrategyTombstones(): Promise<string[]> {
   } catch (err) {
     console.warn('[dsh-trading] fetchStrategyTombstones failed, fallback to empty:', err)
     return []
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 自定义选股器（选股器管理，2026-09-07）                                     */
+/* ------------------------------------------------------------------ */
+
+/** 拉取自定义选股器名册（含内置覆盖记录；前端校验后并入名册）。 */
+export async function fetchCustomScreeners(): Promise<CustomScreenerRecord[]> {
+  try {
+    const wire = await getJson<{ ok: boolean; screeners: CustomScreenerRecord[] }>('/dshtrading/api/strategies/screeners')
+    return Array.isArray(wire.screeners) ? wire.screeners : []
+  } catch (err) {
+    console.warn('[dsh-trading] fetchCustomScreeners failed, fallback to empty:', err)
+    return []
+  }
+}
+
+/** 保存（新增/覆盖）自定义选股器：桥侧 vm 沙箱校验通过才落盘。 */
+export async function saveCustomScreener(input: {
+  id: string
+  title: string
+  summary: string
+  paramsJson: string
+  columnsJson: string
+  evaluateSource: string
+  overridesScreener?: boolean
+}): Promise<{ ok: true; overridesScreener: boolean } | { ok: false; reason: string } | null> {
+  try {
+    const response = await fetch('/dshtrading/api/strategies/screeners', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    if (!response.ok) return null
+    const wire = await response.json() as { ok?: boolean; message?: string; overridesScreener?: boolean }
+    if (wire.ok === true) return { ok: true, overridesScreener: wire.overridesScreener === true }
+    return { ok: false, reason: wire.message ?? 'validation failed' }
+  } catch (err) {
+    console.warn('[dsh-trading] saveCustomScreener failed:', err)
+    return null
+  }
+}
+
+/** 删除选股器（选股器管理）：自定义移除 / 内置落墓碑，均返回是否生效。 */
+export async function deleteCustomScreener(id: string): Promise<boolean> {
+  try {
+    const query = new URLSearchParams({ id })
+    const response = await fetch(`/dshtrading/api/strategies/screeners?${query.toString()}`, {
+      method: 'DELETE',
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean; removed?: boolean }
+    return wire.ok === true && wire.removed === true
+  } catch {
+    return false
+  }
+}
+
+/** 恢复内置选股器出厂默认（选股器管理）：清覆盖记录与墓碑。 */
+export async function resetScreener(id: string): Promise<{ ok: boolean; changed: boolean } | null> {
+  try {
+    const response = await fetch('/dshtrading/api/strategies/screeners/reset', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    if (!response.ok) return null
+    const wire = await response.json() as { ok?: boolean; changed?: boolean }
+    return { ok: wire.ok === true, changed: wire.changed === true }
+  } catch (err) {
+    console.warn('[dsh-trading] resetScreener failed:', err)
+    return null
   }
 }
 
@@ -795,6 +869,10 @@ export interface TradingBridgeService {
   deleteCustomStrategy: typeof deleteCustomStrategy
   resetStrategy: typeof resetStrategy
   fetchStrategyTombstones: typeof fetchStrategyTombstones
+  fetchCustomScreeners: typeof fetchCustomScreeners
+  saveCustomScreener: typeof saveCustomScreener
+  deleteCustomScreener: typeof deleteCustomScreener
+  resetScreener: typeof resetScreener
   fetchKnowledgeCards: typeof fetchKnowledgeCards
   fetchFundamentals: typeof fetchFundamentals
   fetchNews: typeof fetchNews
@@ -811,6 +889,10 @@ export function createTradingBridgeService(): TradingBridgeService {
     deleteCustomStrategy,
     resetStrategy,
     fetchStrategyTombstones,
+    fetchCustomScreeners,
+    saveCustomScreener,
+    deleteCustomScreener,
+    resetScreener,
     fetchKnowledgeCards,
     fetchFundamentals,
     fetchNews,

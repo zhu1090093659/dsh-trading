@@ -233,3 +233,16 @@
   color: var(--dsw-futu-text-primary);
   background: var(--dsw-futu-bg-surface-hover);
 }
+
+.columnHeadRow,
+.columnRow {
+  display: grid;
+  grid-template-columns: 1.4fr 2fr 1fr 24px;
+  gap: 6px;
+  align-items: center;
+}
+
+.columnHeadRow {
+  font-size: 11px;
+  color: var(--dsw-futu-text-secondary);
+}

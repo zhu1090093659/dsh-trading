@@ -28,16 +28,19 @@ import { createFileCustomStrategyStore } from './custom-fs.ts'
 import type { CustomStrategyRecord, CustomStrategyStore } from './custom.ts'
 import { createFileBuiltinTombstonesStore } from './builtin-tombstones-fs.ts'
 import type { BuiltinTombstonesStore } from './builtin-tombstones.ts'
-import { isBuiltinStrategyId } from './management.ts'
+import { isBuiltinStrategyId, isBuiltinScreenerId } from './management.ts'
+import { createFileCustomScreenerStore } from './custom-screener-fs.ts'
+import type { CustomScreenerRecord, CustomScreenerStore } from './custom-screener.ts'
 
 // 桥（client-ui-trading node 半）经本子路径取 file store（knowledge/tool 同款再导出先例）。
 export { createFileCustomStrategyStore }
 export { createFileBuiltinTombstonesStore }
-export { isBuiltinStrategyId } from './management.ts'
-// 桥（node 半）保存策略前的落盘前校验入口（vm 熔断）。
-export { validateCustomStrategyNode } from './validate-node.ts'
+export { createFileCustomScreenerStore }
+export { isBuiltinStrategyId, isBuiltinScreenerId } from './management.ts'
+// 桥（node 半）保存策略/选股器前的落盘前校验入口（vm 熔断）。
+export { validateCustomStrategyNode, validateCustomScreenerNode } from './validate-node.ts'
 import { compileStrategySource } from './validate.ts'
-import { validateCustomStrategyNode } from './validate-node.ts'
+import { validateCustomStrategyNode, validateCustomScreenerNode } from './validate-node.ts'
 import type { BacktestResult, StrategyDefinition, StrategyHorizon, StrategyParamSpec } from './types.ts'
 
 /** Cordis 插件名 = patch 行 id（TEMPLATES §8），市场无关共享行命名空间。 */
@@ -62,6 +65,11 @@ export function defaultStorePath(): string {
 /** 默认墓碑路径：~/.dsh/strategies/builtin-tombstones.json（策略管理）。 */
 export function defaultTombstonesStorePath(): string {
   return path.join(os.homedir(), '.dsh', 'strategies', 'builtin-tombstones.json')
+}
+
+/** 默认自定义选股器路径：~/.dsh/strategies/custom-screeners.json（选股器管理）。 */
+export function defaultScreenerStorePath(): string {
+  return path.join(os.homedir(), '.dsh', 'strategies', 'custom-screeners.json')
 }
 
 /** SDK 服务键：自定义策略 store 单实例（桥与工具共享同一缓存）。 */
@@ -475,14 +483,247 @@ export function createStrategyResetTool(options: StrategyResetToolOptions) {
   })
 }
 
+export interface ScreenerAuthorToolOptions {
+  store: CustomScreenerStore
+  /** 可选：墓碑表（覆盖内置选股器时顺带恢复删除标记）。 */
+  tombstones?: BuiltinTombstonesStore
+  /** 可选：选股器成功落盘后的回调（emit('strategies') 接线点）。 */
+  onWritten?: (record: CustomScreenerRecord) => void
+}
+
+/**
+ * screener_author 工厂（选股器管理）：提交 → 结构/语法/多场景试算校验（vm 熔断）
+ * → 落盘。evaluate(bars, params) 返回 ScreenerMatch | null（单时点截面判断，
+ * 无信号序列语义）。id 为内置选股器（'scr.*'）→ 覆盖该内置（strategy_reset/
+ * screener_reset 可恢复出厂）。
+ */
+export function createScreenerAuthorTool(options: ScreenerAuthorToolOptions) {
+  const { store, tombstones, onWritten } = options
+  return defineTool({
+    name: 'screener_author',
+    description:
+      'Author, validate, and persist a custom stock screener from JavaScript evaluate source. '
+      + 'evaluate(bars, params) is a single-point cross-section predicate: return a ScreenerMatch '
+      + '({ metrics: Record<string, number> with keys declared in columns, reason }) or null when the symbol '
+      + 'does not match / lacks data. The validator runs sandbox trial calculations across multiple kline scenarios. '
+      + 'If valid, the screener is persisted and immediately available in the GUI screener roster. '
+      + 'Submitting an id equal to a built-in screener id (scr.ma-bull-align / scr.volume-breakout / scr.rsi-oversold '
+      + '/ scr.near-high / scr.above-ma) OVERRIDES that built-in screener (factory default stays recoverable via screener_reset).',
+    parameters: {
+      id: {
+        type: 'string',
+        required: true,
+        description: 'Unique screener id with "scr." prefix (e.g. "scr.custom-momentum"); a built-in screener id means overriding that built-in',
+      },
+      title: {
+        type: 'string',
+        required: true,
+        description: 'Display name (1-32 chars), e.g. "量价双确认"',
+      },
+      summary: {
+        type: 'string',
+        required: true,
+        description: 'One-sentence idea summary (≤120 chars), shown in the screener roster',
+      },
+      paramsJson: {
+        type: 'string',
+        description:
+          'JSON string of StrategyParamSpec[] (optional, default []). Each spec: { key, label, default, min, max } with numeric default/min/max and min < max.',
+      },
+      columnsJson: {
+        type: 'string',
+        required: true,
+        description:
+          'JSON string of ScreenerColumnSpec[] (1-8 columns). Each spec: { key, label, format?: "percent" | "number" }. '
+          + 'Match metrics keys must be declared here. JSON example: [{"key":"volRatio","label":"量比(倍)"}]',
+      },
+      evaluateSource: {
+        type: 'string',
+        required: true,
+        description:
+          'JavaScript pure function source, signature (bars, params) => ScreenerMatch | null. '
+          + 'bars has { openTime, open, high, low, close, volume }. Return null to skip the symbol (no match or insufficient data). '
+          + 'metrics values must be finite numbers with keys declared in columnsJson; reason is a non-empty human-readable string.',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as Record<string, unknown>
+      const candidate: CustomScreenerRecord = {
+        id: typeof args.id === 'string' ? args.id : '',
+        title: typeof args.title === 'string' ? args.title : '',
+        horizon: 'swing',
+        summary: typeof args.summary === 'string' ? args.summary : '',
+        paramsJson: typeof args.paramsJson === 'string' && args.paramsJson.trim() ? args.paramsJson.trim() : '[]',
+        columnsJson: typeof args.columnsJson === 'string' ? args.columnsJson : '',
+        evaluateSource: typeof args.evaluateSource === 'string' ? args.evaluateSource : '',
+        createdAt: Date.now(),
+      }
+
+      const result = await validateCustomScreenerNode(candidate)
+      if (!result.ok) {
+        return (
+          `[screener_author] Validation failed: ${result.reason}\n`
+          + 'Review the requirements: evaluate(bars, params) returns ScreenerMatch | null; metrics keys must be declared '
+          + 'in columnsJson with finite number values; reason must be a non-empty string; return null to skip a symbol.'
+        )
+      }
+
+      const overridesBuiltin = isBuiltinScreenerId(result.record.id)
+      if (overridesBuiltin) {
+        // 覆盖内置 = 恢复该 id 的删除标记（author 即「要回它」）。
+        await tombstones?.remove(result.record.id)
+      }
+      await store.save(result.record)
+      onWritten?.(result.record)
+
+      const columnKeys = result.definition.columns.map((c) => c.key).join(', ')
+      return (
+        `[screener_author] Successfully authored screener "${result.record.title}" (id: ${result.record.id}`
+        + (columnKeys ? `, columns: ${columnKeys}` : '') + '). '
+        + 'The screener passed sandbox trials across 5 kline scenarios and is now persisted to the GUI screener roster. '
+        + (overridesBuiltin
+          ? 'This id is a built-in screener — the factory default remains recoverable via screener_reset.'
+          : 'Run scans from the GUI screener pane.')
+      )
+    },
+  })
+}
+
+export interface ScreenerDeleteToolOptions {
+  store: CustomScreenerStore
+  tombstones?: BuiltinTombstonesStore
+  /** 可选：删除成功后的回调（emit('strategies') 接线点）。 */
+  onDeleted?: (id: string, scope: 'custom' | 'builtin', removed: boolean) => void
+}
+
+/**
+ * screener_delete 工厂（选股器管理）：自定义选股器 = 移除记录；内置选股器 =
+ * 落墓碑（出厂代码不动，screener_reset 可恢复）。与 strategy_delete 共用墓碑表。
+ */
+export function createScreenerDeleteTool(options: ScreenerDeleteToolOptions) {
+  const { store, tombstones, onDeleted } = options
+  return defineTool({
+    name: 'screener_delete',
+    description:
+      'Delete a screener by id. Custom screeners (authored via screener_author) are removed from the library; '
+      + 'built-in screener ids (scr.ma-bull-align / scr.volume-breakout / scr.rsi-oversold / scr.near-high / scr.above-ma) '
+      + 'are tombstoned instead — the built-in disappears from the GUI screener roster but stays recoverable via screener_reset. '
+      + 'Deleting a built-in also discards any user override of it.',
+    parameters: {
+      id: {
+        type: 'string',
+        required: true,
+        description: 'Screener id to delete (a custom id or a built-in screener id)',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { id?: unknown }
+      const id = typeof args.id === 'string' ? args.id.trim() : ''
+      if (!id) {
+        throw new Error('screener_delete: id is required')
+      }
+      if (isBuiltinScreenerId(id)) {
+        await tombstones?.add(id)
+        const discardedOverride = await store.remove(id)
+        onDeleted?.(id, 'builtin', true)
+        return JSON.stringify({
+          ok: true,
+          scope: 'builtin',
+          deleted: true,
+          discardedOverride,
+          note: `Built-in screener "${id}" is now tombstoned — hidden from the GUI screener roster. Call screener_reset to restore the factory default.`,
+        })
+      }
+      const removed = await store.remove(id)
+      onDeleted?.(id, 'custom', removed)
+      return JSON.stringify({
+        ok: true,
+        scope: 'custom',
+        deleted: removed,
+        note: removed
+          ? `Deleted custom screener "${id}".`
+          : `"${id}" was not found in the custom screener library (built-in ids are handled by tombstone — double-check the id).`,
+      })
+    },
+  })
+}
+
+export interface ScreenerResetToolOptions {
+  store: CustomScreenerStore
+  tombstones?: BuiltinTombstonesStore
+  /** 可选：恢复成功后的回调（emit('strategies') 接线点）。 */
+  onReset?: (id: string, changed: boolean) => void
+}
+
+/**
+ * screener_reset 工厂（选股器管理）：恢复内置选股器出厂默认——清覆盖记录与墓碑。
+ * 仅对内置选股器 id 有意义；自定义选股器无出厂版本，明确报错引导 screener_delete。
+ */
+export function createScreenerResetTool(options: ScreenerResetToolOptions) {
+  const { store, tombstones, onReset } = options
+  return defineTool({
+    name: 'screener_reset',
+    description:
+      'Restore a built-in screener (scr.ma-bull-align / scr.volume-breakout / scr.rsi-oversold / scr.near-high / scr.above-ma) '
+      + 'to its factory default: any user override is discarded and a deletion tombstone is lifted. Custom screener ids '
+      + 'have no factory default — use screener_delete for those.',
+    parameters: {
+      id: {
+        type: 'string',
+        required: true,
+        description: 'Built-in screener id to restore',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { id?: unknown }
+      const id = typeof args.id === 'string' ? args.id.trim() : ''
+      if (!id) {
+        throw new Error('screener_reset: id is required')
+      }
+      if (!isBuiltinScreenerId(id)) {
+        throw new Error(
+          `screener_reset: "${id}" is not a built-in screener id — custom screeners have no factory default; use screener_delete to remove them`,
+        )
+      }
+      const removedOverride = await store.remove(id)
+      const liftedTombstone = await tombstones?.remove(id) ?? false
+      const changed = removedOverride || liftedTombstone
+      onReset?.(id, changed)
+      return JSON.stringify({
+        ok: true,
+        reset: true,
+        changed,
+        removedOverride,
+        liftedTombstone,
+        note: changed
+          ? `Built-in screener "${id}" restored to factory default (override/tombstone cleared).`
+          : `"${id}" was already at factory default — nothing to restore.`,
+      })
+    },
+  })
+}
+
 /** Host plugin body：provide store 服务 + 注册策略工具族（host 平面，全会话可见）。 */
 export function apply(ctx: Context): void {
   const store = createFileCustomStrategyStore(defaultStorePath())
   const tombstones = createFileBuiltinTombstonesStore(defaultTombstonesStorePath())
+  const screenerStore = createFileCustomScreenerStore(defaultScreenerStorePath())
   // Service 单实例（issue #33 收口模式，同 indicators 的 tradingCustomIndicators）：
   // 桥（client-ui-trading node 半）经 ctx.get 解包 .store/.tombstones 复用同一
   // 实例——此前桥自建第二个 file store，工具写入与桥缓存互不感知（跨实例 stale 窗口）。
-  new StrategiesStoreService(ctx, { store, tombstones })
+  new StrategiesStoreService(ctx, { store, tombstones, screenerStore })
 
   ctx.inject(['tools'] as never, (toolCtx) => {
     const tools = (toolCtx as unknown as { tools?: { register(t: unknown): void; get(name: string): unknown } }).tools
@@ -497,17 +738,28 @@ export function apply(ctx: Context): void {
     register(createStrategyBacktestTool({ store, tombstones, marketData: createMarketDataResolver(ctx) }))
     register(createStrategyDeleteTool({ store, tombstones, onDeleted: () => events() }))
     register(createStrategyResetTool({ store, tombstones, onReset: () => events() }))
+    // 选股器管理工具族（选股器管理，2026-09-07）。
+    register(createScreenerAuthorTool({ store: screenerStore, tombstones, onWritten: () => events() }))
+    register(createScreenerDeleteTool({ store: screenerStore, tombstones, onDeleted: () => events() }))
+    register(createScreenerResetTool({ store: screenerStore, tombstones, onReset: () => events() }))
   })
 }
 
 /** 策略 store 服务（桥与工具的单实例共享点，issue #33 收口模式）。 */
 export class StrategiesStoreService extends Service {
   readonly store: CustomStrategyStore
-  /** 内置墓碑表（策略管理；桥 DELETE/POST /strategies/* 与工具共享）。 */
+  /** 内置墓碑表（策略/选股器管理共用；桥 DELETE/POST /strategies/* 与工具共享）。 */
   readonly tombstones: BuiltinTombstonesStore
-  constructor(ctx: Context, deps: { store: CustomStrategyStore; tombstones: BuiltinTombstonesStore }, serviceName: string = TRADING_STRATEGIES_KEY) {
+  /** 自定义选股器 store（选股器管理）。 */
+  readonly screenerStore: CustomScreenerStore
+  constructor(
+    ctx: Context,
+    deps: { store: CustomStrategyStore; tombstones: BuiltinTombstonesStore; screenerStore: CustomScreenerStore },
+    serviceName: string = TRADING_STRATEGIES_KEY,
+  ) {
     super(ctx, serviceName)
     this.store = deps.store
     this.tombstones = deps.tombstones
+    this.screenerStore = deps.screenerStore
   }
 }

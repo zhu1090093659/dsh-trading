@@ -39,15 +39,30 @@ export {
 // 墓碑内存存储浏览器安全（file 版在 ./plugin，Node 侧专用）。
 export {
   BUILTIN_STRATEGY_IDS,
+  BUILTIN_SCREENER_IDS,
   isBuiltinStrategyId,
+  isBuiltinScreenerId,
   applyStrategyManagement,
+  applyScreenerManagement,
   builtinStrategySource,
   builtinStrategyRecord,
+  builtinScreenerSource,
+  builtinScreenerRecord,
 } from './management.ts'
 export {
   createMemoryBuiltinTombstonesStore,
   type BuiltinTombstonesStore,
 } from './builtin-tombstones.ts'
+// 自定义选股器管线（选股器管理）：纯类型 + 内存存储 + 校验器（浏览器安全）。
+export {
+  createMemoryCustomScreenerStore,
+  type CustomScreenerRecord,
+  type CustomScreenerStore,
+} from './custom-screener.ts'
+export {
+  validateCustomScreener,
+  type ScreenerValidationResult,
+} from './validate.ts'
 
 export {
   screenerParadigms,

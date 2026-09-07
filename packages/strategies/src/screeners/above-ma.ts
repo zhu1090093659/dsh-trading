@@ -1,8 +1,10 @@
 /**
  * 牛熊线之上：现价站上长期均线且均线自身斜率向上——与量化「200 日均线
  * 牛熊择时基线」同源的长线标的筛选（Faber GTAA 的截面版）。
+ *
+ * evaluate 自包含（内联滚动 SMA，与 @dshtrading/indicators math.ts 同式）：
+ * 选股器管理（覆盖内置）可经 evaluate.toString() 导出完整可编译源码。
  */
-import { sma } from '@dshtrading/indicators'
 import type { ScreenerDefinition } from './types.ts'
 
 export const aboveMaScreener: ScreenerDefinition = {
@@ -23,8 +25,20 @@ export const aboveMaScreener: ScreenerDefinition = {
     const i = bars.length - 1
     if (i < period + slopeBars - 1) return null
 
+    const smaOf = (values: number[], period: number): Array<number | undefined> => {
+      const out: Array<number | undefined> = new Array(values.length).fill(undefined)
+      if (!Number.isFinite(period) || period < 1 || values.length < period) return out
+      let sum = 0
+      for (let index = 0; index < values.length; index++) {
+        sum += values[index] as number
+        if (index >= period) sum -= values[index - period] as number
+        if (index >= period - 1) out[index] = sum / period
+      }
+      return out
+    }
+
     const closes = bars.map((b) => b.close)
-    const maSeries = sma(closes, period)
+    const maSeries = smaOf(closes, period)
     const ma = maSeries[i]
     const maPrev = maSeries[i - slopeBars]
     if (ma === undefined || maPrev === undefined || !(maPrev > 0)) return null

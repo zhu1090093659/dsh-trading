@@ -1,8 +1,10 @@
 /**
  * 均线多头排列：现价站上三线，且短中期均线自上而下依次压制
  * （SMA(短) > SMA(中) > SMA(长)），趋势结构完整的顺势筛选。
+ *
+ * evaluate 自包含（内联滚动 SMA，与 @dshtrading/indicators math.ts 同式）：
+ * 选股器管理（覆盖内置）可经 evaluate.toString() 导出完整可编译源码。
  */
-import { sma } from '@dshtrading/indicators'
 import type { ScreenerDefinition } from './types.ts'
 
 export const maBullAlignScreener: ScreenerDefinition = {
@@ -24,10 +26,22 @@ export const maBullAlignScreener: ScreenerDefinition = {
     const i = bars.length - 1
     if (i + 1 < n3) return null
 
+    const smaOf = (values: number[], period: number): Array<number | undefined> => {
+      const out: Array<number | undefined> = new Array(values.length).fill(undefined)
+      if (!Number.isFinite(period) || period < 1 || values.length < period) return out
+      let sum = 0
+      for (let index = 0; index < values.length; index++) {
+        sum += values[index] as number
+        if (index >= period) sum -= values[index - period] as number
+        if (index >= period - 1) out[index] = sum / period
+      }
+      return out
+    }
+
     const closes = bars.map((b) => b.close)
-    const s1 = sma(closes, n1)[i]
-    const s2 = sma(closes, n2)[i]
-    const s3 = sma(closes, n3)[i]
+    const s1 = smaOf(closes, n1)[i]
+    const s2 = smaOf(closes, n2)[i]
+    const s3 = smaOf(closes, n3)[i]
     if (s1 === undefined || s2 === undefined || s3 === undefined) return null
 
     const close = bars[i]!.close
