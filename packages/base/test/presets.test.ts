@@ -77,10 +77,20 @@ it('composes all 16 installed-market subsets deterministically, preserving conne
         expect(text).toContain('dynamic-capabilities')
         expect(text).toContain('strategy_backtest')
         expect(text).toContain('knowledge-curation')
+        // Skill surface + shell: the master drives session skills (content-insight
+        // pipelines) and therefore carries the bash row; specialists do not.
+        expect(text).toContain("name: '@deepseek-ai/dsh-skill-filesystem'")
+        expect(text).toContain("name: '@deepseek-ai/dsh-tool-skill'")
+        expect(text).toContain("name: '@deepseek-ai/dsh-tool-bash'")
       } else {
         expect(text).not.toContain('@deepseek-ai/dsh-tool-subagent')
         expect(text).not.toContain('@deepseek-ai/dsh-tool-jobs') // no delegation, no background jobs
+        expect(text).not.toContain("name: '@deepseek-ai/dsh-tool-bash'") // shell is master-only
       }
+      // Every role gets the skill catalog and loader (host web rows are disabled;
+      // without these the persona's skill names are dead references — 2026-09-07).
+      expect(text).toContain("name: '@deepseek-ai/dsh-skill-filesystem'")
+      expect(text).toContain("name: '@deepseek-ai/dsh-tool-skill'")
       // Role skill distribution (#70): the mounted base-skill row follows the persona discipline.
       if (preset.id === 'master') {
         expect(text).toContain("- id: dsh-trading-role-skills\n  name: '@dshtrading/base/role-skills'\n") // full pair, no whitelist

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""whisper_asr.py — 本地 mlx-whisper 转写（content-insight 管线的离线 ASR 替代）
+"""whisper_asr.py — 本地 mlx-whisper 转写（content-insight 管线 V2 唯一 ASR 路径）
 
-用于 bili_transcribe.js 的云端 SDK 在本机不可用时（无 .z-ai-config 凭据）。
+无官方字幕时直接使用本地模型转写，无云端依赖。
 
 依赖（Apple Silicon，一次性）:
     uv venv <工作目录>/.venv --python 3.12
@@ -10,7 +10,7 @@
 用法: <工作目录>/.venv/bin/python whisper_asr.py <工作目录> [...更多工作目录]
 输入: <工作目录>/audio.wav
 输出: <工作目录>/transcript_full.json [{index, start:"HH:MM:SS", text}] + transcript_full.txt
-      （与 bili_transcribe.js 输出格式一致，bili_transcript.py 可直接消费）
+      （bili_transcript.py 可直接消费）
 模型 mlx-community/whisper-large-v3-turbo（约1.6GB）首次运行时下载；
 HF 直连失败时设 HF_ENDPOINT=https://hf-mirror.com 重跑。
 已存在 transcript_full.json 的工作目录自动跳过（断点语义：整段原子完成）。
