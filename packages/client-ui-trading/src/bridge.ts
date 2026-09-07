@@ -24,7 +24,11 @@ import { clampActivationParams, createMemoryChartActivationStore, createMemoryCu
 import type { KnowledgeCard, KnowledgeCardStore } from '@dshtrading/knowledge'
 import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord, CustomStrategyStore } from '@dshtrading/strategies'
-import { createMemoryCustomStrategyStore } from '@dshtrading/strategies'
+import { createMemoryCustomStrategyStore, createMemoryBuiltinTombstonesStore, isBuiltinStrategyId } from '@dshtrading/strategies'
+import type { BuiltinTombstonesStore } from '@dshtrading/strategies'
+// Node 侧沙箱校验（策略管理 PUT 落盘前的 vm 熔断试算）；bridge.ts 仅 node 半加载，
+// client 打包不 import 本文件（client 半只经 api.ts 走 HTTP）。
+import { validateCustomStrategyNode } from '@dshtrading/strategies/plugin'
 import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from '@dshtrading/watchlist'
 import { createMemorySelectionStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
 // 统一资产台账（issue #65）：type-only import——@dshtrading/holdings 由并行流建设，
@@ -80,6 +84,8 @@ export function createBridgeHost(services: {
   chartActivationsStore?: ChartActivationStore | undefined
   knowledgeStore?: KnowledgeCardStore | undefined
   strategyStore?: CustomStrategyStore | undefined
+  /** 内置策略/选股器墓碑 store（策略管理，可选）。 */
+  tombstonesStore?: BuiltinTombstonesStore | undefined
   watchlistStore?: WatchlistStore | undefined
   selectionStore?: SelectionStore | undefined
   /** 统一资产台账 store（issue #65；缺席 → 进程内内存兜底）。 */
@@ -103,6 +109,7 @@ export function createBridgeHost(services: {
     chartActivationsStore: services.chartActivationsStore ?? createMemoryChartActivationStore(),
     knowledgeStore: services.knowledgeStore ?? createMemoryKnowledgeCardStore(),
     strategyStore: services.strategyStore ?? createMemoryCustomStrategyStore(),
+    tombstonesStore: services.tombstonesStore ?? createMemoryBuiltinTombstonesStore(),
     watchlistStore: services.watchlistStore ?? createMemoryWatchlistStore(),
     selectionStore: services.selectionStore ?? createMemorySelectionStore(),
     holdingsStore: services.holdingsStore ?? createFallbackHoldingsStore(),
@@ -132,6 +139,8 @@ export interface BridgeHost {
   knowledgeStore?: KnowledgeCardStore
   /** 自定义策略存储（可选，issue #31）。 */
   strategyStore?: CustomStrategyStore
+  /** 内置策略/选股器墓碑存储（可选，策略管理；createBridgeHost 已兜底内存实现）。 */
+  tombstonesStore?: BuiltinTombstonesStore
   /** 自选股存储（可选，issue #32）。 */
   watchlistStore?: WatchlistStore
   /** 选中标的存储（可选，issue #32）。 */
@@ -971,7 +980,7 @@ export class TradingBridge {
     return { ok: true, items: result.items, unavailable: result.unavailable }
   }
 
-  /** 自定义策略名册（issue #31）：返回记录，前端校验后并入名册。 */
+  /** 自定义策略名册（issue #31）：返回记录（含内置覆盖记录），前端校验后并入名册。 */
   async customStrategies(): Promise<{ ok: boolean; strategies: CustomStrategyRecord[] }> {
     const store = this.host.strategyStore
     if (store === undefined) return { ok: true, strategies: [] }
@@ -979,12 +988,84 @@ export class TradingBridge {
     return { ok: true, strategies }
   }
 
-  /** 删除自定义策略（issue #31）。 */
-  async deleteCustomStrategy(id: string): Promise<{ ok: boolean; removed: boolean }> {
+  /**
+   * 删除策略（策略管理）：自定义 = 移除记录；内置范式 = 落墓碑（出厂代码不动，
+   * POST /strategies/reset 可恢复），顺带丢弃该内置的覆盖记录。
+   */
+  async deleteCustomStrategy(rawId: string): Promise<{ ok: boolean; removed: boolean; scope: 'custom' | 'builtin' }> {
+    // 与 PUT 同款归一化（PUT 在 isBuiltinStrategyId 前先 trim+lowercase，两侧对称）。
+    const id = rawId.trim().toLowerCase()
+    if (isBuiltinStrategyId(id)) {
+      await this.host.tombstonesStore?.add(id)
+      // 内置删除丢弃覆盖记录：归档后可找回（出厂代码由墓碑/恢复语义保证）。
+      await this.host.strategyStore?.remove(id, true)
+      return { ok: true, removed: true, scope: 'builtin' }
+    }
     const store = this.host.strategyStore
-    if (store === undefined) return { ok: true, removed: false }
+    if (store === undefined) return { ok: true, removed: false, scope: 'custom' }
     const removed = await store.remove(id)
-    return { ok: true, removed }
+    return { ok: true, removed, scope: 'custom' }
+  }
+
+  /**
+   * 保存自定义策略（策略管理，PUT /strategies/custom）：桥侧 vm 沙箱全量校验
+   * （结构/语法/多场景试算/信号序列）通过才落盘。同 id 既有自定义记录即 upsert
+   * 覆盖；id 命中内置范式 = 覆盖内置，必须显式带 overridesBuiltin 确认位
+   * （防 GUI 误覆盖），成功时顺带清除该 id 的删除墓碑。
+   */
+  async saveCustomStrategy(body: unknown): Promise<
+    | { ok: true; strategy: CustomStrategyRecord; overridesBuiltin: boolean }
+    | { ok: false; code: string; message: string }
+  > {
+    const store = this.host.strategyStore
+    if (store === undefined) {
+      return { ok: false, code: 'TRADING_STRATEGY_UNAVAILABLE', message: 'strategy store is not mounted' }
+    }
+    const input = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>
+    const id = typeof input.id === 'string' ? input.id.trim().toLowerCase() : ''
+    const overridesBuiltin = isBuiltinStrategyId(id)
+    if (overridesBuiltin && input.overridesBuiltin !== true) {
+      return {
+        ok: false,
+        code: 'TRADING_STRATEGY_OVERRIDE_CONFIRM',
+        message: `id "${id}" is a built-in paradigm strategy — pass overridesBuiltin:true to confirm overriding it`,
+      }
+    }
+    const result = await validateCustomStrategyNode(input)
+    if (!result.ok) {
+      return { ok: false, code: 'TRADING_STRATEGY_INVALID', message: result.reason }
+    }
+    if (overridesBuiltin) {
+      await this.host.tombstonesStore?.remove(id)
+      // 上一次覆盖记录将被本次 save 顶掉：先归档删除再落盘，旧修改可找回。
+      const previousOverride = await store.get(id)
+      if (previousOverride !== undefined) await store.remove(id, true)
+    }
+    await store.save(result.record)
+    return { ok: true, strategy: result.record, overridesBuiltin }
+  }
+
+  /** 内置删除墓碑清单（策略管理；GUI 据此展示灰卡与恢复入口）。 */
+  async builtinTombstones(): Promise<{ ok: boolean; deleted: string[] }> {
+    const deleted = await this.host.tombstonesStore?.list() ?? []
+    return { ok: true, deleted }
+  }
+
+  /**
+   * 恢复内置策略出厂默认（策略管理，POST /strategies/reset）：清覆盖记录与墓碑。
+   * 自定义策略无出厂版本 → 业务拒绝。
+   */
+  async resetStrategy(id: string): Promise<
+    | { ok: true; reset: true; changed: boolean; removedOverride: boolean; liftedTombstone: boolean }
+    | { ok: false; code: string; message: string }
+  > {
+    if (!isBuiltinStrategyId(id)) {
+      return { ok: false, code: 'TRADING_STRATEGY_NOT_BUILTIN', message: `"${id}" is not a built-in paradigm strategy id` }
+    }
+    // 恢复出厂丢弃覆盖记录：归档后可找回。
+    const removedOverride = await this.host.strategyStore?.remove(id, true) ?? false
+    const liftedTombstone = await this.host.tombstonesStore?.remove(id) ?? false
+    return { ok: true, reset: true, changed: removedOverride || liftedTombstone, removedOverride, liftedTombstone }
   }
 
   /**
@@ -1209,7 +1290,8 @@ export class TradingBridge {
       }
       const hideScope = symbol !== '' ? symbolScopeKey(market, symbol) : market
       const next = withHiddenScopes(existing, hideScope, raw.visible === true)
-      if (next !== existing) await store.activate(next)
+      // existing 来自 store.list()，存在即 store 已定义；此处守卫只为类型窄化。
+      if (store !== undefined && next !== existing) await store.activate(next)
       return { ok: true, instances: store !== undefined ? await store.list() : [next] }
     }
 
@@ -1450,6 +1532,9 @@ export async function dispatchBridgeRequest(
       case '/strategies/custom': {
         return { status: 200, payload: await bridge.customStrategies() }
       }
+      case '/strategies/tombstones': {
+        return { status: 200, payload: await bridge.builtinTombstones() }
+      }
       case '/watchlists': {
         return { status: 200, payload: await bridge.watchlistRows() }
       }
@@ -1510,12 +1595,21 @@ export async function dispatchBridgeRequest(
     if (pathname === '/holdings') {
       return { status: 200, payload: await bridge.updateHolding(body) }
     }
+    if (pathname === '/strategies/custom') {
+      return { status: 200, payload: await bridge.saveCustomStrategy(body) }
+    }
     throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }
 
   if (method === 'POST') {
     if (pathname === '/trade/order') {
       return { status: 200, payload: await bridge.placeOrderFromGui(search.get('market') ?? '', body as GuiOrderBody) }
+    }
+    if (pathname === '/strategies/reset') {
+      const input = (typeof body === 'object' && body !== null ? body : {}) as { id?: unknown }
+      const id = typeof input.id === 'string' ? input.id.trim() : ''
+      if (!id) throw new BridgeProtocolError(400, 'reset strategy: id is required')
+      return { status: 200, payload: await bridge.resetStrategy(id) }
     }
     if (pathname === '/watchlists') {
       return { status: 200, payload: await bridge.addWatchlistRow(body) }

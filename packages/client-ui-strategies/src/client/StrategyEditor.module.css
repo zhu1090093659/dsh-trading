@@ -1,0 +1,235 @@
+/* 策略编辑器（策略管理，2026-09-07）：模态覆盖层 + 表单面板。
+   词汇沿用 StrategyView.module.css 的 --dsw-futu-* design tokens。 */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 18, 22, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.panel {
+  background: var(--dsw-futu-bg-base);
+  border: 1px solid var(--dsw-futu-border-default);
+  border-radius: var(--dsw-futu-radius-lg);
+  box-shadow: var(--dsw-futu-shadow-lg, 0 12px 40px rgba(0, 0, 0, 0.25));
+  width: min(720px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panelTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary);
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: var(--dsw-futu-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: var(--dsw-futu-radius-sm);
+}
+
+.closeBtn:hover {
+  color: var(--dsw-futu-text-primary);
+  background: var(--dsw-futu-bg-surface-hover);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 120px;
+  gap: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fieldLabel {
+  font-size: 11.5px;
+  color: var(--dsw-futu-text-secondary);
+}
+
+.fieldInput {
+  background: var(--dsw-futu-bg-surface);
+  border: 1px solid var(--dsw-futu-border-subtle);
+  border-radius: var(--dsw-futu-radius-sm);
+  color: var(--dsw-futu-text-primary);
+  font-size: 12.5px;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.fieldInput:focus {
+  border-color: var(--dsw-futu-border-active);
+}
+
+.fieldInput:disabled {
+  opacity: 0.6;
+}
+
+.paramTable {
+  border: 1px solid var(--dsw-futu-border-subtle);
+  border-radius: var(--dsw-futu-radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.paramHeadRow,
+.paramRow {
+  display: grid;
+  grid-template-columns: 1.2fr 1.6fr 0.8fr 0.8fr 0.8fr 0.7fr 24px;
+  gap: 6px;
+  align-items: center;
+}
+
+.paramHeadRow {
+  font-size: 11px;
+  color: var(--dsw-futu-text-secondary);
+}
+
+.paramCell {
+  background: var(--dsw-futu-bg-surface);
+  border: 1px solid var(--dsw-futu-border-subtle);
+  border-radius: var(--dsw-futu-radius-sm);
+  color: var(--dsw-futu-text-primary);
+  font-size: 12px;
+  padding: 4px 6px;
+  min-width: 0;
+  outline: none;
+}
+
+.paramCell:focus {
+  border-color: var(--dsw-futu-border-active);
+}
+
+.paramRemove {
+  background: transparent;
+  border: none;
+  color: var(--dsw-futu-text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px;
+}
+
+.paramRemove:hover {
+  color: var(--dsw-futu-text-primary);
+}
+
+.addParamBtn {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px dashed var(--dsw-futu-border-default);
+  border-radius: var(--dsw-futu-radius-sm);
+  color: var(--dsw-futu-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.addParamBtn:hover {
+  color: var(--dsw-futu-text-primary);
+  border-color: var(--dsw-futu-border-active);
+}
+
+.sourceArea {
+  background: var(--dsw-futu-bg-surface);
+  border: 1px solid var(--dsw-futu-border-subtle);
+  border-radius: var(--dsw-futu-radius-sm);
+  color: var(--dsw-futu-text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px;
+  resize: vertical;
+  outline: none;
+  white-space: pre;
+}
+
+.sourceArea:focus {
+  border-color: var(--dsw-futu-border-active);
+}
+
+.noticeOk {
+  font-size: 12.5px;
+  color: #2ba471;
+  background: rgba(43, 164, 113, 0.08);
+  border: 1px solid rgba(43, 164, 113, 0.35);
+  border-radius: var(--dsw-futu-radius-sm);
+  padding: 8px 10px;
+}
+
+.noticeError {
+  font-size: 12.5px;
+  color: #e64545;
+  background: rgba(230, 69, 69, 0.08);
+  border: 1px solid rgba(230, 69, 69, 0.35);
+  border-radius: var(--dsw-futu-radius-sm);
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.actionBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actionSpacer {
+  flex: 1;
+}
+
+.primaryBtn,
+.secondaryBtn {
+  border-radius: var(--dsw-futu-radius-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 16px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.primaryBtn {
+  background: var(--dsw-futu-border-active);
+  color: #fff;
+}
+
+.primaryBtn:disabled,
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondaryBtn {
+  background: var(--dsw-futu-bg-surface);
+  border-color: var(--dsw-futu-border-subtle);
+  color: var(--dsw-futu-text-secondary);
+}
+
+.secondaryBtn:hover {
+  color: var(--dsw-futu-text-primary);
+  background: var(--dsw-futu-bg-surface-hover);
+}

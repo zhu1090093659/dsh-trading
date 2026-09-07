@@ -325,7 +325,7 @@ export async function fetchCustomStrategies(): Promise<CustomStrategyRecord[]> {
   }
 }
 
-/** 删除自定义策略（issue #31）。 */
+/** 删除策略（策略管理）：自定义移除 / 内置落墓碑，均返回是否生效。 */
 export async function deleteCustomStrategy(id: string): Promise<boolean> {
   try {
     const query = new URLSearchParams({ id })
@@ -338,6 +338,60 @@ export async function deleteCustomStrategy(id: string): Promise<boolean> {
     return wire.ok === true && wire.removed === true
   } catch {
     return false
+  }
+}
+
+/** 保存（新增/覆盖）自定义策略（策略管理）：桥侧 vm 沙箱校验通过才落盘。 */
+export async function saveCustomStrategy(input: {
+  id: string
+  title: string
+  horizon: string
+  summary: string
+  paramsJson: string
+  computeSource: string
+  overridesBuiltin?: boolean
+}): Promise<{ ok: true; overridesBuiltin: boolean } | { ok: false; reason: string } | null> {
+  try {
+    const response = await fetch('/dshtrading/api/strategies/custom', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    if (!response.ok) return null
+    const wire = await response.json() as { ok?: boolean; message?: string; overridesBuiltin?: boolean }
+    if (wire.ok === true) return { ok: true, overridesBuiltin: wire.overridesBuiltin === true }
+    return { ok: false, reason: wire.message ?? 'validation failed' }
+  } catch (err) {
+    console.warn('[dsh-trading] saveCustomStrategy failed:', err)
+    return null
+  }
+}
+
+/** 恢复内置策略出厂默认（策略管理）：清覆盖记录与墓碑。 */
+export async function resetStrategy(id: string): Promise<{ ok: boolean; changed: boolean } | null> {
+  try {
+    const response = await fetch('/dshtrading/api/strategies/reset', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    if (!response.ok) return null
+    const wire = await response.json() as { ok?: boolean; changed?: boolean }
+    return { ok: wire.ok === true, changed: wire.changed === true }
+  } catch (err) {
+    console.warn('[dsh-trading] resetStrategy failed:', err)
+    return null
+  }
+}
+
+/** 内置删除墓碑清单（策略管理）：GUI 据此展示灰卡与恢复入口。 */
+export async function fetchStrategyTombstones(): Promise<string[]> {
+  try {
+    const wire = await getJson<{ ok: boolean; deleted: string[] }>('/dshtrading/api/strategies/tombstones')
+    return Array.isArray(wire.deleted) ? wire.deleted : []
+  } catch (err) {
+    console.warn('[dsh-trading] fetchStrategyTombstones failed, fallback to empty:', err)
+    return []
   }
 }
 
@@ -737,6 +791,10 @@ export async function fetchFx(base: HoldingsBaseCurrency): Promise<FxSnapshot | 
 export interface TradingBridgeService {
   fetchKlines: typeof fetchKlines
   fetchCustomStrategies: typeof fetchCustomStrategies
+  saveCustomStrategy: typeof saveCustomStrategy
+  deleteCustomStrategy: typeof deleteCustomStrategy
+  resetStrategy: typeof resetStrategy
+  fetchStrategyTombstones: typeof fetchStrategyTombstones
   fetchKnowledgeCards: typeof fetchKnowledgeCards
   fetchFundamentals: typeof fetchFundamentals
   fetchNews: typeof fetchNews
@@ -749,6 +807,10 @@ export function createTradingBridgeService(): TradingBridgeService {
   return {
     fetchKlines,
     fetchCustomStrategies,
+    saveCustomStrategy,
+    deleteCustomStrategy,
+    resetStrategy,
+    fetchStrategyTombstones,
     fetchKnowledgeCards,
     fetchFundamentals,
     fetchNews,

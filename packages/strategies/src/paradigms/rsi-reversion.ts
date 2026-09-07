@@ -3,8 +3,10 @@
  *
  * 入场：RSI(2) < 10 极端超卖入场。
  * 出场：RSI(2) > 60 快速反弹获利了结。
+ *
+ * compute 自包含（内联 Wilder RSI，与 @dshtrading/indicators math.ts 同式）：
+ * 策略管理（覆盖内置）可经 compute.toString() 导出完整可编译源码。
  */
-import { rsi } from '@dshtrading/indicators'
 import type { StrategyDefinition, StrategySignal } from '../types.ts'
 
 export const rsiReversionStrategy: StrategyDefinition = {
@@ -22,8 +24,30 @@ export const rsiReversionStrategy: StrategyDefinition = {
     const enterThresh = Number(params.entryThreshold ?? 10)
     const exitThresh = Number(params.exitThreshold ?? 60)
 
+    const rsiOf = (values: number[], period: number): Array<number | undefined> => {
+      const out: Array<number | undefined> = new Array(values.length).fill(undefined)
+      if (!Number.isFinite(period) || period < 1 || values.length < period) return out
+      let gain = 0
+      let loss = 0
+      for (let index = 1; index <= period; index++) {
+        const delta = (values[index] as number) - (values[index - 1] as number)
+        if (delta >= 0) gain += delta
+        else loss -= delta
+      }
+      gain /= period
+      loss /= period
+      out[period] = loss === 0 ? 100 : 100 - 100 / (1 + gain / loss)
+      for (let index = period + 1; index < values.length; index++) {
+        const delta = (values[index] as number) - (values[index - 1] as number)
+        gain = (gain * (period - 1) + Math.max(delta, 0)) / period
+        loss = (loss * (period - 1) + Math.max(-delta, 0)) / period
+        out[index] = loss === 0 ? 100 : 100 - 100 / (1 + gain / loss)
+      }
+      return out
+    }
+
     const closes = bars.map((b) => b.close)
-    const rsiValues = rsi(closes, period)
+    const rsiValues = rsiOf(closes, period)
     const signals: StrategySignal[] = []
     let inPosition = false
 
