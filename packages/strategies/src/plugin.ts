@@ -14,6 +14,7 @@
  * 红线（铁律 #3）：策略层永不触发 place_order——本插件只读行情 + 本地回测。
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import os from 'node:os'
 import path from 'node:path'
@@ -46,6 +47,9 @@ const MARKET_SERVICE_KEYS: Record<string, string> = {
 export function defaultStorePath(): string {
   return path.join(os.homedir(), '.dsh', 'strategies', 'custom.json')
 }
+
+/** SDK 服务键：自定义策略 store 单实例（桥与工具共享同一缓存）。 */
+export const TRADING_STRATEGIES_KEY = 'tradingStrategies'
 
 /** tradingEvents 的最小发布面（鸭式，不定死接口；总线缺席时静默降级）。 */
 export interface TradingEventsPublisher {
@@ -288,6 +292,10 @@ export function createStrategyBacktestTool(deps: StrategyBacktestToolDeps) {
 /** Host plugin body：注册 strategy_author / strategy_backtest（host 平面，全会话可见）。 */
 export function apply(ctx: Context): void {
   const store = createFileCustomStrategyStore(defaultStorePath())
+  // Service 单实例（issue #33 收口模式，同 indicators 的 tradingCustomIndicators）：
+  // 桥（client-ui-trading node 半）经 ctx.get 解包 .store 复用同一实例——此前
+  // 桥自建第二个 file store，工具写入与桥缓存互不感知（跨实例 stale 窗口）。
+  new StrategiesStoreService(ctx, store)
 
   ctx.inject(['tools'] as never, (toolCtx) => {
     const tools = (toolCtx as unknown as { tools?: { register(t: unknown): void; get(name: string): unknown } }).tools
@@ -306,4 +314,13 @@ export function apply(ctx: Context): void {
       tools.register(backtestTool)
     }
   })
+}
+
+/** 自定义策略 store 服务（桥与工具的单实例共享点，issue #33 收口模式）。 */
+export class StrategiesStoreService extends Service {
+  readonly store: CustomStrategyStore
+  constructor(ctx: Context, store: CustomStrategyStore, serviceName: string = TRADING_STRATEGIES_KEY) {
+    super(ctx, serviceName)
+    this.store = store
+  }
 }

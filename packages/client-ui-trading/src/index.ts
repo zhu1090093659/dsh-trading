@@ -115,8 +115,15 @@ export function apply(ctx: Context): void {
       ? (base: string) => (holdingsService.fx as NonNullable<typeof holdingsService.fx>).getRates(base)
       : undefined
 
-  const strategyStorePath = path.join(os.homedir(), '.dsh', 'strategies', 'custom.json')
-  const strategyStore = createFileCustomStrategyStore(strategyStorePath)
+  // issue #33 收口（策略侧补齐）：@dshtrading/strategies/plugin provide
+  // tradingStrategies 服务（Service 实例，.store = file store 单实例）——桥与
+  // strategy_author/strategy_backtest 工具共享同一缓存；服务缺席（老部署）→
+  // 回退自建同路径 file store（旧行为）。
+  const strategiesService = serviceGet('tradingStrategies') as
+    | { store?: import('@dshtrading/strategies').CustomStrategyStore }
+    | undefined
+  const strategyStore = strategiesService?.store
+    ?? createFileCustomStrategyStore(path.join(os.homedir(), '.dsh', 'strategies', 'custom.json'))
 
   const watchlistStorePath = path.join(os.homedir(), '.dsh', 'watchlists.json')
   const watchlistStore = createFileWatchlistStore(watchlistStorePath)
