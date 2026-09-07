@@ -122,6 +122,24 @@ describe('图表激活名册桥端点（issue #63）', () => {
     expect(list).toEqual({ status: 200, payload: { ok: true, instances: [{ id: 'td9', params: { count: 12 } }] } })
   })
 
+  it('PUT 半参 scope（只给 market）→ 业务拒绝 TRADING_INVALID_SCOPE，不落盘（issue #72 复审）', async () => {
+    const bridge = new TradingBridge(fakeHost())
+    const wire = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'hk', params: { count: 11 } })
+    expect(wire).toMatchObject({ status: 200, payload: { ok: false, code: 'TRADING_INVALID_SCOPE' } })
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams())
+    expect(list).toEqual({ status: 200, payload: { ok: true, instances: [] } })
+  })
+
+  it('PUT clearSymbol 对未挂载 id 是无操作，不反向创建实例（issue #72 复审）', async () => {
+    const bridge = new TradingBridge(fakeHost())
+    const wire = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'hk', symbol: '00700.HK', clearSymbol: true })
+    expect(wire).toEqual({ status: 200, payload: { ok: true, instances: [] } })
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams())
+    expect(list).toEqual({ status: 200, payload: { ok: true, instances: [] } })
+  })
+
   it('POST import 保真 symbolParams（issue #72 迁移不丢覆盖）', async () => {
     const bridge = new TradingBridge(fakeHost())
     await dispatchBridgeRequest(bridge, 'POST', '/chart/indicators/import', new URLSearchParams(), {

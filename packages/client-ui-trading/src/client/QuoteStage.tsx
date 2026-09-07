@@ -588,8 +588,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         title: definition.title,
         pane: definition.pane,
         key: indicators.instanceKey(instance),
-        // issue #72：命中 symbolParams["market:symbol"] 覆盖时该套参数整体替代全局 params。
-        outputs: definition.compute(klines, effectiveInstanceParams(instance, market, symbol)),
+        // issue #72：命中 symbolParams["market:symbol"] 覆盖时该套参数整体替代全局 params；
+        // 计算前按当前 schema clamp——re-author 改 schema 后 stale 覆盖的旧键/越界值不直通 compute。
+        outputs: definition.compute(klines, indicators.clampParams(definition, effectiveInstanceParams(instance, market, symbol))),
       })
     }
     return groups

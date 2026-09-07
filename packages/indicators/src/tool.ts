@@ -1,9 +1,9 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { presetDefinitions, type IndicatorDefinition } from './presets.ts'
-import type { IndicatorParamSpec, Kline } from './types.ts'
+import type { IndicatorInstance, IndicatorParamSpec, Kline } from './types.ts'
 import type { CustomIndicatorStore } from './custom.ts'
 import type { ChartActivationStore } from './chart-activations.ts'
-import { defaultActivationInstance } from './chart-activations.ts'
+import { clampActivationParams, defaultActivationInstance } from './chart-activations.ts'
 import { validateCustomIndicatorNode } from './validate-node.ts'
 
 export { createFileCustomIndicatorStore } from './custom-fs.ts'
@@ -246,12 +246,24 @@ export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
       let activatedNote = ''
       if (args.activate === true) {
         if (chartStore !== undefined) {
-          const instance = defaultActivationInstance({
+          const defaults = defaultActivationInstance({
             id: result.record.id,
             title: result.record.title,
             pane: result.record.pane,
             params: result.record.params,
           })
+          // issue #72：re-author 重挂与 indicator_activate 全局写同语义——保留已有按标的
+          // 覆盖（否则 author 一次就静默清掉覆盖）；改 schema 后按新 schema 重 clamp
+          // （旧键丢弃、缺键补默认、越界收敛），stale 覆盖不直通 compute。
+          const existing = (await chartStore.list()).find(candidate => candidate.id === result.record.id)
+          let instance: IndicatorInstance = defaults
+          if (existing?.symbolParams !== undefined) {
+            const symbolParams: Record<string, Record<string, number>> = {}
+            for (const [scope, scoped] of Object.entries(existing.symbolParams)) {
+              symbolParams[scope] = clampActivationParams(result.record.params, scoped)
+            }
+            instance = { id: defaults.id, params: defaults.params, symbolParams }
+          }
           await chartStore.activate(instance)
           onActivated?.(result.record.id)
           activatedNote = ' The indicator has also been mounted on the chart with its default parameters (see indicator_deactivate to unmount).'

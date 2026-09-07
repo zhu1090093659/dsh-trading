@@ -252,6 +252,34 @@ describe('indicator_author「创作即上图」（issue #63）', () => {
     expect(await chartStore.list()).toEqual([{ id: 'authored_i', params: {} }])
   })
 
+  it('re-author activate:true 保留 symbolParams 并按新 schema 重 clamp（issue #72 复审：不抹覆盖、stale 覆盖不直通）', async () => {
+    const store = createMemoryCustomIndicatorStore()
+    const chartStore = createMemoryChartActivationStore()
+    const tool = createAuthorIndicatorTool({ store, chartStore })
+    const v1 = { ...AUTHOR_ARGS, paramsJson: '[{"key":"a1","label":"锚点1","default":0,"min":0,"max":20991231}]' }
+
+    // v1 挂载并写一个按标的覆盖
+    await tool.execute({ ...v1, activate: true })
+    await chartStore.activate({ id: 'authored_i', params: { a1: 0 }, symbolParams: { 'hk:00700.HK': { a1: 20240102 } } })
+
+    // v2 改 schema（a1 → a2）：重挂不清覆盖；覆盖按新 schema 重 clamp（旧键 a1 丢弃、
+    // 缺键 a2 补默认 7），全局 params 取新 schema 默认值。
+    const v2 = { ...AUTHOR_ARGS, paramsJson: '[{"key":"a2","label":"锚点2","default":7,"min":0,"max":100}]' }
+    await tool.execute({ ...v2, activate: true })
+    expect(await chartStore.list()).toEqual([{
+      id: 'authored_i', params: { a2: 7 },
+      symbolParams: { 'hk:00700.HK': { a2: 7 } },
+    }])
+
+    // v3 同 schema re-author：覆盖原样保留，全局 params 更新为新默认。
+    const v3 = { ...AUTHOR_ARGS, paramsJson: '[{"key":"a2","label":"锚点2","default":9,"min":0,"max":100}]' }
+    await tool.execute({ ...v3, activate: true })
+    expect(await chartStore.list()).toEqual([{
+      id: 'authored_i', params: { a2: 9 },
+      symbolParams: { 'hk:00700.HK': { a2: 7 } },
+    }])
+  })
+
   it('activate 缺省 → 不上图；chartStore 缺席 → 降级说明不失败', async () => {
     const store = createMemoryCustomIndicatorStore()
     const chartStore = createMemoryChartActivationStore()

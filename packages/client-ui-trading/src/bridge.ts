@@ -262,7 +262,7 @@ export interface ChartActivationsWire {
 /** 图表激活写入的业务拒绝（未知指标 id 等；协议错误仍走 BridgeProtocolError）。 */
 export interface ChartActivationRejectedWire {
   ok: false
-  code: 'TRADING_UNKNOWN_INDICATOR'
+  code: 'TRADING_UNKNOWN_INDICATOR' | 'TRADING_INVALID_SCOPE'
   message: string
 }
 
@@ -1156,7 +1156,8 @@ export class TradingBridge {
    * params 按 schema clamp，缺失键取 schema 默认值。
    * issue #72：body 同时带 market+symbol 时写入该标的的参数覆盖（symbolParams[
    * `${market}:${symbol}`]），clearSymbol:true 改为删除该覆盖；不带 scope 时写
-   * 全局 params。两种写法都保留实例上已有的其他覆盖。
+   * 全局 params。两种写法都保留实例上已有的其他覆盖。market/symbol 只给其一是
+   * 业务拒绝（TRADING_INVALID_SCOPE）；clearSymbol 对未挂载 id 是无操作不建实例。
    */
   async putChartActivation(body: unknown): Promise<ChartActivationsWire | ChartActivationRejectedWire> {
     const store = this.host.chartActivationsStore
@@ -1181,10 +1182,24 @@ export class TradingBridge {
     const market = typeof raw.market === 'string' ? raw.market.trim() : ''
     const symbol = typeof raw.symbol === 'string' ? raw.symbol.trim() : ''
     const scope = market !== '' && symbol !== '' ? symbolScopeKey(market, symbol) : undefined
+    if (scope === undefined && (market !== '' || symbol !== '')) {
+      // 与 indicator_activate 工具同规则：scope 只收成对 market+symbol，
+      // 半参业务拒绝而非静默落全局（全局写影响所有标的）。
+      return {
+        ok: false,
+        code: 'TRADING_INVALID_SCOPE',
+        message: 'market and symbol must be supplied together (or neither) — got market='
+          + JSON.stringify(market) + ', symbol=' + JSON.stringify(symbol),
+      }
+    }
     const existing = store !== undefined ? (await store.list()).find(instance => instance.id === id) : undefined
 
     let instance: IndicatorInstance
     if (scope !== undefined) {
+      // 清除不存在的覆盖是无操作：不反向创建激活实例。
+      if (raw.clearSymbol === true && existing === undefined) {
+        return { ok: true, instances: store !== undefined ? await store.list() : [] }
+      }
       // 新实例的全局 params 取 schema 默认值——首个标的的覆盖不得泄漏成全局值。
       const base: IndicatorInstance = existing ?? { id, params: clampActivationParams(spec.params, {}) }
       const symbolParams: Record<string, Record<string, number>> = { ...(base.symbolParams ?? {}) }
