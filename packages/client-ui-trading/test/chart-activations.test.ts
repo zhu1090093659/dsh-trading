@@ -83,6 +83,78 @@ describe('图表激活名册桥端点（issue #63）', () => {
     expect(second).toMatchObject({ status: 200, payload: { ok: false, imported: false } })
   })
 
+  it('PUT 按标的覆盖（issue #72）：market+symbol 写 symbolParams；clearSymbol 删除；全局写保留覆盖', async () => {
+    const bridge = new TradingBridge(fakeHost())
+    // 按标的写入两套覆盖
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'hk', symbol: '00700.HK', params: { count: 11 } })
+    const wire = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'us', symbol: 'GOOGL', params: { count: 10 } })
+    expect(wire).toEqual({
+      status: 200,
+      payload: {
+        ok: true,
+        instances: [{
+          id: 'td9', params: { count: 9 },
+          symbolParams: { 'hk:00700.HK': { count: 11 }, 'us:GOOGL': { count: 10 } },
+        }],
+      },
+    })
+    // 全局写更新 params 且保留覆盖
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(), { id: 'td9', params: { count: 12 } })
+    let list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams())
+    expect(list).toEqual({
+      status: 200,
+      payload: {
+        ok: true,
+        instances: [{
+          id: 'td9', params: { count: 12 },
+          symbolParams: { 'hk:00700.HK': { count: 11 }, 'us:GOOGL': { count: 10 } },
+        }],
+      },
+    })
+    // clearSymbol 删除单标的覆盖；清空后 symbolParams 字段整体消失
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'hk', symbol: '00700.HK', clearSymbol: true })
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'us', symbol: 'GOOGL', clearSymbol: true })
+    list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams())
+    expect(list).toEqual({ status: 200, payload: { ok: true, instances: [{ id: 'td9', params: { count: 12 } }] } })
+  })
+
+  it('PUT 半参 scope（只给 market）→ 业务拒绝 TRADING_INVALID_SCOPE，不落盘（issue #72 复审）', async () => {
+    const bridge = new TradingBridge(fakeHost())
+    const wire = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'hk', params: { count: 11 } })
+    expect(wire).toMatchObject({ status: 200, payload: { ok: false, code: 'TRADING_INVALID_SCOPE' } })
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams())
+    expect(list).toEqual({ status: 200, payload: { ok: true, instances: [] } })
+  })
+
+  it('PUT clearSymbol 对未挂载 id 是无操作，不反向创建实例（issue #72 复审）', async () => {
+    const bridge = new TradingBridge(fakeHost())
+    const wire = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'hk', symbol: '00700.HK', clearSymbol: true })
+    expect(wire).toEqual({ status: 200, payload: { ok: true, instances: [] } })
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams())
+    expect(list).toEqual({ status: 200, payload: { ok: true, instances: [] } })
+  })
+
+  it('POST import 保真 symbolParams（issue #72 迁移不丢覆盖）', async () => {
+    const bridge = new TradingBridge(fakeHost())
+    await dispatchBridgeRequest(bridge, 'POST', '/chart/indicators/import', new URLSearchParams(), {
+      instances: [{ id: 'td9', params: { count: 9 }, symbolParams: { 'hk:00700.HK': { count: 11 }, '': { count: 1 } } }],
+    })
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams())
+    expect(list).toEqual({
+      status: 200,
+      payload: {
+        ok: true,
+        instances: [{ id: 'td9', params: { count: 9 }, symbolParams: { 'hk:00700.HK': { count: 11 } } }],
+      },
+    })
+  })
+
   it('桥缺 chartActivationsStore（老部署）→ 端点静默降级不崩', async () => {
     const bridge = new TradingBridge(fakeHost({ chartActivationsStore: undefined }))
     const put = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(), { id: 'ma' })

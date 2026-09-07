@@ -447,13 +447,24 @@ export async function fetchChartActivations(): Promise<IndicatorInstance[]> {
   }
 }
 
-/** 挂载/更新一个激活实例（PUT /chart/indicators；未知 id → ok:false，转 false）。 */
-export async function putChartActivation(id: string, params?: Record<string, number>): Promise<boolean> {
+/**
+ * 挂载/更新一个激活实例（PUT /chart/indicators；未知 id → ok:false，转 false）。
+ * issue #72：带 scope（market+symbol）时写该标的的参数覆盖，不动全局 params。
+ */
+export async function putChartActivation(
+  id: string,
+  params?: Record<string, number>,
+  scope?: { market: string; symbol: string },
+): Promise<boolean> {
   try {
     const response = await fetch('/dshtrading/api/chart/indicators', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id, ...(params !== undefined ? { params } : {}) }),
+      body: JSON.stringify({
+        id,
+        ...(params !== undefined ? { params } : {}),
+        ...(scope !== undefined ? { market: scope.market, symbol: scope.symbol } : {}),
+      }),
     })
     if (!response.ok) return false
     const wire = await response.json() as { ok?: boolean }

@@ -6,6 +6,7 @@ import { readFile, writeFile, rename, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { IndicatorInstance } from './types.ts'
 import type { ChartActivationStore } from './chart-activations.ts'
+import { sanitizeInstance } from './chart-activations.ts'
 
 export function createFileChartActivationStore(filePath: string): ChartActivationStore {
   let cache: Map<string, IndicatorInstance> | null = null
@@ -18,9 +19,8 @@ export function createFileChartActivationStore(filePath: string): ChartActivatio
       const map = new Map<string, IndicatorInstance>()
       if (Array.isArray(parsed)) {
         for (const item of parsed) {
-          if (item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string') {
-            map.set((item as { id: string }).id, item as IndicatorInstance)
-          }
+          const clean = sanitizeInstance(item)
+          if (clean !== undefined) map.set(clean.id, clean)
         }
       }
       cache = map
@@ -64,11 +64,15 @@ export function createFileChartActivationStore(filePath: string): ChartActivatio
   return {
     async list() {
       const map = await load()
-      return [...map.values()].map(instance => ({ id: instance.id, params: { ...instance.params } }))
+      return [...map.values()].map(instance => sanitizeInstance(instance) as IndicatorInstance)
     },
     async activate(instance) {
+      const clean = sanitizeInstance(instance)
+      if (clean === undefined) {
+        throw new Error('chart activation: invalid instance shape for id ' + JSON.stringify((instance as { id?: unknown } | null | undefined)?.id))
+      }
       const map = await load()
-      map.set(instance.id, { id: instance.id, params: { ...instance.params } })
+      map.set(clean.id, clean)
       await flush(map)
     },
     async deactivate(id) {
@@ -79,7 +83,10 @@ export function createFileChartActivationStore(filePath: string): ChartActivatio
     },
     async replaceAll(instances) {
       const map = new Map<string, IndicatorInstance>()
-      for (const item of instances) map.set(item.id, { id: item.id, params: { ...item.params } })
+      for (const item of instances) {
+        const clean = sanitizeInstance(item)
+        if (clean !== undefined) map.set(clean.id, clean)
+      }
       cache = map
       await flush(map)
     },

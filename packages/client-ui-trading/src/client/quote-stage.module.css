@@ -549,6 +549,12 @@
   background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.05));
 }
 
+.paramHint {
+  font-size: 11px;
+  color: var(--dsh-text-secondary, #8a8f99);
+  margin-bottom: 6px;
+}
+
 .paramEditor {
   width: 100%;
   display: flex;

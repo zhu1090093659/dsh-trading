@@ -66,4 +66,10 @@ export interface IndicatorDefinition {
 export interface IndicatorInstance {
   id: string
   params: Record<string, number>
+  /**
+   * 按标的参数覆盖（issue #72）：key 为 `${market}:${symbol}`（如 "hk:00700.HK"），
+   * 命中当前标的时该套参数整体替代全局 params。锚点类自定义指标（每标的一套
+   * 锚点参数）依赖此机制；无覆盖的标的回退全局 params。
+   */
+  symbolParams?: Record<string, Record<string, number>>
 }

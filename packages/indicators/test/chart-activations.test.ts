@@ -11,7 +11,10 @@ import {
   clampActivationParams,
   createMemoryChartActivationStore,
   createMemoryCustomIndicatorStore,
+  effectiveInstanceParams,
   resolveIndicatorSpec,
+  sanitizeInstance,
+  symbolScopeKey,
 } from '../src/index.js'
 import { createFileChartActivationStore } from '../src/chart-activations-fs.js'
 import { createChartActivationTools } from '../src/chart-tools.js'
@@ -76,6 +79,49 @@ describe('clampActivationParams / resolveIndicatorSpec', () => {
   })
 })
 
+describe('symbolParams 按标的参数覆盖（issue #72）', () => {
+  it('sanitizeInstance：保留合法 symbolParams，非法键/值清洗，坏形整体丢弃该字段', () => {
+    expect(sanitizeInstance({ id: 'anchor_px', params: { a1: 0 }, symbolParams: { 'hk:00700.HK': { a1: 20240102, bad: Number.NaN } } }))
+      .toEqual({ id: 'anchor_px', params: { a1: 0 }, symbolParams: { 'hk:00700.HK': { a1: 20240102 } } })
+    expect(sanitizeInstance({ id: 'anchor_px', params: { a1: 0 }, symbolParams: { '': { a1: 1 }, 'hk:x': 'nope' } }))
+      .toEqual({ id: 'anchor_px', params: { a1: 0 } })
+    expect(sanitizeInstance({ id: 'anchor_px', params: { a1: 0 } })).toEqual({ id: 'anchor_px', params: { a1: 0 } })
+    expect(sanitizeInstance({ id: '', params: {} })).toBeUndefined()
+  })
+
+  it('effectiveInstanceParams：命中覆盖整体替代，未命中/缺 market 回退全局', () => {
+    const instance = { id: 'anchor_px', params: { a1: 0 }, symbolParams: { 'hk:00700.HK': { a1: 20240102 } } }
+    expect(effectiveInstanceParams(instance, 'hk', '00700.HK')).toEqual({ a1: 20240102 })
+    expect(effectiveInstanceParams(instance, 'hk', '02714.HK')).toEqual({ a1: 0 })
+    expect(effectiveInstanceParams(instance)).toEqual({ a1: 0 })
+    expect(effectiveInstanceParams(instance, 'hk')).toEqual({ a1: 0 })
+    expect(symbolScopeKey('hk', '00700.HK')).toBe('hk:00700.HK')
+  })
+
+  it('内存 store：symbolParams 随 activate/list/replaceAll 保真深拷贝', async () => {
+    const store = createMemoryChartActivationStore()
+    const source = { a1: 20240102 }
+    await store.activate({ id: 'anchor_px', params: { a1: 0 }, symbolParams: { 'hk:00700.HK': source } })
+    source.a1 = 99999999 // 改源对象不得影响 store
+    const listed = await store.list()
+    expect(listed).toEqual([{ id: 'anchor_px', params: { a1: 0 }, symbolParams: { 'hk:00700.HK': { a1: 20240102 } } }])
+    listed[0]?.symbolParams && (listed[0].symbolParams['hk:00700.HK']!.a1 = 1) // 改读出副本不得影响 store
+    expect((await store.list())[0]?.symbolParams?.['hk:00700.HK']).toEqual({ a1: 20240102 })
+  })
+
+  it('文件 store：symbolParams 落盘读回一致', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dsh-chart-sym-'))
+    tmpDirs.push(dir)
+    const file = path.join(dir, 'chart.json')
+    const store = createFileChartActivationStore(file)
+    await store.activate({ id: 'anchor_px', params: { a1: 0 }, symbolParams: { 'hk:00700.HK': { a1: 20240102 }, 'us:GOOGL': { a1: 20240315 } } })
+    const reopened = createFileChartActivationStore(file)
+    expect(await reopened.list()).toEqual([
+      { id: 'anchor_px', params: { a1: 0 }, symbolParams: { 'hk:00700.HK': { a1: 20240102 }, 'us:GOOGL': { a1: 20240315 } } },
+    ])
+  })
+})
+
 describe('createFileChartActivationStore', () => {
   it('原子写读回一致；损坏文件降级空册', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'dsh-chart-'))
@@ -133,6 +179,42 @@ describe('图表激活工具族（indicator_list / activate / deactivate）', ()
     expect(await chartStore.list()).toEqual([{ id: 'td9', params: { count: 11 } }])
   })
 
+  it('indicator_activate 按标的覆盖（issue #72）：market+symbol 写 symbolParams，全局写保留覆盖', async () => {
+    const customStore = createMemoryCustomIndicatorStore([{
+      id: 'anchor_px', title: 'AnchoredPx', pane: 'main',
+      params: [{ key: 'a1', label: '锚点1', default: 0, min: 0, max: 20991231 }],
+      computeSource: CUSTOM_SOURCE, createdAt: 1,
+    }])
+    const chartStore = createMemoryChartActivationStore()
+    const { activate } = createChartActivationTools({ customStore, chartStore })
+
+    // market/symbol 只给一个 → 业务提示，不写入
+    expect(String(await activate.execute({ id: 'anchor_px', market: 'hk' }))).toContain('supplied together')
+    expect(await chartStore.list()).toEqual([])
+
+    // 按标的写入两个覆盖，互不影响
+    const out1 = String(await activate.execute({ id: 'anchor_px', market: 'hk', symbol: '00700.HK', paramsJson: '{"a1":20240102}' }))
+    expect(out1).toContain('scope: hk:00700.HK')
+    await activate.execute({ id: 'anchor_px', market: 'us', symbol: 'GOOGL', paramsJson: '{"a1":20240315}' })
+    expect(await chartStore.list()).toEqual([{
+      id: 'anchor_px', params: { a1: 0 },
+      symbolParams: { 'hk:00700.HK': { a1: 20240102 }, 'us:GOOGL': { a1: 20240315 } },
+    }])
+
+    // 全局写：更新 params 但保留已有覆盖（回归：旧行为整体覆盖会抹掉 symbolParams）
+    await activate.execute({ id: 'anchor_px', paramsJson: '{"a1":20250110}' })
+    expect(await chartStore.list()).toEqual([{
+      id: 'anchor_px', params: { a1: 20250110 },
+      symbolParams: { 'hk:00700.HK': { a1: 20240102 }, 'us:GOOGL': { a1: 20240315 } },
+    }])
+
+    // 同标的重复写 → 覆盖该标的这套；另一标的保持
+    await activate.execute({ id: 'anchor_px', market: 'hk', symbol: '00700.HK', paramsJson: '{"a1":20240620}' })
+    expect((await chartStore.list())[0]?.symbolParams).toEqual({
+      'hk:00700.HK': { a1: 20240620 }, 'us:GOOGL': { a1: 20240315 },
+    })
+  })
+
   it('indicator_deactivate：摘除后返回 removed，定义仍在库', async () => {
     const chartStore = createMemoryChartActivationStore([{ id: 'boll', params: {} }])
     const { deactivate } = createChartActivationTools({ chartStore })
@@ -168,6 +250,34 @@ describe('indicator_author「创作即上图」（issue #63）', () => {
     const out = String(await tool.execute({ ...AUTHOR_ARGS, activate: true }))
     expect(out).toContain('mounted on the chart')
     expect(await chartStore.list()).toEqual([{ id: 'authored_i', params: {} }])
+  })
+
+  it('re-author activate:true 保留 symbolParams 并按新 schema 重 clamp（issue #72 复审：不抹覆盖、stale 覆盖不直通）', async () => {
+    const store = createMemoryCustomIndicatorStore()
+    const chartStore = createMemoryChartActivationStore()
+    const tool = createAuthorIndicatorTool({ store, chartStore })
+    const v1 = { ...AUTHOR_ARGS, paramsJson: '[{"key":"a1","label":"锚点1","default":0,"min":0,"max":20991231}]' }
+
+    // v1 挂载并写一个按标的覆盖
+    await tool.execute({ ...v1, activate: true })
+    await chartStore.activate({ id: 'authored_i', params: { a1: 0 }, symbolParams: { 'hk:00700.HK': { a1: 20240102 } } })
+
+    // v2 改 schema（a1 → a2）：重挂不清覆盖；覆盖按新 schema 重 clamp（旧键 a1 丢弃、
+    // 缺键 a2 补默认 7），全局 params 取新 schema 默认值。
+    const v2 = { ...AUTHOR_ARGS, paramsJson: '[{"key":"a2","label":"锚点2","default":7,"min":0,"max":100}]' }
+    await tool.execute({ ...v2, activate: true })
+    expect(await chartStore.list()).toEqual([{
+      id: 'authored_i', params: { a2: 7 },
+      symbolParams: { 'hk:00700.HK': { a2: 7 } },
+    }])
+
+    // v3 同 schema re-author：覆盖原样保留，全局 params 更新为新默认。
+    const v3 = { ...AUTHOR_ARGS, paramsJson: '[{"key":"a2","label":"锚点2","default":9,"min":0,"max":100}]' }
+    await tool.execute({ ...v3, activate: true })
+    expect(await chartStore.list()).toEqual([{
+      id: 'authored_i', params: { a2: 9 },
+      symbolParams: { 'hk:00700.HK': { a2: 7 } },
+    }])
   })
 
   it('activate 缺省 → 不上图；chartStore 缺席 → 降级说明不失败', async () => {

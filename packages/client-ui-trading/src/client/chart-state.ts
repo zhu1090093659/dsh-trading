@@ -22,8 +22,12 @@ export interface ChartState {
 export interface ChartStateStore extends WritableObservable<ChartState> {
   /** 切换某 preset：无实例 → 加默认实例；有 → 全部移除。 */
   togglePreset(id: string): void
-  /** 更新（或补建）某 preset 的唯一实例参数。 */
-  setParams(id: string, params: Record<string, number>): void
+  /**
+   * 更新（或补建）某 preset 的唯一实例参数。
+   * issue #72：带 scopeKey（`${market}:${symbol}`）时写该标的的参数覆盖，
+   * 全局 params 与其它标的覆盖保持不变；不带 scopeKey 写全局 params 并保留覆盖表。
+   */
+  setParams(id: string, params: Record<string, number>, scopeKey?: string): void
   /** 移除某 preset 的激活实例（自定义指标删除用；无实例时静默）。 */
   removeInstance(id: string): void
   instanceFor(id: string): IndicatorInstance | undefined
@@ -54,13 +58,22 @@ export function createChartStateStore(registry: IndicatorRegistry): ChartStateSt
       })
       persist()
     },
-    setParams(id, params) {
+    setParams(id, params, scopeKey) {
       const definition = registry.get(id)
       const clamped = definition !== undefined ? registry.clampParams(definition, params) : params
       store.update((current) => {
-        const exists = current.instances.some(instance => instance.id === id)
-        return { instances: exists
-          ? current.instances.map(instance => instance.id === id ? { id, params: clamped } : instance)
+        const existing = current.instances.find(instance => instance.id === id)
+        if (scopeKey !== undefined) {
+          if (existing === undefined) {
+            const baseParams = definition !== undefined ? registry.defaultParams(definition) : {}
+            return { instances: [...current.instances, { id, params: baseParams, symbolParams: { [scopeKey]: clamped } }] }
+          }
+          return { instances: current.instances.map(instance => instance.id === id
+            ? { ...instance, symbolParams: { ...(instance.symbolParams ?? {}), [scopeKey]: clamped } }
+            : instance) }
+        }
+        return { instances: existing !== undefined
+          ? current.instances.map(instance => instance.id === id ? { ...instance, params: clamped } : instance)
           : [...current.instances, { id, params: clamped }] }
       })
       persist()

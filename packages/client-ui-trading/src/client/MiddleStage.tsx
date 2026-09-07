@@ -50,7 +50,7 @@ export interface MiddleStageInjected {
     chart: Observable<ChartState>
   }
   toggleIndicator: (id: string) => void
-  setIndicatorParams: (id: string, params: Record<string, number>) => void
+  setIndicatorParams: (id: string, params: Record<string, number>, scopeKey?: string) => void
   /** 删除自定义指标（issue #30，透传给 QuoteStage 指标选择器）。 */
   deleteIndicator: (id: string) => Promise<boolean>
   /** 行情上下文 → 会话输入框（透传给 QuoteStage「发给 Agent」，只填入不发送）。 */
