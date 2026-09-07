@@ -18,6 +18,7 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { IndicatorRegistry } from '@dshtrading/indicators'
+import type { Instrument, MarketId } from './types.ts'
 import { validateCustomIndicatorAsync } from '@dshtrading/indicators'
 import { createSelectionStore, createWatchlistStore } from './store.ts'
 import { createChartStateStore } from './chart-state.ts'
@@ -82,12 +83,15 @@ export function apply(ctx: ClientContext): void {
   // 行情 → 会话输入框（「发给 Agent」按钮）：只把上下文 + 截图**填入 composer
   // 不提交**（owner 裁决：用户还要补自己的 prompt）。conversation 根服务在点击
   // 时惰性解析（同 uiWorkspace 纪律：apply 时序不保证）；编排细节见 fill-composer.ts。
-  const fillComposer: FillComposerFn = (text, image) =>
-    fillComposerWithQuote({
+  const fillComposer: FillComposerFn = (text, image) => {
+    // exactOptionalPropertyTypes：conversation 缺席时必须整个键缺位，不能显式 undefined。
+    const conversation = ctx.get('conversation', false) as ConversationDraftFace | undefined
+    return fillComposerWithQuote({
       sessions,
-      conversation: ctx.get('conversation', false) as ConversationDraftFace | undefined,
+      ...(conversation !== undefined ? { conversation } : {}),
       startSession: startNewSession,
     }, text, image)
+  }
   fillComposer.captureTarget = () => guardComposerTarget(sessions, fillComposer)
   const openSettings = (): void => {
     // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
@@ -104,7 +108,7 @@ export function apply(ctx: ClientContext): void {
   const toggleMarketFold = (): void => { marketFolded.toggle() }
 
   // 静态包的 slot 条目崩溃默认无人上报（监督缝只覆盖动态插件）——打到 console 可见化。
-  ctx.slots.onEntryError((slot, _entry, error) => {
+  ctx.slots.onEntryError((slot: string, _entry: unknown, error: unknown) => {
     console.error(`[dsh-trading] slot entry crashed: ${slot}`, error)
   })
 
@@ -188,9 +192,9 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       hooks: { selection, watchlists, marketFolded },
-      addInstrument: (market, instrument) => { watchlists.add(market, instrument) },
-      removeInstrument: (market, symbol) => { watchlists.remove(market, symbol) },
-      selectInstrument: (instrument) => { selection.select(instrument) },
+      addInstrument: (market: MarketId, instrument: Instrument) => { watchlists.add(market, instrument) },
+      removeInstrument: (market: MarketId, symbol: string) => { watchlists.remove(market, symbol) },
+      selectInstrument: (instrument: Instrument) => { selection.select(instrument) },
       toggleFold: toggleMarketFold,
       openSettings,
     }),
@@ -205,7 +209,7 @@ export function apply(ctx: ClientContext): void {
     priority: -1,
     locale: NS,
     inject: () => ({
-      openSession: (sessionId) => { sessions.open(sessionId) },
+      openSession: (sessionId: string) => { sessions.open(sessionId as SessionIdParam) },
       startNewSession,
       // 历史行操作菜单三件套，与官方 WorkspaceBrowser 语义对齐：
       // rename 走 session binding 的显式标题（钉住自动生成）；fork 官方同款
@@ -280,17 +284,19 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: () => ({
       hooks: { selection, chart },
-      toggleIndicator: (id) => { chart.togglePreset(id) },
-      setIndicatorParams: (id, params, scopeKey) => { chart.setParams(id, params, scopeKey) },
+      // 回调参数显式类型：QuotePaneProps 的 InjectFace 是异构 union，注入面在
+      // 槽注册处不参与推断（PR #74 合并遗留债，2026-09-07 顺手清偿）。
+      toggleIndicator: (id: string) => { chart.togglePreset(id) },
+      setIndicatorParams: (id: string, params: Record<string, number>, scopeKey?: string) => { chart.setParams(id, params, scopeKey) },
       // symbol visibility：scopeKey = "<market>:<symbol>"；缺省（无聚焦标的）忽略——
       // QuoteStage 在该情形走 toggleIndicator 全局语义。
-      setIndicatorVisible: (id, visible, scopeKey) => {
+      setIndicatorVisible: (id: string, visible: boolean, scopeKey?: string) => {
         const split = scopeKey !== undefined ? scopeKey.indexOf(':') : -1
         if (scopeKey === undefined || split <= 0) return
         chart.setSymbolVisibility(id, scopeKey.slice(0, split), scopeKey.slice(split + 1), visible)
       },
-      removeIndicator: (id) => { if (chart.isActive(id)) chart.togglePreset(id) },
-      deleteIndicator: async (id) => {
+      removeIndicator: (id: string) => { if (chart.isActive(id)) chart.togglePreset(id) },
+      deleteIndicator: async (id: string) => {
         const ok = await deleteCustomIndicator(id)
         if (ok) {
           indicators.unregister(id)
