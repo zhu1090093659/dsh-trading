@@ -33,6 +33,7 @@ import {
 } from './format.ts'
 import { indicators, isCustomIndicator } from './indicator-registry.ts'
 import type { IndicatorDefinition, IndicatorInstance } from '@dshtrading/indicators'
+import { effectiveInstanceParams, symbolScopeKey } from '@dshtrading/indicators'
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
@@ -100,7 +101,7 @@ export interface QuoteStageProps {
   useSelection: UseStoreState<SelectionState>
   useChart: UseStoreState<ChartState>
   toggleIndicator: (id: string) => void
-  setIndicatorParams: (id: string, params: Record<string, number>) => void
+  setIndicatorParams: (id: string, params: Record<string, number>, scopeKey?: string) => void
   /** 删除自定义指标（issue #30 删除入口；仅自定义行渲染按钮）。 */
   deleteIndicator: (id: string) => Promise<boolean>
   /** 行情上下文 → 会话输入框（只填入不发送；shell 注入，缺席时按钮不渲染）。 */
@@ -587,11 +588,12 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         title: definition.title,
         pane: definition.pane,
         key: indicators.instanceKey(instance),
-        outputs: definition.compute(klines, instance.params),
+        // issue #72：命中 symbolParams["market:symbol"] 覆盖时该套参数整体替代全局 params。
+        outputs: definition.compute(klines, effectiveInstanceParams(instance, market, symbol)),
       })
     }
     return groups
-  }, [klines, instances, rosterVersion])
+  }, [klines, instances, rosterVersion, market, symbol])
 
   const mainOverlays = useMemo(() => indicatorGroups.filter(group => group.pane === 'main'), [indicatorGroups])
   const subIndicators = useMemo(() => indicatorGroups.filter(group => group.pane === 'sub'), [indicatorGroups])
@@ -1086,13 +1088,19 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                   t={t}
                   instances={instances}
                   editingIndicator={editingIndicator}
+                  scopeKey={market !== undefined && symbol !== undefined ? symbolScopeKey(market, symbol) : undefined}
+                  symbolLabel={symbol}
                   onToggle={(id) => {
                     toggleIndicator(id)
                     setEditingIndicator(null)
                   }}
                   onEdit={(id) => { setEditingIndicator(current => current === id ? null : id) }}
                   onApply={(id, params) => {
-                    setIndicatorParams(id, params)
+                    // issue #72：当前标的已有参数覆盖 → 写覆盖；否则写全局 params。
+                    const scopeKey = market !== undefined && symbol !== undefined ? symbolScopeKey(market, symbol) : undefined
+                    const instance = instances.find(candidate => candidate.id === id)
+                    const hasOverride = scopeKey !== undefined && instance?.symbolParams?.[scopeKey] !== undefined
+                    setIndicatorParams(id, params, hasOverride ? scopeKey : undefined)
                     setEditingIndicator(null)
                   }}
                   onDelete={(id) => { void deleteIndicator(id) }}
@@ -1355,13 +1363,17 @@ function IndicatorPicker(props: {
   t: Translate
   instances: IndicatorInstance[]
   editingIndicator: string | null
+  /** 当前标的的 scope 键（`${market}:${symbol}`）；undefined = 无聚焦标的。 */
+  scopeKey?: string | undefined
+  /** 当前标的 symbol（覆盖提示文案用）。 */
+  symbolLabel?: string | undefined
   onToggle: (id: string) => void
   onEdit: (id: string) => void
   onApply: (id: string, params: Record<string, number>) => void
   onDelete: (id: string) => void
   onClose: () => void
 }): React.JSX.Element {
-  const { t, instances, editingIndicator, onToggle, onEdit, onApply, onDelete, onClose } = props
+  const { t, instances, editingIndicator, scopeKey, symbolLabel, onToggle, onEdit, onApply, onDelete, onClose } = props
   const definitions = indicators.list()
   const empty = definitions.length === 0
   return (
@@ -1378,6 +1390,8 @@ function IndicatorPicker(props: {
               definitions={definitions.filter(definition => definition.pane === 'main')}
               instances={instances}
               editingIndicator={editingIndicator}
+              scopeKey={scopeKey}
+              symbolLabel={symbolLabel}
               t={t}
               onToggle={onToggle}
               onEdit={onEdit}
@@ -1389,6 +1403,8 @@ function IndicatorPicker(props: {
               definitions={definitions.filter(definition => definition.pane === 'sub')}
               instances={instances}
               editingIndicator={editingIndicator}
+              scopeKey={scopeKey}
+              symbolLabel={symbolLabel}
               t={t}
               onToggle={onToggle}
               onEdit={onEdit}
@@ -1407,19 +1423,23 @@ function PickerGroup(props: {
   definitions: readonly IndicatorDefinition[]
   instances: readonly IndicatorInstance[]
   editingIndicator: string | null
+  scopeKey?: string | undefined
+  symbolLabel?: string | undefined
   t: Translate
   onToggle: (id: string) => void
   onEdit: (id: string) => void
   onApply: (id: string, params: Record<string, number>) => void
   onDelete: (id: string) => void
 }): React.JSX.Element {
-  const { title, definitions, instances, editingIndicator, t, onToggle, onEdit, onApply, onDelete } = props
+  const { title, definitions, instances, editingIndicator, scopeKey, symbolLabel, t, onToggle, onEdit, onApply, onDelete } = props
   return (
     <div className={css.pickerGroup}>
       <div className={css.pickerGroupTitle}>{title}</div>
       {definitions.map(definition => {
         const instance = instances.find(candidate => candidate.id === definition.id) ?? null
         const editing = editingIndicator === definition.id
+        // issue #72：编辑器初值 = 当前标的生效参数（覆盖优先），有覆盖时展示提示。
+        const scopedParams = instance !== null && scopeKey !== undefined ? instance.symbolParams?.[scopeKey] : undefined
         return (
           <div key={definition.id} className={css.pickerRow}>
             <label className={css.pickerLabel}>
@@ -1456,7 +1476,10 @@ function PickerGroup(props: {
             {editing && instance !== null && (
               <IndicatorParamEditor
                 definition={definition}
-                initial={instance.params}
+                initial={scopedParams ?? instance.params}
+                overrideHint={scopedParams !== undefined && symbolLabel !== undefined
+                  ? t('indicator.symbolOverride', { symbol: symbolLabel })
+                  : undefined}
                 t={t}
                 onCancel={() => onEdit(definition.id)}
                 onApply={(params) => onApply(definition.id, params)}
@@ -1472,6 +1495,8 @@ function PickerGroup(props: {
 function IndicatorParamEditor(props: {
   definition: IndicatorDefinition
   initial: Record<string, number>
+  /** issue #72：当前编辑的是某标的的专属覆盖时展示的提示文案。 */
+  overrideHint?: string | undefined
   t: Translate
   onCancel: () => void
   onApply: (params: Record<string, number>) => void
@@ -1485,6 +1510,7 @@ function IndicatorParamEditor(props: {
 
   return (
     <div className={css.paramEditor}>
+      {props.overrideHint !== undefined && <div className={css.paramHint}>{props.overrideHint}</div>}
       {definition.params.map(spec => (
         <label key={spec.key} className={css.paramRow}>
           <span>{spec.label}</span>

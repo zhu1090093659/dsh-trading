@@ -37,7 +37,10 @@ export {
   clampActivationParams,
   createMemoryChartActivationStore,
   defaultActivationInstance,
+  effectiveInstanceParams,
   resolveIndicatorSpec,
+  sanitizeInstance,
+  symbolScopeKey,
   type ChartActivationStore,
   type IndicatorSpecLike,
 } from './chart-activations.ts'

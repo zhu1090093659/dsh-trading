@@ -7,7 +7,8 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { CustomIndicatorStore } from './custom.ts'
 import type { ChartActivationStore } from './chart-activations.ts'
-import { clampActivationParams, defaultActivationInstance, resolveIndicatorSpec } from './chart-activations.ts'
+import { clampActivationParams, defaultActivationInstance, resolveIndicatorSpec, symbolScopeKey } from './chart-activations.ts'
+import type { IndicatorInstance } from './types.ts'
 import { presetDefinitions } from './presets.ts'
 
 export interface IndicatorListToolOptions {
@@ -69,6 +70,8 @@ export function createIndicatorActivateTool(options: IndicatorActivateToolOption
       + 'The id must be a preset indicator or a custom indicator authored via indicator_author. '
       + 'Activating an already-active id updates its parameters in place (one instance per id). '
       + 'Optionally pass paramsJson to override schema defaults; values are clamped to each parameter\'s min/max. '
+      + 'Pass market AND symbol together to write a per-symbol parameter override (for indicators whose params are per-instrument): '
+      + 'the override replaces the global params when that instrument is on the chart; other instruments keep the global params. '
       + 'Use indicator_list to discover ids and parameter schemas.',
     parameters: {
       id: {
@@ -80,16 +83,31 @@ export function createIndicatorActivateTool(options: IndicatorActivateToolOption
         type: 'string',
         description: 'Optional JSON object of parameter overrides, e.g. {"fast":12,"slow":26,"signal":9}. Missing keys use schema defaults.',
       },
+      market: {
+        type: 'string',
+        description: 'Optional market vocabulary slug (crypto | us | cn | hk). Must be supplied together with symbol to write a per-symbol override.',
+      },
+      symbol: {
+        type: 'string',
+        description: 'Optional market-canonical symbol exactly as the chart uses it (e.g. "00700.HK", "002714.SZ", "AAPL"). Requires market.',
+      },
     },
     output: {
       schema: { type: 'string' },
       render: (_args, value) => [{ type: 'text', text: String(value) }],
     },
     async execute(raw) {
-      const args = (raw ?? {}) as { id?: unknown; paramsJson?: unknown }
+      const args = (raw ?? {}) as { id?: unknown; paramsJson?: unknown; market?: unknown; symbol?: unknown }
       const id = typeof args.id === 'string' ? args.id.trim() : ''
       if (!id) {
         throw new Error('indicator_activate: id is required')
+      }
+      const market = typeof args.market === 'string' ? args.market.trim() : ''
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      const scope = market !== '' && symbol !== '' ? symbolScopeKey(market, symbol) : undefined
+      if (scope === undefined && (market !== '' || symbol !== '')) {
+        return '[indicator_activate] market and symbol must be supplied together (or neither) — got market='
+          + JSON.stringify(market) + ', symbol=' + JSON.stringify(symbol)
       }
       const spec = await resolveIndicatorSpec(id, customStore)
       if (spec === undefined) {
@@ -118,12 +136,25 @@ export function createIndicatorActivateTool(options: IndicatorActivateToolOption
       }
 
       const params = clampActivationParams(spec.params, overrides)
-      await chartStore.activate({ id, params })
+      let instance: IndicatorInstance
+      if (scope !== undefined) {
+        // 按标的覆盖（issue #72）：保留全局 params 与其它标的的覆盖，只写本标的这套。
+        // 新实例的全局 params 取 schema 默认值——首个标的的覆盖不得泄漏成全局值。
+        const existing = (await chartStore.list()).find(candidate => candidate.id === id)
+        const base: IndicatorInstance = existing ?? { id, params: clampActivationParams(spec.params, {}) }
+        instance = { id, params: base.params, symbolParams: { ...(base.symbolParams ?? {}), [scope]: params } }
+      } else {
+        // 全局写：保留已有按标的覆盖（旧行为直接整体覆盖实例会把 symbolParams 抹掉）。
+        const existing = (await chartStore.list()).find(candidate => candidate.id === id)
+        instance = existing?.symbolParams !== undefined ? { id, params, symbolParams: existing.symbolParams } : { id, params }
+      }
+      await chartStore.activate(instance)
       onWritten?.(id)
 
       const paramText = spec.params.map(p => (p.key + '=' + params[p.key])).join(', ')
       return '[indicator_activate] Mounted "' + spec.title + '" (id: ' + id + ', pane: ' + spec.pane
-        + (paramText ? ', params: ' + paramText : '') + ') on the chart. '
+        + (paramText ? ', params: ' + paramText : '')
+        + (scope !== undefined ? ', scope: ' + scope + ' (per-symbol override)' : '') + ') on the chart. '
         + 'The GUI chart renders it live via the SSE invalidation channel.'
     },
   })

@@ -281,7 +281,7 @@ export function apply(ctx: ClientContext): void {
     inject: () => ({
       hooks: { selection, chart },
       toggleIndicator: (id) => { chart.togglePreset(id) },
-      setIndicatorParams: (id, params) => { chart.setParams(id, params) },
+      setIndicatorParams: (id, params, scopeKey) => { chart.setParams(id, params, scopeKey) },
       deleteIndicator: async (id) => {
         const ok = await deleteCustomIndicator(id)
         if (ok) {

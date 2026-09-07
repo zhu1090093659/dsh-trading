@@ -20,7 +20,7 @@ import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@d
 import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dshtrading/kit-us'
 import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dshtrading/kit-crypto'
 import type { ChartActivationStore, CustomIndicatorRecord, CustomIndicatorStore, IndicatorInstance } from '@dshtrading/indicators'
-import { clampActivationParams, createMemoryChartActivationStore, createMemoryCustomIndicatorStore, resolveIndicatorSpec } from '@dshtrading/indicators'
+import { clampActivationParams, createMemoryChartActivationStore, createMemoryCustomIndicatorStore, resolveIndicatorSpec, sanitizeInstance, symbolScopeKey } from '@dshtrading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dshtrading/knowledge'
 import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord, CustomStrategyStore } from '@dshtrading/strategies'
@@ -1151,13 +1151,16 @@ export class TradingBridge {
   }
 
   /**
-   * 挂载/更新一个激活实例（PUT /chart/indicators，body { id, params? }）：
+   * 挂载/更新一个激活实例（PUT /chart/indicators，body { id, params?, market?, symbol?, clearSymbol? }）：
    * id 必须能解析为预置或自定义指标（未知 id 业务拒绝——与 GUI 可渲染集合同源）；
    * params 按 schema clamp，缺失键取 schema 默认值。
+   * issue #72：body 同时带 market+symbol 时写入该标的的参数覆盖（symbolParams[
+   * `${market}:${symbol}`]），clearSymbol:true 改为删除该覆盖；不带 scope 时写
+   * 全局 params。两种写法都保留实例上已有的其他覆盖。
    */
   async putChartActivation(body: unknown): Promise<ChartActivationsWire | ChartActivationRejectedWire> {
     const store = this.host.chartActivationsStore
-    const raw = (body ?? {}) as { id?: unknown; params?: unknown }
+    const raw = (body ?? {}) as { id?: unknown; params?: unknown; market?: unknown; symbol?: unknown; clearSymbol?: unknown }
     const id = typeof raw.id === 'string' ? raw.id.trim() : ''
     if (!id) throw new BridgeProtocolError(400, 'chart activation body requires string id')
     const spec = await resolveIndicatorSpec(id, this.host.customIndicatorsStore)
@@ -1175,7 +1178,26 @@ export class TradingBridge {
       }
     }
     const params = clampActivationParams(spec.params, overrides)
-    const instance: IndicatorInstance = { id, params }
+    const market = typeof raw.market === 'string' ? raw.market.trim() : ''
+    const symbol = typeof raw.symbol === 'string' ? raw.symbol.trim() : ''
+    const scope = market !== '' && symbol !== '' ? symbolScopeKey(market, symbol) : undefined
+    const existing = store !== undefined ? (await store.list()).find(instance => instance.id === id) : undefined
+
+    let instance: IndicatorInstance
+    if (scope !== undefined) {
+      // 新实例的全局 params 取 schema 默认值——首个标的的覆盖不得泄漏成全局值。
+      const base: IndicatorInstance = existing ?? { id, params: clampActivationParams(spec.params, {}) }
+      const symbolParams: Record<string, Record<string, number>> = { ...(base.symbolParams ?? {}) }
+      if (raw.clearSymbol === true) delete symbolParams[scope]
+      else symbolParams[scope] = params
+      instance = Object.keys(symbolParams).length > 0
+        ? { id, params: base.params, symbolParams }
+        : { id, params: base.params }
+    } else {
+      instance = existing?.symbolParams !== undefined
+        ? { id, params, symbolParams: existing.symbolParams }
+        : { id, params }
+    }
     if (store !== undefined) await store.activate(instance)
     return { ok: true, instances: store !== undefined ? await store.list() : [instance] }
   }
@@ -1292,7 +1314,9 @@ function parseChartInstances(body: unknown): IndicatorInstance[] {
     for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
       if (typeof value === 'number' && Number.isFinite(value)) clean[key] = value
     }
-    out.push({ id, params: clean })
+    // 行保留语义不变（脏值清洗成空 params），symbolParams 经 sanitizeInstance 保真（issue #72）。
+    const normalized = sanitizeInstance({ id, params: clean, symbolParams: (item as { symbolParams?: unknown }).symbolParams })
+    if (normalized !== undefined) out.push(normalized)
   }
   return out
 }
