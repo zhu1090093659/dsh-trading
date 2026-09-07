@@ -33,7 +33,7 @@ import {
 } from './format.ts'
 import { indicators, isCustomIndicator } from './indicator-registry.ts'
 import type { IndicatorDefinition, IndicatorInstance } from '@dshtrading/indicators'
-import { effectiveInstanceParams, symbolScopeKey } from '@dshtrading/indicators'
+import { effectiveInstanceParams, isInstanceVisibleOn, symbolScopeKey } from '@dshtrading/indicators'
 import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
@@ -102,6 +102,14 @@ export interface QuoteStageProps {
   useChart: UseStoreState<ChartState>
   toggleIndicator: (id: string) => void
   setIndicatorParams: (id: string, params: Record<string, number>, scopeKey?: string) => void
+  /**
+   * 按标的可见性（symbol visibility）：visible=false 记隐藏、true 清该标的隐藏。
+   * scopeKey = `${market}:${symbol}`；缺省（无聚焦标的）由 shell 忽略——调用方
+   * 在该情形应退回 toggleIndicator 全局语义。
+   */
+  setIndicatorVisible: (id: string, visible: boolean, scopeKey?: string) => void
+  /** 全局移除：卸载所有标的上的该指标实例（原 togglePreset 全局关语义）。 */
+  removeIndicator: (id: string) => void
   /** 删除自定义指标（issue #30 删除入口；仅自定义行渲染按钮）。 */
   deleteIndicator: (id: string) => Promise<boolean>
   /** 行情上下文 → 会话输入框（只填入不发送；shell 注入，缺席时按钮不渲染）。 */
@@ -122,7 +130,7 @@ type SendState = 'idle' | 'sending' | 'sent' | 'error'
 /** 信号 reason 的币种符号（按市场；crypto 以 USD 计价近似）。 */
 const CURRENCY_SYMBOL: Record<MarketId, string> = { cn: '¥', hk: 'HK$', us: '$', crypto: '$' }
 
-export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator, fillComposer }: QuoteStageProps) {
+export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator, fillComposer }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
   const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk'].includes(instrument.market))
     ? (instrument.market as MarketId)
@@ -135,6 +143,27 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const numLocale = scaleLocaleOf(t)
 
   const instances = useChart(state => state.instances)
+  // symbol visibility：按标的可见实例——唯一过滤点。图表调度、读数行、发 Agent
+  // 快照（标题/读数）、快捷词条、选择器勾选态全部消费它（隐藏 ≠ 取消激活，
+  // 实例仍在名册，raw `instances` 仅供「全局移除」按钮判定存在性）。
+  const visibleInstances = useMemo(
+    () => instances.filter(instance => isInstanceVisibleOn(instance, market, symbol)),
+    [instances, market, symbol],
+  )
+  // 复选框/快捷词条共用的按标的开关（symbol visibility）：关→记隐藏；开→清隐藏；
+  // 未挂载→全局挂载；无聚焦标的（market/symbol 缺失）退回全局开关语义。
+  const toggleIndicatorVisible = (id: string): void => {
+    const raw = instances.find(candidate => candidate.id === id)
+    const isVisible = raw !== undefined && isInstanceVisibleOn(raw, market, symbol)
+    if (market === undefined || symbol === undefined) {
+      toggleIndicator(id)
+      return
+    }
+    const scopeKey = symbolScopeKey(market, symbol)
+    if (isVisible) setIndicatorVisible(id, false, scopeKey)
+    else if (raw !== undefined) setIndicatorVisible(id, true, scopeKey)
+    else toggleIndicator(id)
+  }
   // 指标名册修订号：插件晚于首帧合并 definition 时触发重渲染。
   const rosterVersion = useSyncExternalStore(indicators.subscribe, indicators.getVersion)
 
@@ -576,11 +605,11 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     [rangeSelection, klines],
   )
 
-  // 指标调度：klines × 激活实例 → 渲染输入
+  // 指标调度：可见实例 × klines → 渲染输入（symbol visibility 过滤后的实例才参与）
   const indicatorGroups = useMemo(() => {
     if (klines === null) return []
     const groups: Array<TvIndicatorGroup & { id: string; pane: 'main' | 'sub'; title: string }> = []
-    for (const instance of instances) {
+    for (const instance of visibleInstances) {
       const definition = indicators.get(instance.id)
       if (definition === undefined) continue
       groups.push({
@@ -594,7 +623,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       })
     }
     return groups
-  }, [klines, instances, rosterVersion, market, symbol])
+  }, [klines, visibleInstances, rosterVersion, market, symbol])
 
   const mainOverlays = useMemo(() => indicatorGroups.filter(group => group.pane === 'main'), [indicatorGroups])
   const subIndicators = useMemo(() => indicatorGroups.filter(group => group.pane === 'sub'), [indicatorGroups])
@@ -724,7 +753,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       pct: stats.pct,
       prevClose: stats.prevClose,
       candle: readoutCandle,
-      indicatorTitles: instances.map(instance => indicators.get(instance.id)?.title ?? instance.id),
+      indicatorTitles: visibleInstances.map(instance => indicators.get(instance.id)?.title ?? instance.id),
       withScreenshot: capture !== null,
     }
     // exactOptionalPropertyTypes：undefined 字段直接剔除而非显式传 undefined。
@@ -1087,21 +1116,26 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               {pickerOpen && (
                 <IndicatorPicker
                   t={t}
-                  instances={instances}
+                  instances={visibleInstances}
+                  activeInstances={instances}
                   editingIndicator={editingIndicator}
                   scopeKey={market !== undefined && symbol !== undefined ? symbolScopeKey(market, symbol) : undefined}
                   symbolLabel={symbol}
                   onToggle={(id) => {
-                    toggleIndicator(id)
+                    toggleIndicatorVisible(id)
                     setEditingIndicator(null)
                   }}
                   onEdit={(id) => { setEditingIndicator(current => current === id ? null : id) }}
                   onApply={(id, params) => {
                     // issue #72：当前标的已有参数覆盖 → 写覆盖；否则写全局 params。
                     const scopeKey = market !== undefined && symbol !== undefined ? symbolScopeKey(market, symbol) : undefined
-                    const instance = instances.find(candidate => candidate.id === id)
+                    const instance = visibleInstances.find(candidate => candidate.id === id)
                     const hasOverride = scopeKey !== undefined && instance?.symbolParams?.[scopeKey] !== undefined
                     setIndicatorParams(id, params, hasOverride ? scopeKey : undefined)
+                    setEditingIndicator(null)
+                  }}
+                  onRemoveGlobal={(id) => {
+                    removeIndicator(id)
                     setEditingIndicator(null)
                   }}
                   onDelete={(id) => { void deleteIndicator(id) }}
@@ -1312,14 +1346,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       {stageTab === 'chart' && (
         <div className={css.quickIndicatorBar} role="toolbar" aria-label="Quick indicators">
           {allDefinitions.map(def => {
-            const active = instances.some(inst => inst.id === def.id)
+            const active = visibleInstances.some(inst => inst.id === def.id)
             return (
               <button
                 key={def.id}
                 type="button"
                 className={css.quickIndicatorTag}
                 data-active={active ? 'true' : undefined}
-                onClick={() => toggleIndicator(def.id)}
+                onClick={() => toggleIndicatorVisible(def.id)}
                 title={`${def.title} (${def.pane === 'main' ? t('indicator.group.main') : t('indicator.group.sub')})`}
               >
                 {def.title}
@@ -1362,7 +1396,10 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
 
 function IndicatorPicker(props: {
   t: Translate
+  /** 当前标的可见实例（勾选态/参数编辑的数据源）。 */
   instances: IndicatorInstance[]
+  /** 全量激活名册（含对当前标的隐藏的实例）——「全局移除」按钮的存在性判定。 */
+  activeInstances: IndicatorInstance[]
   editingIndicator: string | null
   /** 当前标的的 scope 键（`${market}:${symbol}`）；undefined = 无聚焦标的。 */
   scopeKey?: string | undefined
@@ -1371,10 +1408,11 @@ function IndicatorPicker(props: {
   onToggle: (id: string) => void
   onEdit: (id: string) => void
   onApply: (id: string, params: Record<string, number>) => void
+  onRemoveGlobal: (id: string) => void
   onDelete: (id: string) => void
   onClose: () => void
 }): React.JSX.Element {
-  const { t, instances, editingIndicator, scopeKey, symbolLabel, onToggle, onEdit, onApply, onDelete, onClose } = props
+  const { t, instances, activeInstances, editingIndicator, scopeKey, symbolLabel, onToggle, onEdit, onApply, onRemoveGlobal, onDelete, onClose } = props
   const definitions = indicators.list()
   const empty = definitions.length === 0
   return (
@@ -1390,6 +1428,7 @@ function IndicatorPicker(props: {
               title={t('indicator.group.main')}
               definitions={definitions.filter(definition => definition.pane === 'main')}
               instances={instances}
+              activeInstances={activeInstances}
               editingIndicator={editingIndicator}
               scopeKey={scopeKey}
               symbolLabel={symbolLabel}
@@ -1397,12 +1436,14 @@ function IndicatorPicker(props: {
               onToggle={onToggle}
               onEdit={onEdit}
               onApply={onApply}
+              onRemoveGlobal={onRemoveGlobal}
               onDelete={onDelete}
             />
             <PickerGroup
               title={t('indicator.group.sub')}
               definitions={definitions.filter(definition => definition.pane === 'sub')}
               instances={instances}
+              activeInstances={activeInstances}
               editingIndicator={editingIndicator}
               scopeKey={scopeKey}
               symbolLabel={symbolLabel}
@@ -1410,6 +1451,7 @@ function IndicatorPicker(props: {
               onToggle={onToggle}
               onEdit={onEdit}
               onApply={onApply}
+              onRemoveGlobal={onRemoveGlobal}
               onDelete={onDelete}
             />
           </>
@@ -1422,7 +1464,10 @@ function IndicatorPicker(props: {
 function PickerGroup(props: {
   title: string
   definitions: readonly IndicatorDefinition[]
+  /** 当前标的可见实例（勾选态/参数编辑）。 */
   instances: readonly IndicatorInstance[]
+  /** 全量激活名册（「全局移除」按钮存在性）。 */
+  activeInstances: readonly IndicatorInstance[]
   editingIndicator: string | null
   scopeKey?: string | undefined
   symbolLabel?: string | undefined
@@ -1430,28 +1475,30 @@ function PickerGroup(props: {
   onToggle: (id: string) => void
   onEdit: (id: string) => void
   onApply: (id: string, params: Record<string, number>) => void
+  onRemoveGlobal: (id: string) => void
   onDelete: (id: string) => void
 }): React.JSX.Element {
-  const { title, definitions, instances, editingIndicator, scopeKey, symbolLabel, t, onToggle, onEdit, onApply, onDelete } = props
+  const { title, definitions, instances, activeInstances, editingIndicator, scopeKey, symbolLabel, t, onToggle, onEdit, onApply, onRemoveGlobal, onDelete } = props
   return (
     <div className={css.pickerGroup}>
       <div className={css.pickerGroupTitle}>{title}</div>
       {definitions.map(definition => {
-        const instance = instances.find(candidate => candidate.id === definition.id) ?? null
+        const visible = instances.find(candidate => candidate.id === definition.id) ?? null
+        const active = activeInstances.some(candidate => candidate.id === definition.id)
         const editing = editingIndicator === definition.id
         // issue #72：编辑器初值 = 当前标的生效参数（覆盖优先），有覆盖时展示提示。
-        const scopedParams = instance !== null && scopeKey !== undefined ? instance.symbolParams?.[scopeKey] : undefined
+        const scopedParams = visible !== null && scopeKey !== undefined ? visible.symbolParams?.[scopeKey] : undefined
         return (
           <div key={definition.id} className={css.pickerRow}>
             <label className={css.pickerLabel}>
               <input
                 type="checkbox"
-                checked={instance !== null}
+                checked={visible !== null}
                 onChange={() => onToggle(definition.id)}
               />
               <span>{definition.title}</span>
             </label>
-            {instance !== null && (
+            {visible !== null && (
               <button
                 type="button"
                 className={css.pickerParams}
@@ -1459,6 +1506,19 @@ function PickerGroup(props: {
                 onClick={() => onEdit(definition.id)}
               >
                 {t('indicator.params')}
+              </button>
+            )}
+            {active && (
+              <button
+                type="button"
+                className={css.pickerParams}
+                title={t('indicator.removeGlobal')}
+                aria-label={t('indicator.removeGlobal')}
+                onClick={() => {
+                  if (window.confirm(t('indicator.removeGlobalConfirm'))) onRemoveGlobal(definition.id)
+                }}
+              >
+                {t('indicator.removeGlobal')}
               </button>
             )}
             {isCustomIndicator(definition.id) && (
@@ -1474,10 +1534,10 @@ function PickerGroup(props: {
                 {t('indicator.delete')}
               </button>
             )}
-            {editing && instance !== null && (
+            {editing && visible !== null && (
               <IndicatorParamEditor
                 definition={definition}
-                initial={scopedParams ?? instance.params}
+                initial={scopedParams ?? visible.params}
                 overrideHint={scopedParams !== undefined && symbolLabel !== undefined
                   ? t('indicator.symbolOverride', { symbol: symbolLabel })
                   : undefined}

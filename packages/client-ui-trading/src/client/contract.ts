@@ -513,6 +513,8 @@ export type MarketLocaleKey =
   | 'indicator.apply'
   | 'indicator.cancel'
   | 'indicator.symbolOverride'
+  | 'indicator.removeGlobal'
+  | 'indicator.removeGlobalConfirm'
   | 'indicator.delete'
   | 'indicator.deleteConfirm'
   | 'interval.1m'

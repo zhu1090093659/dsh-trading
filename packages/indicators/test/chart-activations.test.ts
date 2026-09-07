@@ -12,9 +12,11 @@ import {
   createMemoryChartActivationStore,
   createMemoryCustomIndicatorStore,
   effectiveInstanceParams,
+  isInstanceVisibleOn,
   resolveIndicatorSpec,
   sanitizeInstance,
   symbolScopeKey,
+  withHiddenScopes,
 } from '../src/index.js'
 import { createFileChartActivationStore } from '../src/chart-activations-fs.js'
 import { createChartActivationTools } from '../src/chart-tools.js'
@@ -122,6 +124,56 @@ describe('symbolParams 按标的参数覆盖（issue #72）', () => {
   })
 })
 
+describe('hiddenScopes 按标的隐藏（symbol visibility）', () => {
+  const hidden = { id: 'kmaster', params: { n: 9 }, hiddenScopes: ['us', 'hk:00700.HK'] }
+
+  it('sanitizeInstance：hiddenScopes 去重/丢非空串清洗，空表整字段消失', () => {
+    expect(sanitizeInstance({ id: 'k', params: {}, hiddenScopes: ['us', 'us', ' cn ', 42, ''] }))
+      .toEqual({ id: 'k', params: {}, hiddenScopes: ['us', 'cn'] })
+    expect(sanitizeInstance({ id: 'k', params: {}, hiddenScopes: [] })).toEqual({ id: 'k', params: {} })
+    expect(sanitizeInstance({ id: 'k', params: {}, hiddenScopes: 'us' })).toEqual({ id: 'k', params: {} })
+  })
+
+  it('isInstanceVisibleOn：market 级与 symbol 级命中即隐藏，无记录/market 缺失可见', () => {
+    expect(isInstanceVisibleOn(hidden, 'us', 'AAPL')).toBe(false)      // 市场级隐藏
+    expect(isInstanceVisibleOn(hidden, 'hk', '00700.HK')).toBe(false)  // 单标的隐藏
+    expect(isInstanceVisibleOn(hidden, 'hk', '02714.HK')).toBe(true)   // 同市场其它标的可见
+    expect(isInstanceVisibleOn(hidden, 'cn', '002714.SZ')).toBe(true)
+    expect(isInstanceVisibleOn(hidden)).toBe(true)                     // 无聚焦标的 → 可见（全局语义）
+    expect(isInstanceVisibleOn({ id: 'k', params: {} }, 'us', 'AAPL')).toBe(true)
+  })
+
+  it('withHiddenScopes：记隐藏/清隐藏幂等，清空后字段整体消失，不触碰 params/symbolParams', () => {
+    const base = { id: 'k', params: { n: 1 }, symbolParams: { 'us:AAPL': { n: 2 } } }
+    const once = withHiddenScopes(base, 'us', false)
+    expect(once.hiddenScopes).toEqual(['us'])
+    expect(withHiddenScopes(once, 'us', false)).toBe(once)             // 重复记隐藏 → 原引用
+    const twice = withHiddenScopes(once, 'us:AAPL', false)
+    expect(twice.hiddenScopes).toEqual(['us', 'us:AAPL'])
+    expect(withHiddenScopes(base, 'hk:00700.HK', true)).toBe(base)     // 无记录清隐藏 → 原引用
+    const unhidden = withHiddenScopes(twice, 'us', true)
+    expect(unhidden.hiddenScopes).toEqual(['us:AAPL'])
+    const cleared = withHiddenScopes(unhidden, 'us:AAPL', true)
+    expect(cleared).toEqual(base)                                      // 清空 → 字段整体消失
+  })
+
+  it('内存 store：hiddenScopes 随 activate/list 保真', async () => {
+    const store = createMemoryChartActivationStore()
+    await store.activate(hidden)
+    expect(await store.list()).toEqual([hidden])
+  })
+
+  it('文件 store：hiddenScopes 落盘读回一致', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dsh-chart-hide-'))
+    tmpDirs.push(dir)
+    const file = path.join(dir, 'chart.json')
+    const store = createFileChartActivationStore(file)
+    await store.activate(hidden)
+    const reopened = createFileChartActivationStore(file)
+    expect(await reopened.list()).toEqual([hidden])
+  })
+})
+
 describe('createFileChartActivationStore', () => {
   it('原子写读回一致；损坏文件降级空册', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'dsh-chart-'))
@@ -222,6 +274,47 @@ describe('图表激活工具族（indicator_list / activate / deactivate）', ()
     expect(JSON.parse(String(await deactivate.execute({ id: 'boll' })))).toMatchObject({ ok: true, removed: false })
     // required 缺失由 dsh-tools 框架校验拦截（execute 内同名校验为防御性冗余）。
     await expect(deactivate.execute({})).rejects.toThrow(/missing required property/)
+  })
+
+  it('indicator_deactivate scope 隐藏：market 级 / symbol 级 / 仅 symbol 拒绝 / 未挂载 no-op（symbol visibility）', async () => {
+    const chartStore = createMemoryChartActivationStore([{ id: 'boll', params: {} }])
+    const onWritten = vi.fn()
+    const { deactivate } = createChartActivationTools({ chartStore, onWritten })
+
+    // 仅 symbol → 业务提示不写入
+    expect(String(await deactivate.execute({ id: 'boll', symbol: 'AAPL' }))).toContain('requires market')
+    expect(await chartStore.list()).toEqual([{ id: 'boll', params: {} }])
+
+    // market 级隐藏：实例保留，us 全市场不可见
+    await deactivate.execute({ id: 'boll', market: 'us' })
+    expect(await chartStore.list()).toEqual([{ id: 'boll', params: {}, hiddenScopes: ['us'] }])
+    expect(onWritten).toHaveBeenCalledWith('boll')
+
+    // symbol 级隐藏追加；同市场其它标的不受影响
+    await deactivate.execute({ id: 'boll', market: 'hk', symbol: '00700.HK' })
+    expect(await chartStore.list()).toEqual([{ id: 'boll', params: {}, hiddenScopes: ['us', 'hk:00700.HK'] }])
+
+    // 未挂载 id 隐藏 → no-op 不反向创建
+    expect(JSON.parse(String(await deactivate.execute({ id: 'ghost', market: 'us' })))).toMatchObject({ ok: false, hidden: false })
+    expect(await chartStore.list()).toHaveLength(1)
+  })
+
+  it('indicator_activate scope 写覆盖同时清该标的两级隐藏（显示语义）', async () => {
+    const customStore = createMemoryCustomIndicatorStore([{
+      id: 'anchor_px', title: 'AnchoredPx', pane: 'main',
+      params: [{ key: 'a1', label: '锚点1', default: 0, min: 0, max: 20991231 }],
+      computeSource: CUSTOM_SOURCE, createdAt: 1,
+    }])
+    const chartStore = createMemoryChartActivationStore([{
+      id: 'anchor_px', params: { a1: 0 }, hiddenScopes: ['us', 'hk:00700.HK'],
+    }])
+    const { activate } = createChartActivationTools({ customStore, chartStore })
+    await activate.execute({ id: 'anchor_px', market: 'hk', symbol: '00700.HK', paramsJson: '{"a1":20240102}' })
+    expect(await chartStore.list()).toEqual([{
+      id: 'anchor_px', params: { a1: 0 },
+      symbolParams: { 'hk:00700.HK': { a1: 20240102 } },
+      hiddenScopes: ['us'],   // hk 两级隐藏被清除，us 市场级隐藏保留
+    }])
   })
 
   it('emit 接线：activate/deactivate 回调经便捷工厂透传（回归：漏接导致 GUI 不实时）', async () => {

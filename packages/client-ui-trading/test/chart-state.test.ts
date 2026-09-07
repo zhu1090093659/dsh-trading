@@ -60,6 +60,30 @@ describe('chart-state store', () => {
     })
   })
 
+  it('setSymbolVisibility：symbol 级隐藏/显示，其它标的与全局 params 不受影响（symbol visibility）', () => {
+    const store = makeStore()
+    // 隐藏当前标的：实例保留，仅 hiddenScopes 记录
+    store.setSymbolVisibility('ma', 'us', 'AAPL', false)
+    expect(store.instanceFor('ma')).toEqual({
+      id: 'ma',
+      params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 },
+      hiddenScopes: ['us:AAPL'],
+    })
+    expect(store.isActive('ma')).toBe(true)
+    // 追加另一标的隐藏 → 再显示第一个：只清该标的，其余保留
+    store.setSymbolVisibility('ma', 'hk', '00700.HK', false)
+    store.setSymbolVisibility('ma', 'us', 'AAPL', true)
+    expect(store.instanceFor('ma')?.hiddenScopes).toEqual(['hk:00700.HK'])
+    // 逐个清空后字段整体消失
+    store.setSymbolVisibility('ma', 'hk', '00700.HK', true)
+    expect(store.instanceFor('ma')).toEqual({
+      id: 'ma', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 },
+    })
+    // 未激活 id：静默 no-op
+    store.setSymbolVisibility('rsi', 'us', 'AAPL', false)
+    expect(store.isActive('rsi')).toBe(false)
+  })
+
   it('未知 id 的 toggle/setParams 为无 default/clamp 原样落盘（防御手改 localStorage）', () => {
     const store = makeStore()
     store.togglePreset('ghost')
