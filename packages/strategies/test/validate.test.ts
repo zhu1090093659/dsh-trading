@@ -121,10 +121,10 @@ describe('validateCustomStrategy', () => {
     expect(validateSignalSequence(signals, SAMPLE_BARS)).toBeUndefined()
   })
 
-  it('范式保留 id → 拒绝', async () => {
-    const result = await validateCustomStrategy({ ...VALID_RECORD, id: 'ema-crossover' }, { runner: directRunner })
-    expect(result).toMatchObject({ ok: false })
-    if (!result.ok) expect(result.reason).toContain('保留名称')
+  it('内置范式 id（覆盖语义）→ 放行，定义保留原 id（策略管理）', async () => {
+    const result = await validateCustomStrategy({ ...VALID_RECORD, id: 'ema-crossover' })
+    expect(result).toMatchObject({ ok: true })
+    if (result.ok) expect(result.definition.id).toBe('ema-crossover')
   })
 
   it('paramsJson 非法 JSON / min>=max / default 越界 → 拒绝', async () => {

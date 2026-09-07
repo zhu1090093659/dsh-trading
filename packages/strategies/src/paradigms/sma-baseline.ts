@@ -3,8 +3,10 @@
  *
  * 入场：收盘价站上 SMA200 牛市生命线，全仓持有。
  * 出场：收盘价跌破 SMA200 熊市防线，空仓避险。
+ *
+ * compute 自包含（内联滚动 SMA，与 @dshtrading/indicators math.ts 同式）：
+ * 策略管理（覆盖内置）可经 compute.toString() 导出完整可编译源码。
  */
-import { sma } from '@dshtrading/indicators'
 import type { StrategyDefinition, StrategySignal } from '../types.ts'
 
 export const smaBaselineStrategy: StrategyDefinition = {
@@ -17,8 +19,21 @@ export const smaBaselineStrategy: StrategyDefinition = {
   ],
   compute(bars, params) {
     const period = Math.max(10, Math.round(params.period ?? 200))
+
+    const smaOf = (values: number[], period: number): Array<number | undefined> => {
+      const out: Array<number | undefined> = new Array(values.length).fill(undefined)
+      if (!Number.isFinite(period) || period < 1 || values.length < period) return out
+      let sum = 0
+      for (let index = 0; index < values.length; index++) {
+        sum += values[index] as number
+        if (index >= period) sum -= values[index - period] as number
+        if (index >= period - 1) out[index] = sum / period
+      }
+      return out
+    }
+
     const closes = bars.map((b) => b.close)
-    const smaValues = sma(closes, period)
+    const smaValues = smaOf(closes, period)
     const signals: StrategySignal[] = []
     let inPosition = false
 

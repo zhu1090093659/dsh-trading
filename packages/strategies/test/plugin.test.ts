@@ -64,7 +64,7 @@ describe('strategy_author', () => {
     expect(await store.get('demo-alternating')).toMatchObject({ id: 'demo-alternating', horizon: 'swing' })
   })
 
-  it('非法提交（范式保留 id）→ 结构化失败文案，不落盘不回调', async () => {
+  it('内置范式 id（覆盖语义）→ 落盘覆盖并提示可恢复，回调触发', async () => {
     const store = createMemoryCustomStrategyStore()
     const onWritten = vi.fn()
     const tool = createStrategyAuthorTool({ store, onWritten })
@@ -75,9 +75,10 @@ describe('strategy_author', () => {
       summary: 'x',
       computeSource: VALID_SOURCE,
     })
-    expect(String(result)).toContain('Validation failed')
-    expect(onWritten).not.toHaveBeenCalled()
-    expect(await store.get('ema-crossover')).toBeUndefined()
+    expect(String(result)).toContain('Successfully authored')
+    expect(String(result)).toContain('strategy_reset')
+    expect(onWritten).toHaveBeenCalledTimes(1)
+    expect(await store.get('ema-crossover')).toMatchObject({ id: 'ema-crossover', title: '撞名' })
   })
 })
 

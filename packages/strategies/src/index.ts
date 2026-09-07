@@ -35,6 +35,20 @@ export {
   type StrategyValidationResult,
 } from './validate.ts'
 
+// 策略管理（2026-09-07）：覆盖 + 墓碑模型的纯函数合成与内置源码导出；
+// 墓碑内存存储浏览器安全（file 版在 ./plugin，Node 侧专用）。
+export {
+  BUILTIN_STRATEGY_IDS,
+  isBuiltinStrategyId,
+  applyStrategyManagement,
+  builtinStrategySource,
+  builtinStrategyRecord,
+} from './management.ts'
+export {
+  createMemoryBuiltinTombstonesStore,
+  type BuiltinTombstonesStore,
+} from './builtin-tombstones.ts'
+
 export {
   screenerParadigms,
   getScreenerById,

@@ -34,11 +34,9 @@ const MAX_SOURCE_LENGTH = 16 * 1024 // 16KB
 const MAX_PARAMS_COUNT = 8
 const MAX_SUMMARY_LENGTH = 120
 const MAX_REASON_LENGTH = 200
-/** 6 大范式 id 是系统保留名（custom_* 前缀或自定义名避免冲突）。 */
-const RESERVED_IDS = new Set([
-  'donchian-breakout', 'rsi-reversion', 'ema-crossover',
-  'bollinger-reversion', 'sma-baseline', 'momentum-12m',
-])
+// 内置范式 id 不再是保留名（策略管理，2026-09-07）：同 id 记录 = 覆盖内置的
+// 合法形态；「误覆盖」防护上移到写边界——agent 工具显式覆盖语义、GUI 桥
+// PUT 要求 overridesBuiltin 确认位。校验器对所有合法 id 一视同仁。
 const HORIZONS: readonly StrategyHorizon[] = ['short', 'swing', 'long']
 const DEFAULT_TIMEOUT_MS = 100
 
@@ -161,9 +159,6 @@ function checkCustomStrategyStructure(raw: unknown):
   if (!ID_PATTERN.test(id)) {
     return { ok: false, reason: `策略 id "${id}" 不合法：必须由 2-32 位小写字母、数字、下划线或连字符组成` }
   }
-  if (RESERVED_IDS.has(id)) {
-    return { ok: false, reason: `策略 id "${id}" 是系统范式保留名称，请使用其他名称（如 custom_${id}）` }
-  }
 
   // 2. title 校验
   const title = typeof input.title === 'string' ? input.title.trim() : ''
@@ -224,7 +219,10 @@ function checkCustomStrategyStructure(raw: unknown):
       if (defVal < minVal || defVal > maxVal) {
         return { ok: false, reason: `paramsJson[${index}] (${key}) 的 default (${defVal}) 必须在 [min, max] (${minVal}..${maxVal}) 范围内` }
       }
-      params.push({ key, label, default: defVal, min: minVal, max: maxVal, step: 1 })
+      // step 可选（缺省 1）：保留合法正值，让内置策略覆盖保存后参数步进不失真。
+      const stepVal = Number(spec.step)
+      const step = Number.isFinite(stepVal) && stepVal > 0 ? stepVal : 1
+      params.push({ key, label, default: defVal, min: minVal, max: maxVal, step })
     }
   }
 

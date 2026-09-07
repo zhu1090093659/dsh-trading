@@ -3,8 +3,11 @@
  *
  * 入场：收盘价跌破布林线下轨（超卖错杀）。
  * 出场：收盘价回归至布林带中轨（均线目标位平仓）。
+ *
+ * compute 自包含（内联 SMA + 总体口径滚动标准差合成的布林带，
+ * 与 @dshtrading/indicators math.ts 同式）：策略管理（覆盖内置）可经
+ * compute.toString() 导出完整可编译源码。
  */
-import { bollinger } from '@dshtrading/indicators'
 import type { StrategyDefinition, StrategySignal } from '../types.ts'
 
 export const bollingerReversionStrategy: StrategyDefinition = {
@@ -20,8 +23,42 @@ export const bollingerReversionStrategy: StrategyDefinition = {
     const period = Math.max(5, Math.round(params.period ?? 20))
     const k = Number(params.multiplier ?? 2)
 
+    const smaOf = (values: number[], period: number): Array<number | undefined> => {
+      const out: Array<number | undefined> = new Array(values.length).fill(undefined)
+      if (!Number.isFinite(period) || period < 1 || values.length < period) return out
+      let sum = 0
+      for (let index = 0; index < values.length; index++) {
+        sum += values[index] as number
+        if (index >= period) sum -= values[index - period] as number
+        if (index >= period - 1) out[index] = sum / period
+      }
+      return out
+    }
+    const stdevOf = (values: number[], period: number): Array<number | undefined> => {
+      const out: Array<number | undefined> = new Array(values.length).fill(undefined)
+      if (!Number.isFinite(period) || period < 1 || values.length < period) return out
+      for (let index = period - 1; index < values.length; index++) {
+        let mean = 0
+        for (let offset = 0; offset < period; offset++) mean += values[index - offset] as number
+        mean /= period
+        let variance = 0
+        for (let offset = 0; offset < period; offset++) {
+          const delta = (values[index - offset] as number) - mean
+          variance += delta * delta
+        }
+        out[index] = Math.sqrt(variance / period)
+      }
+      return out
+    }
+
     const closes = bars.map((b) => b.close)
-    const { mid, lower } = bollinger(closes, period, k)
+    const mid = smaOf(closes, period)
+    const sd = stdevOf(closes, period)
+    const lower: Array<number | undefined> = closes.map((_, index) => {
+      const base = mid[index]
+      const dev = sd[index]
+      return base === undefined || dev === undefined ? undefined : base - k * dev
+    })
     const signals: StrategySignal[] = []
     let inPosition = false
 

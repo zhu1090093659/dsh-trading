@@ -3,8 +3,10 @@
  *
  * 入场：近 12 个月（约 250 根日 K）累计收益 > 0 且价格高于年线，强动量做多。
  * 出场：动量转负或价格跌破年线，动量衰竭离场。
+ *
+ * compute 自包含（内联滚动 SMA，与 @dshtrading/indicators math.ts 同式）：
+ * 策略管理（覆盖内置）可经 compute.toString() 导出完整可编译源码。
  */
-import { sma } from '@dshtrading/indicators'
 import type { StrategyDefinition, StrategySignal } from '../types.ts'
 
 export const momentum12mStrategy: StrategyDefinition = {
@@ -17,8 +19,21 @@ export const momentum12mStrategy: StrategyDefinition = {
   ],
   compute(bars, params) {
     const lookback = Math.max(10, Math.round(params.lookbackBars ?? 250))
+
+    const smaOf = (values: number[], period: number): Array<number | undefined> => {
+      const out: Array<number | undefined> = new Array(values.length).fill(undefined)
+      if (!Number.isFinite(period) || period < 1 || values.length < period) return out
+      let sum = 0
+      for (let index = 0; index < values.length; index++) {
+        sum += values[index] as number
+        if (index >= period) sum -= values[index - period] as number
+        if (index >= period - 1) out[index] = sum / period
+      }
+      return out
+    }
+
     const closes = bars.map((b) => b.close)
-    const smaValues = sma(closes, lookback)
+    const smaValues = smaOf(closes, lookback)
     const signals: StrategySignal[] = []
     let inPosition = false
 

@@ -13,6 +13,7 @@ import type { ComponentType } from 'react'
 import type { ToolCallOwnerProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import { StrategyView } from './StrategyView.tsx'
 import { StrategyBacktestCard, StrategyAuthorCard } from './toolview.tsx'
+import type { StrategyEditorSaveInput } from './StrategyEditor.tsx'
 import './contract.ts'
 
 import { en, zh } from './locales.ts'
@@ -38,6 +39,11 @@ interface BridgeService {
   fetchCustomStrategies(): Promise<Array<Record<string, unknown>>>
   fetchSymbols(market: string): Promise<Array<{ symbol: string; name?: string }>>
   subscribeTradingEvents(handlers: Record<string, () => void>): () => void
+  // 策略管理面（2026-09-07；老 shell 缺席 → 视图管理动作降级隐藏）。
+  saveCustomStrategy?(input: StrategyEditorSaveInput): Promise<{ ok: true } | { ok: false; reason: string } | null>
+  deleteCustomStrategy?(id: string): Promise<boolean>
+  resetStrategy?(id: string): Promise<{ ok: boolean; changed: boolean } | null>
+  fetchStrategyTombstones?(): Promise<string[]>
 }
 
 export function apply(ctx: ClientContext): void {
@@ -58,6 +64,11 @@ export function apply(ctx: ClientContext): void {
       fetchSymbols: (market) =>
         faces.tradingBridge.fetchSymbols(market) as never,
       subscribeTradingEvents: (handlers) => faces.tradingBridge.subscribeTradingEvents(handlers),
+      // 管理面透传（可选：老 shell 缺席时方法为 undefined，视图据此降级）。
+      saveCustomStrategy: faces.tradingBridge.saveCustomStrategy?.bind(faces.tradingBridge),
+      deleteCustomStrategy: faces.tradingBridge.deleteCustomStrategy?.bind(faces.tradingBridge),
+      resetStrategy: faces.tradingBridge.resetStrategy?.bind(faces.tradingBridge),
+      fetchStrategyTombstones: faces.tradingBridge.fetchStrategyTombstones?.bind(faces.tradingBridge),
     }
     faces.tradingStageViews.register({
       id: 'strategy',
