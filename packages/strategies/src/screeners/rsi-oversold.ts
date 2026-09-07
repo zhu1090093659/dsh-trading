@@ -1,8 +1,10 @@
 /**
  * RSI 超卖：RSI(period) 跌入阈值以下的逆势关注筛选——超卖≠见底，
  * 定位是「值得盯的反转候选池」，命中理由里明示是逆势信号。
+ *
+ * evaluate 自包含（内联 Wilder RSI，与 @dshtrading/indicators math.ts 同式）：
+ * 选股器管理（覆盖内置）可经 evaluate.toString() 导出完整可编译源码。
  */
-import { rsi } from '@dshtrading/indicators'
 import type { ScreenerDefinition } from './types.ts'
 
 export const rsiOversoldScreener: ScreenerDefinition = {
@@ -22,7 +24,29 @@ export const rsiOversoldScreener: ScreenerDefinition = {
     const i = bars.length - 1
     if (i < period) return null
 
-    const value = rsi(bars.map((b) => b.close), period)[i]
+    const rsiOf = (values: number[], period: number): Array<number | undefined> => {
+      const out: Array<number | undefined> = new Array(values.length).fill(undefined)
+      if (!Number.isFinite(period) || period < 1 || values.length < period) return out
+      let gain = 0
+      let loss = 0
+      for (let index = 1; index <= period; index++) {
+        const delta = (values[index] as number) - (values[index - 1] as number)
+        if (delta >= 0) gain += delta
+        else loss -= delta
+      }
+      gain /= period
+      loss /= period
+      out[period] = loss === 0 ? 100 : 100 - 100 / (1 + gain / loss)
+      for (let index = period + 1; index < values.length; index++) {
+        const delta = (values[index] as number) - (values[index - 1] as number)
+        gain = (gain * (period - 1) + Math.max(delta, 0)) / period
+        loss = (loss * (period - 1) + Math.max(-delta, 0)) / period
+        out[index] = loss === 0 ? 100 : 100 - 100 / (1 + gain / loss)
+      }
+      return out
+    }
+
+    const value = rsiOf(bars.map((b) => b.close), period)[i]
     if (value === undefined) return null
     if (!(value < threshold)) return null
 

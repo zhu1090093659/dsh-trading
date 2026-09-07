@@ -27,6 +27,8 @@ import type {
   StrategySignal,
 } from './types.ts'
 import type { CustomStrategyRecord } from './custom.ts'
+import type { ScreenerColumnSpec } from './screeners/types.ts'
+import type { CustomScreenerRecord } from './custom-screener.ts'
 
 const ID_PATTERN = /^[a-z0-9_][a-z0-9_-]{1,31}$/
 const PARAM_KEY_PATTERN = /^[a-zA-Z0-9_]{1,16}$/
@@ -134,6 +136,59 @@ export function validateSignalSequence(
 }
 
 /**
+ * 参数规格数组解析（策略/选股器校验共用）：JSON 解析 → StrategyParamSpec[]，
+ * 保留合法正值 step（内置覆盖保存后参数步进不失真）。
+ */
+function parseParamSpecs(paramsJson: unknown): { ok: true; params: StrategyParamSpec[] } | { ok: false; reason: string } {
+  if (paramsJson === undefined) return { ok: true, params: [] }
+  if (typeof paramsJson !== 'string') {
+    return { ok: false, reason: 'paramsJson 必须是字符串（StrategyParamSpec[] 的 JSON）' }
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(paramsJson)
+  } catch (error) {
+    return { ok: false, reason: `paramsJson 不是合法 JSON: ${String((error as { message?: string })?.message ?? error)}` }
+  }
+  if (!Array.isArray(parsed)) {
+    return { ok: false, reason: 'paramsJson 解析结果必须是数组（StrategyParamSpec[]）' }
+  }
+  if (parsed.length > MAX_PARAMS_COUNT) {
+    return { ok: false, reason: `策略参数数量超出上限（至多 ${MAX_PARAMS_COUNT} 个）` }
+  }
+  const params: StrategyParamSpec[] = []
+  for (let index = 0; index < parsed.length; index++) {
+    const p = parsed[index]
+    if (typeof p !== 'object' || p === null) {
+      return { ok: false, reason: `paramsJson[${index}] 必须是一个对象` }
+    }
+    const spec = p as Partial<StrategyParamSpec>
+    const key = typeof spec.key === 'string' ? spec.key.trim() : ''
+    if (!PARAM_KEY_PATTERN.test(key)) {
+      return { ok: false, reason: `paramsJson[${index}].key "${key}" 不合法：必须是 1-16 位字母数字或下划线` }
+    }
+    const label = typeof spec.label === 'string' ? spec.label.trim() : key
+    const defVal = Number(spec.default)
+    const minVal = Number(spec.min)
+    const maxVal = Number(spec.max)
+    if (!Number.isFinite(defVal) || !Number.isFinite(minVal) || !Number.isFinite(maxVal)) {
+      return { ok: false, reason: `paramsJson[${index}] (${key}) 的 default、min、max 必须是有限数字` }
+    }
+    if (minVal >= maxVal) {
+      return { ok: false, reason: `paramsJson[${index}] (${key}) 的 min (${minVal}) 必须严格小于 max (${maxVal})` }
+    }
+    if (defVal < minVal || defVal > maxVal) {
+      return { ok: false, reason: `paramsJson[${index}] (${key}) 的 default (${defVal}) 必须在 [min, max] (${minVal}..${maxVal}) 范围内` }
+    }
+    // step 可选（缺省 1）：保留合法正值，让内置策略覆盖保存后参数步进不失真。
+    const stepVal = Number(spec.step)
+    const step = Number.isFinite(stepVal) && stepVal > 0 ? stepVal : 1
+    params.push({ key, label, default: defVal, min: minVal, max: maxVal, step })
+  }
+  return { ok: true, params }
+}
+
+/**
  * 结构校验（无试算）——browser/node 校验器共用。
  */
 function checkCustomStrategyStructure(raw: unknown):
@@ -178,53 +233,9 @@ function checkCustomStrategyStructure(raw: unknown):
     return { ok: false, reason: `策略 summary 必须是 1-${MAX_SUMMARY_LENGTH} 字符的非空字符串` }
   }
 
-  // 5. paramsJson 校验：JSON 解析 → 参数规格数组（语义与指标参数一致）
-  let params: StrategyParamSpec[] = []
-  if (input.paramsJson !== undefined) {
-    if (typeof input.paramsJson !== 'string') {
-      return { ok: false, reason: '策略 paramsJson 必须是字符串（StrategyParamSpec[] 的 JSON）' }
-    }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(input.paramsJson)
-    } catch (error) {
-      return { ok: false, reason: `paramsJson 不是合法 JSON: ${String((error as { message?: string })?.message ?? error)}` }
-    }
-    if (!Array.isArray(parsed)) {
-      return { ok: false, reason: 'paramsJson 解析结果必须是数组（StrategyParamSpec[]）' }
-    }
-    if (parsed.length > MAX_PARAMS_COUNT) {
-      return { ok: false, reason: `策略参数数量超出上限（至多 ${MAX_PARAMS_COUNT} 个）` }
-    }
-    for (let index = 0; index < parsed.length; index++) {
-      const p = parsed[index]
-      if (typeof p !== 'object' || p === null) {
-        return { ok: false, reason: `paramsJson[${index}] 必须是一个对象` }
-      }
-      const spec = p as Partial<StrategyParamSpec>
-      const key = typeof spec.key === 'string' ? spec.key.trim() : ''
-      if (!PARAM_KEY_PATTERN.test(key)) {
-        return { ok: false, reason: `paramsJson[${index}].key "${key}" 不合法：必须是 1-16 位字母数字或下划线` }
-      }
-      const label = typeof spec.label === 'string' ? spec.label.trim() : key
-      const defVal = Number(spec.default)
-      const minVal = Number(spec.min)
-      const maxVal = Number(spec.max)
-      if (!Number.isFinite(defVal) || !Number.isFinite(minVal) || !Number.isFinite(maxVal)) {
-        return { ok: false, reason: `paramsJson[${index}] (${key}) 的 default、min、max 必须是有限数字` }
-      }
-      if (minVal >= maxVal) {
-        return { ok: false, reason: `paramsJson[${index}] (${key}) 的 min (${minVal}) 必须严格小于 max (${maxVal})` }
-      }
-      if (defVal < minVal || defVal > maxVal) {
-        return { ok: false, reason: `paramsJson[${index}] (${key}) 的 default (${defVal}) 必须在 [min, max] (${minVal}..${maxVal}) 范围内` }
-      }
-      // step 可选（缺省 1）：保留合法正值，让内置策略覆盖保存后参数步进不失真。
-      const stepVal = Number(spec.step)
-      const step = Number.isFinite(stepVal) && stepVal > 0 ? stepVal : 1
-      params.push({ key, label, default: defVal, min: minVal, max: maxVal, step })
-    }
-  }
+  // 5. paramsJson 校验
+  const params = parseParamSpecs(input.paramsJson)
+  if (!params.ok) return params
 
   // 6. computeSource 源码校验
   const computeSource = typeof input.computeSource === 'string' ? input.computeSource.trim() : ''
@@ -242,7 +253,7 @@ function checkCustomStrategyStructure(raw: unknown):
     return { ok: false, reason: `源码语法错误或无法编译: ${String((error as { message?: string })?.message ?? error)}` }
   }
 
-  return { ok: true, id, title, horizon, summary, params, computeSource, input }
+  return { ok: true, id, title, horizon, summary, params: params.params, computeSource, input }
 }
 
 /**
@@ -290,6 +301,224 @@ export async function validateCustomStrategy(
     summary,
     paramsJson: JSON.stringify(params),
     computeSource,
+    createdAt: typeof input.createdAt === 'number' ? input.createdAt : Date.now(),
+  }
+  return { ok: true, definition, record }
+}
+
+/* ------------------------------------------------------------------ */
+/* 自定义选股器校验（选股器管理，2026-09-07）                                */
+/* ------------------------------------------------------------------ */
+
+/** 选股器 id：强制 'scr.' 前缀与范式策略 id 空间隔离（内置 id 同形，可覆盖）。 */
+const SCREENER_ID_PATTERN = /^scr\.[a-z0-9_][a-z0-9_-]{1,31}$/
+const MAX_COLUMNS_COUNT = 8
+
+export type ScreenerValidationResult =
+  | { ok: true; definition: import('./screeners/types.ts').ScreenerDefinition; record: CustomScreenerRecord }
+  | { ok: false; reason: string }
+
+/**
+ * 结构校验（无试算）：id / title / summary / paramsJson / columnsJson / evaluateSource。
+ * evaluate 与 compute 同为 (bars, params) 纯函数，编译走同一 compileStrategySource。
+ */
+function checkCustomScreenerStructure(raw: unknown):
+  | { ok: false; reason: string }
+  | {
+    ok: true
+    id: string
+    title: string
+    summary: string
+    params: StrategyParamSpec[]
+    columns: ScreenerColumnSpec[]
+    evaluateSource: string
+    input: Partial<CustomScreenerRecord>
+  } {
+  if (typeof raw !== 'object' || raw === null) {
+    return { ok: false, reason: '选股器配置必须是一个非空对象' }
+  }
+  const input = raw as Partial<CustomScreenerRecord>
+
+  const id = typeof input.id === 'string' ? input.id.trim().toLowerCase() : ''
+  if (!id) return { ok: false, reason: '缺少选股器 id' }
+  if (!SCREENER_ID_PATTERN.test(id)) {
+    return { ok: false, reason: `选股器 id "${id}" 不合法：必须以 "scr." 开头，后接 2-32 位小写字母、数字、下划线或连字符` }
+  }
+
+  const title = typeof input.title === 'string' ? input.title.trim() : ''
+  if (!title || title.length > 32) {
+    return { ok: false, reason: '选股器 title 必须是 1-32 字符的非空字符串' }
+  }
+
+  const summary = typeof input.summary === 'string' ? input.summary.trim() : ''
+  if (!summary || summary.length > MAX_SUMMARY_LENGTH) {
+    return { ok: false, reason: `选股器 summary 必须是 1-${MAX_SUMMARY_LENGTH} 字符的非空字符串` }
+  }
+
+  const params = parseParamSpecs(input.paramsJson)
+  if (!params.ok) return params
+
+  // columnsJson：结果动态列声明，metrics 键必须落在其子集内（试算阶段校验）。
+  let columns: ScreenerColumnSpec[] = []
+  if (typeof input.columnsJson !== 'string' || !input.columnsJson.trim()) {
+    return { ok: false, reason: '缺少 columnsJson（ScreenerColumnSpec[] 的 JSON，至少 1 列）' }
+  }
+  let parsedColumns: unknown
+  try {
+    parsedColumns = JSON.parse(input.columnsJson)
+  } catch (error) {
+    return { ok: false, reason: `columnsJson 不是合法 JSON: ${String((error as { message?: string })?.message ?? error)}` }
+  }
+  if (!Array.isArray(parsedColumns) || parsedColumns.length === 0) {
+    return { ok: false, reason: 'columnsJson 解析结果必须是非空数组（ScreenerColumnSpec[]）' }
+  }
+  if (parsedColumns.length > MAX_COLUMNS_COUNT) {
+    return { ok: false, reason: `结果列数量超出上限（至多 ${MAX_COLUMNS_COUNT} 列）` }
+  }
+  for (let index = 0; index < parsedColumns.length; index++) {
+    const c = parsedColumns[index]
+    if (typeof c !== 'object' || c === null) {
+      return { ok: false, reason: `columnsJson[${index}] 必须是一个对象` }
+    }
+    const spec = c as Partial<ScreenerColumnSpec>
+    const key = typeof spec.key === 'string' ? spec.key.trim() : ''
+    if (!PARAM_KEY_PATTERN.test(key)) {
+      return { ok: false, reason: `columnsJson[${index}].key "${key}" 不合法：必须是 1-16 位字母数字或下划线` }
+    }
+    const label = typeof spec.label === 'string' ? spec.label.trim() : key
+    const format = spec.format === 'percent' || spec.format === 'number' ? spec.format : undefined
+    columns.push(format === undefined ? { key, label } : { key, label, format })
+  }
+  const columnKeys = new Set(columns.map((c) => c.key))
+  if (columnKeys.size !== columns.length) {
+    return { ok: false, reason: 'columnsJson 存在重复的列 key' }
+  }
+
+  const evaluateSource = typeof input.evaluateSource === 'string' ? input.evaluateSource.trim() : ''
+  if (!evaluateSource) {
+    return { ok: false, reason: '缺少 evaluateSource 源码' }
+  }
+  if (evaluateSource.length > MAX_SOURCE_LENGTH) {
+    return { ok: false, reason: `evaluateSource 源码长度 (${evaluateSource.length} B) 超出限制 (${MAX_SOURCE_LENGTH} B / 16KB)` }
+  }
+  try {
+    compileStrategySource(evaluateSource)
+  } catch (error) {
+    return { ok: false, reason: `源码语法错误或无法编译: ${String((error as { message?: string })?.message ?? error)}` }
+  }
+
+  return { ok: true, id, title, summary, params: params.params, columns, evaluateSource, input }
+}
+
+/** 单个命中结果校验（null = 未命中合法；其余必须符合 ScreenerMatch 形状）。 */
+function checkScreenerMatch(value: unknown, columns: readonly ScreenerColumnSpec[], scenario: string): string | undefined {
+  if (value === null || value === undefined) return undefined
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return `evaluate 返回值必须是 ScreenerMatch 对象或 null，${scenario} 场景实际为: ${typeof value}`
+  }
+  const match = value as { metrics?: unknown; reason?: unknown }
+  if (typeof match.metrics !== 'object' || match.metrics === null || Array.isArray(match.metrics)) {
+    return `ScreenerMatch.metrics 必须是 Record<string, number>（${scenario} 场景）`
+  }
+  const columnKeys = new Set(columns.map((c) => c.key))
+  for (const [key, val] of Object.entries(match.metrics as Record<string, unknown>)) {
+    if (!columnKeys.has(key)) {
+      return `metrics 键 "${key}" 未在 columns 中声明（${scenario} 场景）——动态列必须先声明再产出`
+    }
+    if (typeof val !== 'number' || !Number.isFinite(val)) {
+      return `metrics["${key}"] 必须是有限数字（${scenario} 场景），收到: ${String(val)}`
+    }
+  }
+  if (typeof match.reason !== 'string' || !match.reason.trim()) {
+    return `ScreenerMatch.reason 必须是非空字符串（${scenario} 场景）`
+  }
+  if (match.reason.length > MAX_REASON_LENGTH) {
+    return `reason 超长（${match.reason.length} > ${MAX_REASON_LENGTH}，${scenario} 场景）`
+  }
+  return undefined
+}
+
+/**
+ * 自定义选股器校验（异步——试算走可等待 runner，默认浏览器 Worker 超时熔断；
+ * Node 宿主侧传 validate-node.ts 的 vm 熔断 runner）。
+ *
+ * 与策略校验的差异：evaluate 是「单时点截面判断」——无信号序列语义，
+ * 返回 null（未命中/数据不足跳过）或 ScreenerMatch（metrics 键 ⊆ columns 声明、
+ * 数值有限、reason 非空）。内置选股器 id 可覆盖（不再保留名）。
+ */
+export async function validateCustomScreener(
+  raw: unknown,
+  options?: { runner?: AsyncComputeRunner },
+): Promise<ScreenerValidationResult> {
+  const checked = checkCustomScreenerStructure(raw)
+  if (!checked.ok) return checked
+  const { id, title, summary, params, columns, evaluateSource, input } = checked
+
+  const sampleScenarios = createSampleBars()
+  const scenarioNames: Array<keyof typeof sampleScenarios> = ['uptrend', 'downtrend', 'flat', 'gap', 'short']
+  const runner = options?.runner ?? workerComputeRunner
+  const defaultParamsMap: Record<string, number> = {}
+  for (const p of params) defaultParamsMap[p.key] = p.default
+
+  // 长序列样例（300 根，涨→跌→涨多 regime + 周期性放量）：5 个标准场景最长仅
+  // 30 根，长窗口选股器（如 above-ma 200 日、near-high 250 日）在短场景上合法
+  // 全 null；该场景同时暴露「数据长度 guard 笔误」（如 bars.length < 300 对真实
+  // 扫描恒跳过）。放量脉冲（i%7===5 → 5 倍量）让「放量突破」类条件在长样例上
+  // 也有命中机会（量价结构参照，非任意数据）。
+  const longScenario: Kline[] = []
+  let longPrice = 100
+  for (let i = 0; i < 300; i++) {
+    const drift = i < 100 ? 0.6 : i < 200 ? -0.5 : 0.55
+    longPrice = Math.max(1, longPrice + drift)
+    longScenario.push({
+      openTime: 1700000000000 + i * 86_400_000,
+      open: longPrice - drift / 2,
+      high: longPrice + 0.4,
+      low: longPrice - 0.4,
+      close: longPrice,
+      volume: i % 7 === 5 ? 5000 : 800,
+    })
+  }
+  type ScreenerScenarioName = keyof typeof sampleScenarios | 'long'
+  const scenarios: Array<{ name: ScreenerScenarioName; bars: Kline[] }> = [
+    ...scenarioNames.map((name) => ({ name: name as ScreenerScenarioName, bars: sampleScenarios[name] })),
+    { name: 'long' as const, bars: longScenario },
+  ]
+
+  let matchedScenario = false
+  for (const { name: scenario, bars } of scenarios) {
+    let match: unknown
+    try {
+      const out = await runner(evaluateSource, bars, { ...defaultParamsMap }, DEFAULT_TIMEOUT_MS)
+      match = out
+    } catch (error) {
+      return { ok: false, reason: `在 ${scenario} 样例数据上试算执行报错: ${String((error as { message?: string })?.message ?? error)}` }
+    }
+    const matchReason = checkScreenerMatch(match, columns, scenario)
+    if (matchReason !== undefined) {
+      return { ok: false, reason: matchReason }
+    }
+    if (match !== null && match !== undefined) matchedScenario = true
+  }
+
+  // 全场景（含 300 根长序列）不命中 = 无用过滤器（涨/跌/震荡互斥场景 + 长窗口
+  // 皆不中，几乎必然是 guard/阈值笔误，如 bars.length < 300 一类恒跳过）。
+  if (!matchedScenario) {
+    return { ok: false, reason: '选股器在全部样例场景（上涨/下跌/震荡/跳空/短序列/300根长序列）上都返回 null——请检查入场条件（阈值方向、数据长度 guard），至少一个场景应命中' }
+  }
+
+  // evaluate 与 compute 同为 (bars, params) 纯函数，编译器同源；返回形状已由试算校验。
+  const evaluate = compileStrategySource(evaluateSource) as unknown as import('./screeners/types.ts').ScreenerDefinition['evaluate']
+  const definition = { id, name: title, summary, params, columns, evaluate }
+  const record: CustomScreenerRecord = {
+    id,
+    title,
+    // 选股器当前无期限分组，记录与策略记录同构故恒 'swing'（仅承载词汇位）。
+    horizon: 'swing',
+    summary,
+    paramsJson: JSON.stringify(params),
+    columnsJson: JSON.stringify(columns),
+    evaluateSource,
     createdAt: typeof input.createdAt === 'number' ? input.createdAt : Date.now(),
   }
   return { ok: true, definition, record }

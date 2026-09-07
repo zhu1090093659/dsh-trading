@@ -1,8 +1,10 @@
 /**
  * 放量突破：收盘价创 lookback 日新高，且成交量 ≥ 均量的 volMultiple 倍——
  * 突破有效性的量能确认（无量突破不入选）。量比口径跨市场可比（比值无量纲）。
+ *
+ * evaluate 自包含（内联滚动 SMA，与 @dshtrading/indicators math.ts 同式）：
+ * 选股器管理（覆盖内置）可经 evaluate.toString() 导出完整可编译源码。
  */
-import { sma } from '@dshtrading/indicators'
 import type { ScreenerDefinition } from './types.ts'
 
 export const volumeBreakoutScreener: ScreenerDefinition = {
@@ -24,10 +26,22 @@ export const volumeBreakoutScreener: ScreenerDefinition = {
     // 需要 lookback 根历史 K 线 + 均量窗口
     if (i < lookback) return null
 
+    const smaOf = (values: number[], period: number): Array<number | undefined> => {
+      const out: Array<number | undefined> = new Array(values.length).fill(undefined)
+      if (!Number.isFinite(period) || period < 1 || values.length < period) return out
+      let sum = 0
+      for (let index = 0; index < values.length; index++) {
+        sum += values[index] as number
+        if (index >= period) sum -= values[index - period] as number
+        if (index >= period - 1) out[index] = sum / period
+      }
+      return out
+    }
+
     const window = bars.slice(i - lookback, i)
     const priorHigh = Math.max(...window.map((b) => b.high))
     const volumes = bars.map((b) => b.volume)
-    const avgVolume = sma(volumes, lookback)[i]
+    const avgVolume = smaOf(volumes, lookback)[i]
     if (avgVolume === undefined || avgVolume <= 0) return null
 
     const close = bars[i]!.close

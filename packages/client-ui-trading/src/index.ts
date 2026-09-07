@@ -16,7 +16,7 @@ import type { MarketDataService } from '@dshtrading/api'
 import type { TradingEventsService, TradingEventStore } from '@dshtrading/eventbus'
 import { createFileChartActivationStore, createFileCustomIndicatorStore } from '@dshtrading/indicators/plugin'
 import { createFileKnowledgeCardStore } from '@dshtrading/knowledge/plugin'
-import { createFileCustomStrategyStore, createFileBuiltinTombstonesStore } from '@dshtrading/strategies/plugin'
+import { createFileCustomStrategyStore, createFileBuiltinTombstonesStore, createFileCustomScreenerStore } from '@dshtrading/strategies/plugin'
 import { createFileSelectionStore, createFileWatchlistStore } from '@dshtrading/watchlist/plugin'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import os from 'node:os'
@@ -117,18 +117,21 @@ export function apply(ctx: Context): void {
 
   // issue #33 收口（策略侧补齐）：@dshtrading/strategies/plugin provide
   // tradingStrategies 服务（Service 实例，.store = file store 单实例、.tombstones =
-  // 内置墓碑表）——桥与 strategy_author/strategy_backtest 工具共享同一缓存；服务
-  // 缺席（老部署）→ 回退自建同路径 file store（旧行为）。
+  // 内置墓碑表、.screenerStore = 自定义选股器）——桥与 strategy_*/screener_* 工具
+  // 共享同一缓存；服务缺席（老部署）→ 回退自建同路径 file store（旧行为）。
   const strategiesService = serviceGet('tradingStrategies') as
     | {
         store?: import('@dshtrading/strategies').CustomStrategyStore
         tombstones?: import('@dshtrading/strategies').BuiltinTombstonesStore
+        screenerStore?: import('@dshtrading/strategies').CustomScreenerStore
       }
     | undefined
   const strategyStore = strategiesService?.store
     ?? createFileCustomStrategyStore(path.join(os.homedir(), '.dsh', 'strategies', 'custom.json'))
   const strategyTombstones = strategiesService?.tombstones
     ?? createFileBuiltinTombstonesStore(path.join(os.homedir(), '.dsh', 'strategies', 'builtin-tombstones.json'))
+  const screenerStore = strategiesService?.screenerStore
+    ?? createFileCustomScreenerStore(path.join(os.homedir(), '.dsh', 'strategies', 'custom-screeners.json'))
 
   const watchlistStorePath = path.join(os.homedir(), '.dsh', 'watchlists.json')
   const watchlistStore = createFileWatchlistStore(watchlistStorePath)
@@ -160,6 +163,7 @@ export function apply(ctx: Context): void {
       knowledgeStore,
       strategyStore,
       tombstonesStore: strategyTombstones,
+      screenerStore,
       watchlistStore,
       selectionStore,
       holdingsStore,
@@ -252,6 +256,9 @@ export function apply(ctx: Context): void {
             // 策略管理（2026-09-07）：GUI 写策略（保存/覆盖）与恢复出厂 → 'strategies' 失效信号。
             if (req.method === 'PUT' && sub === '/strategies/custom') eventsOf()?.emit('strategies')
             if (req.method === 'POST' && sub === '/strategies/reset') eventsOf()?.emit('strategies')
+            // 选股器管理（选股器管理，2026-09-07）：同通道复用（GUI 按 payload 分流）。
+            if ((req.method === 'PUT' || req.method === 'DELETE') && sub === '/strategies/screeners') eventsOf()?.emit('strategies')
+            if (req.method === 'POST' && sub === '/strategies/screeners/reset') eventsOf()?.emit('strategies')
             if ((req.method === 'PUT' || req.method === 'POST' || req.method === 'DELETE')
               && (sub === '/watchlists' || sub === '/watchlists/import')) eventsOf()?.emit('watchlists')
             if (req.method === 'PUT' && sub === '/selection') eventsOf()?.emit('selection')

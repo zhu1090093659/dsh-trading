@@ -4,7 +4,12 @@
  */
 import * as vm from 'node:vm'
 import type { Kline } from '@dshtrading/indicators'
-import { validateCustomStrategy, type StrategyValidationResult } from './validate.ts'
+import {
+  validateCustomStrategy,
+  validateCustomScreener,
+  type ScreenerValidationResult,
+  type StrategyValidationResult,
+} from './validate.ts'
 import type { StrategySignal } from './types.ts'
 
 export const nodeStrategyComputeRunner = (
@@ -48,4 +53,30 @@ export const nodeStrategyComputeRunner = (
 /** Node.js 宿主端策略校验器：自动启用 node:vm 超时熔断保护。 */
 export function validateCustomStrategyNode(raw: unknown): Promise<StrategyValidationResult> {
   return validateCustomStrategy(raw, { runner: nodeStrategyComputeRunner })
+}
+
+/**
+ * Node 宿主端选股器 evaluate 试算 runner（同一 vm 沙箱形态；返回值形状由
+ * validateCustomScreener 的 ScreenerMatch 校验把关，此处不约束类型）。
+ * 复用策略 vm runner，但超时文案归位为「选股器」（策略 runner 硬编码「策略试算」）。
+ */
+export const nodeScreenerEvaluateRunner = (
+  evaluateSource: string,
+  bars: readonly Kline[],
+  params: Record<string, number>,
+  timeoutMs = 100,
+): Promise<unknown> => {
+  try {
+    return Promise.resolve(nodeStrategyComputeRunner(evaluateSource, bars, params, timeoutMs) as unknown)
+  } catch (error: any) {
+    if (error?.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT' || String(error?.message).includes('timed out')) {
+      return Promise.reject(new Error(`选股器试算执行超时（超过 ${timeoutMs}ms），可能存在死循环（如 while/for 未退出）`))
+    }
+    return Promise.reject(error)
+  }
+}
+
+/** Node.js 宿主端选股器校验器：vm 熔断 runner 注入。 */
+export function validateCustomScreenerNode(raw: unknown): Promise<ScreenerValidationResult> {
+  return validateCustomScreener(raw, { runner: nodeScreenerEvaluateRunner })
 }
