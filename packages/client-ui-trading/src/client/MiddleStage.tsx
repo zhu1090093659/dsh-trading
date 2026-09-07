@@ -51,6 +51,10 @@ export interface MiddleStageInjected {
   }
   toggleIndicator: (id: string) => void
   setIndicatorParams: (id: string, params: Record<string, number>, scopeKey?: string) => void
+  /** 按标的可见性（symbol visibility；scopeKey = `${market}:${symbol}`，缺省忽略）。 */
+  setIndicatorVisible: (id: string, visible: boolean, scopeKey?: string) => void
+  /** 全局移除：卸载所有标的上的该指标实例。 */
+  removeIndicator: (id: string) => void
   /** 删除自定义指标（issue #30，透传给 QuoteStage 指标选择器）。 */
   deleteIndicator: (id: string) => Promise<boolean>
   /** 行情上下文 → 会话输入框（透传给 QuoteStage「发给 Agent」，只填入不发送）。 */
@@ -62,7 +66,7 @@ export type MiddleStageProps =
   & PropsLocale<'dshtrading.market'>
   & InjectFace<MiddleStageInjected>
 
-export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator, fillComposer }: MiddleStageProps) {
+export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator, fillComposer }: MiddleStageProps) {
   // 名册响应式：registry 版本号驱动 tab 条重渲染；当前视图是普通 state
   // （readStageView 净化 localStorage 脏值）。
   useSyncExternalStore(stageViews.subscribe, stageViews.getVersion)
@@ -95,7 +99,7 @@ export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setInd
           quote 视图 = shell 内建（QuoteStage 直引——需要中栏全部指标动作面）；
           插件视图走 definition.render(props)。 */}
       {view === 'quote' ? (
-        <QuoteStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, deleteIndicator, fillComposer } as never)} />
+        <QuoteStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator, fillComposer } as never)} />
       ) : (
         (() => {
           const definition = stageViews.get(view)

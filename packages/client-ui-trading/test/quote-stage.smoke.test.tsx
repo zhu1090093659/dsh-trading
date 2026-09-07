@@ -56,6 +56,8 @@ function quoteStageProps(market: 'crypto' | 'us') {
     useChart: <T,>(sel: (state: ChartState) => T): T => sel(chart),
     toggleIndicator: () => {},
     setIndicatorParams: () => {},
+    setIndicatorVisible: () => {},
+    removeIndicator: () => {},
     deleteIndicator: async () => true,
   }
 }

@@ -606,6 +606,8 @@ export const zh: Record<MarketLocaleKey, string> = {
       'indicator.delete': '删除',
       'indicator.deleteConfirm': '确定删除该自定义指标？已持久化的定义将从指标库移除。',
       'indicator.symbolOverride': '当前为 {symbol} 的专属参数（仅对该标的生效）',
+      'indicator.removeGlobal': '全局移除',
+      'indicator.removeGlobalConfirm': '确定卸载所有标的上的该指标？（复选框仅控制当前标的的显示）',
 }
 
 export const en: Record<MarketLocaleKey, string> = {
@@ -1207,4 +1209,6 @@ export const en: Record<MarketLocaleKey, string> = {
       'indicator.delete': 'Delete',
       'indicator.deleteConfirm': 'Delete this custom indicator? The persisted definition will be removed from the library.',
       'indicator.symbolOverride': 'Editing symbol-specific params for {symbol} (applies to this instrument only)',
+      'indicator.removeGlobal': 'Remove everywhere',
+      'indicator.removeGlobalConfirm': 'Unmount this indicator on every symbol? (The checkbox only toggles the current symbol.)',
 }
