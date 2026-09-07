@@ -43,27 +43,121 @@ function isValidInstance(raw: unknown): raw is IndicatorInstance {
   return Object.values(params as Record<string, unknown>).every(v => typeof v === 'number' && Number.isFinite(v))
 }
 
+/** 按标的覆盖表防御性清洗（issue #72）：非法键/值整体丢弃该字段，不连累实例本体。 */
+function sanitizeSymbolParams(raw: unknown): Record<string, Record<string, number>> | undefined {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
+  const out: Record<string, Record<string, number>> = {}
+  for (const [scope, params] of Object.entries(raw as Record<string, unknown>)) {
+    if (scope.trim() === '' || typeof params !== 'object' || params === null || Array.isArray(params)) continue
+    const clean: Record<string, number> = {}
+    for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+      if (typeof value === 'number' && Number.isFinite(value)) clean[key] = value
+    }
+    if (Object.keys(clean).length > 0) out[scope] = clean
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+/** 按标的隐藏表防御性清洗：只留非空字符串并去重；空表返回 undefined（字段整体消失）。 */
+function sanitizeHiddenScopes(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: string[] = []
+  for (const item of raw) {
+    if (typeof item !== 'string') continue
+    const key = item.trim()
+    if (key !== '' && !out.includes(key)) out.push(key)
+  }
+  return out.length > 0 ? out : undefined
+}
+
+/** 深拷贝规范化一个实例（params/symbolParams/hiddenScopes 均脱引用）；坏形返回 undefined。 */
+export function sanitizeInstance(raw: unknown): IndicatorInstance | undefined {
+  if (!isValidInstance(raw)) return undefined
+  const params = { ...(raw.params as Record<string, number>) }
+  const symbolParams = sanitizeSymbolParams((raw as { symbolParams?: unknown }).symbolParams)
+  const hiddenScopes = sanitizeHiddenScopes((raw as { hiddenScopes?: unknown }).hiddenScopes)
+  const clean: IndicatorInstance = symbolParams !== undefined ? { id: raw.id, params, symbolParams } : { id: raw.id, params }
+  return hiddenScopes !== undefined ? { ...clean, hiddenScopes } : clean
+}
+
+/** 按标的覆盖的 scope 键：`${market}:${symbol}`（与 client QuoteStage 的 market/symbol 同源）。 */
+export function symbolScopeKey(market: string, symbol: string): string {
+  return market + ':' + symbol
+}
+
+/**
+ * 实例对某标的的生效参数（issue #72）：symbolParams 命中 `${market}:${symbol}`
+ * 时整体替代全局 params；market/symbol 缺失或无覆盖 → 全局 params。
+ */
+export function effectiveInstanceParams(
+  instance: IndicatorInstance,
+  market?: string,
+  symbol?: string,
+): Record<string, number> {
+  if (market !== undefined && symbol !== undefined && instance.symbolParams !== undefined) {
+    const scoped = instance.symbolParams[symbolScopeKey(market, symbol)]
+    if (scoped !== undefined) return scoped
+  }
+  return instance.params
+}
+
+/**
+ * 实例对某标的的可见性：hiddenScopes 命中「market」或「${market}:${symbol}」任一
+ * 作用域即隐藏；无隐藏记录默认可见（存量名册零迁移）。market 缺失（GUI 无聚焦
+ * 标的）按可见处理——调用方此时走全局开关语义。
+ */
+export function isInstanceVisibleOn(instance: IndicatorInstance, market?: string, symbol?: string): boolean {
+  const scopes = instance.hiddenScopes
+  if (scopes === undefined || scopes.length === 0 || market === undefined) return true
+  if (scopes.includes(market)) return false
+  if (symbol !== undefined && scopes.includes(symbolScopeKey(market, symbol))) return false
+  return true
+}
+
+/**
+ * 纯函数切换实例对一个作用域（「market」或「${market}:${symbol}」）的可见性：
+ * visible=false 记隐藏（已记录则原引用返回），visible=true 清隐藏（清空后字段
+ * 整体消失；本就无记录则原引用返回）。不触碰 params/symbolParams。
+ */
+export function withHiddenScopes(instance: IndicatorInstance, scope: string, visible: boolean): IndicatorInstance {
+  const scopes = instance.hiddenScopes ?? []
+  if (!visible) {
+    return scopes.includes(scope) ? instance : { ...instance, hiddenScopes: [...scopes, scope] }
+  }
+  const next = scopes.filter(key => key !== scope)
+  if (next.length === scopes.length) return instance
+  if (next.length === 0) {
+    const rest = { ...instance }
+    delete rest.hiddenScopes
+    return rest
+  }
+  return { ...instance, hiddenScopes: next }
+}
+
 /** 内存版激活名册存储（纯浏览器与单测用）。 */
 export function createMemoryChartActivationStore(initial: IndicatorInstance[] = []): ChartActivationStore {
   const map = new Map<string, IndicatorInstance>()
   for (const item of initial) {
-    if (isValidInstance(item)) map.set(item.id, { id: item.id, params: { ...item.params } })
+    const clean = sanitizeInstance(item)
+    if (clean !== undefined) map.set(clean.id, clean)
   }
 
   return {
-    list: async () => [...map.values()].map(instance => ({ id: instance.id, params: { ...instance.params } })),
+    list: async () => [...map.values()].map(instance => sanitizeInstance(instance) as IndicatorInstance),
     activate: async (instance) => {
-      if (!isValidInstance(instance)) {
+      const clean = sanitizeInstance(instance)
+      if (clean === undefined) {
         const id = (instance as { id?: unknown } | null | undefined)?.id
         throw new Error('chart activation: invalid instance shape for id ' + JSON.stringify(id))
       }
-      map.set(instance.id, { id: instance.id, params: { ...instance.params } })
+      map.set(clean.id, clean)
     },
     deactivate: async (id) => map.delete(id),
     replaceAll: async (instances) => {
       map.clear()
       for (const item of instances) {
-        if (isValidInstance(item)) map.set(item.id, { id: item.id, params: { ...item.params } })
+        const clean = sanitizeInstance(item)
+        if (clean !== undefined) map.set(clean.id, clean)
       }
     },
   }

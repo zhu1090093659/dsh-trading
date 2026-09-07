@@ -4,8 +4,8 @@
  * - 启动同步：GET /chart/indicators → host 有行则以 host 为准覆盖本地 observable；
  *   host 为空且本地 localStorage 有存量 → 一次性迁移导入（POST /chart/indicators/import，
  *   host 非空时服务端拒绝，幂等）→ 重拉 host。
- * - 变更 host-first：togglePreset / setParams / removeInstance 先写 host，成功后才
- *   更新本地 observable（localStorage 由原 store 持久化，降级为缓存镜像）。
+ * - 变更 host-first：togglePreset / setParams / setSymbolVisibility / removeInstance
+ *   先写 host，成功后才更新本地 observable（localStorage 由原 store 持久化，降级为缓存镜像）。
  * - SSE：'chart' 失效信号 → 重拉 host 覆盖本地（indicator_activate/deactivate 工具
  *   写入、indicators/plugin emit 或其它标签页变更）。
  *
@@ -80,11 +80,25 @@ export function wireHostChartSync(options: HostChartSyncOptions): () => void {
     })()
   }
   const originalSetParams = chart.setParams.bind(chart)
-  chart.setParams = (id: string, params: Record<string, number>): void => {
+  chart.setParams = (id: string, params: Record<string, number>, scopeKey?: string): void => {
     void (async () => {
-      const ok = await putChartActivation(id, params)
-      if (ok) originalSetParams(id, params)
+      // scopeKey = "<market>:<symbol>"（issue #72）：写该标的覆盖；缺省写全局。
+      const split = scopeKey !== undefined ? scopeKey.indexOf(':') : -1
+      const scope = split > 0 && scopeKey !== undefined
+        ? { market: scopeKey.slice(0, split), symbol: scopeKey.slice(split + 1) }
+        : undefined
+      const ok = await putChartActivation(id, params, scope)
+      if (ok) originalSetParams(id, params, scopeKey)
       else console.warn('[dsh-trading] chart param update failed on host — local state unchanged')
+    })()
+  }
+  const originalSetSymbolVisibility = chart.setSymbolVisibility.bind(chart)
+  chart.setSymbolVisibility = (id: string, market: string, symbol: string, visible: boolean): void => {
+    void (async () => {
+      // symbol visibility：GUI 只写 symbol 级（整市场隐藏走工具/桥）。
+      const ok = await putChartActivation(id, undefined, { market, symbol, visible })
+      if (ok) originalSetSymbolVisibility(id, market, symbol, visible)
+      else console.warn('[dsh-trading] chart visibility update failed on host — local state unchanged')
     })()
   }
   const originalRemove = chart.removeInstance.bind(chart)

@@ -7,7 +7,8 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { CustomIndicatorStore } from './custom.ts'
 import type { ChartActivationStore } from './chart-activations.ts'
-import { clampActivationParams, defaultActivationInstance, resolveIndicatorSpec } from './chart-activations.ts'
+import { clampActivationParams, defaultActivationInstance, resolveIndicatorSpec, symbolScopeKey, withHiddenScopes } from './chart-activations.ts'
+import type { IndicatorInstance } from './types.ts'
 import { presetDefinitions } from './presets.ts'
 
 export interface IndicatorListToolOptions {
@@ -69,6 +70,9 @@ export function createIndicatorActivateTool(options: IndicatorActivateToolOption
       + 'The id must be a preset indicator or a custom indicator authored via indicator_author. '
       + 'Activating an already-active id updates its parameters in place (one instance per id). '
       + 'Optionally pass paramsJson to override schema defaults; values are clamped to each parameter\'s min/max. '
+      + 'Pass market AND symbol together to write a per-symbol parameter override (for indicators whose params are per-instrument): '
+      + 'the override replaces the global params when that instrument is on the chart; other instruments keep the global params. '
+      + 'Activating with a scope also makes the indicator visible again for that instrument (clears per-symbol and per-market hides). '
       + 'Use indicator_list to discover ids and parameter schemas.',
     parameters: {
       id: {
@@ -80,16 +84,31 @@ export function createIndicatorActivateTool(options: IndicatorActivateToolOption
         type: 'string',
         description: 'Optional JSON object of parameter overrides, e.g. {"fast":12,"slow":26,"signal":9}. Missing keys use schema defaults.',
       },
+      market: {
+        type: 'string',
+        description: 'Optional market vocabulary slug (crypto | us | cn | hk). Must be supplied together with symbol to write a per-symbol override.',
+      },
+      symbol: {
+        type: 'string',
+        description: 'Optional market-canonical symbol exactly as the chart uses it (e.g. "00700.HK", "002714.SZ", "AAPL"). Requires market.',
+      },
     },
     output: {
       schema: { type: 'string' },
       render: (_args, value) => [{ type: 'text', text: String(value) }],
     },
     async execute(raw) {
-      const args = (raw ?? {}) as { id?: unknown; paramsJson?: unknown }
+      const args = (raw ?? {}) as { id?: unknown; paramsJson?: unknown; market?: unknown; symbol?: unknown }
       const id = typeof args.id === 'string' ? args.id.trim() : ''
       if (!id) {
         throw new Error('indicator_activate: id is required')
+      }
+      const market = typeof args.market === 'string' ? args.market.trim() : ''
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      const scope = market !== '' && symbol !== '' ? symbolScopeKey(market, symbol) : undefined
+      if (scope === undefined && (market !== '' || symbol !== '')) {
+        return '[indicator_activate] market and symbol must be supplied together (or neither) — got market='
+          + JSON.stringify(market) + ', symbol=' + JSON.stringify(symbol)
       }
       const spec = await resolveIndicatorSpec(id, customStore)
       if (spec === undefined) {
@@ -118,12 +137,30 @@ export function createIndicatorActivateTool(options: IndicatorActivateToolOption
       }
 
       const params = clampActivationParams(spec.params, overrides)
-      await chartStore.activate({ id, params })
+      let instance: IndicatorInstance
+      if (scope !== undefined) {
+        // 按标的覆盖（issue #72）：保留全局 params 与其它标的的覆盖，只写本标的这套。
+        // 新实例的全局 params 取 schema 默认值——首个标的的覆盖不得泄漏成全局值。
+        // 显示语义：写覆盖同时清除该标的两级隐藏（symbol 级 + market 级）。
+        const existing = (await chartStore.list()).find(candidate => candidate.id === id)
+        const base: IndicatorInstance = withHiddenScopes(
+          withHiddenScopes(existing ?? { id, params: clampActivationParams(spec.params, {}) }, scope, true),
+          market,
+          true,
+        )
+        instance = { ...base, symbolParams: { ...(base.symbolParams ?? {}), [scope]: params } }
+      } else {
+        // 全局写：保留已有按标的覆盖（旧行为直接整体覆盖实例会把 symbolParams 抹掉）。
+        const existing = (await chartStore.list()).find(candidate => candidate.id === id)
+        instance = existing?.symbolParams !== undefined ? { id, params, symbolParams: existing.symbolParams } : { id, params }
+      }
+      await chartStore.activate(instance)
       onWritten?.(id)
 
       const paramText = spec.params.map(p => (p.key + '=' + params[p.key])).join(', ')
       return '[indicator_activate] Mounted "' + spec.title + '" (id: ' + id + ', pane: ' + spec.pane
-        + (paramText ? ', params: ' + paramText : '') + ') on the chart. '
+        + (paramText ? ', params: ' + paramText : '')
+        + (scope !== undefined ? ', scope: ' + scope + ' (per-symbol override)' : '') + ') on the chart. '
         + 'The GUI chart renders it live via the SSE invalidation channel.'
     },
   })
@@ -133,17 +170,22 @@ export interface IndicatorDeactivateToolOptions {
   chartStore: ChartActivationStore
   /** 可选：摘除成功后的回调（plugin 接线 emit('chart')）。 */
   onDeleted?: (id: string, removed: boolean) => void
+  /** 可选：按标的隐藏成功后的回调（plugin 接线 emit('chart')，同 activate 写入面）。 */
+  onWritten?: (id: string) => void
 }
 
-/** indicator_deactivate：把指标从用户图上摘除（定义保留在指标库）。 */
+/** indicator_deactivate：无 scope 全局卸载；带 scope（market 或 market+symbol）按标的隐藏。 */
 export function createIndicatorDeactivateTool(options: IndicatorDeactivateToolOptions) {
-  const { chartStore, onDeleted } = options
+  const { chartStore, onDeleted, onWritten } = options
   return defineTool({
     name: 'indicator_deactivate',
     description:
-      'Unmount an indicator from the user\'s open chart (roster refreshes live over SSE). '
-      + 'This only removes the active chart instance — the indicator definition stays in the library '
+      'Unmount an indicator from the user\'s open chart, or hide it for specific markets/instruments. '
+      + 'Without market/symbol: removes the active chart instance entirely — the indicator definition stays in the library '
       + '(use indicator_delete to remove a custom indicator definition entirely). '
+      + 'With market (optionally plus symbol): the instance stays active but is hidden for that whole market '
+      + '(e.g. hide an HK/CN-only indicator on us and crypto) or just that one instrument — '
+      + 'other scopes keep rendering it; indicator_activate with the same market+symbol shows it again. '
       + 'Use indicator_list to see the currently active roster.',
     parameters: {
       id: {
@@ -151,16 +193,50 @@ export function createIndicatorDeactivateTool(options: IndicatorDeactivateToolOp
         required: true,
         description: 'Indicator id to unmount from the chart',
       },
+      market: {
+        type: 'string',
+        description: 'Optional market slug (crypto | us | cn | hk). With market: hide instead of unmount — hides every instrument of that market.',
+      },
+      symbol: {
+        type: 'string',
+        description: 'Optional market-canonical symbol (requires market): hide only this one instrument (e.g. "AAPL").',
+      },
     },
     output: {
       schema: { type: 'string' },
       render: (_args, value) => [{ type: 'text', text: String(value) }],
     },
     async execute(raw) {
-      const args = (raw ?? {}) as { id?: unknown }
+      const args = (raw ?? {}) as { id?: unknown; market?: unknown; symbol?: unknown }
       const id = typeof args.id === 'string' ? args.id.trim() : ''
       if (!id) {
         throw new Error('indicator_deactivate: id is required')
+      }
+      const market = typeof args.market === 'string' ? args.market.trim() : ''
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      if (market === '' && symbol !== '') {
+        return '[indicator_deactivate] symbol requires market — got symbol=' + JSON.stringify(symbol)
+      }
+      if (market !== '') {
+        // 按标的隐藏：实例保留在名册，仅该作用域不渲染（其余标的照常）。
+        const existing = (await chartStore.list()).find(candidate => candidate.id === id)
+        if (existing === undefined) {
+          return JSON.stringify({
+            ok: false,
+            hidden: false,
+            note: '"' + id + '" has no active chart instance — nothing to hide (mount it with indicator_activate first).',
+          })
+        }
+        const scope = symbol !== '' ? symbolScopeKey(market, symbol) : market
+        await chartStore.activate(withHiddenScopes(existing, scope, false))
+        onWritten?.(id)
+        return JSON.stringify({
+          ok: true,
+          hidden: true,
+          note: 'Hid "' + id + '" for scope ' + JSON.stringify(scope)
+            + ' — the instance stays active and other scopes keep rendering it. '
+            + 'indicator_activate with the same market+symbol shows it again.',
+        })
       }
       const removed = await chartStore.deactivate(id)
       onDeleted?.(id, removed)

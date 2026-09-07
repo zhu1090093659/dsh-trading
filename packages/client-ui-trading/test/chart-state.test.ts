@@ -40,6 +40,50 @@ describe('chart-state store', () => {
     expect(store.instanceFor('rsi')).toEqual({ id: 'rsi', params: { n: 6 } })
   })
 
+  it('setParams 带 scopeKey 写按标的覆盖（issue #72）；全局写保留覆盖表', () => {
+    const store = makeStore()
+    // 已有全局实例 → 写覆盖不动全局 params
+    store.setParams('ma', { n1: 7 }, 'hk:00700.HK')
+    expect(store.instanceFor('ma')).toEqual({
+      id: 'ma',
+      params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 },
+      symbolParams: { 'hk:00700.HK': { n1: 7, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 } },
+    })
+    // 全局写保留覆盖
+    store.setParams('ma', { n1: 8 })
+    expect(store.instanceFor('ma')?.params.n1).toBe(8)
+    expect(store.instanceFor('ma')?.symbolParams?.['hk:00700.HK']?.n1).toBe(7)
+    // 未激活实例带 scopeKey → 补建全局默认 + 该标的覆盖
+    store.setParams('rsi', { n: 6 }, 'us:GOOGL')
+    expect(store.instanceFor('rsi')).toEqual({
+      id: 'rsi', params: { n: 14 }, symbolParams: { 'us:GOOGL': { n: 6 } },
+    })
+  })
+
+  it('setSymbolVisibility：symbol 级隐藏/显示，其它标的与全局 params 不受影响（symbol visibility）', () => {
+    const store = makeStore()
+    // 隐藏当前标的：实例保留，仅 hiddenScopes 记录
+    store.setSymbolVisibility('ma', 'us', 'AAPL', false)
+    expect(store.instanceFor('ma')).toEqual({
+      id: 'ma',
+      params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 },
+      hiddenScopes: ['us:AAPL'],
+    })
+    expect(store.isActive('ma')).toBe(true)
+    // 追加另一标的隐藏 → 再显示第一个：只清该标的，其余保留
+    store.setSymbolVisibility('ma', 'hk', '00700.HK', false)
+    store.setSymbolVisibility('ma', 'us', 'AAPL', true)
+    expect(store.instanceFor('ma')?.hiddenScopes).toEqual(['hk:00700.HK'])
+    // 逐个清空后字段整体消失
+    store.setSymbolVisibility('ma', 'hk', '00700.HK', true)
+    expect(store.instanceFor('ma')).toEqual({
+      id: 'ma', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 },
+    })
+    // 未激活 id：静默 no-op
+    store.setSymbolVisibility('rsi', 'us', 'AAPL', false)
+    expect(store.isActive('rsi')).toBe(false)
+  })
+
   it('未知 id 的 toggle/setParams 为无 default/clamp 原样落盘（防御手改 localStorage）', () => {
     const store = makeStore()
     store.togglePreset('ghost')

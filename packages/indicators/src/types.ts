@@ -66,4 +66,16 @@ export interface IndicatorDefinition {
 export interface IndicatorInstance {
   id: string
   params: Record<string, number>
+  /**
+   * 按标的参数覆盖（issue #72）：key 为 `${market}:${symbol}`（如 "hk:00700.HK"），
+   * 命中当前标的时该套参数整体替代全局 params。锚点类自定义指标（每标的一套
+   * 锚点参数）依赖此机制；无覆盖的标的回退全局 params。
+   */
+  symbolParams?: Record<string, Record<string, number>>
+  /**
+   * 按标的隐藏表：作用域键为「market」（整市场，如 "us"）或「${market}:${symbol}」
+   * （单标的，如 "hk:00700.HK"）。命中的标的不渲染该实例，其余标的跟随全局激活
+   * （默认可见，存量名册零迁移）。隐藏 ≠ 取消激活：实例仍在名册，只是对该标的不可见。
+   */
+  hiddenScopes?: string[]
 }

@@ -281,7 +281,15 @@ export function apply(ctx: ClientContext): void {
     inject: () => ({
       hooks: { selection, chart },
       toggleIndicator: (id) => { chart.togglePreset(id) },
-      setIndicatorParams: (id, params) => { chart.setParams(id, params) },
+      setIndicatorParams: (id, params, scopeKey) => { chart.setParams(id, params, scopeKey) },
+      // symbol visibility：scopeKey = "<market>:<symbol>"；缺省（无聚焦标的）忽略——
+      // QuoteStage 在该情形走 toggleIndicator 全局语义。
+      setIndicatorVisible: (id, visible, scopeKey) => {
+        const split = scopeKey !== undefined ? scopeKey.indexOf(':') : -1
+        if (scopeKey === undefined || split <= 0) return
+        chart.setSymbolVisibility(id, scopeKey.slice(0, split), scopeKey.slice(split + 1), visible)
+      },
+      removeIndicator: (id) => { if (chart.isActive(id)) chart.togglePreset(id) },
       deleteIndicator: async (id) => {
         const ok = await deleteCustomIndicator(id)
         if (ok) {
