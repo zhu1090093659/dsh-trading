@@ -13,8 +13,8 @@ async function root() { const dir = await mkdtemp(join(tmpdir(), 'trading-roles-
 afterEach(async () => { await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true }))) })
 const contributions = () => Promise.all([crypto(), us(), cn(), hk()])
 
-it('uses native loader stable-tree intercept and accepts empty config', () => {
-  expect(inject).toEqual({ loader: { await: true } })
+it('injects loader without waiting for the loader tree to become stable', () => {
+  expect(inject).toEqual({ loader: { await: false } })
   expect(Config({})).toEqual({})
 })
 

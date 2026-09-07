@@ -6,9 +6,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 
 export const name = 'dsh-trading-role-presets'
-// Native loader intercept: wait for imports and nested include trees before discovering markets.
-// Do not await loader.await() inside apply: that would include this plugin's own task.
-export const inject = { loader: { await: true } }
+// The preset installer needs the loader service, but must not wait for
+// loader-wide stability: this entry is itself part of the loader tree and
+// waiting for stability can create a startup dependency cycle.
+export const inject = { loader: { await: false } }
 export interface Config { presetRoot?: string }
 export const Config: Schema<Config> = Schema.object({ presetRoot: Schema.string() })
 export const DEFAULT_PRESET_ROOT = join(homedir(), '.dsh-trading-presets')
