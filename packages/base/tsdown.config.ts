@@ -2,7 +2,7 @@ import { defineConfig } from 'tsdown'
 
 // bundle 包无运行时 API，构建只为维持 files 白名单里的 lib 产物统一。
 export default defineConfig({
-  entry: ['src/index.ts', 'src/presets.ts', 'src/research-tools.ts', 'src/role-skills.ts'],
+  entry: ['src/index.ts', 'src/presets.ts', 'src/research-tools.ts', 'src/role-skills.ts', 'src/market-tools.ts'],
   outDir: 'lib',
   format: ['esm'],
   platform: 'node',

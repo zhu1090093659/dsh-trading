@@ -395,6 +395,15 @@ export class OkxTradeService extends Service implements TradeService {
     return this.config.env === 'demo'
   }
 
+  /**
+   * 运行环境自述（issue #86 / G1）：host 平面只读账户工具（base/market-tools）
+   * 鸭式读取本方法，把 demo/live 安全信号带进工具输出。api TradeService 契约
+   * 不声明它——可选扩展，缺席即省略该字段。
+   */
+  environment(): { env: string; simulated: boolean } {
+    return { env: String(this.config.env), simulated: this.simulated }
+  }
+
   private auth(credentials: OkxCredentials) {
     return { credentials, simulated: this.simulated }
   }
