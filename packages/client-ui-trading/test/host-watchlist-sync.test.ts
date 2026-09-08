@@ -167,17 +167,17 @@ describe('wireHostWatchlistSync · 分组（issue #82）', () => {
     const watchlists = createWatchlistStore()
     const selection = createSelectionStore()
     const groups = createWatchlistGroupsStore()
-    groups.upsertGroup({ id: 'g_local', name: '本地降级组', createdAt: 1 })
-    groups.setActiveGroup('g_local')
+    groups.upsertGroup({ id: 'g_1', name: 'host 也有', createdAt: 1 })
+    groups.setActiveGroup('g_1')
     apiMock.fetchHostWatchlistGroups.mockResolvedValue([
       { id: 'g_1', name: '核心仓', createdAt: 42 },
     ])
 
     wireHostWatchlistSync({ watchlists, selection, groups })
-    // 等待 host 值真正落到镜像（本地预置的 g_local 会让长度断言提前通过，必须等 id 翻转）。
-    await vi.waitFor(() => { expect(groups.getSnapshot().groups[0]?.id).toBe('g_1') })
+    // 等待 host 值真正落到镜像（本地预置同名 id 会提前命中，必须等 host 名字翻转）。
+    await vi.waitFor(() => { expect(groups.getSnapshot().groups[0]?.name).toBe('核心仓') })
     expect(groups.getSnapshot().groups[0]).toEqual({ id: 'g_1', name: '核心仓', createdAt: 42 })
-    expect(groups.getSnapshot().activeGroupId).toBe('g_local') // UI 态不被 host 覆盖
+    expect(groups.getSnapshot().activeGroupId).toBe('g_1') // UI 态不被 host 覆盖（host 表仍含该 id）
   })
 
   /** 等启动 boot 走到末步（selection 拉取在分组镜像 set 之后），避免异步 boot 覆盖用例写入。 */
@@ -265,3 +265,20 @@ describe('wireHostWatchlistSync · 分组（issue #82）', () => {
   })
 })
 
+
+describe('wireHostWatchlistSync · 活动分组悬挂防护（issue #82）', () => {
+  it('活动分组被别处删除（host 表里消失）→ SSE 重拉时 activeGroupId 归位 null', async () => {
+    const watchlists = createWatchlistStore()
+    const selection = createSelectionStore()
+    const groups = createWatchlistGroupsStore()
+    groups.upsertGroup({ id: 'g_x', name: '别处建的组', createdAt: 1 })
+    groups.setActiveGroup('g_x')
+    wireHostWatchlistSync({ watchlists, selection, groups })
+    await vi.waitFor(() => { expect(apiMock.fetchHostSelection).toHaveBeenCalled() })
+
+    apiMock.fetchHostWatchlistGroups.mockResolvedValue([]) // 组已在别处删除
+    apiMock.handlers['watchlists']?.()
+    await vi.waitFor(() => { expect(groups.getSnapshot().activeGroupId).toBeNull() })
+    expect(groups.getSnapshot().groups).toEqual([])
+  })
+})

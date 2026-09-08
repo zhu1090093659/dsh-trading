@@ -80,8 +80,14 @@ export function wireHostWatchlistSync(options: HostWatchlistSyncOptions): () => 
   const syncGroupsFromHost = async (): Promise<void> => {
     const hostGroups = await fetchHostWatchlistGroups()
     if (hostGroups !== null) {
+      const next = hostGroups as WatchlistGroupMeta[]
+      const { activeGroupId } = groups.getSnapshot()
+      // 活动分组被别处删除 → 归位「全部」（防悬挂 id 过滤出空视图）。
+      if (activeGroupId !== null && !next.some(group => group.id === activeGroupId)) {
+        groups.setActiveGroup(null)
+      }
       // 全量覆盖注册表镜像；activeGroupId 是本地 UI 态，原位保留。
-      groups.set({ ...groups.getSnapshot(), groups: hostGroups as WatchlistGroupMeta[] })
+      groups.set({ ...groups.getSnapshot(), groups: next })
     }
   }
 
