@@ -13,8 +13,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import os from 'node:os'
 import path from 'node:path'
+import { dshHomeDir } from '@dshtrading/dsh-home'
 import { buildGraph } from './graph.ts'
 import type { KnowledgeCardStore } from './types.ts'
 import { createFileKnowledgeCardStore } from './knowledge-fs.ts'
@@ -42,9 +42,9 @@ export interface TradingEventsPublisher {
   emit(store: 'knowledge'): void
 }
 
-/** 默认存储路径：~/.dsh/knowledge/cards.json（与 client-ui-trading 旧路径一致）。 */
+/** 默认存储路径：$DSH_HOME/knowledge/cards.json（缺省 ~/.dsh；与 client-ui-trading 同源解析）。 */
 export function defaultStorePath(): string {
-  return path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
+  return path.join(dshHomeDir(), 'knowledge', 'cards.json')
 }
 
 export interface KnowledgeGraphToolOptions {

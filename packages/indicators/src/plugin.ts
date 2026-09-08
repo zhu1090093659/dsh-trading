@@ -13,8 +13,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import os from 'node:os'
 import path from 'node:path'
+import { dshHomeDir } from '@dshtrading/dsh-home'
 import { createFileCustomIndicatorStore } from './custom-fs.ts'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from './custom.ts'
 import type { ChartActivationStore } from './chart-activations.ts'
@@ -43,14 +43,14 @@ export interface TradingEventsPublisher {
   emit(store: 'indicators' | 'chart'): void
 }
 
-/** 默认存储路径：~/.dsh/indicators/custom.json（与 client-ui-trading 旧路径一致）。 */
+/** 默认存储路径：$DSH_HOME/indicators/custom.json（缺省 ~/.dsh；与 client-ui-trading 同源解析）。 */
 export function defaultStorePath(): string {
-  return path.join(os.homedir(), '.dsh', 'indicators', 'custom.json')
+  return path.join(dshHomeDir(), 'indicators', 'custom.json')
 }
 
-/** 默认激活名册路径：~/.dsh/indicators/chart.json（issue #63）。 */
+/** 默认激活名册路径：$DSH_HOME/indicators/chart.json（issue #63）。 */
 export function defaultChartStorePath(): string {
-  return path.join(os.homedir(), '.dsh', 'indicators', 'chart.json')
+  return path.join(dshHomeDir(), 'indicators', 'chart.json')
 }
 
 export interface IndicatorDeleteToolOptions {

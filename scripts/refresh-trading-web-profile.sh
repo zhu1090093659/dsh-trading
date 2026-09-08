@@ -15,7 +15,9 @@
 
 set -euo pipefail
 
-PROFILE="$HOME/.dsh/profiles/trading-web"
+# dsh-trading 独立 home（2026-09-08 DSH_HOME 分离）；可用环境变量 DSH_HOME 覆盖。
+export DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
+PROFILE="$DSH_HOME/profiles/trading-web"
 HOST_ROOT="/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
 # 与宿主 CLI 树重叠、必须保持单一模块实例的核心包（模块级状态/Symbol 载体）。
 # 2026-09-02 扩充：profile-cohort-check 查出 router 构建产物内嵌 0.1.2-alpha.2 残留
@@ -52,5 +54,5 @@ for pkg in "${CORE_PKGS[@]}"; do
              -not -path "$HOST_ROOT/*" 2>/dev/null)
 done
 
-echo "== 完成。启动实例：cd <你的工作目录> && dsh --profile trading-web --port 3081 --no-open =="
+echo "== 完成。启动实例：cd <你的工作目录> && dsh-trading --profile trading-web --port 3081 --no-open =="
 echo "   （token 每次重启轮换，从启动日志取新值）"

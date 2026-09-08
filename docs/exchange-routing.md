@@ -24,7 +24,7 @@
 | 事实 | 依据 |
 |---|---|
 | `ctx.settings` 服务由 `@deepseek-ai/dsh-settings-file` 提供，挂在 **base bundle**（web 与 headless 都装） | 抽核 web-app/headless/base 三 bundle deps；`trading-dev` profile `--dump-config` 实证第 54-55 行 `id: settings / name: @deepseek-ai/dsh-settings-file` |
-| 用户文档 = 单个 YAML/JSON，`~/.dsh/settings.yaml`（本机已存在：llm-deepseek/llm-pi-ai/ui-onboarding/permission 各 namespace） | `packages/settings/settings-file` README + 本机文件 |
+| 用户文档 = 单个 YAML/JSON，`~/.dsh-trading/settings.yaml`（trading 独立 DSH_HOME，2026-09-08 起；本机已存在：llm-deepseek/llm-pi-ai/ui-onboarding/permission 各 namespace） | `packages/settings/settings-file` README + 本机文件 |
 | 注册：`settings.register(ns, schema, { base, applies })` → `SettingsScope`（get/update/replace/watch），注册绑插件 fiber，重复 ns 注册炸 | `docs/subsystems/settings.md` §Registration/§Owner scope |
 | 便捷封装：`installSettingsSection(ctx, ns, schema, entry, hooks)`——内部 `ctx.inject(['settings'])` + register + watch + set/onChange hooks；`settingsNamespace('kebab-case')` 校验品牌 | `packages/settings/settings/src/index.ts`（llm-pi-ai 即用此封装） |
 | 分层解析：schema 默认 → **组合层 base**（注册时传入）→ 用户层（文档），用户层赢；变更提交发 `settings/updated (ns, next, prev, source)`，deep-equal 不发射 | settings.md §Identity/§Change commits |
@@ -33,7 +33,7 @@
 | UI 写路径：browser 半包经 `ctx.remote.settings`/settingsController 写，redactSecrets 强制；外部插件需复刻 DSH 内部 client 构建（`tsdown.client.ts` lazy-CJS 工厂）——**本轮明确不做** | `packages/client/ui-settings-plugins/README.md` Known Limitations |
 
 **对 headless 的意义**：设置不是 web-only。headless 会话（spike-runner/trading-dev）
-同样经 base 挂 settings——改 `~/.dsh/settings.yaml` 即可让 headless 会话服从路由。
+同样经 base 挂 settings——改 `~/.dsh-trading/settings.yaml` 即可让 headless 会话服从路由。
 
 ---
 
@@ -42,7 +42,7 @@
 ### 2.1 图
 
 ```
-~/.dsh/settings.yaml
+~/.dsh-trading/settings.yaml
   dshtrading:
     markets:
       crypto: { provider: binance }     ← enum [binance, okx]，默认 binance
@@ -268,7 +268,7 @@ task-board 全局锁导致无法另起 web 实例验证；待用户重启 GUI �
 1. `pnpm -r build` + `pnpm -r test` 全绿（含 router 包单测：schema 默认、dict 键、
    enum 拒非法、remote 兼容不验证）。
 2. crypto-trader 单 preset：binance+okx 行 candidate；**crypto-trader-okx 删除**。
-3. 真机（trading-dev）：`~/.dsh/settings.yaml` 加 `dshtrading.markets.crypto.provider: okx`
+3. 真机（trading-dev）：`~/.dsh-trading/settings.yaml` 加 `dshtrading.markets.crypto.provider: okx`
    → 新建 crypto-trader 会话工具面 = OKX 全量（8 工具）+ 闸门 OKX 词汇；改回 binance →
    工具面回 Binance 4 工具。
 4. 未装 router 的旧组合（模拟）：连接器 enabled 语义照旧（向后兼容单测）。

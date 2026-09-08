@@ -207,7 +207,7 @@ importers:
         version: 0.3.16(react@18.3.1)
       '@xmanrui/dsh-im':
         specifier: ^4.11.0
-        version: 4.11.0
+        version: 4.11.0(debug@4.4.3)
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -426,6 +426,9 @@ importers:
       '@dshtrading/client-ui-strategies':
         specifier: workspace:^
         version: link:../client-ui-strategies
+      '@dshtrading/dsh-home':
+        specifier: workspace:^
+        version: link:../dsh-home
       '@dshtrading/eventbus':
         specifier: workspace:^
         version: link:../eventbus
@@ -499,6 +502,9 @@ importers:
 
   packages/client-ui-updater:
     dependencies:
+      '@dshtrading/dsh-home':
+        specifier: workspace:^
+        version: link:../dsh-home
       fflate:
         specifier: ^0.8.2
         version: 0.8.3
@@ -1070,6 +1076,21 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.12)
 
+  packages/dsh-home:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.12)
+
   packages/dsh-i18n:
     dependencies:
       '@dshtrading/client-ui-knowledge':
@@ -1153,6 +1174,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: ^3.18.2
         version: 3.18.2
+      '@dshtrading/dsh-home':
+        specifier: workspace:^
+        version: link:../dsh-home
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1191,6 +1215,9 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: 0.1.2-rc.1
         version: 0.1.2-rc.1(de5e1ff2d608fbe22667925341ad1dfc)
+      '@dshtrading/dsh-home':
+        specifier: workspace:^
+        version: link:../dsh-home
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -1340,6 +1367,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: ^3.18.2
         version: 3.18.2
+      '@dshtrading/dsh-home':
+        specifier: workspace:^
+        version: link:../dsh-home
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1387,6 +1417,9 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: 0.1.2-rc.1
         version: 0.1.2-rc.1(de5e1ff2d608fbe22667925341ad1dfc)
+      '@dshtrading/dsh-home':
+        specifier: workspace:^
+        version: link:../dsh-home
       '@dshtrading/indicators':
         specifier: workspace:*
         version: link:../indicators
@@ -1446,6 +1479,9 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: 0.1.2-rc.1
         version: 0.1.2-rc.1(de5e1ff2d608fbe22667925341ad1dfc)
+      '@dshtrading/dsh-home':
+        specifier: workspace:^
+        version: link:../dsh-home
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -5186,7 +5222,7 @@ snapshots:
       loupe: 3.2.1
       tinyrainbow: 2.0.0
 
-  '@wecom/aibot-node-sdk@1.0.7':
+  '@wecom/aibot-node-sdk@1.0.7(debug@4.4.3)':
     dependencies:
       axios: 1.20.0(debug@4.4.3)
       eventemitter3: 5.0.4
@@ -5197,11 +5233,11 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@xmanrui/dsh-im@4.11.0':
+  '@xmanrui/dsh-im@4.11.0(debug@4.4.3)':
     dependencies:
       '@tencent-connect/qqbot-connector': 1.2.0
       '@tencent-connect/qqbot-nodejs': 1.0.4
-      '@wecom/aibot-node-sdk': 1.0.7
+      '@wecom/aibot-node-sdk': 1.0.7(debug@4.4.3)
       dingtalk-stream: 2.1.4
       qrcode: 1.5.4
       undici: 7.29.0

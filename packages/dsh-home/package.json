@@ -1,0 +1,30 @@
+{
+  "name": "@dshtrading/dsh-home",
+  "description": "dsh home 根目录解析（$DSH_HOME 环境变量感知，缺省 ~/.dsh，对齐宿主 dsh-home-paths 语义）——dsh-trading 各包 home 数据文件的唯一路径来源",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

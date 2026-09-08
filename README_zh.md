@@ -96,13 +96,16 @@ base 安装器按实际启用的市场生成四种角色，支持只安装部分
 
 ```sh
 # 安装到独立 DSH profile（按需选择市场）
+# trading 走独立 DSH home（~/.dsh-trading），与主 dsh web home（~/.dsh）互不污染；
+# 全部 dsh-trading 包的数据路径都经 $DSH_HOME 解析
+export DSH_HOME=~/.dsh-trading
 dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtrading/us
 # …或全市场一次装齐
 dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtrading/us @dshtrading/cn @dshtrading/hk
 
 # 给该 profile 接上浏览器 UI（一次即可）：往 profile 清单的 dsh 核心层之后
 # 插入宿主内置 web 宿主层
-node -e "const f=require('os').homedir()+'/.dsh/profiles/trading-web/package.json',fs=require('fs'),m=JSON.parse(fs.readFileSync(f,'utf8'));m.dsh.profile.bundles.includes('@deepseek-ai/dsh-web-app')||m.dsh.profile.bundles.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(f,JSON.stringify(m,null,2)+'\n')"
+node -e "const f=(process.env.DSH_HOME||require('os').homedir()+'/.dsh')+'/profiles/trading-web/package.json',fs=require('fs'),m=JSON.parse(fs.readFileSync(f,'utf8'));m.dsh.profile.bundles.includes('@deepseek-ai/dsh-web-app')||m.dsh.profile.bundles.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(f,JSON.stringify(m,null,2)+'\n')"
 
 # 启动终端
 dsh --profile trading-web
