@@ -7,7 +7,9 @@
  *   桥的 GET /holdings、GET /fx 与 holdings_stage/holdings_list 共享同一缓存——
  *   client-ui-trading 桥侧经 ctx.get('tradingHoldings') 解包 .store/.fx，
  *   服务缺席回退自建，tradingKnowledgeCards 同款先例）；
- * - host 平面注册 `holdings_stage` / `holdings_list`（全会话可见）；
+ * - host 平面注册 `holdings_stage` / `holdings_confirm` / `holdings_discard` /
+ *   `holdings_add` / `holdings_update` / `holdings_remove` / `holdings_list`
+ *   （全会话可见；记账面全量可控，与下单闸门无关——契约 §5）；
  * - 写成功 emit tradingEvents('holdings')（issue #30 通道，SSE store 名 'holdings'）。
  */
 import type { Context } from '@deepseek-ai/cordis'
@@ -19,7 +21,15 @@ import type { HoldingsStore } from './types.ts'
 import type { FxService } from './fx.ts'
 import { createFxService } from './fx.ts'
 import { createFileHoldingsStore } from './store-fs.ts'
-import { createHoldingsListTool, createHoldingsStageTool } from './tool.ts'
+import {
+  createHoldingsAddTool,
+  createHoldingsConfirmTool,
+  createHoldingsDiscardTool,
+  createHoldingsListTool,
+  createHoldingsRemoveTool,
+  createHoldingsStageTool,
+  createHoldingsUpdateTool,
+} from './tool.ts'
 
 // 桥经本子路径取 file store 与 fx 服务工厂（knowledge/tool 同款再导出先例）。
 export { createFileHoldingsStore, createFxService }
@@ -63,9 +73,13 @@ export function registerHoldingsTools(ctx: Context, deps: HoldingsPluginDeps): v
     const register = (tool: ReturnType<typeof defineTool>) => {
       if (tools.get(tool.name) === undefined) tools.register(tool)
     }
-    register(createHoldingsStageTool(deps.store, {
-      onWritten: () => events()?.emit('holdings'),
-    }))
+    const onWritten = () => events()?.emit('holdings')
+    register(createHoldingsStageTool(deps.store, { onWritten }))
+    register(createHoldingsConfirmTool(deps.store, { onWritten }))
+    register(createHoldingsDiscardTool(deps.store, { onWritten }))
+    register(createHoldingsAddTool(deps.store, { onWritten }))
+    register(createHoldingsUpdateTool(deps.store, { onWritten }))
+    register(createHoldingsRemoveTool(deps.store, { onWritten }))
     register(createHoldingsListTool(deps.store))
   })
 }

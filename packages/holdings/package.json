@@ -1,6 +1,6 @@
 {
   "name": "@dshtrading/holdings",
-  "description": "Unified holdings ledger data plane for dsh-trading (issue #65): Holding model with staged/confirmed two-zone book store (atomic file + memory), frankfurter.dev FX service with cache degradation chain, and holdings_stage / holdings_list agent tools.",
+  "description": "Unified holdings ledger data plane for dsh-trading (issue #65): Holding model with staged/confirmed two-zone book store (atomic file + memory), frankfurter.dev FX service with cache degradation chain, and the full agent tool surface (holdings_stage / confirm / discard / add / update / remove / list).",
   "version": "0.1.6",
   "type": "module",
   "main": "lib/index.js",

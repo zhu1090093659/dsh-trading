@@ -5,8 +5,8 @@
  * 纯库包，零 Node.js 运行时依赖，浏览器端可安全打包（client-ui-trading
  * client 半的类型来源）。Node 端专用件请经子路径引用：
  *   - `@dshtrading/holdings/fx`：FX 汇率服务（frankfurter.dev + 缓存降级链）
- *   - `@dshtrading/holdings/tool`：holdings_stage / holdings_list 工具工厂
- *     （并再导出 createFileHoldingsStore）
+ *   - `@dshtrading/holdings/tool`：台账 agent 工具工厂（stage/confirm/discard/add/
+ *     update/remove/list；并再导出 createFileHoldingsStore）
  *   - `@dshtrading/holdings/plugin`：cordis 插件（并再导出 file store 与 fx 工厂）
  */
 export type {
