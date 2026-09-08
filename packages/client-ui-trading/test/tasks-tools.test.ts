@@ -12,7 +12,7 @@ import { createTasksTools, registerTasksTools } from '../src/tasks/tools.ts'
 
 type Tool = ReturnType<typeof createTasksTools>[number]
 
-/** 假 typertGateway：create 返回固定会话，其余空实现（launch 全链路不被断言）。 */
+/** 假 typertGateway：create 返回固定会话，名册含 master，其余空实现（launch 全链路不被断言）。 */
 function makeGateway() {
   const calls: string[] = []
   return {
@@ -20,11 +20,17 @@ function makeGateway() {
     gateway: {
       async invoke(request: { namespace: string; method: string }): Promise<unknown> {
         calls.push(request.namespace + '/' + request.method)
+        if (request.namespace === 'agentPresets') return { presets: [{ id: 'master' }] }
         if (request.method === 'create') return { sessionId: 'session-1' }
         return {}
       },
     },
   }
+}
+
+/** /permission 命令假派发面：创建默认钉住 workspace-write 后，launch 会真实走到它。 */
+function makeCommands() {
+  return { execute: async (): Promise<{ kind: string; text?: string }> => ({ kind: 'success', text: 'ok' }) }
 }
 
 const EXEC = undefined as unknown as Parameters<Tool['execute']>[1]
@@ -48,7 +54,7 @@ describe('tasks agent tools', () => {
     return new TradingTasksService({
       ledgerPath: join(dir, 'ledger-v1.json'),
       gateway: () => gateway,
-      commands: () => undefined,
+      commands: () => makeCommands(),
       workspaces: () => ({ list: () => [{ id: 'ws-main', name: 'Main' }] }),
     })
   }
@@ -124,7 +130,7 @@ describe('tasks agent tools', () => {
     const service = makeService()
     const tools = toolMap(service)
     await callTool(tools.get('tasks_create')!, {
-      title: '交易任务', prompt: 'p', permission: 'workspace-write', taskId: 't-gated',
+      title: '交易任务', prompt: 'p', permission: 'danger-full-access', taskId: 't-gated',
     })
     const run = await callTool(tools.get('tasks_run')!, { taskId: 't-gated' })
     expect(run).toMatchObject({ ok: false, code: 'TASKS_PERMISSION_PENDING' })
@@ -168,14 +174,24 @@ describe('tasks agent tools', () => {
     expect(conflict).toMatchObject({ ok: false, code: 'TASKS_REQUEST_CONFLICT' })
   })
 
-  it('tasks_meta：工作区名册鸭子解析自宿主面，确认门基准缺省 read-only', async () => {
+  it('tasks_create 未钉住预设/权限 → 落大师 + workspace-write 默认', async () => {
+    const service = makeService()
+    const tools = toolMap(service)
+    const out = await callTool(tools.get('tasks_create')!, { title: '默认任务', prompt: 'p', taskId: 't-defaults' })
+    expect(out.ok).toBe(true)
+    const task = (out.snapshot as { tasks: Array<Record<string, unknown>> }).tasks[0]
+    expect(task.agentPreset).toBe('master')
+    expect(task.permission).toBe('workspace-write')
+  })
+
+  it('tasks_meta：工作区名册鸭子解析自宿主面，确认门基准缺省 workspace-write', async () => {
     const tools = toolMap(makeService())
     const meta = (await callTool(tools.get('tasks_meta')!)).meta as {
       workspaces: Array<{ id: string; name?: string }>
       sessionDefaultPermission: string
     }
     expect(meta.workspaces).toEqual([{ id: 'ws-main', name: 'Main' }])
-    expect(meta.sessionDefaultPermission).toBe('read-only')
+    expect(meta.sessionDefaultPermission).toBe('workspace-write')
   })
 
   it('registerTasksTools：注入 tools 注册并按名去重，已有工具不覆盖', () => {

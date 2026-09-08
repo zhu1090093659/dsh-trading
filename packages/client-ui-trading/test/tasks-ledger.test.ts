@@ -45,8 +45,23 @@ describe('TasksLedger', () => {
     expect(() => env.ledger.apply(createAction('t2', { schedule: { enabled: true, cron: 'nope' } }) as never)).toThrowError(/invalid cron/)
   })
 
+  it('create 未钉住预设/权限时落插件默认：大师 + workspace-write，且不触发确认门', () => {
+    env.ledger.apply(createAction('t-defaults') as never)
+    const task = env.ledger.snapshot().tasks.find(item => item.id === 't-defaults')
+    expect(task?.agentPreset).toBe('master')
+    expect(task?.permission).toBe('workspace-write')
+    // 默认权限 == 会话默认基准：无需人工确认即可运行。
+    const opened = env.ledger.openRun('t-defaults', 'manual')
+    expect(opened.taskId).toBe('t-defaults')
+  })
+
+  it('create 显式空串 agentPreset 同样落大师默认', () => {
+    env.ledger.apply(createAction('t-empty-preset', { agentPreset: '' }) as never)
+    expect(env.ledger.snapshot().tasks.find(item => item.id === 't-empty-preset')?.agentPreset).toBe('master')
+  })
+
   it('高于会话默认权限的任务进入确认门：run 拒绝 → confirm 后放行', () => {
-    env.ledger.apply(createAction('t3', { permission: 'workspace-write' }) as never)
+    env.ledger.apply(createAction('t3', { permission: 'danger-full-access' }) as never)
     expect(() => env.ledger.apply({ requestId: 'r1', action: { kind: 'run', taskId: 't3' } } as never)).toThrowError(/awaits permission confirmation/)
     env.ledger.apply({ requestId: 'r2', action: { kind: 'confirm-permission', taskId: 't3' } } as never)
     const applied = env.ledger.apply({ requestId: 'r3', action: { kind: 'run', taskId: 't3' } } as never)
@@ -56,9 +71,9 @@ describe('TasksLedger', () => {
   })
 
   it('变更钉住权限重新武装确认门', () => {
-    env.ledger.apply(createAction('t4', { permission: 'workspace-write' }) as never)
+    env.ledger.apply(createAction('t4', { permission: 'danger-full-access' }) as never)
     env.ledger.apply({ requestId: 'a', action: { kind: 'confirm-permission', taskId: 't4' } } as never)
-    env.ledger.apply({ requestId: 'b', action: { kind: 'update', taskId: 't4', patch: { permission: 'danger-full-access' } } } as never)
+    env.ledger.apply({ requestId: 'b', action: { kind: 'update', taskId: 't4', patch: { permission: 'workspace-write' } } } as never)
     const task = env.ledger.snapshot().tasks.find(item => item.id === 't4')
     expect(task?.permissionConfirmedAt).toBeUndefined()
   })

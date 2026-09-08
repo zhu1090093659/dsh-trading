@@ -22,6 +22,7 @@ function makeGateway() {
     async invoke(request: { namespace: string; method: string; args: Record<string, unknown> }): Promise<unknown> {
       calls.push({ namespace: request.namespace, method: request.method })
       const request0 = (request.args.request ?? request.args._request ?? {}) as Record<string, unknown>
+      if (request.namespace === 'agentPresets') return { presets: [{ id: 'master' }] }
       if (request.method === 'create') {
         sequence += 1
         const id = 'session-' + String(sequence)
@@ -76,6 +77,8 @@ describe('TradingTasksService', () => {
     const service = new TradingTasksService({
       ledgerPath: join(dir, 'ledger-v1.json'),
       gateway: () => gateway,
+      // 创建默认钉住 workspace-write 后，launch 会对执行会话应用 /permission。
+      commands: () => ({ execute: async () => ({ kind: 'success', text: 'ok' }) }),
       tickMs: options.tickMs ?? 1_000,
       pollMs: 500,
     })

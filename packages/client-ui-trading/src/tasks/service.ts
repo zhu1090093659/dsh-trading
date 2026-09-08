@@ -37,7 +37,7 @@ export interface TradingTasksServiceOptions {
   workspaces?: () => WorkspaceDirectoryLike | undefined
   /** 账本每次提交后的失效信号回调（桥层接 SSE emit('tasks')）。 */
   onEvent?: () => void
-  /** 会话默认权限（确认门基准）；缺省 read-only。 */
+  /** 会话默认权限（确认门基准）；缺省 workspace-write。 */
   sessionDefaultPermission?: TaskPermission
   /** 可注入时钟与节奏（测试）。 */
   now?: () => number

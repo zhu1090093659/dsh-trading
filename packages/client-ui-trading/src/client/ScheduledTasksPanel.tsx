@@ -9,6 +9,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { isValidCron, nextRunAtMs } from './tasks-schedule.ts'
 import {
+  DEFAULT_SESSION_PERMISSION,
+  DEFAULT_TASK_AGENT_PRESET,
+  DEFAULT_TASK_PERMISSION,
   permissionPending,
   TASK_PERMISSIONS,
   type TaskPermission,
@@ -84,7 +87,7 @@ export function ScheduledTasksPanel({ t, openSession, close }: ScheduledTasksPan
   }, [])
 
   const tasks = [...(snapshot?.tasks ?? [])].sort((a, b) => b.updatedAt - a.updatedAt)
-  const defaultPermission = snapshot?.sessionDefaultPermission ?? 'read-only'
+  const defaultPermission = snapshot?.sessionDefaultPermission ?? DEFAULT_SESSION_PERMISSION
 
   return (
     <div className={css.tasksPanel} data-dshtrading-tasks-panel="" role="panel" aria-label={t('tasks.open')}>
@@ -227,8 +230,10 @@ function TaskEditor({ t, meta, task, onDone, onCancel }: TaskEditorProps) {
   const [scheduleEnabled, setScheduleEnabled] = useState(task?.schedule?.enabled ?? true)
   const [cron, setCron] = useState(task?.schedule?.cron ?? '0 9 * * *')
   const [workspaceId, setWorkspaceId] = useState(task?.workspaceId ?? '')
-  const [agentPreset, setAgentPreset] = useState(task?.agentPreset ?? '')
-  const [permission, setPermission] = useState<string>(task?.permission ?? '')
+  // 新建落插件默认（大师 + workspace-write，与账本 taskFromInput 的缺省一致，
+  // 表单所见即所存）；编辑既有任务保留其存储值，未钉住仍显示「跟随默认」。
+  const [agentPreset, setAgentPreset] = useState(task === undefined ? DEFAULT_TASK_AGENT_PRESET : task.agentPreset ?? '')
+  const [permission, setPermission] = useState<string>(task === undefined ? DEFAULT_TASK_PERMISSION : task.permission ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
 
@@ -360,9 +365,9 @@ function TaskEditor({ t, meta, task, onDone, onCancel }: TaskEditorProps) {
       <label className={css.formLabel}>
         {t('tasks.field.permission')}
         <select className={css.formSelect} value={permission} onChange={event => { setPermission(event.target.value) }}>
-          {/* value='' = 不显式指定（跟随会话默认）；标签拼默认值与全量枚举区分，
-              否则默认 read-only 时与 TASK_PERMISSIONS 的 read-only 文本撞车。 */}
-          <option value="">{`${t('tasks.permission.default')} (${meta === null ? 'read-only' : meta.sessionDefaultPermission})`}</option>
+          {/* value='' = 不显式指定（新建落插件默认，编辑清除钉住回宿主默认）；
+              标签拼基准值与全量枚举区分，否则基准在枚举内时与同文本选项撞车。 */}
+          <option value="">{`${t('tasks.permission.default')} (${meta === null ? DEFAULT_SESSION_PERMISSION : meta.sessionDefaultPermission})`}</option>
           {TASK_PERMISSIONS.map(item => (
             <option key={item} value={item}>{item}</option>
           ))}

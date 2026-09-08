@@ -121,16 +121,17 @@ export function createTasksCreateTool(service: TradingTasksService) {
     description:
       '新建定时任务：到点由宿主自动开新 dsh 会话执行 prompt（关闭浏览器照跑）。'
       + '给 cron = 定时任务（如「0 9 * * *」每日 09:00）；不给 cron = 仅手动运行（配 tasks_run）。'
-      + '钉住 workspaceId/agentPreset 前先 tasks_meta 查名册。'
-      + '钉住权限高于会话默认（默认 read-only）的任务需人工在右侧栏 UI 确认后才会运行。'
+      + '缺省落插件默认：agentPreset=master（大师）、permission=workspace-write（有写入权限，启动时应用）。'
+      + '钉住 workspaceId/其他 agentPreset 前先 tasks_meta 查名册。'
+      + '钉住权限高于会话默认（workspace-write）的任务（如 danger-full-access）需人工在右侧栏 UI 确认后才会运行。'
       + '勿创建分钟级高频任务：每轮都是真实会话，持续消耗 API 额度。',
     parameters: {
       title: { type: 'string', required: true, description: '任务短标题（≤200 字符；会话重命名同款文案）' },
       prompt: { type: 'string', required: true, description: '到点发给新会话的完整任务 prompt（≤64KiB）' },
       cron: { type: 'string', description: '5 段 cron：分 时 日 月 周（宿主本地时区，如「30 8 * * 1-5」= 工作日 08:30）；缺省 = 不排期仅手动运行' },
       workspaceId: { type: 'string', description: '执行工作区 id（tasks_meta 查名册）；缺省 = 执行时最近工作区回退' },
-      agentPreset: { type: 'string', description: '执行会话的 agent 预设 id（tasks_meta 查名册）；缺省 = 部署默认' },
-      permission: { type: 'string', enum: TASK_PERMISSIONS, description: '执行会话权限预设（/permission 词汇）。缺省 = 会话默认（read-only）；钉住更高权限需人工在右侧栏 UI 确认后才会运行' },
+      agentPreset: { type: 'string', description: '执行会话的 agent 预设 id（tasks_meta 查名册）；缺省 = master（大师）' },
+      permission: { type: 'string', enum: TASK_PERMISSIONS, description: '执行会话权限预设（/permission 词汇）。缺省 = workspace-write（插件默认，启动时应用）；钉住更高权限（danger-full-access）需人工在右侧栏 UI 确认后才会运行' },
       taskId: { type: 'string', description: '可选自定义任务 id（重试安全：同 id 重复创建返回 TASKS_ID_EXISTS 而非重复建）；缺省自动生成' },
       requestId: { type: 'string', description: '可选幂等键（非空 ≤64 字符）；缺省自动生成' },
     },

@@ -28,8 +28,18 @@ export const TASK_PERMISSIONS = ['read-only', 'workspace-write', 'danger-full-ac
 /** 单个权限预设 id。 */
 export type TaskPermission = (typeof TASK_PERMISSIONS)[number]
 
-/** 未钉住权限时的会话默认（交易宿主保守取 read-only）。 */
-export const DEFAULT_SESSION_PERMISSION: TaskPermission = 'read-only'
+/** 未钉住权限时的会话默认（确认门基准；交易宿主取 workspace-write——日常任务
+ * 默认可写，只有 danger-full-access 仍走人工确认门）。 */
+export const DEFAULT_SESSION_PERMISSION: TaskPermission = 'workspace-write'
+
+/** 新建任务未钉住 agent 预设时的插件默认：大师（多 agent 团队主导者）。 */
+export const DEFAULT_TASK_AGENT_PRESET = 'master' as const
+
+/**
+ * 新建任务未钉住权限时的插件默认。必须有值落盘（钉住）：runner 只对钉住权限
+ * 执行 /permission——缺省会话回退宿主默认（read-only），拿不到写入。
+ */
+export const DEFAULT_TASK_PERMISSION: TaskPermission = 'workspace-write'
 
 /** 权限等级比较：高于会话默认的钉住权限必须经人工确认才能运行。 */
 export function permissionRank(permission: TaskPermission): number {

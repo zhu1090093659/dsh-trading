@@ -90,7 +90,7 @@ describe('/dshtrading/api/tasks 子面', () => {
     expect(JSON.parse(snapshot.body)).toMatchObject({ schemaVersion: 1, tasks: [] })
     const meta = await request(route, { url: '/dshtrading/api/tasks/meta' })
     expect(meta.status).toBe(200)
-    expect(JSON.parse(meta.body)).toMatchObject({ sessionDefaultPermission: 'read-only', workspaces: [], agentPresets: [] })
+    expect(JSON.parse(meta.body)).toMatchObject({ sessionDefaultPermission: 'workspace-write', workspaces: [], agentPresets: [] })
   })
 
   it('POST /tasks/action：非法信封 400，合法 create 落账本并回快照', async () => {

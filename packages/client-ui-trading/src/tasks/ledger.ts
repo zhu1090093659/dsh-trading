@@ -16,6 +16,8 @@ import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readF
 import { dirname } from 'node:path'
 import {
   DEFAULT_SESSION_PERMISSION,
+  DEFAULT_TASK_AGENT_PRESET,
+  DEFAULT_TASK_PERMISSION,
   hasOpenExecution,
   permissionPending,
   retainRecentExecutions,
@@ -115,7 +117,11 @@ function armSchedule(rule: { enabled: boolean; cron: string }, now: number): Sch
   return { enabled: true, cron: rule.cron, nextRunAt: nextRunAtMs(rule.cron, now), lastTriggeredAt: undefined }
 }
 
-/** 由新建输入落一条任务记录（id/时间戳由账本盖）。 */
+/**
+ * 由新建输入落一条任务记录（id/时间戳由账本盖）。未钉住 agent 预设/权限时落
+ * 插件默认（大师 + workspace-write，2026-09-08 起）：钉住必须落盘——runner 只
+ * 对钉住权限执行 /permission，缺省会话回退宿主默认，拿不到写入。
+ */
 function taskFromInput(id: string, input: NewTaskInput, now: number): TaskRecord {
   return {
     id,
@@ -126,8 +132,8 @@ function taskFromInput(id: string, input: NewTaskInput, now: number): TaskRecord
     executions: [],
     ...(input.schedule?.enabled === true ? { schedule: armSchedule(input.schedule, now) } : {}),
     ...(input.workspaceId === undefined || input.workspaceId === '' ? {} : { workspaceId: input.workspaceId }),
-    ...(input.agentPreset === undefined || input.agentPreset === '' ? {} : { agentPreset: input.agentPreset }),
-    ...(input.permission === undefined ? {} : { permission: input.permission }),
+    agentPreset: input.agentPreset === undefined || input.agentPreset === '' ? DEFAULT_TASK_AGENT_PRESET : input.agentPreset,
+    permission: input.permission ?? DEFAULT_TASK_PERMISSION,
   }
 }
 
@@ -207,7 +213,7 @@ export interface AppliedAction {
 }
 
 export interface TasksLedgerOptions {
-  /** 会话默认权限（确认门基准）；缺省 read-only。 */
+  /** 会话默认权限（确认门基准）；缺省 workspace-write。 */
   sessionDefaultPermission?: TaskPermission
   /** 可注入时钟（测试）。 */
   now?: () => number
