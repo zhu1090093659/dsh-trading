@@ -41,7 +41,7 @@ export { isBuiltinStrategyId, isBuiltinScreenerId } from './management.ts'
 export { validateCustomStrategyNode, validateCustomScreenerNode } from './validate-node.ts'
 import { compileStrategySource } from './validate.ts'
 import { nodeScreenerEvaluateRunner, validateCustomStrategyNode, validateCustomScreenerNode } from './validate-node.ts'
-import type { BacktestResult, StrategyDefinition, StrategyHorizon, StrategyParamSpec } from './types.ts'
+import type { BacktestResult, Kline, StrategyDefinition, StrategyHorizon, StrategyParamSpec } from './types.ts'
 import type { ScreenerColumnSpec, ScreenerDefinition } from './screeners/types.ts'
 
 /** Cordis 插件名 = patch 行 id（TEMPLATES §8），市场无关共享行命名空间。 */
