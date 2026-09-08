@@ -1,22 +1,26 @@
 /**
  * 富途式市场/自选面板（内容组件，由 MarketDock 停靠在左缘）：
- * 顶部自选分组与折叠按钮 + 胶囊市场页签 + 表头 + 三段式自选标的列表 +
- * 底部设置入口（3.0 自右缘竖条迁入，MarketDock 注入 openSettings）。
- * 点击行 = 选中标的并切到行情模式（QuotePane 消费）；
- * 行内嵌迷你面积走势（当日/最近交易日分钟线，分钟线不可用时降级日 K）+ 最新价 + 涨跌幅
- * （红涨绿跌）。行情批量轮询、页面隐藏时暂停。
+ * 顶部自选分组下拉（全部/自定义分组/创建分组/自选管理，issue #82）+ 折叠按钮 +
+ * 胶囊市场页签 + 表头 + 三段式自选标的列表 + 底部设置入口。
+ * 点击行 = 选中标的并切到行情模式（QuotePane 消费）；行内嵌迷你面积走势 +
+ * 最新价 + 涨跌幅（红涨绿跌）。行情批量轮询、页面隐藏时暂停。
+ * 分组视图（issue #82）：标题下拉选分组后列表按归属过滤（跨市场）；添加标的
+ * 直落入组；行 ✕ 仅移出分组；行 hover 分组按钮可勾选切换多归属。
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers } from './api.ts'
 import { searchAllMarkets, searchSymbols, setDynamicCatalog, updateDynamicCatalog } from './symbol-catalog.ts'
-import type { MarketLocaleKey } from './contract.ts'
+import type { Observable, SelectionState, WatchlistGroupOpResult, WatchlistGroupsState, Watchlists } from './store.ts'
+import { rowsFor } from './store.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { intradayCandidates, intradayRequest, selectIntradaySeries } from './intraday-series.ts'
 import { colorModeStore } from './color-mode.ts'
+import { MARKET_TAB_KEY, normalizeSymbolInput } from './market-vocab.ts'
 import { Sparkline } from './Sparkline.tsx'
-import { IconChevronDown, IconFoldPanel, IconSettings } from './icons.tsx'
-import { rowsFor, type Observable, type SelectionState, type Watchlists } from './store.ts'
+import { IconChevronDown, IconFolder, IconFoldPanel, IconSettings } from './icons.tsx'
+import { GroupMenu, GroupMembershipPopover, type GroupCreateOutcome } from './WatchlistGroups.tsx'
+import { WatchlistManager } from './WatchlistManager.tsx'
 import type { Instrument, MarketId, MarketInfo, ReferenceSeries, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
 import css from './market-sidebar.module.css'
@@ -28,8 +32,10 @@ export interface MarketSidebarInjected {
   hooks: {
     selection: Observable<SelectionState>
     watchlists: Observable<Watchlists>
+    /** 自定义分组（issue #82）：注册表镜像 + activeGroupId UI 态。 */
+    groups: Observable<WatchlistGroupsState>
   }
-  /** 写路径：加入某市场自选。 */
+  /** 写路径：加入某市场自选（instrument.groups 直落归属）。 */
   addInstrument(market: MarketId, instrument: Instrument): void
   /** 写路径：移除。 */
   removeInstrument(market: MarketId, symbol: string): void
@@ -37,6 +43,13 @@ export interface MarketSidebarInjected {
   selectInstrument(instrument: Instrument): void
   /** 打开官方设置弹层（3.0 起入口在本面板底部；MarketDock 注入转发）。 */
   openSettings(): void
+  /** 分组写路径（issue #82，host-first 由 wireHostWatchlistSync 接管）。 */
+  createGroup(name: string): Promise<WatchlistGroupOpResult>
+  renameGroup(id: string, name: string): Promise<WatchlistGroupOpResult>
+  deleteGroup(id: string): Promise<boolean>
+  assignGroupMember(id: string, market: string, symbol: string, member: boolean, name?: string): Promise<boolean>
+  /** 切活动分组过滤（null = 全部；本地 UI 态，localStorage 持久化）。 */
+  setActiveGroup(id: string | null): void
 }
 
 export type MarketSidebarProps =
@@ -51,25 +64,18 @@ const PRICE_POLL_MS = 8000
 const SERIES_POLL_MS = 60 * 1000
 const DAILY_FALLBACK_LIMIT = 32
 
-const TAB_KEY: Record<MarketId, MarketLocaleKey> = {
-  crypto: 'tab.crypto',
-  us: 'tab.us',
-  cn: 'tab.cn',
-  hk: 'tab.hk',
-}
-
-const KNOWN_SH_INDICES = new Set(['000688', '000300', '000016', '000905', '000852'])
-
 /** 标的行键（market:symbol）。 */
 export function rowKey(market: string, symbol: string): string {
   return `${market}:${symbol}`
 }
 
 export function MarketSidebar({
-  t, useSelection, useWatchlists, addInstrument, removeInstrument, selectInstrument, onFold, openSettings, updateAvailable,
+  t, useSelection, useWatchlists, useGroups, addInstrument, removeInstrument, selectInstrument, onFold, openSettings,
+  createGroup, renameGroup, deleteGroup, assignGroupMember, setActiveGroup, updateAvailable,
 }: MarketSidebarProps) {
   const selection = useSelection(value => value.instrument)
   const watchlists = useWatchlists(value => value)
+  const groupState = useGroups(value => value)
   const [tab, setTab] = useState<MarketTab>('watch')
   const [markets, setMarkets] = useState<MarketInfo[] | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -78,7 +84,13 @@ export function MarketSidebar({
   const [draft, setDraft] = useState('')
   const [addMarket, setAddMarket] = useState<MarketId>('crypto')
   const [catalogVersion, setCatalogVersion] = useState(0)
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false)
+  const [managerOpen, setManagerOpen] = useState(false)
+  const [rowGroupMenu, setRowGroupMenu] = useState<string | null>(null)
   const colorMode = useSyncExternalStore(colorModeStore.subscribe, colorModeStore.getSnapshot)
+
+  const activeGroupId = groupState.activeGroupId
+  const activeGroup = activeGroupId !== null ? groupState.groups.find(group => group.id === activeGroupId) ?? null : null
 
   const reloadMarkets = useRef((): void => {})
   reloadMarkets.current = () => {
@@ -105,15 +117,29 @@ export function MarketSidebar({
   }, [tab])
 
   const availableMarkets = markets ?? []
+  // 全量行（市场页签与分组视图共用基数；分组计数也基于它）。
+  const allRows = useMemo(() => {
+    const all: Instrument[] = []
+    for (const info of availableMarkets) all.push(...rowsFor(watchlists, info.id))
+    return all
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markets, watchlists])
+
   const rows = useMemo(() => {
-    if (tab === 'watch') {
-      const all: Instrument[] = []
-      for (const info of availableMarkets) all.push(...rowsFor(watchlists, info.id))
-      return all
-    }
+    // 分组视图：跨市场按归属过滤（issue #82）。
+    if (activeGroupId !== null) return allRows.filter(row => row.groups?.includes(activeGroupId))
+    if (tab === 'watch') return allRows
     return rowsFor(watchlists, tab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, markets, watchlists])
+  }, [allRows, tab, activeGroupId, watchlists])
+
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const row of allRows) {
+      for (const id of row.groups ?? []) counts.set(id, (counts.get(id) ?? 0) + 1)
+    }
+    return counts
+  }, [allRows])
 
   const rowsKey = rows.map(row => rowKey(row.market, row.symbol)).join('|')
 
@@ -267,17 +293,41 @@ export function MarketSidebar({
 
   const tabs: { id: MarketTab; label: string }[] = [
     { id: 'watch', label: t('tab.watch') },
-    ...availableMarkets.map(info => ({ id: info.id as MarketTab, label: t(TAB_KEY[info.id]) })),
+    ...availableMarkets.map(info => ({ id: info.id as MarketTab, label: t(MARKET_TAB_KEY[info.id]) })),
   ]
+
+  const selectTab = (next: MarketTab): void => {
+    setTab(next)
+    setDraft('')
+    // 分组视图与市场页签互斥：点页签即回到市场视图（清活动分组）。
+    if (activeGroupId !== null) setActiveGroup(null)
+  }
+
+  const createGroupFromMenu = async (name: string): Promise<GroupCreateOutcome> => {
+    const result = await createGroup(name)
+    if (result.ok) {
+      setActiveGroup(result.group.id)
+      setTab('watch')
+      return 'created'
+    }
+    return result.reason === 'duplicate' ? 'duplicate' : 'failed'
+  }
 
   return (
     <div className={css.root} data-dshtrading-market-sidebar="">
-      {/* 顶部标题区：自选下拉组 + 折叠按钮 */}
+      {/* 顶部标题区：分组下拉（issue #82）+ 折叠按钮 */}
       <div className={css.topBar}>
-        <div className={css.titleGroup} title={t('tab.watch')}>
-          <span>{t('tab.watch')}</span>
+        <button
+          type="button"
+          className={css.titleGroup}
+          title={activeGroup !== null ? activeGroup.name : t('tab.watch')}
+          aria-haspopup="menu"
+          aria-expanded={groupMenuOpen}
+          onClick={() => { setGroupMenuOpen(open => !open); setRowGroupMenu(null) }}
+        >
+          <span>{activeGroup !== null ? activeGroup.name : t('tab.watch')}</span>
           <IconChevronDown size={12} />
-        </div>
+        </button>
         {onFold !== undefined && (
           <button
             type="button"
@@ -290,18 +340,35 @@ export function MarketSidebar({
           </button>
         )}
       </div>
+      {groupMenuOpen && (
+        <GroupMenu
+          t={t}
+          groups={groupState.groups}
+          activeGroupId={activeGroupId}
+          allCount={allRows.length}
+          countOf={id => groupCounts.get(id) ?? 0}
+          onSelect={(id) => {
+            setActiveGroup(id)
+            setTab('watch')
+            setDraft('')
+          }}
+          onCreate={createGroupFromMenu}
+          onOpenManager={() => { setManagerOpen(true); setRowGroupMenu(null) }}
+          onClose={() => setGroupMenuOpen(false)}
+        />
+      )}
 
-      {/* 市场胶囊 Tab 条 */}
-      <div className={css.tabs} role="tablist" aria-label={t('sidebar.markets')}>
+      {/* 市场胶囊 Tab 条（分组视图下置灰，点任一页签回到市场视图） */}
+      <div className={css.tabs} role="tablist" aria-label={t('sidebar.markets')} data-muted={activeGroupId !== null ? 'true' : undefined}>
         {tabs.map(entry => (
           <button
             key={entry.id}
             type="button"
             role="tab"
-            aria-selected={entry.id === tab}
+            aria-selected={entry.id === tab && activeGroupId === null}
             className={css.tab}
-            data-active={entry.id === tab ? 'true' : undefined}
-            onClick={() => { setTab(entry.id); setDraft('') }}
+            data-active={entry.id === tab && activeGroupId === null ? 'true' : undefined}
+            onClick={() => { selectTab(entry.id); setRowGroupMenu(null) }}
           >
             {entry.label}
           </button>
@@ -315,10 +382,24 @@ export function MarketSidebar({
         </div>
       )}
 
-      {/* 添加标的表单 */}
+      {/* 添加标的表单（分组视图下添加直落入组，issue #82） */}
       {(() => {
         const target: MarketId | null = tab === 'watch' ? addMarket : tab
         if (target === null) return null
+        const submitAdd = (market: MarketId, symbol: string, name: string | undefined): void => {
+          const item: Instrument = {
+            market,
+            symbol,
+            ...(name !== undefined ? { name } : {}),
+            ...(activeGroupId !== null ? { groups: [activeGroupId] } : {}),
+          }
+          addInstrument(market, item)
+          selectInstrument(item)
+          if (activeGroupId === null && tab !== 'watch' && tab !== market) {
+            setTab(market)
+          }
+          setDraft('')
+        }
         return (
           <form className={css.addRow} onSubmit={(event) => {
             event.preventDefault()
@@ -333,35 +414,13 @@ export function MarketSidebar({
               (s.name && s.name.toUpperCase().startsWith(raw))
             ) ?? (suggestions.length > 0 ? suggestions[0] : undefined)
 
-            let symbol: string
-            let market: MarketId
-            let name: string | undefined
-
             if (match) {
-              symbol = match.symbol
-              market = match.market ?? target
-              name = match.name
-            } else {
-              // 防呆：若输入包含中文但未在任何市场字典或在线检索中找到标的，杜绝将纯中文当作 symbol 提交导致后端报错
-              if (/[\u4e00-\u9fa5]/.test(rawDraft)) return
-              market = target
-              if (target === 'cn' && /^\d{6}$/.test(raw)) {
-                const isSh = raw.startsWith('6') || raw.startsWith('9') || raw.startsWith('5') || KNOWN_SH_INDICES.has(raw)
-                symbol = `${raw}.${isSh ? 'SH' : 'SZ'}`
-              } else if (target === 'hk' && /^\d{1,5}$/.test(raw)) {
-                symbol = `${raw.padStart(5, '0')}.HK`
-              } else {
-                symbol = raw
-              }
+              submitAdd(match.market ?? target, match.symbol, match.name)
+              return
             }
-
-            const item: Instrument = { market, symbol, ...(name ? { name } : {}) }
-            addInstrument(market, item)
-            selectInstrument(item)
-            if (tab !== 'watch' && tab !== market) {
-              setTab(market)
-            }
-            setDraft('')
+            // 防呆：若输入包含中文但未在任何市场字典或在线检索中找到标的，杜绝将纯中文当作 symbol 提交导致后端报错
+            if (/[\u4e00-\u9fa5]/.test(rawDraft)) return
+            submitAdd(target, normalizeSymbolInput(target, rawDraft), undefined)
           }}>
             {tab === 'watch' && (
               <button
@@ -374,7 +433,7 @@ export function MarketSidebar({
                   setAddMarket(order[(index + 1) % order.length] ?? 'crypto')
                 }}
               >
-                {t(TAB_KEY[addMarket])}
+                {t(MARKET_TAB_KEY[addMarket])}
               </button>
             )}
             <input
@@ -394,19 +453,11 @@ export function MarketSidebar({
                     aria-selected="true"
                     className={css.suggestion}
                     onMouseDown={(e) => { e.preventDefault() }}
-                    onClick={() => {
-                      const item: Instrument = { market: entry.market, symbol: entry.symbol, name: entry.name }
-                      addInstrument(entry.market, item)
-                      selectInstrument(item)
-                      if (tab !== 'watch' && tab !== entry.market) {
-                        setTab(entry.market)
-                      }
-                      setDraft('')
-                    }}
+                    onClick={() => { submitAdd(entry.market, entry.symbol, entry.name) }}
                   >
                     <span className={css.suggestionSymbol}>{entry.symbol}</span>
                     <span className={css.suggestionName}>{entry.name}</span>
-                    <span className={css.suggestionMarket}>{t(TAB_KEY[entry.market])}</span>
+                    <span className={css.suggestionMarket}>{t(MARKET_TAB_KEY[entry.market])}</span>
                   </button>
                 ))}
               </div>
@@ -426,7 +477,7 @@ export function MarketSidebar({
       {rows.length === 0 && !loadError
         ? (
             <div className={css.empty}>
-              {tab === 'watch' ? t('sidebar.emptyHint') : t('sidebar.empty')}
+              {activeGroupId !== null ? t('group.emptyHint') : (tab === 'watch' ? t('sidebar.emptyHint') : t('sidebar.empty'))}
             </div>
           )
         : (
@@ -441,6 +492,7 @@ export function MarketSidebar({
                 const pct = changePercent(price, ticker?.prevClose ?? ref?.prevClose)
                 const up = (pct ?? 0) >= 0
                 const selected = selection !== null && selection.market === row.market && selection.symbol === row.symbol
+                const memberOf = row.groups ?? []
                 return (
                   <button
                     key={key}
@@ -463,7 +515,7 @@ export function MarketSidebar({
                       </span>
                       <span className={css.codeRow}>
                         <span className={css.code}>{row.symbol}</span>
-                        {tab === 'watch' && <span className={css.marketTag}>{t(TAB_KEY[row.market])}</span>}
+                        {(tab === 'watch' || activeGroupId !== null) && <span className={css.marketTag}>{t(MARKET_TAB_KEY[row.market])}</span>}
                       </span>
                     </span>
                     <span className={css.spark}>
@@ -475,11 +527,39 @@ export function MarketSidebar({
                     </span>
                     <span
                       role="button"
-                      aria-label={t('row.remove')}
+                      aria-label={t('row.group')}
+                      title={t('row.group')}
+                      className={css.rowGroupBtn}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setGroupMenuOpen(false)
+                        setRowGroupMenu(current => (current === key ? null : key))
+                      }}
+                    >
+                      <IconFolder size={13} />
+                    </span>
+                    {rowGroupMenu === key && (
+                      <GroupMembershipPopover
+                        t={t}
+                        groups={groupState.groups}
+                        memberOf={memberOf}
+                        onToggle={(gid, member) => { void assignGroupMember(gid, row.market, row.symbol, member, row.name) }}
+                        onClose={() => setRowGroupMenu(null)}
+                      />
+                    )}
+                    <span
+                      role="button"
+                      aria-label={activeGroupId !== null ? t('group.remove') : t('row.remove')}
+                      title={activeGroupId !== null ? t('group.remove') : t('row.remove')}
                       className={css.remove}
                       onClick={(event) => {
                         event.stopPropagation()
-                        removeInstrument(row.market, row.symbol)
+                        if (activeGroupId !== null) {
+                          // 分组视图：✕ 仅移出分组（标的保留在自选）。
+                          void assignGroupMember(activeGroupId, row.market, row.symbol, false, row.name)
+                        } else {
+                          removeInstrument(row.market, row.symbol)
+                        }
                       }}
                     >
                       ✕
@@ -489,6 +569,22 @@ export function MarketSidebar({
               })}
             </div>
           )}
+
+      {/* 自选管理弹窗（issue #82，富途参考图 2） */}
+      {managerOpen && (
+        <WatchlistManager
+          t={t}
+          useWatchlists={useWatchlists}
+          useWatchlistGroups={useGroups}
+          addInstrument={addInstrument}
+          removeInstrument={removeInstrument}
+          createGroup={createGroup}
+          renameGroup={renameGroup}
+          deleteGroup={deleteGroup}
+          assignGroupMember={assignGroupMember}
+          onClose={() => setManagerOpen(false)}
+        />
+      )}
 
       {/* 底部设置入口（3.0 自右缘竖条迁入）：沉底栏 + 更新提示点。 */}
       <div className={css.footBar}>

@@ -20,7 +20,7 @@ import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { IndicatorRegistry } from '@dshtrading/indicators'
 import type { Instrument, MarketId } from './types.ts'
 import { validateCustomIndicatorAsync } from '@dshtrading/indicators'
-import { createSelectionStore, createWatchlistStore } from './store.ts'
+import { createSelectionStore, createWatchlistGroupsStore, createWatchlistStore } from './store.ts'
 import { createChartStateStore } from './chart-state.ts'
 import { indicators, markCustomIndicator, unmarkCustomIndicator } from './indicator-registry.ts'
 import { stageViews } from './stage-views.ts'
@@ -67,6 +67,7 @@ export function apply(ctx: ClientContext): void {
 
   const selection = createSelectionStore()
   const watchlists = createWatchlistStore()
+  const watchlistGroups = createWatchlistGroupsStore()
   const chart = createChartStateStore(indicators)
   const sessions = ctx.sessions as unknown as ISessions
 
@@ -176,7 +177,9 @@ export function apply(ctx: ClientContext): void {
 
   // 自选股 host SSOT 同步（issue #32）：启动同步 + 一次性迁移 + 变更 host-first
   // 接管（add/remove/select 写 host 成功后才更新本地）+ SSE 双通道刷新。
-  wireHostWatchlistSync({ watchlists, selection })
+  // 分组扩展（issue #82）：groups 的 create/rename/delete/assignMember 同步被
+  // 接管为 host-first；注册表启动拉取 + SSE 'watchlists' 一并重拉。
+  wireHostWatchlistSync({ watchlists, selection, groups: watchlistGroups })
 
   // 图表激活名册 host SSOT 同步（issue #63）：agent 经 indicator_activate/
   // deactivate 写 host → SSE 'chart' → 图表即时点亮；GUI 挂载/摘除/调参同样
@@ -191,12 +194,19 @@ export function apply(ctx: ClientContext): void {
     order: 10,
     locale: NS,
     inject: () => ({
-      hooks: { selection, watchlists, marketFolded },
+      hooks: { selection, watchlists, marketFolded, groups: watchlistGroups },
       addInstrument: (market: MarketId, instrument: Instrument) => { watchlists.add(market, instrument) },
       removeInstrument: (market: MarketId, symbol: string) => { watchlists.remove(market, symbol) },
       selectInstrument: (instrument: Instrument) => { selection.select(instrument) },
       toggleFold: toggleMarketFold,
       openSettings,
+      // 分组写路径（issue #82）：实现已由 wireHostWatchlistSync 接管为 host-first。
+      createGroup: (name: string) => watchlistGroups.create(name),
+      renameGroup: (id: string, name: string) => watchlistGroups.rename(id, name),
+      deleteGroup: (id: string) => watchlistGroups.delete(id),
+      assignGroupMember: (id: string, market: string, symbol: string, member: boolean, name?: string) =>
+        watchlistGroups.assignMember(id, market, symbol, member, name),
+      setActiveGroup: (id: string | null) => { watchlistGroups.setActiveGroup(id) },
     }),
   }, MarketDock))
 

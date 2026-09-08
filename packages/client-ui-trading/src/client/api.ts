@@ -473,8 +473,15 @@ export async function resetScreener(id: string): Promise<{ ok: boolean; changed:
 /* 自选股 + 选中标的（issue #32 / P3）：host store 为 SSOT                  */
 /* ------------------------------------------------------------------ */
 
-/** host 侧自选行（WatchlistsMap：market → 行数组；不含客户端种子回退）。 */
-export type HostWatchlists = Record<string, Array<{ market: string; symbol: string; name?: string }>>
+/** host 侧自选行（WatchlistsMap：market → 行数组；不含客户端种子回退；groups = 分组 id 多归属）。 */
+export type HostWatchlists = Record<string, Array<{ market: string; symbol: string; name?: string; groups?: string[] }>>
+
+/** host 侧自定义分组（issue #82 wire 形状）。 */
+export interface HostWatchlistGroup {
+  id: string
+  name: string
+  createdAt: number
+}
 
 /** 读取 host 自选全量（启动同步与 SSE 重拉）。 */
 export async function fetchHostWatchlists(): Promise<HostWatchlists> {
@@ -487,8 +494,8 @@ export async function fetchHostWatchlists(): Promise<HostWatchlists> {
   }
 }
 
-/** 追加一行（POST /watchlists）。 */
-export async function addHostWatchlistRow(instrument: { market: string; symbol: string; name?: string }): Promise<boolean> {
+/** 追加一行（POST /watchlists；groups 供分组视图下添加直落归属）。 */
+export async function addHostWatchlistRow(instrument: { market: string; symbol: string; name?: string; groups?: string[] }): Promise<boolean> {
   try {
     const response = await fetch('/dshtrading/api/watchlists', {
       method: 'POST',
@@ -552,6 +559,102 @@ export async function putHostSelection(instrument: { market: string; symbol: str
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ instrument }),
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean }
+    return wire.ok === true
+  } catch {
+    return false
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 自定义分组（issue #82）：注册表 CRUD + 行级 membership                   */
+/* ------------------------------------------------------------------ */
+
+/** 读取分组注册表（GET /watchlist-groups；桥缺席/失败 → null，调用方维持现状）。 */
+export async function fetchHostWatchlistGroups(): Promise<HostWatchlistGroup[] | null> {
+  try {
+    const wire = await getJson<{ ok: boolean; groups: HostWatchlistGroup[] }>('/dshtrading/api/watchlist-groups')
+    return Array.isArray(wire.groups) ? wire.groups : []
+  } catch {
+    return null
+  }
+}
+
+/** 创建分组（POST /watchlist-groups）；同名业务拒绝 → 'duplicate'。 */
+export async function createHostWatchlistGroup(name: string): Promise<{ ok: true; group: HostWatchlistGroup } | { ok: false; reason: 'duplicate' | 'unavailable' }> {
+  try {
+    const response = await fetch('/dshtrading/api/watchlist-groups', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    if (!response.ok) return { ok: false, reason: 'unavailable' }
+    const wire = await response.json() as { ok?: boolean; group?: HostWatchlistGroup }
+    if (wire.ok === true && wire.group !== undefined) return { ok: true, group: wire.group }
+    return { ok: false, reason: 'duplicate' }
+  } catch {
+    return { ok: false, reason: 'unavailable' }
+  }
+}
+
+/** 重命名分组（PUT /watchlist-groups）。 */
+export async function renameHostWatchlistGroup(id: string, name: string): Promise<{ ok: true; group: HostWatchlistGroup } | { ok: false; reason: 'duplicate' | 'not-found' | 'unavailable' }> {
+  try {
+    const response = await fetch('/dshtrading/api/watchlist-groups', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, name }),
+    })
+    if (!response.ok) return { ok: false, reason: 'unavailable' }
+    const wire = await response.json() as { ok?: boolean; group?: HostWatchlistGroup }
+    if (wire.ok === true && wire.group !== undefined) return { ok: true, group: wire.group }
+    return { ok: false, reason: 'duplicate' }
+  } catch {
+    return { ok: false, reason: 'unavailable' }
+  }
+}
+
+/** 删除分组（DELETE /watchlist-groups?id=；host 同步剥离所有行上的归属）。 */
+export async function deleteHostWatchlistGroup(id: string): Promise<boolean> {
+  try {
+    const query = new URLSearchParams({ id })
+    const response = await fetch(`/dshtrading/api/watchlist-groups?${query.toString()}`, {
+      method: 'DELETE',
+      headers: { accept: 'application/json' },
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean }
+    return wire.ok === true
+  } catch {
+    return false
+  }
+}
+
+/** 加入分组（POST /watchlist-group-members；行缺席 host 自动物化）。 */
+export async function addHostWatchlistGroupMember(id: string, market: string, symbol: string, name?: string): Promise<boolean> {
+  try {
+    const response = await fetch('/dshtrading/api/watchlist-group-members', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, market, symbol, ...(name !== undefined ? { name } : {}) }),
+    })
+    if (!response.ok) return false
+    const wire = await response.json() as { ok?: boolean }
+    return wire.ok === true
+  } catch {
+    return false
+  }
+}
+
+/** 移出分组（DELETE /watchlist-group-members?id&market&symbol）。 */
+export async function removeHostWatchlistGroupMember(id: string, market: string, symbol: string): Promise<boolean> {
+  try {
+    const query = new URLSearchParams({ id, market, symbol })
+    const response = await fetch(`/dshtrading/api/watchlist-group-members?${query.toString()}`, {
+      method: 'DELETE',
+      headers: { accept: 'application/json' },
     })
     if (!response.ok) return false
     const wire = await response.json() as { ok?: boolean }

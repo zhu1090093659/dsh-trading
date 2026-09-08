@@ -218,3 +218,32 @@ export function IconWallet({ size = 16 }: { size?: number }): ReactElement {
     </svg>
   )
 }
+
+/** 勾选（分组选中态）。 */
+export function IconCheck({ size = 12 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.25 8.5 6.5 11.75 12.75 4.75" />
+    </svg>
+  )
+}
+
+/** 分组（文件夹）。 */
+export function IconFolder({ size = 14 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 4.25A1.25 1.25 0 0 1 3.25 3h3l1.5 1.75h5A1.25 1.25 0 0 1 14 6v6a1.25 1.25 0 0 1-1.25 1.25H3.25A1.25 1.25 0 0 1 2 12z" />
+    </svg>
+  )
+}
+
+/** 自选管理（列表 + 滑杆，富途管理入口近似形）。 */
+export function IconManageList({ size = 14 }: { size?: number }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.75 4h6M2.75 8h4M2.75 12h6" />
+      <path d="M12.25 2.75v10.5" />
+      <circle cx="12.25" cy="5.5" r="1.4" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}

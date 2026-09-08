@@ -1,6 +1,7 @@
 /* MarketSidebar —— 富途牛牛风格左侧自选面板（胶囊Tab + 三段式行结构 + 表头）。 */
 
 .root {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -11,7 +12,7 @@
   box-sizing: border-box;
 }
 
-/* 顶部标题区：自选下拉 + 折叠按钮 */
+/* 顶部标题区：分组下拉（按钮化）+ 折叠按钮 */
 .topBar {
   display: flex;
   align-items: center;
@@ -21,14 +22,26 @@
 }
 
 .titleGroup {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  margin: -2px -4px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 14px;
   font-weight: 700;
+  font-family: inherit;
   color: var(--dsw-futu-text-primary, #1a1e24);
+  border-radius: var(--dsw-futu-radius-sm, 4px);
   cursor: pointer;
   user-select: none;
+  transition: background 0.15s;
+}
+
+.titleGroup:hover {
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.05));
 }
 
 .foldBtn {
@@ -88,6 +101,146 @@
   color: var(--dsw-futu-text-primary, #1a1e24);
   font-weight: 600;
   background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
+}
+
+/* 分组视图下市场页签降透明（视图互斥提示，点击即回市场视图） */
+.tabs[data-muted='true'] {
+  opacity: 0.5;
+}
+
+/* 标题分组下拉（issue #82，富途参考图 1） */
+.groupMenu {
+  position: absolute;
+  top: 38px;
+  left: 10px;
+  width: 188px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  box-sizing: border-box;
+  background: var(--dsw-futu-bg-surface, #ffffff);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  border-radius: var(--dsw-futu-radius-md, 6px);
+  box-shadow: var(--dsw-futu-shadow-md, 0 4px 14px rgba(0, 0, 0, 0.08));
+}
+
+.groupMenuItem {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  border-radius: var(--dsw-futu-radius-sm, 4px);
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.groupMenuItem:hover {
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.groupMenuItem[data-active='true'] {
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.groupMenuItem[data-active='true'] svg {
+  color: var(--dsw-futu-up, #e64545);
+}
+
+.groupMenuItemLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupMenuItemCount {
+  font-size: 10.5px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  font-variant-numeric: tabular-nums;
+}
+
+.groupMenuDivider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--dsw-futu-border-subtle, #edf0f3);
+}
+
+/* 下拉内创建分组的内联表单 */
+.groupCreateForm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px;
+}
+
+.groupCreateInput {
+  height: 26px;
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  border-radius: var(--dsw-futu-radius-md, 6px);
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-family: inherit;
+  background: var(--dsw-futu-bg-surface, #f7f8fa);
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.groupCreateInput:focus {
+  outline: none;
+  background: var(--dsw-futu-bg-base, #ffffff);
+  border-color: var(--dsw-futu-border-active, #3b82f6);
+}
+
+.groupCreateError {
+  font-size: 10.5px;
+  color: var(--dsw-futu-up, #e64545);
+}
+
+.groupCreateActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.groupCreateCancel {
+  appearance: none;
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  background: var(--dsw-futu-bg-surface, #ffffff);
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  border-radius: var(--dsw-futu-radius-sm, 4px);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.groupCreateOk {
+  appearance: none;
+  border: none;
+  background: var(--dsw-futu-accent, #3b82f6);
+  color: #ffffff;
+  border-radius: var(--dsw-futu-radius-sm, 4px);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.groupCreateOk:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* 添加标的表单 */
@@ -367,6 +520,113 @@
   opacity: 1 !important;
   background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
   color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+/* 行 hover 分组按钮（✕ 左侧，同款 hover 显现） */
+.rowGroupBtn {
+  position: absolute;
+  top: 4px;
+  right: 24px;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: var(--dsw-futu-radius-xs, 3px);
+  background: transparent;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  opacity: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.row:hover .rowGroupBtn {
+  opacity: 0.6;
+}
+
+.rowGroupBtn:hover {
+  opacity: 1 !important;
+  background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+/* 行级分组归属弹层（多归属勾选切换） */
+.groupPop {
+  position: absolute;
+  top: 44px;
+  right: 6px;
+  width: 156px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  box-sizing: border-box;
+  background: var(--dsw-futu-bg-surface, #ffffff);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  border-radius: var(--dsw-futu-radius-md, 6px);
+  box-shadow: var(--dsw-futu-shadow-md, 0 4px 14px rgba(0, 0, 0, 0.12));
+}
+
+.groupPopHead {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  font-size: 10.5px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.groupPopClose {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  margin-left: auto;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--dsw-futu-radius-xs, 3px);
+  cursor: pointer;
+}
+
+.groupPopClose:hover {
+  background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
+}
+
+.groupPopItem {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  box-sizing: border-box;
+  border-radius: var(--dsw-futu-radius-sm, 4px);
+  font-size: 11.5px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.groupPopItem:hover {
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.groupPopItem svg {
+  color: var(--dsw-futu-up, #e64545);
+}
+
+.groupPopEmpty {
+  padding: 8px 6px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--dsw-futu-text-muted, #8e95a3);
 }
 
 .empty {

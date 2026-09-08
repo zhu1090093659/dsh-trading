@@ -15,13 +15,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import path from 'node:path'
 import { dshHomeDir } from '@dshtrading/dsh-home'
-import { createMemorySelectionStore, createMemoryWatchlistStore } from './index.ts'
+import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore } from './index.ts'
 import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from './index.ts'
 import { effectiveWatchlistRows, WATCHLIST_SEEDS, watchlistRowSource } from './seeds.ts'
-import { createFileSelectionStore, createFileWatchlistStore } from './file-store.ts'
+import { createFileSelectionStore, createFileWatchlistGroupsStore, createFileWatchlistStore } from './file-store.ts'
 
 // 桥（client-ui-trading node 半）经本子路径取 file store（knowledge/tool 同款再导出先例）。
-export { createFileSelectionStore, createFileWatchlistStore }
+export { createFileSelectionStore, createFileWatchlistGroupsStore, createFileWatchlistStore }
 
 /** Cordis 插件名 = patch 行 id（TEMPLATES §8），市场无关共享行命名空间。 */
 export const name = 'dsh-trading-watchlist'
@@ -36,6 +36,11 @@ export function defaultWatchlistStorePath(): string {
 
 export function defaultSelectionStorePath(): string {
   return path.join(dshHomeDir(), 'selection.json')
+}
+
+/** 默认分组注册表路径：$DSH_HOME/watchlist-groups.json（issue #82）。 */
+export function defaultWatchlistGroupsStorePath(): string {
+  return path.join(dshHomeDir(), 'watchlist-groups.json')
 }
 
 /** tradingEvents 的最小发布面（鸭式；总线缺席时静默降级）。 */

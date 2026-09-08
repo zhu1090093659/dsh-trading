@@ -13,7 +13,7 @@ import { MarketSidebar } from './MarketSidebar.tsx'
 import type { FoldStore } from './fold-store.ts'
 import { IconFoldPanel, IconQuotes, IconSettings, IconWatchlist } from './icons.tsx'
 import { fetchUpdateBadge } from './api.ts'
-import type { Observable, SelectionState, Watchlists } from './store.ts'
+import type { Observable, SelectionState, WatchlistGroupOpResult, WatchlistGroupsState, Watchlists } from './store.ts'
 import type { Instrument, MarketId } from './types.ts'
 import css from './market-dock.module.css'
 
@@ -22,6 +22,8 @@ export interface MarketDockInjected {
     selection: Observable<SelectionState>
     watchlists: Observable<Watchlists>
     marketFolded: FoldStore
+    /** 自定义分组（issue #82）：注册表镜像 + activeGroupId UI 态。 */
+    groups: Observable<WatchlistGroupsState>
   }
   addInstrument(market: MarketId, instrument: Instrument): void
   removeInstrument(market: MarketId, symbol: string): void
@@ -29,6 +31,12 @@ export interface MarketDockInjected {
   toggleFold(): void
   /** 打开官方设置弹层（index.ts 注入：程序化 click 退役列内的官方触发器）。 */
   openSettings(): void
+  /** 分组写路径（issue #82；MarketSidebar 消费，Dock 原样转发）。 */
+  createGroup(name: string): Promise<WatchlistGroupOpResult>
+  renameGroup(id: string, name: string): Promise<WatchlistGroupOpResult>
+  deleteGroup(id: string): Promise<boolean>
+  assignGroupMember(id: string, market: string, symbol: string, member: boolean, name?: string): Promise<boolean>
+  setActiveGroup(id: string | null): void
 }
 
 export type MarketDockProps =
