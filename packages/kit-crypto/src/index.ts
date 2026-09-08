@@ -5,7 +5,7 @@
  *   1. skill provider：crypto-risk-checklist、crypto-instrument-analysis、indicator-authoring、trading-strategy-paradigms、knowledge-curation 与 trading-notes-setup 随包分发；
  *   2. crypto_funding_rate（Binance 公共资金费率）；
  *   3. crypto_get_news（动态聚合新闻）；
- *   4. crypto_get_derivatives 与 crypto_get_fundamentals 工具；
+ *   4. crypto_get_derivatives、crypto_get_derivatives_history 与 crypto_get_fundamentals 工具；
  *   5. indicator_author 创作工具（Issue #19）；
  *   6. knowledge_ingest 与 knowledge_search 知识库工具（Issue #24）。
  *
@@ -25,6 +25,7 @@ import {
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import type { DerivativesHistory, MarketDataService } from '@dshtrading/api'
 import { aggregateNews, deriveSymbolTokens, type AggregateNewsOptions } from './news.js'
 import { fetchCryptoDerivatives, renderDerivativesData } from './derivatives.js'
 import { fetchCryptoFundamentals, renderCryptoFundamentals } from './fundamentals.js'
@@ -282,6 +283,12 @@ export function apply(ctx: Context, config: Config): void {
   registerOnce(createGetDerivativesTool())
   registerOnce(createGetFundamentalsTool())
 
+  // issue #86 / 审计缺口卡 G8：crypto_get_derivatives_history —— 数据源是路由选中的
+  // crypto 行情服务（registry-first，惰性解析：settings 切换 provider 即刻生效）。
+  // 工具无条件注册，调用期裁决：registry 缺席/无激活 provider 抛 TRADING_NO_PROVIDER，
+  // 服务缺可选方法抛 TRADING_NOT_IMPLEMENTED（绝不返回空数组冒充「无数据」）。
+  registerOnce(createGetDerivativesHistoryTool({ getRegistry: () => resolveCryptoMarketDataRegistry(ctx) }))
+
   // issue #33 收口：indicator_author / knowledge_ingest / knowledge_search 已迁移至
   // @dshtrading/indicators/plugin 与 @dshtrading/knowledge/plugin（base patch 行，
   // host 平面单点注册）；crypto_get_indicators 由 connector-binance/okx 注册，kit 不重复。
@@ -328,6 +335,122 @@ export function createGetDerivativesTool(options: { fetch?: typeof globalThis.fe
       }
       const result = await fetchCryptoDerivatives({ symbol, fetch: options.fetch })
       return renderDerivativesData(result, symbol)
+    },
+  })
+}
+
+/* ── crypto_get_derivatives_history：路由行情服务的衍生品历史序列（#86 / G8） ─────── */
+
+const DERIVATIVES_HISTORY_MIN_LIMIT = 1
+const DERIVATIVES_HISTORY_MAX_LIMIT = 200
+
+/** 行情注册表最小形状（与 @dshtrading/router 的 MarketDataRegistryLike 同构）。 */
+interface CryptoMarketDataRegistry {
+  active(market: string): { provider: string; service: MarketDataService } | undefined
+}
+
+/** registry-first 解析（惰性：每次调用重新读取，路由切换即刻生效；老部署无此服务则 undefined）。 */
+function resolveCryptoMarketDataRegistry(ctx: Context): CryptoMarketDataRegistry | undefined {
+  return (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketDataRegistry', false) as
+    | CryptoMarketDataRegistry
+    | undefined
+}
+
+function parseDerivativesHistoryLimit(raw: unknown): number | undefined {
+  if (raw === undefined || raw === null) return undefined
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+    throw new Error(
+      `crypto_get_derivatives_history: invalid limit ${JSON.stringify(raw)} — limit must be a number in ${DERIVATIVES_HISTORY_MIN_LIMIT}..${DERIVATIVES_HISTORY_MAX_LIMIT}`,
+    )
+  }
+  const limit = Math.trunc(raw)
+  if (limit < DERIVATIVES_HISTORY_MIN_LIMIT || limit > DERIVATIVES_HISTORY_MAX_LIMIT) {
+    throw new Error(
+      `crypto_get_derivatives_history: invalid limit ${raw} — limit must be in ${DERIVATIVES_HISTORY_MIN_LIMIT}..${DERIVATIVES_HISTORY_MAX_LIMIT}`,
+    )
+  }
+  return limit
+}
+
+/**
+ * 衍生品历史序列工具（只读）。数据源恒为路由选中的 crypto 行情服务，不直连交易所：
+ * 与 crypto_get_derivatives 的硬编码 Binance 数据源不一致（审计既存项）有意不复刻。
+ */
+export function createGetDerivativesHistoryTool(options: { getRegistry: () => CryptoMarketDataRegistry | undefined }) {
+  return defineTool({
+    name: 'crypto_get_derivatives_history',
+    description:
+      'Read-only. Get the derivatives history series for a crypto perpetual contract — funding-rate history and open-interest history, both time-ascending (oldest first) — '
+      + 'from the currently routed crypto market data provider (registry-first; never a hardcoded exchange). '
+      + 'The returned symbol is the provider-canonical form. '
+      + `Optional limit keeps only the most recent N points per series (${DERIVATIVES_HISTORY_MIN_LIMIT}-${DERIVATIVES_HISTORY_MAX_LIMIT}) and reports truncatedTo. `
+      + 'If the routed provider does not implement getDerivativesHistory the call fails with TRADING_NOT_IMPLEMENTED — an empty series is never substituted for "no data"; '
+      + 'if no crypto provider is routed it fails with TRADING_NO_PROVIDER.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'Perpetual contract symbol, market-canonical vocabulary, e.g. BTCUSDT or BTCUSDT-SWAP',
+      },
+      limit: {
+        type: 'number',
+        description: `Keep only the most recent N points per series (${DERIVATIVES_HISTORY_MIN_LIMIT}-${DERIVATIVES_HISTORY_MAX_LIMIT}). Omit to return the provider's full series.`,
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown; limit?: unknown }
+      const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      if (!symbol) {
+        throw new Error('crypto_get_derivatives_history: symbol parameter is required (e.g. BTCUSDT or BTCUSDT-SWAP)')
+      }
+      const limit = parseDerivativesHistoryLimit(args.limit)
+
+      const entry = options.getRegistry()?.active('crypto')
+      if (entry === undefined) {
+        throw new Error(
+          'crypto_get_derivatives_history: TRADING_NO_PROVIDER — no crypto market data provider is active (market data registry absent, or no crypto provider installed/routed)',
+        )
+      }
+      const getHistory = entry.service.getDerivativesHistory
+      if (typeof getHistory !== 'function') {
+        throw new Error(
+          `crypto_get_derivatives_history: TRADING_NOT_IMPLEMENTED — provider ${entry.provider} does not implement getDerivativesHistory (this is not "no data")`,
+        )
+      }
+
+      const returned = (await getHistory.call(entry.service, symbol)) as unknown
+      if (returned === null || typeof returned !== 'object') {
+        throw new Error(`crypto_get_derivatives_history: provider ${entry.provider} returned an invalid derivatives history payload`)
+      }
+      const history = returned as DerivativesHistory
+
+      const result: {
+        ok: true
+        market: 'crypto'
+        provider: string
+        symbol: string
+        history: DerivativesHistory
+        truncatedTo?: number
+      } = {
+        ok: true,
+        market: 'crypto',
+        provider: entry.provider,
+        symbol: typeof history.symbol === 'string' && history.symbol !== '' ? history.symbol : symbol,
+        history,
+      }
+      if (limit !== undefined) {
+        result.truncatedTo = limit
+        result.history = {
+          ...history,
+          ...(history.fundingRates === undefined ? {} : { fundingRates: history.fundingRates.slice(-limit) }),
+          ...(history.openInterest === undefined ? {} : { openInterest: history.openInterest.slice(-limit) }),
+        }
+      }
+      return JSON.stringify(result)
     },
   })
 }
