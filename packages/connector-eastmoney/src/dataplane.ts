@@ -21,10 +21,10 @@ export function apply(ctx: Context, config: Config): void {
   const key = marketDataKey(market)
   const registry = resolveMarketDataRegistry(ctx)
   if (registry === undefined) {
-    new EastmoneyMarketDataService(ctx, {}, key)
+    new EastmoneyMarketDataService(ctx, { market }, key)
     return
   }
   const inner = ctx.isolate(key)
-  const service = new EastmoneyMarketDataService(inner, {}, key)
+  const service = new EastmoneyMarketDataService(inner, { market }, key)
   ctx.effect(() => registry.register(market, ROUTER_PROVIDER, service))
 }

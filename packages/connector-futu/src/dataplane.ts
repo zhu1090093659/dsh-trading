@@ -48,6 +48,8 @@ const ROUTER_PROVIDER = 'futu'
 const MARKET = 'hk'
 /** 行情面额外注册的市场（normalizeSymbol/toFutuSecurity 已支持 US.* 形态）。 */
 const EXTRA_QUOTE_MARKETS = ['us'] as const
+/** 美股面服务实例的 isolate 键（与 hk 实例分开：listInstruments 按实例市场给标的清单）。 */
+const TRADING_US_MARKET_DATA_KEY = 'tradingUsMarketData'
 
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
@@ -61,10 +63,17 @@ export function apply(ctx: Context, config: Config): void {
     return
   }
   const inner = ctx.isolate(TRADING_HK_MARKET_DATA_KEY)
-  const service = new FutuMarketDataService(inner, restOptions)
+  const service = new FutuMarketDataService(inner, { ...restOptions, market: 'hk' })
   ctx.effect(() => registry.register(MARKET, ROUTER_PROVIDER, service))
+  // 每个市场一个实例：quote 面共用同一 REST 客户端能力，但 listInstruments 必须
+  // 按实例市场给标的清单（2026-09-08 审查 M3：此前 us 面复用 hk 实例，美股搜索
+  // 返回港股清单）。
   for (const market of EXTRA_QUOTE_MARKETS) {
-    ctx.effect(() => registry.register(market, ROUTER_PROVIDER, service))
+    const extra = new FutuMarketDataService(
+      ctx.isolate(market === 'us' ? TRADING_US_MARKET_DATA_KEY : TRADING_HK_MARKET_DATA_KEY),
+      { ...restOptions, market },
+    )
+    ctx.effect(() => registry.register(market, ROUTER_PROVIDER, extra))
   }
 
   const tradeRegistry = resolveTradeRegistry(ctx)

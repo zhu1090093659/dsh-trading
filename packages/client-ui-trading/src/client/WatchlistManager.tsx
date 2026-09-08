@@ -48,7 +48,7 @@ export function WatchlistManager({
   const [markets, setMarkets] = useState<MarketId[]>(FALLBACK_MARKETS)
   const [creating, setCreating] = useState(false)
   const [createDraft, setCreateDraft] = useState('')
-  const [createError, setCreateError] = useState<'duplicate' | 'failed' | null>(null)
+  const [createError, setCreateError] = useState<'duplicate' | 'not-found' | 'failed' | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -66,7 +66,9 @@ export function WatchlistManager({
     return () => { cancelled = true }
   }, [])
 
-  // Esc 关闭（弹窗内输入框的 Esc 先被局部 handler 消费，不冒泡到这）。
+  // Esc 关闭。内联表单的 Esc 由各自 handler 先 `stopPropagation` 消费（React 合成
+  // 事件的 stopPropagation 会阻断原生冒泡），否则一次 Esc 会连整个弹窗一起关掉
+  // （2026-09-08 审查 L5：此前只在注释里假设被消费，实际照常冒泡到 document）。
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose()
@@ -130,7 +132,7 @@ export function WatchlistManager({
       setCreateDraft('')
       setCreateError(null)
     } else {
-      setCreateError(result.reason === 'duplicate' ? 'duplicate' : 'failed')
+      setCreateError(result.reason === 'duplicate' ? 'duplicate' : result.reason === 'not-found' ? 'not-found' : 'failed')
     }
   }
 
@@ -142,7 +144,8 @@ export function WatchlistManager({
       setRenamingId(null)
       setRenameDraft('')
     } else {
-      setCreateError(result.reason === 'duplicate' ? 'duplicate' : 'failed')
+      // 审查 L4：组已被别处删除 → 明确说「分组已不存在」，不再冒充「名称已存在」。
+      setCreateError(result.reason === 'duplicate' ? 'duplicate' : result.reason === 'not-found' ? 'not-found' : 'failed')
     }
   }
 
@@ -220,12 +223,12 @@ export function WatchlistManager({
                       aria-label={t('group.create')}
                       onChange={event => { setCreateDraft(event.target.value); setCreateError(null) }}
                       onKeyDown={event => {
-                        if (event.key === 'Escape') { setCreating(false); setCreateDraft(''); setCreateError(null) }
+                        if (event.key === 'Escape') { event.stopPropagation(); setCreating(false); setCreateDraft(''); setCreateError(null) }
                       }}
                     />
                     {createError !== null && (
                         <div className={css.railCreateError}>
-                          {createError === 'duplicate' ? t('group.duplicateName') : t('group.createFailed')}
+                          {createError === 'duplicate' ? t('group.duplicateName') : createError === 'not-found' ? t('group.notFound') : t('group.createFailed')}
                         </div>
                       )}
                     <div className={css.railCreateActions}>
@@ -270,12 +273,12 @@ export function WatchlistManager({
                         aria-label={t('manager.rename')}
                         onChange={event => { setRenameDraft(event.target.value); setCreateError(null) }}
                         onKeyDown={event => {
-                          if (event.key === 'Escape') { setRenamingId(null); setRenameDraft(''); setCreateError(null) }
+                          if (event.key === 'Escape') { event.stopPropagation(); setRenamingId(null); setRenameDraft(''); setCreateError(null) }
                         }}
                       />
                       {createError !== null && (
                         <div className={css.railCreateError}>
-                          {createError === 'duplicate' ? t('group.duplicateName') : t('group.createFailed')}
+                          {createError === 'duplicate' ? t('group.duplicateName') : createError === 'not-found' ? t('group.notFound') : t('group.createFailed')}
                         </div>
                       )}
                       <div className={css.railCreateActions}>

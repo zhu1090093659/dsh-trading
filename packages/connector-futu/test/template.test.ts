@@ -145,6 +145,72 @@ describe('FutuRestClient.getKlines', () => {
       closeTime: 1725000000000 + 5 * 60 * 1000 - 1,
     })
   })
+
+  it('桥（scripts/futu-openapi-bridge.py）实际发射的 ISO 字符串时间形 → openTime 按 UTC 锚定，closeTime = openTime + 5min - 1', async () => {
+    // 线上证据 spikes/impl-futu-us/us-aapl-1m.json：桥把 time_key 归一为带 Z 的 ISO 串。
+    const isoTime = '2026-09-04T19:58:00Z'
+    const { impl, urls } = stubFetch([
+      {
+        match: '/api/qot/get-kl',
+        body: {
+          retType: 0,
+          data: {
+            klList: [
+              { time: isoTime, open: 380.0, high: 382.0, low: 379.5, close: 381.5, volume: 50000 },
+            ],
+          },
+        },
+      },
+    ])
+    const client = new FutuRestClient({ fetchImpl: impl })
+    const klines = await client.getKlines('00700.HK', '5m', 10)
+
+    const openTime = Date.parse(isoTime)
+    expect(urls[0]).toContain('security=HK.00700')
+    expect(klines).toHaveLength(1)
+    expect(klines[0]?.openTime).toBe(openTime)
+    expect(klines[0]?.closeTime).toBe(openTime + 5 * 60 * 1000 - 1)
+  })
+})
+
+describe('FutuRestClient.listInstruments 市场闸门（2026-09-08 审查 M3）', () => {
+  const HK_PLATE_BODY = {
+    retType: 0,
+    data: {
+      securityList: [
+        { security: 'HK.00700', name: '腾讯控股' },
+        { security: 'HK.09988', name: '阿里巴巴-W' },
+      ],
+    },
+  }
+
+  it("market='us' → 返回空表且一个请求都不发（美股无清单来源，绝不把港股清单当美股候选）", async () => {
+    const { impl, urls } = stubFetch([{ match: '/api/qot/get-plate-security', body: HK_PLATE_BODY }])
+    const client = new FutuRestClient({ market: 'us', fetchImpl: impl })
+
+    expect(await client.listInstruments()).toEqual([])
+    expect(urls).toHaveLength(0)
+  })
+
+  it("market='hk' → 请求 HK.BK1000 盘口并归一为港股规范形", async () => {
+    const { impl, urls } = stubFetch([{ match: '/api/qot/get-plate-security', body: HK_PLATE_BODY }])
+    const client = new FutuRestClient({ market: 'hk', fetchImpl: impl })
+
+    expect(await client.listInstruments()).toEqual([
+      { symbol: '00700.HK', name: '腾讯控股' },
+      { symbol: '09988.HK', name: '阿里巴巴-W' },
+    ])
+    expect(urls).toHaveLength(1)
+    expect(urls[0]).toContain('plate=HK.BK1000')
+  })
+
+  it('缺省 market → 港股面（兼容既有构造：不传 market 仍走 hk 清单）', async () => {
+    const { impl, urls } = stubFetch([{ match: '/api/qot/get-plate-security', body: HK_PLATE_BODY }])
+    const client = new FutuRestClient({ fetchImpl: impl })
+
+    expect(await client.listInstruments()).toHaveLength(2)
+    expect(urls[0]).toContain('plate=HK.BK1000')
+  })
 })
 
 describe('FutuRestClient 美股行情路径', () => {

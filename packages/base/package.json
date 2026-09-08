@@ -51,6 +51,7 @@
     "@dshtrading/client-ui-strategies": "workspace:^",
     "@dshtrading/client-ui-trading": "workspace:^",
     "@dshtrading/client-ui-updater": "workspace:^",
+    "@dshtrading/dsh-home": "workspace:^",
     "@dshtrading/dsh-i18n": "workspace:^",
     "@dshtrading/eventbus": "workspace:^",
     "@dshtrading/holdings": "workspace:^",

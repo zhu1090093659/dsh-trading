@@ -81,3 +81,15 @@ client-ui-trading +7、watchlist +13。逐项修掉，总数 504 → 483（基�
 
 - Issue #82；参考富途牛牛自选下拉与自选管理两张截图（用户提供的交互基准）。
 - `packages/watchlist/src/{index,file-store,plugin}.ts`、`packages/client-ui-trading/src/{bridge.ts,index.ts}`、`src/client/{MarketSidebar,WatchlistGroups,WatchlistManager,store,host-watchlist-sync,api,market-vocab}.tsx|.ts`。
+
+## Addendum (2026-09-08, 审查修正)
+
+同日晚代码审查确认两处数据丢失路径并已修复（完整记录见
+[review fixes](../bug-fix/2026-09-08-review-fixes.md)）：
+
+- **双 store 实例**：桥与 `watchlist/plugin` 各建一个 `watchlists.json` file store，整表
+  缓存 + 整表回写 → agent 工具写覆盖 GUI 写（含分组归属）。改为
+  `watchlist/plugin` provide `tradingWatchlist` 服务、桥解包复用同一实例。
+- **种子基线物化**：未定制市场只物化目标行会让该市场其余默认行被「已定制」语义判删；
+  改为整份种子基线物化（与 `store.remove`/`applyLocalMembership` 同构）。
+- 附带：行写端点按注册表清洗分组 id、file store `add` 补归一、内联表单 Esc 不再冒泡关弹窗。

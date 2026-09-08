@@ -2,7 +2,7 @@
 #
 # 2026-08-29 设置驱动单预设重构（docs/exchange-routing.md）：本预设是 crypto 市场
 # **唯一**预设——Binance 与 OKX 连接器行并存（enabled 都 true），谁激活由用户设置
-# 决定（dshtrading.markets.crypto.provider，默认 binance；改 ~/.dsh/settings.yaml 后
+# 决定（dshtrading.markets.crypto.provider，默认 binance；改 ~/.dsh-trading/settings.yaml 后
 # 新建会话生效）。连接器 apply 时 consult tradingMarketRouter 服务，与设置不符的
 # 行静默退出；无需配置互斥（路由即裁决）。本文件不再有"改 enabled 切交易所"的手工步骤。
 #

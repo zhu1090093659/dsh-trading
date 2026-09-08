@@ -46,3 +46,11 @@ Status: implemented
 - 复核实证（2026-09-08 18:0x HKT，OpenD 活体）：`HK.00700` 与 `00700.HK` 同值（435.4/435.2/435.4），
   `US.AAPL` 快照时间 = 当下（10:06:54Z vs now 10:07Z，ET 解析正确），美股 1m 尾 19:58–20:00Z、日线 09-04T04:00Z、
   HK 5m 尾 07:50–08:00Z；下单闸门仍拒美股。`pnpm --filter @dshtrading/connector-futu build test` 14 用例全绿。
+
+## Addendum (2026-09-08, 审查修正)
+
+- 行情面改为**每市场一个服务实例**（`FutuRestClient.market` + dataplane 分别 isolate
+  `tradingHkMarketData`/`tradingUsMarketData`）：此前 us 复用 hk 实例，
+  `listInstruments()` 恒返回 `HK.BK1000` 港股清单，美股搜索返回港股或空。
+  us 实例现返回空表（无美股名册来源，fail-closed）。详见
+  [review fixes](../bug-fix/2026-09-08-review-fixes.md)。

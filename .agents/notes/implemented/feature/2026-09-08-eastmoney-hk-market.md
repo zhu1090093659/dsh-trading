@@ -32,3 +32,12 @@ Status: implemented
 - trends2/5m/日 K/ticker 四类原始响应存 spikes/impl-eastmoney-hk/（日 K 于限频解除后 12:05 补验成功：rc=0、含 09-04/09-07 真实日线）；真机端到端已验：bridge 1m/5m/ticker 全通（1m 末 bar 与 ticker 价一致），自选列表港股行日内分时 + 固定时段轴渲染正确。
 - futu 连接器的 OpenD HTTP 假设问题留作独立议题（要么找到对应 HTTP 网关包装器，要么重写为 TCP protobuf 或标注需第三方桥）。
 - 测试：connector-eastmoney 11 个单测全绿（新增 hk secid 映射、×1000 缩放、trends2 解析、5m kline 路由四类用例，全部用真实响应值作 fixture）。
+
+## Addendum (2026-09-08, 审查修正)
+
+- `toEastmoneySecid(symbol, market)` 改为**市场感知**：hk 实例接受 `00700.HK` /
+  `HK.00700` / `HK00700` / 裸 1-5 位（`700` → `116.00700`），CN 形态显式拒绝；
+  cn 实例反之。此前形态解析与实例市场无关，`700` 会落 `secid=0.700`/`700.SZ`。
+- kline/get 时间戳改用 `utc8WallTimeToEpochMs`（与 trends2 同锚），修掉 TZ≠UTC+8
+  宿主上 1m 与 5m/日 K 相差 12h 的问题。详见
+  [review fixes](../bug-fix/2026-09-08-review-fixes.md)。

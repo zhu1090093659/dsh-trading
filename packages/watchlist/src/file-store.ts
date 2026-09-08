@@ -89,7 +89,8 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
         const map = await load()
         const rows = map[market] ?? []
         if (rows.some(row => row.symbol === instrument.symbol)) return false
-        const next = { ...map, [market]: [...rows, { ...instrument }] }
+        // 与内存版同款归一（审查 L6）：groups 空数组不落键、去重，落盘形状一致。
+        const next = { ...map, [market]: [...rows, normalizeWatchlistRow(instrument)] }
         cache = next
         await writeNow(next)
         return true

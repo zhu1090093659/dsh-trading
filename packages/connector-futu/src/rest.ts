@@ -28,10 +28,15 @@ export class TradingServiceError extends Error {
   }
 }
 
+/** 本连接器服务的市场（行情面双市场；交易面仅 hk）。 */
+export type FutuMarket = 'hk' | 'us'
+
 export interface FutuRestOptions {
   gatewayUrl?: string
   fetchImpl?: typeof fetch
   timeoutMs?: number
+  /** 实例市场（决定 listInstruments 的标的来源；缺省 hk）。 */
+  market?: FutuMarket
 }
 
 export interface FutuCredentials {
@@ -116,11 +121,14 @@ export class FutuRestClient {
   private readonly gatewayUrl: string
   private readonly fetchImpl: typeof fetch
   private readonly timeoutMs: number
+  /** 实例市场（2026-09-08 审查 M3：行情面按市场各建实例，标的来源不跨市场串味）。 */
+  readonly market: FutuMarket
 
   constructor(options: FutuRestOptions = {}) {
     this.gatewayUrl = (options.gatewayUrl ?? 'http://127.0.0.1:11111').replace(/\/+$/, '')
     this.fetchImpl = options.fetchImpl ?? fetch
     this.timeoutMs = options.timeoutMs ?? 10_000
+    this.market = options.market ?? 'hk'
   }
 
   private async request<T>(path: string, query?: Record<string, string | number>): Promise<T> {
@@ -227,7 +235,13 @@ export class FutuRestClient {
     })
   }
 
+  /**
+   * 标的名册（GUI 搜索/联想用）。港股面取 HK.BK1000 盘口；**美股面暂无标的清单
+   * 来源**（OpenD 该端点无 US 盘口实证）——返回空表 fail-closed，绝不把港股清单
+   * 当作美股候选（2026-09-08 审查 M3）。
+   */
   async listInstruments(): Promise<Array<{ symbol: string; name?: string }>> {
+    if (this.market !== 'hk') return []
     try {
       const data = await this.request<{
         securityList?: Array<{ security: string; name?: string }>

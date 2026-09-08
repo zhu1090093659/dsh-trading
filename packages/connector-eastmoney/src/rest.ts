@@ -79,11 +79,16 @@ export type EastmoneyMarket = 'cn' | 'hk'
 /** CN/HK 均为永久 UTC+8（无夏令时）——墙钟时间用固定偏移锚定，与运行机器时区无关。 */
 const UTC8_MS = 8 * 3600_000
 
-/** `YYYY-MM-DD HH:MM[:SS]`（UTC+8 墙钟）→ epoch ms。 */
+/**
+ * `YYYY-MM-DD[ HH:MM[:SS]]`（UTC+8 墙钟；日 K 只有日期段）→ epoch ms。
+ * CN/HK 均为永久 UTC+8，故用固定偏移锚定，与运行机器时区无关（审查 M1：
+ * kline/get 此前用 `new Date('YYYY/MM/DD')` 按宿主本地时区解析，TZ≠UTC+8 时
+ * 与同市场 1m 序列相差数小时）。
+ */
 export function utc8WallTimeToEpochMs(value: string): number {
-  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value)
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(value)
   if (!m) throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `invalid eastmoney wall time ${JSON.stringify(value)}`)
-  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] ?? 0)) - UTC8_MS
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] ?? 0), Number(m[5] ?? 0), Number(m[6] ?? 0)) - UTC8_MS
 }
 
 /** 东财价格字段的分精度倍率：cn ×100（2 位小数），hk ×1000（3 位小数，响应 decimal=3）。 */
@@ -92,46 +97,56 @@ export function eastmoneyPriceScale(market: EastmoneyMarket): number {
 }
 
 /**
- * 将标准代码（如 600519.SH / 000001.SZ / 600519 / 000001）转为东财 secid。
- * 上海（60/68/51等）= 1.xxxxxx
- * 深圳（00/30/15等）= 0.xxxxxx
- * 北京（83/87/43/92等）= 0.xxxxxx
+ * 将标准代码转为东财 secid。**按连接器市场分流**（2026-09-08 审查 H3/L1）：同一个
+ * 东财服务实例可能服务 cn 或 hk，形态解析必须知道自己是哪个市场——否则港股宽容
+ * 形 `700` 会落进 CN 兜底（secid 0.700 / canonical 700.SZ），查询到另一个市场
+ * 的证券且回带错误规范形。
+ *
+ * - `market='hk'`：`00700.HK` / `HK.00700`（Futu 原生形）/ `HK00700` / 裸 1-5 位
+ *   数字 → secid 116.xxxxx；CN 形态（6 位数字 / .SH/.SZ/.BJ）显式拒绝。
+ * - `market='cn'`：6 位数字（可带 .SH/.SZ/.BJ）→ 1.xxxxxx（沪）/ 0.xxxxxx（深、
+ *   北）；HK 形态显式拒绝。
  */
-export function toEastmoneySecid(symbol: string): { secid: string; canonical: string; market: EastmoneyMarket } {
+export function toEastmoneySecid(symbol: string, market: EastmoneyMarket = 'cn'): { secid: string; canonical: string; market: EastmoneyMarket } {
   const clean = symbol.trim().toUpperCase()
-  // 港股分支：`00700.HK` / `HK00700` / 裸 5 位数字（A 股代码恒 6 位，无歧义）→ secid 116.xxxxx。
-  const hkMatch = /^(\d{1,5})\.HK$/.exec(clean) ?? /^HK(\d{1,5})$/.exec(clean)
-  if (hkMatch !== null || /^\d{5}$/.test(clean)) {
-    const hkCode = (hkMatch?.[1] ?? clean).padStart(5, '0')
+  if (market === 'hk') {
+    const hkMatch = /^(\d{1,5})\.HK$/.exec(clean) ?? /^HK\.?(\d{1,5})$/.exec(clean) ?? /^(\d{1,5})$/.exec(clean)
+    if (hkMatch === null) {
+      throw new TradingServiceError('TRADING_UNSUPPORTED_SYMBOL', `Eastmoney hk: malformed HK symbol ${JSON.stringify(symbol)}`)
+    }
+    const hkCode = (hkMatch[1] as string).padStart(5, '0')
     return { secid: `116.${hkCode}`, canonical: `${hkCode}.HK`, market: 'hk' }
   }
+  if (/^\d{1,5}$/.test(clean) || /\.HK$/.test(clean) || /^HK/.test(clean)) {
+    throw new TradingServiceError('TRADING_UNSUPPORTED_SYMBOL', `Eastmoney cn: not an A-share symbol ${JSON.stringify(symbol)}`)
+  }
   let code = clean
-  let market = ''
+  let exchange = ''
 
   if (clean.includes('.')) {
     const parts = clean.split('.')
-    code = parts[0]
-    market = parts[1]
+    code = parts[0] as string
+    exchange = parts[1] as string
   } else if (/^\d{6}$/.test(clean)) {
     code = clean
     if (KNOWN_SH_INDICES.has(code) || code.startsWith('6') || code.startsWith('5') || code.startsWith('9')) {
-      market = 'SH'
+      exchange = 'SH'
     } else if (code.startsWith('0') || code.startsWith('3') || code.startsWith('1')) {
-      market = 'SZ'
+      exchange = 'SZ'
     } else if (code.startsWith('8') || code.startsWith('4') || code.startsWith('92')) {
-      market = 'BJ'
+      exchange = 'BJ'
     }
   }
 
-  if (!market) {
-    if (KNOWN_SH_INDICES.has(code) || code.startsWith('6') || code.startsWith('5')) market = 'SH'
-    else market = 'SZ'
+  if (!exchange) {
+    if (KNOWN_SH_INDICES.has(code) || code.startsWith('6') || code.startsWith('5')) exchange = 'SH'
+    else exchange = 'SZ'
   }
 
-  const prefix = market === 'SH' ? '1' : '0'
+  const prefix = exchange === 'SH' ? '1' : '0'
   return {
     secid: `${prefix}.${code}`,
-    canonical: `${code}.${market}`,
+    canonical: `${code}.${exchange}`,
     market: 'cn',
   }
 }
@@ -141,12 +156,16 @@ export interface EastmoneyRestOptions {
   historyBaseUrl?: string
   searchBaseUrl?: string
   fetchImpl?: typeof fetch
+  /** 本实例服务的市场（形态解析与价格倍率都按它分流；缺省 cn）。 */
+  market?: EastmoneyMarket
 }
 
 export class EastmoneyRestClient {
   readonly baseUrl: string
   readonly historyBaseUrl: string
   readonly searchBaseUrl: string
+  /** 本实例的市场（cn/hk 单包双实例；形态解析必须与注册市场一致）。 */
+  readonly market: EastmoneyMarket
   private readonly fetchImpl: typeof fetch
 
   constructor(options: EastmoneyRestOptions = {}) {
@@ -154,6 +173,7 @@ export class EastmoneyRestClient {
     this.historyBaseUrl = options.historyBaseUrl ?? 'https://push2his.eastmoney.com'
     this.searchBaseUrl = options.searchBaseUrl ?? 'https://searchapi.eastmoney.com'
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
+    this.market = options.market ?? 'cn'
   }
 
   private async requestJson<T>(url: string): Promise<T> {
@@ -182,7 +202,7 @@ export class EastmoneyRestClient {
   }
 
   async getTicker(symbol: string): Promise<Ticker> {
-    const { secid, canonical, market } = toEastmoneySecid(symbol)
+    const { secid, canonical, market } = toEastmoneySecid(symbol, this.market)
     const scale = eastmoneyPriceScale(market)
     // f60=昨收 f169=涨跌额 f170=涨跌幅（均为 ×100 分精度整数；'-' 停牌占位）。
     const url = `${this.baseUrl}/api/qt/stock/get?secid=${secid}&fields=f43,f44,f45,f46,f47,f48,f57,f58,f60,f86,f169,f170`
@@ -222,7 +242,7 @@ export class EastmoneyRestClient {
   }
 
   async getKlines(symbol: string, interval: Interval = '1d', limit: number = 100): Promise<Kline[]> {
-    const { secid, market } = toEastmoneySecid(symbol)
+    const { secid, market } = toEastmoneySecid(symbol, this.market)
     // 港股 1m 走 trends2 分时端点（当日完整分钟序列；kline/get 的 klt=1 对 hk 未实证，
     // 5m/日 K 已实证可用，spikes/impl-eastmoney-hk/）。
     if (market === 'hk' && interval === '1m') {
@@ -248,8 +268,13 @@ export class EastmoneyRestClient {
       const low = parseFloat(parts[4])
       const volume = parseFloat(parts[5])
 
-      const openTime = new Date(timeStr.replace(/-/g, '/')).getTime()
-      if (Number.isNaN(openTime)) continue
+      // UTC+8 固定偏移锚定（审查 M1）：与同市场 1m（trends2）同口径，机器时区无关。
+      let openTime: number
+      try {
+        openTime = utc8WallTimeToEpochMs(timeStr)
+      } catch {
+        continue
+      }
 
       klines.push({
         openTime,
@@ -299,10 +324,17 @@ export class EastmoneyRestClient {
     const url = `${this.searchBaseUrl}/api/suggest/get?input=${encodeURIComponent(query)}&type=14`
     const res = await this.requestJson<{ QuotationCodeTable?: { Data?: Array<{ Code: string; Name: string; SecurityTypeName: string }> } }>(url)
     const items = res.QuotationCodeTable?.Data ?? []
-    return items.map((item) => {
-      const { canonical } = toEastmoneySecid(item.Code)
-      return { symbol: canonical, name: item.Name }
-    })
+    const out: Array<{ symbol: string; name: string }> = []
+    for (const item of items) {
+      // 搜索结果可能混入其它市场形态：映射不了就跳过（不让一条坏行毁掉整份名册）。
+      try {
+        const { canonical } = toEastmoneySecid(item.Code, this.market)
+        out.push({ symbol: canonical, name: item.Name })
+      } catch {
+        continue
+      }
+    }
+    return out
   }
 }
 export type { Interval, Kline, Ticker }

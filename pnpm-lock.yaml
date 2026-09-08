@@ -178,6 +178,9 @@ importers:
       '@dshtrading/client-ui-updater':
         specifier: workspace:^
         version: link:../client-ui-updater
+      '@dshtrading/dsh-home':
+        specifier: workspace:^
+        version: link:../dsh-home
       '@dshtrading/dsh-i18n':
         specifier: workspace:^
         version: link:../dsh-i18n

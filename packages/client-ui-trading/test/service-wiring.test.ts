@@ -13,8 +13,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { apply } from '../src/index.ts'
 import { KnowledgeCardsService } from '@dshtrading/knowledge/plugin'
 import { CustomIndicatorsService } from '@dshtrading/indicators/plugin'
+import { WatchlistStoreService } from '@dshtrading/watchlist/plugin'
 import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
 import { createMemoryCustomIndicatorStore } from '@dshtrading/indicators'
+import { createMemorySelectionStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
 
 interface Route {
   kind: string
@@ -81,6 +83,18 @@ describe('apply() 服务→桥接线（Service 实例解包）', () => {
     const res = await dispatch(registered, 'GET', '/indicators/custom')
     expect(res.status).toBe(200)
     expect(res.body).toMatchObject({ ok: true, indicators: [{ id: 'ci_test1' }] })
+  })
+
+  it('tradingWatchlist 服务以 Service 实例 provide → 桥复用同一 store（审查 H1 防双实例回归）', async () => {
+    const store = createMemoryWatchlistStore()
+    await store.add('us', { market: 'us', symbol: 'AAPL', name: '苹果' })
+
+    const { registered } = await makeCtx(ctx => { new WatchlistStoreService(ctx, { watchlists: store, selection: createMemorySelectionStore() }) })
+
+    const res = await dispatch(registered, 'GET', '/watchlists')
+    expect(res.status).toBe(200)
+    // 桥读到的就是服务提供的实例（若桥自建第二个 file store，这里会是空表）。
+    expect(res.body).toMatchObject({ ok: true, watchlists: { us: [{ market: 'us', symbol: 'AAPL', name: '苹果' }] } })
   })
 
   it('服务缺席（老部署）→ 回退自建 file store，端点仍可用', async () => {

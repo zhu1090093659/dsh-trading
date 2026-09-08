@@ -29,3 +29,10 @@ UI 编辑器新建表单默认选中 master / workspace-write（所见即所存�
 - launch 路径现在对默认任务执行 `/permission`，宿主 commands 服务从「钉权限才用」变成常规依赖（web 宿主核心服务，缺席时 launch 报 `permission command dispatcher (commands) is unavailable`，结算 failed，错误面可读）。
 - 测试：4 个任务测试文件随语义更新（门测试改用 danger-full-access 触发、假网关补 agentPresets 名册、假 commands 派发面），新增创建缺省断言（ledger/tools 两层）。门禁 `pnpm build` / `pnpm test`（1208 绿）/ typecheck 棘轮（484==基线）全绿；`service-wiring.test.ts` 首轮全量并发跑出现一次与本地活宿主持锁竞态的无关 flake，隔离与复跑均绿。
 - 生效条件：宿主重启/重载加载新包产物；trading-web profile 验证前需按流程刷新 file: 副本。
+
+## Addendum (2026-09-08, 审查修正)
+
+- 语义不变（存量任务不回填、不改运行时权限），补上此前缺失的断言：
+  `tasks-service.test.ts` 记录 commands 派发流水，断言默认任务 launch 时确实执行
+  `/permission workspace-write`（此前只桩不验，漏传也全绿）。详见
+  [review fixes](../bug-fix/2026-09-08-review-fixes.md)。

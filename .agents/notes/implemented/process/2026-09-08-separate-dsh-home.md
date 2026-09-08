@@ -78,3 +78,16 @@ Status: implemented
 - 迁移后实测见 PR 描述：preflight 通过、`dsh-trading --profile trading-web`
   托管 HTTP 200 + 无头截图（自选/持仓/知识库数据从新 home 读出）、桌面壳日志
   `[desktop] dsh home: /Users/zcl/.dsh-trading`。
+
+## Addendum (2026-09-08, 审查修正)
+
+审查确认「老用户数据被孤立」缺兜底并已补齐（完整记录见
+[review fixes](../bug-fix/2026-09-08-review-fixes.md)）：
+
+- `@dshtrading/dsh-home` 新增 `migrateLegacyTradingHome()`：白名单条目从 `~/.dsh`
+  **复制**到解析 home（目标已存在则跳过，写 `.legacy-home-migrated.json` 幂等标记），
+  `packages/base` 启动面调用；解析 home 等于 `~/.dsh` 时零动作，宿主资产永不触碰。
+- Windows 卸载脚本由删 `$PROFILE\.dsh` 改为 `$PROFILE\.dsh-trading`（此前既漏清交易
+  数据、又误删 dsh web 宿主共享 home）；桌面壳 wrapper 参数改经 `open --args` 转发；
+  `sync-profile-overrides.mjs` 空白 `DSH_HOME` 视为未设；`content-insight` 技能与
+  连接器/技能指南、桌面 README、crypto 预设注释统一改 `~/.dsh-trading`。

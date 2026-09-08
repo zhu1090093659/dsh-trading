@@ -39,8 +39,8 @@
 
 | 层级 (Level) | 适用场景 | 存放物理路径 | 优先级 (Rank) | 覆盖规则 |
 |---|---|---|---|---|
-| **Level 1: 用户自定义 (User Custom)** | 用户私有交易策略、个人风控偏好、自定义参数 | `~/.dsh/skills/`<br>或当前工作区 `.agents/skills/` | **Rank 100-300** | **最高优先级**：同名配置自动覆盖社区与内置版本 |
-| **Level 2: 社区精选 (Community)** | 来自 OKX Tradekit、开源社区的策略或指标分析 | `~/.dsh/profiles/<name>/skills/`<br>或 `.agents/skills/<market>-*` | **Rank 400-500** | 中等优先级：覆盖官方内置版本 |
+| **Level 1: 用户自定义 (User Custom)** | 用户私有交易策略、个人风控偏好、自定义参数 | `~/.dsh-trading/skills/`<br>或当前工作区 `.agents/skills/` | **Rank 100-300** | **最高优先级**：同名配置自动覆盖社区与内置版本 |
+| **Level 2: 社区精选 (Community)** | 来自 OKX Tradekit、开源社区的策略或指标分析 | `~/.dsh-trading/profiles/<name>/skills/`<br>或 `.agents/skills/<market>-*` | **Rank 400-500** | 中等优先级：覆盖官方内置版本 |
 | **Level 3: 官方内置 (Bundled in Kit)** | 随包发布的风控清单、多周期定性分析等基准 SOP | `packages/kit-<market>/assets/skills/` | **Rank 600** (`BUNDLED_SKILL_RANK`) | 兜底基线：提供基础交易能力保证 |
 
 ---

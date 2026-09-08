@@ -298,8 +298,8 @@ export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
   if (!routeAllows(ctx, config, 'hk')) return
 
-  const client = new FutuRestClient({ gatewayUrl: config.gatewayUrl })
-  const marketData = new FutuMarketDataService(ctx, { gatewayUrl: config.gatewayUrl }, client)
+  const client = new FutuRestClient({ gatewayUrl: config.gatewayUrl, market: 'hk' })
+  const marketData = new FutuMarketDataService(ctx, { gatewayUrl: config.gatewayUrl, market: 'hk' }, client)
   const trade = new FutuTradeService(ctx, { client, config })
 
   ctx.inject(['tools'], (ctx) => {

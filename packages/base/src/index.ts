@@ -25,6 +25,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
+import { migrateLegacyTradingHome } from '@dshtrading/dsh-home'
 
 /**
  * Cordis 插件名 = patch 行 id（TEMPLATES §8）。base 是共享行唯一拥有者，
@@ -98,8 +99,22 @@ export function createGateListener(): (
   }
 }
 
-/** 插件入口：按配置挂统一审批监听器（不声明 inject —— 事件面无需 tools 服务）。 */
+/**
+ * 插件入口：按配置挂统一审批监听器（不声明 inject —— 事件面无需 tools 服务）。
+ *
+ * 启动副作用：旧 home 一次性数据迁移（2026-09-08 审查 H4）。base 是 base patch
+ * 的首个 insert 行，早于所有 trading 数据 store 的构造与首读；解析 home 与
+ * `~/.dsh` 同源时零动作，语义见 {@link migrateLegacyTradingHome}。测试进程不
+ * 迁移（vitest 会直接执行 apply()，迁移属宿主启动行为）。
+ */
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
+  if (process.env.VITEST === undefined && process.env.NODE_ENV !== 'test') {
+    try {
+      migrateLegacyTradingHome({ log: message => console.warn(message) })
+    } catch (error) {
+      console.warn('[dsh-trading/base] legacy home migration skipped:', error)
+    }
+  }
   ctx.on('tools/pre-execute', createGateListener())
 }

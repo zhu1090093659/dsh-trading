@@ -26,7 +26,7 @@
   "packages/connector-binance/tsconfig.json": 1,
   "packages/connector-bybit/tsconfig.json": 15,
   "packages/connector-ccxt/tsconfig.json": 11,
-  "packages/connector-eastmoney/tsconfig.json": 12,
+  "packages/connector-eastmoney/tsconfig.json": 10,
   "packages/connector-finnhub/tsconfig.json": 14,
   "packages/connector-fmp/tsconfig.json": 19,
   "packages/connector-futu/tsconfig.json": 7,
@@ -61,5 +61,5 @@
   "packages/router/tsconfig.json": 7,
   "packages/strategies/tsconfig.json": 42,
   "packages/us/tsconfig.json": 0,
-  "packages/watchlist/tsconfig.json": 1
+  "packages/watchlist/tsconfig.json": 0
 }

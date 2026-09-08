@@ -36,7 +36,7 @@ import type { BuiltinTombstonesStore, CustomScreenerRecord, CustomScreenerStore 
 // 加载，client 打包不 import 本文件（client 半只经 api.ts 走 HTTP）。
 import { validateCustomStrategyNode, validateCustomScreenerNode } from '@dshtrading/strategies/plugin'
 import type { SelectionStore, WatchlistGroup, WatchlistGroupsStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from '@dshtrading/watchlist'
-import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
+import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore, WATCHLIST_SEEDS } from '@dshtrading/watchlist'
 // 统一资产台账（issue #65）：type-only import——@dshtrading/holdings 由并行流建设，
 // 缺席时本包 vitest 不受影响（擦除）；运行时 store 走 host 注入 + 本文件内存兜底。
 import type { Holding, HoldingCurrency, NewHolding, NewHoldingInput } from '@dshtrading/holdings'
@@ -1274,19 +1274,54 @@ export class TradingBridge {
   async replaceWatchlists(body: unknown): Promise<{ ok: boolean; watchlists: WatchlistsMap }> {
     const store = this.host.watchlistStore
     if (store === undefined) return { ok: true, watchlists: {} }
-    const map = parseWatchlistsMap(body)
+    const map = await this.dropUnknownGroups(parseWatchlistsMap(body))
     await store.save(map)
     return { ok: true, watchlists: await store.list() }
+  }
+
+  /**
+   * 行上分组归属按注册表清洗（2026-09-08 审查 L4）：注册表里已不存在的 id 一律
+   * 丢弃——成员端点会校验，行写端点此前不校验，可落悬挂 id（删组清理覆盖不到）。
+   */
+  private async filterKnownGroups(groups: readonly string[] | undefined): Promise<string[] | undefined> {
+    if (groups === undefined || groups.length === 0) return undefined
+    const store = this.host.groupsStore
+    if (store === undefined) return undefined
+    const known = new Set((await store.list()).map(group => group.id))
+    const kept = groups.filter(id => known.has(id))
+    return kept.length > 0 ? kept : undefined
+  }
+
+  /** 整表行上的分组归属按注册表清洗（PUT/import 全量写入口）。 */
+  private async dropUnknownGroups(map: WatchlistsMap): Promise<WatchlistsMap> {
+    if (this.host.groupsStore === undefined) return map
+    const out: WatchlistsMap = {}
+    for (const [market, rows] of Object.entries(map)) {
+      out[market] = await Promise.all(rows.map(async (row) => {
+        const groups = await this.filterKnownGroups(row.groups)
+        return {
+          market: row.market,
+          symbol: row.symbol,
+          ...(row.name !== undefined ? { name: row.name } : {}),
+          ...(groups !== undefined ? { groups } : {}),
+        }
+      }))
+    }
+    return out
   }
 
   /** 追加一行（POST /watchlists）。 */
   async addWatchlistRow(body: unknown): Promise<{ ok: boolean; added: boolean; instrument: WatchlistInstrument }> {
     const store = this.host.watchlistStore
-    if (store === undefined) {
-      const instrument = parseInstrumentBody(body)
-      return { ok: true, added: false, instrument }
+    const parsed = parseInstrumentBody(body)
+    const groups = await this.filterKnownGroups(parsed.groups)
+    const instrument: WatchlistInstrument = {
+      market: parsed.market,
+      symbol: parsed.symbol,
+      ...(parsed.name !== undefined ? { name: parsed.name } : {}),
+      ...(groups !== undefined ? { groups } : {}),
     }
-    const instrument = parseInstrumentBody(body)
+    if (store === undefined) return { ok: true, added: false, instrument }
     const added = await store.add(instrument.market, instrument)
     return { ok: true, added, instrument }
   }
@@ -1309,7 +1344,7 @@ export class TradingBridge {
     if (Object.keys(existing).length > 0) {
       return { ok: false, imported: false, reason: 'host watchlist store is not empty — migration already done (idempotent guard)' }
     }
-    const map = parseWatchlistsMap(body)
+    const map = await this.dropUnknownGroups(parseWatchlistsMap(body))
     await store.save(map)
     return { ok: true, imported: true }
   }
@@ -1325,20 +1360,27 @@ export class TradingBridge {
     return { ok: true, groups: await store.list() }
   }
 
-  /** 创建分组（POST /watchlist-groups，body { name }）；同名业务拒绝（ok:false + reason）。 */
-  async createWatchlistGroup(body: unknown): Promise<{ ok: boolean; created: boolean; group?: WatchlistGroup; reason?: string }> {
+  /** 创建分组（POST /watchlist-groups，body { name }）；同名业务拒绝（ok:false + code）。 */
+  async createWatchlistGroup(body: unknown): Promise<{ ok: boolean; created: boolean; group?: WatchlistGroup; code?: 'duplicate' | 'unavailable'; reason?: string }> {
     const store = this.host.groupsStore
     const name = parseGroupNameBody(body)
-    if (store === undefined) return { ok: true, created: false }
+    if (store === undefined) return { ok: true, created: false, code: 'unavailable' }
     const result = await store.create(name)
-    if (result.error === 'duplicate' || result.group === undefined) {
-      return { ok: false, created: false, reason: `group name ${JSON.stringify(name)} already exists` }
+    if (result.error === 'duplicate') {
+      return { ok: false, created: false, code: 'duplicate', reason: `group name ${JSON.stringify(name)} already exists` }
+    }
+    if (result.group === undefined) {
+      return { ok: false, created: false, code: 'unavailable', reason: 'watchlist group store returned no group' }
     }
     return { ok: true, created: true, group: result.group }
   }
 
-  /** 重命名分组（PUT /watchlist-groups，body { id, name }）。 */
-  async renameWatchlistGroup(body: unknown): Promise<{ ok: boolean; renamed: boolean; group?: WatchlistGroup; reason?: string }> {
+  /**
+   * 重命名分组（PUT /watchlist-groups，body { id, name }）。
+   * `code` 是机器可读判据（审查 L4）：'not-found' 与 'duplicate' 的 reason 文案
+   * 不同但都走 ok:false，客户端此前一律显示「名称已存在」。
+   */
+  async renameWatchlistGroup(body: unknown): Promise<{ ok: boolean; renamed: boolean; group?: WatchlistGroup; code?: 'duplicate' | 'not-found' | 'unavailable'; reason?: string }> {
     const store = this.host.groupsStore
     const raw = (body ?? {}) as { id?: unknown }
     const id = typeof raw.id === 'string' ? raw.id.trim() : ''
@@ -1346,9 +1388,12 @@ export class TradingBridge {
     const name = parseGroupNameBody(body)
     if (store === undefined) return { ok: true, renamed: false }
     const result = await store.rename(id, name)
-    if (result.error === 'not-found') return { ok: false, renamed: false, reason: `no such group id ${JSON.stringify(id)}` }
-    if (result.error === 'duplicate' || result.group === undefined) {
-      return { ok: false, renamed: false, reason: `group name ${JSON.stringify(name)} already exists` }
+    if (result.error === 'not-found') return { ok: false, renamed: false, code: 'not-found', reason: `no such group id ${JSON.stringify(id)}` }
+    if (result.error === 'duplicate') {
+      return { ok: false, renamed: false, code: 'duplicate', reason: `group name ${JSON.stringify(name)} already exists` }
+    }
+    if (result.group === undefined) {
+      return { ok: false, renamed: false, code: 'unavailable', reason: 'watchlist group store returned no group' }
     }
     return { ok: true, renamed: true, group: result.group }
   }
@@ -1379,7 +1424,27 @@ export class TradingBridge {
     if (watchlists !== undefined) {
       const map = await watchlists.list()
       const rows = map[input.market]
-      if (!Array.isArray(rows) || !rows.some(row => row.symbol === input.symbol)) {
+      if (!Array.isArray(rows)) {
+        // 未定制市场：整体物化该市场种子基线，目标行落分组归属（2026-09-08 审查
+        // H2）。只物化单行会让「键存在 = 已定制」语义把该市场其余默认行判成已
+        // 删除——侧栏与 watchlist_list 立刻少行。口径与 store.remove（种子兜底）
+        // 和客户端 applyLocalMembership（同款物化）一致。
+        const seeds = WATCHLIST_SEEDS[input.market] ?? []
+        const baseline: WatchlistInstrument[] = seeds.map(row => ({
+          market: row.market,
+          symbol: row.symbol,
+          ...(row.name !== undefined ? { name: row.name } : {}),
+        }))
+        if (!baseline.some(row => row.symbol === input.symbol)) {
+          baseline.push({
+            market: input.market,
+            symbol: input.symbol,
+            ...(input.name !== undefined ? { name: input.name } : {}),
+          })
+        }
+        await watchlists.save({ ...map, [input.market]: baseline })
+        materialized = true
+      } else if (!rows.some(row => row.symbol === input.symbol)) {
         materialized = await watchlists.add(input.market, {
           market: input.market,
           symbol: input.symbol,

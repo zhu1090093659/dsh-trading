@@ -1,4 +1,4 @@
-﻿; Custom NSIS installer script for DSH Trading Desktop
+; Custom NSIS installer script for DSH Trading Desktop
 ; Includes:
 ; 1. Detection and silent installation of Microsoft Visual C++ 2015-2022 Redistributable (x64)
 ; 2. Uninstallation prompt asking the user whether to clean ~/.dsh and user app data
@@ -30,9 +30,11 @@
 !macroend
 
 !macro customUnInstall
-  MessageBox MB_ICONQUESTION|MB_YESNO "是否同时清除用户交易数据与配置目录（包括 ~/.dsh 和本地缓存）？$\r$\n$\r$\n【是】完全删除数据与配置$\r$\n【否】保留用户数据以便重新安装" IDNO skipUserData
-    DetailPrint "Cleaning user data directory (~/.dsh)..."
-    RMDir /r "$PROFILE\.dsh"
+  ; 只清 dsh-trading 自有 home（~/.dsh-trading）——绝不动 ~/.dsh（dsh web 宿主
+  ; 与 CLI 的共享 home，含会话/记忆/技能/凭据；2026-09-08 DSH_HOME 分离后两者无关）。
+  MessageBox MB_ICONQUESTION|MB_YESNO "是否同时清除用户交易数据与配置目录（包括 ~/.dsh-trading 和本地缓存）？$\r$\n$\r$\n【是】完全删除数据与配置$\r$\n【否】保留用户数据以便重新安装" IDNO skipUserData
+    DetailPrint "Cleaning user data directory (~/.dsh-trading)..."
+    RMDir /r "$PROFILE\.dsh-trading"
     RMDir /r "$APPDATA\dsh-trading-desktop"
     RMDir /r "$LOCALAPPDATA\dsh-trading-desktop"
   skipUserData:

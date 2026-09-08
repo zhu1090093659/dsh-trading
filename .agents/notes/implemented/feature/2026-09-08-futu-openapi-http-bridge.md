@@ -30,3 +30,10 @@ connector-futu 的 HTTP 契约（GET /api/qot/*）没有真实载体：原版 Fu
 - 订阅槽位：每 (code, ktype) 一个，自选 2 只港股 × 2 粒度 ≈ 4/100；watchlist 增长仍远低于上限。
 - 早期发现的过程性问题记录：`open` 启动桌面壳会继承调用方 shell 的 DSH_HOME（显式 env 优先于内置缺省）——从带 DSH_HOME 的 shell 验证必须 `env -i`。
 - spikes/impl-futu-bridge/ 留桥面原始响应证据；connector-futu 既有单测不受影响（未改 rest.ts 契约）。
+
+## Addendum (2026-09-08, 审查修正)
+
+- 订阅槽表改 LRU（`OrderedDict` + 满额 `quote.unsubscribe` 淘汰，上限
+  `FUTU_BRIDGE_MAX_SUBSCRIPTIONS` 默认 100）：此前只增不减，累计 100 个
+  (security, klType) 后新订阅全失败、分钟线全错，直到重启桥；迷你走势 60s 轮询
+  会放大触发。详见 [review fixes](../bug-fix/2026-09-08-review-fixes.md)。

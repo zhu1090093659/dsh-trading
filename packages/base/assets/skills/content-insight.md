@@ -134,7 +134,8 @@ python <skill目录>/scripts/wechat_fetch.py "<文章链接>" <工作目录>
 
 ## S4: 知识库入库（统一存储，默认执行）
 
-**唯一权威存储**：`~/.dsh/knowledge/cards.json` —— dsh-trading 知识库 UI（中栏知识库 Tab）的
+**唯一权威存储**：`$DSH_HOME/knowledge/cards.json`（dsh-trading 缺省 `~/.dsh-trading/knowledge/cards.json`；
+2026-09-08 起 trading 走独立 home，不再是 `~/.dsh`）—— dsh-trading 知识库 UI（中栏知识库 Tab）的
 唯一数据源。markdown 知识卡片（S3 产物）只是过程底稿；**不入库 = 未沉淀**。
 字段契约与受控词表对齐 dsh-trading 的 `knowledge-curation` 技能（source.url 为查重键；
 credibility 三档；factCheck 三桶；takeaways/boundaries/tags）。

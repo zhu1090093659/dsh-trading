@@ -5,4 +5,9 @@
 # 注意：桌面壳已在运行时本脚本只会激活旧实例——先退出再启动。
 #   退出：osascript -e 'quit app "DSH Trading"'
 DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
-exec open -a "DSH Trading" --env "DSH_HOME=$DSH_HOME" "$@"
+# 参数必须经 --args 转交应用本体（直接 "$@" 会被 open 自己解析：--profile 报
+# unrecognized option，路径被当作要打开的文件；2026-09-08 审查 L2 实证）。
+if [ "$#" -gt 0 ]; then
+  exec open -a "DSH Trading" --env "DSH_HOME=$DSH_HOME" --args "$@"
+fi
+exec open -a "DSH Trading" --env "DSH_HOME=$DSH_HOME"

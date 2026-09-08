@@ -9,7 +9,8 @@ with @dshtrading/connector-futu 的假定契约（GET + query，响应 {retType,
   GET /api/qot/get-ticker?security=HK.00700
       → get_market_snapshot（不消耗订阅/历史额度）→ {curPrice,bidPrice,askPrice,volume,time}
   GET /api/qot/get-kl?security=HK.00700&klType=2&reqNum=200&rehabType=1
-      → 自动订阅 K_*(消耗 1 个订阅槽，上限 100) + get_cur_kline（不消耗历史K线额度 6/100）
+      → 自动订阅 K_*(消耗 1 个订阅槽；上限 100，FUTU_BRIDGE_MAX_SUBSCRIPTIONS 可覆盖，
+        满额按 LRU 自动 unsubscribe 淘汰) + get_cur_kline（不消耗历史K线额度 6/100）
       → {klList:[{time,open,high,low,close,volume}]}，time 为 ISO UTC
   GET /api/qot/get-plate-security?plate=... → {securityList:[]}（listInstruments 静默空）
   其余（/api/trd/*）→ retType:-1（交易面保持关闭，liveTrading 恒 false）
@@ -29,6 +30,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+from collections import OrderedDict
 from datetime import datetime, timezone, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -77,7 +79,11 @@ KL_TYPE_TO_SUBTYPE = {
 }
 
 quote = OpenQuoteContext(host=OPEND_HOST, port=OPEND_PORT)
-subscribed: set[tuple[str, int]] = set()
+# 订阅槽 LRU（2026-09-08 审查 M2）：OpenD 每连接订阅上限 100，此前只增不减——
+# 累计 100 个 (security, klType) 后所有新订阅失败、分钟线全错，直到重启桥。
+# 命中上限时按最久未用淘汰并 unsubscribe，槽位可回收。
+MAX_SUBSCRIPTIONS = max(1, int(os.environ.get('FUTU_BRIDGE_MAX_SUBSCRIPTIONS', '100')))
+subscribed: "OrderedDict[tuple[str, int], None]" = OrderedDict()
 lock = threading.Lock()  # futu-api ctx 非线程安全，串行化
 
 
@@ -129,10 +135,23 @@ def handle_get_kl(q: dict) -> dict:
 
     key = (code, kl_type)
     if key not in subscribed:
+        while len(subscribed) >= MAX_SUBSCRIPTIONS:
+            old_code, old_type = subscribed.popitem(last=False)
+            old_subtype = KL_TYPE_TO_SUBTYPE.get(old_type)
+            if old_subtype is None:
+                continue
+            try:
+                quote.unsubscribe([old_code], [old_subtype])
+                print(f'unsubscribed {old_code} {old_subtype} (LRU eviction)', flush=True)
+            except Exception as exc:  # noqa: BLE001 —— 淘汰失败不阻塞新订阅
+                print(f'unsubscribe {old_code} {old_subtype} failed: {exc}', flush=True)
         ret, err_msg = quote.subscribe([code], [subtype], subscribe_push=False)
         if ret != 0:
             return err(f'subscribe {code} {subtype} failed: {err_msg}')
-        subscribed.add(key)
+        subscribed[key] = None
+        print(f'subscribed {code} {subtype} ({len(subscribed)}/{MAX_SUBSCRIPTIONS})', flush=True)
+    else:
+        subscribed.move_to_end(key)
 
     ret, df = quote.get_cur_kline(code, num=req_num, ktype=kltype, autype=AuType.QFQ)
     if ret != 0:

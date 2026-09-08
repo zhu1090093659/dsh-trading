@@ -38,6 +38,7 @@ export type MarketLocaleKey =
   | 'group.manage'
   | 'group.emptyHint'
   | 'group.duplicateName'
+  | 'group.notFound'
   | 'group.createFailed'
   | 'group.ungrouped'
   | 'group.remove'

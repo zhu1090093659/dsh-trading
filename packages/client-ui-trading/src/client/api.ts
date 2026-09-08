@@ -591,9 +591,11 @@ export async function createHostWatchlistGroup(name: string): Promise<{ ok: true
       body: JSON.stringify({ name }),
     })
     if (!response.ok) return { ok: false, reason: 'unavailable' }
-    const wire = await response.json() as { ok?: boolean; group?: HostWatchlistGroup }
+    const wire = await response.json() as { ok?: boolean; group?: HostWatchlistGroup; code?: string; reason?: string }
     if (wire.ok === true && wire.group !== undefined) return { ok: true, group: wire.group }
-    return { ok: false, reason: 'duplicate' }
+    // code 是机器可读判据（审查 L4）；缺 code 的旧桥按 reason 文案兜底。
+    if (wire.code === 'duplicate' || (wire.reason ?? '').includes('already exists')) return { ok: false, reason: 'duplicate' }
+    return { ok: false, reason: 'unavailable' }
   } catch {
     return { ok: false, reason: 'unavailable' }
   }
@@ -608,9 +610,12 @@ export async function renameHostWatchlistGroup(id: string, name: string): Promis
       body: JSON.stringify({ id, name }),
     })
     if (!response.ok) return { ok: false, reason: 'unavailable' }
-    const wire = await response.json() as { ok?: boolean; group?: HostWatchlistGroup }
+    const wire = await response.json() as { ok?: boolean; group?: HostWatchlistGroup; code?: string; reason?: string }
     if (wire.ok === true && wire.group !== undefined) return { ok: true, group: wire.group }
-    return { ok: false, reason: 'duplicate' }
+    // 审查 L4：not-found（组已被别处删除）与同名冲突此前同形，一律显示「名称已存在」。
+    if (wire.code === 'not-found' || (wire.reason ?? '').includes('no such group id')) return { ok: false, reason: 'not-found' }
+    if (wire.code === 'duplicate' || (wire.reason ?? '').includes('already exists')) return { ok: false, reason: 'duplicate' }
+    return { ok: false, reason: 'unavailable' }
   } catch {
     return { ok: false, reason: 'unavailable' }
   }

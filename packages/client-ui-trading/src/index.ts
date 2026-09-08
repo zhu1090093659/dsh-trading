@@ -133,13 +133,24 @@ export function apply(ctx: Context): void {
   const screenerStore = strategiesService?.screenerStore
     ?? createFileCustomScreenerStore(path.join(dshHomeDir(), 'strategies', 'custom-screeners.json'))
 
-  const watchlistStorePath = path.join(dshHomeDir(), 'watchlists.json')
-  const watchlistStore = createFileWatchlistStore(watchlistStorePath)
+  // 自选/选中 store 单实例（2026-09-08 审查 H1）：@dshtrading/watchlist/plugin
+  // provide tradingWatchlist 服务（.store/.selection = 同一 file store 实例）——
+  // 此前桥自建第二个实例，两侧各持整表缓存、各自整表回写，agent 工具写会覆盖
+  // GUI 写入的行与分组归属。服务缺席（老部署）→ 回退自建同路径 file store。
+  const watchlistService = serviceGet('tradingWatchlist') as
+    | {
+        store?: import('@dshtrading/watchlist').WatchlistStore
+        selection?: import('@dshtrading/watchlist').SelectionStore
+      }
+    | undefined
+  const watchlistStore = watchlistService?.store
+    ?? createFileWatchlistStore(path.join(dshHomeDir(), 'watchlists.json'))
+  const selectionStore = watchlistService?.selection
+    ?? createFileSelectionStore(path.join(dshHomeDir(), 'selection.json'))
   // 自定义分组注册表（issue #82）：成员关系存在 watchlists.json 行的 groups 字段，
   // 这里只挂注册表（名称等元数据）；删分组时桥先 stripGroup 再删注册表行。
+  // 注册表只有桥读写（agent 工具面不暴露分组），无需跨包共享单实例。
   const groupsStore = createFileWatchlistGroupsStore(path.join(dshHomeDir(), 'watchlist-groups.json'))
-  const selectionStorePath = path.join(dshHomeDir(), 'selection.json')
-  const selectionStore = createFileSelectionStore(selectionStorePath)
 
   // tradingEvents 失效信号源（issue #30）：base patch 行挂载 eventbus 时可用；
   // 缺席（老部署）→ 发布点静默降级为现状（一次性 fetch 客户端行为不变）。

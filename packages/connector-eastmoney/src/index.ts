@@ -91,7 +91,8 @@ export function apply(ctx: Context, config: Config): void {
   const market = config.market ?? 'cn'
   if (!routeAllows(ctx, config, market)) return
 
-  const marketData = new EastmoneyMarketDataService(ctx, {}, marketDataKey(market))
+  // 形态解析/价格倍率按实例市场分流（审查 H3）：hk 实例不接 CN 形态，反之亦然。
+  const marketData = new EastmoneyMarketDataService(ctx, { market }, marketDataKey(market))
 
   ctx.inject(['tools'], (ctx) => {
     const tools = ctx.tools as unknown as { register(d: unknown): void; get(n: string): unknown }

@@ -130,7 +130,7 @@ export function GroupMenu({ t, groups, activeGroupId, allCount, countOf, onSelec
                 aria-label={t('group.create')}
                 onChange={event => { setDraft(event.target.value); setCreateError(null) }}
                 onKeyDown={(event) => {
-                  if (event.key === 'Escape') { setMode('list'); setCreateError(null); setDraft('') }
+                  if (event.key === 'Escape') { event.stopPropagation(); setMode('list'); setCreateError(null); setDraft('') }
                 }}
               />
               {createError !== null && (

@@ -73,12 +73,21 @@ describe('TradingTasksService', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  function makeService(gateway: ReturnType<typeof makeGateway>['gateway'], options: { tickMs?: number } = {}): TradingTasksService {
+  function makeService(
+    gateway: ReturnType<typeof makeGateway>['gateway'],
+    options: { tickMs?: number; permissionCalls?: Array<{ sessionId: string; line: string }> } = {},
+  ): TradingTasksService {
     const service = new TradingTasksService({
       ledgerPath: join(dir, 'ledger-v1.json'),
       gateway: () => gateway,
       // 创建默认钉住 workspace-write 后，launch 会对执行会话应用 /permission。
-      commands: () => ({ execute: async () => ({ kind: 'success', text: 'ok' }) }),
+      // permissionCalls 记录派发流水（审查 M4：只桩不验会让「权限没下发」静默通过）。
+      commands: () => ({
+        execute: async (sessionId: string, line: string) => {
+          options.permissionCalls?.push({ sessionId, line })
+          return { kind: 'success', text: 'ok' }
+        },
+      }),
       tickMs: options.tickMs ?? 1_000,
       pollMs: 500,
     })
@@ -112,6 +121,22 @@ describe('TradingTasksService', () => {
       const settled = service.snapshot().tasks.find(item => item.id === taskId)
       expect(settled?.executions[0]?.result).toBe('succeeded')
       expect(settled?.schedule?.nextRunAt).toBe(new Date(2026, 0, 1, 9, 2, 0).getTime())
+    } finally {
+      service.dispose()
+    }
+  })
+
+  it('默认权限钉住后 launch 对执行会话下发 /permission workspace-write（审查 M4）', async () => {
+    const fake = makeGateway()
+    const permissionCalls: Array<{ sessionId: string; line: string }> = []
+    const service = makeService(fake.gateway, { permissionCalls })
+    service.start()
+    try {
+      const taskId = createTask(service, '* * * * *')
+      await vi.advanceTimersByTimeAsync(65_000)
+      expect(permissionCalls).toEqual([
+        { sessionId: service.snapshot().tasks.find(item => item.id === taskId)?.executions[0]?.sessionId, line: '/permission workspace-write' },
+      ])
     } finally {
       service.dispose()
     }

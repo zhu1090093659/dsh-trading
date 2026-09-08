@@ -59,7 +59,13 @@ function defaultDshRoot() {
 }
 
 const DSH = String(opts.get('dsh') ?? defaultDshRoot())
-const DSH_HOME = String(opts.get('dsh-home') ?? process.env.DSH_HOME ?? join(homedir(), '.dsh-trading'))
+// 空白 DSH_HOME 视为未设（与 @dshtrading/dsh-home、两个 .sh 脚本同语义；审查 L3）：
+// 此前 `??` 只在 undefined 时回落，`DSH_HOME=` 会让路径变成 CWD 相对的 profiles/。
+const DSH_HOME_ENV = process.env.DSH_HOME
+const DSH_HOME = String(
+  opts.get('dsh-home')
+  ?? (DSH_HOME_ENV !== undefined && DSH_HOME_ENV.trim() !== '' ? DSH_HOME_ENV : join(homedir(), '.dsh-trading')),
+)
 const DRY = opts.get('dry-run') === true
 
 /** SDK 包在 DSH 本体内的路径映射（npm 安装树为扁平布局：node_modules/@deepseek-ai/<pkg>；

@@ -69,18 +69,25 @@ describe('watchlist group endpoints（issue #82）', () => {
     })
     expect(add.payload).toMatchObject({ ok: true, added: true, materialized: true })
 
+    // 审查 H2：未定制市场整体物化种子基线（不能只物化目标行——「键存在 = 已定制」
+    // 会让该市场其余默认行被判删），目标行落分组归属。
     const list = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
-    expect(list.payload).toMatchObject({ ok: true, watchlists: { us: [{ market: 'us', symbol: 'AAPL', name: '苹果', groups: [id] }] } })
+    const us = (list.payload as { watchlists: { us: Array<{ symbol: string; name?: string; groups?: string[] }> } }).watchlists.us
+    expect(us.map(row => row.symbol)).toEqual(['AAPL', 'MSFT', 'NVDA', 'GOOGL'])
+    expect(us.find(row => row.symbol === 'AAPL')?.groups).toEqual([id])
+    expect(us.filter(row => row.symbol !== 'AAPL').every(row => row.groups === undefined)).toBe(true)
 
-    // 再入一行已有标的（不物化）
-    await dispatchBridgeRequest(bridge, 'POST', '/watchlists', new URLSearchParams(), { market: 'us', symbol: 'MSFT' })
+    // 已在基线里的标的入组不物化
     const add2 = await dispatchBridgeRequest(bridge, 'POST', '/watchlist-group-members', new URLSearchParams(), { id, market: 'us', symbol: 'MSFT' })
     expect(add2.payload).toMatchObject({ ok: true, added: true, materialized: false })
 
     const remove = await dispatchBridgeRequest(bridge, 'DELETE', '/watchlist-group-members', new URLSearchParams({ id, market: 'us', symbol: 'AAPL' }))
     expect(remove.payload).toMatchObject({ ok: true, removed: true })
     const after = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
-    expect(after.payload).toMatchObject({ ok: true, watchlists: { us: [{ symbol: 'AAPL' }, { symbol: 'MSFT', groups: [id] }] } })
+    const afterUs = (after.payload as { watchlists: { us: Array<{ symbol: string; groups?: string[] }> } }).watchlists.us
+    expect(afterUs.map(row => row.symbol)).toEqual(['AAPL', 'MSFT', 'NVDA', 'GOOGL'])
+    expect(afterUs.find(row => row.symbol === 'AAPL')?.groups).toBeUndefined()
+    expect(afterUs.find(row => row.symbol === 'MSFT')?.groups).toEqual([id])
     await expect(dispatchBridgeRequest(bridge, 'DELETE', '/watchlist-group-members', new URLSearchParams({ id, market: 'us' })))
       .rejects.toThrowError(/id, market and symbol are required/)
   })
@@ -95,24 +102,37 @@ describe('watchlist group endpoints（issue #82）', () => {
     await dispatchBridgeRequest(bridge, 'DELETE', '/watchlist-groups', new URLSearchParams({ id }))
     const list = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
     const us = (list.payload as { watchlists: { us: Array<{ symbol: string; groups?: string[] }> } }).watchlists.us
-    expect(us.map(row => row.symbol).sort()).toEqual(['AAPL', 'MSFT'])
+    // 种子基线（审查 H2）保留，成员关系被剥离。
+    expect(us.map(row => row.symbol).sort()).toEqual(['AAPL', 'GOOGL', 'MSFT', 'NVDA'])
     expect(us.every(row => row.groups === undefined)).toBe(true)
   })
 
-  it('POST/PUT /watchlists 携带 groups 字段保真（GUI 分组视图添加/全量替换）', async () => {
+  it('POST/PUT /watchlists 携带 groups 字段保真（已注册 id；坏项与未注册 id 被清洗）', async () => {
     const { bridge } = makeBridge()
+    const g1 = (await dispatchBridgeRequest(bridge, 'POST', '/watchlist-groups', new URLSearchParams(), { name: '甲组' }))
+      .payload as { group: { id: string } }
+    const g2 = (await dispatchBridgeRequest(bridge, 'POST', '/watchlist-groups', new URLSearchParams(), { name: '乙组' }))
+      .payload as { group: { id: string } }
+
     await dispatchBridgeRequest(bridge, 'POST', '/watchlists', new URLSearchParams(), {
-      market: 'crypto', symbol: 'BTCUSDT', name: 'Bitcoin', groups: ['g_a', 'g_b', ''],
+      market: 'crypto', symbol: 'BTCUSDT', name: 'Bitcoin', groups: [g1.group.id, g2.group.id, ''],
     })
     const list = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
-    // 坏项（空串）被清洗，合法 id 保序保留
-    expect(list.payload).toMatchObject({ ok: true, watchlists: { crypto: [{ symbol: 'BTCUSDT', groups: ['g_a', 'g_b'] }] } })
+    // 坏项（空串）被清洗，已注册 id 保序保留
+    expect(list.payload).toMatchObject({ ok: true, watchlists: { crypto: [{ symbol: 'BTCUSDT', groups: [g1.group.id, g2.group.id] }] } })
+
+    // 审查 L4：注册表里不存在的 id 一律丢弃（删组清理覆盖不到的悬挂归属）。
+    await dispatchBridgeRequest(bridge, 'PUT', '/watchlists', new URLSearchParams(), {
+      watchlists: { hk: [{ market: 'hk', symbol: '00700', groups: ['g_ghost'] }] },
+    })
+    const dropped = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
+    expect(dropped.payload).toMatchObject({ ok: true, watchlists: { hk: [{ symbol: '00700' }] } })
 
     await dispatchBridgeRequest(bridge, 'PUT', '/watchlists', new URLSearchParams(), {
-      watchlists: { hk: [{ market: 'hk', symbol: '00700', groups: ['g_x'] }] },
+      watchlists: { hk: [{ market: 'hk', symbol: '00700', groups: [g1.group.id] }] },
     })
     const after = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
-    expect(after.payload).toMatchObject({ ok: true, watchlists: { hk: [{ symbol: '00700', groups: ['g_x'] }] } })
+    expect(after.payload).toMatchObject({ ok: true, watchlists: { hk: [{ symbol: '00700', groups: [g1.group.id] }] } })
   })
 
   it('成员入组协议校验：缺 id/market/symbol 400', async () => {

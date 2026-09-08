@@ -6,10 +6,10 @@ An Electron shell that turns the dsh-trading Web GUI into an installable desktop
 
 ## What it does
 
-- Double-click launch: the app seeds `~/.dsh/profiles/trading-web` from the bundled profile when it is missing, starts the dsh host on a free loopback port with the bundled Node runtime (`dsh --profile trading-web --no-open`), waits for the GUI, and loads the tokenized URL the host prints (the auth fence issues a per-process token; the resulting session cookie lives in the app window).
+- Double-click launch: the app seeds `~/.dsh-trading/profiles/trading-web` from the bundled profile when it is missing, starts the dsh host on a free loopback port with the bundled Node runtime (`dsh --profile trading-web --no-open`), waits for the GUI, and loads the tokenized URL the host prints (the auth fence issues a per-process token; the resulting session cookie lives in the app window).
 - Custom installation wizard: Windows NSIS installer provides a multi-step setup wizard with custom destination directory selection (silent one-click mode disabled).
 - Silent VC++ redistributable integration: Bundles Microsoft Visual C++ 2015-2022 Redistributable (x64), automatically checks 64-bit Windows registry during install, and installs silently if missing, preventing host startup crashes (0xC0000135) on clean Windows setups.
-- Uninstallation prompt: Asks the user via interactive dialog whether to clean `~/.dsh` configuration and local caches upon uninstall.
+- Uninstallation prompt: Asks the user via interactive dialog whether to clean the `~/.dsh-trading` data directory and local caches upon uninstall (the shared `~/.dsh` home of the dsh web host is never touched).
 - Handoff instead of double hosts: when a dsh web GUI already answers at `http://127.0.0.1:3080`, the app opens that URL in the system browser (whose cookie jar already holds the session) and quits. Two web hosts on one `~/.dsh` are never started.
 - Shares `~/.dsh` with any existing dsh installation: profiles the app seeded itself carry a `.dsh-desktop-seed.json` marker and are re-seeded when the bundled runtime changes; profiles without the marker are user-managed and never touched. The user's `cordis.patch.yml` layer survives re-seeding.
 - Trading safety semantics are unchanged: orders default to dry-run behind the base approval gate exactly as in the CLI (`liveTrading` stays an explicit opt-in).

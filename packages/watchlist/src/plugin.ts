@@ -12,6 +12,7 @@
  * 词汇纪律：market/symbol 用市场规范形，本插件不归一化（原样落盘）。
  */
 import type { Context } from '@deepseek-ai/cordis'
+import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import path from 'node:path'
 import { dshHomeDir } from '@dshtrading/dsh-home'
@@ -249,10 +250,36 @@ export function registerWatchlistTools(ctx: Context, deps: WatchlistPluginDeps):
   })
 }
 
+/** SDK 服务键：自选/选中 store 单实例（桥与工具共享同一缓存；2026-09-08 审查 H1 收口）。 */
+export const TRADING_WATCHLIST_KEY = 'tradingWatchlist'
+
+/**
+ * 自选 + 选中 store 服务（单实例共享点，strategies/indicators 同款 provide 模式）。
+ *
+ * 2026-09-08 审查实证：桥（client-ui-trading node 半）此前自建第二个 file store，
+ * 与工具侧实例各持整表缓存、各自整表回写 → 两侧写互相覆盖（agent `watchlist_add`
+ * 抹掉 GUI 刚写入的行与全部分组归属）。服务缺席（老部署）时桥仍回退自建实例。
+ */
+export class WatchlistStoreService extends Service {
+  readonly store: WatchlistStore
+  readonly selection: SelectionStore
+  constructor(
+    ctx: Context,
+    deps: { watchlists: WatchlistStore; selection: SelectionStore },
+    serviceName: string = TRADING_WATCHLIST_KEY,
+  ) {
+    super(ctx, serviceName)
+    this.store = deps.watchlists
+    this.selection = deps.selection
+  }
+}
+
 /** Host plugin body：file store provide + 4 工具注册（host 平面，全会话可见）。 */
 export function apply(ctx: Context): void {
   const watchlists = createFileWatchlistStore(defaultWatchlistStorePath())
   const selection = createFileSelectionStore(defaultSelectionStorePath())
+  // Service 单实例（审查 H1）：桥经 ctx.get 解包 .store/.selection 复用同一 file store。
+  new WatchlistStoreService(ctx, { watchlists, selection })
   registerWatchlistTools(ctx, { watchlists, selection })
 }
 

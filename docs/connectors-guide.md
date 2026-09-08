@@ -61,7 +61,7 @@
 
 ## 五、环境变量配置建议
 
-可以将所需连接器的 Key 写入根目录 `.env` 或 `~/.dsh/settings.yaml` 中，例如：
+可以将所需连接器的 Key 写入根目录 `.env` 或 `~/.dsh-trading/settings.yaml`（= `$DSH_HOME/settings.yaml`）中，例如：
 ```bash
 # 美股与全球
 FMP_API_KEY="your_fmp_api_key"
