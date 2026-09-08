@@ -1653,12 +1653,13 @@ function writeInterval(market: MarketId, interval: string): void {
   } catch { /* 忽略 */ }
 }
 
-/** 盘口竖栏开关记忆（issue #39；跨会话，坏值/隐私模式回退默认开）。 */
+/** 盘口竖栏开关记忆（issue #39；跨会话，坏值/隐私模式回退默认关——2026-09-08 用户裁定：
+ *  数据源普遍缺盘口（HK eastmoney/腾讯 r_hk 等），空竖栏是干扰；显式开过的用户保留偏好）。 */
 function readOrderbookOpen(): boolean {
   try {
-    return localStorage.getItem(ORDERBOOK_OPEN_KEY) !== '0'
+    return localStorage.getItem(ORDERBOOK_OPEN_KEY) === '1'
   } catch { /* 忽略 */ }
-  return true
+  return false
 }
 
 function writeOrderbookOpen(open: boolean): void {
