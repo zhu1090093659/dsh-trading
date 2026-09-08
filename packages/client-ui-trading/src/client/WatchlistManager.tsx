@@ -12,7 +12,7 @@ import { searchAllMarkets, updateDynamicCatalog } from './symbol-catalog.ts'
 import type { Observable, WatchlistGroupOpResult, WatchlistGroupsState, Watchlists } from './store.ts'
 import { rowsFor } from './store.ts'
 import type { Instrument, MarketId } from './types.ts'
-import { MARKET_TAB_KEY, normalizeSymbolInput } from './market-vocab.ts'
+import { inferInputMarket, MARKET_TAB_KEY, normalizeSymbolInput } from './market-vocab.ts'
 import { IconClose, IconPlus, IconRename, IconTrash } from './icons.tsx'
 import { GroupMembershipPopover } from './WatchlistGroups.tsx'
 import css from './watchlist-manager.module.css'
@@ -47,7 +47,7 @@ export function WatchlistManager({
   const [markets, setMarkets] = useState<MarketId[]>(FALLBACK_MARKETS)
   const [creating, setCreating] = useState(false)
   const [createDraft, setCreateDraft] = useState('')
-  const [createError, setCreateError] = useState(false)
+  const [createError, setCreateError] = useState<'duplicate' | 'failed' | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -90,9 +90,11 @@ export function WatchlistManager({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows])
 
-  const visibleRows = selected === 'all'
+  // 活动分组被别处删除（SSE 重拉/另一标签页）→ 归位「全部」，防悬挂 id 过滤出空表。
+  const scope: string | 'all' = selected === 'all' || groups.some(group => group.id === selected) ? selected : 'all'
+  const visibleRows = scope === 'all'
     ? allRows
-    : allRows.filter(row => row.groups?.includes(selected))
+    : allRows.filter(row => row.groups?.includes(scope))
 
   // 联想：与侧栏同款（本地字典 + 200ms 防抖在线检索注入动态字典）。
   const suggestions = useMemo(() => searchAllMarkets(draft), [draft, catalogVersion])
@@ -125,9 +127,9 @@ export function WatchlistManager({
       setSelected(result.group.id)
       setCreating(false)
       setCreateDraft('')
-      setCreateError(false)
+      setCreateError(null)
     } else {
-      setCreateError(result.reason === 'duplicate')
+      setCreateError(result.reason === 'duplicate' ? 'duplicate' : 'failed')
     }
   }
 
@@ -139,7 +141,7 @@ export function WatchlistManager({
       setRenamingId(null)
       setRenameDraft('')
     } else {
-      setCreateError(result.reason === 'duplicate')
+      setCreateError(result.reason === 'duplicate' ? 'duplicate' : 'failed')
     }
   }
 
@@ -151,8 +153,8 @@ export function WatchlistManager({
 
   const addToScope = (market: MarketId, symbol: string, name?: string): void => {
     const item: Instrument = { market, symbol, ...(name ? { name } : {}) }
-    if (selected !== 'all') {
-      const gid = selected
+    if (scope !== 'all') {
+      const gid = scope
       addInstrument(market, { ...item, groups: [gid] })
       // 幂等兜底：标的已在自选（addInstrument 去重）时也确保入组。
       void assignGroupMember(gid, market, symbol, true, name)
@@ -179,12 +181,13 @@ export function WatchlistManager({
     }
     // 防呆：纯中文且无字典命中不提交（与侧栏同款）。
     if (/[\u4e00-\u9fa5]/.test(rawDraft)) return
-    const target = FALLBACK_MARKETS[0] ?? 'crypto'
+    // 无市场上下文的手输：按代码形态推断（此前恒落 crypto，把美股 ticker 归错市场）。
+    const target = inferInputMarket(rawDraft)
     addToScope(target, normalizeSymbolInput(target, rawDraft))
     setDraft('')
   }
 
-  const selectedName = selected === 'all' ? t('group.all') : groups.find(group => group.id === selected)?.name ?? t('group.all')
+  const selectedName = scope === 'all' ? t('group.all') : groups.find(group => group.id === scope)?.name ?? t('group.all')
   const rowKey = (row: Instrument): string => `${row.market}:${row.symbol}`
 
   // portal 到 body：dock 祖先链有自己的层叠上下文（z 序低于中栏），fixed 弹窗
@@ -214,14 +217,18 @@ export function WatchlistManager({
                       autoFocus
                       placeholder={t('group.createPlaceholder')}
                       aria-label={t('group.create')}
-                      onChange={event => { setCreateDraft(event.target.value); setCreateError(false) }}
+                      onChange={event => { setCreateDraft(event.target.value); setCreateError(null) }}
                       onKeyDown={event => {
-                        if (event.key === 'Escape') { setCreating(false); setCreateDraft(''); setCreateError(false) }
+                        if (event.key === 'Escape') { setCreating(false); setCreateDraft(''); setCreateError(null) }
                       }}
                     />
-                    {createError && <div className={css.railCreateError}>{t('group.duplicateName')}</div>}
+                    {createError !== null && (
+                        <div className={css.railCreateError}>
+                          {createError === 'duplicate' ? t('group.duplicateName') : t('group.createFailed')}
+                        </div>
+                      )}
                     <div className={css.railCreateActions}>
-                      <button type="button" className={css.miniBtn} onClick={() => { setCreating(false); setCreateDraft(''); setCreateError(false) }}>
+                      <button type="button" className={css.miniBtn} onClick={() => { setCreating(false); setCreateDraft(''); setCreateError(null) }}>
                         {t('manager.cancel')}
                       </button>
                       <button type="submit" className={css.miniBtnPrimary} disabled={createDraft.trim() === ''}>
@@ -240,7 +247,7 @@ export function WatchlistManager({
               <button
                 type="button"
                 className={css.groupRow}
-                data-active={selected === 'all' ? 'true' : undefined}
+                data-active={scope === 'all' ? 'true' : undefined}
                 onClick={() => setSelected('all')}
               >
                 <span className={css.groupRowName}>{t('group.all')}</span>
@@ -260,14 +267,18 @@ export function WatchlistManager({
                         maxLength={24}
                         autoFocus
                         aria-label={t('manager.rename')}
-                        onChange={event => { setRenameDraft(event.target.value); setCreateError(false) }}
+                        onChange={event => { setRenameDraft(event.target.value); setCreateError(null) }}
                         onKeyDown={event => {
-                          if (event.key === 'Escape') { setRenamingId(null); setRenameDraft(''); setCreateError(false) }
+                          if (event.key === 'Escape') { setRenamingId(null); setRenameDraft(''); setCreateError(null) }
                         }}
                       />
-                      {createError && <div className={css.railCreateError}>{t('group.duplicateName')}</div>}
+                      {createError !== null && (
+                        <div className={css.railCreateError}>
+                          {createError === 'duplicate' ? t('group.duplicateName') : t('group.createFailed')}
+                        </div>
+                      )}
                       <div className={css.railCreateActions}>
-                        <button type="button" className={css.miniBtn} onClick={() => { setRenamingId(null); setRenameDraft(''); setCreateError(false) }}>
+                        <button type="button" className={css.miniBtn} onClick={() => { setRenamingId(null); setRenameDraft(''); setCreateError(null) }}>
                           {t('manager.cancel')}
                         </button>
                         <button type="submit" className={css.miniBtnPrimary} disabled={renameDraft.trim() === ''}>
@@ -281,13 +292,13 @@ export function WatchlistManager({
                   <div
                     key={group.id}
                     className={css.groupRowWrap}
-                    data-active={selected === group.id ? 'true' : undefined}
+                    data-active={scope === group.id ? 'true' : undefined}
                     onClick={() => setSelected(group.id)}
                     role="button"
                     tabIndex={0}
                     onKeyDown={event => { if (event.key === 'Enter') setSelected(group.id) }}
                   >
-                    <button type="button" className={css.groupRow} data-active={selected === group.id ? 'true' : undefined} tabIndex={-1}>
+                    <button type="button" className={css.groupRow} data-active={scope === group.id ? 'true' : undefined} tabIndex={-1}>
                       <span className={css.groupRowName}>{group.name}</span>
                       <span className={css.groupRowCount}>{groupCounts.get(group.id) ?? 0}</span>
                     </button>
@@ -394,7 +405,7 @@ export function WatchlistManager({
             </div>
             <div className={css.tableBody}>
               {visibleRows.length === 0
-                ? <div className={css.empty}>{selected === 'all' ? t('sidebar.emptyHint') : t('group.emptyHint')}</div>
+                ? <div className={css.empty}>{scope === 'all' ? t('sidebar.emptyHint') : t('group.emptyHint')}</div>
                 : visibleRows.map((row) => {
                   const key = rowKey(row)
                   const memberOf = row.groups ?? []
@@ -438,8 +449,8 @@ export function WatchlistManager({
                                 type="button"
                                 className={css.rowActionDanger}
                                 onClick={() => {
-                                  if (selected === 'all') removeInstrument(row.market, row.symbol)
-                                  else if (selected !== 'all') void assignGroupMember(selected, row.market, row.symbol, false, row.name)
+                                  if (scope === 'all') removeInstrument(row.market, row.symbol)
+                                  else void assignGroupMember(scope, row.market, row.symbol, false, row.name)
                                   setConfirmRemoveKey(null)
                                 }}
                               >
@@ -450,8 +461,8 @@ export function WatchlistManager({
                               <button
                                 type="button"
                                 className={css.rowAction}
-                                aria-label={selected === 'all' ? t('manager.removeRow') : t('group.remove')}
-                                title={selected === 'all' ? t('manager.removeRow') : t('group.remove')}
+                                aria-label={scope === 'all' ? t('manager.removeRow') : t('group.remove')}
+                                title={scope === 'all' ? t('manager.removeRow') : t('group.remove')}
                                 onClick={() => setConfirmRemoveKey(key)}
                               >
                                 ✕

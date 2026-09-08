@@ -43,6 +43,26 @@ Status: implemented
 - 测试：watchlist 包 19 例（注册表 CRUD/membership 语义/文件往返/并发）、桥端点 6 例（CRUD/物化/保真/协议 400）、client sync 14 例（host-first 接管/悬挂防护/SSE）、store 13 例；全仓 `pnpm build` + `pnpm test` 全绿（1237 passed）。
 - 实测（trading-web profile + 无头 Chrome 交互驱动）：建组/选组/组内添加（TSLA 直落入组）/行级勾选（AAPL、GOOGL 入组）/管理器 CRUD（创建备选→改名观察仓→删除）/管理器内加标的（00700→00700.HK 带组物化）/页签互斥/移出分组语义，全部落盘验证通过；测试数据已清理复原。
 
+## 审查修正（2026-09-08 主 agent 审查 #85）
+
+- **管理弹窗添加框错归市场（已修）**：`submitDraft` 无字典命中时回落 `FALLBACK_MARKETS[0]`（= crypto），
+  手输 `PLTR` 之类本地字典未收录的美股代码会落成 crypto 行。修法：新增 `market-vocab.inferInputMarket`
+  （1-5 位数字/含 `HK.`/`.HK` → hk，6 位数字/`.SH`/`.SZ` → cn，含加密计价标记 → crypto，其余 → us），
+  `normalizeSymbolInput` 的 hk 分支同时接受 `HK.00700` 原生形归一到 `00700.HK`。
+- **管理弹窗活动分组悬挂（已修）**：`selected` 指向的分组被别处删除（SSE 重拉/另一标签页）时，
+  标题回落「全部」但列表仍按死 id 过滤 → 空表。修法：派生 `scope`（分组不在注册表即归位 `'all'`），
+  展示与交互路径（范围标题/行 ✕/加标的入组目标/rail 高亮）统一走 `scope`；侧栏同款防护此前已由 815702d 落地。
+- **未知分组 id 入组未校验（已修）**：桥 `addWatchlistGroupMember` 取了 `groupsStore` 却只判空，
+  任意 id 会物化行并写入悬挂归属（管理弹窗显示 `?` chip，删组清理覆盖不到）。修法：入组前校验注册表，
+  不存在返回 `ok:false + reason`（客户端 host-first 语义下 fail-closed，本地不动）。
+- **错误提示误导（已修）**：创建/重命名失败一律报「分组名称已存在」，宿主桥不可用（`unavailable`）时文案错误且静默。
+  修法：新增 i18n 键 `group.createFailed`（zh/en），下拉菜单与管理弹窗区分 `duplicate` / `failed`。
+- 补测：`market-vocab.test.ts`（推断/归一 8 断言）、桥端点未知 id 用例、`watchlist-manager.smoke.test.tsx`
+  （jsdom 渲染冒烟：分组行/chip 渲染、手输 `PLTR`→us 与 `700`→00700.HK、活动分组被删后行不消失）。
+- 未改动但需知悉：`applyLocalMembership` 在未定制市场按整段种子基线物化本地镜像（与 `remove` 同款既有语义，
+  SSE 重拉后收敛为 host 真实行，`host-watchlist-sync.test.ts` 已断言该行为）；`syncGroupsFromHost` 用 `set`
+  覆盖镜像不落 localStorage（下次启动仍以 host 为准）。
+
 ## References
 
 - Issue #82；参考富途牛牛自选下拉与自选管理两张截图（用户提供的交互基准）。

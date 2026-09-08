@@ -1366,11 +1366,15 @@ export class TradingBridge {
    * 加入分组（POST /watchlist-group-members，body { id, market, symbol, name? }）：
    * 行缺席时物化（种子展示行入组场景——host store 未定制市场无行），随后写归属。
    */
-  async addWatchlistGroupMember(body: unknown): Promise<{ ok: boolean; added: boolean; materialized: boolean }> {
+  async addWatchlistGroupMember(body: unknown): Promise<{ ok: boolean; added: boolean; materialized: boolean; reason?: string }> {
     const groups = this.host.groupsStore
     const watchlists = this.host.watchlistStore
     if (groups === undefined) return { ok: true, added: false, materialized: false }
     const input = parseGroupMemberBody(body)
+    // 组不存在即拒绝：否则行上留下悬挂 id（管理弹窗显示 '?' chip，删组清理也覆盖不到）。
+    if (!(await groups.list()).some(group => group.id === input.id)) {
+      return { ok: false, added: false, materialized: false, reason: `no such group id ${JSON.stringify(input.id)}` }
+    }
     let materialized = false
     if (watchlists !== undefined) {
       const map = await watchlists.list()

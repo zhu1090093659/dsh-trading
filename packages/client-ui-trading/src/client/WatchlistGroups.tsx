@@ -28,7 +28,7 @@ export interface GroupMenuProps {
 export function GroupMenu({ t, groups, activeGroupId, allCount, countOf, onSelect, onCreate, onOpenManager, onClose }: GroupMenuProps & PropsLocale<'dshtrading.market'>) {
   const [mode, setMode] = useState<'list' | 'create'>('list')
   const [draft, setDraft] = useState('')
-  const [dupError, setDupError] = useState(false)
+  const [createError, setCreateError] = useState<'duplicate' | 'failed' | null>(null)
   const [busy, setBusy] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -53,11 +53,12 @@ export function GroupMenu({ t, groups, activeGroupId, allCount, countOf, onSelec
     setBusy(false)
     if (outcome === 'created') {
       setDraft('')
-      setDupError(false)
+      setCreateError(null)
       setMode('list')
       onClose()
     } else {
-      setDupError(true)
+      // 'failed' = 宿主桥不可用：不能报「名称已存在」（误导）。
+      setCreateError(outcome)
     }
   }
 
@@ -96,7 +97,7 @@ export function GroupMenu({ t, groups, activeGroupId, allCount, countOf, onSelec
                 type="button"
                 role="menuitem"
                 className={css.groupMenuItem}
-                onClick={() => { setMode('create'); setDupError(false) }}
+                onClick={() => { setMode('create'); setCreateError(null) }}
               >
                 <IconPlus size={11} />
                 <span className={css.groupMenuItemLabel}>{t('group.create')}</span>
@@ -127,14 +128,18 @@ export function GroupMenu({ t, groups, activeGroupId, allCount, countOf, onSelec
                 maxLength={24}
                 placeholder={t('group.createPlaceholder')}
                 aria-label={t('group.create')}
-                onChange={event => { setDraft(event.target.value); setDupError(false) }}
+                onChange={event => { setDraft(event.target.value); setCreateError(null) }}
                 onKeyDown={(event) => {
-                  if (event.key === 'Escape') { setMode('list'); setDupError(false); setDraft('') }
+                  if (event.key === 'Escape') { setMode('list'); setCreateError(null); setDraft('') }
                 }}
               />
-              {dupError && <div className={css.groupCreateError}>{t('group.duplicateName')}</div>}
+              {createError !== null && (
+                <div className={css.groupCreateError}>
+                  {createError === 'duplicate' ? t('group.duplicateName') : t('group.createFailed')}
+                </div>
+              )}
               <div className={css.groupCreateActions}>
-                <button type="button" className={css.groupCreateCancel} onClick={() => { setMode('list'); setDupError(false); setDraft('') }}>
+                <button type="button" className={css.groupCreateCancel} onClick={() => { setMode('list'); setCreateError(null); setDraft('') }}>
                   {t('manager.cancel')}
                 </button>
                 <button type="submit" className={css.groupCreateOk} disabled={draft.trim() === '' || busy}>

@@ -120,4 +120,16 @@ describe('watchlist group endpoints（issue #82）', () => {
     await expect(dispatchBridgeRequest(bridge, 'POST', '/watchlist-group-members', new URLSearchParams(), { market: 'us', symbol: 'AAPL' }))
       .rejects.toThrowError(/id, market and symbol/)
   })
+
+  it('未知分组 id 入组被拒：不物化行、不写悬挂归属（审查补充）', async () => {
+    const { bridge } = makeBridge()
+    const rejected = await dispatchBridgeRequest(bridge, 'POST', '/watchlist-group-members', new URLSearchParams(), {
+      id: 'g_ghost', market: 'us', symbol: 'AAPL', name: '苹果',
+    })
+    expect(rejected.payload).toMatchObject({ ok: false, added: false, materialized: false })
+    expect((rejected.payload as { reason: string }).reason).toContain('no such group id')
+    // 行未被物化（悬挂 id 会以 '?' chip 出现在管理弹窗）
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
+    expect(list.payload).toMatchObject({ ok: true, watchlists: {} })
+  })
 })
