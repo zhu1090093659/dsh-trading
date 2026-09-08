@@ -1,0 +1,9 @@
+#!/bin/sh
+# dsh-trading CLI wrapper：在独立 dsh-trading home 下运行 dsh
+# （2026-09-08 DSH_HOME 分离，与 dsh web 宿主 ~/.dsh 互不污染；
+#   note: .agents/notes/implemented/process/2026-09-08-separate-dsh-home.md）
+# 安装：cp scripts/home/dsh-trading ~/.local/bin/ && chmod +x ~/.local/bin/dsh-trading
+# 已显式设置 DSH_HOME 时尊重现有值。
+DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
+export DSH_HOME
+exec dsh "$@"

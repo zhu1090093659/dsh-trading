@@ -13,8 +13,8 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import os from 'node:os'
 import path from 'node:path'
+import { dshHomeDir } from '@dshtrading/dsh-home'
 import { createMemorySelectionStore, createMemoryWatchlistStore } from './index.ts'
 import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from './index.ts'
 import { effectiveWatchlistRows, WATCHLIST_SEEDS, watchlistRowSource } from './seeds.ts'
@@ -29,13 +29,13 @@ export const name = 'dsh-trading-watchlist'
 /** 本插件不硬依赖任何服务；tools 经 ctx.inject 声明。 */
 export const inject: string[] = []
 
-/** 默认存储路径。 */
+/** 默认存储路径：$DSH_HOME/watchlists.json（缺省 ~/.dsh）。 */
 export function defaultWatchlistStorePath(): string {
-  return path.join(os.homedir(), '.dsh', 'watchlists.json')
+  return path.join(dshHomeDir(), 'watchlists.json')
 }
 
 export function defaultSelectionStorePath(): string {
-  return path.join(os.homedir(), '.dsh', 'selection.json')
+  return path.join(dshHomeDir(), 'selection.json')
 }
 
 /** tradingEvents 的最小发布面（鸭式；总线缺席时静默降级）。 */

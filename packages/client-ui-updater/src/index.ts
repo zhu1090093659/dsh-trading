@@ -12,7 +12,7 @@
  * 浏览器半（exports["./client"]）注册设置面板一级菜单（软件更新）。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import os from 'node:os'
+import { dshHomeDir } from '@dshtrading/dsh-home'
 import path from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { discoverEnvironment } from './environment.ts'
@@ -61,7 +61,7 @@ export function apply(ctx: Context): void {
     env,
     repo: repoSlug(),
     statePath: process.env.DSH_TRADING_UPDATER_STATE
-      ?? path.join(os.homedir(), '.dsh', 'trading-updater', 'state.json'),
+      ?? path.join(dshHomeDir(), 'trading-updater', 'state.json'),
     ...(process.env.DSH_TRADING_UPDATE_API_BASE !== undefined && process.env.DSH_TRADING_UPDATE_API_BASE !== ''
       ? { github: { apiBase: process.env.DSH_TRADING_UPDATE_API_BASE } }
       : {}),

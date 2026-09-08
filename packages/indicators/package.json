@@ -36,5 +36,8 @@
     "tsdown": "^0.22.0",
     "vitest": "^3.0.0",
     "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "@dshtrading/dsh-home": "workspace:^"
   }
 }

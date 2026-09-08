@@ -44,7 +44,8 @@
     "@dshtrading/kit-crypto": "workspace:^",
     "lightweight-charts": "^5.2.1",
     "@dshtrading/client-ui-strategies": "workspace:^",
-    "@dshtrading/client-ui-knowledge": "workspace:^"
+    "@dshtrading/client-ui-knowledge": "workspace:^",
+    "@dshtrading/dsh-home": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

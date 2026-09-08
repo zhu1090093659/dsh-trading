@@ -1,0 +1,8 @@
+#!/bin/sh
+# 以独立 dsh-trading home 启动「DSH Trading」桌面壳
+# （2026-09-08 DSH_HOME 分离；桌面壳从环境变量读 DSH_HOME 并 seed $DSH_HOME/profiles/trading-web）
+# 安装：cp scripts/home/dsh-trading-desktop ~/.local/bin/ && chmod +x ~/.local/bin/dsh-trading-desktop
+# 注意：桌面壳已在运行时本脚本只会激活旧实例——先退出再启动。
+#   退出：osascript -e 'quit app "DSH Trading"'
+DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
+exec open -a "DSH Trading" --env "DSH_HOME=$DSH_HOME" "$@"

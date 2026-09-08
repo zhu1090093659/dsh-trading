@@ -15,7 +15,7 @@
  *   node scripts/sync-profile-overrides.mjs --all            # $DSH_HOME/profiles/ 下全部
  *   选项：--dsh <dir>（默认自动从 dsh 可执行文件 realpath 推导 <dsh>/node_modules；
  *         2026-09-02 起 DSH 本体 = npm 全局安装包，deepseek-harness 开发 checkout 已废弃）
- *         --dsh-home <dir>（默认 $DSH_HOME 或 ~/.dsh）
+ *         --dsh-home <dir>（默认 $DSH_HOME 或 ~/.dsh-trading）
  *         --dry-run（只打印将追加的行，不写文件）
  */
 import { readdir, readFile, writeFile, stat } from 'node:fs/promises'
@@ -59,7 +59,7 @@ function defaultDshRoot() {
 }
 
 const DSH = String(opts.get('dsh') ?? defaultDshRoot())
-const DSH_HOME = String(opts.get('dsh-home') ?? process.env.DSH_HOME ?? join(homedir(), '.dsh'))
+const DSH_HOME = String(opts.get('dsh-home') ?? process.env.DSH_HOME ?? join(homedir(), '.dsh-trading'))
 const DRY = opts.get('dry-run') === true
 
 /** SDK 包在 DSH 本体内的路径映射（npm 安装树为扁平布局：node_modules/@deepseek-ai/<pkg>；

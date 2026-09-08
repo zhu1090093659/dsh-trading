@@ -20,7 +20,8 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
+# dsh-trading 独立 home（2026-09-08 DSH_HOME 分离）；可用环境变量 DSH_HOME 覆盖。
+DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
 
 if [ $# -eq 0 ]; then
   echo "用法: $0 <profile> [profile ...]" >&2

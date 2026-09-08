@@ -25,7 +25,7 @@ import path from 'node:path'
 const argv = process.argv.slice(2)
 const apply = argv.includes('--apply')
 const fileIdx = argv.indexOf('--file')
-const file = fileIdx > -1 ? argv[fileIdx + 1] : path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json')
+const file = fileIdx > -1 ? argv[fileIdx + 1] : path.join(process.env.DSH_HOME?.trim() || path.join(os.homedir(), '.dsh-trading'), 'knowledge', 'cards.json')
 
 const PERIOD_TAG_RE = /^\d{4}(H1|H2|Q[1-4])$/i
 

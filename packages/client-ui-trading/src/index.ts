@@ -18,8 +18,8 @@ import { createFileChartActivationStore, createFileCustomIndicatorStore } from '
 import { createFileKnowledgeCardStore } from '@dshtrading/knowledge/plugin'
 import { createFileCustomStrategyStore, createFileBuiltinTombstonesStore, createFileCustomScreenerStore } from '@dshtrading/strategies/plugin'
 import { createFileSelectionStore, createFileWatchlistStore } from '@dshtrading/watchlist/plugin'
+import { dshHomeDir } from '@dshtrading/dsh-home'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import os from 'node:os'
 import path from 'node:path'
 import {
   BridgeProtocolError,
@@ -84,24 +84,24 @@ export function apply(ctx: Context): void {
     | { store?: import('@dshtrading/indicators').CustomIndicatorStore }
     | undefined
   const customIndicatorsStore = customIndicatorsService?.store
-    ?? createFileCustomIndicatorStore(path.join(os.homedir(), '.dsh', 'indicators', 'custom.json'))
+    ?? createFileCustomIndicatorStore(path.join(dshHomeDir(), 'indicators', 'custom.json'))
   // issue #63：图表激活名册 store 单实例（Service 解包同上；服务缺席 → 回退自建）。
   const chartActivationsService = serviceGet('tradingChartActivations') as
     | { store?: import('@dshtrading/indicators').ChartActivationStore }
     | undefined
   const chartActivationsStore = chartActivationsService?.store
-    ?? createFileChartActivationStore(path.join(os.homedir(), '.dsh', 'indicators', 'chart.json'))
+    ?? createFileChartActivationStore(path.join(dshHomeDir(), 'indicators', 'chart.json'))
   const knowledgeService = serviceGet('tradingKnowledgeCards') as
     | { store?: import('@dshtrading/knowledge').KnowledgeCardStore }
     | undefined
   const knowledgeStore = knowledgeService?.store
-    ?? createFileKnowledgeCardStore(path.join(os.homedir(), '.dsh', 'knowledge', 'cards.json'))
+    ?? createFileKnowledgeCardStore(path.join(dshHomeDir(), 'knowledge', 'cards.json'))
 
   // 统一资产台账（issue #65）：@dshtrading/holdings/plugin 提供 tradingHoldings
   // 服务（HoldingsService 实例，.store = file store 单实例、.fx = 含文件缓存的
   // FX 服务）——.store/.fx 双双解包注入（knowledge 同款先例）。服务缺席（老
   // 部署）→ 两项皆 undefined：createBridgeHost 回退同包内存 store 与纯内存
-  // 缓存 FX（刻意不自建 file store/文件缓存：~/.dsh/holdings/ 两个文件格式
+  // 缓存 FX（刻意不自建 file store/文件缓存：$DSH_HOME/holdings/ 两个文件格式
   // 归 holdings 包所有，双写者互踩）。
   const holdingsService = serviceGet('tradingHoldings') as
     | {
@@ -127,15 +127,15 @@ export function apply(ctx: Context): void {
       }
     | undefined
   const strategyStore = strategiesService?.store
-    ?? createFileCustomStrategyStore(path.join(os.homedir(), '.dsh', 'strategies', 'custom.json'))
+    ?? createFileCustomStrategyStore(path.join(dshHomeDir(), 'strategies', 'custom.json'))
   const strategyTombstones = strategiesService?.tombstones
-    ?? createFileBuiltinTombstonesStore(path.join(os.homedir(), '.dsh', 'strategies', 'builtin-tombstones.json'))
+    ?? createFileBuiltinTombstonesStore(path.join(dshHomeDir(), 'strategies', 'builtin-tombstones.json'))
   const screenerStore = strategiesService?.screenerStore
-    ?? createFileCustomScreenerStore(path.join(os.homedir(), '.dsh', 'strategies', 'custom-screeners.json'))
+    ?? createFileCustomScreenerStore(path.join(dshHomeDir(), 'strategies', 'custom-screeners.json'))
 
-  const watchlistStorePath = path.join(os.homedir(), '.dsh', 'watchlists.json')
+  const watchlistStorePath = path.join(dshHomeDir(), 'watchlists.json')
   const watchlistStore = createFileWatchlistStore(watchlistStorePath)
-  const selectionStorePath = path.join(os.homedir(), '.dsh', 'selection.json')
+  const selectionStorePath = path.join(dshHomeDir(), 'selection.json')
   const selectionStore = createFileSelectionStore(selectionStorePath)
 
   // tradingEvents 失效信号源（issue #30）：base patch 行挂载 eventbus 时可用；
@@ -187,7 +187,7 @@ export function apply(ctx: Context): void {
     let tasksService: TradingTasksService | undefined
     try {
       tasksService = new TradingTasksService({
-        ledgerPath: process.env.DSH_TRADING_TASKS_LEDGER ?? path.join(os.homedir(), '.dsh', 'trading-tasks', 'ledger-v1.json'),
+        ledgerPath: process.env.DSH_TRADING_TASKS_LEDGER ?? path.join(dshHomeDir(), 'trading-tasks', 'ledger-v1.json'),
         gateway: () => resolveHostService('typertGateway') as SessionGateway | undefined,
         commands: () => resolveHostService('commands') as SessionCommandDispatcher | undefined,
         workspaces: () => resolveHostService('workspaceRegistry') as import('./tasks/service.ts').WorkspaceDirectoryLike | undefined,

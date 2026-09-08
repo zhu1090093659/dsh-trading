@@ -25,6 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@dshtrading/dsh-home": "workspace:^",
     "@dshtrading/indicators": "workspace:*"
   },
   "peerDependencies": {

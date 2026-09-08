@@ -20,8 +20,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import os from 'node:os'
 import path from 'node:path'
+import { dshHomeDir } from '@dshtrading/dsh-home'
 import type { MarketDataService } from '@dshtrading/api'
 import { getStrategyById, run } from './index.ts'
 import { createFileCustomStrategyStore } from './custom-fs.ts'
@@ -57,19 +57,19 @@ const MARKET_SERVICE_KEYS: Record<string, string> = {
   hk: 'tradingHkMarketData',
 }
 
-/** 默认存储路径：~/.dsh/strategies/custom.json。 */
+/** 默认存储路径：$DSH_HOME/strategies/custom.json（缺省 ~/.dsh）。 */
 export function defaultStorePath(): string {
-  return path.join(os.homedir(), '.dsh', 'strategies', 'custom.json')
+  return path.join(dshHomeDir(), 'strategies', 'custom.json')
 }
 
-/** 默认墓碑路径：~/.dsh/strategies/builtin-tombstones.json（策略管理）。 */
+/** 默认墓碑路径：$DSH_HOME/strategies/builtin-tombstones.json（策略管理）。 */
 export function defaultTombstonesStorePath(): string {
-  return path.join(os.homedir(), '.dsh', 'strategies', 'builtin-tombstones.json')
+  return path.join(dshHomeDir(), 'strategies', 'builtin-tombstones.json')
 }
 
-/** 默认自定义选股器路径：~/.dsh/strategies/custom-screeners.json（选股器管理）。 */
+/** 默认自定义选股器路径：$DSH_HOME/strategies/custom-screeners.json（选股器管理）。 */
 export function defaultScreenerStorePath(): string {
-  return path.join(os.homedir(), '.dsh', 'strategies', 'custom-screeners.json')
+  return path.join(dshHomeDir(), 'strategies', 'custom-screeners.json')
 }
 
 /** SDK 服务键：自定义策略 store 单实例（桥与工具共享同一缓存）。 */

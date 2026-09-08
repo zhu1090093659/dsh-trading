@@ -13,8 +13,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import os from 'node:os'
 import path from 'node:path'
+import { dshHomeDir } from '@dshtrading/dsh-home'
 import type { HoldingsStore } from './types.ts'
 import type { FxService } from './fx.ts'
 import { createFxService } from './fx.ts'
@@ -38,14 +38,14 @@ export interface TradingEventsPublisher {
   emit(store: 'holdings'): void
 }
 
-/** 默认台账路径：~/.dsh/holdings/book.json（契约 §2）。 */
+/** 默认台账路径：$DSH_HOME/holdings/book.json（缺省 ~/.dsh；契约 §2）。 */
 export function defaultHoldingsStorePath(): string {
-  return path.join(os.homedir(), '.dsh', 'holdings', 'book.json')
+  return path.join(dshHomeDir(), 'holdings', 'book.json')
 }
 
-/** 默认 fx 文件缓存路径：~/.dsh/holdings/fx-cache.json（契约 §4）。 */
+/** 默认 fx 文件缓存路径：$DSH_HOME/holdings/fx-cache.json（契约 §4）。 */
 export function defaultFxCachePath(): string {
-  return path.join(os.homedir(), '.dsh', 'holdings', 'fx-cache.json')
+  return path.join(dshHomeDir(), 'holdings', 'fx-cache.json')
 }
 
 export interface HoldingsPluginDeps {
