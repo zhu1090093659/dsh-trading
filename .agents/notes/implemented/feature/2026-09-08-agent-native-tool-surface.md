@@ -49,7 +49,11 @@ Status: implemented
 
 - **工具面增量**：host 平面 +33（28 市场/账户 + 5 能力包），preset 平面 +1（kit-crypto）。审计 §5.6 的「一次成型后冻结」窗口按记录重开一次并再次冻结（见 `docs/design/agentic-native-architecture.md` §5.6）。
 - **测试**：`packages/base/test/market-tools.test.ts`（工具级：成功/NOT_IMPLEMENTED/无 provider/无交易连接器/注册面幂等/闸门命名族零命中）、`packages/base/test/market-tools-wiring.test.ts`（真实 cordis Context 上 router + market-tools + watchlist + strategies + holdings 同表接线，含 screener_run 端到端与分组写读闭环）、`packages/strategies/test/{plugin-list,backtest-params,screener-run}.test.ts`、`packages/watchlist/test/groups-tools.test.ts`、`packages/holdings/test/tool-fx.test.ts`、`packages/kit-crypto/test/derivatives-history.test.ts`。
-- **门禁**：`pnpm -r build` / `pnpm test` / `node scripts/typecheck-gate.mjs`（481 = 基线，棘轮通过）/ `pnpm i18n:check` 全绿。
+- **门禁**：`pnpm -r build` / `pnpm test`（165 文件 / 1370 用例通过，基线 157/1319）/ `node scripts/typecheck-gate.mjs`（481 = 基线，棘轮通过）/ `pnpm i18n:check` 全绿。
+- **运行时实证（真实宿主，2026-09-08）**：
+  - `trading-dev` profile 刷新包副本后 `--dump-config` 确认新 host 行 `dsh-trading-market-tools` 进组合树；一次真实 headless 会话（`dsh-trading --profile trading-dev --patch <禁用 web 专属社区行> "Reply with exactly: ok"`）的 session transcript 里 93 个工具含全部新增项：四市场 `_get_orderbook/_get_trades/_get_positions/_get_orders/_get_fills/_get_balance/_get_order`、`fx_get`、`strategy_list`、`screener_list`、`screener_run`、`watchlist_group_create/_rename/_delete/_assign`。
+  - **同名工具归属实证**：改用 `default: master` 预设（真实挂载 okx 连接器）再跑一次会话，transcript 里 `crypto_get_positions` 的 description 是**工厂文案**（"Read-only crypto account positions from the currently routed trade connector…"）——即 host 平面先注册、okx 的 `registerTool` 守卫跳过其同名工具。okx 的 demo/live 安全信号因此经 `OkxTradeService.environment()` 由工厂读出，未丢字段；okx 侧三个同名只读工具成为守卫兜底（未删除，保留非标准组合下的可用性）。
+  - 桌面壳（trading-web）实例当时正在运行，未执行 `dsh plugin install`（铁律：实例运行中禁止），故 App 内对话验收待刷新 profile + 重启后进行。
 - **待裁决（本轮不做）**：
   - G6 `routing_set`（B 类）：需先定 settings 写契约（深层合并语义）、`'routing'` 事件语义与审计留痕格式；agent 侧目前仍只能读 `routing_get` 并引导用户到设置面板。
   - G9 图表指标名册迁移导入、G10 更新器：维持审计 §5 的「不做」判定。
