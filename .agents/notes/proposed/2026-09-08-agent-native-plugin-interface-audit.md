@@ -2,6 +2,8 @@
 
 Status: proposed
 
+落地进度：G1-G5 / G7 / G8 已实现（见 [implemented/feature/2026-09-08-agent-native-tool-surface.md](../implemented/feature/2026-09-08-agent-native-tool-surface.md)）；G6（routing_set，B 类）与 G9/G10、C/D 类仍按本文裁决。
+
 ## Problem
 
 2026-09-08 的 holdings 样板（commit `5a61735`）把「台账是导入型记账数据，agent 应当能完全操控，唯一红线是不得下单」落到了工具面：7 个窄工具、description 自带纪律、写后 `tradingEvents.emit('holdings')`。但除 holdings 之外，没有任何一次系统盘点回答过同一个问题：**还有哪些能力只对 UI 或 REST 桥开放，agent 做不了或只能半做。**

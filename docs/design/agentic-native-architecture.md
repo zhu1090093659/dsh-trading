@@ -174,6 +174,12 @@ Bundle（分发面）    base patch insert 行挂载，sync-profile-overrides �
 - 通用工具用能力前缀（`strategy_*`、`watchlist_*`、`instruments_*`、`knowledge_*`、`routing_*`）；市场工具维持 `<market>_*`。
 - 下单/撤单闸门正则**不同步开放**（`provider-vocabulary-open` 既定裁决）：任何新工具不得命中或仿冒该命名族；闸门扩展只随市场段增加。
 - KV cache 纪律：host 平面工具面一次成型后保持稳定；能力实例走注册表，不再加工具。
+- **冻结窗口重开记录（2026-09-08，issue #86 / 审计 G1-G8）**：一次性批量落地后重新冻结——
+  - 能力包（host 平面）：`strategy_list` / `screener_list` / `screener_run`（strategies）、`watchlist_group_create|rename|delete|assign`（watchlist）、`fx_get`（holdings）；`strategy_backtest` 增可选 `paramsJson`（参数覆盖，不是新工具）。
+  - 市场面（新 host 行 `@dshtrading/base/market-tools`，registry 驱动、四市场展开）：`<market>_get_orderbook` / `_get_trades` / `_get_positions` / `_get_orders` / `_get_fills` / `_get_balance` / `_get_order`。
+  - preset 平面：`crypto_get_derivatives_history`（kit-crypto，数据源恒为路由选中的行情服务）。
+  - 新增工具一律零交易语义（不命中闸门命名族）；账户只读面由连接器可选方法提供，未实现返回 `TRADING_NOT_IMPLEMENTED`（新增错误码 `TRADING_NO_PROVIDER` / `TRADING_NO_TRADE_SERVICE`，见 `packages/api`）。
+  - 自此再次冻结：后续能力增量走注册表/参数，不再新增 host 平面工具；C/D 类（下单/撤单/paper/凭据）按审计 §5 明确不做。
 
 ## 6. 阶段划分与 Issue 拆解
 
