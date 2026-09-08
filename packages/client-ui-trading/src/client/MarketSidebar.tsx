@@ -12,7 +12,7 @@ import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers } from './api.ts'
 import { searchAllMarkets, searchSymbols, setDynamicCatalog, updateDynamicCatalog } from './symbol-catalog.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
-import { intradayCandidates, intradayRequest, selectIntradayCloses } from './intraday-series.ts'
+import { intradayCandidates, intradayRequest, selectIntradaySeries } from './intraday-series.ts'
 import { colorModeStore } from './color-mode.ts'
 import { Sparkline } from './Sparkline.tsx'
 import { IconChevronDown, IconFoldPanel, IconSettings } from './icons.tsx'
@@ -172,11 +172,18 @@ export function MarketSidebar({
         try {
           const req = intradayRequest(row.market, interval)
           const klines = await fetchKlines(row.market, row.symbol, req.interval, req.limit)
-          const closes = selectIntradayCloses(row.market, klines)
-          if (closes.length === 0) throw new Error('empty intraday series')
+          const picked = selectIntradaySeries(row.market, klines)
+          if (picked.closes.length === 0) throw new Error('empty intraday series')
           setSeries((current) => ({
             ...current,
-            [key]: { closes, prevClose: current[key]?.prevClose, fetchedAt: Date.now(), mode: 'intraday', interval },
+            [key]: {
+              closes: picked.closes,
+              ...(picked.xFractions !== undefined ? { xFractions: picked.xFractions } : {}),
+              prevClose: current[key]?.prevClose,
+              fetchedAt: Date.now(),
+              mode: 'intraday',
+              interval,
+            },
           }))
           storedIntraday = true
           break
@@ -460,7 +467,7 @@ export function MarketSidebar({
                       </span>
                     </span>
                     <span className={css.spark}>
-                      <Sparkline values={ref?.closes ?? []} width={56} height={22} up={up} colorMode={colorMode} />
+                      <Sparkline values={ref?.closes ?? []} {...(ref?.xFractions !== undefined ? { xFractions: ref.xFractions } : {})} width={56} height={22} up={up} colorMode={colorMode} />
                     </span>
                     <span className={css.quote}>
                       <span className={css.price} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPrice(price)}</span>

@@ -7,12 +7,14 @@ import { getColorPalette, type ColorMode } from './color-mode.ts'
 
 export function Sparkline(props: {
   values: readonly number[]
+  /** 可选：每点的 x 位置（0..1，固定交易时段口径）。缺省 = 等距铺满。 */
+  xFractions?: readonly number[]
   width: number
   height: number
   up: boolean
   colorMode?: ColorMode
 }): React.JSX.Element {
-  const { values, width, height, up, colorMode } = props
+  const { values, xFractions, width, height, up, colorMode } = props
   const gradientId = useId()
 
   if (values.length < 2) {
@@ -28,14 +30,18 @@ export function Sparkline(props: {
 
   const span = max - min
   const step = width / (values.length - 1)
+  const useFractions = xFractions !== undefined && xFractions.length === values.length
   const pts = values.map((value, index) => {
-    const x = index * step
+    const x = useFractions ? (xFractions[index] as number) * width : index * step
     const y = span === 0 ? height / 2 : (1 - (value - min) / span) * (height - 4) + 2
     return [x, y] as const
   })
 
   const strokePoints = pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ')
-  const areaPath = `M 0,${height} L ${pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' L ')} L ${width},${height} Z`
+  // 面积填充只覆盖已绘制线段的水平范围（盘中固定时段轴下右侧留白）
+  const firstX = (pts[0] as readonly [number, number])[0]
+  const lastX = (pts[pts.length - 1] as readonly [number, number])[0]
+  const areaPath = `M ${firstX.toFixed(2)},${height} L ${pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' L ')} L ${lastX.toFixed(2)},${height} Z`
 
   const palette = getColorPalette(colorMode)
   const strokeColor = span === 0 ? palette.flatColor : up ? palette.upColor : palette.downColor

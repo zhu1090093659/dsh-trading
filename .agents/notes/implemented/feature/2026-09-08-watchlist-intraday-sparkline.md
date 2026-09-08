@@ -15,7 +15,8 @@ Status: implemented
 - **降级链**：分钟线抛错或返回空（如腾讯公开端明确不支持港股分钟线，connector-tencent/src/rest.ts:595）→ 回落 1d×32 日 K 走势（原行为），mode:'daily' 条目 10min TTL 内复用、过后重试分钟线。
 - **刷新**：走势序列独立 usePoll 60s 一拍（分钟 bar 粒度下足够「活」又对公共端温和），页面隐藏暂停；不再挂在 rowsKey effect 上（旧实现 TTL 永不触发的问题随之消失）。
 - **prevClose 兜底不变**：涨跌幅锚点仍 ticker.prevClose 优先；仅当缓存缺 prevClose 时补拉一次 1d×2（日 K 缺最新收盘 bar 的错位风险仍在，故永远让位于快照官方锚点）。
-- 纯函数选材逻辑抽为 src/client/intraday-series.ts（intradayRequest / selectIntradayCloses），ReferenceSeries 增 mode 字段。
+- **固定交易时段 x 轴（同日后续修正）**：盘中未走完的交易日不得把已有数据拉伸铺满全宽（否则上午 11 点的分时看起来像已收盘）。股票每点带 xFractions——bar 开盘时刻映射到固定时段窗口的 0..1 位置（us 9:30–16:00 ET=390min；cn 9:30–11:30+13:00–15:00=240min，午休压缩；hk 9:30–12:00+13:00–16:00=330min），时段外钳制到最近边界；Sparkline 按 xFractions 定位、面积填充只覆盖已绘线段（右侧留白）。crypto 滚动 24h 与日 K 降级窗口天然固定，等距铺满不变。
+- 纯函数选材逻辑抽为 src/client/intraday-series.ts（intradayCandidates / intradayRequest / selectIntradaySeries / sessionXFraction），ReferenceSeries 增 mode / interval / xFractions 字段。
 
 ## Alternatives considered
 
@@ -30,5 +31,5 @@ Status: implemented
 - 港股（腾讯源）分钟线全不支持 → 稳定走日 K 降级，每 10min 重试一次分钟线（换源后自动升级，无需改本组件）；A 股（腾讯源）自动落到 5m 日内分时。
 - 轮询成本：每标的每分钟 1 次分钟线请求（N 标的 = N 请求/分），公共端可承受；首屏 prevClose 补拉一次性。
 - Yahoo 公共端 1m 有约 15min 延迟（美股迷你图相应滞后），属数据源固有限制。
-- 测试：test/intraday-series.test.ts 覆盖候选粒度与取数上限、crypto 滚动不分组、us/cn/hk 本地日筛选、节假日回落最近交易日（2026-09-07 美国劳动节实证）。门禁 pnpm build / pnpm test 全绿；真机验证走 trading-web profile（3081 实例）+ CDP 延迟截图——注意 headless Chrome --timeout 是上限不是等待，load 事件一到就截图，行情面板须用 CDP 主动等 ~20s 再 Page.captureScreenshot。
+- 测试：test/intraday-series.test.ts 覆盖候选粒度与取数上限、crypto 滚动不分组、us/cn/hk 本地日筛选、节假日回落最近交易日（2026-09-07 美国劳动节实证）、三市场固定时段 x 映射（含午休压缩与时段外钳制）。真机实证：11:07 CST A 股盘中走势只占左 ~40% 宽度。门禁 pnpm build / pnpm test 全绿；真机验证走 trading-web profile（3081 实例）+ CDP 延迟截图——注意 headless Chrome --timeout 是上限不是等待，load 事件一到就截图，行情面板须用 CDP 主动等 ~20s 再 Page.captureScreenshot。
 - 视觉结构记录见 [2026-08-31-futu-ui-visual-upgrade](2026-08-31-futu-ui-visual-upgrade.md)（本记录取代其数据语义面）。

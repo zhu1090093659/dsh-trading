@@ -49,3 +49,66 @@ export function selectIntradayCloses(market: MarketId, klines: readonly Kline[])
   const lastDay = fmt.format(lastBar.openTime)
   return klines.filter(k => fmt.format(k.openTime) === lastDay).map(k => k.close)
 }
+
+/* ------------------------------------------------------------------ */
+/* 固定交易时段 x 轴（2026-09-08）：盘中未走完的交易日，迷你走势只应    */
+/* 铺满左侧已完成部分，而不是把已有数据拉伸到全宽（否则上午 11 点的      */
+/* 分时看起来像已收盘）。crypto 滚动 24h 窗口天然固定，无需 x 映射。   */
+/* ------------------------------------------------------------------ */
+
+/** 各市场常规时段（市场本地分钟数 since 00:00；午休等休止段压缩掉）。 */
+const SESSION_SPANS: Record<Exclude<MarketId, 'crypto'>, { spans: readonly (readonly [number, number])[]; total: number }> = {
+  us: { spans: [[570, 960]], total: 390 },            // 9:30–16:00 ET
+  cn: { spans: [[570, 690], [780, 900]], total: 240 }, // 9:30–11:30 + 13:00–15:00 CST
+  hk: { spans: [[570, 720], [780, 960]], total: 330 }, // 9:30–12:00 + 13:00–16:00 HKT
+}
+
+const timeFmtCache = new Map<string, Intl.DateTimeFormat>()
+
+function localMinutes(tz: string, openTime: number): number {
+  let fmt = timeFmtCache.get(tz)
+  if (fmt === undefined) {
+    fmt = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    timeFmtCache.set(tz, fmt)
+  }
+  const parts = fmt.formatToParts(openTime)
+  const hour = Number(parts.find(p => p.type === 'hour')?.value)
+  const minute = Number(parts.find(p => p.type === 'minute')?.value)
+  return hour * 60 + minute
+}
+
+/**
+ * bar 开盘时刻 → 当日交易时段内的 x 位置（0..1）。时段外（盘前/盘后/午休）
+ * 钳制到最近边界：盘前→0，午休→上午收盘位置，盘后→1。
+ */
+export function sessionXFraction(market: MarketId, openTime: number): number | null {
+  const tz = MARKET_TIMEZONE[market]
+  if (tz === null) return null
+  const session = SESSION_SPANS[market as Exclude<MarketId, 'crypto'>]
+  const t = localMinutes(tz, openTime)
+  let acc = 0
+  for (const [start, end] of session.spans) {
+    if (t <= start) return acc / session.total
+    if (t < end) return (acc + (t - start)) / session.total
+    acc += end - start
+  }
+  return 1
+}
+
+/**
+ * 与 selectIntradayCloses 同筛选口径，返回 closes + 每点的固定时段 x 位置。
+ * crypto 不返回 xFractions（滚动窗口等距即可）。
+ */
+export function selectIntradaySeries(market: MarketId, klines: readonly Kline[]): { closes: number[]; xFractions?: number[] } {
+  if (klines.length === 0) return { closes: [] }
+  const tz = MARKET_TIMEZONE[market]
+  if (tz === null) return { closes: klines.map(k => k.close) }
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+  const lastBar = klines[klines.length - 1] as Kline
+  const lastDay = fmt.format(lastBar.openTime)
+  const dayBars = klines.filter(k => fmt.format(k.openTime) === lastDay)
+  return {
+    closes: dayBars.map(k => k.close),
+    xFractions: dayBars.map(k => sessionXFraction(market, k.openTime) ?? 0),
+  }
+}

@@ -36,4 +36,6 @@ export interface ReferenceSeries {
   mode: 'intraday' | 'daily'
   /** intraday 模式下实测可用的分钟粒度（连接器能力各异，成功后记住，避免每拍重试必失败的粒度）。 */
   interval?: '1m' | '5m'
+  /** intraday 模式下每点的固定交易时段 x 位置（0..1）；crypto/日 K 降级无此字段（等距铺满）。 */
+  xFractions?: number[]
 }

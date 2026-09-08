@@ -3,7 +3,7 @@
  * 取数上限，与「最后一根 bar 的市场本地交易日」筛选语义——周末/节假日无需日历即回落最近交易日。
  */
 import { describe, expect, it } from 'vitest'
-import { intradayCandidates, intradayRequest, selectIntradayCloses } from '../src/client/intraday-series.ts'
+import { intradayCandidates, intradayRequest, selectIntradayCloses, selectIntradaySeries, sessionXFraction } from '../src/client/intraday-series.ts'
 import type { Kline } from '../src/client/types.ts'
 
 function bar(openTime: number, close: number): Kline {
@@ -72,5 +72,51 @@ describe('selectIntradayCloses', () => {
       bar(Date.UTC(2026, 8, 8, 2, 0), 21),
     ]
     expect(selectIntradayCloses('hk', klines)).toEqual([21])
+  })
+})
+
+describe('sessionXFraction（固定交易时段 x 轴）', () => {
+  // 2026-09 期间 ET=UTC-4（EDT）、CST/HKT=UTC+8
+  it('crypto 无时段概念 → null', () => {
+    expect(sessionXFraction('crypto', Date.UTC(2026, 8, 8, 2, 0))).toBeNull()
+  })
+  it('us：9:30 ET→0，12:45 ET→0.5，16:00 ET→1，盘前钳 0', () => {
+    expect(sessionXFraction('us', Date.UTC(2026, 8, 4, 13, 30))).toBe(0)
+    expect(sessionXFraction('us', Date.UTC(2026, 8, 4, 16, 45))).toBeCloseTo(0.5)
+    expect(sessionXFraction('us', Date.UTC(2026, 8, 4, 20, 0))).toBe(1)
+    expect(sessionXFraction('us', Date.UTC(2026, 8, 4, 12, 0))).toBe(0) // 8:00 ET 盘前
+  })
+  it('cn：10:30→0.25，午休钳到上午收盘 0.5，13:30→0.625，15:00→1', () => {
+    expect(sessionXFraction('cn', Date.UTC(2026, 8, 8, 2, 30))).toBeCloseTo(0.25)
+    expect(sessionXFraction('cn', Date.UTC(2026, 8, 8, 3, 40))).toBeCloseTo(0.5) // 11:40 午休
+    expect(sessionXFraction('cn', Date.UTC(2026, 8, 8, 5, 30))).toBeCloseTo(0.625)
+    expect(sessionXFraction('cn', Date.UTC(2026, 8, 8, 7, 0))).toBe(1)
+  })
+  it('hk：10:30→60/330，午休钳到 150/330，14:00→210/330，16:00→1', () => {
+    expect(sessionXFraction('hk', Date.UTC(2026, 8, 8, 2, 30))).toBeCloseTo(60 / 330)
+    expect(sessionXFraction('hk', Date.UTC(2026, 8, 8, 4, 30))).toBeCloseTo(150 / 330) // 12:30 午休
+    expect(sessionXFraction('hk', Date.UTC(2026, 8, 8, 6, 0))).toBeCloseTo(210 / 330)
+    expect(sessionXFraction('hk', Date.UTC(2026, 8, 8, 8, 0))).toBe(1)
+  })
+})
+
+describe('selectIntradaySeries', () => {
+  it('us：返回 closes + 固定时段 xFractions（上午未完成时最右点 < 1）', () => {
+    const klines = [
+      bar(Date.UTC(2026, 8, 3, 20, 0), 100), // 前一日收盘 bar，应剔除
+      bar(Date.UTC(2026, 8, 4, 13, 30), 101), // 9:30 ET → x=0
+      bar(Date.UTC(2026, 8, 4, 16, 30), 102), // 12:30 ET → x=180/390
+    ]
+    const picked = selectIntradaySeries('us', klines)
+    expect(picked.closes).toEqual([101, 102])
+    expect(picked.xFractions).toHaveLength(2)
+    expect(picked.xFractions?.[0]).toBe(0)
+    expect(picked.xFractions?.[1]).toBeCloseTo(180 / 390)
+    expect(picked.xFractions?.[1]).toBeLessThan(1) // 盘中语义：未铺满
+  })
+  it('crypto：不返回 xFractions（滚动窗口等距）', () => {
+    const picked = selectIntradaySeries('crypto', [bar(Date.UTC(2026, 8, 8, 1, 0), 1), bar(Date.UTC(2026, 8, 8, 1, 5), 2)])
+    expect(picked.closes).toEqual([1, 2])
+    expect(picked.xFractions).toBeUndefined()
   })
 })
