@@ -1,5 +1,12 @@
 # @dshtrading/knowledge
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [770878d]
+  - @dshtrading/dsh-home@0.1.6
+
 ## 0.1.5
 
 ## 0.1.4

@@ -1,5 +1,13 @@
 # @dshtrading/watchlist
 
+## 0.1.6
+
+### Patch Changes
+
+- 770878d: 修复 2026-09-08 代码审查发现的问题：自选 store 单实例化（agent 工具写不再覆盖 GUI 写与分组归属）、未定制市场分组时种子基线完整物化、东财符号形态按实例市场分流 + 港股时间戳 UTC+8 锚定、futu 行情面按市场分实例（美股搜索不再返回港股）、旧 DSH_HOME 一次性数据迁移与 Windows 卸载清理目标修正、OpenD 桥订阅槽 LRU 淘汰，以及配套测试补齐（含两条此前不可失败的冒烟用例）。
+- Updated dependencies [770878d]
+  - @dshtrading/dsh-home@0.1.6
+
 ## 0.1.5
 
 ## 0.1.4

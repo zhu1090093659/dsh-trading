@@ -1,5 +1,18 @@
 # @dshtrading/cn
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [770878d]
+  - @dshtrading/connector-eastmoney@0.1.6
+  - @dshtrading/connector-akshare@0.1.6
+  - @dshtrading/connector-hithink@0.1.6
+  - @dshtrading/connector-qmt@0.1.6
+  - @dshtrading/connector-tencent@0.1.6
+  - @dshtrading/connector-tushare@0.1.6
+  - @dshtrading/kit-cn@0.1.6
+
 ## 0.1.5
 
 ### Patch Changes

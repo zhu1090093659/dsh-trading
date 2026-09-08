@@ -1,5 +1,17 @@
 # @dshtrading/all
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies [770878d]
+  - @dshtrading/base@0.1.6
+  - @dshtrading/cn@0.1.6
+  - @dshtrading/hk@0.1.6
+  - @dshtrading/crypto@0.1.6
+  - @dshtrading/us@0.1.6
+
 ## 0.1.5
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @dshtrading/client-ui-indicators
 
+## 0.1.6
+
+### Patch Changes
+
+- @dshtrading/indicators@0.1.6
+
 ## 0.1.5
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @dshtrading/connector-finnhub
 
+## 0.1.6
+
+### Patch Changes
+
+- @dshtrading/api@0.1.6
+
 ## 0.1.5
 
 ### Patch Changes
