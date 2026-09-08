@@ -5,9 +5,10 @@
  *
  * 常态（宿主有 tradingMarketDataRegistry，@dshtrading/router 提供）：enabled=false
  * 硬关；否则在 isolate realm 内构造服务（不占 host 根市场键，多连接器并存无互斥
- * 冲突）并 register(hk, 'futu')——激活裁决推迟到消费方按路由
- * 当前值惰性解析（GUI 行情桥每请求解析，settings 切换交易所即刻生效）。
- * 无注册表的老部署 → 回退直接 provide 市场键（旧桥消费，settings 切换须重启到 GUI）。
+ * 冲突）并 register(hk/us, 'futu')（行情面双市场，交易面仍仅 hk）——激活裁决
+ * 推迟到消费方按路由当前值惰性解析（GUI 行情桥每请求解析，settings 切换交易所
+ * 即刻生效）。无注册表的老部署 → 回退直接 provide 市场键（旧桥消费，settings
+ * 切换须重启到 GUI，且仅 hk）。
  *
  * 接线：市场 bundle 的 cordis.patch.yml insert 本入口行（enabled: true 等行 config
  * 必须 restate——整行替换语义），见 docs/connector-playbook.md §4。
@@ -43,8 +44,10 @@ function resolveTradeRegistry(ctx: Context): TradeRegistry | undefined {
 
 /** 本连接器的路由 provider slug（路由层词汇 = 交易所 slug，docs/exchange-routing.md §2.2）。 */
 const ROUTER_PROVIDER = 'futu'
-/** 市场短前缀。 */
+/** 交易面市场短前缀（交易服务仅注册 hk；US 订单需美国账户 trd 上下文，未接）。 */
 const MARKET = 'hk'
+/** 行情面额外注册的市场（normalizeSymbol/toFutuSecurity 已支持 US.* 形态）。 */
+const EXTRA_QUOTE_MARKETS = ['us'] as const
 
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
@@ -60,6 +63,9 @@ export function apply(ctx: Context, config: Config): void {
   const inner = ctx.isolate(TRADING_HK_MARKET_DATA_KEY)
   const service = new FutuMarketDataService(inner, restOptions)
   ctx.effect(() => registry.register(MARKET, ROUTER_PROVIDER, service))
+  for (const market of EXTRA_QUOTE_MARKETS) {
+    ctx.effect(() => registry.register(market, ROUTER_PROVIDER, service))
+  }
 
   const tradeRegistry = resolveTradeRegistry(ctx)
   if (tradeRegistry !== undefined) {

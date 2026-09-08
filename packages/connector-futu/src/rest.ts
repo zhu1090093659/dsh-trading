@@ -1,7 +1,8 @@
 /**
- * Futu (富途 OpenD) REST 客户端 —— 港股市场 (hk) 行情与交易数据面。
+ * Futu (富途 OpenD) REST 客户端 —— 港股 (hk) + 美股 (us) 行情数据面，交易面仅港股。
  *
- * 通过本地或远程 FutuOpenD 网关进行交互（默认 http://127.0.0.1:11111）。
+ * 通过本地或远程 FutuOpenD 网关进行交互（默认 http://127.0.0.1:11111，生产经
+ * scripts/futu-openapi-bridge.py 的 HTTP 桥 11112）。
  *
  * @module @dshtrading/connector-futu/rest
  */
@@ -76,11 +77,36 @@ export function normalizeHkSymbol(raw: string): string {
   throw new TradingServiceError('TRADING_UNSUPPORTED_SYMBOL', `Futu: malformed HK symbol ${JSON.stringify(raw)}`)
 }
 
-/** 将规范形转换为 FutuOpenD 所需格式（HK.00700） */
+/** 归一化美股代码为规范形（如 AAPL；接受 AAPL / us.aapl / US.AAPL / US.BRK.B） */
+export function normalizeUsSymbol(raw: string): string {
+  const trimmed = raw.trim().toUpperCase()
+  let code = trimmed
+  if (code.startsWith('US.')) code = code.slice(3)
+  if (code.endsWith('.US')) code = code.slice(0, -3)
+  // 美股代码为字母主体（类别股如 BRK.B 允许一个点分段）；纯数字是港股形态，不在此受理
+  if (/^[A-Z]{1,6}(\.[A-Z]{1,3})?$/.test(code)) {
+    return code
+  }
+  throw new TradingServiceError('TRADING_UNSUPPORTED_SYMBOL', `Futu: malformed US symbol ${JSON.stringify(raw)}`)
+}
+
+/** 按形态分派归一：纯数字（可带 .HK 后缀）走港股，其余走美股（行情面双市场入口）。 */
+export function normalizeSymbol(raw: string): string {
+  const trimmed = raw.trim().toUpperCase()
+  if (/^\d{1,5}(\.HK)?$/.test(trimmed)) {
+    return normalizeHkSymbol(trimmed)
+  }
+  return normalizeUsSymbol(trimmed)
+}
+
+/** 将规范形转换为 FutuOpenD 所需格式（HK.00700 / US.AAPL） */
 export function toFutuSecurity(canonicalSymbol: string): string {
-  const norm = normalizeHkSymbol(canonicalSymbol)
-  const digits = norm.slice(0, 5)
-  return `HK.${digits}`
+  const trimmed = canonicalSymbol.trim().toUpperCase()
+  if (/^\d{1,5}(\.HK)?$/.test(trimmed)) {
+    const digits = normalizeHkSymbol(trimmed).slice(0, 5)
+    return `HK.${digits}`
+  }
+  return `US.${normalizeUsSymbol(trimmed)}`
 }
 
 export class FutuRestClient {
@@ -134,7 +160,7 @@ export class FutuRestClient {
   }
 
   async getTicker(symbol: string): Promise<Ticker> {
-    const canonical = normalizeHkSymbol(symbol)
+    const canonical = normalizeSymbol(symbol)
     const security = toFutuSecurity(canonical)
     const data = await this.request<{
       curPrice?: number
@@ -164,7 +190,7 @@ export class FutuRestClient {
   }
 
   async getKlines(symbol: string, interval: Interval, limit = 100): Promise<Kline[]> {
-    const canonical = normalizeHkSymbol(symbol)
+    const canonical = normalizeSymbol(symbol)
     const security = toFutuSecurity(canonical)
     const klType = INTERVAL_TO_FUTU[interval]
     if (!klType) {
@@ -225,6 +251,7 @@ export class FutuRestClient {
   }
 
   async placeOrder(_credentials: FutuCredentials | undefined, req: { symbol: string; side: 'BUY' | 'SELL'; type: 'MARKET' | 'LIMIT'; quantity: number; price?: number }): Promise<Order> {
+    // 交易面仅港股（US 订单需美国账户 trd 上下文，未接）：非港股符号在此显式拒绝
     const canonical = normalizeHkSymbol(req.symbol)
     const security = toFutuSecurity(canonical)
     const data = await this.request<{ orderId?: string; orderID?: string }>('/api/trd/place-order', {

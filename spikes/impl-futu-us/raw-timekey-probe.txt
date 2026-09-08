@@ -1,0 +1,6 @@
+2026-09-08 15:44:40,456 | 51232 | 8396136064 | [open_context_base.py:410] _init_connect_sync: New connect ready: conn=7502995308490226734(1) context=<futu.quote.open_quote_context.OpenQuoteContext object at 0x10598a120>
+US.AAPL K_DAY ['2026-09-02 00:00:00', '2026-09-03 00:00:00', '2026-09-04 00:00:00']
+US.AAPL K_1M ['2026-09-04 15:59:00', '2026-09-04 16:00:00']
+HK.00700 K_DAY ['2026-09-04 00:00:00', '2026-09-07 00:00:00', '2026-09-08 00:00:00']
+HK.00700 K_5M ['2026-09-08 15:40:00', '2026-09-08 15:45:00']
+2026-09-08 15:44:40,708 | 51232 | 6197047296 | [open_context_base.py:518] on_disconnect: Disconnected: conn=0(1) reason=CallClose
