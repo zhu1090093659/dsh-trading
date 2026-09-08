@@ -947,6 +947,8 @@ const SCREENER_MAX_POOL = 500
 const SCREENER_RESULT_LIMIT = 50
 const SCREENER_EVAL_TIMEOUT_MS = 1000
 const SCREENER_FETCH_TIMEOUT_MS = 8000
+/** 单次扫描总预算：超时后不再领取新标的（agent 工具无取消通道，用预算收敛成本）。 */
+const SCREENER_TOTAL_BUDGET_MS = 90_000
 
 /** 解析后的选股器：内置（可信代码）或自定义（源码经 vm 熔断 runner 执行）。 */
 export type ResolvedScreener =
@@ -1079,6 +1081,10 @@ export interface ScreenerRunToolDeps {
   active: (market: string) => { provider: string; service: MarketDataService } | undefined
   /** 老部署回退：市场键直读行情服务（无 registry 时）。 */
   fallback?: (market: string) => MarketDataService | undefined
+  /** 单次扫描总预算 ms（缺省 90s；测试注入小值/假时钟）。 */
+  budgetMs?: number
+  /** 注入时钟（测试用；缺省 Date.now）。 */
+  now?: () => number
 }
 
 /**
@@ -1096,7 +1102,8 @@ export function createScreenerRunTool(deps: ScreenerRunToolDeps) {
       + 'provider, evaluates a pure function per instrument, and never places orders or emits trading signals. '
       + 'Instruments whose window is too short are skipped silently (contract semantics); per-instrument fetch/evaluate failures are '
       + 'counted, never fatal. Cost guards are explicit in the result: scanPool (pool cap), scanned, failed, insufficient, '
-      + 'resultLimit and truncated. ALWAYS call screener_list first to get the id and its parameter/column keys.',
+      + 'resultLimit, truncated, budgetMs and deadlineExceeded (no cancellation channel exists — the scan stops taking new instruments '
+      + 'once the time budget is spent). ALWAYS call screener_list first to get the id and its parameter/column keys.',
     parameters: {
       screenerId: {
         type: 'string',
@@ -1176,10 +1183,14 @@ export function createScreenerRunTool(deps: ScreenerRunToolDeps) {
 
       const pool = universe.slice(0, poolCap)
       const matched: Array<Record<string, unknown>> = []
+      const budgetMs = deps.budgetMs ?? SCREENER_TOTAL_BUDGET_MS
+      const now = deps.now ?? (() => Date.now())
+      const deadline = now() + budgetMs
       let scanned = 0
       let failed = 0
       let insufficient = 0
       let cursor = 0
+      let deadlineExceeded = false
 
       const evaluate = async (bars: Kline[]): Promise<unknown> => {
         if (resolved.kind === 'builtin') return resolved.definition.evaluate(bars, effective)
@@ -1192,6 +1203,11 @@ export function createScreenerRunTool(deps: ScreenerRunToolDeps) {
 
       const worker = async (): Promise<void> => {
         while (cursor < pool.length) {
+          // 预算检查在领取标的之前：超时后不再发起新请求（在途请求由各自超时兜底）。
+          if (now() > deadline) {
+            deadlineExceeded = true
+            return
+          }
           const instrument = pool[cursor]
           cursor += 1
           if (instrument === undefined) return
@@ -1252,10 +1268,13 @@ export function createScreenerRunTool(deps: ScreenerRunToolDeps) {
         returned: results.length,
         resultLimit: SCREENER_RESULT_LIMIT,
         truncated: matched.length > SCREENER_RESULT_LIMIT,
+        budgetMs,
+        deadlineExceeded,
         params: { requested, effective },
         results,
         note: 'Read-only cross-sectional scan (no trading signals). failed = fetch/evaluate errors; insufficient = window too short for the '
-          + 'screener (contract: skipped silently). Raise limit to widen the pool (max ' + SCREENER_MAX_POOL + ').',
+          + 'screener (contract: skipped silently). Raise limit to widen the pool (max ' + SCREENER_MAX_POOL + '). '
+          + `The scan stops taking new instruments after budgetMs (${budgetMs}ms); deadlineExceeded=true means the pool was not fully scanned.`,
       })
     },
   })

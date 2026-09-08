@@ -104,6 +104,19 @@ export interface StrategyDefinition {
 - i18n：新增 `stage.strategy`（'策略'）与 `strategy.*` 一族，删除 `workflow.*`；
 - 空态：未运行时给引导文案（选择策略 → 运行回测）。
 
+### 3.4b 选股器扫描调度护栏（host 侧 `screener_run`，issue #86 / G4）
+
+视图层（ScreenerPane）的扫描调度契约此前只存在于浏览器半；agent 工具面按同口径在 host 侧复刻并写死如下护栏（工具结果逐项回显，模型据此判断成本与完整性）：
+
+- **扫描池**：路由 provider 的名册 `listInstruments()` 全集 → 截断到 `limit`（缺省 100，上限 500）；名册缺席或为空 → `ok:false, code:TRADING_NO_UNIVERSE`（**不返回空结果冒充「零命中」**）。
+- **数据窗口**：固定 `1d` × 500 根（覆盖全部内置选股器在参数上限下的需求）。
+- **并发**：5（保护公共数据源，不追求速度）。
+- **超时**：单标的取数 8s；单标的求值 1s（自定义源码走 Node `vm` 熔断 runner，内置选股器为可信代码直调）。
+- **总预算**：单次调用 90s；耗尽后不再领取新标的，结果置 `deadlineExceeded:true`（agent 工具没有 UI 的「停止」按钮，用预算替代取消语义）。
+- **结果**：上限 50 条，`matched` = 总命中数、`returned` = 返回条数、`truncated` 标记截断。
+- **计数语义**：`failed` = 取数/求值失败（含空 K 线响应）；`insufficient` = 窗口不足导致 `evaluate` 返回 null（契约语义：静默跳过，既不算命中也不算错误）。
+- **零交易语义**：只读行情 + 本地纯函数计算，不产生交易信号、不下单（铁律 #3 不涉及）。
+
 ### 3.5 Skill 层
 
 `.agents/skills/trading-strategy-paradigms/SKILL.md`（SSOT，五段论）：教 agent 讲解范式、跑回测、解读绩效与反方情景；明确「回测 ≠ 未来收益、不构成投资建议、实盘仍走闸门」。经 `scripts/sync-skills.mjs` 同步至 4 个 kit assets。

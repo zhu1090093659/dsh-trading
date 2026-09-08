@@ -31,7 +31,7 @@ Status: implemented
 - 全部新工具**零交易语义**：不命中 `ORDER_GATE_PATTERN`，不进审批闸门；`screener_run` 只读行情 + 本地纯函数计算，`fx_get` 只读汇率，分组工具只写自选注册表。
 - 写后 emit：分组工具复用 `tradingEvents.emit('watchlists')`（GUI 左栏实时刷新）；只读工具不 emit。
 - 分组注册表单实例：`WatchlistStoreService` 增加 `groups` 字段，桥（client-ui-trading）优先解包服务实例、缺席才回退自建——避免审计点名的「双 store 整表回写互相覆盖」前科。
-- `screener_run` 护栏显式回显：扫描池上限（默认 100 / 上限 500）、并发 5、单标的取数超时 8s、求值超时 1s（自定义源码走 Node vm 熔断）、结果上限 50（`truncated` 标记）、`failed` / `insufficient` 分开计数（数据不足按契约静默跳过，不混入失败）。
+- `screener_run` 护栏显式回显（并写进 `docs/design/strategy-tab.md` §3.4b）：扫描池上限（默认 100 / 上限 500）、并发 5、单标的取数超时 8s、求值超时 1s（自定义源码走 Node vm 熔断）、单次总预算 90s（耗尽后 `deadlineExceeded:true`，替代 agent 面缺失的取消通道）、结果上限 50（`truncated` 标记）、`failed` / `insufficient` 分开计数（数据不足按契约静默跳过，不混入失败）。
 - okx 的 `OkxTradeService` 增可选 `environment()` 自述方法（demo/live 安全信号），由账户工具鸭式读取并写入输出 `environment` 字段——api 契约不声明该可选方法。
 
 ## Alternatives considered

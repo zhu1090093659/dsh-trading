@@ -32,6 +32,8 @@ type RunWire = {
   matched?: number
   returned?: number
   truncated?: boolean
+  budgetMs?: number
+  deadlineExceeded?: boolean
   resultLimit?: number
   params?: { requested: Record<string, number>; effective: Record<string, number> }
   results?: Array<{ symbol: string; name?: string; price: number | null; metrics: Record<string, number>; reason: string }>
@@ -135,6 +137,30 @@ describe('screener_run', () => {
     const wire = JSON.parse(String(await makeTool({ store }).execute({ screenerId: 'scr.demo-all', market: 'us' }))) as RunWire
     expect(wire.results).toHaveLength(2)
     expect(wire.results?.[0]?.metrics.n).toBe(300)
+  })
+
+
+  it('总预算耗尽 → deadlineExceeded=true 且不再领取新标的（注入假时钟，确定性）', async () => {
+    let clock = 0
+    const tool = createScreenerRunTool({
+      store: createMemoryCustomScreenerStore(),
+      budgetMs: 1000,
+      now: () => clock,
+      active: () => ({
+        provider: 'fake',
+        service: service({
+          symbols: Array.from({ length: 10 }, (_, i) => ({ symbol: 'S' + i })),
+          bars: async () => { clock = 5000; return risingBars(300) },
+        }),
+      }),
+    })
+    const wire = JSON.parse(String(await tool.execute({ screenerId: 'scr.near-high', market: 'us' }))) as RunWire
+    expect(wire.ok).toBe(true)
+    expect(wire.deadlineExceeded).toBe(true)
+    expect(wire.budgetMs).toBe(1000)
+    // 首个 worker 领取 1 个标的（此时钟被推过预算），其余 worker 在领取前即退出。
+    expect(wire.scanned).toBe(1)
+    expect(wire.scanPool).toBe(10)
   })
 
   it('未知 id / 墓碑删除 / 无名册 / 无服务 → 显式失败，不返回空结果冒充无命中', async () => {
