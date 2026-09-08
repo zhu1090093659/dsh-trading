@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +9,8 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const {
   resolveRuntimePaths,
+  hostCliShimPath,
+  writeHostCliShims,
   resolveDshHome,
   profileAction,
   applyProfileSeed,
@@ -157,6 +160,33 @@ test('formatHostExitDiagnostic detects missing VC++ redistributable on Windows',
   const signalExit = formatHostExitDiagnostic(null, 'SIGTERM', 'darwin');
   assert.equal(signalExit.isMissingVCRedist, false);
   assert.ok(signalExit.message.includes('SIGTERM'));
+});
+
+test('writeHostCliShims drops a runnable dsh shim into the staged host', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-cli-shim-'));
+  const host = path.join(dir, 'runtime', 'host');
+  const entry = path.join(host, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
+  fs.mkdirSync(path.dirname(entry), { recursive: true });
+  fs.writeFileSync(entry, "process.stdout.write(JSON.stringify(process.argv.slice(2)) + '\\n');\n");
+  const nodeBin = path.join(dir, 'runtime', 'node', 'bin');
+  fs.mkdirSync(nodeBin, { recursive: true });
+  fs.symlinkSync(process.execPath, path.join(nodeBin, 'node'));
+
+  const written = writeHostCliShims(host);
+  assert.equal(written.posix, hostCliShimPath(host, 'darwin'));
+  assert.equal(written.windows, hostCliShimPath(host, 'win32'));
+  assert.ok(written.posix.endsWith(path.join('.bin', 'dsh')), 'gateway probes .bin/dsh');
+  assert.ok(written.windows.endsWith(path.join('.bin', 'dsh.cmd')), 'gateway probes .bin/dsh.cmd on Windows');
+  assert.ok(fs.existsSync(written.posix) && fs.existsSync(written.windows));
+  assert.ok(fs.readFileSync(written.posix, 'utf8').includes('@deepseek-ai/dsh/lib/bin.js'));
+  assert.ok(fs.readFileSync(written.windows, 'utf8').includes('@deepseek-ai\\dsh\\lib\\bin.js'));
+
+  if (process.platform !== 'win32') {
+    assert.ok((fs.statSync(written.posix).mode & 0o111) !== 0, 'the POSIX shim is executable');
+    const out = execFileSync(written.posix, ['plugin', '--profile', 'trading-web', 'list'], { encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(out), ['plugin', '--profile', 'trading-web', 'list']);
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('toNodeImportSpecifier converts paths to valid file URLs safe for --import', () => {

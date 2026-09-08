@@ -182,6 +182,53 @@
     - id: dsh-trading-im
       name: '@xmanrui/dsh-im'
 
+    # 使用统计（2026-09-08，npm 复用 dsh-web 项目同款插件 @linxin666/dsh-usage）：
+    # 单行双半：host 半（会话事件流折叠成 token 账本落 $DSH_HOME/dsh-usage/
+    # usage-ledger.json + 各 provider 余额/套餐配额轮询探针 + /api/dsh-usage 路由）
+    # + 浏览器半（设置一级菜单「使用统计」，section order 151）。凭据经宿主凭据缝
+    # （llm-pi-ai 记录 / apiKeyEnv 引用）解析，密钥不出宿主进程。
+    # 适配点：本产品不含 dsh-pet（宠物），宠物气泡默认 off（插件设置面板可随时
+    # 改回 always/change，属用户可见项）；账本随 DSH_HOME=~/.dsh-trading 隔离，
+    # 不污染宿主 ~/.dsh。市场无关共享行，归 base 所有（铁律 #1）。
+    # headless 宿主 host 半 webServer 注入挂起无害（client-ui-updater 同款）。
+    # 包名解析依赖本包 dependencies 里的 @linxin666/dsh-usage（进 profile 安装
+    # 闭包，S3 坑 3 同款）。^0.3.17：落地时刻 0.3.18 尚在 pnpm minimumReleaseAge
+    # 24h 冷却期内，caret 待其出冷却后 pnpm update 自然跟进（session-archive 同款）。
+    - id: dsh-trading-usage
+      name: '@linxin666/dsh-usage'
+      config:
+        bubbleMode: 'off'
+
+    # 插件管理（2026-09-08，npm 复用 dsh-web 项目同款插件
+    # @linxin666/dsh-client-ui-plugin-manager）：官方「插件」设置区的
+    # Plugin manager 标签页（settings.plugins.tab order 20），npm/git 安装、
+    # 启用开关、更新校验、卸载、安装冲突回滚与「让 agent 修」修复会话。
+    # 双通道：官方 installer 通道存在时走 /plugin-installer RPC；npm 发布版
+    # web 运行时无该通道，由本包 host 半挂 loopback 网关、派生官方 dsh CLI
+    # 写入 profile（唯一写者）。CLI 解析顺序 = 宿主 PATH → 宿主入口向上
+    # node_modules/.bin/dsh → darwin /opt/homebrew|/usr/local/bin/dsh；
+    # 桌面版自带 runtime 无全局 CLI，由 desktop 构建期投放
+    # runtime/host/node_modules/.bin/dsh 垫片补齐（本变更同批落地）。
+    # 市场无关共享行，归 base 所有（铁律 #1）。写入仅限本机 loopback
+    # （socket+Host+Origin+sec-fetch-site 四重校验，非 loopback 403）。
+    # 隐私面：浏览器半每日一次匿名安装心跳到 dsh-market.com（随机
+    # localStorage id + 包名，无对话数据/无 IP），详见 Agent Note。
+    - id: dsh-trading-plugin-manager
+      name: '@linxin666/dsh-client-ui-plugin-manager'
+
+    # 模型能力声明（2026-09-08，npm 复用 dsh-web 项目同款插件
+    # @linxin666/dsh-client-ui-model-capabilities）：在官方「模型」设置页的
+    # 自定义 provider 卡片（llm-pi-ai 家族）内就地声明每模型的图片输入与
+    # 推理档位（settings.models.provider-card keyed slot + footer 归档区），
+    # 并支持 provider 级禁用/恢复归档。写回官方 llm-pi-ai settings
+    # namespace（整数组覆盖，非本插件字段原样保留），无 DSH 源码改动。
+    # host 半只注册自身 namespace dsh-model-capabilities（禁用 provider 归档）。
+    # 适配点：本仓 llm-pi-ai 路由（kimi-coding / zai-coding-cn 等）即在该
+    # 卡片体系内，能力声明直接生效；llm-deepseek 固定目录不在覆盖范围
+    # （官方能力面自带）。市场无关共享行，归 base 所有（铁律 #1）。
+    - id: dsh-trading-model-capabilities
+      name: '@linxin666/dsh-client-ui-model-capabilities'
+
 - id: agent-presets
   name: '@deepseek-ai/dsh-agent-presets'
   config:
