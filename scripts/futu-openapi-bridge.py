@@ -45,12 +45,27 @@ OPEND_PORT = 11111
 HK_TZ = timezone(timedelta(hours=8))  # 港股墙钟（无夏令时）
 # 美股 time_key 为美东墙钟（2026-09-08 OpenD 实证：US.AAPL 1m 尾巴 15:59/16:00=收盘分钟，
 # 日线盖交易日 00:00；若按北京解析则分钟偏差 12h、日线日期错位一天）
-US_TZ = ZoneInfo('America/New_York')
+_us_tz = None
+
+
+def us_tz():
+    """美东时区（含夏令时）。惰性解析：宿主无系统 tz 库（Windows 需 pip install tzdata）时
+    只在请求美股时报错，港股面不受影响。"""
+    global _us_tz
+    if _us_tz is None:
+        try:
+            _us_tz = ZoneInfo('America/New_York')
+        except Exception as exc:  # noqa: BLE001 —— 折成可执行报错，桥面统一 retType:-1
+            raise RuntimeError(
+                f"bridge: cannot load timezone 'America/New_York' ({exc}); "
+                'install tzdata (pip install tzdata) for US quotes'
+            ) from exc
+    return _us_tz
 
 
 def market_tz(security: str):
     """按证券前缀选墙钟时区：US.* 美东（含夏令时），其余（HK.*）北京时间。"""
-    return US_TZ if security.upper().startswith('US.') else HK_TZ
+    return us_tz() if security.upper().startswith('US.') else HK_TZ
 
 KL_TYPE_TO_KLTYPE = {
     1: KLType.K_1M, 2: KLType.K_5M, 3: KLType.K_15M, 4: KLType.K_30M,

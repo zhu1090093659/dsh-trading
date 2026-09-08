@@ -33,3 +33,16 @@ Status: implemented
 - 设置 UI：us 市场候选出现 futu（需 OpenD+桥存活，缺一报 `TRADING_NETWORK`，与 hk 面同依赖）；tushare 不再出现在 hk/us 候选。
 - 与美股四时段盘点（2026-09-08 会话）的衔接：futu 美股 LV3 权限含延长时段报价，但 `Ticker` 契约无 pre/post 字段、`Kline` 无时段标志——延长时段语义仍是契约级缺口，本 note 不解决。
 - connector-futu 单测 9→13（US 归一/分派/行情路径/交易闸门）；client-ui-settings 冒烟不受影响。
+
+## 审查修正（2026-09-08 主 agent 审查 #84）
+
+- **输入宽容回归（已修）**：分派正则只认「纯数字 / .HK 后缀」，把 Futu 原生形 `HK.00700` 打进美股分支 →
+  `TRADING_UNSUPPORTED_SYMBOL`（main 上 `normalizeHkSymbol` 受理该形）。违反
+  docs/symbol-vocabulary.md §2「输入宽容：同时接受规范形与本交易所原生形」。修法：抽出 `HK_FORM`
+  （`^(HK\.)?\d{1,5}(\.HK)?$`）供 `normalizeSymbol`/`toFutuSecurity` 共用，补单测与 `docs/symbol-vocabulary.md`
+  的 futu 行（hk/us 原生形 ↔ 规范形）。实证：`spikes/impl-futu-us/verify-native-hk.mjs`（旁路桥 11113）。
+- **桥 tzdata 可用性（已修）**：`US_TZ = ZoneInfo('America/New_York')` 在 import 期解析，宿主无系统 tz
+  库（Windows 未装 tzdata 包）时整个桥起不来、港股面被连带打挂 → 改惰性 `us_tz()`，仅美股请求报可执行错误。
+- 复核实证（2026-09-08 18:0x HKT，OpenD 活体）：`HK.00700` 与 `00700.HK` 同值（435.4/435.2/435.4），
+  `US.AAPL` 快照时间 = 当下（10:06:54Z vs now 10:07Z，ET 解析正确），美股 1m 尾 19:58–20:00Z、日线 09-04T04:00Z、
+  HK 5m 尾 07:50–08:00Z；下单闸门仍拒美股。`pnpm --filter @dshtrading/connector-futu build test` 14 用例全绿。

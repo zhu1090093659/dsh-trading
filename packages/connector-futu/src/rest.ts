@@ -90,10 +90,13 @@ export function normalizeUsSymbol(raw: string): string {
   throw new TradingServiceError('TRADING_UNSUPPORTED_SYMBOL', `Futu: malformed US symbol ${JSON.stringify(raw)}`)
 }
 
-/** 按形态分派归一：纯数字（可带 .HK 后缀）走港股，其余走美股（行情面双市场入口）。 */
+/** 港股形态（规范形 00700.HK / 裸数字 700 / Futu 原生形 HK.00700）。 */
+const HK_FORM = /^(HK\.)?\d{1,5}(\.HK)?$/
+
+/** 按形态分派归一：港股形态走港股，其余走美股（行情面双市场入口）。 */
 export function normalizeSymbol(raw: string): string {
   const trimmed = raw.trim().toUpperCase()
-  if (/^\d{1,5}(\.HK)?$/.test(trimmed)) {
+  if (HK_FORM.test(trimmed)) {
     return normalizeHkSymbol(trimmed)
   }
   return normalizeUsSymbol(trimmed)
@@ -102,7 +105,7 @@ export function normalizeSymbol(raw: string): string {
 /** 将规范形转换为 FutuOpenD 所需格式（HK.00700 / US.AAPL） */
 export function toFutuSecurity(canonicalSymbol: string): string {
   const trimmed = canonicalSymbol.trim().toUpperCase()
-  if (/^\d{1,5}(\.HK)?$/.test(trimmed)) {
+  if (HK_FORM.test(trimmed)) {
     const digits = normalizeHkSymbol(trimmed).slice(0, 5)
     return `HK.${digits}`
   }

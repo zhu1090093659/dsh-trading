@@ -49,12 +49,18 @@ describe('FutuRestClient 符号与周期映射', () => {
     expect(() => normalizeUsSymbol('12345')).toThrowError(TradingServiceError)
   })
 
-  it('归一分派：数字形态走港股，字母形态走美股', () => {
+  it('归一分派：港股形态走港股，字母形态走美股', () => {
     expect(normalizeSymbol('700')).toBe('00700.HK')
     expect(normalizeSymbol('700.HK')).toBe('00700.HK')
     expect(normalizeSymbol('aapl')).toBe('AAPL')
     expect(normalizeSymbol('us.AAPL')).toBe('AAPL')
     expect(() => normalizeSymbol('INVALID!')).toThrowError(TradingServiceError)
+  })
+
+  it('输入宽容：Futu 原生形 HK.00700 在分派与证券格式转换两侧都受理（规范词汇 §2）', () => {
+    expect(normalizeSymbol('HK.00700')).toBe('00700.HK')
+    expect(normalizeSymbol('hk.00700')).toBe('00700.HK')
+    expect(toFutuSecurity('HK.00700')).toBe('HK.00700')
   })
 
   it('支持的 interval 词汇包含 5m/15m/30m/1h/1d/1w/1M', () => {
