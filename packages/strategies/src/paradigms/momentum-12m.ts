@@ -20,6 +20,15 @@ export const momentum12mStrategy: StrategyDefinition = {
   compute(bars, params) {
     const lookback = Math.max(10, Math.round(params.lookbackBars ?? 250))
 
+    // 价格文案小数位自适应（与 ../price-format.ts 同式；compute 需自包含）：
+    // ≥1 默认 2 位，2 位舍入丢第 3 位有效小数时升 3 位
+    const fmtPrice = (value: number): string => {
+      if (!Number.isFinite(value)) return '—'
+      const abs = Math.abs(value)
+      if (abs < 1) return value.toFixed(abs >= 0.01 ? 4 : 6)
+      return value.toFixed(Math.abs(Number(value.toFixed(2)) - value) < 1e-9 ? 2 : 3)
+    }
+
     const smaOf = (values: number[], period: number): Array<number | undefined> => {
       const out: Array<number | undefined> = new Array(values.length).fill(undefined)
       if (!Number.isFinite(period) || period < 1 || values.length < period) return out
@@ -53,9 +62,9 @@ export const momentum12mStrategy: StrategyDefinition = {
           action: 'entry',
           direction: 'long',
           price: currentClose,
-          reason: `近 ${lookback} 周期动量为正 (+${(momentumReturn * 100).toFixed(1)}%) 且位于均线 (${currentSma.toFixed(2)}) 之上，确认强动量`,
+          reason: `近 ${lookback} 周期动量为正 (+${(momentumReturn * 100).toFixed(1)}%) 且位于均线 (${fmtPrice(currentSma)}) 之上，确认强动量`,
           reasonKey: 'strat.momentum-12m.reason.entry',
-          reasonParams: { n: lookback, pct: (momentumReturn * 100).toFixed(1), sma: currentSma.toFixed(2) },
+          reasonParams: { n: lookback, pct: (momentumReturn * 100).toFixed(1), sma: fmtPrice(currentSma) },
         })
         inPosition = true
       } else if (inPosition && (momentumReturn <= 0 || currentClose < currentSma)) {
@@ -66,9 +75,9 @@ export const momentum12mStrategy: StrategyDefinition = {
           action: 'exit',
           direction: 'flat',
           price: currentClose,
-          reason: `${exitCause} (${(momentumReturn * 100).toFixed(1)}% / SMA ${currentSma.toFixed(2)})，动量衰减平仓`,
+          reason: `${exitCause} (${(momentumReturn * 100).toFixed(1)}% / SMA ${fmtPrice(currentSma)})，动量衰减平仓`,
           reasonKey: 'strat.momentum-12m.reason.exit',
-          reasonParams: { cause: momentumReturn <= 0 ? 'momentumNegative' : 'belowBaseline', pct: (momentumReturn * 100).toFixed(1), sma: currentSma.toFixed(2) },
+          reasonParams: { cause: momentumReturn <= 0 ? 'momentumNegative' : 'belowBaseline', pct: (momentumReturn * 100).toFixed(1), sma: fmtPrice(currentSma) },
         })
         inPosition = false
       }

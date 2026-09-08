@@ -22,6 +22,15 @@ export const emaCrossoverStrategy: StrategyDefinition = {
     const fastP = Math.max(2, Math.round(params.fastPeriod ?? 20))
     const slowP = Math.max(fastP + 1, Math.round(params.slowPeriod ?? 60))
 
+    // 价格文案小数位自适应（与 ../price-format.ts 同式；compute 需自包含）：
+    // ≥1 默认 2 位，2 位舍入丢第 3 位有效小数时升 3 位
+    const fmtPrice = (value: number): string => {
+      if (!Number.isFinite(value)) return '—'
+      const abs = Math.abs(value)
+      if (abs < 1) return value.toFixed(abs >= 0.01 ? 4 : 6)
+      return value.toFixed(Math.abs(Number(value.toFixed(2)) - value) < 1e-9 ? 2 : 3)
+    }
+
     const emaOf = (values: number[], period: number): Array<number | undefined> => {
       const out: Array<number | undefined> = new Array(values.length).fill(undefined)
       if (!Number.isFinite(period) || period < 1 || values.length < period) return out
@@ -66,9 +75,9 @@ export const emaCrossoverStrategy: StrategyDefinition = {
           action: 'entry',
           direction: 'long',
           price: bars[i].close,
-          reason: `EMA(${fastP}) (${currFast.toFixed(2)}) 上穿 EMA(${slowP}) (${currSlow.toFixed(2)}) 形成金叉`,
+          reason: `EMA(${fastP}) (${fmtPrice(currFast)}) 上穿 EMA(${slowP}) (${fmtPrice(currSlow)}) 形成金叉`,
           reasonKey: 'strat.ema-crossover.reason.entry',
-          reasonParams: { fastP, fast: currFast.toFixed(2), slowP, slow: currSlow.toFixed(2) },
+          reasonParams: { fastP, fast: fmtPrice(currFast), slowP, slow: fmtPrice(currSlow) },
         })
         inPosition = true
       }
@@ -80,9 +89,9 @@ export const emaCrossoverStrategy: StrategyDefinition = {
           action: 'exit',
           direction: 'flat',
           price: bars[i].close,
-          reason: `EMA(${fastP}) (${currFast.toFixed(2)}) 下穿 EMA(${slowP}) (${currSlow.toFixed(2)}) 形成死叉`,
+          reason: `EMA(${fastP}) (${fmtPrice(currFast)}) 下穿 EMA(${slowP}) (${fmtPrice(currSlow)}) 形成死叉`,
           reasonKey: 'strat.ema-crossover.reason.exit',
-          reasonParams: { fastP, fast: currFast.toFixed(2), slowP, slow: currSlow.toFixed(2) },
+          reasonParams: { fastP, fast: fmtPrice(currFast), slowP, slow: fmtPrice(currSlow) },
         })
         inPosition = false
       }

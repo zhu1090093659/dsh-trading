@@ -7,7 +7,7 @@ import type {
 } from '@dshtrading/api'
 import { fetchFundamentals } from './api.ts'
 import { readJson, type SelectionState } from './store.ts'
-import { scaleLocaleOf } from './format.ts'
+import { fmtPrice, scaleLocaleOf } from './format.ts'
 import type { Instrument, MarketId } from './types.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import css from './fundamentals-stage.module.css'
@@ -622,7 +622,7 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                     <div className={css.forecastStatBox}>
                       <span className={css.gridLabel}>{t('fund.forecast.targetPrice')}</span>
                       <span className={css.pillValue} style={{ fontSize: 18 }}>
-                        {forecast.targetPriceAvg !== undefined ? `¥${forecast.targetPriceAvg.toFixed(2)}` : '--'}
+                        {forecast.targetPriceAvg !== undefined ? `¥${fmtPrice(forecast.targetPriceAvg)}` : '--'}
                       </span>
                     </div>
                     <div className={css.forecastStatBox}>
@@ -718,15 +718,15 @@ export function FundamentalsStage({ t, useSelection }: FundamentalsStageProps) {
                   <div className={css.rangePointerInfo}>
                     <span>{t('fund.valuation.range52w')}</span>
                     <span>
-                      {stock.fiftyTwoWeekLow.toFixed(2)} ~ {stock.fiftyTwoWeekHigh.toFixed(2)}
+                      {fmtPrice(stock.fiftyTwoWeekLow)} ~ {fmtPrice(stock.fiftyTwoWeekHigh)}
                     </span>
                   </div>
                   <div className={css.rangeGaugeLabels}>
-                    <span>{t('fund.valuation.low52w', { price: stock.fiftyTwoWeekLow.toFixed(2) })}</span>
+                    <span>{t('fund.valuation.low52w', { price: fmtPrice(stock.fiftyTwoWeekLow) })}</span>
                     <span>
                       {t('fund.valuation.peNote', { note: stock.peTtm !== undefined ? (stock.peTtm < 15 ? t('fund.valuation.undervalued') : stock.peTtm < 30 ? t('fund.valuation.fair') : t('fund.valuation.overvalued')) : t('fund.valuation.assessing') })}
                     </span>
-                    <span>{t('fund.valuation.high52w', { price: stock.fiftyTwoWeekHigh.toFixed(2) })}</span>
+                    <span>{t('fund.valuation.high52w', { price: fmtPrice(stock.fiftyTwoWeekHigh) })}</span>
                   </div>
                 </div>
               )}

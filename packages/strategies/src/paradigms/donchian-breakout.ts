@@ -18,6 +18,15 @@ export const donchianBreakoutStrategy: StrategyDefinition = {
   compute(bars, params) {
     const n1 = Math.max(2, Math.round(params.lookbackEntry ?? 20))
     const n2 = Math.max(1, Math.round(params.lookbackExit ?? 10))
+
+    // 价格文案小数位自适应（与 ../price-format.ts 同式；compute 需自包含）：
+    // ≥1 默认 2 位，2 位舍入丢第 3 位有效小数时升 3 位
+    const fmtPrice = (value: number): string => {
+      if (!Number.isFinite(value)) return '—'
+      const abs = Math.abs(value)
+      if (abs < 1) return value.toFixed(abs >= 0.01 ? 4 : 6)
+      return value.toFixed(Math.abs(Number(value.toFixed(2)) - value) < 1e-9 ? 2 : 3)
+    }
     const signals: StrategySignal[] = []
     let inPosition = false
 
@@ -43,9 +52,9 @@ export const donchianBreakoutStrategy: StrategyDefinition = {
           action: 'entry',
           direction: 'long',
           price: currentClose,
-          reason: `收盘价 (${currentClose.toFixed(2)}) 突破前 ${n1} 根最高价 (${highestHigh.toFixed(2)})`,
+          reason: `收盘价 (${fmtPrice(currentClose)}) 突破前 ${n1} 根最高价 (${fmtPrice(highestHigh)})`,
           reasonKey: 'strat.donchian-breakout.reason.entry',
-          reasonParams: { close: currentClose.toFixed(2), n: n1, high: highestHigh.toFixed(2) },
+          reasonParams: { close: fmtPrice(currentClose), n: n1, high: fmtPrice(highestHigh) },
         })
         inPosition = true
       } else if (inPosition && currentClose < lowestLow) {
@@ -55,9 +64,9 @@ export const donchianBreakoutStrategy: StrategyDefinition = {
           action: 'exit',
           direction: 'flat',
           price: currentClose,
-          reason: `收盘价 (${currentClose.toFixed(2)}) 跌破前 ${n2} 根最低价 (${lowestLow.toFixed(2)})`,
+          reason: `收盘价 (${fmtPrice(currentClose)}) 跌破前 ${n2} 根最低价 (${fmtPrice(lowestLow)})`,
           reasonKey: 'strat.donchian-breakout.reason.exit',
-          reasonParams: { close: currentClose.toFixed(2), n: n2, low: lowestLow.toFixed(2) },
+          reasonParams: { close: fmtPrice(currentClose), n: n2, low: fmtPrice(lowestLow) },
         })
         inPosition = false
       }

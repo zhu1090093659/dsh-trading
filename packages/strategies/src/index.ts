@@ -21,6 +21,10 @@ export type {
 
 export { run } from './engine.ts'
 
+// 标的价格显示小数位（自适应 2→3 位）：client-ui 两包经此复用同一规则，
+// 替代各处内联 toFixed(2) 对 3 位小数标的（港股 0.001 tick）的截断。
+export { fmtPrice, priceDigits } from './price-format.ts'
+
 // 自定义策略管线（issue #31 / P2）：纯类型 + 内存存储 + 校验器（浏览器安全；
 // file store 与 host 插件在 ./plugin 子路径，Node 侧专用，不进浏览器 bundle）。
 export {

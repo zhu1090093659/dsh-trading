@@ -12,20 +12,13 @@ export function directionColor(value: number, mode: ColorMode = 'red-up'): strin
   return palette.flatColor
 }
 
-/** Price decimals by magnitude (crypto sub-dollar pairs need more precision). */
-export function priceDigits(value: number | undefined): number {
-  if (value === undefined || !Number.isFinite(value)) return 2
-  const abs = Math.abs(value)
-  if (abs >= 1000) return 2
-  if (abs >= 1) return 2
-  if (abs >= 0.01) return 4
-  return 6
-}
+import { fmtPrice, priceDigits } from '@dshtrading/strategies'
 
-export function fmtPrice(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) return '—'
-  return value.toFixed(priceDigits(value))
-}
+/** 标的价格显示小数位与价格文本：规则单一来源在 @dshtrading/strategies
+ * （src/price-format.ts，≥1 默认 2 位、2 位舍入丢第 3 位有效小数时升 3 位）。
+ * import 后再导出：fmtChange 等本模块函数仍引用 fmtPrice，纯 `export from`
+ * 转发不会绑定本地作用域。 */
+export { fmtPrice, priceDigits }
 
 /** Signed percent string: +1.74% / -0.83% / 0.00%. */
 export function fmtPercent(value: number | undefined): string {

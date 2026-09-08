@@ -20,6 +20,15 @@ export const smaBaselineStrategy: StrategyDefinition = {
   compute(bars, params) {
     const period = Math.max(10, Math.round(params.period ?? 200))
 
+    // 价格文案小数位自适应（与 ../price-format.ts 同式；compute 需自包含）：
+    // ≥1 默认 2 位，2 位舍入丢第 3 位有效小数时升 3 位
+    const fmtPrice = (value: number): string => {
+      if (!Number.isFinite(value)) return '—'
+      const abs = Math.abs(value)
+      if (abs < 1) return value.toFixed(abs >= 0.01 ? 4 : 6)
+      return value.toFixed(Math.abs(Number(value.toFixed(2)) - value) < 1e-9 ? 2 : 3)
+    }
+
     const smaOf = (values: number[], period: number): Array<number | undefined> => {
       const out: Array<number | undefined> = new Array(values.length).fill(undefined)
       if (!Number.isFinite(period) || period < 1 || values.length < period) return out
@@ -49,9 +58,9 @@ export const smaBaselineStrategy: StrategyDefinition = {
           action: 'entry',
           direction: 'long',
           price: currentClose,
-          reason: `收盘价 (${currentClose.toFixed(2)}) 站上长期基线 SMA(${period}) (${currentSma.toFixed(2)})，确立多头趋势`,
+          reason: `收盘价 (${fmtPrice(currentClose)}) 站上长期基线 SMA(${period}) (${fmtPrice(currentSma)})，确立多头趋势`,
           reasonKey: 'strat.sma-baseline.reason.entry',
-          reasonParams: { close: currentClose.toFixed(2), period, sma: currentSma.toFixed(2) },
+          reasonParams: { close: fmtPrice(currentClose), period, sma: fmtPrice(currentSma) },
         })
         inPosition = true
       } else if (inPosition && currentClose < currentSma) {
@@ -61,9 +70,9 @@ export const smaBaselineStrategy: StrategyDefinition = {
           action: 'exit',
           direction: 'flat',
           price: currentClose,
-          reason: `收盘价 (${currentClose.toFixed(2)}) 跌破长期基线 SMA(${period}) (${currentSma.toFixed(2)})，转入防御避险`,
+          reason: `收盘价 (${fmtPrice(currentClose)}) 跌破长期基线 SMA(${period}) (${fmtPrice(currentSma)})，转入防御避险`,
           reasonKey: 'strat.sma-baseline.reason.exit',
-          reasonParams: { close: currentClose.toFixed(2), period, sma: currentSma.toFixed(2) },
+          reasonParams: { close: fmtPrice(currentClose), period, sma: fmtPrice(currentSma) },
         })
         inPosition = false
       }

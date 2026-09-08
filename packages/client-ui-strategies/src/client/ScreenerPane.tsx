@@ -19,6 +19,7 @@ import {
   isBuiltinScreenerId,
   builtinScreenerRecord,
   workerComputeRunner,
+  fmtPrice,
   type Kline,
   type ScreenerDefinition,
   type CustomScreenerRecord,
@@ -549,7 +550,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
                       <tr key={row.symbol}>
                         <td>{row.symbol}</td>
                         <td className={css.nameCell}>{row.name ?? '--'}</td>
-                        <td>{row.price.toFixed(2)}</td>
+                        <td>{fmtPrice(row.price)}</td>
                         {(scanning ? scanScreener : currentScreener)!.columns.map((col) => (
                           <td key={col.key}>{formatMetric(row.metrics[col.key] ?? NaN, col.format)}</td>
                         ))}

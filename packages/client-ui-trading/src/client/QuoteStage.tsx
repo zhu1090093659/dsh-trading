@@ -670,14 +670,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             time: bar.time,
             action: 'entry',
             price: bar.close,
-            reason: t('marker.signal.entryReason', { cur, price: bar.close.toFixed(2) }),
+            reason: t('marker.signal.entryReason', { cur, price: fmtPrice(bar.close) }),
           })
         } else if (prevDiff >= 0 && diff < 0) {
           signals.push({
             time: bar.time,
             action: 'exit',
             price: bar.close,
-            reason: t('marker.signal.exitReason', { cur, price: bar.close.toFixed(2) }),
+            reason: t('marker.signal.exitReason', { cur, price: fmtPrice(bar.close) }),
           })
         }
       }

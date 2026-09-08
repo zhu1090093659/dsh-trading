@@ -17,6 +17,7 @@ import {
   applyStrategyManagement,
   isBuiltinStrategyId,
   builtinStrategyRecord,
+  fmtPrice,
   type StrategyHorizon,
   type StrategyDefinition,
   type BacktestResult,
@@ -663,8 +664,8 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
                       <tr key={idx}>
                         <td>{formatDate(tr.entryTime)}</td>
                         <td>{formatDate(tr.exitTime)}</td>
-                        <td>{tr.entryPrice.toFixed(2)}</td>
-                        <td>{tr.exitPrice.toFixed(2)}</td>
+                        <td>{fmtPrice(tr.entryPrice)}</td>
+                        <td>{fmtPrice(tr.exitPrice)}</td>
                         <td>{tr.holdingBars}</td>
                         <td className={tr.returnPercent >= 0 ? css.trendUp : css.trendDown}>
                           {formatPercent(tr.returnPercent, true)}

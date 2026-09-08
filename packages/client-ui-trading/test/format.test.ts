@@ -14,6 +14,12 @@ describe('fmtPrice', () => {
     expect(fmtPrice(undefined)).toBe('—')
     expect(fmtPrice(Number.NaN)).toBe('—')
   })
+
+  it('≥1 价位保留第 3 位有效小数（港股 0.001 tick），无第 3 位时维持 2 位', () => {
+    expect(fmtPrice(107.125)).toBe('107.125')
+    expect(fmtPrice(346.59)).toBe('346.59')
+    expect(fmtPrice(107)).toBe('107.00')
+  })
 })
 
 /** 评审 L2：哨兵判定健壮性——两个哨兵值都识别，未知值告警回落 en。 */
@@ -39,7 +45,7 @@ describe('fmtPercent / fmtChange', () => {
     expect(fmtPercent(1.742)).toBe('+1.74%')
     expect(fmtPercent(-0.8)).toBe('-0.80%')
     expect(fmtPercent(0)).toBe('0.00%')
-    expect(fmtChange(1.234)).toBe('+1.23')
+    expect(fmtChange(1.234)).toBe('+1.234')
     expect(fmtChange(-2)).toBe('-2.00')
   })
 })

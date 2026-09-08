@@ -23,6 +23,15 @@ export const bollingerReversionStrategy: StrategyDefinition = {
     const period = Math.max(5, Math.round(params.period ?? 20))
     const k = Number(params.multiplier ?? 2)
 
+    // 价格文案小数位自适应（与 ../price-format.ts 同式；compute 需自包含）：
+    // ≥1 默认 2 位，2 位舍入丢第 3 位有效小数时升 3 位
+    const fmtPrice = (value: number): string => {
+      if (!Number.isFinite(value)) return '—'
+      const abs = Math.abs(value)
+      if (abs < 1) return value.toFixed(abs >= 0.01 ? 4 : 6)
+      return value.toFixed(Math.abs(Number(value.toFixed(2)) - value) < 1e-9 ? 2 : 3)
+    }
+
     const smaOf = (values: number[], period: number): Array<number | undefined> => {
       const out: Array<number | undefined> = new Array(values.length).fill(undefined)
       if (!Number.isFinite(period) || period < 1 || values.length < period) return out
@@ -76,9 +85,9 @@ export const bollingerReversionStrategy: StrategyDefinition = {
           action: 'entry',
           direction: 'long',
           price: currentClose,
-          reason: `收盘价 (${currentClose.toFixed(2)}) 跌破布林下轨 (${currentLower.toFixed(2)})，触发波段均值回归`,
+          reason: `收盘价 (${fmtPrice(currentClose)}) 跌破布林下轨 (${fmtPrice(currentLower)})，触发波段均值回归`,
           reasonKey: 'strat.bollinger-reversion.reason.entry',
-          reasonParams: { close: currentClose.toFixed(2), band: currentLower.toFixed(2) },
+          reasonParams: { close: fmtPrice(currentClose), band: fmtPrice(currentLower) },
         })
         inPosition = true
       } else if (inPosition && currentClose >= currentMid) {
@@ -88,9 +97,9 @@ export const bollingerReversionStrategy: StrategyDefinition = {
           action: 'exit',
           direction: 'flat',
           price: currentClose,
-          reason: `收盘价 (${currentClose.toFixed(2)}) 成功回归至布林中轨 (${currentMid.toFixed(2)})，完成目标止盈`,
+          reason: `收盘价 (${fmtPrice(currentClose)}) 成功回归至布林中轨 (${fmtPrice(currentMid)})，完成目标止盈`,
           reasonKey: 'strat.bollinger-reversion.reason.exit',
-          reasonParams: { close: currentClose.toFixed(2), mid: currentMid.toFixed(2) },
+          reasonParams: { close: fmtPrice(currentClose), mid: fmtPrice(currentMid) },
         })
         inPosition = false
       }
