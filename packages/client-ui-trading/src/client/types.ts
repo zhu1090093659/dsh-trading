@@ -14,6 +14,15 @@ export interface Instrument {
   symbol: string
   /** Display label (seed names, or the raw symbol for user-added rows). */
   name?: string
+  /** 所属自定义分组 id（issue #82；多归属，缺省/空 = 未分组；注册表见 groups store）。 */
+  groups?: string[]
+}
+
+/** 自定义分组（镜像 host 侧 WatchlistGroup wire 形状；type-only，不打进 bundle）。 */
+export interface WatchlistGroupMeta {
+  id: string
+  name: string
+  createdAt: number
 }
 
 export interface MarketInfo {

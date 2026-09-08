@@ -35,8 +35,8 @@ import type { BuiltinTombstonesStore, CustomScreenerRecord, CustomScreenerStore 
 // Node 侧沙箱校验（策略/选股器管理 PUT 落盘前的 vm 熔断试算）；bridge.ts 仅 node 半
 // 加载，client 打包不 import 本文件（client 半只经 api.ts 走 HTTP）。
 import { validateCustomStrategyNode, validateCustomScreenerNode } from '@dshtrading/strategies/plugin'
-import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from '@dshtrading/watchlist'
-import { createMemorySelectionStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
+import type { SelectionStore, WatchlistGroup, WatchlistGroupsStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from '@dshtrading/watchlist'
+import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
 // 统一资产台账（issue #65）：type-only import——@dshtrading/holdings 由并行流建设，
 // 缺席时本包 vitest 不受影响（擦除）；运行时 store 走 host 注入 + 本文件内存兜底。
 import type { Holding, HoldingCurrency, NewHolding, NewHoldingInput } from '@dshtrading/holdings'
@@ -95,6 +95,8 @@ export function createBridgeHost(services: {
   /** 自定义选股器 store（选股器管理，可选）。 */
   screenerStore?: CustomScreenerStore | undefined
   watchlistStore?: WatchlistStore | undefined
+  /** 自定义分组注册表 store（issue #82；可选）。 */
+  groupsStore?: WatchlistGroupsStore | undefined
   selectionStore?: SelectionStore | undefined
   /** 统一资产台账 store（issue #65；缺席 → 进程内内存兜底）。 */
   holdingsStore?: HoldingsStoreLike | undefined
@@ -120,6 +122,7 @@ export function createBridgeHost(services: {
     tombstonesStore: services.tombstonesStore ?? createMemoryBuiltinTombstonesStore(),
     screenerStore: services.screenerStore ?? createMemoryCustomScreenerStore(),
     watchlistStore: services.watchlistStore ?? createMemoryWatchlistStore(),
+    groupsStore: services.groupsStore ?? createMemoryWatchlistGroupsStore(),
     selectionStore: services.selectionStore ?? createMemorySelectionStore(),
     holdingsStore: services.holdingsStore ?? createFallbackHoldingsStore(),
     fetchFxRates: services.fetchFxRates,
@@ -154,6 +157,8 @@ export interface BridgeHost {
   screenerStore?: CustomScreenerStore
   /** 自选股存储（可选，issue #32）。 */
   watchlistStore?: WatchlistStore
+  /** 自定义分组注册表存储（可选，issue #82；createBridgeHost 已兜底内存实现）。 */
+  groupsStore?: WatchlistGroupsStore
   /** 选中标的存储（可选，issue #32）。 */
   selectionStore?: SelectionStore
   /** 统一资产台账存储（可选，issue #65；createBridgeHost 已兜底内存实现）。 */
@@ -1310,6 +1315,94 @@ export class TradingBridge {
   }
 
   /* ---------------------------------------------------------------- */
+  /* 自定义分组（issue #82）：注册表 CRUD + 行级 membership              */
+  /* ---------------------------------------------------------------- */
+
+  /** 全量读取分组注册表（GET /watchlist-groups）。 */
+  async watchlistGroups(): Promise<{ ok: boolean; groups: WatchlistGroup[] }> {
+    const store = this.host.groupsStore
+    if (store === undefined) return { ok: true, groups: [] }
+    return { ok: true, groups: await store.list() }
+  }
+
+  /** 创建分组（POST /watchlist-groups，body { name }）；同名业务拒绝（ok:false + reason）。 */
+  async createWatchlistGroup(body: unknown): Promise<{ ok: boolean; created: boolean; group?: WatchlistGroup; reason?: string }> {
+    const store = this.host.groupsStore
+    const name = parseGroupNameBody(body)
+    if (store === undefined) return { ok: true, created: false }
+    const result = await store.create(name)
+    if (result.error === 'duplicate' || result.group === undefined) {
+      return { ok: false, created: false, reason: `group name ${JSON.stringify(name)} already exists` }
+    }
+    return { ok: true, created: true, group: result.group }
+  }
+
+  /** 重命名分组（PUT /watchlist-groups，body { id, name }）。 */
+  async renameWatchlistGroup(body: unknown): Promise<{ ok: boolean; renamed: boolean; group?: WatchlistGroup; reason?: string }> {
+    const store = this.host.groupsStore
+    const raw = (body ?? {}) as { id?: unknown }
+    const id = typeof raw.id === 'string' ? raw.id.trim() : ''
+    if (!id) throw new BridgeProtocolError(400, 'rename watchlist group body requires string id')
+    const name = parseGroupNameBody(body)
+    if (store === undefined) return { ok: true, renamed: false }
+    const result = await store.rename(id, name)
+    if (result.error === 'not-found') return { ok: false, renamed: false, reason: `no such group id ${JSON.stringify(id)}` }
+    if (result.error === 'duplicate' || result.group === undefined) {
+      return { ok: false, renamed: false, reason: `group name ${JSON.stringify(name)} already exists` }
+    }
+    return { ok: true, renamed: true, group: result.group }
+  }
+
+  /** 删除分组（DELETE /watchlist-groups?id=）：先清全表成员关系，再删注册表行。 */
+  async removeWatchlistGroup(id: string): Promise<{ ok: boolean; removed: boolean }> {
+    const store = this.host.groupsStore
+    if (store === undefined || !id) return { ok: true, removed: false }
+    if (this.host.watchlistStore !== undefined) await this.host.watchlistStore.stripGroup(id)
+    const removed = await store.remove(id)
+    return { ok: true, removed }
+  }
+
+  /**
+   * 加入分组（POST /watchlist-group-members，body { id, market, symbol, name? }）：
+   * 行缺席时物化（种子展示行入组场景——host store 未定制市场无行），随后写归属。
+   */
+  async addWatchlistGroupMember(body: unknown): Promise<{ ok: boolean; added: boolean; materialized: boolean; reason?: string }> {
+    const groups = this.host.groupsStore
+    const watchlists = this.host.watchlistStore
+    if (groups === undefined) return { ok: true, added: false, materialized: false }
+    const input = parseGroupMemberBody(body)
+    // 组不存在即拒绝：否则行上留下悬挂 id（管理弹窗显示 '?' chip，删组清理也覆盖不到）。
+    if (!(await groups.list()).some(group => group.id === input.id)) {
+      return { ok: false, added: false, materialized: false, reason: `no such group id ${JSON.stringify(input.id)}` }
+    }
+    let materialized = false
+    if (watchlists !== undefined) {
+      const map = await watchlists.list()
+      const rows = map[input.market]
+      if (!Array.isArray(rows) || !rows.some(row => row.symbol === input.symbol)) {
+        materialized = await watchlists.add(input.market, {
+          market: input.market,
+          symbol: input.symbol,
+          ...(input.name !== undefined ? { name: input.name } : {}),
+        })
+      }
+    }
+    const added = watchlists !== undefined ? await watchlists.assignGroup(input.market, input.symbol, input.id, true) : false
+    return { ok: true, added, materialized }
+  }
+
+  /** 移出分组（DELETE /watchlist-group-members?id&market&symbol）；只摘归属不删自选行。 */
+  async removeWatchlistGroupMember(id: string, market: string, symbol: string): Promise<{ ok: boolean; removed: boolean }> {
+    const groups = this.host.groupsStore
+    const watchlists = this.host.watchlistStore
+    if (groups === undefined || watchlists === undefined || !id || !market || !symbol) {
+      return { ok: true, removed: false }
+    }
+    const removed = await watchlists.assignGroup(market, symbol, id, false)
+    return { ok: true, removed }
+  }
+
+  /* ---------------------------------------------------------------- */
   /* 图表激活名册（issue #63）：host store 为 SSOT，localStorage 降级镜像  */
   /* ---------------------------------------------------------------- */
 
@@ -1456,7 +1549,7 @@ export class TradingBridge {
   }
 }
 
-/** 自选 map 的形状校验（Record<market, Instrument[]>，宽容 name 缺省）。 */
+/** 自选 map 的形状校验（Record<market, Instrument[]>，宽容 name 缺省；groups 多归属放行）。 */
 function parseWatchlistsMap(body: unknown): WatchlistsMap {
   if (typeof body !== 'object' || body === null) {
     throw new BridgeProtocolError(400, 'watchlists body must be an object')
@@ -1469,29 +1562,69 @@ function parseWatchlistsMap(body: unknown): WatchlistsMap {
   for (const [market, rows] of Object.entries(raw as Record<string, unknown>)) {
     if (!Array.isArray(rows)) continue
     out[market] = rows.map((row) => {
-      const r = row as { market?: unknown; symbol?: unknown; name?: unknown }
+      const r = row as { market?: unknown; symbol?: unknown; name?: unknown; groups?: unknown }
       if (typeof r?.symbol !== 'string' || !r.symbol) {
         throw new BridgeProtocolError(400, `watchlists[${market}] rows must have string symbol`)
       }
+      const groups = parseGroupsField(r.groups)
       return {
         market: typeof r.market === 'string' ? r.market : market,
         symbol: r.symbol,
         ...(typeof r.name === 'string' && r.name ? { name: r.name } : {}),
+        ...(groups !== undefined ? { groups } : {}),
       }
     })
   }
   return out
 }
 
-/** 单行 instrument 的形状校验。 */
+/** 单行 instrument 的形状校验（groups 放行——GUI 分组视图下添加标的直落归属）。 */
 function parseInstrumentBody(body: unknown): WatchlistInstrument {
-  const raw = (body ?? {}) as { market?: unknown; symbol?: unknown; name?: unknown }
+  const raw = (body ?? {}) as { market?: unknown; symbol?: unknown; name?: unknown; groups?: unknown }
   const market = typeof raw.market === 'string' ? raw.market.trim() : ''
   const symbol = typeof raw.symbol === 'string' ? raw.symbol.trim() : ''
   if (!market || !symbol) {
     throw new BridgeProtocolError(400, 'instrument body requires string market and symbol')
   }
+  const groups = parseGroupsField(raw.groups)
   return {
+    market,
+    symbol,
+    ...(typeof raw.name === 'string' && raw.name ? { name: raw.name } : {}),
+    ...(groups !== undefined ? { groups } : {}),
+  }
+}
+
+/** 行上 groups 字段清洗（issue #82）：只收非空字符串 id，去重截断封顶 32。 */
+function parseGroupsField(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item === 'string' && item) seen.add(item)
+  }
+  return seen.size > 0 ? [...seen].slice(0, 32) : undefined
+}
+
+/** 分组名字段校验：trim 非空、≤ 24 字符（协议层 400）。 */
+function parseGroupNameBody(body: unknown): string {
+  const raw = (body ?? {}) as { name?: unknown }
+  const name = typeof raw.name === 'string' ? raw.name.trim() : ''
+  if (!name) throw new BridgeProtocolError(400, 'watchlist group body requires non-empty string name')
+  if (name.length > 24) throw new BridgeProtocolError(400, 'watchlist group name too long (24 chars max)')
+  return name
+}
+
+/** 分组成员写参数校验（body { id, market, symbol, name? }；name 供行物化兜底展示）。 */
+function parseGroupMemberBody(body: unknown): { id: string; market: string; symbol: string; name?: string } {
+  const raw = (body ?? {}) as { id?: unknown; market?: unknown; symbol?: unknown; name?: unknown }
+  const id = typeof raw.id === 'string' ? raw.id.trim() : ''
+  const market = typeof raw.market === 'string' ? raw.market.trim() : ''
+  const symbol = typeof raw.symbol === 'string' ? raw.symbol.trim() : ''
+  if (!id || !market || !symbol) {
+    throw new BridgeProtocolError(400, 'group member body requires string id, market and symbol')
+  }
+  return {
+    id,
     market,
     symbol,
     ...(typeof raw.name === 'string' && raw.name ? { name: raw.name } : {}),
@@ -1630,6 +1763,9 @@ export async function dispatchBridgeRequest(
       case '/watchlists': {
         return { status: 200, payload: await bridge.watchlistRows() }
       }
+      case '/watchlist-groups': {
+        return { status: 200, payload: await bridge.watchlistGroups() }
+      }
       case '/selection': {
         return { status: 200, payload: await bridge.selection() }
       }
@@ -1673,6 +1809,18 @@ export async function dispatchBridgeRequest(
       if (!market || !symbol) throw new BridgeProtocolError(400, 'delete watchlist row: market and symbol are required')
       return { status: 200, payload: await bridge.removeWatchlistRow(market, symbol) }
     }
+    if (pathname === '/watchlist-groups') {
+      const id = search.get('id') ?? ''
+      if (!id) throw new BridgeProtocolError(400, 'delete watchlist group: id is required')
+      return { status: 200, payload: await bridge.removeWatchlistGroup(id) }
+    }
+    if (pathname === '/watchlist-group-members') {
+      const id = search.get('id') ?? ''
+      const market = search.get('market') ?? ''
+      const symbol = search.get('symbol') ?? ''
+      if (!id || !market || !symbol) throw new BridgeProtocolError(400, 'remove group member: id, market and symbol are required')
+      return { status: 200, payload: await bridge.removeWatchlistGroupMember(id, market, symbol) }
+    }
     if (pathname === '/holdings') {
       return { status: 200, payload: await bridge.removeHolding(search.get('id') ?? '') }
     }
@@ -1682,6 +1830,9 @@ export async function dispatchBridgeRequest(
   if (method === 'PUT') {
     if (pathname === '/watchlists') {
       return { status: 200, payload: await bridge.replaceWatchlists(body) }
+    }
+    if (pathname === '/watchlist-groups') {
+      return { status: 200, payload: await bridge.renameWatchlistGroup(body) }
     }
     if (pathname === '/selection') {
       return { status: 200, payload: await bridge.putSelection(body) }
@@ -1722,6 +1873,12 @@ export async function dispatchBridgeRequest(
     }
     if (pathname === '/watchlists/import') {
       return { status: 200, payload: await bridge.importWatchlists(body) }
+    }
+    if (pathname === '/watchlist-groups') {
+      return { status: 200, payload: await bridge.createWatchlistGroup(body) }
+    }
+    if (pathname === '/watchlist-group-members') {
+      return { status: 200, payload: await bridge.addWatchlistGroupMember(body) }
     }
     if (pathname === '/chart/indicators/import') {
       return { status: 200, payload: await bridge.importChartActivations(body) }

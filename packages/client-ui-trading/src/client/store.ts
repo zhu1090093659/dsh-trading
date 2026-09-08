@@ -11,7 +11,7 @@
  * persist to localStorage (durable across reloads; single-user local app — no
  * server sync by design).
  */
-import type { Instrument, MarketId } from './types.ts'
+import type { Instrument, MarketId, WatchlistGroupMeta } from './types.ts'
 import { WATCHLIST_SEEDS } from '@dshtrading/watchlist'
 
 /** Minimal observable face — matches the slot kit's HostObservable contract. */
@@ -145,9 +145,21 @@ function sanitizeWatchlists(raw: Watchlists): Watchlists {
         market: row.market && ['crypto', 'us', 'cn', 'hk'].includes(row.market) ? row.market : market,
         symbol: row.symbol,
         ...(row.name ? { name: row.name } : {}),
+        // 分组归属（issue #82）：只收非空字符串 id，去重；空集不落键
+        ...sanitizeGroupsField(row.groups),
       }))
   }
   return clean
+}
+
+/** 行上 groups 字段清洗（issue #82；坏项剔除、去重、空集 → 键缺省）。 */
+function sanitizeGroupsField(raw: unknown): { groups?: string[] } | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item === 'string' && item) seen.add(item)
+  }
+  return seen.size > 0 ? { groups: [...seen] } : undefined
 }
 
 export function createWatchlistStore(): WatchlistStore {
@@ -170,6 +182,8 @@ export function createWatchlistStore(): WatchlistStore {
         market: targetMarket,
         symbol: instrument.symbol,
         ...(instrument.name ? { name: instrument.name } : {}),
+        // 分组视图下添加标的直落归属（issue #82；host 侧 parseInstrumentBody 同步放行）
+        ...sanitizeGroupsField(instrument.groups),
       }
       store.update((current) => {
         const rows = current[targetMarket] ?? []
@@ -199,6 +213,149 @@ export function rowsFor(watchlists: Watchlists, market: MarketId): Instrument[] 
   const rows = watchlists[market]
   if (Array.isArray(rows)) return rows
   return DEFAULT_WATCHLISTS[market] ?? []
+}
+
+// ---------------------------------------------------------------------------
+// 自定义分组（issue #82）：注册表镜像 + 活动分组过滤 UI 态
+// ---------------------------------------------------------------------------
+
+const GROUPS_KEY = 'dshtrading.watchlist-groups.v1'
+const ACTIVE_GROUP_KEY = 'dshtrading.watchlist.active-group.v1'
+
+export interface WatchlistGroupsState {
+  /** 分组注册表镜像（host SSOT；降级时本地直写）。 */
+  groups: WatchlistGroupMeta[]
+  /** 活动分组过滤（null = 全部/市场视图）。纯本地 UI 态，不进 host。 */
+  activeGroupId: string | null
+}
+
+/** 分组写操作结果（桥面业务结果镜像；'unavailable' = 桥缺席/网络失败）。 */
+export type WatchlistGroupOpResult =
+  | { ok: true; group: WatchlistGroupMeta }
+  | { ok: false; reason: 'duplicate' | 'not-found' | 'unavailable' }
+
+/** 分组 store 客户端全 face：镜像维护 + host-first 写路径（wireHostWatchlistSync 接管替换）。 */
+export interface WatchlistGroupsStoreApi extends WritableObservable<WatchlistGroupsState> {
+  /** 注册表镜像直写（rename 原位替换，不挪顺序；create 追加尾部）。 */
+  upsertGroup(group: WatchlistGroupMeta): void
+  /** 注册表镜像摘除（活动分组指向被删组时归位 null）。 */
+  removeGroupLocal(id: string): void
+  /** 切活动分组（本地持久化，不进 host）。 */
+  setActiveGroup(id: string | null): void
+  create(name: string): Promise<WatchlistGroupOpResult>
+  rename(id: string, name: string): Promise<WatchlistGroupOpResult>
+  delete(id: string): Promise<boolean>
+  /** 行级 membership（member=false 仅摘归属不删行）。 */
+  assignMember(id: string, market: string, symbol: string, member: boolean, name?: string): Promise<boolean>
+}
+
+function sanitizeGroupsRegistry(raw: unknown): WatchlistGroupMeta[] {
+  if (!Array.isArray(raw)) return []
+  const out: WatchlistGroupMeta[] = []
+  for (const item of raw) {
+    const group = item as Partial<WatchlistGroupMeta> | null
+    if (group !== null && typeof group === 'object' && typeof group.id === 'string' && group.id
+      && typeof group.name === 'string' && typeof group.createdAt === 'number') {
+      out.push({ id: group.id, name: group.name, createdAt: group.createdAt })
+    }
+  }
+  return out
+}
+
+export function createWatchlistGroupsStore(): WatchlistGroupsStoreApi {
+  const persisted = readJson<{ groups?: unknown }>(GROUPS_KEY, {})
+  const persistedActive = readJson<unknown>(ACTIVE_GROUP_KEY, null)
+  const store = createObservable<WatchlistGroupsState>({
+    groups: sanitizeGroupsRegistry(persisted.groups),
+    activeGroupId: typeof persistedActive === 'string' && persistedActive ? persistedActive : null,
+  })
+  const persist = (): void => { writeJson(GROUPS_KEY, { groups: store.getSnapshot().groups }) }
+
+  const newLocalId = (): string => `g_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+  const upsert = (group: WatchlistGroupMeta): void => {
+    store.update((current) => {
+      const index = current.groups.findIndex(entry => entry.id === group.id)
+      if (index < 0) return { ...current, groups: [...current.groups, group] }
+      const groups = [...current.groups]
+      groups[index] = group
+      return { ...current, groups }
+    })
+    persist()
+  }
+
+  return {
+    ...store,
+    upsertGroup: upsert,
+    removeGroupLocal(id) {
+      store.update((current) => ({
+        ...current,
+        groups: current.groups.filter(entry => entry.id !== id),
+        activeGroupId: current.activeGroupId === id ? null : current.activeGroupId,
+      }))
+      persist()
+    },
+    setActiveGroup(id) {
+      store.set({ ...store.getSnapshot(), activeGroupId: id })
+      writeJson(ACTIVE_GROUP_KEY, id)
+    },
+    // 以下四个是桥缺席时的本地降级路径（启动时 wireHostWatchlistSync 无条件替换为 host-first；
+    // 桥不可用 = fail-closed 不改本地，与 add/remove 的 host-first 语义一致）。
+    async create(name) {
+      const trimmed = name.trim()
+      if (!trimmed) return { ok: false, reason: 'unavailable' }
+      if (store.getSnapshot().groups.some(entry => entry.name === trimmed)) return { ok: false, reason: 'duplicate' }
+      const group: WatchlistGroupMeta = { id: newLocalId(), name: trimmed, createdAt: Date.now() }
+      upsert(group)
+      return { ok: true, group }
+    },
+    async rename(id, name) {
+      const trimmed = name.trim()
+      if (!trimmed) return { ok: false, reason: 'unavailable' }
+      const existing = store.getSnapshot().groups.find(entry => entry.id === id)
+      if (existing === undefined) return { ok: false, reason: 'not-found' }
+      if (store.getSnapshot().groups.some(entry => entry.id !== id && entry.name === trimmed)) return { ok: false, reason: 'duplicate' }
+      const group = { ...existing, name: trimmed }
+      upsert(group)
+      return { ok: true, group }
+    },
+    async delete() {
+      return false
+    },
+    async assignMember() {
+      return false
+    },
+  }
+}
+
+/** 本地镜像的行级 membership 写（host-first 包装成功后调用；未定制市场按种子物化，与 host 行为同构）。 */
+export function applyLocalMembership(
+  watchlists: WritableObservable<Watchlists>,
+  market: MarketId,
+  groupId: string,
+  symbol: string,
+  member: boolean,
+): void {
+  watchlists.update((current) => {
+    const base = Array.isArray(current[market]) ? current[market] ?? [] : DEFAULT_WATCHLISTS[market] ?? []
+    let changed = false
+    const nextRows = base.map((row) => {
+      if (row.symbol !== symbol) return row
+      const groups = row.groups ?? []
+      const has = groups.includes(groupId)
+      if (member === has) return row
+      changed = true
+      const next = member ? [...groups, groupId] : groups.filter(entry => entry !== groupId)
+      // 显式重建行（不能 { ...row } 展开——移出后 groups 键会被原行带回）。
+      return {
+        market: row.market,
+        symbol: row.symbol,
+        ...(row.name !== undefined ? { name: row.name } : {}),
+        ...(next.length > 0 ? { groups: next } : {}),
+      }
+    })
+    if (!changed) return current
+    return { ...current, [market]: nextRows }
+  })
 }
 
 /** Chart intervals offered per market (connector-supported subsets only). */

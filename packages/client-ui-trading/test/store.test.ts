@@ -13,7 +13,9 @@ vi.stubGlobal('localStorage', {
 })
 
 import {
+  applyLocalMembership,
   createObservable,
+  createWatchlistGroupsStore,
   createWatchlistStore,
   rowsFor,
   sameInstrument,
@@ -102,5 +104,53 @@ describe('createWatchlistStore', () => {
   it('sameInstrument：market+symbol 二元组判定', () => {
     expect(sameInstrument({ market: 'us', symbol: 'AAPL' }, { market: 'us', symbol: 'AAPL' })).toBe(true)
     expect(sameInstrument({ market: 'us', symbol: 'AAPL' }, { market: 'crypto', symbol: 'AAPL' })).toBe(false)
+  })
+})
+
+describe('watchlist groups（issue #82）', () => {
+  it('add 时携带 groups 直落行上并在 localStorage 镜像保真；坏项清洗', () => {
+    const store = createWatchlistStore()
+    store.add('us', { market: 'us', symbol: 'AAPL', name: '苹果', groups: ['g_1', 'g_1', ''] })
+    expect(store.listFor('us')[0]?.groups).toEqual(['g_1'])
+    // 从 localStorage 重载：groups 字段保留
+    const reloaded = createWatchlistStore()
+    expect(reloaded.listFor('us')[0]?.groups).toEqual(['g_1'])
+  })
+
+  it('groups store：create/rename 本地降级路径 + 同名拒绝 + activeGroup 持久化', async () => {
+    const store = createWatchlistGroupsStore()
+    const created = await store.create('核心仓')
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+    expect((await store.create('核心仓')).reason).toBe('duplicate')
+    expect((await store.create('  ')).reason).toBe('unavailable')
+
+    const renamed = await store.rename(created.group.id, '观察仓')
+    expect(renamed.ok).toBe(true)
+    // 改名原位替换不挪顺序
+    await store.create('备选')
+    expect(store.getSnapshot().groups.map(group => group.name)).toEqual(['观察仓', '备选'])
+
+    store.setActiveGroup(created.group.id)
+    expect(store.getSnapshot().activeGroupId).toBe(created.group.id)
+    // 重载后 activeGroupId 恢复
+    const reloaded = createWatchlistGroupsStore()
+    expect(reloaded.getSnapshot().activeGroupId).toBe(created.group.id)
+
+    // 删除组降级路径 fail-closed；本地摘除后活动分组指向被删组 → 归位 null
+    await expect(store.delete(created.group.id)).resolves.toBe(false)
+    store.removeGroupLocal(created.group.id)
+    expect(store.getSnapshot().activeGroupId).toBeNull()
+    expect(store.getSnapshot().groups.map(group => group.name)).toEqual(['备选'])
+  })
+
+  it('applyLocalMembership：种子基线物化 + 移出清键', () => {
+    const store = createWatchlistStore()
+    applyLocalMembership(store, 'us', 'g_9', 'AAPL', true)
+    const rows = store.listFor('us')
+    expect(rows.length).toBeGreaterThanOrEqual(1)
+    expect(rows.find(row => row.symbol === 'AAPL')?.groups).toEqual(['g_9'])
+    applyLocalMembership(store, 'us', 'g_9', 'AAPL', false)
+    expect(store.listFor('us').find(row => row.symbol === 'AAPL')?.groups).toBeUndefined()
   })
 })

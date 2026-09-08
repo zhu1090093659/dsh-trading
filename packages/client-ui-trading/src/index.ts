@@ -17,7 +17,7 @@ import type { TradingEventsService, TradingEventStore } from '@dshtrading/eventb
 import { createFileChartActivationStore, createFileCustomIndicatorStore } from '@dshtrading/indicators/plugin'
 import { createFileKnowledgeCardStore } from '@dshtrading/knowledge/plugin'
 import { createFileCustomStrategyStore, createFileBuiltinTombstonesStore, createFileCustomScreenerStore } from '@dshtrading/strategies/plugin'
-import { createFileSelectionStore, createFileWatchlistStore } from '@dshtrading/watchlist/plugin'
+import { createFileSelectionStore, createFileWatchlistGroupsStore, createFileWatchlistStore } from '@dshtrading/watchlist/plugin'
 import { dshHomeDir } from '@dshtrading/dsh-home'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
@@ -135,6 +135,9 @@ export function apply(ctx: Context): void {
 
   const watchlistStorePath = path.join(dshHomeDir(), 'watchlists.json')
   const watchlistStore = createFileWatchlistStore(watchlistStorePath)
+  // 自定义分组注册表（issue #82）：成员关系存在 watchlists.json 行的 groups 字段，
+  // 这里只挂注册表（名称等元数据）；删分组时桥先 stripGroup 再删注册表行。
+  const groupsStore = createFileWatchlistGroupsStore(path.join(dshHomeDir(), 'watchlist-groups.json'))
   const selectionStorePath = path.join(dshHomeDir(), 'selection.json')
   const selectionStore = createFileSelectionStore(selectionStorePath)
 
@@ -165,6 +168,7 @@ export function apply(ctx: Context): void {
       tombstonesStore: strategyTombstones,
       screenerStore,
       watchlistStore,
+      groupsStore,
       selectionStore,
       holdingsStore,
       fetchFxRates,
@@ -259,8 +263,10 @@ export function apply(ctx: Context): void {
             // 选股器管理（选股器管理，2026-09-07）：同通道复用（GUI 按 payload 分流）。
             if ((req.method === 'PUT' || req.method === 'DELETE') && sub === '/strategies/screeners') eventsOf()?.emit('strategies')
             if (req.method === 'POST' && sub === '/strategies/screeners/reset') eventsOf()?.emit('strategies')
+            // 分组写（issue #82）复用 'watchlists' 失效信号：客户端重拉 watchlists + groups。
             if ((req.method === 'PUT' || req.method === 'POST' || req.method === 'DELETE')
-              && (sub === '/watchlists' || sub === '/watchlists/import')) eventsOf()?.emit('watchlists')
+              && (sub === '/watchlists' || sub === '/watchlists/import'
+                || sub === '/watchlist-groups' || sub === '/watchlist-group-members')) eventsOf()?.emit('watchlists')
             if (req.method === 'PUT' && sub === '/selection') eventsOf()?.emit('selection')
             // issue #65：holdings 写成功（stage/confirm/discard/add/update/remove）
             // → 'holdings' 失效信号（契约 §3 SSE store 名；GET 读面不发）。
