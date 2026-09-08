@@ -141,6 +141,7 @@ export function apply(ctx: Context): void {
     | {
         store?: import('@dshtrading/watchlist').WatchlistStore
         selection?: import('@dshtrading/watchlist').SelectionStore
+        groups?: import('@dshtrading/watchlist').WatchlistGroupsStore
       }
     | undefined
   const watchlistStore = watchlistService?.store
@@ -149,8 +150,10 @@ export function apply(ctx: Context): void {
     ?? createFileSelectionStore(path.join(dshHomeDir(), 'selection.json'))
   // 自定义分组注册表（issue #82）：成员关系存在 watchlists.json 行的 groups 字段，
   // 这里只挂注册表（名称等元数据）；删分组时桥先 stripGroup 再删注册表行。
-  // 注册表只有桥读写（agent 工具面不暴露分组），无需跨包共享单实例。
-  const groupsStore = createFileWatchlistGroupsStore(path.join(dshHomeDir(), 'watchlist-groups.json'))
+  // issue #86 / G5：agent 工具面已暴露分组，注册表必须与工具侧共用同一实例
+  // （服务缺席的老部署才回退自建，双 store 会互相覆盖整表缓存）。
+  const groupsStore = watchlistService?.groups
+    ?? createFileWatchlistGroupsStore(path.join(dshHomeDir(), 'watchlist-groups.json'))
 
   // tradingEvents 失效信号源（issue #30）：base patch 行挂载 eventbus 时可用；
   // 缺席（老部署）→ 发布点静默降级为现状（一次性 fetch 客户端行为不变）。

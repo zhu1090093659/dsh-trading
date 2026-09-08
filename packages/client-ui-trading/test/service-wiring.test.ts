@@ -16,7 +16,7 @@ import { CustomIndicatorsService } from '@dshtrading/indicators/plugin'
 import { WatchlistStoreService } from '@dshtrading/watchlist/plugin'
 import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
 import { createMemoryCustomIndicatorStore } from '@dshtrading/indicators'
-import { createMemorySelectionStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
+import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
 
 interface Route {
   kind: string
@@ -89,7 +89,13 @@ describe('apply() 服务→桥接线（Service 实例解包）', () => {
     const store = createMemoryWatchlistStore()
     await store.add('us', { market: 'us', symbol: 'AAPL', name: '苹果' })
 
-    const { registered } = await makeCtx(ctx => { new WatchlistStoreService(ctx, { watchlists: store, selection: createMemorySelectionStore() }) })
+    const { registered } = await makeCtx(ctx => {
+      new WatchlistStoreService(ctx, {
+        watchlists: store,
+        selection: createMemorySelectionStore(),
+        groups: createMemoryWatchlistGroupsStore(),
+      })
+    })
 
     const res = await dispatch(registered, 'GET', '/watchlists')
     expect(res.status).toBe(200)
