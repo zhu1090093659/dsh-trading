@@ -15,7 +15,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import path from 'node:path'
 import { dshHomeDir } from '@dshtrading/dsh-home'
-import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore } from './index.ts'
+import { createMemorySelectionStore, createMemoryWatchlistStore } from './index.ts'
 import type { SelectionStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from './index.ts'
 import { effectiveWatchlistRows, WATCHLIST_SEEDS, watchlistRowSource } from './seeds.ts'
 import { createFileSelectionStore, createFileWatchlistGroupsStore, createFileWatchlistStore } from './file-store.ts'
@@ -59,7 +59,7 @@ function parseInstrumentArgs(raw: Record<string, unknown>): { market: string; sy
   if (!market || !symbol) {
     throw new Error('market and symbol are required (market: crypto|us|cn|hk…, symbol: 市场规范形，如 BTCUSDT / AAPL / 600519 / 00700)')
   }
-  return { market, symbol, name }
+  return { market, symbol, ...(name !== undefined ? { name } : {}) }
 }
 
 export interface WatchlistToolDeps {

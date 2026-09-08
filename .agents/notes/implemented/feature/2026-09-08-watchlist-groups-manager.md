@@ -63,6 +63,20 @@ Status: implemented
   SSE 重拉后收敛为 host 真实行，`host-watchlist-sync.test.ts` 已断言该行为）；`syncGroupsFromHost` 用 `set`
   覆盖镜像不落 localStorage（下次启动仍以 host 为准）。
 
+## 合并后修正（typecheck 棘轮，2026-09-08）
+
+CI 首跑红在 `node scripts/typecheck-gate.mjs`（PR 自查门禁清单只跑了 build + test + i18n，漏了 typecheck 棘轮）：
+client-ui-trading +7、watchlist +13。逐项修掉，总数 504 → 483（基线 484，棘轮通过）：
+
+- `WatchlistManagerInjected.hooks.groups` → `watchlistGroups`：slot 运行时按 hooks 键名合成 `use<Key>` prop，
+  键名 `groups` 合成的是 `useGroups`，而组件消费的是 `useWatchlistGroups`（靠 MarketSidebar 显式透传才在运行时成立）。
+  改键名让声明面与消费面一致，连带消掉 6 处隐式 any。
+- `watchlist.assignGroup`（文件/内存两实现）：`rows[index]` 在 `noUncheckedIndexedAccess` 下是 `T | undefined`，
+  补 `base === undefined` 守卫（12 处）。
+- `plugin.ts`：删未用 import；`parseInstrumentArgs` 返回改展开写法满足 `exactOptionalPropertyTypes`。
+- 门禁口径：合并前必须跑 `pnpm -r build` + `node scripts/typecheck-gate.mjs` + `pnpm i18n:check` + `pnpm -r test`
+  （= .github/workflows/ci.yml 五步），只跑 build/test 会漏棘轮。
+
 ## References
 
 - Issue #82；参考富途牛牛自选下拉与自选管理两张截图（用户提供的交互基准）。

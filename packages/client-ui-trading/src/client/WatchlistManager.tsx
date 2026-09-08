@@ -21,7 +21,8 @@ import css from './watchlist-manager.module.css'
 export interface WatchlistManagerInjected {
   hooks: {
     watchlists: Observable<Watchlists>
-    groups: Observable<WatchlistGroupsState>
+    // 键名决定合成后的 prop 名（useWatchlistGroups）——MarketSidebar 按该名显式透传。
+    watchlistGroups: Observable<WatchlistGroupsState>
   }
   addInstrument(market: MarketId, instrument: Instrument): void
   removeInstrument(market: MarketId, symbol: string): void

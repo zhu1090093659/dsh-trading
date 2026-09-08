@@ -117,6 +117,7 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
         const index = rows.findIndex(row => row.symbol === symbol)
         if (index < 0) return false
         const base = rows[index]
+        if (base === undefined) return false
         const current = Array.isArray(base.groups) ? base.groups : []
         if (member === current.includes(groupId)) return false
         const nextGroups = member ? [...current, groupId] : current.filter(id => id !== groupId)
