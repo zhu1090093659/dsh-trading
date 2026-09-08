@@ -59,4 +59,9 @@ K 线信号 marker 文案、基本面 52 周区间/目标价、选股命中表�
 - 验证：strategies 119 例（含新增 price-format 3 例）、client-ui-trading
   315 例（format.test.ts 增 3 位小数用例，fmtChange(1.234) 期望随新规则更新
   为 +1.234）、client-ui-strategies 17 例全绿；`pnpm build` / `pnpm test`
-  全仓门禁通过。
+  全仓门禁通过。桌面壳实测定案（trading-web profile 刷新后）：HYPE/USDT
+  现价/昨收/开显示 84.349 / 86.139 / 85.175，图表最新价线 84.349
+  （precision=3 生效）；中概互联网 ETF 513050 显示 1.042（该 ETF 本身即 3 位
+  小数标的，旧版截成 1.04，正是本次反馈的显示问题实例）；2 位标的（牧原
+  43.29、腾讯 437.60、XAUT 4431.60、游戏 ETF 1.15、BTC/ETH/SOL 状态栏）
+  显示与旧版完全一致，无第 3 位不补零，无回归。
