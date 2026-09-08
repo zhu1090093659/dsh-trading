@@ -394,6 +394,10 @@ export function MarketSidebar({
             ...(activeGroupId !== null ? { groups: [activeGroupId] } : {}),
           }
           addInstrument(market, item)
+          // 标的已在自选时 addInstrument 去重不落 groups——幂等补挂保证入组。
+          if (activeGroupId !== null) {
+            void assignGroupMember(activeGroupId, market, symbol, true, name)
+          }
           selectInstrument(item)
           if (activeGroupId === null && tab !== 'watch' && tab !== market) {
             setTab(market)

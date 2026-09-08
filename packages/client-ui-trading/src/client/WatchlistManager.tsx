@@ -5,6 +5,7 @@
  * 添加标的自动入组；✕ 在全部视图 = 从自选移除，在分组视图 = 仅移出分组。
  */
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { fetchMarkets, fetchSymbols } from './api.ts'
 import { searchAllMarkets, updateDynamicCatalog } from './symbol-catalog.ts'
@@ -186,7 +187,9 @@ export function WatchlistManager({
   const selectedName = selected === 'all' ? t('group.all') : groups.find(group => group.id === selected)?.name ?? t('group.all')
   const rowKey = (row: Instrument): string => `${row.market}:${row.symbol}`
 
-  return (
+  // portal 到 body：dock 祖先链有自己的层叠上下文（z 序低于中栏），fixed 弹窗
+  // 会被盖住；挂 body 才能盖全应用（实测 2026-09-08：不 portal 时弹窗渲染不可见）。
+  return createPortal(
     <div className={css.overlay} role="dialog" aria-modal="true" aria-label={t('manager.title')} onMouseDown={onClose}>
       <div className={css.dialog} onMouseDown={event => { event.stopPropagation() }}>
         <header className={css.head}>
@@ -462,6 +465,7 @@ export function WatchlistManager({
           </section>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
