@@ -9,7 +9,8 @@
  *   服务缺席回退自建，tradingKnowledgeCards 同款先例）；
  * - host 平面注册 `holdings_stage` / `holdings_confirm` / `holdings_discard` /
  *   `holdings_add` / `holdings_update` / `holdings_remove` / `holdings_list`
- *   （全会话可见；记账面全量可控，与下单闸门无关——契约 §5）；
+ *   （全会话可见；记账面全量可控，与下单闸门无关——契约 §5），
+ *   外加只读 `fx_get`（缺口卡 G7：与桥 GET /fx 共享同一 fx 服务实例与缓存）；
  * - 写成功 emit tradingEvents('holdings')（issue #30 通道，SSE store 名 'holdings'）。
  */
 import type { Context } from '@deepseek-ai/cordis'
@@ -22,6 +23,7 @@ import type { FxService } from './fx.ts'
 import { createFxService } from './fx.ts'
 import { createFileHoldingsStore } from './store-fs.ts'
 import {
+  createFxGetTool,
   createHoldingsAddTool,
   createHoldingsConfirmTool,
   createHoldingsDiscardTool,
@@ -60,6 +62,8 @@ export function defaultFxCachePath(): string {
 
 export interface HoldingsPluginDeps {
   store: HoldingsStore
+  /** 可选：注入后额外注册只读 `fx_get`（缺省不注册，保持既有 7 工具面兼容）。 */
+  fx?: FxService
 }
 
 export function registerHoldingsTools(ctx: Context, deps: HoldingsPluginDeps): void {
@@ -81,6 +85,7 @@ export function registerHoldingsTools(ctx: Context, deps: HoldingsPluginDeps): v
     register(createHoldingsUpdateTool(deps.store, { onWritten }))
     register(createHoldingsRemoveTool(deps.store, { onWritten }))
     register(createHoldingsListTool(deps.store))
+    if (deps.fx !== undefined) register(createFxGetTool({ fx: deps.fx }))
   })
 }
 
@@ -100,5 +105,5 @@ export function apply(ctx: Context): void {
   const store = createFileHoldingsStore(defaultHoldingsStorePath())
   const fx = createFxService({ cacheFilePath: defaultFxCachePath() })
   new HoldingsService(ctx, store, fx)
-  registerHoldingsTools(ctx, { store })
+  registerHoldingsTools(ctx, { store, fx })
 }

@@ -8,6 +8,7 @@
  *   - holdings_update:  修订正式持仓字段
  *   - holdings_remove:  删除正式持仓（平仓、清理重复条目）
  *   - holdings_list:    只读概要（staged + holdings 两区）
+ *   - fx_get:           只读 FX 汇率快照（与资产面板/桥 GET /fx 共享同一 FxService）
  *
  * 工具不经过审批闸门（ORDER_GATE_PATTERN 不匹配，天然放行）：纯本地数据，
  * 无交易语义（契约 §5）。记账与下单严格分离——任何工具都不会触发买卖；
@@ -23,6 +24,8 @@ import type {
   NewHoldingInput,
 } from './types.ts'
 import { HoldingValidationError, validateNewHoldingInput } from './normalize.ts'
+import { FX_BASES } from './fx.ts'
+import type { FxService } from './fx.ts'
 
 // 桥经本子路径取 file store（knowledge/tool 同款再导出先例）。
 export { createFileHoldingsStore } from './store-fs.ts'
@@ -602,6 +605,57 @@ export function createHoldingsRemoveTool(store: HoldingsStore, options: Holdings
       lines.push('请提醒用户：台账记录已清理，不代表账户真实状态；请自行核对券商/交易所持仓。')
       onWritten?.(removed)
       return lines.join('\n')
+    },
+  })
+}
+
+/**
+ * fx_get：只读 FX 汇率快照（缺口卡 G7）。
+ *
+ * 与资产面板 / 桥 GET /fx 共享同一 FxService 实例与缓存（plugin apply 注入），
+ * 口径与台账一致：rates[c] = 1 单位 c 折合多少 base。纯读取，不写台账、不下单。
+ */
+export function createFxGetTool(deps: { fx: FxService }) {
+  return defineTool({
+    name: 'fx_get',
+    description:
+      '只读读取 FX 汇率快照（与资产面板、桥 GET /fx 共享同一服务实例与缓存），用于多币种持仓的折算与汇总。'
+      + '语义：rates[c] = 1 单位 c 折合多少 base（base=USD 时 rates.CNY 即 1 元人民币折合多少美元，恒含 rates[base]=1）；'
+      + 'USDT 恒定锚定 USD。base 仅支持 USD | CNY | HKD，缺省 USD（不区分大小写）。'
+      + 'stale=true 表示本次汇率走了过期缓存或恒等兜底（无实时数据），是近似值——向用户汇报时必须显式标注「近似/可能过期」，'
+      + '不得当作实时汇率使用；stale=false 表示 1 小时 TTL 内的新鲜汇率（新拉取或内存缓存命中）。'
+      + '返回 JSON：{ ok, base, rates, asOf, stale, note }，note 为可直接转述给用户的提示文案。'
+      + '本工具只读：不改台账、不下单。',
+    parameters: {
+      base: {
+        type: 'string',
+        description: '基准币种，缺省 USD；仅支持 USD | CNY | HKD（不区分大小写，如 usd/cny/hkd 亦可）。',
+      },
+    },
+    output: textOutput,
+    async execute(raw) {
+      const args = (raw ?? {}) as Record<string, unknown>
+      const requested = readString(args.base) ?? 'USD'
+      const base = requested.toUpperCase()
+      if (!(FX_BASES as readonly string[]).includes(base)) {
+        throw new Error(
+          `[fx_get] TRADING_FX_INVALID_BASE：base 仅支持 ${FX_BASES.join(' | ')}（收到 ${JSON.stringify(requested)}）`,
+        )
+      }
+      const quote = await deps.fx.getRates(base)
+      const note = quote.stale
+        ? `汇率走了过期缓存或恒等兜底（asOf=${quote.asOf}，0 表示无真实数据），是近似值；`
+          + '向用户汇报时必须标注「汇率为近似值、可能已过期」，并提示可稍后重试或到资产面板刷新。'
+        : `数据口径：rates[c] = 1 单位 c 折合多少 ${quote.base}`
+          + `（如 rates.CNY = 1 元人民币折合多少 ${quote.base}）；来源 ECB 日频汇率，asOf=${quote.asOf}。`
+      return JSON.stringify({
+        ok: true,
+        base: quote.base,
+        rates: quote.rates,
+        asOf: quote.asOf,
+        stale: quote.stale,
+        note,
+      })
     },
   })
 }
