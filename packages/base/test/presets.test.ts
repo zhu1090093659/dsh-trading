@@ -40,6 +40,9 @@ it('composes all 16 installed-market subsets deterministically, preserving conne
       expect(text).toContain('Never cite sell-side ratings or target prices')
       expect(text).toContain('scarcity')
       expect(text).toContain('Always reply in the language the user writes in')
+      // Workspace instructions: the Web surface disables the host-plane row, so the
+      // preset must mount it or the role sees no AGENTS.md at all (2026-09-08).
+      expect(text).toContain("- id: dsh-trading-agent-instructions\n  name: '@deepseek-ai/dsh-agent-instructions'\n  config:\n    maxBytes: 65536\n")
       expect(text).not.toContain("name: '@dshtrading/knowledge/plugin'") // shared host registration stays single
       if (preset.id === 'instrument-researcher' || preset.id === 'risk-reviewer') {
         expect(text).not.toContain("name: '@dshtrading/connector-")

@@ -23,6 +23,7 @@ const {
   readStampFile,
   profileAction,
   applyProfileSeed,
+  normalizeProfileCohort,
   findFreePort,
   waitForGui,
   parseTokenUrlLine,
@@ -227,6 +228,16 @@ async function boot() {
     setStatus(action === 'seed' ? 'Installing the bundled web profile…' : 'Updating the bundled web profile…');
     pushLogLine('[desktop] profile action: ' + action + ' (' + stampText + ')');
     applyProfileSeed(runtime.profileSeed, profileDir, action, stampText, { appVersion: app.getVersion() });
+  }
+
+  // The profile is also maintained by the dsh CLI, whose install links core
+  // packages against the global npm tree while this app spawns its own bundled
+  // runtime. Two copies of a core package split module-level state, and a preset
+  // then keeps its tools but loses its persona, its AGENTS.md and its skill
+  // catalog. Normalize before spawning; see normalizeProfileCohort.
+  const cohort = normalizeProfileCohort(profileDir, runtime.hostModules, { log: pushLogLine });
+  if (cohort.relinked.length > 0) {
+    pushLogLine('[desktop] normalized ' + cohort.relinked.length + ' core package link(s) to the bundled runtime');
   }
 
   setStatus('Starting the dsh host…');

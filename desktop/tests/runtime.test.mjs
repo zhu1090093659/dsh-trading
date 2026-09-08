@@ -15,6 +15,7 @@ const {
   parseTokenUrlLine,
   formatHostExitDiagnostic,
   toNodeImportSpecifier,
+  normalizeProfileCohort,
   SEED_MARKER,
 } = require('../src/runtime.cjs');
 
@@ -52,6 +53,52 @@ test('profileAction seeds missing, leaves user-managed, reseeds stale', () => {
   fs.writeFileSync(path.join(profile, SEED_MARKER), JSON.stringify({ stamp: 's1' }));
   assert.equal(profileAction(profile, 's1'), 'leave', 'current stamp is up to date');
   assert.equal(profileAction(profile, 's2'), 'reseed', 'moved stamp triggers reseed');
+});
+
+test('normalizeProfileCohort relinks core packages onto the bundled runtime', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-cohort-'));
+  const bundled = path.join(dir, 'runtime', 'node_modules');
+  const foreign = path.join(dir, 'foreign');
+  const profile = path.join(dir, 'profiles', 'trading-web');
+  const core = path.join(profile, 'node_modules', '@deepseek-ai');
+  const writePackage = (pkgDir) => {
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(path.join(pkgDir, 'package.json'), '{}');
+  };
+  for (const name of ['dsh-scope', 'dsh-tools', 'dsh-agent-presets']) writePackage(path.join(bundled, '@deepseek-ai', name));
+  writePackage(path.join(foreign, 'dsh-scope'));
+  fs.mkdirSync(core, { recursive: true });
+  // already single-instance: must stay untouched
+  fs.symlinkSync(path.join(bundled, '@deepseek-ai', 'dsh-scope'), path.join(core, 'dsh-scope'), 'dir');
+  // a foreign install's link and a materialized copy: both must be relinked
+  fs.symlinkSync(path.join(foreign, 'dsh-scope'), path.join(core, 'dsh-tools'), 'dir');
+  writePackage(path.join(core, 'dsh-agent-presets'));
+  // a package the bundled runtime does not ship: must survive
+  writePackage(path.join(core, 'dsh-future'));
+  // nested shadow copy under a real package tree: must be relinked too
+  writePackage(path.join(profile, 'node_modules', '@dshtrading', 'knowledge', 'node_modules', '@deepseek-ai', 'dsh-tools'));
+  // a symlinked package tree belongs to another install: must be left alone
+  const linkedTree = path.join(dir, 'linked-package');
+  writePackage(path.join(linkedTree, 'node_modules', '@deepseek-ai', 'dsh-tools'));
+  fs.symlinkSync(linkedTree, path.join(profile, 'node_modules', '@dshtrading', 'linked'), 'dir');
+
+  const result = normalizeProfileCohort(profile, bundled);
+  assert.equal(result.failed.length, 0);
+  assert.equal(result.relinked.length, 3);
+  const bundledReal = (name) => fs.realpathSync(path.join(bundled, '@deepseek-ai', name));
+  assert.equal(fs.realpathSync(path.join(core, 'dsh-tools')), bundledReal('dsh-tools'));
+  assert.equal(fs.realpathSync(path.join(core, 'dsh-agent-presets')), bundledReal('dsh-agent-presets'));
+  assert.equal(fs.realpathSync(path.join(core, 'dsh-scope')), bundledReal('dsh-scope'));
+  assert.ok(fs.existsSync(path.join(core, 'dsh-future', 'package.json')), 'unknown package survives');
+  assert.equal(
+    fs.realpathSync(path.join(profile, 'node_modules', '@dshtrading', 'knowledge', 'node_modules', '@deepseek-ai', 'dsh-tools')),
+    bundledReal('dsh-tools'),
+    'nested shadow copy is relinked',
+  );
+  const linkedShadow = path.join(linkedTree, 'node_modules', '@deepseek-ai', 'dsh-tools');
+  assert.ok(fs.lstatSync(linkedShadow).isDirectory() && !fs.lstatSync(linkedShadow).isSymbolicLink(), 'a symlinked package tree is never rewritten');
+  assert.deepEqual(normalizeProfileCohort(profile, bundled).relinked, [], 'second pass is a no-op');
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('applyProfileSeed keeps the user patch layer on reseed', () => {

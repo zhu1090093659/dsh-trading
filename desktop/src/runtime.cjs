@@ -36,6 +36,7 @@ function resolveRuntimePaths(resourcesRoot, platform, arch, packaged = true) {
       : path.join(nodeRoot, 'bin', 'node'),
     nodeHome: nodeRoot,
     hostBin: path.join(runtimeRoot, 'host', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+    hostModules: path.join(runtimeRoot, 'host', 'node_modules'),
     profileSeed: path.join(runtimeRoot, 'profile-trading'),
     stampFile: path.join(runtimeRoot, RUNTIME_STAMP),
   };
@@ -239,10 +240,127 @@ function toNodeImportSpecifier(filePath) {
   return pathToFileURL(filePath).href;
 }
 
+/** The scope every dsh core package lives under. */
+const CORE_SCOPE = '@deepseek-ai';
+/** Depth cap for the nested `node_modules` walk that finds shadow copies. */
+const COHORT_WALK_DEPTH = 6;
+
+/**
+ * Collect every `node_modules/@deepseek-ai/<pkg>` entry under a node_modules
+ * root, nested shadow copies included. Symlinked package directories are not
+ * descended into: a symlinked package's own node_modules belongs to another
+ * install (a repo checkout, a pnpm store) and must not be rewritten from here.
+ * @param {string} nodeModulesRoot
+ * @param {number} [depth]
+ * @returns {{ pkg: string, path: string }[]}
+ */
+function collectCorePackageDirs(nodeModulesRoot, depth = 0) {
+  const found = [];
+  if (depth > COHORT_WALK_DEPTH) return found;
+  let entries;
+  try {
+    entries = fs.readdirSync(nodeModulesRoot, { withFileTypes: true });
+  } catch {
+    return found;
+  }
+  for (const entry of entries) {
+    const child = path.join(nodeModulesRoot, entry.name);
+    if (entry.name === CORE_SCOPE) {
+      let packages;
+      try {
+        packages = fs.readdirSync(child, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const pkg of packages) {
+        if (pkg.isDirectory() || pkg.isSymbolicLink()) found.push({ pkg: pkg.name, path: path.join(child, pkg.name) });
+      }
+      continue;
+    }
+    if (entry.isSymbolicLink() || !entry.isDirectory()) continue;
+    // A scoped directory holds packages one level down; an unscoped one is a
+    // package itself. Both may carry their own nested node_modules.
+    if (entry.name.startsWith('@')) {
+      let scoped;
+      try {
+        scoped = fs.readdirSync(child, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const pkg of scoped) {
+        if (pkg.isSymbolicLink() || !pkg.isDirectory()) continue;
+        found.push(...collectCorePackageDirs(path.join(child, pkg.name, 'node_modules'), depth + 1));
+      }
+      continue;
+    }
+    found.push(...collectCorePackageDirs(path.join(child, 'node_modules'), depth + 1));
+  }
+  return found;
+}
+
+/**
+ * Normalize the live profile's core `@deepseek-ai/*` packages onto THIS app's
+ * bundled runtime.
+ *
+ * The profile is also maintained by the dsh CLI, whose `dsh plugin install`
+ * links core packages against the globally installed npm tree. This app instead
+ * spawns its own bundled runtime, and every core package resolved from the
+ * profile shadows the runtime's copy with a second module instance. Two
+ * instances split module-level state: `@deepseek-ai/dsh-scope` keeps its
+ * scope-parent table in a per-instance WeakMap, so a preset that binds an
+ * agent's scope through one copy is invisible to the other. Symptoms are
+ * exactly inverted from "the preset did not load" — the preset's TOOLS resolve
+ * (the tools registry shares the binder's copy) while its prompt sections and
+ * its event listeners silently miss the agent: no persona, no workspace
+ * AGENTS.md, no skill catalog (2026-09-08). The bundled symbol normalizer
+ * cannot repair this, because a WeakMap is not a symbol.
+ *
+ * Only entries the runtime also ships are relinked, so a profile carrying a
+ * newer package than the bundled runtime keeps that package. Every change is
+ * reported; failures are logged and never block the boot.
+ * @param {string} profileDir
+ * @param {string} hostModulesDir - the bundled runtime's node_modules.
+ * @param {{ log?: (line: string) => void }} [options]
+ * @returns {{ relinked: string[], failed: string[] }}
+ */
+function normalizeProfileCohort(profileDir, hostModulesDir, options = {}) {
+  const log = typeof options.log === 'function' ? options.log : () => {};
+  const relinked = [];
+  const failed = [];
+  const root = path.join(profileDir, 'node_modules');
+  const scopeDir = path.join(hostModulesDir, CORE_SCOPE);
+  if (!fs.existsSync(root) || !fs.existsSync(scopeDir)) return { relinked, failed };
+  const realPath = (target) => {
+    try {
+      return fs.realpathSync(target);
+    } catch {
+      return undefined;
+    }
+  };
+  for (const entry of collectCorePackageDirs(root)) {
+    const bundled = path.join(scopeDir, entry.pkg);
+    if (!fs.existsSync(path.join(bundled, 'package.json'))) continue;
+    const target = realPath(bundled);
+    if (target !== undefined && realPath(entry.path) === target) continue;
+    try {
+      fs.rmSync(entry.path, { recursive: true, force: true });
+      fs.mkdirSync(path.dirname(entry.path), { recursive: true });
+      // A Windows directory junction needs no elevation; a plain 'dir' symlink does.
+      fs.symlinkSync(bundled, entry.path, process.platform === 'win32' ? 'junction' : 'dir');
+      relinked.push(entry.path);
+    } catch (error) {
+      failed.push(entry.path);
+      log('[desktop] core package relink failed: ' + entry.path + ' (' + String(error && error.message ? error.message : error) + ')');
+    }
+  }
+  return { relinked, failed };
+}
+
 module.exports = {
   SEED_MARKER,
   RUNTIME_STAMP,
   resolveRuntimePaths,
+  normalizeProfileCohort,
   resolveDshHome,
   readStampFile,
   profileAction,
