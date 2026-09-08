@@ -43,14 +43,16 @@ function resolveRuntimePaths(resourcesRoot, platform, arch, packaged = true) {
 
 /**
  * Resolve the DSH home the desktop app manages: an explicit DSH_HOME from the
- * environment wins, everything else falls back to ~/.dsh — the same lookup
- * order the dsh host itself applies.
+ * environment wins, everything else falls back to ~/.dsh-trading — this is the
+ * DSH Trading dedicated shell, and Dock launches carry no environment, so the
+ * trading home must be the built-in default (2026-09-08; 宿主 dsh CLI 自身的
+ * 缺省仍是 ~/.dsh，两者语义不同是刻意的).
  * @param {NodeJS.ProcessEnv} env
  * @param {string} homedir
  */
 function resolveDshHome(env, homedir) {
   const configured = env.DSH_HOME;
-  if (configured === undefined || configured.trim() === '') return path.join(homedir, '.dsh');
+  if (configured === undefined || configured.trim() === '') return path.join(homedir, '.dsh-trading');
   const trimmed = configured.trim();
   if (trimmed === '~') return homedir;
   if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) return path.join(homedir, trimmed.slice(2));

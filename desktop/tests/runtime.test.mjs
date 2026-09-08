@@ -33,9 +33,9 @@ test('resolveRuntimePaths keeps the per-platform dir unpackaged', () => {
   assert.equal(devWin.nodeBin, path.join('/res', 'runtime', 'node-win32-x64', 'node.exe'));
 });
 
-test('resolveDshHome follows the host lookup order', () => {
-  assert.equal(resolveDshHome({}, '/home/u'), path.join('/home/u', '.dsh'));
-  assert.equal(resolveDshHome({ DSH_HOME: '' }, '/home/u'), path.join('/home/u', '.dsh'));
+test('resolveDshHome: explicit env wins, default is the trading home', () => {
+  assert.equal(resolveDshHome({}, '/home/u'), path.join('/home/u', '.dsh-trading'));
+  assert.equal(resolveDshHome({ DSH_HOME: '' }, '/home/u'), path.join('/home/u', '.dsh-trading'));
   assert.equal(resolveDshHome({ DSH_HOME: '~/custom' }, '/home/u'), path.join('/home/u', 'custom'));
   assert.equal(resolveDshHome({ DSH_HOME: '/data/dsh' }, '/home/u'), path.resolve('/data/dsh'));
 });

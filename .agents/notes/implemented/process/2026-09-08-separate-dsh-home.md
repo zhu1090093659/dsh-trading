@@ -48,7 +48,7 @@ Status: implemented
 3. **启动面**：`~/.local/bin/dsh-trading` wrapper（= `DSH_HOME=~/.dsh-trading
    dsh`，权威副本 `scripts/home/dsh-trading`）；桌面壳用
    `open -a "DSH Trading" --env DSH_HOME=…`（权威副本
-   `scripts/home/dsh-trading-desktop`；Dock 直点不带 env，须走本脚本）。
+   `scripts/home/dsh-trading-desktop`）。**后续修正（同日）**：桌面壳缺省 home 已内置为 ~/.dsh-trading，Dock 直点即正确，脚本仅作显式覆盖入口，见 [2026-09-08-desktop-default-trading-home](2026-09-08-desktop-default-trading-home.md)。
 4. **仓库工具面默认值翻转**：`refresh-trading-web-profile.sh`（export
    DSH_HOME 后透传给 preflight 与 `dsh plugin install`）、
    `profile-config-preflight.sh`、`sync-profile-overrides.mjs`、
