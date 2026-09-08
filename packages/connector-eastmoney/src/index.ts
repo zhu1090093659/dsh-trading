@@ -26,13 +26,21 @@ export const name = 'dsh-trading-cn-connector-eastmoney'
 
 export interface Config {
   enabled: boolean
+  /** 市场分流（单包双市场，照抄 connector-tencent 模式）：cn=A 股（缺省），hk=港股（trends2 分钟线实证）。 */
+  market?: 'cn' | 'hk'
 }
 
 export const Config: Schema<Config> = Schema.object({
   enabled: Schema.boolean().default(true).description('是否激活东财连接器'),
+  market: Schema.union(['cn', 'hk']).default('cn').description('市场：cn=A 股，hk=港股'),
 })
 
 export const TRADING_CN_MARKET_DATA_KEY = 'tradingCnMarketData'
+export const TRADING_HK_MARKET_DATA_KEY = 'tradingHkMarketData'
+
+export function marketDataKey(market: 'cn' | 'hk'): string {
+  return market === 'hk' ? TRADING_HK_MARKET_DATA_KEY : TRADING_CN_MARKET_DATA_KEY
+}
 
 export class EastmoneyMarketDataService extends Service implements MarketDataService {
   private readonly client: EastmoneyRestClient
@@ -71,7 +79,7 @@ export class EastmoneyMarketDataService extends Service implements MarketDataSer
 
 export const ROUTER_PROVIDER = 'eastmoney'
 
-export function routeAllows(ctx: Context, config: Config, market: string): boolean {
+export function routeAllows(ctx: Context, config: Config, market: 'cn' | 'hk'): boolean {
   if (!config.enabled) return false
   const router = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as { activeProvider(m: string): string | undefined } | undefined
   if (router === undefined) return true
@@ -80,9 +88,10 @@ export function routeAllows(ctx: Context, config: Config, market: string): boole
 
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
-  if (!routeAllows(ctx, config, 'cn')) return
+  const market = config.market ?? 'cn'
+  if (!routeAllows(ctx, config, market)) return
 
-  const marketData = new EastmoneyMarketDataService(ctx)
+  const marketData = new EastmoneyMarketDataService(ctx, {}, marketDataKey(market))
 
   ctx.inject(['tools'], (ctx) => {
     const tools = ctx.tools as unknown as { register(d: unknown): void; get(n: string): unknown }
@@ -91,9 +100,9 @@ export function apply(ctx: Context, config: Config): void {
     }
 
     register(defineTool({
-      name: 'cn_get_ticker',
-      description: 'Get the latest trade price and quote for an A-share stock via Eastmoney API.',
-      parameters: { symbol: { type: 'string', required: true, description: 'A-share stock symbol, e.g. 600519.SH' } },
+      name: `${market}_get_ticker`,
+      description: market === 'hk' ? 'Get the latest trade price and quote for a HK stock via Eastmoney API.' : 'Get the latest trade price and quote for an A-share stock via Eastmoney API.',
+      parameters: { symbol: { type: 'string', required: true, description: market === 'hk' ? 'HK stock symbol, e.g. 00700.HK' : 'A-share stock symbol, e.g. 600519.SH' } },
       output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
       async execute(args) {
         return JSON.stringify(await marketData.getTicker(args.symbol))
@@ -101,10 +110,10 @@ export function apply(ctx: Context, config: Config): void {
     }))
 
     register(defineTool({
-      name: 'cn_get_klines',
-      description: 'Get recent public klines for an A-share stock via Eastmoney API. Supports 1m/5m/15m/30m/1h/1d/1w/1M.',
+      name: `${market}_get_klines`,
+      description: market === 'hk' ? 'Get recent public klines for a HK stock via Eastmoney API. 1m = 当日分时（trends2）；5m/15m/30m/1h/1d/1w/1M 走 kline。' : 'Get recent public klines for an A-share stock via Eastmoney API. Supports 1m/5m/15m/30m/1h/1d/1w/1M.',
       parameters: {
-        symbol: { type: 'string', required: true, description: 'A-share stock symbol, e.g. 600519.SH' },
+        symbol: { type: 'string', required: true, description: market === 'hk' ? 'HK stock symbol, e.g. 00700.HK' : 'A-share stock symbol, e.g. 600519.SH' },
         interval: { type: 'string', enum: INTERVAL_VOCABULARY, default: '1d', description: 'Interval' },
         limit: { type: 'integer', default: 100, description: 'Limit' },
       },

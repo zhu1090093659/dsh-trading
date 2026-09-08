@@ -28,7 +28,7 @@ Status: implemented
 ## Consequences
 
 - 自选走势对盘中用户「活」了：60s 粒度跟随当日分时；非交易日静态展示最近交易日全天。
-- 港股（腾讯源）分钟线全不支持 → 稳定走日 K 降级，每 10min 重试一次分钟线（换源后自动升级，无需改本组件）；A 股（腾讯源）自动落到 5m 日内分时。
+- 港股走哪个源决定走势形态：腾讯源分钟线全不支持 → 日 K 降级（10min 重试）；**eastmoney 源已打通港股分钟线**（trends2，见 [2026-09-08-eastmoney-hk-market](2026-09-08-eastmoney-hk-market.md)）→ hk.provider=eastmoney 时港股同样走日内分时；A 股（腾讯源）自动落到 5m 日内分时。
 - 轮询成本：每标的每分钟 1 次分钟线请求（N 标的 = N 请求/分），公共端可承受；首屏 prevClose 补拉一次性。
 - Yahoo 公共端 1m 有约 15min 延迟（美股迷你图相应滞后），属数据源固有限制。
 - 测试：test/intraday-series.test.ts 覆盖候选粒度与取数上限、crypto 滚动不分组、us/cn/hk 本地日筛选、节假日回落最近交易日（2026-09-07 美国劳动节实证）、三市场固定时段 x 映射（含午休压缩与时段外钳制）。真机实证：11:07 CST A 股盘中走势只占左 ~40% 宽度。门禁 pnpm build / pnpm test 全绿；真机验证走 trading-web profile（3081 实例）+ CDP 延迟截图——注意 headless Chrome --timeout 是上限不是等待，load 事件一到就截图，行情面板须用 CDP 主动等 ~20s 再 Page.captureScreenshot。

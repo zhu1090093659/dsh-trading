@@ -1143,6 +1143,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: '>=3.18.0'
         version: 3.18.2
+      '@dshtrading/connector-eastmoney':
+        specifier: workspace:*
+        version: link:../connector-eastmoney
       '@dshtrading/connector-futu':
         specifier: workspace:*
         version: link:../connector-futu

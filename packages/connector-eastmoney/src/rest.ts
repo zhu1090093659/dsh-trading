@@ -58,16 +58,38 @@ export function parseIntervalMs(interval: Interval): number {
  * 上游分精度整数（×100，如昨收 f60=129740 → 1297.40）→ 数值；
  * '-'/‘−’ 停牌占位或缺失返回 undefined。
  */
-function parseScaledHundred(value: unknown): number | undefined {
-  if (typeof value === 'number') return Number.isFinite(value) ? value / 100 : undefined
+function parseScaled(value: unknown, scale: number): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value / scale : undefined
   if (typeof value === 'string' && value !== '-' && value !== '−') {
     const parsed = parseFloat(value)
-    return Number.isNaN(parsed) ? undefined : parsed / 100
+    return Number.isNaN(parsed) ? undefined : parsed / scale
   }
   return undefined
 }
 
+function parseScaledHundred(value: unknown): number | undefined {
+  return parseScaled(value, 100)
+}
+
 const KNOWN_SH_INDICES = new Set(['000688', '000300', '000016', '000905', '000852'])
+
+/** 连接器服务的市场（cn=A 股；hk=港股，2026-09-08 扩展，实证见 spikes/impl-eastmoney-hk/）。 */
+export type EastmoneyMarket = 'cn' | 'hk'
+
+/** CN/HK 均为永久 UTC+8（无夏令时）——墙钟时间用固定偏移锚定，与运行机器时区无关。 */
+const UTC8_MS = 8 * 3600_000
+
+/** `YYYY-MM-DD HH:MM[:SS]`（UTC+8 墙钟）→ epoch ms。 */
+export function utc8WallTimeToEpochMs(value: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value)
+  if (!m) throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `invalid eastmoney wall time ${JSON.stringify(value)}`)
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] ?? 0)) - UTC8_MS
+}
+
+/** 东财价格字段的分精度倍率：cn ×100（2 位小数），hk ×1000（3 位小数，响应 decimal=3）。 */
+export function eastmoneyPriceScale(market: EastmoneyMarket): number {
+  return market === 'hk' ? 1000 : 100
+}
 
 /**
  * 将标准代码（如 600519.SH / 000001.SZ / 600519 / 000001）转为东财 secid。
@@ -75,8 +97,14 @@ const KNOWN_SH_INDICES = new Set(['000688', '000300', '000016', '000905', '00085
  * 深圳（00/30/15等）= 0.xxxxxx
  * 北京（83/87/43/92等）= 0.xxxxxx
  */
-export function toEastmoneySecid(symbol: string): { secid: string; canonical: string } {
+export function toEastmoneySecid(symbol: string): { secid: string; canonical: string; market: EastmoneyMarket } {
   const clean = symbol.trim().toUpperCase()
+  // 港股分支：`00700.HK` / `HK00700` / 裸 5 位数字（A 股代码恒 6 位，无歧义）→ secid 116.xxxxx。
+  const hkMatch = /^(\d{1,5})\.HK$/.exec(clean) ?? /^HK(\d{1,5})$/.exec(clean)
+  if (hkMatch !== null || /^\d{5}$/.test(clean)) {
+    const hkCode = (hkMatch?.[1] ?? clean).padStart(5, '0')
+    return { secid: `116.${hkCode}`, canonical: `${hkCode}.HK`, market: 'hk' }
+  }
   let code = clean
   let market = ''
 
@@ -104,6 +132,7 @@ export function toEastmoneySecid(symbol: string): { secid: string; canonical: st
   return {
     secid: `${prefix}.${code}`,
     canonical: `${code}.${market}`,
+    market: 'cn',
   }
 }
 
@@ -153,7 +182,8 @@ export class EastmoneyRestClient {
   }
 
   async getTicker(symbol: string): Promise<Ticker> {
-    const { secid, canonical } = toEastmoneySecid(symbol)
+    const { secid, canonical, market } = toEastmoneySecid(symbol)
+    const scale = eastmoneyPriceScale(market)
     // f60=昨收 f169=涨跌额 f170=涨跌幅（均为 ×100 分精度整数；'-' 停牌占位）。
     const url = `${this.baseUrl}/api/qt/stock/get?secid=${secid}&fields=f43,f44,f45,f46,f47,f48,f57,f58,f60,f86,f169,f170`
     const res = await this.requestJson<{ data?: Record<string, unknown> }>(url)
@@ -165,16 +195,17 @@ export class EastmoneyRestClient {
     const d = res.data
     let rawPrice = 0
     if (typeof d.f43 === 'number') {
-      rawPrice = d.f43 / 100
+      rawPrice = d.f43 / scale
     } else if (typeof d.f43 === 'string' && d.f43 !== '-' && d.f43 !== '−') {
       const parsed = parseFloat(d.f43)
-      rawPrice = Number.isNaN(parsed) ? 0 : parsed / 100
+      rawPrice = Number.isNaN(parsed) ? 0 : parsed / scale
     }
     const price = rawPrice > 0 ? rawPrice : 0
     const volume = typeof d.f47 === 'number' ? d.f47 : typeof d.f47 === 'string' ? parseFloat(d.f47) : 0
     const timestamp = typeof d.f86 === 'number' ? d.f86 * 1000 : Date.now()
     // 官方昨收锚点（与 tencent fields[4] 同语义）：涨跌幅基准，UI 头部/侧栏直接消费。
-    const prevClose = parseScaledHundred(d.f60)
+    // hk 昨收同样 ×1000（f60=438400 → 438.4）；涨跌幅 f170 两市场均 ×100。
+    const prevClose = market === 'hk' ? parseScaled(d.f60, scale) : parseScaledHundred(d.f60)
     const changePercent = parseScaledHundred(d.f170)
 
     const name = typeof d.f58 === 'string' && d.f58.trim() ? d.f58.trim() : undefined
@@ -191,7 +222,12 @@ export class EastmoneyRestClient {
   }
 
   async getKlines(symbol: string, interval: Interval = '1d', limit: number = 100): Promise<Kline[]> {
-    const { secid } = toEastmoneySecid(symbol)
+    const { secid, market } = toEastmoneySecid(symbol)
+    // 港股 1m 走 trends2 分时端点（当日完整分钟序列；kline/get 的 klt=1 对 hk 未实证，
+    // 5m/日 K 已实证可用，spikes/impl-eastmoney-hk/）。
+    if (market === 'hk' && interval === '1m') {
+      return this.getHkIntradayTrends(secid, limit)
+    }
     const klt = mapIntervalToKlt(interval)
     const stepMs = parseIntervalMs(interval)
     const url = `${this.historyBaseUrl}/api/qt/stock/kline/get?secid=${secid}&klt=${klt}&fqt=1&lmt=${limit}&end=20500101&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58`
@@ -227,6 +263,35 @@ export class EastmoneyRestClient {
     }
 
     return klines
+  }
+
+  /**
+   * 港股当日分时（trends2，ndays=1 = 最近一个交易日全天分钟序列，非交易日自然回落）。
+   * 行格式同 kline/get：`时间,开,收,高,低,量,额,均价`；时间 'YYYY-MM-DD HH:MM' 为 UTC+8 墙钟。
+   */
+  private async getHkIntradayTrends(secid: string, limit: number): Promise<Kline[]> {
+    const url = `${this.historyBaseUrl}/api/qt/stock/trends2/get?secid=${secid}&fields1=f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11&fields2=f51,f52,f53,f54,f55,f56,f57,f58&ndays=1&iscr=0`
+    const res = await this.requestJson<{ data?: { trends?: string[] } }>(url)
+    const trends = res.data?.trends
+    if (!Array.isArray(trends)) return []
+
+    const stepMs = parseIntervalMs('1m')
+    const klines: Kline[] = []
+    for (const line of trends) {
+      const parts = line.split(',')
+      if (parts.length < 6) continue
+      const openTime = utc8WallTimeToEpochMs(parts[0] ?? '')
+      klines.push({
+        openTime,
+        open: parseFloat(parts[1] ?? ''),
+        high: parseFloat(parts[3] ?? ''),
+        low: parseFloat(parts[4] ?? ''),
+        close: parseFloat(parts[2] ?? ''),
+        volume: parseFloat(parts[5] ?? ''),
+        closeTime: openTime + stepMs - 1,
+      })
+    }
+    return klines.slice(-Math.max(limit, 1))
   }
 
   async listInstruments(query?: string): Promise<Array<{ symbol: string; name: string }>> {

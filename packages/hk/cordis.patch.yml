@@ -28,6 +28,11 @@
       name: '@dshtrading/connector-futu/dataplane'
       config:
         enabled: true
+    - id: dsh-trading-hk-dataplane-eastmoney
+      name: '@dshtrading/connector-eastmoney/dataplane'
+      config:
+        enabled: true
+        market: hk
     - id: dsh-trading-hk-dataplane-longbridge
       name: '@dshtrading/connector-longbridge/dataplane'
       config:

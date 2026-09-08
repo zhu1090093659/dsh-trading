@@ -74,6 +74,20 @@
         dryRun: true
         liveTrading: false
 
+# 东财港股面（2026-09-08）：trends2 分时 + kline 分钟/日 K 已实证（spikes/impl-eastmoney-hk/），
+# 弥补腾讯公开端港股分钟线全不支持的缺口；routeAllows 按路由裁决，仅 hk.provider=eastmoney 时激活。
+- id: dsh-trading-hk-connector-eastmoney-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingHkMarketData: true
+  config:
+    - id: dsh-trading-hk-connector-eastmoney
+      name: '@dshtrading/connector-eastmoney'
+      config:
+        enabled: true
+        market: hk
+
 - id: dsh-trading-hk-connector-tiger-group
   name: cordis:group
   group: true

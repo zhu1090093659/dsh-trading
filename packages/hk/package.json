@@ -28,6 +28,7 @@
     "build": "tsdown"
   },
   "dependencies": {
+    "@dshtrading/connector-eastmoney": "workspace:*",
     "@dshtrading/connector-futu": "workspace:*",
     "@dshtrading/connector-longbridge": "workspace:*",
     "@dshtrading/connector-tencent": "workspace:*",
