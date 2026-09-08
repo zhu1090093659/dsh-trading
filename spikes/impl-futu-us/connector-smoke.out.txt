@@ -1,0 +1,5 @@
+us.AAPL ticker: {"symbol":"AAPL","price":319.97,"timestamp":1788853416000,"bid":320.01,"ask":320.07,"volume":39606884}
+US.AAPL 1d last: {"openTime":1788494400000,"open":328.305,"high":328.93,"low":317.86,"close":319.97,"volume":39606884,"closeTime":1788580799999}
+US.AAPL 5m last: {"openTime":1788552000000,"open":320.69,"high":320.75,"low":319.65,"close":319.97,"volume":7394647,"closeTime":1788552299999}
+00700.HK ticker: {"symbol":"00700.HK","price":435.6,"timestamp":1788853416000,"bid":435.6,"ask":435.8,"volume":8683649}
+US placeOrder gate: TRADING_UNSUPPORTED_SYMBOL: Futu: malformed HK symbol "AAPL"

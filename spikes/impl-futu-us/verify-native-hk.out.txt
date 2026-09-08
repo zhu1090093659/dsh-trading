@@ -1,0 +1,7 @@
+now=2026-09-08T10:08:25.464Z
+native HK.00700 ticker: {"symbol":"00700.HK","price":435.4,"timestamp":1788854910000,"bid":435.2,"ask":435.4,"volume":10414838}
+canonical 00700.HK ticker: {"symbol":"00700.HK","price":435.4,"timestamp":1788854910000,"bid":435.2,"ask":435.4,"volume":10414838}
+US.AAPL ticker: {"symbol":"AAPL","price":319.97,"timestamp":1788862089000,"bid":318.77,"ask":318.86,"volume":39606884}
+bare AAPL 5m last: {"openTime":1788552000000,"open":320.69,"high":320.75,"low":319.65,"close":319.97,"volume":7394647,"closeTime":1788552299999}
+HK.00700 5m last: {"openTime":1788854400000,"open":435.6,"high":436.2,"low":435.4,"close":435.4,"volume":1291600,"closeTime":1788854699999}
+US order gate: TRADING_UNSUPPORTED_SYMBOL: Futu: malformed HK symbol "AAPL"

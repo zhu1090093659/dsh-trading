@@ -39,10 +39,12 @@ export const PROVIDER_LABELS: readonly Readonly<ProviderMeta>[] = [
   { id: 'stooq', label: 'provider.stooq', url: 'https://stooq.com', type: 'public', markets: ['us'] },
   { id: 'tencent', label: 'provider.tencent', url: 'https://finance.qq.com', type: 'public', markets: ['cn', 'hk'] },
   { id: 'eastmoney', label: 'provider.eastmoney', url: 'https://eastmoney.com', type: 'public', markets: ['cn', 'hk'] },
-  { id: 'tushare', label: 'provider.tushare', url: 'https://tushare.pro/register', env: 'TUSHARE_TOKEN', type: 'commercial', markets: ['cn', 'hk', 'us'] },
+  // markets 必须 = 连接器实现的真实覆盖（dataplane 注册面），不是券商平台能力：
+  // tushare connector 仅 A 股实现；futu 行情面 hk+us（交易面仅 hk）；cn 未实现。
+  { id: 'tushare', label: 'provider.tushare', url: 'https://tushare.pro/register', env: 'TUSHARE_TOKEN', type: 'commercial', markets: ['cn'] },
   { id: 'akshare', label: 'provider.akshare', url: 'https://akshare.xyz', env: 'AKSHARE_API_URL', type: 'public', markets: ['cn', 'hk'] },
   { id: 'qmt', label: 'provider.qmt', url: 'http://127.0.0.1:5800', env: 'QMT_GATEWAY_URL', type: 'gateway', markets: ['cn'] },
-  { id: 'futu', label: 'provider.futu', url: 'https://futunn.com/download/open-api', env: 'FUTU_HOST', type: 'gateway', markets: ['hk', 'us', 'cn'] },
+  { id: 'futu', label: 'provider.futu', url: 'https://futunn.com/download/open-api', env: 'FUTU_HOST', type: 'gateway', markets: ['hk', 'us'] },
   { id: 'longbridge', label: 'provider.longbridge', url: 'https://open.longportapp.com', env: 'LONGBRIDGE_APP_KEY', type: 'commercial', markets: ['hk', 'us'] },
   { id: 'tiger', label: 'provider.tiger', url: 'https://developer.itigerup.com', env: 'TIGER_ID', type: 'commercial', markets: ['hk', 'us', 'cn'] },
   { id: 'hithink', label: 'provider.hithink', url: 'https://fuyao.aicubes.cn', env: 'HITHINK_FINANCE_API_KEY', type: 'commercial', markets: ['cn'] },

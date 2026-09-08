@@ -5,6 +5,8 @@ import {
   INTERVAL_VOCABULARY,
   TradingServiceError,
   normalizeHkSymbol,
+  normalizeSymbol,
+  normalizeUsSymbol,
   toFutuSecurity,
 } from '../src/rest.js'
 import { createPlaceOrderTool, type Config } from '../src/index.js'
@@ -35,6 +37,30 @@ describe('FutuRestClient 符号与周期映射', () => {
     expect(normalizeHkSymbol('HK.00700')).toBe('00700.HK')
     expect(toFutuSecurity('00700.HK')).toBe('HK.00700')
     expect(() => normalizeHkSymbol('INVALID')).toThrowError(TradingServiceError)
+  })
+
+  it('美股符号归一化与 Futu 证券格式转换（行情面双市场）', () => {
+    expect(normalizeUsSymbol('AAPL')).toBe('AAPL')
+    expect(normalizeUsSymbol('us.aapl')).toBe('AAPL')
+    expect(normalizeUsSymbol('US.AAPL')).toBe('AAPL')
+    expect(normalizeUsSymbol('BRK.B')).toBe('BRK.B')
+    expect(toFutuSecurity('AAPL')).toBe('US.AAPL')
+    expect(toFutuSecurity('us.brk.b')).toBe('US.BRK.B')
+    expect(() => normalizeUsSymbol('12345')).toThrowError(TradingServiceError)
+  })
+
+  it('归一分派：港股形态走港股，字母形态走美股', () => {
+    expect(normalizeSymbol('700')).toBe('00700.HK')
+    expect(normalizeSymbol('700.HK')).toBe('00700.HK')
+    expect(normalizeSymbol('aapl')).toBe('AAPL')
+    expect(normalizeSymbol('us.AAPL')).toBe('AAPL')
+    expect(() => normalizeSymbol('INVALID!')).toThrowError(TradingServiceError)
+  })
+
+  it('输入宽容：Futu 原生形 HK.00700 在分派与证券格式转换两侧都受理（规范词汇 §2）', () => {
+    expect(normalizeSymbol('HK.00700')).toBe('00700.HK')
+    expect(normalizeSymbol('hk.00700')).toBe('00700.HK')
+    expect(toFutuSecurity('HK.00700')).toBe('HK.00700')
   })
 
   it('支持的 interval 词汇包含 5m/15m/30m/1h/1d/1w/1M', () => {
@@ -118,6 +144,56 @@ describe('FutuRestClient.getKlines', () => {
       volume: 50000,
       closeTime: 1725000000000 + 5 * 60 * 1000 - 1,
     })
+  })
+})
+
+describe('FutuRestClient 美股行情路径', () => {
+  it('getTicker 接受 us.AAPL 并转换 US.AAPL，回带规范形 AAPL', async () => {
+    const { impl, urls } = stubFetch([
+      {
+        match: '/api/qot/get-ticker',
+        body: {
+          retType: 0,
+          data: { curPrice: 250.5, bidPrice: 250.4, askPrice: 250.6, volume: 42000000, time: 1725000000000 },
+        },
+      },
+    ])
+    const client = new FutuRestClient({ fetchImpl: impl })
+    const ticker = await client.getTicker('us.AAPL')
+
+    expect(urls[0]).toContain('security=US.AAPL')
+    expect(ticker.symbol).toBe('AAPL')
+    expect(ticker.price).toBe(250.5)
+  })
+
+  it('getKlines 接受 US.AAPL 并转换 US.AAPL', async () => {
+    const { impl, urls } = stubFetch([
+      {
+        match: '/api/qot/get-kl',
+        body: {
+          retType: 0,
+          data: {
+            klList: [
+              { time: 1725000000000, open: 248.0, high: 251.0, low: 247.5, close: 250.2, volume: 61000000 },
+            ],
+          },
+        },
+      },
+    ])
+    const client = new FutuRestClient({ fetchImpl: impl })
+    const klines = await client.getKlines('US.AAPL', '1d', 5)
+
+    expect(urls[0]).toContain('security=US.AAPL')
+    expect(klines).toHaveLength(1)
+    expect(klines[0]).toMatchObject({ close: 250.2 })
+  })
+
+  it('交易面保持仅港股：US 符号下单被拒绝', async () => {
+    const { impl } = stubFetch([])
+    const client = new FutuRestClient({ fetchImpl: impl })
+    await expect(client.placeOrder(undefined, {
+      symbol: 'AAPL', side: 'BUY', type: 'MARKET', quantity: 10,
+    })).rejects.toMatchObject({ code: 'TRADING_UNSUPPORTED_SYMBOL' })
   })
 })
 

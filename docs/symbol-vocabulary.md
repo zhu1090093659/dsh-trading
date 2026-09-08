@@ -36,6 +36,8 @@
 | tencent | cn/hk | `sh600519` / `hk00700`（wire） | 规范形 `600519.SH`/`00700.HK` ↔ wire 前缀小写形；输出用请求时的 wire 前缀还原规范形 |
 | yahoo | us | `AAPL` | 恒等 |
 | stooq | us | `aapl.us` | 小写化 + 补 `.us` 后缀（既有行为，输出规范大写形） |
+| futu | hk | `HK.00700` | 规范形 `00700.HK` / 裸 1-5 位数字 / 原生形 `HK.00700` 互译（wire 恒 `HK.` + 5 位补零） |
+| futu | us | `US.AAPL` | 规范形纯大写 ticker（接受 `US.AAPL` / `AAPL.US` / 类别股 `BRK.B`）↔ wire `US.AAPL` |
 
 ## 给新连接器（手册补充条款）
 

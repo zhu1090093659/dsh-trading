@@ -14,6 +14,8 @@ with @dshtrading/connector-futu 的假定契约（GET + query，响应 {retType,
   GET /api/qot/get-plate-security?plate=... → {securityList:[]}（listInstruments 静默空）
   其余（/api/trd/*）→ retType:-1（交易面保持关闭，liveTrading 恒 false）
 
+时区：time_key/update_time 按市场本地墙钟解析（US=美东含夏令时，HK=北京），统一转 ISO UTC。
+
 用法：
   python3 scripts/futu-openapi-bridge.py            # 前台
   nohup python3 scripts/futu-openapi-bridge.py &    # 后台（日志 scripts/futu-openapi-bridge.log）
@@ -25,18 +27,45 @@ with @dshtrading/connector-futu 的假定契约（GET + query，响应 {retType,
 from __future__ import annotations
 
 import json
+import os
 import threading
 from datetime import datetime, timezone, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
+from zoneinfo import ZoneInfo
 
 from futu import OpenQuoteContext, KLType, SubType, AuType
 
 LISTEN_HOST = '127.0.0.1'
-LISTEN_PORT = 11112
+# 默认 11112（LaunchAgent com.dshtrading.futu-openapi-bridge 托管 11112）；旁路验证/
+# 并行实例用 FUTU_BRIDGE_PORT 覆盖，避免与常驻桥抢端口。
+LISTEN_PORT = int(os.environ.get('FUTU_BRIDGE_PORT', '11112'))
 OPEND_HOST = '127.0.0.1'
 OPEND_PORT = 11111
 HK_TZ = timezone(timedelta(hours=8))  # 港股墙钟（无夏令时）
+# 美股 time_key 为美东墙钟（2026-09-08 OpenD 实证：US.AAPL 1m 尾巴 15:59/16:00=收盘分钟，
+# 日线盖交易日 00:00；若按北京解析则分钟偏差 12h、日线日期错位一天）
+_us_tz = None
+
+
+def us_tz():
+    """美东时区（含夏令时）。惰性解析：宿主无系统 tz 库（Windows 需 pip install tzdata）时
+    只在请求美股时报错，港股面不受影响。"""
+    global _us_tz
+    if _us_tz is None:
+        try:
+            _us_tz = ZoneInfo('America/New_York')
+        except Exception as exc:  # noqa: BLE001 —— 折成可执行报错，桥面统一 retType:-1
+            raise RuntimeError(
+                f"bridge: cannot load timezone 'America/New_York' ({exc}); "
+                'install tzdata (pip install tzdata) for US quotes'
+            ) from exc
+    return _us_tz
+
+
+def market_tz(security: str):
+    """按证券前缀选墙钟时区：US.* 美东（含夏令时），其余（HK.*）北京时间。"""
+    return us_tz() if security.upper().startswith('US.') else HK_TZ
 
 KL_TYPE_TO_KLTYPE = {
     1: KLType.K_1M, 2: KLType.K_5M, 3: KLType.K_15M, 4: KLType.K_30M,
@@ -60,9 +89,16 @@ def err(msg: str) -> dict:
     return {'retType': -1, 'retMsg': msg, 'data': None}
 
 
-def hk_wall_to_iso(value: str) -> str:
-    """'2026-09-08 11:35:00'（HK 墙钟）→ ISO UTC（连接器 new Date(iso) 解析无歧义）。"""
-    dt = datetime.strptime(value, '%Y-%m-%d %H:%M:%S').replace(tzinfo=HK_TZ)
+def wall_to_iso(value: str, tz) -> str:
+    """'2026-09-08 11:35:00'（交易所本地墙钟，Futu 各市场按本地时间给 time_key/update_time）
+    → ISO UTC（连接器 new Date(iso) 解析无歧义）。
+    美股快照 update_time 可带毫秒小数（'…:12.412'），先剥掉再解析。"""
+    text = value.strip()
+    if '.' in text:
+        text = text.split('.', 1)[0]
+    if len(text) == 16:
+        text += ':00'
+    dt = datetime.strptime(text, '%Y-%m-%d %H:%M:%S').replace(tzinfo=tz)
     return dt.astimezone(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
 
 
@@ -78,7 +114,7 @@ def handle_get_ticker(q: dict) -> dict:
         'bidPrice': float(row['bid_price']) if row['bid_price'] > 0 else None,
         'askPrice': float(row['ask_price']) if row['ask_price'] > 0 else None,
         'volume': float(row['volume']),
-        'time': hk_wall_to_iso(update_time if len(update_time) == 19 else update_time + ':00'),
+        'time': wall_to_iso(update_time, market_tz(code)),
     })
 
 
@@ -103,8 +139,9 @@ def handle_get_kl(q: dict) -> dict:
         return err(f'cur_kline failed: {df}')
     bars = []
     now = datetime.now(timezone.utc)
+    tz = market_tz(code)
     for _, row in df.iterrows():
-        iso = hk_wall_to_iso(str(row['time_key']))
+        iso = wall_to_iso(str(row['time_key']), tz)
         # 午休/收盘后 cur-kline 会预生成下一时段的占位 bar（量=0、时间为未来）——丢弃
         if datetime.fromisoformat(iso.replace('Z', '+00:00')) > now:
             continue
