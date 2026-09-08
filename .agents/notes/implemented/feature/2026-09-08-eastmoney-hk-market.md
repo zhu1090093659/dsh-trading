@@ -29,6 +29,6 @@ Status: implemented
 
 - 港股自选迷你走势从「日 K 降级」升级为**真日内分时**（1m trends2，固定时段轴 9:30–12:00+13:00–16:00 已在前序 f0feea9 落地）；港股 ticker/涨跌幅同样可由 eastmoney 供给（价格缩放已实证正确）。
 - 东财公共端**限频敏感**：2026-09-08 探测中 push2his API 路径一度整 IP 断开（[000]），约 20 分钟后 push2 恢复、push2his 逐步恢复——客户端 60s 轮询对公共端温和，但批量探测需节制。
-- 港股日 K（klt=101）尚未拿到成功响应证据（限频窗口），下次网络窗口补验；trends2/5m/ticker 三类原始响应存 spikes/impl-eastmoney-hk/。
+- trends2/5m/日 K/ticker 四类原始响应存 spikes/impl-eastmoney-hk/（日 K 于限频解除后 12:05 补验成功：rc=0、含 09-04/09-07 真实日线）；真机端到端已验：bridge 1m/5m/ticker 全通（1m 末 bar 与 ticker 价一致），自选列表港股行日内分时 + 固定时段轴渲染正确。
 - futu 连接器的 OpenD HTTP 假设问题留作独立议题（要么找到对应 HTTP 网关包装器，要么重写为 TCP protobuf 或标注需第三方桥）。
 - 测试：connector-eastmoney 11 个单测全绿（新增 hk secid 映射、×1000 缩放、trends2 解析、5m kline 路由四类用例，全部用真实响应值作 fixture）。
