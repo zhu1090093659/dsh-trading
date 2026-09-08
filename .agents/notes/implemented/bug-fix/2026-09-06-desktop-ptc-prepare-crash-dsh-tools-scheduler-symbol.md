@@ -80,3 +80,24 @@ Status: implemented
 - 遗留观察（未处理）：多宿主并存时 trading-tasks ledger 锁争用
   （`LedgerLockedError ... locked by another live host process`）只在
   日志留痕、服务降级运行，暂不构成阻塞；若日后任务台账丢写再立专项。
+
+## Addendum (2026-09-08, issue #81 外部用户复现)
+
+- 外部用户 spancerxing 在
+  [#81](https://github.com/zhu1090093659/dsh-trading/issues/81) 复现同症状
+  （两份 rc.1、runtime 一份 + trading-web profile 一份、reading 'prepare'）
+  → 版本滞后（≤v0.1.3 安装包不带归一器），回复升级 v0.1.5 指引后关闭。
+  外部复现再证：安装版双实例是**出厂结构性常态**，不是用户环境弄脏——
+  `build-runtime.mjs` 对 staging 载荷里的 symlink 直接 throw（装进
+  $DSH_HOME 会断链），seed profile 只能物化核心包实体拷贝；归一器是
+  安装版的唯一兜底层。
+- **官方 rc.1 仍是 per-instance Symbol**（2026-09-08 `npm pack
+  @deepseek-ai/dsh-tools@0.1.2-rc.1` 下载官方 tarball 实证 lib/index.js
+  为 `Symbol(...)`）——「上游采纳 Symbol.for 后移除归一器」的移除条件
+  尚未满足，勿提前摘除。
+- **本机已不代表官方裸环境**：/opt/homebrew 全局宿主 dsh-tools
+  lib/index.js:2430 于 2026-09-06 19:05 被手工 patch 成 `Symbol.for`
+  （官方无此改动；就地修改、未留备份，原样可从官方 tarball 取回）。
+  本机因此叠加三层缓解（手工 patch + profile symlink 重挂 + 归一器），
+  复现不了外部用户的裸安装病态——排查外部报告时必须意识到这层偏差，
+  需要裸环境复现时用官方 tarball/安装包另起沙箱。
