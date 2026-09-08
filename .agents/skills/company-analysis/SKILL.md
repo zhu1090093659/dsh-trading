@@ -52,7 +52,7 @@ description: Use this skill when the user wants to analyze a listed company, sto
 
 ### 预期与现实框架
 
-公司分析必须融入 `/Users/zcl/cowork/trading_journal/rules/fundamental_analysis_framework.md` 的底层框架。若该文件可读，开始分析前先读取；若不可读，也必须按以下稳定规则执行。
+公司分析必须融入 `references/fundamental_analysis_framework.md` 的底层框架。开始分析前先读取该文件；若读取失败，也必须按以下稳定规则执行。
 
 核心口诀：大部分基本面交易都是买预期、卖现实。拿到基本面信息后不能只判断“好不好”，还要判断当前价格反映的是过去现实、当前现实，还是未来预期；以及反映不够、反映刚好，还是反映过度。
 

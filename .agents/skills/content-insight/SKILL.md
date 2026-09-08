@@ -45,7 +45,7 @@ description: 多源内容深度分析与知识沉淀技能，支持两类素材�
 python <skill目录>/scripts/bili_fetch.py "<视频链接或BV号>" <工作目录>
 ```
 
-- 工作目录建议 `<任务根>/bili_<BV号后4位>/`（本机任务根例：`/Users/zcl/cowork/trading_journal/outputs/content_insight_<日期>/`），脚本自动创建。
+- 工作目录建议 `<任务根>/bili_<BV号后4位>/`，脚本自动创建。
 - 读末行 `RESULT: {...}` 决定分支：`SUBTITLES_FOUND`（已有 subtitles.json，跳到V3）/
   `AUDIO_CHUNKED`（走V2）/ `FAILED`（视频不存在/VIP需登录/ffmpeg缺失，如实告知用户）。
 - 已内置：cookie预热防412、WBI签名、b23.tv短链解析、多P选择（`--page N`）、durl老格式回退。
