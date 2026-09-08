@@ -58,6 +58,7 @@ Status: implemented
 - **待裁决（本轮不做）**：
   - G6 `routing_set`（B 类）：需先定 settings 写契约（深层合并语义）、`'routing'` 事件语义与审计留痕格式；agent 侧目前仍只能读 `routing_get` 并引导用户到设置面板。
   - G9 图表指标名册迁移导入、G10 更新器：维持审计 §5 的「不做」判定。
+  - 审计 Wave 3 的纯文案/一致性项未做：connector/kit 工具 description 的「操作后必须回显」纪律文案、同名双源收敛（`crypto_funding_rate` kit-crypto vs okx、`us_get_news` kit-us vs finnhub）——均不改权限，可另开小 PR。
   - C/D 类（下单/撤单/paper/liveTrading 开关/凭据）：按铁律 #3 与 §5 一律不开放。
 - **实证发现（与本变更无关，另案）**：`trading-dev`（headless）profile 在 `dsh --profile trading-dev "..."` 下启动失败——`@linxin666/dsh-session-archive`、`@xmanrui/dsh-im`、`@linxin666/dsh-usage`、`@linxin666/dsh-client-ui-plugin-manager` 四行等待 `webServer`/`connection` 服务而 headless 宿主没有，`assertEntriesActivated` 直接抛错。来自 2026-09-08 的 `466cbe1`（另一会话的三插件内置），修法可参照同文件 `dsh-trading-dynamic-capabilities` 行的条件禁用范式；本变更未改。
 - **时效**：`trading-web` profile 的包副本是 `file:` 拷贝而非 symlink，运行时生效需 `scripts/refresh-trading-web-profile.sh` 刷新副本 + 重启宿主（桌面壳需重启 App）。本变更只跑通包级与真实 cordis 接线验证，未动用户正在运行的桌面实例。
