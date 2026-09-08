@@ -32,4 +32,8 @@ export interface ReferenceSeries {
   closes: number[]
   prevClose: number | undefined
   fetchedAt: number
+  /** intraday = 当日/最近交易日分钟线（60s 轮询）；daily = 分钟线不可用时的日 K 降级（TTL 内复用后再重试分钟线）。 */
+  mode: 'intraday' | 'daily'
+  /** intraday 模式下实测可用的分钟粒度（连接器能力各异，成功后记住，避免每拍重试必失败的粒度）。 */
+  interval?: '1m' | '5m'
 }

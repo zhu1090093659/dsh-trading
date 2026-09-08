@@ -34,7 +34,7 @@
 - **表头**：紧凑三列小字表头（名称代码 | 走势 | 最新价/涨跌幅）。
 - **三段式列表行**：
   - 左段：标的名称（加粗） + 市场代码/市场 Tag；
-  - 中段：升级为带 **SVG LinearGradient 半透明面积填充** 的 Sparkline 走势图（56px 宽，22px 高）；
+  - 中段：升级为带 **SVG LinearGradient 半透明面积填充** 的 Sparkline 走势图（56px 宽，22px 高；数据语义 2026-09-08 起由日 K 收盘改为日内分钟线，见 [2026-09-08-watchlist-intraday-sparkline](2026-09-08-watchlist-intraday-sparkline.md)）；
   - 右段：最新价（大号加粗 tabular-nums） + 涨跌幅（着色 tabular-nums）。
 - **交互态**：选中行整行高亮浅底与红条指示，行高紧凑控制在 48px。
 

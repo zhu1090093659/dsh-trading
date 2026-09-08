@@ -3,7 +3,8 @@
  * 顶部自选分组与折叠按钮 + 胶囊市场页签 + 表头 + 三段式自选标的列表 +
  * 底部设置入口（3.0 自右缘竖条迁入，MarketDock 注入 openSettings）。
  * 点击行 = 选中标的并切到行情模式（QuotePane 消费）；
- * 行内嵌迷你面积走势 + 最新价 + 涨跌幅（红涨绿跌）。行情批量轮询、页面隐藏时暂停。
+ * 行内嵌迷你面积走势（当日/最近交易日分钟线，分钟线不可用时降级日 K）+ 最新价 + 涨跌幅
+ * （红涨绿跌）。行情批量轮询、页面隐藏时暂停。
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -11,6 +12,7 @@ import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers } from './api.ts'
 import { searchAllMarkets, searchSymbols, setDynamicCatalog, updateDynamicCatalog } from './symbol-catalog.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
+import { intradayCandidates, intradayRequest, selectIntradayCloses } from './intraday-series.ts'
 import { colorModeStore } from './color-mode.ts'
 import { Sparkline } from './Sparkline.tsx'
 import { IconChevronDown, IconFoldPanel, IconSettings } from './icons.tsx'
@@ -42,10 +44,12 @@ export type MarketSidebarProps =
   & InjectFace<MarketSidebarInjected>
   & { onFold?: () => void; updateAvailable?: boolean }
 
+/** 日 K 降级序列的复用窗口：分钟内不重复打必失败的分钟线，TTL 过后重试。 */
 const SERIES_TTL_MS = 10 * 60 * 1000
 const PRICE_POLL_MS = 8000
-const SPARK_INTERVAL = '1d'
-const SPARK_LIMIT = 32
+/** 日内走势序列轮询节拍：分钟 bar 粒度下 60s 足够「活」，又对公共端温和。 */
+const SERIES_POLL_MS = 60 * 1000
+const DAILY_FALLBACK_LIMIT = 32
 
 const TAB_KEY: Record<MarketId, MarketLocaleKey> = {
   crypto: 'tab.crypto',
@@ -148,32 +152,67 @@ export function MarketSidebar({
     }
   }, [draft, tab])
 
-  // 参考序列（日K收盘 → 迷你走势 + 昨收）：逐标的惰性拉一次，TTL 内复用。
-  useEffect(() => {
+  // 参考序列（迷你走势 + 昨收兜底）：日内分钟线 60s 轮询；分钟线不可用（如腾讯
+  // 公开端港股）降级日 K，TTL 内复用后再重试分钟线。prevClose 仅为快照缺官方锚点
+  // 时的兜底，首次缺省时补拉一次日 K（日 K 序列可能缺最新收盘 bar，倒数第二根
+  // 会错位一个交易日，故永远让位于 ticker.prevClose）。
+  usePoll(async () => {
     if (rows.length === 0) return
-    let cancelled = false
     const now = Date.now()
-    for (const row of rows) {
+    await Promise.all(rows.map(async (row) => {
       const key = rowKey(row.market, row.symbol)
       const cached = series[key]
-      if (cached !== undefined && now - cached.fetchedAt < SERIES_TTL_MS) continue
-      fetchKlines(row.market, row.symbol, SPARK_INTERVAL, SPARK_LIMIT)
-        .then((klines) => {
-          if (cancelled) return
+      if (cached?.mode === 'daily' && now - cached.fetchedAt < SERIES_TTL_MS) return
+      // 粒度自适应：已学过用学过的一档；否则按候选顺序试（腾讯 A 股无 1m 只有 5m）。
+      const candidates = cached?.mode === 'intraday' && cached.interval !== undefined
+        ? [cached.interval]
+        : intradayCandidates(row.market)
+      let storedIntraday = false
+      for (const interval of candidates) {
+        try {
+          const req = intradayRequest(row.market, interval)
+          const klines = await fetchKlines(row.market, row.symbol, req.interval, req.limit)
+          const closes = selectIntradayCloses(row.market, klines)
+          if (closes.length === 0) throw new Error('empty intraday series')
+          setSeries((current) => ({
+            ...current,
+            [key]: { closes, prevClose: current[key]?.prevClose, fetchedAt: Date.now(), mode: 'intraday', interval },
+          }))
+          storedIntraday = true
+          break
+        } catch { /* 试下一档粒度 */ }
+      }
+      if (!storedIntraday) {
+        try {
+          const daily = await fetchKlines(row.market, row.symbol, '1d', DAILY_FALLBACK_LIMIT)
+          if (daily.length === 0) return
           setSeries((current) => ({
             ...current,
             [key]: {
-              closes: klines.map(candle => candle.close),
-              prevClose: klines.length >= 2 ? klines[klines.length - 2]?.close : undefined,
+              closes: daily.map(candle => candle.close),
+              prevClose: daily.length >= 2 ? daily[daily.length - 2]?.close : current[key]?.prevClose,
               fetchedAt: Date.now(),
+              mode: 'daily',
             },
           }))
-        })
-        .catch(() => { /* 序列失败不影响报价行 */ })
-    }
-    return () => { cancelled = true }
+        } catch { /* 序列失败不影响报价行 */ }
+      }
+      // prevClose 兜底补拉（仅在缺省时；独立于走势成败）
+      if (series[key]?.prevClose === undefined) {
+        try {
+          const pair = await fetchKlines(row.market, row.symbol, '1d', 2)
+          const prevClose = pair.length >= 2 ? pair[pair.length - 2]?.close : undefined
+          if (prevClose !== undefined) {
+            setSeries((current) => current[key] === undefined ? current : ({
+              ...current,
+              [key]: { ...(current[key] as ReferenceSeries), prevClose },
+            }))
+          }
+        } catch { /* 下轮再试 */ }
+      }
+    }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowsKey])
+  }, SERIES_POLL_MS, [rowsKey])
 
   // 最新价批量轮询：按市场分组，每市场每拍一次请求，并自动回填标的真实中文名称。
   usePoll(async () => {
