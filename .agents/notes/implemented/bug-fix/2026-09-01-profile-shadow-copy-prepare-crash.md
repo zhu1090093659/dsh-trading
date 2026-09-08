@@ -59,3 +59,7 @@ Status: implemented
   与「实例本身缺失」。对照实验（纯血 profile）早做，比静态读码快。
 - dsh-web 侧若出现同症状（任何 link/独立 profile 携带 @deepseek-ai 影子
   拷贝的场景），同款 dedupe 思路适用。
+- （2026-09-09）重挂循环补 `-type l`：桌面壳 `normalizeProfileCohort` 把核心包归一为
+  指向自带 runtime 的 symlink，旧循环只匹配 `-type d`，漏掉这些链接——CLI 启动时仍带着
+  app-runtime 的模块实例（同款双实例风险，且预检与脚本都静默通过）。两类都要重挂到
+  全局宿主；反向由桌面壳启动时自愈。

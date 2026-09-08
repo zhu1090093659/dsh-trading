@@ -45,12 +45,15 @@ dsh plugin --profile trading-web install
 
 echo "== 恢复宿主核心包单一实例 symlink（pnpm install 会重新物化影子拷贝，必须重挂）=="
 # 递归处理：包括嵌套 node_modules 里的残留拷贝（如 @dshtrading/knowledge 下的 dsh-tools）。
+# -type d -o -type l：桌面壳 normalizeProfileCohort 把核心包归一为指向自带 runtime 的
+# symlink，只匹配目录会漏掉这些链接，CLI 启动时仍带着 app-runtime 的模块实例（双实例
+# 静默失效）。两类都要重挂到全局宿主。
 for pkg in "${CORE_PKGS[@]}"; do
   while IFS= read -r shadow; do
     rm -rf "$shadow"
     ln -s "$HOST_ROOT/$pkg" "$shadow"
     echo "  linked: ${shadow#"$PROFILE"/node_modules/} -> host/$pkg"
-  done < <(find "$PROFILE/node_modules" -type d -path "*/@deepseek-ai/$pkg" \
+  done < <(find "$PROFILE/node_modules" \( -type d -o -type l \) -path "*/@deepseek-ai/$pkg" \
              -not -path "$HOST_ROOT/*" 2>/dev/null)
 done
 
