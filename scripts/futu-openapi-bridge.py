@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""
+futu-openapi-bridge — Futu OpenD (TCP protobuf) → HTTP JSON 桥，protocol-compatible
+with @dshtrading/connector-futu 的假定契约（GET + query，响应 {retType, retMsg, data}）。
+
+  OpenD(11111, TCP protobuf) ←futu-api SDK— bridge(127.0.0.1:11112, HTTP) ←— connector-futu
+
+端点（connector-futu/src/rest.ts 实际消费面）：
+  GET /api/qot/get-ticker?security=HK.00700
+      → get_market_snapshot（不消耗订阅/历史额度）→ {curPrice,bidPrice,askPrice,volume,time}
+  GET /api/qot/get-kl?security=HK.00700&klType=2&reqNum=200&rehabType=1
+      → 自动订阅 K_*(消耗 1 个订阅槽，上限 100) + get_cur_kline（不消耗历史K线额度 6/100）
+      → {klList:[{time,open,high,low,close,volume}]}，time 为 ISO UTC
+  GET /api/qot/get-plate-security?plate=... → {securityList:[]}（listInstruments 静默空）
+  其余（/api/trd/*）→ retType:-1（交易面保持关闭，liveTrading 恒 false）
+
+用法：
+  python3 scripts/futu-openapi-bridge.py            # 前台
+  nohup python3 scripts/futu-openapi-bridge.py &    # 后台（日志 scripts/futu-openapi-bridge.log）
+
+依赖：pip install futu-api（本机已装 10.05.6508）；FutuOpenD 已启动并登录。
+额度语义（2026-09-08 OpenD 控制台实证）：订阅 0/100，历史K线 6/100——本桥只用
+订阅制 cur-kline + snapshot，不碰历史K线额度。
+"""
+from __future__ import annotations
+
+import json
+import threading
+from datetime import datetime, timezone, timedelta
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
+
+from futu import OpenQuoteContext, KLType, SubType, AuType
+
+LISTEN_HOST = '127.0.0.1'
+LISTEN_PORT = 11112
+OPEND_HOST = '127.0.0.1'
+OPEND_PORT = 11111
+HK_TZ = timezone(timedelta(hours=8))  # 港股墙钟（无夏令时）
+
+KL_TYPE_TO_KLTYPE = {
+    1: KLType.K_1M, 2: KLType.K_5M, 3: KLType.K_15M, 4: KLType.K_30M,
+    5: KLType.K_60M, 6: KLType.K_DAY, 7: KLType.K_WEEK, 8: KLType.K_MON,
+}
+KL_TYPE_TO_SUBTYPE = {
+    1: SubType.K_1M, 2: SubType.K_5M, 3: SubType.K_15M, 4: SubType.K_30M,
+    5: SubType.K_60M, 6: SubType.K_DAY, 7: SubType.K_WEEK, 8: SubType.K_MON,
+}
+
+quote = OpenQuoteContext(host=OPEND_HOST, port=OPEND_PORT)
+subscribed: set[tuple[str, int]] = set()
+lock = threading.Lock()  # futu-api ctx 非线程安全，串行化
+
+
+def ok(data) -> dict:
+    return {'retType': 0, 'retMsg': '', 'data': data}
+
+
+def err(msg: str) -> dict:
+    return {'retType': -1, 'retMsg': msg, 'data': None}
+
+
+def hk_wall_to_iso(value: str) -> str:
+    """'2026-09-08 11:35:00'（HK 墙钟）→ ISO UTC（连接器 new Date(iso) 解析无歧义）。"""
+    dt = datetime.strptime(value, '%Y-%m-%d %H:%M:%S').replace(tzinfo=HK_TZ)
+    return dt.astimezone(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
+
+
+def handle_get_ticker(q: dict) -> dict:
+    code = (q.get('security') or [''])[0]
+    ret, df = quote.get_market_snapshot([code])
+    if ret != 0 or df.empty:
+        return err(f'snapshot failed: {df}')
+    row = df.iloc[0]
+    update_time = str(row['update_time'])
+    return ok({
+        'curPrice': float(row['last_price']),
+        'bidPrice': float(row['bid_price']) if row['bid_price'] > 0 else None,
+        'askPrice': float(row['ask_price']) if row['ask_price'] > 0 else None,
+        'volume': float(row['volume']),
+        'time': hk_wall_to_iso(update_time if len(update_time) == 19 else update_time + ':00'),
+    })
+
+
+def handle_get_kl(q: dict) -> dict:
+    code = (q.get('security') or [''])[0]
+    kl_type = int((q.get('klType') or ['2'])[0])
+    req_num = max(1, min(int((q.get('reqNum') or ['100'])[0]), 1000))
+    kltype = KL_TYPE_TO_KLTYPE.get(kl_type)
+    subtype = KL_TYPE_TO_SUBTYPE.get(kl_type)
+    if kltype is None:
+        return err(f'unsupported klType {kl_type}')
+
+    key = (code, kl_type)
+    if key not in subscribed:
+        ret, err_msg = quote.subscribe([code], [subtype], subscribe_push=False)
+        if ret != 0:
+            return err(f'subscribe {code} {subtype} failed: {err_msg}')
+        subscribed.add(key)
+
+    ret, df = quote.get_cur_kline(code, num=req_num, ktype=kltype, autype=AuType.QFQ)
+    if ret != 0:
+        return err(f'cur_kline failed: {df}')
+    bars = []
+    now = datetime.now(timezone.utc)
+    for _, row in df.iterrows():
+        iso = hk_wall_to_iso(str(row['time_key']))
+        # 午休/收盘后 cur-kline 会预生成下一时段的占位 bar（量=0、时间为未来）——丢弃
+        if datetime.fromisoformat(iso.replace('Z', '+00:00')) > now:
+            continue
+        bars.append({
+            'time': iso,
+            'open': float(row['open']),
+            'high': float(row['high']),
+            'low': float(row['low']),
+            'close': float(row['close']),
+            'volume': float(row['volume']),
+        })
+    return ok({'klList': bars})
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        parsed = urlparse(self.path)
+        q = parse_qs(parsed.query)
+        try:
+            with lock:
+                if parsed.path == '/api/qot/get-ticker':
+                    body = handle_get_ticker(q)
+                elif parsed.path == '/api/qot/get-kl':
+                    body = handle_get_kl(q)
+                elif parsed.path == '/api/qot/get-plate-security':
+                    body = ok({'securityList': []})
+                else:
+                    body = err(f'bridge: unsupported path {parsed.path}')
+        except Exception as exc:  # noqa: BLE001 —— 桥面把一切异常折成 retType:-1
+            body = err(f'{type(exc).__name__}: {exc}')
+        payload = json.dumps(body).encode()
+        self.send_response(200)
+        self.send_header('content-type', 'application/json')
+        self.send_header('content-length', str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+        print(f'{parsed.path}?{parsed.query} -> retType={body.get("retType")}', flush=True)
+
+    def log_message(self, *args) -> None:  # 静默默认访问日志（保留上方业务日志）
+        return
+
+
+if __name__ == '__main__':
+    print(f'futu-openapi-bridge listening on {LISTEN_HOST}:{LISTEN_PORT} -> OpenD {OPEND_HOST}:{OPEND_PORT}', flush=True)
+    ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler).serve_forever()

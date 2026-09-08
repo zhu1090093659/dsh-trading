@@ -28,6 +28,8 @@
       name: '@dshtrading/connector-futu/dataplane'
       config:
         enabled: true
+        # OpenD 原生 11111 是 TCP protobuf；HTTP 契约走 scripts/futu-openapi-bridge.py（11112）
+        gatewayUrl: 'http://127.0.0.1:11112'
     - id: dsh-trading-hk-dataplane-eastmoney
       name: '@dshtrading/connector-eastmoney/dataplane'
       config:

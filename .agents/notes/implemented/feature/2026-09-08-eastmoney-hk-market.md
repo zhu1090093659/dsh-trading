@@ -21,7 +21,7 @@ Status: implemented
 
 ## Alternatives considered
 
-- **修 connector-futu 走 OpenD 原生 TCP protobuf**：协议重、需登录/解锁流，成本不成比例；且 futu 连接器的 HTTP 假设意味着它从未对原生 OpenD 工作过（疑似按某个 HTTP 包装器写的，待考证）。否决为本次路径。
+- **修 connector-futu 走 OpenD 原生 TCP protobuf**：协议重、需登录/解锁流，成本不成比例。后经官方 `futu-api` SDK 桥接方案落地（见 [2026-09-08-futu-openapi-http-bridge](2026-09-08-futu-openapi-http-bridge.md)），futu 连接器的 HTTP 契约由本地桥承载——futu 面已可用，作为 eastmoney 之外的港股源选项。
 - **腾讯 hkMinute 端点**：实证已死（web.ifzq.gtimg.cn/appstock/app/hkMinute/get 返回 code:11 undefined method；kline/mkline 对 hk00700 301→web3 空响应）。腾讯港股分钟线缺口无解，只能换源。
 - **hk 分钟线也走 kline/get klt=1**：未实证；trends2 是东财 App 分时同款端点、数据形态更贴合「当日走势」用途。选 trends2。
 

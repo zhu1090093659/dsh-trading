@@ -57,6 +57,8 @@
       name: '@dshtrading/connector-futu'
       config:
         enabled: true
+        # OpenD 原生 11111 是 TCP protobuf；HTTP 契约走 scripts/futu-openapi-bridge.py（11112）
+        gatewayUrl: 'http://127.0.0.1:11112'
         dryRun: true
         liveTrading: false
 

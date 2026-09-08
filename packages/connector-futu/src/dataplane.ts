@@ -49,12 +49,16 @@ const MARKET = 'hk'
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
   const registry = resolveMarketDataRegistry(ctx)
+  // 行情面必须与交易面同样透传 gatewayUrl（2026-09-08 实证 bug：此前只有交易面传，
+  // 行情面恒落默认 11111——对 OpenD 原生 TCP 端口发 HTTP 请求会 TCP 连上但永不响应，
+  // 表现为 10s 超时 abort）。
+  const restOptions = { gatewayUrl: config.gatewayUrl }
   if (registry === undefined) {
-    new FutuMarketDataService(ctx)
+    new FutuMarketDataService(ctx, restOptions)
     return
   }
   const inner = ctx.isolate(TRADING_HK_MARKET_DATA_KEY)
-  const service = new FutuMarketDataService(inner)
+  const service = new FutuMarketDataService(inner, restOptions)
   ctx.effect(() => registry.register(MARKET, ROUTER_PROVIDER, service))
 
   const tradeRegistry = resolveTradeRegistry(ctx)
