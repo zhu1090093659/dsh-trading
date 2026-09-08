@@ -75,12 +75,26 @@ export type NewHolding = Omit<Holding, 'id' | 'source' | 'importedAt' | 'updated
 
 ## 5. Agent 工具（holdings plugin，host 平面注册）
 
-- `holdings_stage(items: NewHolding[])`：唯一写入口。description 自带完整纪律：
-  解析券商/交易所截图 → 只 stage 不 confirm → 提醒用户「到资产面板确认入账」；
-  market 词汇表（crypto/us/cn/hk）与 symbol 连接器词汇要求；数字必须原样取自截图，
-  不确定的字段缺省不编造；一张截图一个 account 名（用户未说明时用截图里的券商名）。
-- `holdings_list()`：只读，返回当前 staged+holdings 概要（供 agent 回答「我录入了什么」）。
+> 2026-09-08 修订：台账是**导入型记录**，agent 对记账面拥有完整控制权（用户定案：
+> 「理论上 agent 应该能完全操控这些资产，除了不能直接买入和卖出标的」）。原「唯一写
+> 入口 = stage」收敛为**截图导入的默认路径**，不再是权限边界；确认/修订/删除全部开放
+> 给 agent，纪律由 description 承载（回显、核对、提醒用户复核）。
+
+| 工具 | 作用 | 关键纪律 |
+|---|---|---|
+| `holdings_stage(items)` | 截图解析 → 待确认区 | 数字原样取自截图、缺省不编造；回显后提醒用户到面板确认 |
+| `holdings_confirm(ids, edits?)` | 待确认区 → 正式持仓 | 确认后必须列出确认了哪几条（id + 关键字段） |
+| `holdings_discard(ids)` | 丢弃待确认区条目 | 先说明丢的是哪几条，再回显剩余条数 |
+| `holdings_add(items)` | 口述/手动录入直接进正式区 | 数字原样取自用户口述，不编造；截图导入仍优先走 stage |
+| `holdings_update(id, patch)` | 修订正式持仓字段 | 回显「旧 → 新」；改 market 未给 currency 时按新市场重推导 |
+| `holdings_remove(ids)` | 删除正式持仓（平仓/清重） | 明确「这是记账不是下单」，删后提醒用户自行核对账户真实状态 |
+| `holdings_list()` | 只读概要（含 id） | 两区 id 来源；不得凭记忆复述 |
+
 - 工具**不经过审批闸门**（ORDER_GATE_PATTERN 不匹配，天然放行）：纯本地数据，无交易语义。
+  记账与下单严格分离——任何台账工具都不会触发买卖，也不改变券商/交易所账户里的真实持仓。
+- 区隔提示：`update/remove` 只作用于正式持仓区；待确认区条目的修订走 `confirm` 的
+  `edits`、移除走 `discard`，工具对跨区 id 返回指向正确工具的提示。
+- 全部写成功 → `tradingEvents.emit('holdings')`（与 REST 写路径同一失效信号）。
 
 ## 6. Client 半（client-ui-trading）
 
@@ -140,7 +154,8 @@ export interface TaggedPosition extends Position {   // 结构扩展，契约不
 ## 7. 测试基线
 
 - holdings 包：store 全操作 + 默认值推导 + revision 自增 + 原子写；fx 缓存/降级链；
-  工具 stage/list 行为。vitest。
+  工具 stage/list/confirm/discard/add/update/remove 行为（含校验整体拒绝、跨区 id 提示、
+  回显文案与 onWritten 回调）。vitest。
 - client：聚合引擎（多来源/多币种/加权成本/缺成本价/FX stale 降级）；
   api 封装 envelope 解析。vitest。
 - 全仓 `pnpm build` `pnpm test` 绿。

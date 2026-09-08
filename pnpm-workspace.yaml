@@ -149,3 +149,4 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-cordis-host-runner@0.1.2-rc.1'
   - '@deepseek-ai/dsh-tool-cordis@0.1.2-rc.1'
   - '@deepseek-ai/dsh-client-ui-tool@0.1.2-rc.1'
+  - '@linxin666/dsh-client-ui-model-capabilities@0.3.18'

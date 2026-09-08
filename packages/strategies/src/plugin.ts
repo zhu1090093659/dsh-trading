@@ -23,7 +23,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import path from 'node:path'
 import { dshHomeDir } from '@dshtrading/dsh-home'
 import type { MarketDataService } from '@dshtrading/api'
-import { getStrategyById, run } from './index.ts'
+import { getStrategyById, getScreenerById, run, screenerParadigms, strategyParadigms } from './index.ts'
 import { createFileCustomStrategyStore } from './custom-fs.ts'
 import type { CustomStrategyRecord, CustomStrategyStore } from './custom.ts'
 import { createFileBuiltinTombstonesStore } from './builtin-tombstones-fs.ts'
@@ -40,8 +40,9 @@ export { isBuiltinStrategyId, isBuiltinScreenerId } from './management.ts'
 // 桥（node 半）保存策略/选股器前的落盘前校验入口（vm 熔断）。
 export { validateCustomStrategyNode, validateCustomScreenerNode } from './validate-node.ts'
 import { compileStrategySource } from './validate.ts'
-import { validateCustomStrategyNode, validateCustomScreenerNode } from './validate-node.ts'
-import type { BacktestResult, StrategyDefinition, StrategyHorizon, StrategyParamSpec } from './types.ts'
+import { nodeScreenerEvaluateRunner, validateCustomStrategyNode, validateCustomScreenerNode } from './validate-node.ts'
+import type { BacktestResult, Kline, StrategyDefinition, StrategyHorizon, StrategyParamSpec } from './types.ts'
+import type { ScreenerColumnSpec, ScreenerDefinition } from './screeners/types.ts'
 
 /** Cordis 插件名 = patch 行 id（TEMPLATES §8），市场无关共享行命名空间。 */
 export const name = 'dsh-trading-strategies'
@@ -208,6 +209,136 @@ export function createStrategyAuthorTool(options: StrategyAuthorToolOptions) {
   })
 }
 
+export interface StrategyListToolOptions {
+  store: CustomStrategyStore
+  /** 可选：墓碑表（内置删除状态回显）。 */
+  tombstones?: BuiltinTombstonesStore
+}
+
+/**
+ * strategy_list 工厂（issue #86 / G3）：名册 + 覆盖 + 墓碑三态一次读全。
+ * 此前 strategy_delete / strategy_backtest 都要 id 而 agent 拿不到 id，
+ * 只能让用户口述或去读 ~/.dsh-trading/strategies/custom.json。
+ */
+export function createStrategyListTool(options: StrategyListToolOptions) {
+  return defineTool({
+    name: 'strategy_list',
+    description:
+      'List the user strategy roster: built-in paradigms (with their parameter keys/defaults), custom strategies authored via '
+      + 'strategy_author, and tombstoned (deleted) built-in ids. Read-only. '
+      + 'ALWAYS call this before strategy_backtest / strategy_delete / strategy_reset when you do not already have an id from this '
+      + 'session, and before strategy_backtest with paramsJson so you know the declared parameter keys. '
+      + 'A paradigm with overridden=true is a built-in currently replaced by a user record; deleted=true means the built-in is '
+      + 'tombstoned and hidden from the roster until strategy_reset restores it.',
+    parameters: {},
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute() {
+      const deleted = options.tombstones === undefined ? [] : await options.tombstones.list()
+      const records = await options.store.list()
+      const overridden = new Set(records.filter(record => isBuiltinStrategyId(record.id)).map(record => record.id))
+      const paradigms = strategyParadigms.map(definition => ({
+        id: definition.id,
+        name: definition.name,
+        horizon: definition.horizon,
+        summary: definition.summary,
+        params: definition.params.map(spec => ({ key: spec.key, label: spec.label, default: spec.default, min: spec.min, max: spec.max })),
+        overridden: overridden.has(definition.id),
+        deleted: deleted.includes(definition.id),
+      }))
+      const custom = records
+        .filter(record => !isBuiltinStrategyId(record.id))
+        .map(record => ({
+          id: record.id,
+          title: record.title,
+          horizon: record.horizon,
+          summary: record.summary,
+          createdAt: record.createdAt,
+        }))
+      // 墓碑表策略/选股器混装（'scr.' 前缀天然隔离 id 空间）：本工具只回本族的墓碑，
+      // 否则模型会把已删的内置选股器当成「已删的内置策略」（2026-09-08 审查 P2-6）。
+      const deletedStrategies = deleted.filter(id => isBuiltinStrategyId(id))
+      return JSON.stringify({ ok: true, paradigms, custom, deleted: deletedStrategies })
+    },
+  })
+}
+
+export interface ScreenerListToolOptions {
+  store: CustomScreenerStore
+  /** 可选：墓碑表（内置选股器删除状态回显）。 */
+  tombstones?: BuiltinTombstonesStore
+}
+
+/** 选股器记录 → 名册条目（paramsJson/columnsJson 解析在读取边界，坏数据降级为空数组）。 */
+function screenerRecordEntry(record: CustomScreenerRecord) {
+  let params: StrategyParamSpec[] = []
+  let columns: ScreenerColumnSpec[] = []
+  try {
+    const parsed = JSON.parse(record.paramsJson) as StrategyParamSpec[]
+    if (Array.isArray(parsed)) params = parsed
+  } catch {
+    params = []
+  }
+  try {
+    const parsed = JSON.parse(record.columnsJson) as ScreenerColumnSpec[]
+    if (Array.isArray(parsed)) columns = parsed
+  } catch {
+    columns = []
+  }
+  return {
+    id: record.id,
+    title: record.title,
+    summary: record.summary,
+    params: params.map(spec => ({ key: spec.key, label: spec.label, default: spec.default, min: spec.min, max: spec.max })),
+    columns: columns.map(column => ({ key: column.key, label: column.label, ...(column.format !== undefined ? { format: column.format } : {}) })),
+    createdAt: record.createdAt,
+  }
+}
+
+/** screener_list 工厂（issue #86 / G3）：选股器名册三态一次读全。 */
+export function createScreenerListTool(options: ScreenerListToolOptions) {
+  return defineTool({
+    name: 'screener_list',
+    description:
+      'List the screener roster: built-in screeners (with their parameter keys and result column keys), custom screeners authored via '
+      + 'screener_author, and tombstoned (deleted) built-in screener ids. Read-only. '
+      + 'ALWAYS call this before screener_run / screener_delete / screener_reset when you do not already have an id from this session. '
+      + 'A screener with overridden=true is a built-in currently replaced by a user record; deleted=true means the built-in is tombstoned '
+      + 'and hidden from the roster until screener_reset restores it.',
+    parameters: {},
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute() {
+      const deleted = options.tombstones === undefined ? [] : await options.tombstones.list()
+      const records = await options.store.list()
+      const overridden = new Set(records.filter(record => isBuiltinScreenerId(record.id)).map(record => record.id))
+      const paradigms = screenerParadigms.map(definition => ({
+        id: definition.id,
+        name: definition.name,
+        summary: definition.summary,
+        params: definition.params.map(spec => ({ key: spec.key, label: spec.label, default: spec.default, min: spec.min, max: spec.max })),
+        columns: definition.columns.map(column => ({
+          key: column.key,
+          label: column.label,
+          ...(column.format !== undefined ? { format: column.format } : {}),
+        })),
+        overridden: overridden.has(definition.id),
+        deleted: deleted.includes(definition.id),
+      }))
+      const custom = records
+        .filter(record => !isBuiltinScreenerId(record.id))
+        .map(record => screenerRecordEntry(record))
+      // 只回选股器族的墓碑（与 strategy_list 对称，2026-09-08 审查 P2-6）。
+      const deletedScreeners = deleted.filter(id => isBuiltinScreenerId(id))
+      return JSON.stringify({ ok: true, paradigms, custom, deleted: deletedScreeners })
+    },
+  })
+}
+
 export interface StrategyBacktestToolOptions {
   store: CustomStrategyStore
   /** 可选：墓碑表（内置删除后回测拒绝并引导恢复，策略管理语义）。 */
@@ -274,7 +405,9 @@ export function createStrategyBacktestTool(deps: StrategyBacktestToolDeps) {
       'Backtest a strategy (custom authored via strategy_author, or a built-in paradigm like ema-crossover / donchian-breakout '
       + '/ rsi-reversion / bollinger-reversion / sma-baseline / momentum-12m) on a symbol and interval using the pure-function engine. '
       + 'Returns 8 metrics (totalReturn, cagr, maxDrawdown, sharpe, winRate, profitFactor, tradeCount, exposure), the trade list, and the equity curve. '
-      + 'Signals confirm at bar close and fill at the next bar open with fee/slippage modeling; this is simulation only — it never places orders.',
+      + 'Signals confirm at bar close and fill at the next bar open with fee/slippage modeling; this is simulation only — it never places orders. '
+      + 'Pass paramsJson to override declared parameters (values clamped to min/max) and read the echoed params.effective; '
+      + 'call strategy_list first when you need an id or its parameter keys.',
     parameters: {
       strategyId: {
         type: 'string',
@@ -298,6 +431,13 @@ export function createStrategyBacktestTool(deps: StrategyBacktestToolDeps) {
       limit: {
         type: 'number',
         description: 'Kline count to backtest (default 200, capped by the provider)',
+      },
+      paramsJson: {
+        type: 'string',
+        description:
+          'Optional JSON object string overriding strategy parameters for this run, e.g. {"fast":10,"slow":30}. '
+          + 'Keys must be declared by the strategy (see strategy_list); values are clamped to each param min/max and the effective '
+          + 'values are echoed back in the result. Use this to reproduce a parameter set the user tuned in the GUI.',
       },
     },
     output: {
@@ -341,7 +481,41 @@ export function createStrategyBacktestTool(deps: StrategyBacktestToolDeps) {
         throw new Error(`strategy_backtest: no klines returned for ${symbol} (${market}, ${interval}) — check the symbol/interval vocabulary`)
       }
 
-      const result: BacktestResult = run(bars, definition)
+      // 参数覆盖（issue #86 / G3）：UI 侧参数是 localStorage-only，agent 复现用户调过的
+      // 参数组合此前做不到；这里按声明校验 + clamp，并回显实际生效值。
+      const requested: Record<string, number> = {}
+      const paramsOverride: Record<string, number> = {}
+      const paramsJson = typeof args.paramsJson === 'string' && args.paramsJson.trim() ? args.paramsJson.trim() : undefined
+      if (paramsJson !== undefined) {
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(paramsJson)
+        } catch {
+          throw new Error('strategy_backtest: paramsJson must be a JSON object string like {"fast":10,"slow":30}')
+        }
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('strategy_backtest: paramsJson must be a JSON object string like {"fast":10,"slow":30}')
+        }
+        const specs = new Map(definition.params.map(spec => [spec.key, spec]))
+        for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+          const spec = specs.get(key)
+          if (spec === undefined) {
+            throw new Error(
+              `strategy_backtest: unknown param ${JSON.stringify(key)} for strategy "${definition.id}" — valid keys: `
+              + (definition.params.length > 0 ? definition.params.map(item => item.key).join(', ') : '(this strategy declares no params)'),
+            )
+          }
+          if (typeof value !== 'number' || !Number.isFinite(value)) {
+            throw new Error(`strategy_backtest: param ${JSON.stringify(key)} must be a finite number (got ${JSON.stringify(value)})`)
+          }
+          requested[key] = value
+          paramsOverride[key] = Math.min(spec.max, Math.max(spec.min, value))
+        }
+      }
+      const effectiveParams: Record<string, number> = {}
+      for (const spec of definition.params) effectiveParams[spec.key] = paramsOverride[spec.key] ?? spec.default
+
+      const result: BacktestResult = run(bars, definition, paramsOverride)
       return JSON.stringify({
         ok: true,
         strategy: { id: definition.id, name: definition.name, horizon: definition.horizon },
@@ -349,6 +523,7 @@ export function createStrategyBacktestTool(deps: StrategyBacktestToolDeps) {
         symbol,
         interval,
         barsTested: bars.length,
+        params: { requested, effective: effectiveParams },
         metrics: result.metrics,
         trades: result.trades,
         equity: result.equity,
@@ -740,6 +915,7 @@ export function apply(ctx: Context): void {
     }
 
     register(createStrategyAuthorTool({ store, tombstones, onWritten: () => events() }))
+    register(createStrategyListTool({ store, tombstones }))
     register(createStrategyBacktestTool({ store, tombstones, marketData: createMarketDataResolver(ctx) }))
     register(createStrategyDeleteTool({ store, tombstones, onDeleted: () => events() }))
     register(createStrategyResetTool({ store, tombstones, onReset: () => events() }))
@@ -747,6 +923,369 @@ export function apply(ctx: Context): void {
     register(createScreenerAuthorTool({ store: screenerStore, tombstones, onWritten: () => events() }))
     register(createScreenerDeleteTool({ store: screenerStore, tombstones, onDeleted: () => events() }))
     register(createScreenerResetTool({ store: screenerStore, tombstones, onReset: () => events() }))
+    register(createScreenerListTool({ store: screenerStore, tombstones }))
+    // 扫描调度（issue #86 / G4）：registry-first 解析 provider 与行情服务，
+    // 老部署（无 registry）回落市场键直读——与 createMarketDataResolver 同纪律。
+    const marketDataFallback = createMarketDataResolver(ctx)
+    register(createScreenerRunTool({
+      store: screenerStore,
+      tombstones,
+      active: (market) => {
+        const registry = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown })
+          .get?.('tradingMarketDataRegistry', false) as { active(m: string): { provider: string; service: MarketDataService } | undefined } | undefined
+        return registry?.active(market)
+      },
+      fallback: marketDataFallback,
+    }))
+  })
+}
+
+/* ------------------------------------------------------------------ */
+/* screener_run（issue #86 / G4）：host 侧扫描调度                       */
+/* ------------------------------------------------------------------ */
+
+/** 扫描护栏（对齐 client-ui-strategies 视图层口径，显式回显给模型）。 */
+const SCREENER_SCAN_CONCURRENCY = 5
+const SCREENER_KLINE_WINDOW = 500
+const SCREENER_DEFAULT_POOL = 100
+const SCREENER_MAX_POOL = 500
+const SCREENER_RESULT_LIMIT = 50
+const SCREENER_EVAL_TIMEOUT_MS = 1000
+const SCREENER_FETCH_TIMEOUT_MS = 8000
+/** 单次扫描总预算：超时后不再领取新标的（agent 工具无取消通道，用预算收敛成本）。 */
+const SCREENER_TOTAL_BUDGET_MS = 90_000
+
+/** 解析后的选股器：内置（可信代码）或自定义（源码经 vm 熔断 runner 执行）。 */
+export type ResolvedScreener =
+  | { kind: 'builtin'; definition: ScreenerDefinition }
+  | {
+    kind: 'custom'
+    id: string
+    name: string
+    summary: string
+    params: StrategyParamSpec[]
+    columns: ScreenerColumnSpec[]
+    evaluateSource: string
+  }
+
+function parseScreenerSpecs(record: CustomScreenerRecord): { params: StrategyParamSpec[]; columns: ScreenerColumnSpec[] } {
+  let params: StrategyParamSpec[] = []
+  let columns: ScreenerColumnSpec[] = []
+  try {
+    const parsed = JSON.parse(record.paramsJson) as StrategyParamSpec[]
+    if (Array.isArray(parsed)) params = parsed
+  } catch {
+    params = []
+  }
+  try {
+    const parsed = JSON.parse(record.columnsJson) as ScreenerColumnSpec[]
+    if (Array.isArray(parsed)) columns = parsed
+  } catch {
+    columns = []
+  }
+  return { params, columns }
+}
+
+/**
+ * 选股器解析（覆盖 + 墓碑合成，与 resolveStrategyDefinition 同模型）：
+ * 墓碑命中 → undefined；自定义记录优先（覆盖内置同 id）；损坏记录回落内置
+ * 出厂定义，非内置损坏记录视为不存在（与名册语义一致）。
+ */
+export async function resolveScreener(
+  store: CustomScreenerStore,
+  screenerId: string,
+  options?: { tombstones?: BuiltinTombstonesStore | undefined },
+): Promise<ResolvedScreener | undefined> {
+  if (await isTombstoned(options?.tombstones, screenerId)) return undefined
+  const record = await store.get(screenerId)
+  if (record !== undefined) {
+    try {
+      // 编译探针：损坏/不可编译的源码不进入扫描循环（否则每个标的都失败）。
+      compileStrategySource(record.evaluateSource)
+      const { params, columns } = parseScreenerSpecs(record)
+      return {
+        kind: 'custom',
+        id: record.id,
+        name: record.title,
+        summary: record.summary,
+        params,
+        columns,
+        evaluateSource: record.evaluateSource,
+      }
+    } catch {
+      if (isBuiltinScreenerId(record.id)) {
+        const builtin = getScreenerById(record.id)
+        return builtin === undefined ? undefined : { kind: 'builtin', definition: builtin }
+      }
+      return undefined
+    }
+  }
+  const builtin = getScreenerById(screenerId)
+  return builtin === undefined ? undefined : { kind: 'builtin', definition: builtin }
+}
+
+/** 单次 await 的超时熔断（数据源挂死不能让一次工具调用无限期占用）。 */
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
+/** 解析 paramsJson（与 strategy_backtest 同口径：声明键校验 + clamp）。 */
+function parseParamsOverride(
+  paramsJson: string | undefined,
+  specs: readonly StrategyParamSpec[],
+  tool: string,
+  ownerId: string,
+): { requested: Record<string, number>; effective: Record<string, number> } {
+  const requested: Record<string, number> = {}
+  const override: Record<string, number> = {}
+  if (paramsJson !== undefined) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(paramsJson)
+    } catch {
+      throw new Error(`${tool}: paramsJson must be a JSON object string like {"window":120}`)
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(`${tool}: paramsJson must be a JSON object string like {"window":120}`)
+    }
+    const byKey = new Map(specs.map(spec => [spec.key, spec]))
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const spec = byKey.get(key)
+      if (spec === undefined) {
+        throw new Error(
+          `${tool}: unknown param ${JSON.stringify(key)} for "${ownerId}" — valid keys: `
+          + (specs.length > 0 ? specs.map(item => item.key).join(', ') : '(no params declared)'),
+        )
+      }
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw new Error(`${tool}: param ${JSON.stringify(key)} must be a finite number (got ${JSON.stringify(value)})`)
+      }
+      requested[key] = value
+      override[key] = Math.min(spec.max, Math.max(spec.min, value))
+    }
+  }
+  const effective: Record<string, number> = {}
+  for (const spec of specs) effective[spec.key] = override[spec.key] ?? spec.default
+  return { requested, effective }
+}
+
+export interface ScreenerRunToolDeps {
+  store: CustomScreenerStore
+  tombstones?: BuiltinTombstonesStore
+  /** registry-first 解析（provider 标签 + 行情服务）。 */
+  active: (market: string) => { provider: string; service: MarketDataService } | undefined
+  /** 老部署回退：市场键直读行情服务（无 registry 时）。 */
+  fallback?: (market: string) => MarketDataService | undefined
+  /** 单次扫描总预算 ms（缺省 90s；测试注入小值/假时钟）。 */
+  budgetMs?: number
+  /** 注入时钟（测试用；缺省 Date.now）。 */
+  now?: () => number
+}
+
+/**
+ * screener_run 工厂（issue #86 / G4）：把选股器从「只对 UI 可用」提升为 agent 可跑。
+ * 扫描调度 = 名册 → 截断扫描池 → 受限并发拉 500 根日 K → 纯函数 evaluate；
+ * 数据不足（evaluate 返回 null）静默跳过，单标的失败只计数不中断。
+ * 只读行情 + 本地计算，无交易语义（铁律 #3 不涉及）。
+ */
+export function createScreenerRunTool(deps: ScreenerRunToolDeps) {
+  return defineTool({
+    name: 'screener_run',
+    description:
+      'Run one screener (built-in or custom, by id from screener_list) over a market and return the matched instruments with their '
+      + 'metric columns and a one-line reason. Read-only cross-sectional scan: it fetches daily candles from the routed market data '
+      + 'provider, evaluates a pure function per instrument, and never places orders or emits trading signals. '
+      + 'Instruments whose window is too short are skipped silently (contract semantics); per-instrument fetch/evaluate failures are '
+      + 'counted, never fatal. Cost guards are explicit in the result: scanPool (pool cap), scanned, failed, insufficient, '
+      + 'resultLimit, truncated, budgetMs and deadlineExceeded (no cancellation channel exists — the scan stops taking new instruments '
+      + 'once the time budget is spent). ALWAYS call screener_list first to get the id and its parameter/column keys.',
+    parameters: {
+      screenerId: {
+        type: 'string',
+        required: true,
+        description: 'Screener id from screener_list (built-in like scr.ma-bull-align, or a custom id)',
+      },
+      market: {
+        type: 'string',
+        required: true,
+        description: 'Market vocabulary: crypto | us | cn | hk',
+      },
+      limit: {
+        type: 'number',
+        description: `Scan pool cap: how many instruments of the market roster to scan (default ${SCREENER_DEFAULT_POOL}, max ${SCREENER_MAX_POOL})`,
+      },
+      paramsJson: {
+        type: 'string',
+        description: 'Optional JSON object string overriding screener parameters, e.g. {"window":120}; clamped to each param min/max and echoed in params.effective',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as Record<string, unknown>
+      const screenerId = typeof args.screenerId === 'string' ? args.screenerId.trim() : ''
+      const market = typeof args.market === 'string' ? args.market.trim() : ''
+      if (!screenerId || !market) throw new Error('screener_run: screenerId and market are required')
+      const poolCap = typeof args.limit === 'number' && Number.isFinite(args.limit) && args.limit > 0
+        ? Math.min(SCREENER_MAX_POOL, Math.max(1, Math.floor(args.limit)))
+        : SCREENER_DEFAULT_POOL
+
+      const resolved = await resolveScreener(deps.store, screenerId, { tombstones: deps.tombstones })
+      if (resolved === undefined) {
+        if (await isTombstoned(deps.tombstones, screenerId)) {
+          throw new Error(
+            `screener_run: screener "${screenerId}" has been deleted by the user — call screener_reset with this id to restore the `
+            + 'built-in, or screener_author to re-create it.',
+          )
+        }
+        throw new Error(
+          `screener_run: unknown screenerId "${screenerId}" — call screener_list for the current ids, or author one with screener_author.`,
+        )
+      }
+
+      const active = deps.active(market)
+      const service = active?.service ?? deps.fallback?.(market)
+      if (service === undefined) {
+        // 市场键是开放小写 slug（crypto|us|cn|hk 为内置）；把「键写错」与「没装连接器」分开说。
+        throw new Error(
+          `screener_run: no market data service for market "${market}" — market keys are lowercase slugs (crypto | us | cn | hk); `
+          + 'if the key is right, install/activate a market connector for it first.',
+        )
+      }
+      const provider = active?.provider ?? 'unknown'
+      if (typeof service.listInstruments !== 'function') {
+        return JSON.stringify({
+          ok: false,
+          code: 'TRADING_NO_UNIVERSE',
+          market,
+          provider,
+          note: `market "${market}" provider "${provider}" exposes no instrument roster (listInstruments) — screener_run cannot build a scan pool. `
+            + 'Scan a specific symbol instead with strategy_backtest, or pick a provider that lists instruments.',
+        })
+      }
+      const universe = await service.listInstruments()
+      if (!Array.isArray(universe) || universe.length === 0) {
+        return JSON.stringify({
+          ok: false,
+          code: 'TRADING_NO_UNIVERSE',
+          market,
+          provider,
+          note: `market "${market}" provider "${provider}" returned an empty instrument roster — nothing to scan.`,
+        })
+      }
+
+      const specs = resolved.kind === 'builtin' ? resolved.definition.params : resolved.params
+      const paramsJson = typeof args.paramsJson === 'string' && args.paramsJson.trim() ? args.paramsJson.trim() : undefined
+      const { requested, effective } = parseParamsOverride(paramsJson, specs, 'screener_run', resolved.kind === 'builtin' ? resolved.definition.id : resolved.id)
+
+      const pool = universe.slice(0, poolCap)
+      const matched: Array<Record<string, unknown>> = []
+      const budgetMs = deps.budgetMs ?? SCREENER_TOTAL_BUDGET_MS
+      const now = deps.now ?? (() => Date.now())
+      const deadline = now() + budgetMs
+      let scanned = 0
+      let failed = 0
+      let insufficient = 0
+      let cursor = 0
+      let deadlineExceeded = false
+
+      const evaluate = async (bars: Kline[]): Promise<unknown> => {
+        if (resolved.kind === 'builtin') return resolved.definition.evaluate(bars, effective)
+        return withTimeout(
+          nodeScreenerEvaluateRunner(resolved.evaluateSource, bars, effective, SCREENER_EVAL_TIMEOUT_MS),
+          SCREENER_EVAL_TIMEOUT_MS + 500,
+          `screener_run evaluate(${resolved.id})`,
+        )
+      }
+
+      const worker = async (): Promise<void> => {
+        while (cursor < pool.length) {
+          // 预算检查在领取标的之前：超时后不再发起新请求（在途请求由各自超时兜底）。
+          if (now() > deadline) {
+            deadlineExceeded = true
+            return
+          }
+          const instrument = pool[cursor]
+          cursor += 1
+          if (instrument === undefined) return
+          try {
+            const bars = await withTimeout(
+              service.getKlines(instrument.symbol, '1d', SCREENER_KLINE_WINDOW),
+              SCREENER_FETCH_TIMEOUT_MS,
+              `screener_run getKlines(${instrument.symbol})`,
+            )
+            if (!Array.isArray(bars) || bars.length === 0) {
+              failed += 1
+              continue
+            }
+            const match = await evaluate(bars)
+            if (match === null || match === undefined) {
+              insufficient += 1
+              continue
+            }
+            if (typeof match !== 'object' || typeof (match as { reason?: unknown }).reason !== 'string') {
+              failed += 1
+              continue
+            }
+            const hit = match as { metrics?: Record<string, number>; reason: string; reasonKey?: string; reasonParams?: Record<string, string | number> }
+            matched.push({
+              symbol: instrument.symbol,
+              ...(instrument.name !== undefined ? { name: instrument.name } : {}),
+              price: bars[bars.length - 1]?.close ?? null,
+              metrics: hit.metrics ?? {},
+              reason: hit.reason,
+              ...(hit.reasonKey !== undefined ? { reasonKey: hit.reasonKey } : {}),
+              ...(hit.reasonParams !== undefined ? { reasonParams: hit.reasonParams } : {}),
+            })
+          } catch {
+            failed += 1
+          } finally {
+            scanned += 1
+          }
+        }
+      }
+
+      await Promise.all(Array.from({ length: Math.min(SCREENER_SCAN_CONCURRENCY, pool.length) }, () => worker()))
+
+      const results = matched.slice(0, SCREENER_RESULT_LIMIT)
+      return JSON.stringify({
+        ok: true,
+        screenerId: resolved.kind === 'builtin' ? resolved.definition.id : resolved.id,
+        screenerName: resolved.kind === 'builtin' ? resolved.definition.name : resolved.name,
+        market,
+        provider,
+        interval: '1d',
+        klineWindow: SCREENER_KLINE_WINDOW,
+        universeSize: universe.length,
+        scanPool: pool.length,
+        scanned,
+        failed,
+        insufficient,
+        matched: matched.length,
+        returned: results.length,
+        resultLimit: SCREENER_RESULT_LIMIT,
+        truncated: matched.length > SCREENER_RESULT_LIMIT,
+        budgetMs,
+        deadlineExceeded,
+        params: { requested, effective },
+        results,
+        note: 'Read-only cross-sectional scan (no trading signals). failed = fetch/evaluate errors; insufficient = window too short for the '
+          + 'screener (contract: skipped silently). Raise limit to widen the pool (max ' + SCREENER_MAX_POOL + '). '
+          + `The scan stops taking new instruments after budgetMs (${budgetMs}ms); deadlineExceeded=true means the pool was not fully scanned.`,
+      })
+    },
   })
 }
 

@@ -22,6 +22,10 @@
       "types": "./lib/research-tools.d.ts",
       "default": "./lib/research-tools.js"
     },
+    "./market-tools": {
+      "types": "./lib/market-tools.d.ts",
+      "default": "./lib/market-tools.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -60,7 +64,10 @@
     "@dshtrading/router": "workspace:^",
     "@dshtrading/strategies": "workspace:^",
     "@dshtrading/watchlist": "workspace:^",
+    "@linxin666/dsh-client-ui-model-capabilities": "^0.3.18",
+    "@linxin666/dsh-client-ui-plugin-manager": "^0.3.17",
     "@linxin666/dsh-session-archive": "^0.3.16",
+    "@linxin666/dsh-usage": "^0.3.17",
     "@xmanrui/dsh-im": "^4.11.0"
   },
   "peerDependencies": {
