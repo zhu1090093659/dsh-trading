@@ -51,6 +51,8 @@ export interface MarketDataRegistryLike {
 
 export interface TradeRegistryLike {
   active(market: string): { provider: string; service: TradeService } | undefined
+  /** 已注册的交易 provider（用于区分「未注册」与「未路由」，可选面）。 */
+  list?(market: string): ReadonlyArray<{ provider: string }>
 }
 
 /** 未实现可选方法（与「无数据」严格区分）。 */
@@ -63,14 +65,27 @@ function notImplementedError(market: string, provider: string, method: string, l
 
 function noMarketProviderError(market: string): Error {
   return new Error(
-    `TRADING_NO_PROVIDER: no active market-data provider for market "${market}" — check routing_get and installed connectors.`,
+    `TRADING_NO_PROVIDER: no active market-data provider for market "${market}" — market keys are lowercase slugs `
+    + '(crypto | us | cn | hk); if the key is right, check routing_get and installed connectors.',
   )
 }
 
-function noTradeServiceError(market: string): Error {
+/**
+ * 无可用交易服务：**区分「该市场没注册交易连接器」与「注册了但当前路由指不到」**
+ * （2026-09-08 审查 P1：us 数据面 yahoo + 交易面 alpaca 时，旧文案会误报成「没装
+ * 交易连接器」，把用户引向错误的排查方向）。
+ */
+function noTradeServiceError(market: string, registered: string[]): Error {
+  if (registered.length === 0) {
+    return new Error(
+      `TRADING_NO_TRADE_SERVICE: no trade connector is registered for market "${market}" — the routed provider has no account/trading '
+      + 'capability (routing_get shows the market-data provider; trade connectors register separately).`,
+    )
+  }
   return new Error(
-    `TRADING_NO_TRADE_SERVICE: no trade connector is registered for market "${market}" — the routed provider has no account/trading '
-    + 'capability (routing_get shows the market-data provider; trade connectors register separately).`,
+    `TRADING_TRADE_PROVIDER_NOT_ROUTED: market "${market}" has trade connector(s) registered (${registered.join(', ')}), but the routed `
+    + `provider exposes no trade service, so none is active. Set dshtrading.markets.${market}.tradeProvider to one of them to enable `
+    + 'account reads. This is "not routed", NOT "not installed" — do not tell the user the connector is missing.',
   )
 }
 
@@ -181,8 +196,11 @@ export function createMarketReadTools(market: string, getRegistry: () => MarketD
  */
 export function createAccountTools(market: string, getRegistry: () => TradeRegistryLike | undefined) {
   const active = () => {
-    const entry = getRegistry()?.active(market)
-    if (entry === undefined) throw noTradeServiceError(market)
+    const registry = getRegistry()
+    const entry = registry?.active(market)
+    if (entry === undefined) {
+      throw noTradeServiceError(market, (registry?.list?.(market) ?? []).map(item => item.provider))
+    }
     return entry
   }
   const symbolParam = {
@@ -207,7 +225,11 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
       output: textOutput,
       async execute() {
         const entry = active()
-        const positions = await entry.service.getPositions()
+        const getPositions = entry.service.getPositions
+        if (typeof getPositions !== 'function') {
+          throw notImplementedError(market, entry.provider, 'getPositions', 'account positions')
+        }
+        const positions = await getPositions.call(entry.service)
         const environment = environmentOf(entry.service)
         return JSON.stringify({ ok: true, market, provider: entry.provider, ...(environment !== undefined ? { environment } : {}), positions })
       },
@@ -312,7 +334,11 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
         const symbol = parseSymbol(args.symbol, `${market}_get_order`)
         const orderId = typeof args.orderId === 'string' ? args.orderId.trim() : ''
         if (!orderId) throw new Error(`${market}_get_order: orderId is required`)
-        const order = await entry.service.getOrder(symbol, orderId)
+        const getOrder = entry.service.getOrder
+        if (typeof getOrder !== 'function') {
+          throw notImplementedError(market, entry.provider, 'getOrder', 'single order lookup')
+        }
+        const order = await getOrder.call(entry.service, symbol, orderId)
         const environment = environmentOf(entry.service)
         return JSON.stringify({
           ok: true, market, provider: entry.provider,

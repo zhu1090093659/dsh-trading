@@ -638,6 +638,8 @@ export type TradingErrorCode =
   | 'TRADING_NO_PROVIDER'
   /** 该市场未注册任何交易连接器（无账户/交易能力；与 NO_PROVIDER 区分）。 */
   | 'TRADING_NO_TRADE_SERVICE'
+  /** 该市场注册了交易连接器，但路由选中的数据 provider 没有交易面（需设 tradeProvider；≠ 未安装）。 */
+  | 'TRADING_TRADE_PROVIDER_NOT_ROUTED'
   | 'TRADING_UNSUPPORTED_SYMBOL'
   | 'TRADING_UNSUPPORTED_INTERVAL'
   /** 凭证缺失或无效（ctx.credentials 引用解析失败 [S4]）。 */

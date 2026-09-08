@@ -257,7 +257,10 @@ export function createStrategyListTool(options: StrategyListToolOptions) {
           summary: record.summary,
           createdAt: record.createdAt,
         }))
-      return JSON.stringify({ ok: true, paradigms, custom, deleted })
+      // 墓碑表策略/选股器混装（'scr.' 前缀天然隔离 id 空间）：本工具只回本族的墓碑，
+      // 否则模型会把已删的内置选股器当成「已删的内置策略」（2026-09-08 审查 P2-6）。
+      const deletedStrategies = deleted.filter(id => isBuiltinStrategyId(id))
+      return JSON.stringify({ ok: true, paradigms, custom, deleted: deletedStrategies })
     },
   })
 }
@@ -329,7 +332,9 @@ export function createScreenerListTool(options: ScreenerListToolOptions) {
       const custom = records
         .filter(record => !isBuiltinScreenerId(record.id))
         .map(record => screenerRecordEntry(record))
-      return JSON.stringify({ ok: true, paradigms, custom, deleted })
+      // 只回选股器族的墓碑（与 strategy_list 对称，2026-09-08 审查 P2-6）。
+      const deletedScreeners = deleted.filter(id => isBuiltinScreenerId(id))
+      return JSON.stringify({ ok: true, paradigms, custom, deleted: deletedScreeners })
     },
   })
 }
@@ -1153,7 +1158,11 @@ export function createScreenerRunTool(deps: ScreenerRunToolDeps) {
       const active = deps.active(market)
       const service = active?.service ?? deps.fallback?.(market)
       if (service === undefined) {
-        throw new Error(`screener_run: no market data service for market "${market}" — install/activate a market connector first`)
+        // 市场键是开放小写 slug（crypto|us|cn|hk 为内置）；把「键写错」与「没装连接器」分开说。
+        throw new Error(
+          `screener_run: no market data service for market "${market}" — market keys are lowercase slugs (crypto | us | cn | hk); `
+          + 'if the key is right, install/activate a market connector for it first.',
+        )
       }
       const provider = active?.provider ?? 'unknown'
       if (typeof service.listInstruments !== 'function') {

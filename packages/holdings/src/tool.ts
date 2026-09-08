@@ -635,6 +635,11 @@ export function createFxGetTool(deps: { fx: FxService }) {
     output: textOutput,
     async execute(raw) {
       const args = (raw ?? {}) as Record<string, unknown>
+      // base 显式给了就必须是字符串（2026-09-08 审查 P2-10）：静默回落 USD 会让模型
+      // 误以为拿到了别的基准；桥面同场景是 400。
+      if (args.base !== undefined && args.base !== null && typeof args.base !== 'string') {
+        throw new Error(`[fx_get] base 必须是字符串（${FX_BASES.join(' | ')}，缺省 USD），收到 ${JSON.stringify(args.base)}`)
+      }
       const requested = readString(args.base) ?? 'USD'
       const base = requested.toUpperCase()
       if (!(FX_BASES as readonly string[]).includes(base)) {

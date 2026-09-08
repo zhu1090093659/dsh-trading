@@ -15,7 +15,9 @@
  * 兼容性设计（§2.4）：
  * - markets 用 Schema.dict —— 新市场 = 新键，schema 零改；
  * - provider enum = 全仓候选集（binance/okx/yahoo/stooq/tencent），新交易所 = enum 加候选；
- * - 数据/交易分离（tradeProvider）字段预留不实现（铁律 #4：两个市场真实需要才做）。
+ * - 数据/交易分离（tradeProvider）：字段已就位且**已生效**——activeTradeProvider =
+ *   tradeProvider ?? provider，TradeRegistryService 按它裁决（2026-09-04 起；
+ *   2026-09-08 issue #86 文档修正，此前头注写「预留不实现」与代码不符）。
  *
  * @module @dshtrading/router
  */

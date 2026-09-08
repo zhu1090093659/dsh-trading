@@ -975,13 +975,21 @@ interface ToolsServiceLike {
 /**
  * 互斥激活的注册面：dsh-tools 对同名重复注册直接抛错（会炸 boot/preset 挂载），
  * 而互斥纪律下「同时至多一个连接器激活」只是配置约定。这里把冲突降级为
- * 「先到先得 + log」：已被占用（binance 或 kit-crypto 先注册）的名字跳过。
+ * 「先到先得 + log」：已被占用的名字跳过。
+ *
+ * 占用方有两类（2026-09-08 审查 P2-3 修正文案，此前一律说成「另一 provider 互斥」）：
+ * 1. host 平面能力包工具（如 @dshtrading/base/market-tools 的 <market>_get_positions
+ *    等只读账户工具，boot 时先注册）——这类跳过是**预期**的，连接器版本不再生效；
+ * 2. 同市场另一连接器/kit 先注册（真正的互斥冲突，需要用户检查配置）。
  */
 function registerTool(ctx: Context, tool: ReturnType<typeof defineTool>, log: LogLike): void {
   const tools = ctx.tools as unknown as ToolsServiceLike
   if (tools.get(tool.name) !== undefined) {
     log.warn(
-      '[dsh-trading-crypto-connector-okx] tool %s already registered by another provider — skipped (mutual exclusion: at most one crypto connector/toolset may be active)',
+      '[dsh-trading-crypto-connector-okx] tool %s already registered — skipped. If this name belongs to the host-plane '
+      + '@dshtrading/base/market-tools read-only family (crypto_get_positions/_get_balance/_get_order) this is expected and the '
+      + 'host version serves the tool; otherwise another crypto connector/toolset registered it first (mutual exclusion) — check '
+      + 'dshtrading.markets.crypto.provider.',
       tool.name,
     )
     return

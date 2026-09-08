@@ -428,12 +428,17 @@ export function createGetDerivativesHistoryTool(options: { getRegistry: () => Cr
       }
       const history = returned as DerivativesHistory
 
+      // truncatedTo 只在**真的截断**时回显（2026-09-08 审查 P2-5）：此前无条件等于请求
+      // 的 limit，4 点序列 + limit=200 会让模型报「已截断到 200 条」。
+      const longest = Math.max(history.fundingRates?.length ?? 0, history.openInterest?.length ?? 0)
+      const truncated = limit !== undefined && longest > limit
       const result: {
         ok: true
         market: 'crypto'
         provider: string
         symbol: string
         history: DerivativesHistory
+        truncated: boolean
         truncatedTo?: number
       } = {
         ok: true,
@@ -441,8 +446,9 @@ export function createGetDerivativesHistoryTool(options: { getRegistry: () => Cr
         provider: entry.provider,
         symbol: typeof history.symbol === 'string' && history.symbol !== '' ? history.symbol : symbol,
         history,
+        truncated,
       }
-      if (limit !== undefined) {
+      if (truncated && limit !== undefined) {
         result.truncatedTo = limit
         result.history = {
           ...history,

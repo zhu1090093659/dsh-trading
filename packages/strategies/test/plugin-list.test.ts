@@ -62,6 +62,12 @@ describe('strategy_list', () => {
     expect(wire.custom).toEqual([])
   })
 
+  it('墓碑按族过滤：选股器墓碑不出现在 strategy_list.deleted（审查 P2-6）', async () => {
+    const tombstones = createMemoryBuiltinTombstonesStore(['rsi-reversion', 'scr.rsi-oversold'])
+    const wire = JSON.parse(String(await createStrategyListTool({ store: createMemoryCustomStrategyStore(), tombstones }).execute({}))) as StrategyListWire
+    expect(wire.deleted).toEqual(['rsi-reversion'])
+  })
+
   it('墓碑表缺席时 deleted 恒为空数组（老部署）', async () => {
     const wire = JSON.parse(String(await createStrategyListTool({ store: createMemoryCustomStrategyStore() }).execute({}))) as StrategyListWire
     expect(wire.deleted).toEqual([])
@@ -93,5 +99,11 @@ describe('screener_list', () => {
       params: [{ key: 'window' }],
       columns: [{ key: 'offHighPct' }],
     })
+  })
+
+  it('墓碑按族过滤：策略墓碑不出现在 screener_list.deleted（审查 P2-6）', async () => {
+    const tombstones = createMemoryBuiltinTombstonesStore(['rsi-reversion', 'scr.rsi-oversold'])
+    const wire = JSON.parse(String(await createScreenerListTool({ store: createMemoryCustomScreenerStore(), tombstones }).execute({}))) as ScreenerListWire
+    expect(wire.deleted).toEqual(['scr.rsi-oversold'])
   })
 })

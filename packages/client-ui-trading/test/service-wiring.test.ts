@@ -41,15 +41,22 @@ async function makeCtx(services?: (ctx: CordisContext) => void) {
   return { ctx, registered }
 }
 
-async function dispatch(registered: Route[], method: string, sub: string): Promise<{ status: number; body: Record<string, unknown> }> {
+async function dispatch(registered: Route[], method: string, sub: string, body?: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
   let status = 0
-  let body = ''
+  let text = ''
   const res = {
     writeHead: (s: number) => { status = s },
-    end: (b?: string) => { body = b ?? '' },
+    end: (b?: string) => { text = b ?? '' },
   } as unknown as ServerResponse
-  await registered[0].handler({ method, url: `/dshtrading/api${sub}` } as never, res)
-  return { status, body: JSON.parse(body) as Record<string, unknown> }
+  // 写端点经 readJsonBody 以 for-await 读请求体：假 req 用 async iterator 供数据。
+  const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body), 'utf8')]
+  const req = {
+    method,
+    url: `/dshtrading/api${sub}`,
+    async *[Symbol.asyncIterator]() { for (const chunk of chunks) yield chunk },
+  }
+  await registered[0].handler(req as never, res)
+  return { status, body: JSON.parse(text) as Record<string, unknown> }
 }
 
 describe('apply() 服务→桥接线（Service 实例解包）', () => {
@@ -101,6 +108,26 @@ describe('apply() 服务→桥接线（Service 实例解包）', () => {
     expect(res.status).toBe(200)
     // 桥读到的就是服务提供的实例（若桥自建第二个 file store，这里会是空表）。
     expect(res.body).toMatchObject({ ok: true, watchlists: { us: [{ market: 'us', symbol: 'AAPL', name: '苹果' }] } })
+  })
+
+  it('分组注册表同样复用注入实例（GET/POST /watchlist-groups 双 store 防回归，issue #86）', async () => {
+    const groups = createMemoryWatchlistGroupsStore()
+    const seeded = await groups.create('注入组')
+    const { registered } = await makeCtx(ctx => {
+      new WatchlistStoreService(ctx, {
+        watchlists: createMemoryWatchlistStore(),
+        selection: createMemorySelectionStore(),
+        groups,
+      })
+    })
+
+    const listed = await dispatch(registered, 'GET', '/watchlist-groups')
+    expect(listed.body).toMatchObject({ ok: true, groups: [{ id: seeded.group?.id, name: '注入组' }] })
+
+    const posted = await dispatch(registered, 'POST', '/watchlist-groups', { name: '桥建组' })
+    expect(posted.body).toMatchObject({ ok: true, created: true })
+    // 写入落在注入实例上（桥自建第二个 store 时这里读不到新组）。
+    expect((await groups.list()).map(group => group.name).sort()).toEqual(['桥建组', '注入组'])
   })
 
   it('服务缺席（老部署）→ 回退自建 file store，端点仍可用', async () => {

@@ -23,11 +23,11 @@ Status: implemented
 ### 与审计建议的两处偏差（都是刻意收敛，不是遗漏）
 
 1. **市场/账户工具改为 registry 驱动，不逐连接器接线**。审计原文建议「工具工厂 + 各连接器接线（按市场分别提测）」；照做的代价是同一能力在 30 个连接器里各写一遍，必然漂移（审计自己就记录了 `get_indicators` 只在 binance/okx 注册、provider=bybit/ccxt 时缺失的先例），且第三方连接器永远补不齐。改为：两个工具族由 `tradingMarketDataRegistry` / `tradingTradeRegistry` 在**调用期**解析路由选中的服务，工具名固定、实现随 provider 走——零连接器改动即覆盖全部 provider（含第三方），且与既有 `base/research-tools` 的 registry 语义一致。
-2. **未实现语义显式化**。可选方法缺席时抛 `TRADING_NOT_IMPLEMENTED`（`packages/api` 既有错误码），绝不返回空数组冒充「无持仓/无挂单/空盘口」；「市场无激活 provider」与「该市场没有交易连接器」分别用新增错误码 `TRADING_NO_PROVIDER` / `TRADING_NO_TRADE_SERVICE`（`packages/api` 的 `TradingErrorCode` 联合扩展，向后兼容）。
+2. **未实现语义显式化**。可选方法缺席时抛 `TRADING_NOT_IMPLEMENTED`（`packages/api` 既有错误码），绝不返回空数组冒充「无持仓/无挂单/空盘口」；「市场无激活 provider」「该市场没有交易连接器」「注册了但当前路由指不到」三种情形分别用 `TRADING_NO_PROVIDER` / `TRADING_NO_TRADE_SERVICE` / `TRADING_TRADE_PROVIDER_NOT_ROUTED`（`packages/api` 的 `TradingErrorCode` 联合扩展，向后兼容）。
 
 ### 关键接线与安全边界
 
-- `@dshtrading/base/market-tools` 是新的 host 平面共享行（base 拥有全部市场无关行，铁律 #1），行 id `dsh-trading-market-tools`，insert-only 追加在 base 的 `cordis.patch.yml`。同名工具先到先得：连接器（如 okx 的 `crypto_get_positions`）与工厂都带 `tools.get(name) === undefined` 守卫，两侧都不会抛重名错。
+- `@dshtrading/base/market-tools` 是新的 host 平面共享行（base 拥有全部市场无关行，铁律 #1），行 id `dsh-trading-market-tools`，insert-only 追加在 base 的 `cordis.patch.yml`。同名工具先到先得，**host 平面先注册因此胜出**（真实会话实证，见下）：连接器（如 okx 的 `crypto_get_positions`）与工厂都带 `tools.get(name) === undefined` 守卫，两侧都不会抛重名错；okx 侧三个同名只读工具保留为守卫兜底。
 - 全部新工具**零交易语义**：不命中 `ORDER_GATE_PATTERN`，不进审批闸门；`screener_run` 只读行情 + 本地纯函数计算，`fx_get` 只读汇率，分组工具只写自选注册表。
 - 写后 emit：分组工具复用 `tradingEvents.emit('watchlists')`（GUI 左栏实时刷新）；只读工具不 emit。
 - 分组注册表单实例：`WatchlistStoreService` 增加 `groups` 字段，桥（client-ui-trading）优先解包服务实例、缺席才回退自建——避免审计点名的「双 store 整表回写互相覆盖」前科。
@@ -47,7 +47,7 @@ Status: implemented
 
 ## Consequences
 
-- **工具面增量**：host 平面 +33（28 市场/账户 + 5 能力包），preset 平面 +1（kit-crypto）。审计 §5.6 的「一次成型后冻结」窗口按记录重开一次并再次冻结（见 `docs/design/agentic-native-architecture.md` §5.6）。
+- **工具面增量**：host 平面 +36（28 市场/账户 + `strategy_list`/`screener_list`/`screener_run` 3 + `watchlist_group_create/_rename/_delete/_assign` 4 + `fx_get` 1），preset 平面 +1（`crypto_get_derivatives_history`）。审计 §5.6 的「一次成型后冻结」窗口按记录重开一次并再次冻结（见 `docs/design/agentic-native-architecture.md` §5.6）。
 - **测试**：`packages/base/test/market-tools.test.ts`（工具级：成功/NOT_IMPLEMENTED/无 provider/无交易连接器/注册面幂等/闸门命名族零命中）、`packages/base/test/market-tools-wiring.test.ts`（真实 cordis Context 上 router + market-tools + watchlist + strategies + holdings 同表接线，含 screener_run 端到端与分组写读闭环）、`packages/strategies/test/{plugin-list,backtest-params,screener-run}.test.ts`、`packages/watchlist/test/groups-tools.test.ts`、`packages/holdings/test/tool-fx.test.ts`、`packages/kit-crypto/test/derivatives-history.test.ts`。
 - **门禁**：`pnpm -r build` / `pnpm test`（165 文件 / 1370 用例通过，基线 157/1319）/ `node scripts/typecheck-gate.mjs`（481 = 基线，棘轮通过）/ `pnpm i18n:check` 全绿。
 - **运行时实证（真实宿主，2026-09-08）**：
@@ -55,10 +55,13 @@ Status: implemented
   - **真实调用实证**（同 profile，master 预设，只读提示词）：`routing_get`、`strategy_list`（6 范式）、`screener_list`（5 内置）、`watchlist_list`（含 groups/selection 回显）、`crypto_get_orderbook(BTCUSDT)`（provider=okx，真实盘口 20 档）、`fx_get(USD)`（ECB 汇率，stale=false）全部 `ok:true`；preset 平面的 `crypto_get_derivatives_history` 在该 headless 一次性会话里未进入工具面（preset scope 工具与 headless 一次性会话的已知行为），其行为由 `packages/kit-crypto/test/derivatives-history.test.ts` 与 `pnpm --filter @dshtrading/kit-crypto test` 覆盖。
   - **同名工具归属实证**：改用 `default: master` 预设（真实挂载 okx 连接器）再跑一次会话，transcript 里 `crypto_get_positions` 的 description 是**工厂文案**（"Read-only crypto account positions from the currently routed trade connector…"）——即 host 平面先注册、okx 的 `registerTool` 守卫跳过其同名工具。okx 的 demo/live 安全信号因此经 `OkxTradeService.environment()` 由工厂读出，未丢字段；okx 侧三个同名只读工具成为守卫兜底（未删除，保留非标准组合下的可用性）。
   - 桌面壳（trading-web）实例当时正在运行，未执行 `dsh plugin install`（铁律：实例运行中禁止），故 App 内对话验收待刷新 profile + 重启后进行。
+- **独立审查轮（2026-09-08，findings-first）修复项**：P1（us/cn 账户读面错误码误报「没装交易连接器」）→ 新增 `TRADING_TRADE_PROVIDER_NOT_ROUTED` 并列出已注册 provider 与 `dshtrading.markets.<m>.tradeProvider` 设置键；P2 全清：`getPositions`/`getOrder` 补可选方法探测（第三方 provider 不再抛裸 TypeError）、okx 守卫 warn 文案改为「host 平面已拥有该名 / 另一 provider 互斥」二义澄清、`crypto_get_order` 入参由 okx 原生 `(instId, ordId)` 变为统一 `(symbol, orderId)`（已在工具 description 写明）、`truncatedTo` 仅真截断时回显并补 `truncated`、`strategy_list`/`screener_list` 的 `deleted` 按族过滤、桥分组端点补注入实例断言（`service-wiring` GET+POST）、`screener_run` 市场键文案区分「键写错」与「没装连接器」、`fx_get` 非字符串 base 拒绝（schema 层已先拒）。
+- **已知语义边界（如实记录，非缺陷）**：账户读面读的是 **host 数据面行的交易实例**（`tradingTradeRegistry`），与 preset 行里 `place/cancel` 用的实例相互独立——okx 的 `env`（demo/live）若只改 preset 行而不同步改 host 行（`packages/crypto/cordis.patch.yml`），下单走实盘而账户读面仍读 demo。GUI 交易台此前就是同一分裂；工具输出已带 `environment` 自述（来源即该 host 实例），可据此判断。
 - **待裁决（本轮不做）**：
   - G6 `routing_set`（B 类）：需先定 settings 写契约（深层合并语义）、`'routing'` 事件语义与审计留痕格式；agent 侧目前仍只能读 `routing_get` 并引导用户到设置面板。
   - G9 图表指标名册迁移导入、G10 更新器：维持审计 §5 的「不做」判定。
   - 审计 Wave 3 的纯文案/一致性项未做：connector/kit 工具 description 的「操作后必须回显」纪律文案、同名双源收敛（`crypto_funding_rate` kit-crypto vs okx、`us_get_news` kit-us vs finnhub）——均不改权限，可另开小 PR。
   - C/D 类（下单/撤单/paper/liveTrading 开关/凭据）：按铁律 #3 与 §5 一律不开放。
+  - **默认路由下 us/cn 账户读面不可用（需 owner 裁决）**：`TradeRegistryService` 按 `tradeProvider ?? provider` 严格解析且不静默降级，而默认配置 us=yahoo（数据）/ alpaca（交易）、cn=tencent / qmt 数据面与交易面不同名，因此账户工具在默认配置下只能返回 `TRADING_TRADE_PROVIDER_NOT_ROUTED`。三条可选路径：(a) 用户在 settings.yaml 显式设 `markets.us.tradeProvider: alpaca`（当前唯一可行，已写进 `docs/exchange-routing.md` §2.4）；(b) 设置面板补 tradeProvider 行；(c) 改注册表语义（数据 provider 无交易面时回落该市场唯一注册的交易服务——会推翻 `router/test` 里「选中了但未注册 → undefined，不静默降级」的既有裁决）。本轮选 (a)+精确报错，未擅自改语义。
 - **实证发现（与本变更无关，另案）**：`trading-dev`（headless）profile 在 `dsh --profile trading-dev "..."` 下启动失败——`@linxin666/dsh-session-archive`、`@xmanrui/dsh-im`、`@linxin666/dsh-usage`、`@linxin666/dsh-client-ui-plugin-manager` 四行等待 `webServer`/`connection` 服务而 headless 宿主没有，`assertEntriesActivated` 直接抛错。来自 2026-09-08 的 `466cbe1`（另一会话的三插件内置），修法可参照同文件 `dsh-trading-dynamic-capabilities` 行的条件禁用范式；本变更未改。
 - **时效**：`trading-web` profile 的包副本是 `file:` 拷贝而非 symlink，运行时生效需 `scripts/refresh-trading-web-profile.sh` 刷新副本 + 重启宿主（桌面壳需重启 App）。本变更只跑通包级与真实 cordis 接线验证，未动用户正在运行的桌面实例。

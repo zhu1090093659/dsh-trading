@@ -111,12 +111,20 @@ export const Config: Schema<Config> = Schema.object({
 | 接 Bybit | ① 新连接器 slug=bybit 读 `activeProvider('crypto')==='bybit'`；② bundle deps 加包 + preset 加候选行 enabled:true；③（仅内置候选）设置 UI `PROVIDER_LABELS` 加显示行。**schema 不再需动**（2026-08-30 开放字符串） | 连接器自包含，路由零改 |
 | 接第二个 us 源 | schema us.provider enum 加候选（若 stooq 实证则已在内）；us 连接器（yahoo/stooq）各读自己的 slug | 同上 |
 | 新市场（jp） | schema markets 加 `jp` 键（dict 零改）+ jp bundle/router 读 jp | api 增强 + preset |
-| 数据/交易分离（binance 行情 + okx 下单） | markets.crypto 加 `tradeProvider`；行情键 provider 照旧，交易服务遵守 tradeProvider | schema 加字段 + 连接器交易面读 tradeProvider；**字段预留但不提前实现**（铁律 #4：两个市场真实需要才做） |
+| 数据/交易分离（binance 行情 + okx 下单） | markets.crypto 加 `tradeProvider`；行情键 provider 照旧，交易服务遵守 tradeProvider | schema 字段已就位，`MarketRouterService.activeTradeProvider` = `tradeProvider ?? provider`，`TradeRegistryService` 按它裁决（2026-09-04 起已实际生效，非预留） |
 | 设置 UI 一级菜单 | 新界面体系落地后，按其客户端形态注册 settings 面板；**namespace/schema 已就位，UI 只是消费端** | 纯 UI 增量 |
 | 多 profile 各不同设置 | settings 是用户级（跨 profile）——若需要 profile 级，页面层/会话层加 override（评估后定）；**本轮不引入 profile 级**（用户没说，YAGNI） | 无 |
 
-**边界声明（YAGNI）**：本轮不做 live 热切换、不做 tradeProvider 分离、不做 profile 级
-设置、不做 UI 面板。每项都有明确触发条件（见 §3）。
+**边界声明（YAGNI）**：本轮不做 live 热切换、不做 profile 级设置、不做 UI 面板。每项都有明确触发条件（见 §3）。
+
+> **`tradeProvider` 语义与已知缺口（2026-09-08，issue #86 实证）**：交易注册表按
+> `tradeProvider ?? provider` 解析，且**不静默降级**——数据 provider 没有交易面时
+> `active(market)` 返回 undefined。默认配置里 us=yahoo（数据）/ alpaca（交易）、
+> cn=tencent / qmt 正是这种形态，因此 agent 的账户只读工具（`<market>_get_positions` 等）
+> 会返回 `TRADING_TRADE_PROVIDER_NOT_ROUTED` 并提示 `dshtrading.markets.<market>.tradeProvider`，
+> 而不是误报「没装交易连接器」。要让账户读面可用，需显式设置
+> `markets.us: { provider: yahoo, tradeProvider: alpaca }`（当前只能改 settings.yaml；
+> 设置面板的 tradeProvider 行与 agent 侧 `routing_set` 均未实现，见 issue #86 待裁决项）。
 
 ---
 

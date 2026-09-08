@@ -131,11 +131,15 @@ describe(TOOL_NAME, () => {
     for (const limit of [Number.NaN, Number.POSITIVE_INFINITY, '10']) {
       await expect(tool.execute({ symbol: 'BTCUSDT', limit })).rejects.toThrow(/limit/)
     }
+    // 真截断：truncated=true + truncatedTo=limit + 序列截到 limit（审查 P2-5）。
     const one = JSON.parse((await tool.execute({ symbol: 'BTCUSDT', limit: 1 })) as string)
+    expect(one.truncated).toBe(true)
     expect(one.truncatedTo).toBe(1)
     expect(one.history.fundingRates).toHaveLength(1)
+    // 序列比 limit 短：不算截断，不回显 truncatedTo（此前无条件回显请求值）。
     const max = JSON.parse((await tool.execute({ symbol: 'BTCUSDT', limit: 200 })) as string)
-    expect(max.truncatedTo).toBe(200)
+    expect(max.truncated).toBe(false)
+    expect(max.truncatedTo).toBeUndefined()
     expect(max.history.openInterest).toHaveLength(4)
   })
 

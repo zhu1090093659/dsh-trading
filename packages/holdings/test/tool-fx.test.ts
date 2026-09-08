@@ -103,6 +103,15 @@ describe('fx_get Tool', () => {
     expect(fx.calls).toHaveLength(0)
   })
 
+  it('base 显式给非字符串 → 抛错，不静默回落 USD（审查 P2-10）', async () => {
+    const fx = fakeFx()
+    const tool = createFxGetTool({ fx })
+    // schema 层先拒（"must be a string"）；execute 内另有一道同义守卫（直接调用/内层复用）。
+    await expect((tool as any).execute({ base: 123 })).rejects.toThrow(/base.*must be a string|base 必须是字符串/)
+    await expect((tool as any).execute({ base: { code: 'USD' } })).rejects.toThrow(/base.*must be a string|base 必须是字符串/)
+    expect(fx.calls).toHaveLength(0)
+  })
+
   it('缺省 base = USD；base 大小写与空白容忍', async () => {
     const fx = fakeFx()
     const tool = createFxGetTool({ fx })

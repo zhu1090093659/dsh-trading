@@ -23,8 +23,11 @@ function marketRegistry(entry: { provider: string; service: unknown } | undefine
   return { active: () => entry as never }
 }
 
-function tradeRegistry(entry: { provider: string; service: unknown } | undefined): TradeRegistryLike {
-  return { active: () => entry as never }
+function tradeRegistry(entry: { provider: string; service: unknown } | undefined, registered: string[] = []): TradeRegistryLike {
+  return {
+    active: () => entry as never,
+    list: () => registered.map(provider => ({ provider })),
+  }
 }
 
 const ORDERBOOK = { bids: [[100, 1]], asks: [[101, 1]], timestamp: 1 }
@@ -105,6 +108,21 @@ describe('account tools（G1）', () => {
     await expect(tools[0]!.execute({})).rejects.toThrow(/TRADING_NO_TRADE_SERVICE/)
     const [noRegistry] = createAccountTools('hk', () => undefined)
     await expect(noRegistry!.execute({})).rejects.toThrow(/TRADING_NO_TRADE_SERVICE/)
+  })
+
+  it('注册了但未路由 → TRADING_TRADE_PROVIDER_NOT_ROUTED（区分「没装」与「没路由」，审查 P1）', async () => {
+    const tools = createAccountTools('us', () => tradeRegistry(undefined, ['alpaca', 'ibkr']))
+    await expect(tools[0]!.execute({})).rejects.toThrow(/TRADING_TRADE_PROVIDER_NOT_ROUTED/)
+    await expect(tools[0]!.execute({})).rejects.toThrow(/registered \(alpaca, ibkr\)/)
+    await expect(tools[0]!.execute({})).rejects.toThrow(/dshtrading\.markets\.us\.tradeProvider/)
+    await expect(tools[0]!.execute({})).rejects.toThrow(/NOT "not installed"/)
+  })
+
+  it('第三方服务缺必需方法 → TRADING_NOT_IMPLEMENTED 而不是裸 TypeError（审查 P2-2）', async () => {
+    const thirdParty = { listOpenOrders: async () => [] }
+    const tools = createAccountTools('us', () => tradeRegistry({ provider: 'third-party', service: thirdParty }))
+    await expect(tools[0]!.execute({})).rejects.toThrow(/TRADING_NOT_IMPLEMENTED: us provider "third-party" does not implement getPositions/)
+    await expect(tools[4]!.execute({ symbol: 'AAPL', orderId: 'o1' })).rejects.toThrow(/TRADING_NOT_IMPLEMENTED/)
   })
 })
 
