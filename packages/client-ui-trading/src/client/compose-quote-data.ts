@@ -16,7 +16,8 @@ import type { Kline } from './types.ts'
 /** 一个指标实例的读数面（与图表 legend 同源：output key + 当根数值）。 */
 export interface QuoteIndicatorReadout {
   title: string
-  outputs: ReadonlyArray<{ key: string; value: number | undefined; precision?: number }>
+  // precision 显式 undefined 合法（exactOptionalPropertyTypes）：图表读数产出侧 output.precision 本就是 number | undefined。
+  outputs: ReadonlyArray<{ key: string; value: number | undefined; precision?: number | undefined }>
 }
 
 export interface QuoteDataSectionInput {
