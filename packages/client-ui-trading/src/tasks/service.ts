@@ -206,7 +206,8 @@ export class TradingTasksService {
     if (this.disposed || this.pollInFlight) return
     this.pollInFlight = true
     try {
-      for (const open of this.ledger.openExecutions()) {
+      const opens = this.ledger.openExecutions()
+      for (const open of opens) {
         // 未绑定会话 = launch 还在途（launchTask 自己负责失败结算），跳过。
         if (open.sessionId === undefined) continue
         try {
@@ -222,6 +223,10 @@ export class TradingTasksService {
           // 单个执行侦查失败不影响其他执行，下轮再试。
         }
       }
+      // 对账扫描备忘：已删除/已结算任务的会话 id 不在名册，清掉防泄漏。
+      this.runner.pruneScanMemos(new Set(
+        opens.map(open => open.sessionId).filter((id): id is string => id !== undefined),
+      ))
     } finally {
       this.pollInFlight = false
     }

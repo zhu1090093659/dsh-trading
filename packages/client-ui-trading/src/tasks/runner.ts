@@ -263,4 +263,14 @@ export class TasksRunner {
       : { outcome: 'succeeded' }
   }
 
+  /**
+   * 清掉不在未结算名册里的扫描备忘：任务在执行途中被删除（或经非侦查路径
+   * 结算）后，inspect 不会再被调用，备忘键会永久残留——每轮 poll 对账一次。
+   */
+  pruneScanMemos(activeSessionIds: ReadonlySet<string>): void {
+    for (const sessionId of [...this.scanMemos.keys()]) {
+      if (!activeSessionIds.has(sessionId)) this.scanMemos.delete(sessionId)
+    }
+  }
+
 }
