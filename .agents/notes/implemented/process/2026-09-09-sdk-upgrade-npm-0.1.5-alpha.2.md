@@ -62,6 +62,42 @@ tag；`latest`/`next` 仍为 `0.1.2-rc.1`，0.1.3-alpha.2 被跳过未在本仓�
   新会话落盘 ✓。旧会话迁移包（session-format v0→v3）已随宿主闭包就位，
   交互级旧会话打开未自动化验证，留待首次使用确认。
 
+## 追记（同日）：desktop 闭包混代闪退与 census 门禁
+
+首轮 desktop runtime 重建后用户启动即闪退。宿主日志签名：
+`failed to import loader entry session-query-sqlite: The requested module
+'@deepseek-ai/dsh-session-query' does not provide an export named
+'SESSION_QUERY_DEFAULT_PREPARED_SESSION_CACHE_SIZE'` → `host exited code=1`
+→ 壳加载 error.html 退出（与 2026-09-09 上午 partial-copy 闪退同终端表现，
+根因不同层）。
+
+根因：desktop 宿主闭包的 lockfile 是在旧 lockfile 上**原地** `pnpm install`
+再解析的。官方包宽 peer range + pnpm 锁文件保留语义 → 25 个旧代条目
+（24 个 0.1.2-alpha.4 + dsh-brand/util-values@rc.1 地层）被原样保留，
+node_modules/暂存/app bundle 三层忠实物化 → 单一 app 自带闭包内部混代。
+CLI 宿主（npm 全局，全新解析）是干净的，故本轮 CLI 冒烟全绿而 app 必崩——
+暴露验证缺口：此前从未启动验证过 app 自带闭包。
+
+修复与固化：
+
+1. `desktop/runtime/host/{node_modules,pnpm-lock.yaml}` 删除后从零解析
+   （clean-slate；pnpm 自动补录此前根本不在 exclude 清单的旧地层成员），
+   lockfile 普查：244 个 @deepseek-ai 包全部 0.1.5-alpha.2（node-addon-system
+   @0.1.2 是独立版本线的原生插件包，非 dsh 家族）；物化 230 个 dsh-* 目录零残留。
+   `desktop/runtime/profile-trading` 闭包同法清底。
+2. **`build-runtime.mjs` 新增 `assertHostCohort` 门禁**：host 安装后普查
+   node_modules/@deepseek-ai/dsh-* 实体版本，任何一个偏离宿主钉版即 fail
+   构建并提示清 lockfile 重装——「宽 range 保留旧代」这一失败类从静默变红灯。
+3. app 重装后按启动纪律验证：`open --env DSH_HOME=$HOME/.dsh-trading
+   "/Applications/DSH Trading.app"`，日志 delta 确认 `[desktop] dsh home:
+   /Users/zcl/.dsh-trading` + `dsh web:` + `GUI ready`，无 exited/boot failed；
+   headless 截图 UI 完整渲染（行情 sparkline 拉数）+ `DSH_CHECK_PORT` 栅栏
+   401 + cohort check 无 FAIL。
+
+教训：**锁文件原地刷新 ≠ cohort 迁移**。官方家族宽 peer range 下，改钉版
+必须清 lockfile 从零解析（或如 root 仓用 overrides 强制），且构建产物要有
+世代普查红灯；「依赖安装成功/入口文件存在」不等于「闭包单一世代」。
+
 ## 教训 / 备注
 
 - **cohort check 脚本的 home 语义**：`profile-cohort-check.sh` 默认扫

@@ -246,6 +246,33 @@ function readBundledPnpmVersion() {
   }
 }
 
+/**
+ * The dsh release family inside the host closure must resolve to a single
+ * generation. Refreshing the lockfile in place can silently preserve stale
+ * entries: official packages declare wide peer ranges, so an older version
+ * that still satisfies the range survives the re-resolution (2026-09-09:
+ * 25 packages straggled at 0.1.2-alpha.4/rc.1 beside a 0.1.5-alpha.2 host;
+ * every app boot died on ESM export mismatches at plugin load). Census the
+ * materialized tree and fail the build on any dsh-* package off the pinned
+ * host version.
+ */
+function assertHostCohort(hostVersion) {
+  const scopeDir = path.join(runtimeSrc, 'host', 'node_modules', '@deepseek-ai');
+  const offenders = [];
+  for (const entry of fs.readdirSync(scopeDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith('dsh-')) continue;
+    const version = readPackageManifest(path.join(scopeDir, entry.name)).version;
+    if (version !== hostVersion) offenders.push(entry.name + '@' + version);
+  }
+  if (offenders.length > 0) {
+    throw new Error(
+      'host closure is not single-cohort (expected ' + HOST_PACKAGE + '@' + hostVersion
+      + '); delete runtime/host/node_modules + pnpm-lock.yaml and reinstall: '
+      + offenders.join(', '));
+  }
+  console.log('[build-runtime] host cohort census: every dsh-* package is ' + HOST_PACKAGE + '@' + hostVersion);
+}
+
 function main() {
   const hostVersion = readPackageManifest(path.join(runtimeSrc, 'host')).dependencies[HOST_PACKAGE];
   buildWorkspace();
@@ -255,6 +282,7 @@ function main() {
 
   pnpmInstall(path.join(runtimeSrc, 'profile-trading'));
   pnpmInstall(path.join(runtimeSrc, 'host'));
+  assertHostCohort(hostVersion);
 
   stage(path.join(runtimeSrc, 'profile-trading'), path.join(stagingRoot, 'profile-trading'), [
     'package.json', 'pnpm-workspace.yaml', 'cordis.patch.yml', 'node_modules',
