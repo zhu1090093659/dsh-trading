@@ -1,5 +1,6 @@
 /**
- * Node.js 宿主端专用校验执行器（带 node:vm 100ms 超时熔断，拦截死循环与卡死代码）。
+ * Node.js 宿主端专用校验执行器（带 node:vm 超时熔断，拦截死循环与卡死代码；
+ * 默认 100ms，入口可经 trialTimeoutMs 注入放宽——issue #88）。
  */
 import * as vm from 'node:vm'
 import type { IndicatorOutput, Kline } from './types.ts'
@@ -43,7 +44,10 @@ export const nodeVmComputeRunner: ComputeRunner = (
   }
 }
 
-/** Node.js 宿主端校验器：自动启用 node:vm 超时熔断保护。 */
-export function validateCustomIndicatorNode(raw: unknown): ValidationResult {
-  return validateCustomIndicator(raw, { runner: nodeVmComputeRunner })
+/**
+ * Node.js 宿主端校验器：自动启用 node:vm 超时熔断保护。
+ * trialTimeoutMs 缺省用 DEFAULT_TRIAL_TIMEOUT_MS（100ms）。
+ */
+export function validateCustomIndicatorNode(raw: unknown, options?: { trialTimeoutMs?: number | undefined }): ValidationResult {
+  return validateCustomIndicator(raw, { runner: nodeVmComputeRunner, trialTimeoutMs: options?.trialTimeoutMs })
 }

@@ -5,7 +5,8 @@
  * 1. 结构与参数合法性断言
  * 2. 源码体积与格式检查
  * 3. 多场景样例 K 线试算（上涨/下跌/平盘/缺口/极短序列）
- * 4. 支持可插拔 runner（Node 侧传入 nodeVmRunner 开启 100ms 超时熔断保护）
+ * 4. 支持可插拔 runner（Node 侧传入 nodeVmRunner 开启超时熔断保护，默认 100ms，
+ *    可经 trialTimeoutMs 注入放宽——issue #88：CI 高并发下 100ms 墙钟偶发误判）
  * 5. 输出形状等长断言（values.length === bars.length）
  * 6. 有限数值与 warm-up 断言（严禁 NaN/Infinity/非法类型）
  */
@@ -23,7 +24,15 @@ const PARAM_KEY_PATTERN = /^[a-zA-Z0-9_]{1,16}$/
 const MAX_SOURCE_LENGTH = 16 * 1024 // 16KB
 const MAX_PARAMS_COUNT = 8
 const RESERVED_IDS = new Set(['ma', 'ema', 'boll', 'macd', 'rsi', 'kdj'])
-const DEFAULT_TIMEOUT_MS = 100
+
+/**
+ * 试算超时默认值（毫秒）。试算本身是 30 根 K 线的纯计算，正常耗时在微秒级；
+ * 100ms 只作死循环熔断，不是性能阈值——issue #88：Windows CI（2 vCPU）上
+ * `pnpm -r test` 全包并行时进程被抢占，墙钟偶发超过 100ms 导致合法指标被误判
+ * 超时。入口（两个校验器 + validateCustomIndicatorNode + 两个工具工厂）
+ * 可注入 trialTimeoutMs 放宽；死循环保护由显式用例覆盖，不依赖本默认值。
+ */
+export const DEFAULT_TRIAL_TIMEOUT_MS = 100
 
 export type ValidationResult =
   | { ok: true; definition: IndicatorDefinition; record: CustomIndicatorRecord }
@@ -168,7 +177,7 @@ export function workerComputeRunner(
   computeSource: string,
   bars: readonly Kline[],
   params: Record<string, number>,
-  timeoutMs = 100,
+  timeoutMs = DEFAULT_TRIAL_TIMEOUT_MS,
 ): Promise<unknown> {
   if (typeof Worker === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined') {
     try {
@@ -349,7 +358,7 @@ function checkIndicatorTrialOutputs(outputs: unknown, barsLength: number): strin
   return undefined
 }
 
-export function validateCustomIndicator(raw: unknown, options?: { runner?: ComputeRunner }): ValidationResult {
+export function validateCustomIndicator(raw: unknown, options?: { runner?: ComputeRunner; trialTimeoutMs?: number | undefined }): ValidationResult {
   const checked = checkCustomIndicatorStructure(raw)
   if (!checked.ok) return checked
   const { id, title, pane, params, computeSource, defaultParamsMap, input } = checked
@@ -357,12 +366,13 @@ export function validateCustomIndicator(raw: unknown, options?: { runner?: Compu
   const sampleScenarios = createSampleBars()
   const scenarioNames: Array<keyof typeof sampleScenarios> = ['uptrend', 'downtrend', 'flat', 'gap', 'short']
   const runner = options?.runner ?? defaultJsRunner
+  const trialTimeoutMs = options?.trialTimeoutMs ?? DEFAULT_TRIAL_TIMEOUT_MS
 
   for (const scenario of scenarioNames) {
     const bars = sampleScenarios[scenario]
     let outputs: IndicatorOutput[]
     try {
-      outputs = runner(computeSource, bars, defaultParamsMap, DEFAULT_TIMEOUT_MS)
+      outputs = runner(computeSource, bars, defaultParamsMap, trialTimeoutMs)
     } catch (error) {
       return { ok: false, reason: `在 ${scenario} 样例数据上试算执行报错: ${String((error as { message?: string })?.message ?? error)}` }
     }
@@ -402,7 +412,7 @@ export function validateCustomIndicator(raw: unknown, options?: { runner?: Compu
  */
 export async function validateCustomIndicatorAsync(
   raw: unknown,
-  options?: { runner?: AsyncComputeRunner },
+  options?: { runner?: AsyncComputeRunner; trialTimeoutMs?: number | undefined },
 ): Promise<ValidationResult> {
   const checked = checkCustomIndicatorStructure(raw)
   if (!checked.ok) return checked
@@ -411,12 +421,13 @@ export async function validateCustomIndicatorAsync(
   const sampleScenarios = createSampleBars()
   const scenarioNames: Array<keyof typeof sampleScenarios> = ['uptrend', 'downtrend', 'flat', 'gap', 'short']
   const runner = options?.runner ?? workerComputeRunner
+  const trialTimeoutMs = options?.trialTimeoutMs ?? DEFAULT_TRIAL_TIMEOUT_MS
 
   for (const scenario of scenarioNames) {
     const bars = sampleScenarios[scenario]
     let outputs: IndicatorOutput[]
     try {
-      outputs = await runner(computeSource, bars, { ...defaultParamsMap }, DEFAULT_TIMEOUT_MS) as IndicatorOutput[]
+      outputs = await runner(computeSource, bars, { ...defaultParamsMap }, trialTimeoutMs) as IndicatorOutput[]
     } catch (error) {
       return { ok: false, reason: `在 ${scenario} 样例数据上试算执行报错: ${String((error as { message?: string })?.message ?? error)}` }
     }

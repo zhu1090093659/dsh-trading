@@ -8,6 +8,7 @@ import { validateCustomIndicatorNode } from './validate-node.ts'
 
 export { createFileCustomIndicatorStore } from './custom-fs.ts'
 export { validateCustomIndicatorNode, nodeVmComputeRunner } from './validate-node.ts'
+export { DEFAULT_TRIAL_TIMEOUT_MS } from './validate.ts'
 
 /** 最小行情服务面（结构类型——与 @dshtrading/api 的 MarketDataService 兼容）。 */
 export interface IndicatorsMarketDataLike {
@@ -24,6 +25,12 @@ export interface GetIndicatorsToolOptions {
   klineLimit?: number
   /** 可选：自定义指标 store（issue #33）——请求 id 非预置时从此解析（校验+编译后计算）。 */
   customStore?: CustomIndicatorStore
+  /**
+   * 可选：自定义指标重校验的 vm 试算超时（毫秒，issue #88）。
+   * 缺省 100ms（DEFAULT_TRIAL_TIMEOUT_MS）——仅作死循环熔断；CI/高负载环境下
+   * 墙钟抖动会让合法指标被误判超时，需要时由此注入放宽。
+   */
+  trialTimeoutMs?: number | undefined
 }
 
 const DEFAULT_POINTS = 30
@@ -42,7 +49,7 @@ function tail(values: ReadonlyArray<number | undefined>, n: number): Array<numbe
 }
 
 export function createGetIndicatorsTool(options: GetIndicatorsToolOptions) {
-  const { marketData, market = 'crypto', providerLabel, klineLimit = 300, customStore } = options
+  const { marketData, market = 'crypto', providerLabel, klineLimit = 300, customStore, trialTimeoutMs } = options
   return defineTool({
     name: market + '_get_indicators',
     description:
@@ -102,7 +109,7 @@ export function createGetIndicatorsTool(options: GetIndicatorsToolOptions) {
             + ' — available presets: ' + DEFAULT_INDICATOR_IDS.join(', ')
             + '; custom ids require authoring via indicator_author first')
         }
-        const result = validateCustomIndicatorNode(record)
+        const result = validateCustomIndicatorNode(record, { trialTimeoutMs })
         if (!result.ok) {
           throw new Error((market + '_get_indicators: custom indicator ') + JSON.stringify(id) + ' failed validation: ' + result.reason)
         }
@@ -144,10 +151,15 @@ export interface AuthorIndicatorToolOptions {
   chartStore?: ChartActivationStore | undefined
   /** 可选：创作即上图成功后的回调（plugin 接线 emit('chart')，GUI 实时同步）。 */
   onActivated?: (id: string) => void
+  /**
+   * 可选：vm 试算超时（毫秒，issue #88）。缺省 100ms（DEFAULT_TRIAL_TIMEOUT_MS）——
+   * 仅作死循环熔断，不是性能阈值；CI/高负载环境下墙钟抖动会让合法指标被误判超时。
+   */
+  trialTimeoutMs?: number | undefined
 }
 
 export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
-  const { store, onWritten, chartStore, onActivated } = options
+  const { store, onWritten, chartStore, onActivated, trialTimeoutMs } = options
 
   return defineTool({
     name: 'indicator_author',
@@ -230,7 +242,7 @@ export function createAuthorIndicatorTool(options: AuthorIndicatorToolOptions) {
         description: typeof args.description === 'string' ? args.description.trim() : undefined,
       }
 
-      const result = validateCustomIndicatorNode(candidate)
+      const result = validateCustomIndicatorNode(candidate, { trialTimeoutMs })
       if (!result.ok) {
         return (
           `[indicator_author] Validation failed: ${result.reason}\n`

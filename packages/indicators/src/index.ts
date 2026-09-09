@@ -25,6 +25,7 @@ export {
   workerComputeRunner,
   compileComputeSource,
   createSampleBars,
+  DEFAULT_TRIAL_TIMEOUT_MS,
   type ValidationResult,
   type AsyncComputeRunner,
 } from './validate.ts'

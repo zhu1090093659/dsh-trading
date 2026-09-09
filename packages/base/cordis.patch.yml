@@ -3,7 +3,7 @@
 # 本文件只允许 insert（patch 非 insert 语义是按 id 整行替换，多市场并存会互相
 # 覆盖）；共享行一律只在本层定义一次，市场 bundle 不得 replace。
 #
-# 当前两层语义（2026-08-29 web 宿主实测修正，vendor/loader + vendor/include 源码为准）：
+# 当前三类语义（2026-08-29 web 宿主实测修正，vendor/loader + vendor/include 源码为准）：
 #   1. insert 行：dsh-trading-base-gate —— 本包的统一审批监听器插件（见 src/index.ts）：
 #      对 <market>_(place|cancel)_order 且 dryRun!==true 的工具调用返回 ask 交宿主
 #      审批面；headless 无应答者时宿主降级为 deny（fail-closed 特性）。
@@ -23,6 +23,13 @@
 #      2026-09-06-unified-trading-role-presets.md；用户层 settings 仍可覆盖）。
 #      包名解析依赖本包 dependencies 里的
 #      @deepseek-ai/dsh-agent-presets（进 profile 安装闭包，S3 坑 3）。
+#
+#   3. 条件禁用行（issue #88）：host 半硬 inject web 宿主服务（webServer /
+#      workspaceRegistry / connection）的 npm 插件行，用 `disabled: !!js (...)`
+#      按「宿主树里是否存在对应服务提供方行」开关。headless 宿主（dsh-headless
+#      层，trading-dev / trading-all）没有这些服务，缺服务的行永久 pending，
+#      assertEntriesActivated 直接终止启动（2026-09-08 实测 4 行，issue #88）。
+#      先例：dsh-trading-dynamic-capabilities（issue #62，按 cordis-host-runner 行判定）。
 #
 # 脚手架阶段遗留的 insert-only 约定不变：后续共享行（组合管理/风控工具行、
 # credentials 引用约定行 [S4]）继续追加到本文件的 insert 列表。
@@ -173,8 +180,12 @@
     # （DEFAULT_AUTO_CONFIG，需用户在设置面板显式开启），insert 不改变
     # 交易会话数据安全面。包名解析依赖本包 dependencies 里的
     # @linxin666/dsh-session-archive（进 profile 安装闭包，S3 坑 3 同款）。
+    # 行安全（issue #88）：host 半硬 inject webServer + workspaceRegistry，
+    # headless 宿主缺服务即永久 pending → 启动即崩；按提供方行条件禁用
+    # （见文件头「条件禁用行」）。
     - id: dsh-trading-session-archive
       name: '@linxin666/dsh-session-archive'
+      disabled: !!js (![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-host-webserver') || ![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-workspace'))
 
     # IM 机器人接入（2026-09-06，npm 复用社区插件 @xmanrui/dsh-im）：飞书/微信/
     # 钉钉/企业微信/QQ/Slack/Telegram/Discord/WhatsApp 九渠道机器人接入，
@@ -182,16 +193,19 @@
     # 浏览器半（设置 → IM机器人 配置面，section order 21，与 updater 的
     # order 20 相邻不冲突）。市场无关共享行，归 base 所有（铁律 #1）。
     # 凭据须用户在设置面板显式配置，未配置时各渠道空闲待命，insert 不改变
-    # 交易会话数据安全面；headless 宿主 host 半 webServer 注入挂起无害
-    # （client-ui-updater 同款）。包名解析依赖本包 dependencies 里的
+    # 交易会话数据安全面。包名解析依赖本包 dependencies 里的
     # @xmanrui/dsh-im（进 profile 安装闭包，S3 坑 3 同款）。^4.11.0：落地
     # 时刻 4.12/4.13 尚在 pnpm minimumReleaseAge 24h 冷却期内，caret 待其
     # 出冷却后 pnpm update 自然跟进（session-archive 同款选版纪律）。
     # 注意：本行即内置安装，勿再对 profile 执行 `dsh plugin add
     # @xmanrui/dsh-im`——其自带 patch（id xmanrui-dsh-im）会与本行重复
     # 挂载同一插件，设置面二次注册。
+    # 行安全（issue #88）：host 半硬 inject connection/credentials/typertGateway，
+    # headless 宿主缺 connection 即永久 pending → 启动即崩；按提供方行条件禁用
+    # （见文件头「条件禁用行」）。
     - id: dsh-trading-im
       name: '@xmanrui/dsh-im'
+      disabled: !!js (![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-client-connection'))
 
     # 使用统计（2026-09-08，npm 复用 dsh-web 项目同款插件 @linxin666/dsh-usage）：
     # 单行双半：host 半（会话事件流折叠成 token 账本落 $DSH_HOME/dsh-usage/
@@ -201,12 +215,14 @@
     # 适配点：本产品不含 dsh-pet（宠物），宠物气泡默认 off（插件设置面板可随时
     # 改回 always/change，属用户可见项）；账本随 DSH_HOME=~/.dsh-trading 隔离，
     # 不污染宿主 ~/.dsh。市场无关共享行，归 base 所有（铁律 #1）。
-    # headless 宿主 host 半 webServer 注入挂起无害（client-ui-updater 同款）。
     # 包名解析依赖本包 dependencies 里的 @linxin666/dsh-usage（进 profile 安装
     # 闭包，S3 坑 3 同款）。^0.3.17：落地时刻 0.3.18 尚在 pnpm minimumReleaseAge
     # 24h 冷却期内，caret 待其出冷却后 pnpm update 自然跟进（session-archive 同款）。
+    # 行安全（issue #88）：host 半硬 inject webServer，headless 宿主缺服务即
+    # 永久 pending → 启动即崩；按提供方行条件禁用（见文件头「条件禁用行」）。
     - id: dsh-trading-usage
       name: '@linxin666/dsh-usage'
+      disabled: !!js (![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-host-webserver'))
       config:
         bubbleMode: 'off'
 
@@ -224,8 +240,11 @@
     # （socket+Host+Origin+sec-fetch-site 四重校验，非 loopback 403）。
     # 隐私面：浏览器半每日一次匿名安装心跳到 dsh-market.com（随机
     # localStorage id + 包名，无对话数据/无 IP），详见 Agent Note。
+    # 行安全（issue #88）：host 半硬 inject webServer，headless 宿主缺服务即
+    # 永久 pending → 启动即崩；按提供方行条件禁用（见文件头「条件禁用行」）。
     - id: dsh-trading-plugin-manager
       name: '@linxin666/dsh-client-ui-plugin-manager'
+      disabled: !!js (![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-host-webserver'))
 
     # 模型能力声明（2026-09-08，npm 复用 dsh-web 项目同款插件
     # @linxin666/dsh-client-ui-model-capabilities）：在官方「模型」设置页的
