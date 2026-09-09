@@ -7,7 +7,7 @@ import { clampActivationParams, defaultActivationInstance } from './chart-activa
 import { validateCustomIndicatorNode } from './validate-node.ts'
 
 export { createFileCustomIndicatorStore } from './custom-fs.ts'
-export { validateCustomIndicatorNode, nodeVmComputeRunner } from './validate-node.ts'
+export { validateCustomIndicatorNode, nodeVmComputeRunner, runSourceInVmSandbox } from './validate-node.ts'
 export { DEFAULT_TRIAL_TIMEOUT_MS } from './validate.ts'
 
 /** 最小行情服务面（结构类型——与 @dshtrading/api 的 MarketDataService 兼容）。 */

@@ -149,7 +149,11 @@ export type AsyncComputeRunner = (
   timeoutMs: number,
 ) => Awaitable<unknown>
 
-/** blob Worker 内执行的编译+试算脚本（自包含，不依赖宿主任何模块）。 */
+/**
+ * blob Worker 内执行的编译+试算脚本（自包含，不依赖宿主任何模块）。
+ * 与 compileComputeSource 同构的第三处实现——Worker 内无法 import，镜像不可避免；
+ * 形态嗅探正则与编译语义改动必须同步本段（单一事实来源 = compileComputeSource）。
+ */
 const WORKER_TRIAL_SCRIPT = `self.onmessage = (event) => {
   const { source, bars, params } = event.data
   try {

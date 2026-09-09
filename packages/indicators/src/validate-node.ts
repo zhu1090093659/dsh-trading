@@ -6,12 +6,19 @@ import * as vm from 'node:vm'
 import type { IndicatorOutput, Kline } from './types.ts'
 import { validateCustomIndicator, type ComputeRunner, type ValidationResult } from './validate.ts'
 
-export const nodeVmComputeRunner: ComputeRunner = (
+/**
+ * 用户源码 vm 沙箱执行的单一实现（指标/策略/选股器共用，2026-09-09 收敛自
+ * strategies 的同体副本）：沙箱白名单全局、箭头/函数体双形态编译、超时熔断。
+ * label 是超时文案的语境词（如「指标试算」/「策略试算」/「选股器试算」）——
+ * 文案按调用语境归位，机制只此一份。
+ */
+export function runSourceInVmSandbox(
   computeSource: string,
   bars: readonly Kline[],
   params: Record<string, number>,
-  timeoutMs = 100,
-): IndicatorOutput[] => {
+  timeoutMs: number,
+  label: string,
+): unknown {
   const sandbox = {
     bars,
     params,
@@ -35,14 +42,21 @@ export const nodeVmComputeRunner: ComputeRunner = (
   const context = vm.createContext(sandbox)
   try {
     script.runInContext(context, { timeout: timeoutMs })
-    return sandbox.result as IndicatorOutput[]
+    return sandbox.result
   } catch (error: any) {
     if (error?.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT' || String(error?.message).includes('timed out')) {
-      throw new Error(`指标试算执行超时（超过 ${timeoutMs}ms），可能存在死循环（如 while/for 未退出）`)
+      throw new Error(`${label}执行超时（超过 ${timeoutMs}ms），可能存在死循环（如 while/for 未退出）`)
     }
     throw error
   }
 }
+
+export const nodeVmComputeRunner: ComputeRunner = (
+  computeSource: string,
+  bars: readonly Kline[],
+  params: Record<string, number>,
+  timeoutMs = 100,
+): IndicatorOutput[] => runSourceInVmSandbox(computeSource, bars, params, timeoutMs, '指标试算') as IndicatorOutput[]
 
 /**
  * Node.js 宿主端校验器：自动启用 node:vm 超时熔断保护。
