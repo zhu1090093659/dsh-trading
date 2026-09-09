@@ -8,7 +8,7 @@
  *   把截图注册成 browser-owned 草稿图（id + previewUrl）；
  * - per-session `input` facade（SessionInput）：`setDraft(text)` 整稿写入
  *   （会替换草稿——先读 `state.draft` 非空时以空行拼接追加，不覆盖用户已打
- *   的内容）、`addImages(ids)` 挂图；绝不调 `submit()`。
+ *   的内容）、`addAttachments(ids)` 挂图；绝不调 `submit()`。
  *
  * 会话解析：优先 `sessions.list.current`；无当前会话时经 uiWorkspace 的
  * startSession 建/复用会话并短轮询等落地（官方 startSession 是导航动作）。
@@ -103,10 +103,10 @@ export async function fillComposerWithQuote(deps: FillComposerDeps, text: string
   if (phase !== 'plain') {
     throw new Error('composer is busy (submission in flight) — try again in a moment')
   }
-  // 截图先落草稿图注册表再挂 id；提交中 addImages 自己也会拒（双保险）。
+  // 截图先落草稿图注册表再挂 id；提交中 addAttachments 自己也会拒（双保险）。
   if (image !== undefined) {
     const [attachment] = conversation.createDraftImages([dataUrlToFile(image.dataUrl, image.name ?? 'chart.png')])
-    if (attachment !== undefined && !facade.addImages([attachment.id])) {
+    if (attachment !== undefined && !facade.addAttachments([attachment.id])) {
       conversation.releaseDraftImage?.(attachment.id)
       console.warn('[dsh-trading] composer refused image (busy) — filling text only')
     }

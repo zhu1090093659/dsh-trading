@@ -29,7 +29,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-tools": "^0.1.2-alpha.2",
+    "@deepseek-ai/dsh-tools": "0.1.5-alpha.2",
     "@deepseek-ai/schemastery": "^3.18.2",
     "@dshtrading/dsh-home": "workspace:^"
   },

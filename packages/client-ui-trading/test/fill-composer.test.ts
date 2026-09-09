@@ -23,9 +23,9 @@ function makeSessions(options: { current?: string }) {
   return { sessions, setCurrent: (next?: string) => { current = next } }
 }
 
-function makeConversation(options: { phase?: string; draft?: string; addImagesOk?: boolean } = {}) {
-  const calls: { setDraft: string[]; addImages: string[][]; created: File[][]; released: string[]; submit: number } = {
-    setDraft: [], addImages: [], created: [], released: [], submit: 0,
+function makeConversation(options: { phase?: string; draft?: string; addAttachmentsOk?: boolean } = {}) {
+  const calls: { setDraft: string[]; addAttachments: string[][]; created: File[][]; released: string[]; submit: number } = {
+    setDraft: [], addAttachments: [], created: [], released: [], submit: 0,
   }
   let nextId = 0
   const facade = {
@@ -33,9 +33,9 @@ function makeConversation(options: { phase?: string; draft?: string; addImagesOk
       getSnapshot: () => ({ phase: options.phase ?? 'plain', draft: options.draft ?? '', imageIds: [] }),
     },
     setDraft(text: string) { calls.setDraft.push(text) },
-    addImages(ids: readonly string[]) {
-      calls.addImages.push([...ids])
-      return options.addImagesOk ?? true
+    addAttachments(ids: readonly string[]) {
+      calls.addAttachments.push([...ids])
+      return options.addAttachmentsOk ?? true
     },
   }
   const conversation: ConversationDraftFace = {
@@ -72,7 +72,7 @@ describe('fillComposerWithQuote', () => {
     const { conversation, calls } = makeConversation()
     await fillComposerWithQuote({ sessions, conversation }, '看一下苹果', undefined)
     expect(calls.setDraft).toEqual(['看一下苹果'])
-    expect(calls.addImages).toEqual([])
+    expect(calls.addAttachments).toEqual([])
     expect(calls.submit).toBe(0)
   })
 
@@ -83,14 +83,14 @@ describe('fillComposerWithQuote', () => {
     expect(calls.setDraft).toEqual(['帮我看下\n\n看一下苹果'])
   })
 
-  it('附图：dataUrl 转 PNG File 摄取后 addImages 挂 id', async () => {
+  it('附图：dataUrl 转 PNG File 摄取后 addAttachments 挂 id', async () => {
     const { sessions } = makeSessions({ current: 'sess-1' })
     const { conversation, calls } = makeConversation()
     await fillComposerWithQuote({ sessions, conversation }, '看图', { dataUrl: PNG_URL, name: 'AAPL-1d.png' })
     expect(calls.created).toHaveLength(1)
     expect(calls.created[0][0].name).toBe('AAPL-1d.png')
     expect(calls.created[0][0].type).toBe('image/png')
-    expect(calls.addImages).toEqual([['draft-0-AAPL-1d.png']])
+    expect(calls.addAttachments).toEqual([['draft-0-AAPL-1d.png']])
     expect(calls.released).toEqual([])
   })
 
@@ -99,12 +99,12 @@ describe('fillComposerWithQuote', () => {
     const { conversation, calls } = makeConversation({ phase: 'submitting' })
     await expect(fillComposerWithQuote({ sessions, conversation }, 'hello')).rejects.toThrow(/composer is busy/)
     expect(calls.setDraft).toEqual([])
-    expect(calls.addImages).toEqual([])
+    expect(calls.addAttachments).toEqual([])
   })
 
-  it('addImages 被拒（busy）：回收草稿图，文本照填', async () => {
+  it('addAttachments 被拒（busy）：回收草稿图，文本照填', async () => {
     const { sessions } = makeSessions({ current: 'sess-1' })
-    const { conversation, calls } = makeConversation({ addImagesOk: false })
+    const { conversation, calls } = makeConversation({ addAttachmentsOk: false })
     await fillComposerWithQuote({ sessions, conversation }, 'hello', { dataUrl: PNG_URL, name: 'a.png' })
     expect(calls.released).toHaveLength(1)
     expect(calls.setDraft).toEqual(['hello'])
