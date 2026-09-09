@@ -133,6 +133,40 @@ describe('FX Service', () => {
     expect(quote.rates).toEqual({ USD: 1, USDT: 1 })
   })
 
+  it('在途去重：同 base 并发 miss 只打一轮上游；不同 base 各自一轮', async () => {
+    const tracker = { count: 0, urls: [] as string[] }
+    // 挂起一拍的 fetch：让三个并发调用真实重叠在在途窗口内。
+    const slowFetch: FxFetchLike = async (url, init) => {
+      tracker.count += 1
+      tracker.urls.push(url)
+      await new Promise(resolve => setTimeout(resolve, 20))
+      return okFetch({ rates: { CNY: 7.1, HKD: 7.8 } })(url, init)
+    }
+    const fx = createFxService({ fetchImpl: slowFetch, now: () => 5000 })
+    const [a, b, c, d] = await Promise.all([
+      fx.getRates('USD'), fx.getRates('USD'), fx.getRates('USD'), fx.getRates('CNY'),
+    ])
+    expect(tracker.count).toBe(2) // USD 一轮 + CNY 一轮
+    expect(a.stale).toBe(false)
+    expect(b.rates.CNY).toBeCloseTo(a.rates.CNY!, 10)
+    expect(c.asOf).toBe(a.asOf)
+    expect(d.base).toBe('CNY')
+  })
+
+  it('在途去重的失败路径：并发方各自走兜底链；在途清理后可重试', async () => {
+    let fail = true
+    const toggle: FxFetchLike = async (url, init) =>
+      fail ? failFetch()(url, init) : okFetch({ rates: { CNY: 7.1 } })(url, init)
+    const fx = createFxService({ fetchImpl: toggle, now: () => 7000 })
+    const [a, b] = await Promise.all([fx.getRates('USD'), fx.getRates('USD')])
+    expect(a.stale).toBe(true)
+    expect(b.stale).toBe(true)
+    fail = false
+    const retry = await fx.getRates('USD')
+    expect(retry.stale).toBe(false)
+    expect(retry.rates.CNY).toBeCloseTo(1 / 7.1, 10)
+  })
+
   it('恒等兜底：非 USD 基准只含 {base:1}（USDT/USD 无数据不编造）', async () => {
     const fx = createFxService({ fetchImpl: failFetch() })
     const quote = await fx.getRates('CNY')

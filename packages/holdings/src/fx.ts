@@ -96,6 +96,10 @@ export function createFxService(options: FxServiceOptions = {}): FxService {
   const fetchImpl: FxFetchLike = options.fetchImpl ?? ((url, init) => fetch(url, { signal: init.signal }))
   const now = options.now ?? (() => Date.now())
   const memory = new Map<FxBase, FxCacheEntry>()
+  // 同 base 在途刷新去重：缓存过期瞬间多面板并发 getRates 时只打一轮上游 +
+  // 一次落盘（对齐桥 fundamentals 的 inflight 先例）；失败时各调用方各自走
+  // 既有失败链（过期内存 → 文件 → 恒等），互不污染。
+  const inflight = new Map<FxBase, Promise<FxCacheEntry>>()
 
   async function fetchFresh(base: FxBase): Promise<FxCacheEntry> {
     const url = `${FRANKFURTER_LATEST}?base=${base}&symbols=${FX_SYMBOLS.join(',')}`
@@ -166,9 +170,20 @@ export function createFxService(options: FxServiceOptions = {}): FxService {
       }
 
       try {
-        const fresh = await fetchFresh(base)
-        memory.set(base, fresh)
-        await writeFileCache(base, fresh)
+        let job = inflight.get(base)
+        if (job === undefined) {
+          const created = (async (): Promise<FxCacheEntry> => {
+            const fresh = await fetchFresh(base)
+            memory.set(base, fresh)
+            await writeFileCache(base, fresh)
+            return fresh
+          })()
+          inflight.set(base, created)
+          // 创建者负责清理（在创建分支内 await+finally，避免派生 promise 的未处理拒绝）。
+          try { await created } finally { inflight.delete(base) }
+          job = created
+        }
+        const fresh = await job
         return { base, rates: { ...fresh.rates }, asOf: fresh.asOf, stale: false }
       } catch {
         // 失败链（契约 §4）：过期内存 → 文件缓存 → 恒等兜底，皆 stale:true。
