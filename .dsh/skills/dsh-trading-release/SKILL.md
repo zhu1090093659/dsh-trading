@@ -181,8 +181,9 @@ gh run list --workflow=desktop-release.yml   # 查历史
 npm view @dshtrading/all version        # 期望 = X.Y.Z
 npm view @dshtrading/base version       # 期望 = X.Y.Z
 gh release view "vX.Y.Z" --json assets --jq '.assets[].name'
-# 期望资产（7 个）：dsh-trading-desktop-X.Y.Z-mac-{arm64,x64}.{dmg,zip} +
-# dsh-trading-desktop-X.Y.Z-win-x64.{exe,zip} + SHA256SUMS.txt
+# 期望资产（9 个）：dsh-trading-desktop-X.Y.Z-mac-{arm64,x64}.{dmg,zip} +
+# dsh-trading-desktop-X.Y.Z-win-x64.{exe,zip} + SHA256SUMS.txt +
+# 桌面自动更新 feed：trading-update-vX.Y.Z.zip + updates-manifest-vX.Y.Z.json
 gh release view "vX.Y.Z" --json body --jq .body      # 自动 notes 已生成
 gh run list --workflow=desktop-release.yml           # 全部成功
 git ls-remote --tags origin | grep "vX.Y.Z"          # tag 已在远端
@@ -195,6 +196,16 @@ git ls-remote --tags origin | grep "vX.Y.Z"          # tag 已在远端
 curl 确认托管 UI 可达（401 = host 已起待鉴权），再 headless Chrome `--timeout`
 截图确认 trading GUI 完整渲染。详见
 [ui-verification note](../../../.agents/notes/implemented/process/2026-09-04-ui-verification-hosted-http-headless-chrome.md)。
+
+启动注意（v0.2.0 实证）：从 agent 会话 shell 用 `open` 启动会把会话环境
+（含 `DSH_HOME=~/.dsh`）传给应用，盖过桌面壳内置缺省 home，按旧 home 的
+trading-web 残留 profile 加载即崩；且 `open -a "DSH Trading"` 按
+LaunchServices 名字解析，可能命中历史注册的开发副本（如 desktop/dist 下
+electron-builder 产物）。抽查一律显式路径 + 显式 env：
+`open --env DSH_HOME=$HOME/.dsh-trading "/Applications/DSH Trading.app"`，
+启动后看 `dsh-host.log` 新增 delta 首行 `[desktop] dsh home:` 确认 home
+解析正确再继续。机制详见
+[desktop crash note](../../../.agents/notes/implemented/bug-fix/2026-09-09-desktop-crash-profile-partial-copy.md)。
 
 ## 6. 纪律
 

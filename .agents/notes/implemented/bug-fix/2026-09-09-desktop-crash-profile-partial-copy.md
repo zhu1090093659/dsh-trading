@@ -42,5 +42,6 @@ Status: implemented
 
 - trading-web profile 副本回到单一 0.1.6 世代；profile 内 `@deepseek-ai/*` 链接方向随最后启动者变化（本次末次启动者为桌面壳，符合 [cohort note](2026-09-08-desktop-preset-context-injection.md) 的既定行为）；CLI 验证前仍需跑 refresh 脚本。
 - **agent 会话内跑本仓脚本的人工纪律（守卫落地前）**：dsh 宿主会话环境带 `DSH_HOME=~/.dsh`，凡跑 refresh / preflight / plugin install 前必须显式 `DSH_HOME=$HOME/.dsh-trading`；wrapper「显式值优先」对 agent 会话不是保护而是陷阱。
+- **发版抽查的 `open` 启动同理（v0.2.0 实证，2026-09-09 晚）**：`open` 会把调用 shell 的环境（含 `DSH_HOME`）传给被启动应用，桌面壳按旧 home 解析即崩（同 Verification 第 2 条机制）；且 `open -a "DSH Trading"` 按 LaunchServices 名字解析，可能命中历史注册的开发副本（desktop/dist/mac-arm64）而非 /Applications 安装。抽查一律显式路径 + 显式 env：`open --env DSH_HOME=$HOME/.dsh-trading "/Applications/DSH Trading.app"`，启动后以 `dsh-host.log` delta 首行 `[desktop] dsh home:` 确认解析正确。已同步进 [dsh-trading-release skill](../../../.dsh/skills/dsh-trading-release/SKILL.md) 第 5 节。
 - 旧 home trading-web 残留的存在与否以本文为准（separate-dsh-home 的「不复存在」表述已被证伪），待用户决定清理方式。
 - 本 note 为事件记录 + 流程纪律，无仓库代码变更。
