@@ -66,7 +66,7 @@ Status: implemented
 - 两个 home 的 `settings.yaml` 自此各自演化——改交易侧 LLM/路由配置要改
   `~/.dsh-trading/settings.yaml`。
 - `~/.dsh/profiles/trading-*` 不复存在；任何还写死旧路径的脚本会
-  preflight 报死路径（门禁按设计拦截）。
+  preflight 报死路径（门禁按设计拦截）。（2026-09-09 事实修正：~/.dsh/profiles/trading-web 残留目录实际仍在，0.1.2 vendor 死路径；agent 会话级 DSH_HOME=/Users/zcl/.dsh 会把仓库脚本带偏到此——见 [desktop crash 记录](../bug-fix/2026-09-09-desktop-crash-profile-partial-copy.md)）
 - 外部消费者（如宿主端 `@deepseek-ai/dsh-agent-presets`）经 `$DSH_HOME` 定位
   `.agent-presets`，无需感知迁移。
 
