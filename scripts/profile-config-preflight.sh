@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Profile 配置预检：在 dsh plugin install / 刷新前，抓出三类会让 profile
-# 变砖或混世代的配置漂移（2026-09-03/04 实证）：
+# Profile 配置预检：在 dsh plugin install / 刷新前，抓出四类会让 profile
+# 变砖或混世代的配置漂移（2026-09-03/04 与 2026-09-09 实证）：
 #
 #   1. 死路径 —— file:/link: 依赖指向已删除目录（@dsh 时代指向 code/dsh、
 #      link: 指向已弃用 deepseek-harness checkout，目录删除后 profile 无法
@@ -11,6 +11,11 @@
 #      workspace:^ 解析不到同侪 → install 连锁失败）。
 #   3. 闭包缺口 —— profile 依赖了 @dshtrading/* 包但 overrides 没覆盖全部
 #      仓库包（#60 给 base 加 dsh-i18n 依赖后 overrides 缺行 → install 失败）。
+#   4. 版本漂移 —— 已安装的 node_modules/@dshtrading/* 拷贝混世代（同族
+#      fixed 版本，正常只可能全体同版本）。局部刷新留下的半新半旧拷贝会让
+#      profile 组装崩：2026-09-09 trading-all 实测 0.1.5/0.1.6 混装 →
+#      client-ui-trading 找不到 watchlist 新导出 + hk 的 eastmoney 行
+#      market 配置在旧拷贝里不存在 → 重复注册 cn/eastmoney，启动即崩。
 #
 # 用法：scripts/profile-config-preflight.sh <profile> [profile ...]
 #   退出码：0 = 全部通过；1 = 存在漂移（先修再 install）。
@@ -102,6 +107,43 @@ for (const profile of profiles) {
     if (missing.length) {
       problems.push("闭包缺口: overrides 缺 " + missing.join(", "));
     }
+  }
+
+  // 检查 4：已安装 @dshtrading/* 拷贝版本必须全体一致（同族 fixed 版本）。
+  // 递归但不下钻软链目录（指向宿主核心包的 symlink 会带出无关树）。
+  const installed = new Map();
+  const collectCopies = (dir, rel) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const abs = path.join(dir, e.name);
+      const relPath = rel + "/" + e.name;
+      if (e.name === "@dshtrading") {
+        let pkgs = [];
+        try { pkgs = fs.readdirSync(abs, { withFileTypes: true }); } catch { continue; }
+        for (const p of pkgs) {
+          if (!p.isDirectory()) continue;
+          try {
+            const version = JSON.parse(fs.readFileSync(path.join(abs, p.name, "package.json"), "utf8")).version;
+            if (!installed.has(version)) installed.set(version, []);
+            installed.get(version).push(relPath + "/" + p.name);
+          } catch {}
+        }
+        continue;
+      }
+      if (e.name === ".pnpm") continue;
+      collectCopies(abs, relPath);
+    }
+  };
+  collectCopies(path.join(P, "node_modules"), "node_modules");
+  if (installed.size > 1) {
+    const detail = [...installed.entries()]
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+      .map(([v, paths]) => v + " x" + paths.length + "（" + paths.slice(0, 3).join(", ") + (paths.length > 3 ? ", …" : "") + "）")
+      .join(" / ");
+    problems.push("版本漂移: node_modules/@dshtrading/* 混世代 " + detail
+      + "——局部刷新残留，重装：rm -rf <profile>/node_modules/@dshtrading/* && dsh plugin --profile " + profile + " install");
   }
 
   // 检查 2b：cordis.patch.yml 的 name: 行不许指向历史 scope
