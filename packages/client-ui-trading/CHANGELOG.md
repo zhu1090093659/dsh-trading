@@ -1,5 +1,27 @@
 # @dshtrading/client-ui-trading
 
+## 0.2.0
+
+### Patch Changes
+
+- Updated dependencies [5a61735]
+- Updated dependencies [41dc2be]
+  - @dshtrading/holdings@0.2.0
+  - @dshtrading/indicators@0.2.0
+  - @dshtrading/kit-cn@0.2.0
+  - @dshtrading/kit-crypto@0.2.0
+  - @dshtrading/kit-hk@0.2.0
+  - @dshtrading/kit-us@0.2.0
+  - @dshtrading/strategies@0.2.0
+  - @dshtrading/api@0.2.0
+  - @dshtrading/client-ui-knowledge@0.2.0
+  - @dshtrading/client-ui-strategies@0.2.0
+  - @dshtrading/dsh-home@0.2.0
+  - @dshtrading/eventbus@0.2.0
+  - @dshtrading/knowledge@0.2.0
+  - @dshtrading/router@0.2.0
+  - @dshtrading/watchlist@0.2.0
+
 ## 0.1.6
 
 ### Patch Changes

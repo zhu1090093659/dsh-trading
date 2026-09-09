@@ -1,5 +1,15 @@
 # @dshtrading/dsh-i18n
 
+## 0.2.0
+
+### Patch Changes
+
+- @dshtrading/client-ui-trading@0.2.0
+- @dshtrading/client-ui-knowledge@0.2.0
+- @dshtrading/client-ui-settings@0.2.0
+- @dshtrading/client-ui-strategies@0.2.0
+- @dshtrading/client-ui-updater@0.2.0
+
 ## 0.1.6
 
 ### Patch Changes

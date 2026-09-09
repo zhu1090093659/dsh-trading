@@ -1,5 +1,11 @@
 # @dshtrading/connector-alpaca
 
+## 0.2.0
+
+### Patch Changes
+
+- @dshtrading/api@0.2.0
+
 ## 0.1.6
 
 ### Patch Changes
