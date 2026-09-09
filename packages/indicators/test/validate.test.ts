@@ -3,6 +3,11 @@ import { validateCustomIndicator, compileComputeSource } from '../src/validate.t
 import { createMemoryCustomIndicatorStore } from '../src/custom.ts'
 import { createAuthorIndicatorTool, validateCustomIndicatorNode } from '../src/tool.ts'
 
+// issue #88：vm 试算超时默认 100ms 只作死循环熔断，不是性能阈值；CI（2 vCPU）
+// 全包并行时墙钟抖动会让合法指标被误判超时。走 vm 试算的用例注入放宽值，
+// 死循环保护用例仍用默认值（超时判定本身由「trialTimeoutMs 可注入」用例覆盖）。
+const TEST_TRIAL_TIMEOUT_MS = 5_000
+
 describe('validateCustomIndicator', () => {
   it('rejects invalid structural inputs', () => {
     expect(validateCustomIndicator(null).ok).toBe(false)
@@ -75,6 +80,26 @@ describe('validateCustomIndicator', () => {
     })
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.reason).toContain('非法数值')
+  })
+
+  it('trialTimeoutMs 可注入：慢试算默认判超时、放宽后通过（issue #88）', () => {
+    const raw = {
+      id: 'slow_calc',
+      title: 'Slow',
+      pane: 'main',
+      // 150ms 墙钟忙等：超过默认 100ms 熔断线，但远低于注入的放宽值。
+      computeSource: `(bars) => {
+        const deadline = Date.now() + 150;
+        while (Date.now() < deadline) {}
+        return [{ key: 'line', kind: 'line', color: '#f00', values: bars.map(b => b.close) }];
+      }`,
+    }
+    const strict = validateCustomIndicatorNode(raw)
+    expect(strict.ok).toBe(false)
+    if (!strict.ok) expect(strict.reason).toContain('超时')
+
+    const relaxed = validateCustomIndicatorNode(raw, { trialTimeoutMs: TEST_TRIAL_TIMEOUT_MS })
+    expect(relaxed.ok).toBe(true)
   })
 
   it('rejects infinite loop in computeSource (timeout protection)', () => {
@@ -266,7 +291,7 @@ describe('validateCustomIndicator', () => {
 describe('createAuthorIndicatorTool', () => {
   it('validates and persists custom indicator through tool execute', async () => {
     const store = createMemoryCustomIndicatorStore()
-    const tool = createAuthorIndicatorTool({ store })
+    const tool = createAuthorIndicatorTool({ store, trialTimeoutMs: TEST_TRIAL_TIMEOUT_MS })
 
     // 1. 尝试传入非法代码
     const failOut = await tool.execute({

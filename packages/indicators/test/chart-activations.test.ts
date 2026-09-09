@@ -24,6 +24,10 @@ import { createAuthorIndicatorTool } from '../src/tool.js'
 
 const CUSTOM_SOURCE = '(bars) => [{ key: "close_copy", kind: "line", color: "#ff0000", values: bars.map(b => b.close) }]'
 
+// issue #88：vm 试算超时默认 100ms 只作死循环熔断；CI（2 vCPU）全包并行时
+// 墙钟抖动会让合法指标被误判超时。测试注入放宽值，死循环保护另有专门用例。
+const TEST_TRIAL_TIMEOUT_MS = 5_000
+
 const tmpDirs: string[] = []
 afterAll(async () => {
   for (const dir of tmpDirs) await rm(dir, { recursive: true, force: true })
@@ -339,7 +343,7 @@ describe('indicator_author「创作即上图」（issue #63）', () => {
   it('activate: true → 校验通过后按 schema 默认参数上图', async () => {
     const store = createMemoryCustomIndicatorStore()
     const chartStore = createMemoryChartActivationStore()
-    const tool = createAuthorIndicatorTool({ store, chartStore })
+    const tool = createAuthorIndicatorTool({ store, chartStore, trialTimeoutMs: TEST_TRIAL_TIMEOUT_MS })
     const out = String(await tool.execute({ ...AUTHOR_ARGS, activate: true }))
     expect(out).toContain('mounted on the chart')
     expect(await chartStore.list()).toEqual([{ id: 'authored_i', params: {} }])
@@ -348,7 +352,7 @@ describe('indicator_author「创作即上图」（issue #63）', () => {
   it('re-author activate:true 保留 symbolParams 并按新 schema 重 clamp（issue #72 复审：不抹覆盖、stale 覆盖不直通）', async () => {
     const store = createMemoryCustomIndicatorStore()
     const chartStore = createMemoryChartActivationStore()
-    const tool = createAuthorIndicatorTool({ store, chartStore })
+    const tool = createAuthorIndicatorTool({ store, chartStore, trialTimeoutMs: TEST_TRIAL_TIMEOUT_MS })
     const v1 = { ...AUTHOR_ARGS, paramsJson: '[{"key":"a1","label":"锚点1","default":0,"min":0,"max":20991231}]' }
 
     // v1 挂载并写一个按标的覆盖
@@ -376,11 +380,11 @@ describe('indicator_author「创作即上图」（issue #63）', () => {
   it('activate 缺省 → 不上图；chartStore 缺席 → 降级说明不失败', async () => {
     const store = createMemoryCustomIndicatorStore()
     const chartStore = createMemoryChartActivationStore()
-    const withStore = createAuthorIndicatorTool({ store, chartStore })
+    const withStore = createAuthorIndicatorTool({ store, chartStore, trialTimeoutMs: TEST_TRIAL_TIMEOUT_MS })
     expect(String(await withStore.execute({ ...AUTHOR_ARGS }))).not.toContain('mounted')
     expect(await chartStore.list()).toEqual([])
 
-    const noChart = createAuthorIndicatorTool({ store })
+    const noChart = createAuthorIndicatorTool({ store, trialTimeoutMs: TEST_TRIAL_TIMEOUT_MS })
     const out = String(await noChart.execute({ ...AUTHOR_ARGS, activate: true }))
     expect(out).toContain('no chart activation store is available')
     expect(await store.get('authored_i')).toBeDefined()
@@ -390,12 +394,12 @@ describe('indicator_author「创作即上图」（issue #63）', () => {
     const store = createMemoryCustomIndicatorStore()
     const chartStore = createMemoryChartActivationStore()
     const onActivated = vi.fn()
-    await createAuthorIndicatorTool({ store, chartStore, onActivated }).execute({ ...AUTHOR_ARGS, activate: true })
+    await createAuthorIndicatorTool({ store, chartStore, onActivated, trialTimeoutMs: TEST_TRIAL_TIMEOUT_MS }).execute({ ...AUTHOR_ARGS, activate: true })
     expect(onActivated).toHaveBeenCalledTimes(1)
     expect(onActivated).toHaveBeenCalledWith('authored_i')
 
     const silent = vi.fn()
-    await createAuthorIndicatorTool({ store, chartStore, onActivated: silent }).execute({ ...AUTHOR_ARGS, id: 'authored_ii' })
+    await createAuthorIndicatorTool({ store, chartStore, onActivated: silent, trialTimeoutMs: TEST_TRIAL_TIMEOUT_MS }).execute({ ...AUTHOR_ARGS, id: 'authored_ii' })
     expect(silent).not.toHaveBeenCalled()
   })
 })
