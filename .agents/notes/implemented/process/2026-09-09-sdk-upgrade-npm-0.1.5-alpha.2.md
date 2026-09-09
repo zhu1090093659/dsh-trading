@@ -98,6 +98,38 @@ CLI 宿主（npm 全局，全新解析）是干净的，故本轮 CLI 冒烟全�
 必须清 lockfile 从零解析（或如 root 仓用 overrides 强制），且构建产物要有
 世代普查红灯；「依赖安装成功/入口文件存在」不等于「闭包单一世代」。
 
+## 追记 2（同日）：UI 功能双症（工作区不可选 + 左侧死区）与 ui:check 固化
+
+桌面壳升级后用户报告两症：①「选择工作区」不可用，composer 停在禁用占位；
+②窗口左缘恒定 360px 黑区。CDP 交互探针（node 内置 WebSocket，零依赖）取证：
+
+- 症①根因：alpha.2 `@deepseek-ai/dsh-persona` 配置 schema 从 `text` 变为
+  `prefix`（required）/`suffix`/`complete`/`includeRuntimeContext`。本仓 8 个
+  角色预设由 `packages/base/src/presets.ts` 生成托管到 `~/.dsh-trading-presets/`，
+  仍按旧 schema 产 `text:` → 会话创建一律
+  `agent-preset/invalid: preset "master" failed to mount` → 选工作区（=建会话）
+  与新建会话全数失败。修复：生成器 `text:` → `prefix:`，重建 base 后随宿主
+  挂载由 installPresets 管理戳机制自动重写（未定制的托管预设零手工干预）。
+- 症②根因：交易壳对宿主 frame 的四轨道接管（shell-pad.css，rtl 技巧）里
+  「工具详情列折叠」镜像的宿主信号是 0.1.2 的 `[data-details-collapsed]`；
+  0.1.5 该列由全新 sidebar-right dock 接管，折叠信号改为
+  `[data-rightbar-collapsed]`，旧信号永不再来 → 工具详情轨道恒 360px，
+  列内是 dock 的空窗占位「空面板」。修复：折叠规则同时镜像新旧两信号 +
+  dock 面板宽度钳到轨道内（宿主内联 720px 在 360px 轨道会溢出）。
+- 排查方法论沉淀：无头截图只能证「渲染了什么」，证不了「交互是否可用」；
+  用 CDP（Runtime.evaluate + Input.dispatchMouseEvent）做点击流取证才定位到
+  症①的控制台 SessionCreateError 与症②的属性失配。原生 web profile 对照
+  （LTR/右栏 0px）是判定「上游默认 vs 插件互动」的关键证据。
+- **固化 `scripts/ui-functional-check.mjs`（`pnpm ui:check`）**：自起（或
+  `--url` 附加）实例 → 完整 tokenized URL 捕获 → CDP 八项断言（认证栅栏 401、
+  交易面挂载、composer 可用态、无 SessionCreateError、折叠宣告下工具详情
+  轨道必须 0 宽、工作区菜单可开、无未捕获异常、无 error 控制台）→ 截图存证
+  → 清理。boot/attach 双模式实测全绿。后续宿主升级先跑 `pnpm ui:check`，
+  不再只看截图。
+- 顺带修复：`~/.dsh-trading/profiles/web` 缺 `@deepseek-ai/dsh-web-search-exa`
+  依赖声明（bundle patch 行引用但 package.json 未声明，boot 即
+  ERR_MODULE_NOT_FOUND），补声明并物化 alpha.2。
+
 ## 教训 / 备注
 
 - **cohort check 脚本的 home 语义**：`profile-cohort-check.sh` 默认扫

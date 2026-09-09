@@ -10,8 +10,11 @@
 
 /* 1) rtl 翻转 + 四轨道接管。折叠态镜像宿主 data 属性：
       sidebar 收起 = 56px 紧凑栏（columns.ts SIDEBAR_COLLAPSED），
-      details 收起 = 0px（宿主以 0 宽保持子树挂载）。轨道 var 变化
-      仍走宿主 grid-template-columns transition（对话列展开有滑入动画）。 */
+      details 收起 = 0px。宿主信号随世代变化：0.1.2 写
+      [data-details-collapsed]；0.1.5 起 details 列由 sidebar-right dock
+      接管，折叠信号为 [data-rightbar-collapsed]（两者都镜像，兼容
+      未升级的宿主）。轨道 var 变化仍走宿主 grid-template-columns
+      transition（对话列展开有滑入动画）。 */
 /* 1) rtl 翻转 + 四轨道接管。
       第 1 轨道：右缘侧栏/竖条预留（44px）
       第 2 轨道：对话列（默认 380px，折叠时 0px）
@@ -30,8 +33,15 @@ div:has(> [data-shell-overlay])[data-sidebar-collapsed] {
   --dshtrading-sidebar-w: 44px !important;
 }
 
-div:has(> [data-shell-overlay])[data-details-collapsed] {
+div:has(> [data-shell-overlay])[data-details-collapsed],
+div:has(> [data-shell-overlay])[data-rightbar-collapsed] {
   --dshtrading-details-w: 0px !important;
+}
+
+/* dock 面板宽度钳到工具详情轨道内（宿主内联宽度按原生半屏写定，
+      360px 轨道里会向行情区溢出）。 */
+div:has(> [data-shell-overlay]) [data-sidebar-right-panel] {
+  width: 100% !important;
 }
 
 /* 对话列轨道 = 用户拖拽宽度（默认 380px）。--dshtrading-chat-user-w 由
