@@ -13,7 +13,7 @@
  *   FxInvalidBaseError（桥映射 HTTP 400）。
  */
 import { readFile } from 'node:fs/promises'
-import { writeJsonAtomic } from './fs-atomic.ts'
+import { writeJsonAtomic } from '@dshtrading/dsh-home'
 
 export const FX_BASES = ['USD', 'CNY', 'HKD'] as const
 export type FxBase = (typeof FX_BASES)[number]
@@ -149,7 +149,7 @@ export function createFxService(options: FxServiceOptions = {}): FxService {
         // 首写/损坏：覆盖重建。
       }
       file.entries[base] = entry
-      await writeJsonAtomic(cacheFilePath, file, LOG_TAG)
+      await writeJsonAtomic(cacheFilePath, file, `${LOG_TAG} failed to atomic flush to`)
     } catch {
       // 缓存落盘失败不致命：内存层已就位，文件层只是重启兜底。
     }

@@ -2,8 +2,8 @@
  * 文件持久化版图表激活名册存储（Node.js 宿主侧使用，issue #63）。
  * 与 custom-fs.ts 同款 tmp + rename 原子写入模式与错误日志纪律。
  */
-import { readFile, writeFile, rename, mkdir } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { writeJsonAtomic } from '@dshtrading/dsh-home'
 import type { IndicatorInstance } from './types.ts'
 import type { ChartActivationStore } from './chart-activations.ts'
 import { sanitizeInstance } from './chart-activations.ts'
@@ -35,30 +35,7 @@ export function createFileChartActivationStore(filePath: string): ChartActivatio
   }
 
   async function flush(map: Map<string, IndicatorInstance>): Promise<void> {
-    const dir = dirname(filePath)
-    const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
-    const data = JSON.stringify([...map.values()], null, 2)
-    try {
-      await mkdir(dir, { recursive: true })
-      await writeFile(tmpPath, data, 'utf8')
-      let lastError: unknown
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          await rename(tmpPath, filePath)
-          return
-        } catch (err) {
-          const code = (err as { code?: string }).code
-          if (code !== 'EPERM' && code !== 'EBUSY') throw err
-          lastError = err
-          await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
-        }
-      }
-      throw lastError
-    } catch (error) {
-      console.error(`[dsh-trading/indicators] failed to atomic flush chart activations to ${filePath}:`, error)
-      await import('node:fs/promises').then(m => m.unlink(tmpPath)).catch(() => {})
-      throw error
-    }
+    await writeJsonAtomic(filePath, [...map.values()], '[dsh-trading/indicators] failed to atomic flush chart activations to')
   }
 
   return {

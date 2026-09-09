@@ -13,6 +13,9 @@ import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
+// home 数据文件原子写（tmp+rename，EPERM/EBUSY 重试）——全包唯一实现。
+export { writeJsonAtomic } from './fs-atomic.ts'
+
 const DEFAULT_HOME_DIR_NAME = '.dsh'
 
 /** 展开 `~` 与 `~/` 前缀（对齐宿主 expandHomePath；Windows 反斜杠前缀同样接受）。 */
