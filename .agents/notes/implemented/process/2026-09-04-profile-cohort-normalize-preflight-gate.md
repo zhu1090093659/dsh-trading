@@ -39,8 +39,10 @@ checkout，yaml 带 @dsh/* 死 overrides）。即 4 个 WARN 背后是 4 个无�
 4. **固化门禁 `scripts/profile-config-preflight.sh <profile>...`**（只读）：
    ① 死路径（file:/link: 目标不存在）② 身份漂移（行名 ≠ 目标目录真实包名，
    并检查 cordis.patch.yml 的历史 scope name: 行）③ 闭包缺口（依赖
-   @dshtrading/* 则 overrides 必须覆盖全部仓库包）。接入
-   `refresh-trading-web-profile.sh` 预检位，失败即中止（set -e），杜绝带病
+   @dshtrading/* 则 overrides 必须覆盖全部仓库包）④ **版本漂移**（2026-09-09
+   追加：已安装的 node_modules/@dshtrading/* 拷贝必须全体同版本——同族 fixed
+   版本下混世代只可能是局部刷新残留；递归扫描但不下钻软链目录，漂移即 exit 1）。
+   接入 `refresh-trading-web-profile.sh` 预检位，失败即中止（set -e），杜绝带病
    install。数据解析在 node 内完成（行含冒号/引号，bash 切字段会炸）。
 
 ## Consequences
@@ -57,3 +59,11 @@ checkout，yaml 带 @dsh/* 死 overrides）。即 4 个 WARN 背后是 4 个无�
 - 变更面：`scripts/profile-config-preflight.sh`（新增）、
   `scripts/refresh-trading-web-profile.sh`（预检接线）、本 note。
   profile 侧变更在 `~/.dsh`（机器状态，不进仓库）。
+- **检查 ④ 的实证来源（2026-09-09）**：`trading-all` 启动崩在两个「同根症状」
+  ——`@dshtrading/watchlist` 缺 `createMemoryWatchlistGroupsStore`（client-ui-trading
+  0.1.6 对 watchlist 0.1.5），以及 `dsh-trading-hk-dataplane-eastmoney` 重复注册
+  `cn/eastmoney`（旧 eastmoney 拷贝不认 `config.market: hk`，回落到默认 cn）。
+  该 profile 的 46 个 @dshtrading 拷贝当时是 0.1.5 / 0.1.6 混装；删拷贝重装后两条
+  症状同时消失，`dsh --profile trading-all "Reply with exactly: ok"` 返回 `ok`。
+  检查 ④ 对 5 个 profile 正常态全 OK，对人工注入的单个 0.1.5 拷贝正确 FAIL
+  （exit 1）。
