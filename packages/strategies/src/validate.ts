@@ -16,6 +16,7 @@
  *    Node 侧传 vm 熔断 runner（validate-node.ts）。
  */
 import {
+  compileComputeSource,
   createSampleBars,
   workerComputeRunner,
   type AsyncComputeRunner,
@@ -46,21 +47,14 @@ export type StrategyValidationResult =
   | { ok: true; definition: import('./types.ts').StrategyDefinition; record: CustomStrategyRecord }
   | { ok: false; reason: string }
 
-/** 将策略源码解析为可执行纯函数（浏览器端 new Function；Node 侧走 vm runner 试算）。 */
-export function compileStrategySource(
+/**
+ * 将策略源码解析为可执行纯函数（浏览器端 new Function；Node 侧走 vm runner 试算）。
+ * 编译语义（形态嗅探 + new Function 双形态）的单一来源是 @dshtrading/indicators 的
+ * compileComputeSource——此处仅按策略信号类型收窄返回值（2026-09-09 收敛同体副本）。
+ */
+export const compileStrategySource = compileComputeSource as unknown as (
   source: string,
-): (bars: readonly Kline[], params: Readonly<Record<string, number>>) => StrategySignal[] {
-  const trimmed = source.trim()
-  if (
-    /^(?:\([a-zA-Z0-9_,\s]*\)|[a-zA-Z0-9_]+)\s*=>/.test(trimmed)
-    || /^function\b/.test(trimmed)
-  ) {
-    const factory = new Function(`"use strict"; return (${trimmed});`)
-    return factory() as (bars: readonly Kline[], params: Readonly<Record<string, number>>) => StrategySignal[]
-  }
-  const factory = new Function('bars', 'params', `"use strict";\n${trimmed}`)
-  return factory as unknown as (bars: readonly Kline[], params: Readonly<Record<string, number>>) => StrategySignal[]
-}
+) => (bars: readonly Kline[], params: Readonly<Record<string, number>>) => StrategySignal[]
 
 /**
  * 信号序列专用校验（引擎语义对齐：i 收盘确认、i+1 开盘成交可复算）。
