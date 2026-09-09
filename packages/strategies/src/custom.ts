@@ -8,6 +8,7 @@
  * 序列化（file store 直接 JSON 落盘），解析在读取边界做。
  */
 import type { StrategyHorizon, StrategyParamSpec } from './types.ts'
+import { createMemoryRecordStore } from './memory-store.ts'
 
 export interface CustomStrategyRecord {
   /** 策略唯一 ID，如 'ema-stop-takeprofit'（校验器保留 6 大范式 id） */
@@ -34,17 +35,7 @@ export interface CustomStrategyStore {
   remove(id: string, archive?: boolean): Promise<boolean>
 }
 
-/** 内存版自定义策略存储（纯浏览器与单测用）。 */
+/** 内存版自定义策略存储（纯浏览器与单测用）；CRUD 机制见 memory-store.ts 单一实现。 */
 export function createMemoryCustomStrategyStore(initial: CustomStrategyRecord[] = []): CustomStrategyStore {
-  const map = new Map<string, CustomStrategyRecord>()
-  for (const item of initial) map.set(item.id, item)
-
-  return {
-    list: async () => [...map.values()],
-    get: async (id) => map.get(id),
-    save: async (record) => {
-      map.set(record.id, { ...record })
-    },
-    remove: async (id) => map.delete(id),
-  }
+  return createMemoryRecordStore(initial)
 }

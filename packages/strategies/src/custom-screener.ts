@@ -8,6 +8,7 @@
  * （覆盖 + 墓碑模型，见 management.ts）。解析在读取边界做。
  */
 import type { StrategyHorizon } from './types.ts'
+import { createMemoryRecordStore } from './memory-store.ts'
 
 export interface CustomScreenerRecord {
   /** 选股器唯一 ID，强制 'scr.' 前缀（如 'scr.custom-momentum'） */
@@ -36,17 +37,7 @@ export interface CustomScreenerStore {
   remove(id: string, archive?: boolean): Promise<boolean>
 }
 
-/** 内存版自定义选股器存储（纯浏览器与单测用）。 */
+/** 内存版自定义选股器存储（纯浏览器与单测用）；CRUD 机制见 memory-store.ts 单一实现。 */
 export function createMemoryCustomScreenerStore(initial: CustomScreenerRecord[] = []): CustomScreenerStore {
-  const map = new Map<string, CustomScreenerRecord>()
-  for (const item of initial) map.set(item.id, item)
-
-  return {
-    list: async () => [...map.values()],
-    get: async (id) => map.get(id),
-    save: async (record) => {
-      map.set(record.id, { ...record })
-    },
-    remove: async (id) => map.delete(id),
-  }
+  return createMemoryRecordStore(initial)
 }
