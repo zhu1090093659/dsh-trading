@@ -50,6 +50,8 @@ export interface IndicatorOutput {
   invertFilledArea?: boolean
   /** 线宽（1-4） */
   lineWidth?: number
+  /** 图例/读数小数位（缺省 2）：成本线类自定义指标可设 3 提高读数分辨率。 */
+  precision?: number
 }
 
 export interface IndicatorDefinition {

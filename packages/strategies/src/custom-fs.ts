@@ -5,8 +5,9 @@
  * remove(archive=true) 会先把被删记录归档到 sidecar 文件（<path>.archive.jsonl，
  * JSONL 追加）——策略管理（覆盖 + 墓碑）丢弃用户 override 时可找回（2026-09-07）。
  */
-import { appendFile, readFile, writeFile, rename, unlink, mkdir } from 'node:fs/promises'
+import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { writeJsonAtomic } from '@dshtrading/dsh-home'
 import type { CustomStrategyRecord, CustomStrategyStore } from './custom.ts'
 
 export interface ArchiveCapableStore extends CustomStrategyStore {
@@ -60,29 +61,7 @@ export function createFileCustomStrategyStore(filePath: string): CustomStrategyS
   }
 
   async function flush(map: Map<string, CustomStrategyRecord>): Promise<void> {
-    const dir = dirname(filePath)
-    const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
-    const data = JSON.stringify([...map.values()], null, 2)
-    try {
-      await mkdir(dir, { recursive: true })
-      await writeFile(tmpPath, data, 'utf8')
-      let lastError: unknown
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          await rename(tmpPath, filePath)
-          return
-        } catch (err: any) {
-          if (err?.code !== 'EPERM' && err?.code !== 'EBUSY') throw err
-          lastError = err
-          await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
-        }
-      }
-      throw lastError
-    } catch (error) {
-      console.error(`[dsh-trading/strategies] failed to atomic flush custom strategies to ${filePath}:`, error)
-      await unlink(tmpPath).catch(() => {})
-      throw error
-    }
+    await writeJsonAtomic(filePath, [...map.values()], '[dsh-trading/strategies] failed to atomic flush custom strategies to')
   }
 
   return {

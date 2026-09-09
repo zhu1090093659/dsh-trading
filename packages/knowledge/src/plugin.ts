@@ -7,7 +7,7 @@
  *   knowledge_ingest/search 共享同一缓存）；
  * - host 平面注册 `knowledge_ingest` / `knowledge_search` / `knowledge_get` /
  *   `knowledge_delete`（从 kit/client-ui-trading 双注册收口）+ `knowledge_graph`
- *   （buildGraph 的只读结构概要包装）；
+ *   （countGraphSummary 的只读结构概要，与 buildGraph 默认模式同值）；
  * - 写/删成功 emit tradingEvents('knowledge')（issue #30 通道）。
  */
 import type { Context } from '@deepseek-ai/cordis'
@@ -15,7 +15,7 @@ import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import path from 'node:path'
 import { dshHomeDir } from '@dshtrading/dsh-home'
-import { buildGraph } from './graph.ts'
+import { countGraphSummary } from './graph.ts'
 import type { KnowledgeCardStore } from './types.ts'
 import { createFileKnowledgeCardStore } from './knowledge-fs.ts'
 import {
@@ -68,7 +68,8 @@ export function createKnowledgeGraphTool(options: KnowledgeGraphToolOptions) {
     },
     async execute() {
       const cards = await store.list()
-      const data = buildGraph(cards)
+      // 只要规模数字：计数通道与默认 buildGraph 严格同值但不物化边对象（O(n²) 配对 → 标签索引计数）。
+      const data = countGraphSummary(cards)
       // 两级检索第一级：主体（聚类键 = 卡片首个标签）全量分布——清洗后约 10-20 个
       // 主体，全量返回成本可忽略；卡片级内容一律走 knowledge_search / knowledge_get。
       const clusterCounts = new Map<string, number>()
@@ -84,8 +85,8 @@ export function createKnowledgeGraphTool(options: KnowledgeGraphToolOptions) {
       return JSON.stringify({
         ok: true,
         cards: cards.length,
-        nodeCount: data.nodes.length,
-        edgeCount: data.links.length,
+        nodeCount: data.nodeCount,
+        edgeCount: data.edgeCount,
         clusters,
         credibility,
       })

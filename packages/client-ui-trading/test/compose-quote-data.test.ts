@@ -48,6 +48,20 @@ describe('composeQuoteDataSection', () => {
     expect(lines[3]).toBe('readouts MA MA5=11.26, MA10=10.80; MACD DIF=0.12, DEA=0.05, MACD=-0.04')
   })
 
+  it('precision：output.precision 覆盖缺省两位小数（缺省用例不变）', () => {
+    const text = composeQuoteDataSection({
+      market: 'hk',
+      symbol: '00700.HK',
+      interval: '1d',
+      klines: [kline(at(2026, 9, 1), 10), kline(at(2026, 9, 2), 11)],
+      indicatorReadouts: [
+        { title: 'KDAS', outputs: [{ key: 'KDAS_25-10-01', value: 12.3456, precision: 3 }] },
+      ],
+      klinesTool: 'hk_get_klines',
+    }, COPY)
+    expect(text.split('\n')[3]).toBe('readouts KDAS KDAS_25-10-01=12.346')
+  })
+
   it('warm-up：分量 undefined 跳过，整组无有效值整组省略', () => {
     const text = composeQuoteDataSection({
       market: 'us',

@@ -43,6 +43,7 @@ import type { Holding, HoldingCurrency, NewHolding, NewHoldingInput } from '@dsh
 import { createMemoryHoldingsStore } from '@dshtrading/holdings'
 import type { FxFetchLike } from '@dshtrading/holdings/fx'
 import { createFxService } from '@dshtrading/holdings/fx'
+import { TtlCache } from './ttl-cache.ts'
 
 /** 本桥支持的市场（与连接器服务键一一对应）。 */
 export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
@@ -517,6 +518,9 @@ export const SYMBOLS_CACHE_TTL_MS = 30 * 60 * 1000
  */
 export const FUNDAMENTALS_CACHE_TTL_MS = 5 * 60 * 1000
 
+/** 基本面缓存条目上限（LRU）：财报级数据包体积大，长生命周期宿主必须有界。 */
+export const FUNDAMENTALS_CACHE_MAX = 64
+
 /** 从 Error 上提取结构化错误词汇（连接器按 TradingError 形状附加 code）。 */
 export function errorPayload(error: unknown): { code: string; message: string } {
   if (error instanceof Error) {
@@ -529,7 +533,7 @@ export function errorPayload(error: unknown): { code: string; message: string } 
 
 export class TradingBridge {
   private readonly symbolsCache = new Map<string, { list: SymbolInfoWire[]; fetchedAt: number }>()
-  private readonly fundamentalsCache = new Map<string, { pkg: StockFundamentals; fetchedAt: number }>()
+  private readonly fundamentalsCache = new TtlCache<StockFundamentals>(FUNDAMENTALS_CACHE_TTL_MS, FUNDAMENTALS_CACHE_MAX)
   private readonly fundamentalsInflight = new Map<string, Promise<StockFundamentals>>()
   /** FX 兜底 fetcher（issue #65；host.fetchFxRates 注入正式实现时不走这里）。 */
   readonly #fallbackFxFetcher: FxRatesFetcher = createFallbackFxFetcher()
@@ -1182,9 +1186,9 @@ export class TradingBridge {
     if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
 
     const cacheKey = `${market}:${trimmed}`
-    const cached = this.fundamentalsCache.get(cacheKey)
-    if (cached !== undefined && Date.now() - cached.fetchedAt < FUNDAMENTALS_CACHE_TTL_MS) {
-      return { ok: true, fundamentals: cached.pkg }
+    const cached = this.fundamentalsCache.getFresh(cacheKey, Date.now())
+    if (cached !== undefined) {
+      return { ok: true, fundamentals: cached }
     }
     const inflight = this.fundamentalsInflight.get(cacheKey)
     if (inflight !== undefined) return { ok: true, fundamentals: await inflight }
@@ -1211,7 +1215,7 @@ export class TradingBridge {
             timestamp: snapshot?.timestamp ?? Date.now(),
           } as unknown as StockFundamentals)
         : snapshot as StockFundamentals
-      this.fundamentalsCache.set(cacheKey, { pkg: result, fetchedAt: Date.now() })
+      this.fundamentalsCache.set(cacheKey, result, Date.now())
       return result
     })()
 

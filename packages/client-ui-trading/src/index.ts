@@ -27,6 +27,7 @@ import {
   TradingBridge,
   createBridgeHost,
   dispatchBridgeRequest,
+  errorPayload,
   type MarketDataRegistryLike,
   type TradeRegistryLike,
 } from './bridge.ts'
@@ -295,7 +296,7 @@ export function apply(ctx: Context): void {
             sendJson(res, error.status, { ok: false, code, message: error.message })
             return
           }
-          sendJson(res, 200, { ok: false, ...errorPayloadOf(error) })
+          sendJson(res, 200, { ok: false, ...errorPayload(error) })
         }
       },
     }
@@ -371,11 +372,3 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-function errorPayloadOf(error: unknown): { code: string; message: string } {
-  if (error instanceof Error) {
-    const raw = (error as { code?: unknown }).code
-    const code = typeof raw === 'string' ? raw : 'TRADING_UNKNOWN'
-    return { code, message: error.message }
-  }
-  return { code: 'TRADING_UNKNOWN', message: String(error) }
-}

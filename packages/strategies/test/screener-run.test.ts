@@ -139,6 +139,30 @@ describe('screener_run', () => {
     expect(wire.results?.[0]?.metrics.n).toBe(300)
   })
 
+  it('编译复用执行器逐标的建独立沙箱：逐标的取数正确且全局污染不泄漏', async () => {
+    const store = createMemoryCustomScreenerStore([{
+      id: 'scr.demo-isolation', title: '隔离', horizon: 'swing', summary: '演示',
+      paramsJson: '[]', columnsJson: '[]',
+      // 写 globalThis 的污染源：若 context 被复用，n 会跨标的累加而非恒 1。
+      evaluateSource: '(bars) => { globalThis.__n = (globalThis.__n ?? 0) + 1; return { metrics: { n: globalThis.__n, len: bars.length }, reason: "x" } }',
+      createdAt: 1,
+    }])
+    const wire = JSON.parse(String(await makeTool({
+      store,
+      active: () => ({
+        provider: 'fake',
+        service: service({
+          symbols: [{ symbol: 'S300' }, { symbol: 'S150' }],
+          bars: async (symbol) => risingBars(symbol === 'S300' ? 300 : 150),
+        }),
+      }),
+    }).execute({ screenerId: 'scr.demo-isolation', market: 'us' }))) as RunWire & { results?: Array<{ metrics: Record<string, number> }> }
+    expect(wire.results).toHaveLength(2)
+    const byLen = new Map(wire.results?.map(r => [r.metrics.len, r.metrics.n]))
+    expect(byLen.get(300)).toBe(1)
+    expect(byLen.get(150)).toBe(1)
+  })
+
 
   it('总预算耗尽 → deadlineExceeded=true 且不再领取新标的（注入假时钟，确定性）', async () => {
     let clock = 0

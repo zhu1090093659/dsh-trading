@@ -2,7 +2,7 @@
  * 文件账本单测（临时目录）：动作语义、权限确认门、幂等、有界历史、持久化、
  * 目录锁与重启对账。时钟注入固定值，断言不依赖墙钟。
  */
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -136,6 +136,37 @@ describe('TasksLedger', () => {
     const second = new TasksLedger(join(env.dir, 'lock-b.json'), { now: () => T0 })
     expect(second.snapshot().tasks.length).toBe(0)
     second.dispose()
+  })
+
+  it('调度器心跳只在内存推进：不落盘、不广播、快照可见（稳态写放大优化回归）', () => {
+    env.ledger.apply(createAction('t-hb') as never)
+    const revision = env.ledger.snapshot().revision
+    const onDisk = readFileSync(env.path, 'utf8')
+    let fired = 0
+    const unsubscribe = env.ledger.subscribe(() => { fired += 1 })
+    env.ledger.updateScheduler({ lastTickAt: T0 + 30_000, error: undefined })
+    expect(env.ledger.snapshot().scheduler.lastTickAt).toBe(T0 + 30_000)
+    expect(env.ledger.snapshot().revision).toBe(revision)
+    expect(fired).toBe(0)
+    expect(readFileSync(env.path, 'utf8')).toBe(onDisk)
+    unsubscribe()
+  })
+
+  it('调度器错误的出现与清除走完整 commit（可见状态变化必须广播落盘）', () => {
+    env.ledger.apply(createAction('t-err') as never)
+    let fired = 0
+    env.ledger.subscribe(() => { fired += 1 })
+    const before = env.ledger.snapshot().revision
+    env.ledger.updateScheduler({ error: 'tick boom' })
+    expect(env.ledger.snapshot().revision).toBe(before + 1)
+    expect(env.ledger.snapshot().scheduler.error).toBe('tick boom')
+    expect(fired).toBe(1)
+    // 出错后下心跳不再走快路径：成功 tick 清错误必须落盘广播。
+    env.ledger.updateScheduler({ lastTickAt: T0 + 30_000, error: undefined })
+    expect(env.ledger.snapshot().revision).toBe(before + 2)
+    expect(env.ledger.snapshot().scheduler.error).toBeUndefined()
+    expect(env.ledger.snapshot().scheduler.lastTickAt).toBe(T0 + 30_000)
+    expect(fired).toBe(2)
   })
 
   it('重启对账：无会话 id 的执行取消，有会话 id 的保留观察', () => {

@@ -7,7 +7,7 @@
  */
 import { readFile } from 'node:fs/promises'
 import { createEmptyBook, createHoldingsStore } from './store-core.ts'
-import { writeJsonAtomic } from './fs-atomic.ts'
+import { writeJsonAtomic } from '@dshtrading/dsh-home'
 import type { HoldingsBook, HoldingsStore } from './types.ts'
 
 const LOG_TAG = '[dsh-trading/holdings]'
@@ -52,7 +52,7 @@ export function createFileHoldingsStore(filePath: string): HoldingsStore {
   }
 
   async function flush(book: HoldingsBook): Promise<void> {
-    await writeJsonAtomic(filePath, { revision: book.revision, staged: book.staged, holdings: book.holdings }, LOG_TAG)
+    await writeJsonAtomic(filePath, { revision: book.revision, staged: book.staged, holdings: book.holdings }, `${LOG_TAG} failed to atomic flush to`)
   }
 
   return createHoldingsStore({ load, flush })

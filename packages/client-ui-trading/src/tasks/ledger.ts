@@ -560,7 +560,16 @@ export class TasksLedger {
 
   /** 调度器快照字段（tick 时间/错误）。 */
   // error 显式允许 undefined：tick 成功时用它清空上次错误（缺省=无错误）。
+  // 心跳快路径：纯 lastTickAt 刷新且当前无错误态时只在内存文档推进——不做
+  // 整文档克隆/落盘 fsync/监听器广播。tick 每 30s 一次，空转时整文档 fsync
+  // + SSE 扇出（每标签页随即 refetch 全量快照）是宿主唯一稳态写放大源；
+  // lastTickAt 是易失心跳（snapshot() 读内存文档即可见），下一次真实 commit
+  // 会顺带把它落盘。错误的出现/清除仍走完整 mutate（可见状态变化必须广播）。
   updateScheduler(patch: { lastTickAt?: number; error?: string | undefined }): void {
+    if (patch.error === undefined && patch.lastTickAt !== undefined && this.document.scheduler.error === undefined) {
+      this.document.scheduler = { timeZone: this.document.scheduler.timeZone, lastTickAt: patch.lastTickAt }
+      return
+    }
     this.mutate(document => {
       document.scheduler = {
         timeZone: document.scheduler.timeZone,

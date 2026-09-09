@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildGraph } from '../src/graph.ts'
+import { buildGraph, countGraphSummary } from '../src/graph.ts'
 import type { KnowledgeCard } from '../src/types.ts'
 
 function makeCard(id: string, title: string, author: string, tags: string[], related: string[] = []): KnowledgeCard {
@@ -106,5 +106,51 @@ describe('Knowledge Graph Builder — tagHubs 模式（Obsidian 式）', () => {
     // 100 卡 + 2 hub，边 = 200 条卡-标签边；全配对模式下这里会是 4950+ 边
     expect(graph.nodes).toHaveLength(102)
     expect(graph.links).toHaveLength(200)
+  })
+})
+
+describe('countGraphSummary（knowledge_graph 的只计数通道）', () => {
+  // 与默认模式 buildGraph 的 {nodes.length, links.length} 严格同值是硬契约：
+  // 用确定性伪随机卡集做等价断言（含多标签重叠/同作者/related 互指/manual 排除）。
+  function lcg(seed: number): () => number {
+    let s = seed
+    return () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648 }
+  }
+  function randomCards(seed: number, count: number): KnowledgeCard[] {
+    const rand = lcg(seed)
+    const tags = ['宏观', '行业', '公司', '策略', '风险', '估值']
+    const authors = ['alice', 'bob', 'manual', '手工', '']
+    const cards: KnowledgeCard[] = []
+    for (let i = 0; i < count; i++) {
+      const tagCount = 1 + Math.floor(rand() * 3)
+      const cardTags: string[] = []
+      for (let t = 0; t < tagCount; t++) cardTags.push(tags[Math.floor(rand() * tags.length)]!)
+      const related: string[] = []
+      if (i > 0 && rand() < 0.3) related.push('kc_' + Math.floor(rand() * i))
+      if (rand() < 0.1) related.push('kc_ghost') // 悬空 related 不入边
+      cards.push(makeCard('kc_' + i, '卡' + i, authors[Math.floor(rand() * authors.length)]!, cardTags, related))
+    }
+    return cards
+  }
+
+  it('与 buildGraph 默认模式同值（多组确定性卡集）', () => {
+    for (const [seed, count] of [[1, 0], [2, 1], [3, 17], [4, 64], [5, 215]] as const) {
+      const cards = randomCards(seed, count)
+      const summary = countGraphSummary(cards)
+      const graph = buildGraph(cards)
+      expect(summary.nodeCount).toBe(graph.nodes.length)
+      expect(summary.edgeCount).toBe(graph.links.length)
+    }
+  })
+
+  it('空库/自指 related/重复标签的边角与 buildGraph 一致', () => {
+    expect(countGraphSummary([])).toEqual({ nodeCount: 0, edgeCount: 0 })
+    const tricky = [
+      makeCard('a', 'A', 'alice', ['x', 'x', 'y'], ['a', 'b']),
+      makeCard('b', 'B', 'alice', ['y'], ['a']),
+    ]
+    const summary = countGraphSummary(tricky)
+    const graph = buildGraph(tricky)
+    expect(summary).toEqual({ nodeCount: graph.nodes.length, edgeCount: graph.links.length })
   })
 })

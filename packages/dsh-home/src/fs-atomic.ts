@@ -1,12 +1,16 @@
 /**
- * JSON 原子写小工具（Node.js 宿主端专用）：tmp + rename 模式，
- * 逐行对齐 packages/knowledge/src/knowledge-fs.ts 的 flush 先例
- * （EPERM/EBUSY 重试 3 次、失败清理 tmp、错误日志带模块前缀）。
+ * home 数据文件原子写单一实现（2026-09-09 收敛，原为 7 个包的 9+ 处同体副本）：
+ * tmp（唯一名）+ rename，EPERM/EBUSY（Windows 目标占用）25ms 退避重试 3 次；
+ * 重试耗尽或任何失败保留旧文件、清理 tmp、log + throw——目标文件永远只被
+ * 原子 rename 触碰，绝不非原子直写（半截写会损坏 JSON 导致 load 静默重置）。
+ *
+ * logPrefix 是失败日志在文件路径之前的完整前缀，逐字保留各调用方既有日志
+ * （如 '[dsh-trading/knowledge] failed to atomic flush knowledge cards to'）。
  */
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-export async function writeJsonAtomic(filePath: string, data: unknown, logTag: string): Promise<void> {
+export async function writeJsonAtomic(filePath: string, data: unknown, logPrefix: string): Promise<void> {
   const dir = dirname(filePath)
   const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
   const text = JSON.stringify(data, null, 2)
@@ -26,7 +30,7 @@ export async function writeJsonAtomic(filePath: string, data: unknown, logTag: s
     }
     throw lastError
   } catch (error) {
-    console.error(`${logTag} failed to atomic flush to ${filePath}:`, error)
+    console.error(`${logPrefix} ${filePath}:`, error)
     await unlink(tmpPath).catch(() => {})
     throw error
   }

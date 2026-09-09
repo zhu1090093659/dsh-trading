@@ -3,8 +3,8 @@
  *
  * 采用 tmp + rename 原子写入模式，并包含明确的错误日志与异常处理。
  */
-import { readFile, writeFile, rename, unlink, mkdir } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { writeJsonAtomic } from '@dshtrading/dsh-home'
 import type { CustomIndicatorRecord, CustomIndicatorStore } from './custom.ts'
 
 export function createFileCustomIndicatorStore(filePath: string): CustomIndicatorStore {
@@ -33,29 +33,7 @@ export function createFileCustomIndicatorStore(filePath: string): CustomIndicato
   }
 
   async function flush(map: Map<string, CustomIndicatorRecord>): Promise<void> {
-    const dir = dirname(filePath)
-    const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
-    const data = JSON.stringify([...map.values()], null, 2)
-    try {
-      await mkdir(dir, { recursive: true })
-      await writeFile(tmpPath, data, 'utf8')
-      let lastError: unknown
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          await rename(tmpPath, filePath)
-          return
-        } catch (err: any) {
-          if (err?.code !== 'EPERM' && err?.code !== 'EBUSY') throw err
-          lastError = err
-          await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
-        }
-      }
-      throw lastError
-    } catch (error) {
-      console.error(`[dsh-trading/indicators] failed to atomic flush custom indicators to ${filePath}:`, error)
-      await unlink(tmpPath).catch(() => {})
-      throw error
-    }
+    await writeJsonAtomic(filePath, [...map.values()], '[dsh-trading/indicators] failed to atomic flush custom indicators to')
   }
 
   return {

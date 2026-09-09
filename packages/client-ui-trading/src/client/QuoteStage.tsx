@@ -792,7 +792,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
           klines,
           indicatorReadouts: indicatorGroups.map(group => ({
             title: group.title,
-            outputs: group.outputs.map(output => ({ key: output.key, value: output.values[readoutIndex] })),
+            outputs: group.outputs.map(output => ({ key: output.key, value: output.values[readoutIndex], precision: output.precision })),
           })),
           klinesTool: `${activeMarket}_get_klines`,
         }, dataCopy)
@@ -1605,7 +1605,7 @@ function outputReadouts(
     if (value === undefined || !Number.isFinite(value)) return null
     return (
       <span key={`${group.key}.${output.key}`} style={{ color: output.color, fontWeight: 500 }}>
-        {group.title} {output.key}: {value.toFixed(2)}
+        {group.title} {output.key}: {value.toFixed(output.precision ?? 2)}
       </span>
     )
   })

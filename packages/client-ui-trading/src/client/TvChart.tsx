@@ -817,7 +817,7 @@ export function TvChart(props: TvChartProps): React.JSX.Element {
               if (value === undefined || !Number.isFinite(value)) return null
               return (
                 <span key={output.key} style={{ color: output.color, fontWeight: 500 }}>
-                  {output.key}: {value.toFixed(2)}
+                  {output.key}: {value.toFixed(output.precision ?? 2)}
                 </span>
               )
             })}
@@ -917,16 +917,25 @@ function syncIndicators(
   })
 }
 
+/** 输出读数小数位（precision 缺省 2，越界/非整数收敛到 0-8）。 */
+function outputDigits(output: IndicatorOutput): number {
+  if (output.precision === undefined) return 2
+  return Math.min(8, Math.max(0, Math.round(output.precision)))
+}
+
 function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: number): ISeriesApi<SeriesType> {
   // 主图叠加（pane 0）与蜡烛同住左轴价格刻度；副图 pane 保持各自默认右轴。
   const priceScaleId = paneIndex === 0 ? { priceScaleId: 'left' as const } : {}
+  // 序列 priceFormat 与缺省（precision 2 / minMove 0.01）一致，显式传入以支持
+  // 自定义指标按 output.precision 提高十字线/轴标签分辨率。
+  const priceFormat = { type: 'price' as const, precision: outputDigits(output), minMove: 1 / 10 ** outputDigits(output) }
   if (output.kind === 'histogram') {
     return chart.addSeries(HistogramSeries, {
       ...priceScaleId,
       color: output.color,
       priceLineVisible: false,
       lastValueVisible: false,
-      priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+      priceFormat,
     }, paneIndex)
   }
   if (output.kind === 'area') {
@@ -940,6 +949,7 @@ function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: numb
       priceLineVisible: false,
       lastValueVisible: false,
       crosshairMarkerVisible: false,
+      priceFormat,
     }, paneIndex)
   }
   return chart.addSeries(LineSeries, {
@@ -949,6 +959,7 @@ function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: numb
     priceLineVisible: false,
     lastValueVisible: false,
     crosshairMarkerVisible: false,
+    priceFormat,
   }, paneIndex)
 }
 

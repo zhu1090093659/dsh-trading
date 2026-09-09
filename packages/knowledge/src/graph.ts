@@ -196,3 +196,64 @@ export function buildGraph(
 
   return { nodes, links }
 }
+
+/**
+ * 只计数的图概要（knowledge_graph 工具专用）：与默认模式 buildGraph 的
+ * { nodes.length, links.length } 严格同值，但不物化节点/边对象——
+ * related 边 O(E) 键去重、co-author 边按作者分组 Σk(k-1)/2（同作者对唯一）、
+ * co-tag 边按标签索引逐标签枚举对并全局去重 O(Σ k_t²)。工具只要规模数字时
+ * 避免全配对边的对象分配（215 卡 ≈ 2 万+边对象的构建与丢弃）。
+ */
+export function countGraphSummary(cards: readonly KnowledgeCard[]): { nodeCount: number; edgeCount: number } {
+  if (!cards || cards.length === 0) return { nodeCount: 0, edgeCount: 0 }
+  const ids = new Set<string>()
+  for (const c of cards) ids.add(c.id)
+
+  // 显式 related 边（无向键去重；与 buildGraph 的 related 段同口径）
+  const related = new Set<string>()
+  for (const card of cards) {
+    if (!Array.isArray(card.related)) continue
+    for (const targetId of card.related) {
+      if (!ids.has(targetId) || targetId === card.id) continue
+      const [a, b] = card.id < targetId ? [card.id, targetId] : [targetId, card.id]
+      related.add(`${a}:${b}`)
+    }
+  }
+
+  // co-tag 边：标签 → 成员卡索引，逐标签枚举对；全局 Set 去重后的大小即边数。
+  // 卡内重复标签先去重（对齐 buildGraph 的 Set(cardA.tags) 语义，防自配对）。
+  const byTag = new Map<string, string[]>()
+  for (const card of cards) {
+    const seen = new Set<string>()
+    for (const tag of card.tags) {
+      if (seen.has(tag)) continue
+      seen.add(tag)
+      const members = byTag.get(tag)
+      if (members === undefined) byTag.set(tag, [card.id])
+      else members.push(card.id)
+    }
+  }
+  const coTag = new Set<string>()
+  for (const members of byTag.values()) {
+    for (let i = 0; i < members.length; i++) {
+      for (let j = i + 1; j < members.length; j++) {
+        const a = members[i]!
+        const b = members[j]!
+        coTag.add(a < b ? `${a}:${b}` : `${b}:${a}`)
+      }
+    }
+  }
+
+  // co-author 边：同作者对唯一（空/'manual'/'手工' 不参与），Σ k(k-1)/2。
+  const byAuthor = new Map<string, number>()
+  for (const card of cards) {
+    const author = card.source.author.trim()
+    if (!author || author === 'manual' || author === '手工') continue
+    byAuthor.set(author, (byAuthor.get(author) ?? 0) + 1)
+  }
+  let coAuthor = 0
+  for (const k of byAuthor.values()) coAuthor += (k * (k - 1)) / 2
+
+  return { nodeCount: cards.length, edgeCount: related.size + coTag.size + coAuthor }
+}
+
