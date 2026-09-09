@@ -16,7 +16,7 @@ import type { Kline } from './types.ts'
 /** 一个指标实例的读数面（与图表 legend 同源：output key + 当根数值）。 */
 export interface QuoteIndicatorReadout {
   title: string
-  outputs: ReadonlyArray<{ key: string; value: number | undefined }>
+  outputs: ReadonlyArray<{ key: string; value: number | undefined; precision?: number }>
 }
 
 export interface QuoteDataSectionInput {
@@ -67,14 +67,14 @@ function fill(template: string, slots: Record<string, string | number>): string 
 }
 
 /**
- * 指标读数 → `标题 key=value, ...`（图表 legend 同款两位小数；warm-up
- * 分量跳过，整组无有效值时整组省略）。
+ * 指标读数 → `标题 key=value, ...`（图表 legend 同款小数位：默认两位，
+ * output.precision 可指定；warm-up 分量跳过，整组无有效值时整组省略）。
  */
 function formatReadout(readout: QuoteIndicatorReadout): string | undefined {
   const entries: string[] = []
   for (const output of readout.outputs) {
     if (output.value === undefined || !Number.isFinite(output.value)) continue
-    entries.push(`${output.key}=${output.value.toFixed(2)}`)
+    entries.push(`${output.key}=${output.value.toFixed(output.precision ?? 2)}`)
   }
   return entries.length > 0 ? `${readout.title} ${entries.join(', ')}` : undefined
 }
