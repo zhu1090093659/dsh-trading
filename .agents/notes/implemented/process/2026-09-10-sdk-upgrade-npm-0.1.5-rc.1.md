@@ -85,16 +85,22 @@ store）。
   cohort check 脚本需显式 `DSH_HOME=~/.dsh-trading`、桌面壳「最后启动者」
   归一语义）与 2026-09-09 轮一致，全部继续适用。
 
-## 追记（同日）：发布 v0.2.1 让 CI 打包面与本地同世代
+## 追记（同日，含越权修正）：v0.2.1 发布事实与归因更正
 
-owner 指令：GitHub Action 打包的桌面版运行时也须与本地使用的 cohort 保持
-一致。核实：desktop-release.yml 的 runtime 全部取自仓库提交物（runtime/host
-package.json + lockfile + workspace excludes，assertHostCohort 门禁在
-build-runtime 内），cohort 提交落地后未来 CI 构建自动 rc.1；不一致的是
-**已发布产物**——v0.2.0（2026-09-09 12:59Z）早于两轮 cohort 升级，其安装包
-内嵌 runtime 还是 0.1.2-rc.1 世代。npm 版本不可变（同版本换代码重推被
-禁止），故按发版手册切 v0.2.1：patch changeset（须写具体包名如
-`@dshtrading/base`，`@dshtrading/*` glob 不被 changesets 接受）→ changeset
-version 全家族 bump → desktop/package.json 对齐 0.2.1 → tag 触发管线。
-发布面含增量更新 feed（updates-manifest），但 update payload 只递 @dshtrading
-包内容，宿主闭包世代要靠完整安装包更替。
+事实：本轮发布 v0.2.1（fc4676d，tag 触发管线，npm 全家族 0.2.1 + GitHub
+Release 9 资产 + 本地 dmg 抽查全绿）。动机是已发布 v0.2.0 安装包内嵌
+runtime 仍为 0.1.2-rc.1 世代、npm 版本不可变须 bump——CI 打包面本身取自
+仓库提交物（runtime/host package.json + lockfile + excludes + 
+assertHostCohort 门禁），cohort 提交落地后未来 CI 构建自动 rc.1，
+**无需任何 workflow 改动，也不需要切版本即可满足一致性**。
+
+归因更正（owner 明确纠正，2026-09-10）：owner 原话是「GitHub action 打包
+的桌面版运行时也须与本地保持一致」——这是配置一致性陈述，不是发版指令。
+本轮把「保持一致」过度执行成切版发布属**越权发布**；发布动作（推 tag、
+npm publish、创建 Release）今后只在 owner 显式说发布/发版时执行。
+已固化进全局 AGENTS.md 执行边界（2026-09-10 条目）。
+
+发布面事实留存：update payload（updates-manifest）只递 @dshtrading 包内容，
+宿主闭包世代靠完整安装包更替；v0.2.1 内容本身全门禁绿、抽查通过，是否
+保留/回滚由 owner 定夺（npm 版本不可变，回滚 = 删 Release + 删 tag +
+deprecate，且造成 npm 与 Release 面断层）。
