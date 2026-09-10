@@ -1,4 +1,10 @@
-# dsh-trading
+# dsh-trading — AI Trading Terminal for Crypto & Stocks
+
+**English** | [简体中文](README_zh.md)
+
+**DSH Trading (dsh-trading)** is an AI trading terminal built on DeepSeek Harness (DSH) for cryptocurrency, US equities, China A-shares and Hong Kong stocks. It brings market data, technical analysis, AI-assisted investment research and human-approved order execution into one modular workspace. Orders default to dry-run simulation; live trading requires explicit opt-in and approval.
+
+[Quick start](#quick-start) · [Features](#features) · [Supported markets](#one-terminal-every-market) · [FAQ](#faq) · [Documentation](#documentation)
 
 ![dsh-trading — Your next trading terminal, and your AI Agent](docs/banners/banner-en.jpg)
 
@@ -13,6 +19,14 @@
 [![License](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-lightgrey.svg)](LICENSE)
 
 </div>
+
+## Features
+
+- **Multi-market research:** follow crypto and stocks in one watchlist, with quotes, news, announcements and fundamentals from configured providers.
+- **Technical analysis:** candlestick charts, MA / EMA / MACD / RSI indicators, order books and crypto derivatives data.
+- **AI trading agents:** coordinate research, trading plans and risk review, with chart context sent to the agent on demand.
+- **Strategy backtesting:** evaluate historical trading signals with `strategy_backtest` alongside the bundled strategy playbooks; past performance does not predict future returns.
+- **Controlled execution:** dry-run by default, optional paper trading through supported connectors, and human approval for live orders.
 
 First, a question for you:
 
@@ -141,16 +155,34 @@ Six invariants lock the ecosystem down: insert-only bundle patches · knowledge 
 | Crypto | Binance / OKX | Official APIs; OKX paper trading with your own keys |
 | Crypto fundamentals | CoinCap | Public REST, individual use only — no redistribution, no bulk scraping |
 
+## FAQ
+
+### Is dsh-trading an autonomous trading bot?
+
+It is an AI-assisted trading terminal, not an unattended live-trading bot. Order tools default to dry-run. Live execution requires `liveTrading: true` and interactive approval; headless sessions fail closed. Dry-run simulation is distinct from exchange or broker paper trading.
+
+### Which exchanges, brokers and market data APIs can I connect?
+
+Connectors include Binance, OKX, Bybit and CCXT for crypto; Yahoo Finance, Alpaca and Interactive Brokers for US stocks; Tencent Finance, Eastmoney and MiniQMT for China A-shares; and Longbridge, Futu and Tiger for Hong Kong stocks. Data coverage, trading support, credentials and local gateway requirements vary by connector. See the [connector configuration guide](docs/connectors-guide.md).
+
+### Do I need API keys to use the terminal?
+
+Some public market data sources work without keys. Authenticated data services, broker or exchange accounts, and your selected AI provider may require separate credentials and fees. You supply your own keys (BYOK); provider terms and account permissions still apply.
+
+### Is dsh-trading free for commercial use?
+
+No. The [PolyForm Noncommercial 1.0.0 license](LICENSE) permits noncommercial use; commercial use requires prior written authorization. The software does not provide investment advice or guarantee trading returns.
+
 ## Documentation
 
-- 📖 [Connectors onboarding & configuration](docs/connectors-guide.md)
-- 📖 [New connector playbook](docs/connector-playbook.md)
-- 📖 [Skills architecture](docs/skills-guide.md)
-- 📖 [Symbol vocabulary](docs/symbol-vocabulary.md)
-- 📖 [Exchange routing & data plane](docs/exchange-routing.md)
-- 🗺️ [Analysis & quant roadmap](docs/analysis-roadmap.md)
-- 📜 [Architecture decision log](spikes/REVIEW-LOG.md)
-- 🇨🇳 [中文介绍](README_zh.md)
+- [Connectors onboarding & configuration](docs/connectors-guide.md)
+- [New connector playbook](docs/connector-playbook.md)
+- [Skills architecture](docs/skills-guide.md)
+- [Symbol vocabulary](docs/symbol-vocabulary.md)
+- [Exchange routing & data plane](docs/exchange-routing.md)
+- [Analysis & quant roadmap](docs/analysis-roadmap.md)
+- [Architecture decision log](spikes/REVIEW-LOG.md)
+- [中文介绍](README_zh.md)
 
 ## Friendly Links
 
@@ -159,7 +191,7 @@ Six invariants lock the ecosystem down: insert-only bundle patches · knowledge 
 
 ## Community
 
-💬 **QQ group: DSH Trading 交流群（群号 `319737695`）** — questions, feedback, and everything dsh-trading. Scan with QQ to join:
+**QQ group: DSH Trading 交流群（群号 `319737695`）** — questions, feedback, and everything dsh-trading. Scan with QQ to join:
 
 <div align="center">
 

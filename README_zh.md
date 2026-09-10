@@ -1,4 +1,10 @@
-# dsh-trading
+# dsh-trading — 面向加密货币、美股、A 股与港股的 AI 交易终端
+
+[English](README.md) | **简体中文**
+
+**DSH Trading（dsh-trading）** 是基于 DeepSeek Harness（DSH）的 AI 交易终端，覆盖加密货币、美股、A 股和港股。在一个模块化工作区内整合市场行情、技术分析、AI 辅助投研与人工审批下单。订单默认 dry-run 模拟，实盘交易必须显式开启并经过审批。
+
+[快速开始](#快速开始) · [核心功能](#核心功能) · [支持市场](#一个终端全市场覆盖) · [常见问题](#常见问题) · [文档导航](#文档)
 
 ![dsh-trading —— 你的下一个交易终端，也可以是你的 AI Agent](docs/banners/banner-zh.jpg)
 
@@ -13,6 +19,14 @@
 [![许可](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-lightgrey.svg)](LICENSE)
 
 </div>
+
+## 核心功能
+
+- **跨市场投研：** 在同一自选列表关注加密货币与股票，通过已配置的数据源获取行情、新闻、公告和基本面。
+- **技术分析：** K 线图表、MA / EMA / MACD / RSI 等技术指标、盘口与加密衍生品数据。
+- **AI 交易助手：** 研究员、交易员与风控角色协作，按需将图表上下文发送给 Agent，辅助分析和交易计划制定。
+- **策略回测：** 结合内置策略范式与 `strategy_backtest` 评估历史交易信号；历史表现不代表未来收益。
+- **受控交易执行：** 默认 dry-run，支持通过适用连接器接入模拟盘，实盘订单须人工审批。
 
 先问各位一个问题：
 
@@ -143,16 +157,34 @@ dsh --profile trading-web
 | 加密 | Binance / OKX | 官方 API；OKX 支持自带密钥的模拟盘 |
 | 加密基本面 | CoinCap | 公共 REST，仅个人使用——不再分发、不批量抓取 |
 
+## 常见问题
+
+### dsh-trading 是自动交易机器人吗？
+
+它是 AI 辅助交易终端，不是无人值守的实盘交易机器人。下单工具默认 dry-run；实盘必须开启 `liveTrading: true` 并交互审批，无头会话拒绝执行。dry-run 模拟与交易所、券商提供的模拟盘不是同一回事。
+
+### 支持哪些交易所、券商和行情 API？
+
+加密货币连接器包括 Binance（币安）、OKX（欧易）、Bybit 和 CCXT；美股包括 Yahoo Finance、Alpaca 和盈透证券 IBKR；A 股包括腾讯财经、东方财富和 MiniQMT；港股包括长桥、富途和老虎。各连接器的行情覆盖、交易能力、凭证及本地网关要求不同，详见[连接器接入与配置指南](docs/connectors-guide.md)。
+
+### 使用前必须配置 API Key 吗？
+
+部分公共行情源无需密钥。需要认证的数据服务、券商或交易所账户，以及选用的 AI 提供方，可能需要单独配置凭证并付费。密钥由用户自行提供（BYOK），使用仍受提供方条款和账户权限约束。
+
+### dsh-trading 可以免费商用吗？
+
+不可以。项目采用 [PolyForm Noncommercial 1.0.0](LICENSE) 许可，非商业用途免费，商业用途须事先取得书面授权。本软件不构成投资建议，也不保证交易收益。
+
 ## 文档
 
-- 📖 [连接器接入与配置指南](docs/connectors-guide.md)
-- 📖 [新连接器标准手册](docs/connector-playbook.md)
-- 📖 [Skills 架构指南](docs/skills-guide.md)
-- 📖 [标的符号规范](docs/symbol-vocabulary.md)
-- 📖 [交易所路由与数据平面](docs/exchange-routing.md)
-- 🗺️ [定性分析与量化路线图](docs/analysis-roadmap.md)
-- 📜 [架构决策与 Spike 裁决史](spikes/REVIEW-LOG.md)
-- 🇺🇸 [English README](README.md)
+- [连接器接入与配置指南](docs/connectors-guide.md)
+- [新连接器标准手册](docs/connector-playbook.md)
+- [Skills 架构指南](docs/skills-guide.md)
+- [标的符号规范](docs/symbol-vocabulary.md)
+- [交易所路由与数据平面](docs/exchange-routing.md)
+- [定性分析与量化路线图](docs/analysis-roadmap.md)
+- [架构决策与 Spike 裁决史](spikes/REVIEW-LOG.md)
+- [English README](README.md)
 
 ## 友情链接
 
@@ -161,7 +193,7 @@ dsh --profile trading-web
 
 ## 社区
 
-💬 **QQ 交流群：DSH Trading 交流群（群号 `319737695`）**——使用交流、问题反馈、功能建议，QQ 扫码即可加入：
+**QQ 交流群：DSH Trading 交流群（群号 `319737695`）**——使用交流、问题反馈、功能建议，QQ 扫码即可加入：
 
 <div align="center">
 
