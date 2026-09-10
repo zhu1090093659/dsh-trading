@@ -7,7 +7,7 @@
 
 <div align="center">
 
-[![DSH 基线](https://img.shields.io/badge/DSH%20Baseline-0.1.5--alpha.2-blue.svg)](https://github.com/deepseek-ai)
+[![DSH 基线](https://img.shields.io/badge/DSH%20Baseline-0.1.5--rc.1-blue.svg)](https://github.com/deepseek-ai)
 [![市场](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK-green.svg)](#一个终端全市场覆盖)
 [![连接器](https://img.shields.io/badge/Connectors-19%2B-orange.svg)](docs/connectors-guide.md)
 [![许可](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-lightgrey.svg)](LICENSE)

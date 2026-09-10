@@ -30,7 +30,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": ">=0.1.5-alpha.2"
+    "@deepseek-ai/dsh-tools": ">=0.1.5-rc.1"
   },
   "devDependencies": {
     "tsdown": "^0.22.0",

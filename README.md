@@ -7,7 +7,7 @@
 
 <div align="center">
 
-[![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.1.5--alpha.2-blue.svg)](https://github.com/deepseek-ai)
+[![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.1.5--rc.1-blue.svg)](https://github.com/deepseek-ai)
 [![Markets](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK-green.svg)](#one-terminal-every-market)
 [![Connectors](https://img.shields.io/badge/Connectors-19%2B-orange.svg)](docs/connectors-guide.md)
 [![License](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-lightgrey.svg)](LICENSE)
