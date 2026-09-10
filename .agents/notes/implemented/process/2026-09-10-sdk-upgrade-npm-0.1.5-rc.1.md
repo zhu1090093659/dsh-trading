@@ -84,3 +84,17 @@ store）。
 - 其余纪律（desktop 闭包 clean-slate、profile file: 依赖复制在 build 之后、
   cohort check 脚本需显式 `DSH_HOME=~/.dsh-trading`、桌面壳「最后启动者」
   归一语义）与 2026-09-09 轮一致，全部继续适用。
+
+## 追记（同日）：发布 v0.2.1 让 CI 打包面与本地同世代
+
+owner 指令：GitHub Action 打包的桌面版运行时也须与本地使用的 cohort 保持
+一致。核实：desktop-release.yml 的 runtime 全部取自仓库提交物（runtime/host
+package.json + lockfile + workspace excludes，assertHostCohort 门禁在
+build-runtime 内），cohort 提交落地后未来 CI 构建自动 rc.1；不一致的是
+**已发布产物**——v0.2.0（2026-09-09 12:59Z）早于两轮 cohort 升级，其安装包
+内嵌 runtime 还是 0.1.2-rc.1 世代。npm 版本不可变（同版本换代码重推被
+禁止），故按发版手册切 v0.2.1：patch changeset（须写具体包名如
+`@dshtrading/base`，`@dshtrading/*` glob 不被 changesets 接受）→ changeset
+version 全家族 bump → desktop/package.json 对齐 0.2.1 → tag 触发管线。
+发布面含增量更新 feed（updates-manifest），但 update payload 只递 @dshtrading
+包内容，宿主闭包世代要靠完整安装包更替。

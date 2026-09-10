@@ -1,5 +1,11 @@
 # @dshtrading/client-ui-settings
 
+## 0.2.1
+
+### Patch Changes
+
+- @dshtrading/router@0.2.1
+
 ## 0.2.0
 
 ### Patch Changes

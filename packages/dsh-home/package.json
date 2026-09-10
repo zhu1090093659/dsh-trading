@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/dsh-home",
   "description": "dsh home 根目录解析（$DSH_HOME 环境变量感知，缺省 ~/.dsh，对齐宿主 dsh-home-paths 语义）——dsh-trading 各包 home 数据文件的唯一路径来源",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

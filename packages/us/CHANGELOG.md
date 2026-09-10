@@ -1,5 +1,17 @@
 # @dshtrading/us
 
+## 0.2.1
+
+### Patch Changes
+
+- @dshtrading/connector-alpaca@0.2.1
+- @dshtrading/connector-finnhub@0.2.1
+- @dshtrading/connector-fmp@0.2.1
+- @dshtrading/connector-ibkr@0.2.1
+- @dshtrading/connector-polygon@0.2.1
+- @dshtrading/connector-yahoo@0.2.1
+- @dshtrading/kit-us@0.2.1
+
 ## 0.2.0
 
 ### Patch Changes

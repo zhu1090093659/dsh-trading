@@ -1,5 +1,28 @@
 # @dshtrading/base
 
+## 0.2.1
+
+### Patch Changes
+
+- SDK cohort 对齐官方 0.1.5-rc.1：全家族 peer floor >=0.1.5-rc.1，desktop 自带宿主运行时（runtime/host 闭包 lockfile 从零重解析）与 CLI 宿主同世代，发布安装包与本地/CI 构建单一世代。
+  - @dshtrading/api@0.2.1
+  - @dshtrading/client-ui-indicators@0.2.1
+  - @dshtrading/client-ui-knowledge@0.2.1
+  - @dshtrading/client-ui-masters-quotes@0.2.1
+  - @dshtrading/client-ui-settings@0.2.1
+  - @dshtrading/client-ui-strategies@0.2.1
+  - @dshtrading/client-ui-trading@0.2.1
+  - @dshtrading/client-ui-updater@0.2.1
+  - @dshtrading/dsh-home@0.2.1
+  - @dshtrading/dsh-i18n@0.2.1
+  - @dshtrading/eventbus@0.2.1
+  - @dshtrading/holdings@0.2.1
+  - @dshtrading/indicators@0.2.1
+  - @dshtrading/knowledge@0.2.1
+  - @dshtrading/router@0.2.1
+  - @dshtrading/strategies@0.2.1
+  - @dshtrading/watchlist@0.2.1
+
 ## 0.2.0
 
 ### Patch Changes
