@@ -68,6 +68,7 @@ export type SettingsLocaleKey =
   | 'provider.futu'
   | 'provider.longbridge'
   | 'provider.tiger'
+  | 'provider.hithink'
   | 'field.label.apiKey'
   | 'field.label.apiSecret'
   | 'field.label.secretKey'
@@ -168,6 +169,7 @@ export const zh: Record<SettingsLocaleKey, string> = {
       'provider.futu': 'Futu (富途 OpenD)',
       'provider.longbridge': 'Longbridge (长桥)',
       'provider.tiger': 'Tiger Trade (老虎证券)',
+      'provider.hithink': '同花顺',
       'field.label.apiKey': 'API Key',
       'field.label.apiSecret': 'API Secret',
       'field.label.secretKey': 'Secret Key',
@@ -269,6 +271,7 @@ export const en: Record<SettingsLocaleKey, string> = {
       'provider.futu': 'Futu (OpenD)',
       'provider.longbridge': 'Longbridge',
       'provider.tiger': 'Tiger Trade',
+      'provider.hithink': 'HiThink',
       'field.label.apiKey': 'API Key',
       'field.label.apiSecret': 'API Secret',
       'field.label.secretKey': 'Secret Key',
