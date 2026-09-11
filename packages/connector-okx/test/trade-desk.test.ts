@@ -124,3 +124,57 @@ describe('OkxTradeService.listOpenOrders/listTradeFills（issue #40）', () => {
     }
   })
 })
+
+describe('只读账户面规格预取（性能回归）', () => {
+  function instrumentBody(url: URL): unknown {
+    const id = url.searchParams.get('instId') ?? ''
+    return { code: '0', data: [{ instId: id, instType: 'SWAP', lotSz: '0.1', minSz: '0.1', tickSz: '0.1', ctVal: '0.01' }] }
+  }
+  function counting(routes: Record<string, (url: URL) => unknown>): { fetchImpl: typeof fetch; counts: Record<string, number> } {
+    const counts: Record<string, number> = {}
+    const fetchImpl = (async (input: unknown) => {
+      const url = new URL(String(input))
+      const route = routes[url.pathname]
+      if (route === undefined) throw new Error(`unexpected request: ${url}`)
+      counts[url.pathname] = (counts[url.pathname] ?? 0) + 1
+      return okResponse(route(url))
+    }) as typeof fetch
+    return { fetchImpl, counts }
+  }
+  const POSITIONS = {
+    code: '0',
+    data: [
+      { instId: 'BTC-USDT-SWAP', pos: '2', avgPx: '100', markPx: '110', upl: '1', lever: '5', uTime: '1700000000000' },
+      { instId: 'ETH-USDT-SWAP', pos: '3', avgPx: '100', markPx: '110', upl: '1', lever: '5', uTime: '1700000000000' },
+      { instId: 'ETH-USDT-SWAP', pos: '1', avgPx: '100', markPx: '110', upl: '1', lever: '5', uTime: '1700000000000' },
+      { instId: 'SOL-USDT-SWAP', pos: '4', avgPx: '100', markPx: '110', upl: '1', lever: '5', uTime: '1700000000000' },
+    ],
+  }
+
+  it('getPositions：每个不同 SWAP instId 只解析一次规格（重复标的去重）', async () => {
+    const { fetchImpl, counts } = counting({
+      '/api/v5/public/instruments': url => instrumentBody(url),
+      '/api/v5/account/positions': () => POSITIONS,
+    })
+    const positions = await service(fetchImpl).getPositions()
+    expect(positions.map(p => p.size)).toEqual([0.02, 0.03, 0.01, 0.04])
+    expect(counts['/api/v5/public/instruments']).toBe(3)
+  })
+
+  it('规格查不到：该标的保留张数原值，同批其他标的照常换算，且不逐行重试', async () => {
+    let ethAttempts = 0
+    const { fetchImpl } = counting({
+      '/api/v5/public/instruments': (url) => {
+        if (url.searchParams.get('instId') === 'ETH-USDT-SWAP') {
+          ethAttempts++
+          return { code: '0', data: [] }
+        }
+        return instrumentBody(url)
+      },
+      '/api/v5/account/positions': () => POSITIONS,
+    })
+    const positions = await service(fetchImpl).getPositions()
+    expect(positions.map(p => p.size)).toEqual([0.02, 3, 1, 0.04])
+    expect(ethAttempts).toBe(1)
+  })
+})

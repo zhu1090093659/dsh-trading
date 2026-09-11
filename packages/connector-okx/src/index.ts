@@ -375,6 +375,8 @@ export interface OkxTradeServiceOptions {
 }
 
 const INSTRUMENT_TTL_MS = 60 * 60 * 1000
+/** 规格并发预取上限：账户只读面冷缓存时最多同时打这么多 /public/instruments（公共面有限频，取保守并发）。 */
+const INSTRUMENT_PREFETCH_CONCURRENCY = 8
 
 export class OkxTradeService extends Service implements TradeService {
   private readonly client: OkxRestClient
@@ -421,6 +423,37 @@ export class OkxTradeService extends Service implements TradeService {
     }
     this.instruments.set(bucket, { instrument: row, at: Date.now() })
     return row
+  }
+
+  /** 从上游行集收集 instId（只读账户面三个入口共用的预取键；非 SWAP 由 prefetch 内部过滤）。 */
+  private instIdsOf(rows: readonly unknown[]): string[] {
+    const ids: string[] = []
+    for (const row of rows) {
+      const instId = (row as Record<string, unknown>).instId
+      if (typeof instId === 'string') ids.push(instId)
+    }
+    return ids
+  }
+
+  /**
+   * 规格并发预取（只读账户面冷启动热路径）：getPositions/listOpenOrders/listTradeFills 每个
+   * 不同 SWAP instId 都要一次 /public/instruments 解析 ctVal；逐行 await 会把 N 个不同标的
+   * 放大成 N 次串行往返。这里先按上限并发解析并把成功结果回传，逐行同步取用。
+   * 返回 Map 只含成功项：查不到的 instId 缺席，调用点按原语义保留张数原值（不再逐行重试）。
+   */
+  private async prefetchInstruments(instIds: Iterable<string>): Promise<Map<string, OkxInstrument>> {
+    const distinct = [...new Set([...instIds].filter(id => id.endsWith('-SWAP')))]
+    const resolved = new Map<string, OkxInstrument>()
+    for (let i = 0; i < distinct.length; i += INSTRUMENT_PREFETCH_CONCURRENCY) {
+      await Promise.all(distinct.slice(i, i + INSTRUMENT_PREFETCH_CONCURRENCY).map(async (id) => {
+        try {
+          resolved.set(id, await this.getInstrument(id))
+        } catch {
+          // 规格查不到：缺席即回退原值。
+        }
+      }))
+    }
+    return resolved
   }
 
   /**
@@ -587,6 +620,7 @@ export class OkxTradeService extends Service implements TradeService {
   async getPositions(): Promise<Position[]> {
     const credentials = await this.getCredentials()
     const rows = await this.client.getPositions(this.auth(credentials))
+    const instruments = await this.prefetchInstruments(this.instIdsOf(rows))
     const positions: Position[] = []
     for (const row of rows) {
       const d = row as Record<string, unknown>
@@ -594,14 +628,10 @@ export class OkxTradeService extends Service implements TradeService {
       const pos = typeof d.pos === 'string' || typeof d.pos === 'number' ? Number(d.pos) : Number.NaN
       if (instId === undefined || !Number.isFinite(pos)) continue
       let size = Math.abs(pos)
-      // 张 → 币（ctVal 查不到时保留原值并在注释处可见——不虚构换算）。
+      // 张 → 币（预取命中才换算；规格查不到保留原值——不虚构换算）。
       if (instId.endsWith('-SWAP')) {
-        try {
-          const instrument = await this.getInstrument(instId)
-          if (instrument.ctVal !== undefined) size = size * instrument.ctVal
-        } catch {
-          // 规格查不到：保留张数原值（调用方按 instId 语义自行判读）。
-        }
+        const instrument = instruments.get(instId)
+        if (instrument?.ctVal !== undefined) size = size * instrument.ctVal
       }
       const posSide = d.posSide === 'long' || d.posSide === 'short' ? d.posSide : 'net'
       const side = posSide === 'net' ? (pos >= 0 ? 'long' as const : 'short' as const) : posSide
@@ -644,13 +674,20 @@ export class OkxTradeService extends Service implements TradeService {
     return balances
   }
 
-  /** SWAP 的 sz/accFillSz/fillSz（张）→ base 币数（规格缓存，非 SWAP 原值）。 */
-  private async toCoins(instId: string, exchangeAmount: unknown): Promise<number | undefined> {
+  /**
+   * SWAP 的 sz/accFillSz/fillSz（张）→ base 币数（非 SWAP 原值）。传入已预取的规格 Map
+   * 时纯内存查表（缺席即回退原值，不触网）；未传时回退单条 getInstrument（带缓存）。
+   */
+  private async toCoins(instId: string, exchangeAmount: unknown, instruments?: ReadonlyMap<string, OkxInstrument>): Promise<number | undefined> {
     const n = typeof exchangeAmount === 'string' || typeof exchangeAmount === 'number'
       ? Number(exchangeAmount)
       : Number.NaN
     if (!Number.isFinite(n)) return undefined
     if (!instId.endsWith('-SWAP')) return n
+    if (instruments !== undefined) {
+      const instrument = instruments.get(instId)
+      return instrument?.ctVal !== undefined ? n * instrument.ctVal : n
+    }
     try {
       const instrument = await this.getInstrument(instId)
       return instrument.ctVal !== undefined ? n * instrument.ctVal : n
@@ -664,15 +701,16 @@ export class OkxTradeService extends Service implements TradeService {
     const instId = symbol !== undefined && symbol !== '' ? normalizeOkxSymbol(symbol) : undefined
     const credentials = await this.getCredentials()
     const rows = await this.client.listPendingOrders(instId, this.auth(credentials))
+    const instruments = await this.prefetchInstruments(this.instIdsOf(rows))
     const orders: Order[] = []
     for (const row of rows) {
       const d = row as Record<string, unknown>
       const ordId = typeof d.ordId === 'string' ? d.ordId : undefined
       const rawInstId = typeof d.instId === 'string' ? d.instId : undefined
       if (ordId === undefined || rawInstId === undefined) continue
-      const quantity = await this.toCoins(rawInstId, d.sz)
+      const quantity = await this.toCoins(rawInstId, d.sz, instruments)
       if (quantity === undefined) continue
-      const filledQuantity = await this.toCoins(rawInstId, d.accFillSz)
+      const filledQuantity = await this.toCoins(rawInstId, d.accFillSz, instruments)
       const price = typeof d.px === 'string' && d.px !== '' ? Number(d.px) : typeof d.avgPx === 'string' && d.avgPx !== '' ? Number(d.avgPx) : undefined
       const state = typeof d.state === 'string' ? d.state : ''
       const timestamp = typeof d.uTime === 'string' ? Number(d.uTime) : typeof d.cTime === 'string' ? Number(d.cTime) : Date.now()
@@ -698,13 +736,14 @@ export class OkxTradeService extends Service implements TradeService {
     const capped = Math.max(1, Math.min(Math.floor(limit) || 50, 100))
     const credentials = await this.getCredentials()
     const rows = await this.client.listFillsHistory(instId, capped, this.auth(credentials))
+    const instruments = await this.prefetchInstruments(this.instIdsOf(rows))
     const fills: TradeFill[] = []
     for (const row of rows) {
       const d = row as Record<string, unknown>
       const rawInstId = typeof d.instId === 'string' ? d.instId : undefined
       const price = pickNumber(d.fillPx)
       if (rawInstId === undefined || price === undefined) continue
-      const amount = await this.toCoins(rawInstId, d.fillSz)
+      const amount = await this.toCoins(rawInstId, d.fillSz, instruments)
       if (amount === undefined) continue
       const fee = pickNumber(d.fee)
       const feeAsset = typeof d.feeCcy === 'string' && d.feeCcy !== '' ? d.feeCcy : undefined
