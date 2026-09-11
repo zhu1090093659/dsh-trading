@@ -33,7 +33,14 @@ const {
 
 const READY_TIMEOUT_MS = 180000;
 const LOG_TAIL_LINES = 200;
-/** The host prints its tokenized GUI URL on this stdout line. */
+/** Browser-session cookie the host issues for its own request authority. */
+const AUTH_COOKIE_PREFIX = 'dsh-auth-';
+/**
+ * Request-header budget for the spawned host. The host serves the client
+ * plugin batch as one combo URL (`/plugins/??<every client entry>&rev=…`,
+ * measured 2.8 KiB), which Node's 16 KiB default leaves little room for.
+ */
+const MAX_HTTP_HEADER_BYTES = 65536;
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -105,6 +112,7 @@ function startHost(runtime, home, port) {
     pushLogLine('[desktop] injecting dsh scope symbol normalizer: ' + normalizerImport);
   }
   const args = [
+    '--max-http-header-size=' + String(MAX_HTTP_HEADER_BYTES),
     ...(normalizerImport === undefined ? [] : ['--import', normalizerImport]),
     runtime.hostBin, '--profile', 'trading-web', '--no-open', '--host', '127.0.0.1', '--port', String(port),
   ];
@@ -212,6 +220,32 @@ async function showError(message, extra = {}) {
   });
 }
 
+/**
+ * Drop the browser-session cookies left by earlier launches before the new
+ * host issues its own. The host derives the cookie name from the request
+ * authority (`127.0.0.1:<port>`) and the shell takes a fresh random port on
+ * every start, so each launch leaves one more `dsh-auth-*` cookie behind and
+ * nothing ever retires it. Chromium replays the whole jar on every request;
+ * once the accumulated cookie header plus the multi-kilobyte `/plugins/??…`
+ * combo URL overruns the host's request-header budget, the host answers 431
+ * for the client batch and the GUI reports "Failed to load plugins" (measured
+ * 2026-09-11: 63 cookies = 14 KiB of cookies beside a 2.8 KiB URL, 431 on the
+ * application batch only). The tokenized URL loaded right after this issues a
+ * fresh cookie, so the jar stays at one entry per launch.
+ */
+async function pruneStaleAuthCookies(targetSession, origin) {
+  try {
+    const jar = await targetSession.cookies.get({ url: origin });
+    const stale = jar.filter((cookie) => cookie.name.startsWith(AUTH_COOKIE_PREFIX));
+    for (const cookie of stale) await targetSession.cookies.remove(origin, cookie.name);
+    if (stale.length > 0) pushLogLine('[desktop] pruned ' + String(stale.length) + ' stale dsh auth cookie(s)');
+  } catch (error) {
+    // Best effort: a stale jar must not block a launch, and the header budget
+    // above still covers a grown jar.
+    pushLogLine('[desktop] auth cookie prune failed: ' + String(error && error.message ? error.message : error));
+  }
+}
+
 async function boot() {
   const runtime = resolveRuntimePaths(resourcesRoot(), process.platform, process.arch, app.isPackaged);
   const home = resolveDshHome(process.env, os.homedir());
@@ -261,6 +295,7 @@ async function boot() {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
   }
   const target = tokenUrl ?? ('http://127.0.0.1:' + port + '/');
+  await pruneStaleAuthCookies(mainWindow.webContents.session, 'http://127.0.0.1:' + port + '/');
   pushLogLine('[desktop] GUI ready, loading ' + (tokenUrl === null ? 'the bare URL (no token line seen)' : 'the tokenized URL'));
   await mainWindow.loadURL(target);
 }
