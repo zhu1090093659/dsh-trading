@@ -15,3 +15,4 @@ desktop/src/runtime.cjs 的 resolveDshHome 缺省从 ~/.dsh 改为 ~/.dsh-tradin
 - Dock/访达直点桌面壳即可正确启动：播种、数据、profile 全落 ~/.dsh-trading。
 - 已装旧版 app 不受此 commit 影响——本机通过重打包或就地修补生效，随下一 release 对全部用户生效。
 - 测试：desktop/tests/runtime.test.mjs 断言更新（env 优先、缺省 trading home）。
+- 环境变量优先是刻意行为，但有启动姿势坑：从携带 DSH_HOME 的 shell 裸 `open` 会压过内置缺省并撞陈旧 profile，处置见 [2026-09-11-desktop-shell-local-rebuild-open-env-pitfall](2026-09-11-desktop-shell-local-rebuild-open-env-pitfall.md)。
