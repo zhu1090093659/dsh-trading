@@ -24,5 +24,6 @@ Status: implemented
 ## Consequences
 
 - 桌面壳从 shell 启动时继承的任何 `DSH_HOME` 都会压过内置缺省；排障时先看 `dsh-host.log` 的 `[desktop] dsh home:` 行确认实际 home。
+- 「Failed to load plugins / failed to import loader entry」+ 窗口未重启：先怀疑 profile cohort 链接漂移（CLI 侧启动过、核心包指向全局树），app 下次启动 normalize 自愈；判据是 `dsh-host.log` 出现 `normalized N core package link(s)`（本机实证 N 从 7 变 10），同一 bundle rev 在归一后的实例上复现加载成功。处置 = 重载窗口或重启 app，不改载荷。
 - `~/.dsh/profiles/trading-web` 残留现状：已被本次误启动 reseed 成新载荷 + 旧用户层 patch，处于「若用 DSH_HOME=~/.dsh 启动会崩 overlay」状态；正常 Dock 启动（`~/.dsh-trading`）不触碰它。
 - 本次重建已交付：`dsh-trading-desktop-0.2.1-mac-arm64.dmg/.zip` 与已安装 `/Applications/DSH Trading.app` 均为 2026-09-11T03:07Z 载荷，GUI 实测渲染正常。
