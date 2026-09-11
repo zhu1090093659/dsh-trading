@@ -14,7 +14,7 @@
  * - 当前最新价水平虚线与坐标轴实心价签
  * - 紧凑网格与等宽数字
  */
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import {
   AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries, LineStyle, createChart, createSeriesMarkers,
 } from 'lightweight-charts'
@@ -294,7 +294,7 @@ export function getChartThemeOptions(dark: boolean) {
   } as const
 }
 
-export function TvChart(props: TvChartProps): React.JSX.Element {
+function TvChartImpl(props: TvChartProps): React.JSX.Element {
   const { bars, volumes, dataKey, mainOverlays, subIndicators, readoutIndex } = props
 
   const [dark, setDark] = useState<boolean>(() => isDarkTheme())
@@ -1004,3 +1004,10 @@ function firstTimeDiffers(prev: readonly TvBar[], next: readonly TvBar[]): boole
   }
   return false
 }
+
+/**
+ * Memo boundary: QuoteStage 的秒级时钟、面板开关、轮询 setState 都会重渲染父树，
+ * 但只有图表真正消费的 props（bars/volumes/readoutIndex/指标/标记/色彩模式）变化时
+ * 才需要重建 lightweight-charts 视图。其余重渲染在此短路。
+ */
+export const TvChart = memo(TvChartImpl)

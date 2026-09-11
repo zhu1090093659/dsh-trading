@@ -69,6 +69,33 @@ export function rowKey(market: string, symbol: string): string {
   return `${market}:${symbol}`
 }
 
+/**
+ * 回收 record 中不在 live 键集里的条目（长生命周期宿主的无界 Map 收敛为
+ * O(当前自选数)）。无条目被删时返回原引用，避免 setState 触发多余重渲染。
+ */
+export function pruneRecord<T>(current: Record<string, T>, live: ReadonlySet<string>): Record<string, T> {
+  let changed = false
+  const next: Record<string, T> = {}
+  for (const [key, value] of Object.entries(current)) {
+    if (live.has(key)) next[key] = value
+    else changed = true
+  }
+  return changed ? next : current
+}
+
+/** 无序列行共用的空数组（模块常量保证引用稳定，Sparkline 的 memo 才有意义）。 */
+const EMPTY_CLOSES: readonly number[] = []
+
+/** 面板展示的价格字段是否等价（timestamp 等非展示字段不参与，避免静止行情空转）。 */
+export function displayTickerEqual(prev: Ticker | undefined, next: Ticker): boolean {
+  return prev !== undefined
+    && prev.symbol === next.symbol
+    && prev.name === next.name
+    && prev.price === next.price
+    && prev.prevClose === next.prevClose
+    && prev.changePercent === next.changePercent
+}
+
 export function MarketSidebar({
   t, useSelection, useWatchlists, useGroups, addInstrument, removeInstrument, selectInstrument, onFold, openSettings,
   createGroup, renameGroup, deleteGroup, assignGroupMember, setActiveGroup, updateAvailable,
@@ -88,6 +115,10 @@ export function MarketSidebar({
   const [managerOpen, setManagerOpen] = useState(false)
   const [rowGroupMenu, setRowGroupMenu] = useState<string | null>(null)
   const colorMode = useSyncExternalStore(colorModeStore.subscribe, colorModeStore.getSnapshot)
+  /** 已回灌动态字典的名称（market:symbol → name）：名称未变就不再重建整表。 */
+  const syncedNames = useRef(new Map<string, string>())
+  /** 当前选中行：选中态变化时把它滚入视野（点击以外的选中来源不会自动可见）。 */
+  const selectedRowRef = useRef<HTMLButtonElement | null>(null)
 
   const activeGroupId = groupState.activeGroupId
   const activeGroup = activeGroupId !== null ? groupState.groups.find(group => group.id === activeGroupId) ?? null : null
@@ -132,6 +163,23 @@ export function MarketSidebar({
     return rowsFor(watchlists, tab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows, tab, activeGroupId, watchlists])
+
+  // 有界化：prices/series 只保有「当前自选全集」的键，移出自选的标的即时回收。
+  // 用 allRows 而非 rows——页签/分组只是视图过滤，丢弃其它市场的行情会让切回
+  // 页签时重拉（series 每个键带着分钟线数组，是这两个 Map 里较大的一个）。
+  useEffect(() => {
+    const live = new Set(allRows.map(row => rowKey(row.market, row.symbol)))
+    setPrices(current => pruneRecord(current, live))
+    setSeries(current => pruneRecord(current, live))
+    for (const key of syncedNames.current.keys()) {
+      if (!live.has(key)) syncedNames.current.delete(key)
+    }
+  }, [allRows])
+
+  // 选中来源可能是搜索添加/宿主同步（目标行不在可视区）——把选中行滚入视野。
+  useEffect(() => {
+    selectedRowRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [selection?.market, selection?.symbol])
 
   const groupCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -248,10 +296,13 @@ export function MarketSidebar({
   }, SERIES_POLL_MS, [rowsKey])
 
   // 最新价批量轮询：按市场分组，每市场每拍一次请求，并自动回填标的真实中文名称。
+  // 静止行情（休市/无成交）下不 setState、不重建动态字典：整表保持不重渲染。
   usePoll(async () => {
     if (rows.length === 0) return
     const byMarket = new Map<MarketId, string[]>()
+    const rowByKey = new Map<string, Instrument>()
     for (const row of rows) {
+      rowByKey.set(rowKey(row.market, row.symbol), row)
       const list = byMarket.get(row.market) ?? []
       list.push(row.symbol)
       byMarket.set(row.market, list)
@@ -263,25 +314,39 @@ export function MarketSidebar({
       try {
         const outcome = await fetchTickers(market, symbols)
         for (const [symbol, result] of Object.entries(outcome)) {
-          if (result.ok) {
-            next[rowKey(market, symbol)] = result.ticker
-            if (result.ticker.name && result.ticker.name !== symbol && !/\(A股\)|\(港股\)/.test(result.ticker.name)) { // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
-              const list = dynamicUpdates.get(market) ?? []
-              list.push({ symbol, name: result.ticker.name })
-              dynamicUpdates.set(market, list)
+          if (!result.ok) continue
+          const key = rowKey(market, symbol)
+          next[key] = result.ticker
+          const name = result.ticker.name
+          if (!name || name === symbol || /\(A股\)|\(港股\)/.test(name)) continue // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
+          // 名称没变就不再回灌动态字典：否则每拍都重建整表并触发一次重渲染。
+          if (syncedNames.current.get(key) === name) continue
+          syncedNames.current.set(key, name)
+          const list = dynamicUpdates.get(market) ?? []
+          list.push({ symbol, name })
+          dynamicUpdates.set(market, list)
 
-              // 若自选列表中此标的名字为空或为占位符，自动更新自选名称
-              const existingRow = rows.find((r) => r.market === market && r.symbol === symbol)
-              if (existingRow && (!existingRow.name || existingRow.name === symbol || /\(A股\)|\(港股\)/.test(existingRow.name))) { // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
-                addInstrument(market, { market, symbol, name: result.ticker.name })
-              }
-            }
+          // 若自选列表中此标的名字为空或为占位符，自动更新自选名称
+          const existingRow = rowByKey.get(key)
+          if (existingRow && (!existingRow.name || existingRow.name === symbol || /\(A股\)|\(港股\)/.test(existingRow.name))) { // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
+            addInstrument(market, { market, symbol, name })
           }
         }
       } catch { /* 桥暂不可用，下轮再试 */ }
     }))
 
-    if (Object.keys(next).length > 0) setPrices(current => ({ ...current, ...next }))
+    if (Object.keys(next).length > 0) {
+      setPrices(current => {
+        let changed = false
+        const merged = { ...current }
+        for (const [key, ticker] of Object.entries(next)) {
+          if (displayTickerEqual(current[key], ticker)) continue
+          merged[key] = ticker
+          changed = true
+        }
+        return changed ? merged : current
+      })
+    }
 
     if (dynamicUpdates.size > 0) {
       for (const [m, entries] of dynamicUpdates.entries()) {
@@ -454,7 +519,7 @@ export function MarketSidebar({
                     key={entry.market + ':' + entry.symbol}
                     type="button"
                     role="option"
-                    aria-selected="true"
+                    aria-selected={false}
                     className={css.suggestion}
                     onMouseDown={(e) => { e.preventDefault() }}
                     onClick={() => { submitAdd(entry.market, entry.symbol, entry.name) }}
@@ -500,6 +565,7 @@ export function MarketSidebar({
                 return (
                   <button
                     key={key}
+                    ref={selected ? selectedRowRef : undefined}
                     type="button"
                     role="option"
                     aria-selected={selected}
@@ -523,7 +589,7 @@ export function MarketSidebar({
                       </span>
                     </span>
                     <span className={css.spark}>
-                      <Sparkline values={ref?.closes ?? []} {...(ref?.xFractions !== undefined ? { xFractions: ref.xFractions } : {})} width={56} height={22} up={up} colorMode={colorMode} />
+                      <Sparkline values={ref?.closes ?? EMPTY_CLOSES} {...(ref?.xFractions !== undefined ? { xFractions: ref.xFractions } : {})} width={56} height={22} up={up} colorMode={colorMode} />
                     </span>
                     <span className={css.quote}>
                       <span className={css.price} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPrice(price)}</span>

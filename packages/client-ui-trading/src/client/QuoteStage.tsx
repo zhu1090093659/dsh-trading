@@ -4,7 +4,7 @@
  * 主图指标读数行（副图指标读数在 TvChart 各自 pane 内）+
  * 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   fetchKlines, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiOrder,
@@ -38,8 +38,8 @@ import { MARKET_INTERVALS } from './store.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
 import type { AccountBalance, DerivativesData, DerivativesHistory, Order, Orderbook, Position, TradeFill, TradeTick } from './types.ts'
-import { colorModeStore } from './color-mode.ts'
-import { MARKET_INDICES, getMarketSessionStatus } from './market-status.ts'
+import { colorModeStore, type ColorMode } from './color-mode.ts'
+import { MARKET_INDICES, getMarketSessionStatus, type MarketIndexDef } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
 import { fetchNews, fetchFundamentals } from './api.ts'
@@ -277,6 +277,11 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
   /** TvChart 注册的截图回调（图表未渲染/已卸载 = null）。 */
   const captureRef = useRef<(() => TvChartCapture | null) | null>(null)
+  // 稳定引用：TvChart 走 memo，内联回调/对象会让 memo 失效（每次父渲染都重建图表视图）。
+  const handleCaptureReady = useCallback((capture: (() => TvChartCapture | null) | null) => {
+    captureRef.current = capture
+  }, [])
+  const markerTexts = useMemo(() => ({ entry: t('trade.buy'), exit: t('trade.sell') }), [t])
 
   // ── 新闻与公告（issue #37）────────────────────────────────────
   const [newsItems, setNewsItems] = useState<ClientNewsItem[] | null>(null)
@@ -287,20 +292,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const markerState = useSyncExternalStore(markerStore.subscribe, markerStore.getSnapshot)
   const [markerHover, setMarkerHover] = useState<MarkerHoverInfo | null>(null)
 
-  const [clock, setClock] = useState(() => formatStatusBarClock(Date.now()))
   const [indexTickers, setIndexTickers] = useState<Record<string, Ticker>>({})
-
-  // 状态栏秒级时钟
-  useEffect(() => {
-    const timer = setInterval(() => { setClock(formatStatusBarClock(Date.now())) }, 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  // 市场时段状态（随秒钟与激活市场自动刷新）
-  const sessionStatus = useMemo(() => {
-    return getMarketSessionStatus(activeMarket, Date.now())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMarket, clock])
 
   const indexDefs = MARKET_INDICES[activeMarket] ?? []
 
@@ -1177,14 +1169,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 subIndicators={subIndicators}
                 readoutIndex={readoutIndex}
                 onHoverIndex={setHoverIndex}
-                onCaptureReady={(capture) => { captureRef.current = capture }}
+                onCaptureReady={handleCaptureReady}
                 rangeSelectionMode={rangeMode}
                 selection={rangeSelection}
                 onRangeSelect={setRangeSelection}
                 signalMarkers={markerState.showSignals ? signalMarkers : undefined}
                 knowledgeMarkers={markerState.showKnowledgeEvents ? knowledgeMarkers : undefined}
                 onMarkerHover={setMarkerHover}
-                markerTexts={{ entry: t('trade.buy'), exit: t('trade.sell') }}
+                markerTexts={markerTexts}
                 numLocale={numLocale}
               />
             )}
@@ -1363,33 +1355,66 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         </div>
       )}
 
-      {/* 底部富途式市场状态栏 */}
-      <div className={css.statusBar} role="status">
-        <span className={css.statusSession}>
-          <span className={css.statusDot} style={{ background: sessionStatus.color }} />
-          {t(sessionStatus.statusKey)}
-        </span>
-        {indexDefs.map(def => {
-          const indexTicker = indexTickers[def.symbol]
-          const price = indexTicker?.price
-          const prevClose = (indexTicker as { prevClose?: number })?.prevClose
-          const pct = (indexTicker as { changePercent?: number })?.changePercent ?? changePercent(price, prevClose)
-          const color = directionColor(pct ?? 0, colorMode)
-          return (
-            <span key={def.symbol} className={css.indexGroup}>
-              <span className={css.indexName}>{t(def.nameKey)}</span>
-              {price !== undefined ? (
-                <span style={{ color, fontWeight: 600 }}>
-                  {fmtPrice(price)} {fmtPercent(pct)}
-                </span>
-              ) : (
-                <span style={{ color: 'var(--dsw-futu-text-muted, #8e95a3)' }}>—</span>
-              )}
-            </span>
-          )
-        })}
-        <span className={css.statusClock}>{clock}</span>
-      </div>
+      {/* 底部富途式市场状态栏（秒级时钟自持于 StatusBar，见下） */}
+      <StatusBar
+        t={t}
+        activeMarket={activeMarket}
+        indexDefs={indexDefs}
+        indexTickers={indexTickers}
+        colorMode={colorMode}
+      />
+    </div>
+  )
+}
+
+/**
+ * 底部富途式市场状态栏。秒级时钟与市场时段状态自持：时钟每秒 setState 只重渲染
+ * 这个小节点，不再把整棵 QuoteStage 子树（含 TvChart）拖进每秒一次的渲染。
+ */
+function StatusBar(props: {
+  t: Translate
+  activeMarket: MarketId
+  indexDefs: readonly MarketIndexDef[]
+  indexTickers: Record<string, Ticker>
+  colorMode: ColorMode
+}): React.JSX.Element {
+  const { t, activeMarket, indexDefs, indexTickers, colorMode } = props
+  const [clock, setClock] = useState(() => formatStatusBarClock(Date.now()))
+  useEffect(() => {
+    const timer = setInterval(() => { setClock(formatStatusBarClock(Date.now())) }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+  // 市场时段状态（随秒钟与激活市场自动刷新）
+  const sessionStatus = useMemo(() => {
+    return getMarketSessionStatus(activeMarket, Date.now())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMarket, clock])
+  return (
+    <div className={css.statusBar} role="status">
+      <span className={css.statusSession}>
+        <span className={css.statusDot} style={{ background: sessionStatus.color }} />
+        {t(sessionStatus.statusKey)}
+      </span>
+      {indexDefs.map(def => {
+        const indexTicker = indexTickers[def.symbol]
+        const price = indexTicker?.price
+        const prevClose = (indexTicker as { prevClose?: number })?.prevClose
+        const pct = (indexTicker as { changePercent?: number })?.changePercent ?? changePercent(price, prevClose)
+        const color = directionColor(pct ?? 0, colorMode)
+        return (
+          <span key={def.symbol} className={css.indexGroup}>
+            <span className={css.indexName}>{t(def.nameKey)}</span>
+            {price !== undefined ? (
+              <span style={{ color, fontWeight: 600 }}>
+                {fmtPrice(price)} {fmtPercent(pct)}
+              </span>
+            ) : (
+              <span style={{ color: 'var(--dsw-futu-text-muted, #8e95a3)' }}>—</span>
+            )}
+          </span>
+        )
+      })}
+      <span className={css.statusClock}>{clock}</span>
     </div>
   )
 }
