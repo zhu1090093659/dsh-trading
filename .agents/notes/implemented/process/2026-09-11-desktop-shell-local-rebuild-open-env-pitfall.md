@@ -23,6 +23,9 @@ Status: implemented
 - **base/presets 只写角色预设**（trader / instrument-researcher / risk-reviewer / master）：`~/.dsh-trading-presets/<market>-trader/` 是统一角色预设重构前的遗留目录，不再随新市场生成；新市场能力体现在角色预设的 connector/kit 行与技能白名单里（本次实测 `trader` 已含 futures 连接器行、kit 行与四技能白名单）。
 - **验证链**（本次全过）：`/dshtrading/api/markets` 返回 `{"id":"futures","provider":"hithink"}`；`dsh --profile trading-web --dump-config` 可见 futures installer/dataplane 两行；桥 `/dshtrading/api/tickers?market=futures&symbols=RB00.SHF` 返回真实行情（3000/3020）与日K OHLC；headless 截图左栏「期货」页签渲染；profile 副本哈希与工作区一致；`@deepseek-ai/*`（含嵌套）全部归一为指向应用 runtime 的 symlink。
 
+- **载荷重建的同版本陷阱（已修）**：`desktop/runtime/profile-trading/` 的生成 `pnpm-lock.yaml` 会把上一次打包的 tarball 完整性钉住——同版本号重打包时 pnpm 直接从 store 复用旧内容，新增文件静默缺失（2026-09-12 实证：新 `connector-hithink` tarball 含 `futures-plugin`，staged 安装仍只有旧 lib）。`build-runtime.mjs` 已在 profile install 前清掉生成态 `pnpm-lock.yaml` + `node_modules`（host 的 tracked lockfile 不受影响）。
+- **本次载荷交付**：`prepare-runtime` + `dist:mac`；`VERSION.json builtAt 2026-09-12T03:32Z`、`trading` 清单含 `@dshtrading/futures`，包内 seed profile 含 futures/kit-futures 与 `connector-hithink/lib/futures-plugin.js`；产物 `dist/dsh-trading-desktop-0.2.1-mac-arm64.{dmg,zip}`（11:34）并替换 `/Applications/DSH Trading.app`（旧包备份 `/tmp/DSH-Trading-0.2.1-old-20260912.app`）。全新 home 冒烟（`open --env DSH_HOME=/tmp/…`）实测 seed 直接可用：`/markets` 返回 5 市场含 `futures:hithink`；用户 home 正常启动同样在线。
+
 ## Alternatives considered
 
 - 给桌面壳加「检测到 DSH_HOME 指向非 trading home 时告警」的启动诊断：能兜底但为一个启动姿势问题改主进程启动逻辑，收益不抵面；先以操作纪律覆盖，若再撞同类坑再评估。

@@ -280,9 +280,18 @@ function main() {
   buildWorkspace();
   const vendorDir = path.join(runtimeSrc, 'profile-trading', 'vendor');
   const tarballs = packWorkspacePackages(vendorDir);
-  writeProfileManifest(path.join(runtimeSrc, 'profile-trading'), tarballs);
+  const profileDir = path.join(runtimeSrc, 'profile-trading');
+  writeProfileManifest(profileDir, tarballs);
 
-  pnpmInstall(path.join(runtimeSrc, 'profile-trading'));
+  // 生成的 pnpm-lock.yaml 会把上一次打包的 tarball 完整性钉住：同一版本号重打包时
+  // pnpm install 直接从 store 复用旧内容，新文件静默缺失（2026-09-12 实证：
+  // connector-hithink 新增 futures 入口未进载荷）。两者都是 gitignore 的生成物，
+  // install 前清掉，保证按当前 tarball 重新解析；host 的 lockfile 是 tracked 输入，
+  // 不在此列（其 install 语义不变）。
+  fs.rmSync(path.join(profileDir, 'pnpm-lock.yaml'), { force: true });
+  fs.rmSync(path.join(profileDir, 'node_modules'), { recursive: true, force: true });
+
+  pnpmInstall(profileDir);
   pnpmInstall(path.join(runtimeSrc, 'host'));
   assertHostCohort(hostVersion);
 
