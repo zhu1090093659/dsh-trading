@@ -1,0 +1,10 @@
+{
+  "path": "/api/futures/prices/daily?thscode=CU2601.SHF",
+  "http": 200,
+  "body": {
+    "code": 3001,
+    "message": "Target not found: CU2601.SHF",
+    "request_id": "9ae11e2352cb48b6863d6e08d0a8f049",
+    "data": null
+  }
+}

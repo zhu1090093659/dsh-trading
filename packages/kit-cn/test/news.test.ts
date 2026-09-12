@@ -84,6 +84,45 @@ describe('aggregateNews（东财单源聚合 + 过滤）', () => {
   })
 })
 
+describe('源配置化（issue #96）：aggregateNews 按 sources 装配', () => {
+  const NOW = Date.parse('2026-08-30T20:00:00+08:00')
+
+  it('sources 缺省 = 全部默认源（eastmoney 快讯照常返回）', async () => {
+    const { aggregateNews } = await import('../src/news.js')
+    const fetchImpl = cnRouteFetch({ emNews: jsonResp(eastmoneyJson) })
+    const { items } = await aggregateNews({ fetch: fetchImpl, now: NOW })
+    expect(items.length).toBeGreaterThan(0)
+    expect(items[0]?.source).toBe('eastmoney')
+  })
+
+  it('sources 排除 eastmoney 时不请求东财快讯，公告源仍受 symbol 门控', async () => {
+    const { aggregateNews } = await import('../src/news.js')
+    const fetchImpl = vi.fn(async () => jsonResp(eastmoneyJson)) as unknown as typeof globalThis.fetch
+    const { items } = await aggregateNews({ fetch: fetchImpl, now: NOW, sources: ['cninfo-announcement'] })
+    expect(items).toEqual([])
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('sources = 空数组 → 显式关闭：零请求零条目', async () => {
+    const { aggregateNews } = await import('../src/news.js')
+    const fetchImpl = vi.fn(async () => jsonResp(eastmoneyJson)) as unknown as typeof globalThis.fetch
+    const { items, unavailable } = await aggregateNews({ fetch: fetchImpl, now: NOW, sources: [] })
+    expect(items).toEqual([])
+    expect(unavailable).toEqual([])
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('sources 含公告源且带 symbol 时公告源照常启用', async () => {
+    const { aggregateNews } = await import('../src/news.js')
+    const fetchImpl = cnRouteFetch({
+      emNews: jsonResp({ data: { fastNewsList: [] } }),
+      emAnn: jsonResp({ data: { list: [{ title: '关于回购股份的通知', art_code: 'AN202608300001', display_time: '2026-08-30 19:00:00' }] } }),
+    })
+    const { items } = await aggregateNews({ fetch: fetchImpl, now: NOW, symbol: '600519', sources: ['eastmoney-announcement'] })
+    expect(items.some((i) => i.source === 'eastmoney-announcement')).toBe(true)
+  })
+})
+
 describe('createGetNewsTool（工具壳）', () => {
   it('execute 渲染：含来源、时间、链接与 unavailable 注记', async () => {
     const base = Date.now() - 1_800_000

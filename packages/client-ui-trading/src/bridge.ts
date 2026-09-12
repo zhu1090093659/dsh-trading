@@ -39,16 +39,16 @@ import type { SelectionStore, WatchlistGroup, WatchlistGroupsStore, WatchlistIns
 import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore, WATCHLIST_SEEDS } from '@dshtrading/watchlist'
 // 统一资产台账（issue #65）：type-only import——@dshtrading/holdings 由并行流建设，
 // 缺席时本包 vitest 不受影响（擦除）；运行时 store 走 host 注入 + 本文件内存兜底。
-import type { Holding, HoldingCurrency, NewHolding, NewHoldingInput } from '@dshtrading/holdings'
-import { createMemoryHoldingsStore } from '@dshtrading/holdings'
+import type { Holding, HoldingCurrency, HoldingMarket, NewHolding, NewHoldingInput } from '@dshtrading/holdings'
+import { createMemoryHoldingsStore, HOLDING_MARKETS } from '@dshtrading/holdings'
 import type { FxFetchLike } from '@dshtrading/holdings/fx'
 import { createFxService } from '@dshtrading/holdings/fx'
 import { TtlCache } from './ttl-cache.ts'
 
 /** 本桥支持的市场（与连接器服务键一一对应）。 */
-export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
+export type MarketId = 'crypto' | 'us' | 'cn' | 'hk' | 'futures'
 
-export const MARKET_IDS: readonly MarketId[] = ['crypto', 'us', 'cn', 'hk']
+export const MARKET_IDS: readonly MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures']
 
 /** market → Context 服务键（@dshtrading/api 的 Context 增强）。 */
 export const MARKET_SERVICE_KEYS: Record<MarketId, string> = {
@@ -56,6 +56,7 @@ export const MARKET_SERVICE_KEYS: Record<MarketId, string> = {
   us: 'tradingUsMarketData',
   cn: 'tradingCnMarketData',
   hk: 'tradingHkMarketData',
+  futures: 'tradingFuturesMarketData',
 }
 
 /** 注册表服务的最小形状（鸭式，与 @dshtrading/router 的 MarketDataRegistryLike 同构）。 */
@@ -107,6 +108,8 @@ export function createBridgeHost(services: {
   newsRegistry?: TradingNewsRegistryLike | undefined
   /** CryptoPanic API token 取值函数（从 router settings 获取；可选）。 */
   newsKey?: (() => string | undefined) | undefined
+  /** 市场启用的新闻/公告源 id 列表取值函数（issue #96；可选）。 */
+  newsSources?: ((market: string) => readonly string[] | undefined) | undefined
 }): BridgeHost {
   return {
     getMarketService: market => {
@@ -129,6 +132,7 @@ export function createBridgeHost(services: {
     fetchFxRates: services.fetchFxRates,
     newsRegistry: services.newsRegistry,
     newsKey: services.newsKey,
+    newsSources: services.newsSources,
   }
 }
 
@@ -176,6 +180,8 @@ export interface BridgeHost {
   newsRegistry?: TradingNewsRegistryLike | undefined
   /** CryptoPanic API token 取值函数（从 router settings 获取；可选，issue #37）。 */
   newsKey?: (() => string | undefined) | undefined
+  /** 市场启用的新闻/公告源 id 列表取值函数（issue #96；缺省 = kit 默认源全集）。 */
+  newsSources?: ((market: string) => readonly string[] | undefined) | undefined
 }
 
 export interface MarketInfoWire {
@@ -407,7 +413,7 @@ export function parseNewHolding(body: unknown): NewHoldingInput | HoldingsReject
   if (typeof body !== 'object' || body === null) return holdingsRejected('holding must be an object')
   const raw = body as Record<string, unknown>
   const market = typeof raw.market === 'string' ? raw.market.trim() : ''
-  if (!isMarketId(market)) return holdingsRejected(`holding.market must be one of ${MARKET_IDS.join('/')}`)
+  if (!isHoldingMarket(market)) return holdingsRejected(`holding.market must be one of ${HOLDING_MARKETS.join('/')}`)
   const symbol = typeof raw.symbol === 'string' ? raw.symbol.trim() : ''
   if (symbol === '') return holdingsRejected('holding.symbol is required')
   if (raw.side !== undefined && raw.side !== 'long') return holdingsRejected("holding.side only supports 'long'")
@@ -432,7 +438,7 @@ export function parseHoldingPatch(body: Record<string, unknown>): Partial<NewHol
   const out: Partial<NewHolding> = {}
   if (body.market !== undefined) {
     const market = typeof body.market === 'string' ? body.market.trim() : ''
-    if (!isMarketId(market)) return holdingsRejected(`holding.market must be one of ${MARKET_IDS.join('/')}`)
+    if (!isHoldingMarket(market)) return holdingsRejected(`holding.market must be one of ${HOLDING_MARKETS.join('/')}`)
     out.market = market
   }
   if (body.symbol !== undefined) {
@@ -507,6 +513,11 @@ export class BridgeProtocolError extends Error {
 
 function isMarketId(value: string): value is MarketId {
   return (MARKET_IDS as readonly string[]).includes(value)
+}
+
+/** 台账市场守卫（holdings 契约面 4 市场）：futures 属数据面，无台账/账户，不得写入。 */
+function isHoldingMarket(value: string): value is HoldingMarket {
+  return (HOLDING_MARKETS as readonly string[]).includes(value)
 }
 
 /** 动态标的全集缓存 TTL（30分钟）。 */
@@ -995,6 +1006,7 @@ export class TradingBridge {
       limit: limit ?? 20,
       windowHours: 24,
       cryptoPanicKey: this.host.newsKey?.(),
+      sources: this.host.newsSources?.(market),
     })
 
     return { ok: true, items: result.items, unavailable: result.unavailable }

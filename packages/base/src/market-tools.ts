@@ -31,7 +31,7 @@ export const name = 'dsh-trading-market-tools'
 /** 工具注册需要 tools 服务；两个注册表经 ctx.get 惰性解析（可能缺席的老部署）。 */
 export const inject = ['tools']
 
-export const MARKETS = ['crypto', 'us', 'cn', 'hk'] as const
+export const MARKETS = ['crypto', 'us', 'cn', 'hk', 'futures'] as const
 export type MarketSlug = (typeof MARKETS)[number]
 
 export interface Config {
@@ -66,7 +66,7 @@ function notImplementedError(market: string, provider: string, method: string, l
 function noMarketProviderError(market: string): Error {
   return new Error(
     `TRADING_NO_PROVIDER: no active market-data provider for market "${market}" — market keys are lowercase slugs `
-    + '(crypto | us | cn | hk); if the key is right, check routing_get and installed connectors.',
+    + '(crypto | us | cn | hk | futures); if the key is right, check routing_get and installed connectors.',
   )
 }
 

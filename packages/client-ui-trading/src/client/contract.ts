@@ -15,6 +15,7 @@ export type MarketLocaleKey =
   | 'tab.us'
   | 'tab.cn'
   | 'tab.hk'
+  | 'tab.futures'
   | 'sidebar.addPlaceholder'
   | 'sidebar.add'
   | 'sidebar.addMarketHint'

@@ -4,9 +4,10 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from './contract/slots.ts'
 import type {
   CredentialField,
+  NewsSourceMeta,
   TradingSettingsState,
 } from './trading-settings-controller.ts'
-import { PROVIDER_CREDENTIAL_SPECS, PROVIDER_LABELS } from './trading-settings-controller.ts'
+import { NEWS_SOURCE_CATALOG, PROVIDER_CREDENTIAL_SPECS, PROVIDER_LABELS } from './trading-settings-controller.ts'
 import type {} from './contract/locale-keys.ts'
 import css from './market-provider-panel.module.css'
 
@@ -35,6 +36,10 @@ export interface MarketProviderPanelInjected {
   setNewsKey: (value: string) => Promise<void>
   /** WS2c: clear the CryptoPanic news API key back to base (public sources). */
   resetNewsKey: () => Promise<void>
+  /** issue #96: set this market's enabled news/announcement source ids. */
+  setNewsSources: (market: string, ids: readonly string[]) => Promise<void>
+  /** issue #96: clear this market's enabled sources back to kit defaults. */
+  resetNewsSources: (market: string) => Promise<void>
 }
 
 export type MarketProviderPanelProps =
@@ -56,7 +61,7 @@ const EMPTY_RECORD: Record<string, string> = {}
 function ProviderCredentialCard(props: {
   providerId: string
   spec: readonly CredentialField[]
-  currentValues?: Record<string, string>
+  currentValues?: Record<string, string> | undefined
   writable: boolean
   onSave: (fields: Record<string, string>) => Promise<void>
   onDelete: () => Promise<void>
@@ -207,6 +212,118 @@ function ProviderCredentialCard(props: {
   )
 }
 
+/** issue #96：单市场新闻/公告源多选卡片（draft 勾选集 + 保存/重置；空集 = 显式关闭）。 */
+function NewsSourcesSection(props: {
+  market: string
+  catalog: readonly NewsSourceMeta[]
+  resolved: readonly string[] | undefined
+  overridden: boolean
+  writable: boolean
+  onSave: (ids: readonly string[]) => Promise<void>
+  onReset: () => Promise<void>
+  t: (key: string, params?: Record<string, unknown>) => string
+}) {
+  const { market, catalog, resolved, overridden, writable, onSave, onReset, t } = props
+  // draft === undefined：未改动（展示 resolved；未配置 = 全部默认源 = 全勾选展示）。
+  const [draft, setDraft] = useState<readonly string[] | undefined>(undefined)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const current = resolved ?? catalog.map((s) => s.id)
+
+  useEffect(() => {
+    setDraft(undefined)
+    setMsg(null)
+  }, [market])
+
+  // 保存/重置成功后 resolved 会变化：只重置草稿，保留「已保存」提示（失败提示依赖 resolved 不变）。
+  useEffect(() => {
+    setDraft(undefined)
+  }, [resolved])
+
+  const checked = (id: string): boolean => (draft ?? current).includes(id)
+  const dirty = useMemo(() => {
+    if (draft === undefined) return false
+    const a = [...draft].sort().join(',')
+    const b = [...current].sort().join(',')
+    return a !== b
+  }, [draft, current])
+
+  const toggle = (id: string): void => {
+    const base = draft ?? current
+    setDraft(base.includes(id) ? base.filter((x) => x !== id) : [...base, id])
+  }
+
+  const save = async (): Promise<void> => {
+    if (draft === undefined) return
+    setSaving(true)
+    setMsg(null)
+    try {
+      await onSave(draft)
+      setMsg(t('newsSaved'))
+    } catch (err) {
+      setMsg(`${t('newsSaveFailed')}: ${String(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const reset = async (): Promise<void> => {
+    setSaving(true)
+    setMsg(null)
+    try {
+      await onReset()
+      setDraft(undefined)
+      setMsg(t('newsSaved'))
+    } catch (err) {
+      setMsg(`${t('newsSaveFailed')}: ${String(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (catalog.length === 0) return null
+  return (
+    <div className={css.newsSection}>
+      <label className={css.newsLabel}>{t('newsSourcesTitle')}</label>
+      <div className={css.newsSourcesGrid}>
+        {catalog.map((source) => (
+          <label key={`${market}-${source.id}`} className={css.newsSourceItem}>
+            <input
+              type="checkbox"
+              checked={checked(source.id)}
+              disabled={!writable || saving}
+              onChange={() => toggle(source.id)}
+            />
+            <span>{t(source.label)}</span>
+          </label>
+        ))}
+      </div>
+      <div className={css.newsSourcesHint}>{t('newsSourcesHint')}</div>
+      <div className={css.actions}>
+        <button
+          type="button"
+          className={css.saveBtn}
+          disabled={!dirty || saving || !writable}
+          onClick={() => void save()}
+        >
+          {t('save')}
+        </button>
+        {overridden && (
+          <button
+            type="button"
+            className={css.discardBtn}
+            disabled={saving || !writable}
+            onClick={() => void reset()}
+          >
+            {t('newsSourcesReset')}
+          </button>
+        )}
+        {msg !== null ? <span className={css.message}>{msg}</span> : null}
+      </div>
+    </div>
+  )
+}
+
 /** Render one market's provider radio group with save/reset (+ WS2c news key, crypto only). */
 export function MarketProviderPanel({
   t: tProp,
@@ -218,7 +335,9 @@ export function MarketProviderPanel({
   deleteCredential,
   setNewsKey,
   resetNewsKey,
-}: MarketProviderPanelProps) {
+  setNewsSources,
+  resetNewsSources,
+}: MarketProviderPanelProps & { t?: PanelT }) {
   // PropsLocale 的 t 座位在无宿主 merge 的独立编译下解析为 never（既有债 20 处
   // TS2349 的根因）。本地遮蔽：运行时框架注入 t，签名与 SDK Translate 对齐。
   const t = tProp as unknown as PanelT
@@ -431,6 +550,17 @@ export function MarketProviderPanel({
           </div>
         </div>
       )}
+
+      <NewsSourcesSection
+        market={market}
+        catalog={NEWS_SOURCE_CATALOG[market] ?? []}
+        resolved={state.newsSources[market]}
+        overridden={state.newsSourcesOverridden[market] === true}
+        writable={writable}
+        onSave={(ids) => setNewsSources(market, ids)}
+        onReset={() => resetNewsSources(market)}
+        t={t}
+      />
     </div>
   )
 }

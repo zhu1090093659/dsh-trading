@@ -276,6 +276,15 @@ describe('MarketRouterService（tradingMarketRouter）', () => {
     svc.setSource(() => resolved)
     expect(svc.newsKey()).toBe('sec_xxx')
   })
+
+  it('newsSources：默认无配置（undefined = kit 默认源全集），setSource 后读 resolved 的 news.sources[market]（issue #96）', () => {
+    const svc = new MarketRouterService(new CordisContext() as never, () => ENTRY)
+    expect(svc.newsSources('cn')).toBeUndefined()
+    const resolved: ConfigType = { markets: { ...DEFAULT_MARKETS }, news: { sources: { cn: ['eastmoney'] } } }
+    svc.setSource(() => resolved)
+    expect(svc.newsSources('cn')).toEqual(['eastmoney'])
+    expect(svc.newsSources('us')).toBeUndefined()
+  })
 })
 
 describe('TradingNewsRegistryService（tradingNewsRegistry，Issue #37）', () => {

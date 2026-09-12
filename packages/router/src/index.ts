@@ -90,6 +90,12 @@ export interface MarketProviderEntry {
 export interface NewsConfig {
   /** 可选：CryptoPanic API token（WS2c，#4）。有值时 crypto_get_news 走 CryptoPanic 免费层增强；无值/无效则优雅降级到公共源。 */
   cryptoPanicKey?: string
+  /**
+   * 可选：各市场启用的新闻/公告源 id 列表（issue #96，方案A 源配置化）。
+   * 键 = 市场（cn/us/hk/crypto，开放键），值 = 源 id 数组（各 kit NewsSource 词汇）。
+   * 市场键缺省 = 用该 kit 全部默认源；空数组 = 显式关闭该市场新闻。
+   */
+  sources?: Record<string, string[]>
 }
 
 export interface Config {
@@ -106,6 +112,8 @@ export const DEFAULT_MARKETS: Record<string, MarketProviderEntry> = {
   us: { provider: 'yahoo' },
   cn: { provider: 'tencent' },
   hk: { provider: 'tencent' },
+  // 期货（issue #97）：唯一 provider 为同花顺（日K + 当日分时；无实盘交易面）。
+  futures: { provider: 'hithink' },
 }
 
 const MarketProviderEntrySchema = Schema.object({
@@ -125,7 +133,11 @@ export const Config: Schema<Config> = Schema.object({
   // credentials 可选：各 provider 的 API Key/Secret/Token/Gateway 地址字典
   credentials: Schema.dict(Schema.dict(Schema.string())).default({}),
   // news 可选（WS2c）：默认空对象 = 无 key = 公共源；字段在时 settings UI 可展示/编辑。
-  news: Schema.object({ cryptoPanicKey: Schema.string().default(undefined) }).default({}),
+  news: Schema.object({
+    cryptoPanicKey: Schema.string().default(undefined),
+    // 每市场启用源 id 列表（issue #96）：市场键开放；键缺省 = kit 默认源全集。
+    sources: Schema.dict(Schema.array(Schema.string())).default({}),
+  }).default({}),
 })
 
 /** settings namespace（kebab-case 品牌化，llm-pi-ai 同款）。 */
@@ -175,6 +187,11 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
   /** WS2c：CryptoPanic API token（settings resolved；缺省 undefined = 无 key = 新闻走公共源）。 */
   newsKey(): string | undefined {
     return this.source().news?.cryptoPanicKey
+  }
+
+  /** 某市场启用的新闻/公告源 id 列表（issue #96；缺省 undefined = 该 kit 默认源全集）。 */
+  newsSources(market: string): readonly string[] | undefined {
+    return this.source().news?.sources?.[market]
   }
 
   /** 订阅激活变化（settings commit 驱动；restart 型当前仅记录，未来 live 用）。 */

@@ -278,7 +278,12 @@ export function apply(ctx: Context, config: Config): void {
   const router = (ctx as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as
     | { newsKey?: () => string | undefined }
     | undefined
-  registerOnce(createGetNewsTool({ cryptoPanicKey: router?.newsKey?.() }))
+  // 启用源（issue #96）从 router settings 惰性读取：工具每次 execute 时取当前值。
+  const routerCtx = ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }
+  const readNewsSources = (): readonly string[] | undefined =>
+    (routerCtx.get?.('tradingMarketRouter', false) as { newsSources?: (market: string) => readonly string[] | undefined } | undefined)
+      ?.newsSources?.('crypto')
+  registerOnce(createGetNewsTool({ cryptoPanicKey: router?.newsKey?.(), getSources: readNewsSources }))
 
   registerOnce(createGetDerivativesTool())
   registerOnce(createGetFundamentalsTool())
@@ -500,7 +505,7 @@ function renderNewsItem(item: { source: string; title: string; url: string; publ
   return `[${item.source}] ${item.publishedAt}  ${item.title}\n  ${item.url}`
 }
 
-export function createGetNewsTool(toolOptions: { cryptoPanicKey?: string } = {}) {
+export function createGetNewsTool(toolOptions: { cryptoPanicKey?: string; getSources?: () => readonly string[] | undefined } = {}) {
   const description =
     'Get recent crypto news from public no-key sources (Binance listing/delisting/API announcements, OKX announcements, CoinDesk & The Block RSS). '
     + (toolOptions.cryptoPanicKey
@@ -539,6 +544,7 @@ export function createGetNewsTool(toolOptions: { cryptoPanicKey?: string } = {})
         windowHours: typeof args.windowHours === 'number' ? args.windowHours : undefined,
         limit: typeof args.limit === 'number' ? args.limit : undefined,
         cryptoPanicKey: toolOptions.cryptoPanicKey,
+        sources: toolOptions.getSources?.(),
       }
       const { items, unavailable } = await aggregateNews(options)
       if (items.length === 0 && unavailable.length === 0) {

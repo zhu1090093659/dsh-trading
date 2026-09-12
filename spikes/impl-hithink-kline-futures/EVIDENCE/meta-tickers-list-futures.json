@@ -1,0 +1,74 @@
+{
+  "path": "/api/meta/tickers/list?asset_type=futures&limit=5&offset=0",
+  "http": 200,
+  "body": {
+    "code": 0,
+    "message": "success",
+    "request_id": "f97fda2775634f4ab9a3a6c6d953c5a3",
+    "data": {
+      "timestamp": 1789174821847,
+      "item": [
+        {
+          "thscode": "IC2609.CFE",
+          "ticker": "IC2609",
+          "name": "中证500 2609",
+          "exchange": "CFFEX",
+          "asset_type": "futures",
+          "currency": null,
+          "list_date": "2026-01-19",
+          "end_date": "2026-09-21",
+          "last_trade_date": "2026-09-18",
+          "last_delivery_date": "2026-09-18"
+        },
+        {
+          "thscode": "IC2612.CFE",
+          "ticker": "IC2612",
+          "name": "中证500 2612",
+          "exchange": "CFFEX",
+          "asset_type": "futures",
+          "currency": null,
+          "list_date": "2026-04-20",
+          "end_date": "2026-12-21",
+          "last_trade_date": "2026-12-18",
+          "last_delivery_date": "2026-12-18"
+        },
+        {
+          "thscode": "IC2703.CFE",
+          "ticker": "IC2703",
+          "name": "中证500 2703",
+          "exchange": "CFFEX",
+          "asset_type": "futures",
+          "currency": null,
+          "list_date": "2026-07-20",
+          "end_date": "2027-03-22",
+          "last_trade_date": "2027-03-19",
+          "last_delivery_date": "2027-03-19"
+        },
+        {
+          "thscode": "IC2610.CFE",
+          "ticker": "IC2610",
+          "name": "中证500 2610",
+          "exchange": "CFFEX",
+          "asset_type": "futures",
+          "currency": null,
+          "list_date": "2026-08-24",
+          "end_date": "2026-10-19",
+          "last_trade_date": "2026-10-16",
+          "last_delivery_date": "2026-10-16"
+        },
+        {
+          "thscode": "IF2609.CFE",
+          "ticker": "IF2609",
+          "name": "沪深300 2609",
+          "exchange": "CFFEX",
+          "asset_type": "futures",
+          "currency": null,
+          "list_date": "2026-01-19",
+          "end_date": "2026-09-21",
+          "last_trade_date": "2026-09-18",
+          "last_delivery_date": "2026-09-18"
+        }
+      ]
+    }
+  }
+}

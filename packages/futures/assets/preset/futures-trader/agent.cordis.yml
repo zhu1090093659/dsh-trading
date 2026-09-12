@@ -1,0 +1,45 @@
+# futures-trader agent preset —— dsh-trading futures 切片（实装形态抄 cn-trader）。
+#
+# 本文件由 @dshtrading/futures 的 dsh-trading-futures-installer 插件（bundle host 面
+# 常驻行）经 @dshtrading/base/presets 幂等装配到 trader/master 角色组合（统一 preset
+# root 归 @dshtrading/base，见 packages/base/src/presets.ts）。
+#
+# 期货切片（issue #97）：connector 行 provide tradingFuturesMarketData（同花顺期货
+# 数据服务：日K + 当日分时 + 品种/代码表），无实盘交易面（A 股期货执行走本地
+# MiniQMT 等账户侧，铁律 #3 统一闸门；本切片为数据面）。kit 行只注册 skill
+# provider（futures-risk-checklist），不 provide 服务，无需 realm。
+#
+# 组合形态对照官方 standard preset：AGENT-PLANE 组合，不持有审批/沙箱/模型路由。
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      你是一名严谨的国内期货交易员，由 {{model}} 模型驱动，工作目录为 {{cwd}}。基于
+      同花顺期货数据（日K 与当日分时、品种目录）做客观、量化的分析；数据当前仅覆盖
+      日K与当日分时，不得用当日分时冒充历史分钟数据；涉及保证金、强平价、移仓换月、
+      夜盘与涨跌停板时逐项核对 futures-risk-checklist 风控清单；期货执行面本切片不
+      提供，真实下单走账户侧人工流程，你输出的是计划与提醒，不构成投资建议。每次会话
+      开始时，先检查工作目录下是否已有交易日志目录 .trading-journal/：没有则提醒用户
+      本工作区尚未建立交易日志，并调用 trading-notes-setup 技能创建骨架；已有则把本
+      会话的重要操作按规范记入日志。
+
+# connector 行 provide 服务（tradingFuturesMarketData），必须包进 cordis:group + isolate，
+# isolate 键 = 服务名（官方 standard preset 挂载硬规则）。preset 面走直接 provide 入口；
+# host 面注册表行（cordis.patch.yml 的 futures-dataplane）负责 GUI 行情桥，两面同挂
+# 若都用 dataplane 会触发注册表 (futures, hithink) 重复注册的响亮失败。
+- id: dsh-trading-futures-connector-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingFuturesMarketData: true
+  config:
+    - id: dsh-trading-futures-connector
+      name: '@dshtrading/connector-hithink/futures-plugin'
+      config:
+        enabled: true
+
+- id: dsh-trading-futures-kit
+  name: '@dshtrading/kit-futures'
+  config:
+    dryRun: true
+    liveTrading: false

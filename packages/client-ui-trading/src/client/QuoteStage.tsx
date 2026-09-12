@@ -120,6 +120,7 @@ function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
   if (!symbol) return undefined
   const sym = symbol.toUpperCase()
   if (sym.endsWith('.SH') || sym.endsWith('.SZ') || /^\d{6}$/.test(sym)) return 'cn'
+  if (/^[A-Z]{1,3}\d{2,4}(\.(SHF|DCE|CZC|INE|GFE|CFE))?$/.test(sym)) return 'futures'
   if (sym.endsWith('.HK') || /^\d{5}$/.test(sym)) return 'hk'
   if (sym.includes('USDT') || sym.includes('BTC') || sym.includes('ETH')) return 'crypto'
   return 'us'
@@ -128,11 +129,11 @@ function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
 type SendState = 'idle' | 'sending' | 'sent' | 'error'
 
 /** 信号 reason 的币种符号（按市场；crypto 以 USD 计价近似）。 */
-const CURRENCY_SYMBOL: Record<MarketId, string> = { cn: '¥', hk: 'HK$', us: '$', crypto: '$' }
+const CURRENCY_SYMBOL: Record<MarketId, string> = { cn: '¥', hk: 'HK$', us: '$', crypto: '$', futures: '¥' }
 
 export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator, fillComposer }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
-  const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk'].includes(instrument.market))
+  const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk', 'futures'].includes(instrument.market))
     ? (instrument.market as MarketId)
     : inferMarketFromSymbol(instrument?.symbol)
   const symbol = instrument?.symbol
@@ -1712,4 +1713,5 @@ const TAB_KEY: Record<MarketId, MarketLocaleKey> = {
   us: 'tab.us',
   cn: 'tab.cn',
   hk: 'tab.hk',
+  futures: 'tab.futures',
 }

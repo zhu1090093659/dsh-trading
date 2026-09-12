@@ -160,7 +160,12 @@ export function providerForSkills(allowed?: readonly string[]): SkillProvider {
 export function apply(ctx: Context, config: Config): void {
   ctx.skills.registerProvider(() => providerForSkills(config.skills))
 
-  const newsTool = createGetNewsTool()
+  // 启用源（issue #96）从 router settings 惰性读取：工具每次 execute 时取当前值。
+  const routerCtx = ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }
+  const readNewsSources = (): readonly string[] | undefined =>
+    (routerCtx.get?.('tradingMarketRouter', false) as { newsSources?: (market: string) => readonly string[] | undefined } | undefined)
+      ?.newsSources?.('hk')
+  const newsTool = createGetNewsTool({ getSources: readNewsSources })
   const fundamentalsTool = createGetFundamentalsTool()
 
   const tools = ctx.tools as unknown as {
@@ -222,7 +227,7 @@ function renderNewsItem(item: { source: string; title: string; url: string; publ
   return `[${item.source}] ${item.publishedAt}  ${item.title}\n  ${item.url}`
 }
 
-export function createGetNewsTool() {
+export function createGetNewsTool(toolOptions: { getSources?: () => readonly string[] | undefined } = {}) {
   const description =
     'Get recent Hong Kong stock market news, derived from Eastmoney financial fast-news (HK column) filtered to HK-relevant items '
     + '(HKEX-listed marketId=116 codes or HK keywords). '
@@ -258,6 +263,7 @@ export function createGetNewsTool() {
         symbol: typeof args.symbol === 'string' ? args.symbol : undefined,
         windowHours: typeof args.windowHours === 'number' ? args.windowHours : undefined,
         limit: typeof args.limit === 'number' ? args.limit : undefined,
+        sources: toolOptions.getSources?.(),
       }
       const { items, unavailable } = await aggregateNews(options)
       if (items.length === 0 && unavailable.length === 0) {

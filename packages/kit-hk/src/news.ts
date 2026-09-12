@@ -32,6 +32,8 @@ export interface AggregateNewsOptions {
   now?: number | undefined
   /** CryptoPanic API token（桥面透传，hk 聚合器忽略；对齐 api 契约形状）。 */
   cryptoPanicKey?: string | undefined
+  /** 启用源 id 列表（issue #96 源配置化）；缺省 = 全部默认源，空数组 = 显式关闭。 */
+  sources?: readonly string[] | undefined
 }
 
 export interface AggregateNewsResult {
@@ -415,11 +417,16 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
   const windowMs = windowHours * 3_600_000
   const limit = clampNumber(options.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
 
-  const fetchers: Promise<NewsItem[]>[] = [fetchEastmoneyHk(fetchImpl, limit)]
+  // 源配置化（issue #96）：sources 缺省 = 全部默认源；公告双源仍受 symbol 门控。
+  const enabled = options.sources
+  const isEnabled = (id: NewsSource): boolean => enabled === undefined || enabled.includes(id)
+
+  const fetchers: Promise<NewsItem[]>[] = []
+  if (isEnabled('eastmoney')) fetchers.push(fetchEastmoneyHk(fetchImpl, limit))
   if (options.symbol && options.symbol.trim()) {
     // 公告双源并行（2026-09-03 多供应商冗余）：东财 ann_type=H 主源 + HKEX 披露易备份源。
-    fetchers.push(fetchEastmoneyHkAnnouncements(fetchImpl, options.symbol, limit))
-    fetchers.push(fetchHkexAnnouncements(fetchImpl, options.symbol, limit, now))
+    if (isEnabled('eastmoney-announcement')) fetchers.push(fetchEastmoneyHkAnnouncements(fetchImpl, options.symbol, limit))
+    if (isEnabled('hkex-announcement')) fetchers.push(fetchHkexAnnouncements(fetchImpl, options.symbol, limit, now))
   }
 
   const results = await Promise.allSettled(fetchers)

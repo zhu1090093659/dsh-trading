@@ -150,7 +150,8 @@ Six invariants lock the ecosystem down: insert-only bundle patches · knowledge 
 | Market | Default source | Boundary |
 |---|---|---|
 | US | Yahoo Finance / Alpaca | Yahoo public endpoint (individual use); Alpaca official Paper/Live APIs |
-| CN | Tencent Finance / Eastmoney / HiThink (Fuyao) | Public endpoints; HiThink REST API for fundamentals & auction data; live execution via local MiniQMT gateway |
+| CN | Tencent Finance / Eastmoney / HiThink (Fuyao) | Public endpoints; HiThink REST API for A-share daily K / fundamentals & auction data; live execution via local MiniQMT gateway |
+| Futures (CN) | HiThink (Fuyao) | HiThink REST API for daily K / intraday points / varieties & ticker tables; data-plane only, no execution face |
 | HK | Tencent HK / Longbridge | Public endpoint; licensed broker OpenAPI/Gateway for execution |
 | Crypto | Binance / OKX | Official APIs; OKX paper trading with your own keys |
 | Crypto fundamentals | CoinCap | Public REST, individual use only — no redistribution, no bulk scraping |

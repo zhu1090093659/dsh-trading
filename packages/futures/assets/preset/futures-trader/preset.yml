@@ -1,0 +1,3 @@
+name: 期货交易员
+description: 国内期货市场会话：同花顺期货行情工具与交易员人设（由 @dshtrading/futures 自安装，普通会话不可见期货工具）。
+order: 22

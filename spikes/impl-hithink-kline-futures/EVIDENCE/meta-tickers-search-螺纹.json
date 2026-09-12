@@ -1,0 +1,74 @@
+{
+  "path": "/api/meta/tickers/search?q=%E8%9E%BA%E7%BA%B9%E9%92%A2&asset_type=futures&limit=5",
+  "http": 200,
+  "body": {
+    "code": 0,
+    "message": "success",
+    "request_id": "b14f89e087bb4d0a955e87bb2e53043d",
+    "data": {
+      "timestamp": 1789174821847,
+      "item": [
+        {
+          "thscode": "RB00.SHF",
+          "ticker": "RB7777",
+          "name": "螺纹钢连续",
+          "exchange": "SHFE",
+          "asset_type": "futures",
+          "currency": null,
+          "list_date": null,
+          "end_date": null,
+          "last_trade_date": null,
+          "last_delivery_date": null
+        },
+        {
+          "thscode": "RB2609.SHF",
+          "ticker": "RB2609",
+          "name": "螺纹钢2609",
+          "exchange": "SHFE",
+          "asset_type": "futures",
+          "currency": null,
+          "list_date": "2025-09-16",
+          "end_date": "2026-09-16",
+          "last_trade_date": "2026-09-15",
+          "last_delivery_date": "2026-09-17"
+        },
+        {
+          "thscode": "RB2610.SHF",
+          "ticker": "RB2610",
+          "name": "螺纹钢2610",
+          "exchange": "SHFE",
+          "asset_type": "futures",
+          "currency": null,
+          "list_date": "2025-10-16",
+          "end_date": "2026-10-16",
+          "last_trade_date": "2026-10-15",
+          "last_delivery_date": "2026-10-19"
+        },
+        {
+          "thscode": "RB2611.SHF",
+          "ticker": "RB2611",
+          "name": "螺纹钢2611",
+          "exchange": "SHFE",
+          "asset_type": "futures",
+          "currency": null,
+          "list_date": "2025-11-18",
+          "end_date": "2026-11-17",
+          "last_trade_date": "2026-11-16",
+          "last_delivery_date": "2026-11-18"
+        },
+        {
+          "thscode": "RB2612.SHF",
+          "ticker": "RB2612",
+          "name": "螺纹钢2612",
+          "exchange": "SHFE",
+          "asset_type": "futures",
+          "currency": null,
+          "list_date": "2025-12-16",
+          "end_date": "2026-12-16",
+          "last_trade_date": "2026-12-15",
+          "last_delivery_date": "2026-12-17"
+        }
+      ]
+    }
+  }
+}

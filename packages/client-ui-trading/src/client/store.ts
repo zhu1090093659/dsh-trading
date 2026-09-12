@@ -83,6 +83,7 @@ export function inferMarket(symbol?: string): MarketId {
   const sym = symbol.toUpperCase()
   if (sym.endsWith('.SH') || sym.endsWith('.SZ') || /^\d{6}$/.test(sym)) return 'cn'
   if (sym.endsWith('.HK') || /^\d{5}$/.test(sym)) return 'hk'
+  if (/^[A-Z]{1,3}\d{2,4}(\.(SHF|DCE|CZC|INE|GFE|CFE))?$/.test(sym)) return 'futures'
   if (sym.includes('USDT') || sym.includes('BTC') || sym.includes('ETH')) return 'crypto'
   return 'us'
 }
@@ -91,7 +92,7 @@ export function createSelectionStore(): SelectionStore {
   const raw = readJson<Instrument | null>(SELECTION_KEY, null)
   const initialInstrument: Instrument | null = raw && typeof raw.symbol === 'string' && raw.symbol
     ? {
-        market: raw.market && ['crypto', 'us', 'cn', 'hk'].includes(raw.market) ? (raw.market as MarketId) : inferMarket(raw.symbol),
+        market: raw.market && ['crypto', 'us', 'cn', 'hk', 'futures'].includes(raw.market) ? (raw.market as MarketId) : inferMarket(raw.symbol),
         symbol: raw.symbol,
         ...(raw.name ? { name: raw.name } : {}),
       }
@@ -103,7 +104,7 @@ export function createSelectionStore(): SelectionStore {
     ...store,
     select(instrument) {
       const sanitized: Instrument = {
-        market: instrument.market && ['crypto', 'us', 'cn', 'hk'].includes(instrument.market) ? instrument.market : inferMarket(instrument.symbol),
+        market: instrument.market && ['crypto', 'us', 'cn', 'hk', 'futures'].includes(instrument.market) ? instrument.market : inferMarket(instrument.symbol),
         symbol: instrument.symbol,
         ...(instrument.name ? { name: instrument.name } : {}),
       }
@@ -137,12 +138,12 @@ export function sameInstrument(a: Instrument, b: Instrument): boolean {
 function sanitizeWatchlists(raw: Watchlists): Watchlists {
   const clean: Watchlists = {}
   for (const [key, rows] of Object.entries(raw)) {
-    if (!['crypto', 'us', 'cn', 'hk'].includes(key) || !Array.isArray(rows)) continue
+    if (!['crypto', 'us', 'cn', 'hk', 'futures'].includes(key) || !Array.isArray(rows)) continue
     const market = key as MarketId
     clean[market] = rows
       .filter((row): row is Instrument => Boolean(row && typeof row.symbol === 'string' && row.symbol))
       .map(row => ({
-        market: row.market && ['crypto', 'us', 'cn', 'hk'].includes(row.market) ? row.market : market,
+        market: row.market && ['crypto', 'us', 'cn', 'hk', 'futures'].includes(row.market) ? row.market : market,
         symbol: row.symbol,
         ...(row.name ? { name: row.name } : {}),
         // 分组归属（issue #82）：只收非空字符串 id，去重；空集不落键
@@ -177,7 +178,7 @@ export function createWatchlistStore(): WatchlistStore {
       return Array.isArray(rows)
     },
     add(market, instrument) {
-      const targetMarket = ['crypto', 'us', 'cn', 'hk'].includes(market) ? market : inferMarket(instrument.symbol)
+      const targetMarket = ['crypto', 'us', 'cn', 'hk', 'futures'].includes(market) ? market : inferMarket(instrument.symbol)
       const sanitized: Instrument = {
         market: targetMarket,
         symbol: instrument.symbol,
@@ -193,7 +194,7 @@ export function createWatchlistStore(): WatchlistStore {
       persist()
     },
     remove(market, symbol) {
-      const targetMarket = ['crypto', 'us', 'cn', 'hk'].includes(market) ? market : inferMarket(symbol)
+      const targetMarket = ['crypto', 'us', 'cn', 'hk', 'futures'].includes(market) ? market : inferMarket(symbol)
       store.update((current) => {
         const existing = current[targetMarket]
         const baseRows = Array.isArray(existing) ? existing : (DEFAULT_WATCHLISTS[targetMarket] ?? [])
@@ -364,4 +365,6 @@ export const MARKET_INTERVALS: Record<MarketId, string[]> = {
   us: ['5m', '15m', '30m', '1h', '1d', '1w', '1M'],
   cn: ['5m', '30m', '1d', '1w', '1M'],
   hk: ['5m', '15m', '30m', '1h', '1d', '1w', '1M'],
+  // 期货：上游日K可回溯，分钟只有当日分时——只上日线及以上周期，避免单日分钟冒充历史。
+  futures: ['1d', '1w', '1M'],
 }

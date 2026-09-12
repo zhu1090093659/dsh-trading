@@ -38,6 +38,7 @@ const MARKET_TABS: readonly { id: string; order: number; key: string }[] = [
   { id: 'us', order: 1, key: 'us' },
   { id: 'cn', order: 2, key: 'cn' },
   { id: 'hk', order: 3, key: 'hk' },
+  { id: 'futures', order: 4, key: 'futures' },
 ]
 
 /** 注册『交易』设置一级菜单（tab 容器）+ 每市场面板。 */
@@ -75,6 +76,15 @@ export function apply(ctx: ClientContext): void {
     async resetNewsKey() {
       const rev = scope.getSnapshot().revision
       await scope.mutate([{ op: 'unset', path: ['news', 'cryptoPanicKey'] }], rev)
+    },
+    async setNewsSources(market, ids) {
+      const rev = scope.getSnapshot().revision
+      // 空选集 = 显式关闭该市场新闻（保留空数组语义，与「未配置 = kit 默认源」区分）。
+      await scope.mutate([{ op: 'set', path: ['news', 'sources', market], value: [...ids] }], rev)
+    },
+    async resetNewsSources(market) {
+      const rev = scope.getSnapshot().revision
+      await scope.mutate([{ op: 'unset', path: ['news', 'sources', market] }], rev)
     },
     async setColorMode(mode) {
       const rev = scope.getSnapshot().revision

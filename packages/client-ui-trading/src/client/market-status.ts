@@ -34,6 +34,8 @@ export const MARKET_INDICES: Record<MarketId, MarketIndexDef[]> = {
     { symbol: 'ETHUSDT', nameKey: 'index.eth' },
     { symbol: 'SOLUSDT', nameKey: 'index.sol' },
   ],
+  // 期货无「大盘指数」概念（品种行情按合约展示，指数代码不在本表口径内）。
+  futures: [],
 }
 
 export interface MarketSessionInfo {
@@ -132,6 +134,36 @@ export function getMarketSessionStatus(market: MarketId, dateOrTimestamp: Date |
     if (minutes >= 960 && minutes < 970) {
       return { statusKey: 'status.auction', isOpen: false, color: '#e37318' }
     }
+    return { statusKey: 'status.closed', isOpen: false, color: '#8e95a3' }
+  }
+
+  // 期货（issue #97，近似模型）：日盘 9:00-10:15/10:30-11:30/13:30-15:00，夜盘统一按
+  // 21:00-23:00（部分品种到 01:00/02:30，周末凌晨段不区分）；夜盘收市后到次日开盘为已收盘。
+  if (market === 'futures') {
+    const { dayOfWeek, minutes } = getZonedTime(date, 'Asia/Shanghai')
+    if (dayOfWeek === 0 || (dayOfWeek === 6 && minutes < 180)) {
+      // 周六凌晨仍可能属周五夜盘（02:30 收市品种）；近似按 03:00 前归周五夜盘尾巴
+      if (dayOfWeek === 6 && minutes < 150) {
+        return { statusKey: 'status.trading', isOpen: true, color: '#2ba471' }
+      }
+      return { statusKey: 'status.closed', isOpen: false, color: '#8e95a3' }
+    }
+    if (dayOfWeek === 6) return { statusKey: 'status.closed', isOpen: false, color: '#8e95a3' }
+    // 日盘竞价 08:55 - 09:00
+    if (minutes >= 535 && minutes < 540) return { statusKey: 'status.auction', isOpen: false, color: '#e37318' }
+    // 09:00 - 10:15 第一节
+    if (minutes >= 540 && minutes < 615) return { statusKey: 'status.trading', isOpen: true, color: '#2ba471' }
+    // 10:15 - 10:30 中场休息
+    if (minutes >= 615 && minutes < 630) return { statusKey: 'status.midday', isOpen: false, color: '#e37318' }
+    // 10:30 - 11:30 第二节
+    if (minutes >= 630 && minutes < 690) return { statusKey: 'status.trading', isOpen: true, color: '#2ba471' }
+    // 11:30 - 13:30 午间休市
+    if (minutes >= 690 && minutes < 810) return { statusKey: 'status.midday', isOpen: false, color: '#e37318' }
+    // 13:30 - 15:00 第三节
+    if (minutes >= 810 && minutes < 900) return { statusKey: 'status.trading', isOpen: true, color: '#2ba471' }
+    // 夜盘竞价 20:55 - 21:00 与交易 21:00 - 23:00（近似统一收市）
+    if (minutes >= 1255 && minutes < 1260) return { statusKey: 'status.auction', isOpen: false, color: '#e37318' }
+    if (minutes >= 1260 && minutes < 1380) return { statusKey: 'status.trading', isOpen: true, color: '#2ba471' }
     return { statusKey: 'status.closed', isOpen: false, color: '#8e95a3' }
   }
 
