@@ -120,7 +120,7 @@ function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
   if (!symbol) return undefined
   const sym = symbol.toUpperCase()
   if (sym.endsWith('.SH') || sym.endsWith('.SZ') || /^\d{6}$/.test(sym)) return 'cn'
-  if (/^[A-Z]{1,3}\d{3,4}(\.(SHF|DCE|CZC|INE|GFE))?$/.test(sym)) return 'futures'
+  if (/^[A-Z]{1,3}\d{3,4}(\.(SHF|DCE|CZC|INE|GFE|CFE))?$/.test(sym)) return 'futures'
   if (sym.endsWith('.HK') || /^\d{5}$/.test(sym)) return 'hk'
   if (sym.includes('USDT') || sym.includes('BTC') || sym.includes('ETH')) return 'crypto'
   return 'us'

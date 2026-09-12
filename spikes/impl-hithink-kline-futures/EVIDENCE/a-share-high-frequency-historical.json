@@ -1,0 +1,9 @@
+{
+  "path": "/api/a-share/high-frequency/historical?thscode=600519.SH&interval=1m&start=1789090335678&end=1789176735678",
+  "http": 200,
+  "body": {
+    "code": 2004,
+    "message": "该数据为同花顺AI客户端专用，前往[同花顺AI客户端](https://lumi.10jqka.com.cn/?channel=Hithink-API)即刻体验",
+    "data": null
+  }
+}

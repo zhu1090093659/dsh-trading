@@ -26,6 +26,7 @@
 | us | 纯大写 ticker | `AAPL` | Yahoo/Stooq 原生形即规范形 |
 | cn | `NNNNNN.SH` / `NNNNNN.SZ` | `600519.SH`、`000001.SZ` | 大陆通行写法；裸 6 位数字为宽容输入（按首位推断：6/9→SH，0/3→SZ；北交所 4/8 暂不支持） |
 | hk | `NNNNN.HK`（5 位补零） | `00700.HK` | 裸 1-5 位数字为宽容输入（`700` → `00700.HK`） |
+| futures | `VARIANTNNNN.EXCHANGE`（品种大写 + 3-4 位年月 + 交易所后缀） | `RB2601.SHF`、`IF2612.CFE`、`IC2609.CFE` | 同花顺 thscode 形；后缀 SHF/INE=上期所/能源中心，DCE=大期所，CZC=郑商所，GFE=广期所，CFE=中金所；主力连续 `RB00.SHF` 由上游检索返回 |
 
 ## 连接器互译现状
 
@@ -37,6 +38,8 @@
 | yahoo | us | `AAPL` | 恒等 |
 | stooq | us | `aapl.us` | 小写化 + 补 `.us` 后缀（既有行为，输出规范大写形） |
 | futu | hk | `HK.00700` | 规范形 `00700.HK` / 裸 1-5 位数字 / 原生形 `HK.00700` 互译（wire 恒 `HK.` + 5 位补零） |
+| hithink | futures | `RB2601.SHF` | 近恒等：大写去空白透传（带/不带后缀均交上游裁决，品种→交易所映射不做本地硬编码，检索/代码表返回即规范形） |
+| hithink | cn | `600519.SH` | `normalizeThsCode`：裸 6 位按首位推断 SH/SZ/BJ，`sh600519` 前缀形互译 |
 | futu | us | `US.AAPL` | 规范形纯大写 ticker（接受 `US.AAPL` / `AAPL.US` / 类别股 `BRK.B`）↔ wire `US.AAPL` |
 
 ## 给新连接器（手册补充条款）

@@ -1,0 +1,743 @@
+{
+  "path": "/api/futures/prices/intraday?thscode=RB00.SHF&session=intraday",
+  "http": 200,
+  "body": {
+    "code": 0,
+    "message": "success",
+    "request_id": "d34aba9fac2242f085f9d2f6fd30d4d9",
+    "data": {
+      "timestamp": 1789176737719,
+      "thscode": "RB00.SHF",
+      "date": "2026-09-14",
+      "session": "intraday",
+      "item": [
+        {
+          "timestamp": 1789131600000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789131660000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789131720000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789131780000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789131840000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789131900000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789131960000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132020000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132080000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132140000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132200000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132260000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132320000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132380000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132440000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132500000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132560000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132620000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132680000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132740000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132800000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132860000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132920000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789132980000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133040000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133100000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133160000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133220000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133280000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133340000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133400000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133460000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133520000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133580000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133640000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133700000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133760000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133820000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133880000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789133940000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134000000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134060000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134120000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134180000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134240000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134300000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134360000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134420000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134480000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134540000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134600000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134660000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134720000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134780000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134840000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134900000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789134960000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135020000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135080000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135140000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135200000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135260000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135320000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135380000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135440000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135500000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135560000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135620000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135680000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135740000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135800000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135860000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135920000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789135980000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136040000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136100000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136160000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136220000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136280000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136340000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136400000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136460000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136520000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136580000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136640000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136700000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136760000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136820000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136880000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789136940000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137000000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137060000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137120000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137180000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137240000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137300000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137360000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137420000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137480000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137540000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137600000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137660000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137720000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137780000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137840000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137900000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789137960000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138020000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138080000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138140000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138200000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138260000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138320000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138380000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138440000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138500000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138560000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138620000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138680000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138740000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        },
+        {
+          "timestamp": 1789138800000,
+          "price": null,
+          "volume": null,
+          "turnover": 0
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,1 @@
+Error: a-share-high-frequency-historical failed: HTTP 200 code=2004 该数据为同花顺AI客户端专用，前往[同花顺AI客户端](https://lumi.10jqka.com.cn/?channel=Hithink-API)即刻体验

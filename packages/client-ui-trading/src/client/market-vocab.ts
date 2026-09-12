@@ -30,7 +30,7 @@ export function inferInputMarket(rawDraft: string): MarketId {
   const raw = rawDraft.trim().toUpperCase()
   if (/^(HK\.)?\d{1,5}(\.HK)?$/.test(raw)) return 'hk'
   if (/^\d{6}(\.(SH|SZ))?$/.test(raw)) return 'cn'
-  if (/^[A-Z]{1,3}\d{3,4}(\.(SHF|DCE|CZC|INE|GFE))?$/.test(raw)) return 'futures'
+  if (/^[A-Z]{1,3}\d{3,4}(\.(SHF|DCE|CZC|INE|GFE|CFE))?$/.test(raw)) return 'futures'
   if (CRYPTO_MARKERS.some(marker => raw.includes(marker))) return 'crypto'
   return 'us'
 }
