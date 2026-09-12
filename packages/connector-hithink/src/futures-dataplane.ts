@@ -19,9 +19,16 @@ const MARKET = 'futures'
 
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
-  const apiKey = process.env[config.apiKeyRef]
+  // 凭证与 cn dataplane 同源（2026-09-12 实证修复）：settings credentials 优先、
+  // env 兜底，惰性到每次请求解析（settings 加载/修改晚于 apply 亦生效）。
+  const apiKeyProvider = (): string | undefined => {
+    const router = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as
+      | { getCredential?(provider: string): Record<string, string> | undefined }
+      | undefined
+    return router?.getCredential?.('hithink')?.apiKey || process.env[config.apiKeyRef]
+  }
   const registry = resolveMarketDataRegistry(ctx)
-  const opts = apiKey ? { apiKey } : {}
+  const opts = { apiKeyProvider }
   if (registry === undefined) {
     new HiThinkFuturesMarketDataService(ctx, opts)
     return

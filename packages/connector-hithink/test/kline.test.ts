@@ -276,6 +276,28 @@ describe('HiThinkFuturesMarketDataService', () => {
     expect(roster).toHaveLength(2)
   })
 
+  it('apiKeyProvider: 惰性凭证源每请求解析（settings credentials 晚于 apply 亦生效）', async () => {
+    const seenKeys: Array<string | undefined> = []
+    const impl = (async (input: unknown, init?: { headers?: Record<string, string> }) => {
+      seenKeys.push(init?.headers?.['X-api-key'])
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 0, message: 'success', data: { timestamp: null, thscode: 'CU2601.SHF', interval: '1d', item: [] } }),
+      }
+    }) as unknown as typeof fetch
+    let key: string | undefined
+    const client = new HiThinkRestClient({ apiKeyProvider: () => key, fetchImpl: impl })
+
+    key = undefined
+    await client.getFuturesDailyKlines('CU2601.SHF', 5)
+    expect(seenKeys[0]).toBeUndefined()
+
+    key = 'late-key'
+    await client.getFuturesDailyKlines('CU2601.SHF', 5)
+    expect(seenKeys[1]).toBe('late-key')
+  })
+
   it('HiThinkRestClient.getFuturesDailyKlines: limit>100 时携带 start/end 窗口', async () => {
     const { impl, urls } = stubFetch({
       '/api/futures/prices/daily': { body: { code: 0, message: 'success', data: { timestamp: null, thscode: 'CU2601.SHF', interval: '1d', item: [] } } },

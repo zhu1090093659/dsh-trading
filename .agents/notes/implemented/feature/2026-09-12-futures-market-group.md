@@ -18,6 +18,12 @@ Issue: #97
    - client-ui-settings：MARKET_TABS 加 futures（hithink 卡片 markets 含 futures）；desktop build-runtime 两清单纳入 `@dshtrading/futures`（runtime 产物随构建重生成）。
 3. **期货无实盘交易面**（A 股期货执行走本地 MiniQMT 等账户侧，铁律 #3）：`futures_place_order` 工具不存在，闸门正则扩展仅为预防性收口；新闻面：上游无期货新闻端点，newsRegistry 未注册 futures 聚合器，GUI 新闻页签空态（fetchNews 错误已被 catch 兜住）。
 
+## 补充实证（verify profile，2026-09-12）
+
+- **设置中心凭证从未到达 hithink 连接器的根因**：cn/futures 两个 dataplane 原实现只在 apply 期从 `process.env` 快照 Key；而用户在设置-交易配置的 Key 存于 `dshtrading.credentials.hithink.apiKey`（settings.yaml），tushare/fmp/finnhub 等商业连接器均读 router `getCredential`。修复：凭证解析惰性到每次请求（`HiThinkRestOptions.apiKeyProvider`，settings 优先、env 兜底），与注册表「热切换」语义一致（首个截图轮实测 Missing X-api-key → 惰性化后全通）。
+- **宿主全链路实测（一次性 verify profile + 桥 API + headless 截图）**：cn 600519.SH 日K 3 根真实数据（原 NOT_IMPLEMENTED 已修）、cn ticker 1275.16/prevClose 1285.13、futures RB00.SHF ticker 3000/3020 与日K、`/markets` 含 `futures:hithink`、cn 新闻流正常；GUI 左栏「期货」页签渲染（截图留 /tmp/trading-verify-ui.png，验证后 verify profile 已删除）。
+- 桌面壳在跑实例仍持旧代码：用户侧生效需合并后重建桌面 runtime 或刷新 profile 并重启实例。
+
 ## Verification
 
 - `pnpm build` 全绿；`pnpm test` 1428 用例全通过。

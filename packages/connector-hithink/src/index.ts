@@ -117,6 +117,14 @@ export class HiThinkMarketDataService extends Service implements MarketDataServi
 
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
-  const apiKey = process.env[config.apiKeyRef]
-  new HiThinkMarketDataService(ctx, apiKey ? { apiKey } : {})
+  // 凭证对齐 tushare/fmp 等商业连接器（2026-09-12 实证修复）：设置中心
+  // dshtrading.credentials.hithink.apiKey（router getCredential）优先，环境变量兜底。
+  // 解析惰性到每次请求：settings 用户层加载与修改晚于插件 apply（热切换即时生效）。
+  const apiKeyProvider = (): string | undefined => {
+    const router = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as
+      | { getCredential?(provider: string): Record<string, string> | undefined }
+      | undefined
+    return router?.getCredential?.('hithink')?.apiKey || process.env[config.apiKeyRef]
+  }
+  new HiThinkMarketDataService(ctx, { apiKeyProvider })
 }

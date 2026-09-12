@@ -45,6 +45,8 @@ export class TradingServiceError extends Error {
 
 export interface HiThinkRestOptions {
   apiKey?: string | undefined
+  /** 惰性凭证源（每次请求解析）：settings credentials 热切换与异步加载晚于插件 apply 时生效。 */
+  apiKeyProvider?: (() => string | undefined) | undefined
   baseUrl?: string | undefined
   fetchImpl?: typeof fetch | undefined
   timeoutMs?: number | undefined
@@ -75,15 +77,21 @@ export function normalizeThsCode(input: string): string {
 
 export class HiThinkRestClient {
   private readonly apiKey?: string | undefined
+  private readonly apiKeyProvider?: (() => string | undefined) | undefined
   private readonly baseUrl: string
   private readonly fetchImpl: typeof fetch
   private readonly timeoutMs: number
 
   constructor(options: HiThinkRestOptions = {}) {
     this.apiKey = options.apiKey ?? process.env.HITHINK_FINANCE_API_KEY ?? process.env.HITHINK_API_KEY
+    this.apiKeyProvider = options.apiKeyProvider
     this.baseUrl = (options.baseUrl ?? 'https://fuyao.aicubes.cn').replace(/\/+$/, '')
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
     this.timeoutMs = options.timeoutMs ?? 10_000
+  }
+
+  private resolvedApiKey(): string | undefined {
+    return this.apiKeyProvider?.() ?? this.apiKey
   }
 
   private async request<T>(path: string, params: Record<string, string | number | undefined> = {}): Promise<T> {
@@ -98,8 +106,9 @@ export class HiThinkRestClient {
       Accept: 'application/json',
       'User-Agent': 'dsh-trading/0.1.0',
     }
-    if (this.apiKey) {
-      headers['X-api-key'] = this.apiKey
+    const apiKey = this.resolvedApiKey()
+    if (apiKey) {
+      headers['X-api-key'] = apiKey
     }
 
     let res: Response
