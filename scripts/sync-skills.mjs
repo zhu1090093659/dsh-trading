@@ -15,6 +15,7 @@
  *   - 'us-*'                                      -> kit-us
  *   - 'cn-*'                                      -> kit-cn
  *   - 'hk-*'                                      -> kit-hk
+ *   - 'futures-*'                                 -> kit-futures
  *   - 其它通用基础技能                             -> base
  */
 
@@ -32,6 +33,7 @@ const MARKET_PACKAGES = {
   us: path.join(ROOT, 'packages', 'kit-us', 'assets', 'skills'),
   cn: path.join(ROOT, 'packages', 'kit-cn', 'assets', 'skills'),
   hk: path.join(ROOT, 'packages', 'kit-hk', 'assets', 'skills'),
+    futures: path.join(ROOT, 'packages', 'kit-futures', 'assets', 'skills'),
   base: path.join(ROOT, 'packages', 'base', 'assets', 'skills'),
 }
 
@@ -47,6 +49,7 @@ function resolveTargetDirs(skillName) {
   if (skillName.startsWith('us-')) return [MARKET_PACKAGES.us]
   if (skillName.startsWith('cn-')) return [MARKET_PACKAGES.cn]
   if (skillName.startsWith('hk-')) return [MARKET_PACKAGES.hk]
+  if (skillName.startsWith('futures-')) return [MARKET_PACKAGES.futures]
   return [MARKET_PACKAGES.base]
 }
 
