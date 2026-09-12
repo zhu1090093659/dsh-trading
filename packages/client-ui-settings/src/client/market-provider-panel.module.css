@@ -421,3 +421,29 @@
 }
 
 
+
+/* issue #96：新闻/公告源多选卡片 */
+.newsSourcesGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.newsSourceItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--panel-text-primary);
+  cursor: pointer;
+}
+
+.newsSourceItem input {
+  accent-color: var(--panel-border-card-selected);
+}
+
+.newsSourcesHint {
+  font-size: 11.5px;
+  color: var(--panel-text-secondary, var(--panel-text-primary));
+  opacity: 0.75;
+}

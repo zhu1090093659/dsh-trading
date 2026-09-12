@@ -35,6 +35,8 @@ export interface AggregateNewsOptions {
   now?: number | undefined
   /** WS2c：CryptoPanic API token。有值时加测 CryptoPanic 免费层（B 增强）；无值 = 仅公共源。 */
   cryptoPanicKey?: string | undefined
+  /** 启用源 id 列表（issue #96 源配置化）；缺省 = 全部默认源，空数组 = 显式关闭。 */
+  sources?: readonly string[] | undefined
 }
 
 export interface AggregateNewsResult {
@@ -260,15 +262,18 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
 
   // WS2c：有 key 时加测 CryptoPanic 免费层（B 增强）；无 key 仅公共源。
   // cryptopanic 失败不炸整体——落入 allSettled 的 rejected 分支 → unavailable（降级语义）。
-  const fetchers: Promise<NewsItem[]>[] = [
-    fetchBinanceNews(fetchImpl),
-    fetchOkxNews(fetchImpl),
-    fetchRssNews(fetchImpl, 'coindesk', COINDESK_RSS_URL),
-    fetchRssNews(fetchImpl, 'theblock', THEBLOCK_RSS_URL),
-    fetchRssNews(fetchImpl, 'cointelegraph', COINTELEGRAPH_RSS_URL),
-    fetchRssNews(fetchImpl, 'decrypt', DECRYPT_RSS_URL),
-  ]
-  if (options.cryptoPanicKey && options.cryptoPanicKey.trim()) {
+  // 源配置化（issue #96）：sources 缺省 = 全部默认源；cryptopanic 还需 key 同时成立。
+  const enabled = options.sources
+  const isEnabled = (id: NewsSource): boolean => enabled === undefined || enabled.includes(id)
+
+  const fetchers: Promise<NewsItem[]>[] = []
+  if (isEnabled('binance')) fetchers.push(fetchBinanceNews(fetchImpl))
+  if (isEnabled('okx')) fetchers.push(fetchOkxNews(fetchImpl))
+  if (isEnabled('coindesk')) fetchers.push(fetchRssNews(fetchImpl, 'coindesk', COINDESK_RSS_URL))
+  if (isEnabled('theblock')) fetchers.push(fetchRssNews(fetchImpl, 'theblock', THEBLOCK_RSS_URL))
+  if (isEnabled('cointelegraph')) fetchers.push(fetchRssNews(fetchImpl, 'cointelegraph', COINTELEGRAPH_RSS_URL))
+  if (isEnabled('decrypt')) fetchers.push(fetchRssNews(fetchImpl, 'decrypt', DECRYPT_RSS_URL))
+  if (options.cryptoPanicKey && options.cryptoPanicKey.trim() && isEnabled('cryptopanic')) {
     // CryptoPanic currencies 参数用币种代码（BTC/ETH/SOL，不含报价/合约后缀）。
     // tokens 含原始串（如 BTCUSDT-SWAP）与 base（BTC）：先剥合约后缀再剥报价段，
     // 确保 swap 形也归一到币种代码（否则会把 'BTCUSDT-SWAP' 原样发给 CryptoPanic）。

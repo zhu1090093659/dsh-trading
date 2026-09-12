@@ -25,6 +25,23 @@ export type SettingsLocaleKey =
   | 'newsKeyPlaceholder'
   | 'newsSaved'
   | 'newsSaveFailed'
+  | 'newsSourcesTitle'
+  | 'newsSourcesHint'
+  | 'newsSourcesReset'
+  | 'newsSource.eastmoney'
+  | 'newsSource.eastmoneyAnnouncement'
+  | 'newsSource.cninfoAnnouncement'
+  | 'newsSource.hkexAnnouncement'
+  | 'newsSource.yahoo'
+  | 'newsSource.googlenews'
+  | 'newsSource.secEdgar'
+  | 'newsSource.binance'
+  | 'newsSource.okx'
+  | 'newsSource.coindesk'
+  | 'newsSource.theblock'
+  | 'newsSource.cointelegraph'
+  | 'newsSource.decrypt'
+  | 'newsSource.cryptopanic'
   | 'colorMode.label'
   | 'colorMode.redUp'
   | 'colorMode.greenUp'
@@ -126,6 +143,23 @@ export const zh: Record<SettingsLocaleKey, string> = {
       'newsKeyPlaceholder': '粘贴 CryptoPanic free API token（私钥，仅本地存储）',
       'newsSaved': '已保存',
       'newsSaveFailed': '保存失败',
+      'newsSourcesTitle': '新闻公告数据源',
+      'newsSourcesHint': '未配置时使用全部默认源；取消全部勾选并保存 = 关闭该市场新闻流。公告源仅在查询具体标的时生效。',
+      'newsSourcesReset': '恢复默认源',
+      'newsSource.eastmoney': '东方财富快讯',
+      'newsSource.eastmoneyAnnouncement': '东财公告',
+      'newsSource.cninfoAnnouncement': '巨潮资讯公告',
+      'newsSource.hkexAnnouncement': '港交所披露易',
+      'newsSource.yahoo': 'Yahoo Finance',
+      'newsSource.googlenews': 'Google News',
+      'newsSource.secEdgar': 'SEC EDGAR 公报',
+      'newsSource.binance': 'Binance 公告',
+      'newsSource.okx': 'OKX 公告',
+      'newsSource.coindesk': 'CoinDesk',
+      'newsSource.theblock': 'The Block',
+      'newsSource.cointelegraph': 'Cointelegraph',
+      'newsSource.decrypt': 'Decrypt',
+      'newsSource.cryptopanic': 'CryptoPanic',
       'colorMode.label': '涨跌配色',
       'colorMode.redUp': '红涨绿跌（国内习惯）',
       'colorMode.greenUp': '绿涨红跌（国际习惯）',
@@ -228,6 +262,23 @@ export const en: Record<SettingsLocaleKey, string> = {
       'newsKeyPlaceholder': 'Paste a CryptoPanic free API token (stored locally only)',
       'newsSaved': 'Saved',
       'newsSaveFailed': 'Save failed',
+      'newsSourcesTitle': 'News & announcement sources',
+      'newsSourcesHint': 'Unconfigured = all default sources enabled; uncheck everything and save to turn this market news feed off. Announcement sources only apply to symbol queries.',
+      'newsSourcesReset': 'Restore defaults',
+      'newsSource.eastmoney': 'Eastmoney fast news',
+      'newsSource.eastmoneyAnnouncement': 'Eastmoney announcements',
+      'newsSource.cninfoAnnouncement': 'CNINFO announcements',
+      'newsSource.hkexAnnouncement': 'HKEX disclosures',
+      'newsSource.yahoo': 'Yahoo Finance',
+      'newsSource.googlenews': 'Google News',
+      'newsSource.secEdgar': 'SEC EDGAR',
+      'newsSource.binance': 'Binance announcements',
+      'newsSource.okx': 'OKX announcements',
+      'newsSource.coindesk': 'CoinDesk',
+      'newsSource.theblock': 'The Block',
+      'newsSource.cointelegraph': 'Cointelegraph',
+      'newsSource.decrypt': 'Decrypt',
+      'newsSource.cryptopanic': 'CryptoPanic',
       'colorMode.label': 'Price Color Scheme',
       'colorMode.redUp': 'Red Up / Green Down (Chinese)',
       'colorMode.greenUp': 'Green Up / Red Down (International)',

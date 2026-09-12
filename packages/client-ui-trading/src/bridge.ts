@@ -107,6 +107,8 @@ export function createBridgeHost(services: {
   newsRegistry?: TradingNewsRegistryLike | undefined
   /** CryptoPanic API token 取值函数（从 router settings 获取；可选）。 */
   newsKey?: (() => string | undefined) | undefined
+  /** 市场启用的新闻/公告源 id 列表取值函数（issue #96；可选）。 */
+  newsSources?: ((market: string) => readonly string[] | undefined) | undefined
 }): BridgeHost {
   return {
     getMarketService: market => {
@@ -129,6 +131,7 @@ export function createBridgeHost(services: {
     fetchFxRates: services.fetchFxRates,
     newsRegistry: services.newsRegistry,
     newsKey: services.newsKey,
+    newsSources: services.newsSources,
   }
 }
 
@@ -176,6 +179,8 @@ export interface BridgeHost {
   newsRegistry?: TradingNewsRegistryLike | undefined
   /** CryptoPanic API token 取值函数（从 router settings 获取；可选，issue #37）。 */
   newsKey?: (() => string | undefined) | undefined
+  /** 市场启用的新闻/公告源 id 列表取值函数（issue #96；缺省 = kit 默认源全集）。 */
+  newsSources?: ((market: string) => readonly string[] | undefined) | undefined
 }
 
 export interface MarketInfoWire {
@@ -995,6 +1000,7 @@ export class TradingBridge {
       limit: limit ?? 20,
       windowHours: 24,
       cryptoPanicKey: this.host.newsKey?.(),
+      sources: this.host.newsSources?.(market),
     })
 
     return { ok: true, items: result.items, unavailable: result.unavailable }

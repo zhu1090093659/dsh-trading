@@ -193,6 +193,11 @@ export function apply(ctx: Context): void {
         const router = webCtx.get('tradingMarketRouter', false) as { newsKey?: () => string | undefined } | undefined
         return router?.newsKey?.()
       },
+      // 启用新闻源（issue #96 源配置化）：从 router settings 惰性读取，随设置即时生效。
+      newsSources: (market: string) => {
+        const router = webCtx.get('tradingMarketRouter', false) as { newsSources?: (market: string) => readonly string[] | undefined } | undefined
+        return router?.newsSources?.(market)
+      },
     })
     const bridge = new TradingBridge(host)
 

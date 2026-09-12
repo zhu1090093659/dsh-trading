@@ -805,6 +805,11 @@ export interface AggregateNewsOptions {
   symbol?: string | undefined
   /** CryptoPanic API token（仅 crypto 市场使用，可选）。 */
   cryptoPanicKey?: string | undefined
+  /**
+   * 启用的新闻/公告源 id 列表（issue #96 源配置化；各 kit 的 NewsSource 词汇）。
+   * 缺省 = 该市场全部默认源；空数组 = 显式关闭（返回空结果）。
+   */
+  sources?: readonly string[] | undefined
 }
 
 /** 新闻聚合结果。 */

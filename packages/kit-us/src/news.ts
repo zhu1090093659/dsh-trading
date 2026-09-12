@@ -8,7 +8,7 @@
  * 铁律 #5：输出只带元数据（来源名/标题/链接/发布时间），不取正文，不缓存，不再分发。
  * 每源独立容错：单源失败不炸整体，失败源在 `unavailable` 中注明，fail-soft。
  */
-export type NewsSource = 'yahoo' | 'googlenews'
+export type NewsSource = 'yahoo' | 'googlenews' | 'sec-edgar'
 
 export interface NewsItem {
   /** 来源名（铁律 #5 的来源标注）。 */
@@ -32,6 +32,8 @@ export interface AggregateNewsOptions {
   now?: number | undefined
   /** CryptoPanic API token（桥面透传，us 聚合器忽略；对齐 api 契约形状）。 */
   cryptoPanicKey?: string | undefined
+  /** 启用源 id 列表（issue #96 源配置化）；缺省 = 全部默认源，空数组 = 显式关闭。 */
+  sources?: readonly string[] | undefined
 }
 
 export interface AggregateNewsResult {
@@ -215,11 +217,14 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
   const limit = clampNumber(options.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
   const topic = (options.symbol?.trim() || DEFAULT_QUERY_TOPIC)
 
-  const fetchers: Promise<NewsItem[]>[] = [
-    fetchYahooNews(fetchImpl, topic, limit),
-    fetchGooglenews(fetchImpl, topic, limit),
-  ]
-  if (options.symbol && options.symbol.trim()) {
+  // 源配置化（issue #96）：sources 缺省 = 全部默认源；sec-edgar 公报仍受 symbol 门控。
+  const enabled = options.sources
+  const isEnabled = (id: NewsSource): boolean => enabled === undefined || enabled.includes(id)
+
+  const fetchers: Promise<NewsItem[]>[] = []
+  if (isEnabled('yahoo')) fetchers.push(fetchYahooNews(fetchImpl, topic, limit))
+  if (isEnabled('googlenews')) fetchers.push(fetchGooglenews(fetchImpl, topic, limit))
+  if (options.symbol && options.symbol.trim() && isEnabled('sec-edgar')) {
     fetchers.push(fetchSecEdgarAnnouncements(fetchImpl, options.symbol, limit))
   }
 

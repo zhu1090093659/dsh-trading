@@ -47,8 +47,41 @@ export const PROVIDER_LABELS: readonly Readonly<ProviderMeta>[] = [
   { id: 'futu', label: 'provider.futu', url: 'https://futunn.com/download/open-api', env: 'FUTU_HOST', type: 'gateway', markets: ['hk', 'us'] },
   { id: 'longbridge', label: 'provider.longbridge', url: 'https://open.longportapp.com', env: 'LONGBRIDGE_APP_KEY', type: 'commercial', markets: ['hk', 'us'] },
   { id: 'tiger', label: 'provider.tiger', url: 'https://developer.itigerup.com', env: 'TIGER_ID', type: 'commercial', markets: ['hk', 'us', 'cn'] },
-  { id: 'hithink', label: 'provider.hithink', url: 'https://fuyao.aicubes.cn', env: 'HITHINK_FINANCE_API_KEY', type: 'commercial', markets: ['cn'] },
+  { id: 'hithink', label: 'provider.hithink', url: 'https://fuyao.aicubes.cn', env: 'HITHINK_FINANCE_API_KEY', type: 'commercial', markets: ['cn', 'futures'] },
 ]
+
+/** 新闻/公告源候选（issue #96 源配置化）：id = 各 kit NewsSource 词汇；label = 词典键。 */
+export interface NewsSourceMeta {
+  id: string
+  label: string
+}
+
+export const NEWS_SOURCE_CATALOG: Record<string, readonly NewsSourceMeta[]> = {
+  cn: [
+    { id: 'eastmoney', label: 'newsSource.eastmoney' },
+    { id: 'eastmoney-announcement', label: 'newsSource.eastmoneyAnnouncement' },
+    { id: 'cninfo-announcement', label: 'newsSource.cninfoAnnouncement' },
+  ],
+  us: [
+    { id: 'yahoo', label: 'newsSource.yahoo' },
+    { id: 'googlenews', label: 'newsSource.googlenews' },
+    { id: 'sec-edgar', label: 'newsSource.secEdgar' },
+  ],
+  hk: [
+    { id: 'eastmoney', label: 'newsSource.eastmoney' },
+    { id: 'eastmoney-announcement', label: 'newsSource.eastmoneyAnnouncement' },
+    { id: 'hkex-announcement', label: 'newsSource.hkexAnnouncement' },
+  ],
+  crypto: [
+    { id: 'binance', label: 'newsSource.binance' },
+    { id: 'okx', label: 'newsSource.okx' },
+    { id: 'coindesk', label: 'newsSource.coindesk' },
+    { id: 'theblock', label: 'newsSource.theblock' },
+    { id: 'cointelegraph', label: 'newsSource.cointelegraph' },
+    { id: 'decrypt', label: 'newsSource.decrypt' },
+    { id: 'cryptopanic', label: 'newsSource.cryptopanic' },
+  ],
+}
 
 export interface CredentialField {
   key: string
@@ -125,8 +158,8 @@ export interface TradingSettings {
   markets: Record<string, { provider?: string; tradeProvider?: string }>
   /** 各提供方 API 凭证。 */
   credentials?: Record<string, Record<string, string>>
-  /** WS2c：新闻相关设置（CryptoPanic API token，可选）。 */
-  news?: { cryptoPanicKey?: string }
+  /** WS2c：新闻相关设置（CryptoPanic API token + 每市场启用源，可选）。 */
+  news?: { cryptoPanicKey?: string; sources?: Record<string, string[]> }
   /** 涨跌配色模式：red-up = 红涨绿跌（国内），green-up = 绿涨红跌（国际）。 */
   colorMode?: 'red-up' | 'green-up'
 }
@@ -144,6 +177,10 @@ export interface TradingSettingsState {
   newsKey: string | undefined
   /** WS2c：用户是否覆盖了 CryptoPanic key。 */
   newsOverridden: boolean
+  /** issue #96：market id → 已解析启用源列表（undefined = 未配置 = kit 默认源全集）。 */
+  newsSources: Record<string, readonly string[] | undefined>
+  /** issue #96：market id → 用户是否覆盖了启用源。 */
+  newsSourcesOverridden: Record<string, boolean>
   /** 涨跌配色模式。 */
   colorMode: 'red-up' | 'green-up'
   /** 表单可写（mode=host 且 writable）。 */
@@ -159,6 +196,9 @@ export interface TradingSettingsActions {
   /** WS2c：设置/清除 CryptoPanic key（空串 = 清除回公共源）。 */
   setNewsKey(value: string): Promise<void>
   resetNewsKey(): Promise<void>
+  /** issue #96：设置/清除某市场启用的新闻源列表（ids = 全量勾选集合；reset = 回 kit 默认源）。 */
+  setNewsSources(market: string, ids: readonly string[]): Promise<void>
+  resetNewsSources(market: string): Promise<void>
   /** 设置涨跌配色模式。 */
   setColorMode(mode: 'red-up' | 'green-up'): Promise<void>
 }
@@ -188,7 +228,18 @@ export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): T
   // WS2c：新闻 key 同理（value 优先、base 兜底；user 层 presence 判 overridden）。
   const baseNews = (snap.base as TradingSettings | undefined)?.news
   const news = value?.news ?? baseNews
-  const userNews = ((snap.user ?? {}) as { news?: { cryptoPanicKey?: string } }).news
+  const userNews = ((snap.user ?? {}) as { news?: { cryptoPanicKey?: string; sources?: Record<string, unknown> } }).news
+  // issue #96：每市场启用源（value 优先、base 兜底；user 层 presence 判 overridden）。
+  const newsSources: Record<string, readonly string[] | undefined> = {}
+  const newsSourcesOverridden: Record<string, boolean> = {}
+  const sourceMarketIds = new Set<string>([
+    ...Object.keys(news?.sources ?? {}),
+    ...Object.keys(userNews?.sources ?? {}),
+  ])
+  for (const marketId of sourceMarketIds) {
+    newsSources[marketId] = news?.sources?.[marketId]
+    newsSourcesOverridden[marketId] = userNews?.sources?.[marketId] !== undefined
+  }
   return {
     status: snap.status,
     resolved,
@@ -196,6 +247,8 @@ export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): T
     credentials,
     newsKey: news?.cryptoPanicKey,
     newsOverridden: userNews?.cryptoPanicKey !== undefined,
+    newsSources,
+    newsSourcesOverridden,
     colorMode: value?.colorMode === 'green-up' ? 'green-up' : 'red-up',
     writable: snap.writable && snap.mode === 'host',
   }

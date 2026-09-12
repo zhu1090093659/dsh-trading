@@ -40,6 +40,8 @@ export interface AggregateNewsOptions {
   now?: number | undefined
   /** CryptoPanic API token（桥面透传，cn/hk/us 聚合器忽略；对齐 api 契约形状）。 */
   cryptoPanicKey?: string | undefined
+  /** 启用源 id 列表（issue #96 源配置化）；缺省 = 全部默认源，空数组 = 显式关闭。 */
+  sources?: readonly string[] | undefined
 }
 
 export interface AggregateNewsResult {
@@ -384,10 +386,18 @@ export async function aggregateNews(options: AggregateNewsOptions = {}): Promise
   const windowMs = windowHours * 3_600_000
   const limit = clampNumber(options.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
 
-  const tasks: Promise<NewsItem[]>[] = [fetchEastmoney(fetchImpl, limit)]
-  if (options.symbol) {
+  const tasks: Promise<NewsItem[]>[] = []
+  // 源配置化（issue #96）：sources 缺省 = 全部默认源；公告双源仍受 symbol 门控。
+  const enabled = options.sources
+  const isEnabled = (id: NewsSource): boolean => enabled === undefined || enabled.includes(id)
+  if (isEnabled('eastmoney')) {
+    tasks.push(fetchEastmoney(fetchImpl, limit))
+  }
+  if (options.symbol && isEnabled('eastmoney-announcement')) {
     // 公告双源并行（2026-09-03 多供应商冗余）：东财公告主源 + 巨潮备份源。
     tasks.push(fetchEastmoneyAnnouncements(fetchImpl, options.symbol, limit))
+  }
+  if (options.symbol && isEnabled('cninfo-announcement')) {
     tasks.push(fetchCninfoAnnouncements(fetchImpl, options.symbol, limit, now))
   }
 

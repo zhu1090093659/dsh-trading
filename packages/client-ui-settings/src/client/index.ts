@@ -76,6 +76,15 @@ export function apply(ctx: ClientContext): void {
       const rev = scope.getSnapshot().revision
       await scope.mutate([{ op: 'unset', path: ['news', 'cryptoPanicKey'] }], rev)
     },
+    async setNewsSources(market, ids) {
+      const rev = scope.getSnapshot().revision
+      // 空选集 = 显式关闭该市场新闻（保留空数组语义，与「未配置 = kit 默认源」区分）。
+      await scope.mutate([{ op: 'set', path: ['news', 'sources', market], value: [...ids] }], rev)
+    },
+    async resetNewsSources(market) {
+      const rev = scope.getSnapshot().revision
+      await scope.mutate([{ op: 'unset', path: ['news', 'sources', market] }], rev)
+    },
     async setColorMode(mode) {
       const rev = scope.getSnapshot().revision
       await scope.mutate([{ op: 'set', path: ['colorMode'], value: mode }], rev)
