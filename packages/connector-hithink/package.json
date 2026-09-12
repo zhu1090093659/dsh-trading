@@ -14,6 +14,14 @@
       "types": "./lib/dataplane.d.ts",
       "default": "./lib/dataplane.js"
     },
+    "./futures": {
+      "types": "./lib/futures.d.ts",
+      "default": "./lib/futures.js"
+    },
+    "./futures-dataplane": {
+      "types": "./lib/futures-dataplane.d.ts",
+      "default": "./lib/futures-dataplane.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

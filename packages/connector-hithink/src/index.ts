@@ -21,9 +21,11 @@ import {
   type HiThinkRestOptions,
   TradingServiceError,
 } from './rest.js'
+import { aggregateDailyKlines, dailyBarToKline } from './kline.js'
 
 export * from './rest.js'
 export * from './types.js'
+export * from './kline.js'
 
 export const name = 'dsh-trading-cn-connector-hithink'
 
@@ -55,8 +57,31 @@ export class HiThinkMarketDataService extends Service implements MarketDataServi
     return this.client.getTicker(symbol)
   }
 
-  async getKlines(_symbol: string, _interval: Interval = '1d', _limit: number = 100): Promise<Kline[]> {
-    throw new TradingServiceError('TRADING_NOT_IMPLEMENTED', 'HiThink K-lines not supported yet')
+  /**
+   * A 股 K 线。上游仅开放日线（高频分钟模块未开放外部接入）：
+   * 1d 直连 /api/a-share/prices/historical（前复权）；3d/1w/1M 由日线本地聚合；
+   * 分钟级周期抛 TRADING_UNSUPPORTED_INTERVAL（需分钟 K 时切换 cn provider 至 tencent 等）。
+   */
+  async getKlines(symbol: string, interval: Interval = '1d', limit: number = 100): Promise<Kline[]> {
+    const n = Math.max(1, Math.min(Number.isFinite(limit) ? Math.floor(limit) : 100, 1000))
+    if (interval !== '1d' && interval !== '3d' && interval !== '1w' && interval !== '1M') {
+      throw new TradingServiceError(
+        'TRADING_UNSUPPORTED_INTERVAL',
+        `HiThink A-share K-lines only support 1d/3d/1w/1M (upstream minute module not open); got ${interval}`,
+      )
+    }
+    const dailyBars = await this.client.getHistoricalDailyKlines(symbol, interval === '1d' ? n : Math.min(n * 35, 1000))
+    const daily = dailyBars.map((b) => dailyBarToKline(
+      b.date_ms as number,
+      b.open_price as number,
+      b.high_price as number,
+      b.low_price as number,
+      b.close_price as number,
+      b.volume ?? 0,
+    ))
+    if (interval === '1d') return daily
+    const aggregated = aggregateDailyKlines(daily, interval)
+    return aggregated.slice(-n)
   }
 
   async getStockFundamentals(symbol: string): Promise<StockFundamentals> {

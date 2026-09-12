@@ -21,8 +21,12 @@ import type {
 import type {
   HiThinkAuctionData,
   HiThinkEnvelope,
+  HiThinkFuturesDailyData,
+  HiThinkFuturesIntradayData,
+  HiThinkHistoricalData,
   HiThinkLadderData,
   HiThinkLimitUpPoolData,
+  HiThinkMetaTickerData,
   HiThinkPriceSnapshotData,
   HiThinkTickerSearchData,
   HiThinkValuationData,
@@ -260,5 +264,73 @@ export class HiThinkRestClient {
       symbol: item.thscode,
       name: item.name,
     }))
+  }
+
+  /* ── K 线与元信息域 ──────────────────────────────────────────────── */
+
+  /**
+   * A 股历史日K（上游仅开放 1d，start/end 毫秒必填，窗口最长 10 年）。
+   * 以 end=now 反推覆盖窗口取数后截尾最近 limit 根（升序）。
+   */
+  async getHistoricalDailyKlines(symbol: string, limit: number, adjust: 'none' | 'forward' | 'backward' = 'forward'): Promise<HiThinkHistoricalData['item']> {
+    const thscode = normalizeThsCode(symbol)
+    const end = Date.now()
+    const windowDays = Math.min(Math.ceil(limit * 1.7) + 7, 3650)
+    const data = await this.request<HiThinkHistoricalData>('/api/a-share/prices/historical', {
+      thscode,
+      interval: '1d',
+      start: end - windowDays * 86_400_000,
+      end,
+      adjust,
+    })
+    const bars = (data?.item ?? []).filter((b) => typeof b.date_ms === 'number' && typeof b.close_price === 'number')
+    return bars.slice(-limit)
+  }
+
+  /** 期货日K（省略 start/end 返回最近 100 根；窗口模式可取更长序列）。 */
+  async getFuturesDailyKlines(thscode: string, limit: number): Promise<HiThinkFuturesDailyData['item']> {
+    const end = Date.now()
+    const windowDays = Math.min(Math.ceil(limit * 1.7) + 7, 3650)
+    const data = await this.request<HiThinkFuturesDailyData>('/api/futures/prices/daily', {
+      thscode,
+      ...(limit > 100 ? { start: end - windowDays * 86_400_000, end } : {}),
+    })
+    const bars = (data?.item ?? []).filter((b) => typeof b.timestamp === 'number' && typeof b.close_price === 'number')
+    return bars.slice(-limit)
+  }
+
+  /** 期货当日分时点（session 缺省 intraday；非交易时段可能为空）。 */
+  async getFuturesIntraday(thscode: string, session?: 'pre_market' | 'intraday' | 'post_market'): Promise<HiThinkFuturesIntradayData> {
+    return this.request<HiThinkFuturesIntradayData>('/api/futures/prices/intraday', {
+      thscode,
+      ...(session !== undefined ? { session } : {}),
+    })
+  }
+
+  /** 跨资产标的检索（期货用 asset_type=futures 过滤；q 支持 thscode/代码/中英文名称子串）。 */
+  async searchFuturesTickers(keyword: string, limit = 50): Promise<HiThinkMetaTickerData['item']> {
+    const data = await this.request<HiThinkMetaTickerData>('/api/meta/tickers/search', {
+      q: keyword.trim(),
+      asset_type: 'futures',
+      limit,
+    })
+    return data?.item ?? []
+  }
+
+  /** 期货全量代码表（offset 分页取尽；由调用方过滤已到期合约）。 */
+  async listFuturesTickers(): Promise<HiThinkMetaTickerData['item']> {
+    const all: HiThinkMetaTickerData['item'] = []
+    const pageSize = 10_000
+    for (let offset = 0; offset < 100_000; offset += pageSize) {
+      const data = await this.request<HiThinkMetaTickerData>('/api/meta/tickers/list', {
+        asset_type: 'futures',
+        limit: pageSize,
+        offset,
+      })
+      const page = data?.item ?? []
+      all.push(...page)
+      if (page.length < pageSize) break
+    }
+    return all
   }
 }

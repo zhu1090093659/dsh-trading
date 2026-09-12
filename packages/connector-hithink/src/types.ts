@@ -132,3 +132,74 @@ export interface HiThinkTickerSearchData {
   total: number
   item: HiThinkTickerSearchItem[]
 }
+
+/* ── K 线与元信息域（历史日K / 期货 / 代码表） ─────────────────────────── */
+
+/** A 股历史日K条目（/api/a-share/prices/historical，date_ms 为东八区交易日零点）。 */
+export interface HiThinkPriceBarItem {
+  date_ms?: number | null
+  open_price?: number | null
+  high_price?: number | null
+  low_price?: number | null
+  close_price?: number | null
+  volume?: number | null
+  turnover?: number | null
+}
+
+export interface HiThinkHistoricalData {
+  timestamp: number | null
+  item: HiThinkPriceBarItem[]
+}
+
+/** 期货日K条目（/api/futures/prices/daily，timestamp 为毫秒；与 A 股的 date_ms 字段名不同）。 */
+export interface HiThinkFuturesDailyItem {
+  timestamp?: number | null
+  open_price?: number | null
+  high_price?: number | null
+  low_price?: number | null
+  close_price?: number | null
+  volume?: number | null
+  turnover?: number | null
+}
+
+export interface HiThinkFuturesDailyData {
+  timestamp: number | null
+  thscode: string
+  interval: string
+  item: HiThinkFuturesDailyItem[]
+}
+
+/** 期货当日分时点（/api/futures/prices/intraday；价格点序列，非 OHLC）。 */
+export interface HiThinkFuturesIntradayItem {
+  timestamp?: number | null
+  price?: number | null
+  volume?: number | null
+  turnover?: number | null
+}
+
+export interface HiThinkFuturesIntradayData {
+  timestamp: number | null
+  thscode: string
+  date: string
+  session: string
+  item: HiThinkFuturesIntradayItem[]
+}
+
+/** 跨资产代码表条目（/api/meta/tickers/list|search，日期为 yyyy-MM-dd 或 null）。 */
+export interface HiThinkMetaTickerItem {
+  thscode: string
+  ticker: string
+  name: string
+  exchange?: string | null
+  asset_type: string
+  currency?: string | null
+  list_date?: string | null
+  end_date?: string | null
+  last_trade_date?: string | null
+  last_delivery_date?: string | null
+}
+
+export interface HiThinkMetaTickerData {
+  timestamp: number | null
+  item: HiThinkMetaTickerItem[]
+}
