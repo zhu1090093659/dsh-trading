@@ -24,7 +24,9 @@
       会话的重要操作按规范记入日志。
 
 # connector 行 provide 服务（tradingFuturesMarketData），必须包进 cordis:group + isolate，
-# isolate 键 = 服务名（官方 standard preset 挂载硬规则）。
+# isolate 键 = 服务名（官方 standard preset 挂载硬规则）。preset 面走直接 provide 入口；
+# host 面注册表行（cordis.patch.yml 的 futures-dataplane）负责 GUI 行情桥，两面同挂
+# 若都用 dataplane 会触发注册表 (futures, hithink) 重复注册的响亮失败。
 - id: dsh-trading-futures-connector-group
   name: cordis:group
   group: true
@@ -32,7 +34,7 @@
     tradingFuturesMarketData: true
   config:
     - id: dsh-trading-futures-connector
-      name: '@dshtrading/connector-hithink/futures-dataplane'
+      name: '@dshtrading/connector-hithink/futures-plugin'
       config:
         enabled: true
 

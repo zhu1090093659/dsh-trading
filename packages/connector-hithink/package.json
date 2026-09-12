@@ -22,6 +22,10 @@
       "types": "./lib/futures-dataplane.d.ts",
       "default": "./lib/futures-dataplane.js"
     },
+    "./futures-plugin": {
+      "types": "./lib/futures-plugin.d.ts",
+      "default": "./lib/futures-plugin.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

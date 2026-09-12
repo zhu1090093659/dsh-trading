@@ -83,7 +83,7 @@ export function inferMarket(symbol?: string): MarketId {
   const sym = symbol.toUpperCase()
   if (sym.endsWith('.SH') || sym.endsWith('.SZ') || /^\d{6}$/.test(sym)) return 'cn'
   if (sym.endsWith('.HK') || /^\d{5}$/.test(sym)) return 'hk'
-  if (/^[A-Z]{1,3}\d{3,4}(\.(SHF|DCE|CZC|INE|GFE|CFE))?$/.test(sym)) return 'futures'
+  if (/^[A-Z]{1,3}\d{2,4}(\.(SHF|DCE|CZC|INE|GFE|CFE))?$/.test(sym)) return 'futures'
   if (sym.includes('USDT') || sym.includes('BTC') || sym.includes('ETH')) return 'crypto'
   return 'us'
 }
@@ -365,4 +365,6 @@ export const MARKET_INTERVALS: Record<MarketId, string[]> = {
   us: ['5m', '15m', '30m', '1h', '1d', '1w', '1M'],
   cn: ['5m', '30m', '1d', '1w', '1M'],
   hk: ['5m', '15m', '30m', '1h', '1d', '1w', '1M'],
+  // 期货：上游日K可回溯，分钟只有当日分时——只上日线及以上周期，避免单日分钟冒充历史。
+  futures: ['1d', '1w', '1M'],
 }

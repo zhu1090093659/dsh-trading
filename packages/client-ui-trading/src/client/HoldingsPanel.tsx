@@ -30,10 +30,10 @@ import { fetchTradeOpenOrders, fetchTradeFills, fetchTradeBalances } from './api
 import type { TradeRowsReason } from './api.ts'
 import { IconChevronRight, IconClose, IconPlus, IconWallet } from './icons.tsx'
 import {
-  HOLDINGS_BASE_CURRENCIES, HOLDINGS_MARKETS, MARKET_DEFAULT_CURRENCY,
+  HOLDINGS_BASE_CURRENCIES, HOLDINGS_MARKETS, MARKET_DEFAULT_CURRENCY, isHoldingMarket,
 } from './holdings-types.ts'
 import type {
-  Holding, NewHolding, NewHoldingInput, PositionOrigin, TaggedPosition,
+  Holding, HoldingMarket, NewHolding, NewHoldingInput, PositionOrigin, TaggedPosition,
 } from './holdings-types.ts'
 import type { AccountBalance, MarketId, Order, TradeFill } from './types.ts'
 import { colorModeStore } from './color-mode.ts'
@@ -79,6 +79,7 @@ const MARKET_LABEL_KEY: Record<MarketId, MarketLocaleKey> = {
   us: 'tab.us',
   cn: 'tab.cn',
   hk: 'tab.hk',
+  futures: 'tab.futures',
 }
 
 /** Tab 条短标签（会话列宽度约束下的紧凑文案）。 */
@@ -143,7 +144,7 @@ function fmtDay(ts: number): string {
 
 /** 持仓表单草稿（数字字段以字符串承载，提交时解析校验）。 */
 interface HoldingDraft {
-  market: MarketId
+  market: HoldingMarket
   symbol: string
   size: string
   /** 空串 = 无成本价（uPnL 不显示）。 */
@@ -192,7 +193,7 @@ function HoldingDraftFields({ t, draft, onChange }: {
     <div className={css.formGrid}>
       <label className={css.formField}>
         <span>{t('trade.holdings.field.market')}</span>
-        <select value={draft.market} onChange={(e) => onChange({ ...draft, market: e.target.value as MarketId })}>
+        <select value={draft.market} onChange={(e) => onChange({ ...draft, market: e.target.value as HoldingMarket })}>
           {(['crypto', 'us', 'cn', 'hk'] as const).map(m => (
             <option key={m} value={m}>{t(MARKET_LABEL_KEY[m])}</option>
           ))}
@@ -1148,7 +1149,7 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
         t={t}
         title={t('trade.holdings.edit.title')}
         initial={{
-          market: editingSnapshot?.market ?? 'crypto',
+          market: isHoldingMarket(editingSnapshot?.market) ? editingSnapshot.market : 'crypto',
           symbol: editingSnapshot?.symbol ?? '',
           size: editingSnapshot !== null ? String(editingSnapshot.size) : '',
           entryPrice: editingSnapshot?.entryPrice !== undefined ? String(editingSnapshot.entryPrice) : '',

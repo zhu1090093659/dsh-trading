@@ -34,6 +34,8 @@ export const MARKET_INDICES: Record<MarketId, MarketIndexDef[]> = {
     { symbol: 'ETHUSDT', nameKey: 'index.eth' },
     { symbol: 'SOLUSDT', nameKey: 'index.sol' },
   ],
+  // 期货无「大盘指数」概念（品种行情按合约展示，指数代码不在本表口径内）。
+  futures: [],
 }
 
 export interface MarketSessionInfo {

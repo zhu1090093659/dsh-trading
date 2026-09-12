@@ -9,7 +9,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import type { Disposable, Interval, Kline, MarketDataService, Ticker } from '@dshtrading/api'
-import { HiThinkRestClient, TradingServiceError, type HiThinkRestOptions } from './rest.js'
+import { HiThinkRestClient, type HiThinkRestOptions } from './rest.js'
 import { aggregateDailyKlines, aggregateMinutePoints, dailyBarToKline } from './kline.js'
 
 export const TRADING_FUTURES_MARKET_DATA_KEY = 'tradingFuturesMarketData'

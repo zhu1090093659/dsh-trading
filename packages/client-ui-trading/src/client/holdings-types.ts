@@ -10,10 +10,10 @@
  * imported 持仓允许缺成本价（uPnL 不显示）——必填字段无法表达「缺省」，
  * 故实现改为 `extends Omit<Position, 'entryPrice'>` + 可选 entryPrice，语义不变。
  */
-import type { Holding, HoldingCurrency, NewHolding, NewHoldingInput } from '@dshtrading/holdings'
+import type { Holding, HoldingCurrency, HoldingMarket, NewHolding, NewHoldingInput } from '@dshtrading/holdings'
 import type { MarketId, Position } from './types.ts'
 
-export type { Holding, HoldingCurrency, NewHolding, NewHoldingInput }
+export type { Holding, HoldingCurrency, HoldingMarket, NewHolding, NewHoldingInput }
 
 /** 持仓血缘（§1）：创建后不可变。 */
 export type PositionOrigin = 'paper' | 'live' | 'imported'
@@ -82,4 +82,9 @@ export function holdingsPriceKey(market: MarketId, symbol: string): string {
 }
 
 /** 全部持仓市场（四市场 live 拉取/盯市分组的迭代序，§6.4）。 */
-export const HOLDINGS_MARKETS: readonly MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures']
+export const HOLDINGS_MARKETS: readonly HoldingMarket[] = ['crypto', 'us', 'cn', 'hk']
+
+/** 台账市场守卫：futures 等纯数据面市场不进台账（TaggedPosition 的 market 可能来自更宽的市场联合）。 */
+export function isHoldingMarket(value: MarketId | undefined): value is HoldingMarket {
+  return value !== undefined && (HOLDINGS_MARKETS as readonly string[]).includes(value)
+}

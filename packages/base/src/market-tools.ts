@@ -66,7 +66,7 @@ function notImplementedError(market: string, provider: string, method: string, l
 function noMarketProviderError(market: string): Error {
   return new Error(
     `TRADING_NO_PROVIDER: no active market-data provider for market "${market}" — market keys are lowercase slugs `
-    + '(crypto | us | cn | hk); if the key is right, check routing_get and installed connectors.',
+    + '(crypto | us | cn | hk | futures); if the key is right, check routing_get and installed connectors.',
   )
 }
 

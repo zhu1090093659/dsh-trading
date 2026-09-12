@@ -61,7 +61,7 @@ const EMPTY_RECORD: Record<string, string> = {}
 function ProviderCredentialCard(props: {
   providerId: string
   spec: readonly CredentialField[]
-  currentValues?: Record<string, string>
+  currentValues?: Record<string, string> | undefined
   writable: boolean
   onSave: (fields: Record<string, string>) => Promise<void>
   onDelete: () => Promise<void>
@@ -233,7 +233,12 @@ function NewsSourcesSection(props: {
   useEffect(() => {
     setDraft(undefined)
     setMsg(null)
-  }, [market, resolved])
+  }, [market])
+
+  // 保存/重置成功后 resolved 会变化：只重置草稿，保留「已保存」提示（失败提示依赖 resolved 不变）。
+  useEffect(() => {
+    setDraft(undefined)
+  }, [resolved])
 
   const checked = (id: string): boolean => (draft ?? current).includes(id)
   const dirty = useMemo(() => {
@@ -332,7 +337,7 @@ export function MarketProviderPanel({
   resetNewsKey,
   setNewsSources,
   resetNewsSources,
-}: MarketProviderPanelProps) {
+}: MarketProviderPanelProps & { t?: PanelT }) {
   // PropsLocale 的 t 座位在无宿主 merge 的独立编译下解析为 never（既有债 20 处
   // TS2349 的根因）。本地遮蔽：运行时框架注入 t，签名与 SDK Translate 对齐。
   const t = tProp as unknown as PanelT
