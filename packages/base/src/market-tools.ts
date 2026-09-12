@@ -31,7 +31,7 @@ export const name = 'dsh-trading-market-tools'
 /** 工具注册需要 tools 服务；两个注册表经 ctx.get 惰性解析（可能缺席的老部署）。 */
 export const inject = ['tools']
 
-export const MARKETS = ['crypto', 'us', 'cn', 'hk'] as const
+export const MARKETS = ['crypto', 'us', 'cn', 'hk', 'futures'] as const
 export type MarketSlug = (typeof MARKETS)[number]
 
 export interface Config {

@@ -12,6 +12,7 @@ export const MARKET_TAB_KEY: Record<MarketId, MarketLocaleKey> = {
   us: 'tab.us',
   cn: 'tab.cn',
   hk: 'tab.hk',
+  futures: 'tab.futures',
 }
 
 const KNOWN_SH_INDICES = new Set(['000688', '000300', '000016', '000905', '000852'])
@@ -21,7 +22,7 @@ const CRYPTO_MARKERS = ['USDT', 'USDC', 'BTC', 'ETH']
 /**
  * 手输 symbol 推断市场（无市场上下文的手输入口用，如自选管理弹窗的添加框）：
  * 1-5 位数字（含 `00700.HK`/`HK.00700`）→ hk；6 位数字（含 `.SH`/`.SZ`）→ cn；
- * 含加密计价标记 → crypto；其余 → us。
+ * 品种代码+3/4 位数字（如 RB2610、IF2603）→ futures；含加密计价标记 → crypto；其余 → us。
  * 注意与 `store.inferMarket` 的差别：后者是存储恢复用（5 位数字才判 hk、无 USDC），
  * 这里按「用户可能手输 700 表示港股」的宽容口径。
  */
@@ -29,6 +30,7 @@ export function inferInputMarket(rawDraft: string): MarketId {
   const raw = rawDraft.trim().toUpperCase()
   if (/^(HK\.)?\d{1,5}(\.HK)?$/.test(raw)) return 'hk'
   if (/^\d{6}(\.(SH|SZ))?$/.test(raw)) return 'cn'
+  if (/^[A-Z]{1,3}\d{3,4}(\.(SHF|DCE|CZC|INE|GFE))?$/.test(raw)) return 'futures'
   if (CRYPTO_MARKERS.some(marker => raw.includes(marker))) return 'crypto'
   return 'us'
 }

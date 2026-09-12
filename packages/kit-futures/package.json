@@ -1,0 +1,37 @@
+{
+  "name": "@dshtrading/kit-futures",
+  "description": "China futures toolkit plugin for dsh-trading: futures risk checklist skill provider (margin/leverage/forced-liquidation/delivery/night-session); runs as a futures-trader preset row (session-scoped)",
+  "version": "0.2.1",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "assets"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dshtrading/api": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-skill": ">=0.1.5-rc.1",
+    "@deepseek-ai/dsh-tools": ">=0.1.5-rc.1",
+    "@deepseek-ai/schemastery": ">=3.18.0"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0"
+  }
+}

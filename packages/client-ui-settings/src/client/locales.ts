@@ -49,6 +49,7 @@ export type SettingsLocaleKey =
   | 'market.us'
   | 'market.cn'
   | 'market.hk'
+  | 'market.futures'
   | 'credential.btn'
   | 'credential.btnFold'
   | 'credential.configured'
@@ -167,6 +168,7 @@ export const zh: Record<SettingsLocaleKey, string> = {
       'market.us': '美国股票',
       'market.cn': '中国 A 股',
       'market.hk': '香港股票',
+      'market.futures': '期货',
       'credential.btn': '配置 API 凭证',
       'credential.btnFold': '收起配置',
       'credential.configured': '已配置凭证',
@@ -286,6 +288,7 @@ export const en: Record<SettingsLocaleKey, string> = {
       'market.us': 'US Stocks',
       'market.cn': 'China A-shares',
       'market.hk': 'Hong Kong',
+      'market.futures': 'Futures',
       'credential.btn': 'Configure API Credentials',
       'credential.btnFold': 'Hide Configuration',
       'credential.configured': 'Configured',

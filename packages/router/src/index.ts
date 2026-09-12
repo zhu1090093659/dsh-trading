@@ -112,6 +112,8 @@ export const DEFAULT_MARKETS: Record<string, MarketProviderEntry> = {
   us: { provider: 'yahoo' },
   cn: { provider: 'tencent' },
   hk: { provider: 'tencent' },
+  // 期货（issue #97）：唯一 provider 为同花顺（日K + 当日分时；无实盘交易面）。
+  futures: { provider: 'hithink' },
 }
 
 const MarketProviderEntrySchema = Schema.object({

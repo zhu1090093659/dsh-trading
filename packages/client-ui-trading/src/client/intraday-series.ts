@@ -15,6 +15,7 @@ const MARKET_TIMEZONE: Record<MarketId, string | null> = {
   us: 'America/New_York',
   cn: 'Asia/Shanghai',
   hk: 'Asia/Hong_Kong',
+  futures: 'Asia/Shanghai',
 }
 
 export type IntradayInterval = '1m' | '5m'
@@ -61,6 +62,9 @@ const SESSION_SPANS: Record<Exclude<MarketId, 'crypto'>, { spans: readonly (read
   us: { spans: [[570, 960]], total: 390 },            // 9:30–16:00 ET
   cn: { spans: [[570, 690], [780, 900]], total: 240 }, // 9:30–11:30 + 13:00–15:00 CST
   hk: { spans: [[570, 720], [780, 960]], total: 330 }, // 9:30–12:00 + 13:00–16:00 HKT
+  // 期货（近似固定轴）：日盘 9:00–10:15 + 10:30–11:30 + 13:30–15:00，夜盘按 21:00–23:00
+  // （部分品种到 01:00/02:30，跨日部分不进固定轴；分时轴近似，品种差异以注释为准）。
+  futures: { spans: [[540, 615], [630, 690], [810, 900], [1260, 1380]], total: 345 },
 }
 
 const timeFmtCache = new Map<string, Intl.DateTimeFormat>()

@@ -35,7 +35,7 @@ export interface WatchlistManagerInjected {
 
 export type WatchlistManagerProps = PropsLocale<'dshtrading.market'> & InjectFace<WatchlistManagerInjected>
 
-const FALLBACK_MARKETS: MarketId[] = ['crypto', 'us', 'cn', 'hk']
+const FALLBACK_MARKETS: MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures']
 
 export function WatchlistManager({
   t, useWatchlists, useWatchlistGroups, addInstrument, removeInstrument,

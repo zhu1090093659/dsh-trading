@@ -680,6 +680,8 @@ declare module '@deepseek-ai/cordis' {
     tradingCnMarketData: MarketDataService
     /** hk 市场行情服务（由腾讯连接器同包双实例提供，config.market 分流；cn+hk 切片 2026-08-31 补齐）。 */
     tradingHkMarketData: MarketDataService
+    /** futures 市场行情服务（由同花顺期货连接器提供，issue #97；日K + 当日分时聚合）。 */
+    tradingFuturesMarketData: MarketDataService
     /**
      * crypto 市场交易服务（R3 2026-08-29 补齐，crypto 市场第一个真实 TradeService）：
      * 由 connector-okx 实现（签名 demo/live 下单），与 connector-binance 经

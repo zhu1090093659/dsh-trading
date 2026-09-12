@@ -6,7 +6,7 @@
 import type { AccountBalance, DerivativesData, DerivativesHistory, DerivativesPoint, Kline, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeTick } from '@dshtrading/api'
 
 /** Markets served by the bridge (subset = installed connector set). */
-export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
+export type MarketId = 'crypto' | 'us' | 'cn' | 'hk' | 'futures'
 
 /** One watchable instrument (a watchlist row / the quote stage's subject). */
 export interface Instrument {

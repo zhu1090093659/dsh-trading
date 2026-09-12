@@ -129,7 +129,7 @@ export function apply(ctx: ClientContext): void {
   // 对话内富卡片（issue #34 / P5 §5.5）：下单三态卡（4 市场 keyed 各一把 +
   // 生成器注册）与自选 chip 卡。策略/知识卡的注册在各自视图包（归属随视图）。
   ctx.slots.inject('tool.call.toolview', function* () {
-    for (const market of ['crypto', 'us', 'cn', 'hk'] as const) {
+    for (const market of ['crypto', 'us', 'cn', 'hk', 'futures'] as const) {
       yield ctx.slots.register({
         name: 'tool.call.toolview',
         key: `${market}_place_order`,

@@ -46,9 +46,9 @@ import { createFxService } from '@dshtrading/holdings/fx'
 import { TtlCache } from './ttl-cache.ts'
 
 /** 本桥支持的市场（与连接器服务键一一对应）。 */
-export type MarketId = 'crypto' | 'us' | 'cn' | 'hk'
+export type MarketId = 'crypto' | 'us' | 'cn' | 'hk' | 'futures'
 
-export const MARKET_IDS: readonly MarketId[] = ['crypto', 'us', 'cn', 'hk']
+export const MARKET_IDS: readonly MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures']
 
 /** market → Context 服务键（@dshtrading/api 的 Context 增强）。 */
 export const MARKET_SERVICE_KEYS: Record<MarketId, string> = {
@@ -56,6 +56,7 @@ export const MARKET_SERVICE_KEYS: Record<MarketId, string> = {
   us: 'tradingUsMarketData',
   cn: 'tradingCnMarketData',
   hk: 'tradingHkMarketData',
+  futures: 'tradingFuturesMarketData',
 }
 
 /** 注册表服务的最小形状（鸭式，与 @dshtrading/router 的 MarketDataRegistryLike 同构）。 */

@@ -73,6 +73,7 @@ export const MARKET_DEFAULT_CURRENCY: Record<MarketId, HoldingCurrency> = {
   us: 'USD',
   cn: 'CNY',
   hk: 'HKD',
+  futures: 'CNY',
 }
 
 /** 盯市价格表的键（§6.2：`${market}:${symbol}`）。 */
@@ -81,4 +82,4 @@ export function holdingsPriceKey(market: MarketId, symbol: string): string {
 }
 
 /** 全部持仓市场（四市场 live 拉取/盯市分组的迭代序，§6.4）。 */
-export const HOLDINGS_MARKETS: readonly MarketId[] = ['crypto', 'us', 'cn', 'hk']
+export const HOLDINGS_MARKETS: readonly MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures']
