@@ -118,3 +118,6 @@ finance 自带的看盘网页查看，交易终端（中栏）没有入口；用
   本机桌面端与 CLI 共用 ~/.dsh-trading/profiles/trading-web（无
   .dsh-desktop-seed.json 标记 = 用户管理，桌面永不 reseed 覆盖），
   refresh 脚本刷新的包副本对桌面端即时生效，宿主重启即加载。
+- **图表呈现（2026-09-18 追加）**：序列名改由图上方 HTML 图例承载、四张图尺寸
+  改由容器 flex 驱动（`LineChart` 删 `height` prop、画布 `autoSize`），
+  见 [特殊指标图表图例与容器自适应](../bug-fix/2026-09-18-special-indicators-chart-legend-and-fill.md)。

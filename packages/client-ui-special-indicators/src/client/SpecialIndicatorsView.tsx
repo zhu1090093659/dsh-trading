@@ -344,7 +344,7 @@ function SentimentCard({ t, snap, hist, loading }: {
   const series = useMemo<LineChartSeries[]>(() => {
     if (hist?.data === undefined) return []
     return [
-      { id: 'score', points: toChartSeries(hist.data.series, (r) => r.score), color: '#5b8def', area: true },
+      { id: 'score', points: toChartSeries(hist.data.series, (r) => r.score), color: '#5b8def', area: true, title: t('si.sentiment.scoreLine') },
       { id: 'overlay', points: toChartSeries(hist.data.overlay, (r) => r.close), color: '#8e95a3', scale: 'left', title: t('si.sentiment.indexOverlay') },
     ]
   }, [hist?.data, t])
@@ -385,7 +385,7 @@ function SentimentCard({ t, snap, hist, loading }: {
                 </div>
               ))}
             </div>
-            {series.some((x) => x.points.length > 0) && <LineChart series={series} height={240} />}
+            {series.some((x) => x.points.length > 0) && <LineChart series={series} />}
           </>
         )}
     </CardShell>
@@ -444,7 +444,7 @@ function BasisCard({ t, snap, hist, loading }: {
               })}
             </div>
             <div className={cx('chartCaption')}>{t('si.basis.historyPct', { days: BASIS_DAYS })}</div>
-            {series.some((x) => x.points.length > 0) && <LineChart series={series} height={240} />}
+            {series.some((x) => x.points.length > 0) && <LineChart series={series} />}
           </>
         )}
     </CardShell>
@@ -464,10 +464,10 @@ function HkShortCard({ t, snap, chart, loading }: {
   const series = useMemo<LineChartSeries[]>(() => {
     if (c === undefined) return []
     return [
-      { id: 'ratio', points: toChartSeries(c.short_ratio, (r) => r.pct_turnover), color: '#5b8def', area: true },
-      { id: 'index', points: toChartSeries(c.index, (r) => r.close), color: '#8e95a3', scale: 'left' },
+      { id: 'ratio', points: toChartSeries(c.short_ratio, (r) => r.pct_turnover), color: '#5b8def', area: true, title: t('si.hkshort.ratioLine') },
+      { id: 'index', points: toChartSeries(c.index, (r) => r.close), color: '#8e95a3', scale: 'left', title: t('si.hkshort.indexLine') },
     ]
-  }, [c])
+  }, [c, t])
   return (
     <CardShell
       t={t}
@@ -491,7 +491,7 @@ function HkShortCard({ t, snap, chart, loading }: {
               <span className={cx('statItem') + ' ' + trendClass(s.five_day.value_difference)}>{t('si.hkshort.value5d')} {formatSigned(s.five_day.value_difference, 1)}</span>
               <span className={cx('statItem') + ' ' + trendClass(s.five_day.index_5d_pct)}>{t('si.hkshort.index5d')} {formatSigned(s.five_day.index_5d_pct, 2, '%')}</span>
             </div>
-            {series.some((x) => x.points.length > 0) && <LineChart series={series} height={240} />}
+            {series.some((x) => x.points.length > 0) && <LineChart series={series} />}
             {c !== undefined && c.top10.length > 0 && (
               <table className={cx('table')}>
                 <caption className={cx('tableCaption')}>{t('si.hkshort.top10', { count: c.top10.length })}</caption>
@@ -624,7 +624,7 @@ function SectorsCard({ t, snap, ranking, loading }: {
                       </span>
                     </div>
                     {detailLoading && d === undefined && <div className={cx('loadingLine')}>{t('si.loading')}</div>}
-                    {series.some((x) => x.points.length > 0) && <LineChart series={series} height={280} />}
+                    {series.some((x) => x.points.length > 0) && <LineChart series={series} />}
                   </>
                 )}
               </div>

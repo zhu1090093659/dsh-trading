@@ -1,6 +1,10 @@
 /**
  * 多序列小线图（lightweight-charts v5 薄封装）：
  * - 1–2 条日频序列，支持左/右双价格轴（score 0–100 与指数点位不同量纲）。
+ * - 序列名一律进图上方 HTML 图例（series.title），不交给价格轴：v5 把
+ *   series.title 画在最新价标签旁、文字伸进绘图区压住折线（2026-09-18 实证）。
+ * - 尺寸由容器驱动（autoSize + ResizeObserver）：卡片吃掉中栏剩余高度后
+ *   画布随之伸展，不再按固定像素高留出空白。
  * - series 引用变化即整体重建（重建成本 < 一帧；生产方须用 useMemo 把
  *   引用稳定到数据真正更新时，否则行选中等无数据变化的重渲染会整图
  *   销毁重建。与 StrategyView 权益曲线同款生命周期纪律：卸载即 chart.remove()）。
@@ -15,6 +19,15 @@ import {
   type Time,
 } from 'lightweight-charts'
 import type { ChartPoint } from './wire.ts'
+import css from './LineChart.module.css'
+
+/** CSS Modules 类表在 noUncheckedIndexedAccess 下索引为 string|undefined；
+ *  运行期类名恒存在（构建期类表契约），此处把类型面收敛为 string。 */
+const cx = (name: string): string => css[name] ?? name
+
+/** ResizeObserver 缺失或首帧未量出尺寸时的回退画布尺寸（autoSize 失效路径）。 */
+const FALLBACK_WIDTH = 600
+const FALLBACK_HEIGHT = 240
 
 export interface LineChartSeries {
   id: string
@@ -24,15 +37,15 @@ export interface LineChartSeries {
   scale?: 'left' | 'right'
   /** area = 渐变填充面积图，默认细线。 */
   area?: boolean
+  /** 图例名（含轴位提示）；不写入价格轴尾标签。 */
   title?: string
 }
 
 export interface LineChartProps {
   series: LineChartSeries[]
-  height?: number
 }
 
-export function LineChart({ series, height = 160 }: LineChartProps) {
+export function LineChart({ series }: LineChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -40,8 +53,11 @@ export function LineChart({ series, height = 160 }: LineChartProps) {
     if (container === null || series.every((s) => s.points.length === 0)) return
 
     const chart: IChartApi = createChart(container, {
-      width: container.clientWidth,
-      height,
+      // 画布跟随容器尺寸（含中栏/侧栏改宽与窗高变化）；width/height 只作
+      // ResizeObserver 不可用时的回退值。
+      autoSize: true,
+      width: container.clientWidth > 0 ? container.clientWidth : FALLBACK_WIDTH,
+      height: container.clientHeight > 0 ? container.clientHeight : FALLBACK_HEIGHT,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: '#8e95a3',
@@ -61,7 +77,6 @@ export function LineChart({ series, height = 160 }: LineChartProps) {
       if (s.points.length === 0) continue
       const common = {
         priceScaleId: s.scale ?? 'right',
-        title: s.title ?? '',
         priceLineVisible: false,
         lastValueVisible: true,
       }
@@ -80,17 +95,25 @@ export function LineChart({ series, height = 160 }: LineChartProps) {
     }
     chart.timeScale().fitContent()
 
-    const handleResize = () => {
-      if (containerRef.current !== null) {
-        chart.applyOptions({ width: containerRef.current.clientWidth })
-      }
-    }
-    window.addEventListener('resize', handleResize)
     return () => {
-      window.removeEventListener('resize', handleResize)
       chart.remove()
     }
-  }, [series, height])
+  }, [series])
 
-  return <div ref={containerRef} style={{ height }} />
+  const legend = series.filter((s) => (s.title ?? '') !== '')
+  return (
+    <div className={cx('chart')}>
+      {legend.length > 0 && (
+        <div className={cx('chartLegend')}>
+          {legend.map((s) => (
+            <span key={s.id} className={cx('chartLegendItem')}>
+              <span className={cx('chartLegendSwatch')} style={{ background: s.color }} />
+              {s.title}
+            </span>
+          ))}
+        </div>
+      )}
+      <div ref={containerRef} className={cx('chartCanvas')} />
+    </div>
+  )
 }

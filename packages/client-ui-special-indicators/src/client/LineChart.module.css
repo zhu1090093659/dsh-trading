@@ -1,0 +1,41 @@
+/* 折线图容器：图上方 HTML 图例 + lightweight-charts 画布。
+   高度由父级 flex 决定（卡片吃掉中栏剩余高度后，画布随之伸展）。 */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  /* 图区下限：中栏过矮时保住可读折线，超出部分交给 .panel 滚动。 */
+  min-height: 160px;
+}
+
+.chartLegend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11px;
+  color: #8e95a3;
+  line-height: 1.4;
+}
+
+.chartLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chartLegendSwatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.chartCanvas {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}

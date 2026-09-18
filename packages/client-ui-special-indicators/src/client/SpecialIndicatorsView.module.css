@@ -91,6 +91,9 @@
 }
 
 .panel > .card {
+  /* 卡片吃掉中栏剩余高度：图区随容器伸展，卡片下方不再留大片空白；
+     内容高于中栏时由 .panel 滚动（卡片 min-height:auto 不压缩内容）。 */
+  flex: 1 1 auto;
   max-width: 960px;
   width: 100%;
 }
@@ -283,24 +286,28 @@
 
 .tableScroll {
   overflow-y: auto;
-  max-height: 320px;
 }
 
-/* 板块融资双栏：左排行表、右选中板块双轴历史图（finance 页面同布局）。 */
+/* 板块融资双栏：左排行表、右选中板块双轴历史图（finance 页面同布局）。
+   两栏都被中栏剩余高度拉伸——表格在自己栏内滚动，图区吃掉右栏余量。 */
 .sectorLayout {
   display: flex;
   gap: 14px;
-  align-items: flex-start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 240px;
 }
 
 .sectorTable {
   flex: 0 0 440px;
   min-width: 0;
+  min-height: 0;
 }
 
 .sectorChart {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -336,9 +343,11 @@
     flex-direction: column;
   }
 
+  /* 单栏堆叠时排行表不再被行高拉伸，恢复固定高度内滚动。 */
   .sectorTable {
     flex: none;
     width: 100%;
+    max-height: 320px;
   }
 }
 
