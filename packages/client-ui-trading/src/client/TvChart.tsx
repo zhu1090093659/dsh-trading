@@ -678,8 +678,12 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
         return
       }
       const heights = panes.map(pane => pane.getHeight())
+      // 容器高 = Σpane 高 + Σ分隔条 + 底部时间轴；先扣时间轴再反推分隔条厚度，
+      // 否则分隔条被高估 timeAxis/(panes-1)，pane 越靠后 legend 下漂越多
+      //（末位 pane 恰好多漂一整条时间轴高度，legend 落进绘图区中段与图形重叠）。
+      const timeAxisHeight = chart.timeScale().height()
       const gapsTotal = panes.length > 1
-        ? Math.max(0, container.clientHeight - heights.reduce((sum, height) => sum + height, 0))
+        ? Math.max(0, container.clientHeight - heights.reduce((sum, height) => sum + height, 0) - timeAxisHeight)
         : 0
       const separator = panes.length > 1 ? gapsTotal / (panes.length - 1) : 0
       const tops: number[] = []
