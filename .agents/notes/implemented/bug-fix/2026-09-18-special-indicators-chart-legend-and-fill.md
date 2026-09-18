@@ -1,4 +1,4 @@
-# Agent Note: 特殊指标四张图的价格轴文字压折线 + 固定像素高留白
+# Agent Note: 特殊指标图表的价格轴文字压折线 + 卡片固定尺寸留白
 
 Status: implemented
 
@@ -15,9 +15,14 @@ Status: implemented
 紧随其后的序列名却向绘图区内延伸——左轴（板块指数/中证全指）的文字从左缘伸进绘图区约 80 px，
 右轴（融资余额/恒科卖空占比）的文字向内侧延伸跨过折线末端。
 
-第 2 条的机制在布局里：`.panel > .card` 只约束最大宽度、不参与中栏高度分配，卡片高度
-= 内容高度；每张图又写死 `height={240}`（板块明细 280），于是中栏越高、卡片下方空白越大
-（1600x913 视口下约 40%）。
+第 2 条的机制在布局里，且**横向纵向各有一条**：`.panel > .card` 有
+`max-width: 960px` 上限——中栏比它宽时卡片右缘提前收住，右侧留白；同时卡片不参与
+中栏高度分配、高度 = 内容高度，每张图又写死 `height={240}`（板块明细 280），中栏越高
+卡片下方空白越大（1600x913 视口下约 40%）。
+
+首轮只修了纵向，用户同日复测宽中栏截图即指出「左右仍然没有自适应对齐」。漏检原因
+明确：首次验证用的 1600x913 视口中栏只有 903px，正好落在 960px 阈值之下，横向回归
+在该视口下**不可见**；换成 2400x1000 视口，实测面板内容宽 1679px 而卡片只有 960px。
 
 ## Decision
 
@@ -35,11 +40,18 @@ Status: implemented
   `width/height` 仅作 ResizeObserver 不可用时的回退值；CSS 面
   `.chart { flex: 1; min-height: 160px }` + `.chartCanvas { flex: 1; min-height: 0 }`；
   同时删掉只监听 `window.resize` 的手工重排——中栏被外层网格改宽时它不触发。
-- **卡片吃掉中栏剩余高度**：`.panel > .card { flex: 1 1 auto }`（配合卡片自身
-  `min-height: auto`，内容高于中栏时不压缩、由 `.panel` 滚动）；板块双栏
+- **卡片吃掉中栏两个方向**：`.panel > .card { flex: 1 1 auto; width: 100% }`
+  （原 `max-width: 960px` 上限删除；配合卡片自身 `min-height: auto`，内容高于中栏时
+  不压缩、由 `.panel` 滚动）。板块融资卡片原本靠 `cardWide` 变体免掉这个上限，上限
+  删除后变体失去意义——`CardShell` 的 `wide` prop 与 `.cardWide` 规则一并删除，
+  所有卡片回到同一套宽度契约。板块双栏
   `.sectorLayout { flex: 1; min-height: 240px; align-items: stretch }`——排行表在自己栏内
   滚动（`.tableScroll` 的 320 px 上限撤掉）、明细图吃掉右栏余量；窄窗单栏堆叠时
   （`max-width: 1100px`）排行表恢复 320 px 内滚动。
+- **回归固化为门禁**：`scripts/ui-functional-check.mjs` 新增 G 段——把视口撑到
+  2400x1000（触发条件本身要进断言，否则 960px 上限在中栏窄时不可见）后进特殊指标
+  页签，按**实测矩形**断言「卡片宽 = 面板内容宽」「图区宽 = 卡片内容宽」「图区高 ≥ 300」；
+  桥未配置或不可用时显式 SKIP 而非判失败（该脚本还要能在没有 finance 凭据的机器上跑）。
 
 ## Alternatives considered
 
@@ -75,3 +87,14 @@ Status: implemented
   `node scripts/typecheck-gate.mjs` 475 = 基线 475；`pnpm i18n:check` OK
   （新增 3 键 zh/en 同步）；`pnpm test:audit` 无新增测试债；`pnpm -r build`、
   `pnpm -r test`、`pnpm test:scripts`、`pnpm test:desktop` 全绿。
+- **UI 门禁先红后绿**（`DSH_HOME=~/.dsh-trading pnpm ui:check`，2400x1000 视口）：
+  修横向之前 G1「卡片 962px / 面板内容 1679px」、G2「图区 960px / 卡片内容 962px」
+  双双 FAIL；删掉宽度上限后 G1/G2/G3 全 PASS（卡片 1679 = 面板内容 1679，图区 1679 =
+  卡片内容 1679，图区高 630px），整轮 11 项断言全绿、退出码 0。宽中栏（2400x1100）
+  与常规中栏（1600x913）四页签截图复核：卡片右缘与面板对齐、折线上无文字覆盖、
+  板块双栏与窄窗单栏堆叠均照常。
+- **门禁脚本顺带修掉两处既有缺陷**（都在 G 段实测中暴露）：内容盒测量改用
+  `clientWidth/clientHeight`——`getBoundingClientRect` 会把 1px 边框算成 2px 的假
+  失配（首轮 G2 即被它误报）；清理 Chrome 用户目录加 `maxRetries`——`ENOTEMPTY` 会让
+  断言全绿的运行在收尾崩溃、退出码 1，且因崩溃点在 `instance.kill()` 之前而漏杀宿主
+  （第二次运行即被残留在 3095 端口的宿主挡下）。

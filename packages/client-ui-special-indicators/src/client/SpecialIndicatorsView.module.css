@@ -91,15 +91,11 @@
 }
 
 .panel > .card {
-  /* 卡片吃掉中栏剩余高度：图区随容器伸展，卡片下方不再留大片空白；
-     内容高于中栏时由 .panel 滚动（卡片 min-height:auto 不压缩内容）。 */
+  /* 卡片吃满中栏两个方向：高度吃掉剩余空间（图区随之伸展），宽度铺满面板
+     内容宽（原 960px 上限让更宽的中栏右侧留白）；内容高于中栏时由 .panel
+     滚动（卡片 min-height:auto 不压缩内容）。 */
   flex: 1 1 auto;
-  max-width: 960px;
   width: 100%;
-}
-
-.panel > .cardWide {
-  max-width: none;
 }
 
 .card {

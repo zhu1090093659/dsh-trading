@@ -12,6 +12,9 @@
 //   D. 交易面挂载：[data-shell-overlay] 与自选行渲染。
 //   E. 工作区菜单可打开且列出工作区（只验证不选择，不改用户状态）。
 //   F. 全程无未捕获异常、无 error 级控制台输出。
+//   G. 特殊指标视图铺满中栏：卡片宽度 = 面板内容宽、图区宽 = 卡片内容宽、
+//      图区吃掉中栏剩余高度（2026-09-18 事故：卡片 960px 上限让中栏更宽时
+//      右侧留白；固定像素高让卡片下方留白。两条都靠实测矩形判定，不读 CSS）。
 //
 // 用法：
 //   node scripts/ui-functional-check.mjs                 # 自起 trading-web 实例
@@ -48,6 +51,10 @@ const passes = [];
 function check(name, ok, detail = '') {
   (ok ? passes : failures).push(name + (detail ? ` — ${detail}` : ''));
   console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`);
+}
+/** 环境缺前置（无凭据/桥不可用）时的显式跳过：不算通过，也不算失败。 */
+function skip(name, detail = '') {
+  console.log(`  SKIP  ${name}${detail ? ' — ' + detail : ''}`);
 }
 
 // --- 实例承载 -----------------------------------------------------------
@@ -225,6 +232,69 @@ if (!btn) {
   await sleep(400);
 }
 
+// --- G. 特殊指标视图铺满中栏（左右与上下都无空白） ------------------------
+
+/** 布局探针：面板/卡片取内容盒（扣 padding），图区取实测矩形。 */
+const LAYOUT_PROBE = `(() => {
+  const stage = document.querySelector('[data-dshtrading-middle-stage]');
+  if (!stage) return { state: 'no-stage' };
+  if (/特殊指标未配置|加载失败/.test(stage.textContent || '')) {
+    return { state: 'unavailable', text: (stage.textContent || '').trim().slice(0, 60) };
+  }
+  const card = stage.querySelector('section');
+  if (!card) return { state: 'no-card' };
+  const chart = [...stage.querySelectorAll('div')].find((el) => String(el.className).includes('chartCanvas'));
+  if (!chart) return { state: 'no-chart' };
+  // clientWidth/clientHeight 是 padding 盒（已排除边框与滚动条），扣掉 padding
+  // 即内容盒——用 getBoundingClientRect 会把 1px 边框算成 2px 的假失配。
+  const inner = (el) => {
+    const cs = getComputedStyle(el);
+    return {
+      w: Math.round(el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)),
+      h: Math.round(el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)),
+    };
+  };
+  const cr = chart.getBoundingClientRect();
+  return {
+    state: 'ready',
+    panel: inner(card.parentElement),
+    card: inner(card),
+    chart: { w: Math.round(cr.width), h: Math.round(cr.height) },
+    viewport: [innerWidth, innerHeight],
+  };
+})()`;
+
+// 2400 宽视口是必需的触发条件：中栏窄于卡片宽度上限时回归不可见（首次漏检的原因）。
+await send('Emulation.setDeviceMetricsOverride', { width: 2400, height: 1000, deviceScaleFactor: 1, mobile: false });
+await evalJs("localStorage.setItem('dshtrading.stage.v1', JSON.stringify('special-indicators')); localStorage.setItem('dshtrading.special-indicators.tab.v1', JSON.stringify('basis')); true");
+await send('Page.reload', { ignoreCache: true });
+
+let layout = null;
+for (let i = 0; i < 45; i++) {
+  await sleep(1000);
+  layout = await evalJs(LAYOUT_PROBE);
+  if (layout?.state === 'ready' || layout?.state === 'unavailable') break;
+}
+if (layout?.state === 'ready') {
+  check('G1. 特殊指标卡片铺满中栏宽度', layout.card.w >= layout.panel.w - 1,
+    `卡片 ${layout.card.w}px / 面板内容 ${layout.panel.w}px（视口 ${layout.viewport[0]}px）`);
+  check('G2. 特殊指标图区铺满卡片宽度', layout.chart.w >= layout.card.w - 1,
+    `图区 ${layout.chart.w}px / 卡片内容 ${layout.card.w}px`);
+  check('G3. 特殊指标图区吃掉中栏剩余高度', layout.chart.h >= 300,
+    `图区高 ${layout.chart.h}px（视口高 ${layout.viewport[1]}px）`);
+} else if (layout?.state === 'unavailable') {
+  // 只有「桥无凭据/不可用」才是环境缺前置；挂载失败、卡片或图区缺失都是真回归。
+  skip('G. 特殊指标视图铺满中栏', `环境缺数据（${layout.text}），本机跳过`);
+} else {
+  check('G. 特殊指标视图铺满中栏', false, `探测结果 ${JSON.stringify(layout)}`);
+}
+
+// 还原现场：后续截图仍是行情视图的原始视口。
+await evalJs("localStorage.setItem('dshtrading.stage.v1', JSON.stringify('quote')); true");
+await send('Emulation.clearDeviceMetricsOverride');
+await send('Page.reload', { ignoreCache: true });
+await sleep(5000);
+
 // --- F. 控制台健康 --------------------------------------------------------
 
 check('F1. 无未捕获异常', exceptions.length === 0, exceptions[0] ?? '');
@@ -244,7 +314,9 @@ try {
 // --- 清理与结论 -----------------------------------------------------------
 
 killChrome();
-rmSync(userDir, { recursive: true, force: true });
+// Chrome 尚未退完时用户目录可能非空：recursive + maxRetries 才让 ENOTEMPTY 重试
+// （否则断言全绿也会在收尾崩掉，退出码 1）。
+rmSync(userDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 if (instance && !keep) instance.kill();
 
 console.log('');

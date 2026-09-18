@@ -296,7 +296,7 @@ export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
 
 /* --------------------------------- 卡片骨架 --------------------------------- */
 
-function CardShell({ title, subtitle, date, stale, error, loading, children, t, wide }: {
+function CardShell({ title, subtitle, date, stale, error, loading, children, t }: {
   t: TFunc
   title: string
   subtitle: string
@@ -305,11 +305,9 @@ function CardShell({ title, subtitle, date, stale, error, loading, children, t, 
   error?: string | undefined
   loading: boolean
   children?: React.ReactNode
-  /** 表格+图表双栏卡片（板块融资）占满面板宽度。 */
-  wide?: boolean | undefined
 }) {
   return (
-    <section className={wide === true ? cx('card') + ' ' + cx('cardWide') : cx('card')}>
+    <section className={cx('card')}>
       <header className={cx('cardHeader')}>
         <div>
           <div className={cx('cardTitle')}>{title}</div>
@@ -566,7 +564,6 @@ function SectorsCard({ t, snap, ranking, loading }: {
       date={s?.data_date}
       error={snap?.error ?? ranking?.error}
       loading={loading}
-      wide
     >
       {s === undefined || rows === undefined
         ? <div className={cx('loadingLine')}>{t('si.loading')}</div>
