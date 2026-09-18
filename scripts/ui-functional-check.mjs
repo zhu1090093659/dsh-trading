@@ -12,9 +12,10 @@
 //   D. 交易面挂载：[data-shell-overlay] 与自选行渲染。
 //   E. 工作区菜单可打开且列出工作区（只验证不选择，不改用户状态）。
 //   F. 全程无未捕获异常、无 error 级控制台输出。
-//   G. 特殊指标视图铺满中栏：卡片宽度 = 面板内容宽、图区宽 = 卡片内容宽、
-//      图区吃掉中栏剩余高度（2026-09-18 事故：卡片 960px 上限让中栏更宽时
-//      右侧留白；固定像素高让卡片下方留白。两条都靠实测矩形判定，不读 CSS）。
+//   G. 特殊指标视图宽度/高度契约：卡片 = 面板内容宽、图区 = 卡片内容宽、
+//      图区吃掉中栏剩余高度、而文字/进度条块仍限宽（2026-09-18 事故：卡片
+//      960px 上限让中栏更宽时右侧留白、固定像素高让卡片下方留白；宽度上限挪到
+//      内容块后，还要钉住「文本没跟着无限拉长」。全部按实测矩形判定，不读 CSS）。
 //
 // 用法：
 //   node scripts/ui-functional-check.mjs                 # 自起 trading-web 实例
@@ -254,12 +255,14 @@ const LAYOUT_PROBE = `(() => {
       h: Math.round(el.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)),
     };
   };
+  const read = stage.querySelector('[class*="basisGrid"]') ?? stage.querySelector('[class*="statRow"]');
   const cr = chart.getBoundingClientRect();
   return {
     state: 'ready',
     panel: inner(card.parentElement),
     card: inner(card),
     chart: { w: Math.round(cr.width), h: Math.round(cr.height) },
+    read: read === null ? null : inner(read),
     viewport: [innerWidth, innerHeight],
   };
 })()`;
@@ -282,6 +285,13 @@ if (layout?.state === 'ready') {
     `图区 ${layout.chart.w}px / 卡片内容 ${layout.card.w}px`);
   check('G3. 特殊指标图区吃掉中栏剩余高度', layout.chart.h >= 300,
     `图区高 ${layout.chart.h}px（视口高 ${layout.viewport[1]}px）`);
+  // 文本块必须窄于图区（限宽生效），又不至于被压到不可用；图区此时是铺满的，
+  // 因此「文本 < 图区 - 100」等价于「宽度上限只作用在内容块上」。
+  check('G4. 特殊指标文字/进度条类内容限宽而图区仍铺满',
+    layout.read !== null && layout.read.w >= 320 && layout.read.w <= layout.chart.w - 100,
+    layout.read === null
+      ? '未找到统计/进度条块'
+      : `文本块 ${layout.read.w}px / 图区 ${layout.chart.w}px`);
 } else if (layout?.state === 'unavailable') {
   // 只有「桥无凭据/不可用」才是环境缺前置；挂载失败、卡片或图区缺失都是真回归。
   skip('G. 特殊指标视图铺满中栏', `环境缺数据（${layout.text}），本机跳过`);

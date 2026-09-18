@@ -8,6 +8,8 @@
   min-height: 0;
   background: var(--dsh-bg, #fff);
   color: var(--dsh-text, #1f2329);
+  /* 文字/进度条/表格类内容的可读宽度上限：图表区铺满中栏，文本块不跟着拉长。 */
+  --si-read-width: 960px;
 }
 
 .toolbar {
@@ -93,9 +95,20 @@
 .panel > .card {
   /* 卡片吃满中栏两个方向：高度吃掉剩余空间（图区随之伸展），宽度铺满面板
      内容宽（原 960px 上限让更宽的中栏右侧留白）；内容高于中栏时由 .panel
-     滚动（卡片 min-height:auto 不压缩内容）。 */
+     滚动（卡片 min-height:auto 不压缩内容）。文字类内容的宽度上限改由
+     下面那条规则按块施加，宽度上限不再作用到图表区。 */
   flex: 1 1 auto;
   width: 100%;
+}
+
+/* 文字行、统计行、进度条与表格限宽：图表区照旧铺满中栏，这些块过宽会拉出
+   难以扫读的长行与超长条形。卡片头部（标题/日期）两端对齐到整幅宽度。 */
+.statRow,
+.components,
+.basisGrid,
+.chartCaption,
+.table {
+  max-width: var(--si-read-width);
 }
 
 .card {
