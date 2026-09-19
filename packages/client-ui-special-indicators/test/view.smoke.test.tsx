@@ -1,7 +1,9 @@
 /**
  * 特殊指标视图渲染测试（jsdom）：二级页签切换与持久化、未配置引导、
- * 状态桥故障占位、面板隔离。零 mock：桥 fetch 为契约化 fake（真实
- * Response），CSS Modules 类表在 vitest 下为空表、cx() 回落原始类名；
+ * 状态桥故障占位、面板隔离、缓存优先与平滑过渡（sessionStorage 面板
+ * 持久化 + 后台再验证）。零 mock：桥 fetch 为契约化 fake（真实 Response，
+ * 可选闸门 Promise 模拟慢桥，等待一律 await 闸门，不睡不轮询），
+ * CSS Modules 类表在 vitest 下为空表、cx() 回落原始类名；
  * 历史序列留空使 LineChart 不实例化（jsdom 无 canvas 实现）。
  *
  * @vitest-environment jsdom
@@ -86,8 +88,8 @@ function fixtureFor(url: string): { status?: number; body: unknown } {
   return { status: 404, body: { error: 'unknown' } }
 }
 
-/** 契约化 fake fetch：按子路由回真实 Response，记录调用面供断言。 */
-function installFakeFetch(overrides?: Record<string, { status?: number; body?: unknown } | 'reject'>) {
+/** 契约化 fake fetch：按子路由回真实 Response（可选闸门模拟慢桥），记录调用面供断言。 */
+function installFakeFetch(overrides?: Record<string, { status?: number; body?: unknown; hold?: Promise<void> } | 'reject'>) {
   const calls: string[] = []
   const impl = async (input: string | URL | Request): Promise<Response> => {
     const url = String(input)
@@ -95,6 +97,7 @@ function installFakeFetch(overrides?: Record<string, { status?: number; body?: u
     for (const [key, value] of Object.entries(overrides ?? {})) {
       if (url.includes(key)) {
         if (value === 'reject') throw new Error('bridge down')
+        if (value.hold !== undefined) await value.hold
         return new Response(JSON.stringify(value.body ?? {}), { status: value.status ?? 200, headers: { 'content-type': 'application/json' } })
       }
     }
@@ -110,12 +113,12 @@ let restoreFetch: () => void = () => undefined
 let restoreStorage: () => void = () => undefined
 
 /**
- * 内存版 localStorage 契约假件：jsdom 在本 vitest 面下 localStorage 是空壳
- * （与 client-ui-trading market-sidebar 冒烟测试同口径的实证结论），
- * 持久化断言用 defineProperty 遮蔽为完整 Storage 面；视图自身的 try/catch
- * 在无假件时静默降级，两种面都测。
+ * 内存版 Storage 契约假件（localStorage / sessionStorage 二选一遮蔽）：
+ * jsdom 在本 vitest 面下 Storage 是空壳（与 client-ui-trading market-sidebar
+ * 冒烟测试同口径的实证结论），持久化断言用 defineProperty 遮蔽为完整
+ * Storage 面；视图自身的 try/catch 在无假件时静默降级，两种面都测。
  */
-function installMemoryStorage() {
+function installMemoryStorage(kind: 'localStorage' | 'sessionStorage') {
   const store = new Map<string, string>()
   const fake = {
     getItem: (k: string): string | null => (store.has(k) ? (store.get(k) ?? null) : null),
@@ -125,18 +128,24 @@ function installMemoryStorage() {
     key: (i: number): string | null => [...store.keys()][i] ?? null,
     get length(): number { return store.size },
   }
-  const original = Object.getOwnPropertyDescriptor(window, 'localStorage')
-  Object.defineProperty(window, 'localStorage', { value: fake, configurable: true })
+  const original = Object.getOwnPropertyDescriptor(window, kind)
+  Object.defineProperty(window, kind, { value: fake, configurable: true })
   return {
     store,
     restore: (): void => {
-      if (original !== undefined) Object.defineProperty(window, 'localStorage', original)
+      if (original !== undefined) Object.defineProperty(window, kind, original)
     },
   }
 }
 
 beforeEach(() => {
-  // jsdom 空壳 localStorage 下视图降级为不持久化，无需清理。
+  // jsdom 下 sessionStorage 在本环境可用（localStorage 才是空壳）：跨用例
+  // 清空面板持久化，保证每个用例从零缓存起步；空壳环境下降级为无害调用。
+  try {
+    window.sessionStorage.clear()
+  } catch {
+    // 空壳 Storage 面：无持久化可清。
+  }
 })
 
 afterEach(() => {
@@ -162,7 +171,7 @@ describe('特殊指标二级页签', () => {
 
   it('用户切换页签时只渲染对应指标卡片并把选择写入持久化', async () => {
     // Given: 内存 Storage + 视图已渲染在默认页签
-    const storage = installMemoryStorage()
+    const storage = installMemoryStorage('localStorage')
     restoreStorage = storage.restore
     const fake = installFakeFetch()
     restoreFetch = fake.restore
@@ -215,7 +224,7 @@ describe('特殊指标二级页签', () => {
 
   it('用户重开视图时回落到上次选择的二级页签', async () => {
     // Given: 内存 Storage 中上次会话持久化为恒科页签
-    const storage = installMemoryStorage()
+    const storage = installMemoryStorage('localStorage')
     restoreStorage = storage.restore
     storage.store.set('dshtrading.special-indicators.tab.v1', '"hkshort"')
     const fake = installFakeFetch()
@@ -282,5 +291,86 @@ describe('特殊指标视图故障面', () => {
     expect((await screen.findAllByText('煤炭')).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('tab', { name: 'A 股恐慌指数' }))
     expect(await screen.findAllByText(/bridge down/)).not.toHaveLength(0)
+  })
+})
+
+describe('特殊指标缓存优先与平滑过渡', () => {
+  it('用户切走再回来时立即渲染上次数据并后台换新，不再整屏加载中', async () => {
+    // Given: sessionStorage 可用，首次渲染数据已落地并持久化
+    const storage = installMemoryStorage('sessionStorage')
+    restoreStorage = storage.restore
+    const fake = installFakeFetch()
+    restoreFetch = fake.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    await screen.findByText('42.6')
+    expect(storage.store.get('dshtrading.special-indicators.dash.v1') ?? '').toContain('42.6')
+    // When: 用户切走（视图卸载）后桥响应被闸住，再回到视图
+    cleanup()
+    let openGate = (): void => undefined
+    const gate = new Promise<void>((resolve) => { openGate = resolve })
+    const slow = installFakeFetch({
+      '/sentiment/snapshot': {
+        hold: gate,
+        body: {
+          score: 55.5, label: 'neutral', label_text: '中性', date: '2026-09-18', stale: false,
+          average_5d: 42.1, vs_5d: 13.4,
+          components: [{ key: 'cn_momentum', name: '全指动量', raw: -5.35, score: 44.2, direction: 'higher_fear' }],
+          coverage: { valid: 1, total: 7, partial: false },
+        },
+      },
+      '/sentiment/history': { hold: gate, body: { series: [], overlay: [] } },
+    })
+    restoreFetch = slow.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    // Then: 不出现「加载中」，上次分数立即上屏，工具栏如实处于刷新中
+    expect(screen.queryByText('加载中…')).toBeNull()
+    expect(screen.getByText('42.6')).toBeTruthy()
+    expect(screen.queryByText('数据滞后')).toBeNull()
+    expect(await screen.findByRole('button', { name: '刷新中…' })).toBeTruthy()
+    // When: 后台再验证放行落地（新分数）
+    openGate()
+    // Then: 数据平滑换新且全程无加载行
+    expect(await screen.findByText('55.5')).toBeTruthy()
+    expect(screen.queryByText('加载中…')).toBeNull()
+    expect(screen.queryByText('42.6')).toBeNull()
+  })
+
+  it('用户拿到桥陈旧回源响应时卡片如实挂数据滞后徽标', async () => {
+    // Given: 桥对恐慌指数快照回 stale 信封（node 半 SWR 立即服役过期窗口缓存）
+    const fake = installFakeFetch({
+      '/sentiment/snapshot': { body: { ok: true, data: fixtureFor(MOUNT + '/sentiment/snapshot').body, stale: true } },
+    })
+    restoreFetch = fake.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    // Then: 数据照常渲染，且卡片头部出现「数据滞后」徽标（桥标记，非上游 stale 字段）
+    expect(await screen.findByText('42.6')).toBeTruthy()
+    expect(screen.getByText('数据滞后')).toBeTruthy()
+  })
+
+  it('用户刷新失败时已落地数据不被错误面板清空', async () => {
+    // Given: 数据已落地；随后桥对恐慌快照断开、历史响应被闸住（刷新在途可控）
+    const fake = installFakeFetch()
+    restoreFetch = fake.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    await screen.findByText('42.6')
+    let openGate = (): void => undefined
+    const gate = new Promise<void>((resolve) => { openGate = resolve })
+    const broken = installFakeFetch({
+      '/sentiment/snapshot': 'reject',
+      '/sentiment/history': { hold: gate, body: { series: [], overlay: [] } },
+    })
+    restoreFetch = broken.restore
+    // When: 用户点击刷新（刷新周期被闸门保持在场）
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    expect(await screen.findByRole('button', { name: '刷新中…' })).toBeTruthy()
+    // Then: 失败面板不覆盖已有数据面板——刷新在途分数仍在、无错误文案
+    expect(screen.getByText('42.6')).toBeTruthy()
+    expect(screen.queryByText(/bridge down/)).toBeNull()
+    // When: 刷新周期落定
+    openGate()
+    await waitFor(() => expect(screen.getByRole('button', { name: '刷新' })).toBeTruthy())
+    // Then: 数据依旧上屏，错误文案从未出现
+    expect(screen.getByText('42.6')).toBeTruthy()
+    expect(screen.queryByText(/bridge down/)).toBeNull()
   })
 })

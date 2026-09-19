@@ -3,9 +3,11 @@
  *
  * - HTTP Basic 认证，凭据**惰性到每次请求解析**（设置中心 credentials.finance
  *   → 行配置 → 环境变量兜底；缺省未配置 → FINANCE_NOT_CONFIGURED，不内置密钥）。
- * - 每客户端限流 10 req/s（nginx 模板）：内存 TTL 缓存 + in-flight 去重，
- *   失败不缓存；快照 60s / 历史 300s（服务端成功内容自身缓存 10 分钟，
- *   客户端无需按秒拉取）。
+ * - 每客户端限流 10 req/s（nginx 模板）：内存 TTL 缓存 + in-flight 去重 +
+ *   陈旧回源（stale-while-revalidate）——窗口外请求立即返回陈旧值并后台
+ *   再验证，冷缓存上游重算十几秒不再阻塞调用方；快照 60s / 历史 300s
+ *   （服务端成功内容自身缓存 10 分钟，客户端无需按秒拉取）。
+ *   失败不写入缓存；陈旧值在后台再验证失败时继续服役（stale 标记如实上报）。
  * - Accept: application/json + 标识 User-Agent（docs/api.md 要求）；401 不
  *   自动重试（密码错误不应触发无限自动重试）。
  */
@@ -39,6 +41,14 @@ interface CacheEntry {
   payload: unknown
 }
 
+/** getWithMeta 的缓存面：stale=true = 命中已过 TTL 窗口的陈旧条目。 */
+export interface CacheMeta {
+  /** 陈旧值立即服役（后台再验证并发起）；调用方据此向下游如实标记。 */
+  stale: boolean
+  /** 陈旧命中触发的后台再验证（成功刷新缓存，失败保留陈旧值）；冷启动为 null。 */
+  revalidated: Promise<void> | null
+}
+
 export class FinanceClient {
   private readonly baseUrl: string
   private readonly timeoutMs: number
@@ -59,20 +69,11 @@ export class FinanceClient {
     return (this.options.password() ?? '') !== ''
   }
 
-  /**
-   * GET 一个上游 API 路径（含查询串），带 TTL 缓存与 in-flight 去重。
-   * @param path 上游路径，如 /api/sentiment/snapshot?market=cn&methodology=2
-   * @param ttlMs 缓存毫秒；0 = 不缓存
-   */
-  async get(path: string, ttlMs: number): Promise<unknown> {
+  /** 拉取上游并落缓存（in-flight 去重）；失败不写缓存，由调用方消费异常。 */
+  private refresh(path: string, ttlMs: number): Promise<unknown> {
     const key = path
-    if (ttlMs > 0) {
-      const hit = this.cache.get(key)
-      if (hit !== undefined && this.now() - hit.at < ttlMs) return hit.payload
-    }
     const pending = this.inflight.get(key)
     if (pending !== undefined) return pending
-
     const promise = this.fetchUpstream(path)
       .then((payload) => {
         if (ttlMs > 0) this.cache.set(key, { at: this.now(), payload })
@@ -83,6 +84,35 @@ export class FinanceClient {
       })
     this.inflight.set(key, promise)
     return promise
+  }
+
+  /**
+   * GET 一个上游 API 路径（含查询串）：TTL 窗口内直回缓存；窗口外
+   * stale-while-revalidate——立即回陈旧值 + 后台再验证（in-flight 去重，
+   * 失败保留陈旧值下次继续 stale 服役）；零缓存才阻塞等上游。
+   * @param path 上游路径，如 /api/sentiment/snapshot?market=cn&methodology=2
+   * @param ttlMs 缓存毫秒；0 = 不缓存
+   */
+  async getWithMeta(path: string, ttlMs: number): Promise<{ payload: unknown; meta: CacheMeta }> {
+    const key = path
+    if (ttlMs > 0) {
+      const hit = this.cache.get(key)
+      if (hit !== undefined) {
+        if (this.now() - hit.at < ttlMs) return { payload: hit.payload, meta: { stale: false, revalidated: null } }
+        const revalidated = this.refresh(path, ttlMs).then(
+          () => undefined,
+          () => undefined,
+        )
+        return { payload: hit.payload, meta: { stale: true, revalidated } }
+      }
+    }
+    const payload = await this.refresh(path, ttlMs)
+    return { payload, meta: { stale: false, revalidated: null } }
+  }
+
+  /** 兼容面：只取负载（陈旧回源行为与 getWithMeta 一致）。 */
+  async get(path: string, ttlMs: number): Promise<unknown> {
+    return (await this.getWithMeta(path, ttlMs)).payload
   }
 
   private async fetchUpstream(path: string): Promise<unknown> {

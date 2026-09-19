@@ -30,8 +30,10 @@ finance 自带的看盘网页查看，交易终端（中栏）没有入口；用
     环境变量 `FINANCE_API_PASSWORD` 兜底；**仓库不内置密钥**（密码只落本机
     profile 文件，不进 git）。401 映射 FINANCE_AUTH_FAILED 且不自动重试
     （docs/api.md 纪律）。
-  - 内存 TTL 缓存（快照 60s/历史 300s）+ in-flight 去重：nginx 每客户端
-    10 req/s 限流下的好公民；失败不缓存。
+  - 内存 TTL 缓存（快照 60s/历史 300s）+ in-flight 去重 + 陈旧回源
+    （SWR，2026-09-18：窗口外请求立即回陈旧值 + 后台再验证，失败保留
+    陈旧值；信封带 stale 标记）：nginx 每客户端 10 req/s 限流下的好公民；
+    失败不写缓存。详见 [特殊指标拉数据不再整屏清空](../bug-fix/2026-09-18-special-indicators-swr-cached-first.md)。
 - **client 半 = 中栏 tab**（tradingStageViews.register，id
   `special-indicators`、order 30 于知识库之后）：**二级页签布局，每个页签
   一组指标**（用户 2026-09-17 评审意见：一屏通览改逐组展示）——恐慌指数
@@ -43,7 +45,10 @@ finance 自带的看盘网页查看，交易终端（中栏）没有入口；用
   数据**页签按需加载**（2026-09-17 优化）：status 握手后只拉当前页签的
   两个端点（首屏数据请求 8→2），页签首访拉取、回访命中已加载集零网络，
   手动刷新重拉全部已加载页签（未访问页签不预拉）；allSettled 面板隔离
-  不变。上游 null/滞后如实呈现不补零（docs/api.md「错误处理」纪律）。
+  不变。**面板数据持久化 sessionStorage**（2026-09-18：`dshtrading.special-
+  indicators.dash.v1`，重挂载缓存先上屏 + 后台再验证平滑换新，失败面板
+  不覆盖已有数据面板，详见 bug-fix 链接同上）。上游 null/滞后如实呈现
+  不补零（docs/api.md「错误处理」纪律）。
   - **代码面懒加载**（2026-09-17 优化）：tradingStageViews 注册的 render
     经 `LazySpecialIndicatorsView`（React.lazy + 自带 Suspense 边界，
     MiddleStage 上方无边界）动态 import 视图本体——视图 +

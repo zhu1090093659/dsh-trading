@@ -38,11 +38,17 @@ function makeHandler(overrides: {
   password?: string
   upstreamBody?: unknown
   upstreamStatus?: number
+  upstreamBodies?: unknown[]
+  now?: () => number
 }) {
   const calls: string[] = []
+  let call = 0
   const fetchImpl = (async (input: string | URL | Request) => {
     calls.push(String(input))
-    return new Response(JSON.stringify(overrides.upstreamBody ?? { ready: true }), {
+    const bodies = overrides.upstreamBodies
+    const body = bodies === undefined ? overrides.upstreamBody ?? { ready: true } : bodies[Math.min(call, bodies.length - 1)]
+    call += 1
+    return new Response(JSON.stringify(body), {
       status: overrides.upstreamStatus ?? 200,
       headers: { 'content-type': 'application/json' },
     })
@@ -52,6 +58,7 @@ function makeHandler(overrides: {
     username: () => 'api',
     password: () => overrides.password ?? 'secret',
     fetchImpl,
+    now: overrides.now,
   })
   const connection = { requestRejection: () => overrides.rejection }
   const handler = createRouteHandler(client, BASE_CONFIG, connection)
@@ -147,6 +154,42 @@ describe('特殊指标桥子路由映射', () => {
     // Then: 502（上游侧失败）+ 认证失败业务码
     expect(state.status).toBe(502)
     expect(json().code).toBe('FINANCE_AUTH_FAILED')
+  })
+})
+
+describe('特殊指标桥陈旧回源', () => {
+  it('用户在缓存窗口内请求时桥直回缓存且不附加 stale 标记', async () => {
+    // Given: 可控时钟 + 首拉已落地
+    let clock = 1_000_000
+    const { handler } = makeHandler({ now: () => clock })
+    const first = fakeRes()
+    await handler(fakeReq('GET', '/basis/snapshot'), first.res)
+    // When: 用户在窗口内再次请求
+    clock += 30_000
+    const { res, state, json } = fakeRes()
+    await handler(fakeReq('GET', '/basis/snapshot'), res)
+    // Then: 信封恰好为 ok+data，无 stale 标记（fresh 缓存不误报滞后）
+    expect(state.status).toBe(200)
+    expect(json()).toEqual({ ok: true, data: { ready: true } })
+    expect(first.json().stale).toBeUndefined()
+  })
+
+  it('用户在缓存窗口外请求时桥立即回陈旧缓存并带 stale 标记', async () => {
+    // Given: 可控时钟 + 上游两拍负载（第二拍供后台再验证）
+    let clock = 1_000_000
+    const { handler, calls } = makeHandler({
+      now: () => clock,
+      upstreamBodies: [{ ready: true }, { ready: 'refreshed' }],
+    })
+    await handler(fakeReq('GET', '/basis/snapshot'), fakeRes().res)
+    // When: 用户推进时钟出窗后再请求
+    clock += 61_000
+    const { res, state, json } = fakeRes()
+    await handler(fakeReq('GET', '/basis/snapshot'), res)
+    // Then: 立即 200 陈旧负载 + stale 标记；后台再验证已同步并发发起
+    expect(state.status).toBe(200)
+    expect(json()).toEqual({ ok: true, data: { ready: true }, stale: true })
+    expect(calls.length).toBe(2)
   })
 })
 

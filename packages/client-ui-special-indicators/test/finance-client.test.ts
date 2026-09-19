@@ -1,7 +1,9 @@
 /**
  * FinanceClient 契约测试（docs/api.md 口径）：
- * 凭据链惰性解析、Basic 认证头、限流/401 错误映射、TTL 缓存与失败不缓存。
- * 零 mock：上游为契约化 fake fetch（真实 Response 对象），时钟为注入假时钟。
+ * 凭据链惰性解析、Basic 认证头、限流/401 错误映射、TTL 缓存、失败不缓存
+ * 与陈旧回源（stale-while-revalidate）。
+ * 零 mock：上游为契约化 fake fetch（真实 Response 对象，可选闸门 Promise
+ * 模拟慢上游），时钟为注入假时钟；等待一律 await 测试持有的闸门，不睡不轮询。
  */
 import { describe, expect, it } from 'vitest'
 import { FinanceClient, FinanceError } from '../src/finance-client.ts'
@@ -12,8 +14,8 @@ interface CapturedCall {
   userAgent: string | undefined
 }
 
-/** 契约化 fake fetch：按状态档回真实 Response，记录调用面供断言。 */
-function fakeFetch(sequence: Array<{ status?: number; body?: unknown }>) {
+/** 契约化 fake fetch：按状态档回真实 Response（可选闸门模拟慢上游），记录调用面供断言。 */
+function fakeFetch(sequence: Array<{ status?: number; body?: unknown; hold?: Promise<void> }>) {
   const calls: CapturedCall[] = []
   let cursor = 0
   const impl = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -21,6 +23,7 @@ function fakeFetch(sequence: Array<{ status?: number; body?: unknown }>) {
     calls.push({ url: String(input), authorization: headers.get('authorization') ?? undefined, userAgent: headers.get('user-agent') ?? undefined })
     const step = sequence[Math.min(cursor, sequence.length - 1)]
     cursor += 1
+    if (step.hold !== undefined) await step.hold
     return new Response(JSON.stringify(step.body ?? {}), {
       status: step.status ?? 200,
       headers: { 'content-type': 'application/json' },
@@ -32,7 +35,7 @@ function fakeFetch(sequence: Array<{ status?: number; body?: unknown }>) {
 function makeClient(overrides: {
   password?: string
   username?: string
-  sequence?: Array<{ status?: number; body?: unknown }>
+  sequence?: Array<{ status?: number; body?: unknown; hold?: Promise<void> }>
   now?: () => number
 }) {
   const upstream = fakeFetch(overrides.sequence ?? [{ body: { ready: true } }])
@@ -140,5 +143,78 @@ describe('FinanceClient TTL 缓存', () => {
     expect(a).toEqual({ ready: true })
     expect(b).toEqual({ ready: true })
     expect(c).toEqual({ ready: true })
+  })
+})
+
+describe('FinanceClient 陈旧回源（stale-while-revalidate）', () => {
+  it('用户请求落在缓存窗口外时立即得到陈旧值，后台再验证平滑换新', async () => {
+    // Given: 首拉已落地；上游第二次响应被闸住（模拟冷缓存上游重算十几秒）
+    let openGate = (): void => undefined
+    const gate = new Promise<void>((resolve) => { openGate = resolve })
+    const { client, upstream, advance } = makeClient({
+      sequence: [{ body: { v: 1 } }, { body: { v: 2 }, hold: gate }],
+    })
+    await client.get('/api/snapshot', 60_000)
+    advance(61_000)
+    // When: 用户在窗口外请求（上游仍被闸住）
+    const stale = await client.getWithMeta('/api/snapshot', 60_000)
+    // Then: 立即回陈旧值并如实标记 stale（不被慢上游阻塞）
+    expect(stale.payload).toEqual({ v: 1 })
+    expect(stale.meta.stale).toBe(true)
+    expect(upstream.count()).toBe(2)
+    // When: 后台再验证放行落定后用户再次请求
+    openGate()
+    await stale.meta.revalidated
+    const fresh = await client.getWithMeta('/api/snapshot', 60_000)
+    // Then: 缓存已换新，后续请求回新值且不再标记 stale
+    expect(fresh.payload).toEqual({ v: 2 })
+    expect(fresh.meta.stale).toBe(false)
+    expect(fresh.meta.revalidated).toBeNull()
+  })
+
+  it('用户陈旧值服役期间并发请求合并为一次后台再验证', async () => {
+    // Given: 窗口外陈旧条目 + 上游第二次响应被闸住
+    let openGate = (): void => undefined
+    const gate = new Promise<void>((resolve) => { openGate = resolve })
+    const { client, upstream, advance } = makeClient({
+      sequence: [{ body: { v: 1 } }, { body: { v: 2 }, hold: gate }],
+    })
+    await client.get('/api/snapshot', 60_000)
+    advance(61_000)
+    // When: 用户连续两次窗口外请求（再验证在途）
+    const a = await client.getWithMeta('/api/snapshot', 60_000)
+    const b = await client.getWithMeta('/api/snapshot', 60_000)
+    // Then: 两者都拿到陈旧值，共享同一次再验证（限流纪律）
+    expect(a.payload).toEqual({ v: 1 })
+    expect(b.payload).toEqual({ v: 1 })
+    expect(a.meta.stale).toBe(true)
+    expect(b.meta.stale).toBe(true)
+    openGate()
+    await Promise.all([a.meta.revalidated, b.meta.revalidated])
+    expect(upstream.count()).toBe(2)
+  })
+
+  it('用户后台再验证失败时陈旧值继续服役，上游恢复后自动换新', async () => {
+    // Given: 首拉落地；窗口外第一次再验证 500、第二次恢复新负载
+    const { client, upstream, advance } = makeClient({
+      sequence: [{ body: { v: 1 } }, { status: 500 }, { body: { v: 3 } }],
+    })
+    await client.get('/api/snapshot', 60_000)
+    advance(61_000)
+    // When: 用户窗口外请求并等后台再验证落定（失败被吞，不抛给调用方）
+    const stale = await client.getWithMeta('/api/snapshot', 60_000)
+    await stale.meta.revalidated
+    const still = await client.getWithMeta('/api/snapshot', 60_000)
+    // Then: 陈旧值继续服役且如实标记，下一次再验证已发起
+    expect(still.payload).toEqual({ v: 1 })
+    expect(still.meta.stale).toBe(true)
+    expect(still.meta.revalidated).not.toBeNull()
+    // When: 该次再验证成功恢复
+    await still.meta.revalidated
+    const fresh = await client.getWithMeta('/api/snapshot', 60_000)
+    // Then: 缓存换新
+    expect(fresh.payload).toEqual({ v: 3 })
+    expect(fresh.meta.stale).toBe(false)
+    expect(upstream.count()).toBe(3)
   })
 })

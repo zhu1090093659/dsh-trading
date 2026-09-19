@@ -119,6 +119,25 @@
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  /* 挂载淡入 + 再验证降透明度共用 opacity 过渡：换缓存数据基础上增量
+     更新，新数据落地平滑换新，不再整屏清空。 */
+  animation: si-card-in 0.24s ease;
+  transition: opacity 0.24s ease;
+}
+
+/* 后台再验证进行中（已有数据上屏时）：整卡轻微降不透明度示意刷新中，
+   数据落地后过渡回满。 */
+.cardRefreshing {
+  opacity: 0.72;
+}
+
+@keyframes si-card-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .cardHeader {

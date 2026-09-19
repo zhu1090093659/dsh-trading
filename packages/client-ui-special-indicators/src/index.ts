@@ -167,9 +167,10 @@ export function createRouteHandler(client: FinanceClient, config: Config, connec
     }
     try {
       const ttl = route.tier === 'snapshot' ? config.snapshotCacheMs : config.historyCacheMs
-      const payload = await client.get(upstream, ttl)
+      const { payload, meta } = await client.getWithMeta(upstream, ttl)
       // 透传上游 JSON（自有服务自有数据；包装 ok 信封与 updater 桥一致）。
-      sendJson(res, 200, { ok: true, data: payload })
+      // 陈旧回源立即服役时如实带 stale 标记（浏览器半渲染「数据滞后」徽标）。
+      sendJson(res, 200, { ok: true, data: payload, stale: meta.stale === true || undefined })
     } catch (error) {
       if (error instanceof FinanceError) {
         const status = error.code === 'FINANCE_NOT_CONFIGURED' ? 200 : error.code === 'FINANCE_AUTH_FAILED' ? 502 : error.code === 'FINANCE_RATE_LIMITED' ? 503 : 502

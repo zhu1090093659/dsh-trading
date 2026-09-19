@@ -7,10 +7,13 @@
  *
  * 数据面：node 半 /dshtrading/api/special-indicators 桥（同源 fetch）；
  * 页签按需加载——status 握手后只拉当前页签的两个端点（首屏 8→2 个数据
- * 请求，冷缓存上游重算可达十几秒，finance-client 契约），页签首访拉取、
- * 回访命中已加载集零网络；手动刷新重拉全部已加载页签。
- * 每张卡片独立 Promise.allSettled 落地——单面板失败不拖垮整屏；
- * 更新时钟随每次落地走动。滞后/未就绪按上游字段如实标记，不补零不修饰。
+ * 请求），页签首访拉取、回访命中已加载集零网络；手动刷新重拉全部已加载页签。
+ * 面板数据持久化 sessionStorage：会话内切走再回来先上屏上次数据，后台
+ * 再验证平滑换新——拉数据不再整屏「加载中」；node 半陈旧回源（SWR）让
+ * 窗口外请求即时返回，桥 stale 标记如实挂「数据滞后」徽标。再验证失败
+ * 不清空已落地面板（错误只在零缓存时展示）。每张卡片独立
+ * Promise.allSettled 落地——单面板失败不拖垮整屏；更新时钟随每次落地
+ * 走动。滞后/未就绪按上游字段如实标记，不补零不修饰。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -24,6 +27,7 @@ import {
   fetchSentimentHistory,
   fetchSentimentSnapshot,
   fetchStatus,
+  type BridgePayload,
   type BridgeStatus,
 } from './api.ts'
 import { LineChart, type LineChartSeries } from './LineChart.tsx'
@@ -62,6 +66,8 @@ export interface SpecialIndicatorsViewProps {
 interface Panel<T> {
   data?: T
   error?: string
+  /** 桥陈旧回源标记（node 半 SWR 立即服役过期窗口缓存时为 true）。 */
+  stale?: boolean | undefined
 }
 
 interface Dashboard {
@@ -104,6 +110,54 @@ function writeSubTab(id: SubTabId): void {
   }
 }
 
+/** 面板数据持久化（sessionStorage，会话内跨视图挂载存活）：视图切走再
+ *  回来先上屏上次数据、后台再验证平滑换新，拉数据不再整屏「加载中」。
+ *  v1 信封防旧结构误读；jsdom 无 Storage 面时 try/catch 静默降级
+ *  （与页签持久化同款契约）。 */
+const DASH_KEY = 'dshtrading.special-indicators.dash.v1'
+
+interface StoredDash {
+  v: 1
+  at: string
+  dash: Dashboard
+}
+
+function readStoredDash(): { dash: Dashboard; at: Date | null } {
+  try {
+    const raw = window.sessionStorage.getItem(DASH_KEY)
+    if (raw === null) return { dash: {}, at: null }
+    const parsed = JSON.parse(raw) as Partial<StoredDash>
+    if (parsed?.v !== 1 || parsed.dash === null || typeof parsed.dash !== 'object') return { dash: {}, at: null }
+    const dash = parsed.dash
+    const panelsLookSane = Object.values(dash).every((p) => typeof p === 'object' && p !== null)
+    if (!panelsLookSane) return { dash: {}, at: null }
+    return { dash, at: typeof parsed.at === 'string' ? new Date(parsed.at) : null }
+  } catch {
+    return { dash: {}, at: null }
+  }
+}
+
+function writeStoredDash(dash: Dashboard, at: Date): void {
+  try {
+    const stored: StoredDash = { v: 1, at: at.toISOString(), dash }
+    window.sessionStorage.setItem(DASH_KEY, JSON.stringify(stored))
+  } catch {
+    // 隐私模式等写失败：视图仍可用，仅不持久化。
+  }
+}
+
+/** 每页签占用的面板键（恢复持久化时反查哪些页签已是「已加载」）。 */
+const DASH_TAB_KEYS: Record<SubTabId, (keyof Dashboard)[]> = {
+  sentiment: ['sentimentSnap', 'sentimentHist'],
+  basis: ['basisSnap', 'basisHist'],
+  hkshort: ['hkSnap', 'hkChart'],
+  sectors: ['sectorsSnap', 'sectorsRanking'],
+}
+
+function loadedTabsOf(dash: Dashboard): Set<SubTabId> {
+  return new Set(SUBTAB_IDS.filter((id) => DASH_TAB_KEYS[id].some((k) => dash[k] !== undefined)))
+}
+
 const ZONE_BADGE: Record<string, string> = {
   extreme_fear: cx('badgeFear'),
   fear: cx('badgeFear'),
@@ -122,8 +176,10 @@ function errMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-const panelOf = <T,>(r: PromiseSettledResult<T>): Panel<T> =>
-  r.status === 'fulfilled' ? { data: r.value } : { error: errMessage(r.reason) }
+const panelOf = <T,>(r: PromiseSettledResult<BridgePayload<T>>): Panel<T> =>
+  r.status === 'fulfilled'
+    ? { data: r.value.data, stale: r.value.stale || undefined }
+    : { error: errMessage(r.reason) }
 
 /** 每页签两个端点，allSettled 面板隔离（单面板失败不拖垮同页签另一张卡）。 */
 const TAB_FETCHERS: Record<SubTabId, () => Promise<Partial<Dashboard>>> = {
@@ -146,17 +202,40 @@ const TAB_FETCHERS: Record<SubTabId, () => Promise<Partial<Dashboard>>> = {
 }
 
 export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
+  // 上次会话面板先上屏（sessionStorage），随后台再验证平滑换新。
+  const [restored] = useState(readStoredDash)
   const [tab, setTab] = useState<SubTabId>(readSubTab)
   const [status, setStatus] = useState<Panel<BridgeStatus>>({})
-  const [dash, setDash] = useState<Dashboard>({})
+  const [dash, setDash] = useState<Dashboard>(restored.dash)
+  const dashRef = useRef<Dashboard>(restored.dash)
   // 加载指示 = 在途页签请求计数（并发 ensureTab 下不错位）。
   const [pending, setPending] = useState(0)
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
-  // 已加载页签集（回访零网络）+ 每页签 in-flight 去重（快速切换/重复刷新
-  // 复用同一次落地；注入式状态机，不睡不轮询）。
-  const loadedRef = useRef<Set<SubTabId>>(new Set())
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(restored.at)
+  // 已加载页签集（回访零网络；恢复面里出现过的页签视为已加载，手动刷新
+  // 会重拉它们）+ 每页签 in-flight 去重（快速切换/重复刷新复用同一次落地；
+  // 注入式状态机，不睡不轮询）。
+  const loadedRef = useRef<Set<SubTabId>>(loadedTabsOf(restored.dash))
   const inflightRef = useRef<Map<SubTabId, Promise<void>>>(new Map())
   const statusInflightRef = useRef<Promise<Panel<BridgeStatus>> | null>(null)
+
+  // 面板落地合并：失败面板不覆盖已有数据面板（后台再验证抖动不清空缓存
+  // 视图，错误只在零缓存时展示），成功面板整块换新并同步持久化。
+  const applyDash = useCallback((slice: Partial<Dashboard>): void => {
+    const next: Dashboard = { ...dashRef.current }
+    for (const key of Object.keys(slice) as (keyof Dashboard)[]) {
+      const incoming = slice[key]
+      if (incoming === undefined) continue
+      if (incoming.data !== undefined || next[key]?.data === undefined) {
+        // Record 视图写入：keyof 联合键直赋会让 TS 把目标收敛成全面板交集。
+        ;(next as Record<string, Panel<unknown>>)[key] = incoming
+      }
+    }
+    dashRef.current = next
+    setDash(next)
+    const at = new Date()
+    setUpdatedAt(at)
+    writeStoredDash(next, at)
+  }, [])
 
   // status 握手：在途复用（刷新连点不翻倍），落定即放行下一次——
   // 不缓存失败面板，刷新总能重新握手。
@@ -189,8 +268,7 @@ export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
     setPending((n) => n + 1)
     const run = TAB_FETCHERS[id]()
       .then((slice) => {
-        setDash((prev) => ({ ...prev, ...slice }))
-        setUpdatedAt(new Date())
+        applyDash(slice)
       })
       .finally(() => {
         inflightRef.current.delete(id)
@@ -198,7 +276,7 @@ export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
       })
     inflightRef.current.set(id, run)
     return run
-  }, [])
+  }, [applyDash])
 
   // 首屏：status 桥握手——未配置/故障分支不发起任何数据子路由请求。
   useEffect(() => {
@@ -206,12 +284,21 @@ export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
   }, [loadStatus])
 
   // 页签按需加载：configured 后激活页签首访拉取自身端点；回访命中
-  // loadedRef 零网络（页签状态在视图存活期内保留，整视图卸载后重来，
-  // host 半 TTL 缓存兜住重挂载成本）。
+  // loadedRef 零网络（页签状态在视图存活期内保留，整视图卸载后由
+  // sessionStorage 恢复面接管）。
   const configured = status.data?.configured === true
   useEffect(() => {
     if (configured) void ensureTab(tab)
   }, [configured, tab, ensureTab])
+
+  // 恢复面后台再验证（configured 就绪后仅一次）：上次会话已加载页签
+  // 逐个 force 重拉——缓存先上屏、新数据落地平滑换新，重挂载零空屏。
+  const revalidatedRef = useRef(false)
+  useEffect(() => {
+    if (!configured || revalidatedRef.current) return
+    revalidatedRef.current = true
+    for (const id of loadedRef.current) void ensureTab(id, true)
+  }, [configured, ensureTab])
 
   // 手动刷新：重握手 status + 重拉全部已加载页签（未访问页签不预拉）。
   const refresh = useCallback((): void => {
@@ -296,7 +383,7 @@ export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
 
 /* --------------------------------- 卡片骨架 --------------------------------- */
 
-function CardShell({ title, subtitle, date, stale, error, loading, children, t }: {
+function CardShell({ title, subtitle, date, stale, error, loading, refreshing, children, t }: {
   t: TFunc
   title: string
   subtitle: string
@@ -304,10 +391,12 @@ function CardShell({ title, subtitle, date, stale, error, loading, children, t }
   stale?: boolean | undefined
   error?: string | undefined
   loading: boolean
+  /** 已落地数据上屏期间后台再验证中：整卡轻微降透明度，落地平滑回满。 */
+  refreshing?: boolean | undefined
   children?: React.ReactNode
 }) {
   return (
-    <section className={cx('card')}>
+    <section className={refreshing === true ? cx('card') + ' ' + cx('cardRefreshing') : cx('card')}>
       <header className={cx('cardHeader')}>
         <div>
           <div className={cx('cardTitle')}>{title}</div>
@@ -352,9 +441,10 @@ function SentimentCard({ t, snap, hist, loading }: {
       title={t('si.sentiment.title')}
       subtitle={t('si.sentiment.subtitle')}
       date={s?.date}
-      stale={s?.stale}
+      stale={s?.stale === true || snap?.stale === true || hist?.stale === true}
       error={snap?.error ?? hist?.error}
       loading={loading}
+      refreshing={loading && s !== undefined}
     >
       {s === undefined
         ? <div className={cx('loadingLine')}>{t('si.loading')}</div>
@@ -412,8 +502,10 @@ function BasisCard({ t, snap, hist, loading }: {
       title={t('si.basis.title')}
       subtitle={t('si.basis.subtitle')}
       date={hist?.data?.data_date}
+      stale={snap?.stale === true || hist?.stale === true}
       error={snap?.error ?? hist?.error}
       loading={loading}
+      refreshing={loading && s !== undefined}
     >
       {s === undefined
         ? <div className={cx('loadingLine')}>{t('si.loading')}</div>
@@ -472,9 +564,10 @@ function HkShortCard({ t, snap, chart, loading }: {
       title={t('si.hkshort.title')}
       subtitle={t('si.hkshort.subtitle')}
       date={s?.data_date}
-      stale={c?.stale}
+      stale={c?.stale === true || snap?.stale === true || chart?.stale === true}
       error={snap?.error ?? chart?.error}
       loading={loading}
+      refreshing={loading && s !== undefined}
     >
       {s === undefined
         ? <div className={cx('loadingLine')}>{t('si.loading')}</div>
@@ -562,8 +655,10 @@ function SectorsCard({ t, snap, ranking, loading }: {
       title={t('si.sectors.title')}
       subtitle={t('si.sectors.subtitle', { window: SECTOR_WINDOW })}
       date={s?.data_date}
+      stale={snap?.stale === true || ranking?.stale === true}
       error={snap?.error ?? ranking?.error}
       loading={loading}
+      refreshing={loading && s !== undefined && rows !== undefined}
     >
       {s === undefined || rows === undefined
         ? <div className={cx('loadingLine')}>{t('si.loading')}</div>
