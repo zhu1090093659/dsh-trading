@@ -56,5 +56,8 @@ Status: implemented
 - 实测（trading-web profile 刷新后，headless Chrome CDP 实机验证）：冷首拉
   12.95s（上游重算）后二连 0.01s（缓存命中）；切走「行情」再切回「特殊
   指标」，采样即时含 38.9 分数与分项、无「加载中」；恐慌指数卡片、数据
-  滞后徽标、双轴历史图真实渲染（截图核对）。
+  滞后徽标、双轴历史图真实渲染（截图核对）。补强验证（页面内 fetch 闸门
+  延迟快照 4s 并改值 55.5/42.0）：Pending 窗口采样 cached score/分项可见 +
+  刷新中按钮 + cardRefreshing=1 + 零加载行；闸门放行后 +3.5s 新值 55.5
+  上屏、旧值消失、dim 清除——缓存服役与增量换新两端都有实机证据。
 - 决策背景见 [特殊指标中栏视图](../feature/2026-09-17-special-indicators-stage-view.md)。
