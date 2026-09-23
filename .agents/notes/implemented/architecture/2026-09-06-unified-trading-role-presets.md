@@ -39,3 +39,27 @@ master 委派边界如实声明：fork 子代理继承会话工具面（含下�
 默认预设裁决（2026-09-06，owner）：base 的 agent-presets 覆盖行 `default: standard` → `default: master`——角色整合完成且 master 委派链路验收通过后，部署层新会话默认进「大师」。取代 S3 期「default 保持官方 standard、不劫持默认 preset」的过渡口径（该口径的历史语境是四市场各自预设并存的会话选择问题，统一角色后不复存在）；官方 standard 及用户创作预设仍在 roster 可选。owner 同日裁决：本机全局 `~/.dsh/settings.yaml` 的用户层覆盖 `agent-presets.default: ptc` 保留不动（用户层优先于组合层，跨 profile 生效）——因此本机 trading-web 新会话实际默认仍是 ptc，`default: master` 对无用户层覆盖的干净部署生效；headless 部署不受影响（base 该行在 headless 仅警告跳过，默认预设由部署方自行配置）。
 
 已知缺陷（2026-09-06 晚实证，宿主 SDK rc.1 层，非本仓可修）：**创建后切换预设（GUI 会话头 picker → `agentPresets/select`）只切工具面、不切系统提示词 persona**。证据：6 个含 `agent-preset/selected` 事件的会话（含 master、instrument-researcher 目标）request/header 全部保留创建时 persona，无一跟随；同会话工具面切换成功（研究员会话可调 cn_get_* 工具）——形成「工具是研究员、纪律是默认」的半切换状态。对照组：创建时绑定（定时任务 agentPreset=master）与 fork 委派子代理的 per-child persona 均正确注入。根因收窄至 SDK 的 blank-session select 路径（swap→recompose→rebind 对 tools 注册表生效、对 systemPrompt ScopedLayers 不生效；静态阅读 dsh-scope/dsh-system-prompt 显示应为动态解析，疑似 rc.1 实现缺陷）。**Workaround：在 Settings 把默认预设写成目标角色后新建会话**（创建时绑定 100% 生效），不要依赖会话内切换；已半切换的会话废弃重建。
+
+## 0.1.7 cohort 迁移（2026-09-23）：磁盘 roots → agent-preset-registry 运行时注册
+
+0.1.7 官方停发 `@deepseek-ai/dsh-agent-presets` 并删除磁盘 roots 机制（preset 定义
+改为 Cordis 行声明 + `ctx.agentPresets.register()`，registry 由 web-app 层
+`agent-preset-registry` 行提供）。本 note 的安装器产物形态整体变更：
+
+- `composePresets` 产出对象形 `PresetDefinition`（id/name/description/order/plugins），
+  原 agent.cordis.yml + preset.yml 两文件结构 1:1 映射（preset.yml 三字段进
+  definition 元数据；plugins 数组即原行列表）。市场贡献仍以 YAML 文本分发（市场包
+  资产不动），base 侧用 `yaml` 单点解析（`marketRowsOf`）。
+- 安装器 `@dshtrading/base/presets` 改为 `inject: ['loader', 'agentPresets']`，
+  对每个角色 definition 先过官方 `entryListProblem` 校验再 register，返回 disposer
+  （cordis 插件卸载时释放）。管理戳/写盘/legacy 目录退役逻辑随 roots 机制整体删除。
+- `default: master` 的 owner 裁决不变，载体从覆盖 agent-presets 行改为覆盖
+  `agent-preset-registry` 行（见
+  [2026-08-29-agent-presets-row-host-asymmetry](2026-08-29-agent-presets-row-host-asymmetry.md)
+  的 0.1.7 段）。headless 部署契约同款：profile 层 insert registry 行；registry
+  服务是安装器的硬 inject，缺行时安装器行永久 pending（部署方必须 insert）。
+- 用户层 settings 的 `agent-presets.default` 覆盖键随行 id 演进为 registry 的
+  default（本机 `~/.dsh/settings.yaml` 的 `agent-presets.default: ptc` 用户层覆盖
+  需要对应迁移；owner 2026-09-06 裁决的「用户层优先」口径不变）。
+- 已知宿主缺陷记录保留：0.1.5 实测的「创建后切预设不切 persona」在 0.1.7 的
+  复验纳入本轮 profile 验收清单（registry 时代 select 路径重写，可能已修复）。
