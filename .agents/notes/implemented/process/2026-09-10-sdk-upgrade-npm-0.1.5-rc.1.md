@@ -104,3 +104,29 @@ npm publish、创建 Release）今后只在 owner 显式说发布/发版时执�
 宿主闭包世代靠完整安装包更替；v0.2.1 内容本身全门禁绿、抽查通过，是否
 保留/回滚由 owner 定夺（npm 版本不可变，回滚 = 删 Release + 删 tag +
 deprecate，且造成 npm 与 Release 面断层）。
+
+## 0.1.7-alpha.2 cohort（2026-09-23）
+
+宿主 `dsh` CLI 与 dev cohort 前移到 `0.1.7-alpha.2`（npm `alpha` tag；宿主
+实际运行版本核验一致）。沿用本文的 cohort 纪律与验收面：
+
+- 根 `pnpm-workspace.yaml` overrides 全量前移 `0.1.7-alpha.2`（含 cordis 4.0.4 /
+  cosmokit 1.8.5 / schemastery 3.18.4 / plugin-include 1.0.9 / plugin-loader 1.0.5）；
+  `dsh-agent-presets`、`dsh-code-runtime` 官方停发，前者由 `dsh-agent-preset-registry`
+  取代（见 [role presets note](../architecture/2026-09-06-unified-trading-role-presets.md)）。
+- floor 面随 cohort 前移：全部 `packages/*/package.json` 的 `@deepseek-ai/dsh-*`
+  peer floor 与精确 devDep → `>=0.1.7-alpha.2`；`desktop/runtime/host/package.json`
+  pin 与 runtime host lockfile/excludes、`build-runtime.mjs` 的 search-exa pin 同步。
+  本 pass 补齐上轮遗漏的 `packages/base` 的 `dsh-tools`/`dsh-skill` 两处 floor 与
+  `README_zh.md` 徽章（`README.md` 已随首提交前移）。
+- 本仓仍无 `dsh.engines.dsh` floor、无 CI mount pin（`ci.yml` 仅 install/build/test）。
+- 适配（各自 Owning Note 承载细节）：base 角色预设迁移到运行时 registry；
+  client-ui-trading 会话寻址收口 + 「发给 Agent」活动会话读面桥；client-ui-settings
+  迁移到 configForms + locale 合并宿主。
+- 验证（worktree `feat/dsh-0.1.7-alpha.2`，最终提交跑全量）：frozen install / `pnpm -r build`
+  / typecheck 棘轮（475 → 448）/ i18n / test:audit（无新增债）/ test:scripts /
+  test:desktop / `pnpm -r test` 全绿。
+- **桌面壳重发布待办**：`desktop/runtime/host` 闭包已前移且 GitHub Actions 打包会取
+  本提交物，但本机 `/Applications/DSH Trading.app` 内嵌 runtime 仍是 `0.1.5-rc.1`——
+  重发布前不要用桌面壳跑 0.1.7 客户端包（模块实例割裂），本机 profile 链接方向与
+  真机 GUI 验收随重发布一并完成。
