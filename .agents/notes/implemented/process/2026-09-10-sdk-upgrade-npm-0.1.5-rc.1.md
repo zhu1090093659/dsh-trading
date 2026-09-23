@@ -139,3 +139,15 @@ deprecate，且造成 npm 与 Release 面断层）。
   本提交物，但本机 `/Applications/DSH Trading.app` 内嵌 runtime 仍是 `0.1.5-rc.1`——
   重发布前不要用桌面壳跑 0.1.7 客户端包（模块实例割裂），本机 profile 链接方向与
   真机 GUI 验收随重发布一并完成。
+- 合并与 Web GUI 验收（2026-09-23）：分支快进合并进 main（本地，未推送）。验收在
+  隔离 profile（`trading-web-verify`：由 trading-web 复制 + 0.1.7 exclude + 宿主
+  symlink 归一，验后删除；不动桌面壳与两个 trading-game 实例）上用全局 CLI 0.1.7
+  宿主 + 无头 Chrome 完成：带 token 303 / 无 token 401 / 未认证 API 401；交易三栏壳、
+  自选、行情/策略/知识库 tab、「发给 Agent」按钮渲染；设置对话框与本仓「交易」页完整
+  渲染（通用：涨跌配色 + 金十 MCP Token；市场数据源：六市场 tab + provider 凭证卡）
+  ——client-ui-settings 的 configForms 迁移与 locale 合并经真机 GUI 证实；boot 日志
+  无 slot/模块错误；移除的 session-archive / usage 不再出现，原生「性能与用量」在位。
+- **仍待办的 rollout**：① 桌面壳重发布（本机内嵌 runtime 仍 0.1.5-rc.1）；② persistent
+  `trading-web` profile 需在停掉运行实例后 refresh 到 0.1.7；③ `trading-all` 仍停在
+  0.1.2-rc.1，需单独升级；④「发给 Agent」真实填入链路的会话级 GUI 验收（单元测试已
+  覆盖 holder 与目标解析，按钮已渲染）。
