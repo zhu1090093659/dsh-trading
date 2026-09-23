@@ -157,8 +157,6 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-client-ui-tool@0.1.7-alpha.2'
   - '@linxin666/dsh-client-ui-model-capabilities@0.3.21'
   - '@linxin666/dsh-client-ui-plugin-manager@0.3.21'
-  - '@linxin666/dsh-session-archive@0.3.21'
-  - '@linxin666/dsh-usage@0.3.21'
   - '@deepseek-ai/dsh-chunked-list@0.1.7-alpha.2'
   - '@deepseek-ai/dsh-client-file-upload@0.1.7-alpha.2'
   - '@deepseek-ai/dsh-commands@0.1.7-alpha.2'

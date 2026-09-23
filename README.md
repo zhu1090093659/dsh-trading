@@ -78,7 +78,7 @@ A shoddy terminal makes even the smartest agent an armchair general.
 
 ### The operations surface is built in
 
-- **Usage statistics.** A first-level *Usage Statistics* settings section folds each session's live token stream into a local ledger (`$DSH_HOME/dsh-usage/usage-ledger.json`), probes every configured provider for balance and coding-plan quota, and prices today's DeepSeek spend against the published peak/off-peak book. Credentials are resolved host-side and never reach the browser.
+- **Usage statistics.** DSH's built-in *Performance & Usage* settings surface each session's live token stream and spend, resolved host-side so credentials never reach the browser.
 - **Plugin manager.** The Plugins section gains a manager tab: install from an npm spec or a git URL, flip next-start enablement, check and apply verified updates (gated on each package's declared minimum DSH version), roll back conflicting installs, and hand failures to a repair conversation. Writes are loopback-only and ride the official CLI; the desktop build ships a `dsh` shim so this works without a global install.
 - **Per-model capability declarations.** Every custom `llm-pi-ai` provider card carries a capability area: declare image input and reasoning efforts per model (including the exact wire value each level sends), or archive a provider to take its route down without touching its stored keys.
 

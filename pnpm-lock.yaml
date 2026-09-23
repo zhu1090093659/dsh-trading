@@ -219,12 +219,6 @@ importers:
       '@linxin666/dsh-client-ui-plugin-manager':
         specifier: ^0.3.21
         version: 0.3.21(react@18.3.1)
-      '@linxin666/dsh-session-archive':
-        specifier: ^0.3.21
-        version: 0.3.21(react@18.3.1)
-      '@linxin666/dsh-usage':
-        specifier: ^0.3.21
-        version: 0.3.21(react@18.3.1)
       '@xmanrui/dsh-im':
         specifier: ^4.20.2
         version: 4.20.2(debug@4.4.3)
@@ -2632,18 +2626,6 @@ packages:
 
   '@linxin666/dsh-client-ui-plugin-manager@0.3.21':
     resolution: {integrity: sha512-xKnb4nGEIIAkPD4SQdYhnP0GgcuCba3N6zgQAuLtWNRXiFOY8b3zOg9n3MTtK9pK460uk6km5OPfxav4W8ODJA==}
-    peerDependencies:
-      react: ^18.2.0
-
-  '@linxin666/dsh-session-archive@0.3.21':
-    resolution: {integrity: sha512-TgMNIzvqE9XnKTFC1GRkJ4jwodGpPmW05uQVDf0X+wfd+yNSWq7zwsrA0s5aJvelAKkV96/JIwEVxMNS0xZbpQ==}
-    engines: {node: ^22.19.0 || >=24.0.0}
-    peerDependencies:
-      react: ^18.2.0
-
-  '@linxin666/dsh-usage@0.3.21':
-    resolution: {integrity: sha512-Qhz2k/GkQ9v7jqoZQGj1iAPuhJC705GAJWwGf6QMwmRANcv486cDBdCryfFJ4oBjbge2VSSfZ25HzH5Sma7fmw==}
-    engines: {node: ^22.19.0 || >=24.0.0}
     peerDependencies:
       react: ^18.2.0
 
@@ -5533,16 +5515,6 @@ snapshots:
     dependencies:
       react: 18.3.1
       yaml: 2.9.0
-
-  '@linxin666/dsh-session-archive@0.3.21(react@18.3.1)':
-    dependencies:
-      react: 18.3.1
-      schemastery: 3.18.0
-
-  '@linxin666/dsh-usage@0.3.21(react@18.3.1)':
-    dependencies:
-      react: 18.3.1
-      schemastery: 3.18.0
 
   '@manypkg/find-root@1.1.0':
     dependencies:

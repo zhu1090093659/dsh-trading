@@ -48,3 +48,20 @@ web 插件库）已有成熟实现 `@linxin666/dsh-session-archive`——会话�
 - 本仓只消费不发布；该包问题（bug/汉化缺失）上游修，必要时在本仓 lockfile 钉版过渡。
 - 新增外部信任面：@linxin666 scope 包随 profile 安装闭包执行，升级时留意
   supply-chain 提示（pnpm verify 已覆盖 lockfile 校验）。
+
+## 0.1.7 cohort 移除（2026-09-23）
+
+0.1.7 官方把客户端设置面从 `ctx.settingsScope` 换成 `configForms`，而
+`@linxin666/dsh-session-archive`（含最新 0.3.24）客户端半仍把 `settingsScope`
+列进必需 inject 并调用 `ctx.settingsScope.bind(...)`——0.1.7 下该服务不存在，
+客户端半永久 pending、会话归档 UI 静默消失；宿主半也因对应设置面缺失而无消费方。
+官方 0.1.7-alpha.1 已原生提供侧边栏会话置顶/归档管理/筛选/撤销归档/搜索结果恢复，
+覆盖本插件核心能力面。owner 2026-09-23 裁决：只移除失效插件，不做源码 fork。
+
+- base dependencies 删除 `@linxin666/dsh-session-archive`；cordis.patch.yml 的
+  `dsh-trading-session-archive` 行删除（原位留移除说明注释）；
+  `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 条目同步删除。
+- 被放弃的上游附加能力（原生面没有的）：家族级联物理删除、自动归档/自动清理
+  策略调度器、`dsh-session-archive` HTTP 路由。如需恢复应作为本仓自有实现重新
+  立项，而不是重新引入不兼容的上游包。
+- 原生替代面：DSH 0.1.7-alpha.1 的侧边栏归档管理（置顶/筛选/撤销/恢复）。

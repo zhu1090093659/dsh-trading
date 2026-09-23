@@ -185,20 +185,11 @@
     - id: dsh-trading-client-ui-updater
       name: '@dshtrading/client-ui-updater'
 
-    # 会话归纳管理（2026-09-06，npm 复用 dsh-web 项目同款插件）：单行同时挂
-    # host 半（会话集中清单/批量归档恢复/家族级联物理删除/自动归档与清理
-    # 策略调度器/dsh-session-archive HTTP 路由）与浏览器半（web 宿主
-    # dsh.client 模块扫描进插件名册，由本包 lib/client.js 提供）。市场无关
-    # 共享行，归 base 所有（铁律 #1）。自动归档/自动清理默认均关
-    # （DEFAULT_AUTO_CONFIG，需用户在设置面板显式开启），insert 不改变
-    # 交易会话数据安全面。包名解析依赖本包 dependencies 里的
-    # @linxin666/dsh-session-archive（进 profile 安装闭包，S3 坑 3 同款）。
-    # 行安全（issue #88）：host 半硬 inject webServer + workspaceRegistry，
-    # headless 宿主缺服务即永久 pending → 启动即崩；按提供方行条件禁用
-    # （见文件头「条件禁用行」）。
-    - id: dsh-trading-session-archive
-      name: '@linxin666/dsh-session-archive'
-      disabled: !!js (![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-host-webserver') || ![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-workspace'))
+    # 会话归纳 / 使用统计（@linxin666/dsh-session-archive、@linxin666/dsh-usage）
+    # 2026-09-23 随 0.1.7 cohort 移除：二者客户端半硬注入已删的 ctx.settingsScope
+    # （0.1.7 改为 configForms），在 0.1.7 下永久 pending、UI 静默消失；官方 0.1.7
+    # 已原生提供会话归档/置顶管理与「性能与用量」设置。详见
+    # .agents/notes/implemented/feature/2026-09-08-npm-embed-usage-plugin-manager-model-capabilities.md。
 
     # IM 机器人接入（2026-09-06，npm 复用社区插件 @xmanrui/dsh-im）：飞书/微信/
     # 钉钉/企业微信/QQ/Slack/Telegram/Discord/WhatsApp 九渠道机器人接入，
@@ -219,24 +210,6 @@
       name: '@xmanrui/dsh-im'
       disabled: !!js (![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-client-connection'))
 
-    # 使用统计（2026-09-08，npm 复用 dsh-web 项目同款插件 @linxin666/dsh-usage）：
-    # 单行双半：host 半（会话事件流折叠成 token 账本落 $DSH_HOME/dsh-usage/
-    # usage-ledger.json + 各 provider 余额/套餐配额轮询探针 + /api/dsh-usage 路由）
-    # + 浏览器半（设置一级菜单「使用统计」，section order 151）。凭据经宿主凭据缝
-    # （llm-pi-ai 记录 / apiKeyEnv 引用）解析，密钥不出宿主进程。
-    # 适配点：本产品不含 dsh-pet（宠物），宠物气泡默认 off（插件设置面板可随时
-    # 改回 always/change，属用户可见项）；账本随 DSH_HOME=~/.dsh-trading 隔离，
-    # 不污染宿主 ~/.dsh。市场无关共享行，归 base 所有（铁律 #1）。
-    # 包名解析依赖本包 dependencies 里的 @linxin666/dsh-usage（进 profile 安装
-    # 闭包，S3 坑 3 同款）。版本由 base 的 package.json 与工作区 lockfile
-    # 统一管理，升级后需刷新用户 profile。
-    # 行安全（issue #88）：host 半硬 inject webServer，headless 宿主缺服务即
-    # 永久 pending → 启动即崩；按提供方行条件禁用（见文件头「条件禁用行」）。
-    - id: dsh-trading-usage
-      name: '@linxin666/dsh-usage'
-      disabled: !!js (![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-host-webserver'))
-      config:
-        bubbleMode: 'off'
 
     # 插件管理（2026-09-08，npm 复用 dsh-web 项目同款插件
     # @linxin666/dsh-client-ui-plugin-manager）：官方「插件」设置区的

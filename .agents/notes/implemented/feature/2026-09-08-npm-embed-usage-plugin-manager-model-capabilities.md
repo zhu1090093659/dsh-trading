@@ -83,3 +83,21 @@ dsh-web 源码 `lib/` 逐字节一致（npm pack 后 diff 全等，供应链核�
   22:54 的首次验证启动均正常，此后复现稳定，与本变更无因果。定位手段：
   `kill -USR1 <pid>` 开 inspector 后 `Debugger.evaluateOnCallFrame` 列出
   `fiber.inertia` 非空条目 = `@dshtrading/base/presets`。
+
+## 0.1.7 cohort 修正（2026-09-23）：usage 移除、plugin-manager / model-capabilities 保留
+
+0.1.7 把客户端设置面从 `ctx.settingsScope` 换成 `configForms`：
+
+- `@linxin666/dsh-usage`（含最新 0.3.24）客户端半仍硬注入 `ctx.settingsScope`，在
+  0.1.7 下永久 pending、使用统计 UI 静默消失；其 provider 余额/套餐探针在官方
+  0.1.7-alpha.1 新增的「性能与用量」设置里没有等价实现。owner 2026-09-23 裁决：
+  移除该插件，接受这两项上游附加能力（余额/套餐探针、`$DSH_HOME/dsh-usage/`
+  账本文件）的损失，不 fork。base dependencies、cordis.patch.yml 的
+  `dsh-trading-usage` 行、workspace exclude 条目同步删除。
+- `@linxin666/dsh-client-ui-plugin-manager` 与
+  `@linxin666/dsh-client-ui-model-capabilities` 复核无 `settingsScope`/
+  `SessionListState` 等已删面引用，保留。plugin-manager 与官方 0.1.6 原生「插件」
+  管理页功能重叠，但本插件多出安装冲突回滚与「让 agent 修」修复会话，暂作
+  recorded exception 保留；model-capabilities 的按模型图片/推理档位声明无官方
+  等价面，保留。
+- `@xmanrui/dsh-im` 仅用 deprecated 但 0.1.7 仍在的 `snapshotEvents`，保留观察。
