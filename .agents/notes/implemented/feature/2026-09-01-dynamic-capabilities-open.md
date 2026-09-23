@@ -27,3 +27,13 @@ owner 2026-08-31 裁决（D5）：宿主内置的 `@deepseek-ai/dsh-tool-cordis`
 - 安全模型成立：liveTrading=false（缺省）时动态包直调 TradeService 被服务缝拒绝（P0 单测覆盖）；liveTrading=true 时绕过审批的残余风险按设计文档 §5.4 接受（用户显式授权声明 + 信任级声明 + skill 纪律约束）。
 - 验收场景「动态包定义+激活 → 结果回话 → 重启即散」需实机会话验证——与 P1-P4 同受宿主 checkout 迁移环境阻塞（见 2026-09-01-sse-invalidation-signal.md），离线侧验证：base patch yml 结构有效（id 唯一）、dsh-tool-cordis 模块可从 base 解析加载、pnpm build 全绿、pnpm test 616 通过。
 - 提交后 dynamic-capabilities 进入宿主技能目录（sync-skills 已验证分发）。
+
+## 0.1.7 cohort 更新（2026-09-23）
+
+官方在 0.1.6-alpha.2 移除了 `cordis_define`/`cordis_run`/`cordis_stop`/`cordis_undefine`
+（`@deepseek-ai/dsh-tool-cordis` 只剩只读巡检 `cordis_inspect_*`，由官方 `cordis`
+preset 原生挂载）。base 的 `dsh-trading-dynamic-capabilities` 工具行删除（重复实现）。
+skill 改写为官方通路薄扩展：一次性跨标的聚合 = master 预设 bash 行跑即弃脚本；
+可复用助手 = 官方 `cordis-plugin-development` 流程 + Plugin Manager 持久化插件（跨会话
+存活，强于旧 session-scoped）。安全边界原样保留：禁绕下单闸门（服务缝 P0 兜底不变）、
+优先手写工具、bash 信任级纪律。原「浏览器半人工审批」边界随浏览器半删除自然消失。

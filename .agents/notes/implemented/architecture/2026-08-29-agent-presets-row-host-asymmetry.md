@@ -30,3 +30,13 @@ patch 合并语义（vendor/include/src/index.ts applyEntryPatches:77-125 源码
 
 - trading-web（web 宿主）组合树只剩一行、loader 通过；trading-dev（headless）经 profile 层 insert 后回归全绿。
 - 复制手册坑表新增「重复行 id」「agent-presets 行位置」两条，废除 S3 时代「第三方 bundle 自己 insert」的旧建议。
+
+## 0.1.7 cohort 更新（2026-09-23）
+
+`@deepseek-ai/dsh-agent-presets` 停发，磁盘 roots 机制随包消失；宿主 web-app 层的
+对应行改为 `id: agent-preset-registry` / `name: '@deepseek-ai/dsh-agent-preset-registry'`
+（config 只剩 `default`）。base 的覆盖行随之改为同 id 覆盖 `agent-preset-registry`
+（`default: master` 语义不变）；不对称写法原则原样适用——headless 部署方仍在 profile
+级 insert 同一行。角色组合本体不再经该行配置 roots，改由 `@dshtrading/base/presets`
+安装器经 `ctx.agentPresets.register()` 运行时注册（见
+[2026-09-06-unified-trading-role-presets](2026-09-06-unified-trading-role-presets.md)）。
