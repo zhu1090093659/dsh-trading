@@ -16,7 +16,15 @@
  * 行情数据走 node 半注册的 /dshtrading/api 桥（同源 fetch，浏览器认证栅栏内）。
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+// 类型锚点（type-only，无运行时 import）：加载 locale 与 renderer 的 cordis
+// Context 增补（ctx.locale / ctx.slots 服务面）。缺锚点时这两个服务在 client
+// tsconfig 下解析不到，形成历史 tsc 债务。
+import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { ISessions, SessionTarget } from '@deepseek-ai/dsh-api-session-controller/client'
+// 仅加载 conversation 的 SlotMap 增补（conversation.input.left 等），type-only
+// 不产生运行时 import，client purity gate 不受影响。
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { IndicatorRegistry } from '@dshtrading/indicators'
 import type { Instrument, MarketId } from './types.ts'
 import { validateCustomIndicatorAsync } from '@dshtrading/indicators'
@@ -25,7 +33,8 @@ import { createChartStateStore } from './chart-state.ts'
 import { indicators, markCustomIndicator, unmarkCustomIndicator } from './indicator-registry.ts'
 import { stageViews } from './stage-views.ts'
 import { createTradingBridgeService } from './api.ts'
-import { fillComposerWithQuote, guardComposerTarget, type FillComposerFn, type ConversationDraftFace } from './fill-composer.ts'
+import { fillComposerWithQuote, guardComposerTarget, type FillComposerFn, type FillComposerTarget, type ConversationDraftFace } from './fill-composer.ts'
+import { createSessionTargetHolder, SessionTargetProbe } from './session-target.ts'
 import { OrderCard, WatchlistChipCard } from './toolview.tsx'
 import { MarketDock } from './MarketDock.tsx'
 import { QuotePane } from './QuotePane.tsx'
@@ -76,6 +85,12 @@ export function apply(ctx: ClientContext): void {
   const chart = createChartStateStore(indicators)
   const sessions = ctx.sessions as unknown as ISessions
 
+  // 0.1.7 活动会话读面桥：session 作用域 slot 的 inject 工厂会收到框架解析的
+  // sessionId，采集件把它投影进本地 holder（见 session-target.ts）。
+  const sessionTarget = createSessionTargetHolder()
+  const resolveTarget = (): FillComposerTarget | undefined =>
+    sessionTarget.current !== undefined ? { sessionId: sessionTarget.current } : undefined
+
   // 共享入口动作：右缘竖条（2.9 起唯一会话入口）使用。
   // uiWorkspace 必须在点击时惰性解析：官方 dsh.client.inject 边只是加载/预取
   // 元数据、「never apply sequencing」（ui-workspace 同款注释）——服务由
@@ -87,16 +102,21 @@ export function apply(ctx: ClientContext): void {
   }
 
   // 行情 → 会话输入框（「发给 Agent」按钮）：只把上下文 + 截图**填入 composer
-  // 不提交**（owner 裁决：用户还要补自己的 prompt）。conversation 根服务在点击
-  // 时惰性解析（同 uiWorkspace 纪律：apply 时序不保证）；编排细节见 fill-composer.ts。
-  const fillComposer: FillComposerFn = (text, image) => {
+  // 不提交**（owner 裁决：用户还要补自己的 prompt）。目标会话 = 显式传入或当前
+  // 活动会话（0.1.7 经官方 slot 契约投影，见 session-target.ts）；无目标即显式报错，
+  // 不猜会话。conversation 根服务在点击时惰性解析（同 uiWorkspace 纪律：apply
+  // 时序不保证）；编排细节见 fill-composer.ts。
+  const rawFill: FillComposerFn = (text, image, target) => {
     // exactOptionalPropertyTypes：conversation 缺席时必须整个键缺位，不能显式 undefined。
     const conversation = ctx.get('conversation', false) as ConversationDraftFace | undefined
     return fillComposerWithQuote({
       ...(conversation !== undefined ? { conversation } : {}),
-    }, text, image)
+    }, text, image, target)
   }
-  fillComposer.captureTarget = target => guardComposerTarget(fillComposer).captureTarget?.(target) ?? fillComposer
+  const fillComposer: FillComposerFn = (text, image, target) => rawFill(text, image, target ?? resolveTarget())
+  // 采集期间固定目标：captureTarget 在异步采集开始前解析一次（无会话时固定为
+  // undefined，填入阶段显式报错），杜绝采集中切会话写错 composer。
+  fillComposer.captureTarget = target => guardComposerTarget(rawFill).captureTarget?.(target ?? resolveTarget()) ?? fillComposer
   const openSettings = (): void => {
     // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
     // 侧栏里唯一的 [aria-haspopup=dialog]，程序化 click 走官方打开逻辑，
@@ -354,5 +374,16 @@ export function apply(ctx: ClientContext): void {
       },
       fillComposer,
     }),
-  }, QuotePane))}
+  }, QuotePane))
+
+  // 活动会话采集（0.1.7）：conversation.input.left 是官方 session 作用域 list 槽，
+  // 其 inject 工厂收到框架解析的 sessionId（renderer 的 runInject 把 scope binding
+  // 的 key 作为首参，按 entry × binding 记忆化）。采集件零渲染，只把活动会话 id
+  // 投影进 sessionTarget，供「发给 Agent」定位目标；无会话时卸载清回 undefined。
+  ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
+    name: 'conversation.input.left',
+    id: 'dshtrading-session-target',
+    order: -100,
+    inject: (sessionId: string) => ({ sessionId, holder: sessionTarget }),
+  }, SessionTargetProbe))}
 

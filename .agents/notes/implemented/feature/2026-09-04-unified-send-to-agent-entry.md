@@ -61,3 +61,28 @@ Status: implemented
 - 资金面菜单项依赖衍生品快照在位（30s 轮询首帧前不可用）；现货/非 crypto 市场永不出现。
 - 旧入口记录指向：[2026-09-02 自选合并视图 +「发给 Agent」](../2026-09-02-watchlist-agent-visibility-and-send-to-agent.md)（工具栏按钮位置决策由本记录取代）、
   [2026-09-03 issue #54 衍生品页签](2026-09-03-issue-54-derivatives-stage.md)（「分析资金面」按钮由本记录收敛）。
+
+## 0.1.7 cohort 迁移（2026-09-23）：会话寻址收口 + 活动会话读面桥
+
+0.1.7 官方把客户端 Session 多实例共存（0.1.6-alpha.2 起）落到插件服务面：
+`SessionListState.current` 删除，`ISessions.open`/`list.current` 收口，selection
+内化进 `UiWorkspaceService`（`selection` 私有）。因此「填入哪个 composer」不能再读
+「当前会话」，改由调用方显式给目标，缺省目标经官方 slot 契约投影：
+
+- `FillComposerFn` 增加可选 `target?: FillComposerTarget`（`{ sessionId }`）；
+  `fillComposerWithQuote` 无目标时显式抛错，绝不猜会话（猜错会把行情写进错误
+  composer）。
+- 活动会话读面桥 `session-target.ts`：挂一个零渲染的官方 `conversation.input.left`
+  （session 作用域 list 槽）条目，其 `inject` 工厂收到框架解析的 `sessionId`
+  （dsh-client-ui-renderer 的 `runInject` 把 scope binding 的 key 作为首参，按
+  entry × binding 记忆化），采集件把 id 投影进插件本地 holder；卸载清回 undefined。
+  这是官方 slot 契约上的薄扩展层，不复制官方选择状态。
+- `captureTarget()`（异步采集开始前固定目标）改为解析并固定活动会话：采集中切
+  会话不会写错目标；采集开始无会话则填入阶段显式报错。
+- 上一版（0.1.7 迁移首提交）的「QuoteStage 发给 Agent 暂时显式报错」降级由本桥
+  恢复；恢复后的目标语义与升级前一致（填当前显示的会话 composer，只填不发）。
+- 验证：`session-target.test.tsx` 3 例覆盖挂载写入/切换跟随/卸载清空；
+  client-ui-trading 全量单测通过。**真机 GUI 待验**：本机已安装桌面壳仍跑旧
+  cohort（0.1.5-rc.1）runtime，与 0.1.7 客户端包混代会模块割裂，待桌面壳重发布
+  （见 [2026-08-29-trading-web-profile.md](../process/2026-08-29-trading-web-profile.md)）
+  后按本文「真机端到端验收」口径复核一次「发给 Agent」填入链路。
