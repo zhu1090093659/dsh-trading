@@ -147,7 +147,18 @@ deprecate，且造成 npm 与 Release 面断层）。
   渲染（通用：涨跌配色 + 金十 MCP Token；市场数据源：六市场 tab + provider 凭证卡）
   ——client-ui-settings 的 configForms 迁移与 locale 合并经真机 GUI 证实；boot 日志
   无 slot/模块错误；移除的 session-archive / usage 不再出现，原生「性能与用量」在位。
-- **仍待办的 rollout**：① 桌面壳重发布（本机内嵌 runtime 仍 0.1.5-rc.1）；② persistent
-  `trading-web` profile 需在停掉运行实例后 refresh 到 0.1.7；③ `trading-all` 仍停在
-  0.1.2-rc.1，需单独升级；④「发给 Agent」真实填入链路的会话级 GUI 验收（单元测试已
-  覆盖 holder 与目标解析，按钮已渲染）。
+- Rollout 完成（2026-09-23，本地构建/安装，未推 tag、未 npm publish、未创建 Release）：
+  ① 桌面壳本地重建重装：`desktop` 的 `npm run prepare-runtime`（host 闭包 census 全
+     `@deepseek-ai/dsh@0.1.7-alpha.2`）+ `npm run dist:mac` → `ditto` 替换
+     `/Applications/DSH Trading.app`（先 bootout 两个 launchd game job + 退出 GUI）；
+     装机后 app 内嵌 runtime 实测 0.1.7-alpha.2。
+  ② `trading-web` profile 刷新：exclude 块换 0.1.7 cohort、`rm -rf @dshtrading/*` 后
+     `dsh plugin --profile trading-web install`、核心包归一到新 app runtime；preflight OK、
+     cohort 无 FAIL；两个 launchd 游戏宿主在 :8888/:8889 以 0.1.7 app runtime 复活，
+     未认证 API 401。
+  ③ `trading-all` 与 `trading-dev`（headless）升级到 0.1.7：patch 的 agent-presets insert
+     改为 agent-preset-registry，`rm @dshtrading + install + 归一` 后 `failed to import = 0`
+     （trading-all 修复前 8 个、trading-dev 修复前 typert/pending/1 个）。
+  ④ 「发给 Agent」端到端填入在真实桌面宿主（0.1.7 + 刷新后的 profile）上用无头 Chrome
+     复核：选中 AAPL → 点击 → composer 出现行情快照 + 图表截图，按钮态「已填入输入框」，
+     控制台零异常。
