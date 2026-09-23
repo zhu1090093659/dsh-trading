@@ -8,28 +8,30 @@
 #      对 <market>_(place|cancel)_order 且 dryRun!==true 的工具调用返回 ask 交宿主
 #      审批面；headless 无应答者时宿主降级为 deny（fail-closed 特性）。
 #      该 id 全仓唯一，insert 在任何宿主都安全。
-#   2. 同 id 覆盖行：agent-presets —— 统一 preset root 配置（S3 机制）。
-#      **为什么不能 insert**：web 宿主的 web-app 层已有 agent-presets 行，insert 无 id
-#      条目一律 append 新行，loader.update 对重复 id 直接抛
-#      「duplicate loader entry id」——web profile 会启动崩溃（trading-web 实测）。
-#      覆盖条目语义：行存在 → 按 key 覆盖（config 全键 restate，不合并——所以 default/
-#      includeShippedRoot/includeUserRoot 必须全带）；行不存在（headless）→ 仅 Loader
-#      警告并跳过，不致命。headless 部署需要该 root 时，由部署方在 profile 级
-#      cordis.patch.yml 自行 insert 同一行（见 README 开发期安装节；trading-dev 即如此）。
-#      roots 用市场自有目录 ~/.dsh-trading-presets（bundle 安装器自安装目的地，
-#      不混入 ~/.dsh/.agent-presets 用户创作区）；default=master（owner 2026-09-06
-#      裁决：角色整合完成后，新会话默认进「大师」团队主导者，取代 S3 期
-#      default=standard 的过渡口径，见 .agents/notes/implemented/architecture/
+#   2. 同 id 覆盖行：agent-preset-registry —— 部署默认预设 default=master（0.1.7
+#      cohort：preset 平面改为 registry 行声明 + 运行时注册，磁盘 roots 机制已随
+#      @deepseek-ai/dsh-agent-presets 停发而消失；角色组合改由 @dshtrading/base/presets
+#      安装器经 ctx.agentPresets.register() 动态注册）。
+#      **为什么不能 insert**：web 宿主的 web-app 层已有 agent-preset-registry 行，insert
+#      无 id 条目一律 append 新行，loader.update 对重复 id 直接抛
+#      「duplicate loader entry id」——web profile 会启动崩溃（0.1.5 世代 agent-presets
+#      行同款实测）。覆盖条目语义：行存在 → 按 key 覆盖（config 全键 restate）；行不
+#      存在（headless）→ 仅 Loader 警告并跳过，不致命。headless 部署需要 registry 时，
+#      由部署方在 profile 级 cordis.patch.yml 自行 insert 同一行（见 README 开发期安装
+#      节；trading-dev 即如此）。default=master（owner 2026-09-06 裁决：角色整合完成后，
+#      新会话默认进「大师」团队主导者，见 .agents/notes/implemented/architecture/
 #      2026-09-06-unified-trading-role-presets.md；用户层 settings 仍可覆盖）。
 #      包名解析依赖本包 dependencies 里的
-#      @deepseek-ai/dsh-agent-presets（进 profile 安装闭包，S3 坑 3）。
+#      @deepseek-ai/dsh-agent-preset-registry（进 profile 安装闭包，S3 坑 3）。
 #
 #   3. 条件禁用行（issue #88）：host 半硬 inject web 宿主服务（webServer /
 #      workspaceRegistry / connection）的 npm 插件行，用 `disabled: !!js (...)`
 #      按「宿主树里是否存在对应服务提供方行」开关。headless 宿主（dsh-headless
 #      层，trading-dev / trading-all）没有这些服务，缺服务的行永久 pending，
 #      assertEntriesActivated 直接终止启动（2026-09-08 实测 4 行，issue #88）。
-#      先例：dsh-trading-dynamic-capabilities（issue #62，按 cordis-host-runner 行判定）。
+#      先例：dsh-trading-dynamic-capabilities（issue #62，按 cordis-host-runner 行判定；
+#      0.1.7 cohort 起该行随 cordis_define/cordis_run 移除而删除，条件禁用写法仍适用
+#      于本文件其余 host 半行）。
 #
 # 脚手架阶段遗留的 insert-only 约定不变：后续共享行（组合管理/风控工具行、
 # credentials 引用约定行 [S4]）继续追加到本文件的 insert 列表。
@@ -79,20 +81,6 @@
     # 注册；写后 emit tradingEvents('indicators'|'chart')。
     - id: dsh-trading-indicators
       name: '@dshtrading/indicators/plugin'
-
-    # dsh-tool-cordis 动态包能力开放（issue #35 / P6，owner 裁决 D5，硬前置 P0 服务缝
-    # 闸门已落地）：cordis_inspect_* / cordis_define / cordis_run / cordis_stop /
-    # cordis_undefine 7 工具进 trading profile。信任级 = bash（官方声明）；动态包
-    # session-scoped、重启即散、浏览器半需人工审批；服务缝闸门兜底实盘边界。
-    # 行安全（issue #62）：tool-cordis 硬 inject dynamicCordisRunner/cordisInspect，
-    # 唯一提供方是 dsh-web-app 层的 cordis-host-runner 行；裸 dsh-base 自定义
-    # profile（quick start 补 web-app 层前的中间态）与 dsh-headless 无头 profile
-    # 缺该行，工具挂不上服务即永久 pending，宿主 assertEntriesActivated 启动即崩。
-    # 故条件禁用：宿主树存在 cordis-host-runner 行（web/desktop profile）才启用，
-    # 其余宿主降级为无动态包工具（fail-soft，与其余 client 行 headless 无害同款）。
-    - id: dsh-trading-dynamic-capabilities
-      name: '@deepseek-ai/dsh-tool-cordis'
-      disabled: !!js (!([...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-cordis-host-runner')))
 
     # 知识能力收口（issue #33 / P4）：provide tradingKnowledgeCards 单实例 store 服务，
     # knowledge_ingest/search/graph host 平面注册；写后 emit tradingEvents('knowledge')。
@@ -285,12 +273,7 @@
     - id: dsh-trading-model-capabilities
       name: '@linxin666/dsh-client-ui-model-capabilities'
 
-- id: agent-presets
-  name: '@deepseek-ai/dsh-agent-presets'
+- id: agent-preset-registry
+  name: '@deepseek-ai/dsh-agent-preset-registry'
   config:
     default: master
-    roots:
-      - path: ~/.dsh-trading-presets
-        trust: user
-    includeShippedRoot: true
-    includeUserRoot: true

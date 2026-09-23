@@ -10,8 +10,9 @@
  *      `dryRun !== true` 的调用返回 `{kind:'ask'}`，其余一律 `next()` 放行，
  *      绝不代替下游策略直接 allow。
  *   2. `cordis.patch.yml`（由 package.json 的 `dsh.bundle.patch` 声明）：
- *      insert-only 共享行 —— 本插件行 + `agent-presets` 行（headless 宿主没有
- *      该行，S3 证实必须由本层 insert；统一 preset root 归 base 所有，铁律 #1）。
+ *      insert-only 共享行 —— 本插件行 + `agent-preset-registry` 覆盖行
+ *      （0.1.7 cohort：registry 行接管部署默认预设 default=master；headless 宿主
+ *      没有该行，由部署方在 profile 层 insert，铁律 #1）。
  *
  * **fail-closed 是特性**：headless 部署没有审批应答者 —— dsh core 的
  * `serviceAsk`（core/tools/src/index.ts）在 approval 服务缺失、无 agent、

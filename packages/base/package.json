@@ -45,7 +45,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-tool-cordis": ">=0.1.5-rc.1",
+    "@deepseek-ai/dsh-agent-preset-registry": ">=0.1.7-alpha.2",
     "@dshtrading/api": "workspace:^",
     "@dshtrading/client-ui-indicators": "workspace:^",
     "@dshtrading/client-ui-knowledge": "workspace:^",
@@ -69,7 +69,7 @@
     "@linxin666/dsh-session-archive": "^0.3.21",
     "@linxin666/dsh-usage": "^0.3.21",
     "@xmanrui/dsh-im": "^4.20.2",
-    "@deepseek-ai/dsh-agent-preset-registry": ">=0.1.7-alpha.2"
+    "yaml": "^2.9.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

@@ -1,31 +1,213 @@
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { composePresets, connectorRowsOf, installFromLoader, installPresets, isUnmodifiedManaged, MARKETS, stamp, Config } from '../src/presets.js'
+import { expect, it } from 'vitest'
+import { entryListProblem } from '@deepseek-ai/dsh-agent-preset-registry'
+import type { PresetDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
+import { composePresets, installFromLoader, marketRowsOf, MARKETS, Config } from '../src/presets.js'
+import type { MarketContribution } from '../src/presets.js'
 import { getPresetContribution as crypto } from '../../crypto/src/index.js'
 import { getPresetContribution as us } from '../../us/src/index.js'
 import { getPresetContribution as cn } from '../../cn/src/index.js'
 import { getPresetContribution as hk } from '../../hk/src/index.js'
 
-const dirs: string[] = []
-async function root() { const dir = await mkdtemp(join(tmpdir(), 'trading-roles-')); dirs.push(dir); return join(dir, 'presets') }
-afterEach(async () => { await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true }))) })
 const contributions = () => Promise.all([crypto(), us(), cn(), hk()])
 
 it('accepts empty config', () => {
   expect(Config({})).toEqual({})
 })
 
-it('boots through the real loader with asynchronous preset installation', async () => {
-  const presetRoot = await root()
+/** Registry contract fake: records definitions, hands back working disposers. */
+function fakeRegistry() {
+  const definitions: PresetDefinition[] = []
+  const disposed: string[] = []
+  const registry = {
+    async register(definition: PresetDefinition) {
+      definitions.push(definition)
+      return async () => { disposed.push(definition.id) }
+    },
+  }
+  return { registry, definitions, disposed }
+}
+
+it('composes all 16 installed-market subsets deterministically as registry definitions', async () => {
+  const all = await contributions()
+  for (let mask = 0; mask < 16; mask++) {
+    const subset = all.filter((_, i) => mask & (1 << i))
+    const result = composePresets(subset)
+    expect(result.map(p => p.id)).toEqual(['trader', 'instrument-researcher', 'risk-reviewer', 'master'])
+    expect(composePresets([...subset].reverse())).toEqual(result)
+    for (const preset of result) {
+      // Every definition must satisfy the host registry's row validation.
+      expect(entryListProblem(preset.plugins, preset.id), preset.id).toBeUndefined()
+      const ids = preset.plugins.map(row => row.id)
+      expect(new Set(ids).size).toBe(ids.length)
+      // Roster display fields ride the definition, not a preset.yml file.
+      expect(typeof preset.order).toBe('number')
+      expect(preset.name).toBeTruthy()
+      const persona = preset.plugins.find(row => row.id === 'persona')!
+      expect(persona.name).toBe('@deepseek-ai/dsh-persona')
+      const prefix = (persona.config!.prefix as string)
+      for (const text of [
+        'knowledge_search', '*_get_fundamentals', 'cn_get_news / hk_get_news include announcements',
+        'Never predict', 'Never cite sell-side ratings or target prices',
+        'Evidence contract', 'source grade, verdict, anchor',
+        'supported | contradicted | mixed | insufficient',
+        'one C/D/E source may never alone support a conclusion', 'scarcity',
+        'Always reply in the language the user writes in',
+      ]) expect(prefix).toContain(text)
+      expect(prefix).toContain(`Installed markets: ${subset.map(c => c.market).join(', ') || 'none'}`)
+      // Workspace instructions: the Web surface disables the host-plane row, so the
+      // preset must mount it or the role sees no AGENTS.md at all (2026-09-08).
+      expect(preset.plugins).toContainEqual({
+        id: 'dsh-trading-agent-instructions',
+        name: '@deepseek-ai/dsh-agent-instructions',
+        config: { maxBytes: 65536 },
+      })
+      const kitIds = preset.plugins.filter(row => row.id.startsWith('dsh-trading-') && row.id.endsWith('-kit'))
+      for (const market of MARKETS) {
+        const mounted = kitIds.some(row => row.id === `dsh-trading-${market}-kit`)
+        expect(mounted, `${preset.id}/${market}`).toBe(subset.some(c => c.market === market))
+      }
+      expect(preset.plugins.some(row => row.name === '@dshtrading/knowledge/plugin')).toBe(false) // shared host registration stays single
+      const connectorNames = preset.plugins.map(row => row.name).filter(name => name.startsWith('@dshtrading/connector-'))
+      if (preset.id === 'instrument-researcher' || preset.id === 'risk-reviewer') {
+        expect(connectorNames).toEqual([])
+        const research = preset.plugins.find(row => row.id === 'dsh-trading-research-market-data')
+        expect(Boolean(research)).toBe(subset.length > 0)
+        if (research) expect(research.config).toEqual({ markets: subset.map(c => c.market) })
+      } else {
+        for (const contribution of subset) {
+          // Market contributions stay text; both connector-holding roles embed their rows.
+          expect(contribution.traderRows).toMatch(/^.*connector(?:-group)?\n  name: cordis:group\n  group: true\n  isolate:/)
+          expect(contribution.traderRows).not.toContain('liveTrading: true')
+          const { connectors } = marketRowsOfHelper(contribution)
+          for (const row of connectors) expect(preset.plugins).toContainEqual(row)
+          if (preset.id === 'trader') {
+            // kit row is split out of the market block and rewritten with the trader whitelist (#70)
+            const kit = preset.plugins.find(row => row.id === `dsh-trading-${contribution.market}-kit`)!
+            expect(kit.config).toEqual({
+              dryRun: true,
+              liveTrading: false,
+              skills: [`${contribution.market}-risk-checklist`, 'trading-strategy-paradigms', 'indicator-authoring', 'trading-notes-setup'],
+            })
+          }
+        }
+        expect(preset.plugins.find(row => row.id === 'dsh-trading-research-market-data')).toBeUndefined() // connector tools already registered
+      }
+      if (preset.id === 'master') {
+        for (const tool of ['researcher_subagent', 'trader_subagent', 'risk_reviewer_subagent']) {
+          const delegate = preset.plugins.find(row => row.config && (row.config as Record<string, unknown>).toolName === tool)
+          expect(delegate, tool).toBeTruthy()
+          expect(delegate!.name).toBe('@deepseek-ai/dsh-tool-subagent')
+          expect((delegate!.config as Record<string, unknown>).provider).toBe('fork')
+          expect((delegate!.config as Record<string, unknown>).backgroundMode).toBe('one-shot')
+        }
+        expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-jobs')).toBeTruthy() // background one-shot delegates need a job controller
+        const personas = preset.plugins.map(row => (row.config as Record<string, unknown> | undefined)?.persona).filter(Boolean) as string[]
+        expect(personas).toHaveLength(3)
+        for (const persona of personas) {
+          expect(persona).toContain('one-shot delegate')
+          expect(persona).toContain('Evidence contract')
+        }
+        expect(preset.plugins.map(row => row.name).filter(name => name === '@deepseek-ai/dsh-tool-subagent')).toHaveLength(3)
+        // Master orchestration: capital ledger first, then knowledge, skills and delegation.
+        expect(prefix).toContain('holdings_list')
+        expect(prefix).toContain('holdings_stage')
+        expect(prefix).toContain('dynamic-capabilities')
+        expect(prefix).toContain('strategy_backtest')
+        expect(prefix).toContain('knowledge-curation')
+        // Skill surface + shell: the master drives session skills (content-insight
+        // pipelines) and therefore carries the bash row; specialists do not.
+        expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-bash')).toBeTruthy()
+      } else {
+        expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-subagent')).toBeUndefined()
+        expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-jobs')).toBeUndefined() // no delegation, no background jobs
+        expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-bash')).toBeUndefined() // shell is master-only
+      }
+      // Every role gets the skill catalog and loader (host web rows are disabled;
+      // without these the persona's skill names are dead references — 2026-09-07).
+      expect(preset.plugins).toContainEqual({ id: 'dsh-trading-skill-filesystem', name: '@deepseek-ai/dsh-skill-filesystem' })
+      expect(preset.plugins).toContainEqual({ id: 'dsh-trading-tool-skill', name: '@deepseek-ai/dsh-tool-skill' })
+      // Role skill distribution (#70): the mounted base-skill row follows the persona discipline.
+      const roleSkills = preset.plugins.find(row => row.id === 'dsh-trading-role-skills')
+      if (preset.id === 'master') {
+        expect(roleSkills).toEqual({ id: 'dsh-trading-role-skills', name: '@dshtrading/base/role-skills' }) // full pair, no whitelist
+      } else if (preset.id === 'trader') {
+        expect(roleSkills).toBeUndefined() // no base skills for the execution role
+      } else if (preset.id === 'instrument-researcher') {
+        expect(roleSkills!.config).toEqual({ skills: ['company-analysis'] })
+      }
+      for (const kit of kitIds) {
+        const market = kit.id.replace('dsh-trading-', '').replace('-kit', '')
+        if (preset.id === 'instrument-researcher') {
+          expect(kit.config!.skills).toEqual(market === 'crypto'
+            ? ['crypto-instrument-analysis', 'knowledge-curation', 'trading-notes-setup']
+            : ['knowledge-curation', 'trading-notes-setup'])
+        } else if (preset.id === 'risk-reviewer') {
+          expect(kit.config!.skills).toEqual([`${market}-risk-checklist`, 'trading-notes-setup'])
+        } else if (preset.id === 'master') {
+          expect(kit.config!.skills).toBeUndefined() // master keeps the full kit catalog
+        }
+      }
+    }
+  }
+})
+
+function marketRowsOfHelper(contribution: MarketContribution) {
+  return marketRowsOf(contribution.market, contribution.traderRows)
+}
+
+it('the trader rebuilds every market kit row with its whitelist; specialists mount kit rows only', async () => {
+  const all = await contributions()
+  const presets = composePresets(all)
+  const master = presets.find(p => p.id === 'master')!
+  const trader = presets.find(p => p.id === 'trader')!
+  for (const contribution of all) {
+    const { kit } = marketRowsOfHelper(contribution)
+    // The verbatim market kit row (no skills key) only survives into the master preset.
+    expect(master.plugins).toContainEqual(kit)
+    const traderKit = trader.plugins.find(row => row.id === `dsh-trading-${contribution.market}-kit`)!
+    expect(traderKit.config!.skills).toEqual([`${contribution.market}-risk-checklist`, 'trading-strategy-paradigms', 'indicator-authoring', 'trading-notes-setup'])
+  }
+})
+
+it('installs through the enabled loader rows and registers one definition per role', async () => {
+  const all = await contributions()
+  const loader = {
+    entries: () => [
+      { disabled: false, options: { name: '@dshtrading/crypto' } },
+      { disabled: true, options: { name: '@dshtrading/us' } },
+      { disabled: false, options: { name: '@dshtrading/cn' } },
+      { disabled: false, options: { name: '@dshtrading/hk' } },
+      { disabled: false, options: { name: '@dshtrading/base' } }, // non-market rows are ignored
+    ],
+    import: async (name: string) => {
+      const map: Record<string, () => Promise<MarketContribution>> = {
+        '@dshtrading/crypto': crypto, '@dshtrading/us': us, '@dshtrading/cn': cn, '@dshtrading/hk': hk,
+      }
+      return { getPresetContribution: map[name] }
+    },
+  }
+  const { registry, definitions, disposed } = fakeRegistry()
+  const disposers = await installFromLoader(loader, registry)
+  expect(definitions.map(d => d.id)).toEqual(['trader', 'instrument-researcher', 'risk-reviewer', 'master'])
+  // Disabled market rows must not leak their contribution into any persona.
+  for (const definition of definitions) {
+    const persona = definition.plugins.find(row => row.id === 'persona')!
+    expect(persona.config!.prefix).toContain('Installed markets: crypto, cn, hk')
+    expect(persona.config!.prefix).not.toMatch(/Installed markets: [^\n]*\bus\b/)
+  }
+  expect(disposers).toHaveLength(4)
+  await Promise.all(disposers.map(dispose => dispose()))
+  expect(disposed.sort()).toEqual(['instrument-researcher', 'master', 'risk-reviewer', 'trader'])
+})
+
+it('boots through the real loader with asynchronous preset registration', async () => {
   const script = `
     import { createRequire } from 'node:module';
     import { pathToFileURL } from 'node:url';
-    import { readFile } from 'node:fs/promises';
     import { join } from 'node:path';
     import { Context } from '@deepseek-ai/cordis';
     import * as presets from ${JSON.stringify(new URL('../src/presets.ts', import.meta.url).href)};
@@ -35,6 +217,16 @@ it('boots through the real loader with asynchronous preset installation', async 
     const ctx = new Context();
     await ctx.plugin(Loader);
     const loader = ctx.get('loader');
+    const registered = [];
+    // Real cordis service plugin (contract fake): the presets row declares a hard
+    // inject on 'agentPresets', so the fake must be a plugin-provided service,
+    // not a plain property.
+    class FakeRegistry {
+      static inject = [];
+      constructor(serviceCtx) { serviceCtx.provide('agentPresets'); serviceCtx.agentPresets = this; }
+      async register(definition) { registered.push(definition.id); return async () => {}; }
+    }
+    await ctx.plugin(FakeRegistry);
     let applies = 0;
     const wrapped = {
       ...presets,
@@ -44,7 +236,7 @@ it('boots through the real loader with asynchronous preset installation', async 
       apply() {},
       async getPresetContribution() {
         // A concurrent loader notify (another row finishing init, a tree
-        // update) must not cancel the in-flight installation. The old
+        // update) must not cancel the in-flight registration. The old
         // inject.loader.await form counted the installer's own init task in
         // loader.getTasks(), so this notify flipped the loader service off and
         // restarted the fiber forever (issue #99). Keeping this probe makes
@@ -55,13 +247,12 @@ it('boots through the real loader with asynchronous preset installation', async 
     };
     loader.import = async name => name === '@dshtrading/base/presets' ? wrapped : market;
     await Promise.all([
-      loader.create({ id: 'presets', name: '@dshtrading/base/presets', config: { presetRoot: ${JSON.stringify(presetRoot)} } }),
+      loader.create({ id: 'presets', name: '@dshtrading/base/presets' }),
       loader.create({ id: 'crypto', name: '@dshtrading/crypto' }),
       loader.create({ id: 'us', name: '@dshtrading/us', disabled: true }),
     ]);
     await loader.await();
-    const text = await readFile(join(${JSON.stringify(presetRoot)}, 'trader', 'agent.cordis.yml'), 'utf8');
-    console.log(JSON.stringify({ crypto: text.includes('@dshtrading/kit-crypto'), us: text.includes('@dshtrading/kit-us'), applies }));
+    console.log(JSON.stringify({ registered, applies }));
     await ctx.fiber.dispose();
   `
   const tsx = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href
@@ -71,241 +262,22 @@ it('boots through the real loader with asynchronous preset installation', async 
   })
   expect(child.error, child.stderr).toBeUndefined()
   expect(child.status, child.stderr).toBe(0)
-  expect(JSON.parse(child.stdout.trim())).toEqual({ crypto: true, us: false, applies: 1 })
+  expect(JSON.parse(child.stdout.trim())).toEqual({
+    registered: ['trader', 'instrument-researcher', 'risk-reviewer', 'master'],
+    applies: 1,
+  })
 }, 10000)
 
-it('composes all 16 installed-market subsets deterministically, preserving connector realms for trader and master', async () => {
-  const all = await contributions()
-  for (let mask = 0; mask < 16; mask++) {
-    const subset = all.filter((_, i) => mask & (1 << i))
-    const result = composePresets(subset)
-    expect(result.map(p => p.id)).toEqual(['trader', 'instrument-researcher', 'risk-reviewer', 'master'])
-    expect(composePresets([...subset].reverse())).toEqual(result)
-    for (const preset of result) {
-      const text = preset.files['agent.cordis.yml']
-      expect((text.match(/^- id: persona$/gm) ?? [])).toHaveLength(1)
-      const ids = [...text.matchAll(/^\s*- id: (.+)$/gm)].map(m => m[1])
-      expect(new Set(ids).size).toBe(ids.length)
-      for (const market of MARKETS) {
-        expect(text.includes(`name: '@dshtrading/kit-${market}'`)).toBe(subset.some(c => c.market === market))
-      }
-      expect(text).toContain('knowledge_search')
-      expect(text).toContain('*_get_fundamentals')
-      expect(text).toContain('cn_get_news / hk_get_news include announcements')
-      expect(text).toContain('Never predict')
-      expect(text).toContain('Never cite sell-side ratings or target prices')
-      // 证据契约（2026-09-16）：全部角色与委派人设共享同一刻度——来源等级 + 四态判定 + 锚点。
-      expect(text).toContain('Evidence contract')
-      expect(text).toContain('source grade, verdict, anchor')
-      expect(text).toContain('supported | contradicted | mixed | insufficient')
-      expect(text).toContain('one C/D/E source may never alone support a conclusion')
-      expect(text).toContain('scarcity')
-      expect(text).toContain('Always reply in the language the user writes in')
-      // Workspace instructions: the Web surface disables the host-plane row, so the
-      // preset must mount it or the role sees no AGENTS.md at all (2026-09-08).
-      expect(text).toContain("- id: dsh-trading-agent-instructions\n  name: '@deepseek-ai/dsh-agent-instructions'\n  config:\n    maxBytes: 65536\n")
-      expect(text).not.toContain("name: '@dshtrading/knowledge/plugin'") // shared host registration stays single
-      if (preset.id === 'instrument-researcher' || preset.id === 'risk-reviewer') {
-        expect(text).not.toContain("name: '@dshtrading/connector-")
-        expect(text.includes("name: '@dshtrading/base/research-tools'")).toBe(subset.length > 0)
-      } else {
-        for (const contribution of subset) {
-          expect(contribution.traderRows).toMatch(/^.*connector(?:-group)?\n  name: cordis:group\n  group: true\n  isolate:/)
-          expect(contribution.traderRows).not.toContain('liveTrading: true')
-          if (preset.id === 'trader') {
-            // kit row is split out of the market block and rewritten with the trader whitelist (#70)
-            expect(text).toContain(connectorRowsOf(contribution.market, contribution.traderRows))
-            expect(text).toContain(`skills: ["${contribution.market}-risk-checklist","trading-strategy-paradigms","indicator-authoring","trading-notes-setup"]`)
-          } else {
-            expect(text).toContain(contribution.traderRows) // master keeps the market block verbatim (full kit catalog)
-          }
-        }
-        expect(text).not.toContain("name: '@dshtrading/base/research-tools'") // connector tools already registered
-      }
-      if (preset.id === 'master') {
-        expect(text).toContain('provider: fork\n    toolName: researcher_subagent')
-        expect(text).toContain('toolName: trader_subagent')
-        expect(text).toContain('toolName: risk_reviewer_subagent')
-        expect(text).toContain('backgroundMode: one-shot')
-        expect(text).toContain("name: '@deepseek-ai/dsh-tool-jobs'") // background one-shot delegates need a job controller in the owner's composition
-        expect(text).toContain('instrument research analyst')
-        expect(text).toContain('unified trader')
-        expect(text).toContain('independent risk reviewer')
-        expect((text.match(/@deepseek-ai\/dsh-tool-subagent/g) ?? [])).toHaveLength(3)
-        expect((text.match(/one-shot delegate/g) ?? [])).toHaveLength(3)
-        // Master orchestration: capital ledger first, then knowledge, skills and delegation.
-        expect(text).toContain('holdings_list')
-        expect(text).toContain('holdings_stage')
-        expect(text).toContain('trade-plan drafting to trader_subagent')
-        expect(text).toContain('hypotheses to verify with invalidation signals')
-        expect(text).toContain('dynamic-capabilities')
-        expect(text).toContain('strategy_backtest')
-        expect(text).toContain('knowledge-curation')
-        // Skill surface + shell: the master drives session skills (content-insight
-        // pipelines) and therefore carries the bash row; specialists do not.
-        expect(text).toContain("name: '@deepseek-ai/dsh-skill-filesystem'")
-        expect(text).toContain("name: '@deepseek-ai/dsh-tool-skill'")
-        expect(text).toContain("name: '@deepseek-ai/dsh-tool-bash'")
-      } else {
-        expect(text).not.toContain('@deepseek-ai/dsh-tool-subagent')
-        expect(text).not.toContain('@deepseek-ai/dsh-tool-jobs') // no delegation, no background jobs
-        expect(text).not.toContain("name: '@deepseek-ai/dsh-tool-bash'") // shell is master-only
-      }
-      // Every role gets the skill catalog and loader (host web rows are disabled;
-      // without these the persona's skill names are dead references — 2026-09-07).
-      expect(text).toContain("name: '@deepseek-ai/dsh-skill-filesystem'")
-      expect(text).toContain("name: '@deepseek-ai/dsh-tool-skill'")
-      // Role skill distribution (#70): the mounted base-skill row follows the persona discipline.
-      if (preset.id === 'master') {
-        expect(text).toContain("- id: dsh-trading-role-skills\n  name: '@dshtrading/base/role-skills'\n") // full pair, no whitelist
-        expect(text).not.toContain('config:\n    skills:')
-      } else if (preset.id === 'trader') {
-        expect(text).not.toContain('- id: dsh-trading-role-skills') // no base skills for the execution role
-      } else if (preset.id === 'instrument-researcher') {
-        expect(text).toContain('skills: ["company-analysis"]')
-        for (const contribution of subset) {
-          expect(text).toContain(contribution.market === 'crypto'
-            ? 'skills: ["crypto-instrument-analysis","knowledge-curation","trading-notes-setup"]'
-            : 'skills: ["knowledge-curation","trading-notes-setup"]')
-        }
-        expect(text).not.toContain('risk-checklist') // ordering discipline stays out of the research role
-      } else if (preset.id === 'risk-reviewer') {
-        for (const contribution of subset) {
-          expect(text).toContain(`skills: ["${contribution.market}-risk-checklist","trading-notes-setup"]`)
-        }
-        expect(text).not.toContain('trading-strategy-paradigms')
-        expect(text).not.toContain('indicator-authoring')
-      }
-    }
-  }
+it('the dynamic-capabilities skill routes to the 0.1.7 replacement paths', async () => {
+  // The skill catalog rows reference bundled assets. 0.1.7 removed the
+  // cordis_define/cordis_run tools, so the skill must not teach defining
+  // dynamic packages any more and must point at the official replacement
+  // paths: throwaway bash scripts (one-off) and the Plugin Manager (reusable).
+  const skill = await readFile(new URL('../assets/skills/dynamic-capabilities.md', import.meta.url), 'utf8')
+  expect(skill).toContain('已移除')
+  expect(skill).not.toContain('定义动态包')
+  expect(skill).not.toContain('cordis_undefine')
+  expect(skill).toContain('即弃脚本')
+  expect(skill).toContain('Plugin Manager')
 })
 
-it('installs four roles idempotently and removes stale market rows after uninstall', async () => {
-  const path = await root()
-  const all = await contributions()
-  expect((await installPresets(all, path)).every(r => r.wrote.length === 2)).toBe(true)
-  expect((await installPresets(all, path)).every(r => r.wrote.length === 0)).toBe(true)
-  await installPresets([all[0]], path)
-  const trader = await readFile(join(path, 'trader/agent.cordis.yml'), 'utf8')
-  expect(trader).toContain('@dshtrading/connector-binance')
-  expect(trader).not.toContain('@dshtrading/connector-yahoo')
-  expect(isUnmodifiedManaged(trader)).toBe(true)
-  expect((await readdir(path)).sort()).toEqual(['instrument-researcher', 'master', 'risk-reviewer', 'trader'])
-  const master = await readFile(join(path, 'master/preset.yml'), 'utf8')
-  expect(master).toContain('name: 大师')
-  expect(master).toContain('order: 90')
-})
-
-it.each(['no-stamp', 'modified-stamp'])('preserves %s customizations and leaves both role files untouched', async kind => {
-  const path = await root()
-  const all = await contributions()
-  await installPresets([all[0]], path)
-  const target = join(path, 'trader/agent.cordis.yml')
-  const before = await readFile(target, 'utf8')
-  const custom = kind === 'no-stamp' ? '# custom\n[]\n' : `${before}# retained stamp but edited\n`
-  await writeFile(target, custom)
-  const metaPath = join(path, 'trader/preset.yml')
-  const meta = await readFile(metaPath, 'utf8')
-  const results = await installPresets(all, path)
-  expect(results[0].skipped).toHaveLength(1)
-  expect(await readFile(target, 'utf8')).toBe(custom)
-  expect(await readFile(metaPath, 'utf8')).toBe(meta)
-})
-
-async function legacy(path: string, id: string, edited = false, extra = false) {
-  const dir = join(path, id)
-  await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, 'agent.cordis.yml'), stamp('[]\n') + (edited ? '# user edit\n' : ''))
-  await writeFile(join(dir, 'preset.yml'), stamp(`name: ${id}\n`))
-  if (extra) await writeFile(join(dir, 'my-notes.md'), 'mine')
-}
-it('archives only intact managed legacy defaults outside roster; preserves edits and extra user files', async () => {
-  const path = await root()
-  await legacy(path, 'crypto-trader')
-  await legacy(path, 'us-trader', true)
-  await legacy(path, 'cn-trader', false, true)
-  await installPresets(await contributions(), path)
-  expect(await readdir(path)).not.toContain('crypto-trader')
-  expect(await readFile(join(`${path}.legacy-backup`, 'crypto-trader/agent.cordis.yml'), 'utf8')).toBe(stamp('[]\n'))
-  expect(await readdir(path)).toEqual(expect.arrayContaining(['us-trader', 'cn-trader']))
-})
-it('operator retires a re-created legacy default whose identical copy is already archived', async () => {
-  // Given 名册根与归档根各有一份逐字节相同的受管旧默认
-  const path = await root()
-  await legacy(path, 'crypto-trader')
-  await legacy(`${path}.legacy-backup`, 'crypto-trader')
-  const archived = await readFile(join(`${path}.legacy-backup`, 'crypto-trader/agent.cordis.yml'), 'utf8')
-  // When 安装器再次执行
-  await installPresets([], path)
-  // Then 名册副本被清除，归档原样保留
-  expect(await readdir(path)).not.toContain('crypto-trader')
-  expect(await readFile(join(`${path}.legacy-backup`, 'crypto-trader/agent.cordis.yml'), 'utf8')).toBe(archived)
-})
-it('operator archives a differing legacy default under its own name instead of overwriting the backup or leaving it in the roster', async () => {
-  // Given 备份名下是用户改过的副本，名册根是另一份受管默认
-  const path = await root()
-  await legacy(path, 'crypto-trader')
-  await legacy(`${path}.legacy-backup`, 'crypto-trader', true)
-  const edited = await readFile(join(`${path}.legacy-backup`, 'crypto-trader/agent.cordis.yml'), 'utf8')
-  // When 安装器再次执行
-  await installPresets([], path)
-  // Then 名册副本被清除，改过的备份未被覆盖，差异版本另名归档
-  expect(await readdir(path)).not.toContain('crypto-trader')
-  expect(await readFile(join(`${path}.legacy-backup`, 'crypto-trader/agent.cordis.yml'), 'utf8')).toBe(edited)
-  const siblings = (await readdir(`${path}.legacy-backup`)).filter(name => name.startsWith('crypto-trader.'))
-  expect(siblings).toHaveLength(1)
-  expect(await readFile(join(`${path}.legacy-backup`, siblings[0], 'agent.cordis.yml'), 'utf8')).toBe(stamp('[]\n'))
-})
-it('operator re-checks a differing default that is already archived instead of leaving it in the roster', async () => {
-  // Given 差异版本已按内容哈希归档，名册根又出现同一份受管默认
-  const path = await root()
-  await legacy(path, 'crypto-trader')
-  await legacy(`${path}.legacy-backup`, 'crypto-trader', true)
-  await installPresets([], path)
-  await legacy(path, 'crypto-trader')
-  // When 安装器再次执行
-  await installPresets([], path)
-  // Then 名册副本被清除，归档仍只有一份
-  expect(await readdir(path)).not.toContain('crypto-trader')
-  expect((await readdir(`${path}.legacy-backup`)).filter(name => name.startsWith('crypto-trader.'))).toHaveLength(1)
-})
-it('operator leaves a legacy default in place while a replacement role is customized', async () => {
-  // Given 替代角色被用户定制，名册根另有一个受管旧默认
-  const path = await root()
-  await installPresets([], path)
-  await legacy(path, 'us-trader')
-  await writeFile(join(path, 'trader/preset.yml'), 'name: custom\n')
-  // When 安装器再次执行
-  await installPresets([], path)
-  // Then 旧默认不被迁移，保留在原处
-  expect(await readdir(path)).toContain('us-trader')
-})
-it('refuses symlink targets without writing through them', async () => {
-  const path = await root()
-  await mkdir(path, { recursive: true })
-  const external = join(path, '../external')
-  await mkdir(external)
-  await symlink(external, join(path, 'trader'), 'dir')
-  await expect(installPresets([], path)).rejects.toThrow('symlink')
-  expect(await readdir(external)).toEqual([])
-})
-it('uses effective enabled loader rows, not installed package reachability; honors common root', async () => {
-  const path = await root()
-  const imported = vi.fn(async () => ({ getPresetContribution: crypto }))
-  await installFromLoader({ entries: () => [
-    { disabled: false, options: { name: '@dshtrading/crypto', config: { presetRoot: path } } },
-    { disabled: true, options: { name: '@dshtrading/us' } },
-    { disabled: false, options: { name: '@dshtrading/connector-tencent/dataplane' } },
-  ], import: imported })
-  expect(imported).toHaveBeenCalledExactlyOnceWith('@dshtrading/crypto')
-  expect(await readdir(path)).toEqual(['instrument-researcher', 'master', 'risk-reviewer', 'trader'])
-})
-it('rejects conflicting roots and unreadable market assets instead of silently dropping a market', async () => {
-  const imported = vi.fn(async () => { throw new Error('missing asset') })
-  await expect(installFromLoader({ entries: () => [
-    { disabled: false, options: { name: '@dshtrading/crypto', config: { presetRoot: '/a' } } },
-    { disabled: false, options: { name: '@dshtrading/us', config: { presetRoot: '/b' } } },
-  ], import: imported })).rejects.toThrow('Conflicting')
-  expect(imported).not.toHaveBeenCalled()
-  await expect(installFromLoader({ entries: () => [{ disabled: false, options: { name: '@dshtrading/crypto' } }], import: imported })).rejects.toThrow('missing asset')
-})

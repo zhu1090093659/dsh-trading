@@ -33,7 +33,7 @@ const CANDIDATES: RoleCandidate[] = [
   },
   {
     name: 'dynamic-capabilities',
-    description: 'dsh-tool-cordis 动态包使用指南：何时用 cordis_define/cordis_run 定义一次性动态包（临时批量计算、跨标的聚合分析等数据型需求），何时不用；信任级、生命周期与安全边界（禁止规避下单闸门、浏览器半必须人工审批）。',
+    description: '一次性批量计算/跨标的聚合与可复用小工具的官方通路指南：0.1.7 宿主已移除 cordis_define/cordis_run 动态包，一次性需求用 bash 跑即弃脚本，可复用助手走官方 cordis preset + Plugin Manager 持久化插件；含优先关系与交易安全边界（禁止规避下单闸门）。',
     invocation: { modelInvocable: true, userInvocable: true },
     provider: name,
     source: 'bundled',
