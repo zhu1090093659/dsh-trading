@@ -77,7 +77,7 @@ function ProviderCredentialCard(props: {
   onDelete: () => Promise<void>
   t: (key: string, params?: Record<string, unknown>) => string
 }) {
-  const { providerId, spec, writable, onSave, onDelete, t } = props
+  const { spec, writable, onSave, onDelete, t } = props
   const currentValues = props.currentValues ?? EMPTY_RECORD
   const drawerId = useId()
   const [open, setOpen] = useState(false)
@@ -270,9 +270,10 @@ export function MarketProviderPanel({
   resetNewsKey,
   setNewsSources,
   resetNewsSources,
-}: MarketProviderPanelProps & { t?: PanelT }) {
-  // PropsLocale 的 t 座位在无宿主 merge 的独立编译下解析为 never（既有债 20 处
-  // TS2349 的根因）。本地遮蔽：运行时框架注入 t，签名与 SDK Translate 对齐。
+}: MarketProviderPanelProps) {
+  // 0.1.7：dshtrading.settings 并入 LocaleNamespaceMap 后 PropsLocale 的 t 座位
+  // 收敛为 TranslateNS（只收本 namespace 的字面量键）。组件内部把动态词典键
+  // 交给本地 PanelT 面（string 键）消费，边界处单点断言。
   const t = tProp as unknown as PanelT
   const state = useController((value: TradingSettingsState) => value)
   const writable = state.writable

@@ -53,3 +53,27 @@ tab 栏，每个市场面板里又依次是行情提供方卡片网格、「保�
   滚动到底、900px 窄窗（无横向溢出），控制台零异常；ArrowRight roving tabindex
   焦点移入下一市场 tab。
 - 未覆盖：真实桌面壳刷新后的实例由用户实测；本变更未触碰宿主 profile 副本与运行中服务。
+
+## 0.1.7 cohort 迁移（2026-09-23）：settingsScope → configForms + locale 合并宿主前移
+
+0.1.7 官方把客户端设置读写面整体换代为 `configForms`，本节记录本包随 cohort 的接线变更
+（UI 结构、词典、写动作语义均不变）：
+
+- 绑定：`ctx.settingsScope.bind<T>({ namespace: 'dshtrading' })` →
+  `ctx.configForms.get<T>('dshtrading')`（软服务 inject `settingsScope` → `configForms`）。
+  `ConfigForm` 的 `getSnapshot()` 与 `mutate(ops, revision?)` 契约与旧 `SettingsScope` 同形
+  （status/value/base/user/revision/writable/mode + revision-fenced path ops），控制器
+  `projectSnapshot` 只换类型名。类型 `SettingsScope`/`SettingsScopeSnapshot` →
+  `ConfigForm`/`ConfigFormSnapshot`。
+- 只读 shim：0.1.7 的 `dsh-client-store` `SnapshotStore` 已含 `update/set`，本包只用
+  getSnapshot+subscribe 的面，改为包内 `TradingSettingsStore`（不再对外声称完整
+  SnapshotStore，避免补一堆用不到的写桩）。
+- locale：`LocaleNamespaceMap` 的声明宿主由 `@deepseek-ai/dsh-client-locale/client`
+  迁至 `@deepseek-ai/dsh-client-ui-slots`，本包 `contract/locale-keys.ts` 的合并目标跟着走。
+  否则 `dshtrading.settings` 不进键联合，`register/bind/PropsLocale` 全报错——是本次
+  4 处增量 tsc 错误的主因。
+- 词典键收窄后 `TranslateNS<'dshtrading.settings'>` 只收字面量键：动态拼接键
+  （`'market.' + slug`）与面板内部的 `PanelT`（string 键）在边界单点断言，值域仍由
+  词典测试兜底。
+- 门禁：`packages/client-ui-settings/tsconfig.client.json` 由基线 11 清到 0，typecheck
+  棘轮总错误数 475 → 464（`node scripts/typecheck-gate.mjs` 通过）；包内 6 例单测全绿。

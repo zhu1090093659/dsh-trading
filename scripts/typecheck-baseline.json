@@ -10,7 +10,7 @@
   "packages/client-ui-knowledge/tsconfig.json": 0,
   "packages/client-ui-masters-quotes/tsconfig.client.json": 0,
   "packages/client-ui-masters-quotes/tsconfig.json": 0,
-  "packages/client-ui-settings/tsconfig.client.json": 11,
+  "packages/client-ui-settings/tsconfig.client.json": 0,
   "packages/client-ui-settings/tsconfig.host.json": 0,
   "packages/client-ui-settings/tsconfig.json": 0,
   "packages/client-ui-special-indicators/tsconfig.client.json": 3,

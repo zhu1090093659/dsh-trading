@@ -7,11 +7,8 @@
  * into revision-fenced path mutations.
  */
 import type {
-  SnapshotStore,
-} from '@deepseek-ai/dsh-client-store'
-import type {
-  SettingsScope,
-  SettingsScopeSnapshot,
+  ConfigForm,
+  ConfigFormSnapshot,
 } from '@deepseek-ai/dsh-client-ui-settings/client'
 
 export interface ProviderMeta {
@@ -215,7 +212,7 @@ export interface TradingSettingsActions {
 }
 
 /** 状态转化：从 settings 快照投射为组件的可观察视图。 */
-export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): TradingSettingsState {
+export function projectSnapshot(snap: ConfigFormSnapshot<TradingSettings>): TradingSettingsState {
   const value = snap.value ?? (snap.base as TradingSettings | undefined)
   const user = (snap.user ?? {}) as { markets?: Record<string, unknown>; credentials?: Record<string, unknown> }
   // 市场键 = value/base/user 的实际键并集（dict 开放：新市场的键出现即进入，无需改码）。
@@ -265,16 +262,24 @@ export function projectSnapshot(snap: SettingsScopeSnapshot<TradingSettings>): T
   }
 }
 
-/** 从 settings scope 构建 SnapshotStore（getSnapshot 稳定引用 + subscribe 转发）。 */
-export function createTradingSettingsStore(scope: SettingsScope<TradingSettings>): SnapshotStore<TradingSettingsState> {
-  let cached: TradingSettingsState = projectSnapshot(scope.getSnapshot())
+/** 面板消费的最小可观察面（getSnapshot 稳定引用 + subscribe 转发）。
+ *  0.1.7：dsh-client-store 的 SnapshotStore 已扩含 update/set，本 shim 只读，
+ *  不再对外声明完整 SnapshotStore（避免补桩一堆用不到的写方法）。 */
+export interface TradingSettingsStore {
+  getSnapshot: () => TradingSettingsState
+  subscribe: (listener: () => void) => () => void
+}
+
+/** 从 configForms 的 dshtrading 表单构建只读快照源（稳定引用 + subscribe 转发）。 */
+export function createTradingSettingsStore(form: ConfigForm<TradingSettings>): TradingSettingsStore {
+  let cached: TradingSettingsState = projectSnapshot(form.getSnapshot())
   return {
     getSnapshot: () => {
-      const current = projectSnapshot(scope.getSnapshot())
+      const current = projectSnapshot(form.getSnapshot())
       // 引用稳定：值未变则复用缓存（bindSnapshotSelector 依赖引用稳定性做浅比较）。
       if (JSON.stringify(current) !== JSON.stringify(cached)) cached = current
       return cached
     },
-    subscribe: (listener) => scope.subscribe(listener),
+    subscribe: (listener) => form.subscribe(listener),
   }
 }

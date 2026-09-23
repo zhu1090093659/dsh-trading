@@ -10,7 +10,10 @@ import type { zh } from '../locales.ts'
 /** Keys of the dshtrading.settings namespace. */
 export type SettingsLocaleKey = Extract<keyof typeof zh, string>
 
-declare module '@deepseek-ai/dsh-client-locale/client' {
+// 0.1.7：LocaleNamespaceMap 的声明宿主从 dsh-client-locale/client 迁到
+// dsh-client-ui-slots（locale 包改为向 ui-slots 合并、并从该包再导出）。
+// 合并目标必须跟着走，否则自定义 namespace 不进键联合，register/bind/PropsLocale 全报错。
+declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** 交易设置词典（client-ui-settings 包私有）。 */
     'dshtrading.settings': SettingsLocaleKey
