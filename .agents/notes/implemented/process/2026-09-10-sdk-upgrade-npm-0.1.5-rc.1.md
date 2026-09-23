@@ -126,6 +126,15 @@ deprecate，且造成 npm 与 Release 面断层）。
 - 验证（worktree `feat/dsh-0.1.7-alpha.2`，最终提交跑全量）：frozen install / `pnpm -r build`
   / typecheck 棘轮（475 → 448）/ i18n / test:audit（无新增债）/ test:scripts /
   test:desktop / `pnpm -r test` 全绿。
+- 官方变更证据：range `dsh-v0.1.5-rc.1` → `dsh-v0.1.7-alpha.2`（中间 tag
+  `0.1.5-rc.2` / `0.1.6-alpha.1` / `0.1.6-alpha.2` / `0.1.7-alpha.1`）。逐 tag 读
+  release notes（`gh api repos/deepseek-ai/deepseek-harness/releases/tags/<tag>`）
+  与 compare（`.../compare/dsh-v0.1.5-rc.1...dsh-v0.1.7-alpha.2`：3152 commits，
+  files 面命中 300 上限）。与本次适配直接相关的条目：0.1.6-alpha.2「客户端 Session
+  多实例共存，相关 API 及 slot 有变化」「创造模式移除原 Cordis 动态定义及运行工具」；
+  0.1.7-alpha.1「Agent 预设改由插件组合包声明和安装」「设置改由当前 Profile 的插件
+  配置保存，自定义设置插件需适配」「Session 日志升级 V4」「Remote ... readBytes」；
+  0.1.7-alpha.2「spill-policy 的 maxInlineBytes 改 maxInlineTokens」。
 - **桌面壳重发布待办**：`desktop/runtime/host` 闭包已前移且 GitHub Actions 打包会取
   本提交物，但本机 `/Applications/DSH Trading.app` 内嵌 runtime 仍是 `0.1.5-rc.1`——
   重发布前不要用桌面壳跑 0.1.7 客户端包（模块实例割裂），本机 profile 链接方向与
