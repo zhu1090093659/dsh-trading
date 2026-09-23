@@ -26,11 +26,12 @@ function makeConversation(options: { phase?: string; draft?: string; addAttachme
     },
   }
   const conversation: ConversationDraftFace = {
-    createDraftImages(files: readonly File[]) {
+    createDrafts(sessionId: string, files: readonly File[]) {
+      void sessionId
       calls.created.push([...files])
       return files.map((file) => ({ id: `draft-${nextId++}-${file.name}` }))
     },
-    releaseDraftImage(id: string) { calls.released.push(id) },
+    releaseDraftAttachment(id: string) { calls.released.push(id) },
     input: {
       shell(id: string) {
         void id

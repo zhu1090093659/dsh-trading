@@ -86,3 +86,10 @@ Status: implemented
   cohort（0.1.5-rc.1）runtime，与 0.1.7 客户端包混代会模块割裂，待桌面壳重发布
   （见 [2026-08-29-trading-web-profile.md](../process/2026-08-29-trading-web-profile.md)）
   后按本文「真机端到端验收」口径复核一次「发给 Agent」填入链路。
+- 端到端 GUI 验收（2026-09-23，隔离 profile + 全局 CLI 0.1.7 宿主 + 无头 Chrome）：
+  选中 AAPL → 点「发给 Agent」→ composer 真实出现行情快照文本与随附图表截图缩略图，
+  按钮态变为「已填入输入框」，控制台零异常。首次跑失败暴露并修复了同一 cohort 的
+  草稿附件 API 变更：0.1.7 把根服务 `createDraftImages([file])` / `releaseDraftImage(id)`
+  换成按会话寻址的 `createDrafts(sessionId, files)` / `releaseDraftAttachment(id)`——
+  旧调用在附图路径抛 `createDraftImages is not a function`，导致主按钮恒失败。
+  `fill-composer.ts` 与单测 fake 已同步到新 API。

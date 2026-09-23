@@ -4,8 +4,9 @@
  * 由用户自己按）。
  *
  * 通道全部走官方 face，零 DOM hack：
- * - 根服务 `conversation`（ConversationController）：`createDraftImages([file])`
- *   把截图注册成 browser-owned 草稿图（id + previewUrl）；
+ * - 根服务 `conversation`（ConversationController）：`createDrafts(sessionId, [file])`
+ *   把截图注册成 browser-owned 草稿图（0.1.7 起按会话寻址；旧 `createDraftImages([file])`
+ *   已随 cohort 删除），`releaseDraftAttachment(id)` 回收；
  * - per-session `input` facade（SessionInput）：`setDraft(text)` 整稿写入
  *   （会替换草稿——先读 `state.draft` 非空时以空行拼接追加，不覆盖用户已打
  *   的内容）、`addAttachments(ids)` 挂图；绝不调 `submit()`。
@@ -53,11 +54,13 @@ export function guardComposerTarget(fill: FillComposerFn): FillComposerFn {
   )
 }
 
-/** conversation 根服务最小结构面（只用草稿摄取 + input registry 两块）。 */
+/** conversation 根服务最小结构面（只用草稿摄取 + input registry 两块）。
+ *  0.1.7：草稿摄取按会话寻址（createDrafts(sessionId, files)），回收走
+ *  releaseDraftAttachment；旧的 createDraftImages/releaseDraftImage 已删除。 */
 export interface ConversationDraftFace {
-  createDraftImages(files: readonly File[]): ReadonlyArray<{ id: DraftAttachmentId }>
+  createDrafts(sessionId: string, files: readonly File[]): ReadonlyArray<{ id: DraftAttachmentId }>
   /** 摄取被拒（composer busy）时回收草稿图与 preview URL。 */
-  releaseDraftImage?(id: DraftAttachmentId): void
+  releaseDraftAttachment?(id: DraftAttachmentId): void
   input: {
     /** 按 session id 直达 facade（官方 service-face 路径，provide 之外也可用）。 */
     shell(id: string): SessionInput | undefined
@@ -76,7 +79,7 @@ export function stripDataUrlPrefix(dataUrl: string): string {
   return index >= 0 ? dataUrl.slice(index + marker.length) : dataUrl
 }
 
-/** data URL → 浏览器 File（createDraftImages 按 File 摄取）。 */
+/** data URL → 浏览器 File（conversation.createDrafts 按 File 摄取）。 */
 export function dataUrlToFile(dataUrl: string, name: string): File {
   const bytes = Uint8Array.from(atob(stripDataUrlPrefix(dataUrl)), char => char.charCodeAt(0))
   return new File([bytes], name, { type: 'image/png' })
@@ -98,9 +101,9 @@ export async function fillComposerWithQuote(deps: FillComposerDeps, text: string
   }
   // 截图先落草稿图注册表再挂 id；提交中 addAttachments 自己也会拒（双保险）。
   if (image !== undefined) {
-    const [attachment] = conversation.createDraftImages([dataUrlToFile(image.dataUrl, image.name ?? 'chart.png')])
+    const [attachment] = conversation.createDrafts(sessionId, [dataUrlToFile(image.dataUrl, image.name ?? 'chart.png')])
     if (attachment !== undefined && !facade.addAttachments([attachment.id])) {
-      conversation.releaseDraftImage?.(attachment.id)
+      conversation.releaseDraftAttachment?.(attachment.id)
       console.warn('[dsh-trading] composer refused image (busy) — filling text only')
     }
   }
