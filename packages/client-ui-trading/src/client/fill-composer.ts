@@ -10,14 +10,14 @@
  *   （会替换草稿——先读 `state.draft` 非空时以空行拼接追加，不覆盖用户已打
  *   的内容）、`addAttachments(ids)` 挂图；绝不调 `submit()`。
  *
- * 会话解析：优先 `sessions.list.current`；无当前会话时经 uiWorkspace 的
- * startSession 建/复用会话并短轮询等落地（官方 startSession 是导航动作）。
- * composer 提交中（phase ≠ 'plain'）拒绝写入，避免与乐观提交竞态。
+ * 0.1.7 cohort 变更：官方把「当前会话」选择内化进 workspace 服务（多实例
+ * 共存，0.1.6-alpha.2），`SessionListState` 不再有 `current` 字段，插件服务
+ * 面无公开 selection 读取 API。填充目标改为调用方显式传入（`target`）；
+ * 无目标时明确报错——猜一个会话会把行情上下文写进错误的 composer。
  *
- * 纯编排模块（SDK 只 import type）：sessions/conversation/startSession 由
- * shell apply 惰性注入，vitest 以 fake 对象直测。
+ * 纯编排模块（SDK 只 import type）：conversation 由 shell apply 惰性注入，
+ * vitest 以 fake 对象直测。
  */
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { DraftAttachmentId, SessionInput } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 /** 随草稿附图的浏览器侧载荷（dataUrl = PNG data URL）。 */
@@ -28,18 +28,29 @@ export interface SendImageInput {
   height?: number
 }
 
-/** shell 注入的填入入口（QuotePane → MiddleStage → QuoteStage 透传）。 */
-export type FillComposerFn = ((text: string, image?: SendImageInput) => Promise<void>) & {
-  /** Capture a destination guard before an asynchronous collection starts. */
-  captureTarget?: () => FillComposerFn
+/** 填充目标会话：0.1.7 起由调用方显式给出，服务层不再解析「当前会话」。 */
+export interface FillComposerTarget {
+  sessionId: string
 }
 
-export function guardComposerTarget(sessions: ISessions, fill: FillComposerFn): FillComposerFn {
-  const target = sessions.list.getSnapshot().current
-  return async (text, image) => {
-    if (sessions.list.getSnapshot().current !== target) throw new Error('composer session changed during collection — retry in the intended session')
-    await fill(text, image)
-  }
+/** shell 注入的填入入口（QuotePane → MiddleStage → QuoteStage 透传）。 */
+export type FillComposerFn = ((text: string, image?: SendImageInput, target?: FillComposerTarget) => Promise<void>) & {
+  /** Fix the destination before an asynchronous collection starts. */
+  captureTarget?: (target?: FillComposerTarget) => FillComposerFn
+}
+
+export function guardComposerTarget(fill: FillComposerFn): FillComposerFn {
+  // 捕获时固定显式目标；执行时不再复查——0.1.7 没有 selection 读面，
+  // 不存在「采集期间切会话」的晚期竞态可检。
+  return Object.assign(
+    async (text: string, image?: SendImageInput, target?: FillComposerTarget) => { await fill(text, image, target) },
+    {
+      captureTarget: (target?: FillComposerTarget) => {
+        const fixed = target
+        return async (text: string, image?: SendImageInput) => { await fill(text, image, fixed) }
+      },
+    },
+  )
 }
 
 /** conversation 根服务最小结构面（只用草稿摄取 + input registry 两块）。 */
@@ -49,22 +60,14 @@ export interface ConversationDraftFace {
   releaseDraftImage?(id: DraftAttachmentId): void
   input: {
     /** 按 session id 直达 facade（官方 service-face 路径，provide 之外也可用）。 */
-    shell(id: string): SessionInput
+    shell(id: string): SessionInput | undefined
   }
 }
 
 export interface FillComposerDeps {
-  sessions: ISessions
-  /** 根服务 `conversation`；缺席（理论上仅 headless）时只能填文本。 */
+  /** 根服务 `conversation`；缺席（理论上仅 headless）时只能报错。 */
   conversation?: ConversationDraftFace
-  /** 无当前会话时的建会话入口（官方 uiWorkspace.startSession）。 */
-  startSession?: () => void
-  /** list.current 就绪轮询（默认 100ms × 30 = 3s；单测可缩短）。 */
-  pollMs?: number
-  pollMax?: number
 }
-
-const delay = (ms: number): Promise<void> => new Promise(resolve => { setTimeout(resolve, ms) })
 
 /** PNG data URL → 纯 base64（File 构造吃裸字节）。 */
 export function stripDataUrlPrefix(dataUrl: string): string {
@@ -79,24 +82,14 @@ export function dataUrlToFile(dataUrl: string, name: string): File {
   return new File([bytes], name, { type: 'image/png' })
 }
 
-export async function fillComposerWithQuote(deps: FillComposerDeps, text: string, image?: SendImageInput): Promise<void> {
-  const { sessions } = deps
-  let current = sessions.list.getSnapshot().current
-  if (current === undefined && deps.startSession !== undefined) {
-    deps.startSession()
-    const pollMs = deps.pollMs ?? 100
-    const pollMax = deps.pollMax ?? 30
-    for (let round = 0; round < pollMax && current === undefined; round++) {
-      await delay(pollMs)
-      current = sessions.list.getSnapshot().current
-    }
-  }
-  if (current === undefined) {
-    throw new Error('no session available to fill the composer (start a session first)')
-  }
+export async function fillComposerWithQuote(deps: FillComposerDeps, text: string, image?: SendImageInput, target?: FillComposerTarget): Promise<void> {
   const conversation = deps.conversation
   if (conversation === undefined) throw new Error('conversation service unavailable — cannot fill the composer')
-  const facade = conversation.input.shell(current)
+  const sessionId = target?.sessionId
+  if (sessionId === undefined) {
+    throw new Error('no target session — pass the session to fill explicitly (0.1.7 removed the plugin-facing current-session read)')
+  }
+  const facade = conversation.input.shell(sessionId)
   if (facade === undefined) throw new Error('conversation service unavailable — cannot fill the composer')
 
   const { phase, draft } = facade.state.getSnapshot()

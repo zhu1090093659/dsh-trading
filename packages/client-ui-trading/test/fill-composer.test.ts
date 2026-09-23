@@ -1,27 +1,14 @@
 /**
- * 「发给 Agent → 填入输入框」链路单测（离线，fake sessions/conversation）：
- * fill-composer 编排（草稿拼接、截图 File 摄取、busy 拒写、无会话建会话）
+ * 「发给 Agent → 填入输入框」链路单测（离线，fake conversation）：
+ * fill-composer 编排（草稿拼接、截图 File 摄取、busy 拒写、显式目标）
  * 与 compose-quote 文案组装。核心断言：**绝不触发 submit**。
  */
 import { describe, expect, it, vi } from 'vitest'
 import { composeQuoteMessage } from '../src/client/compose-quote.ts'
 import { dataUrlToFile, fillComposerWithQuote, guardComposerTarget, stripDataUrlPrefix } from '../src/client/fill-composer.ts'
 import type { ConversationDraftFace, FillComposerDeps } from '../src/client/fill-composer.ts'
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 
 const PNG_URL = 'data:image/png;base64,QUJD' // 'ABC'
-
-function makeSessions(options: { current?: string }) {
-  let current = options.current
-  const sessions = {
-    list: {
-      getSnapshot: () => ({ current }),
-      subscribe: () => () => {},
-    },
-    binding: (id: string) => (id === current ? { sessionId: id } : undefined),
-  } as unknown as ISessions
-  return { sessions, setCurrent: (next?: string) => { current = next } }
-}
 
 function makeConversation(options: { phase?: string; draft?: string; addAttachmentsOk?: boolean } = {}) {
   const calls: { setDraft: string[]; addAttachments: string[][]; created: File[][]; released: string[]; submit: number } = {
@@ -55,38 +42,23 @@ function makeConversation(options: { phase?: string; draft?: string; addAttachme
 }
 
 describe('fillComposerWithQuote', () => {
-  it('异步采集固定目标：切会话后拒绝填入，原会话仍在时保留只填不发', async () => {
-    const { sessions, setCurrent } = makeSessions({ current: 'sess-1' })
-    const fill = vi.fn(async () => {})
-    const guarded = guardComposerTarget(sessions, fill)
-    setCurrent('sess-2')
-    await expect(guarded('old context')).rejects.toThrow('session changed')
-    expect(fill).not.toHaveBeenCalled()
-    const current = guardComposerTarget(sessions, fill)
-    await current('new context')
-    expect(fill).toHaveBeenCalledExactlyOnceWith('new context', undefined)
-  })
-
-  it('有当前会话：setDraft 写入文本，不触发 submit', async () => {
-    const { sessions } = makeSessions({ current: 'sess-1' })
+  it('显式目标：setDraft 写入文本，不触发 submit', async () => {
     const { conversation, calls } = makeConversation()
-    await fillComposerWithQuote({ sessions, conversation }, '看一下苹果', undefined)
+    await fillComposerWithQuote({ conversation }, '看一下苹果', undefined, { sessionId: 'sess-1' })
     expect(calls.setDraft).toEqual(['看一下苹果'])
     expect(calls.addAttachments).toEqual([])
     expect(calls.submit).toBe(0)
   })
 
   it('非空草稿：空行拼接追加，不覆盖用户已打内容', async () => {
-    const { sessions } = makeSessions({ current: 'sess-1' })
     const { conversation, calls } = makeConversation({ draft: '帮我看下' })
-    await fillComposerWithQuote({ sessions, conversation }, '看一下苹果')
+    await fillComposerWithQuote({ conversation }, '看一下苹果', undefined, { sessionId: 'sess-1' })
     expect(calls.setDraft).toEqual(['帮我看下\n\n看一下苹果'])
   })
 
   it('附图：dataUrl 转 PNG File 摄取后 addAttachments 挂 id', async () => {
-    const { sessions } = makeSessions({ current: 'sess-1' })
     const { conversation, calls } = makeConversation()
-    await fillComposerWithQuote({ sessions, conversation }, '看图', { dataUrl: PNG_URL, name: 'AAPL-1d.png' })
+    await fillComposerWithQuote({ conversation }, '看图', { dataUrl: PNG_URL, name: 'AAPL-1d.png' }, { sessionId: 'sess-1' })
     expect(calls.created).toHaveLength(1)
     expect(calls.created[0][0].name).toBe('AAPL-1d.png')
     expect(calls.created[0][0].type).toBe('image/png')
@@ -95,35 +67,27 @@ describe('fillComposerWithQuote', () => {
   })
 
   it('composer 提交中（phase ≠ plain）：拒绝写入并抛错', async () => {
-    const { sessions } = makeSessions({ current: 'sess-1' })
     const { conversation, calls } = makeConversation({ phase: 'submitting' })
-    await expect(fillComposerWithQuote({ sessions, conversation }, 'hello')).rejects.toThrow(/composer is busy/)
+    await expect(fillComposerWithQuote({ conversation }, 'hello', undefined, { sessionId: 'sess-1' })).rejects.toThrow(/composer is busy/)
     expect(calls.setDraft).toEqual([])
     expect(calls.addAttachments).toEqual([])
   })
 
   it('addAttachments 被拒（busy）：回收草稿图，文本照填', async () => {
-    const { sessions } = makeSessions({ current: 'sess-1' })
     const { conversation, calls } = makeConversation({ addAttachmentsOk: false })
-    await fillComposerWithQuote({ sessions, conversation }, 'hello', { dataUrl: PNG_URL, name: 'a.png' })
+    await fillComposerWithQuote({ conversation }, 'hello', { dataUrl: PNG_URL, name: 'a.png' }, { sessionId: 'sess-1' })
     expect(calls.released).toHaveLength(1)
     expect(calls.setDraft).toEqual(['hello'])
   })
 
-  it('无当前会话：startSession 后轮询到 list.current 落地再填入', async () => {
-    const { sessions, setCurrent } = makeSessions({})
+  it('无目标：抛错且不写草稿（0.1.7 无 current 读面，禁止猜会话）', async () => {
     const { conversation, calls } = makeConversation()
-    const startSession = vi.fn(() => { setCurrent('sess-new') })
-    await fillComposerWithQuote({ sessions, conversation, startSession, pollMs: 1, pollMax: 5 }, 'hello')
-    expect(startSession).toHaveBeenCalledTimes(1)
-    expect(calls.setDraft).toEqual(['hello'])
+    await expect(fillComposerWithQuote({ conversation }, 'hello')).rejects.toThrow(/no target session/)
+    expect(calls.setDraft).toEqual([])
   })
 
-  it('始终无会话：抛错（不写草稿）', async () => {
-    const { sessions } = makeSessions({})
-    const { conversation, calls } = makeConversation()
-    await expect(fillComposerWithQuote({ sessions, conversation, pollMs: 1, pollMax: 2 }, 'hello')).rejects.toThrow(/no session available/)
-    expect(calls.setDraft).toEqual([])
+  it('conversation 缺席：抛错（headless 面）', async () => {
+    await expect(fillComposerWithQuote({}, 'hello', undefined, { sessionId: 'sess-1' })).rejects.toThrow(/conversation service unavailable/)
   })
 })
 

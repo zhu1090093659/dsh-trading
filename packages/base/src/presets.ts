@@ -88,7 +88,9 @@ export function marketRowsOf(market: Market, traderRows: string): { connectors: 
   const rows = parseMarketRows(market, traderRows)
   const at = rows.findIndex(row => row.id === `dsh-trading-${market}-kit`)
   if (at < 0) throw new Error(`Missing ${market} kit row in market contribution`)
-  return { connectors: rows.slice(0, at), kit: rows[at] }
+  const kit = rows[at]
+  if (kit === undefined) throw new Error(`Malformed ${market} kit row in market contribution`)
+  return { connectors: rows.slice(0, at), kit }
 }
 
 const kitRow = (market: Market, skills: string[] | null): PresetRow => ({
@@ -207,7 +209,7 @@ export async function installFromLoader(loader: PresetLoader, registry: PresetRe
   }
   return disposers
 }
-export async function apply(ctx: Context, config: Config): Promise<() => Promise<void>> {
+export async function apply(ctx: Context): Promise<() => Promise<void>> {
   const loader = ctx.get('loader') as unknown as PresetLoader
   const registry = ctx.get('agentPresets') as unknown as PresetRegistry
   const disposers = await installFromLoader(loader, registry)

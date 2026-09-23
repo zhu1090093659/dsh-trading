@@ -16,7 +16,7 @@
  * 行情数据走 node 半注册的 /dshtrading/api 桥（同源 fetch，浏览器认证栅栏内）。
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISessions, SessionTarget } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { IndicatorRegistry } from '@dshtrading/indicators'
 import type { Instrument, MarketId } from './types.ts'
 import { validateCustomIndicatorAsync } from '@dshtrading/indicators'
@@ -50,13 +50,17 @@ const NS = 'dshtrading.market'
 export const inject = ['slots', 'locale', 'sessions', 'uiWorkspace']
 
 /** SessionId 是 branded 类型而 dsh-session 非本包依赖（直接 import 解析不到）；
- *  从已引入的 ISessions 面派生同一 brand，inject 面字符串 id 在边界断言一次。 */
-type SessionIdParam = Parameters<ISessions['open']>[0]
+ *  从已引入的 ISessions 面派生同一 brand，inject 面字符串 id 在边界断言一次。
+ *  0.1.7：open() 已被 workspace 导航取代，会话寻址统一走 SessionTarget。 */
+type SessionIdParam = SessionTarget
 
-/** uiWorkspace 的最小结构面（startSession = 建/复用并打开会话；
- *  archiveSession = 官方侧栏「归档会话」同款通路，host 权威归档集随之广播）。 */
+/** uiWorkspace 的最小结构面（0.1.7：会话导航全部收口到 uiWorkspace——
+ *  startSession 建/复用并打开、openSession 即官方「选中并显示」、forkSession
+ *  官方同款语义（不切选中，行内可见）、archiveSession 广播权威归档集）。 */
 interface WorkspaceNavigation {
   startSession(workspaceId?: string): void
+  openSession(sessionId: string): void
+  forkSession(sessionId: string): Promise<void>
   archiveSession(sessionId: string): Promise<void>
 }
 
@@ -89,12 +93,10 @@ export function apply(ctx: ClientContext): void {
     // exactOptionalPropertyTypes：conversation 缺席时必须整个键缺位，不能显式 undefined。
     const conversation = ctx.get('conversation', false) as ConversationDraftFace | undefined
     return fillComposerWithQuote({
-      sessions,
       ...(conversation !== undefined ? { conversation } : {}),
-      startSession: startNewSession,
     }, text, image)
   }
-  fillComposer.captureTarget = () => guardComposerTarget(sessions, fillComposer)
+  fillComposer.captureTarget = target => guardComposerTarget(fillComposer).captureTarget?.(target) ?? fillComposer
   const openSettings = (): void => {
     // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
     // 侧栏里唯一的 [aria-haspopup=dialog]，程序化 click 走官方打开逻辑，
@@ -243,21 +245,26 @@ export function apply(ctx: ClientContext): void {
     priority: -1,
     locale: NS,
     inject: () => ({
-      openSession: (sessionId: string) => { sessions.open(sessionId as SessionIdParam) },
+      openSession: (sessionId: string) => {
+        ;(ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined)
+          ?.openSession(sessionId)
+      },
       startNewSession,
       // 历史行操作菜单三件套，与官方 WorkspaceBrowser 语义对齐：
       // rename 走 session binding 的显式标题（钉住自动生成）；fork 官方同款
       // increaseTitle 后 open 新会话；archive 走 uiWorkspace（同 startSession
       // 惰性解析纪律：apply 时序不保证，点击时 ctx.get）。
       renameSession: async (sessionId: string, title: string) => {
-        const face = sessions.binding(sessionId as SessionIdParam)?.session
-        if (face === undefined) throw new Error(`unknown session "${sessionId}"`)
-        const result = await face.rename(title)
-        if (!result.ok) throw new Error(result.error.message)
+        // 0.1.7：session 对象层经 retain/using 获取（binding 随 reference 存活）。
+        await sessions.using(sessionId as SessionIdParam, { source: 'controllerOperation' }, async (reference) => {
+          const result = await reference.binding.session.rename(title)
+          if (!result.ok) throw new Error(result.error.message)
+        })
       },
       forkSession: (sessionId: string) => {
-        sessions.fork({ sessionId: sessionId as SessionIdParam, increaseTitle: true })
-          .then((forkedId) => { sessions.open(forkedId) })
+        // 0.1.7 官方 forkSession：不切换当前选中（官方行内动作同款），新会话在列表可见。
+        ;(ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined)
+          ?.forkSession(sessionId)
           .catch((e: unknown) => { console.warn('[dsh-trading] session fork rejected:', e) })
       },
       archiveSession: (sessionId: string) => {
@@ -290,7 +297,10 @@ export function apply(ctx: ClientContext): void {
       startNewSession,
       toggleFold,
       // 执行历史「打开会话」：HomeHistory 同款官方 sessions 通路。
-      openSession: (sessionId: string) => { sessions.open(sessionId as SessionIdParam) },
+      openSession: (sessionId: string) => {
+        ;(ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined)
+          ?.openSession(sessionId)
+      },
       // 资产面板「导入持仓」：会话输入框填入入口（只填不发）。
       fillComposer,
       // 文件页签（2026-09-15）：宿主右侧栏 dock 的容器化开合面。
