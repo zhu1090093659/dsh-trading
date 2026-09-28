@@ -43,6 +43,7 @@
 | hithink | cn | `600519.SH` | `normalizeThsCode`：裸 6 位按首位推断 SH/SZ/BJ，`sh600519` 前缀形互译 |
 | futu | us | `US.AAPL` | 规范形纯大写 ticker（接受 `US.AAPL` / `AAPL.US` / 类别股 `BRK.B`）↔ wire `US.AAPL` |
 | jin10 | global | `XAUUSD` | 恒等（原生大写即规范形）；输入 trim + 大写化，未登记代码交 `get_quote` 裁决（未知品种报 `TRADING_UNSUPPORTED_SYMBOL`） |
+| xysz | cn | `600519.SH`（AmazingData code+market 形即规范形） | 近恒等：接受规范形 / 裸 6 位 / `sh600519` 前缀形；输出恒为规范形。裸 6 位按首位推断 SH/SZ/BJ（6/9→SH，0/2/3→SZ，4/8→BJ）；港股与加密形态显式拒绝（fail-closed） |
 
 ## 给新连接器（手册补充条款）
 

@@ -1,0 +1,51 @@
+{
+  "symbol": "600519.SH",
+  "orderbook": {
+    "symbol": "600519.SH",
+    "bids": [
+      {
+        "price": 1243.77,
+        "amount": 100
+      },
+      {
+        "price": 1243.75,
+        "amount": 100
+      },
+      {
+        "price": 1243.57,
+        "amount": 100
+      },
+      {
+        "price": 1243.5,
+        "amount": 200
+      },
+      {
+        "price": 1243.47,
+        "amount": 100
+      }
+    ],
+    "asks": [
+      {
+        "price": 1243.88,
+        "amount": 319
+      },
+      {
+        "price": 1243.9,
+        "amount": 2000
+      },
+      {
+        "price": 1243.91,
+        "amount": 1000
+      },
+      {
+        "price": 1243.92,
+        "amount": 900
+      },
+      {
+        "price": 1243.93,
+        "amount": 100
+      }
+    ],
+    "timestamp": 1790584189000
+  }
+}

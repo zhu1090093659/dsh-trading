@@ -44,6 +44,12 @@
       name: '@dshtrading/connector-hithink/dataplane'
       config:
         enabled: true
+    # 银河星耀数智（AmazingData/tgw）A 股数据源：本机/局域网 FastAPI 封装服务的连接器。
+    # 无交易面；apiUrl 缺省 = 127.0.0.1:8191（SSH 隧道或本机服务）。
+    - id: dsh-trading-cn-dataplane-xysz
+      name: '@dshtrading/connector-xysz/dataplane'
+      config:
+        enabled: true
 
 
 

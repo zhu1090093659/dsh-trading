@@ -641,6 +641,9 @@ importers:
       '@dshtrading/connector-tushare':
         specifier: workspace:*
         version: link:../connector-tushare
+      '@dshtrading/connector-xysz':
+        specifier: workspace:*
+        version: link:../connector-xysz
       '@dshtrading/kit-cn':
         specifier: workspace:*
         version: link:../kit-cn
@@ -1099,6 +1102,28 @@ importers:
         version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.13)(yaml@2.9.0)
 
   packages/connector-tushare:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.0.4
+        version: 4.0.4(@deepseek-ai/cordis-plugin-include@1.0.9)(@deepseek-ai/cordis-plugin-loader@1.0.5)
+      '@deepseek-ai/dsh-tools':
+        specifier: 0.1.7-alpha.2
+        version: 0.1.7-alpha.2(d994fe21de47ce254061a7c5a2b16d37)
+      '@deepseek-ai/schemastery':
+        specifier: 3.18.4
+        version: 3.18.4
+      '@dshtrading/api':
+        specifier: workspace:^
+        version: link:../api
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.13)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(tsx@4.23.13)(yaml@2.9.0)
+
+  packages/connector-xysz:
     dependencies:
       '@deepseek-ai/cordis':
         specifier: 4.0.4

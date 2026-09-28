@@ -78,6 +78,7 @@ export const PROVIDER_VOCABULARY = [
   'tiger',
   'hithink',
   'jin10',
+  'xysz',
 ] as const
 export type Provider = (typeof PROVIDER_VOCABULARY)[number]
 

@@ -647,6 +647,12 @@ export type TradingErrorCode =
   | 'TRADING_AUTH_FAILED'
   | 'TRADING_RATE_LIMITED'
   | 'TRADING_NETWORK'
+  /**
+   * 上游返回了非成功状态（HTTP 4xx/5xx 或上游业务错误码）——与 TRADING_NETWORK
+   * （连不上/超时）区分：请求到达了上游，上游明确报错。13 个连接器已按此语义使用
+   * 该码（rest.ts 的 HTTP 非 ok 分支），此前只是漏进了本词汇表（类型层缺口）。
+   */
+  | 'TRADING_UPSTREAM_ERROR'
   | 'TRADING_INSUFFICIENT_BALANCE'
   /** liveTrading=false 闸门拒绝实盘（铁律 #3）。 */
   | 'TRADING_LIVE_TRADING_DISABLED'

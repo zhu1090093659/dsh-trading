@@ -53,7 +53,7 @@ describe('dshtrading schema（用户设置一级）', () => {
     expect(activeProviderOf(cfg, 'jp')).toBe('yahoo')
   })
 
-  it('provider 候选集 = 全仓词汇（binance/okx/bybit/ccxt/yahoo/stooq/alpaca/fmp/finnhub/polygon/ibkr/tencent/eastmoney/tushare/akshare/qmt/futu/longbridge/tiger/hithink/jin10）', () => {
+  it('provider 候选集 = 全仓词汇（binance/okx/bybit/ccxt/yahoo/stooq/alpaca/fmp/finnhub/polygon/ibkr/tencent/eastmoney/tushare/akshare/qmt/futu/longbridge/tiger/hithink/jin10/xysz）', () => {
     expect([...PROVIDER_VOCABULARY].sort()).toEqual([
       'akshare',
       'alpaca',
@@ -75,12 +75,14 @@ describe('dshtrading schema（用户设置一级）', () => {
       'tencent',
       'tiger',
       'tushare',
+      'xysz',
       'yahoo',
     ].sort())
     expect(PROVIDER_VOCABULARY).toContain('binance' as Provider)
     expect(PROVIDER_VOCABULARY).toContain('ibkr' as Provider)
     expect(PROVIDER_VOCABULARY).toContain('qmt' as Provider)
     expect(PROVIDER_VOCABULARY).toContain('tiger' as Provider)
+    expect(PROVIDER_VOCABULARY).toContain('xysz' as Provider)
   })
 
   it('schema 开放字符串：第三方 slug（custom_dex）不被一票否决（2026-08-30 整改 #4）', () => {

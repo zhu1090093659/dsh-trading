@@ -1,0 +1,13 @@
+{
+  "symbol": "000001.SZ",
+  "ticker": {
+    "symbol": "000001.SZ",
+    "price": 11.3,
+    "timestamp": 1790586000000,
+    "volume": 71534143,
+    "prevClose": 11.3,
+    "changePercent": 0,
+    "bid": 11.3,
+    "ask": 11.31
+  }
+}

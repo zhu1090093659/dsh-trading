@@ -34,6 +34,7 @@
     "@dshtrading/connector-qmt": "workspace:*",
     "@dshtrading/connector-tencent": "workspace:*",
     "@dshtrading/connector-tushare": "workspace:*",
+    "@dshtrading/connector-xysz": "workspace:*",
     "@dshtrading/kit-cn": "workspace:*"
   },
   "peerDependencies": {

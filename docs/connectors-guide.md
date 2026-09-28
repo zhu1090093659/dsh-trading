@@ -14,6 +14,7 @@
 | **Tushare Pro (`tushare`)** | 商业/量化社区 | `TUSHARE_TOKEN` | [tushare.pro/register](https://tushare.pro/register) | 免费注册送积分，可获取 PE/PB 估值指标与分钟线 |
 | **AkShare (`akshare`)** | 开源量化/宏观数据 | 免密 / `AKSHARE_API_URL` | [akshare.xyz](https://akshare.xyz) | 支持行业板块资金流排行与宏观指标（注：交易所自 2024-08 已停发实时北向资金，北向接口已下线；纯数据源，无交易通道） |
 | **迅投 MiniQMT (`qmt`)** | 券商实盘网关 | `QMT_GATEWAY_URL` (默认 `http://127.0.0.1:5800`)<br>`QMT_ACCOUNT_ID` | 联系开户券商申请 (如国金/华泰/中信/银河) | 需在本机运行券商提供的 MiniQMT 客户端与本地 RPC/HTTP 网关桥（见下方契约说明）；支持真实可用资金查询、股票委托申报与撤单 |
+| **银河星耀数智 (`xysz`)** | 券商行情 SDK（经本地 REST 封装） | `XYSZ_API_URL` (默认 `http://127.0.0.1:8191`) | 联系中国银河证券营业部开通星耀数智权限 | 券商侧 Level-1 行情与资讯数据（AmazingData/tgw Python SDK）。SDK 有状态（调用前须登录），故由本机/局域网的 FastAPI 封装服务 `xysz-api` 持有账号并暴露 REST，连接器只连该服务。支持 1m~1M K 线（A 股全历史自 2013）、五档盘口、沪深北名册（含中文简称）与基本面快照；纯数据源，无交易通道 |
 
 > **MiniQMT 本地网关桥契约说明**：
 > 由于 MiniQMT 官方仅提供 Python `xtquant` SDK，连接器通过本地 HTTP 桥通信。桥服务需实现以下标准契约：

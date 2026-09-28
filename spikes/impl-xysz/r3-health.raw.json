@@ -1,0 +1,15 @@
+{
+  "url": "http://127.0.0.1:8191/health",
+  "body": {
+    "status": "ok",
+    "logged_in": true,
+    "upstream": {
+      "host": "101.230.159.235",
+      "port": 8600,
+      "username": "***"
+    },
+    "login_ts": 1790596088.7457862,
+    "login_error": null,
+    "sdk_version": "1.1.9"
+  }
+}

@@ -73,6 +73,17 @@
         dryRun: true
         liveTrading: false
 
+    # 银河星耀数智（AmazingData/tgw）：券商侧 A 股行情源，上游是本机/局域网的
+    # FastAPI 封装服务（xysz-api）。enabled=true 只表示"候选就绪"——实际激活动裁决
+    # 在 routeAllows：cn 路由选中 xysz 时才 provide tradingCnMarketData（互斥纪律）。
+    # 无交易面（星耀数智是数据服务，不含下单通道）。
+    - id: dsh-trading-cn-connector-xysz
+      name: '@dshtrading/connector-xysz'
+      config:
+        enabled: true
+        dryRun: true
+        liveTrading: false
+
 
 
 

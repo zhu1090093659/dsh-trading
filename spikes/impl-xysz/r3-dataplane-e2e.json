@@ -1,0 +1,80 @@
+{
+  "generatedAt": "2026-09-28T12:01:35.744Z",
+  "loaderExports": {
+    "index": {
+      "name": "dsh-trading-cn-connector-xysz",
+      "inject": [
+        "tools"
+      ],
+      "Config": "function",
+      "apply": "function"
+    },
+    "dataplane": {
+      "inject": [],
+      "Config": "function",
+      "apply": "function"
+    }
+  },
+  "registrations": [
+    {
+      "market": "cn",
+      "provider": "xysz"
+    }
+  ],
+  "isolateKeys": [
+    "tradingCnMarketData"
+  ],
+  "rootMarketKeyOccupied": false,
+  "samples": {
+    "ticker": {
+      "symbol": "600519.SH",
+      "price": 1243.88,
+      "timestamp": 1790584189000,
+      "volume": 2821830,
+      "prevClose": 1237,
+      "changePercent": 0.5562,
+      "bid": 1243.77,
+      "ask": 1243.88
+    },
+    "klines": {
+      "openTime": 1790524800000,
+      "open": 11.28,
+      "high": 11.41,
+      "low": 11.27,
+      "close": 11.3,
+      "volume": 71534143,
+      "closeTime": 1790524800000
+    },
+    "book": {
+      "bestBid": {
+        "price": 1243.77,
+        "amount": 100
+      },
+      "bestAsk": {
+        "price": 1243.88,
+        "amount": 319
+      }
+    },
+    "instruments": [
+      {
+        "symbol": "601318.SH",
+        "name": "中国平安"
+      },
+      {
+        "symbol": "001359.SZ",
+        "name": "平安电工"
+      },
+      {
+        "symbol": "000001.SZ",
+        "name": "平安银行"
+      }
+    ],
+    "fundamentals": {
+      "symbol": "600519.SH",
+      "timestamp": 1790596894343,
+      "name": "贵州茅台",
+      "fiftyTwoWeekHigh": 1568,
+      "fiftyTwoWeekLow": 1151.01
+    }
+  }
+}

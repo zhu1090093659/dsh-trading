@@ -1,0 +1,159 @@
+{
+  "target": "http://127.0.0.1:8191",
+  "generatedAt": "2026-09-28T12:01:32.435Z",
+  "passed": 13,
+  "failed": 0,
+  "results": [
+    {
+      "name": "health（封装服务 + 上游登录态）",
+      "file": "r3-health.raw.json",
+      "latencyMs": 34,
+      "status": "ok",
+      "loggedIn": true,
+      "upstream": {
+        "host": "101.230.159.235",
+        "port": 8600,
+        "username": "***"
+      },
+      "sdkVersion": "1.1.9"
+    },
+    {
+      "name": "ticker 600519.SH（连接器解析）",
+      "file": "r3-ticker.raw.json",
+      "price": 1243.88,
+      "prevClose": 1237,
+      "changePercent": 0.5562,
+      "bid": 1243.77,
+      "ask": 1243.88,
+      "timestamp": 1790584189000
+    },
+    {
+      "name": "ticker 裸 6 位入参归一到规范形",
+      "canonical": "600519.SH",
+      "samePrice": true
+    },
+    {
+      "name": "ticker 000001.SZ（深市）",
+      "price": 11.3,
+      "prevClose": 11.3
+    },
+    {
+      "name": "klines 1d（升序 + 数量）",
+      "file": "r3-klines-1d.raw.json",
+      "latencyMs": 103,
+      "count": 30,
+      "first": {
+        "openTime": 1786896000000,
+        "open": 1295,
+        "high": 1301,
+        "low": 1280.34,
+        "close": 1293.09,
+        "volume": 7842956,
+        "closeTime": 1786896000000
+      },
+      "last": {
+        "openTime": 1790524800000,
+        "open": 1236,
+        "high": 1244.01,
+        "low": 1228.1,
+        "close": 1243.88,
+        "volume": 2821830,
+        "closeTime": 1790524800000
+      }
+    },
+    {
+      "name": "klines 1m（当日分时，升序）",
+      "file": "r3-klines-1m.raw.json",
+      "latencyMs": 328,
+      "count": 60,
+      "first": {
+        "openTime": 1790575200000,
+        "open": 1240.01,
+        "high": 1240.01,
+        "low": 1239.78,
+        "close": 1240,
+        "volume": 5100,
+        "closeTime": 1790575200000
+      },
+      "last": {
+        "openTime": 1790578740000,
+        "open": 1243.88,
+        "high": 1243.88,
+        "low": 1243.88,
+        "close": 1243.88,
+        "volume": 49100,
+        "closeTime": 1790578740000
+      }
+    },
+    {
+      "name": "klines 1w",
+      "count": 8,
+      "last": {
+        "openTime": 1790524800000,
+        "open": 1236,
+        "high": 1244.01,
+        "low": 1228.1,
+        "close": 1243.88,
+        "volume": 2821830,
+        "closeTime": 1790524800000
+      }
+    },
+    {
+      "name": "klines 1M",
+      "count": 6,
+      "last": {
+        "openTime": 1788192000000,
+        "open": 1295,
+        "high": 1338.86,
+        "low": 1228.1,
+        "close": 1243.88,
+        "volume": 48388896,
+        "closeTime": 1788192000000
+      }
+    },
+    {
+      "name": "orderbook 五档",
+      "file": "r3-orderbook.raw.json",
+      "latencyMs": 2801,
+      "bidLevels": 5,
+      "askLevels": 5,
+      "bestBid": {
+        "price": 1243.77,
+        "amount": 100
+      },
+      "bestAsk": {
+        "price": 1243.88,
+        "amount": 319
+      }
+    },
+    {
+      "name": "listInstruments 全量 + 名称检索",
+      "file": "r3-instruments.raw.json",
+      "latencyMs": 28506,
+      "total": 5570,
+      "maotaiMatches": 1
+    },
+    {
+      "name": "贵州茅台",
+      "file": "r3-fundamentals.raw.json",
+      "latencyMs": 853,
+      "symbol": "600519.SH",
+      "timestamp": 1790596891446,
+      "fiftyTwoWeekHigh": 1568,
+      "fiftyTwoWeekLow": 1151.01
+    },
+    {
+      "name": "交叉 sanity：ticker 价 vs 日K末收",
+      "tickerPrice": 1243.88,
+      "lastClose": 1243.88,
+      "ratio": 0,
+      "conclusion": "同源一致（差 <5%）"
+    },
+    {
+      "name": "港股形态拒绝（fail-closed）",
+      "code": "TRADING_UNSUPPORTED_SYMBOL",
+      "message": "Xysz cn: \"00700.HK\" is not an A-share symbol (this connector serves cn/A-share only)"
+    }
+  ],
+  "failures": []
+}

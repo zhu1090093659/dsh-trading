@@ -1,0 +1,14 @@
+{
+  "symbol": "600519.SH",
+  "ticker": {
+    "symbol": "600519.SH",
+    "price": 1243.88,
+    "timestamp": 1790584189000,
+    "volume": 2821830,
+    "prevClose": 1237,
+    "changePercent": 0.5562,
+    "bid": 1243.77,
+    "ask": 1243.88
+  },
+  "connectorLatencyMs": 2786
+}

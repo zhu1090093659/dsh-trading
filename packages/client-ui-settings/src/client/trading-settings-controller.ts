@@ -46,6 +46,7 @@ export const PROVIDER_LABELS: readonly Readonly<ProviderMeta>[] = [
   { id: 'tiger', label: 'provider.tiger', url: 'https://developer.itigerup.com', env: 'TIGER_ID', type: 'commercial', markets: ['hk', 'us', 'cn'] },
   { id: 'jin10', label: 'provider.jin10', url: 'https://mcp.jin10.com', env: 'JIN10_MCP_TOKEN', type: 'public', markets: ['global'] },
   { id: 'hithink', label: 'provider.hithink', url: 'https://fuyao.aicubes.cn', env: 'HITHINK_FINANCE_API_KEY', type: 'commercial', markets: ['cn', 'futures'] },
+  { id: 'xysz', label: 'provider.xysz', url: 'https://www.chinastock.com.cn', env: 'XYSZ_API_URL', type: 'commercial', markets: ['cn'] },
 ]
 
 /** 新闻/公告源候选（issue #96 源配置化）：id = 各 kit NewsSource 词汇；label = 词典键。 */
