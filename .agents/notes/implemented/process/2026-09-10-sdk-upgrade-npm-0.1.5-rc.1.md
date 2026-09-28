@@ -145,7 +145,10 @@ deprecate，且造成 npm 与 Release 面断层）。
   宿主 + 无头 Chrome 完成：带 token 303 / 无 token 401 / 未认证 API 401；交易三栏壳、
   自选、行情/策略/知识库 tab、「发给 Agent」按钮渲染；设置对话框与本仓「交易」页完整
   渲染（通用：涨跌配色 + 金十 MCP Token；市场数据源：六市场 tab + provider 凭证卡）
-  ——client-ui-settings 的 configForms 迁移与 locale 合并经真机 GUI 证实；boot 日志
+   ——client-ui-settings 的 configForms 迁移与 locale 合并经真机 GUI 证实（该次只看渲染，
+   写入面未验；「保存」实为失效，修复见
+   [交易设置 UX note](../feature/2026-09-13-trading-settings-ux-grouping.md) 的
+   「设置保存失效修复（2026-09-24）」节）；boot 日志
   无 slot/模块错误；移除的 session-archive / usage 不再出现，原生「性能与用量」在位。
 - Rollout 完成（2026-09-23，本地构建/安装，未推 tag、未 npm publish、未创建 Release）：
   ① 桌面壳本地重建重装：`desktop` 的 `npm run prepare-runtime`（host 闭包 census 全

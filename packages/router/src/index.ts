@@ -2,15 +2,17 @@
  * @dshtrading/router —— 市场/数据源路由插件（host 面，市场无关共享行，base 拥有）。
  *
  * 职责（docs/exchange-routing.md §2 定稿）：
- * - 注册 `dshtrading` settings namespace（用户设置一级：markets.<market>.provider），
- *   分层 = schema 默认 → 组合 base（本轮默认表）→ 用户层（`~/.dsh/settings.yaml`），
- *   用户层赢；base 默认实现「现状零变化」。
+ * - expose `dshtrading` 设置面（用户设置一级：markets.<market>.provider）。
+ *   0.1.7 起 settings 由 loader 行配置承载：本行（id dsh-trading-market-router）
+ *   的 Config 即设置 schema，设置页按行 id 寻址读写；字段须标 volatile 才可
+ *   在设置页保存（SettingsForms.write 的 isVolatilePath 闸门）。
  * - provide `tradingMarketRouter` 服务：连接器 apply 时 consult
  *   `activeProvider(market)`——设置选谁谁激活。无 router 的旧部署连接器回退
  *   enabled 语义（向后兼容）。
- * - `applies: 'restart'`：连接器 apply 只在挂载时跑，切交易所后新建会话生效
- *   （preset 挂载是会话级的，无需重启 dsh 进程）。watch 服务面保留，live 热切换
- *   留待后续（需要连接器 re-inject，本轮不做——YAGNI）。
+ * - 保存路径（0.1.7）：设置页写入 → SettingsForms.write → configEditor.edit →
+ *   loader volatile-only 更新（字段标了 volatile，不重载插件）→ 宿主 emit
+ *   `loader/volatile-update` → 本插件 diff provider 并通知 watchers；数据面
+ *   经 MarketDataRegistryService 按最新路由惰性解析，GUI 热切换即刻生效。
  *
  * 兼容性设计（§2.4）：
  * - markets 用 Schema.dict —— 新市场 = 新键，schema 零改；
@@ -25,6 +27,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
+import type { Volatile } from '@deepseek-ai/cosmokit'
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 
 import type {
@@ -107,6 +110,12 @@ export interface Config {
   credentials?: Record<string, Record<string, string>>
   /** 新闻相关设置（WS2c）：默认无 key（公共源）。 */
   news?: NewsConfig
+  /**
+   * 涨跌配色：red-up = 红涨绿跌（国内习惯），green-up = 绿涨红跌（国际习惯）。
+   * 声明在 schema 里才进 describe 投影（0.1.7 SettingsForms 只投影 schema 声明
+   * 的字段）——否则设置页写入能落盘、读回却永远缺该字段，radio 无法回显。
+   */
+  colorMode?: 'red-up' | 'green-up'
 }
 
 export const DEFAULT_MARKETS: Record<string, MarketProviderEntry> = {
@@ -130,10 +139,23 @@ const MarketProviderEntrySchema = Schema.object({
   tradeProvider: Schema.string().default(undefined),
 })
 
-export const Config: Schema<Config> = Schema.object({
+/**
+ * 0.1.7 起整个 Config 标记 volatile（llm-pi-ai 同款，官方 host 包先例）：
+ * - 0.1.7 的 settings 面只允许写 volatile 声明的字段（SettingsForms.write 的
+ *   isVolatilePath 闸门），不标 = 设置页保存必被拒（「保存不了」的根因之一）；
+ * - volatile 的运行时值是 cosmokit VolatileRef（引用），插件持有引用、
+ *   .get() 惰性取当前快照，并在 `loader/volatile-update` 事件里刷新派生
+ *   状态（0.1.5 世代 installSection 的 setSource/onChange 钩子已随该代
+ *   settings 面删除）。
+ */
+// 0.1.7：volatile() 把返回类型投成 Volatile 包装（运行时是引用），与
+// Schema<Config>（纯数据形态）不再兼容——声明面放宽为 Schema<any>，读取面
+// 由 RouterConfigView 收窄（tsconfig exactOptionalPropertyTypes 下 VolatileSnapshot
+// 的 readonly 数组与 Config 的可变数组天然不合）。
+export const Config: Schema<any> = Schema.object({
   // 默认值用字面量对象（不用函数——该 schemastery 版本 dict 的 default 函数与 loader 解析
   // 不兼容）→ settings resolver 在用户文档缺失时输出完整默认 markets（critical：
-  // installSettingsSection 的 resolved 值没有默认时 = {}，路由会判不出任何 provider）。
+  // resolved 值没有默认时 = {}，路由会判不出任何 provider）。
   markets: Schema.dict(MarketProviderEntrySchema).default({ ...DEFAULT_MARKETS }),
   // credentials 可选：各 provider 的 API Key/Secret/Token/Gateway 地址字典
   credentials: Schema.dict(Schema.dict(Schema.string())).default({}),
@@ -143,35 +165,59 @@ export const Config: Schema<Config> = Schema.object({
     // 每市场启用源 id 列表（issue #96）：市场键开放；键缺省 = kit 默认源全集。
     sources: Schema.dict(Schema.array(Schema.string())).default({}),
   }).default({}),
-})
+  // 涨跌配色（2026-08-31 全局设置）：settings UI 的 radio 写本键；默认 red-up 保持
+  // 现状零变化。必须声明在 schema —— 0.1.7 的 describe 只投影 schema 声明字段，
+  // 未声明的写入能落盘但读不回，radio 会永远停在默认值。
+  colorMode: Schema.string().default('red-up'),
+}).volatile()
 
-/** settings namespace（kebab-case 品牌化，llm-pi-ai 同款）。 */
+/**
+ * 设置页寻址 id（0.1.7）：客户端 configForms.get(<id>) 与服务端
+ * SettingsForms.write 的 ns 都使用 loader 行 id（entry.options.id），不再是
+ * 自由 namespace 字符串。本行 id = dsh-trading-market-router（base patch 拥有）。
+ * SETTINGS_NAMESPACE 保留为兼容导出（旧文档/测试引用），运行时不再参与寻址。
+ */
 export const SETTINGS_NAMESPACE = 'dshtrading' as SettingsNamespace
+export const SETTINGS_ENTRY_ID = 'dsh-trading-market-router'
 
 /* ------------------------------------------------------------------ */
 /* MarketRouterService（provide 到 tradingMarketRouter）                    */
 /* ------------------------------------------------------------------ */
 
+/**
+ * 已解析（volatile 剥离后）的配置快照形态：cosmokit 的 VolatileSnapshot 把
+ * 嵌套数组投成 readonly，与 Config 的可变数组类型不合——路由面只读，收窄到
+ * 本服务实际消费的字段形状即可（news.sources 消费方按 readonly string[] 兼容）。
+ */
+interface RouterConfigView {
+  markets: Record<string, MarketProviderEntry>
+  credentials?: Record<string, Record<string, string>>
+  news?: { cryptoPanicKey?: string; sources?: Readonly<Record<string, readonly string[]>> }
+}
+
 export class MarketRouterService extends Service implements MarketRouterServiceContract {
-  // source thunk 可替换：settings 挂载前 = 组合 entry，挂载后 = resolved scope。
-  // TS 编译期 private 而非 ECMAScript #（realm 代理按类身份校验，README 定稿 5）。
-  private source: () => Config
+  // 0.1.7 volatile 契约：Config 整体解析为 cosmokit VolatileRef（引用），插件
+  // 持有引用、按需 .get() 取当前不可变快照；写路径由 settings 面经 loader 的
+  // volatile-only 更新提交进同一引用（_commitVolatile → updateVolatile），
+  // 快照指针前进后本服务的惰性读取自然看到新值。TS 编译期 private 而非
+  // ECMAScript #（realm 代理按类身份校验，README 定稿 5）。
+  private readonly source: Volatile<RouterConfigView>
   private readonly watchers = new Set<(next: string | undefined, prev: string | undefined) => void>()
   private last: Record<string, string | undefined> = {}
 
-  constructor(ctx: Context, source: () => Config) {
+  constructor(ctx: Context, source: Volatile<RouterConfigView>) {
     super(ctx, 'tradingMarketRouter')
     this.source = source
   }
 
-  /** settings onChange 时替换权威源（installSettingsSection.setSource 契约）。 */
-  setSource(source: () => Config): void {
-    this.source = source
+  /** 当前已解析配置快照（volatile 引用的不可变视图；每次读取取最新）。 */
+  snapshot(): RouterConfigView {
+    return this.source.get() as RouterConfigView
   }
 
   /** 某市场当前激活的 provider slug（settings resolved：用户层赢，缺省 base 默认）。 */
   activeProvider(market: string): string | undefined {
-    return this.source().markets[market]?.provider
+    return this.snapshot().markets[market]?.provider
   }
 
   /**
@@ -180,34 +226,34 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
    * （§2.4 字段预留语义——连接器交易面 slug 与数据面一致是现状常态）。
    */
   activeTradeProvider(market: string): string | undefined {
-    const entry = this.source().markets[market]
+    const entry = this.snapshot().markets[market]
     return entry?.tradeProvider ?? entry?.provider
   }
 
   /** 获取某提供方的 API 凭证字典（如 apiKey、apiSecret 等）。 */
   getCredential(provider: string): Record<string, string> | undefined {
-    return this.source().credentials?.[provider]
+    return this.snapshot().credentials?.[provider]
   }
 
   /** WS2c：CryptoPanic API token（settings resolved；缺省 undefined = 无 key = 新闻走公共源）。 */
   newsKey(): string | undefined {
-    return this.source().news?.cryptoPanicKey
+    return this.snapshot().news?.cryptoPanicKey
   }
 
   /** 某市场启用的新闻/公告源 id 列表（issue #96；缺省 undefined = 该 kit 默认源全集）。 */
   newsSources(market: string): readonly string[] | undefined {
-    return this.source().news?.sources?.[market]
+    return this.snapshot().news?.sources?.[market]
   }
 
-  /** 订阅激活变化（settings commit 驱动；restart 型当前仅记录，未来 live 用）。 */
+  /** 订阅激活变化（volatile-update 驱动；restart 型当前仅记录，未来 live 用）。 */
   watch(cb: (next: string | undefined, prev: string | undefined) => void): () => void {
     this.watchers.add(cb)
     return () => { this.watchers.delete(cb) }
   }
 
-  /** 内用：settings onChange 后 diff 并通知 watchers（通知在 watch 后注册的同步回调）。 */
+  /** 内用：volatile-update 后 diff 并通知 watchers（通知在 watch 后注册的同步回调）。 */
   notify(): void {
-    const source = this.source()
+    const source = this.snapshot()
     const next: Record<string, string | undefined> = {}
     for (const [market, entry] of Object.entries(source.markets)) next[market] = entry.provider
     for (const [market, provider] of Object.entries(next)) {
@@ -436,7 +482,7 @@ function logger(ctx: Context): LogLike {
  * （无匹配连接器注册即无激活）。已知词汇仅供此告警与设置 UI 候选清单。
  * 返回未知 slug 清单（测试可直证）。
  */
-export function warnUnknownProviders(config: Config, log: LogLike): string[] {
+export function warnUnknownProviders(config: RouterConfigView, log: LogLike): string[] {
   const known = new Set<string>(PROVIDER_VOCABULARY)
   const unknown: string[] = []
   for (const [market, entry] of Object.entries(config.markets)) {
@@ -456,12 +502,12 @@ export function warnUnknownProviders(config: Config, log: LogLike): string[] {
 }
 
 export function apply(ctx: Context, config: Config): void {
-  // loader 没写官方 config 合并语义时，dict 无默认 → 这里兜底合并 DEFAULT_MARKETS。
-  const effective: Config = {
-    markets: { ...DEFAULT_MARKETS, ...(config?.markets ?? {}) },
-    news: config?.news ?? {},
-  }
-  const service = new MarketRouterService(ctx, () => effective)
+  // 0.1.7：Config 标 volatile 后，loader 传进 apply 的 config 是 cosmokit
+  // VolatileRef（引用，见 Config 头注）。这里直接把引用交给
+  // MarketRouterService 持有；每次 activeProvider()/getCredential() 等读取时
+  // 经 snapshot() 取最新不可变快照——settings 面保存后 loader 的
+  // volatile-only 更新会推进同一引用，读取即见新值，无需重启。
+  const service = new MarketRouterService(ctx, toVolatile(config))
   // 注册表与 router 同 fiber 提供：base patch 行零改动。
   const registry = new MarketDataRegistryService(ctx, service)
   // 交易注册表（issue #40 契约）同 fiber 提供——2026-09-04 修复：此前只有契约与消费方、
@@ -470,7 +516,7 @@ export function apply(ctx: Context, config: Config): void {
   // 新闻注册表与 router/registry 同 fiber 提供（Issue #37）；Service 构造即自 provide。
   new TradingNewsRegistryService(ctx)
   const log = logger(ctx)
-  warnUnknownProviders(effective, log)
+  warnUnknownProviders(service.snapshot(), log)
 
   // routing_get / instruments_search（issue #33 / P4，host 平面，全会话可见 D4）。
   ctx.inject(['tools'] as never, (toolCtx) => {
@@ -485,17 +531,26 @@ export function apply(ctx: Context, config: Config): void {
     }
   })
 
-  // settings 服务存在时：注册 namespace（base = 组合 entry，用户层赢）+ 源切换
-  // + onChange 通知 diff。settings 缺失（老部署未挂）→ 服务照常 provide，
-  // 源恒为组合配置（= 现状行为），路由仍然有效。
-  ctx.inject(['settings'], (settingsCtx) => {
-    settingsCtx.settings.installSection(ctx, SETTINGS_NAMESPACE, Config, effective, {
-      // current 是 thunk（() => resolved Config），不是 Config 本体——先调用再校验，
-      // 否则 Object.entries(undefined) 抛错会掐断 installSection 的后续接线。
-      setSource: (current) => { service.setSource(current); warnUnknownProviders(current(), log) },
-      onChange: () => service.notify(),
-    })
-  })
+  // 0.1.7 volatile 热更新：settings 保存经 loader 的 volatile-only 更新提交后，
+  // 宿主 emit loader/volatile-update。这里 diff provider 变化并通知 watchers
+  // （取代 0.1.5 世代 installSection 的 setSource/onChange 接线——两个钩子已随
+  // 该代 settings 面删除）。settings 缺失（老部署未挂）时本事件不会到，
+  // 服务仍按组合配置常驻，路由不失效。
+  ctx.on('loader/volatile-update' as never, (() => {
+    warnUnknownProviders(service.snapshot(), log)
+    service.notify()
+  }) as never)
+}
+
+/**
+ * 把插件 apply 收到的 config 归一为 volatile 引用面：
+ * 0.1.7 loader 传 VolatileRef（有 .get()）；单测/工具直调传纯对象（无 .get()），
+ * 包一层等价引用，两种形态共用同一条读取路径。
+ */
+function toVolatile(config: Config): Volatile<RouterConfigView> {
+  const candidate = config as unknown as { get?: unknown }
+  if (typeof candidate?.get === 'function') return config as unknown as Volatile<RouterConfigView>
+  return { get: () => config as unknown as RouterConfigView }
 }
 
 /** 供测试/连接器单测使用的纯函数：给定 Config 返回市场路由判定。 */

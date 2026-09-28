@@ -68,15 +68,19 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **金十数据 (`jin10`)** | MCP 开放数据服务（免费） | `JIN10_MCP_TOKEN`（或设置中心 `dshtrading.credentials.jin10.token`） | [mcp.jin10.com/app](https://mcp.jin10.com/app/) | 标准 MCP 服务（Streamable HTTP，协议 2025-11-25）：实时快讯、财经资讯、本周财经日历、全球品种报价与分钟 K 线（现货贵金属/原油/铜、外汇、全球与 A 股指数）。工具：`flash_list` / `flash_search` / `news_list` / `news_search` / `news_get` / `econ_calendar` / `global_instruments` / `global_quote` / `global_klines`；每用户每工具每北京时间自然日限 1500 次调用；快讯/资讯只下发标题、时间与链接（数据零再分发） |
 
-配置方式二选一（BYOK，插件不内置密钥）：
+配置方式二选一（BYOK，插件不内置密钥）。推荐路径是设置中心：**设置 → 交易 → 市场快讯数据源**（保存即生效）。手改文档时 0.1.7 起写当前 profile 的 `cordis.patch.yml`：
 
 ```yaml
-# ~/.dsh-trading/settings.yaml
-dshtrading:
-  credentials:
-    jin10:
-      token: "sk-你的金十 MCP Token"
+# ~/.dsh-trading/profiles/<profile>/cordis.patch.yml
+- id: dsh-trading-market-router
+  name: "@dshtrading/router"
+  config:
+    credentials:
+      jin10:
+        token: "sk-你的金十 MCP Token"
 ```
+
+0.1.5 世代的 `~/.dsh-trading/settings.yaml` 已被官方 `importLegacyDocument` 一次性并入活动 profile（原文件改名 `settings.yaml.imported`），继续编辑该文件不再生效。
 
 或写入环境变量 `JIN10_MCP_TOKEN`（也可写工作区 `.env`）。未配置时工具调用报 `TRADING_CREDENTIALS_MISSING` 并在消息中提示配置路径；Token 申请见 [mcp.jin10.com/app](https://mcp.jin10.com/app/)。
 
@@ -97,7 +101,7 @@ dshtrading:
 
 ## 六、环境变量配置建议
 
-可以将所需连接器的 Key 写入根目录 `.env` 或 `~/.dsh-trading/settings.yaml`（= `$DSH_HOME/settings.yaml`）中，例如：
+可以将所需连接器的 Key 写入根目录 `.env`（或进程环境变量；0.1.7 起设置中心保存的凭据落当前 profile 的 patch 文档，见上节），例如：
 ```bash
 # 美股与全球
 FMP_API_KEY="your_fmp_api_key"

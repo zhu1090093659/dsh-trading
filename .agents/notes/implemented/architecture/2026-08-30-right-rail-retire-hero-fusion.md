@@ -44,8 +44,11 @@ Status: implemented
   scope => …)` 回调里用 `scope.slots.register`——根 ctx 上 slots.inject 该类 slot
   会被渲染器静默忽略（同 ui-agent-preset 的做法）。
 - **无当前会话兜底**：右栏退役后无路可走的状态不可接受——HomeHistory 检测
-  `sessions.current === undefined && phase ready` 时执行 startSession 重开（宿主
-  recentWorkspace 策略），hero 融合容器永远可达。
+  「无当前会话 && phase ready」时执行 startSession 重开（宿主 recentWorkspace
+  策略），hero 融合容器永远可达。当前会话读面 0.1.7 起收口 `current-session.ts`：
+  `SessionListState.current` 已删，按官方 ui-layout/ui-workspace 同款从主视图
+  `mainView` retain 计数解出（详见
+  [会话寻址收口](../feature/2026-09-04-unified-send-to-agent-entry.md)）。
 - **品牌头/版本信息不保留**：hero 自带鲸鱼标与「预览版」徽标；版本号随退役列
   一起消失（需要时开设置或走 dev 工具）。
 
@@ -66,8 +69,9 @@ Status: implemented
   全部入口收敛到四处——hero composer（新对话）、融合面板（切会话）、右上角标
   （折叠/新会话）、左下设置。
 - 宿主升级风险点：composer 卡启发式找卡（结构大改时面板退化为不拼接，需重校）、
-  `[aria-haspopup=dialog]` 触发器选择器、session 作用域注册模式。均已在
-  HomeHistory/index.ts 注释标注。
+  `[aria-haspopup=dialog]` 触发器选择器、session 作用域注册模式、当前会话读面
+  （0.1.7 起 `SessionListState.current` 已删，改按 `mainView` retain 计数解出）。
+  均已在 HomeHistory/index.ts、current-session.ts 注释标注。
 - 老键 `dshtrading.browser.workspace.v1`（2.4 输入卡）、新增
   `dshtrading.home.history.open.v1`、`dshtrading.chat.folded.v1` 为 localStorage
   约定，无迁移。

@@ -21,6 +21,12 @@
 
 ## 1. DSH settings 机制调研结论（2026-08-29，源码抽核）
 
+> 本节是 0.1.5 世代（`@deepseek-ai/dsh-settings-file` + `installSection`）的调研快照，
+> 保留作历史依据。**0.1.7 起该机制已换代**：settings 由当前 profile 的 loader 行配置
+> 承载，`installSection`/`settingsNamespace`/`SettingsScope` 全部删除；现行契约见
+> §2.1.1。表中事实仅第 33 行（UI 写路径经 `ctx.remote.settings`、redactSecrets 强制）
+> 仍然成立。
+
 | 事实 | 依据 |
 |---|---|
 | `ctx.settings` 服务由 `@deepseek-ai/dsh-settings-file` 提供，挂在 **base bundle**（web 与 headless 都装） | 抽核 web-app/headless/base 三 bundle deps；`trading-dev` profile `--dump-config` 实证第 54-55 行 `id: settings / name: @deepseek-ai/dsh-settings-file` |
@@ -33,7 +39,10 @@
 | UI 写路径：browser 半包经 `ctx.remote.settings`/settingsController 写，redactSecrets 强制；外部插件需复刻 DSH 内部 client 构建（`tsdown.client.ts` lazy-CJS 工厂）——**本轮明确不做** | `packages/client/ui-settings-plugins/README.md` Known Limitations |
 
 **对 headless 的意义**：设置不是 web-only。headless 会话（spike-runner/trading-dev）
-同样经 base 挂 settings——改 `~/.dsh-trading/settings.yaml` 即可让 headless 会话服从路由。
+同样经 base 挂 settings——0.1.7 起改该 profile 的 `cordis.patch.yml` 里
+`dsh-trading-market-router` 行的 `config` 即可让 headless 会话服从路由（0.1.5 世代改
+`~/.dsh-trading/settings.yaml`；该文档已被官方 `importLegacyDocument` 一次性搬进
+活动 profile 并改名）。
 
 ---
 
@@ -42,18 +51,20 @@
 ### 2.1 图
 
 ```
-~/.dsh-trading/settings.yaml
-  dshtrading:
-    markets:
-      crypto: { provider: binance }     ← enum [binance, okx]，默认 binance
-      us:     { provider: yahoo }       ← enum [yahoo, stooq]，stooq 未实证但保留候选
-      cn:     { provider: tencent }     ← 单候选（占位，为将来多源预留）
-      hk:     { provider: tencent }
-              ↓（settings-file 经 base 挂载，web/headless 一致）
+<profile>/cordis.patch.yml（0.1.7 起：设置落在当前 profile 的 patch 文档）
+  - id: dsh-trading-market-router        ← 行 id 即设置面寻址键（见 §2.1.1）
+    config:
+      markets:
+        crypto: { provider: binance }     ← 开放 slug（词汇表见 §2.2），默认 binance
+        us:     { provider: yahoo }
+        cn:     { provider: tencent }
+        hk:     { provider: tencent }
+              ↓（settings 服务经 base 挂载，web/headless 一致；dsh-settings 按
+                 loader 行配置生成表单，客户端 configForms.get(行 id) 读写）
 @dshtrading/base（host 面）
-  - settings（官方行，base 拥有）
-  - dsh-trading-market-router（新增：本包提供）
-      ctx.inject(['settings']) → installSettingsSection(ctx, dshtrading, schema, defaults, hooks)
+  - settings / config-editor（官方行，base 拥有）
+  - dsh-trading-market-router（本包提供）
+      Config（整体 volatile）→ 设置页可写字段 = markets / credentials / news / colorMode
       → provide tradingMarketRouter 服务（activeProvider(market) / watch）
               ↓（scope 链：agent scope → root realm，规则同 tools）
 crypto-trader preset（会话级，单预设）
@@ -64,6 +75,25 @@ crypto-trader preset（会话级，单预设）
               ↓（0 或 1 个连接器 apply 成功——由设置裁决）
 工具面 = 激活者的工具集（crypto_get_ticker 等市场前缀名不变）
 ```
+
+#### 2.1.1 设置面契约（0.1.7 世代，2026-09-24 修正）
+
+- **寻址**：设置面 id = loader 行 id（`entry.options.id`）。`configForms.get(id)` 与
+  host `SettingsForms.write(ns, …)` 都用它；0.1.5 世代的自由 namespace 字符串
+  （`dshtrading`）与 `installSection`/`setSource`/`onChange` 三个 API 均已删除。
+  本仓行 id = `dsh-trading-market-router`（base bundle patch 拥有；router 侧导出
+  `SETTINGS_ENTRY_ID`）。
+- **可写字段**：仅 schema 中标记 volatile 的字段可写（`isVolatilePath` 闸门），
+  且只有 schema 声明过的字段会被 `describe` 投影回来。router 的 `Config` 因此
+  整体 `.volatile()`；对应地 apply 收到的是 cosmokit VolatileRef，服务持引用
+  按需 `.get()` 取快照。
+- **热更新**：写经 `configEditor.edit` → loader 的 volatile-only 更新原地推进
+  引用（不重载插件）→ 宿主 emit `loader/volatile-update`；router 在该事件里
+  diff provider 并通知 watchers，数据面按最新路由惰性解析。
+- **拒绝语义**：host 拒绝（未挂/只读/revision 过期）时 `ConfigForm.mutate`
+  resolve `false`（不抛）；写动作必须检查该布尔（client-ui-settings 走
+  `requireAccepted`），否则拒绝会被显示成「已保存」。
+- 决策记录：[交易设置 UX note](../.agents/notes/implemented/feature/2026-09-13-trading-settings-ux-grouping.md)。
 
 ### 2.2 关键语义裁决
 
@@ -117,14 +147,19 @@ export const Config: Schema<Config> = Schema.object({
 
 **边界声明（YAGNI）**：本轮不做 live 热切换、不做 profile 级设置、不做 UI 面板。每项都有明确触发条件（见 §3）。
 
+> 三项已于后续落地：GUI 热切换（2026-08-30 注册表模式）、设置 UI 一级菜单「交易」
+> （2026-08-29 起的 client-ui-settings 面板，0.1.7 接线见 §2.1.1）。设置仍为
+> **profile 级**（0.1.7 落当前 profile 的 patch 文档），未引入跨 profile 用户层。
+
 > **`tradeProvider` 语义与已知缺口（2026-09-08，issue #86 实证）**：交易注册表按
 > `tradeProvider ?? provider` 解析，且**不静默降级**——数据 provider 没有交易面时
 > `active(market)` 返回 undefined。默认配置里 us=yahoo（数据）/ alpaca（交易）、
 > cn=tencent / qmt 正是这种形态，因此 agent 的账户只读工具（`<market>_get_positions` 等）
 > 会返回 `TRADING_TRADE_PROVIDER_NOT_ROUTED` 并提示 `dshtrading.markets.<market>.tradeProvider`，
 > 而不是误报「没装交易连接器」。要让账户读面可用，需显式设置
-> `markets.us: { provider: yahoo, tradeProvider: alpaca }`（当前只能改 settings.yaml；
-> 设置面板的 tradeProvider 行与 agent 侧 `routing_set` 均未实现，见 issue #86 待裁决项）。
+> `markets.us: { provider: yahoo, tradeProvider: alpaca }`（设置面板当前只编辑
+> `provider` 与凭证；`tradeProvider` 需手改profile patch 的 `dsh-trading-market-router`
+> 行 config，agent 侧 `routing_set` 未实现，见 issue #86 待裁决项）。
 
 ---
 
@@ -276,7 +311,8 @@ task-board 全局锁导致无法另起 web 实例验证；待用户重启 GUI �
 1. `pnpm -r build` + `pnpm -r test` 全绿（含 router 包单测：schema 默认、dict 键、
    enum 拒非法、remote 兼容不验证）。
 2. crypto-trader 单 preset：binance+okx 行 candidate；**crypto-trader-okx 删除**。
-3. 真机（trading-dev）：`~/.dsh-trading/settings.yaml` 加 `dshtrading.markets.crypto.provider: okx`
+3. 真机（trading-dev）：在该 profile 的 `cordis.patch.yml` 给 `dsh-trading-market-router`
+   行加 `config.markets.crypto.provider: okx`（或经设置 UI 保存）
    → 新建 crypto-trader 会话工具面 = OKX 全量（8 工具）+ 闸门 OKX 词汇；改回 binance →
    工具面回 Binance 4 工具。
 4. 未装 router 的旧组合（模拟）：连接器 enabled 语义照旧（向后兼容单测）。

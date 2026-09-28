@@ -93,3 +93,14 @@ Status: implemented
   换成按会话寻址的 `createDrafts(sessionId, files)` / `releaseDraftAttachment(id)`——
   旧调用在附图路径抛 `createDraftImages is not a function`，导致主按钮恒失败。
   `fill-composer.ts` 与单测 fake 已同步到新 API。
+- 同一 `SessionListState.current` 删除面还静默打碎了 Home 融合历史面板：`HomeHistory`
+  的 `blank` 可见性与 `ChatResizeHandle` 的在场判定都读 `sessions.current`，0.1.7 后
+  恒 `undefined`——面板永不物化，官方 WorkspaceBrowser 又被 priority -1 遮蔽，首页
+  既看不到历史会话也够不到工作区管理入口；单测 fixture 自带 `current`，全绿漏检。
+  修复抽出 `current-session.ts`：按官方 ui-layout（DocumentTitle）/ ui-workspace
+  （mainSessionId）同款读法，从 `SessionListState.byId[*].retainedBy.mainView > 0`
+  解出当前会话（`mainView` 由 dsh-client-ui-session 声明进 SessionReferenceSourceMap），
+  HomeHistory 与 ChatResizeHandle 共用。验证：新增 `current-session.test.ts` 3 例 +
+  `home-history.test.tsx` 两条可见性回归；隔离 profile（trading-web 副本 + 0.1.7 桌面
+  runtime :8890）无头 Chrome 实测首页融合面板在位（历史会话 44 条：可见 3 行 +
+  「展开其余 41 条」，工作区 ⋯ 入口在位），控制台零异常。

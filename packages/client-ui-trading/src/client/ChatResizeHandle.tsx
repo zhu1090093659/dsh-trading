@@ -16,7 +16,9 @@
  */
 import { useEffect, useRef } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import { CHAT_WIDTH_DEFAULT, chatWidthStore, clampChatWidth } from './chat-width-store.ts'
+import { currentSessionId } from './current-session.ts'
 import type { FoldStore } from './fold-store.ts'
 import css from './chat-resize-handle.module.css'
 
@@ -38,7 +40,9 @@ function applyWidth(width: number, persist: boolean): void {
 
 export function ChatResizeHandle({ t, useFolded, useSessions }: ChatResizeHandleProps) {
   const folded = useFolded(value => value)
-  const chatOn = useSessions(state => state.current) !== undefined
+  // 0.1.7：SessionListState 无 current；当前会话从主视图 retain 计数解出
+  // （与 HomeHistory 同一读法，见 current-session.ts）。
+  const chatOn = useSessions((state: SessionListState) => currentSessionId(state)) !== undefined
   const ref = useRef<HTMLDivElement | null>(null)
 
   // 挂载即把持久化宽度同步到 body 变量（会话列展开动画的目标值）；卸载还原，

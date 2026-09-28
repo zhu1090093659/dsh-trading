@@ -22,19 +22,27 @@ const WORKSPACES = {
   error: null,
 }
 
-/** hero 态（当前会话 blank）才会物化 portal 容器渲染面板——会话面按此造。 */
-function sessionState() {
+/** hero 态（当前会话 blank）才会物化 portal 容器渲染面板——0.1.7 当前会话
+ *  按主视图 retain 计数（mainView）解出，不再有 SessionListState.current。 */
+function sessionState(blank = true) {
   return {
-    current: 's1',
     phase: 'ready',
-    byId: { s1: { id: 's1', blank: true, origin: 'user', running: false, updatedAt: 0, displayTitle: '' } },
+    byId: {
+      s1: {
+        id: 's1', blank, origin: 'user', running: false, updatedAt: 0, displayTitle: '',
+        retainedBy: { mainView: 1 },
+      },
+    },
   }
 }
 
-function homeHistoryProps(deleteWorkspace: (workspaceId: string) => Promise<void>) {
+function homeHistoryProps(
+  deleteWorkspace: (workspaceId: string) => Promise<void>,
+  sessions: ReturnType<typeof sessionState> = sessionState(),
+) {
   return {
     t,
-    useSessions: (sel: (s: ReturnType<typeof sessionState>) => unknown) => sel(sessionState()),
+    useSessions: (sel: (s: ReturnType<typeof sessionState>) => unknown) => sel(sessions),
     useWorkspaces: (sel: (s: typeof WORKSPACES) => unknown) => sel(WORKSPACES),
     openSession: () => {},
     startNewSession: () => {},
@@ -45,14 +53,17 @@ function homeHistoryProps(deleteWorkspace: (workspaceId: string) => Promise<void
   }
 }
 
-function renderHomeHistory(deleteWorkspace: (workspaceId: string) => Promise<void>) {
+function renderHomeHistory(
+  deleteWorkspace: (workspaceId: string) => Promise<void>,
+  sessions?: ReturnType<typeof sessionState>,
+) {
   // portal 挂载面：HomeHistory 找 [data-composer-seat] 并把面板并进其父容器。
   const seat = document.createElement('div')
   seat.setAttribute('data-composer-seat', '')
   const scrollBody = document.createElement('div')
   seat.appendChild(scrollBody)
   document.body.appendChild(seat)
-  const view = render(<HomeHistory {...(homeHistoryProps(deleteWorkspace) as never)} />)
+  const view = render(<HomeHistory {...(homeHistoryProps(deleteWorkspace, sessions) as never)} />)
   return { seat, ...view }
 }
 
@@ -74,6 +85,24 @@ describe('HomeHistory 工作区删除入口', () => {
     expect(getByText('browser.ws.delete.desc')).toBeTruthy()
     expect(getByRole('button', { name: 'browser.ws.cancel' })).toBeTruthy()
     expect(getByRole('button', { name: 'browser.ws.delete' })).toBeTruthy()
+  })
+
+  it('用户打开非 blank 会话时首页历史面板退场（工作区管理入口不可达）', () => {
+    // Given 当前会话是非 blank 的历史会话（mainView 保留在 s1，blank=false）
+    // When 渲染 HomeHistory
+    const { queryByRole } = renderHomeHistory(async () => {}, sessionState(false))
+    // Then 面板整板让位对话列：工作区 ⋯ 入口不渲染
+    expect(queryByRole('button', { name: 'browser.ws.aria' })).toBeNull()
+  })
+
+  it('用户没有主视图保留的会话时首页历史面板退场', () => {
+    // Given 会话列表存在但没有任何会话被主视图 retain（mainView 计数为空）
+    const sessions = sessionState()
+    const idle = { ...sessions, byId: { s1: { ...sessions.byId.s1, retainedBy: {} } } }
+    // When 渲染 HomeHistory
+    const { queryByRole } = renderHomeHistory(async () => {}, idle)
+    // Then 无当前会话：工作区 ⋯ 入口不渲染
+    expect(queryByRole('button', { name: 'browser.ws.aria' })).toBeNull()
   })
 
   it('无工作区：不渲染 ⋯ 入口', () => {

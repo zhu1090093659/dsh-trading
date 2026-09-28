@@ -1,21 +1,11 @@
 /**
- * Router 单测：设置 namespace 分层语义（schema 默认 → base → 用户层）、
- * dict 开放（新市场零 schema 改）、enum 拒非法、MarketRouterService 判定、
- * 无 settings 服务时回退组合 entry（向后兼容）。
+ * Router 单测：设置行配置语义（0.1.7 volatile 契约：引用读取 + 热更新）、
+ * dict 开放（新市场零 schema 改）、MarketRouterService 判定、
+ * volatile-update 驱动的 watchers 通知。
  */
 import { Context as CordisContext } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-// 0.1.2-alpha.2 后 dsh-settings 不再导出生插件运行的 installSettingsSection/settingsNamespace；
-// 插件的 settings 接线改为 ctx.inject(['settings'], cb)。本文件只在「thunk 回归」用例里通过
-// 一个可捕获 inject 的上下文直证 apply 的接线语义。
-const captured = vi.hoisted(() => ({
-  hooks: undefined as unknown as {
-    setSource: (source: () => import('../src/index.js').Config) => void
-    onChange: () => void
-  } | undefined,
-}))
-vi.mock('@deepseek-ai/dsh-settings', () => ({}))
 import {
   apply,
   Config,
@@ -34,6 +24,18 @@ import type { MarketDataService, NewsAggregator, TradeService } from '@dshtradin
 
 const ENTRY: ConfigType = { markets: { ...DEFAULT_MARKETS } }
 
+/** 可变引用模拟 cosmokit VolatileRef：setConfig 换内容 = loader 提交新快照。 */
+function mutableRef(initial: ConfigType): { ref: { get: () => ConfigType }; set: (next: ConfigType) => void } {
+  let current = initial
+  return { ref: { get: () => current }, set: (next) => { current = next } }
+}
+
+/** 根 volatile 后 Config(value) 返回 VolatileRef——取 .get() 快照做数据断言。 */
+function resolveConfig(value: unknown): ConfigType {
+  const resolved = (Config as unknown as (v: unknown) => { get: () => ConfigType })(value)
+  return resolved.get()
+}
+
 describe('dshtrading schema（用户设置一级）', () => {
   it('默认值 = 现状零变化（crypto=binance / us=yahoo / cn+hk=tencent）', () => {
     expect(activeProviderOf(ENTRY, 'crypto')).toBe('binance')
@@ -43,9 +45,20 @@ describe('dshtrading schema（用户设置一级）', () => {
   })
 
   it('news 默认空对象（无 key，WS2c）：resolved 无 key 不炸、newsKey 为 undefined', () => {
-    const resolve = Config as unknown as (value: unknown) => ConfigType
-    const resolved = resolve({ markets: { ...DEFAULT_MARKETS } })
+    const resolved = resolveConfig({ markets: { ...DEFAULT_MARKETS } })
     expect(resolved.news?.cryptoPanicKey).toBeUndefined()
+  })
+
+  it('用户改涨跌配色后设置页能回显：colorMode 进 schema 投影（默认 red-up、显式 green-up 透传）', () => {
+    // Given: 设置页的涨跌配色 radio 读写 Config.colorMode（0.1.7 describe 只投影 schema 声明字段）
+    const declared = (Config as unknown as { dict?: Record<string, unknown> }).dict ?? {}
+    // When: 读默认配置与显式 green-up 配置
+    const fallback = resolveConfig({ markets: { ...DEFAULT_MARKETS } })
+    const overridden = resolveConfig({ markets: { ...DEFAULT_MARKETS }, colorMode: 'green-up' })
+    // Then: 字段已声明，且默认回 red-up、显式值原样透传（未声明 = 写得进读不回，radio 无法回显）
+    expect(Object.keys(declared)).toContain('colorMode')
+    expect(fallback.colorMode).toBe('red-up')
+    expect(overridden.colorMode).toBe('green-up')
   })
 
   it('dict 键开放：新市场（jp）不炸 schema（构造即验证，无 schema 报错）', () => {
@@ -86,10 +99,20 @@ describe('dshtrading schema（用户设置一级）', () => {
   })
 
   it('schema 开放字符串：第三方 slug（custom_dex）不被一票否决（2026-08-30 整改 #4）', () => {
-    // schemastery Schema 可调用：Config(value) 即校验+解析。
-    const resolve = Config as unknown as (value: unknown) => ConfigType
-    const resolved = resolve({ markets: { crypto: { provider: 'custom_dex' } } })
+    const resolved = resolveConfig({ markets: { crypto: { provider: 'custom_dex' } } })
     expect(resolved.markets.crypto?.provider).toBe('custom_dex')
+  })
+
+  it('用户在设置页保存数据源时写入被 schema 放行：Config 根标 volatile，解析结果是可取快照的引用', async () => {
+    // Given: router Config 声明（0.1.7 SettingsForms.write 只接受 volatile 声明的字段）
+    const cosmokit = await import('@deepseek-ai/cosmokit')
+    // When: 读取 schema 根标记与一次解析结果
+    const rootVolatile = (Config as unknown as { meta?: { volatile?: boolean } }).meta?.volatile
+    const resolved = resolveConfig({ markets: { ...DEFAULT_MARKETS } })
+    // Then: 根标 volatile（isVolatilePath 对所有字段放行），.get() 后是纯数据快照
+    expect(rootVolatile).toBe(true)
+    expect(cosmokit.isVolatile(resolved)).toBe(false)
+    expect(resolved.markets.crypto?.provider).toBe('binance')
   })
 
   it('运行时校验：未知 slug → warn + 返回清单；已知 slug 静默', () => {
@@ -114,10 +137,10 @@ describe('MarketDataRegistryService（tradingMarketDataRegistry，2026-08-30 注
     subscribeTicker: () => ({ dispose: () => {} }),
   })
   const setup = () => {
-    let source: ConfigType = { markets: { ...DEFAULT_MARKETS } }
-    const router = new MarketRouterService(new CordisContext() as never, () => source)
+    const box = mutableRef({ markets: { ...DEFAULT_MARKETS } })
+    const router = new MarketRouterService(new CordisContext() as never, box.ref)
     const registry = new MarketDataRegistryService(new CordisContext() as never, router)
-    return { router, registry, setSource: (next: ConfigType) => { source = next } }
+    return { router, registry, setConfig: (next: ConfigType) => box.set(next) }
   }
 
   it('注册后按路由解析激活项；重复注册同 (market,provider) 不同实例抛错', () => {
@@ -131,26 +154,29 @@ describe('MarketDataRegistryService（tradingMarketDataRegistry，2026-08-30 注
     expect(() => registry.register('crypto', 'binance', fakeService('binance-2'))).toThrow(/duplicate market data registration/)
   })
 
-  it('热切换语义：setSource 换 provider 后 active() 立即解析到新服务（无 watch 无重启）', () => {
-    const { registry, setSource } = setup()
+  it('用户在设置页切换数据源后注册表按最新路由解析到新服务（无 watch 无重启）', () => {
+    // Given: crypto 市场 binance 与 okx 都已注册，当前路由为 binance
+    const { registry, setConfig } = setup()
     const binance = fakeService('binance')
     const okx = fakeService('okx')
     registry.register('crypto', 'binance', binance)
     registry.register('crypto', 'okx', okx)
     expect(registry.active('crypto')?.service).toBe(binance)
-    setSource({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
+    // When: 用户保存把路由改成 okx（loader 提交新 volatile 快照）
+    setConfig({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
+    // Then: 下一次解析即拿到 okx 服务，不重启进程、不依赖 watch
     expect(registry.active('crypto')?.service).toBe(okx)
     expect(registry.active('crypto')?.provider).toBe('okx')
   })
 
   it('选中了但未注册 → undefined（不静默降级到别家）；注销函数生效', () => {
-    const { registry, setSource } = setup()
+    const { registry, setConfig } = setup()
     const binance = fakeService('binance')
     const unregister = registry.register('crypto', 'binance', binance)
-    setSource({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
+    setConfig({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
     expect(registry.active('crypto')).toBeUndefined() // okx 未注册，不回落 binance
     unregister()
-    setSource({ markets: { ...DEFAULT_MARKETS } })
+    setConfig({ markets: { ...DEFAULT_MARKETS } })
     expect(registry.active('crypto')).toBeUndefined() // binance 已注销
   })
 
@@ -177,10 +203,10 @@ describe('TradeRegistryService（tradingTradeRegistry，2026-09-04 补齐 provid
     getPositions: async () => [],
   })
   const setup = () => {
-    let source: ConfigType = { markets: { ...DEFAULT_MARKETS } }
-    const router = new MarketRouterService(new CordisContext() as never, () => source)
+    const box = mutableRef({ markets: { ...DEFAULT_MARKETS } })
+    const router = new MarketRouterService(new CordisContext() as never, box.ref)
     const registry = new TradeRegistryService(new CordisContext() as never, router)
-    return { router, registry, setSource: (next: ConfigType) => { source = next } }
+    return { router, registry, setConfig: (next: ConfigType) => box.set(next) }
   }
 
   it('按路由解析激活交易服务；重复注册同 (market,provider) 不同实例抛错', () => {
@@ -195,23 +221,23 @@ describe('TradeRegistryService（tradingTradeRegistry，2026-09-04 补齐 provid
   })
 
   it('tradeProvider 显式设置时优先于数据面 provider（数据/交易分离预留语义）', () => {
-    const { registry, setSource } = setup()
+    const { registry, setConfig } = setup()
     const binance = fakeTrade('binance')
     const okx = fakeTrade('okx')
     registry.register('crypto', 'binance', binance)
     registry.register('crypto', 'okx', okx)
-    setSource({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'binance', tradeProvider: 'okx' } } })
+    setConfig({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'binance', tradeProvider: 'okx' } } })
     expect(registry.active('crypto')?.service).toBe(okx)
   })
 
   it('选中了但未注册 → undefined（不静默降级）；注销函数生效', () => {
-    const { registry, setSource } = setup()
+    const { registry, setConfig } = setup()
     const binance = fakeTrade('binance')
     const unregister = registry.register('crypto', 'binance', binance)
-    setSource({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
+    setConfig({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
     expect(registry.active('crypto')).toBeUndefined()
     unregister()
-    setSource({ markets: { ...DEFAULT_MARKETS } })
+    setConfig({ markets: { ...DEFAULT_MARKETS } })
     expect(registry.active('crypto')).toBeUndefined()
   })
 
@@ -225,68 +251,95 @@ describe('TradeRegistryService（tradingTradeRegistry，2026-09-04 补齐 provid
   })
 })
 
-describe('apply 的 installSettingsSection 接线', () => {
-  it('setSource 收到 thunk——先求值再 warn（回归：thunk 误当 Config 抛 TypeError 掐断接线）', () => {
-    const ctx = new CordisContext()
-    ctx.inject = ((_deps: string[], cb: (s: { settings: { installSection: (owner: unknown, ns: unknown, schema: unknown, entry: unknown, hooks: unknown) => void } }) => void) => {
-      cb({ settings: { installSection: (_o, _n, _s, _e, hooks) => { captured.hooks = hooks as never } } } as never)
-      return () => {}
-    }) as never
-    apply(ctx as never, { markets: { ...DEFAULT_MARKETS } } as never)
-    expect(captured.hooks).toBeDefined()
-    const resolved: ConfigType = { markets: { crypto: { provider: 'bybit' } } }
-    expect(() => captured.hooks!.setSource(() => resolved)).not.toThrow()
-    expect(() => captured.hooks!.onChange()).not.toThrow()
-  })
-})
-
 describe('MarketRouterService（tradingMarketRouter）', () => {
-  it('activeProvider 读源（默认 entry）；setSource 后读新源（settings resolved）', () => {
-    const svc = new MarketRouterService(new CordisContext() as never, () => ENTRY)
+  it('用户切换数据源后行情读取即刻取到新 provider（volatile 引用热更新，无重启）', () => {
+    // Given: 路由服务持有 volatile 引用，组合默认 crypto=binance
+    const box = mutableRef(ENTRY)
+    const svc = new MarketRouterService(new CordisContext() as never, box.ref)
     expect(svc.activeProvider('crypto')).toBe('binance')
-    const resolved: ConfigType = { markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } }
-    svc.setSource(() => resolved)
+    // When: 设置保存提交新快照（loader 原地推进同一引用）
+    box.set({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
+    // Then: 下一次读取即是新 provider
     expect(svc.activeProvider('crypto')).toBe('okx')
   })
 
-  it('watch：provider 变化 diff 通知（next/prev）；未变不通知', () => {
-    let source: ConfigType = { markets: { ...DEFAULT_MARKETS } }
-    const svc = new MarketRouterService(new CordisContext() as never, () => source)
+  it('用户部署无 loader 引用时（纯对象直调）路由仍按组合配置解析', () => {
+    // Given: 直调形态只提供可 get 的等价引用（单测/工具面）
+    const svc = new MarketRouterService(new CordisContext() as never, {
+      get: () => ENTRY,
+    })
+    // When: 读取 crypto 路由
+    const provider = svc.activeProvider('crypto')
+    // Then: 取到组合默认值，不因缺 loader 引用而失效
+    expect(provider).toBe('binance')
+  })
+
+  it('用户反复切换数据源时只对真实变化通知 watchers（未变不通知、dispose 后静默）', () => {
+    // Given: 已注册 watcher，首次 notify 记录 undefined→默认值的 diff
+    const box = mutableRef({ markets: { ...DEFAULT_MARKETS } })
+    const svc = new MarketRouterService(new CordisContext() as never, box.ref)
     const events: Array<[string | undefined, string | undefined]> = []
     const dispose = svc.watch((next, prev) => events.push([next, prev]))
     svc.notify()
-    // 首次 diff：四市场各自 undefined→默认值（crypto 的 binance 也在其中）。
     expect(events.filter(([next]) => next === 'binance')).toHaveLength(1)
     const cryptoFirst = events.find(([, prev]) => prev === undefined && events[0]?.[0] === 'binance')
     expect(cryptoFirst).toEqual(['binance', undefined])
+    // When: 配置未变时再次 notify，随后把 crypto 改成 okx
     events.length = 0
     svc.notify()
-    expect(events).toHaveLength(0) // 未变不通知
-    source = { markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } }
+    expect(events).toHaveLength(0)
+    box.set({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
     svc.notify()
+    // Then: 只有真实变化产生一条 binance→okx 通知；dispose 后不再通知
     expect(events).toContainEqual(['okx', 'binance'])
     dispose()
-    source = { markets: { ...DEFAULT_MARKETS, crypto: { provider: 'binance' } } }
+    box.set({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'binance' } } })
     svc.notify()
     const before = events.length
-    expect(events).toHaveLength(before) // dispose 后不再通知
+    expect(events).toHaveLength(before)
   })
 
-  it('newsKey：默认无 key（undefined），setSource 后读 resolved 的 news.cryptoPanicKey（WS2c）', () => {
-    const svc = new MarketRouterService(new CordisContext() as never, () => ENTRY)
+  it('用户保存 CryptoPanic key 后新闻读面即刻取到新值（WS2c）', () => {
+    // Given: 未配置 key 的路由服务
+    const box = mutableRef({ markets: { ...DEFAULT_MARKETS } })
+    const svc = new MarketRouterService(new CordisContext() as never, box.ref)
     expect(svc.newsKey()).toBeUndefined()
-    const resolved: ConfigType = { markets: { ...DEFAULT_MARKETS }, news: { cryptoPanicKey: 'sec_xxx' } }
-    svc.setSource(() => resolved)
+    // When: 设置保存写入 news.cryptoPanicKey
+    box.set({ markets: { ...DEFAULT_MARKETS }, news: { cryptoPanicKey: 'sec_xxx' } })
+    // Then: newsKey 读到新值
     expect(svc.newsKey()).toBe('sec_xxx')
   })
 
-  it('newsSources：默认无配置（undefined = kit 默认源全集），setSource 后读 resolved 的 news.sources[market]（issue #96）', () => {
-    const svc = new MarketRouterService(new CordisContext() as never, () => ENTRY)
+  it('用户保存每市场启用源后读面取到该市场清单，未配置市场仍为未配置（issue #96）', () => {
+    // Given: 未配置启用源的路由服务（undefined = kit 默认源全集）
+    const box = mutableRef({ markets: { ...DEFAULT_MARKETS } })
+    const svc = new MarketRouterService(new CordisContext() as never, box.ref)
     expect(svc.newsSources('cn')).toBeUndefined()
-    const resolved: ConfigType = { markets: { ...DEFAULT_MARKETS }, news: { sources: { cn: ['eastmoney'] } } }
-    svc.setSource(() => resolved)
+    // When: 设置保存 cn 市场只启用 eastmoney
+    box.set({ markets: { ...DEFAULT_MARKETS }, news: { sources: { cn: ['eastmoney'] } } })
+    // Then: cn 读到该清单，us 仍为未配置（不串市场）
     expect(svc.newsSources('cn')).toEqual(['eastmoney'])
     expect(svc.newsSources('us')).toBeUndefined()
+  })
+
+  it('用户在设置页保存后宿主 volatile-update 事件驱动路由 watchers 通知（0.1.7 保存路径）', () => {
+    // Given: apply 完成（服务已 provide）且宿主事件回调已被捕获
+    const events: Array<[string | undefined, string | undefined]> = []
+    const ctx = new CordisContext()
+    const box = mutableRef({ markets: { ...DEFAULT_MARKETS } })
+    let volatileUpdate: (() => void) | undefined
+    ;(ctx as unknown as { on: (event: string, cb: () => void) => void }).on = (event, cb) => {
+      if (event === 'loader/volatile-update') volatileUpdate = cb
+    }
+    apply(ctx as never, box.ref as never)
+    const router = (ctx as unknown as { get: (key: string) => MarketRouterService | undefined }).get('tradingMarketRouter')
+    if (router !== undefined) router.watch((next, prev) => events.push([next, prev]))
+    expect(volatileUpdate).toBeInstanceOf(Function)
+    // When: 设置保存提交新快照后宿主 emit loader/volatile-update
+    box.set({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
+    volatileUpdate!()
+    // Then: watcher 收到 crypto 的 okx 变化（fresh 进程下 prev 为 undefined）
+    expect(events).toContainEqual(['okx', undefined])
   })
 })
 

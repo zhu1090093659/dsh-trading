@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { apply } from '../src/index.js'
 import {
   projectSnapshot,
+  requireAccepted,
   type TradingSettings,
   type SettingsScopeSnapshotLike,
 } from '../src/client/trading-settings-controller.js'
@@ -90,5 +91,24 @@ describe('projectSnapshot（状态投射：value 优先、user presence、dict �
       passphrase: 'pass',
     })
     expect(credState.credentials.alpaca?.apiKey).toBe('alpaca-k')
+  })
+})
+
+describe('requireAccepted（0.1.7 写路径接受语义）', () => {
+  it('用户保存被宿主拒绝时得到显式错误，不再把拒绝当成功', async () => {
+    // Given: Host 拒绝的 mutate 结果（resolve false，而不是 reject）
+    const rejected = Promise.resolve(false)
+    // When: 面板经 requireAccepted 收敛写结果
+    const error = await requireAccepted(rejected, 'dsh-trading-market-router').catch((e: unknown) => e)
+    // Then: 抛出可被面板 catch 的错误，消息带 entry id（保存失败如实显示）
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toContain('dsh-trading-market-router')
+  })
+
+  it('用户保存被宿主接受时静默通过', async () => {
+    // Given: Host 接受的 mutate 结果
+    const accepted = Promise.resolve(true)
+    // When/Then: requireAccepted 正常 resolve，不抛错（面板显示已保存）
+    await expect(requireAccepted(accepted, 'dsh-trading-market-router')).resolves.toBeUndefined()
   })
 })

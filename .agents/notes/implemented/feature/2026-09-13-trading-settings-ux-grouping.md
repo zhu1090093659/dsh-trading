@@ -60,11 +60,11 @@ tab 栏，每个市场面板里又依次是行情提供方卡片网格、「保�
 （UI 结构、词典、写动作语义均不变）：
 
 - 绑定：`ctx.settingsScope.bind<T>({ namespace: 'dshtrading' })` →
-  `ctx.configForms.get<T>('dshtrading')`（软服务 inject `settingsScope` → `configForms`）。
-  `ConfigForm` 的 `getSnapshot()` 与 `mutate(ops, revision?)` 契约与旧 `SettingsScope` 同形
-  （status/value/base/user/revision/writable/mode + revision-fenced path ops），控制器
-  `projectSnapshot` 只换类型名。类型 `SettingsScope`/`SettingsScopeSnapshot` →
-  `ConfigForm`/`ConfigFormSnapshot`。
+  `ctx.configForms.get<T>('dsh-trading-market-router')`（软服务 inject `settingsScope` →
+  `configForms`）。`ConfigForm` 的 `getSnapshot()` 与 `mutate(ops, revision?)` 契约与旧
+  `SettingsScope` 同形（status/value/base/user/revision/writable/mode + revision-fenced
+  path ops），控制器 `projectSnapshot` 只换类型名。类型 `SettingsScope`/`SettingsScopeSnapshot`
+  → `ConfigForm`/`ConfigFormSnapshot`。
 - 只读 shim：0.1.7 的 `dsh-client-store` `SnapshotStore` 已含 `update/set`，本包只用
   getSnapshot+subscribe 的面，改为包内 `TradingSettingsStore`（不再对外声称完整
   SnapshotStore，避免补一堆用不到的写桩）。
@@ -77,3 +77,43 @@ tab 栏，每个市场面板里又依次是行情提供方卡片网格、「保�
   词典测试兜底。
 - 门禁：`packages/client-ui-settings/tsconfig.client.json` 由基线 11 清到 0，typecheck
   棘轮总错误数 475 → 464（`node scripts/typecheck-gate.mjs` 通过）；包内 6 例单测全绿。
+
+## 设置保存失效修复（2026-09-24）：行 id 寻址 + volatile schema + 拒绝不吞
+
+桌面端「设置 → 交易」切换数据源后点「保存」不生效。根因是 0.1.7 设置面换代后，
+Host 与 Client 两侧仍按 0.1.5 世代语义接线，链条上三处同时失效；另有一处
+「拒绝当成功」的显示谎言放大了症状（UI 显示已保存、profile 文档未变）：
+
+- **寻址键换代**：0.1.7 的 settings 由 loader 行配置承载——
+  `SettingsForms.describe()` 的 `ns` = `entry.options.id`，`write(ns, …)` 按
+  `configEditor.entries().find(row => row.options.id === ns)` 查行；`installSection`
+  / `setSource` / `onChange` 三个 0.1.5 API 已整体删除。旧客户端的
+  `configForms.get('dshtrading')` 找不到同名行：describe 不下发该 ns（页面读不到值），
+  mutate 报 `No configurable plugin entry "dshtrading"`。现在两侧统一用 loader 行 id
+  `dsh-trading-market-router`（router 侧 `SETTINGS_ENTRY_ID`、消费方 client-ui-settings
+  同值；行 id 由 base bundle patch 拥有，是部署契约）。
+- **volatile 闸门**：0.1.7 只接受写入 schema 里标了 volatile 的字段
+  （`SettingsForms.write` 的 `isVolatilePath`，且 `volatileForm(schema)` 为 undefined
+  的行根本不进 describe）。router 的 Config 因此整体 `.volatile()`（llm-pi-ai 同款，
+  官方 host 包先例）；对应地 apply 拿到的 `config` 是 cosmokit VolatileRef，
+  `MarketRouterService` 持有引用、`snapshot()` 用 `.get()` 取当前快照，
+  热更新靠 `ctx.on('loader/volatile-update')` → `notify()` 通知 watchers
+  （取代已删的 setSource/onChange；loader 的 volatile-only 更新原地推进同一引用，
+  不重载插件）。
+- **schema 声明才投影**：`describe()` 用 `projectForm` 只投影 schema 声明字段，
+  未声明的字段写得进文档、读不回。`colorMode`（涨跌配色）此前正是这种「只写不读」，
+  radio 永远停在默认值；现声明进 router Config（`Schema.string().default('red-up')`）。
+- **拒绝不吞**：`ConfigForm.mutate` 对 Host 拒绝 resolve `false`（不 reject），
+  旧写动作直接 `await` 丢弃该布尔，拒绝被显示成「已保存」。新增
+  `requireAccepted(mutate结果, entryId)`（controller 内，纯函数可测）：false → 抛错，
+  面板 catch 后如实显示保存失败。
+- 验证：router 29 例 + client-ui-settings 8 例单测；`pnpm build` / `pnpm test`
+  （202 文件 1665 例）/ typecheck 棘轮 446 ≤ 448 / `pnpm test:audit` / i18n 审计全绿。
+  真机验收走隔离 profile（`trading-web-verify`：trading-web 副本，用 0.1.7 桌面 runtime
+  在 :8890 起独立宿主 + 无头 Chrome CDP，验后删除；不动桌面壳与两个 trading-game 实例）：
+  初始读回组合默认（Binance / 红涨绿跌）→ 切 OKX 显示「有未保存的更改」→ 保存显示
+  「已保存」且「当前：OKX (欧易)」→ 切「绿涨红跌」radio 即刻回显 → 重新加载两值仍在；
+  profile patch 落 `dsh-trading-market-router.config.markets.crypto.provider: okx` 与
+  `colorMode: green-up`。修复后的两个包副本已按 profile 刷新契约覆盖
+  `~/.dsh-trading/profiles/trading-web/node_modules/@dshtrading/{router,client-ui-settings}`；
+  桌面壳需重启进程以加载新 client bundle。

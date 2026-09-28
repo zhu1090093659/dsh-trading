@@ -15,6 +15,8 @@
  *
  * 可见性 = 当前会话为 blank（hero 态）；打开非 blank 会话即整板让位对话列
  * （byId 瞬缺按未命中处理——宁可抖动藏面板，不可拼到对话流 composer 上）。
+ * 0.1.7：`SessionListState.current` 已删，当前会话改由 `currentSessionId`
+ * 从 mainView 保留计数解出（官方 ui-layout/ui-workspace 同款读法）。
  * 历史区自身可折叠，展开态持久化 localStorage；列表默认只展示最新 3 条，
  * 其余折叠进「展开其余」页脚（展开态不持久化，回首页即复位）。
  */
@@ -23,6 +25,7 @@ import { createPortal } from 'react-dom'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import { readJson, writeJson } from './store.ts'
+import { currentSessionId } from './current-session.ts'
 import { IconArchive, IconFork, IconMore, IconRename, IconTrash } from './icons.tsx'
 import css from './home-history.module.css'
 
@@ -184,13 +187,16 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
     setWsMenu({ workspaceId, title, x: cx, y: cy, pending: false, error: null })
   }
 
-  const blank = sessions.current !== undefined && sessions.byId[sessions.current]?.blank === true
+  // 0.1.7：SessionListState 已无 current 字段；当前会话按官方读法从主视图
+  // retain 计数解出（见 current-session.ts）。解不出即「无当前会话」。
+  const currentId = currentSessionId(sessions as SessionListState)
+  const blank = currentId !== undefined && sessions.byId[currentId]?.blank === true
 
   // 右栏退役兜底：无当前会话（启动未命中/归档清空）时执行宿主
   // startSession 的 recentWorkspace 策略重开，保证 hero 融合容器可达。
   useEffect(() => {
-    if (sessions.current === undefined && sessions.phase === 'ready') startNewSession()
-  }, [sessions.current, sessions.phase, startNewSession])
+    if (currentId === undefined && sessions.phase === 'ready') startNewSession()
+  }, [currentId, sessions.phase, startNewSession])
 
   useEffect(() => { if (readJson<boolean>(OPEN_KEY, true) !== open) writeJson(OPEN_KEY, open) }, [open])
 
@@ -344,8 +350,8 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
     title: String(item.title ?? item.workspaceId),
     sessionIds: (Array.isArray(item.sessionIds) ? item.sessionIds : []).map(String),
   }))
-  const scopeWorkspace = (sessions.current !== undefined
-    ? workspaceRows.find(row => row.sessionIds.includes(sessions.current as string))?.workspaceId
+  const scopeWorkspace = (currentId !== undefined
+    ? workspaceRows.find(row => row.sessionIds.includes(currentId))?.workspaceId
     : undefined)
     ?? mostRecentlyActive(workspaceRows, sessions.byId)
     ?? workspaceRows[0]?.workspaceId
@@ -410,7 +416,7 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
                   <div
                     key={row.id}
                     className={css.row}
-                    data-current={row.id === sessions.current ? 'true' : undefined}
+                    data-current={row.id === currentId ? 'true' : undefined}
                     onContextMenu={renameState !== null ? undefined : (e) => {
                       e.preventDefault()
                       openMenuAt(row.id, row.displayTitle, e.clientX, e.clientY)

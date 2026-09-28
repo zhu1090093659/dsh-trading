@@ -284,3 +284,19 @@ export function createTradingSettingsStore(form: ConfigForm<TradingSettings>): T
     subscribe: (listener) => form.subscribe(listener),
   }
 }
+
+/**
+ * 0.1.7 写路径的接受语义：ConfigForm.mutate 对 Host 拒绝（settings/rejected /
+ * settings/conflict / 该 namespace 未挂、只读）resolve `false` 而不是 reject，
+ * 只有传输层故障才抛。直接 await 会把「被拒绝」误当成功——设置页显示「已保存」
+ * 而 profile 文档未变（2026-09-24 桌面端实证）。本函数把 false 转成显式错误，
+ * 由面板 catch 后如实显示保存失败。
+ * @param accepted - mutate 的布尔结果。
+ * @param entryId - 设置面 entry id（行 id），进错误消息便于定位。
+ * @returns 接受时正常返回；被拒绝时抛错。
+ */
+export async function requireAccepted(accepted: Promise<boolean> | boolean, entryId: string): Promise<void> {
+  if (!(await accepted)) {
+    throw new Error(`settings write rejected for "${entryId}" (not served, read-only, or stale revision)`)
+  }
+}
