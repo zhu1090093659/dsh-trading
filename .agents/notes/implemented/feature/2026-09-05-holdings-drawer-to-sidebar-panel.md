@@ -32,13 +32,14 @@ Status: implemented
   激活时拉，全市场 no-trade-service → 切 provider 提示）；paper 模式仍读本地
   模拟账本。头部新增交易模式 ghost 切换钮（paper 琥珀/live 绿）。
 - **「+ 添加资产」主按钮**：面板头部常驻（台账桥在位时渲染），打开手动新增
-  对话框；「导入持仓」「重置模拟金」在持仓 tab 动作行。
+  对话框；「重置模拟金」在持仓 tab 动作行（「导入持仓」填入按钮已于 2026-09-29
+  下线，见 [composer 填入入口下线](../simplification/2026-09-29-remove-composer-fill-entries.md)）。
   `trade.holdings.add` 文案改「添加资产 / Add Asset」。
 - **展示重构**（会话列宽度约束）：宽表格改紧凑卡片/行列表——持仓三行卡片、
   汇总总资产卡 + 可展开聚合行、委托/成交/余额紧凑行；tab 条短标签键
   `trade.tab.*`；staged 横幅在 tab 条下方；对话框为全屏遮罩层不受面板约束。
 - **文案同步**（跨包）：`holdings_stage` 工具与 `trade.holdings.import.guide`
-  「资产抽屉」→「资产面板」；删除孤儿键 `trade.drawer.collapse/expand`；
+  「资产抽屉」→「资产面板」（该键随 2026-09-29 导入入口下线删除）；删除孤儿键 `trade.drawer.collapse/expand`；
   `data-dshtrading-trade-drawer` → `data-dshtrading-holdings-panel`；
   docs/design/holdings-ledger.md §6.3 加修订注记。
 

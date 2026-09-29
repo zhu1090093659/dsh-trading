@@ -33,7 +33,9 @@ zh 改 en 漏改无法机器发现。
    渲染处 t() 解析）、strategies toolview 指标标签复用 sv.metrics.*、
    knowledge `未分类` 哨兵改 ASCII `untagged`（纯数据值非文案）。
    compose-quote（发给 Agent 的上下文文本）走 `QuoteMessageCopy` 注入面：
-   默认 zh 常量保兼容，QuoteStage 用 `compose.*` 词典键注入 en 文案。
+   默认 zh 常量保兼容，QuoteStage 用 `compose.*` 词典键注入 en 文案（该模块与
+   `compose.*` 键已于 2026-09-29 随填入入口下线删除，见
+   [composer 填入入口下线](../simplification/2026-09-29-remove-composer-fill-entries.md)）。
 4. **数值单位 locale-aware**：`fundamentals.scale` 作**词典哨兵键**（zh 值 '万'、
    en 值 'B'，不在 UI 渲染）——`t` 不携带 active locale 元数据，从词典值判定
    zh/en 单位制，天然随语言切换响应。`formatScaled`/`fmtCompact`/OrderbookPane

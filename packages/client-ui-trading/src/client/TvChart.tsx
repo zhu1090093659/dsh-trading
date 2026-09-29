@@ -100,8 +100,6 @@ export interface TvChartProps {
   onRangeSelect?: (range: { start: number; end: number } | null) => void
   /** 已提交的框选区间（父级持有以驱动统计面板；此处只负责高亮回显）。 */
   selection?: { start: number; end: number } | null | undefined
-  /** 图表就绪时注册截图回调、卸载时以 null 注销（「发给 Agent」用）。 */
-  onCaptureReady?: (capture: (() => TvChartCapture | null) | null) => void
   /** 策略回测信号标记（可选，issue #41）。 */
   signalMarkers?: readonly ChartSignalMarkerInput[] | undefined
   /** 知识事件标记（可选，issue #41）。 */
@@ -112,13 +110,6 @@ export interface TvChartProps {
   markerTexts?: { entry: string; exit: string } | undefined
   /** 数值紧凑单位 locale（zh = 亿/万，en = K/M/B；缺省 zh 现网口径）。 */
   numLocale?: 'zh' | 'en' | undefined
-}
-
-/** 一次图表截图（PNG data URL + 像素尺寸，回显/命名用）。 */
-export interface TvChartCapture {
-  dataUrl: string
-  width: number
-  height: number
 }
 
 /** kline → 图表 bar（openTime 毫秒 → UTC 秒）。 */
@@ -441,20 +432,7 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
     }
     chart.subscribeCrosshairMove(onCrosshair)
 
-    // 截图回调（v5 takeScreenshot 覆盖主图+副图 pane，白底、不含十字线）。
-    const capture = (): TvChartCapture | null => {
-      try {
-        const canvas = chart.takeScreenshot()
-        if (canvas === null) return null
-        return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height }
-      } catch {
-        return null
-      }
-    }
-    propsRef.current.onCaptureReady?.(capture)
-
     return () => {
-      propsRef.current.onCaptureReady?.(null)
       chart.unsubscribeCrosshairMove(onCrosshair)
       mainRefs.current.clear()
       subRefs.current.clear()

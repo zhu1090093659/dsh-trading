@@ -32,7 +32,6 @@ import { ScheduledTasksPanel } from './ScheduledTasksPanel.tsx'
 import { HoldingsPanel } from './HoldingsPanel.tsx'
 import { FlashPanel } from './FlashPanel.tsx'
 import { MacroPanel } from './MacroPanel.tsx'
-import type { FillComposerFn } from './fill-composer.ts'
 import css from './session-rail.module.css'
 
 export interface SessionRailInjected {
@@ -40,8 +39,6 @@ export interface SessionRailInjected {
   toggleFold(): void
   /** 定时任务执行历史「打开会话」（官方 sessions 通路，index.ts 注入）。 */
   openSession(sessionId: string): void
-  /** 会话输入框填入入口（资产面板「导入持仓」只填不发；index.ts 注入）。 */
-  fillComposer?: FillComposerFn | undefined
   /** 文件页签 ON：宿主 sidebarRight.openTab('files')（index.ts 注入）。 */
   openFilesPanel(): void
   /** 文件页签 OFF / 自有面板互斥：收起宿主右侧栏（index.ts 注入）。 */
@@ -54,7 +51,7 @@ export type SessionRailProps =
   & PropsLocale<'dshtrading.market'>
   & InjectFace<SessionRailInjected>
 
-export function SessionRail({ t, useFolded, useRightbar, startNewSession, toggleFold, openSession, fillComposer, openFilesPanel, collapseRightbar }: SessionRailProps) {
+export function SessionRail({ t, useFolded, useRightbar, startNewSession, toggleFold, openSession, openFilesPanel, collapseRightbar }: SessionRailProps) {
   const folded = useFolded(value => value)
   // 定时任务页签（功能页签 1 号）：会话级开关（无需持久化——每次进来默认收起）。
   const [tasksOpen, setTasksOpen] = useState(false)
@@ -232,7 +229,6 @@ export function SessionRail({ t, useFolded, useRightbar, startNewSession, toggle
       {holdingsOpen && (
         <HoldingsPanel
           t={t}
-          fillComposer={fillComposer}
           onClose={() => { setHoldingsPanelOpen(false) }}
         />
       )}

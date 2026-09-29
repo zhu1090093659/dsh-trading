@@ -11,7 +11,7 @@ Status: implemented
 以「统一台账」重构抽屉的持仓面，四个 owner 拍板的决策点全部落地：
 
 1. **缺省翻转**：tradeMode localStorage 无记录时缺省 paper（已有显式记录的老用户不动）。
-2. **截图导入走 Agent 会话通道**：不新增模型调用路径。「导入持仓」按钮经 fillComposer 只填不发引导文案，用户贴截图发送；Agent 视觉解析后调 holdings_stage 写入宿主侧「待确认区」，抽屉置顶横幅提示确认——**入库前必经人工确认**，与下单闸门同一信任哲学。截图会发往 LLM provider，按钮 title 明示。
+2. **截图导入走 Agent 会话通道**：不新增模型调用路径。用户在会话里贴出截图并发送，Agent 视觉解析后调 holdings_stage 写入宿主侧「待确认区」，抽屉置顶横幅提示确认——**入库前必经人工确认**，与下单闸门同一信任哲学。截图会发往 LLM provider，工具描述明示。客户端「导入持仓」填入按钮已于 2026-09-29 下线（见 [composer 填入入口下线](../simplification/2026-09-29-remove-composer-fill-entries.md)）。
 3. **双字段标记**：origin（paper/live/imported，血缘不可变）+ kind（real/sim，用户标签；导入持仓可改标——截图也可能来自模拟盘）。live 源恒 real、paper 源恒 sim（运行时推导不落库）。
 4. **跨账户汇总**：新「汇总」tab，三源（paper + 四市场 live + imported）按 market:symbol 聚合、可展开分账户明细、FX 折算单一基准币（USD/CNY/HKD 可选，frankfurter.dev 免费汇率，USDT 锚定 USD；内存 1h → 文件缓存 → 恒等兜底三级降级，stale/缺汇率时总资产标注近似或进未折算分区）。
 

@@ -1,9 +1,7 @@
 /**
  * 新闻情报流面板：位于 K 线图下方，展示当前品种相关的最新新闻或公告。
  *
- * 带有“发给 Agent 分析”按钮，实现富途风格的紧凑列表布局。
- *
- * 支持多数据源降级。如果在请求部分数据源时发生降级，会把失败源在底部作为 unavailable 提示。
+ * 富途风格的紧凑列表布局，支持多数据源降级：请求部分数据源降级时把失败源在底部作为 unavailable 提示。
  */
 import { useEffect, useState } from 'react'
 import type { MarketLocaleKey } from './contract.ts'
@@ -30,8 +28,6 @@ export interface NewsFeedPaneProps {
   filterType?: 'exchange' | 'media' | 'all' | undefined
   /** 国际化翻译函数 */
   t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string
-  /** 发给 Agent 分析 */
-  fillComposer?: ((text: string) => Promise<void>) | undefined
 }
 
 /** 仅打开 http(s) 外链（纵深防御：url 来自外部 payload，不校验 scheme 直接 open）。 */
@@ -90,7 +86,7 @@ function formatSourceLabel(source: string, t: (key: MarketLocaleKey, params?: Re
   return source
 }
 
-export function NewsFeedPane({ items, unavailable, fullHeight = false, filterType = 'all', t, fillComposer }: NewsFeedPaneProps): React.JSX.Element {
+export function NewsFeedPane({ items, unavailable, fullHeight = false, filterType = 'all', t }: NewsFeedPaneProps): React.JSX.Element {
   const [, setNow] = useState(Date.now())
   
   // 每分钟更新一次相对时间
@@ -142,18 +138,6 @@ export function NewsFeedPane({ items, unavailable, fullHeight = false, filterTyp
             <span className={css.time}>
               {relativeTime(item.publishedAt, t)}
             </span>
-            {fillComposer !== undefined && (
-              <button
-                className={css.sendBtn}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  fillComposer(`📰 ${item.title}\n${item.url}`).catch(console.error)
-                }}
-                title={t('news.sendToAgentTitle')}
-              >
-                ↦ Agent
-              </button>
-            )}
           </li>
         ))}
       </ul>

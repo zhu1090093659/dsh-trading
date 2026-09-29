@@ -49,7 +49,6 @@ import {
   reloadHoldingsBook, setHoldingsBaseCurrency, stagedHoldings, subscribeTradingEventsHoldings,
 } from './holdings-store.ts'
 import { tradeModeStore, writeTradeMode } from './trade-mode-store.ts'
-import type { SendImageInput } from './fill-composer.ts'
 import css from './holdings-panel.module.css'
 
 export type HoldingsPanelTranslate = (key: MarketLocaleKey, params?: Record<string, unknown>) => string
@@ -58,8 +57,6 @@ export interface HoldingsPanelProps {
   t: HoldingsPanelTranslate
   /** 关闭面板（SessionRail 竖条按钮/头部 ×）。 */
   onClose: () => void
-  /** 会话输入框填入入口（「导入持仓」只填不发；缺席 → 按钮隐藏）。 */
-  fillComposer?: ((text: string, image?: SendImageInput) => Promise<void>) | undefined
 }
 
 type PanelTab = 'positions' | 'summary' | 'orders' | 'fills' | 'balances'
@@ -395,7 +392,7 @@ function aggregateDegradedHint(reasons: TradeRowsReason[], t: HoldingsPanelTrans
   return t(allNoService ? 'trade.noTradeService' : 'trade.credentialHint')
 }
 
-export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps): React.JSX.Element {
+export function HoldingsPanel({ t, onClose }: HoldingsPanelProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<PanelTab>('positions')
   const [originFilter, setOriginFilter] = useState<OriginFilter>('all')
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -864,39 +861,21 @@ export function HoldingsPanel({ t, onClose, fillComposer }: HoldingsPanelProps):
                 </button>
               ))}
             </div>
-            {/* 台账动作行：导入持仓（只填 composer）+ 模拟盘重置 */}
-            {(fillComposer !== undefined || (tradeMode === 'paper' && holdingsAvailable)) && (
+            {/* 台账动作行：模拟盘重置 */}
+            {tradeMode === 'paper' && holdingsAvailable && (
               <div className={css.actionRow}>
-                {fillComposer !== undefined && holdingsAvailable && (
-                  <button
-                    type="button"
-                    className={css.ghostBtn}
-                    title={t('trade.holdings.import.title')}
-                    onClick={() => {
-                      // 只填不发（与「发给 Agent」同款纪律，契约 §6.3）：引导文案
-                      // 填入 composer，截图由用户自己贴入后自行发送。
-                      void fillComposer(t('trade.holdings.import.guide')).catch((error: unknown) => {
-                        console.warn('[dsh-trading] fill composer for holdings import failed:', error)
-                      })
-                    }}
-                  >
-                    {t('trade.holdings.import')}
-                  </button>
-                )}
-                {tradeMode === 'paper' && (
-                  <button
-                    type="button"
-                    className={css.resetBtn}
-                    onClick={() => {
-                      if (typeof window !== 'undefined' && window.confirm(t('trade.paper.resetConfirm'))) {
-                        paper.resetAccount()
-                      }
-                    }}
-                    title={t('trade.paper.reset')}
-                  >
-                    {t('trade.paper.reset')}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className={css.resetBtn}
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && window.confirm(t('trade.paper.resetConfirm'))) {
+                      paper.resetAccount()
+                    }
+                  }}
+                  title={t('trade.paper.reset')}
+                >
+                  {t('trade.paper.reset')}
+                </button>
               </div>
             )}
             {filteredRows.length === 0 ? (

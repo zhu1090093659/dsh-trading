@@ -4,7 +4,7 @@
  * 主图指标读数行（副图指标读数在 TvChart 各自 pane 内）+
  * 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   fetchKlines, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiOrder,
@@ -13,11 +13,7 @@ import {
 import { setHoldingsPanelOpen } from './holdings-store.ts'
 import { tradeModeStore, writeTradeMode } from './trade-mode-store.ts'
 import { TvChart, toBar, toVolume } from './TvChart.tsx'
-import type { TvChartCapture, TvIndicatorGroup } from './TvChart.tsx'
-import { composeQuoteMessage } from './compose-quote.ts'
-import { composeQuoteDataSection, type QuoteDataSectionCopy } from './compose-quote-data.ts'
-import type { QuoteMessageCopy } from './compose-quote.ts'
-import type { SendImageInput, FillComposerFn } from './fill-composer.ts'
+import type { TvIndicatorGroup } from './TvChart.tsx'
 import { FundamentalsStage } from './FundamentalsStage.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
 import { DerivativesStage } from './DerivativesStage.tsx'
@@ -26,11 +22,11 @@ import { OrderPanel } from './OrderPanel.tsx'
 import { paperTradingStore } from './paper-trading-store.ts'
 import { computeRangeStats } from './range-stats.ts'
 import { readoutItems } from './indicator-readout.ts'
-import { IconChevronDown, IconIndicators, IconSend } from './icons.tsx'
+import { IconIndicators } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import {
   INTRADAY_INTERVALS, changePercent, directionColor,
-  fmtChange, fmtClock, fmtCompact, fmtFundingRate, fmtPercent, fmtPrice, scaleLocaleOf,
+  fmtChange, fmtClock, fmtCompact, fmtPercent, fmtPrice, scaleLocaleOf,
 } from './format.ts'
 import { indicators, isCustomIndicator } from './indicator-registry.ts'
 import type { IndicatorDefinition, IndicatorInstance } from '@dshtrading/indicators'
@@ -43,8 +39,7 @@ import { colorModeStore, type ColorMode } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus, type MarketIndexDef } from './market-status.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
-import { fetchNews, fetchFundamentals } from './api.ts'
-import { composeResearchSection } from './compose-research.ts'
+import { fetchNews } from './api.ts'
 import type { ClientNewsItem } from './api.ts'
 import { NewsFeedPane } from './NewsFeedPane.tsx'
 import { MarkerTooltip } from './MarkerTooltip.tsx'
@@ -113,8 +108,6 @@ export interface QuoteStageProps {
   removeIndicator: (id: string) => void
   /** 删除自定义指标（issue #30 删除入口；仅自定义行渲染按钮）。 */
   deleteIndicator: (id: string) => Promise<boolean>
-  /** 行情上下文 → 会话输入框（只填入不发送；shell 注入，缺席时按钮不渲染）。 */
-  fillComposer?: FillComposerFn
 }
 
 function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
@@ -127,12 +120,10 @@ function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
   return 'us'
 }
 
-type SendState = 'idle' | 'sending' | 'sent' | 'error'
-
 /** 信号 reason 的币种符号（按市场；crypto 以 USD 计价近似）。 */
 const CURRENCY_SYMBOL: Record<MarketId, string> = { cn: '¥', hk: 'HK$', us: '$', crypto: '$', futures: '¥', global: '$' }
 
-export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator, fillComposer }: QuoteStageProps) {
+export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
   const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk', 'futures', 'global'].includes(instrument.market))
     ? (instrument.market as MarketId)
@@ -180,9 +171,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
-  const [sendState, setSendState] = useState<SendState>('idle')
-  // 统一「发送给 Agent」下拉菜单开合（2026-09-04 入口收敛）。
-  const [sendMenuOpen, setSendMenuOpen] = useState(false)
   /** 行情板块页签（图表 | 基本面 | 新闻 | 公告）：跨标的保持。 */
   const [stageTab, setStageTab] = useState<'chart' | 'derivatives' | 'fundamentals' | 'news' | 'announcements'>('chart')
   // 渲染期页签归一（issue #54 评审 L3）：衍生品页签是 crypto 专属，切到非 crypto
@@ -277,12 +265,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   /** 区间统计：框选模式开 + 已选逻辑下标区间（TvChart 上报，面板消费）。 */
   const [rangeMode, setRangeMode] = useState(false)
   const [rangeSelection, setRangeSelection] = useState<{ start: number; end: number } | null>(null)
-  /** TvChart 注册的截图回调（图表未渲染/已卸载 = null）。 */
-  const captureRef = useRef<(() => TvChartCapture | null) | null>(null)
-  // 稳定引用：TvChart 走 memo，内联回调/对象会让 memo 失效（每次父渲染都重建图表视图）。
-  const handleCaptureReady = useCallback((capture: (() => TvChartCapture | null) | null) => {
-    captureRef.current = capture
-  }, [])
   const markerTexts = useMemo(() => ({ entry: t('trade.buy'), exit: t('trade.sell') }), [t])
 
   // ── 新闻与公告（issue #37）────────────────────────────────────
@@ -411,7 +393,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     await refreshTradeDesk(activeMarket)
   }, TRADE_DESK_POLL_MS, [stageTab, activeMarket])
 
-
   const onSubmitGuiOrder = async (input: Parameters<typeof placeGuiOrder>[1]): Promise<Awaited<ReturnType<typeof placeGuiOrder>>> => {
     if (tradeMode === 'paper') {
       try {
@@ -447,71 +428,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     if (stageTab === 'derivatives' && market !== 'crypto') setStageTab('chart')
     if (stageTab === 'fundamentals' && market === 'crypto') setStageTab('chart')
   }, [stageTab, market])
-
-  // 统一填入反馈（2026-09-04 入口收敛）：sending/sent/error 状态由「发送给 Agent」
-  // 按钮整体承载，行情快照与资金面快照共用同一套反馈。
-  const fillRequestRef = useRef<AbortController | null>(null)
-  const fillFeedbackRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  useEffect(() => {
-    setSendState('idle')
-    return () => {
-      fillRequestRef.current?.abort()
-      fillRequestRef.current = null
-      clearTimeout(fillFeedbackRef.current)
-    }
-  }, [market, symbol, fillComposer])
-
-  const runFill = (text: string | ((signal: AbortSignal) => Promise<string>), image?: SendImageInput): void => {
-    if (fillComposer === undefined || fillRequestRef.current !== null) return
-    const fillTarget = fillComposer.captureTarget?.() ?? fillComposer
-    const request = new AbortController()
-    fillRequestRef.current = request
-    clearTimeout(fillFeedbackRef.current)
-    setSendState('sending')
-    void (async () => {
-      try {
-        const body = typeof text === 'string' ? text : await text(request.signal)
-        if (request.signal.aborted) return
-        await fillTarget(body, image)
-        if (!request.signal.aborted) {
-          setSendState('sent')
-          fillFeedbackRef.current = setTimeout(() => { setSendState('idle') }, 2000)
-        }
-      } catch (error: unknown) {
-        if (!request.signal.aborted) {
-          console.warn('[dsh-trading] fill composer from quote failed:', error)
-          setSendState('error')
-          fillFeedbackRef.current = setTimeout(() => { setSendState('idle') }, 2600)
-        }
-      } finally {
-        if (fillRequestRef.current === request) fillRequestRef.current = null
-      }
-    })()
-  }
-
-  // 「资金面快照」（原衍生品条「分析资金面」，issue #54；2026-09-04 收敛进统一
-  // 「发送给 Agent」下拉菜单）：把衍生品快照上下文填进会话输入框（只填不发）。
-  // 骨架走词典（derivatives.analyzeBody + 各行标签键）；行值为纯数字/代码，无文案。
-  const onSendFunding = (): void => {
-    if (derivatives === null || symbol === undefined) return
-    const d = derivatives
-    const parts = [
-      d.openInterest !== undefined
-        ? `- ${t('derivatives.oi')} ${fmtCompact(d.openInterest, numLocale)}${d.openInterestValue !== undefined ? ` (${fmtCompact(d.openInterestValue, numLocale)} USD)` : ''}`
-        : undefined,
-      d.fundingRate !== undefined
-        ? `- ${t('derivatives.funding')} ${fmtFundingRate(d.fundingRate)}${d.nextFundingRate !== undefined ? ` (${t('derivatives.predicted')} ${fmtFundingRate(d.nextFundingRate)})` : ''}`
-        : undefined,
-      d.longShortRatio !== undefined ? `- ${t('derivatives.longShort')} ${d.longShortRatio.toFixed(2)}` : undefined,
-      d.topTraderLongShortRatio !== undefined ? `- ${t('derivatives.topLongShort')} ${d.topTraderLongShortRatio.toFixed(2)}` : undefined,
-      d.takerBuySellRatio !== undefined ? `- ${t('derivatives.taker')} ${d.takerBuySellRatio.toFixed(2)}` : undefined,
-      d.markPrice !== undefined && d.indexPrice !== undefined && d.indexPrice > 0
-        ? `- ${t('derivatives.basis')} ${fmtPercent((d.markPrice - d.indexPrice) / d.indexPrice * 100)} (${t('derivatives.markPrice')} ${fmtPrice(d.markPrice)} / ${t('derivatives.indexPrice')} ${fmtPrice(d.indexPrice)})`
-        : undefined,
-    ].filter((line): line is string => line !== undefined)
-    const body = t('derivatives.analyzeBody', { symbol: d.symbol, source: d.source, lines: parts.join('\n') })
-    runFill(body)
-  }
 
   const onCancelGuiOrder = async (orderId: string, sym?: string): Promise<boolean> => {
     const ok = await cancelGuiOrder(activeMarket, orderId, sym)
@@ -728,99 +644,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return markers.length > 0 ? markers : undefined
   }, [newsItems, bars, t])
 
-  // 完整标的上下文：先固定行情与截图，再按点击时标的补齐新闻/公告/基本面。
-  // 只填入文本 + PNG，不自动发送；单源失败在正文标明，切标的取消旧采集。
-  // market/symbol 在函数体内收窄（闭包对 TS 不透传 narrowing），先落成常量。
-  const onSendToAgent = (): void => {
-    if (fillComposer === undefined || sendState === 'sending') return
-    if (market === undefined || symbol === undefined) return
-    const activeMarket: MarketId = market
-    const activeSymbol: string = symbol
-    const capture = captureRef.current?.() ?? null
-    const input = {
-      name: instrument?.name,
-      symbol: activeSymbol,
-      marketLabel: t(TAB_KEY[activeMarket]),
-      intervalLabel: t(INTERVAL_KEY[chartInterval] ?? 'interval.1d'),
-      price: stats.price,
-      change: stats.change,
-      pct: stats.pct,
-      prevClose: stats.prevClose,
-      candle: readoutCandle,
-      indicatorTitles: visibleInstances.map(instance => indicators.get(instance.id)?.title ?? instance.id),
-      withScreenshot: capture !== null,
-    }
-    // exactOptionalPropertyTypes：undefined 字段直接剔除而非显式传 undefined。
-    // deltaWrap 用 '|' 作分隔哨兵拆包裹符对（词典值单字符串无法表达成对括号）。
-    const [deltaOpen = '(', deltaClose = ')'] = t('compose.deltaWrap').split('|')
-    const copy: QuoteMessageCopy = {
-      opener: t('compose.opener'),
-      prevClose: t('compose.prevClose'),
-      priceLine: t('compose.priceLine'),
-      candleLine: t('compose.candleLine'),
-      indicatorsLine: t('compose.indicatorsLine'),
-      listSeparator: t('compose.listSeparator'),
-      deltaWrap: [deltaOpen, deltaClose],
-      prevSep: t('compose.prevSep'),
-      volumeLocale: numLocale,
-      withScreenshotTail: t('compose.withScreenshot'),
-      withoutScreenshotTail: t('compose.withoutScreenshot'),
-    }
-    const text = composeQuoteMessage(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as unknown as Parameters<typeof composeQuoteMessage>[0], copy)
-    // 数据位置段（2026-09-05，owner 裁决）：K 线数据不内联——告知当前图表
-    // 序列的时间范围 + 取数位置（<market>_get_klines 同参复取），分析由
-    // Agent 调工具、写代码完成；已开指标则直接透出计算后的当根读数（与
-    // readoutCandle 同根、图表 legend 同源同参，owner：只给参数让他复算
-    // 属多此一举）。序列未就绪（klines === null）时省略整段。
-    const dataCopy: QuoteDataSectionCopy = {
-      header: t('compose.data.header'),
-      range: t('compose.data.range'),
-      locate: t('compose.data.locate'),
-      indicators: t('compose.data.indicators'),
-    }
-    const dataSection = klines !== null && klines.length > 0 && readoutIndex !== null
-      ? composeQuoteDataSection({
-          market: activeMarket,
-          symbol: activeSymbol,
-          interval: chartInterval,
-          klines,
-          indicatorReadouts: indicatorGroups.map(group => ({
-            title: group.title,
-            outputs: group.outputs.map(output => ({ key: output.key, value: output.values[readoutIndex], precision: output.precision })),
-          })),
-          klinesTool: `${activeMarket}_get_klines`,
-        }, dataCopy)
-      : ''
-    const capturedAt = new Date().toISOString()
-    runFill(async signal => {
-      const timeout = new AbortController()
-      const timer = setTimeout(() => timeout.abort(), 15000)
-      const fetchSignal = AbortSignal.any([signal, timeout.signal])
-      try {
-        const [news, fundamentals] = await Promise.all([
-          fetchNews(activeMarket, activeSymbol, 50, fetchSignal),
-          fetchFundamentals(activeMarket, activeSymbol, fetchSignal),
-        ])
-        const research = composeResearchSection({ news, fundamentals, capturedAt }, {
-          header: t('compose.research.header'), announcements: t('compose.research.announcements'),
-          news: t('compose.research.news'), fundamentals: t('compose.research.fundamentals'),
-          unavailable: t('compose.research.unavailable'), empty: t('compose.research.empty'),
-          sourcesUnavailable: t('compose.research.sourcesUnavailable'), guidance: t('compose.research.guidance'),
-          omitted: t('compose.research.omitted'),
-        })
-        const funding = derivatives === null ? '' : `derivatives: ${JSON.stringify(derivatives)}`
-        return [text, dataSection, research, funding].filter(Boolean).join('\n\n')
-      } finally {
-        clearTimeout(timer)
-      }
-    }, capture === null ? undefined : {
-      dataUrl: capture.dataUrl,
-      name: `${activeSymbol}-${chartInterval}.png`,
-      width: capture.width,
-      height: capture.height,
-    })
-  }
-
   // 空态：未选择标的（空态之后的渲染路径依赖 market/symbol 非空，提前收窄）。
   if (market === undefined || symbol === undefined) {
     return (
@@ -916,74 +739,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         <span className={css.meta}>
           {ticker !== null && <span>{t('quote.updated')} {fmtClock(ticker.timestamp)}</span>}
         </span>
-        {/* 统一「发送给 Agent」入口（2026-09-04 收敛）：报价头常驻，所有页签可见。
-            主按钮一键填行情快照；下拉菜单承载资金面快照（crypto 且快照在位）——
-            取代图表工具栏「发给 Agent」与衍生品条「分析资金面」双入口。 */}
-        {fillComposer !== undefined && (
-          <div className={css.sendWrap}>
-            <button
-              type="button"
-              className={css.sendButton}
-              data-state={sendState === 'idle' ? undefined : sendState}
-              disabled={sendState === 'sending'}
-              title={t('quote.sendToAgentHint')}
-              onClick={onSendToAgent}
-            >
-              <IconSend size={13} />
-              {sendState === 'sent'
-                ? t('quote.sendSent')
-                : sendState === 'error'
-                  ? t('quote.sendFailed')
-                  : sendState === 'sending'
-                    ? t('quote.sendSending')
-                    : t('quote.sendToAgent')}
-            </button>
-            <button
-              type="button"
-              className={css.sendCaret}
-              aria-expanded={sendMenuOpen}
-              aria-haspopup="menu"
-              aria-label={t('quote.sendMenuOpen')}
-              title={t('quote.sendMenuOpen')}
-              onClick={() => { setSendMenuOpen(open => !open) }}
-            >
-              <IconChevronDown size={11} />
-            </button>
-            {sendMenuOpen && (
-              <>
-                <button type="button" className={css.sendBackdrop} aria-label={t('quote.sendMenuOpen')} onClick={() => { setSendMenuOpen(false) }} />
-                <div className={css.sendMenu} role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={css.sendMenuItem}
-                    title={t('quote.sendToAgentHint')}
-                    onClick={() => {
-                      setSendMenuOpen(false)
-                      onSendToAgent()
-                    }}
-                  >
-                    {t('quote.sendMenuSnapshot')}
-                  </button>
-                  {market === 'crypto' && derivatives !== null && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={css.sendMenuItem}
-                      title={t('quote.sendFundingHint')}
-                      onClick={() => {
-                        setSendMenuOpen(false)
-                        onSendFunding()
-                      }}
-                    >
-                      {t('quote.sendMenuFunding')}
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
+
       </div>
 
       {/* 统计行情概览（图表页签专属：基本面页签有自己的信息网格） */}
@@ -1179,7 +935,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 subIndicators={subIndicators}
                 readoutIndex={readoutIndex}
                 onHoverIndex={setHoverIndex}
-                onCaptureReady={handleCaptureReady}
+
                 rangeSelectionMode={rangeMode}
                 selection={rangeSelection}
                 onRangeSelect={setRangeSelection}
@@ -1328,7 +1084,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             fullHeight
             filterType="media"
             t={t}
-            fillComposer={fillComposer}
           />
         </div>
       ) : (
@@ -1339,7 +1094,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
             fullHeight
             filterType="exchange"
             t={t}
-            fillComposer={fillComposer}
           />
         </div>
       )}

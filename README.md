@@ -24,7 +24,7 @@
 
 - **Multi-market research:** follow crypto and stocks in one watchlist, with quotes, news, announcements and fundamentals from configured providers.
 - **Technical analysis:** candlestick charts, MA / EMA / MACD / RSI indicators, order books and crypto derivatives data.
-- **AI trading agents:** coordinate research, trading plans and risk review, with chart context sent to the agent on demand.
+- **AI trading agents:** coordinate research, trading plans and risk review; name a symbol and the agent pulls its quotes, news, disclosures and fundamentals with native tools.
 - **Strategy backtesting:** evaluate historical trading signals with `strategy_backtest` alongside the bundled strategy playbooks; past performance does not predict future returns.
 - **Controlled execution:** dry-run by default, optional paper trading through supported connectors, and human approval for live orders.
 
@@ -54,9 +54,7 @@ Glued on, not grown in.
 
 dsh-trading turns that relationship upside down: **the agent is a first-class citizen of the terminal, and the terminal is the agent's body.** Four things separate it from every chatbot you've used:
 
-1. **Quotes, news, capital flow — the agent has it all.** One click on *Send to Agent*, and the symbol you're watching — live quote, current candle, the chart series' time range with a fetch locator (so the agent pulls the same routed data itself and analyzes it in code), the computed readings of your active indicators, available chart screenshot and derivatives snapshot, plus freshly requested announcements, news and a bounded fundamentals summary — is packaged into the composer without sending. Missing sources are explicit; the agent is guided to verify original disclosures and fill gaps with native research tools. No more screenshot-copy-paste ritual.
-
-![Send to Agent — chart snapshot and quote context injected into the composer](docs/screenshots/chart-to-agent.png)
+1. **Quotes, news, capital flow — the agent has it all.** Live quotes, the current candle, the chart series' time range with a fetch locator (so the agent pulls the same routed data itself and analyzes it in code), the computed readings of your active indicators, derivatives snapshots, plus announcements, news and a bounded fundamentals summary — all native tools the agent drives for the symbol you're watching. Missing sources are explicit; the agent is guided to verify original disclosures and fill gaps with native research tools. No more screenshot-copy-paste ritual.
 
 2. **The agent can trade, but the gate is in your hands.** Market data, order books, derivatives positioning, news, and order placement are all native tools. Yet every order defaults to **dry-run simulation**; live routing requires an explicit `liveTrading: true` opt-in, and then each order still passes through interactive human approval. In headless environments it fails closed. One rule: no move without the gate. Nothing executes behind your back.
 
@@ -73,7 +71,7 @@ The base installer generates these four roles from enabled market bundles, inclu
 A shoddy terminal makes even the smartest agent an armchair general.
 
 - **Center-stage charting.** Lightweight Charts v5 with multi-timeframe switching (5m to weekly); MA / EMA / BOLL / MACD / RSI / KDJ / SuperTrend, all visually editable; strategy signal markers, knowledge-event pins, and drag-to-measure range statistics.
-- **Real market depth.** Live order book with buy/sell pressure bars, tick-by-tick trades, and a derivatives cockpit — open interest, funding rates with settlement countdown, long/short ratio, taker flow. Quote and fund-flow snapshots reach the agent through the unified *send to agent* button (fills the composer, never auto-sends).
+- **Real market depth.** Live order book with buy/sell pressure bars, tick-by-tick trades, and a derivatives cockpit — open interest, funding rates with settlement countdown, long/short ratio, taker flow. Quote and fund-flow data are native tools the agent queries on demand.
 - **Cross-market watchlist.** Crypto perps next to AAPL next to 牧原股份, with sparklines and real-time quotes. Your whole risk universe in one dock.
 
 ### The operations surface is built in

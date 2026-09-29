@@ -48,7 +48,7 @@ Status: implemented
   策略），hero 融合容器永远可达。当前会话读面 0.1.7 起收口 `current-session.ts`：
   `SessionListState.current` 已删，按官方 ui-layout/ui-workspace 同款从主视图
   `mainView` retain 计数解出（详见
-  [会话寻址收口](../feature/2026-09-04-unified-send-to-agent-entry.md)）。
+  [会话寻址收口](../../archived/feature/2026-09-04-unified-send-to-agent-entry.md)）。
 - **品牌头/版本信息不保留**：hero 自带鲸鱼标与「预览版」徽标；版本号随退役列
   一起消失（需要时开设置或走 dev 工具）。
 

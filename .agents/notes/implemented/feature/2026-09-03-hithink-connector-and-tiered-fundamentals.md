@@ -37,7 +37,7 @@ Status: implemented
    - 在 `docs/connectors-guide.md` 中更新全景接入指引。
 5. **衍生品指标栏布局重构（对齐 Binance/OKX 顶部紧凑流式胶囊）**：
    - 将原先堆叠在 K 线图左下角的竖向大方块彻底移除，完全释放 K 线主图的纵向高度；
-   - 将合约指标条（`DerivativesPane`）嵌入顶部行情统计栏（`css.stats`）右侧，采用单行水平胶囊排布（持仓量、资金费率与倒计时、多空比、大户比、主动买卖比），支持点击跳转全景页签与一键发给 Agent。
+   - 将合约指标条（`DerivativesPane`）嵌入顶部行情统计栏（`css.stats`）右侧，采用单行水平胶囊排布（持仓量、资金费率与倒计时、多空比、大户比、主动买卖比），支持点击跳转全景页签（原「一键发给 Agent」入口已于 2026-09-29 下线，见 [composer 填入入口下线](../simplification/2026-09-29-remove-composer-fill-entries.md)）。
 
 ## Verification
 

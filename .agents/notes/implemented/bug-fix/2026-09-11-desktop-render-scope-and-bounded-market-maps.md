@@ -34,8 +34,9 @@ Status: implemented
 
 - `QuoteStage.tsx` 抽出 `StatusBar` 子组件承载秒级时钟与市场时段状态；父组件不再持有
   `clock`，时钟 tick 只重渲染状态栏。
-- `TvChart.tsx` 导出改 `memo(TvChartImpl)`；`QuoteStage` 以 `useCallback` 稳定
-  `onCaptureReady`、`useMemo` 稳定 `markerTexts`（其余 props 已是 memo 值/原始值）。
+- `TvChart.tsx` 导出改 `memo(TvChartImpl)`；`QuoteStage` 以 `useMemo` 稳定
+  `markerTexts`（其余 props 已是 memo 值/原始值）。当时的 `onCaptureReady` 内联箭头
+  已于 2026-09-29 随 [composer 填入入口下线](../simplification/2026-09-29-remove-composer-fill-entries.md) 删除。
   无关父状态变化在 memo 边界短路，真实 props（bars/volumes/dataKey/readoutIndex/指标/
   标记/色彩模式）变化仍照常重建。
 - `MarketSidebar.tsx` 新增 `pruneRecord` 与依赖 `[allRows]` 的回收 effect：`prices`/

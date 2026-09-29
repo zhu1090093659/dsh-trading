@@ -1,5 +1,6 @@
 # Agent Note: 默认发送完整标的上下文
 
+Archived: 2026-09-29
 Status: implemented
 
 ## Problem

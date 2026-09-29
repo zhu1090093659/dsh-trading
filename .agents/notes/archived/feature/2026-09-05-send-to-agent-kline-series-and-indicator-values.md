@@ -1,10 +1,11 @@
 # Agent Note: 「发给 Agent」快照升级——序列时间范围 + 取数位置 + 已开指标当根读数随消息透出
 
+Archived: 2026-09-29
 Status: implemented
 
 ## Problem
 
-「发给 Agent」落地语义只填入快照摘要（现价/涨跌/昨收 + 十字线读数当根 K 线 OHLCV + 已开指标**标题**）+ 图表截图（[2026-09-02 记录](2026-09-02-watchlist-agent-visibility-and-send-to-agent.md)、[2026-09-04 入口统一](2026-09-04-unified-send-to-agent-entry.md)）。owner 2026-09-05 实测两个缺口：
+「发给 Agent」落地语义只填入快照摘要（现价/涨跌/昨收 + 十字线读数当根 K 线 OHLCV + 已开指标**标题**）+ 图表截图（[2026-09-02 记录](../../implemented/feature/2026-09-02-watchlist-agent-visibility.md)、[2026-09-04 入口统一](2026-09-04-unified-send-to-agent-entry.md)）。owner 2026-09-05 实测两个缺口：
 
 1. **序列不在场**：用户选日 K，Agent 收到的只有「当根」读数——图表序列从多久到多久、共几根、去哪取，Agent 全都不知道；对着截图觉得没用（视觉输入难读数），只能自己再去抓标的行情，抓取口径（数据源/周期/条数）还未必与用户所见图表一致。
 2. **指标只有名字没有数值**：快照列「已开启指标：MA、MACD」，但指标算出的结果数值不在场——Agent 要么瞎猜、要么按默认参数复算一套与用户图上的线对不上的值。

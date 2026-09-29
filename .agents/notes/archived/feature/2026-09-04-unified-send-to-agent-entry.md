@@ -1,5 +1,6 @@
 # Agent Note: 「发送给 Agent」入口统一——报价头分体按钮 + 下拉菜单收敛三处散落入口
 
+Archived: 2026-09-29
 Status: implemented
 
 ## Problem
@@ -59,8 +60,8 @@ Status: implemented
 - `DerivativesPane` 变纯展示后不再感知 fillComposer，QuoteStage 中间层（QuotePane/
   MiddleStage）透传链不变。
 - 资金面菜单项依赖衍生品快照在位（30s 轮询首帧前不可用）；现货/非 crypto 市场永不出现。
-- 旧入口记录指向：[2026-09-02 自选合并视图 +「发给 Agent」](../2026-09-02-watchlist-agent-visibility-and-send-to-agent.md)（工具栏按钮位置决策由本记录取代）、
-  [2026-09-03 issue #54 衍生品页签](2026-09-03-issue-54-derivatives-stage.md)（「分析资金面」按钮由本记录收敛）。
+- 旧入口记录指向：[2026-09-02 自选合并视图 +「发给 Agent」](../../implemented/feature/2026-09-02-watchlist-agent-visibility.md)（工具栏按钮位置决策由本记录取代）、
+  [2026-09-03 issue #54 衍生品页签](../../implemented/feature/2026-09-03-issue-54-derivatives-stage.md)（「分析资金面」按钮由本记录收敛）。
 
 ## 0.1.7 cohort 迁移（2026-09-23）：会话寻址收口 + 活动会话读面桥
 
@@ -84,7 +85,7 @@ Status: implemented
 - 验证：`session-target.test.tsx` 3 例覆盖挂载写入/切换跟随/卸载清空；
   client-ui-trading 全量单测通过。**真机 GUI 待验**：本机已安装桌面壳仍跑旧
   cohort（0.1.5-rc.1）runtime，与 0.1.7 客户端包混代会模块割裂，待桌面壳重发布
-  （见 [2026-08-29-trading-web-profile.md](../process/2026-08-29-trading-web-profile.md)）
+  （见 [2026-08-29-trading-web-profile.md](../../implemented/process/2026-08-29-trading-web-profile.md)）
   后按本文「真机端到端验收」口径复核一次「发给 Agent」填入链路。
 - 端到端 GUI 验收（2026-09-23，隔离 profile + 全局 CLI 0.1.7 宿主 + 无头 Chrome）：
   选中 AAPL → 点「发给 Agent」→ composer 真实出现行情快照文本与随附图表截图缩略图，

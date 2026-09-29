@@ -16,7 +16,6 @@
 import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { MiddleStage } from './MiddleStage.tsx'
-import type { FillComposerFn } from './fill-composer.ts'
 import type { Observable, SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
 import css from './quote-pane.module.css'
@@ -34,8 +33,6 @@ export interface QuotePaneInjected {
   removeIndicator: (id: string) => void
   /** 删除自定义指标（issue #30）：桥 DELETE → 注销注册表 + 移除激活实例。 */
   deleteIndicator: (id: string) => Promise<boolean>
-  /** 行情上下文 → 会话输入框（只填入不发送；shell 注入）。 */
-  fillComposer?: FillComposerFn
 }
 
 export type QuotePaneProps =
@@ -50,7 +47,7 @@ interface Rect {
   height: number
 }
 
-export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator, fillComposer }: QuotePaneProps) {
+export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator }: QuotePaneProps) {
   const [rect, setRect] = useState<Rect | null>(null)
 
   useEffect(() => {
@@ -144,7 +141,7 @@ export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndic
     >
       {/* MiddleStage 的 slot 运行时面（viewRequest 等）在面板场景不需要，
           只取 t/两个 store hook 与指标动作。 */}
-      <MiddleStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator, fillComposer } as never)} />
+      <MiddleStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator } as never)} />
     </div>
   )
 }

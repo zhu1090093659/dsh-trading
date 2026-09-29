@@ -1,9 +1,9 @@
 {
   "rules": {
-    "mock": 217,
+    "mock": 199,
     "sleep": 0,
-    "bdd-title": 1565,
-    "bdd-gwt": 1565,
+    "bdd-title": 1528,
+    "bdd-gwt": 1528,
     "weak-assert": 0
   },
   "files": {
@@ -22,9 +22,8 @@
       "bdd-gwt": 11
     },
     "packages/base/test/presets.test.ts": {
-      "mock": 2,
-      "bdd-title": 9,
-      "bdd-gwt": 9
+      "bdd-title": 6,
+      "bdd-gwt": 6
     },
     "packages/base/test/research-tools.test.ts": {
       "mock": 6,
@@ -118,19 +117,6 @@
       "bdd-title": 9,
       "bdd-gwt": 9
     },
-    "packages/client-ui-trading/test/compose-quote-data.test.ts": {
-      "bdd-title": 6,
-      "bdd-gwt": 6
-    },
-    "packages/client-ui-trading/test/compose-research.test.ts": {
-      "bdd-title": 3,
-      "bdd-gwt": 3
-    },
-    "packages/client-ui-trading/test/fill-composer.test.ts": {
-      "mock": 2,
-      "bdd-title": 13,
-      "bdd-gwt": 13
-    },
     "packages/client-ui-trading/test/flash-panel.smoke.test.tsx": {
       "mock": 1,
       "bdd-title": 3,
@@ -218,9 +204,9 @@
       "bdd-gwt": 3
     },
     "packages/client-ui-trading/test/quote-stage.smoke.test.tsx": {
-      "mock": 17,
-      "bdd-title": 14,
-      "bdd-gwt": 14
+      "mock": 4,
+      "bdd-title": 8,
+      "bdd-gwt": 8
     },
     "packages/client-ui-trading/test/range-stats.test.ts": {
       "bdd-title": 4,
@@ -750,9 +736,8 @@
       "bdd-gwt": 6
     },
     "packages/router/test/router.test.ts": {
-      "mock": 1,
-      "bdd-title": 21,
-      "bdd-gwt": 21
+      "bdd-title": 15,
+      "bdd-gwt": 15
     },
     "packages/router/test/tools.test.ts": {
       "bdd-title": 5,
@@ -844,6 +829,6 @@
       "bdd-gwt": 11
     }
   },
-  "tests": 1565,
+  "tests": 1644,
   "scanned": 3
 }

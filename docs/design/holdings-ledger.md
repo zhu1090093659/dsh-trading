@@ -145,9 +145,8 @@ export interface TaggedPosition extends Position {   // 结构扩展，契约不
   localStorage `dshtrading:holdings:baseCurrency`，缺省 USD）+ 总资产 + 分来源小计。
 - 待确认横幅：staged 非空时面板置顶条「N 条待确认持仓」→ 确认对话框
   （可编辑表格：market/symbol/size/entryPrice/account/kind）→ 确认/丢弃。
-- 「导入持仓」按钮：fillComposer 填入引导文案（只填不发，与「发给 Agent」同款纪律），
-  文案提示用户把截图贴进 composer；按钮 title 明示「截图将发送给当前 AI 模型解析」。
-  同时提供「手动新增」对话框（同字段表单）。
+- 持仓录入走「手动新增」对话框（同字段表单）；截图解析入库由 Agent 的
+  `holdings_stage` 工具完成（客户端不再提供「导入持仓」会话填入入口）。
 - 价格供给：面板展开时对全部持仓按 market 分组 fetchTickers 批量盯市，
   30s 轮询；折叠时暂停（现金行不是报价标的，不进盯市目标）。paper 持仓维持现有
   updatePrices 链路不变。
