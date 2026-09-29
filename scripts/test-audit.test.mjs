@@ -6,7 +6,7 @@
  * 本文件是 scripts/test-audit.mjs 唯一豁免扫描的测试文件：夹具必须内联真实违规
  * 样本，否则无法证明规则能命中。
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -159,5 +159,22 @@ describe('test-audit 棘轮比较', () => {
 
     // Then: 总量持平掩盖不了单文件上升，必须精确报出该文件
     expect(regressions).toEqual([{ kind: 'file', file: 'packages/demo/test/b.test.ts', rule: 'mock', now: 1, was: 0 }])
+  })
+})
+
+describe('test-audit 扫描树容错', () => {
+  it('operator 扫描树里的悬空符号链接被跳过而不是让门禁崩溃', () => {
+    // Given: 扫描根下一个指向不存在目标的符号链接（git-ignored 暂存物的常见形态）
+    const root = fixture({
+      'packages/demo/test/good.test.ts':
+        "it('user 下单成功', () => {\n  // Given: 余额充足\n  // When: 下单\n  // Then: 余额扣减\n  expect(1).toBe(1)\n})\n",
+    })
+    symlinkSync(join(root, 'missing-target'), join(root, 'packages/demo/test/dangling.test.ts'))
+
+    // When: 跑审计
+    const report = auditRepo(root)
+
+    // Then: 审计完成且只统计真实存在的用例文件，悬空链接被跳过
+    expect(report.tests).toBe(1)
   })
 })

@@ -110,6 +110,9 @@ typecheck-gate / i18n / test:audit / test:scripts / test:desktop；build-desktop
 
 - 新测试要能过 `pnpm test:audit`：角色前缀标题 + Given/When/Then 正文 + 真断言 +
   不用通用 mock / 真实等待。失败信息直接指出是哪个文件哪条规则从多少涨到多少。
+- 扫描树容错：`walk` 遇到 `statSync` 抛错的入口（悬空符号链接、不可读路径）跳过而不是
+  让门禁崩——git-ignored 暂存物 `desktop/resources/runtime` 的官方 bin 链接被裁剪后会
+  悬空，那是构建产物不完整，不是测试债；门禁只对能读到的用例文件计数。
 - 覆盖率从 0 变成可观测、可棘轮；73.85% 分支离标准的 90% 还有距离，诚实数字在
   基线里，失败路径审计的优先名单由 `pnpm coverage:check` 直接按包打印。
   该指标是回归护栏，不是质量合格证——为什么有未覆盖分支仍须按标准 §5 清单人工审计。

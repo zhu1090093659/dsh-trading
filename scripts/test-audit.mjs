@@ -63,7 +63,15 @@ function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry)
     if (SKIP_DIR_RE.test(relative(ROOT, full).split(sep).join('/'))) continue
-    const st = statSync(full)
+    // statSync 跟随符号链接：git-ignored 暂存物（desktop/resources/runtime 里被裁剪过
+    // 工具链的官方 bin 链接）会在这里抛 ENOENT。悬空/不可读入口既不是目录也不是测试
+    // 文件，跳过即可——门禁因暂存物不完整而崩溃，等于把 CI 之外的本地噪音当成测试债。
+    let st
+    try {
+      st = statSync(full)
+    } catch {
+      continue
+    }
     if (st.isDirectory()) walk(full, out)
     else if (TEST_FILE_RE.test(entry)) out.push(full)
   }
