@@ -4,6 +4,7 @@
  * 纯函数、无副作用、浏览器与 Node 端同构。
  */
 import type { KnowledgeCard, KnowledgeCardInput, KnowledgeCredibility, KnowledgeSourceType } from './types.ts'
+import { canonicalAuthor } from './authors.ts'
 
 const ALLOWED_CREDIBILITY = new Set<KnowledgeCredibility>(['high', 'medium', 'low'])
 const ALLOWED_SOURCE_TYPES = new Set<KnowledgeSourceType>(['bilibili', 'wechat', 'manual'])
@@ -119,7 +120,7 @@ export function validateKnowledgeCard(
     source: {
       type: input.source.type,
       url: input.source.url.trim(),
-      author: input.source.author.trim(),
+      author: canonicalAuthor(input.source.author),
       publishedAt: input.source.publishedAt,
     },
     credibility: input.credibility,

@@ -2,11 +2,12 @@
  * 内存版知识卡片存储实现（用于浏览器端、单测或作为无文件系统环境下的兜底）。
  */
 import type { KnowledgeCard, KnowledgeCardStore } from './types.ts'
+import { canonicalizeCardAuthor } from './authors.ts'
 
 export function createMemoryKnowledgeCardStore(initialCards: readonly KnowledgeCard[] = []): KnowledgeCardStore {
   const map = new Map<string, KnowledgeCard>()
   for (const c of initialCards) {
-    map.set(c.id, { ...c })
+    map.set(c.id, canonicalizeCardAuthor({ ...c }))
   }
 
   return {
@@ -26,7 +27,7 @@ export function createMemoryKnowledgeCardStore(initialCards: readonly KnowledgeC
       return undefined
     },
     async save(card: KnowledgeCard): Promise<void> {
-      map.set(card.id, { ...card })
+      map.set(card.id, canonicalizeCardAuthor({ ...card }))
     },
     async delete(id: string): Promise<boolean> {
       return map.delete(id)

@@ -30,3 +30,9 @@ export {
 export { buildGraph } from './graph.ts'
 
 export { createMemoryKnowledgeCardStore } from './store-memory.ts'
+
+export {
+  AUTHOR_ALIASES,
+  canonicalAuthor,
+  canonicalizeCardAuthor,
+} from './authors.ts'

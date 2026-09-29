@@ -26,7 +26,7 @@ export interface KnowledgeCard {
   readonly source: {
     readonly type: KnowledgeSourceType
     readonly url: string              // 去重键：BV 页链接 / 微信文章链接 / manual
-    readonly author: string           // UP主 / 公众号名 / 手工
+    readonly author: string           // 主体名（UP主 / 公众号 / 手工），跨平台别名归一，见 §3 authors.ts
     readonly publishedAt?: string     // 素材发布日期（ISO 日期）
   }
   readonly credibility: 'high' | 'medium' | 'low'   // 依据核查结论整体定级
@@ -54,7 +54,8 @@ export interface KnowledgeCard {
 packages/knowledge/src/
 ├── index.ts          # 类型 + buildGraph + 内存 store（纯库，浏览器可打包）
 ├── types.ts          # KnowledgeCard / GraphNode / GraphLink
-├── validate.ts       # ingest 结构校验（纯函数）
+├── authors.ts        # 作者别名表与归一（纯函数；author 是作者维度的唯一分组键）
+├── validate.ts       # ingest 结构校验（纯函数，落库前归一 author）
 ├── graph.ts          # buildGraph(cards, opts) → { nodes, links }
 └── tool.ts           # createKnowledgeIngestTool / createKnowledgeSearchTool（node 子路径导出）
 └── knowledge-fs.ts   # createFileKnowledgeCardStore（node 专用）
@@ -81,6 +82,8 @@ packages/knowledge/src/
 两个工具（注册模式对齐 #19 `indicator_author`：`ctx.inject(['tools'])`，宿主全局唯一）：
 
 - `knowledge_ingest`：入参 = 卡片内容（id/时间戳由工具生成）。校验：必填字段、`source.url` 白名单（bilibili.com / b23.tv / mp.weixin.qq.com / manual）、`credibility` 枚举、`related` 必须指向已存在卡片。**去重键 = source.url**：已存在则 update（保留 id/createdAt），返回 `{ status: 'created' | 'updated', id }`；
+- **作者归一（2026-09-29）**：`source.author` 是作者维度的唯一分组键（GUI 作者下拉与卡片过滤、`knowledge_search` 的 `author` 过滤、`knowledge_graph` 的 co-author 边计数、`buildGraph` 默认模式都是精确匹配；当前 GUI 的 `KnowledgeView` 传 `coAuthor: false`，该维度在图上不可见）。别名表 `AUTHOR_ALIASES`（`packages/knowledge/src/authors.ts`，`Object.freeze` 常量）在三处归一：**入库写入**（`validateKnowledgeCard`）、**两个 store 的 `save()`**（不变量兜底，写读同口径）、**文件 store 的 `load()`**（历史数据读出来即规范名）。`knowledge_ingest` 回报在命中别名时显式回显「作者已归一：旧 → 规范名」。
+  - **迁移语义（改别名表前必读）**：`load()` 只归一内存缓存、不写盘；下一次写操作（ingest/delete 的全表回写）会把归一结果落盘——即一次静默数据迁移，故 `load()` 在治愈 ≥1 张卡时打一条 `console.warn` 留痕。**改别名表就是改历史数据**：改前先备份 `cards.json`，误合并会让原始写法从文件消失（同名主体的判断是内容判断，已固化为代码常量）。规范名自身可带括号，匹配为精确字符串匹配（不做模糊剥离）；未登记的新写法不会自动合并，只会安静地多出一行。
 - `knowledge_search`：`{ query?, tags?, cluster?, author?, sourceType?, credibility?, limit?=20, detail?='summary' }`，大小写不敏感子串匹配（title/summary/coreClaims/tags）+ 过滤；有关键词时按字段命中相关度排序（tags > title > coreClaims > summary/author，同分按 updatedAt 倒序），无关键词按 updatedAt 倒序；`detail="full"` 附核心论点/事实核查/经验/边界全文（上限 20 张）（2026-09-02 演进，见 Agent Note `.agents/notes/archived/process/2026-09-02-journal-agents-knowledge-recall.md`）；
 - `knowledge_get`（2026-09-02 新增）：按 id 读单卡全文，id 来自 search 结果或分析引用标注；
 - `knowledge_delete`（2026-09-02 新增）：证伪下架——删除卡片并自动清理其他卡片指向它的 `related` 引用，输出回显被删卡片论点留痕；配套 knowledge-curation skill 的 Retraction SOP；

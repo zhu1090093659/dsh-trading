@@ -30,6 +30,50 @@ function createSampleIngestArgs(url: string, title = '周期股景气度拐点�
 }
 
 describe('Knowledge Agent Tools', () => {
+  it('用户入库跨平台历史写法时存下规范作者并在回报里回显归一', async () => {
+    // Given: 一个提交了历史写法作者名的入库请求
+    const store = createMemoryKnowledgeCardStore()
+    const ingestTool = createKnowledgeIngestTool(store)
+    const input = {
+      ...createSampleIngestArgs('https://www.bilibili.com/video/BVAuthorAlias', '作者归一用例'),
+      sourceAuthor: '鳄鱼派',
+    }
+
+    // When: 走 knowledge_ingest 入库
+    const result = await (ingestTool as any).execute(input)
+
+    // Then: 回报回显「作者已归一」，落库 author 为规范名
+    expect(result).toContain('作者已归一')
+    expect(result).toContain('鳄鱼派（像鳄鱼一样思考）')
+    const cards = await store.list()
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.source.author).toBe('鳄鱼派（像鳄鱼一样思考）')
+  })
+
+  it('用户入库未登记或已是规范名作者时回报不出现归一提示', async () => {
+    // Given: 两个分别提交规范名与未登记名的入库请求
+    const store = createMemoryKnowledgeCardStore()
+    const ingestTool = createKnowledgeIngestTool(store)
+
+    // When: 分别入库
+    const canonicalResult = await (ingestTool as any).execute({
+      ...createSampleIngestArgs('https://www.bilibili.com/video/BVCanonicalAuthor', '规范名用例'),
+      sourceAuthor: '鳄鱼派（像鳄鱼一样思考）',
+    })
+    const unknownResult = await (ingestTool as any).execute({
+      ...createSampleIngestArgs('https://mp.weixin.qq.com/s/unknown-author', '未登记名用例'),
+      sourceType: 'wechat',
+      sourceUrl: 'https://mp.weixin.qq.com/s/unknown-author',
+      sourceAuthor: '未登记的作者',
+    })
+
+    // Then: 两条回报都不含归一提示，落库作者原样
+    expect(canonicalResult).not.toContain('作者已归一')
+    expect(unknownResult).not.toContain('作者已归一')
+    const cards = await store.list()
+    expect(cards.map((c) => c.source.author).sort()).toEqual(['未登记的作者', '鳄鱼派（像鳄鱼一样思考）'].sort())
+  })
+
   it('knowledge_ingest creates card on new URL', async () => {
     const store = createMemoryKnowledgeCardStore()
     const ingestTool = createKnowledgeIngestTool(store)

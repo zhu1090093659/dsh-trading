@@ -41,6 +41,7 @@ description: 财经观点沉淀与知识库策展指南：基于 Content Insight
 - `title`：卡片主题（精炼概括核心逻辑，如「高股息资产在低利率环境下的防御逻辑」）；
 - `summary`：合并 2-4 条核心论点的一句话概述（图谱 hover 提示文案）；
 - `source`：`type`（bilibili / wechat / manual）、`url`、`author`、`publishedAt`；
+  - `author` **只写主体名**（B站 UP 名 / 公众号名 / 机构名），平台、角色（转播/提炼/核查）、发言人名单、备注一律写进卡片正文——同一主体的不同平台写法由 `packages/knowledge/src/authors.ts` 的别名表在入库时自动归一，命中时 `knowledge_ingest` 回报会回显「作者已归一：旧 → 规范名」。注意别名表是**精确匹配**：未登记的写法不会告警、只会安静地多出作者下拉的一行——入库前请先比对规范名册（工作区 `reports/knowledge_taxonomy.md` §作者字段规范），发现新写法时登记 `AUTHOR_ALIASES` 并补 `test/authors.test.ts` 用例，不要手改 `cards.json`；
 - `credibility`：`high` / `medium` / `low`；
 - `coreClaims`：核心论点列表（保留原作者的推理链条，避免断章取义）；
 - `factCheck`：`{ verified: [...], discrepancies: [...], unverifiable: [...] }`；

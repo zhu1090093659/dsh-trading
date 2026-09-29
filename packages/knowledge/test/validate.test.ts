@@ -84,6 +84,23 @@ describe('Knowledge Card Validation', () => {
     expect(result.error).toContain('拒绝悬空关联')
   })
 
+  it('用户入库时提交跨平台历史写法时落库作者被归一为规范名', () => {
+    // Given: 同一作者在公众号侧的历史写法
+    const input: KnowledgeCardInput = {
+      ...createSampleCardInput(),
+      source: {
+        type: 'wechat',
+        url: 'https://mp.weixin.qq.com/s/author-alias-probe',
+        author: '鳄鱼派（公众号：像鳄鱼一样思考）',
+      },
+    }
+    // When: 入库结构校验
+    const result = validateKnowledgeCard(input)
+    // Then: 校验通过，且落库 author 为规范名
+    expect(result.ok).toBe(true)
+    expect(result.card?.source.author).toBe('鳄鱼派（像鳄鱼一样思考）')
+  })
+
   it('accepts related IDs when they exist in existingCards', () => {
     const existing: KnowledgeCard = {
       ...createSampleCardInput(),

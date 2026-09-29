@@ -214,7 +214,12 @@ export function createKnowledgeIngestTool(store: KnowledgeCardStore, options: Kn
 
       const isUpdate = !!existingByUrl
       const actionDesc = isUpdate ? '成功更新已有知识卡片' : '成功创建新知识卡片'
-      return `[knowledge_ingest] ${actionDesc} [${card.id}] "${card.title}" (标签: ${card.tags.join(', ')}${card.related?.length ? `, 关联: ${card.related.join(', ')}` : ''})`
+      // 作者别名归一（authors.ts）：入库值被改写时必须回显，避免调用方以为存了原写法。
+      const requestedAuthor = typeof args.sourceAuthor === 'string' ? args.sourceAuthor.trim() : ''
+      const authorNote = requestedAuthor !== '' && requestedAuthor !== card.source.author
+        ? `（作者已归一：${requestedAuthor} → ${card.source.author}）`
+        : ''
+      return `[knowledge_ingest] ${actionDesc} [${card.id}] "${card.title}"${authorNote} (标签: ${card.tags.join(', ')}${card.related?.length ? `, 关联: ${card.related.join(', ')}` : ''})`
     },
   })
 }
