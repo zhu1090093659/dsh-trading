@@ -286,3 +286,48 @@ compare（四个 compare 的 files 面均命中 300 上限，故按相邻对逐�
   属待完成项而非终态。
 - 本轮仓库侧改动尚未合并进 main（分支 `feat/dsh-0.2.0-rc.2`，基线 `ec0c149`）：只落地
   仓库 cohort 会让插件 floor 高于唯一可装宿主，故不单独合并。
+
+（该阻断已于同日 19:2x 由上游补发解除，后续动作见下方 Rollout。）
+
+### Rollout 完成（2026-09-29，本地构建/安装，未推 tag、未 npm publish、未创建 Release）
+
+上游于 19:2x 补齐 `@deepseek-ai/dsh-client-ui-settings-account@0.2.0-rc.2`（直连 registry
+HTTP 200 核验；`npm install @deepseek-ai/dsh@0.2.0-rc.2 --dry-run` 541 包解析通过），阻断解除。
+
+① **宿主 CLI**：`npm i -g @deepseek-ai/dsh@0.2.0-rc.2`（511 包换新），`dsh --version` 实测
+`0.2.0-rc.2`；宿主树 288 个 `@deepseek-ai` 包。
+
+② **桌面 runtime**：`desktop/runtime/host` 的 lockfile clean-slate 重解析（2617 处全
+`0.2.0-rc.2`、0 处旧世代残留；pnpm 按既有模式追加 11 条新家族成员 exclude），提交
+`c4fb391`。`npm run prepare-runtime` 的 census 断言通过——"every dsh-* package is
+`@deepseek-ai/dsh@0.2.0-rc.2`"，payload 落 `resources/runtime` 并写入 CLI shim。
+
+③ **桌面壳重建重装**：`npm run dist:mac` 产出 `dsh-trading-desktop-0.2.1-mac-arm64.dmg`
+（653MB）与 `.zip`（676MB）；`ditto` 替换 `/Applications/DSH Trading.app`（先 bootout 四个
+trading-game launchd job + 退出 GUI）。装后实测：内嵌 runtime pin `0.2.0-rc.2`、
+`VERSION.json` host `@deepseek-ai/dsh@0.2.0-rc.2`／builtAt `2026-09-29T11:56:19Z`；
+两个 game job 重启后 `:8888`／`:8889` 正常监听且未认证应答 401（认证栅栏在位）。
+桌面 GUI 未自动重启（保持关闭，由 owner 决定何时打开）。
+
+④ **隔离验收 profile**（`trading-web-verify`，由 trading-web 复制 + 改指隔离工作树构建物 +
+核心包 symlink 归一 CLI 宿主，验后整体删除，不动生产 profile）：`profile-cohort-check`
+该 profile 全 OK（仅 4 条同版本实体拷贝 WARN）；带 token 303、无 token 401、未认证 API
+401；无头 Chrome 截图渲染完整交易壳（自选面板与全市场 tab、行情/策略/知识库/特殊指标
+页签、会话竖条、设置与软件更新入口），1640 个颜色、非空白页；boot 日志零错误。
+
+⑤ **工具调用冒烟（cohort 关键面）**：`trading-dev`（核心包 symlink 到 CLI 宿主
+`0.2.0-rc.2`）headless 实跑 `dsh --profile trading-dev 'Use the bash tool to run exactly:
+echo cohort-ok-0.2.0-rc.2'` → `Output: cohort-ok-0.2.0-rc.2`（exit 0）。工具调度器读不到
+调度器实例（`reading 'prepare'`）的旧崩溃类未复现。
+
+### 遗留（待协调，不在本轮已交付范围）
+
+- **合并被 git 拒绝**：共享 checkout 存在另一会话未提交的 `README.md` / `README_zh.md` 改动，
+  与本提交的徽章行同文件；`git merge --ff-only feat/dsh-0.2.0-rc.2` 报 "Your local changes
+  would be overwritten"。分支 HEAD `c4fb391` 未进 main（并已确认 README 未被动）。待该会话
+  提交/暂存后即可 ff 合并。
+- `trading-dev` / `trading-all` profile 的 `@deepseek-ai/dsh-web-search-exa` 仍钉
+  `0.1.7-alpha.2`，被新宿主的兼容性检查禁用（`dsh: disabling profile plugin row
+  "web-search-exa"`）；需按 trading-web 模式升到 `0.2.0-rc.2`。
+- 生产 `trading-web` profile 未刷新（其 `@dshtrading` 副本取自 main 工作树，待合并后按
+  `scripts/refresh-trading-web-profile.sh` 刷新）。
