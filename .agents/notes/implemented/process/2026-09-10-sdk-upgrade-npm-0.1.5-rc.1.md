@@ -320,17 +320,18 @@ trading-game launchd job + 退出 GUI）。装后实测：内嵌 runtime pin `0.
 echo cohort-ok-0.2.0-rc.2'` → `Output: cohort-ok-0.2.0-rc.2`（exit 0）。工具调度器读不到
 调度器实例（`reading 'prepare'`）的旧崩溃类未复现。
 
-### 遗留（待协调，不在本轮已交付范围）
+### 收尾（2026-09-29）
 
-- **合并被 git 拒绝**：共享 checkout 存在另一会话未提交的 `README.md` / `README_zh.md` 改动，
-  与本提交的徽章行同文件；`git merge --ff-only feat/dsh-0.2.0-rc.2` 报 "Your local changes
-  would be overwritten"。分支 HEAD `c4fb391` 未进 main（并已确认 README 未被动）。待该会话
-  提交/暂存后即可 ff 合并。
-- `trading-dev` / `trading-all` profile 的 `@deepseek-ai/dsh-web-search-exa` 仍钉
-  `0.1.7-alpha.2`，被新宿主的兼容性检查禁用（`dsh: disabling profile plugin row
-  "web-search-exa"`）；需按 trading-web 模式升到 `0.2.0-rc.2`。
-- 生产 `trading-web` profile 未刷新（其 `@dshtrading` 副本取自 main 工作树，待合并后按
-  `scripts/refresh-trading-web-profile.sh` 刷新）。
+- **合并完成**：`git merge --ff-only feat/dsh-0.2.0-rc.2` 首次被共享 checkout 里另一会话未
+  提交的 `README.md` / `README_zh.md` 拒绝（与本提交的徽章行同文件）。经 owner 授权，把这两个
+  文件 `git stash push --` 后 ff 合并、随即 `stash pop` 原样还原：另一会话 36 个在飞文件（含 24
+  个 client-ui-trading 改动）与两处 README 编辑全部完好、零冲突标记，stash 列已空。main 现为
+  `c76e52f`（`git merge-base --is-ancestor feat/dsh-0.2.0-rc.2 main` exit 0）。
+- `trading-dev` / `trading-all` / `trading-web` 的 `@deepseek-ai/dsh-web-search-exa` 与 headless
+  面 pin 已升到 `0.2.0-rc.2`，兼容性检查不再禁用（见下节）。
+- 生产 `trading-web` profile 的核心 SDK 包已归一到 CLI 宿主 `0.2.0-rc.2`；其 `@dshtrading`
+  插件副本仍是合并前 main 的构建——来源目录（main 工作树）含另一会话在飞改动，未在其上重建。
+  待该会话收尾后跑一次 `scripts/refresh-trading-web-profile.sh` 即可换新。
 
 
 ### 验收补齐（2026-09-29 晚）
