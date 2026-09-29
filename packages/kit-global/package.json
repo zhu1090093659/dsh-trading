@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/kit-global",
   "description": "Global instruments toolkit plugin for dsh-trading: global risk checklist skill provider (leverage/swap/overnight-gap/event-driven-volatility/USD-denomination for spot metals, oil, FX and global indices); runs as a global-trader preset row (session-scoped)",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

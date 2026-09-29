@@ -1,5 +1,19 @@
 # @dshtrading/cn
 
+## 0.5.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @dshtrading/connector-xysz@0.5.0
+  - @dshtrading/kit-cn@0.5.0
+  - @dshtrading/connector-akshare@0.5.0
+  - @dshtrading/connector-eastmoney@0.5.0
+  - @dshtrading/connector-hithink@0.5.0
+  - @dshtrading/connector-qmt@0.5.0
+  - @dshtrading/connector-tencent@0.5.0
+  - @dshtrading/connector-tushare@0.5.0
+
 ## 0.4.1
 
 ### Patch Changes

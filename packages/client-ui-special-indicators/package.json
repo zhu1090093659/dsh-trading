@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/client-ui-special-indicators",
   "description": "Special indicators stage view plugin for dsh-trading (LOCAL ONLY, never published): registers the 中栏「特殊指标」tab via the tradingStageViews service — proprietary indicators served by the owner's self-hosted finance service (IF/IM 期现基差, A股恐慌指数, 恒科权重股卖空, 板块融资余额). Node half proxies the finance HTTP API behind the browser-auth fence at /dshtrading/api/special-indicators with a TTL cache; credentials stay in the local profile row config / env (BYOK), never in the repo.",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "main": "lib/index.js",

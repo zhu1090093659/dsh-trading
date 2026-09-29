@@ -1,5 +1,15 @@
 # @dshtrading/crypto
 
+## 0.5.0
+
+### Patch Changes
+
+- @dshtrading/kit-crypto@0.5.0
+- @dshtrading/connector-binance@0.5.0
+- @dshtrading/connector-bybit@0.5.0
+- @dshtrading/connector-ccxt@0.5.0
+- @dshtrading/connector-okx@0.5.0
+
 ## 0.4.1
 
 ### Patch Changes

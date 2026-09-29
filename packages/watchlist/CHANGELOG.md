@@ -1,5 +1,11 @@
 # @dshtrading/watchlist
 
+## 0.5.0
+
+### Patch Changes
+
+- @dshtrading/dsh-home@0.5.0
+
 ## 0.4.1
 
 ### Patch Changes
