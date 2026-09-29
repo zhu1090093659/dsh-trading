@@ -24,8 +24,14 @@ HOST_ROOT="/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepsee
 # 拷贝（dsh-llm/dsh-scope/dsh-timeout/dsh-typert-protocol/dsh-util-crypto，仓库
 # lockfile 混代遗留）及三份同版实体拷贝（dsh-settings/dsh-skill/dsh-tool-cordis），
 # 全部并入 symlink 归一，消除模块实例割裂类 FAIL/WARN。
-CORE_PKGS=(dsh-web-app dsh-tools cosmokit schemastery dsh-agent-presets dsh-brand dsh-util-values \
-  dsh-settings dsh-skill dsh-tool-cordis dsh-llm dsh-scope dsh-timeout dsh-typert-protocol dsh-util-crypto)
+# 2026-09-29 0.2.0-rc.2 cohort：dsh-agent-presets 官方改名 dsh-agent-preset-registry
+# （两个名字都留，兼容旧 profile）；并按同代 profile-cohort-check 的 WARN 清单补入
+# dsh-app-boot / dsh-atomic-write / dsh-config-editor / dsh-package-manifest——
+# 它们在 0.2.0-rc.2 profile 里是实体拷贝（同版本），归一后消除跨拷贝隐患。
+CORE_PKGS=(dsh-web-app dsh-tools cosmokit schemastery dsh-agent-presets dsh-agent-preset-registry \
+  dsh-brand dsh-util-values dsh-settings dsh-skill dsh-tool-cordis dsh-llm dsh-scope dsh-timeout \
+  dsh-typert-protocol dsh-util-crypto dsh-app-boot dsh-atomic-write dsh-config-editor \
+  dsh-package-manifest)
 
 echo "== 停止运行中的 trading-web 实例 =="
 pgrep -f "profile trading-web" | xargs kill 2>/dev/null || true
