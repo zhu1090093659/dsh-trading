@@ -331,3 +331,27 @@ echo cohort-ok-0.2.0-rc.2'` → `Output: cohort-ok-0.2.0-rc.2`（exit 0）。工
   "web-search-exa"`）；需按 trading-web 模式升到 `0.2.0-rc.2`。
 - 生产 `trading-web` profile 未刷新（其 `@dshtrading` 副本取自 main 工作树，待合并后按
   `scripts/refresh-trading-web-profile.sh` 刷新）。
+
+
+### 验收补齐（2026-09-29 晚）
+
+- **profile 全家归一（含本轮新发现的两类残留）**：`trading-web` / `trading-dev` /
+  `trading-all` 的 `@deepseek-ai/dsh-web-search-exa` 与 headless 面 pin 前移 `0.2.0-rc.2`
+  （trading-dev/trading-all 原钉 `0.1.7-alpha.2`，会被新宿主的兼容性检查禁用——日志实证
+  `disabling profile plugin row "web-search-exa"`）；三个 profile 的核心包 symlink 归一到
+  CLI 宿主。dated 备份 profile（`trading-web.bak-*`）与 trading home 里的化石 `web` profile
+  中的残留拷贝（含 `@dshtrading/indicators/lib/node_modules/.pnpm/@deepseek-ai_cosmokit@1.8.3`）
+  一并归一。
+- **仓库侧同步修复**：`scripts/refresh-trading-web-profile.sh` 的 CORE_PKGS 随 cohort 更新
+  ——补 `dsh-agent-preset-registry`（`dsh-agent-presets` 的官方继任者，两名并列以兼容旧
+  profile），并纳入四条同版本实体拷贝（dsh-app-boot / dsh-atomic-write / dsh-config-editor /
+  dsh-package-manifest）与 headless 面（dsh-headless / dsh-cmdline）。
+- **门禁终态**：`profile-cohort-check`（DSH_HOME=~/.dsh-trading）**0 FAIL、0 WARN**，覆盖 9 个
+  profile（spike-* / trading-all / trading-dev / trading-web / trading-web.bak-* / web）。
+  `~/.dsh`（承载当前 Web 会话的 harness home，profile `desktop`）保持 2 条 WARN、0 FAIL——
+  该 home 不在本次升级面内，未触碰。
+- **重跑工具调用冒烟**：`trading-dev` headless 实跑 → 输出 `cohort-ok-after-profile-fix`，
+  exit 0；日志中 `disabling profile plugin row` 出现 0 次。
+- **踩坑（可复用）**：`dsh plugin --profile <p> install` 在本机会把 pnpm 子进程挂死
+  （0% CPU、无 socket、26 分钟无写入）；同一条 `pnpm install` 直接在该 profile 目录执行
+  10 秒即完成。profile 刷新一律直接跑 pnpm，不经 `dsh plugin install`。
