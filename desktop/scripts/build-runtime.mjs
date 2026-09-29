@@ -64,7 +64,7 @@ const PRIVATE_VENDOR_PACKAGES = new Set([
 ]);
 /** Registry package carried alongside the trading bundles. */
 const REGISTRY_DEPENDENCIES = {
-  '@deepseek-ai/dsh-web-search-exa': '0.1.7-alpha.2',
+  '@deepseek-ai/dsh-web-search-exa': '0.2.0-rc.2',
 };
 /** Profile bundles: the official web surface plus the trading market bundles. */
 const PROFILE_BUNDLES = [

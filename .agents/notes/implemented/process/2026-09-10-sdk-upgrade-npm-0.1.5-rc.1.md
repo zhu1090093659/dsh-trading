@@ -165,3 +165,124 @@ deprecate，且造成 npm 与 Release 面断层）。
   ④ 「发给 Agent」端到端填入在真实桌面宿主（0.1.7 + 刷新后的 profile）上用无头 Chrome
      复核：选中 AAPL → 点击 → composer 出现行情快照 + 图表截图，按钮态「已填入输入框」，
      控制台零异常。
+
+
+## 0.2.0-rc.2 cohort（2026-09-29）
+
+宿主 `dsh` CLI 与 dev cohort 前移到 `0.2.0-rc.2`（npm `next` tag；`latest` 仍为
+`0.1.7-rc.2`）。owner 指令「适配dsh本体最新的0.2.0-rc.2版本」，决策门取全轮升级
+（仓库 cohort + 宿主 CLI + 桌面壳 + 本机 profile），基线为本地 main tip `ec0c149`
+（领先 origin/main 24 提交；共享 checkout 里的在飞改动属另一会话，未触碰），隔离
+工作树 `feat/dsh-0.2.0-rc.2`。
+
+### 面随 cohort 前移
+
+- 根 `pnpm-workspace.yaml` 的 overrides 与 `minimumReleaseAgeExclude` 整块前移
+  `0.2.0-rc.2`（51 个文件 486 处字面量）；`@deepseek-ai/cordis` `cosmokit`
+  `schemastery` `cordis-plugin-include` `cordis-plugin-loader` 在本世代无新版本，
+  保持 4.0.4 / 1.8.5 / 3.18.4 / 1.0.9 / 1.0.5；3 条外部 npm 插件 exclude
+  （`@linxin666/` 两项、`@xmanrui/dsh-im`）原样保留。
+- floor 面：全部 `packages/*/package.json` 的 `@deepseek-ai/dsh-*` peer floor 与精确
+  devDep、根 `package.json` 的 `dsh-skill` 与 `dsh-tools`、README 与 README_zh 的
+  `DSH Baseline` 徽章（URL 词形 `0.2.0--rc.2`）同步。
+- 桌面壳：`desktop/runtime/host/package.json` 的 pin、
+  `desktop/runtime/host/pnpm-workspace.yaml` 的 exclude 块、
+  `desktop/scripts/build-runtime.mjs` 的 search-exa pin 同步。
+- 本仓仍无 `dsh.engines.dsh` floor、无 CI mount pin（`ci.yml` 只跑 install / build /
+  静态门禁 / 三 OS 测试矩阵）。
+- 依赖闭包不变：dev 树解析出的 `dsh-*` 仍是 69 个，与 0.1.7-alpha.2 世代同集合，无
+  新家族成员进入本仓；宿主闭包新增的 `@deepseek-ai/dsh-experimental-schedule-bundle`
+  不进 dev 树。
+
+### 适配：kit-* 的 `SkillCandidate.locator` 收窄
+
+cohort 迁移要求 clean-slate 重解析 lockfile（见本文 1.5-rc.1 节的最小发布年龄硬约束），
+`@types/node` 因此在 `^24.0.0` 域内由 24.13.3 前移到 24.19.0；其 `fs/promises` 重载在
+无法择优时多吐一条级联 TS2322，暴露的真实缺陷是 `kit-cn` `kit-us` `kit-hk`
+`kit-crypto` 的 `readFile(target.locator, 'utf8')`：SDK 把 `SkillCandidate.locator`
+声明为 `unknown`（不透明 provider 句柄），这四个包缺收窄形
+`type BundledSkillCandidate = SkillCandidate & { locator: URL }`；`kit-global` 与
+`kit-futures` 早已采用该范式。补齐后每包同时消掉历史 TS2769 与新增 TS2322，typecheck
+棘轮 437 → 429，基线就地由 433 下调至 429。
+
+### 兼容面结论
+
+- 19 个被消费的 `@deepseek-ai/*` 包 `.d.ts` 对比 0.1.7-alpha.2 → 0.2.0-rc.2：
+  `dsh-client-ui-slots`、`dsh-client-ui-renderer`、`dsh-client-store`、
+  `dsh-client-connection`、`dsh-settings`、`dsh-skill` 零变化，`dsh-tools` 仅新增
+  `PreToolDecision.ask.displayReason?`；其余为增补（`dsh-client-ui-conversation` 新增
+  stop-shortcut 与 submission 面并移除 `DEVELOPER_TOOLS_VIEW_ID`，
+  `dsh-client-ui-tool` 工具卡改为 phase 判别联合，`dsh-client-ui-workspace` 新增会话行
+  装饰位，`dsh-client-ui-layout` 新增 `ILayout.panelInfo`）。
+- 本仓未消费被移除的 `DEVELOPER_TOOLS_VIEW_ID`；`tool.call.toolview` 注册的订单卡与
+  策略卡沿用「非 settled 返回 null → 回落官方通用工具行」契约，preparing 相位走同一
+  回落路径，无需改源码。
+- 7 个 `dsh.client.inject` 服务（api-remotes、api-session-controller、
+  client-connection、client-locale、client-ui-settings、client-ui-slots、
+  client-ui-workspace）在 0.2.0-rc.2 全部在位、无改名。
+
+### 原生功能重叠清单（Section 3）
+
+- **定时任务**：官方 `@deepseek-ai/dsh-schedule@0.2.0-rc.2` 是宿主级持久提醒与会话绑定
+  任务管理，按 after / at / every / daily / weekly / cron 把提醒作为后续消息投回原
+  会话，且默认不挂载（可选实验 bundle）。本仓 `client-ui-trading` 的
+  `TradingTasksService` 是钉住 workspace 与 agent 预设、带人类唯一权限确认门、账本
+  幂等与 SSE 的交易任务起跑器。原生无法表达钉住预设与确认门，**保留本仓实现并记录为
+  例外**；同时不挂载官方 schedule bundle——两套调度器并存本身就是重复面。
+- **会话竖条与右侧栏**：本仓 `SessionRail` 是官方 `sidebar-right` dock 与
+  `sidebar.workspaces` 插槽的容器化外壳（文件页签即宿主原生 dock），不是原生会话
+  列表的平行实现。
+- **工具卡、设置页、更新器、快捷键、语言包**：均为领域面或官方留出的扩展点
+  （`@dshtrading/*` 族增量更新、zh-CN 与大师金句语言包），无对应原生实现。
+- 未采纳的可用增强：`PreToolDecision.ask.displayReason`（官方审批卡本地化文案）。base
+  是 host 半、无词典宿主，就地写 zh 文案会触「UI 文案一律进词典」禁令并新增 host-half
+  CJK 警告，故本轮不采纳。
+
+### 验证（工作树内，最终提交）
+
+`pnpm install --frozen-lockfile --ignore-scripts` ✓ → `pnpm -r build` ✓（66 包）→
+`node scripts/typecheck-gate.mjs` 429=429 ✓ → `pnpm i18n:check` ✓（130 条 host-half
+存量警告）→ `pnpm test:audit` ✓（无新增测试债）→ `pnpm test:scripts` ✓（22 例）→
+`pnpm test:desktop` ✓（21 例）→ `pnpm -r test` ✓（1689 passed / 0 failed / 0 skipped，
+49 文件）→ `pnpm coverage:check` ✓（无指标下降）。首轮并发跑 `pnpm -r build` 时 rolldown
+报写文件失败与 Too many open files in system（宿主 fd 耗尽），降并发单跑即通过，属环境
+资源而非代码问题。
+
+### 官方变更证据
+
+range `dsh-v0.1.7-alpha.2` → `dsh-v0.2.0-rc.2`，中间 tag `0.1.7-rc.1`、`0.1.7-rc.2`、
+`0.2.0-rc.1`：逐 tag 读 release notes
+（`gh api repos/deepseek-ai/deepseek-harness/releases/tags/<tag>`）并读相邻 tag 对的
+compare（四个 compare 的 files 面均命中 300 上限，故按相邻对逐段读）。与本轮直接相关
+的条目：0.1.7-rc.1「PTC 包名与服务名统一为 ptc-runtime」「工作区文件读取统一
+`readBytes`」「`spill-policy` 的 `maxInlineBytes` 改 `maxInlineTokens`」「插件安装和
+启动检查与当前 DSH 版本的兼容性」；0.1.7-rc.2「定时任务与提醒」「快捷键查看、搜索与
+自定义」「动态增加工具不破坏 KV Cache」；0.2.0-rc.1「自动化任务改由可选插件包提供」；
+0.2.0-rc.2「桌面端内置 dsh 命令」「第三方模型目录到 pi-ai 0.87.1」。
+
+
+### 阻断：0.2.0-rc.2 宿主闭包缺包（2026-09-29）
+
+0.2.0-rc.2 的 npm 发布不完整，宿主闭包不可安装：
+
+- `@deepseek-ai/dsh-client-ui-settings-account` 从未发布 0.2.0-rc.2——直连 registry 复核
+  已发版本仅 0.1.7-alpha.1 / 0.1.7-alpha.2 / 0.1.7-rc.1 / 0.1.7-rc.2 / 0.2.0-rc.1
+  （dist-tags：latest 0.1.7-alpha.1、alpha 0.1.7-alpha.2、next 0.2.0-rc.1），registry
+  modified 2026-09-28T12:54Z。
+- `@deepseek-ai/dsh-web-app@0.2.0-rc.2` 精确依赖它，因此
+  `npm install @deepseek-ai/dsh@0.2.0-rc.2` 直接 ETARGET，桌面宿主闭包 `pnpm install`
+  报 ERR_PNPM_NO_MATCHING_VERSION。
+- 闭包审计（从 dsh、dsh-web-app、dsh-web-frontend 出发两层共 165 个包）：0.2.0-rc.2
+  世代唯一缺发的 `dsh-*` 就是这一个；cordis / cosmokit / schemastery 家族另有版本线，
+  属正常。
+- 本仓 dev 树（不含 dsh-web-app 闭包）可正常解析：69 个 `dsh-*` 全 0.2.0-rc.2，clean-slate
+  lockfile 一次通过，全部 CI 级门禁绿。
+
+结论与待办（owner 决定：等上游补齐该包后完成其余面）：
+
+- 宿主 CLI 0.2.0-rc.2 安装、桌面 runtime 的 lockfile 重解析与重建、本机 profile 刷新
+  与 GUI 验收全部待上游发布后执行。届时 `desktop/runtime/host/pnpm-lock.yaml` 按既有
+  clean-slate 纪律重新解析——当前仍是 0.1.7-alpha.2 内容，与已前移的 pin 暂不一致，
+  属待完成项而非终态。
+- 本轮仓库侧改动尚未合并进 main（分支 `feat/dsh-0.2.0-rc.2`，基线 `ec0c149`）：只落地
+  仓库 cohort 会让插件 floor 高于唯一可装宿主，故不单独合并。

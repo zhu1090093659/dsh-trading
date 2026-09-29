@@ -33,6 +33,9 @@ export * from './news.js'
 
 const PROVIDER_NAME = 'dsh-trading-us'
 
+/** SDK 的 SkillCandidate.locator 声明为 unknown；本包候选固定为随包分发的 file URL。 */
+type BundledSkillCandidate = SkillCandidate & { locator: URL }
+
 const SKILL_BODY_URL = new URL('../assets/skills/us-risk-checklist.md', import.meta.url)
 const AUTHORING_BODY_URL = new URL('../assets/skills/indicator-authoring.md', import.meta.url)
 const STRATEGY_BODY_URL = new URL('../assets/skills/trading-strategy-paradigms.md', import.meta.url)
@@ -43,7 +46,7 @@ const RESOURCE_BASE = {
   path: fileURLToPath(new URL('../assets/skills/', import.meta.url)),
 } as const
 
-const CANDIDATE: SkillCandidate = {
+const CANDIDATE: BundledSkillCandidate = {
   name: 'us-risk-checklist',
   description: '美股交易风控检查清单：开仓前逐项核对盘前盘后流动性、熔断与停牌、做空规则、T+1 与 PDT 日内限制、财报跳空风险。',
   invocation: { modelInvocable: true, userInvocable: true },
@@ -54,7 +57,7 @@ const CANDIDATE: SkillCandidate = {
   locator: SKILL_BODY_URL,
 }
 
-const AUTHORING_CANDIDATE: SkillCandidate = {
+const AUTHORING_CANDIDATE: BundledSkillCandidate = {
   name: 'indicator-authoring',
   description: '自定义技术指标创作指南：根据用户自然语言需求生成符合契约的指标代码（TD9/SuperTrend/OBV+MA等），并通过 indicator_author 工具验证与落库。',
   invocation: { modelInvocable: true, userInvocable: true },
@@ -65,7 +68,7 @@ const AUTHORING_CANDIDATE: SkillCandidate = {
   locator: AUTHORING_BODY_URL,
 }
 
-const STRATEGY_CANDIDATE: SkillCandidate = {
+const STRATEGY_CANDIDATE: BundledSkillCandidate = {
   name: 'trading-strategy-paradigms',
   description: '经典交易策略参考范式指南：提供短线（唐奇安突破/RSI极值回归）、波段（EMA双均线/布林带下轨回归）、长线（200日均线基线/12月动量）6大策略原理、参数调优、8项回测指标研读与风险防范 SOP。',
   invocation: { modelInvocable: true, userInvocable: true },
@@ -76,7 +79,7 @@ const STRATEGY_CANDIDATE: SkillCandidate = {
   locator: STRATEGY_BODY_URL,
 }
 
-const KNOWLEDGE_CURATION_CANDIDATE: SkillCandidate = {
+const KNOWLEDGE_CURATION_CANDIDATE: BundledSkillCandidate = {
   name: 'knowledge-curation',
   description: '财经观点沉淀与知识库策展指南：基于 Content Insight 事实核查产物，规范化提取知识卡片字段、受控词表对齐、查重与关联建立，通过 knowledge_ingest 工具入库。',
   invocation: { modelInvocable: true, userInvocable: true },
@@ -87,7 +90,7 @@ const KNOWLEDGE_CURATION_CANDIDATE: SkillCandidate = {
   locator: KNOWLEDGE_CURATION_BODY_URL,
 }
 
-const JOURNAL_CANDIDATE: SkillCandidate = {
+const JOURNAL_CANDIDATE: BundledSkillCandidate = {
   name: 'trading-notes-setup',
   description:
     '交易日志建立与记录规范：检查/创建工作区 .trading-journal/ 双轨目录（agent 轨 + human 轨），分别记录 agent 与人类各自的操作。会话启动检查发现工作区没有交易日志目录时调用本技能建立骨架；记录条目格式以本技能为权威。',
@@ -99,7 +102,7 @@ const JOURNAL_CANDIDATE: SkillCandidate = {
   locator: JOURNAL_BODY_URL,
 }
 
-const SKILL_CANDIDATES = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE, KNOWLEDGE_CURATION_CANDIDATE, JOURNAL_CANDIDATE]
+const SKILL_CANDIDATES: BundledSkillCandidate[] = [CANDIDATE, AUTHORING_CANDIDATE, STRATEGY_CANDIDATE, KNOWLEDGE_CURATION_CANDIDATE, JOURNAL_CANDIDATE]
 
 export const provider: SkillProvider = {
   name: PROVIDER_NAME,
