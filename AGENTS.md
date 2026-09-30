@@ -11,7 +11,7 @@ DSH 交易插件 monorepo，按市场组织 bundle（crypto/us/cn/hk）。本文
 ## Home 与运行验证
 
 - trading profile 和全部业务数据使用独立 home `~/.dsh-trading`；包内经 `@dshtrading/dsh-home` 解析。显式 `DSH_HOME` 可覆盖，但须核实目标是 trading 实例，不能因继承了 Web 会话环境而误用 `~/.dsh`。CLI 用 `~/.local/bin/dsh-trading` wrapper；桌面壳内置 trading 缺省 home。见 [home 契约](.agents/notes/implemented/process/2026-09-08-separate-dsh-home.md)。
-- UI 验证用 `dsh-trading --profile trading-web`；无头用 `trading-dev`，全市场用 `trading-all`。不得挂回 Web 宿主默认 `web` profile。客户端更新后重建并按 [profile 刷新契约](.agents/notes/implemented/process/2026-08-29-trading-web-profile.md) 刷新 file: 副本；CLI/桌面切换注意 [cohort 链接方向](.agents/notes/implemented/bug-fix/2026-09-08-desktop-preset-context-injection.md)，CLI 刷新入口 `scripts/refresh-trading-web-profile.sh`。禁止实例运行中执行 plugin install，不擅自重启服务。
+- 本项目一律使用 `trading-web` profile：UI 验证是 `dsh-trading --profile trading-web`，无头用 `trading-dev`，全市场用 `trading-all`，不得挂回 Web 宿主默认 `web` profile。agent 会话继承的 `DSH_PROFILE`/`DSH_HOME`（如宿主自身 `desktop`/`~/.dsh`）属于宿主实例，不代表本项目 profile——启动、检查与验证一律按 `trading-web` + `~/.dsh-trading` 判。客户端更新后重建并按 [profile 刷新契约](.agents/notes/implemented/process/2026-08-29-trading-web-profile.md) 刷新 file: 副本；CLI/桌面切换注意 [cohort 链接方向](.agents/notes/implemented/bug-fix/2026-09-08-desktop-preset-context-injection.md)，CLI 刷新入口 `scripts/refresh-trading-web-profile.sh`。禁止实例运行中执行 plugin install，不擅自重启服务。
 - UI 证据走宿主 tokenized HTTP URL + headless Chrome `--timeout` 截图，不做全屏桌面截图；按需加载 `ui-screenshot-verify`，见 [项目验证说明](.agents/notes/implemented/process/2026-09-04-ui-verification-hosted-http-headless-chrome.md)。宿主升级按需加载 `dsh-sdk-upgrade`，检查 profile shadow-copy/cohort；不要把裸 `dsh plugin install` 当刷新完成。
 
 ## 开发、分支与门禁
