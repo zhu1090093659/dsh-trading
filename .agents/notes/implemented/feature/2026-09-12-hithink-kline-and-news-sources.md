@@ -29,3 +29,12 @@ Issue: #96
 
 - `pnpm build` 全绿；`pnpm test` 172 文件 / 1428 用例全部通过（新增 router newsSources 1 例、kit-cn 源装配 4 例、connector-hithink K 线 13 例）。
 - 真实网络：`node spikes/impl-hithink-kline-futures/verify.mjs`——A 股日K 10 根、周K 聚合、期货日K/检索/代码表全通过（证据 JSON 落 EVIDENCE/）；端到端走构建产物：600519.SH 日K 5 根、RB00.SHF 日K 3 根、ticker price=3000/prevClose=3020、名册过滤后 1195 合约。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+## Consequences
+
+- 成功扩充了国内期货市场支持并扩展了同花顺 K 线与资讯数据源。

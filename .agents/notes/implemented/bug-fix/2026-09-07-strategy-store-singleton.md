@@ -10,6 +10,10 @@ Status: implemented
 
 照 indicators 先例（`CustomIndicatorsService`）：`@dshtrading/strategies/plugin` 增 `StrategiesStoreService`（cordis Service，服务键 `tradingStrategies`），`apply()` 以 file store 单实例 provide；`client-ui-trading` 桥装配改为 `ctx.get('tradingStrategies')` 解包 `.store`（后续策略管理再补 `.tombstones`），服务缺席（老部署）回退自建同路径 file store（旧行为不劣化）。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 工具写入与桥读取共享同一缓存与失效语义，跨实例 stale 窗口消除。

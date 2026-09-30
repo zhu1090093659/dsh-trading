@@ -1,15 +1,13 @@
 # Agent Note: 富途牛牛风格标的基本面与估值分析工作台 (Issue #36)
 
-**日期**: 2026-09-02
-**分类**: Feature / UI / Fundamentals / Multi-Market
-**关联 Issue**: #36, Epic #42
+Status: implemented
 
-## 1. 目标与背景
+## Problem
 完整落地 Issue #36：在中栏主舞台提供 100% 对齐富途牛牛（Futu）视觉与交互规范的标的基本面分析工作台，左侧包含 8 大核心分类（财务、预测、晨星研报、估值、经营分析、聪明钱、简况、公司行动），全面激活各连接器与 Kit 中此前未在 UI 体现的多期财务、机构预测、研报精选、主营构成、股东穿透、营运效率与分红送转数据。
 
 > 2026-09-04 方向性收敛：crypto 标的不再展示「基本面」页签（加密资产无标准财报矩阵），见 [2026-09-04-crypto-hide-fundamentals-tab](../simplification/2026-09-04-crypto-hide-fundamentals-tab.md)；本记录的股票市场部分继续有效。
 
-## 2. 核心架构与实现
+## Decision
 
 ### 数据层（100% 动态取数，零假数据）
 - `@dsh-trading/api`：扩展 `FundamentalsPackage`、`ForecastSummary`、`ResearchReportItem`、`MainOperationSegment`、`OperatingEfficiency`、`InstitutionalHoldingItem`、`InsiderTradeItem`、`HolderNumSummary`、`DividendItem`、`SplitItem` 契约定义；
@@ -65,3 +63,14 @@
 | L1-L5 | US symbol 裸插值 / 期间键重复分支 / 死 locale key / website 无 scheme 白名单 / Yahoo 'Recent' 期间键塌缩 | 全部修复（US ticker 正则白名单 + encodeURIComponent；formatReportPeriod 修；死 key 删；website 仅 https? 放行；endDate 缺行剔除+期间键去重） |
 
 验证基线：`pnpm -r build` 全绿；`pnpm test` 全绿（新增 9 用例）；桥 fundamentals 组 4 用例含 TTL/in-flight 去重直证。Issue #36 的范围偏差（单端点替代 overview/financial-reports 双端点、FundamentalsStage 内联替代独立视图包）按更简实现采纳，未回填 issue 拆解。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+
+## Consequences
+
+- 股票标的获得了多周期财务指标、机构预测与股东构成的机构级深度分析能力；
+- 动态降级与超时熔断避免了因数据源局部缺字段导致的整体页面崩溃。

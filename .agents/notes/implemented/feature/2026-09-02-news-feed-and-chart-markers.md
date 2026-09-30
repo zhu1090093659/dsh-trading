@@ -1,12 +1,10 @@
-# Agent Note: Issue #37 + #41 — 新闻情报流 & K线信号/事件标记
+# Agent Note: 新闻情报流与 K 线信号/事件图钉 (Issue #37 & #41)
 
-- **日期**: 2026-09-02
-- **Issue**: #37, #41 (Epic #42 看盘 UI 二期)
-- **类型**: feature
+Status: implemented
 
-## 决策摘要
+## Problem
 
-### #37 新闻情报流
+## Decision
 
 - **架构决策**: 采用与 `MarketDataRegistry` 同款的 Cordis 注册表模式（`TradingNewsRegistryService`），各 Kit 在 Preset 平面 apply 时向 Host 面注册表注册 `aggregateNews` 纯 HTTP 函数。生命周期与 Preset 一致（会话销毁时自动退订）。
 - **替代方案被否**: 直接 import 4 个 kit 包创建跨 bundle 依赖（破坏 bundle 独立性）；动态 import 在 tsdown 打包下有兼容问题。
@@ -47,3 +45,14 @@
 
 - `pnpm build` ✅ 全量构建通过
 - `pnpm test` ✅ 99 test files, 702 tests passed
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+
+## Consequences
+
+- 交易员在 K 线图上可直观对照历史重要新闻与策略买卖信号；
+- 经 Cordis 注册表解耦，保持了各市场 bundle 的高内聚与独立性。

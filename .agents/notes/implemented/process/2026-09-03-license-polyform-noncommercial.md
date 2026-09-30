@@ -24,6 +24,10 @@ polyformproject.org 律师起草文本）作为全仓唯一许可：
 CC BY-NC 4.0（为内容设计，缺专利授权与源码条款）；纯 Apache 2.0（允许商用，
 违背诉求）。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 本仓许可不再是 OSI 语义的开源协议（source-available），对外表述统一为

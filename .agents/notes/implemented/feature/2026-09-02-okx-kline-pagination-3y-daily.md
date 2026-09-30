@@ -31,6 +31,10 @@ integer within 1..300, got 500`——桥层设计是「透传，连接器自行�
 4. **Yahoo 日线窗口** 1d: 1y → 3y（连接器是「全窗口拉取、服务层按 limit
    截尾」模式，窗口不给足则 limit 再大也拿不到三年）。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 其余连接器对 750 日K的兼容性核查：binance/bybit 1000 单请求 ✓、

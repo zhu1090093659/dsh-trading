@@ -1,6 +1,7 @@
 # Agent Note: 桌面包内 node bin 符号链接悬空（cpSync 重写绝对路径）
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

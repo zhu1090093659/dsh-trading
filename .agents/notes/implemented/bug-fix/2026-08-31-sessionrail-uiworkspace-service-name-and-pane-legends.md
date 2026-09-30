@@ -64,6 +64,10 @@ Status: implemented
   `MACD DIF: 6.34 DEA: 5.68 HIST: 1.31`（top 442px = MACD pane），截图确认
   legend 均在各 pane 左上角。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 修正上一轮 note 的错误结论（该文件已加 Correction 标注）；「跨会话排错先

@@ -46,3 +46,12 @@ Status: implemented
 - `packages/kit-us`: 构建成功，单测 12 个全部通过；
 - `packages/router` & `packages/cn` & `packages/client-ui-settings`: 类型与构建全部通过；
 - 全仓质量门禁检验通过。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+## Consequences
+
+- 引入同花顺专业金融数据源，支持了 A 股多维深度基本面与估值分析。

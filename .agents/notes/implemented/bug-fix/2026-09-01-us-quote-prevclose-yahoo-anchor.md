@@ -43,6 +43,10 @@ Status: implemented
 4. **`us_get_ticker` 工具描述**同步新语义（官方昨收 + 官方量，不再声明
    volume 滞后局限）。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 头部/侧栏/指数条昨收与涨跌幅不再受 Yahoo 日 K 缺根影响（测试覆盖

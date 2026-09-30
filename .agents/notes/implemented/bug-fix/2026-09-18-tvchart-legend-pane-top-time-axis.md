@@ -18,6 +18,10 @@ measure 前先扣 `chart.timeScale().height()` 再反推分隔条
 不引入 paneSeparators 等未公开 API）。门禁：tsc --noEmit 0 错，
 client-ui-trading vitest 53 文件 450 用例全绿。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - **硬链接穿透（本轮实测）**：pnpm 对 file: 依赖建硬链接（同 inode），

@@ -50,6 +50,10 @@ Status: implemented
 - 修复后：同任务返回真实 `ls` 输出；`/dshtrading/api/tickers` 桥正常
   （AAPL prevClose 319.7）；纯血 web profile 对照全绿。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - **纪律**：宿主升代后必须跑一次本脚本（先 pnpm build 仓库），不能只

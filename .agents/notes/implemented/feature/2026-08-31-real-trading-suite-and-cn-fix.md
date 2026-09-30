@@ -1,11 +1,12 @@
-# Agent Note: 真实交易协议对接与 A 股数据源修复 (Issue #16 & #17 方案 b)
+# Agent Note: 真实交易协议对接与 A 股数据源修复 (Issue #16 & #17)
 
-**Date**: 2026-08-31
-**Context**: 针对 Issue #16 (Eastmoney/Akshare 量纲与北向失效) 与 Issue #17 (交易面诚信与真实实现)，全面执行真实协议与签名接入，严禁任何硬编码模拟。
+Status: implemented
 
----
+## Problem
 
-## 1. 核心整改与决策
+针对 Issue #16 (Eastmoney/Akshare 量纲与北向失效) 与 Issue #17 (交易面诚信与真实实现)，需全面执行真实协议与签名接入，严禁任何硬编码模拟。
+
+## Decision
 
 ### 1.1 Issue #16 数据源量纲与失效端点修复
 - **Eastmoney (`connector-eastmoney`)**:
@@ -62,3 +63,13 @@
 ## 3. 验证与测试
 - 全仓单测覆盖：RSA-SHA256 验签、LongPort 官方规范 HMAC-SHA256 头部签名、IBKR Warning Reply 流程、QMT 网关载荷、Eastmoney/Akshare 量纲。
 - `pnpm -r build` 与 `pnpm -r test` 100% 绿灯。
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+- **Mock 模拟假数据**：违背真实交易诚信铁律；全面接入官方真实签名与真实网关契约，失效官方接口如实下线。
+
+## Consequences
+
+- 消除了价格分与元的量纲偏差，下线停发接口；
+- 确保了具备交易能力连接器的真实可执行性。

@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-宿主 CLI 升 0.1.5-rc.1 cohort（2026-09-10，见 [rc.1 升级 note](../process/2026-09-10-sdk-upgrade-npm-0.1.5-rc.1.md)）次日，`dsh web --no-open` 启动即崩：
+宿主 CLI 升 0.1.5-rc.1 cohort（2026-09-10，见 [rc.1 升级 note](../../archived/process/2026-09-10-sdk-upgrade-npm-0.1.5-rc.1.md)）次日，`dsh web --no-open` 启动即崩：
 
 ```
 plugin tree failed to load: failed to apply loader entry llm-verifier

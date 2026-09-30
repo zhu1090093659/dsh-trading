@@ -1,6 +1,7 @@
 # Agent Note: 定时任务工作区下拉显示 UUID——宿主显示名字段是 title 不是 name
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

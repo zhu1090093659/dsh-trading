@@ -39,6 +39,10 @@ corepack 缓存目录（用户目录下），首用还要联网拉 pnpm，装进
 `npm -g` 装的是真实文件树 + 相对 symlink，离线、自包含、与 npm 自身的分发
 方式同构。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 本地实测（darwin arm64/x64 暂存目录）：stage-pnpm 安装 + 验证通过、

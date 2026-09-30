@@ -1,6 +1,7 @@
 # Agent Note: npm 新装 profile 启动即崩——base 漏声明 @dshtrading/dsh-i18n 依赖（issue #60）
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

@@ -1,6 +1,7 @@
 # Agent Note: SDK cohort 升级官方 NPM 0.1.5-rc.1（宿主 CLI + dev cohort + desktop runtime + profile 全家验收）
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

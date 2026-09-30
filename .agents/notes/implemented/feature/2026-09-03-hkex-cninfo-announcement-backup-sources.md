@@ -50,6 +50,10 @@ HKEX 披露易可达后，owner 批准接入。
   失败负缓存 5 分钟（TTL 内不重试）+ in-flight promise 合并并发；lookup
   只认精确 code 命中（无 `?? list[0]` 兜底），发射前再核 `secCode`/`STOCK_CODE`。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - cn/hk 公告从单供应商变双源：东财挂时巨潮/披露易仍在，公告页签与 K 线

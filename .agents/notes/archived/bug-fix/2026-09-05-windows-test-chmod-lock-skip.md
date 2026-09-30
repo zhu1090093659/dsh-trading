@@ -1,6 +1,7 @@
 # Agent Note: Windows 管线 Test workspace 失败——chmod 只读模拟仅 POSIX 生效
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

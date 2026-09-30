@@ -200,6 +200,7 @@ pnpm install && pnpm build && pnpm test   # Node 见 engines（^22.19.0 || >=24.
 
 ## 文档
 
+- [文档体系索引与全景导航](docs/README.md)
 - [运行、profile 与本地开发](docs/running.md)
 - [连接器接入与配置指南](docs/connectors-guide.md)
 - [新连接器标准手册](docs/connector-playbook.md)

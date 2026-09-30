@@ -80,3 +80,12 @@ longbridge 24、kit-cn 26、knowledge 26、strategies 42、settings.client 33。
 - `pnpm build && pnpm test` 全绿（101 文件 711 测试 passed；jsx 回归在验证中
   暴露并已修）。
 - PR #49 CI：node 22/24 双矩阵 pass（build → typecheck gate → test 全链）。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+## Consequences
+
+- 确立了只降不升的类型检查棘轮门禁，遏制了技术债务膨胀。

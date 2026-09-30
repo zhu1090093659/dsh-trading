@@ -39,6 +39,10 @@ TvChart 两处换算补齐 pane 偏移，互为逆变换：
 `IPriceScaleApi.width()` 对不可见轴返回 0，左轴隐藏时自动退化为旧行为；
 拖拽中的纯像素矩形不经过图表 API，无需处理。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 拖拽矩形 → 提交区间 → 阴影绘制三者在同一坐标系闭环：阴影边缘与光标

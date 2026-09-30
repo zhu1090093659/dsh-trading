@@ -1,10 +1,8 @@
-# feat: 自动更新插件——GitHub Releases 检测 + @dshtrading/* 家族增量更新 + 设置一级菜单
+# Agent Note: 自动更新插件——GitHub Releases 检测与家族增量更新
 
-- **日期**: 2026-09-05
-- **类型**: feature
-- **状态**: implemented
+Status: implemented
 
-## 背景与需求
+## Problem
 
 用户要求：实现一个自动更新功能的插件；界面放进右侧边栏的设置界面作为一级菜单；
 自动检测 GitHub 上发布的新版本与新版说明；支持增量更新——用户点击更新后直接升级新版本。
@@ -13,7 +11,7 @@
 @dshtrading/* 全家族 package.json 版本与 tag 一致 → 构建桌面安装包（mac dmg/zip
 arm64+x64、win nsis/zip x64）→ GitHub Release 附全部安装包 + SHA256SUMS.txt。
 
-## 决策
+## Decision
 
 ### D1：包归属——单一双面包 @dshtrading/client-ui-updater，base patch insert 行
 
@@ -122,3 +120,14 @@ arm64+x64、win nsis/zip x64）→ GitHub Release 附全部安装包 + SHA256SUM
 - 宿主闭包（@deepseek-ai/dsh）增量更新——需 npm registry 通道 + 宿主二进制替换
   策略，属完整安装包通道的长期演进。
 - Release notes 的 markdown 渲染（当前 pre-wrap 原文）。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+
+## Consequences
+
+- 用户可一键获取最新版本并自动校验 sha256 签名更新；
+- 增量更新机制保障了本地用户数据与配置在升级过程中的完整留存。

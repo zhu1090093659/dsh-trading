@@ -1,6 +1,7 @@
 # Agent Note: PR #57 外部贡献评审（CHANGES_REQUESTED，三项阻塞与架构裁决项）
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

@@ -47,3 +47,12 @@ dsh-scope 采纳 `Symbol.for` 后一并摘除。放弃的替代方案：
   Sep 3 暂存）：dist 内启动实测通过后 `ditto` 替换 /Applications，正式安装再测
   `/` 菜单正常，日志确认注入路径指向 app.asar.unpacked。
 - 旧 app 备份：/tmp/dsh-app-backup/DSH Trading.app.pre-symfix-0.1.2。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+## Consequences
+
+- 统一了桌面宿主内的模块作用域 Symbol，杜绝了多实例加载导致的 prepare 崩溃。

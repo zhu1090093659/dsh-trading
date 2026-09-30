@@ -37,3 +37,12 @@ Status: implemented
 
 - `pnpm test`：90 个测试套件，637 个用例全绿通过。
 - `pnpm build`：全 monorepo 44 个 workspace 包零报错编译成功。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+## Consequences
+
+- 修复了深浅色主题下的白屏与对比度问题，保障了界面渲染稳定性。

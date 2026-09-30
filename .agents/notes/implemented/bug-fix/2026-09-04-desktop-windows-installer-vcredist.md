@@ -22,6 +22,10 @@ Status: implemented
   - 在 [`desktop/src/main.cjs`](../../desktop/src/main.cjs) 中同步 Windows `env.PATH` 与 `env.Path`，避免系统目录丢失；增加 `child.on('error')` 防止进程派生异常引起主进程未捕获异常。
   - 在 [`desktop/src/error.html`](../../desktop/src/error.html) 中增加错误引导与“下载 VC++ 运行库”一键按钮（通过 `ipcMain` 打开微软官方下载直链）。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 纯净 Windows 设备双击安装后，安装程序将自动检测并补齐 VC++ 运行库，内置 Node 宿主服务可稳定正常启动，彻底杜绝 0xC0000135 崩溃。

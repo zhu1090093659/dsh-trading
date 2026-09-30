@@ -1,13 +1,12 @@
-﻿# 2026-09-02: 数据源 API 凭证图形化 UI 配置与运行时集成
+# Agent Note: 数据源 API 凭证图形化 UI 配置与运行时集成
 
-- **类型**：`feature`
-- **影响范围**：`@dsh-trading/router`, `@dsh-trading/client-ui-settings`, `@dsh-trading/connector-fmp`, `@dsh-trading/connector-tushare`, `@dsh-trading/connector-finnhub`, `@dsh-trading/connector-polygon`, `@dsh-trading/connector-alpaca`, `@dsh-trading/connector-okx`
+Status: implemented
 
-## 背景与动因
+## Problem
 - 商业数据源与网关连接器（如 FMP、Finnhub、Tushare Pro、Alpaca、Polygon、OKX 等）此前主要依赖手动配置操作系统环境变量。
 - 用户希望在图形化设置界面中，直接为需要 API 密钥或本地网关地址的数据源提供输入、修改、脱敏查看与一键删除（清除）的能力。
 
-## 实现要点
+## Decision
 
 1. **设置 Schema 扩展 (`@dsh-trading/router`)**：
    - 在 `dshtrading` settings namespace 中增加 `credentials: Record<string, Record<string, string>>` 字典；
@@ -24,3 +23,14 @@
 3. **连接器优先读取与优雅回退**：
    - 连接器优先读取 `tradingMarketRouter.getCredential(provider)`；
    - 未在 UI 配置或清除后自动回退至环境变量 `process.env[ref]`，实现 100% 向后兼容。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+
+## Consequences
+
+- 用户无需手动修改系统环境变量即可在图形化设置界面直观管理各券商 API 凭证；
+- 凭证存储与读取严格遵循 BYOK 铁律，不向浏览器外泄。

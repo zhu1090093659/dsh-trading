@@ -25,6 +25,10 @@ Status: implemented
 
 同线共享文件串行的纪律（#38 → #39）只约束第 1 档的功能线并行。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - AGENTS.md Development Workflow 新增「交付流分级」条目承载本规则；原 note 的

@@ -1,4 +1,7 @@
-# typecheck 棘轮门禁批量回归修复（发版前清障）
+# Agent Note: typecheck 棘轮门禁批量回归修复（发版前清障）
+
+Status: implemented
+Archived: 2026-09-30
 
 - **日期**: 2026-09-06
 - **状态**: implemented

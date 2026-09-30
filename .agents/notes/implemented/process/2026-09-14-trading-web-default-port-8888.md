@@ -21,6 +21,10 @@ web-app 的同一缺省端口 3080（vendor `dsh-web-app/cordis.patch.yml:140`
 缺省端口只存在于 wrapper：裸 `dsh --profile trading-web` 仍是宿主缺省 3080。桌面壳经自带
 runtime 用空闲回环端口启动，不走 wrapper，行为不变。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - `dsh-trading --profile trading-web` 缺省在 127.0.0.1:8888，与主 dsh web 宿主 3080 并存。

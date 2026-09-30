@@ -1,6 +1,6 @@
 # 知识库与知识图谱设计（Knowledge Base Tab）
 
-> 状态：设计定稿（待实现） · 2026-08-31
+> 状态：已全部交付并在交付态演进（含 Obsidian tag-hub 拓扑、两级检索、证伪下架与作者别名归一） · 2026-08-31 定稿交付
 > 决策：项目所有者（Mode 2） · 起草：agent 评审
 > 关联：[docs/design/strategy-tab.md](strategy-tab.md)（第二 Tab）、[`.agents/skills/content-insight/`](../../.agents/skills/content-insight/SKILL.md)（内容摄取管线 SSOT）、[docs/skills-guide.md](../skills-guide.md)
 
@@ -61,7 +61,7 @@ packages/knowledge/src/
 └── knowledge-fs.ts   # createFileKnowledgeCardStore（node 专用）
 ```
 
-- 文件存储：`~/.dsh/knowledge/cards.json`，**tmp+rename 原子写**、错误日志 + rethrow——实现模式逐行对齐 `packages/indicators/src/custom-fs.ts`（#19 先例）；
+- 文件存储：`~/.dsh-trading/knowledge/cards.json`（遵循独立 Home 契约），**tmp+rename 原子写**、错误日志 + rethrow——实现模式逐行对齐 `packages/indicators/src/custom-fs.ts`（#19 先例）；
 - node 子路径 `@dshtrading/knowledge/tool` 承载工具与 file store（对齐 `@dshtrading/indicators/tool`）。
 
 ### 图构建（`graph.ts`）
@@ -130,7 +130,7 @@ packages/knowledge/src/
 
 ## 7. 隐私与边界
 
-- 卡片只落 `~/.dsh/knowledge/` 本地文件；不上传、不同步；
+- 卡片只落 `~/.dsh-trading/knowledge/` 本地文件；不上传、不同步；
 - v1 不做：UI 编辑卡片、自动抓取订阅源、向量检索、跨设备同步；
 - 卡片内容是"别人观点的结构化转述"，图谱上不展示任何交易信号；与策略板块严格解耦（未来如做"观点→标的"联动，另立设计）。
 
@@ -138,7 +138,7 @@ packages/knowledge/src/
 
 - [ ] `pnpm -r build` / `pnpm -r test` 全绿；validate 与 buildGraph 有确定性单测（含孤立节点、多 tag 去重边、related 悬空拒绝）
 - [ ] `knowledge_ingest`：合法入库 / 重复 URL 走 update 且 id 不变 / related 悬空被拒——三个用例齐
-- [ ] `knowledge-curation` skill 经 sync 出现在 4 个 kit assets；`pnpm sync:skills` 幂等
+- [ ] `knowledge-curation` skill 经 sync 出现在 6 个 kit assets（crypto/us/cn/hk/futures/global）；`pnpm sync:skills` 幂等
 - [ ] 中栏三 Tab「行情 | 策略 | 知识库」齐全；真实入库 ≥3 张卡片（含一条 related 链与共享 tag）后图谱 hover/click/过滤/搜索全部可用
 - [ ] headless 场景（无 webServer）行为对齐 #19 先例（工具注册不受影响，bridge 静默挂起）
 - [ ] Agent Note（feature）随 PR；Conventional Commits；**不得在 CHANGES_REQUESTED 状态下自行合并**

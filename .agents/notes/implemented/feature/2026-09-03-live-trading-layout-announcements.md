@@ -52,3 +52,13 @@ Status: implemented
 - 真实股票与假股票搜索验证：东财 suggest 与 bridge.symbols 检索 `000938` 精准返回紫光股份，检索 `000283` 返回空数组；
 - 单测验证：`pnpm test` 全仓 103 个测试套件、738 个测试用例 100% 绿灯全过；
 - 构建验证：`pnpm build` 全仓 28 个 package 全部构建成功。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+## Consequences
+
+- 实盘通道与专业看盘布局全面打通，个股公告数据流恢复正常；
+- 改善了看盘下单的人体工学与交互体验。

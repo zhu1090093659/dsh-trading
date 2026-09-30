@@ -22,6 +22,10 @@ Status: implemented
   - HTTP 桥端点: /dshtrading/api/symbols?market=m 实现 30 分钟进程内 TTL 缓存（防高频重打全量接口），未实现或失败静默回退空数组；
   - 前端联想融合: symbol-catalog.ts 实现静态快照并集动态全集融合（静态优先保留中文名，动态新标的作为扩充项），切页签异步预取，超时/离线静默降级不阻塞输入。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 结清 Issue #14 与 Issue #15 全部要求。

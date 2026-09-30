@@ -1,6 +1,7 @@
 # Agent Note: 自选股默认种子标的去除与清空状态保持修复
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

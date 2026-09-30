@@ -1,6 +1,7 @@
 # Agent Note: 右侧栏拖拽调宽失效——d0dc77e 删了 data-dshtrading-chat 写入方，规则 3 门控变死
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

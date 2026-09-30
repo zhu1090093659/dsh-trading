@@ -10,6 +10,10 @@ DSH_HOME 分离（见 [2026-09-08-separate-dsh-home](2026-09-08-separate-dsh-hom
 
 desktop/src/runtime.cjs 的 resolveDshHome 缺省从 ~/.dsh 改为 ~/.dsh-trading：这是 DSH Trading 专用壳，它管理的 home 就该内置为 trading home；显式 DSH_HOME env 仍然优先（脚本/高级用法不变）。宿主 dsh CLI 自身缺省仍是 ~/.dsh——两处缺省不同是刻意的（通用宿主 vs 专用壳）。scripts/home/dsh-trading-desktop 与 --env 启动方式继续可用，只是不再必需。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - Dock/访达直点桌面壳即可正确启动：播种、数据、profile 全落 ~/.dsh-trading。

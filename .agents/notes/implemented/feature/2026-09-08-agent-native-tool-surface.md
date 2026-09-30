@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-`proposed/2026-09-08-agent-native-plugin-interface-audit.md` 的逐包三面审计结论：多处能力的 Registry/Store 与 View 都在，唯独 Tool 边缺席——用户说「把美股行情源换成 Alpaca」「用选股器扫一遍 A 股」「我美股账户有哪些挂单」「看一下 BTC 盘口和最近逐笔」「把我上次调过参数的那个策略再回测一次」，agent 要么只能回「请到设置面板点」，要么只能让用户报 id。本记录落地审计 §4 实施顺序中的 A 类缺口（G1-G5、G7、G8），并记录与审计建议的偏差、待裁决项与实证结论。
+`../architecture/2026-09-08-agent-native-plugin-interface-audit.md` 的逐包三面审计结论：多处能力的 Registry/Store 与 View 都在，唯独 Tool 边缺席——用户说「把美股行情源换成 Alpaca」「用选股器扫一遍 A 股」「我美股账户有哪些挂单」「看一下 BTC 盘口和最近逐笔」「把我上次调过参数的那个策略再回测一次」，agent 要么只能回「请到设置面板点」，要么只能让用户报 id。本记录落地审计 §4 实施顺序中的 A 类缺口（G1-G5、G7、G8），并记录与审计建议的偏差、待裁决项与实证结论。
 
 ## Decision
 

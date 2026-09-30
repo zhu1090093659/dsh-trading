@@ -1,7 +1,6 @@
-# Windows 兼容遗留项整改——.gitattributes 强制 LF、ci 加 windows 矩阵、nsis.include 去侥幸回退
+# Agent Note: Windows 兼容遗留项整改——.gitattributes 强制 LF 与 CI 矩阵加固
 
-- **日期**: 2026-09-06
-- **状态**: implemented
+Status: implemented
 
 ## Problem
 
@@ -74,3 +73,8 @@ CI 实证全绿，但存在四类遗留债：
 - **Windows 真实锁集成测试**：Node/libuv 打开的句柄自带
   FILE_SHARE_DELETE，纯 JS 无法可靠模拟文件占用锁；windows 矩阵落地后
   具备了真实验证位，待后续窗口补。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->

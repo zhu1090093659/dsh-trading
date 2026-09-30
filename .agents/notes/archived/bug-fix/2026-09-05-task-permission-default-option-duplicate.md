@@ -1,6 +1,7 @@
 # Agent Note: 任务编辑器「会话权限」下拉出现两个 read-only——默认项标签撞车
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

@@ -45,6 +45,10 @@ checkout，yaml 带 @dsh/* 死 overrides）。即 4 个 WARN 背后是 4 个无�
    接入 `refresh-trading-web-profile.sh` 预检位，失败即中止（set -e），杜绝带病
    install。数据解析在 node 内完成（行含冒号/引号，bash 切字段会炸）。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - profile-cohort-check：**0 FAIL、0 WARN**（此前 4 WARN）；5 个 profile

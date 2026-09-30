@@ -21,6 +21,10 @@ Status: implemented
 - 有效性实证：临时重引入 viewTab TDZ，冒烟测试如预期全红报
   "Cannot access 'stageTab' before initialization"，回退后全绿。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 此后 QuoteStage 及衍生品组件的 TDZ/顶层渲染崩溃在 pnpm test 阶段即拦截，

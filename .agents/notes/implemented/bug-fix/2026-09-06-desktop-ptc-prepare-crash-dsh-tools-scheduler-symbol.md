@@ -64,6 +64,10 @@ Status: implemented
 - 桌面 app 优雅重启后宿主带新 hook 起来（pid 54686，注入行 +
   `dsh web:` URL 正常，无 ledger 锁报错）。PTC 会话重试由 user 点击验证。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - **认知纪律**：「能聊天、一干活就崩」+ `reading 'prepare'` 在本仓库有

@@ -1,19 +1,14 @@
 # Agent Note: 全界面视觉美学升级——对齐富途牛牛桌面版风格
 
-- **日期**：2026-08-31
-- **状态**：已实现 (implemented)
-- **关联 Issue**：[#18](https://github.com/zhu1090093659/dsh-trading/issues/18)
-- **分支**：`feat/futu-ui-visual-upgrade`
+Status: implemented
 
----
-
-## 背景与目标
+## Problem
 
 以富途牛牛桌面版视觉规范为基准，对 `trading-web` 的全部 UI 界面（自选侧栏、中栏行情舞台、设置界面）进行了全面的视觉美学升级与交互架构重构。升级遵循五条设计铁律，实现**纯视觉层升级、零数据契约与数据流变更**。
 
 ---
 
-## 核心架构与设计决策
+## Decision
 
 ### 1. 集中式 Design Tokens 基座 (`tokens.css`)
 - **色彩规范**：统一收敛中国市场标准的**红涨绿跌**规范（`--dsw-futu-up: #e64545` / `--dsw-futu-down: #2ba471`）及其对应的半透明背景色、边框色与渐变透明度。
@@ -57,3 +52,13 @@
 1. **编译构建**：`pnpm -r build` 全部 19 个 package 编译通过（100% 成功）。
 2. **单元测试**：`pnpm -r test` 全量通过（100% 绿灯）。
 3. **架构纪律**：零数据契约变更，纯视觉层增强与 UI 架构收口。
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+- **单点零散微调样式**：难以维持长期跨包视觉一致性；采用集中式 Design Tokens 基座。
+
+## Consequences
+
+- 终端具备了专业级金融终端的视觉人体工学；
+- 纯表现层演进未影响底层数据流。

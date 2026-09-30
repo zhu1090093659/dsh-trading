@@ -29,4 +29,4 @@ Status: implemented
 - 门禁实证：包内 vitest 9 用例全绿（注册语义/占主降级/轮换不重复/隐藏跳过/清理顺序/语料形状），全仓 `pnpm build`、`pnpm -r test`、`pnpm i18n:check`、`node scripts/typecheck-gate.mjs` 全绿（新 tsconfig 双 0 入基线）。
 - 语料维护契约写在包 `AGENTS.md`：加句只动 `src/client/quotes.ts`（≤22 全角、无 `{}` 占位符），`i18n-allow` 文件头豁免仅限该数据文件与语言自述名。
 - 待办（标准交付步）：trading-web profile 刷新副本 + 实例重启窗口后做一次真机冒烟（选语言 → 起一轮看金句 + 时钟并存 → 等 120s 看换句）。实例运行中禁止 `dsh plugin install`。
-- 同变更顺带清债：client-ui-trading 定时任务遗留 13 处 tsc 错误压着 typecheck 棘轮（main CI 红），已在独立提交修复（见 [bug-fix note](../bug-fix/2026-09-05-agent-tasks-typecheck-debt.md)），本包新配置才得以 0 错入基线。
+- 同变更顺带清债：client-ui-trading 定时任务遗留 13 处 tsc 错误压着 typecheck 棘轮（main CI 红），已在独立提交修复（见 [bug-fix note](../../archived/bug-fix/2026-09-05-agent-tasks-typecheck-debt.md)），本包新配置才得以 0 错入基线。

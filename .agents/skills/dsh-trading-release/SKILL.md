@@ -80,7 +80,7 @@ pnpm i18n:check
 - npm 通道实际启用且获授权时，检查目标 name@X.Y.Z 的发布结果及 dist 信息；抽查 `@dshtrading/all`、`@dshtrading/base`，并按发布日志对账全家族，不能只看 latest。
 - `gh release view "vX.Y.Z" --json assets,body`：核对 mac 两架构 dmg/zip、win exe/zip、SHA256SUMS.txt、自动更新 feed `trading-update-vX.Y.Z.zip` 与 `updates-manifest-vX.Y.Z.json`；以当前 workflow 的实际资产契约为准，校验下载 hash。
 - `git ls-remote --tags origin "refs/tags/vX.Y.Z"` 核对远端目标，说明失败或部分发布，不虚报完成。
-- mac 抽查先核实安装目标、用户数据和运行实例，不擅自覆盖/重启。显式路径与 home 启动：`open --env DSH_HOME=$HOME/.dsh-trading "/Applications/DSH Trading.app"`；避免会话继承 `DSH_HOME=~/.dsh` 或 LaunchServices 命中旧开发副本。
+- mac 抽查先核实安装目标、用户数据和运行实例，不擅自覆盖/重启。显式路径与 home 启动：`env -u ELECTRON_RUN_AS_NODE open --env DSH_HOME=$HOME/.dsh-trading "/Applications/DSH Trading.app"`；避免会话继承 `DSH_HOME=~/.dsh`、`ELECTRON_RUN_AS_NODE=1`（Electron 降级为纯 Node、应用根本不启动）或 LaunchServices 命中旧开发副本。
 - 从 `~/Library/Logs/dsh-trading-desktop/dsh-host.log` 新增日志确认 `[desktop] dsh home:` 和 runtime/profile，再用 tokenized HTTP URL、curl、headless Chrome `--timeout` 验证，不做全屏桌面截图。
 
-相关证据：[UI 验证](../../../.agents/notes/implemented/process/2026-09-04-ui-verification-hosted-http-headless-chrome.md) 由根 AGENTS 路由；[桌面 home 故障说明](../../../.agents/notes/implemented/bug-fix/2026-09-09-desktop-crash-profile-partial-copy.md)。
+相关证据：[UI 验证](../../../.agents/notes/implemented/process/2026-09-04-ui-verification-hosted-http-headless-chrome.md) 由根 AGENTS 路由；[桌面 home 故障说明](../../../.agents/notes/implemented/bug-fix/2026-09-09-desktop-crash-profile-partial-copy.md)、[启动环境继承坑](../../../.agents/notes/implemented/process/2026-09-11-desktop-shell-local-rebuild-open-env-pitfall.md)。

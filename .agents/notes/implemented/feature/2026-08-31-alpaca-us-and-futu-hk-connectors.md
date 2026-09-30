@@ -1,16 +1,14 @@
-# Feature Note: 接入美股 Alpaca 连接器与港股 Futu 连接器
+# Agent Note: 接入美股 Alpaca 连接器与港股 Futu 连接器
 
-- **日期**: 2026-08-31
-- **类别**: Feature / Connector
-- **状态**: Implemented
+Status: implemented
 
-## 1. 背景与动机
+## Problem
 在多市场交易框架下，美股此前仅有 Yahoo Finance 公共数据源（仅支持日线/周线/月线），港股此前仅有腾讯数据源（港股分钟线接口不可用）。
 为了满足美股与港股的分钟级行情分析（5m/15m/30m/1h 等）以及真实的下单/模拟盘撮合能力，系统正式引入两个专业交易连接器：
 1. **美股市场 (us)**: `@dsh-trading/connector-alpaca`（接入 Alpaca Market Data v2 IEX feed 及 Trading API v2，支持两值 API Key/Secret 鉴权与 Paper/Live 环境）。
 2. **港股市场 (hk)**: `@dsh-trading/connector-futu`（接入 FutuOpenD 网关，支持 5m/15m/30m/60m 等全周期 K 线、Ticker 与港股交易，提供优雅的 ECONNREFUSED 网关离线引导）。
 
-## 2. 架构设计与实现
+## Decision
 
 ### 2.1 美股 Alpaca 连接器 (`@dsh-trading/connector-alpaca`)
 - **Rest 客户端 (`AlpacaRestClient`)**:
@@ -51,3 +49,13 @@
   - `@dsh-trading/connector-alpaca`: 9 tests passed.
   - `@dsh-trading/connector-futu`: 7 tests passed.
   - 全仓 21 个包构建成功，268 个单测全量通过（100% 绿线）。
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+- **仅使用公共行情网页接口**：美股日内分钟线与港股全周期缺乏稳定免费公共接口，且无法满足真实下单与模拟撮合需求；引入 Alpaca 与 FutuOpenD 提供规范化企业级接入。
+
+## Consequences
+
+- 美股与港股具备了完整的分钟级行情与真实/模拟交易能力；
+- 两个连接器完全符合全市场符号归一化规范与 base 统一审批闸门。

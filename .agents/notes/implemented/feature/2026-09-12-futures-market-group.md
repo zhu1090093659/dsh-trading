@@ -43,3 +43,12 @@ Issue: #97
 ## 关联发现（不属本变更，待 owner 裁决）
 
 `packages/kit-cn/assets/skills/cn-risk-checklist.md` 等四个技能文件自 81f239f 起为 59 字节「指针文本」（内容 = 自身相对路径，git 与 profile 安装副本一致），kit `readFile` 直出该路径串——cn-risk-checklist/knowledge-curation/trading-notes-setup/trading-strategy-paradigms 的技能正文疑似长期缺失（正文全仓检索无命中）。kit-futures 的技能文件为完整正文，不受影响。
+
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+## Consequences
+
+- 成功扩充了国内期货市场支持并扩展了同花顺 K 线与资讯数据源。

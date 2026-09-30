@@ -111,3 +111,11 @@ zh 改 en 漏改无法机器发现。
   `packages/client-ui-settings/src/client/contract/locale-keys.ts`
 - 修改：4 UI 包词典抽取与硬编码提取、base/cordis.patch.yml（insert 行）、
   root package.json（i18n:check/i18n:report）、typecheck-baseline.json（549→528）
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+## Consequences
+
+- 建立了集中式多语言字典与国际化审计门禁，统一了中文本地化呈现。

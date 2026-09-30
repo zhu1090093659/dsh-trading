@@ -1,17 +1,12 @@
 # Agent Note: 图表激活名册 host SSOT——agent 直接挂载/摘除/枚举图表指标
 
-- **日期**：2026-09-04
-- **状态**：已实现 (implemented)
-- **关联 Issue**：[#63](https://github.com/zhu1090093659/dsh-trading/issues/63)
-- **分支**：`feat/63-indicator-agent-activation`
+Status: implemented
 
----
-
-## 背景与目标
+## Problem
 
 issue #33 打通了「添加」：agent 经 `indicator_author` 创作自定义指标并上榜 GUI 选择器。但「使用」断在最后一公里——激活名册（chart-state / `dshtrading.chart.v1`）只在浏览器 localStorage，host 平面不可达：agent 无法把指标挂上用户图表，也无法枚举指标库（只能猜 id）。本变更把激活名册升位为 host SSOT 并开放 agent 工具面，补齐「右侧 agent 直接添加**和使用**自定义指标」的完整链路。
 
-## 核心架构与设计决策
+## Decision
 
 ### 1. 复用两个既有定稿模式（不发明新机制）
 
@@ -39,7 +34,7 @@ issue #33 打通了「添加」：agent 经 `indicator_author` 创作自定义�
 - 激活名册是纯展示状态（非交易语义），不涉铁律 #3 闸门；桥端点在既有认证栅栏之后。
 - skill 随包分发（铁律 #2）：`indicator-authoring` 指南（indicators SKILL.md + 4 kit 副本）增补「创作即上图」与挂载管理范式。
 
-## 替代方案
+## Alternatives considered
 
 - **SSE 推送命令通道**（host 发带 payload 事件、客户端 apply）：落选——eventbus 零载荷裁决 + 浏览器离线丢动作。
 - **仅加 indicator_list**（挂载仍手动）：落选——用户目标即「agent 直接使用」，最后一公里必须打通。
@@ -53,3 +48,9 @@ issue #33 打通了「添加」：agent 经 `indicator_author` 创作自定义�
    - `PUT {id:'rsi', params:{n:999}}` → 桥 clamp 到 n=120 → 图例渲染 RSI(120)；
    - DELETE removed 语义正确；演示数据已回滚，host 名册回到迁移后的干净态。
    - 底部快捷词条带 MACD/RSI 同步呈激活态，右侧 agent 面板同框可见。
+
+
+## Consequences
+
+- 打通了 Agent 自然语言编写指标到自动挂载至用户图表的最后一公里；
+- 图表激活名册升位为 Host 权威，杜绝了端侧状态脱节。

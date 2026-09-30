@@ -1,23 +1,20 @@
 # 发布前检查清单（release checklist）
 
-> 2026-08-30 架构评审整改 #6。本仓当前是「本机开发形态」（未发布 npm，AGENTS.md：
-> 发布需用户显式授权）。本清单是从开发形态切换到可分发形态的**全部闸门**——
-> 逐条过完才允许 `pnpm release`（changesets 已配，`@dshtrading/*` fixed 组同族发版）。
+> 2026-08-30 架构评审整改 #6；2026-09-29 最新基线校准。发布入口由技能 `.agents/skills/dsh-trading-release/SKILL.md` 规范管理。
+> 本清单是每次从开发态发版到生产分发态的**核心门禁闸门**——逐条过完才允许进入 Changesets 发布流
+> （`@dshtrading/*` fixed 组同族发版，PolyForm Noncommercial 1.0.0 许可协议）。
 
 ## 1. SDK 钉版解除（最硬的闸门）——✅ 已解除（2026-08-30）
 
-> **状态更新（2026-08-30）**：DSH 0.1.2-alpha.2 已发布 npm，本仓 SDK 依赖整体切换到
-> 官方 npm cohort（cordis 4.0.2 / cosmokit 1.8.3 / schemastery 3.18.2；PR #13）。
-> overrides 全部移除、干净环境 CI 全绿、README 口径已改——本节闸门**已通过**，
-> 决策细节见 `.agents/notes/archived/process/2026-08-30-sdk-upgrade-npm-0.1.2-alpha.2.md`。
-> 以下原始清单保留作历史口径。
+> **版本基线（2026-09-29）**：DSH 0.2.0-rc.2 世代（配套 cordis 4.0.4 / cosmokit 1.8.5 / schemastery 3.18.4），
+> 本仓 SDK 依赖采用官方 npm cohort peerDependencies 声明，并通过 pnpm-workspace.yaml 的 overrides 与 minimumReleaseAgeExclude 精确钉住，保证单一模块实例。
+> 发布前检查确认：
 
 本仓 `pnpm-workspace.yaml` 的 overrides 把 `@deepseek-ai/*` SDK 钉到本机绝对路径
 （`/Users/zcl/code/deepseek-harness/...`）——**任何其他机器都无法 install 本仓**。
 发布前必须：
 
-- [x] npm 上 `@deepseek-ai/*` 世代与本仓代码面兼容（~~当前宿主 0.1.2-alpha.1~~
-  → npm 0.1.2-alpha.2 cohort 已对齐）；
+- [x] npm 上 `@deepseek-ai/*` 世代与本仓代码面兼容（当前宿主与 dev cohort 0.2.0-rc.2 已对齐）；
 - [x] 删除本仓 overrides 全部 file:/link: 行（peerDependencies 声明已是正式包名+版本，
   无需改）；
 - [x] 在一台**干净环境**（无 /Users/zcl/code/deepseek-harness）`pnpm install &&

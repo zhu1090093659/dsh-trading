@@ -12,7 +12,7 @@ Status: implemented
 execution session session-… failed during launch: Cannot read properties of undefined (reading 'aborted')
 ```
 
-根因（拿到栈后才确认）：0.1.5-rc.1 cohort（见 [rc.1 升级](../process/2026-09-10-sdk-upgrade-npm-0.1.5-rc.1.md)）把 `@deepseek-ai/dsh-commands` 的 `execute` 从
+根因（拿到栈后才确认）：0.1.5-rc.1 cohort（见 [rc.1 升级](../../archived/process/2026-09-10-sdk-upgrade-npm-0.1.5-rc.1.md)）把 `@deepseek-ai/dsh-commands` 的 `execute` 从
 `execute(sessionId, line, signal)` 改为 `@Remote async execute(agent: Agent, line, submittedAttachments, signal)`；
 `tasks/runner.ts` 仍按旧形状传三个参数，于是 `submittedAttachments` 吃掉了 signal、`signal` 成为 `undefined`，服务内首行 `if (signal.aborted)`（`dsh-commands/lib/index.js:323`）抛 TypeError：
 

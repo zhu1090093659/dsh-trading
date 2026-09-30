@@ -1,6 +1,7 @@
 # Agent Note: 交易连接器 API 凭证无法正常输入问题修复
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

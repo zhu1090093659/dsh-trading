@@ -32,6 +32,10 @@ Status: implemented
   - 铁律 #2：知识与代码分离，定性分析判读写入 Skill，代码只负责纯净取数；
   - 铁律 #5：所有数据源均为公共无 key 端点，本仓不内置密钥、不缓存、不再分发数据。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 路线图 WS4 规划的所有 3 个子工作流（新闻源扩展、衍生品数据面、四市场基本面与估值）全部交付，Issue #6 完成所有目标并结清。

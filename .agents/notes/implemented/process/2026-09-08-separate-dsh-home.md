@@ -59,6 +59,10 @@ Status: implemented
 5. **交付流**：跨 7 包联动 → `feat/dsh-home-separation` 分支 + PR（挂 Issue），
    本地 profile 从分支工作树 file: 安装即时生效，合并不阻塞本机使用。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 2026-09-08 前的会话历史留在 `~/.dsh/sessions`（dsh web 侧可见）；trading home

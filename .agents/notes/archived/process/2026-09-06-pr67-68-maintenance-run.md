@@ -1,6 +1,7 @@
 # Agent Note: pr-issue-maintenance 运行——PR #67 按 #66 婉拒口径关闭、PR #68 评审修正后合并
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

@@ -1,19 +1,14 @@
 # Agent Note: 自然语言生成自定义指标——Agent 原生指标创作链路
 
-- **日期**：2026-08-31
-- **状态**：已实现 (implemented)
-- **关联 Issue**：[#19](https://github.com/zhu1090093659/dsh-trading/issues/19)
-- **分支**：`feat/author-custom-indicators`
+Status: implemented
 
----
-
-## 背景与目标
+## Problem
 
 为了让用户在会话列中用自然语言（如 "帮我写一个 TD9 指标"、"帮我写一个 SuperTrend 指标"、"给 OBV 加一个 34 天均线"）自由创作自定义技术指标，本项目搭建了完整的 **Agent-Native 指标创作、校验与端到端图表加载链路**。
 
 ---
 
-## 核心架构与设计决策
+## Decision
 
 ### 1. 校验器与超时熔断保护 (`packages/indicators/src/validate.ts` & `validate-node.ts`)
 - **断言集**：
@@ -49,3 +44,13 @@
 2. **单元测试**：全量 `pnpm -r test` 252+ 用例全绿（涵盖坏例拦截、死循环超时熔断、TD9、SuperTrend、OBV+MA34 黄金用例、HTTP 桥端点等专项单测）。
 
 > 后续（2026-09-04）：「使用」侧最后一公里（agent 挂载/摘除/枚举图表指标）由 [indicator-agent-chart-activation](./2026-09-04-indicator-agent-chart-activation.md) 补齐，`indicator_author` 增加 `activate` 可选参数。
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+- **仅在前端提供公式编辑器**：门槛过高且违背「对话驱动一切」的 Agent 原生理念；选择 Node vm 校验与桥同步方案。
+
+## Consequences
+
+- 用户可用自然语言直接驱动 Agent 编写指标并自动校验上图；
+- 统一指标 schema 使得自定义指标与内置指标具备完全一致的计算与渲染待遇。

@@ -1,6 +1,7 @@
 # Agent Note: CI 棘轮门禁修复——定时任务合入的类型清债（564→510）
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

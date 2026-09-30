@@ -1,6 +1,7 @@
 # Agent Note: Windows 打包失败——installer.nsh 非法指令 !ifexists 与无 BOM UTF-8 中文
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

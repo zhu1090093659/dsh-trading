@@ -1,8 +1,8 @@
 # Agent Note: agent-native 插件接口审计（能力 × 执行者矩阵与增强清单）
 
-Status: proposed
+Status: implemented
 
-落地进度：G1-G5 / G7 / G8 已实现（见 [implemented/feature/2026-09-08-agent-native-tool-surface.md](../implemented/feature/2026-09-08-agent-native-tool-surface.md)）；G6（routing_set，B 类）与 G9/G10、C/D 类仍按本文裁决。
+落地状态：全量审计定稿。G1-G5 / G7 / G8 已交付落地（见 [feature/2026-09-08-agent-native-tool-surface.md](../feature/2026-09-08-agent-native-tool-surface.md)）；G6（routing_set）按裁决推迟；G9/G10 及 C 类（无闸门下单撤单）与 D 类（工具暴露凭证）按安全铁律明确否决。
 
 ## Problem
 
@@ -19,7 +19,7 @@ Status: proposed
 
 本记录给出可执行的增强清单：逐包三面（agent 工具面 / REST 桥面 / UI 面）判定「可做 / 半做 / 做不到」，把每个缺口归到 A 至 D 风险等级，并明确「该补」与「不该补」。
 
-## Proposal
+## Decision
 
 ### 0. 审计口径、运行时验证与基线
 
@@ -306,3 +306,10 @@ Status: proposed
 - **双 store 数据丢失前科**：watchlist 曾因桥与插件各建一个 file store 导致 agent 写覆盖 GUI 写（`.agents/notes/implemented/feature/2026-09-08-watchlist-groups-manager.md` Addendum、review-fixes note）；分组工具必须复用同一实例。
 - **C/D 类边界被后续会话反复重提**：§5 逐条写明理由，后续会话以本文为准。
 - **本记录的时效**：工作树另有其他会话的未提交改动（含 `packages/base/cordis.patch.yml`），若该变更改动工具面挂载行，本矩阵需重跑（命令见 §0）。
+
+
+## Consequences
+
+- 形成了整个项目 Agent 原生能力的完整全景盘点矩阵与安全分类裁决；
+- 指导并落地了 G1-G5、G7、G8 等 37 个核心 Agent 工具，彻底消除了只对 UI 开放的特权面；
+- 坚决捍卫了统一交易审批闸门与凭证安全底线（C/D 类明确否决）。

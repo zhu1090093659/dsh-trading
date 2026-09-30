@@ -1,10 +1,12 @@
-# 全局涨跌配色配置（红涨绿跌 ↔ 绿涨红跌）
+# Agent Note: 全局涨跌配色配置（红涨绿跌 ↔ 绿涨红跌）
 
-- **status**: implemented
-- **date**: 2026-08-31
-- **scope**: client-ui-trading, client-ui-settings, connector-okx, connector-bybit
+Status: implemented
 
-## 决策
+## Problem
+
+用户需要全局统一涨跌色彩配置，支持 A 股（红涨绿跌）与国际（绿涨红跌）两种交易习惯，并在图表、面板和设置之间即时无缝联动。
+
+## Decision
 
 用户要求全局统一涨跌色彩配置，支持 A 股（红涨绿跌）与国际（绿涨红跌）两种习惯。
 
@@ -39,3 +41,13 @@
 
 - `color-mode.test.ts`：9 个用例覆盖 `getColorPalette`、`directionColor` 在双模式下的输出。
 - 全仓 435 tests passed, 0 failures。
+
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+- **切换颜色需刷新页面**：打断看盘连续性；采用 CSS 变量与自定义事件实现同窗口即时热切换。
+
+## Consequences
+
+- 实现了红绿配色的全局热切换与跨 Tab/设置双向同步；
+- 兼顾了中国本土与国际市场交易员的不同心智习惯。

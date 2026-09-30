@@ -199,6 +199,7 @@ No. The [PolyForm Noncommercial 1.0.0 license](LICENSE) permits noncommercial us
 
 ## Documentation
 
+- [Documentation Index](docs/README.md)
 - [Running, profiles & development](docs/running.md)
 - [Connectors onboarding & configuration](docs/connectors-guide.md)
 - [New connector playbook](docs/connector-playbook.md)

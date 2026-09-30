@@ -1,6 +1,7 @@
 # Agent Note: 致谢并确认 Issue #69——DSH Meme Hub 第三方导航站收录
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

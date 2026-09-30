@@ -1,6 +1,6 @@
 # 中栏「策略」板块设计（Strategy Tab）
 
-> 状态：设计定稿（待实现） · 2026-08-31
+> 状态：已全部交付并在交付态演进（含纯函数回测引擎、6大经典参考范式、自定义策略与选股器 Host 调度护栏） · 2026-08-31 定稿交付
 > 决策：项目所有者（Mode 2） · 起草：agent 评审
 > 关联：[docs/design/knowledge-graph.md](knowledge-graph.md)（第三 Tab）、[docs/skills-guide.md](../skills-guide.md)（Skill SSOT）、[docs/crypto-slice-plan.md](../archive/crypto-slice-plan.md)（旧回测 non-goal 的反转说明）
 
@@ -19,7 +19,7 @@
 - 中栏视图注册表更新：`quote | strategy`（`workflow` 占位完成使命后移除；`knowledge` 由知识库任务追加）；
 - 新包 `packages/strategies`：策略契约类型 + 纯函数回测引擎 + 6 个参考范式策略（纯库、零运行时依赖、浏览器可打包，形态对齐 `packages/indicators`）；
 - `StrategyView` UI：策略目录 → 参数面板 → 回测结果（指标卡 + 权益曲线 + 交易明细）；
-- 策略知识 Skill 化：`.agents/skills/trading-strategy-paradigms/`（五段论 SOP，经 `scripts/sync-skills.mjs` 分发至 4 个 kit）。
+- 策略知识 Skill 化：`.agents/skills/trading-strategy-paradigms/`（五段论 SOP，经 `scripts/sync-skills.mjs` 分发至 6 个市场 kit：crypto/us/cn/hk/futures/global）。
 
 **非目标（Out of scope）**
 
@@ -119,7 +119,7 @@ export interface StrategyDefinition {
 
 ### 3.5 Skill 层
 
-`.agents/skills/trading-strategy-paradigms/SKILL.md`（SSOT，五段论）：教 agent 讲解范式、跑回测、解读绩效与反方情景；明确「回测 ≠ 未来收益、不构成投资建议、实盘仍走闸门」。经 `scripts/sync-skills.mjs` 同步至 4 个 kit assets。
+`.agents/skills/trading-strategy-paradigms/SKILL.md`（SSOT，五段论）：教 agent 讲解范式、跑回测、解读绩效与反方情景；明确「回测 ≠ 未来收益、不构成投资建议、实盘仍走闸门」。经 `scripts/sync-skills.mjs` 同步至 6 个 kit assets（crypto/us/cn/hk/futures/global）。
 
 ## 4. 六个参考范式详表（实现指示）
 
@@ -136,11 +136,11 @@ export interface StrategyDefinition {
 
 ## 5. 验收清单
 
-- [ ] `pnpm -r build`（新增 1 包）与 `pnpm -r test` 全绿；engine 有确定性单测（固定合成 bars → 精确断言 metrics）
-- [ ] 中栏显示「行情 | 策略」两 Tab；旧 `workflow` 视图与 locale 键清理干净（grep 无残留）
-- [ ] 任一策略在任一市场标的（如 BTCUSDT 日线）可运行出结果；指标卡与权益曲线渲染正常；切 Tab 再切回状态保持
-- [ ] `trading-strategy-paradigms` skill 经 sync 脚本出现在 4 个 kit assets；`pnpm sync:skills` 幂等
-- [ ] Agent Note（feature）随 PR 提交；遵守 Conventional Commits；**不得在 CHANGES_REQUESTED 状态下自行合并**
+- [x] `pnpm -r build`（新增 `packages/strategies`）与 `pnpm -r test` 全绿；engine 具备确定性单测（固定合成 bars → 精确断言 metrics）
+- [x] 中栏支持「行情 | 策略 | 知识库」三大 Tab；旧 `workflow` 视图与占位 locale 键已彻底清理
+- [x] 任一策略在全市场标的（日线/分钟线）可稳定运行并输出 8 项关键绩效指标卡、权益曲线与交易明细；切 Tab 状态保持
+- [x] `trading-strategy-paradigms` skill 经 sync 脚本同步出现在 6 个 kit assets，`pnpm sync:skills` 保证幂等
+- [x] Agent Note 已就位并在后续功能演进中原地更新事实
 
 ## 6. 参考
 

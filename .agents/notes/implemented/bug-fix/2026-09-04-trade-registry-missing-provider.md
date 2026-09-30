@@ -45,6 +45,10 @@ Status: implemented
    其它 400 协议错误会混淆；不加服务端 code 的话语义无法稳定演进，故桥+客户端
    同步加 code（旧部署兼容：客户端对无 code 的 400 回退按服务未挂解释）。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 交易连接器 dataplane 的 `resolveTradeRegistry` 从此拿得到注册表，

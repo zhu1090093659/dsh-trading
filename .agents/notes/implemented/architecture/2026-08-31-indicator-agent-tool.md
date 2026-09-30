@@ -32,6 +32,10 @@ Alternatives considered：
 - **宏分析工具**（一次出完整定性报告）：落选——roadmap Q2 已裁决，分析框架是
   知识（WS3 skill），工具只提供可组合的原子能力。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - Agent 在任一激活 connector 下可用 `crypto_get_indicators`：入参 symbol

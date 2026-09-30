@@ -1,6 +1,7 @@
 # Agent Note: 策略/选股器管理 PR 审查修复（#75/#76 合并前整改）
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

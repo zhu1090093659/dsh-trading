@@ -1,6 +1,7 @@
 # Agent Note: 婉拒社区提案 Issue #66——Headline Arena 预测竞技场接入
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 

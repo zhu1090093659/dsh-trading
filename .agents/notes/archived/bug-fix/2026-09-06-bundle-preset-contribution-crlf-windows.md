@@ -1,4 +1,7 @@
-# bundle getPresetContribution CRLF 归一——修 Windows runner 行定位失配
+# Agent Note: bundle getPresetContribution CRLF 归一——修 Windows runner 行定位失配
+
+Status: implemented
+Archived: 2026-09-30
 
 - **日期**: 2026-09-06
 - **状态**: implemented

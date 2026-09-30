@@ -39,6 +39,10 @@ Status: implemented
    会被运行中实例的旧缓存在下次 save 时覆盖（本轮 trading-web 实例运行中，
    仅完成 dry-run，apply 留待实例关闭后执行）。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 新工具（get/delete）与 search 新参数对 agent 生效需刷新 profile 的 file:

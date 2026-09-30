@@ -31,6 +31,10 @@ Status: implemented
 - `bridge.test.ts`：「仅剩公告 → 触发宏观回退」改判「不回退、公告原样保留」，
   新增「无任何相关内容 → 空列表透传」用例。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - 公告页签恢复真实数据：002714.SZ 桥级端到端返回 6 条公告；K 线事件图钉

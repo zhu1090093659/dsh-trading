@@ -23,6 +23,10 @@ trading-web boot 持续崩溃：`plugin tree failed to load: failed to apply loa
 2. **教训**：「批量替换已应用」必须以复扫结果为证，不能以记忆/计划为证——本轮就是被前次未落盘的 sed 记录误导了一轮 boot。
 3. **同步治理**：`scripts/sync-profile-overrides.mjs`（npm 布局 + stale 行修复）与 AGENTS.md 的宿主本体条目（npm 全局 `@deepseek-ai/dsh@0.1.2-alpha.3`，旧 deepseek-harness checkout 弃用）随本变更一并提交。
 
+## Alternatives considered
+
+<!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
 ## Consequences
 
 - boot 全绿，#30–#33/#35 的 live 验收通道打通（事件总线/策略流水线/自选 SSOT/自定义指标/知识卡片/动态能力均在宿主内挂载）。

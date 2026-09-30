@@ -1,6 +1,7 @@
 # Agent Note: 定时任务遗留类型清债——typecheck 棘轮回归修复
 
 Status: implemented
+Archived: 2026-09-30
 
 ## Problem
 
