@@ -11,6 +11,9 @@
     },
     "android": {
       "package": "com.dshtrading.mobile"
-    }
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
   }
 }
