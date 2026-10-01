@@ -70,7 +70,7 @@
 | 档 | 状态 | 证据 / 复现 |
 |---|---|---|
 | 1. shadow | **已完成** | 10 分钟真实行情验收（消息 4864 / 坏帧 0 / 全程 aligned / tick 238 / 从未 halt / 退出码 0）；记录见 docs/ops-runbook.md 的"演练记录"节；**一条命令复现**：node scripts/e2e-smoke.mjs --with-network（30 秒版）|
-| 2. paper | 未开始 | 准入见上文；**需你**：venue 测试网凭证（平台建议 OKX/Bybit，能力更完整）|
+| 2. paper | **准备就绪，待人执行** | 平台已定 **OKX**；装配走仓库原生 connector-okx 的 demo 环境（env 缺省即 demo，**不需引入 ccxt**）；凭证名 OKX_DEMO_API_KEY / OKX_DEMO_SECRET_KEY / OKX_DEMO_PASSPHRASE；**基线 92 passed | 2 skipped ⇒ 期望 94 passed | 0 skipped**；routing 证据要求与守门见上文；记录位见 docs/ops-runbook.md |
 | 3. 小额 live | 未开始 | 准入见上文；**需你**：主网凭证 + 人工签署授权 + 金额上限 + 在环承诺 |
 | 带外退出演练 | 未开始 | **必须人在环**；卡片硬要求："我方全挂"前提，无记录即视为未满足 |
 
