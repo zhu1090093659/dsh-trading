@@ -111,9 +111,37 @@
 
 **仍未验证**：br 相对 gzip 的**实际收益**没有量出来（本轮只证明了协商与回落正确）—— 下一轮可以在构建输出里直接比对两个产物的字节数。
 
+
+## A0 端到端验证（卡片证据项，同日补完）
+
+卡片要求的证据是"**A0 端点在行情与 agent 全挂时仍可用**"。此前只有渲染层断言（控制面不受数据面失败影响）与 P2 的 edge 单测；这一轮补上了**真实 edge 上的端到端记录**：
+
+    # packages/cockpit/drill/a0-e2e.mjs —— 真实 createEdgeGateway + 驾驶舱 /v1 作为 business route
+    设备已配对：dev_4e8034d510dcdbf3 scopes=["read","control"]
+    edge 已起：http://127.0.0.1:4591
+
+    === 业务面（模拟全挂：每个请求都抛错）===
+    GET /v1/cards -> 500（业务调用次数 1）
+
+    === 带外 A0 六条路径 ===
+    /a0/ping       -> 200  {"ok":true,"atMs":...,"device":"dev_..."}
+    /a0/status     -> 200  {"ok":true,"state":{"killed":false,"paused":false,...}}
+    /a0/kill       -> 200  {"ok":true,"state":{"killed":true,...}}
+    /a0/pause      -> 200  {"ok":true,"state":{"killed":true,"paused":true,...}}
+    /a0/resume     -> 200  {"ok":true,"state":{"killed":false,"paused":false,...}}
+    /a0/ack        -> 200  {"ok":true,"ackedBy":"dev_...",...}
+
+    结论：业务面全挂时 A0 六条路径全部 200 ✓
+
+**这份记录证明的**：A0 与业务面共用一个 edge 时，业务面抛错**不会**带走带外通道；kill→pause→resume 的状态迁移在真实请求上确实发生（不是只有单测里的对象）。
+
+**顺带印证的一条既有裁决**：设备配对时 `scopes=["read","control"]` —— read 来自配对，**control 来自显式的 `grantControl`**，与"control 永不默认签发"一致。
+
+**仍不构成生产形态证据**（如实标注）：edge 跑在 127.0.0.1、设备注册表在内存（不落盘）、故障是"业务 route 抛错"而不是真实行情/agent 进程挂掉、也没有三 uid 隔离 —— 生产形态的带外演练仍按 deploy/README.md 的四类演练执行（需 root 安装后）。
+
 ## 未验证项（如实标注）
 
 - ~~尚无业务内容~~ **五块信息架构已实现**（见下节）；**ui-screenshot-verify 截图仍未做**。
 - ~~headless Chrome 渲染验证未做~~ **已做**（见下节），并抓出两个真问题、都已修。
-- ~~A0 全挂时驾驶舱控制面可用~~ **已用纯组件断言覆盖**（见下节）；仍未做的是**真实 A0 端点**在驾驶舱会话上的端到端复验（本轮验的是渲染层命题，不是 A0 端点本身；A0 端点本身在 P2 的 edge 测试里覆盖）。
+- ~~A0 端到端复验~~ **已做**（见下节：真实 edge + 业务面全挂 + A0 六路径全 200）；**生产形态**的带外演练仍按 deploy/README.md 四类演练执行（需 root 安装后）。
 - 首屏预算只有构建期闸门 + 本地回环实测（见下）；**没有真实慢网/节流测量**，且 **serveStatic 不做压缩**（实测未压缩传输 147752B vs gzip 48234B）—— 修法见下节。
