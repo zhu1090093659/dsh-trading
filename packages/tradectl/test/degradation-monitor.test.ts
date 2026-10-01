@@ -16,6 +16,9 @@ function healthy(overrides: Partial<MonitorSignals> = {}): MonitorSignals {
     venueErrorStreak: 0,
     venueErrorThreshold: 3,
     diskWriteFailed: false,
+    // 时钟漂移必须显式给出才算"已测"；不给就是未知（不假装健康）
+    clockDriftMs: 0,
+    clockDriftToleranceMs: 100,
     now: () => T0 + 1_000,
     ...overrides,
   }
@@ -89,4 +92,28 @@ describe('降级检测层', () => {
     expect(result.triggers).not.toContain('out-of-band-halt')
     expect(result.triggers.sort()).toEqual(['disk-full', 'heartbeat-lost', 'market-stale', 'venue-error'])
   })
-})
+
+  it('管理员：时钟漂移超容差 ⇒ 触发；未测 ⇒ 记未知而不是当健康', () => {
+    // Given 漂移 500ms、容差 100ms
+    const drifted = scanDegradation(healthy({ clockDriftMs: 500, clockDriftToleranceMs: 100 }))
+    // When/Then 命中触发源
+    expect(drifted.triggers).toContain('clock-drift')
+    // Given 完全没给漂移读数
+    const notMeasured = scanDegradation(healthy({ clockDriftMs: undefined, clockDriftToleranceMs: undefined }))
+    // Then 记未知（静默当健康是这类系统最危险的默认值）
+    expect(notMeasured.triggers).not.toContain('clock-drift')
+    expect(notMeasured.unknownSignals).toContain('clock-drift')
+    // Given 只给漂移量、没给容差
+    const noTolerance = scanDegradation(healthy({ clockDriftToleranceMs: undefined }))
+    // Then 同样算未测
+    expect(noTolerance.unknownSignals).toContain('clock-drift')
+  })
+
+  it('管理员：容差边界——等于容差不触发、超过才触发', () => {
+    // Given 漂移恰好等于容差 / 超过 1ms
+    const atLimit = scanDegradation(healthy({ clockDriftMs: 100, clockDriftToleranceMs: 100 }))
+    const overLimit = scanDegradation(healthy({ clockDriftMs: 101, clockDriftToleranceMs: 100 }))
+    // Then 严格大于才触发
+    expect(atLimit.triggers).not.toContain('clock-drift')
+    expect(overLimit.triggers).toContain('clock-drift')
+  })})

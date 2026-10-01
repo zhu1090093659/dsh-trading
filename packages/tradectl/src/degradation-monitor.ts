@@ -29,6 +29,13 @@ export interface MonitorSignals {
   readonly venueErrorThreshold: number
   /** 磁盘写入是否失败（由写入方上报，检测层不去猜）。 */
   readonly diskWriteFailed: boolean
+  /**
+   * 时钟漂移量（毫秒，由 clock-drift 检测器给出；负数=墙钟落后）。
+   * 不给就是"没测"，**不等于没漂** —— 与其它未知信号同样处理（不假装健康）。
+   */
+  readonly clockDriftMs?: number | undefined
+  /** 漂移容差；给了 clockDriftMs 但没给容差时按"未测"处理。 */
+  readonly clockDriftToleranceMs?: number | undefined
   readonly now: () => number
 }
 
@@ -79,6 +86,13 @@ export function scanDegradation(signals: MonitorSignals): ScanResult {
 
   // ④ 磁盘写失败（由写入方上报）
   if (signals.diskWriteFailed) triggers.push('disk-full')
+
+  // ⑤ 时钟漂移（由 clock-drift 检测器给出漂移量；没给就是没测 ⇒ 记未知而不是当健康）
+  if (signals.clockDriftMs === undefined || signals.clockDriftToleranceMs === undefined) {
+    unknownSignals.push('clock-drift')
+  } else if (Math.abs(signals.clockDriftMs) > signals.clockDriftToleranceMs) {
+    triggers.push('clock-drift')
+  }
 
   return { triggers, symbolsByTrigger, unknownSignals }
 }
