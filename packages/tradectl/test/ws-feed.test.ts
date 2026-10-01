@@ -259,3 +259,27 @@ describe('快照世代号由 feed 盖章', () => {
     expect(alignment.state(T0).alignment).toBe('aligned')
   })
 })
+describe('重连路径', () => {
+  it('管理员：重连后重新引导并再次对齐（这正是"静默停摆"的场景）', async () => {
+    // Given 一条连上并已对齐的流（引导快照自带错误 epoch，靠 feed 盖章纠正）
+    const { fake, alignment, feed, clock } = fixture({
+      bootstrap: async () => [{ kind: 'snapshot', epoch: 999, symbol: 'BTC/USDT', price: 60_000, atMs: T0 }],
+      subscribeTokenCapacity: 10,
+    })
+    feed.start()
+    fake.open()
+    await new Promise((resolve) => setImmediate(resolve))
+    fake.message(JSON.stringify({ kind: 'tick', epoch: 1, symbol: 'BTC/USDT', price: 60_100, atMs: T0, seq: 1 }))
+    expect(alignment.state(T0).alignment).toBe('aligned')
+    // When 服务端断开、重连（新一代连接）并重新引导
+    fake.serverClose('server said bye')
+    clock.advance(1_000)
+    fake.open()
+    await new Promise((resolve) => setImmediate(resolve))
+    // Then 新世代的 tick 仍然能对齐（若快照 epoch 仍是 999，这里会永远 unaligned）
+    const later = T0 + 1_000
+    fake.message(JSON.stringify({ kind: 'tick', epoch: 2, symbol: 'BTC/USDT', price: 60_200, atMs: later, seq: 2 }))
+    expect(alignment.state(later).alignment).toBe('aligned')
+    expect(feed.stats().reconnects).toBe(1)
+  })
+})
