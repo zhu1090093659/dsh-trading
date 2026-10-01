@@ -83,3 +83,17 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 **测试 5 例对着真实 edge 走真 HTTP**（`desktop/tests/device-credential.test.mjs`，import 构建产物 `packages/tradectl/lib/edge.js`）：配对后端到端读到 A0（`/a0/ping`)；文件权限实测 `0600`；换地址不外发；forget 后 `/a0/ping` 变 401；坏码 ⇒ `PAIRING_CODE_UNKNOWN`、连不上 ⇒ `PAIR_UNREACHABLE`（都不抛错）。
 
 **⑤ 剩余**：把这三块（attach-mode 决策 / device-credential 凭据 / source-guard 守卫）接进 `main.cjs` 的启动分支，并在 Electron 里跑一次（本机尚无该验证路径，接线时要如实标注）。
+
+### 接线：main.cjs 的附着分支（2026-10-01 完成接线）
+
+`boot()` 顶部先算 `planStartup`（纯函数），据结果分流：
+
+- **local** ⇒ 完全走原路径（播种 profile、等 token 行、加载本地 URL）；
+- **attach + 需要配对** ⇒ 明确提示"必须先配对"，**不起本地 host、也不加载一个未授权页面**；
+- **attach + 有凭据** ⇒ 跳过本地 host 与 profile 播种，注册 `webRequest.onBeforeSendHeaders` 钩子（**只对 bot 同源**注入 Authorization），然后 `loadURL(botUrl)`；加载失败时给出**回滚指引**（删 ``<DSH_HOME>/attach.json` 回到本地模式）。
+
+**凭据不进渲染层**：Authorization 由主进程在请求头里注入，渲染层任何脚本都读不到密钥。判定用 `URL.origin` **全等**比较，跨源一律不注入（含 `192.168.1.30.evil.com` 这类后缀相似的域名 —— 有测试）。
+
+**验证状态（如实）**：决策层（`planStartup`/`resolveHostMode`/`loadBotUrl`）、凭据层（对真 edge 走真 HTTP）、注入层（`attachRequestHeaders` 纯函数）**都有测试**；`main.cjs` 的分支本身**只做了语法检查 + 全量 desktop 测试通过**，**没有在 Electron 里真跑过**（本机没有可跑该 App 的验证路径）。人工验证只需一条命令：
+
+    DSH_TRADING_BOT_URL=http://127.0.0.1:<edge端口> npx electron desktop    # 期望日志出现 startup plan: attach 且不起本地 host

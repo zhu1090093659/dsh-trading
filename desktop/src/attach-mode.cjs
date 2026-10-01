@@ -80,4 +80,48 @@ function loadBotUrl(options) {
   }
 }
 
-module.exports = { resolveHostMode, isPrivateOrLoopbackHost, loadBotUrl };
+/**
+ * 启动计划（P4 步骤 5 的接线判定，**纯函数**）：把"起本地 host"还是"附着远端 bot"算成一个值，
+ * main.cjs 只负责照着执行 —— 这样分支逻辑本身有测试，调用点薄到可以一眼审完。
+ *
+ * 一条 UI 诚实性规则：附着模式下若**没有该地址的设备凭据**，绝不加载远端页面假装它能用 ——
+ * 报 %%needsPairing: true%%，由界面提示去配对。加载一个未授权页面会让人以为"连上了"。
+ *
+ * @param {{ home: string, env?: Record<string, string | undefined>, credential?: { authorization(url: string): string | undefined } }} options
+ */
+function planStartup(options) {
+  const botUrl = loadBotUrl({ home: options.home, env: options.env ?? process.env });
+  const decision = resolveHostMode({ botUrl });
+  if (decision.mode === 'local') return { mode: 'local', reason: decision.reason };
+  const authorization = options.credential?.authorization(decision.url);
+  if (authorization === undefined) {
+    return { mode: 'attach', url: decision.url, needsPairing: true, reason: '附着目标已配置，但本机还没有该地址的设备凭据：需要先配对' };
+  }
+  return { mode: 'attach', url: decision.url, needsPairing: false, reason: '已配置内网 bot 且有凭据：附着' };
+}
+
+/**
+ * 附着模式下的请求头注入（P4 步骤 5）：**只有与 bot 同源的请求**才带上 Authorization。
+ *
+ * 为什么这样做而不是把密钥交给渲染层：渲染层的任何脚本都能读到它；而且一旦注入逻辑按"域名后缀"
+ * 之类的模糊规则写错，密钥就会随请求发到别的源。所以判定用 %%URL.origin%% 全等比较，**跨源一律
+ * 返回 undefined**（与 device-credential 的地址绑定同一条纪律）。
+ *
+ * 纯函数：Electron 的 webRequest 钩子只是它的调用点，逻辑本身可测。
+ * @param {{ requestUrl: string, botUrl: string, authorization: string | undefined }} input
+ */
+function attachRequestHeaders(input) {
+  if (input.authorization === undefined) return undefined
+  let requestOrigin
+  let botOrigin
+  try {
+    requestOrigin = new URL(input.requestUrl).origin
+    botOrigin = new URL(input.botUrl).origin
+  } catch {
+    return undefined
+  }
+  if (requestOrigin !== botOrigin) return undefined
+  return { authorization: input.authorization }
+}
+
+module.exports = { resolveHostMode, isPrivateOrLoopbackHost, loadBotUrl, planStartup, attachRequestHeaders };

@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 
 const require = createRequire(import.meta.url)
-const { resolveHostMode, isPrivateOrLoopbackHost, loadBotUrl } = require('../src/attach-mode.cjs')
+const { resolveHostMode, isPrivateOrLoopbackHost, loadBotUrl, planStartup, attachRequestHeaders } = require('../src/attach-mode.cjs')
 
 test('管理员：没配 bot 时保持现状（起本地 host）', () => {
   // Given 没有 bot 配置
@@ -81,4 +81,47 @@ test('管理员：loadBotUrl 先看环境变量、再看 attach.json，坏配置
   } finally {
     rmSync(home, { recursive: true, force: true })
   }
+})
+
+test('管理员：启动计划在附着但缺凭据时要求先配对，绝不假装能用', () => {
+  // Given 一个临时 home 里配了内网 bot
+  const home = mkdtempSync(join(tmpdir(), 'attach-plan-'))
+  try {
+    writeFileSync(join(home, 'attach.json'), JSON.stringify({ botUrl: 'http://192.168.1.30:8888' }))
+    // When 没有该地址的凭据
+    const noCredential = planStartup({ home, env: {}, credential: { authorization: () => undefined } })
+    // Then 走附着但要求配对（不是加载一个未授权页面）
+    assert.equal(noCredential.mode, 'attach')
+    assert.equal(noCredential.needsPairing, true)
+    assert.match(noCredential.reason, /配对/)
+    // When 有凭据
+    const withCredential = planStartup({ home, env: {}, credential: { authorization: (url) => (url === 'http://192.168.1.30:8888' ? 'Bearer dev_x.y' : undefined) } })
+    // Then 直接附着
+    assert.equal(withCredential.mode, 'attach')
+    assert.equal(withCredential.needsPairing, false)
+    // When 没配 bot
+    const local = planStartup({ home: mkdtempSync(join(tmpdir(), 'attach-plan-empty-')), env: {} })
+    // Then 照旧起本地 host
+    assert.equal(local.mode, 'local')
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('管理员：附着时的请求头注入只对 bot 同源生效，跨源一律不注入', () => {
+  // Given 一个 bot 地址与凭据
+  const botUrl = 'http://192.168.1.30:8888'
+  const authorization = 'Bearer dev_x.y'
+  // When/Then 同源（同 host 同端口不同路径）注入
+  assert.deepEqual(attachRequestHeaders({ requestUrl: botUrl + '/v1/cards', botUrl, authorization }), { authorization })
+  // 端口不同不算同源
+  assert.equal(attachRequestHeaders({ requestUrl: 'http://192.168.1.30:9999/v1/cards', botUrl, authorization }), undefined)
+  // host 不同不算同源
+  assert.equal(attachRequestHeaders({ requestUrl: 'http://192.168.1.31:8888/v1/cards', botUrl, authorization }), undefined)
+  // 公网源不算同源（哪怕后缀相似）
+  assert.equal(attachRequestHeaders({ requestUrl: 'https://192.168.1.30.evil.com/v1/cards', botUrl, authorization }), undefined)
+  // 没有凭据时不注入
+  assert.equal(attachRequestHeaders({ requestUrl: botUrl + '/v1/cards', botUrl, authorization: undefined }), undefined)
+  // 非法 URL 不注入（不抛错）
+  assert.equal(attachRequestHeaders({ requestUrl: 'not a url', botUrl, authorization }), undefined)
 })

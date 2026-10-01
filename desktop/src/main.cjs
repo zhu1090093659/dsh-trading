@@ -31,6 +31,8 @@ const {
   formatHostExitDiagnostic,
   toNodeImportSpecifier,
 } = require('./runtime.cjs');
+const { planStartup, attachRequestHeaders } = require('./attach-mode.cjs');
+const { createDeviceCredential } = require('./device-credential.cjs');
 
 const READY_TIMEOUT_MS = 180000;
 const LOG_TAIL_LINES = 200;
@@ -251,6 +253,35 @@ async function boot() {
   const runtime = resolveRuntimePaths(resourcesRoot(), process.platform, process.arch, app.isPackaged);
   const home = resolveDshHome(process.env, os.homedir());
   pushLogLine('[desktop] dsh home: ' + home);
+
+  // P4 步骤 5：配了 bot 的机器默认不再起本地 host。判定是纯函数（attach-mode.cjs），这里只执行。
+  // 附着模式下**连本地 profile 的播种/修复都不做** —— 那些工作属于我们不会启动的那个 host。
+  const credential = createDeviceCredential({ home });
+  const plan = planStartup({ home, env: process.env, credential });
+  pushLogLine('[desktop] startup plan: ' + plan.mode + ' — ' + plan.reason);
+  if (plan.mode === 'attach') {
+    if (plan.needsPairing === true) {
+      await showError('这台机器已配置远端 bot（' + plan.url + '），但本机还没有该地址的设备凭据。' + String.fromCharCode(10, 10) +
+        '请先在 bot 所在机器上生成配对码并完成配对；本机不会起本地服务。' + String.fromCharCode(10) +
+        '（若想回到本地模式：删除 ' + path.join(home, 'attach.json') + ' 后重开本应用。）');
+      return;
+    }
+    const authorization = credential.authorization(plan.url);
+    // 凭据留在主进程：只给 **bot 同源**的请求注入 Authorization（渲染层永远看不到密钥）。
+    mainWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+      const headers = attachRequestHeaders({ requestUrl: details.url, botUrl: plan.url, authorization });
+      callback({ requestHeaders: headers === undefined ? details.requestHeaders : { ...details.requestHeaders, ...headers } });
+    });
+    setStatus('Attaching to the remote bot…');
+    pushLogLine('[desktop] attach mode: loading ' + plan.url);
+    try {
+      await mainWindow.loadURL(plan.url);
+    } catch (error) {
+      await showError('无法附着到远端 bot（' + plan.url + '）：' + String(error && error.message ? error.message : error) +
+        String.fromCharCode(10, 10) + '回滚：删除 ' + path.join(home, 'attach.json') + ' 后重开本应用即可回到本地模式。');
+    }
+    return;
+  }
 
   if (!fs.existsSync(runtime.nodeBin)) throw new Error('bundled Node runtime is missing: ' + runtime.nodeBin);
   if (!fs.existsSync(runtime.hostBin)) throw new Error('bundled dsh host is missing: ' + runtime.hostBin);
