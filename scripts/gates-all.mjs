@@ -78,6 +78,13 @@ function main() {
       ? GATES
       : GATES.filter((gate) => (only.includes('=') ? only.split('=')[1] ?? '' : args[args.indexOf(only) + 1] ?? '').split(',').includes(gate.name))
 
+  // **空洞成功守卫**：选不中任何门禁时必须报错 —— 否则 `--only 拼错的名字` 会输出"全部通过"、
+  // 让人以为跑过了（门禁工具自己犯这种错最讽刺）。
+  if (selected.length === 0) {
+    process.stderr.write('[gates-all] ✗ 没有选中任何门禁：检查 --only 的名字（可用名字见脚本里的 GATES 清单）' + NL)
+    return 2
+  }
+
   process.stdout.write('[gates-all] 跑 ' + String(selected.length) + ' 条门禁' + (withNetwork ? '（含网络项）' : '') + NL)
   const results = []
   for (const gate of selected) results.push(runGate(gate))

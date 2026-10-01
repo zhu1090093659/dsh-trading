@@ -150,3 +150,12 @@ scripts/gates-all.mjs 顺序跑 14 条门禁，**显式收集每条退出码**�
 **全量实测**：14 通过 / 0 失败，exit 0（build 21.9s / -r test 31.7s / coverage 30.2s / typecheck 32.1s / 其余 <1.4s）。
 
 **用法**：收尾一律 `pnpm gates:all`。
+
+### gates-all 的两条性质（自测进 CI）
+
+门禁工具自己也会犯错，所以它的两条性质现在由 `scripts/gates-all.test.mjs`（进 `test:scripts`）断言：
+
+1. **失败会传播** —— `--self-test` 内部跑一个 `process.exit(3)` 的伪门禁，断言整体判定为失败（不许"红字但 exit 0"）；
+2. **选不中要报错** —— `--only 拼错的名字` 必须 exit 2 并说明原因。**这条是新发现的漏洞**：初版 `--only bogus` 会选中 0 条门禁然后输出"全部通过"，**门禁工具自己空洞成功**（最讽刺的一种）。
+
+实测：`--only no-such-gate` ⇒ `✗ 没有选中任何门禁：检查 --only 的名字`、exit 2；`--self-test` ⇒ exit 0；`--only home-guard:check` ⇒ 跑 1 条并绿。
