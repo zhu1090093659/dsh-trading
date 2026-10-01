@@ -1,0 +1,228 @@
+{
+  "$comment": [
+    "行 id 冻结清单（scripts/patch-id-gate.mjs 的判据来源）。",
+    "dsh-trading-* 是跨版本公共契约：新增 / 改名 / 换 owner 都必须显式跑",
+    "  node scripts/patch-id-gate.mjs --update",
+    "并在同一次变更里说明理由——门禁不会自动接纳新 id。",
+    "owner 取值 = bundle:<包目录名> | profile:<profile 名>。"
+  ],
+  "rows": {
+    "dsh-trading-base-gate": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/base"
+    },
+    "dsh-trading-client-ui-indicators": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/client-ui-indicators"
+    },
+    "dsh-trading-client-ui-knowledge": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/client-ui-knowledge"
+    },
+    "dsh-trading-client-ui-masters-quotes": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/client-ui-masters-quotes"
+    },
+    "dsh-trading-client-ui-settings": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/client-ui-settings"
+    },
+    "dsh-trading-client-ui-special-indicators": {
+      "owner": "profile:trading",
+      "name": "@dshtrading/client-ui-special-indicators"
+    },
+    "dsh-trading-client-ui-strategies": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/client-ui-strategies"
+    },
+    "dsh-trading-client-ui-trading": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/client-ui-trading"
+    },
+    "dsh-trading-client-ui-updater": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/client-ui-updater"
+    },
+    "dsh-trading-cn-dataplane": {
+      "owner": "bundle:cn",
+      "name": "@dshtrading/connector-tencent/dataplane"
+    },
+    "dsh-trading-cn-dataplane-akshare": {
+      "owner": "bundle:cn",
+      "name": "@dshtrading/connector-akshare/dataplane"
+    },
+    "dsh-trading-cn-dataplane-eastmoney": {
+      "owner": "bundle:cn",
+      "name": "@dshtrading/connector-eastmoney/dataplane"
+    },
+    "dsh-trading-cn-dataplane-hithink": {
+      "owner": "bundle:cn",
+      "name": "@dshtrading/connector-hithink/dataplane"
+    },
+    "dsh-trading-cn-dataplane-qmt": {
+      "owner": "bundle:cn",
+      "name": "@dshtrading/connector-qmt/dataplane"
+    },
+    "dsh-trading-cn-dataplane-tushare": {
+      "owner": "bundle:cn",
+      "name": "@dshtrading/connector-tushare/dataplane"
+    },
+    "dsh-trading-cn-dataplane-xysz": {
+      "owner": "bundle:cn",
+      "name": "@dshtrading/connector-xysz/dataplane"
+    },
+    "dsh-trading-cn-installer": {
+      "owner": "bundle:cn",
+      "name": "@dshtrading/cn"
+    },
+    "dsh-trading-connector-jin10": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/connector-jin10"
+    },
+    "dsh-trading-crypto-dataplane-binance": {
+      "owner": "bundle:crypto",
+      "name": "@dshtrading/connector-binance/dataplane"
+    },
+    "dsh-trading-crypto-dataplane-bybit": {
+      "owner": "bundle:crypto",
+      "name": "@dshtrading/connector-bybit/dataplane"
+    },
+    "dsh-trading-crypto-dataplane-ccxt": {
+      "owner": "bundle:crypto",
+      "name": "@dshtrading/connector-ccxt/dataplane"
+    },
+    "dsh-trading-crypto-dataplane-okx": {
+      "owner": "bundle:crypto",
+      "name": "@dshtrading/connector-okx/dataplane"
+    },
+    "dsh-trading-crypto-installer": {
+      "owner": "bundle:crypto",
+      "name": "@dshtrading/crypto"
+    },
+    "dsh-trading-dsh-i18n": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/dsh-i18n"
+    },
+    "dsh-trading-eventbus": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/eventbus"
+    },
+    "dsh-trading-futures-dataplane": {
+      "owner": "bundle:futures",
+      "name": "@dshtrading/connector-hithink/futures-dataplane"
+    },
+    "dsh-trading-futures-installer": {
+      "owner": "bundle:futures",
+      "name": "@dshtrading/futures"
+    },
+    "dsh-trading-global-dataplane-jin10": {
+      "owner": "bundle:global",
+      "name": "@dshtrading/connector-jin10/dataplane"
+    },
+    "dsh-trading-global-installer": {
+      "owner": "bundle:global",
+      "name": "@dshtrading/global"
+    },
+    "dsh-trading-hk-dataplane-eastmoney": {
+      "owner": "bundle:hk",
+      "name": "@dshtrading/connector-eastmoney/dataplane"
+    },
+    "dsh-trading-hk-dataplane-futu": {
+      "owner": "bundle:hk",
+      "name": "@dshtrading/connector-futu/dataplane"
+    },
+    "dsh-trading-hk-dataplane-longbridge": {
+      "owner": "bundle:hk",
+      "name": "@dshtrading/connector-longbridge/dataplane"
+    },
+    "dsh-trading-hk-dataplane-tencent": {
+      "owner": "bundle:hk",
+      "name": "@dshtrading/connector-tencent/dataplane"
+    },
+    "dsh-trading-hk-dataplane-tiger": {
+      "owner": "bundle:hk",
+      "name": "@dshtrading/connector-tiger/dataplane"
+    },
+    "dsh-trading-hk-installer": {
+      "owner": "bundle:hk",
+      "name": "@dshtrading/hk"
+    },
+    "dsh-trading-holdings": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/holdings/plugin"
+    },
+    "dsh-trading-im": {
+      "owner": "bundle:base",
+      "name": "@xmanrui/dsh-im"
+    },
+    "dsh-trading-indicators": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/indicators/plugin"
+    },
+    "dsh-trading-knowledge": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/knowledge/plugin"
+    },
+    "dsh-trading-market-router": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/router"
+    },
+    "dsh-trading-market-tools": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/base/market-tools"
+    },
+    "dsh-trading-model-capabilities": {
+      "owner": "bundle:base",
+      "name": "@linxin666/dsh-client-ui-model-capabilities"
+    },
+    "dsh-trading-plugin-manager": {
+      "owner": "bundle:base",
+      "name": "@linxin666/dsh-client-ui-plugin-manager"
+    },
+    "dsh-trading-role-presets": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/base/presets"
+    },
+    "dsh-trading-strategies": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/strategies/plugin"
+    },
+    "dsh-trading-us-dataplane-alpaca": {
+      "owner": "bundle:us",
+      "name": "@dshtrading/connector-alpaca/dataplane"
+    },
+    "dsh-trading-us-dataplane-finnhub": {
+      "owner": "bundle:us",
+      "name": "@dshtrading/connector-finnhub/dataplane"
+    },
+    "dsh-trading-us-dataplane-fmp": {
+      "owner": "bundle:us",
+      "name": "@dshtrading/connector-fmp/dataplane"
+    },
+    "dsh-trading-us-dataplane-ibkr": {
+      "owner": "bundle:us",
+      "name": "@dshtrading/connector-ibkr/dataplane"
+    },
+    "dsh-trading-us-dataplane-polygon": {
+      "owner": "bundle:us",
+      "name": "@dshtrading/connector-polygon/dataplane"
+    },
+    "dsh-trading-us-dataplane-yahoo": {
+      "owner": "bundle:us",
+      "name": "@dshtrading/connector-yahoo/dataplane"
+    },
+    "dsh-trading-us-installer": {
+      "owner": "bundle:us",
+      "name": "@dshtrading/us"
+    },
+    "dsh-trading-watchlist": {
+      "owner": "bundle:base",
+      "name": "@dshtrading/watchlist/plugin"
+    }
+  },
+  "overrides": {
+    "agent-preset-registry": [
+      "bundle:base"
+    ]
+  }
+}

@@ -4,6 +4,7 @@
  * @module @dshtrading/connector-alpaca
  */
 
+import { liveTradingEnabled } from '@dshtrading/authority'
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -182,7 +183,7 @@ export class AlpacaMarketDataService extends Service implements MarketDataServic
 
 export class AlpacaTradeService extends Service implements TradeService {
   private readonly client: AlpacaRestClient
-  /** 插件配置（服务缝闸门 P0：dryRun 强制模拟 / liveTrading 总闸门）。 */
+  /** 插件配置（服务缝闸门 P0：dryRun 强制模拟 / liveTrading 非权威镜像——实盘授权由 @dshtrading/authority 的人工签署平面裁定）。 */
   private readonly config: Config
   private readonly getCredentials: () => Promise<AlpacaCredentials>
 
@@ -211,11 +212,11 @@ export class AlpacaTradeService extends Service implements TradeService {
 
   async placeOrder(order: OrderRequest): Promise<Order> {
     const requestedDryRun = order.dryRun ?? true
-    if (!requestedDryRun && !this.config.liveTrading) {
+    if (!requestedDryRun && !liveTradingEnabled(this.config.liveTrading)) {
       throw new TradingServiceError(
         'TRADING_LIVE_TRADING_DISABLED',
         `Alpaca TradeService.placeOrder rejected: the request asks for real execution (dryRun=${String(order.dryRun)}) `
-          + 'but liveTrading=false — enable liveTrading explicitly or keep dryRun=true for a simulated fill.',
+          + 'but the signed live-trading authority does not grant real execution (see @dshtrading/authority) — keep dryRun=true for a simulated fill.',
       )
     }
     if (requestedDryRun || this.config.dryRun) {
@@ -242,10 +243,10 @@ export class AlpacaTradeService extends Service implements TradeService {
   }
 
   async cancelOrder(orderId: string, _symbol?: string): Promise<void> {
-    if (!this.config.liveTrading || this.config.dryRun) {
+    if (!liveTradingEnabled(this.config.liveTrading) || this.config.dryRun) {
       throw new TradingServiceError(
         'TRADING_LIVE_TRADING_DISABLED',
-        'Alpaca TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
+        'Alpaca TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires a signed live-trading grant (see @dshtrading/authority) with dryRun=false.',
       )
     }
     const creds = await this.getCredentials()
@@ -301,13 +302,13 @@ export type OrderGateVerdict =
 
 export function evaluateOrderGate(config: Config, args: PlaceOrderArgs): OrderGateVerdict {
   const requestedDryRun = args.dryRun ?? true
-  if (!requestedDryRun && !config.liveTrading) {
+  if (!requestedDryRun && !liveTradingEnabled(config.liveTrading)) {
     return {
       action: 'reject',
       code: 'TRADING_LIVE_TRADING_DISABLED',
       message:
         `us_place_order rejected: real execution requested (dryRun=${String(args.dryRun)}) `
-        + 'but live trading is disabled (liveTrading=false). Enable liveTrading explicitly or keep dryRun=true.',
+        + 'but live trading is disabled (no signed live-trading grant from the authority plane). Ask the operator to sign a live-trading grant, or keep dryRun=true.',
     }
   }
   if (requestedDryRun || config.dryRun) return { action: 'simulate' }

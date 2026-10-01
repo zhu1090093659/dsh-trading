@@ -38,6 +38,14 @@ jobs:
       # i18n 门禁（PR #56 评审 H2）：zh/en 键位对齐 + {placeholder} 对齐 +
       # client CJK 扫描 + dsh-i18n 中心包漂移。读各包 lib 产物，必须在 build 后。
       - run: pnpm i18n:check
+      # 行 id 门禁：dsh-trading-* 是比 HTTP 路径更硬的跨版本公共契约——同一 id 被两层
+      # insert 时宿主 loader 会静默塌缩为最后一条（不抛错），只能靠启动前的静态门禁拦。
+      # 判据文件 scripts/patch-id-freeze.json（新增/改名必须显式 --update）。
+      - run: pnpm patch-id:check
+      # 实盘开关门禁：不变量 §13.3「实盘开关不在 agent 可写路径上」——preset 资产里的
+      # liveTrading 只是非权威镜像（只许 false），实盘授权由 @dshtrading/authority 的
+      # 人工签署平面裁定；运行期不得引用签署侧。
+      - run: pnpm live-trading:check
       # 测试卫生棘轮（business-testing-ci §6）：BDD 命名/结构、零 mock、零 sleep、
       # 断言完整性；存量债入 scripts/test-audit-baseline.json，只许降不许升。
       - run: pnpm test:audit

@@ -97,13 +97,26 @@ function processAlive(pid: number): boolean {
     }
   }
   try {
-    const probe = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { timeout: 2_000 })
-    if (probe.status !== 0 || probe.stdout.length === 0) return false
-    const state = probe.stdout.toString('utf8').trim()
-    return state !== 'Z' && state !== 'X'
+    return interpretProcessProbe(spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { timeout: 2_000 }))
   } catch {
     return true // 探针不可用时保守认为活（宁可误拒不可双写）
   }
+}
+
+/**
+ * 解释一次进程探针的结果（纯函数：逐分支钉住保守语义）。
+ *
+ * 「探针不可用」与「进程已死」是两件事，混为一谈会让目录锁在同 uid／受限环境下**静默
+ * 失效**：2026-10-01 实测（文件沙箱把 `ps` 判 EPERM，spawnSync 返回 status=null +
+ * error=EPERM），旧实现按 status!==0 判成「已死」，于是活着的持有者被接管，直接违反
+ * 不变量 #15「同一份 home 同一时刻只允许一个 dsh host 写者」。
+ * 判据只看输出：探针报错 ⇒ 活（保守）；跑完没输出 ⇒ 死；跑出 Z/X（僵尸）⇒ 死；其余 ⇒ 活。
+ */
+export function interpretProcessProbe(probe: { error?: unknown; stdout: string | Buffer; status: number | null }): boolean {
+  if (probe.error !== undefined && probe.error !== null) return true
+  const state = probe.stdout.toString('utf8').trim()
+  if (state.length === 0) return false
+  return state !== 'Z' && state !== 'X'
 }
 
 /** 武装定时规则：启用且表达式合法 → 计算下次运行；禁用 → 保留表达式、清到期。 */

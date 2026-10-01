@@ -56,6 +56,12 @@ docs/
 6. **[设置驱动的市场路由](exchange-routing.md)** (`docs/exchange-routing.md`)
    - 确立「一个市场一个预设，由设置决定激活连接器」的单预设架构。
    - 支持数据平面运行时热插拔与免重启生效。
+7. **[Trading Bot 与 GUI 分离、Auto Trading 目标架构](design/bot-and-auto-trading.md)** (`docs/design/bot-and-auto-trading.md`)
+   - 三进程（tradectl / dsh(trading-bot) / edge）、快慢双环、三层授权与 §13 的 26 条不变量。
+   - 本轮架构讨论的**唯一事实之家**，决策记录见 `.agents/notes/proposed/architecture/2026-10-01-bot-gui-split-and-auto-trading.md`。
+8. **[官方缝清单（三问逐条作答）](design/dsh-seam-inventory.md)** (`docs/design/dsh-seam-inventory.md`)
+   - 对每条官方缝逐条回答「是不是契约 / 变更时响不响亮 / 静默失效看不看得见」，缺检测点即标未满足。
+   - 与上一条的分工：那里写「能不能踩」的结论，这里写「踩了以后怎么知道它断了」。
 
 ---
 

@@ -1,0 +1,41 @@
+{
+  "name": "@dshtrading/authority",
+  "description": "Live-trading authority plane for dsh-trading: a fail-closed, human-signed (Ed25519) grant outside every agent-writable path. The preset asset's liveTrading flag is demoted to a non-authoritative mirror that can only deny (design doc §5 / invariant 13.3).",
+  "version": "0.5.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./sign": {
+      "types": "./lib/sign.d.ts",
+      "default": "./lib/sign.js"
+    },
+    "./testing": {
+      "types": "./lib/testing.d.ts",
+      "default": "./lib/testing.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dshtrading/dsh-home": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0",
+    "yaml": "^2.9.0"
+  }
+}

@@ -494,7 +494,7 @@ export interface OrderRequest {
   readonly quantity: number
   /** limit 单必填。 */
   readonly price?: number
-  /** 缺省/true 时仅模拟，不触碰交易所。实盘还受插件 liveTrading 闸门与 approval 约束 [S4]。 */
+  /** 缺省/true 时仅模拟，不触碰交易所。实盘还受 @dshtrading/authority 的人工签署授权与 approval 约束 [S4]。 */
   readonly dryRun?: boolean
 }
 
@@ -596,7 +596,7 @@ export interface MarketDataService {
 }
 
 /**
- * 交易服务契约：placeOrder 默认 dry-run；实盘前必须过插件 liveTrading 开关与
+ * 交易服务契约：placeOrder 默认 dry-run；实盘前必须过 @dshtrading/authority 的人工签署授权与
  * ctx.approval.request（交互形态；headless 下 ask=deny，fail-closed [S4]）。
  *
  * R3（okx 切片 2026-08-29）修订：cancelOrder 增加可选 symbol、新增 getOrder——
@@ -654,7 +654,7 @@ export type TradingErrorCode =
    */
   | 'TRADING_UPSTREAM_ERROR'
   | 'TRADING_INSUFFICIENT_BALANCE'
-  /** liveTrading=false 闸门拒绝实盘（铁律 #3）。 */
+  /** 未获人工签署实盘授权时拒绝实盘（铁律 #3）。 */
   | 'TRADING_LIVE_TRADING_DISABLED'
   /** approval 被拒/无应答（headless fail-closed [S4]）。 */
   | 'TRADING_APPROVAL_DENIED'
@@ -700,7 +700,7 @@ declare module '@deepseek-ai/cordis' {
      * 交易服务注册表（issue #40 GUI 交易台，@dshtrading/api 类型声明）：
      * 与 tradingMarketDataRegistry 同构的宿主平面注册面——交易连接器 host 面数据行
      * 注册，GUI 桥按路由当前值惰性解析。**注册不改变安全语义**：placeOrder 的
-     * 服务缝闸门（dryRun 缺省 true + liveTrading 显式开关）随服务实例生效；
+     * 服务缝闸门（dryRun 缺省 true + @dshtrading/authority 人工签署授权）随服务实例生效；
      * GUI 桥只放行 dry-run 下单与只读查询，实盘路径仍走 Agent 工具的 base 审批闸门。
      */
     tradingTradeRegistry: TradeRegistry

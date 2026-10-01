@@ -12,6 +12,7 @@
  * @module @dshtrading/connector-binance
  */
 
+import { liveTradingEnabled } from '@dshtrading/authority'
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -57,7 +58,7 @@ export interface Config {
   enabled: boolean
   /** 交易安全闸门（铁律 #3）：true 时下单类工具强制 dry-run。 */
   dryRun: boolean
-  /** 实盘总闸门：默认 false；false 时无论 dryRun 与否都拒绝实盘下单 [S4]。 */
+  /** 实盘镜像：默认 false。它是非权威镜像——只能收紧、永不能授予；实盘授权由 @dshtrading/authority 的人工签署平面裁定 [S4]。 */
   liveTrading: boolean
 }
 
@@ -252,15 +253,15 @@ export interface PlaceOrderArgs {
 
 /**
  * 闸门判定结果（三条路径，顺序即铁律 #3 修订版的裁决顺序）：
- *  - `reject`  —— ① 请求实盘（dryRun!==true）而 liveTrading=false：工具返回结构化
+ *  - `reject`  —— ① 请求实盘（dryRun!==true）而未获实盘授权：工具返回结构化
  *                拒绝（不抛异常，模型可读到明确原因与出路）；
  *  - `simulate` —— ② dryRun=true（显式、缺省，或被插件 config.dryRun 强制）：
  *                返回 DRY-RUN 模拟成交回执；
- *  - `live`    —— ③ dryRun=false 且 liveTrading=true：本切片无签名下单能力，
+ *  - `live`    —— ③ dryRun=false 且实盘已获授权：本切片无签名下单能力，
  *                工具抛 TRADING_NOT_IMPLEMENTED 结构化错误。
  *
  * 优先级说明：config.dryRun=true 是「强制模拟」开关，只影响 ②/③ 的归类；
- * 显式 dryRun=false 的实盘意图在 liveTrading=false 时仍走 ① 明确拒绝，
+ * 显式 dryRun=false 的实盘意图在 未获实盘授权时仍走 ① 明确拒绝，
  * 不做静默降级（拒绝语义优先于强制模拟，调用方必须知道实盘意图被拒）。
  */
 export type OrderGateVerdict =
@@ -270,13 +271,13 @@ export type OrderGateVerdict =
 
 export function evaluateOrderGate(config: Config, args: PlaceOrderArgs): OrderGateVerdict {
   const requestedDryRun = args.dryRun ?? true
-  if (!requestedDryRun && !config.liveTrading) {
+  if (!requestedDryRun && !liveTradingEnabled(config.liveTrading)) {
     return {
       action: 'reject',
       code: 'TRADING_LIVE_TRADING_DISABLED',
       message:
         `crypto_place_order rejected: the call requests real execution (dryRun=${String(args.dryRun)}) `
-        + 'but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly '
+        + 'but live trading is disabled (no signed live-trading grant from the authority plane). Ask the operator to sign a live-trading grant (packages/authority/bin/sign-live-trading.mjs) '
         + 'after confirmation, or keep dryRun=true for a simulated fill.',
     }
   }
@@ -361,7 +362,7 @@ export async function buildDryRunReceipt(
 export interface PlaceOrderToolDeps {
   /** 行情服务（ dry-run 回执的市价参照），按接口取用，不直连 REST。 */
   readonly marketData: Pick<MarketDataService, 'getTicker'>
-  /** 插件配置（dryRun 强制模拟 / liveTrading 总闸门）。 */
+  /** 插件配置（dryRun 强制模拟 / liveTrading 非权威镜像——实盘授权由 @dshtrading/authority 的人工签署平面裁定）。 */
   readonly config: Config
 }
 
@@ -376,7 +377,7 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
   return defineTool({
     name: 'crypto_place_order',
     description:
-      'Place a Binance spot order, or simulate one. dryRun defaults to true and returns a DRY-RUN simulated fill receipt with the current market price as reference. Real execution (dryRun=false) requires the plugin liveTrading switch to be enabled plus user approval, and is not implemented yet in this slice.',
+      'Place a Binance spot order, or simulate one. dryRun defaults to true and returns a DRY-RUN simulated fill receipt with the current market price as reference. Real execution (dryRun=false) requires a signed live-trading grant plus user approval, and is not implemented yet in this slice.',
     parameters: {
       symbol: {
         type: 'string',
@@ -407,7 +408,7 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
       dryRun: {
         type: 'boolean',
         description:
-          'true (default) = simulate only and return a DRY-RUN receipt; false = request real execution (gated by liveTrading and user approval)',
+          'true (default) = simulate only and return a DRY-RUN receipt; false = request real execution (gated by the signed live-trading authority and user approval)',
         default: true,
       },
     },

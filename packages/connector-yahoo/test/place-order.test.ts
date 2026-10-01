@@ -1,6 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { installTestAuthority, type TestAuthority } from '@dshtrading/authority/testing'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Ticker } from '@dshtrading/api'
 import { createPlaceOrderTool, evaluateOrderGate } from '../src/index.js'
+
+/** 实盘授权夹具：连接器闸门现在要求人工签署授权（@dshtrading/authority），
+ *  用例在临时目录里搭一份真实签名的平面并指向它——不这样做，闸门 ③ 只能被 mock 掉。 */
+let testAuthority: TestAuthority | undefined
+beforeAll(() => { testAuthority = installTestAuthority() })
+afterAll(() => { testAuthority?.uninstall() })
 
 const TICKER: Ticker = {
   symbol: 'AAPL',
@@ -21,14 +28,14 @@ function makeTool(configOverrides: Partial<GateConfig> = {}) {
 const MARKET_ARGS = { symbol: 'AAPL', side: 'BUY', type: 'MARKET', quantity: 10 }
 
 describe('evaluateOrderGate（三条闸门路径，铁律 #3 修订版 [S4]）', () => {
-  it('① dryRun=false + liveTrading=false → 结构化拒绝', () => {
+  it('① dryRun=false + 未获实盘授权 → 结构化拒绝', () => {
     const verdict = evaluateOrderGate({ dryRun: true, liveTrading: false }, { ...MARKET_ARGS, dryRun: false })
     expect(verdict).toMatchObject({
       action: 'reject',
       code: 'TRADING_LIVE_TRADING_DISABLED',
     })
     if (verdict.action === 'reject') {
-      expect(verdict.message).toContain('liveTrading=false')
+      expect(verdict.message).toContain('no signed live-trading grant')
     }
   })
 

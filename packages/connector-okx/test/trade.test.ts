@@ -2,8 +2,9 @@
  * 交易面单测（离线）：三态闸门矩阵、三 ref 凭证缺失路径、sz 单位纪律（SPOT tgtCcy /
  * SWAP 张换算）、撤单幂等化、订单/持仓/余额解析。
  */
+import { installTestAuthority, type TestAuthority } from '@dshtrading/authority/testing'
 import { Context as CordisContext } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Config } from '../src/index.js'
 import {
   OkxTradeService,
@@ -17,6 +18,12 @@ import {
   type CredentialResolverLike,
 } from '../src/index.js'
 import { OkxRestClient, TradingServiceError, type OkxCredentials } from '../src/rest.js'
+
+/** 实盘授权夹具：连接器闸门现在要求人工签署授权（@dshtrading/authority），
+ *  用例在临时目录里搭一份真实签名的平面并指向它——不这样做，闸门 ③ 只能被 mock 掉。 */
+let testAuthority: TestAuthority | undefined
+beforeAll(() => { testAuthority = installTestAuthority() })
+afterAll(() => { testAuthority?.uninstall() })
 
 /* ------------------------------------------------------------------ */
 /* 夹具                                                                    */
@@ -45,7 +52,7 @@ const MARKET_ARGS: PlaceOrderArgs = { instId: 'btc-usdt', side: 'buy', type: 'ma
 /* ------------------------------------------------------------------ */
 
 describe('evaluateOrderGate（三态环境 × 三段闸门）', () => {
-  it('① dryRun=false + liveTrading=false → 结构化拒绝（headless 唯一防线）', () => {
+  it('① dryRun=false + 未获实盘授权 → 结构化拒绝（headless 唯一防线）', () => {
     const verdict = evaluateOrderGate(baseConfig(), { ...MARKET_ARGS, dryRun: false })
     expect(verdict).toMatchObject({ action: 'reject', code: 'TRADING_LIVE_TRADING_DISABLED' })
   })
@@ -60,7 +67,7 @@ describe('evaluateOrderGate（三态环境 × 三段闸门）', () => {
     expect(verdict).toEqual({ action: 'simulate' })
   })
 
-  it('③ dryRun=false + liveTrading=true + env=demo（缺省）→ live demo（真实签名打模拟盘）', () => {
+  it('③ dryRun=false + 实盘已获授权 + env=demo（缺省）→ live demo（真实签名打模拟盘）', () => {
     const verdict = evaluateOrderGate(baseConfig({ dryRun: false, liveTrading: true }), { ...MARKET_ARGS, dryRun: false })
     expect(verdict).toEqual({ action: 'live', environment: 'demo' })
   })

@@ -25,6 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@dshtrading/authority": "workspace:^",
     "@dshtrading/api": "workspace:^",
     "@dshtrading/indicators": "workspace:^"
   },

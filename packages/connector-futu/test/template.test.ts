@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { installTestAuthority, type TestAuthority } from '@dshtrading/authority/testing'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { TradeService } from '@dshtrading/api'
 import {
   FutuRestClient,
@@ -10,6 +11,12 @@ import {
   toFutuSecurity,
 } from '../src/rest.js'
 import { createPlaceOrderTool, type Config } from '../src/index.js'
+
+/** 实盘授权夹具：连接器闸门现在要求人工签署授权（@dshtrading/authority），
+ *  用例在临时目录里搭一份真实签名的平面并指向它——不这样做，闸门 ③ 只能被 mock 掉。 */
+let testAuthority: TestAuthority | undefined
+beforeAll(() => { testAuthority = installTestAuthority() })
+afterAll(() => { testAuthority?.uninstall() })
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

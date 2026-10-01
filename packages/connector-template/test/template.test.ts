@@ -6,8 +6,9 @@
  * 本文件守卫的是模板的结构性正确性：Config 默认值、闸门三态、凭证 ref 分组、
  * 互斥激活注册面、dry-run 回执不触网。
  */
+import { installTestAuthority, type TestAuthority } from '@dshtrading/authority/testing'
 import { Context as CordisContext } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   apply,
   buildDryRunReceipt,
@@ -17,6 +18,12 @@ import {
   Config,
   type Config as ConfigType,
 } from '../src/index.js'
+
+/** 实盘授权夹具：连接器闸门现在要求人工签署授权（@dshtrading/authority），
+ *  用例在临时目录里搭一份真实签名的平面并指向它——不这样做，闸门 ③ 只能被 mock 掉。 */
+let testAuthority: TestAuthority | undefined
+beforeAll(() => { testAuthority = installTestAuthority() })
+afterAll(() => { testAuthority?.uninstall() })
 
 const DEFAULTS: ConfigType = {
   enabled: false,

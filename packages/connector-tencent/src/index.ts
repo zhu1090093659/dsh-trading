@@ -21,6 +21,7 @@
  * @module @dshtrading/connector-tencent
  */
 
+import { liveTradingEnabled } from '@dshtrading/authority'
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -52,7 +53,7 @@ export interface Config {
   market: MarketOption
   /** 交易安全闸门（铁律 #3）：true 时下单类工具强制 dry-run。 */
   dryRun: boolean
-  /** 实盘总闸门：默认 false；false 时无论 dryRun 与否都拒绝实盘下单 [S4]。 */
+  /** 实盘镜像：默认 false。它是非权威镜像——只能收紧、永不能授予；实盘授权由 @dshtrading/authority 的人工签署平面裁定 [S4]。 */
   liveTrading: boolean
 }
 
@@ -161,13 +162,13 @@ export type OrderGateVerdict =
 
 export function evaluateOrderGate(config: Config, args: PlaceOrderArgs): OrderGateVerdict {
   const requestedDryRun = args.dryRun ?? true
-  if (!requestedDryRun && !config.liveTrading) {
+  if (!requestedDryRun && !liveTradingEnabled(config.liveTrading)) {
     return {
       action: 'reject',
       code: 'TRADING_LIVE_TRADING_DISABLED',
       message:
         `${config.market}_place_order rejected: the call requests real execution (dryRun=${String(args.dryRun)}) `
-        + 'but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly '
+        + 'but live trading is disabled (no signed live-trading grant from the authority plane). Ask the operator to sign a live-trading grant (packages/authority/bin/sign-live-trading.mjs) '
         + 'after confirmation, or keep dryRun=true for a simulated fill.',
     }
   }
@@ -247,7 +248,7 @@ export async function buildDryRunReceipt(
 export interface PlaceOrderToolDeps {
   /** 行情服务（dry-run 回执的市价参照），按接口取用，不直连 HTTP。 */
   readonly marketData: Pick<MarketDataService, 'getTicker'>
-  /** 插件配置（market 分流 + dryRun 强制模拟 / liveTrading 总闸门）。 */
+  /** 插件配置（market 分流 + dryRun 强制模拟 / liveTrading 非权威镜像——实盘授权由 @dshtrading/authority 人工签署平面裁定）。 */
   readonly config: Config
 }
 
@@ -264,7 +265,7 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
     description:
       `Place a ${market === 'hk' ? 'Hong Kong' : 'China A-share'} stock order, or simulate one. dryRun defaults to true and returns a DRY-RUN `
       + 'simulated fill receipt referencing the latest Tencent public quote. Real execution (dryRun=false) requires the '
-      + 'plugin liveTrading switch plus user approval, and is not implemented yet in this slice (Tencent has no trading API).',
+      + 'signed live-trading grant plus user approval, and is not implemented yet in this slice (Tencent has no trading API).',
     parameters: {
       symbol: {
         type: 'string',
@@ -297,7 +298,7 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
       dryRun: {
         type: 'boolean',
         description:
-          'true (default) = simulate only and return a DRY-RUN receipt; false = request real execution (gated by liveTrading and user approval)',
+          'true (default) = simulate only and return a DRY-RUN receipt; false = request real execution (gated by the signed live-trading authority and user approval)',
         default: true,
       },
     },

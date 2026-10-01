@@ -18,7 +18,7 @@
  * `serviceAsk`（core/tools/src/index.ts）在 approval 服务缺失、无 agent、
  * 无审批通道三种情况下都把 ask 降级为 deny。也就是说：无人在场时，凡走到
  * 本闸门的实盘请求必然被拒，绝不静默放行。实盘的第一道闸门是连接器/kit 的
- * 显式 `liveTrading` 开关；approval 只覆盖交互形态（S4 铁律 3 修订）。
+ * 人工签署的实盘授权（@dshtrading/authority）；approval 只覆盖交互形态（S4 铁律 3 修订）。
  *
  * @module @dshtrading/base
  */

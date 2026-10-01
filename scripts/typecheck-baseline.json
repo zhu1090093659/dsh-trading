@@ -1,6 +1,7 @@
 {
   "packages/all/tsconfig.json": 0,
   "packages/api/tsconfig.json": 0,
+  "packages/authority/tsconfig.json": 0,
   "packages/base/tsconfig.json": 0,
   "packages/client-ui-indicators/tsconfig.client.json": 0,
   "packages/client-ui-indicators/tsconfig.host.json": 0,

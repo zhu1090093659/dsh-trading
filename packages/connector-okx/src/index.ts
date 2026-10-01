@@ -13,9 +13,9 @@
  *
  * 三态环境语义（主 agent 裁决，映射铁律 #3 三段闸门）：
  * - dryRun=true（缺省）→ 本地模拟回执，不发任何请求；
- * - dryRun=false + liveTrading=false → 结构化拒绝（headless 唯一防线）；
- * - dryRun=false + liveTrading=true + env='demo'（缺省）→ 真实签名下单 +
- *   `x-simulated-trading: 1`，成交在 OKX 模拟盘（liveTrading=true 的第一默认目标
+ * - dryRun=false + 未获实盘授权 → 结构化拒绝（headless 唯一防线）；
+ * - dryRun=false + 实盘已获授权 + env='demo'（缺省）→ 真实签名下单 +
+ *   `x-simulated-trading: 1`，成交在 OKX 模拟盘（获得实盘授权后的第一默认目标
  *   是 demo 而非真钱）；
  * - env='live' → 真实实盘（无模拟盘头；base 统一审批闸门照旧 ask，headless fail-closed）。
  *
@@ -27,6 +27,7 @@
  * @module @dshtrading/connector-okx
  */
 
+import { liveTradingEnabled } from '@dshtrading/authority'
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -464,11 +465,11 @@ export class OkxTradeService extends Service implements TradeService {
    * 未来任何新消费面）同样 fail-closed；工具层 evaluateOrderGate + base 审批闸门保留
    * （双保险），工具层只做参数预检与富回执。
    *
-   * - 闸门 ① reject（dryRun=false 请求实盘而 liveTrading=false）→ 结构化错误抛出
+   * - 闸门 ① reject（dryRun=false 请求实盘而未获实盘授权）→ 结构化错误抛出
    *   （TRADING_LIVE_TRADING_DISABLED，api TradingError 契约）；
    * - 闸门 ② simulate（dryRun 缺省/true，或 config.dryRun 强制模拟）→ 本地模拟回执
    *   （Order.dryRun=true，不触网；工具层另有带市价参照的富回执）；
-   * - 闸门 ③ live（dryRun=false 且 liveTrading=true）→ 真实签名下单（env=demo 加模拟盘头）。
+   * - 闸门 ③ live（dryRun=false 且实盘已获授权）→ 真实签名下单（env=demo 加模拟盘头）。
    *
    * **sz 单位纪律（调研 §4，实现期最重要的换算）**：
    * - api `OrderRequest.quantity` 语义恒为 base 币数；
@@ -507,7 +508,7 @@ export class OkxTradeService extends Service implements TradeService {
         timestamp: Date.now(),
       }
     }
-    // 闸门 ③：live（dryRun=false 且 liveTrading=true）→ 真实签名下单。
+    // 闸门 ③：live（dryRun=false 且实盘已获授权）→ 真实签名下单。
     const instId = normalizeOkxSymbol(req.symbol)
     const instrument = await this.getInstrument(instId)
     const normalized = normalizeSize(instId, instrument, req.quantity)
@@ -551,13 +552,13 @@ export class OkxTradeService extends Service implements TradeService {
    */
   async cancelOrder(id: string, symbol?: string): Promise<void> {
     // 服务缝闸门（P0）：撤单是会改变交易所真实状态的实盘动作，与真实下单同门槛
-    // （liveTrading 显式开启且未强制模拟）。liveTrading=false 时 fail-closed，
+    // （授权平面已授予且未强制模拟）。未获实盘授权时 fail-closed，
     // 防「经撤单接口绕过下单闸门影响真实/模拟盘订单」。
-    if (!this.config.liveTrading || this.config.dryRun) {
+    if (!liveTradingEnabled(this.config.liveTrading) || this.config.dryRun) {
       throw new TradingServiceError(
         'TRADING_LIVE_TRADING_DISABLED',
-        'OKX cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false '
-          + '(keep liveTrading=false if the order was not placed through this service).',
+        'OKX cancelOrder rejected at the service seam: cancel is a live action and requires a signed live-trading grant (see @dshtrading/authority) with dryRun=false '
+          + '(leave the live-trading authority ungranted if the order was not placed through this service).',
       )
     }
     if (symbol === undefined || symbol === '') {
@@ -811,9 +812,9 @@ export interface PlaceOrderArgs {
 
 /**
  * 三态闸门判定（顺序即铁律 #3 修订版的裁决顺序；主 agent 裁决的三态环境映射）：
- *  - `reject`   —— ① 请求实盘（dryRun!==true）而 liveTrading=false：结构化拒绝；
+ *  - `reject`   —— ① 请求实盘（dryRun!==true）而未获实盘授权：结构化拒绝；
  *  - `simulate` —— ② dryRun=true（显式/缺省/被 config.dryRun 强制）：本地模拟回执；
- *  - `live`     —— ③ dryRun=false 且 liveTrading=true：真实签名下单，environment
+ *  - `live`     —— ③ dryRun=false 且实盘已获授权：真实签名下单，environment
  *                 决定是否带模拟盘头（demo=第一默认目标；live=实盘，base 闸门照旧 ask）。
  */
 export type OrderGateVerdict =
@@ -823,13 +824,13 @@ export type OrderGateVerdict =
 
 export function evaluateOrderGate(config: Config, args: PlaceOrderArgs): OrderGateVerdict {
   const requestedDryRun = args.dryRun ?? true
-  if (!requestedDryRun && !config.liveTrading) {
+  if (!requestedDryRun && !liveTradingEnabled(config.liveTrading)) {
     return {
       action: 'reject',
       code: 'TRADING_LIVE_TRADING_DISABLED',
       message:
         `crypto_place_order rejected: the call requests real execution (dryRun=${String(args.dryRun)}) `
-        + 'but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly '
+        + 'but live trading is disabled (no signed live-trading grant from the authority plane). Ask the operator to sign a live-trading grant (packages/authority/bin/sign-live-trading.mjs) '
         + 'after confirmation, or keep dryRun=true for a simulated fill.',
     }
   }
@@ -917,7 +918,7 @@ export interface PlaceOrderToolDeps {
   readonly marketData: Pick<OkxMarketDataService, 'getTicker'>
   /** 交易服务（闸门 ③ 的真实签名下单路径）。 */
   readonly trade: TradeService
-  /** 插件配置（dryRun 强制模拟 / liveTrading 总闸门 / env 三态）。 */
+  /** 插件配置（dryRun 强制模拟 / liveTrading 非权威镜像——实盘授权由 @dshtrading/authority 的人工签署平面裁定 / env 三态）。 */
   readonly config: Config
 }
 
@@ -935,7 +936,7 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
       'Place an OKX spot or perpetual-swap (SWAP) order, or simulate one. instId accepts market-canonical (BTCUSDT, BTCUSDT-SWAP) or OKX native (BTC-USDT, BTC-USDT-SWAP) vocabulary. '
       + 'quantity is in BASE-ASSET coins: spot MARKET orders are sent with tgtCcy=base_ccy (OKX default for buys is quote-currency amount — a known trap), '
       + 'and SWAP quantities are converted to contracts via ctVal automatically. dryRun defaults to true and returns a DRY-RUN simulated fill receipt '
-      + 'with the current market price as reference. Real execution (dryRun=false) requires the plugin liveTrading switch plus user approval; '
+      + 'with the current market price as reference. Real execution (dryRun=false) requires a signed live-trading grant plus user approval; '
       + 'with env=demo (default) the order is signed and routed to the OKX demo exchange (simulated trading), env=live is real money.',
     parameters: {
       instId: {
@@ -967,7 +968,7 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
       dryRun: {
         type: 'boolean',
         description:
-          'true (default) = simulate only and return a DRY-RUN receipt; false = request real execution (gated by liveTrading, env and user approval)',
+          'true (default) = simulate only and return a DRY-RUN receipt; false = request real execution (gated by the signed live-trading authority, env and user approval)',
         default: true,
       },
     },

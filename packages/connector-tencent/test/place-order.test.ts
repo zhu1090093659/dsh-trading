@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { installTestAuthority, type TestAuthority } from '@dshtrading/authority/testing'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Ticker } from '@dshtrading/api'
 import { type Config, type PlaceOrderArgs, buildDryRunReceipt, createPlaceOrderTool, evaluateOrderGate } from '../src/index.js'
+
+/** 实盘授权夹具：连接器闸门现在要求人工签署授权（@dshtrading/authority），
+ *  用例在临时目录里搭一份真实签名的平面并指向它——不这样做，闸门 ③ 只能被 mock 掉。 */
+let testAuthority: TestAuthority | undefined
+beforeAll(() => { testAuthority = installTestAuthority() })
+afterAll(() => { testAuthority?.uninstall() })
 
 const TICKER: Ticker = {
   symbol: 'sh600519',
@@ -30,7 +37,7 @@ describe('evaluateOrderGate (三路径语义，与 crypto/us 同构)', () => {
     expect(verdict).toMatchObject({ code: 'TRADING_LIVE_TRADING_DISABLED' })
   })
 
-  it('dryRun=false 且 liveTrading=true 且插件 dryRun 关闭 → live（审批交给 base 闸门 ask）', () => {
+  it('dryRun=false 且实盘已获授权 且插件 dryRun 关闭 → live（审批交给 base 闸门 ask）', () => {
     // 插件级 dryRun=true 会把一切强制为模拟（与 crypto/stooq 同语义）：live 路径要求两处开关都开。
     expect(evaluateOrderGate(config({ liveTrading: true, dryRun: false }), args({ dryRun: false }))).toEqual({ action: 'live' })
     expect(evaluateOrderGate(config({ liveTrading: true }), args({ dryRun: false }))).toEqual({ action: 'simulate' })

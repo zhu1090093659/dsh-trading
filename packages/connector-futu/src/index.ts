@@ -4,6 +4,7 @@
  * @module @dshtrading/connector-futu
  */
 
+import { liveTradingEnabled } from '@dshtrading/authority'
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -127,11 +128,11 @@ export class FutuTradeService extends Service implements TradeService {
     // 服务缝闸门（P0 · 铁律 #3 修订版 [S4]）：三态检查下推到服务实现内第一步——
     // 绕过工具层直调本服务（动态包宿主半等）同样 fail-closed；工具层闸门保留（双保险）。
     const requestedDryRun = order.dryRun ?? true
-    if (!requestedDryRun && !this.config.liveTrading) {
+    if (!requestedDryRun && !liveTradingEnabled(this.config.liveTrading)) {
       throw new TradingServiceError(
         'TRADING_LIVE_TRADING_DISABLED',
         `Futu TradeService.placeOrder rejected: the request asks for real execution (dryRun=${String(order.dryRun)}) `
-          + 'but liveTrading=false — enable liveTrading explicitly or keep dryRun=true for a simulated fill.',
+          + 'but the signed live-trading authority does not grant real execution (see @dshtrading/authority) — keep dryRun=true for a simulated fill.',
       )
     }
     if (requestedDryRun || this.config.dryRun) {
@@ -148,7 +149,7 @@ export class FutuTradeService extends Service implements TradeService {
         timestamp: Date.now(),
       }
     }
-    // 闸门 ③：live（dryRun=false 且 liveTrading=true）→ 真实下单。
+    // 闸门 ③：live（dryRun=false 且实盘已获授权）→ 真实下单。
     return this.client.placeOrder(await this.getCredentials(), {
       symbol: order.symbol,
       side: order.side.toUpperCase() as 'BUY' | 'SELL',
@@ -160,10 +161,10 @@ export class FutuTradeService extends Service implements TradeService {
 
   async cancelOrder(orderId: string, _symbol?: string): Promise<void> {
     // 服务缝闸门（P0）：撤单是会改变券商真实状态的实盘动作，与真实下单同门槛。
-    if (!this.config.liveTrading || this.config.dryRun) {
+    if (!liveTradingEnabled(this.config.liveTrading) || this.config.dryRun) {
       throw new TradingServiceError(
         'TRADING_LIVE_TRADING_DISABLED',
-        'Futu TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
+        'Futu TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires a signed live-trading grant (see @dshtrading/authority) with dryRun=false.',
       )
     }
     return this.client.cancelOrder(await this.getCredentials(), orderId) as unknown as void
@@ -216,13 +217,13 @@ export type OrderGateVerdict =
 
 export function evaluateOrderGate(config: Config, args: PlaceOrderArgs): OrderGateVerdict {
   const requestedDryRun = args.dryRun ?? true
-  if (!requestedDryRun && !config.liveTrading) {
+  if (!requestedDryRun && !liveTradingEnabled(config.liveTrading)) {
     return {
       action: 'reject',
       code: 'TRADING_LIVE_TRADING_DISABLED',
       message:
         `hk_place_order rejected: real execution requested (dryRun=${String(args.dryRun)}) `
-        + 'but live trading is disabled (liveTrading=false). Enable liveTrading explicitly or keep dryRun=true.',
+        + 'but live trading is disabled (no signed live-trading grant from the authority plane). Ask the operator to sign a live-trading grant, or keep dryRun=true.',
     }
   }
   if (requestedDryRun || config.dryRun) return { action: 'simulate' }

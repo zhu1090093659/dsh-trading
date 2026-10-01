@@ -1,7 +1,18 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { resetAuthorityCache } from '@dshtrading/authority'
+import { installTestAuthority, type TestAuthority } from '@dshtrading/authority/testing'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Ticker } from '@dshtrading/api'
 import { createPlaceOrderTool, evaluateOrderGate } from '../src/index.js'
 import { TradingServiceError } from '../src/rest.js'
+
+/** 实盘授权夹具：连接器闸门现在要求人工签署授权（@dshtrading/authority），
+ *  用例在临时目录里搭一份真实签名的平面并指向它——不这样做，闸门 ③ 只能被 mock 掉。 */
+let testAuthority: TestAuthority | undefined
+beforeAll(() => { testAuthority = installTestAuthority() })
+afterAll(() => { testAuthority?.uninstall() })
 
 const TICKER: Ticker = {
   symbol: 'BTCUSDT',
@@ -24,14 +35,33 @@ function makeTool(configOverrides: Partial<GateConfig> = {}) {
 const MARKET_ARGS = { symbol: 'btcusdt', side: 'BUY', type: 'MARKET', quantity: 0.01 }
 
 describe('evaluateOrderGate（三条闸门路径，铁律 #3 修订版 [S4]）', () => {
-  it('① dryRun=false + liveTrading=false → 结构化拒绝', () => {
+  it('① dryRun=false + 未获实盘授权 → 结构化拒绝', () => {
     const verdict = evaluateOrderGate({ enabled: true, dryRun: true, liveTrading: false }, { ...MARKET_ARGS, dryRun: false })
     expect(verdict).toMatchObject({
       action: 'reject',
       code: 'TRADING_LIVE_TRADING_DISABLED',
     })
     if (verdict.action === 'reject') {
-      expect(verdict.message).toContain('liveTrading=false')
+      expect(verdict.message).toContain('no signed live-trading grant')
+    }
+  })
+
+  it('管理员：preset 资产被改成 liveTrading=true 但授权平面未授予时仍然拒绝（RT-04 回归）', () => {
+    // Given 一个只有信任锚、没有授权文档的空平面（等价于 agent 只改了资产文件）
+    const emptyDir = mkdtempSync(join(tmpdir(), 'dsh-authority-empty-'))
+    const previous = process.env.DSH_TRADING_AUTHORITY_DIR
+    try {
+      process.env.DSH_TRADING_AUTHORITY_DIR = emptyDir
+      resetAuthorityCache()
+      // When 资产里的镜像被改成 true 后请求实盘
+      const verdict = evaluateOrderGate({ enabled: true, dryRun: false, liveTrading: true }, { ...MARKET_ARGS, dryRun: false })
+      // Then 仍然结构化拒绝——镜像不能授予实盘，授权只能来自人工签署平面
+      expect(verdict).toMatchObject({ action: 'reject', code: 'TRADING_LIVE_TRADING_DISABLED' })
+    } finally {
+      if (previous === undefined) delete process.env.DSH_TRADING_AUTHORITY_DIR
+      else process.env.DSH_TRADING_AUTHORITY_DIR = previous
+      resetAuthorityCache()
+      rmSync(emptyDir, { recursive: true, force: true })
     }
   })
 

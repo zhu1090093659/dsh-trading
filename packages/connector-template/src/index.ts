@@ -3,7 +3,7 @@
  *
  * 结构（对照 connector-okx，本仓第一个真实 TradeService 参照系）：
  *   - Config：互斥激活（enabled 默认 false）+ 三态环境（env=demo|live）+ 铁律 #3
- *     双闸门（dryRun/liveTrading）+ BYOK 三 ref 凭证（demo/live 各一组）。
+ *     双闸门（dryRun / 人工签署的实盘授权）+ BYOK 三 ref 凭证（demo/live 各一组）。
  *   - 服务：__EXCHANGE__MarketDataService（trading__MARKET_CAP__MarketData）与
  *     __EXCHANGE__TradeService（trading__MARKET_CAP__Trade——第一个真实交易面形态，
  *     数据面-only 的连接器删掉 TradeService 与交易面工具即可）。
@@ -27,6 +27,7 @@
  * @module @dshtrading/connector-__EXCHANGE_SLUG__
  */
 
+import { liveTradingEnabled } from '@dshtrading/authority'
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -270,9 +271,9 @@ export class __EXCHANGE__TradeService extends Service implements TradeService {
    * 绕过工具层直调本服务（dsh-tool-cordis 动态包宿主半、未来任何新消费面）同样
    * fail-closed；工具层 evaluateOrderGate + base 审批闸门保留（双保险）。
    *
-   * - 闸门 ① reject（dryRun=false 请求实盘而 liveTrading=false）→ 结构化错误抛出；
+   * - 闸门 ① reject（dryRun=false 请求实盘而未获实盘授权）→ 结构化错误抛出；
    * - 闸门 ② simulate（dryRun 缺省/true，或 config.dryRun 强制模拟）→ 本地模拟回执；
-   * - 闸门 ③ live（dryRun=false 且 liveTrading=true）→ 真实签名下单。
+   * - 闸门 ③ live（dryRun=false 且实盘已获授权）→ 真实签名下单。
    *
    * TODO: 单位换算（api quantity 恒为 base 币数；合约按 ctVal 等换算成交易所原始单位、
    *       现货市价单的计价币陷阱——见 rest.ts 头部清单第 7 条）。
@@ -280,12 +281,12 @@ export class __EXCHANGE__TradeService extends Service implements TradeService {
   async placeOrder(req: OrderRequest): Promise<Order> {
     // 服务缝闸门（P0）：三态判定与工具层 evaluateOrderGate 同语义（单点裁决，双保险）。
     const requestedDryRun = req.dryRun ?? true
-    if (!requestedDryRun && !this.config.liveTrading) {
+    if (!requestedDryRun && !liveTradingEnabled(this.config.liveTrading)) {
       // 闸门 ①：服务级 fail-closed——绕过工具层的直调也拿不到实盘路径。
       throw new TradingServiceError(
         'TRADING_LIVE_TRADING_DISABLED',
         `TradeService.placeOrder rejected: the request asks for real execution (dryRun=${String(req.dryRun)}) `
-          + 'but liveTrading=false — enable liveTrading explicitly or keep dryRun=true for a simulated fill.',
+          + 'but the signed live-trading authority does not grant real execution (see @dshtrading/authority) — keep dryRun=true for a simulated fill.',
       )
     }
     if (requestedDryRun || this.config.dryRun) {
@@ -302,7 +303,7 @@ export class __EXCHANGE__TradeService extends Service implements TradeService {
         timestamp: Date.now(),
       }
     }
-    // 闸门 ③：live（dryRun=false 且 liveTrading=true）→ 真实签名下单。
+    // 闸门 ③：live（dryRun=false 且实盘已获授权）→ 真实签名下单。
     const credentials = await this.getCredentials()
     const rows = await this.client.placeOrder(
       { /* TODO: 按交易所参数形状构造（含单位换算后的 sz） */ },
@@ -333,11 +334,11 @@ export class __EXCHANGE__TradeService extends Service implements TradeService {
    */
   async cancelOrder(id: string, symbol?: string): Promise<void> {
     // 服务缝闸门（P0）：撤单是会改变交易所真实状态的实盘动作，与真实下单同门槛
-    // （liveTrading 显式开启且未强制模拟），防「经撤单接口绕过下单闸门」。
-    if (!this.config.liveTrading || this.config.dryRun) {
+    // （授权平面已授予且未强制模拟），防「经撤单接口绕过下单闸门」。
+    if (!liveTradingEnabled(this.config.liveTrading) || this.config.dryRun) {
       throw new TradingServiceError(
         'TRADING_LIVE_TRADING_DISABLED',
-        'TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
+        'TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires a signed live-trading grant (see @dshtrading/authority) with dryRun=false.',
       )
     }
     if (symbol === undefined || symbol === '') {
@@ -455,9 +456,9 @@ export interface PlaceOrderArgs {
 
 /**
  * 三态闸门判定（顺序即铁律 #3 修订版的裁决顺序）：
- *  - `reject`   —— ① 请求实盘（dryRun!==true）而 liveTrading=false：结构化拒绝；
+ *  - `reject`   —— ① 请求实盘（dryRun!==true）而未获实盘授权：结构化拒绝；
  *  - `simulate` —— ② dryRun=true（显式/缺省/被 config.dryRun 强制）：本地模拟回执；
- *  - `live`     —— ③ dryRun=false 且 liveTrading=true：真实签名下单，environment
+ *  - `live`     —— ③ dryRun=false 且实盘已获授权：真实签名下单，environment
  *                 决定是否带模拟盘头（demo=第一默认目标；live=实盘，base 闸门照旧 ask）。
  */
 export type OrderGateVerdict =
@@ -467,13 +468,13 @@ export type OrderGateVerdict =
 
 export function evaluateOrderGate(config: Config, args: PlaceOrderArgs): OrderGateVerdict {
   const requestedDryRun = args.dryRun ?? true
-  if (!requestedDryRun && !config.liveTrading) {
+  if (!requestedDryRun && !liveTradingEnabled(config.liveTrading)) {
     return {
       action: 'reject',
       code: 'TRADING_LIVE_TRADING_DISABLED',
       message:
         `${MARKET}_place_order rejected: the call requests real execution (dryRun=${String(args.dryRun)}) `
-        + 'but live trading is disabled (liveTrading=false). Ask the user to enable liveTrading explicitly '
+        + 'but live trading is disabled (no signed live-trading grant from the authority plane). Ask the operator to sign a live-trading grant (packages/authority/bin/sign-live-trading.mjs) '
         + 'after confirmation, or keep dryRun=true for a simulated fill.',
     }
   }
@@ -557,7 +558,7 @@ export interface PlaceOrderToolDeps {
   readonly marketData: Pick<__EXCHANGE__MarketDataService, 'getTicker'>
   /** 交易服务（闸门 ③ 的真实签名下单路径）。 */
   readonly trade: TradeService
-  /** 插件配置（dryRun 强制模拟 / liveTrading 总闸门 / env 三态）。 */
+  /** 插件配置（dryRun 强制模拟 / liveTrading 非权威镜像——实盘授权由 @dshtrading/authority 的人工签署平面裁定 / env 三态）。 */
   readonly config: Config
 }
 
@@ -574,8 +575,8 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
     description:
       `Place a ${EXCHANGE} order, or simulate one. symbol uses ${EXCHANGE} vocabulary. `
       + 'quantity is in BASE-ASSET coins. dryRun defaults to true and returns a DRY-RUN simulated fill receipt '
-      + 'with the current market price as reference. Real execution (dryRun=false) requires the plugin liveTrading '
-      + 'switch plus user approval; env=demo (default) routes to the simulated environment, env=live is real money.',
+      + 'with the current market price as reference. Real execution (dryRun=false) requires a signed live-trading grant (see @dshtrading/authority) '
+      + 'signed live-trading grant plus user approval; env=demo (default) routes to the simulated environment, env=live is real money.',
     parameters: {
       symbol: {
         type: 'string',
@@ -606,7 +607,7 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
       dryRun: {
         type: 'boolean',
         description:
-          'true (default) = simulate only and return a DRY-RUN receipt; false = request real execution (gated by liveTrading, env and user approval)',
+          'true (default) = simulate only and return a DRY-RUN receipt; false = request real execution (gated by the signed live-trading authority, env and user approval)',
         default: true,
       },
     },

@@ -3,6 +3,7 @@
  * Bybit 加密货币连接器插件（提供 tradingCryptoMarketData 与 crypto_* 工具）。
  */
 
+import { liveTradingEnabled } from '@dshtrading/authority'
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -181,7 +182,7 @@ export class BybitMarketDataService extends Service implements MarketDataService
 
 export class BybitTradeService extends Service implements TradeService {
   private readonly client: BybitRestClient
-  /** 插件配置（服务缝闸门 P0：dryRun 强制模拟 / liveTrading 总闸门）。 */
+  /** 插件配置（服务缝闸门 P0：dryRun 强制模拟 / liveTrading 非权威镜像——实盘授权由 @dshtrading/authority 的人工签署平面裁定）。 */
   private readonly config: Config
 
   constructor(
@@ -211,11 +212,11 @@ export class BybitTradeService extends Service implements TradeService {
     // 服务缝闸门（P0 · 铁律 #3 修订版 [S4]）：三态检查下推到服务实现内第一步——
     // 绕过工具层直调本服务（动态包宿主半等）同样 fail-closed；工具层闸门保留（双保险）。
     const requestedDryRun = order.dryRun ?? true
-    if (!requestedDryRun && !this.config.liveTrading) {
+    if (!requestedDryRun && !liveTradingEnabled(this.config.liveTrading)) {
       throw new TradingServiceError(
         'TRADING_LIVE_TRADING_DISABLED',
         `Bybit TradeService.placeOrder rejected: the request asks for real execution (dryRun=${String(order.dryRun)}) `
-          + 'but liveTrading=false — enable liveTrading explicitly or keep dryRun=true for a simulated fill.',
+          + 'but the signed live-trading authority does not grant real execution (see @dshtrading/authority) — keep dryRun=true for a simulated fill.',
       )
     }
     if (requestedDryRun || this.config.dryRun) {
@@ -232,15 +233,15 @@ export class BybitTradeService extends Service implements TradeService {
         timestamp: Date.now(),
       }
     }
-    // 闸门 ③：live（dryRun=false 且 liveTrading=true）→ 真实下单。
+    // 闸门 ③：live（dryRun=false 且实盘已获授权）→ 真实下单。
     return this.client.placeOrder(undefined, order)
   }
 
   async cancelOrder(orderId: string, _symbol?: string): Promise<void> {
-    if (!this.config.liveTrading || this.config.dryRun) {
+    if (!liveTradingEnabled(this.config.liveTrading) || this.config.dryRun) {
       throw new TradingServiceError(
         'TRADING_LIVE_TRADING_DISABLED',
-        'Bybit TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires liveTrading=true with dryRun=false.',
+        'Bybit TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires a signed live-trading grant (see @dshtrading/authority) with dryRun=false.',
       )
     }
     return this.client.cancelOrder(undefined, orderId) as unknown as void

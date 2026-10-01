@@ -13,6 +13,12 @@
     "build": "pnpm sync:skills && pnpm -r build",
     "test": "vitest run --passWithNoTests",
     "test:scripts": "vitest run scripts --passWithNoTests",
+    "patch-id:check": "node scripts/patch-id-gate.mjs",
+    "patch-id:report": "node scripts/patch-id-gate.mjs --report",
+    "patch-id:update": "node scripts/patch-id-gate.mjs --update",
+    "live-trading:check": "node scripts/live-trading-gate.mjs",
+    "live-trading:report": "node scripts/live-trading-gate.mjs --report",
+    "authority:sign": "node packages/authority/bin/sign-live-trading.mjs",
     "test:desktop": "node --test \"desktop/tests/*.test.mjs\"",
     "test:audit": "node scripts/test-audit.mjs --check",
     "test:audit:report": "node scripts/test-audit.mjs --report",
@@ -39,6 +45,7 @@
     "tsdown": "^0.22.0",
     "tsx": "^4.23.12",
     "typescript": "^5.9.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "yaml": "^2.9.0"
   }
 }

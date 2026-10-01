@@ -4,9 +4,16 @@
  * dsh-tool-cordis 动态包宿主半 inject 本服务直调时同样过闸（liveTrading !== true
  * 拒绝或模拟；=== true 放行）。
  */
+import { installTestAuthority, type TestAuthority } from '@dshtrading/authority/testing'
 import { Context as CordisContext } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { BybitTradeService, type Config } from '../src/index.js'
+
+/** 实盘授权夹具：连接器闸门现在要求人工签署授权（@dshtrading/authority），
+ *  用例在临时目录里搭一份真实签名的平面并指向它——不这样做，闸门 ③ 只能被 mock 掉。 */
+let testAuthority: TestAuthority | undefined
+beforeAll(() => { testAuthority = installTestAuthority() })
+afterAll(() => { testAuthority?.uninstall() })
 
 function baseConfig(overrides: Partial<Config> = {}): Config {
   return {

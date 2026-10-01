@@ -846,7 +846,7 @@ export class TradingBridge {
 
   /**
    * GUI 下单（真交易执行）：支持实盘报单（默认 dryRun: false）。
-   * 若底层连接器未配置 API 凭证或未开启 liveTrading，由服务缝闸门抛出标准错误，
+   * 若底层连接器未配置 API 凭证或未获人工签署实盘授权，由服务缝闸门抛出标准错误，
    * 桥层如实向前端返回，杜绝伪造假成交。
    */
   async placeOrderFromGui(market: string, body: GuiOrderBody): Promise<PlaceOrderWire> {

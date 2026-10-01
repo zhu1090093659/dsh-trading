@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { LedgerLockedError, TasksLedger } from '../src/tasks/ledger.ts'
+import { LedgerLockedError, TasksLedger, interpretProcessProbe } from '../src/tasks/ledger.ts'
 import { nextRunAtMs } from '../src/client/tasks-schedule.ts'
 
 const T0 = new Date(2026, 0, 1, 9, 0, 30).getTime()
@@ -182,5 +182,33 @@ describe('TasksLedger', () => {
     const t9 = env.ledger.snapshot().tasks.find(item => item.id === 't9')
     expect(t9?.executions[0]?.result).toBe('cancelled')
     void manual
+  })
+})
+
+describe('interpretProcessProbe（探针结论的保守语义）', () => {
+  it('管理员：探针报错时按活锁处理（宁可误拒不可双写）', () => {
+    // Given 一次被权限拒绝的探针（2026-10-01 文件沙箱实测形态：status=null + error=EPERM）
+    const probe = { error: Object.assign(new Error('spawnSync ps EPERM'), { code: 'EPERM' }), stdout: '', status: null }
+    // When 解释这次探针
+    // Then 结论是「活」——探针不可用不等于进程已死，误判会直接放进来第二个写者
+    expect(interpretProcessProbe(probe)).toBe(true)
+  })
+
+  it('管理员：探针正常跑完但没有输出时按已死处理', () => {
+    // Given ps 正常退出但查不到该 pid（进程确实不在了）
+    // When 解释这次探针
+    // Then 结论是「死」，残留锁可被接管
+    expect(interpretProcessProbe({ error: undefined, stdout: '', status: 1 })).toBe(false)
+    expect(interpretProcessProbe({ error: undefined, stdout: Buffer.from('  \n'), status: 1 })).toBe(false)
+  })
+
+  it('管理员：僵尸态按已死处理，正常态按活处理', () => {
+    // Given 四种真实 ps 输出
+    // When 解释它们
+    // Then 僵尸（Z/X）可接管，运行中（S/R）不可接管
+    expect(interpretProcessProbe({ error: undefined, stdout: 'Z\n', status: 0 })).toBe(false)
+    expect(interpretProcessProbe({ error: undefined, stdout: 'X\n', status: 0 })).toBe(false)
+    expect(interpretProcessProbe({ error: undefined, stdout: 'S\n', status: 0 })).toBe(true)
+    expect(interpretProcessProbe({ error: undefined, stdout: 'R\n', status: 0 })).toBe(true)
   })
 })

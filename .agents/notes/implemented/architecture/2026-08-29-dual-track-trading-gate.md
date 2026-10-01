@@ -26,3 +26,5 @@ Status: implemented
 - 新增市场时下单工具名必须落进闸门模式枚举内（复制手册 §3 接线清单）。
 
 > **2026-09-01 取代补充（方向性修订）**：本记录原裁定「闸门收敛在工具层、服务层不做二次裁决」。为 P6 开放 dsh-tool-cordis 动态包（可 inject TradeService 绕过工具层），三态检查已下推到 TradeService 实现内第一步（撤单同门槛），工具层闸门保留为双保险——见 [2026-09-01-service-seam-order-gate](../feature/2026-09-01-service-seam-order-gate.md)。本记录的三态语义与正则枚举不变，仅「层次」从单轨变双轨。
+>
+> **2026-10-01 取代补充（第一段的权威来源）**：本记录第 1 条把 %%liveTrading%% 配置开关称作第一道闸门——今天它仍是否决手段，但**不再是授权来源**。红队 RT-04 复核成立：该配置写在 agent 可写的 preset 资产里，改一行就能抹掉。实盘许可已迁到人工签署的状态平面（%%.packages/authority%%），配置值降级为**非权威镜像**（只能收紧、永不授予）。三态语义、错误码 %%TRADING_LIVE_TRADING_DISABLED%% 与审批面全部不变，只替换第一段的**谁说了算**——见 [2026-10-01-live-trading-authority-plane](2026-10-01-live-trading-authority-plane.md)。
