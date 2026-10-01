@@ -281,3 +281,12 @@
   2. **createTriggerPump 与 onBacklog** —— 泵的接线点属进程装配，但其"积压告警写审计"必须随装配一起做（见上一节）。
 
 **给装配者的清单**（P5 步骤 1 要接的线）：pump（含 onBacklog 写审计）、riskGate、v1Stream、frameDecoder（UDS）、pairingClient、memorySourceRegistry、countingVenue、clockDriftDetector，以及把 deskLoop / watchdog / streamingFeed / shadowDesk / venueErrorStreak 从"演练里构造"改成"运行时构造"。
+
+### 台账更新（round 149 重跑）
+
+| 项 | 变化 |
+|---|---|
+| createClockDriftDetector | **零调用点 → 生产已接线**（round 148 接进 desk 环路：给了 clockDriftToleranceMs 就每轮自采两条时钟，超容差即降级）|
+| 合计 | 21 个工厂：**无调用点 7 个**（原 8）、仅演练 6 个、生产已接线 8 个 |
+
+剩余 7 个零调用点：memorySourceRegistry / pairingClient / triggerPump / riskGate / countingVenue / v1Stream / frameDecoder —— 接线点均在 P5 步骤 1 的进程装配（见上表"给装配者的清单"）。
