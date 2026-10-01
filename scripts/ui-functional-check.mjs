@@ -45,7 +45,20 @@ const screenshotPath = argOf('--screenshot', '/tmp/dsh-ui-check/screenshot.png')
 const chromeBin = process.env.DSH_UI_CHROME
   ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const dshBin = process.env.DSH_DSH_BIN ?? join(process.env.HOME, '.local/bin/dsh-trading');
-const dshHome = process.env.DSH_HOME ? process.env.DSH_HOME : join(process.env.HOME, '.dsh-trading');
+// home 契约（AGENTS.md）：业务数据一律在 trading home，且**不能因为继承了 Web 会话环境就误用
+// 宿主的 ~/.dsh**。所以只有「看起来像 trading home」的 DSH_HOME 才被采信（路径里含 '-trading'）；
+// 否则大声警告并回落到 ~/.dsh-trading。
+// 2026-10-01 实证：本脚本此前是「DSH_HOME 优先」，在 agent 会话里（继承 DSH_HOME=~/.dsh）
+// 直接拿**宿主 home** 起了 trading-web 实例，并写入了宿主的 storages/task-board/trading-tasks
+// （宿主 ~/.dsh 里这些条目的 mtime 被改动，而 ~/.dsh-trading 同期零改动）——正是这条契约要禁止的事。
+const inheritedHome = process.env.DSH_HOME;
+const looksLikeTradingHome = (candidate) => typeof candidate === 'string' && candidate.includes('-trading');
+const dshHome = looksLikeTradingHome(inheritedHome)
+  ? inheritedHome
+  : join(process.env.HOME, '.dsh-trading');
+if (inheritedHome !== undefined && inheritedHome !== dshHome) {
+  console.log(`[ui-check] 忽略继承的 DSH_HOME=${inheritedHome}（不是 trading home），改用 ${dshHome}`);
+}
 
 const failures = [];
 const passes = [];
