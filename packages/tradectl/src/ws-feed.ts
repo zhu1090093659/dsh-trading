@@ -138,7 +138,10 @@ export function createStreamingFeed(options: FeedOptions): {
   start(): void
   stop(): void
   stats(): FeedStats
-  /** 外部喂一张快照（周期刷新基准用；不经过传输层）。 */
+  /**
+   * 外部喂一张快照（周期刷新基准用；不经过传输层）。
+   * **传入的 epoch 会被忽略** —— feed 用当前连接世代盖章，见下。
+   */
   deliverSnapshot(snapshot: FeedMessage): void
 } {
   const bucket = createTokenBucket(options.subscribeTokenCapacity, options.subscribeRefillPerSec, options.now())
@@ -212,7 +215,11 @@ export function createStreamingFeed(options: FeedOptions): {
           void options.bootstrap(options.symbols.length > 0 ? options.symbols : (options.bootstrapSymbols ?? []))
             .then((snapshots) => {
               for (const snapshot of snapshots) {
-                options.sink.onSnapshot({ epoch: snapshot.epoch, symbol: snapshot.symbol, price: snapshot.price, atMs: snapshot.atMs }, options.now())
+                // 世代号由 feed **盖章**（覆盖快照源自带的 epoch）：
+                // "这条快照属于哪次连接"是 feed 独有的事实。让每个适配器/脚本自己记，
+                // 就会出现硬编码 epoch=1 的写法 —— 重连后新世代的 tick 与旧世代快照永远对不上，
+                // 对齐层于是永远停在 unaligned、一条都不发布（2026-10-01 实测确认的静默停摆）。
+                options.sink.onSnapshot({ epoch: generation, symbol: snapshot.symbol, price: snapshot.price, atMs: snapshot.atMs }, options.now())
               }
               note('open', 'bootstrap delivered ' + String(snapshots.length) + ' snapshot(s)')
             })
@@ -270,7 +277,8 @@ export function createStreamingFeed(options: FeedOptions): {
       state = 'stopped'
     },
     deliverSnapshot(snapshot) {
-      options.sink.onSnapshot({ epoch: snapshot.epoch, symbol: snapshot.symbol, price: snapshot.price, atMs: snapshot.atMs }, options.now())
+      // 同样盖章：外部只负责"拿到一个价"，不需要知道当前是第几次连接
+      options.sink.onSnapshot({ epoch: generation, symbol: snapshot.symbol, price: snapshot.price, atMs: snapshot.atMs }, options.now())
     },
     stats: () => ({ connects, reconnects, messages, badFrames, ignoredFrames, heartbeatTimeouts, lastMessageAtMs, state }),
   }

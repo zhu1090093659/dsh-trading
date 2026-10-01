@@ -230,3 +230,32 @@ describe('世代号如实下传', () => {
     expect(feed.stats().badFrames).toBe(0)
   })
 })
+
+describe('快照世代号由 feed 盖章', () => {
+  it('管理员：快照源自带的 epoch 被覆盖为当前连接世代（硬编码 epoch 是静默停摆的根源）', async () => {
+    // Given 一条已连上的流与一批自带错误 epoch（999）的引导快照
+    const { fake, alignment, feed } = fixture({
+      bootstrap: async () => [{ kind: 'snapshot', epoch: 999, symbol: 'BTC/USDT', price: 60_000, atMs: T0 }],
+    })
+    feed.start()
+    fake.open()
+    // 引导是异步的（void bootstrap().then(...)）：先让它落地，再发 tick
+    await new Promise((resolve) => setImmediate(resolve))
+    // When 引导完成后再来一条同世代的 tick
+    fake.message(JSON.stringify({ kind: 'tick', epoch: 1, symbol: 'BTC/USDT', price: 60_100, atMs: T0, seq: 1 }))
+    // Then 对齐层进入 aligned（若 epoch 仍是 999，这条 tick 会被判 unaligned）
+    expect(alignment.state(T0).alignment).toBe('aligned')
+  })
+
+  it('管理员：deliverSnapshot 同样被盖章（周期刷新不需要知道自己是第几次连接）', () => {
+    // Given 一条已连上的流
+    const { fake, alignment, feed } = fixture()
+    feed.start()
+    fake.open()
+    // When 外部喂一张自带错误 epoch 的快照，再来一条 tick
+    feed.deliverSnapshot({ kind: 'snapshot', epoch: 42, symbol: 'BTC/USDT', price: 60_000, atMs: T0 })
+    fake.message(JSON.stringify({ kind: 'tick', epoch: 1, symbol: 'BTC/USDT', price: 60_050, atMs: T0, seq: 1 }))
+    // Then 仍然对齐
+    expect(alignment.state(T0).alignment).toBe('aligned')
+  })
+})
