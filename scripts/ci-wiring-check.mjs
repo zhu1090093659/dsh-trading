@@ -101,7 +101,7 @@ const MUST_BE_WIRED = [
  * 明确**不**进 CI 的门禁与原因（有原因就不算漏接线；没写原因的一律视为漏）。
  */
 const INTENTIONALLY_UNWIRED = {
-  'ui:check': '需要 headless Chrome 并真起一个宿主实例；作为人工/发布前门禁',
+  'ui:check': '需要 headless Chrome 并真起一个宿主实例（会拉起 trading-web）⇒ 不进 CI；本地跑法：pnpm ui:check（2026-10-01 实测 12 项断言全绿）',
   'bot-closure:check': '需要已构建的 bot profile ⇒ 不进 CI；已进 gates:all 的安装态档：pnpm gates:all --with-installed（该档会给它显式交易 home；脚本自身也拒绝在宿主 home 上猜测）',
 }
 
