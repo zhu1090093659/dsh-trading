@@ -11,7 +11,15 @@
       "default": "./lib/index.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "./http": {
+      "types": "./lib/http.d.ts",
+      "default": "./lib/http.js"
+    },
+    "./package.json": "./package.json",
+    "./startup": {
+      "types": "./lib/startup.d.ts",
+      "default": "./lib/startup.js"
+    }
   },
   "files": [
     "lib",
@@ -24,13 +32,23 @@
     }
   },
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dshtrading/base": "workspace:^"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-cmdline": "0.2.0-rc.2",
+    "commander": "^13.0.0",
     "tsdown": "^0.22.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-cmdline": ">=0.2.0-rc.2",
+    "commander": ">=12.0.0"
   }
 }
