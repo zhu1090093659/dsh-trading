@@ -120,3 +120,17 @@ OKX 调 setSandboxMode(true) 之后：**域名不变**（仍是 https://{hostnam
 - **实盘授权**：pnpm authority:sign（人类签署 grant）加 pnpm live-trading:check（CI 静态不变量：镜像文件全部只写 false）—— 这是仓库的权威机制；
 - **第 2 档只跑 demo**：连接器的 env 缺省就是 demo（请求头 x-simulated-trading: 1），不要把它改成 live；
 - paper-tier-okx.ts 里那张环境开关名单只是**附加启发式兜底**，不构成授权判据（它守不住未知的开关名）。
+
+### 第 2 档的执行配方：用仓库已有的测试，不另造机制（2026-10-01 核实）
+
+connector-okx 自带测试已覆盖 demo/live 边界，**不必新写判据**：
+
+- test/trade.test.ts:367 —— 「demo 下单带 x-simulated-trading: 1，live 不带（同一服务，env 决定）」，正反两面都断言；
+- test/signature.test.ts:62 —— 「simulated=true 时附加 x-simulated-trading: 1；false 时不出现（demo/live 唯一分界）」；
+- test/demo-account.test.ts —— **带凭证的 demo 盘集成测试，无凭证自动跳过不红**：提供 OKX_DEMO_API_KEY / OKX_DEMO_SECRET_KEY / OKX_DEMO_PASSPHRASE 后执行**只读签名请求**（GET balance/positions，带 x-simulated-trading: 1）。
+
+**第 2 档建议执行顺序（人执行，agent 不碰凭证）**：
+
+    OKX_DEMO_API_KEY=... OKX_DEMO_SECRET_KEY=... OKX_DEMO_PASSPHRASE=... pnpm --filter @dshtrading/connector-okx test
+
+先看 demo-account 那几条**真的跑了**（不是 skipped），把输出（含余额/仓位响应与 x-simulated-trading 证据）贴进验收记录；再按需走下单用例。tradectl 的 paper-tier-okx.ts 与 assertSandboxRouting 是**第二条防线**（预检守门与路由断言），不是替代品 —— 权威判据在上面这些测试里。
