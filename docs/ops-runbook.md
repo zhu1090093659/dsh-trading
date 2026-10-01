@@ -249,3 +249,35 @@
 2. 同时决定折叠策略（见上一节"积压折叠"）：默认不折叠会把最多 1000 条交给扇出。
 
 **为什么把它单列**：这类"实现了但没人调用"的缺口不会报错，只会让人以为能力已在运行时生效。本会话已在门禁、行 id、脚本守卫上发现过同类问题四次。
+
+## 接线台账：tradectl 的工厂函数谁在用（2026-10-01 全仓扫描）
+
+**方法**（可复现）：扫 packages/tradectl/src 里所有 export function create*/open* 工厂，再全仓统计其名字的出现次数，分为"生产引用"（src 与 scripts）与"演练引用"（drill/），排除定义文件自身。
+
+| 组件 | 生产 | 演练 | 判定 |
+|---|---|---|---|
+| createClockDriftDetector | 0 | 0 | 无调用点 |
+| createMemorySourceRegistry | 0 | 0 | 无调用点 |
+| createPairingClient | 0 | 0 | 无调用点 |
+| createTriggerPump | 0 | 0 | 无调用点 |
+| createRiskGate | 0 | 0 | 无调用点 |
+| createCountingVenue | 0 | 0 | 无调用点 |
+| createV1Stream | 0 | 0 | 无调用点 |
+| createFrameDecoder | 0 | 0 | 无调用点 |
+| createVenueErrorStreak | 0 | 2 | 仅演练 |
+| createWatchdog | 0 | 2 | 仅演练 |
+| createDeviceRegistry | 0 | 4 | 仅演练 |
+| createShadowDesk | 0 | 4 | 仅演练 |
+| createDeskLoop | 0 | 6 | 仅演练 |
+| createStreamingFeed | 0 | 12 | 仅演练 |
+| createTokenBucket / createIdempotencyLedger / createThrottledFanout / openRiskAllowedFor / createJournal / createAlignment / openLedgers | >0 | — | 生产已接线 |
+
+**怎么读这张表（重要，别误读成"死代码"）**：
+
+- 本仓的方法是**先做成可演练的组件、再由进程装配把它们连起来**。所以"仅演练在用"不是缺陷，而是 **P5 步骤 1 进程装配尚未发生**的正常中间态；
+- **真正需要留意的是"无调用点"那 8 个**：它们连演练都没用上，意味着**没有任何证据表明它们被跑过**（只有单测）。
+- 其中两个可以**在不需要 venue 的前提下先接上**：
+  1. **createClockDriftDetector** —— 环路已经有 probeDir 的先例（自己探盘），同理可以自己采两条时钟并把漂移喂进信号，让 clock-drift 从"有实现"变成"运行时真的会响"；
+  2. **createTriggerPump 与 onBacklog** —— 泵的接线点属进程装配，但其"积压告警写审计"必须随装配一起做（见上一节）。
+
+**给装配者的清单**（P5 步骤 1 要接的线）：pump（含 onBacklog 写审计）、riskGate、v1Stream、frameDecoder（UDS）、pairingClient、memorySourceRegistry、countingVenue、clockDriftDetector，以及把 deskLoop / watchdog / streamingFeed / shadowDesk / venueErrorStreak 从"演练里构造"改成"运行时构造"。
