@@ -31,7 +31,8 @@ const okCard = (over: Partial<Card> = {}): Card => ({
   actions: [{ kind: 'ack', label: '知道了' }],
   ...over,
 })
-const surface = (cards: Card[] = [okCard()], staticDir?: string) => ({
+const surface = (cards: Card[] = [okCard()], staticDir?: string, scopes: readonly string[] = ['read']) => ({
+  scopes,
   serverMajor: 1,
   cards: () => cards,
   serverCaps: ['action:ack', 'action:kill'],
@@ -80,6 +81,42 @@ describe('路径与版本协商', () => {
     const response = handleV1(request, surface())
     // Then 405（写路径尚未实现，绝不静默当读处理）
     expect(response.status).toBe(405)
+  })
+})
+
+describe('scope 判定', () => {
+  it('管理员：没有 read 平面时 403 SCOPE_REQUIRED，且不返回任何卡片', () => {
+    // Given 一个只有 command 平面的设备
+    const options = surface([okCard()], undefined, ['command'])
+    // When 请求卡片
+    const response = handleV1({ method: 'GET', path: '/v1/cards', headers: {} }, options)
+    // Then 403 且点名缺哪个平面、并如实回已持有的平面
+    expect(response.status).toBe(403)
+    expect(response.body).toContain('SCOPE_REQUIRED')
+    expect(response.body).toContain('"required":"read"')
+    expect(response.body).not.toContain('desk-summary')
+  })
+
+  it('管理员：持有 read 平面时放行；空 scope 一律 403', () => {
+    // Given 两种设备
+    const reader = surface([okCard()], undefined, ['read'])
+    const empty = surface([okCard()], undefined, [])
+    // When 各请求一次
+    const okResponse = handleV1({ method: 'GET', path: '/v1/cards', headers: {} }, reader)
+    const denied = handleV1({ method: 'GET', path: '/v1/cards', headers: {} }, empty)
+    // Then 前者 200、后者 403
+    expect(okResponse.status).toBe(200)
+    expect(denied.status).toBe(403)
+  })
+
+  it('管理员：静态资源同样受 scope 保护（资源不是免检通道）', () => {
+    // Given 一个只有 control 平面的设备与一个静态根
+    const root = staticRoot()
+    const options = surface([okCard()], root, ['control'])
+    // When 直接取 assets
+    const response = handleV1({ method: 'GET', path: '/v1/assets/index.html', headers: {} }, options)
+    // Then 403（不能靠换个路径绕过授权）
+    expect(response.status).toBe(403)
   })
 })
 

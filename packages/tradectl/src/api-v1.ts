@@ -21,6 +21,7 @@ import {
   renderableActions,
   toClientOrderView,
   validateCard,
+  type ScopePlane,
   type Card,
 } from '@dshtrading/contract'
 
@@ -58,6 +59,14 @@ export interface V1SurfaceOptions {
   readonly requiredCaps?: readonly string[]
   /** 服务端支持的可选能力。 */
   readonly serverCaps?: readonly string[]
+  /**
+   * 调用方持有的 scope 平面（由 edge 从设备令牌解析后传入）。
+   * 为什么不在这层解析令牌：令牌校验只有一处归属（edge），这里只做**授权判定**——
+   * 两处都解析会变成两个事实之家。
+   */
+  readonly scopes: readonly ScopePlane[]
+  /** 本面要求的平面（缺省 read：这是只读面）。 */
+  readonly requiredPlane?: ScopePlane | undefined
   /** 取当前卡片（服务端驱动，客户端只渲染）。 */
   readonly cards: () => readonly Card[]
   /** 静态资源根目录（SPA 构建产物）；不给则不托管静态资源。 */
@@ -101,6 +110,15 @@ export function handleV1(request: V1Request, options: V1SurfaceOptions): V1Respo
       status: verdict.status,
       headers: { 'content-type': 'application/json; charset=utf-8' },
       body: JSON.stringify({ code: verdict.code, message: verdict.message }),
+    }
+  }
+  // scope 判定在协商之后、取数之前：没有读平面就拿不到任何数据（也不该先把数据读出来）
+  const requiredPlane = options.requiredPlane ?? 'read'
+  if (!options.scopes.includes(requiredPlane)) {
+    return {
+      status: 403,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ code: 'SCOPE_REQUIRED', required: requiredPlane, granted: options.scopes }),
     }
   }
   if (request.method !== 'GET') {
