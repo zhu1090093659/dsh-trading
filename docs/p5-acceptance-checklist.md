@@ -88,3 +88,19 @@
 复核判据：OKX/Bybit 的 OCO 与止损市价单应为 true，Binance 的统一标志为 false（按各自实现取舍）。**未复核前不要把这几个标志当作既定事实。**
 
 另：第 2 档演练执行时，第一步必须打印并核对 routing 证据（sandbox 标志、请求头、目标 URL 主机），把那几行输出贴进验收记录 —— agent 不预置"模拟盘开关长什么样"的假设。
+
+### 复核结果（2026-10-01 按上述命令复现，ccxt 4.5.84）
+
+临时目录安装 ccxt 4.5.84 后实测输出（逐字）：
+
+    ccxt 版本: 4.5.84
+    binance {"oco":false,"stopMarket":false,"stopLoss":true,"takeProfit":true,"trigger":true,"sandbox":true}
+    okx     {"oco":true,"stopMarket":true,"stopLoss":true,"takeProfit":true,"trigger":true,"sandbox":true}
+    bybit   {"oco":true,"stopMarket":true,"stopLoss":true,"takeProfit":true,"trigger":true,"sandbox":true}
+
+结论（本次复现所见，仍以实际执行时的输出为准）：
+- **OKX 与 Bybit**：OCO（止盈止损合并单）与止损市价单都支持 ⇒ 第 2 档选 OKX 在"落地即带保护单"这一点上成立；
+- **Binance**：两者为 false（只有单项的 stopLoss / takeProfit / trigger）⇒ 若走 binance，需要在应用层自己组合保护单；
+- 三家都有 setSandboxMode，但**"调到模拟盘是否真的只打模拟盘"仍必须在运行时用 routing 证据核对**（见上一节）。
+
+本仓不依赖 ccxt，因此这张表**只在临时环境可复现**；上面的命令即为复现入口。
