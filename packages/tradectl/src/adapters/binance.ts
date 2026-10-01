@@ -20,6 +20,15 @@ import type { FeedMessage } from '../ws-feed.ts'
 /** 公共现货流地址（combined 形态：一个连接多个流）。 */
 export const BINANCE_PUBLIC_WS = 'wss://stream.binance.com:9443/stream'
 
+/**
+ * 内部符号 <-> 交易所符号的**唯一转换点**。
+ * 真实跑批暴露的坑：交易所帧给 BTCUSDT、REST 快照按 BTC/USDT 查，两种写法在同一条链路里
+ * 会导致"按标的"的状态（对齐、乱序、决策）各认各的 —— 所以出口一律归一。
+ */
+export function binanceSymbolToInternal(exchangeSymbol: string): string {
+  return exchangeSymbol.replace(/^([A-Z0-9]+?)(USDT|USDC|FDUSD|BTC|ETH|BNB)$/, "$1/$2")
+}
+
 /** Binance 的交易对写法：BTC/USDT -> btcusdt。 */
 export function binanceSymbol(symbol: string): string {
   return symbol.replace('/', '').toLowerCase()
@@ -51,7 +60,7 @@ export function parseBinanceFrame(text: string, epoch: number): FeedMessage | un
   if (event === 'aggTrade' || event === 'trade') {
     const price = Number(payload.p)
     const atMs = Number(payload.T ?? payload.E)
-    const symbol = String(payload.s ?? '')
+    const symbol = binanceSymbolToInternal(String(payload.s ?? ''))
     const seq = Number(payload.a ?? payload.t ?? 0)
     if (!Number.isFinite(price) || !Number.isFinite(atMs) || symbol === '') return undefined
     return { kind: 'tick', epoch, symbol, price, atMs, seq }
@@ -62,7 +71,7 @@ export function parseBinanceFrame(text: string, epoch: number): FeedMessage | un
     const candle = kline as Record<string, unknown>
     const price = Number(candle.c)
     const atMs = Number(candle.T ?? payload.E)
-    const symbol = String(candle.s ?? payload.s ?? '')
+    const symbol = binanceSymbolToInternal(String(candle.s ?? payload.s ?? ''))
     if (!Number.isFinite(price) || !Number.isFinite(atMs) || symbol === '') return undefined
     // K 线收盘（x === true）视为一次快照：它是"官方确认过的价格"，适合作为对齐基准。
     const closed = candle.x === true
