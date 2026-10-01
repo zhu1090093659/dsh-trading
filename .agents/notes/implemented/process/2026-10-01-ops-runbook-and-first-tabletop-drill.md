@@ -95,3 +95,16 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 四类输入的最后一项补齐：收集器现在**从 journal 的 position.change 事件重建"之前/之后"持仓** —— 窗口开始前每个标的的最后一条 = "之前"，窗口末尾最后一条 = "之后"；journal 无记录时用 positions 当前值兜底，**并如实说明"与断连时刻可能有偏差"**。
 
 **过程中修掉一个真问题**：journal.append 此前只接受 (kind, payload) 并用**注入时钟的"现在"**当事件时间 ⇒ 我传进去的 atMs 无效，窗口判定全落到同一时刻。已加可选 atMs（atMs ?? now()）并让记录类调用必须传它 —— **一条晚写的记录带上写入时刻，会让按事件时间切窗口的 gap report 失真**。
+
+### desk 运行时环路（同日）：把五层串成一条链
+
+%%packages/tradectl/src/desk-loop.ts%% —— 此前每一层都有零件，**却没有东西把它们串起来**：检测层产触发源、degradation 决定档位、risk-gate 维护状态、desk-records 留痕、gap-collector 生成报告。本模块是那条链：
+
+    每轮：取信号 → scanDegradation → decideDegradation → applyRiskEvent → 变化时 recordDegradation
+    重连：collectGapReport → journal.append('gap.report', …)
+
+**三条立场**：① **映射不重造策略**（只判作用域：单标的走 alignment、全局走 desk-level，档位取自 decideDegradation）；② **只有变化才留痕**；③ **恢复也要留痕** —— 回到 aligned/normal 同样写一条 transition，否则事后只看到"降下去"、看不到"回来了"。
+
+**测试 5 例**（真 node:sqlite + 真 journal + 注入时钟/调度器）：陈旧 ⇒ 该标的被降、开仓被拒、留痕一条；恢复 ⇒ 重新可开仓且"回来"也留痕（不闩锁）；全局三触发 ⇒ 降到 **reduce_only 且断言不是 halt**；重连 ⇒ gap report 产出并进 journal；start/stop 不叠加链。
+
+**仍未接**：没有任何进程启动这个环路（属 P5 步骤 1 的 paper/live 装配，需要真钱档与授权）。

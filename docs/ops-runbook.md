@@ -73,7 +73,8 @@
 | **真实检测器**（谁去发现 ENOSPC、谁去比时钟、谁去数交易所错误） | ⚠️ **缺**：`scanDegradation` 的信号全部注入，目前只有测试在喂 |
 | **收集器**（从库里取四类输入） | ✅ **已落地** `gap-collector.ts`：`collectGapReport({orders, audit}, window)` 取 missed 触发（`occurrences`）、被拒意图条数（`intents.state`）、journal 里的 degradation* 事件、当前持仓，并**逐条点名取不到的输入**（`missingInputs`）|
 | **数据源本身的完整度** | 2026-10-01 实测 + 同日补写入者后：① missed 触发 ✅；② 被拒意图 ✅ **带理由**（`migrateDeskRecords` 幂等补 `reason` 列 + `recordIntentRejection` 写入）；③ 降级动作 ✅（`recordDegradation` 写 journal 的 `degradation.transition`）；④ 持仓 ✅ **完整**：`recordPositionChange` 只在数量变化时写 `position.change`（带事件时间），收集器**从 journal 重建"之前/之后"**（窗口前最后一条 = 之前，窗口末最后一条 = 之后），journal 无记录时用当前值兜底**并如实说明偏差** |
-| **写入者的接线** | ⚠️ **缺**：三个写入 API 有了，但**没有任何运行时调用它们**（P5 步骤 1 接线；`intents`/`positions` 此前连生产写入者都没有）|
+| **运行时环路** | ✅ **已落地** `desk-loop.ts`：每轮「取信号 → 判定触发源 → 更新风控状态 → 变化时留痕」，并在重连时**产出 gap report 并写进 journal**（`gap.report` 事件 —— 否则"产出过一份报告"事后无法证明）。恢复同样留痕（不闩锁）|
+| **进程装配** | ⚠️ **缺**：环路有了，但**没有任何进程启动它**（P5 步骤 1 的 paper/live 装配；需要真钱档与授权）|
 | **恢复时自动调用** | ⚠️ **缺**：收集器有了，但**没有任何运行时在重连后调用它** |
 
 **结论（比"调个函数"重）**：要让"恢复必须产出 gap report"真正成立，得先补三处**记录** —— 三处写入 API 已于同日落地（`desk-records.ts`，含幂等迁移与"只在变化时记账"）。**这三处记录本身就是审计要求**，不是为 gap report 临时加的。（收集器已于同日升级为**从 journal 重建持仓**，四类输入现在齐全。）剩下的一件事：把写入 API **接进运行时**。
