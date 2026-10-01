@@ -200,3 +200,43 @@ describe('录音-回放 harness 与标定', () => {
     expect(result.evidence.join(' ')).toContain('x 1.5')
   })
 })
+describe('参数守卫', () => {
+describe('参数守卫', () => {
+  it('管理员：参数名拼错时立刻抛错，而不是静默降级成"永远 stale"', () => {
+    // Given 把 snapshotAgeBudgetMs 写成 snapshotMaxAgeMs（2026-10-01 实测踩中的坑）
+    const wrong = {
+      symbols: ['BTC/USDT'],
+      snapshotMaxAgeMs: 5_000,
+      bufferMaxTicks: 1_000,
+      bufferMaxBytes: 1_048_576,
+      realignTokenCapacity: 3,
+      realignRefillPerSec: 1,
+      divergenceBps: 50,
+      divergenceStrikes: 3,
+      orderTokenCapacity: 3,
+      orderRefillPerSec: 1,
+    } as unknown as Parameters<typeof createAlignment>[0]
+    // When/Then 抛错且提示指出可能的原因
+    expect(() => createAlignment(wrong, 0)).toThrow(/snapshotAgeBudgetMs/)
+    expect(() => createAlignment(wrong, 0)).toThrow(/拼错/)
+  })
+
+  it('管理员：结构性参数非正数同样抛错（0 预算等于永远陈旧）', () => {
+    // Given 预算为 0
+    const zero = {
+      symbols: ['BTC/USDT'],
+      snapshotAgeBudgetMs: 0,
+      bufferMaxTicks: 1_000,
+      bufferMaxBytes: 1_048_576,
+      realignTokenCapacity: 3,
+      realignRefillPerSec: 0,
+      divergenceBps: 50,
+      divergenceStrikes: 3,
+      orderTokenCapacity: 3,
+      orderRefillPerSec: 0,
+    }
+    // When/Then 抛错（注意 refill 为 0 是合法的，只有结构性参数不许为 0）
+    expect(() => createAlignment(zero, 0)).toThrow(/snapshotAgeBudgetMs/)
+  })
+})
+})

@@ -116,6 +116,37 @@ const BYTES_PER_TICK = 128
  * @param params - 标定过的上界参数（无缺省）。
  * @param startedAtMs - 起始时刻（注入时钟）。
  */
+/**
+ * 参数守卫：**配错就大声失败**，不要静默降级成"永远 stale"。
+ *
+ * 2026-10-01 实测踩中：调用方把预算写成了 %%snapshotMaxAgeMs%%（真名是 %%snapshotAgeBudgetMs%%），
+ * 于是 %%atMs - snapshotAtMs <= undefined%% 恒为 false ⇒ **每一帧都被判陈旧、对齐层永远 stale**，
+ * 表现为"行情接不通"而不是"参数写错了"。drills 与 tests 不在 tsc 范围内，这类拼写错误不会在编译期暴露，
+ * 所以这里做运行期校验：必需的正数参数缺失或非正就抛错。
+ */
+function assertAlignmentParams(params: AlignmentParams): void {
+  // 所有字段都必须是**有限数**（拼错名字时它是 undefined，到这里就会被抓住）
+  const required: (keyof AlignmentParams)[] = [
+    'snapshotAgeBudgetMs',
+    'bufferMaxTicks',
+    'bufferMaxBytes',
+    'realignTokenCapacity',
+    'realignRefillPerSec',
+    'divergenceBps',
+    'divergenceStrikes',
+    'orderTokenCapacity',
+    'orderRefillPerSec',
+  ]
+  const bad = required.filter((key) => typeof params[key] !== 'number' || !Number.isFinite(params[key]))
+  // 结构性参数另外要求 > 0；其余允许 0（例如"不回填令牌桶"是合法配置）
+  const mustBePositive: (keyof AlignmentParams)[] = ['snapshotAgeBudgetMs', 'bufferMaxTicks', 'bufferMaxBytes']
+  const nonPositive = mustBePositive.filter((key) => params[key] <= 0)
+  const missing = [...bad, ...nonPositive]
+  if (missing.length > 0) {
+    throw new Error('createAlignment: 参数缺失或非正数 —— ' + missing.join(', ') + '（常见原因：字段名拼错，例如把 snapshotAgeBudgetMs 写成 snapshotMaxAgeMs）')
+  }
+}
+
 export function createAlignment(params: AlignmentParams, startedAtMs: number): {
   onSnapshot(snapshot: Snapshot, atMs: number): { accepted: boolean; reason: string; published: readonly Tick[] }
   onTick(tick: Tick, atMs: number): TickOutcome
@@ -125,6 +156,7 @@ export function createAlignment(params: AlignmentParams, startedAtMs: number): {
   state(atMs: number): AlignmentSnapshot
   events(): readonly AlignmentEvent[]
 } {
+  assertAlignmentParams(params)
   let epoch: number | null = null
   let alignment: Alignment = 'unaligned'
   let buffer: Tick[] = []

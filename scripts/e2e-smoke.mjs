@@ -63,6 +63,14 @@ const CHECKS = [
     electron: true,
   },
   {
+    // P5 步骤 1 的"真实检测器"行情侧：真实对齐态直接喂进 desk 环路（不涉真钱、无下单端口）。
+    // 它的价值在 2026-10-01 被证明：参数名写错时对齐层"恒 stale"，而那个错只有真跑才看得见。
+    name: '环路 + 真实行情（Binance 公共流驱动风控状态，需网络）',
+    script: 'packages/tradectl/drill/desk-loop-live.ts',
+    expect: ['"alignment":"aligned"', '"badFrames":0', '真实行情驱动环路'],
+    network: true,
+  },
+  {
     name: '真实行情（Binance 公共流，需网络）',
     script: 'packages/tradectl/drill/binance-smoke.ts',
     expect: ['"alignment":"aligned"', '"badFrames":0'],
