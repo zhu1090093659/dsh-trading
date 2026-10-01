@@ -23,7 +23,12 @@ export type PaperPreflight =
     }
   | { readonly ok: false; readonly reason: 'MISSING_CREDENTIALS' | 'LIVE_SWITCH_PRESENT'; readonly message: string; readonly missing: readonly string[] }
 
-/** 任何"允许实盘"的环境开关都视为串味（第 2 档没有资格实盘）。 */
+/**
+ * **附加启发式**（不是权威机制）：几个常见的允许实盘的环境开关名，命中即拒绝。
+ * 权威机制是仓库自带的两件：人类用 pnpm authority:sign 签署 grant，
+ * CI 用 pnpm live-trading:check 守住镜像只写 false 这条静态不变量。
+ * 本列表只是多一道便宜的兜底 —— 别把它当成实盘授权判据（它守不住未知的开关名）。
+ */
 const LIVE_SWITCHES = ['DSHT_ALLOW_LIVE', 'DSHT_LIVE', 'DSHT_LIVE_TRADING', 'OKX_LIVE'] as const
 
 /**

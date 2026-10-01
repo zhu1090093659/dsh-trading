@@ -114,3 +114,9 @@ OKX 调 setSandboxMode(true) 之后：**域名不变**（仍是 https://{hostnam
     assertSandboxRouting('okx', { sandboxMode: ex.options.sandboxMode, headers: ex.headers, apiUrl: ex.urls.api.rest })
 
 判据（已进测试，tradectl 255 例）：sandboxMode 必须为 true；**OKX 的 x-simulated-trading 必须为 1**（缺了就会打到主网，因为域名相同）；apiUrl 不能为空。通过时返回一行可入册的证据（如：okx 模拟盘：sandboxMode=true 且 x-simulated-trading=1）。
+
+### 第 2 档执行前置（权威机制，别用环境变量代替）
+
+- **实盘授权**：pnpm authority:sign（人类签署 grant）加 pnpm live-trading:check（CI 静态不变量：镜像文件全部只写 false）—— 这是仓库的权威机制；
+- **第 2 档只跑 demo**：连接器的 env 缺省就是 demo（请求头 x-simulated-trading: 1），不要把它改成 live；
+- paper-tier-okx.ts 里那张环境开关名单只是**附加启发式兜底**，不构成授权判据（它守不住未知的开关名）。
