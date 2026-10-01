@@ -12,9 +12,12 @@
  * @module @dshtrading/tractl/api-v1
  */
 import { readFileSync, statSync } from 'node:fs'
+import { createIdempotencyLedger, type BeginOutcome } from './idempotency.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import {
+  ACTION_SCOPE,
+  assertNoClientOrderId,
   CARD_LIMITS,
   negotiateVersion,
   parseCaps,
@@ -43,6 +46,8 @@ export interface V1Request {
   readonly method: string
   readonly path: string
   readonly headers: Record<string, string | undefined>
+  /** 请求体（写路径才有；一元写是 JSON）。 */
+  readonly body?: string | undefined
 }
 
 /** 一次 /v1 处理的结果（由调用方写回 HTTP；测试直接断言这个对象）。 */
@@ -67,6 +72,14 @@ export interface V1SurfaceOptions {
   readonly scopes: readonly ScopePlane[]
   /** 本面要求的平面（缺省 read：这是只读面）。 */
   readonly requiredPlane?: ScopePlane | undefined
+  /**
+   * 执行一个命令（写路径）。**端口注入**：本层不碰执行核，只负责授权、幂等与回执。
+   * 返回的结果会被 assertNoClientOrderId 检查——**回执里带 clientOrderId 直接判失败**，
+   * 因为这正是"客户端拿它绕开核心去对 venue 讲话"的入口。
+   */
+  readonly execute?: ((action: string, params: Record<string, unknown>) => Promise<unknown>) | undefined
+  /** 单次请求体上限（字节）。 */
+  readonly maxBodyBytes?: number | undefined
   /** 取当前卡片（服务端驱动，客户端只渲染）。 */
   readonly cards: () => readonly Card[]
   /** 静态资源根目录（SPA 构建产物）；不给则不托管静态资源。 */
@@ -201,3 +214,96 @@ export function attachV1Surface(register: (path: string, handler: (req: Incoming
 
 /** 供调用方复用的视图投影（见契约包的 id 冻结面）。 */
 export { toClientOrderView }
+
+/**
+ * 处理一个写命令：POST /vN/commands，体为 { clientRequestId, action, params }。
+ * 顺序：**scope（按动作）→ 幂等登记 → 执行 → 回执检查**。
+ * 每一步失败都不执行——尤其"幂等键冲突"必须在执行之前判掉，否则就成了"先做了再说"。
+ * @param request - 含 body 的请求。
+ * @param rest - 版本后的路径。
+ @param options - 面配置（含 execute 端口）。
+ * @param caps - 已协商出的能力交集。
+ */
+async function handleCommand(request: V1Request, rest: string, options: V1SurfaceOptions, caps: readonly string[]): Promise<V1Response> {
+  const json = (status: number, payload: unknown): V1Response => ({ status, headers: { 'content-type': 'application/json; charset=utf-8' }, body: JSON.stringify(payload) })
+  if (rest !== 'commands') return json(404, { code: 'NOT_FOUND', message: rest })
+  if (options.execute === undefined) return json(501, { code: 'WRITE_PATH_UNAVAILABLE', message: 'this surface has no command executor' })
+  const raw = request.body ?? ''
+  const maxBytes = options.maxBodyBytes ?? 8_192
+  if (Buffer.byteLength(raw, 'utf8') > maxBytes) return json(413, { code: 'BODY_TOO_LARGE', limit: maxBytes })
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return json(400, { code: 'MALFORMED_BODY' })
+  }
+  if (parsed === null || typeof parsed !== 'object') return json(400, { code: 'MALFORMED_BODY' })
+  const payload = parsed as { clientRequestId?: unknown; action?: unknown; params?: unknown }
+  if (typeof payload.clientRequestId !== 'string' || payload.clientRequestId === '') return json(400, { code: 'CLIENT_REQUEST_ID_REQUIRED' })
+  if (typeof payload.action !== 'string') return json(400, { code: 'ACTION_REQUIRED' })
+  const scope = (ACTION_SCOPE as Record<string, ScopePlane | undefined>)[payload.action]
+  if (scope === undefined) return json(400, { code: 'UNKNOWN_ACTION', action: payload.action })
+  // 授权判定在执行之前
+  if (!options.scopes.includes(scope)) return json(403, { code: 'SCOPE_REQUIRED', required: scope, granted: options.scopes })
+  const params = (payload.params ?? {}) as Record<string, unknown>
+  const ledger = ledgerFor(options)
+  const outcome = ledger.begin(payload.clientRequestId, { action: payload.action, params })
+  if (outcome.kind === 'conflict') return json(409, { code: 'IDEMPOTENCY_CONFLICT', message: outcome.message })
+  if (outcome.kind === 'in-flight') return json(409, { code: 'REQUEST_IN_FLIGHT' })
+  if (outcome.kind === 'replay') return json(200, { clientRequestId: payload.clientRequestId, replayed: true, result: outcome.result })
+  try {
+    const result = await options.execute(payload.action, params)
+    // 回执检查：**带 clientOrderId 的结果直接判失败**（fail-closed，不下发、也不登记成成功）
+    try {
+      assertNoClientOrderId(result)
+    } catch {
+      ledger.fail(payload.clientRequestId)
+      return json(500, { code: 'LEAKY_RESULT', message: 'the command result carried a clientOrderId and was withheld' })
+    }
+    ledger.complete(payload.clientRequestId, result)
+    return json(200, { clientRequestId: payload.clientRequestId, replayed: false, caps, result })
+  } catch (error) {
+    ledger.fail(payload.clientRequestId)
+    return json(502, { code: 'COMMAND_FAILED', message: error instanceof Error ? error.message : String(error) })
+  }
+}
+
+/** 幂等账的最小面（本层只用这三件事）。 */
+interface CommandLedger {
+  begin(clientRequestId: string, payload: unknown): BeginOutcome<unknown>
+  complete(clientRequestId: string, result: unknown): void
+  fail(clientRequestId: string): void
+}
+
+/** 每个面实例一本幂等账（懒建，挂在 options 上以免污染调用方）。 */
+const LEDGERS = new WeakMap<object, CommandLedger>()
+function ledgerFor(options: V1SurfaceOptions): CommandLedger {
+  const existing = LEDGERS.get(options)
+  if (existing !== undefined) return existing
+  const ledger: CommandLedger = createIdempotencyLedger<unknown>({ now: () => Date.now(), ttlMs: 10 * 60_000, maxEntries: 512 })
+  LEDGERS.set(options, ledger)
+  return ledger
+}
+
+/**
+ * 异步入口：GET 交给同步 core，POST 走命令路径。
+ * 为什么分两层而不是把 handleV1 变成 async：读面是纯计算（便于测试与复用），写面才需要等执行核；
+ * 把两者混成一个 Promise 会让所有读路径的调用方都被迫 await。
+ * @param request - 方法与路径、头与体。
+ * @param options - 面配置。
+ */
+export async function handleV1Async(request: V1Request, options: V1SurfaceOptions): Promise<V1Response> {
+  const versioned = parseVersionedPath(request.path)
+  if (versioned === undefined || request.method !== 'POST') return handleV1(request, options)
+  const verdict = negotiateVersion({
+    clientMajor: versioned.major,
+    serverMajor: options.serverMajor,
+    clientCaps: capsOf(request),
+    ...(options.requiredCaps === undefined ? {} : { requiredCaps: options.requiredCaps }),
+    ...(options.serverCaps === undefined ? {} : { serverCaps: options.serverCaps }),
+  })
+  if (!verdict.ok) {
+    return { status: verdict.status, headers: { 'content-type': 'application/json; charset=utf-8' }, body: JSON.stringify({ code: verdict.code, message: verdict.message }) }
+  }
+  return handleCommand(request, versioned.rest, options, verdict.caps)
+}

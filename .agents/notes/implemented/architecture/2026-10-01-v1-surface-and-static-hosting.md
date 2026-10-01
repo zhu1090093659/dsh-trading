@@ -39,10 +39,23 @@
 
 测试 6 例：fresh → in-flight → replay；同键不同载荷冲突且不泄露旧结果；失败后可重试；TTL 过期后键可复用；条数上限丢最旧；键序无关（含嵌套对象）。tradectl 累计 **140 例全绿**。
 
+
+## 写命令端点 POST /vN/commands（同日补）
+
+顺序有意固定为 **scope（按动作）→ 幂等登记 → 执行 → 回执检查**，每一步失败都不执行：
+
+- 动作到平面的映射来自契约包的 `ACTION_SCOPE`（`kill/pause/flatten` 属 control，`approve/reject` 属 command，`ack` 属 read）⇒ 没持有该平面就 `403 SCOPE_REQUIRED` 且**执行核一次没被碰**（测试断言 `calls.length === 0`）。
+- 幂等键冲突在**执行之前**判掉，否则就成了"先做了再说"。
+- **回执检查（fail-closed）**：执行结果先过契约包的 `assertNoClientOrderId`；夹带 `clientOrderId` 的结果被判 `500 LEAKY_RESULT` 并**扣下不下发**，同时把幂等键标记失败（不留"已成功"的假记录）。这条是 id 冻结面在写路径上的落点。
+- 执行核抛错 ⇒ `502` 且幂等键删除（允许重试）；请求体超上限 ⇒ `413`；缺幂等键/未知动作/畸形体 ⇒ `400`。
+- **同步 core + async 包装**：GET 走 `handleV1`（纯计算，不返回 Promise），POST 走 `handleV1Async` —— 把读写混成一个 Promise 会让所有读路径的调用方被迫 await。
+
+测试 7 例：执行一次且 replayed=false；重放不重复执行；同键不同载荷 409 且不执行；control 类动作缺平面 403 且不执行；未知动作/缺键/畸形体 400 且不执行；**回执夹带 clientOrderId 判失败并扣下**；执行抛错 502 且键可重试。tradectl 累计 **147 例全绿**。
+
 ## 未验证项（如实标注）
 
 - **SPA 本体未做**：本步只落地服务端一半（/v1 面 + 静态托管）；React/Vite 前端与 ui-screenshot-verify 截图属客户端一半。
-- **写路径未实现**：一元写的**幂等登记已就绪**（见下节），但 HTTP 写端点、WS 单向下行、journal 游标补页本身都还没做；本面当前只读（GET）。
+- ~~写路径未实现~~ **一元写端点已就绪**（POST /vN/commands + 幂等登记 + 回执检查，见下）；**WS 单向下行与 journal 游标补页仍未做**。
 - ~~scope 校验尚未接进 /v1~~ **已接入**（协商 → scope → 取数，见上）；仍未做的是**写路径的 scope 判定**（写路径本身还没实现）。
 - **静态托管的性能与压缩未测**（没有 gzip/br、没有 ETag）。
 
