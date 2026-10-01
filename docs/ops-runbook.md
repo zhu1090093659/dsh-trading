@@ -70,7 +70,7 @@
 |---|---|
 | **策略/生成层**（9 类触发源、`decideDegradation`、`buildGapReport`、启动形态、禁止自动 `halt`） | ✅ **完整且有测试**（`degradation.test.ts` 覆盖各触发源与 gap report 生成） |
 | **检测层**（把信号变成触发源） | ✅ **部分补齐**：`degradation-monitor.ts` 的 `scanDegradation(signals)` 把「各标的对齐态 / 核心心跳时间 / 交易所连续报错数 / 磁盘写失败」映射成触发源；两条纪律有测试：**未知不当健康**（拿不到心跳或对齐态时进 `unknownSignals` 并如实报告）、**检测层永不产 `out-of-band-halt`** |
-| **真实检测器**（谁去发现 ENOSPC、谁去比时钟、谁去数交易所错误） | ⚠️ **缺**：`scanDegradation` 的信号全部注入，目前只有测试在喂 |
+| **真实检测器**（谁去发现 ENOSPC、谁去比时钟、谁去数交易所错误） | ✅ **已落地**：写探针 `probeWritable`（**真去写一小段再删**，映射 ENOSPC/EROFS/EACCES）、错误连续计数 `createVenueErrorStreak`（**成功即清零**，只有连续错误才算交易所不正常）、时钟漂移 `createClockDriftDetector`（双时钟互校）。三者都在装配演练里接通并验过 |
 | **收集器**（从库里取四类输入） | ✅ **已落地** `gap-collector.ts`：`collectGapReport({orders, audit}, window)` 取 missed 触发（`occurrences`）、被拒意图条数（`intents.state`）、journal 里的 degradation* 事件、当前持仓，并**逐条点名取不到的输入**（`missingInputs`）|
 | **数据源本身的完整度** | 2026-10-01 实测 + 同日补写入者后：① missed 触发 ✅；② 被拒意图 ✅ **带理由**（`migrateDeskRecords` 幂等补 `reason` 列 + `recordIntentRejection` 写入）；③ 降级动作 ✅（`recordDegradation` 写 journal 的 `degradation.transition`）；④ 持仓 ✅ **完整**：`recordPositionChange` 只在数量变化时写 `position.change`（带事件时间），收集器**从 journal 重建"之前/之后"**（窗口前最后一条 = 之前，窗口末最后一条 = 之后），journal 无记录时用当前值兜底**并如实说明偏差** |
 | **运行时环路** | ✅ **已落地** `desk-loop.ts`：每轮「取信号 → 判定触发源 → 更新风控状态 → 变化时留痕」，并在重连时**产出 gap report 并写进 journal**（`gap.report` 事件 —— 否则"产出过一份报告"事后无法证明）。恢复同样留痕（不闩锁）|
@@ -107,10 +107,10 @@
 | 故障类 | 降级语义 | 实现 | 证据/缺口 |
 |---|---|---|---|
 | 行情断流 | 可平不可开 + 要求重快照 | stale 判定 ✅ / 开仓闸门 ⚠️ | 见 §4 |
-| 交易所限频或故障 | 退避 + 拒绝新增风险 | 适配器层有重连与心跳超时；**限频退避**未实测 | ⚠️ 交易所侧上限未实测 |
+| 交易所限频或故障 | 退避 + 拒绝新增风险 | ✅ **检测已落地**（`createVenueErrorStreak`：连续错误达阈值即触发 `venue-error`，成功立即清零）| ⚠️ 限频退避与交易所侧上限仍未实测 |
 | 模型 API 不可用 | 停止产生新决策，保留执行与保护 | 与 agent 会话解耦（desk 只吃卡片与 mandate） | ✅ 结构上成立；未做真实故障注入 |
 | 进程崩溃 | safe-boot 决定以何种形态启动 | `safe-boot.ts` + `assertNoForbiddenDegradation` | ✅ 有测试 |
-| 磁盘满 | 拒写 + 明确报错（不得静默丢审计） | **降级语义已定义**（`disk-full` 触发源 ⇒ "no new risk"）；**ENOSPC 的检测与拒写路径未接** | ⚠️ 缺检测层 |
+| 磁盘满 | 拒写 + 明确报错（不得静默丢审计） | ✅ **检测已落地**（`probeWritable` 真写探针，按 errno 给出可读原因）；降级语义既有（`disk-full` ⇒ no new risk）| ⚠️ 审计写入路径尚未**消费**该探针（接线属 P5 进程装配）|
 | 时钟漂移 | 以核心时钟为准，禁止用界面时间做判定 | ✅ **检测已落地**：`clock-drift.ts` 用两条独立时钟互校（墙钟 vs 单调钟增量），超容差即触发；单调钟倒退按最大可疑处理；检测层把"没测"记为未知而非健康 | ⚠️ **真实拨钟演练未做**（只验了注入读数） |
 | 证书过期 | 内网部署不依赖公网证书 | 本系统只承诺内网可达 | ⚠️ 若改用反代 TLS 需重新评估 |
 | 多实例争抢 | 同一份 `$DSH_HOME` 同一时刻只允许一个 host 写者 | 桌面壳 `attach` 决策 + 数据源守卫 | ✅ 契约测试 + 实测演练 |

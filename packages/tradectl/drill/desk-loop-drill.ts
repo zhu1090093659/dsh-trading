@@ -20,6 +20,7 @@ import { migrateDeskRecords } from '../src/desk-records.ts'
 import { migrateTriggers } from '../src/triggers.ts'
 import { createDeskLoop } from '../src/desk-loop.ts'
 import { createWatchdog } from '../src/watchdog.ts'
+import { createVenueErrorStreak, probeWritable } from '../src/detectors.ts'
 import type { MonitorSignals } from '../src/degradation-monitor.ts'
 
 const T0 = 1_700_000_000_000
@@ -39,14 +40,18 @@ let phase: 'healthy' | 'degraded' | 'recovered' = 'healthy'
 const alignment: Record<string, 'aligned' | 'stale'> = { 'BTC/USDT': 'aligned', 'ETH/USDT': 'aligned' }
 let heartbeatAtMs = T0
 
+// 真实检测器（不是脚本化的假读数）：写探针真去写一次；错误计数由本演练驱动。
+const writeProbe = probeWritable(home)
+const venueErrors = createVenueErrorStreak({ threshold: 3 })
+
 const signals = (): MonitorSignals => ({
   symbols: ['BTC/USDT', 'ETH/USDT'],
   alignmentOf: (symbol) => alignment[symbol],
   lastHeartbeatAtMs: heartbeatAtMs,
   heartbeatTimeoutMs: 30_000,
-  venueErrorStreak: 0,
+  venueErrorStreak: venueErrors.streak(),
   venueErrorThreshold: 3,
-  diskWriteFailed: false,
+  diskWriteFailed: !writeProbe.writable,
   now: () => tick,
 })
 
@@ -146,6 +151,33 @@ try {
   if (back.stale) failures.push("心跳已恢复却仍判失活")
   if (recoveries.length !== 1) failures.push("恢复没有留痕")
 
+  // 第五幕收尾：把心跳恢复 —— 否则第六幕里 heartbeat-lost 一直在触发，
+  // 档位永远回不到 normal，venue-error 的恢复路径就验不出来（第一版就漏了这一步）
+  heartbeatAtMs = tick
+  const afterWatchdog = loop.tickOnce()
+  process.stdout.write("  第五幕收尾 心跳恢复 → " + JSON.stringify({ 触发源: afterWatchdog.triggers, 档位: afterWatchdog.state.level }) + NL)
+  if (afterWatchdog.state.level !== "normal") failures.push("心跳恢复后档位应回 normal，实际 " + afterWatchdog.state.level)
+
+  // 第六幕：交易所连续报错（**经错误计数器**，不是直接塞信号）⇒ venue-error ⇒ 全局 reduce_only
+  venueErrors.recordError("timeout")
+  venueErrors.recordError("timeout")
+  const belowThreshold = loop.tickOnce()
+  process.stdout.write("  第六幕 连错 2 次（阈值 3） → " + JSON.stringify({ 触发源: belowThreshold.triggers, 档位: belowThreshold.state.level }) + NL)
+  if (belowThreshold.triggers.includes("venue-error")) failures.push("未达阈值就触发了 venue-error")
+  venueErrors.recordError("timeout")
+  const atThreshold = loop.tickOnce()
+  process.stdout.write("  第六幕 第 3 次错误 → " + JSON.stringify({ 触发源: atThreshold.triggers, 档位: atThreshold.state.level }) + NL)
+  if (!atThreshold.triggers.includes("venue-error")) failures.push("达阈值却没触发 venue-error")
+  if (atThreshold.state.level !== "reduce_only") failures.push("venue-error 应把 desk 降到 reduce_only，实际 " + atThreshold.state.level)
+  // 一次成功即清零，下一轮应恢复
+  venueErrors.recordOk()
+  const recoveredFromVenue = loop.tickOnce()
+  process.stdout.write("  第六幕 一次成功 → " + JSON.stringify({ 触发源: recoveredFromVenue.triggers, 档位: recoveredFromVenue.state.level }) + NL)
+  if (recoveredFromVenue.state.level !== "normal") failures.push("交易所恢复后档位应回 normal，实际 " + recoveredFromVenue.state.level)
+  // 写探针的读数也如实带进信号（healthy ⇒ 不产 disk-full）
+  process.stdout.write("  第六幕 写探针 → " + JSON.stringify({ writable: writeProbe.writable, reason: writeProbe.reason }) + NL)
+  if (!writeProbe.writable) failures.push("临时 home 应可写，写探针却报不可写：" + writeProbe.reason)
+
   // 复述判据：任何一条过渡都不能是 halt
   for (const event of transitions) {
     if ((event.payload as { to?: string }).to === 'halt') failures.push('journal 里出现了 halt 过渡：' + JSON.stringify(event.payload))
@@ -159,5 +191,5 @@ if (failures.length > 0) {
   for (const failure of failures) process.stderr.write('  - ' + failure + NL)
   process.exit(1)
 }
-process.stdout.write('[desk-loop-drill] ✓ 五幕 + 重连全部通过（#24 单标的不连坐、#25 全局封顶且无 halt、恢复自愈、gap report 齐全、dead-man 第一层看门狗生效且只喊一次）' + NL)
+process.stdout.write('[desk-loop-drill] ✓ 六幕 + 重连全部通过（#24 单标的不连坐、#25 全局封顶且无 halt、恢复自愈、gap report 齐全、dead-man 第一层看门狗生效且只喊一次、真实检测器接通）' + NL)
 process.exit(0)

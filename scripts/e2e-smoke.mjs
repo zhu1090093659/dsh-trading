@@ -40,13 +40,14 @@ const CHECKS = [
   },
   {
     // P5 步骤 1 的"装进进程"在不涉真钱下的最近一步：整条链真的一起跑（真 DB + 真 journal）。
-    // 四幕分别验 #24（单标的不连坐）与 #25（全局封顶 reduce_only、永不 halt）+ 恢复自愈 + 重连产 gap report。
+    // 各幕分别验 #24（单标的不连坐）、#25（全局封顶 reduce_only、永不 halt）、恢复自愈、重连产 gap report、
+    // dead-man 第一层看门狗、以及**真实检测器**（写探针 + 交易所错误计数器）接通。
     // 契约：drill 的**末行总结**与下面的 expect 是跨文件契约，改一边必须改另一边。
-    // 2026-10-01 实证：drill 从“四幕”扩到“五幕”（加 dead-man 看门狗）时只改了 drill，
-    // 这个包立刻报红并打印 drill 的真实末行 —— 断言确实咬得住；别把两边放宽成"包含点啥都行"。
-    name: 'desk 环路装配（五幕 + 重连产 gap report + dead-man 看门狗）',
+    // 2026-10-01 两次实证：drill 从“四幕”扩到“五幕”、再到“六幕”，每次都因为只改 drill 而让这个包报红并打印真实末行。
+    // 断言确实咬得住 —— 别把两边放宽成"包含点啥都行"。
+    name: 'desk 环路装配（六幕 + 重连产 gap report + 看门狗 + 真实检测器）',
     script: 'packages/tradectl/drill/desk-loop-drill.ts',
-    expect: ['五幕 + 重连全部通过', 'dead-man 第一层看门狗生效且只喊一次', 'gap.report 1 条'],
+    expect: ['六幕 + 重连全部通过', 'dead-man 第一层看门狗生效且只喊一次', '真实检测器接通', 'gap.report 1 条'],
     network: false,
   },
   {
