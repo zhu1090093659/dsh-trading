@@ -47,7 +47,7 @@ const CHECKS = [
     // 断言确实咬得住 —— 别把两边放宽成"包含点啥都行"。
     name: 'desk 环路装配（六幕 + 重连产 gap report + 看门狗 + 真实检测器）',
     script: 'packages/tradectl/drill/desk-loop-drill.ts',
-    expect: ['六幕 + 重连全部通过', 'dead-man 第一层看门狗生效且只喊一次', '真实检测器接通', 'gap.report 1 条'],
+    expect: ['六幕 + 重连全部通过', 'dead-man 第一层看门狗生效且只喊一次', '环路自带写探针生效', 'gap.report 1 条'],
     network: false,
   },
   {

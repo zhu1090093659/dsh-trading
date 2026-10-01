@@ -68,6 +68,8 @@ const loop = createDeskLoop({
   // 环路自己产心跳：dead-man 第一层（快环看门狗）据此判断"bot 自己心跳失活"，
   // 而不是靠问进程或看手机连没连上（设计 §13 #19）。
   heartbeatPath: join(home, "heartbeat.json"),
+  // 让**环路自己**探盘（而不是外面探完塞进信号）：这条真实路径此前只有单测覆盖
+  probeDir: home,
 })
 
 const observe: string[] = []
@@ -175,7 +177,11 @@ try {
   process.stdout.write("  第六幕 一次成功 → " + JSON.stringify({ 触发源: recoveredFromVenue.triggers, 档位: recoveredFromVenue.state.level }) + NL)
   if (recoveredFromVenue.state.level !== "normal") failures.push("交易所恢复后档位应回 normal，实际 " + recoveredFromVenue.state.level)
   // 写探针的读数也如实带进信号（healthy ⇒ 不产 disk-full）
-  process.stdout.write("  第六幕 写探针 → " + JSON.stringify({ writable: writeProbe.writable, reason: writeProbe.reason }) + NL)
+  process.stdout.write("  第六幕 写探针（外部） → " + JSON.stringify({ writable: writeProbe.writable, reason: writeProbe.reason }) + NL)
+  const loopProbe = loop.stats().lastProbeReason
+  process.stdout.write("  第六幕 写探针（环路自带） → " + JSON.stringify({ reason: loopProbe }) + NL)
+  if (loopProbe === null) failures.push("环路配了 probeDir 却没留下探针结论")
+  if (!String(loopProbe).includes("成功")) failures.push("临时 home 可写，环路自带探针却报：" + String(loopProbe))
   if (!writeProbe.writable) failures.push("临时 home 应可写，写探针却报不可写：" + writeProbe.reason)
 
   // 复述判据：任何一条过渡都不能是 halt
@@ -191,5 +197,5 @@ if (failures.length > 0) {
   for (const failure of failures) process.stderr.write('  - ' + failure + NL)
   process.exit(1)
 }
-process.stdout.write('[desk-loop-drill] ✓ 六幕 + 重连全部通过（#24 单标的不连坐、#25 全局封顶且无 halt、恢复自愈、gap report 齐全、dead-man 第一层看门狗生效且只喊一次、真实检测器接通）' + NL)
+process.stdout.write('[desk-loop-drill] ✓ 六幕 + 重连全部通过（#24 单标的不连坐、#25 全局封顶且无 halt、恢复自愈、gap report 齐全、dead-man 第一层看门狗生效且只喊一次、真实检测器接通、环路自带写探针生效）' + NL)
 process.exit(0)
