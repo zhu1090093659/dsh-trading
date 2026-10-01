@@ -27,6 +27,7 @@
   "packages/client-ui-trading/tsconfig.json": 0,
   "packages/client-ui-updater/tsconfig.json": 0,
   "packages/cn/tsconfig.json": 0,
+  "packages/cockpit/tsconfig.json": 0,
   "packages/connector-akshare/tsconfig.json": 12,
   "packages/connector-alpaca/tsconfig.json": 10,
   "packages/connector-binance/tsconfig.json": 1,
