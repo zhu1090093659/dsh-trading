@@ -17,6 +17,7 @@
     "contract-id:check": "node scripts/contract-id-gate.mjs",
     "coverage:check": "node scripts/coverage-gate.mjs --check",
     "coverage:update": "node scripts/coverage-gate.mjs --update",
+    "docs-link:check": "node scripts/docs-link-check.mjs",
     "e2e:smoke": "node scripts/e2e-smoke.mjs",
     "gates:all": "node scripts/gates-all.mjs",
     "home-guard:check": "node scripts/home-guard-check.mjs",

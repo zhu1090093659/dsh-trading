@@ -40,6 +40,8 @@ const GATES = [
   { name: 'typecheck-gate', command: 'node', args: ['scripts/typecheck-gate.mjs'] },
   // CI 接线：workflow 引用的脚本必须存在 —— 让"push 之后才发现"的断裂尽量在本地暴露
   { name: 'ci-wiring:check', command: 'node', args: ['scripts/ci-wiring-check.mjs'] },
+  // 文档相对链接：断链不会报错，只会让后人找不到那份 Owning Note（存量债入基线，只拦新增）
+  { name: 'docs-link:check', command: 'node', args: ['scripts/docs-link-check.mjs'] },
   { name: 'e2e:smoke', command: 'node', args: withNetwork ? ['scripts/e2e-smoke.mjs', '--with-network'] : ['scripts/e2e-smoke.mjs'] },
 ]
 

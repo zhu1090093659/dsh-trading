@@ -17,7 +17,7 @@ Status: proposed
 
 ## Decision
 
-目标架构见 [docs/design/bot-and-auto-trading.md](../../../docs/design/bot-and-auto-trading.md)（唯一事实之家）。**取代关系**：[实盘安全闸门双轨制](../../implemented/architecture/2026-08-29-dual-track-trading-gate.md) 的三态语义与正则枚举不变，本记录只改它的**应答者**（人 → mandate，越界升级到人）与**判定位置**（工具层 → 执行核）；[服务缝闸门](../../implemented/feature/2026-09-01-service-seam-order-gate.md) 的双轨结论在此升级为"执行核是唯一触达 venue 者"。落地时应在上述两篇 Note 上原地补充取代说明，不新建重复记录。
+目标架构见 [docs/design/bot-and-auto-trading.md](../../../../docs/design/bot-and-auto-trading.md)（唯一事实之家）。**取代关系**：[实盘安全闸门双轨制](../../implemented/architecture/2026-08-29-dual-track-trading-gate.md) 的三态语义与正则枚举不变，本记录只改它的**应答者**（人 → mandate，越界升级到人）与**判定位置**（工具层 → 执行核）；[服务缝闸门](../../implemented/feature/2026-09-01-service-seam-order-gate.md) 的双轨结论在此升级为"执行核是唯一触达 venue 者"。落地时应在上述两篇 Note 上原地补充取代说明，不新建重复记录。
 
 核心决定：
 

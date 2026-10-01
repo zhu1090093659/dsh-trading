@@ -1,6 +1,6 @@
 # Trading Bot 与 GUI 分离、Auto Trading 目标架构
 
-状态：**提案（未实现）**。决策记录见 [.agents/notes/proposed/2026-10-01-bot-gui-split-and-auto-trading.md](../../.agents/notes/proposed/2026-10-01-bot-gui-split-and-auto-trading.md)。
+状态：**提案（未实现）**。决策记录见 [.agents/notes/proposed/architecture/2026-10-01-bot-gui-split-and-auto-trading.md](../../.agents/notes/proposed/architecture/2026-10-01-bot-gui-split-and-auto-trading.md)。
 本文件是本次架构讨论的**唯一事实之家**：四份工作稿（进程与基础设施 / Agent 决策循环与授权 / 对外契约与客户端 / 兼容性与红队）的结论在此收敛，工作稿本身是过程材料，不作长期引用。
 
 ---

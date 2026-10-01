@@ -94,6 +94,7 @@ const MUST_BE_WIRED = [
   'coverage:check',
   'e2e:smoke',
   'ci-wiring:check',
+  'docs-link:check',
 ]
 
 /**

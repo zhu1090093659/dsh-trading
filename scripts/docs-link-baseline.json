@@ -1,0 +1,22 @@
+{
+  "broken": [
+    "/Users/zcl/code/dsh-trading/.agents/notes/archived/process/2026-09-06-headline-arena-issue66-decline.md → ../feature/2026-09-06-dsh-im-npm-embed.md",
+    "/Users/zcl/code/dsh-trading/.agents/notes/archived/process/2026-09-06-headline-arena-issue66-decline.md → ../feature/2026-09-06-hypothesis-scarcity-doctrine.md",
+    "/Users/zcl/code/dsh-trading/.agents/notes/archived/process/2026-09-06-pr67-68-maintenance-run.md → ../../../../../spikes/impl-symbol-search-EVIDENCE.json",
+    "/Users/zcl/code/dsh-trading/.agents/notes/archived/process/2026-09-10-sdk-upgrade-npm-0.1.5-rc.1.md → ../architecture/2026-09-06-unified-trading-role-presets.md",
+    "/Users/zcl/code/dsh-trading/.agents/notes/archived/process/2026-09-10-sdk-upgrade-npm-0.1.5-rc.1.md → ../feature/2026-09-13-trading-settings-ux-grouping.md",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-04-desktop-windows-installer-vcredist.md → ../../desktop/electron-builder.yml",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-04-desktop-windows-installer-vcredist.md → ../../desktop/resources/installer.nsh",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-04-desktop-windows-installer-vcredist.md → ../../desktop/scripts/fetch-redist.mjs",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-04-desktop-windows-installer-vcredist.md → ../../desktop/src/error.html",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-04-desktop-windows-installer-vcredist.md → ../../desktop/src/main.cjs",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-04-desktop-windows-installer-vcredist.md → ../../desktop/src/runtime.cjs",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-06-desktop-windows-import-file-url.md → ../../desktop/src/main.cjs",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-06-desktop-windows-import-file-url.md → ../../desktop/src/runtime.cjs",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-06-desktop-windows-import-file-url.md → ../../desktop/tests/host-symbol-normalizer.test.mjs",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-06-desktop-windows-import-file-url.md → ../../desktop/tests/runtime.test.mjs",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-08-review-fixes.md → 2026-09-08-tasks-default-master-workspace-write.md",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-08-review-fixes.md → 2026-09-08-watchlist-groups-manager.md",
+    "/Users/zcl/code/dsh-trading/.agents/notes/implemented/bug-fix/2026-09-09-desktop-crash-profile-partial-copy.md → 2026-09-08-desktop-default-trading-home.md"
+  ]
+}
