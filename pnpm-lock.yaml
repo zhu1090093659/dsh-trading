@@ -1842,6 +1842,9 @@ importers:
       '@dshtrading/authority':
         specifier: workspace:^
         version: link:../authority
+      '@dshtrading/contract':
+        specifier: workspace:^
+        version: link:../contract
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
