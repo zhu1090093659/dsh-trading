@@ -1,0 +1,23 @@
+{
+  "name": "@dshtrading/cockpit",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "description": "交易驾驶舱 SPA（独立构建产物，由 bot 的 edge 行托管静态资源）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@dshtrading/contract": "workspace:^",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.0.0"
+  }
+}
