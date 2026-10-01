@@ -37,3 +37,17 @@ npm run build:ios:sim                                    # 模拟器真编译
 
 - 只依赖契约包（**不得**依赖 bot 平面运行时包；`pnpm plane:check` 会拦 bot 闭包，本包不在其闭包内）；
 - CI 只跑 typecheck 与契约测试，**不跑 iOS 构建**（避免把 macOS runner 绑进日常 CI）；iOS 构建留给本地/发布流程。
+
+## 实测证据：仓库内骨架真编译通过（2026-10-01）
+
+不是 blank 模板 —— 编译的是**本目录里这份骨架**（App.tsx / app.json / package.json 均为本仓所有）：
+
+    NPM_INSTALL_EXIT=0
+    EXPO_INSTALL_EXIT=0
+    PREBUILD_EXIT=0
+    ** BUILD SUCCEEDED **
+    BUILD_EXIT=0
+
+命令序列：npm install → npx expo install react react-native expo-status-bar → npx expo prebuild -p ios → npm run build:ios:sim（xcodebuild，模拟器，Xcode 27.0 / iOS SDK 27.0）。完整日志：/tmp/mobile-build.log（临时文件，重建方式即上面四条命令）。
+
+提醒：ios/ 与 android/ 是 prebuild 生成物、不入库；换机器重建只需按「首次引导」四步。
