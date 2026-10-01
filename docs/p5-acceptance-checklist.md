@@ -134,3 +134,17 @@ connector-okx 自带测试已覆盖 demo/live 边界，**不必新写判据**：
     OKX_DEMO_API_KEY=... OKX_DEMO_SECRET_KEY=... OKX_DEMO_PASSPHRASE=... pnpm --filter @dshtrading/connector-okx test
 
 先看 demo-account 那几条**真的跑了**（不是 skipped），把输出（含余额/仓位响应与 x-simulated-trading 证据）贴进验收记录；再按需走下单用例。tradectl 的 paper-tier-okx.ts 与 assertSandboxRouting 是**第二条防线**（预检守门与路由断言），不是替代品 —— 权威判据在上面这些测试里。
+
+### 第 2 档验收到据：设凭证前后的对照（2026-10-01 实测基线）
+
+**设凭证前**（无 OKX_DEMO_*，本仓实测）：
+
+    $ pnpm --filter @dshtrading/connector-okx test
+    Test Files  7 passed | 1 skipped (8)
+    Tests       92 passed | 2 skipped (94)
+    ↓ test/demo-account.test.ts (2 tests | 2 skipped)
+    退出码 0
+
+**设凭证后应变成**：Test Files 8 passed | 0 skipped；Tests **94 passed | 0 skipped**，且 demo-account.test.ts 显示为通过而非跳过。
+
+⇒ **第 2 档的"真的打到模拟盘"以"那 2 条不再跳过、且它们带 x-simulated-trading: 1"为准**（请求头证据由 signature/trade 两条测试在无凭证下也会断言）。把这两次输出贴进验收记录即可对照。
