@@ -283,3 +283,26 @@ describe('重连路径', () => {
     expect(feed.stats().reconnects).toBe(1)
   })
 })
+describe('订阅载荷', () => {
+describe('订阅载荷为空时不发送', () => {
+  it('管理员：URL 式订阅（空载荷）不发订阅帧——发空串会被交易所当畸形 JSON 回 error 帧', () => {
+    // Given 一个 URL 式适配器（subscribePayload 返回空串）与两只标的
+    const { fake, feed } = fixture({ symbols: ['BTC/USDT', 'ETH/USDT'], subscribePayload: () => '' })
+    feed.start()
+    // When 连接打开
+    fake.open()
+    // Then 一条订阅帧都没发（第一版无条件发送 ⇒ Binance 回 {"error":{"code":3,...}}）
+    expect(fake.sent).toEqual([])
+  })
+
+  it('管理员：非空载荷按标的逐条发送（帧式订阅的交易所需要它）', () => {
+    // Given 一个帧式适配器
+    const { fake, feed } = fixture({ symbols: ['BTC/USDT', 'ETH/USDT'], subscribePayload: (symbol) => 'sub:' + symbol })
+    feed.start()
+    // When 连接打开
+    fake.open()
+    // Then 两只标的各发一条，顺序与 symbols 一致
+    expect(fake.sent).toEqual(['sub:BTC/USDT', 'sub:ETH/USDT'])
+  })
+})
+})

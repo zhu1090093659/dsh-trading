@@ -208,7 +208,13 @@ export function createStreamingFeed(options: FeedOptions): {
         attempt = 0
         state = 'live'
         note('open', 'transport open')
-        for (const symbol of options.symbols) options.transport.send(options.subscribePayload(symbol))
+        for (const symbol of options.symbols) {
+          const payload = options.subscribePayload(symbol)
+          // **空载荷不发**：URL 式订阅（Binance）没有订阅帧，而发一个空串会被交易所当成畸形 JSON
+          // 回一个 error 帧 —— 那会被算成"坏帧"，把真实解码问题淹没（2026-10-01 实测：
+          // Binance 返回 {"error":{"code":3,"msg":"Invalid JSON: EOF while parsing a value"}}）。
+          if (payload !== '') options.transport.send(payload)
+        }
         armHeartbeat()
         // 快照引导：拉到基准后对齐层才可能 aligned；失败只记事件
         if (options.bootstrap !== undefined) {
