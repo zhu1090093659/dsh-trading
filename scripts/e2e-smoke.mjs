@@ -37,6 +37,14 @@ const CHECKS = [
     network: false,
   },
   {
+    // P4 步骤 5 的切换演练：真文件 + 真环境变量 + 临时 DSH_HOME + 回滚点，退出码即断言。
+    // 接进常设冒烟的理由：它此前只被"跑过一次"，而它检验的正是"配置改错会不会把桌面壳
+    // 带到错误的地方或加载不该加载的东西"——这类回归没有人会主动去跑。
+    name: '桌面壳附着切换演练（含回滚点）',
+    script: 'desktop/scripts/attach-drill.mjs',
+    expect: ['6/6 步通过', '⑤ 回滚（删配置）⇒ 回到起本地 host'],
+  },
+  {
     name: '真实行情（Binance 公共流，需网络）',
     script: 'packages/tradectl/drill/binance-smoke.ts',
     expect: ['"alignment":"aligned"', '"badFrames":0'],

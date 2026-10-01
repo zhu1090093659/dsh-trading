@@ -97,3 +97,11 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 **验证状态（如实）**：决策层（`planStartup`/`resolveHostMode`/`loadBotUrl`）、凭据层（对真 edge 走真 HTTP）、注入层（`attachRequestHeaders` 纯函数）**都有测试**；`main.cjs` 的分支本身**只做了语法检查 + 全量 desktop 测试通过**，**没有在 Electron 里真跑过**（本机没有可跑该 App 的验证路径）。人工验证只需一条命令：
 
     DSH_TRADING_BOT_URL=http://127.0.0.1:<edge端口> npx electron desktop    # 期望日志出现 startup plan: attach 且不起本地 host
+
+### 附着演练接入常设冒烟（2026-10-01）
+
+`desktop/scripts/attach-drill.mjs` 已接进 `scripts/e2e-smoke.mjs`（成为第 3 项常设检查，`pnpm e2e:smoke` 默认跑）。
+
+**为什么必须接**：它此前只被"跑过一次"，而它检验的正是"配置改错会不会把桌面壳带到错误的地方或加载不该加载的东西" —— **这类回归没有人会主动去跑**。现在它与 A0 带外、shadow 复现并列。
+
+实测：``通过 3 / 失败 0 / 跳过 1``（``EXIT=0``；三项各 51–112ms；网络项仍需 ``--with-network``）。
