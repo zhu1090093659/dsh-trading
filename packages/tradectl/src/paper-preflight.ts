@@ -65,3 +65,45 @@ export function paperPreflight(input: PaperPreflightInput): PaperPreflight {
 
   return { ok: true, venue, credentials: { apiKey: apiKey as string, secret: secret as string, password: password as string } }
 }
+
+/**
+ * 模拟盘路由断言（据 2026-10-01 对 ccxt 4.5.84 的实测事实）：
+ *
+ * OKX 调 setSandboxMode(true) 后 **域名不变**（仍是 https://{hostname}），只在请求头加
+ * x-simulated-trading: 1。⇒ **只看 URL 无法证明自己在模拟盘**；必须校验请求头。
+ * 这条断言的用途：下单前把"我以为在模拟盘"变成"有证据在模拟盘"。
+ */
+export interface SandboxRoutingFacts {
+  /** ccxt 的 options.sandboxMode。 */
+  readonly sandboxMode: boolean
+  /** 交易所实例上的请求头（ccxt 的 exchange.headers）。 */
+  readonly headers: Readonly<Record<string, string>>
+  /** 实际会打的 REST 基址。 */
+  readonly apiUrl: string
+}
+
+export type SandboxRoutingVerdict = { readonly ok: true; readonly evidence: string } | { readonly ok: false; readonly reason: string }
+
+/** OKX 模拟盘的唯一可核证据：该请求头为 1。 */
+const OKX_SIMULATED_HEADER = 'x-simulated-trading'
+
+/**
+ * 断言当前实例确实指向模拟盘。
+ * @param venue - 交易所名（目前只有 okx 有专门判据）。
+ * @param facts - 从实例上读到的路由事实。
+ */
+export function assertSandboxRouting(venue: string, facts: SandboxRoutingFacts): SandboxRoutingVerdict {
+  if (facts.apiUrl.trim() === '') return { ok: false, reason: 'apiUrl 为空：无法证明目标环境' }
+  if (!facts.sandboxMode) return { ok: false, reason: 'sandboxMode 为 false：实例并未切到模拟盘' }
+  if (venue === 'okx') {
+    const value = facts.headers[OKX_SIMULATED_HEADER]
+    if (value !== '1') {
+      return {
+        ok: false,
+        reason: 'OKX 缺少 ' + OKX_SIMULATED_HEADER + ': 1 请求头（域名与主网相同，缺这个头就会打到主网）',
+      }
+    }
+    return { ok: true, evidence: venue + ' 模拟盘：sandboxMode=true 且 ' + OKX_SIMULATED_HEADER + '=1' }
+  }
+  return { ok: true, evidence: venue + ' 模拟盘：sandboxMode=true（该 venue 无专门请求头判据）' }
+}

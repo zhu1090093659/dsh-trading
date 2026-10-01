@@ -104,3 +104,13 @@
 - 三家都有 setSandboxMode，但**"调到模拟盘是否真的只打模拟盘"仍必须在运行时用 routing 证据核对**（见上一节）。
 
 本仓不依赖 ccxt，因此这张表**只在临时环境可复现**；上面的命令即为复现入口。
+
+### routing 证据怎么看（2026-10-01 实测 ccxt 4.5.84）
+
+OKX 调 setSandboxMode(true) 之后：**域名不变**（仍是 https://{hostname}），只在请求头加 x-simulated-trading: 1，同时 options.sandboxMode 变 true。⇒ **只看 URL 无法证明在模拟盘**。
+
+执行者拿到交易所实例后，下单**之前**必须跑这一条并保留输出：
+
+    assertSandboxRouting('okx', { sandboxMode: ex.options.sandboxMode, headers: ex.headers, apiUrl: ex.urls.api.rest })
+
+判据（已进测试，tradectl 255 例）：sandboxMode 必须为 true；**OKX 的 x-simulated-trading 必须为 1**（缺了就会打到主网，因为域名相同）；apiUrl 不能为空。通过时返回一行可入册的证据（如：okx 模拟盘：sandboxMode=true 且 x-simulated-trading=1）。

@@ -2,7 +2,7 @@
  * paper 档预检的判据测试（第 2 档唯一贴近真钱的一步）。
  */
 import { describe, expect, it } from 'vitest'
-import { paperPreflight } from '../src/paper-preflight.ts'
+import { assertSandboxRouting, paperPreflight } from '../src/paper-preflight.ts'
 
 const FULL = { OKX_API_KEY: 'k', OKX_API_SECRET: 's', OKX_API_PASSWORD: 'p' }
 
@@ -56,5 +56,40 @@ describe('paper 档预检（OKX 模拟盘）', () => {
     const result = paperPreflight({ env: { ...FULL, DSHT_ALLOW_LIVE: '0', OKX_LIVE: 'false' }, venue: 'okx' })
     // Then 通过
     expect(result.ok).toBe(true)
+  })
+})
+
+describe('模拟盘路由断言（据 ccxt 4.5.84 实测：OKX 不改域名、只加请求头）', () => {
+  it('管理员：sandboxMode 为真且带 x-simulated-trading=1 时才通过', () => {
+    // Given 实测中 setSandboxMode(true) 之后的事实
+    const facts = { sandboxMode: true, headers: { 'x-simulated-trading': '1' }, apiUrl: 'https://www.okx.com' }
+    // When 断言
+    const verdict = assertSandboxRouting('okx', facts)
+    // Then 通过并给出可入册的证据行
+    expect(verdict.ok).toBe(true)
+    if (verdict.ok) expect(verdict.evidence).toContain('x-simulated-trading=1')
+  })
+
+  it('管理员：sandboxMode 为假即拒绝（没切到模拟盘就是没切）', () => {
+    // Given 未切模拟盘
+    const verdict = assertSandboxRouting('okx', { sandboxMode: false, headers: {}, apiUrl: 'https://www.okx.com' })
+    // Then 拒绝
+    expect(verdict.ok).toBe(false)
+    if (!verdict.ok) expect(verdict.reason).toContain('sandboxMode')
+  })
+
+  it('管理员：OKX 报了 sandboxMode 却缺请求头时拒绝（域名与主网相同，这就会打到主网）', () => {
+    // Given sandboxMode 为真但头没带上
+    const verdict = assertSandboxRouting('okx', { sandboxMode: true, headers: {}, apiUrl: 'https://www.okx.com' })
+    // Then 拒绝
+    expect(verdict.ok).toBe(false)
+    if (!verdict.ok) expect(verdict.reason).toContain('x-simulated-trading')
+  })
+
+  it('管理员：apiUrl 为空时拒绝（没有目标就没有证据）', () => {
+    // Given 空基址
+    const verdict = assertSandboxRouting('okx', { sandboxMode: true, headers: { 'x-simulated-trading': '1' }, apiUrl: '  ' })
+    // Then 拒绝
+    expect(verdict.ok).toBe(false)
   })
 })
