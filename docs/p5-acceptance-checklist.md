@@ -76,3 +76,15 @@
 
 **agent 已完成的部分**：档 1 全流程 + 档 2/3 的全部前置工程（契约面、风控闸门、记录写入者、gap 收集器、运行时环路、dead-man 第一层、检测器三件套、真实行情驱动）。
 **agent 不能代做的部分**：申请凭证、签署授权、决定金额、在环、按停止键。
+
+## 附：venue 条件单能力的**复核方法**（2026-10-01 补）
+
+上面的能力表来自一次**临时环境里的测量**（本仓不依赖 ccxt —— packages/connector-ccxt 的依赖只有工作区包，node_modules/.pnpm 下也没有 ccxt）。因此这张表**在仓库里不可复现**，落地第 2 档前请按下面命令重新核对，以输出为准：
+
+    TMP=$(mktemp -d)
+    cd "$TMP" && npm init -y >/dev/null && npm i ccxt --no-audit --no-fund >/dev/null
+    node -e "import('ccxt').then(m=>{for(const id of ['binance','okx','bybit']){const e=new m[id]();console.log(id, JSON.stringify({oco:e.has.createOrderWithTakeProfitAndStopLoss, stopMarket:e.has.createStopMarketOrder, stopLoss:e.has.createStopLossOrder, takeProfit:e.has.createTakeProfitOrder}))}})"
+
+复核判据：OKX/Bybit 的 OCO 与止损市价单应为 true，Binance 的统一标志为 false（按各自实现取舍）。**未复核前不要把这几个标志当作既定事实。**
+
+另：第 2 档演练执行时，第一步必须打印并核对 routing 证据（sandbox 标志、请求头、目标 URL 主机），把那几行输出贴进验收记录 —— agent 不预置"模拟盘开关长什么样"的假设。
