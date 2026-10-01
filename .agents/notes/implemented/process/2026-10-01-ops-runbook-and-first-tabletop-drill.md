@@ -72,3 +72,20 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 **这条发现改变了工作量判断**：让"恢复必须产出 gap report"成立，不是接一根线，而是要先补三处**记录** —— 而这三处记录本身就是审计要求（被拒理由、降级动作、持仓变化都该留痕）。
 
 测试 4 例（真 node:sqlite + 真表结构）：missed 触发能取到并带到点时间；空窗口时报告为空但**缺口清单不为空**；被拒意图给条数并说明理由取不到；窗口边界是闭区间。
+
+## desk 记录写入者（2026-10-01 补，P5 步骤 1 第三根线）
+
+%%packages/tradectl/src/desk-records.ts%%：gap 收集器实测出"四类输入只有一类有数据源"后，本轮把**记录补上**。根因比预想深：%%intents%% / %%positions%% 两张表**连生产写入者都没有**（只有 safe-boot 的 UPDATE 与测试的 INSERT），所以这是"建 API"而不是"补调用"。
+
+| 能力 | 语义 |
+|---|---|
+| %%migrateDeskRecords%% | 幂等给 %%intents%% 补 %%reason%% 列（已有则不动）—— 拒绝必须带理由 |
+| %%recordIntent%% / %%recordIntentRejection%% | 首次落库；同 id 幂等更新状态；拒绝连理由一起写 |
+| %%recordPositionChange%% | upsert 持仓，**只在数量变化时**写 %%position.change%% 到 journal（每轮都写会把真正的变化淹掉）|
+| %%recordDegradation%% | 档位变化写 %%degradation.transition%%（gap report 的一类输入）|
+
+**收集器同步升级**：被拒意图现在**带理由**返回（%%i-1:desk level is reduce_only%%）；没有 %%reason%% 列的旧库仍能工作，但会在 %%missingInputs%% 里如实说明"只能给条数"。
+
+**测试 9 例**（真 node:sqlite + 真 journal）：迁移幂等；拒绝带理由且收集器给出理由分布；持仓只在变化时记 journal（首次 true / 相同 false / 变化 true，且 journal 恰好两条）；降级动作被收集器认出；意图重复落库幂等。
+
+**仍未接**：写入 API **没有任何运行时调用者**；收集器**尚未消费** journal 里的持仓历史（%%positionsBefore%% 仍为空）。

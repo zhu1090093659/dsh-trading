@@ -48,13 +48,16 @@ export function collectGapReport(options: GapCollectorOptions, window: GapWindow
     .all(window.disconnectedFromMs, window.reconnectedAtMs) as { schedule_id: string; due_at_ms: number }[]
   const missedTriggers = missedRows.map((row) => row.schedule_id + '@' + String(row.due_at_ms))
 
-  // ② 被拒意图：能数条数，但没有理由列
-  const rejectedRows = options.orders
-    .prepare("SELECT intent_id FROM intents WHERE state = 'rejected' AND updated_ms >= ? AND updated_ms <= ? ORDER BY updated_ms")
-    .all(window.disconnectedFromMs, window.reconnectedAtMs) as { intent_id: string }[]
-  const rejectedIntents = rejectedRows.map((row) => row.intent_id)
-  if (rejectedIntents.length > 0) {
-    missingInputs.push('被拒意图的理由：intents 表没有理由列，只能给出条数（' + String(rejectedIntents.length) + ' 条）')
+  // ② 被拒意图：有 reason 列就带理由（desk-records 的迁移会补上），没有则如实说明只能给条数
+  const intentColumns = options.orders.prepare('PRAGMA table_info(intents)').all() as { name: string }[]
+  const hasReasonColumn = intentColumns.some((column) => column.name === 'reason')
+  const rejectedRows = (hasReasonColumn
+    ? options.orders.prepare("SELECT intent_id, reason FROM intents WHERE state = 'rejected' AND updated_ms >= ? AND updated_ms <= ? ORDER BY updated_ms")
+    : options.orders.prepare("SELECT intent_id, NULL AS reason FROM intents WHERE state = 'rejected' AND updated_ms >= ? AND updated_ms <= ? ORDER BY updated_ms")
+  ).all(window.disconnectedFromMs, window.reconnectedAtMs) as { intent_id: string; reason: string | null }[]
+  const rejectedIntents = rejectedRows.map((row) => (row.reason === null || row.reason === '' ? row.intent_id : row.intent_id + ':' + row.reason))
+  if (!hasReasonColumn && rejectedIntents.length > 0) {
+    missingInputs.push('被拒意图的理由：intents 表没有 reason 列（跑 migrateDeskRecords 可补），只能给出条数（' + String(rejectedIntents.length) + ' 条）')
   }
 
   // ③ 降级动作：journal 里目前没有降级事件的写入点
@@ -63,7 +66,7 @@ export function collectGapReport(options: GapCollectorOptions, window: GapWindow
     .all(window.disconnectedFromMs, window.reconnectedAtMs) as { seq: number }[]
   const degradationActions = degradationRows.map((row) => String(row.seq))
   if (degradationActions.length === 0) {
-    missingInputs.push('降级动作：journal 里没有 degradation* 事件（当前没有写入点），期间档位变化取不到')
+    missingInputs.push('降级动作：本窗口内 journal 没有 degradation* 事件（写入点是 recordDegradation；若期间确实没有档位变化，这条会一直在）')
   }
 
   // ④ 持仓：只能拿"之后"，拿不到"之前"
