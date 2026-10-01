@@ -16,12 +16,17 @@
  *   node scripts/gates-all.mjs --self-test      # 自测：用一个必然失败的命令验证退出码传播
  */
 import { spawnSync } from 'node:child_process'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const NL = String.fromCharCode(10)
 const args = process.argv.slice(2)
 const withNetwork = args.includes('--with-network')
+// **安装态门禁**（需要已构建的 profile，故默认不跑）：P1 的验收判据就是 bot 安装闭包，
+// 它必须显式给交易 home —— 脚本自带守卫，在宿主 `~/.dsh` 上会 exit 2 并拒绝猜测。
+const withInstalled = args.includes('--with-installed')
 
 /** 门禁清单：命令 + 参数 + 说明（顺序即执行顺序，快的前面）。 */
 const GATES = [
@@ -45,12 +50,22 @@ const GATES = [
   { name: 'e2e:smoke', command: 'node', args: withNetwork ? ['scripts/e2e-smoke.mjs', '--with-network'] : ['scripts/e2e-smoke.mjs'] },
 ]
 
+/** 安装态门禁：只在 --with-installed 时加入（需要 ~/.dsh-trading 下已构建的 bot profile）。 */
+const INSTALLED_GATES = [
+  {
+    name: 'bot-closure:check（安装态，P1 验收）',
+    command: 'pnpm',
+    args: ['bot-closure:check'],
+    env: { DSH_HOME: join(homedir(), '.dsh-trading') },
+  },
+]
+
 /** 自测用：一个必然失败的门禁，验证退出码确实被传播（不许出"红字但 exit 0"）。 */
 const SELF_TEST_GATE = { name: 'self-test（必然失败）', command: 'node', args: ['-e', 'process.exit(3)'] }
 
 function runGate(gate) {
   const started = Date.now()
-  const result = spawnSync(gate.command, gate.args, { cwd: ROOT, encoding: 'utf8' })
+  const result = spawnSync(gate.command, gate.args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...(gate.env ?? {}) } })
   const elapsedMs = Date.now() - started
   const ok = result.status === 0
   if (!ok) {
@@ -79,7 +94,7 @@ function main() {
   const only = args.find((arg) => arg.startsWith('--only'))
   const selected =
     only === undefined
-      ? GATES
+      ? [...GATES, ...(withInstalled ? INSTALLED_GATES : [])]
       : GATES.filter((gate) => (only.includes('=') ? only.split('=')[1] ?? '' : args[args.indexOf(only) + 1] ?? '').split(',').includes(gate.name))
 
   // **空洞成功守卫**：选不中任何门禁时必须报错 —— 否则 `--only 拼错的名字` 会输出"全部通过"、
