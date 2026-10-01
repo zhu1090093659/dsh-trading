@@ -39,6 +39,14 @@ const CHECKS = [
     network: false,
   },
   {
+    // P5 步骤 1 的"装进进程"在不涉真钱下的最近一步：整条链真的一起跑（真 DB + 真 journal）。
+    // 四幕分别验 #24（单标的不连坐）与 #25（全局封顶 reduce_only、永不 halt）+ 恢复自愈 + 重连产 gap report。
+    name: 'desk 环路装配（四幕 + 重连产 gap report）',
+    script: 'packages/tradectl/drill/desk-loop-drill.ts',
+    expect: ['四幕 + 重连全部通过', 'gap.report 1 条'],
+    network: false,
+  },
+  {
     // P4 步骤 5 的切换演练：真文件 + 真环境变量 + 临时 DSH_HOME + 回滚点，退出码即断言。
     // 接进常设冒烟的理由：它此前只被"跑过一次"，而它检验的正是"配置改错会不会把桌面壳
     // 带到错误的地方或加载不该加载的东西"——这类回归没有人会主动去跑。
