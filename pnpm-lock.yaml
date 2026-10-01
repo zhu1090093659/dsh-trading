@@ -1823,6 +1823,10 @@ importers:
         version: 3.2.7(@types/node@24.19.0)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
 
   packages/tradectl:
+    dependencies:
+      '@dshtrading/authority':
+        specifier: workspace:^
+        version: link:../authority
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
