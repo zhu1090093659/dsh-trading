@@ -69,3 +69,17 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 %%desktop/scripts/attach-drill.mjs%% 是可运行的切换演练（真文件/真环境变量/临时 DSH_HOME/回滚点），6/6 步通过、退出码 0；范围只覆盖"配置 → 决策"层（**不启动 Electron**）。
 
 **接线的前置条件（比预期深）**：远端 bot 的 %%/v1%% 要求 Bearer 设备令牌，所以"把窗口指到 botUrl"并不够 —— 桌面壳需要**自己的设备凭据**（走配对流程 + Keychain），否则只会打开一个未授权的页面。因此接线 = 设备凭据 + 数据源守卫（已就绪）+ 回滚路径，而不是一行 URL 替换。
+
+### 桌面壳设备凭据（2026-10-01 续，接线的第二块）
+
+`desktop/src/device-credential.cjs`：配对 → 落盘 → 取授权头 → 忘记，纯 CJS 无第三方依赖。
+
+三条立场：
+
+1. **凭据与地址绑定**：密钥只在它配对时用的那个地址上使用；换了地址（哪怕只差端口）`authorization()` 返回 undefined。**一次配置改错不该把设备密钥交给另一个 host。**
+2. **落盘 0600**：写 ``<DSH_HOME>/attach-device.json` 并显式 `chmod`（`writeFileSync` 的 mode 受 umask 影响）。移动端有 Keychain，桌面端没有等价物，就退而求其次：限制权限 + 地址绑定 + 随时可撤销。
+3. **401 ⇒ forget**：被 revoke 后继续拿旧密钥重试是最糟的状态（看起来在跑、每条请求都被拒）。
+
+**测试 5 例对着真实 edge 走真 HTTP**（`desktop/tests/device-credential.test.mjs`，import 构建产物 `packages/tradectl/lib/edge.js`）：配对后端到端读到 A0（`/a0/ping`)；文件权限实测 `0600`；换地址不外发；forget 后 `/a0/ping` 变 401；坏码 ⇒ `PAIRING_CODE_UNKNOWN`、连不上 ⇒ `PAIR_UNREACHABLE`（都不抛错）。
+
+**⑤ 剩余**：把这三块（attach-mode 决策 / device-credential 凭据 / source-guard 守卫）接进 `main.cjs` 的启动分支，并在 Electron 里跑一次（本机尚无该验证路径，接线时要如实标注）。
