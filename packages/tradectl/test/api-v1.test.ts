@@ -74,7 +74,12 @@ describe('路径与版本协商', () => {
   })
 
   it('管理员：非 GET 一律 405（这个面只读）', () => {
-    expect(handleV1({ method: 'POST', path: '/v1/cards', headers: {} }, surface()).status).toBe(405)
+    // Given 一个 POST 请求
+    const request = { method: 'POST', path: '/v1/cards', headers: {} }
+    // When 交给面处理
+    const response = handleV1(request, surface())
+    // Then 405（写路径尚未实现，绝不静默当读处理）
+    expect(response.status).toBe(405)
   })
 })
 
