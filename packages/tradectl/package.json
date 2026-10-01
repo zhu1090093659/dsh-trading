@@ -28,5 +28,8 @@
     "tsdown": "^0.22.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@dshtrading/authority": "workspace:^"
   }
 }
