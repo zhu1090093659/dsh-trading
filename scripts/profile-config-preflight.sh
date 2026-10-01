@@ -28,6 +28,17 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # dsh-trading 独立 home（2026-09-08 DSH_HOME 分离）；可用环境变量 DSH_HOME 覆盖。
 DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
 
+# 守卫（2026-10-01，与 refresh-trading-web-profile.sh 同一策略）：agent 会话会继承宿主实例的
+# DSH_HOME（~/.dsh）。对着宿主 home 做配置预检，结论是错的（检的不是交易实例）——拒绝执行。
+case "$DSH_HOME" in
+  *-trading*) ;;
+  *)
+    echo "拒绝执行：DSH_HOME=$DSH_HOME 看起来不是 trading home。" >&2
+    echo "请显式设置 DSH_HOME=$HOME/.dsh-trading 后重试。" >&2
+    exit 2
+    ;;
+esac
+
 if [ $# -eq 0 ]; then
   echo "用法: $0 <profile> [profile ...]" >&2
   exit 1

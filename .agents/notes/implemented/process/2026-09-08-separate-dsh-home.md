@@ -95,3 +95,30 @@ Status: implemented
   数据、又误删 dsh web 宿主共享 home）；桌面壳 wrapper 参数改经 `open --args` 转发；
   `sync-profile-overrides.mjs` 空白 `DSH_HOME` 视为未设；`content-insight` 技能与
   连接器/技能指南、桌面 README、crypto 预设注释统一改 `~/.dsh-trading`。
+
+## DSH_HOME 守卫全仓扫查（2026-10-01）
+
+起因：`ui-functional-check.mjs` 被实测发现会拿**继承的宿主 home**（`~/.dsh`）起 trading-web 实例、并写入宿主的 storages/task-board/trading-tasks。于是把全仓读 `DSH_HOME` 的地方逐个查了一遍，**又找到两处漏网**：
+
+| 位置 | 原行为 | 风险 | 现状 |
+|---|---|---|---|
+| `scripts/refresh-trading-web-profile.sh` | 默认 `~/.dsh-trading`，读到 `~/.dsh` 时拒绝 | — | 已有守卫（2026-10-01 加） |
+| `scripts/sync-profile-overrides.mjs` | 同上 | — | 已有守卫 |
+| `scripts/bot-closure-acceptance.mjs` | 缺参时默认 trading home，`DSH_HOME` 不像交易 home 就拒绝猜测 | — | 已有守卫（round 63 加） |
+| `scripts/ui-functional-check.mjs` | **`DSH_HOME` 优先** | 拿宿主 home 起实例、写入宿主数据 | **已修**（round 67） |
+| `scripts/clean-knowledge-author-tags.mjs` | **`DSH_HOME` 优先**，且**会写知识库** | 改的不是交易数据而是宿主数据 | **已修**（本轮） |
+| `scripts/profile-config-preflight.sh` | **`DSH_HOME` 优先** | 对着宿主 home 做预检，结论是错的 | **已修**（本轮） |
+
+**统一策略**（三处新守卫一致）：`DSH_HOME` 只有在"看起来像 trading home"（路径含 `-trading`）时才被采信；否则打印明确的中文提示并 `exit 2`，让人显式指定。
+
+**实测证据**：
+
+    # 继承宿主 home 时（两处都拒绝）
+    clean-knowledge: 拒绝执行：DSH_HOME 指向 /Users/zcl/.dsh，看起来是宿主实例的 home，不是 trading home。   EXIT=2
+    preflight:       拒绝执行：DSH_HOME=/Users/zcl/.dsh 看起来不是 trading home。                          EXIT=2
+    # 显式 trading home 时（脚本本身仍可用）
+    DSH_HOME=/Users/zcl/.dsh-trading clean-knowledge --dry-run → 目标文件 /Users/zcl/.dsh-trading/knowledge/cards.json   EXIT=0
+
+**为什么这类缺陷危险**：它们**不会报错**。跑在错误的 home 上时脚本照常"成功"，只是作用在另一个实例的数据上 —— 本会话的 ui:check 就是活例：8 项断言"全绿"，其中一整组其实是因为环境缺数据而 SKIP；改到正确 home 后变成 12 项全绿。**跑错 home 的门禁验的根本不是目标系统。**
+
+**一条操作教训**（本轮连栽三次）：修文本时我试图用"读文件 + 字符串替换"的补丁脚本，三次都因为引号/插值写错而失败（`String.raw` 里的 `${...}` 仍会插值，裸写变量名则原样落入文件）。**结论：改既有文件的文本，直接用 `tools.edit`（参数是值、不经代码解析）**，不要写替换脚本。

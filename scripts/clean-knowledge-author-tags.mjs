@@ -28,7 +28,19 @@ import path from 'node:path'
 const argv = process.argv.slice(2)
 const apply = argv.includes('--apply')
 const fileIdx = argv.indexOf('--file')
-const file = fileIdx > -1 ? argv[fileIdx + 1] : path.join(process.env.DSH_HOME?.trim() || path.join(os.homedir(), '.dsh-trading'), 'knowledge', 'cards.json')
+/**
+ * home 守卫（2026-10-01，与 refresh / sync / bot-closure / ui-check 同一策略）：
+ * agent 会话会继承**宿主实例**的 DSH_HOME（~/.dsh），而本脚本**会写**知识库 ——
+ * 那样改的就不是交易数据，而是宿主实例的数据（AGENTS.md 明令禁止）。
+ * 只有看起来像 trading home（路径含 -trading）的 DSH_HOME 才被采信；否则拒绝执行。
+ */
+const inheritedHome = process.env.DSH_HOME?.trim()
+if (inheritedHome !== undefined && inheritedHome !== '' && !inheritedHome.includes('-trading')) {
+  console.error('拒绝执行：DSH_HOME 指向 ' + inheritedHome + '，看起来是宿主实例的 home，不是 trading home。')
+  console.error('本脚本会写知识库，请显式设置 DSH_HOME=$HOME/.dsh-trading 或直接传文件路径后重试。')
+  process.exit(2)
+}
+const file = fileIdx > -1 ? argv[fileIdx + 1] : path.join(inheritedHome || path.join(os.homedir(), '.dsh-trading'), 'knowledge', 'cards.json')
 
 const PERIOD_TAG_RE = /^\d{4}(H1|H2|Q[1-4])$/i
 
