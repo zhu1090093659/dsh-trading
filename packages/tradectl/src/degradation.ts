@@ -21,9 +21,13 @@
  * @module @dshtrading/tradectl/degradation
  */
 import { readKillState, type KillState } from './edge.ts'
+import { ESCALATE_AFTER_MS, type DeskLevel } from './risk-gate.ts'
 
-/** 风险档位。halt = 全停（只可能来自带外）。 */
-export type RiskMode = 'normal' | 'reduce_only' | 'halt'
+/**
+ * 风险档位。**词汇只有一套**：desk 档位定义在 risk-gate.ts（DeskLevel，与价格侧
+ * alignment 严格不相交）；这里只是它在降级决策里的别名，避免两套并行词汇。
+ */
+export type RiskMode = DeskLevel
 
 /** 触发源。除 out-of-band-halt 外，全部是自动路径。 */
 export type DegradationTrigger =
@@ -46,8 +50,7 @@ export interface TriggerContext {
   readonly reduceOnlyForMs?: number | undefined
 }
 
-/** 升级到人的阈值（#24：连续禁开新仓超过 T 秒必须升级）。 */
-export const ESCALATE_AFTER_MS = 10 * 60 * 1000
+// 升级到人的阈值只有一份，家在 risk-gate.ts（#24 的 desk 级语义归那里）；这里只引用。
 
 /** 一次降级决策。 */
 export interface DegradationDecision {

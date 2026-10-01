@@ -11,12 +11,12 @@ import {
   assertNoForbiddenDegradation,
   buildGapReport,
   decideDegradation,
-  ESCALATE_AFTER_MS,
   ForbiddenDegradationError,
   gateNewRisk,
   recoverOnSnapshot,
   type StartupForm,
 } from '../src/degradation.ts'
+import { ESCALATE_AFTER_MS } from '../src/risk-gate.ts'
 
 const dirs: string[] = []
 afterEach(() => {
