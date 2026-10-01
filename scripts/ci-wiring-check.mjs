@@ -76,4 +76,47 @@ if (problems.length > 0) {
   process.stderr.write('[ci-wiring] ✗ ' + String(problems.length) + ' 处接线断裂（push 之后才会在 CI 上炸）' + NL)
   process.exit(1)
 }
+/**
+ * 覆盖方向：这些门禁**必须**出现在 CI 或 gates:all 里（"建好了却没接线，与散文无异"）。
+ * 2026-10-01 本会话在四处发现过这一类漂移，所以把它写成断言而不是靠人记。
+ */
+const MUST_BE_WIRED = [
+  'typecheck-gate',
+  'i18n:check',
+  'patch-id:check',
+  'live-trading:check',
+  'plane:check',
+  'test:audit',
+  'test:scripts',
+  'test:desktop',
+  'contract-id:check',
+  'home-guard:check',
+  'coverage:check',
+  'e2e:smoke',
+  'ci-wiring:check',
+]
+
+/**
+ * 明确**不**进 CI 的门禁与原因（有原因就不算漏接线；没写原因的一律视为漏）。
+ */
+const INTENTIONALLY_UNWIRED = {
+  'ui:check': '需要 headless Chrome 并真起一个宿主实例；作为人工/发布前门禁',
+  'bot-closure:check': '需要一个已构建的 bot profile 目录；属安装态验收，不在 CI 跑',
+}
+
+const allWorkflowText =
+  workflowPaths.map((path) => readFileSync(path, 'utf8')).join(NL) +
+  NL + (existsSync(join(ROOT, 'scripts/gates-all.mjs')) ? readFileSync(join(ROOT, 'scripts/gates-all.mjs'), 'utf8') : '')
+
+const unwired = MUST_BE_WIRED.filter((name) => !allWorkflowText.includes(name))
+if (unwired.length > 0) {
+  for (const name of unwired) process.stderr.write('[ci-wiring] ✗ 门禁没接线：' + name + '（CI 与 gates:all 都没有它）' + NL)
+  process.exit(1)
+}
+const undocumented = Object.keys(INTENTIONALLY_UNWIRED).filter((name) => MUST_BE_WIRED.includes(name))
+if (undocumented.length > 0) {
+  process.stderr.write('[ci-wiring] ✗ 同一门禁既在必须接线清单又在豁免清单：' + undocumented.join('、') + NL)
+  process.exit(1)
+}
+process.stdout.write('[ci-wiring] ✓ 必须接线的 ' + String(MUST_BE_WIRED.length) + ' 条门禁都在 CI 或 gates:all 里；' + String(Object.keys(INTENTIONALLY_UNWIRED).length) + ' 条带原因豁免' + NL)
 process.stdout.write('[ci-wiring] ✓ 接线完整（CI 引用的脚本都存在）' + NL)

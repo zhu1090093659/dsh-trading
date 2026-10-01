@@ -169,3 +169,11 @@ scripts/gates-all.mjs 顺序跑 14 条门禁，**显式收集每条退出码**�
 **实现要点（第一版踩坑）**：%%node scripts/x.mjs%% **必须按所在步骤的 %%working-directory%% 解析**。第一版没做，于是把 %%desktop-release.yml%% 里 %%working-directory: desktop%% 下的 %%node scripts/verify-runtime-toolchain.mjs%% 误报成断裂（实际文件在 %%desktop/scripts/%%）。自测里专门有一条守着这个语义，另一条守着"别把守卫修成永真"（子目录下真缺文件时仍要报错）。
 
 **实测**：3 个 workflow、18 处 pnpm 脚本、8 处 node 脚本 ⇒ **接线完整**，exit 0。自测 3 例（进 %%test:scripts%%）。
+
+### 覆盖方向 + 一次 **grep 假零命中**事故（2026-10-01）
+
+%%ci-wiring-check.mjs%% 现在查**两个方向**：① 引用完整性（workflow 里写的脚本必须存在，按步骤的 %%working-directory%% 解析）；② **覆盖完整性** —— 一份 %%MUST_BE_WIRED%%（13 条）必须真的出现在 CI 或 %%gates:all%% 里，而**不进 CI 的门禁必须写明原因**（%%INTENTIONALLY_UNWIRED%%：%%ui:check%% 需 headless Chrome 真起实例、%%bot-closure:check%% 需已构建的 bot profile）。
+
+**事故记录（值得单独记）**：本轮我用 %%grep -rn "e2e\|smoke" .github/%% 得到**零命中**，据此几乎写下"我此前记录 e2e-smoke 已进 CI 是错的"这条更正 —— 而 %%tools.read%% 打开 ci.yml 一看，**第 69 行就是 %%node scripts/e2e-smoke.mjs%%**（contract-id 在 64、home-guard 在 74）。改用 node 精确复核后确认：**三条门禁确实都在 CI 里，我原来的记录是对的，那次 grep 才是错的**。
+
+**教训**：当一次搜索对"你认为存在的东西"报告"不存在"时，**必须换一种方法复核再下结论**（读文件 / 用 node 扫），否则会把一条假更正写进仓库 —— 这比不写更正更糟。本会话的同类事故已累计：摘要不可靠（3 次）、单次搜索不可靠（1 次）。

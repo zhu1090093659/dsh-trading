@@ -72,6 +72,11 @@ jobs:
       # 写宿主数据、对着宿主 home 做预检），而它们**都不报错**——脚本照常成功，只是作用在
       # 另一个实例的数据上。四个补丁挡不住第五个脚本，所以把策略写成门禁。
       - run: pnpm home-guard:check
+      # CI 接线门禁（双向）：① workflow 里引用的 pnpm 脚本与 node 脚本必须存在（按步骤的
+      # working-directory 解析）；② 一份"必须接线"的门禁清单必须真的出现在 CI 或 gates:all 里
+      # ——后者堵的是"门禁建好了却没接线、与散文无异"这一类漂移（本仓已实证四次）。
+      # 不进 CI 的门禁必须写明原因（如 ui:check 需 headless Chrome 真起实例）。
+      - run: pnpm ci-wiring:check
 
   # 测试矩阵（Tier 1 主体）：与发版管线同源（install+build+test）。
   test:
