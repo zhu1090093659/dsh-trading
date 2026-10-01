@@ -158,6 +158,44 @@ export interface EdgeGateway {
   close(): Promise<void>
 }
 
+/** 配对端点路径（唯一在鉴权之前的路径）。 */
+const PAIR_PATH = '/pair/redeem'
+const PAIR_MAX_BODY_BYTES = 4 * 1024
+/** 同源窗口内失败上限与窗口长度（防爆破；成功即清零）。 */
+const PAIR_FAILURE_LIMIT = 8
+const PAIR_FAILURE_WINDOW_MS = 10 * 60 * 1000
+
+/** 读一个小 JSON 体；超上限或不是对象就拒绝。 */
+function readJsonBody(req: IncomingMessage, limitBytes: number): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    let size = 0
+    const chunks: Buffer[] = []
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length
+      if (size > limitBytes) {
+        reject(new Error('body too large'))
+        req.destroy()
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => {
+      try {
+        const text = Buffer.concat(chunks).toString('utf8')
+        const parsed: unknown = text.length === 0 ? {} : JSON.parse(text)
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          reject(new Error('not an object'))
+          return
+        }
+        resolve(parsed as Record<string, unknown>)
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
+    req.on('error', reject)
+  })
+}
+
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
   res.end(JSON.stringify(payload))
@@ -183,9 +221,44 @@ export async function createEdgeGateway(options: EdgeOptions): Promise<EdgeGatew
   }
   mkdirSync(join(options.killStatePath, '..'), { recursive: true, mode: 0o700 })
   const business = new Map<string, (req: IncomingMessage, res: ServerResponse) => void>()
+  /** 配对失败计数（同源维度，防爆破）。 */
+  const pairFailures = new Map<string, { count: number; firstAtMs: number }>()
 
   const server: Server = createServer((req, res) => {
     const path = new URL(req.url ?? '/', 'http://' + (req.headers.host ?? 'edge')).pathname
+    // 配对端点**必须在鉴权之前**：它本身就是用来换取鉴权凭据的（这是唯一一条这样的路径）。
+    // 防护：一次性码 + TTL（注册表内）之外，这里再加**同源失败次数上限** —— 内网暴露下端口是
+    // 可达的，没有上限就等于把配对码交出去给人爆破。
+    if (path === PAIR_PATH) {
+      if (req.method !== 'POST') {
+        sendJson(res, 405, { code: 'PAIR_METHOD_NOT_ALLOWED', message: 'use POST ' + PAIR_PATH })
+        return
+      }
+      const source = req.socket.remoteAddress ?? 'unknown'
+      const atMs = options.now()
+      const record = pairFailures.get(source)
+      if (record !== undefined && atMs - record.firstAtMs < PAIR_FAILURE_WINDOW_MS && record.count >= PAIR_FAILURE_LIMIT) {
+        sendJson(res, 429, { code: 'PAIR_RATE_LIMITED', message: 'too many failed pairing attempts; try again later' })
+        return
+      }
+      readJsonBody(req, PAIR_MAX_BODY_BYTES)
+        .then((body) => {
+          const code = typeof body.code === 'string' ? body.code : ''
+          const name = typeof body.name === 'string' && body.name.trim().length > 0 ? body.name.trim().slice(0, 64) : 'device'
+          const result = options.registry.redeem({ code, name })
+          if ('error' in result) {
+            if (record === undefined || atMs - record.firstAtMs >= PAIR_FAILURE_WINDOW_MS) pairFailures.set(source, { count: 1, firstAtMs: atMs })
+            else pairFailures.set(source, { count: record.count + 1, firstAtMs: record.firstAtMs })
+            sendJson(res, 400, { code: result.error, message: 'pairing code rejected' })
+            return
+          }
+          // 成功即清掉该来源的失败计数（否则正常用户攒够失败次数也会被自己挡住）
+          pairFailures.delete(source)
+          sendJson(res, 200, { deviceId: result.device.id, secret: result.secret, scopes: result.device.scopes })
+        })
+        .catch(() => { sendJson(res, 400, { code: 'PAIR_BODY_INVALID', message: 'expected a JSON object body' }) })
+      return
+    }
     const a0 = (A0_PATHS as readonly string[]).includes(path)
     if (!a0) {
       // 业务面（行情/agent）：鉴权之外的一切问题都只影响这一条路径。
