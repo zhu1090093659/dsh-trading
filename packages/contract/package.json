@@ -11,7 +11,11 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./core": {
+      "types": "./lib/core.d.ts",
+      "default": "./lib/core.js"
+    }
   },
   "files": [
     "lib"
