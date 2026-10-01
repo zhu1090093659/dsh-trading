@@ -4,7 +4,7 @@
  * 说明：公共市场流无需任何交易凭据；本脚本不下任何单。
  */
 import { createAlignment, createStreamingFeed, type AlignmentParams } from '../lib/index.js'
-import { binanceStreamUrl, parseBinanceFrame } from '../lib/adapters/binance.js'
+import { binanceStreamUrl, fetchBinanceSnapshot, parseBinanceFrame } from '../lib/adapters/binance.js'
 import { createNodeWebSocketTransport } from '../lib/transport/node-ws.js'
 
 const params: AlignmentParams = {
@@ -33,6 +33,11 @@ const feed = createStreamingFeed({
   url,
   symbols: [],
   decode: (text, epoch) => parseBinanceFrame(text, epoch),
+  bootstrapSymbols: ['BTC/USDT', 'ETH/USDT'],
+  bootstrap: async (symbols) => {
+    const snapshots = await Promise.all(symbols.map((symbol) => fetchBinanceSnapshot(symbol, 1)))
+    return snapshots.filter((snapshot) => snapshot !== undefined)
+  },
   subscribePayload: () => '',
   heartbeatTimeoutMs: 20_000,
   reconnectBaseMs: 1_000,
@@ -41,6 +46,17 @@ const feed = createStreamingFeed({
   subscribeRefillPerSec: 0.5,
   onEvent: (event) => process.stdout.write('[feed] ' + event.kind + ': ' + event.detail + String.fromCharCode(10)),
 })
+
+// 周期刷新基准快照：年龄预算 10s ⇒ 刷新节奏 5s（预算必须 ≥ 刷新节奏，否则永远 stale）
+const refresh = setInterval(() => {
+  void Promise.all(['BTC/USDT', 'ETH/USDT'].map((symbol) => fetchBinanceSnapshot(symbol, 1)))
+    .then((snapshots) => {
+      for (const snapshot of snapshots) {
+        if (snapshot === undefined) continue
+        feed.deliverSnapshot(snapshot)
+      }
+    })
+}, 5_000)
 
 process.stdout.write('connecting: ' + url + String.fromCharCode(10))
 feed.start()
@@ -59,6 +75,7 @@ setTimeout(() => {
   process.stdout.write('对齐态: ' + JSON.stringify(alignment.state(Date.now())) + String.fromCharCode(10))
   process.stdout.write('原始帧样本（供离线测试用）:' + String.fromCharCode(10))
   for (const sample of samples) process.stdout.write('  ' + sample.slice(0, 220) + String.fromCharCode(10))
+  clearInterval(refresh)
   feed.stop()
   probe.close()
   process.exit(0)

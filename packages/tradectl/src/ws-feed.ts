@@ -98,6 +98,15 @@ export interface FeedOptions {
    * 算成坏帧——离线测试发现不了，因为测试喂的本来就是自家格式。
    */
   readonly decode?: (text: string, epoch: number) => FeedMessage | undefined
+  /** 引导快照要覆盖的标的（symbols 为空时用它；Binance 的订阅在 URL 里，symbols 常为空）。 */
+  readonly bootstrapSymbols?: readonly string[]
+  /**
+   * 开流后的**快照引导**：连上（并订阅）之后拉一批基准快照喂进对齐层。
+   * 为什么必须有这一步：真实推流（如 Binance aggTrade）只有 tick、没有快照；没有基准，
+   * 对齐层按"先缓冲后发布"永远停在 unaligned、一条都不发布。引导失败**不打断**流
+   * （记事件 + 继续缓冲），因为"有 tick 没基准"总好过"什么都不要"。
+   */
+  readonly bootstrap?: (symbols: readonly string[]) => Promise<readonly FeedMessage[]>
   /** 每次状态变化的通知（诊断/审计用）。 */
   readonly onEvent?: (event: { atMs: number; kind: 'open' | 'close' | 'error' | 'heartbeat-timeout' | 'reconnect' | 'bad-frame'; detail: string }) => void
 }
@@ -121,6 +130,8 @@ export function createStreamingFeed(options: FeedOptions): {
   start(): void
   stop(): void
   stats(): FeedStats
+  /** 外部喂一张快照（周期刷新基准用；不经过传输层）。 */
+  deliverSnapshot(snapshot: FeedMessage): void
 } {
   const bucket = createTokenBucket(options.subscribeTokenCapacity, options.subscribeRefillPerSec, options.now())
   let state: FeedStats['state'] = 'idle'
@@ -187,6 +198,19 @@ export function createStreamingFeed(options: FeedOptions): {
         note('open', 'transport open')
         for (const symbol of options.symbols) options.transport.send(options.subscribePayload(symbol))
         armHeartbeat()
+        // 快照引导：拉到基准后对齐层才可能 aligned；失败只记事件
+        if (options.bootstrap !== undefined) {
+          void options.bootstrap(options.symbols.length > 0 ? options.symbols : (options.bootstrapSymbols ?? []))
+            .then((snapshots) => {
+              for (const snapshot of snapshots) {
+                options.sink.onSnapshot({ epoch: snapshot.epoch, symbol: snapshot.symbol, price: snapshot.price, atMs: snapshot.atMs }, options.now())
+              }
+              note('open', 'bootstrap delivered ' + String(snapshots.length) + ' snapshot(s)')
+            })
+            .catch((error: unknown) => {
+              note('error', 'bootstrap failed: ' + (error instanceof Error ? error.message : String(error)))
+            })
+        }
       },
       onMessage: (text) => {
         messages += 1
@@ -231,6 +255,9 @@ export function createStreamingFeed(options: FeedOptions): {
       cancelReconnect?.()
       options.transport.close()
       state = 'stopped'
+    },
+    deliverSnapshot(snapshot) {
+      options.sink.onSnapshot({ epoch: snapshot.epoch, symbol: snapshot.symbol, price: snapshot.price, atMs: snapshot.atMs }, options.now())
     },
     stats: () => ({ connects, reconnects, messages, badFrames, heartbeatTimeouts, lastMessageAtMs, state }),
   }

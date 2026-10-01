@@ -80,3 +80,33 @@ export function parseBinanceFrame(text: string, epoch: number): FeedMessage | un
 export function binanceDecoder(epoch: number): (text: string) => FeedMessage | undefined {
   return (text) => parseBinanceFrame(text, epoch)
 }
+
+/** 公共 REST 快照地址（无需 API key）。 */
+export const BINANCE_PUBLIC_REST = 'https://api.binance.com/api/v3/ticker/price'
+
+/**
+ * 拉一张基准快照：真实推流只有 tick、没有快照，而"先缓冲后发布"要求先有基准。
+ * 返回 undefined 表示这一只没拿到（调用方决定是重试还是先裸奔 tick —— 本函数不抛）。
+ * @param symbol - 交易对（BTC/USDT 形态）。
+ * @param epoch - 当前连接世代（快照必须带世代号，否则对齐层无从判断新旧）。
+ * @param fetchImpl - 注入的 fetch（测试用假件；生产用全局 fetch）。
+ * @param nowMs - 注入时钟。
+ */
+export async function fetchBinanceSnapshot(
+  symbol: string,
+  epoch: number,
+  fetchImpl: typeof fetch = fetch,
+  nowMs: number = Date.now(),
+): Promise<FeedMessage | undefined> {
+  try {
+    const response = await fetchImpl(BINANCE_PUBLIC_REST + '?symbol=' + binanceSymbol(symbol).toUpperCase())
+    if (!response.ok) return undefined
+    const body = (await response.json()) as { price?: unknown }
+    const price = Number(body.price)
+    if (!Number.isFinite(price)) return undefined
+    return { kind: 'snapshot', epoch, symbol, price, atMs: nowMs }
+  } catch {
+    // 快照拿不到不是致命错误：记录在调用方，流照常缓冲（有 tick 没基准好过什么都不要）
+    return undefined
+  }
+}
