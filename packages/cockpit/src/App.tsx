@@ -1,77 +1,91 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Card } from '@dshtrading/contract'
+import { DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, freshnessText, type CockpitCard } from './blocks.tsx'
 
 /**
- * 骨架版驾驶舱：只做一件事——把 /v1/cards 拿回来按协议渲染，并显式展示"新鲜度"。
+ * 驾驶舱外壳：取数（/v1/cards）+ 组装四块 + 控制区。
  *
- * 两条卡片要求已经落在这里：
- *   - **观测面不依赖 tick 流**：整页只有一次卡片拉取 + 手动刷新，没有任何行情订阅；
- *   - **未知枚举的卡片渲染成不可操作态**：协议层已经把 actions 清空，这里如实显示
- *     "此卡片需要升级客户端"，而不是猜一个样子。
+ * 三条卡片要求落在这里：
+ *   - **观测面不依赖 tick 流**：一次拉取 + 手动刷新，新鲜度靠数据时间与当前时间的差表达；
+ *   - **控制按钮要有二次确认**：kill / pause / flatten 都不是单击即发（协议层已要求
+ *     控制类动作 confirm: true，界面这一层再拦一道）；
+ *   - **不做手动下单面板**：控制区只接控制类动作，不提供买卖标的与数量输入。
  */
 interface CardPage {
-  readonly cards: (Card & { operable?: boolean; problems?: readonly string[] })[]
-  readonly truncated?: boolean
-  readonly caps?: readonly string[]
+  readonly cards: readonly CockpitCard[]
+  readonly truncated?: boolean | undefined
 }
 
+const CAPS = 'action:ack,action:dismiss,action:pause,action:resume,action:kill,action:flatten'
+
 export function App(): JSX.Element {
-  const [page, setPage] = useState<CardPage | undefined>(undefined)
+  const [cards, setCards] = useState<readonly Card[]>([])
   const [error, setError] = useState<string | undefined>(undefined)
   const [fetchedAtMs, setFetchedAtMs] = useState<number | undefined>(undefined)
-  const [caps] = useState<string>('action:ack,action:dismiss')
+  const [pending, setPending] = useState<string | undefined>(undefined)
 
-  const load = async (): Promise<void> => {
+  const load = useCallback(async (): Promise<void> => {
     try {
-      const response = await fetch('/v1/cards', { headers: { 'x-dsht-caps': caps } })
+      const response = await fetch('/v1/cards', { headers: { 'x-dsht-caps': CAPS } })
       if (!response.ok) {
-        setError(response.status === 426 ? '客户端太旧，请升级（426）' : '服务端返回 ' + String(response.status))
+        setError(response.status === 426 ? '客户端太旧，请升级（426 CLIENT_TOO_OLD）' : '服务端返回 ' + String(response.status))
         return
       }
-      setPage((await response.json()) as CardPage)
+      const page = (await response.json()) as CardPage
+      setCards(page.cards)
       setFetchedAtMs(Date.now())
       setError(undefined)
     } catch (cause) {
       setError('无法连接交易机器人：' + (cause instanceof Error ? cause.message : String(cause)))
     }
-  }
+  }, [])
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  const command = useCallback(async (action: string): Promise<void> => {
+    // 二次确认：控制类动作不允许单击即发
+    if (!window.confirm('确认执行「' + action + '」？这是控制类动作。')) return
+    setPending(action)
+    try {
+      const response = await fetch('/v1/commands', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-dsht-caps': CAPS },
+        body: JSON.stringify({ clientRequestId: 'web-' + String(Date.now()) + '-' + action, action }),
+      })
+      if (!response.ok) setError('命令被拒绝：' + String(response.status) + ' ' + (await response.text()))
+      else setError(undefined)
+    } finally {
+      setPending(undefined)
+    }
   }, [])
 
-  const freshness = fetchedAtMs === undefined ? '尚未取到数据' : '数据取于 ' + String(Math.round((Date.now() - fetchedAtMs) / 1000)) + ' 秒前'
-
   return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '1.5rem', lineHeight: 1.6 }}>
+    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '1.5rem', lineHeight: 1.6, maxWidth: '60rem', margin: '0 auto' }}>
       <header>
         <h1 style={{ margin: 0 }}>交易驾驶舱</h1>
-        <p style={{ margin: '0.25rem 0 1rem', color: '#666' }}>服务端驱动：界面由卡片协议决定，客户端只渲染。{freshness}</p>
+        <p style={{ margin: '0.25rem 0 1rem', color: '#666' }}>
+          服务端驱动：界面由卡片协议决定，客户端只渲染。{freshnessText(fetchedAtMs, Date.now())}
+        </p>
         <button type="button" onClick={() => void load()}>
           刷新
         </button>
       </header>
+      <section aria-label="control">
+        <h2>控制</h2>
+        <p style={{ color: '#666', margin: '0 0 0.5rem' }}>控制类动作需要二次确认；此处不提供下单入口。</p>
+        {(['pause', 'resume', 'kill', 'flatten'] as const).map((action) => (
+          <button key={action} type="button" disabled={pending !== undefined} onClick={() => void command(action)}>
+            {pending === action ? '执行中…' : action}
+          </button>
+        ))}
+      </section>
       {error === undefined ? null : <p style={{ color: '#b00' }}>{error}</p>}
-      {page === undefined ? (
-        <p>正在取卡片…</p>
-      ) : (
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {page.cards.map((card) => (
-            <li key={card.cardId} style={{ border: '1px solid #ddd', borderRadius: 8, padding: '0.75rem', marginBottom: '0.5rem' }}>
-              <strong>{card.cardType}</strong>
-              <span style={{ color: '#666' }}> · rev {card.revision}</span>
-              <p style={{ margin: '0.25rem 0' }}>{card.fallbackText}</p>
-              {card.operable === false ? (
-                <p style={{ color: '#b00', margin: 0 }}>此卡片需要升级客户端后才能操作</p>
-              ) : (
-                <p style={{ margin: 0 }}>
-                  {card.actions.length === 0 ? '无可用动作' : '可用动作：' + card.actions.map((action) => action.label).join('、')}
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      <DeskHome cards={cards} />
+      <DecisionFeed cards={cards} />
+      <PositionsAndOrders cards={cards} />
+      <EscalationInbox cards={cards} />
     </main>
   )
 }
