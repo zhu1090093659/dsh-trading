@@ -102,7 +102,7 @@ const MUST_BE_WIRED = [
  */
 const INTENTIONALLY_UNWIRED = {
   'ui:check': '需要 headless Chrome 并真起一个宿主实例；作为人工/发布前门禁',
-  'bot-closure:check': '需要一个已构建的 bot profile 目录；属安装态验收，不在 CI 跑',
+  'bot-closure:check': '需要一个已构建的 bot profile 目录（安装态验收）；本地跑法：DSH_HOME=~/.dsh-trading pnpm bot-closure:check（它会拒绝在宿主 home 上猜测）',
 }
 
 const allWorkflowText =
