@@ -8,7 +8,7 @@
 import {
   type TasksAction,
   type TasksSnapshot,
-} from './tasks-protocol.ts'
+} from '@dshtrading/api'
 import { BridgeError } from './api.ts'
 
 /** 元数据面（工作区/预设名册 + 确认门基准）。 */

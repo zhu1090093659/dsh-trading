@@ -913,3 +913,8 @@ export interface TradingNewsRegistry {
   markets(): string[]
 }
 
+// 定时任务协议与 cron 引擎（2026-10-01 P1 三平面拆包时从 client-ui-trading 的
+// src/client/ 搬来）：两者本身就是**契约**——GUI 与宿主两侧都要按同一份封套解析、
+// 按同一份 cron 语义算下次触发；放在纯契约包里，bot 平面才不必反向依赖 GUI 包。
+export * from './tasks-protocol.ts'
+export * from './tasks-schedule.ts'

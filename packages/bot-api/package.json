@@ -1,0 +1,54 @@
+{
+  "name": "@dshtrading/bot-api",
+  "description": "Bot API-plane bundle for dsh-trading: the /dshtrading/api HTTP surface and SSE stream, with the scheduled-tasks ledger/runner/service and their agent tools. Node half of the former client-ui-trading package, moved out on 2026-10-01 so the bot install closure carries no @dshtrading/client-ui-* dependency (design doc §10 three-plane split).",
+  "version": "0.5.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dshtrading/api": "workspace:^",
+    "@dshtrading/dsh-home": "workspace:^",
+    "@dshtrading/eventbus": "workspace:^",
+    "@dshtrading/holdings": "workspace:^",
+    "@dshtrading/indicators": "workspace:^",
+    "@dshtrading/kit-cn": "workspace:^",
+    "@dshtrading/kit-crypto": "workspace:^",
+    "@dshtrading/kit-hk": "workspace:^",
+    "@dshtrading/kit-us": "workspace:^",
+    "@dshtrading/knowledge": "workspace:^",
+    "@dshtrading/strategies": "workspace:^",
+    "@dshtrading/watchlist": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-tools": ">=0.2.0-rc.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
+    "@types/node": "^24.0.0",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

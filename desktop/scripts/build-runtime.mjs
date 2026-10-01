@@ -43,6 +43,7 @@ const stagingRoot = path.join(desktopDir, 'resources', 'runtime');
 const DIRECT_TRADING_PACKAGES = [
   '@dshtrading/base',
   '@dshtrading/gui',
+  '@dshtrading/bot-api',
   '@dshtrading/crypto',
   '@dshtrading/us',
   '@dshtrading/cn',
@@ -73,6 +74,7 @@ const PROFILE_BUNDLES = [
   '@deepseek-ai/dsh-web-app',
   '@dshtrading/base',
   '@dshtrading/gui',
+  '@dshtrading/bot-api',
   '@dshtrading/crypto',
   '@dshtrading/us',
   '@dshtrading/cn',

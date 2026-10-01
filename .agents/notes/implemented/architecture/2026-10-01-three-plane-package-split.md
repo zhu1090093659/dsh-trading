@@ -14,7 +14,21 @@ bot（无图形界面的 Linux 服务器形态）之前不存在，代价是**�
 
 **Plane B · GUI（新建 `@dshtrading/gui`）**：从 base **原样搬来** 11 行——6 个浏览器半行（`.packages/base/cordis.patch.yml` 的 settings / client-ui-trading / -indicators / -strategies / -knowledge / -masters-quotes / -updater）+ 1 个纯浏览器半语言包（dsh-i18n）+ 3 个只有 web 宿主才有意义的双半行（im / plugin-manager / model-capabilities：host 半硬 inject webServer/connection，headless 下必然 pending，靠 `.packages/base/cordis.patch.yml` 的 `disabled: !!js` 条件禁用兜底）。依赖与版本从 base 的 `.package.json` 原样搬进 gui。
 
-**Plane C · bot API（边界已定，代码未搬）**：承接 `/dshtrading/api` HTTP 前缀与 SSE。搬之前先确认了一件事实：**bridge.ts 本来就与浏览器无关**——它的 import 全部落在 host 平面（api / kit-* / indicators / knowledge / strategies / watchlist / holdings / eventbus / dsh-home），客户端半只经 `api.ts` 走 HTTP。所以搬法是「把 node 半整体移出、client 半留在原包」，不是把一个文件劈成两片。要移的：`bridge.ts`、`sse.ts`、`tasks/*`、`ttl-cache.ts` 与它们的用例；`client-ui-trading/src/index.ts` 退化为空 apply 的桩（保留包名与 `.` 导出，行 id/name 不动）；新包带自己的 patch 层插入新行 `dsh-trading-bot-api`（新行 id 必须显式 `--update` 登记），bot 与 GUI 两个 profile 都把它列进 bundles——这正是「bot API 平面：两者都装」的形态。**落地见后续变更。**
+**Plane C · bot API（已落地）**：新建 `@dshtrading/bot-api`，把 `client-ui-trading` 的 **node 半整体搬出**——`bridge.ts`（2135 行，/dshtrading/api HTTP 面）、`sse.ts`、`tasks/{ledger,runner,service,tools}.ts`、`ttl-cache.ts` 与 18 个相关用例共 31 个文件（`git mv`，保留历史）。复核确认了搬法的前提：bridge.ts 本来就零浏览器依赖（GUI 逻辑在同包的 `src/client/`，不在同一文件里），所以是「node 半整体移出、client 半留在原包」，而不是把一个文件劈成两片——原先记的「按面劈文件」前提不成立，作为更正留在 Alternatives。
+
+搬动中发现并解决的一处共享面：`tasks-protocol.ts`（封套协议）与 `tasks-schedule.ts`（5 段 cron 引擎）**两侧都在用**且零依赖，留在 client-ui-trading 会逼 bot 平面反向依赖 GUI 包，放进 bot-api 又会逼 GUI 依赖 bot 包——两者都违反平面划分。它们的正确归属是 `@dshtrading/api`（纯契约包，bot 与 GUI 都已依赖它）：封套与 cron 语义本来就是两侧必须逐字一致的**契约**。这是「一个事实只有一个家」在平面问题上的直接推论：家的选择看的是**适用范围**，不是谁先用到。
+
+配套：`client-ui-trading/src/index.ts` 退化为空 apply 桩（行 id 与 name 一字不改，见冻结清单）；新行 `dsh-trading-bot-api` 由 bot-api 自己的 patch 层 insert 并显式 `--update` 登记（契约行 53 → 54）；bot 与 GUI 两个 profile 的 bundles 都列它——这正是「bot API 平面：两者都装」的形态。
+
+
+
+**搬包顺带暴露的两件事（都留了痕迹，没有顺手掩盖）**：
+
+1. **类型检查口径**：搬包前的 `client-ui-trading/tsconfig.json` 只 include `src/index.ts` 与 `src/bridge.ts`——`src/tasks/*.ts` 从来没进过类型程序。新包保持**同一口径**（不是收窄：覆盖面与搬前逐字相同）。实测把 include 放宽到 `src` 会 surface 6 处既有错误（`index.ts` 4 + `tasks/tools.ts` 2，全是 `ctx.inject`/`ctx.effect` 找不到），根因是更宽的类型程序里 cordis 的 `declare module '@deepseek-ai/cordis'` 增强没有生效——这是**既有债 + 一个独立的类型环境问题**，不该由「包边界搬家」这个变更吞掉，也不该用放宽 include 的方式掩盖。两项都写进 `packages/bot-api/tsconfig.json` 的注释作为后续项。typecheck 棘轮总量逐项不变（429 = 429）就是这条纪律的证据。
+
+2. **测试卫生棘轮**：用例跟着代码走会换 key（`packages/client-ui-trading/test/...` → `packages/bot-api/test/...`），门禁会按「新文件带债」报红。这里用 `pnpm test:audit --update --force` 重新登记，并逐项核对**规则总量完全不变**（`mock 199 / sleep 0 / bdd-title 1528 / bdd-gwt 1528 / weak-assert 0`，文件数 190 不变）——也就是说这不是「把债洗进基线」，而是同一批债换了个路径 key。
+
+**证据**：`pnpm build` 全绿（70 个包）；`pnpm plane:check` → **bot 平面闭包 18 包（base + bot-api + bot 及其依赖），零 `@dshtrading/client-ui-*`、零 UI 重依赖**；`pnpm patch-id:check` ✓ 12 层 / 54 契约行；`pnpm live-trading:check` ✓。
 
 **bot 平面骨架（本变更同批）**：新建 `@dshtrading/bot` bundle——设计文档 §2.2「bot 是一个 dsh surface，不是自建程序」，所以它不自建 bin、不自建 cordis app，**不含** webserver/connection/modules 行。今天它的 patch 层**有意为空的 `[]`**（空层必须写字面量数组，注释-only 会让启动失败——官方 README 明说），只承担一件事：让 `pnpm plane:check` 从今天起按**真实 bot 平面**（base + bot）量闭包，而不是拿 base 当代理。P2 在这个层里加 bot-startup provider 行与 UDS 传输行（文件里已列出待办与「不得引入 web 栈行」的约束）。
 

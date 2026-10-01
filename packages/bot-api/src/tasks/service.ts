@@ -11,7 +11,7 @@ import {
   type TaskPermission,
   type TasksActionEnvelope,
   type TasksSnapshot,
-} from '../client/tasks-protocol.ts'
+} from '@dshtrading/api'
 import { TasksRunner, SessionLaunchError, type AgentRegistryLike, type SessionCommandDispatcher, type SessionGateway } from './runner.ts'
 
 /** 宿主工作区名册面（meta + runner 校验共用）。宿主 Workspace 实体的显示名

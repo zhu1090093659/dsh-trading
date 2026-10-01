@@ -3,7 +3,7 @@
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { SSE_HEARTBEAT_MS, attachEventStream, type TradingEventStreamSource } from './sse.ts'
+import { SSE_HEARTBEAT_MS, attachEventStream, type TradingEventStreamSource } from '../src/sse.ts'
 
 function fakeRes(): { res: EventEmitter & { writeHead: ReturnType<typeof vi.fn>; write: ReturnType<typeof vi.fn> }; headers: Record<string, unknown>; writes: string[] } {
   const headers: Record<string, unknown> = {}

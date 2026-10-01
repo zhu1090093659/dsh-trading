@@ -25,8 +25,8 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
-/** bot 平面根：host 平面 + （存在时）bot bundle。 */
-const BOT_ROOTS = ['@dshtrading/base']
+/** bot 平面根：host 平面 + bot API 平面（两者都装）+（存在时）bot bundle。 */
+const BOT_ROOTS = ['@dshtrading/base', '@dshtrading/bot-api']
 const BOT_BUNDLE = '@dshtrading/bot'
 /** GUI 平面根。 */
 const GUI_ROOTS = ['@dshtrading/gui']

@@ -32,8 +32,8 @@ import {
   type TasksSchedulerSnapshot,
   type TasksSnapshot,
   type TaskUpdatePatch,
-} from '../client/tasks-protocol.ts'
-import { isValidCron, nextRunAtMs } from '../client/tasks-schedule.ts'
+} from '@dshtrading/api'
+import { isValidCron, nextRunAtMs } from '@dshtrading/api'
 
 /** 账本磁盘文档形状。 */
 interface LedgerDocument {

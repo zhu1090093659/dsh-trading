@@ -17,10 +17,12 @@
   ],
   "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
-    "tsdown": "^0.22.0"
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0"
   }
 }

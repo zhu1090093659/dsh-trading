@@ -7,6 +7,10 @@
     "weak-assert": 0
   },
   "files": {
+    "packages/api/test/tasks-schedule.test.ts": {
+      "bdd-title": 10,
+      "bdd-gwt": 10
+    },
     "packages/base/test/gate.test.ts": {
       "mock": 2,
       "bdd-title": 9,
@@ -31,6 +35,85 @@
       "bdd-gwt": 3
     },
     "packages/base/test/role-skills.test.ts": {
+      "bdd-title": 4,
+      "bdd-gwt": 4
+    },
+    "packages/bot-api/test/bridge-flash.test.ts": {
+      "bdd-title": 7,
+      "bdd-gwt": 7
+    },
+    "packages/bot-api/test/bridge-macro.test.ts": {
+      "bdd-title": 5,
+      "bdd-gwt": 5
+    },
+    "packages/bot-api/test/bridge-screener-management.test.ts": {
+      "mock": 2,
+      "bdd-title": 4,
+      "bdd-gwt": 4
+    },
+    "packages/bot-api/test/bridge-strategy-management.test.ts": {
+      "mock": 2,
+      "bdd-title": 6,
+      "bdd-gwt": 6
+    },
+    "packages/bot-api/test/bridge-watchlist-groups.test.ts": {
+      "mock": 2,
+      "bdd-title": 7,
+      "bdd-gwt": 7
+    },
+    "packages/bot-api/test/bridge.test.ts": {
+      "mock": 4,
+      "bdd-title": 51,
+      "bdd-gwt": 51
+    },
+    "packages/bot-api/test/chart-activations.test.ts": {
+      "bdd-title": 13,
+      "bdd-gwt": 13
+    },
+    "packages/bot-api/test/holdings-bridge.test.ts": {
+      "mock": 2,
+      "bdd-title": 11,
+      "bdd-gwt": 11
+    },
+    "packages/bot-api/test/service-wiring.test.ts": {
+      "bdd-title": 5,
+      "bdd-gwt": 5
+    },
+    "packages/bot-api/test/smoke.test.ts": {
+      "bdd-title": 4,
+      "bdd-gwt": 4
+    },
+    "packages/bot-api/test/sse-endpoint.test.ts": {
+      "mock": 6,
+      "bdd-title": 3,
+      "bdd-gwt": 3
+    },
+    "packages/bot-api/test/sse.test.ts": {
+      "mock": 6,
+      "bdd-title": 4,
+      "bdd-gwt": 4
+    },
+    "packages/bot-api/test/tasks-bridge.test.ts": {
+      "bdd-title": 3,
+      "bdd-gwt": 3
+    },
+    "packages/bot-api/test/tasks-ledger.test.ts": {
+      "bdd-title": 14,
+      "bdd-gwt": 14
+    },
+    "packages/bot-api/test/tasks-runner.test.ts": {
+      "bdd-title": 1,
+      "bdd-gwt": 1
+    },
+    "packages/bot-api/test/tasks-service.test.ts": {
+      "bdd-title": 6,
+      "bdd-gwt": 6
+    },
+    "packages/bot-api/test/tasks-tools.test.ts": {
+      "bdd-title": 11,
+      "bdd-gwt": 11
+    },
+    "packages/bot-api/test/ttl-cache.test.ts": {
       "bdd-title": 4,
       "bdd-gwt": 4
     },
@@ -63,46 +146,9 @@
       "bdd-title": 7,
       "bdd-gwt": 7
     },
-    "packages/client-ui-trading/src/sse.test.ts": {
-      "mock": 6,
-      "bdd-title": 4,
-      "bdd-gwt": 4
-    },
     "packages/client-ui-trading/test/axis-width.test.ts": {
       "bdd-title": 9,
       "bdd-gwt": 9
-    },
-    "packages/client-ui-trading/test/bridge-flash.test.ts": {
-      "bdd-title": 7,
-      "bdd-gwt": 7
-    },
-    "packages/client-ui-trading/test/bridge-macro.test.ts": {
-      "bdd-title": 5,
-      "bdd-gwt": 5
-    },
-    "packages/client-ui-trading/test/bridge-screener-management.test.ts": {
-      "mock": 2,
-      "bdd-title": 4,
-      "bdd-gwt": 4
-    },
-    "packages/client-ui-trading/test/bridge-strategy-management.test.ts": {
-      "mock": 2,
-      "bdd-title": 6,
-      "bdd-gwt": 6
-    },
-    "packages/client-ui-trading/test/bridge-watchlist-groups.test.ts": {
-      "mock": 2,
-      "bdd-title": 7,
-      "bdd-gwt": 7
-    },
-    "packages/client-ui-trading/test/bridge.test.ts": {
-      "mock": 4,
-      "bdd-title": 51,
-      "bdd-gwt": 51
-    },
-    "packages/client-ui-trading/test/chart-activations.test.ts": {
-      "bdd-title": 13,
-      "bdd-gwt": 13
     },
     "packages/client-ui-trading/test/chart-state.test.ts": {
       "bdd-title": 7,
@@ -135,11 +181,6 @@
       "mock": 1,
       "bdd-title": 7,
       "bdd-gwt": 7
-    },
-    "packages/client-ui-trading/test/holdings-bridge.test.ts": {
-      "mock": 2,
-      "bdd-title": 11,
-      "bdd-gwt": 11
     },
     "packages/client-ui-trading/test/home-history.test.tsx": {
       "mock": 4,
@@ -217,21 +258,8 @@
       "bdd-title": 6,
       "bdd-gwt": 6
     },
-    "packages/client-ui-trading/test/service-wiring.test.ts": {
-      "bdd-title": 5,
-      "bdd-gwt": 5
-    },
     "packages/client-ui-trading/test/session-rail.smoke.test.tsx": {
       "mock": 1,
-      "bdd-title": 3,
-      "bdd-gwt": 3
-    },
-    "packages/client-ui-trading/test/smoke.test.ts": {
-      "bdd-title": 4,
-      "bdd-gwt": 4
-    },
-    "packages/client-ui-trading/test/sse-endpoint.test.ts": {
-      "mock": 6,
       "bdd-title": 3,
       "bdd-gwt": 3
     },
@@ -244,30 +272,6 @@
       "bdd-title": 5,
       "bdd-gwt": 5
     },
-    "packages/client-ui-trading/test/tasks-bridge.test.ts": {
-      "bdd-title": 3,
-      "bdd-gwt": 3
-    },
-    "packages/client-ui-trading/test/tasks-ledger.test.ts": {
-      "bdd-title": 14,
-      "bdd-gwt": 14
-    },
-    "packages/client-ui-trading/test/tasks-runner.test.ts": {
-      "bdd-title": 1,
-      "bdd-gwt": 1
-    },
-    "packages/client-ui-trading/test/tasks-schedule.test.ts": {
-      "bdd-title": 10,
-      "bdd-gwt": 10
-    },
-    "packages/client-ui-trading/test/tasks-service.test.ts": {
-      "bdd-title": 6,
-      "bdd-gwt": 6
-    },
-    "packages/client-ui-trading/test/tasks-tools.test.ts": {
-      "bdd-title": 11,
-      "bdd-gwt": 11
-    },
     "packages/client-ui-trading/test/toolview-parse.test.ts": {
       "bdd-title": 8,
       "bdd-gwt": 8
@@ -276,10 +280,6 @@
       "mock": 3,
       "bdd-title": 3,
       "bdd-gwt": 3
-    },
-    "packages/client-ui-trading/test/ttl-cache.test.ts": {
-      "bdd-title": 4,
-      "bdd-gwt": 4
     },
     "packages/client-ui-trading/test/watchlist-groups-api.test.ts": {
       "mock": 1,
@@ -829,6 +829,6 @@
       "bdd-gwt": 11
     }
   },
-  "tests": 1644,
+  "tests": 1704,
   "scanned": 3
 }

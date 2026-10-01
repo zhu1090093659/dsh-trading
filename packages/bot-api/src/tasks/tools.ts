@@ -28,7 +28,7 @@ import {
   type TasksAction,
   type TasksActionEnvelope,
   type TaskUpdatePatch,
-} from '../client/tasks-protocol.ts'
+} from '@dshtrading/api'
 
 /**
  * 工具统一输出投影（JSON 串；knowledge 工具同款）。返回类型必须保字面量
