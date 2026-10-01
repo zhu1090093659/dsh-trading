@@ -73,6 +73,7 @@
   "packages/knowledge/tsconfig.json": 24,
   "packages/router/tsconfig.json": 5,
   "packages/strategies/tsconfig.json": 42,
+  "packages/tradectl/tsconfig.json": 0,
   "packages/us/tsconfig.json": 0,
   "packages/watchlist/tsconfig.json": 0
 }
