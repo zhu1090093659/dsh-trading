@@ -14,6 +14,23 @@
 
 帧解析（合法/坏 JSON/非对象/未知 kind）、连上后逐标的发订阅并喂进对齐层、**心跳超时触发断开与重连并如实计数**、坏帧计数但不影响后续好帧、重连指数退避、**订阅预算打空后不再连接**、stop 后不再重连、epoch 变化由对齐层判定（传输层不越权）。假传输是契约假件（只实现文档化的四个回调），调度器可手工推进——无 mock 框架、无 sleep、无网络。
 
+
+## 后续细化：解码器区分「事件帧」与「畸形帧」（2026-10-01 同日补完）
+
+原文里记的粗糙处（订阅确认帧被计入 badFrames）已经修掉。解码器的返回值现在是三态：
+
+| 返回 | 含义 | 计数 |
+|---|---|---|
+| FeedMessage | 数据帧 | 走对齐层 |
+| **ignored** | **认识但无需处理的事件帧**（订阅确认、pong） | ignoredFrames |
+| undefined | 真的解析不了 | badFrames |
+
+**为什么值得单列一类**：把事件帧混进坏帧会让监控失去意义 —— badFrames 应当表示「要么协议变了、要么有人在乱发」，而不是「交易所回了句 pong」。OKX 的 event 帧、Bybit 的 success/op 帧与两家的 pong，现在都归入 ignoredFrames。
+
+测试补了一例：一帧 ignored + 一帧畸形 + 一帧好数据 ⇒ messages 3 / ignoredFrames 1 / badFrames 1（三类互不混淆）。tradectl 累计 **131 例全绿**。
+
+**仍未验证**：ignoredFrames 在真实 OKX/Bybit 连接上的实际计数未复核（此前实测是 OKX 4 条、Bybit 2 条确认帧，改成 ignored 后应当记在 ignoredFrames 而不是 badFrames）——下次跑冒烟时核对。
+
 ## 未验证项（如实标注）
 
 - **真实交易所适配器仍未写**：Binance / OKX / Bybit / CCXT 的 URL、订阅载荷、消息字段映射（→ `FeedMessage`）都还没有；本模块提供的是它们要实现的端口与策略。

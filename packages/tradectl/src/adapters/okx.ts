@@ -48,8 +48,8 @@ export const OKX_PING = 'ping'
  * @param text - 原始帧。
  * @param epoch - 连接世代号。
  */
-export function parseOkxFrame(text: string, epoch: number): FeedMessage | undefined {
-  if (text === 'pong') return undefined
+export function parseOkxFrame(text: string, epoch: number): FeedMessage | 'ignored' | undefined {
+  if (text === 'pong') return 'ignored'
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
@@ -57,7 +57,9 @@ export function parseOkxFrame(text: string, epoch: number): FeedMessage | undefi
     return undefined
   }
   if (parsed === null || typeof parsed !== 'object') return undefined
-  const frame = parsed as { arg?: { channel?: unknown; instId?: unknown }; data?: unknown }
+  const frame = parsed as { event?: unknown; arg?: { channel?: unknown; instId?: unknown }; data?: unknown }
+  // 订阅/退订确认是事件帧：认识它，但无需处理
+  if (typeof frame.event === 'string') return 'ignored'
   const channel = frame.arg?.channel
   const instId = frame.arg?.instId
   if (typeof channel !== 'string' || typeof instId !== 'string' || !Array.isArray(frame.data)) return undefined

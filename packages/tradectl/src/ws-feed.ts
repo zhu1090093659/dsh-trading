@@ -97,7 +97,13 @@ export interface FeedOptions {
    * 2026-10-01 真实冒烟暴露：第一版没有这个钩子，适配器的解码器无处可接，每一帧都被
    * 算成坏帧——离线测试发现不了，因为测试喂的本来就是自家格式。
    */
-  readonly decode?: (text: string, epoch: number) => FeedMessage | undefined
+  /**
+   * 帧解码钩子。返回值语义（2026-10-01 细化）：FeedMessage = 数据帧；
+   * **%%ignored%% = 认识但无需处理的事件帧**（订阅确认、pong 等，不计入坏帧）；
+   * undefined = 真的解析不了（计入坏帧）。把"事件帧"混进坏帧会让监控失去意义——
+   * 坏帧应当是"要么协议变了要么有人在乱发"，而不是"交易所回了句 pong"。
+   */
+  readonly decode?: (text: string, epoch: number) => FeedMessage | 'ignored' | undefined
   /** 引导快照要覆盖的标的（symbols 为空时用它；Binance 的订阅在 URL 里，symbols 常为空）。 */
   readonly bootstrapSymbols?: readonly string[]
   /**
@@ -116,6 +122,8 @@ export interface FeedStats {
   readonly connects: number
   readonly reconnects: number
   readonly messages: number
+  /** 认识但无需处理的事件帧（订阅确认/pong 等）。 */
+  readonly ignoredFrames: number
   readonly badFrames: number
   readonly heartbeatTimeouts: number
   readonly lastMessageAtMs: number | null
@@ -139,6 +147,7 @@ export function createStreamingFeed(options: FeedOptions): {
   let reconnects = 0
   let messages = 0
   let badFrames = 0
+  let ignoredFrames = 0
   let heartbeatTimeouts = 0
   let lastMessageAtMs: number | null = null
   let cancelHeartbeat: (() => void) | undefined
@@ -217,6 +226,10 @@ export function createStreamingFeed(options: FeedOptions): {
         lastMessageAtMs = options.now()
         armHeartbeat()
         const message = (options.decode ?? ((raw: string) => parseFeedMessage(raw)))(text, generation)
+        if (message === 'ignored') {
+          ignoredFrames += 1
+          return
+        }
         if (message === undefined) {
           badFrames += 1
           note('bad-frame', 'unparseable frame (first 80 chars): ' + text.slice(0, 80))
@@ -259,6 +272,6 @@ export function createStreamingFeed(options: FeedOptions): {
     deliverSnapshot(snapshot) {
       options.sink.onSnapshot({ epoch: snapshot.epoch, symbol: snapshot.symbol, price: snapshot.price, atMs: snapshot.atMs }, options.now())
     },
-    stats: () => ({ connects, reconnects, messages, badFrames, heartbeatTimeouts, lastMessageAtMs, state }),
+    stats: () => ({ connects, reconnects, messages, badFrames, ignoredFrames, heartbeatTimeouts, lastMessageAtMs, state }),
   }
 }

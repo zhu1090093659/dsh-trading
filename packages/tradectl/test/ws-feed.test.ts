@@ -159,6 +159,21 @@ describe('连接、订阅与心跳', () => {
   })
 })
 
+describe('事件帧与坏帧的区分', () => {
+  it('管理员：解码器返回 ignored 的事件帧只计 ignoredFrames，不进 badFrames', () => {
+    // Given 一条把 ack 帧判为 ignored 的流
+    const { fake, feed } = fixture({ decode: (text, epoch) => (text === 'ack' ? 'ignored' : (text === 'bad' ? undefined : { kind: 'tick', epoch, symbol: 'BTC/USDT', price: 1, atMs: T0, seq: 1 })) })
+    feed.start()
+    fake.open()
+    // When 依次收到 ack（ignored）、bad（畸形）、好帧
+    fake.message('ack')
+    fake.message('bad')
+    fake.message(JSON.stringify({ kind: 'tick', epoch: 1, symbol: 'BTC/USDT', price: 60_000, atMs: T0, seq: 1 }))
+    // Then ignored=1、bad=1（互不混淆）
+    expect(feed.stats()).toMatchObject({ messages: 3, ignoredFrames: 1, badFrames: 1 })
+  })
+})
+
 describe('重连退避与订阅限频预算', () => {
   it('管理员：重连按指数退避并封顶（注入调度器推进，不 sleep）', () => {
     // Given 一条已连上的流（预算足够）

@@ -42,7 +42,7 @@ export const BYBIT_PING = JSON.stringify({ op: 'ping' })
  * @param text - 原始帧。
  * @param epoch - 连接世代号。
  */
-export function parseBybitFrame(text: string, epoch: number): FeedMessage | undefined {
+export function parseBybitFrame(text: string, epoch: number): FeedMessage | 'ignored' | undefined {
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
@@ -50,7 +50,9 @@ export function parseBybitFrame(text: string, epoch: number): FeedMessage | unde
     return undefined
   }
   if (parsed === null || typeof parsed !== 'object') return undefined
-  const frame = parsed as { topic?: unknown; ts?: unknown; data?: unknown }
+  const frame = parsed as { topic?: unknown; ts?: unknown; data?: unknown; op?: unknown; success?: unknown }
+  // 订阅确认（{success:true, op:'subscribe'}）与 pong 是事件帧
+  if (typeof frame.op === 'string' || frame.success !== undefined) return 'ignored'
   const topic = frame.topic
   if (typeof topic !== 'string') return undefined
   const atMsDefault = Number(frame.ts)
