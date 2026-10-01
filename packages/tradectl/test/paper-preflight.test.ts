@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { assertSandboxRouting, paperPreflight } from '../src/paper-preflight.ts'
 
-const FULL = { OKX_API_KEY: 'k', OKX_API_SECRET: 's', OKX_API_PASSWORD: 'p' }
+const FULL = { OKX_DEMO_API_KEY: 'k', OKX_DEMO_SECRET_KEY: 's', OKX_DEMO_PASSPHRASE: 'p' }
 
 describe('paper 档预检（OKX 模拟盘）', () => {
   it('管理员：凭证齐全且无实盘开关时通过，并把凭证交给调用方', () => {
@@ -22,19 +22,19 @@ describe('paper 档预检（OKX 模拟盘）', () => {
   it('管理员：缺凭证时不通过，并逐项列出缺什么（不猜、不静默）', () => {
     // Given 只有 key
     // When 预检
-    const result = paperPreflight({ env: { OKX_API_KEY: 'k' }, venue: 'okx' })
+    const result = paperPreflight({ env: { OKX_DEMO_API_KEY: 'k' }, venue: 'okx' })
     // Then 不通过且 missing 明确
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.reason).toBe('MISSING_CREDENTIALS')
-      expect(result.missing).toEqual(['OKX_API_SECRET', 'OKX_API_PASSWORD'])
-      expect(result.message).toContain('OKX_API_SECRET')
+      expect(result.missing).toEqual(['OKX_DEMO_SECRET_KEY', 'OKX_DEMO_PASSPHRASE'])
+      expect(result.message).toContain('OKX_DEMO_SECRET_KEY')
     }
   })
 
   it('管理员：空字符串等同缺失（不给"写了个空值"蒙混过关）', () => {
     // Given 三个键都在但值为空
-    const result = paperPreflight({ env: { OKX_API_KEY: '', OKX_API_SECRET: ' ', OKX_API_PASSWORD: '' }, venue: 'okx' })
+    const result = paperPreflight({ env: { OKX_DEMO_API_KEY: '', OKX_DEMO_SECRET_KEY: ' ', OKX_DEMO_PASSPHRASE: '' }, venue: 'okx' })
     // Then 全部算缺失
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.missing).toHaveLength(3)

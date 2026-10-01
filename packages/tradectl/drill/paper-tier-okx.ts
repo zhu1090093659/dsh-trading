@@ -15,7 +15,7 @@ function main(): number {
   const result = paperPreflight({ env: process.env, venue: VENUE })
   if (!result.ok) {
     console.error('[paper-okx] 预检未通过（' + result.reason + '）：' + result.message)
-    console.error('[paper-okx] 提示：需要 OKX 模拟盘的三项凭证 OKX_API_KEY / OKX_API_SECRET / OKX_API_PASSWORD；')
+    console.error('[paper-okx] 提示：需要 OKX 模拟盘的三项凭证 OKX_DEMO_API_KEY / OKX_DEMO_SECRET_KEY / OKX_DEMO_PASSPHRASE；')
     console.error('[paper-okx] 第 2 档只跑模拟盘，脚本不接受任何实盘开关。')
     return 2
   }

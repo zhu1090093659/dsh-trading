@@ -33,12 +33,12 @@ const LIVE_SWITCHES = ['DSHT_ALLOW_LIVE', 'DSHT_LIVE', 'DSHT_LIVE_TRADING', 'OKX
 export function paperPreflight(input: PaperPreflightInput): PaperPreflight {
   const venue = input.venue
   const missing: string[] = []
-  const apiKey = input.env.OKX_API_KEY
-  const secret = input.env.OKX_API_SECRET
-  const password = input.env.OKX_API_PASSWORD
-  if (apiKey === undefined || apiKey.trim() === '') missing.push('OKX_API_KEY')
-  if (secret === undefined || secret.trim() === '') missing.push('OKX_API_SECRET')
-  if (password === undefined || password.trim() === '') missing.push('OKX_API_PASSWORD')
+  const apiKey = input.env.OKX_DEMO_API_KEY
+  const secret = input.env.OKX_DEMO_SECRET_KEY
+  const password = input.env.OKX_DEMO_PASSPHRASE
+  if (apiKey === undefined || apiKey.trim() === '') missing.push('OKX_DEMO_API_KEY')
+  if (secret === undefined || secret.trim() === '') missing.push('OKX_DEMO_SECRET_KEY')
+  if (password === undefined || password.trim() === '') missing.push('OKX_DEMO_PASSPHRASE')
 
   const live = LIVE_SWITCHES.filter((name) => {
     const value = input.env[name]
