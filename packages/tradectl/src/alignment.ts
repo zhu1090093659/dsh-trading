@@ -132,7 +132,8 @@ export function createAlignment(params: AlignmentParams, startedAtMs: number): {
   let divergenceStrikes = 0
   let forcedResnapshots = 0
   let droppedTicks = 0
-  let lastSeq = -1
+  // 每个标的各自的最后序号：全局比较会让两个交错的标的互相误判（2026-10-01 真实冒烟实测）
+  const lastSeqBySymbol = new Map<string, number>()
   const realignBucket = createTokenBucket(params.realignTokenCapacity, params.realignRefillPerSec, startedAtMs)
   const orderBucket = createTokenBucket(params.orderTokenCapacity, params.orderRefillPerSec, startedAtMs)
   const log: AlignmentEvent[] = []
@@ -189,12 +190,13 @@ export function createAlignment(params: AlignmentParams, startedAtMs: number): {
       }
       // 还没有任何快照 ⇒ 先缓冲等快照（先缓冲后发布的前一半），不丢。
       // 乱序：序号回退的 tick 直接丢（它描述的是更早的价格，补进去只会污染序列）。
-      if (tick.seq <= lastSeq) {
+      const previousSeq = lastSeqBySymbol.get(tick.symbol) ?? -1
+      if (tick.seq <= previousSeq) {
         droppedTicks += 1
-        note(atMs, 'drop', 'out-of-order tick seq ' + String(tick.seq) + ' <= ' + String(lastSeq))
+        note(atMs, 'drop', 'out-of-order tick ' + tick.symbol + ' seq ' + String(tick.seq) + ' <= ' + String(previousSeq))
         return { published: [], buffered: buffer.length, dropped: 1, reason: 'out-of-order' }
       }
-      lastSeq = tick.seq
+      lastSeqBySymbol.set(tick.symbol, tick.seq)
       buffer = [...buffer, tick]
       enforceBounds(atMs)
       // 先缓冲后发布：只有 aligned 且缓冲未越界时才把这些 tick 发出去。

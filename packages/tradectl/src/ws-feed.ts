@@ -91,6 +91,13 @@ export interface FeedOptions {
   /** 订阅/重连的限频预算（与下单预算独立）。 */
   readonly subscribeTokenCapacity: number
   readonly subscribeRefillPerSec: number
+  /**
+   * 帧解码钩子：把交易所原始帧映射成 FeedMessage。缺省用内置 parseFeedMessage；
+   * 交易所适配器必须传自己的解码器（Binance 的字段是 e/s/p/T，不是我们的 kind/epoch/...）。
+   * 2026-10-01 真实冒烟暴露：第一版没有这个钩子，适配器的解码器无处可接，每一帧都被
+   * 算成坏帧——离线测试发现不了，因为测试喂的本来就是自家格式。
+   */
+  readonly decode?: (text: string, epoch: number) => FeedMessage | undefined
   /** 每次状态变化的通知（诊断/审计用）。 */
   readonly onEvent?: (event: { atMs: number; kind: 'open' | 'close' | 'error' | 'heartbeat-timeout' | 'reconnect' | 'bad-frame'; detail: string }) => void
 }
@@ -185,7 +192,7 @@ export function createStreamingFeed(options: FeedOptions): {
         messages += 1
         lastMessageAtMs = options.now()
         armHeartbeat()
-        const message = parseFeedMessage(text)
+        const message = (options.decode ?? ((raw: string) => parseFeedMessage(raw)))(text, generation)
         if (message === undefined) {
           badFrames += 1
           note('bad-frame', 'unparseable frame (first 80 chars): ' + text.slice(0, 80))
