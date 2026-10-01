@@ -40,6 +40,13 @@ export interface TriggerPumpOptions {
   readonly now: () => number
   /** 泵的检查间隔（不是触发精度：到点判定由 dueOccurrences 按 nextAtMs 决定）。 */
   readonly intervalMs: number
+  /**
+   * 积压告警阈值（不改派发语义，只让它可见）。
+   * 停机久了会一次性补发很多条：实测 5 秒间隔停一天 ⇒ 查询上限 1000 条。
+   * 超过阈值时通过 onBacklog 报出来，便于人（或后续策略）决定是否启用折叠。
+   */
+  readonly backlogWarnThreshold?: number | undefined
+  readonly onBacklog?: ((info: { readonly due: number; readonly atMs: number }) => void) | undefined
 }
 
 /**
@@ -73,6 +80,9 @@ export function createTriggerPump(options: TriggerPumpOptions): {
     ticks += 1
     lastTickAtMs = atMs
     const due = dueOccurrences(options.db, atMs)
+    // 积压可见化（**不改派发语义**）：停机久了补发条数会很多，必须让人看得见
+    const backlogWarnAt = options.backlogWarnThreshold ?? 200
+    if (due.length >= backlogWarnAt) options.onBacklog?.({ due: due.length, atMs })
     if (due.length === 0) return 0
     try {
       await options.dispatch(options.deskSessionId, due)
