@@ -169,7 +169,9 @@ export function handleV1(request: V1Request, options: V1SurfaceOptions): V1Respo
     }
   }
   if (versioned.rest.startsWith('assets/') && options.staticDir !== undefined) {
-    return serveStatic(versioned.rest.slice('assets/'.length), options.staticDir)
+    // 生产路径就是这里：/v1/assets/** 走本函数，accept-encoding 必须传下去，
+    // 否则预压缩永远不会生效（2026-10-01 端到端验证正是这样抓到 drill 分支与生产分支不一致）。
+    return serveStatic(versioned.rest.slice('assets/'.length), options.staticDir, request.headers['accept-encoding'])
   }
   return { status: 404, headers: { 'content-type': 'application/json; charset=utf-8' }, body: JSON.stringify({ code: 'NOT_FOUND', message: versioned.rest }) }
 }

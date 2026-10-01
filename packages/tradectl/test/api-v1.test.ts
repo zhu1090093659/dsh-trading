@@ -175,6 +175,18 @@ describe('静态资源托管', () => {
     expect(missing.status).toBe(404)
   })
 
+  it('管理员：/v1/assets/** 尊重 accept-encoding（预压缩在生产路径上真的生效）', () => {
+    // Given 一个带预压缩产物的静态根
+    const root = staticRoot()
+    writeFileSync(join(root, 'assets', 'app.js.gz'), gzipSync(Buffer.from('console.log(1)')))
+    // When 通过 /v1/assets/ 取资源并声明支持 gzip
+    const response = handleV1({ method: 'GET', path: '/v1/assets/assets/app.js', headers: { 'accept-encoding': 'gzip' } }, surface([okCard()], root))
+    // Then 生产路径也回 gzip（不是只有 drill 的分支才回）
+    expect(response.headers['content-encoding']).toBe('gzip')
+    expect(response.headers.vary).toBe('accept-encoding')
+    expect(response.bodyBytes).toBeDefined()
+  })
+
   it('管理员：/v1/assets/** 由面托管；没配 staticDir 时该路径 404', () => {
     // Given 一个配了静态根的面与一个没配的
     const root = staticRoot()
