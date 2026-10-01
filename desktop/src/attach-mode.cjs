@@ -57,4 +57,27 @@ function resolveHostMode(options) {
   return { mode: 'attach', url, reason: '已配置内网 bot：附着，不再起本地 host' };
 }
 
-module.exports = { resolveHostMode, isPrivateOrLoopbackHost };
+/**
+ * 读取 bot 附着配置（P4 步骤 5）。**两个来源，显式优先**：
+ *   1. 环境变量 %%DSH_TRADING_BOT_URL%%（临时演练、脚本化场景用）；
+ *   2. %%<DSH_HOME>/attach.json%% 里的 %%{ "botUrl": "..." }%%（桌面壳正常来源）。
+ * 读不到、读坏、或不是对象 ⇒ 一律当"没配置"（返回 undefined）—— 坏配置不能让 App 起不来。
+ * @param {{ home: string, env?: Record<string, string | undefined> }} options - home 目录与环境。
+ */
+function loadBotUrl(options) {
+  const env = options.env ?? process.env;
+  const fromEnv = typeof env.DSH_TRADING_BOT_URL === 'string' ? env.DSH_TRADING_BOT_URL.trim() : '';
+  if (fromEnv !== '') return fromEnv;
+  try {
+    const raw = require('node:fs').readFileSync(require('node:path').join(options.home, 'attach.json'), 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && typeof parsed.botUrl === 'string') {
+      return parsed.botUrl.trim();
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+module.exports = { resolveHostMode, isPrivateOrLoopbackHost, loadBotUrl };

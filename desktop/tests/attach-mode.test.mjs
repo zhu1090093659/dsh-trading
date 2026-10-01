@@ -3,11 +3,14 @@
  * 用 node:test（与 desktop/tests 其余用例一致），跑法：pnpm test:desktop
  */
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 
 const require = createRequire(import.meta.url)
-const { resolveHostMode, isPrivateOrLoopbackHost } = require('../src/attach-mode.cjs')
+const { resolveHostMode, isPrivateOrLoopbackHost, loadBotUrl } = require('../src/attach-mode.cjs')
 
 test('管理员：没配 bot 时保持现状（起本地 host）', () => {
   // Given 没有 bot 配置
@@ -55,4 +58,27 @@ test('管理员：回环/私有网段判定覆盖本机、私有段与内网域�
   // When/Then 分别判定
   for (const host of inside) assert.equal(isPrivateOrLoopbackHost(host), true, host + ' 应被认作内网')
   for (const host of outside) assert.equal(isPrivateOrLoopbackHost(host), false, host + ' 不应被认作内网')
+})
+
+test('管理员：loadBotUrl 先看环境变量、再看 attach.json，坏配置当没配置', () => {
+  // Given 一个临时 home（真文件）
+  const home = mkdtempSync(join(tmpdir(), 'attach-load-'))
+  try {
+    // When 没写文件也没设环境变量
+    // Then 视为未配置
+    assert.equal(loadBotUrl({ home, env: {} }), undefined)
+    // When 写入文件
+    writeFileSync(join(home, 'attach.json'), JSON.stringify({ botUrl: ' http://10.1.1.1:8888 ' }))
+    // Then 读出来并去掉空白
+    assert.equal(loadBotUrl({ home, env: {} }), 'http://10.1.1.1:8888')
+    // When 同时设了环境变量
+    // Then 环境变量优先
+    assert.equal(loadBotUrl({ home, env: { DSH_TRADING_BOT_URL: 'http://192.168.0.2:1' } }), 'http://192.168.0.2:1')
+    // When 文件内容坏掉
+    writeFileSync(join(home, 'attach.json'), '{ not json')
+    // Then 当作未配置（不抛错，App 还能起来）
+    assert.equal(loadBotUrl({ home, env: {} }), undefined)
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
 })
