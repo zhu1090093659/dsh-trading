@@ -39,6 +39,14 @@ const CHECKS = [
     network: false,
   },
   {
+    // P5 三档验收的**第 1 档（shadow）**：真实行情驱动决策与风控、不产生任何订单。
+    // 默认 30 秒；正式验收跑用 SHADOW_RUN_MS 拉长（10 分钟版已入册，见 ops-runbook 演练记录）。
+    name: 'P5 第 1 档 shadow 验收（真实行情，无订单，需网络）',
+    script: 'packages/tradectl/drill/shadow-acceptance.ts',
+    expect: ['第 1 档通过'],
+    network: true,
+  },
+  {
     // P5 步骤 1 的"装进进程"在不涉真钱下的最近一步：整条链真的一起跑（真 DB + 真 journal）。
     // 各幕分别验 #24（单标的不连坐）、#25（全局封顶 reduce_only、永不 halt）、恢复自愈、重连产 gap report、
     // dead-man 第一层看门狗、以及**真实检测器**（写探针 + 交易所错误计数器）接通。

@@ -22,7 +22,9 @@ import { createDeskLoop } from '../lib/desk-loop.js'
 
 const NL = String.fromCharCode(10)
 const SYMBOL = 'BTC/USDT'
-const RUN_MS = Number(process.env.SHADOW_RUN_MS ?? 600_000)
+// 默认 30 秒：让**常设冒烟**能直接跑它（可反复复现第 1 档证据）；
+// 正式验收跑用显式 env 拉长（2026-10-01 的入册记录用 SHADOW_RUN_MS=600000）。
+const RUN_MS = Number(process.env.SHADOW_RUN_MS ?? 30_000)
 const T0 = Date.now()
 const stamp = new Date(T0).toISOString().replace(/[:.]/g, '-')
 const home = join(process.cwd(), '.local', 'drills', 'shadow-' + stamp)
