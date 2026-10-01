@@ -17,6 +17,17 @@ import { join, resolve } from 'node:path'
 export { writeJsonAtomic } from './fs-atomic.ts'
 
 const DEFAULT_HOME_DIR_NAME = '.dsh'
+/** 交易 home 的目录名（与 CLI wrapper / 各脚本的约定一致）。 */
+const TRADING_HOME_DIR_NAME = '.dsh-trading'
+/** stderr 去重标记（**去重只发生在默认出口**：注入的 warn 每次都调，测试才确定）。 */
+let warnedToStderr = false
+
+/** 默认告警出口：写 stderr，且进程内只写一次（脏日志比没有日志更糟）。 */
+function warnOnceToStderr(message: string): void {
+  if (warnedToStderr) return
+  warnedToStderr = true
+  process.stderr.write(message + String.fromCharCode(10))
+}
 
 /** 展开 `~` 与 `~/` 前缀（对齐宿主 expandHomePath；Windows 反斜杠前缀同样接受）。 */
 function expandHomePath(path: string): string {
@@ -29,13 +40,33 @@ function expandHomePath(path: string): string {
 /**
  * 解析 dsh home 根目录。
  * @param env 环境变量映射，缺省读 `process.env`；空白 `$DSH_HOME` 视为未设。
+ * @param options.warn 告警出口（缺省写 stderr；测试注入以便断言）。
+ *
+ * **告警（不改返回值）**：解析结果落在缺省 home（`~/.dsh`）而 `~/.dsh-trading` 存在时，打一行告警。
+ * 场景是 2026-10-01 实测过的：agent 会话继承宿主的 `DSH_HOME=~/.dsh`，于是交易数据被解析到宿主 home ——
+ * 而这一切**不会报错**，脚本照常"成功"，只是作用在另一个实例的数据上。
+ * 这一行只把"静默跑错 home"变成"响亮但可忽略"：**返回值、优先级、语义全不变**（改默认值属于架构决策，另议）。
  */
-export function dshHomeDir(env: Record<string, string | undefined> = process.env): string {
+export function dshHomeDir(
+  env: Record<string, string | undefined> = process.env,
+  options: { readonly warn?: ((message: string) => void) | undefined } = {},
+): string {
   const fromEnv = env.DSH_HOME
   const configured =
     fromEnv !== undefined && fromEnv.trim().length > 0 ? fromEnv : resolve(homedir(), DEFAULT_HOME_DIR_NAME)
-  return resolve(expandHomePath(configured))
+  const resolvedHome = resolve(expandHomePath(configured))
+  // 只在"确实可能跑错"时告警：结果是缺省 home，且本机存在 trading home
+  if (resolvedHome === defaultDshHome() && existsSync(resolve(homedir(), TRADING_HOME_DIR_NAME))) {
+    const warn = options.warn ?? warnOnceToStderr
+    warn(
+      "[dsh-home] 解析到缺省 home " + resolvedHome + "，而本机存在 " + resolve(homedir(), TRADING_HOME_DIR_NAME) +
+        "：交易数据可能正被写到宿主 home。若这不是本意，请显式设置 DSH_HOME=" + resolve(homedir(), TRADING_HOME_DIR_NAME) +
+        "。（本告警不影响返回值）",
+    )
+  }
+  return resolvedHome
 }
+
 
 /** 缺省 home（`~/.dsh`）——迁移判据用：解析结果等于它就没有旧 home 可迁。 */
 export function defaultDshHome(): string {
