@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "dsh-trading",
+    "slug": "dsh-trading-mobile",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.dshtrading.mobile",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.dshtrading.mobile"
+    }
+  }
+}

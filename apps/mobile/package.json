@@ -1,0 +1,18 @@
+{
+  "name": "dsh-trading-mobile",
+  "version": "0.0.0",
+  "private": true,
+  "description": "dsh-trading 移动端（P4 ④）：本地构建，不进 pnpm workspace（与 desktop/ 同一先例）",
+  "scripts": {
+    "start": "expo start",
+    "prebuild:ios": "expo prebuild -p ios",
+    "build:ios:sim": "xcodebuild -workspace ios/*.xcworkspace -scheme $(node scripts/ios-scheme.mjs) -sdk iphonesimulator -configuration Debug -derivedDataPath build/ios-sim build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "^57.0.26"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}
