@@ -137,14 +137,14 @@ describe('provenance 足以重建判定', () => {
       action: { kind: 'open', symbol: 'BTC/USDT', quantity: 0.1, notional: 6_000 },
       provenance: provenance(),
       risk: initialRiskState(T0),
-      limits: input(),
+      limits: input({ positionNotional: 48_000 }),
     })
     // When 重建
     const rebuilt = rebuildDecision(recorded.card, input({ positionNotional: 48_000 }), priceAgeBudgetMs)
     // Then 可重建且结论一致
     expect(recorded.rebuildable).toBe(true)
     expect(rebuilt).toMatchObject({ rebuildable: true, reproduced: true })
-    expect(rebuilt.detail).toContain('notionalMax')
+    expect(rebuilt.detail).toContain('positionNotionalMax')
   })
 
   it('管理员：价格超龄的卡片被明确标为不可重建（诚实标注，不假装）', () => {
