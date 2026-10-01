@@ -42,12 +42,12 @@
 
 ## 后续修正：bot-closure:check 变成可运行的门禁（2026-10-01）
 
-%%pnpm bot-closure:check%% 此前**按名称跑必定失败**（脚本强制 %%--bot-profile%% 参数，npm script 没传）。一个跑不起来的门禁形同虚设 —— 已修为：
+`pnpm bot-closure:check` 此前**按名称跑必定失败**（脚本强制 `--bot-profile` 参数，npm script 没传）。一个跑不起来的门禁形同虚设 —— 已修为：
 
-- 没给参数时默认到 trading home 的标准 profile（%%~/.dsh-trading/profiles/trading-bot%%）；
-- **继承的宿主 home 一律拒绝猜测**：%%DSH_HOME%% 存在且不像交易 home 时报错退出并让人显式传参（实测输出：%%DSH_HOME=/Users/zcl/.dsh 看起来是宿主实例的 home，不是交易 home；拒绝猜测。%%）。这条守卫当场抓到了 agent 会话自身的环境。
+- 没给参数时默认到 trading home 的标准 profile（`~/.dsh-trading/profiles/trading-bot`）；
+- **继承的宿主 home 一律拒绝猜测**：`DSH_HOME` 存在且不像交易 home 时报错退出并让人显式传参（实测输出：`DSH_HOME=/Users/zcl/.dsh 看起来是宿主实例的 home，不是交易 home；拒绝猜测。`）。这条守卫当场抓到了 agent 会话自身的环境。
 
-修后按名称运行的真实输出：bot 顶层包 54 / 24 个 @dshtrading / **0 个 GUI 平面包 / 0 个 UI 重依赖** / 13.5 MB；GUI 195 / 56 / 8 / 60.7 MB；差 141 包 47.2 MB；**AC1–AC3 通过**。这是在新增加 %%@dshtrading/cockpit%% 之后重测的 —— 驾驶舱没有污染 bot 闭包。
+修后按名称运行的真实输出：bot 顶层包 54 / 24 个 @dshtrading / **0 个 GUI 平面包 / 0 个 UI 重依赖** / 13.5 MB；GUI 195 / 56 / 8 / 60.7 MB；差 141 包 47.2 MB；**AC1–AC3 通过**。这是在新增加 `@dshtrading/cockpit` 之后重测的 —— 驾驶舱没有污染 bot 闭包。
 
 ## 未验证项（如实标注）
 

@@ -43,31 +43,31 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 
 ## 降级检测层（2026-10-01 补，P5 步骤 3 手册暴露的缺口）
 
-%%packages/tradectl/src/degradation-monitor.ts%%：把「信号」映射成「触发源」。分工明确 —— %%degradation.ts%% 回答"给了触发源该怎么办"，本模块回答"**现在有哪些触发源**"。
+`packages/tradectl/src/degradation-monitor.ts`：把「信号」映射成「触发源」。分工明确 —— `degradation.ts` 回答"给了触发源该怎么办"，本模块回答"**现在有哪些触发源**"。
 
 **输入信号（全部注入）**：各标的的对齐态、核心心跳时间与超时阈值、交易所连续报错数与阈值、磁盘写失败标志、注入时钟。
 
 **两条纪律（都有测试）**：
 
-1. **未知 ≠ 健康**：拿不到心跳时间或对齐态时，进 %%unknownSignals%% 并如实报告，**不假装健康**（静默把未知当健康是这类系统最危险的默认值）；
-2. **检测层永不产 %%out-of-band-halt%%**：带外 halt 只由带外通道产生（设计 §13：自动路径上 halt 永不可达）。测试里把全部信号同时恶化，断言触发源集合恰为四个可自动降级的项。
+1. **未知 ≠ 健康**：拿不到心跳时间或对齐态时，进 `unknownSignals` 并如实报告，**不假装健康**（静默把未知当健康是这类系统最危险的默认值）；
+2. **检测层永不产 `out-of-band-halt`**：带外 halt 只由带外通道产生（设计 §13：自动路径上 halt 永不可达）。测试里把全部信号同时恶化，断言触发源集合恰为四个可自动降级的项。
 
-**测试 7 例**：全健康 ⇒ 无触发源；未对齐/陈旧 ⇒ 只带那些标的；心跳超时 ⇒ %%heartbeat-lost%%；从未收到心跳 ⇒ 未知而非健康；对齐态取不到 ⇒ 未知且不误报；交易所报错阈值边界（2/3）+ 磁盘写失败；全恶化 ⇒ 集合精确匹配且不含 halt。
+**测试 7 例**：全健康 ⇒ 无触发源；未对齐/陈旧 ⇒ 只带那些标的；心跳超时 ⇒ `heartbeat-lost`；从未收到心跳 ⇒ 未知而非健康；对齐态取不到 ⇒ 未知且不误报；交易所报错阈值边界（2/3）+ 磁盘写失败；全恶化 ⇒ 集合精确匹配且不含 halt。
 
-**仍未接**：真实检测器（谁去发现 ENOSPC、谁去比时钟、谁去数交易所错误）与恢复时调用 %%buildGapReport%% —— 这两根线属 P5 步骤 1。
+**仍未接**：真实检测器（谁去发现 ENOSPC、谁去比时钟、谁去数交易所错误）与恢复时调用 `buildGapReport` —— 这两根线属 P5 步骤 1。
 
 ## gap report 收集器（2026-10-01 补，P5 步骤 1 第二根线）
 
-%%packages/tractectl%%… 更正：%%packages/tradectl/src/gap-collector.ts%% 的 %%collectGapReport({orders, audit}, window)%%：能从库里取的就取，**取不到的逐条点名**（%%missingInputs%%）—— 不用空数组冒充"期间什么都没发生"，后者是最危险的谎。
+`packages/tractectl`… 更正：`packages/tradectl/src/gap-collector.ts` 的 `collectGapReport({orders, audit}, window)`：能从库里取的就取，**取不到的逐条点名**（`missingInputs`）—— 不用空数组冒充"期间什么都没发生"，后者是最危险的谎。
 
 **实测出来的数据源完整度**（四类里只有一类齐全）：
 
 | 输入 | 数据源 | 状态 |
 |---|---|---|
-| 错过的触发 | %%occurrences.missed%% + %%due_at_ms%% | ✅ 齐全 |
-| 被拒意图 | %%intents.state = 'rejected'%% | ⚠️ 能数条数，**没有理由列** |
-| 降级动作 | journal 的 %%degradation*%% 事件 | ⚠️ **没有写入点**（现有写入点是 shadow.decision 与 reconcile.*） |
-| 持仓变化 | %%positions%% | ⚠️ **只有当前值、无历史** ⇒ 只能给"之后" |
+| 错过的触发 | `occurrences.missed` + `due_at_ms` | ✅ 齐全 |
+| 被拒意图 | `intents.state = 'rejected'` | ⚠️ 能数条数，**没有理由列** |
+| 降级动作 | journal 的 `degradation*` 事件 | ⚠️ **没有写入点**（现有写入点是 shadow.decision 与 reconcile.*） |
+| 持仓变化 | `positions` | ⚠️ **只有当前值、无历史** ⇒ 只能给"之后" |
 
 **这条发现改变了工作量判断**：让"恢复必须产出 gap report"成立，不是接一根线，而是要先补三处**记录** —— 而这三处记录本身就是审计要求（被拒理由、降级动作、持仓变化都该留痕）。
 
@@ -75,20 +75,20 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 
 ## desk 记录写入者（2026-10-01 补，P5 步骤 1 第三根线）
 
-%%packages/tradectl/src/desk-records.ts%%：gap 收集器实测出"四类输入只有一类有数据源"后，本轮把**记录补上**。根因比预想深：%%intents%% / %%positions%% 两张表**连生产写入者都没有**（只有 safe-boot 的 UPDATE 与测试的 INSERT），所以这是"建 API"而不是"补调用"。
+`packages/tradectl/src/desk-records.ts`：gap 收集器实测出"四类输入只有一类有数据源"后，本轮把**记录补上**。根因比预想深：`intents` / `positions` 两张表**连生产写入者都没有**（只有 safe-boot 的 UPDATE 与测试的 INSERT），所以这是"建 API"而不是"补调用"。
 
 | 能力 | 语义 |
 |---|---|
-| %%migrateDeskRecords%% | 幂等给 %%intents%% 补 %%reason%% 列（已有则不动）—— 拒绝必须带理由 |
-| %%recordIntent%% / %%recordIntentRejection%% | 首次落库；同 id 幂等更新状态；拒绝连理由一起写 |
-| %%recordPositionChange%% | upsert 持仓，**只在数量变化时**写 %%position.change%% 到 journal（每轮都写会把真正的变化淹掉）|
-| %%recordDegradation%% | 档位变化写 %%degradation.transition%%（gap report 的一类输入）|
+| `migrateDeskRecords` | 幂等给 `intents` 补 `reason` 列（已有则不动）—— 拒绝必须带理由 |
+| `recordIntent` / `recordIntentRejection` | 首次落库；同 id 幂等更新状态；拒绝连理由一起写 |
+| `recordPositionChange` | upsert 持仓，**只在数量变化时**写 `position.change` 到 journal（每轮都写会把真正的变化淹掉）|
+| `recordDegradation` | 档位变化写 `degradation.transition`（gap report 的一类输入）|
 
-**收集器同步升级**：被拒意图现在**带理由**返回（%%i-1:desk level is reduce_only%%）；没有 %%reason%% 列的旧库仍能工作，但会在 %%missingInputs%% 里如实说明"只能给条数"。
+**收集器同步升级**：被拒意图现在**带理由**返回（`i-1:desk level is reduce_only`）；没有 `reason` 列的旧库仍能工作，但会在 `missingInputs` 里如实说明"只能给条数"。
 
 **测试 9 例**（真 node:sqlite + 真 journal）：迁移幂等；拒绝带理由且收集器给出理由分布；持仓只在变化时记 journal（首次 true / 相同 false / 变化 true，且 journal 恰好两条）；降级动作被收集器认出；意图重复落库幂等。
 
-**仍未接**：写入 API **没有任何运行时调用者**；收集器**尚未消费** journal 里的持仓历史（%%positionsBefore%% 仍为空）。
+**仍未接**：写入 API **没有任何运行时调用者**；收集器**尚未消费** journal 里的持仓历史（`positionsBefore` 仍为空）。
 
 ### 收集器升级：从 journal 重建持仓（同日）
 
@@ -98,7 +98,7 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 
 ### desk 运行时环路（同日）：把五层串成一条链
 
-%%packages/tradectl/src/desk-loop.ts%% —— 此前每一层都有零件，**却没有东西把它们串起来**：检测层产触发源、degradation 决定档位、risk-gate 维护状态、desk-records 留痕、gap-collector 生成报告。本模块是那条链：
+`packages/tradectl/src/desk-loop.ts` —— 此前每一层都有零件，**却没有东西把它们串起来**：检测层产触发源、degradation 决定档位、risk-gate 维护状态、desk-records 留痕、gap-collector 生成报告。本模块是那条链：
 
     每轮：取信号 → scanDegradation → decideDegradation → applyRiskEvent → 变化时 recordDegradation
     重连：collectGapReport → journal.append('gap.report', …)
@@ -111,7 +111,7 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 
 ### desk 环路装配演练（同日）：把"装进进程"做到不涉真钱的最近一步
 
-%%packages/tradectl/drill/desk-loop-drill.ts%%：真 DB + 真 journal，四幕脚本化信号，退出码即断言。
+`packages/tradectl/drill/desk-loop-drill.ts`：真 DB + 真 journal，四幕脚本化信号，退出码即断言。
 
     第一幕 健康                    → level=normal（留痕 0）
     第二幕 仅 BTC 陈旧（单标的）    → level=normal（留痕 1）   ← #24：全局档位不动、ETH 不被连坐
@@ -121,7 +121,7 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 
 **第一版演练写错了断言**：我把"单标的陈旧"和"心跳丢失（全局）"安排在**同一幕**，然后断言"ETH 不该被连坐" —— 而全局故障下 desk 整体 reduce_only、ETH 本就该被挡。**断言错了，实现是对的**；改成四幕后两条不变量各自可辨。
 
-已接进常设冒烟（%%pnpm e2e:smoke%% 默认跑，无网络）。
+已接进常设冒烟（`pnpm e2e:smoke` 默认跑，无网络）。
 
 ### dead-man 第一层：心跳 + 快环看门狗（2026-10-01 落地）
 
@@ -129,11 +129,11 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 
 | 模块 | 职责 |
 |---|---|
-| %%heartbeat.ts%% | **原子写**心跳（临时文件 + rename）。崩溃时不会留半个 JSON —— 否则看门狗会把"文件坏了"误判成"心跳停了"（其实两者都该按失活处理，但原因要能分清）|
-| %%watchdog.ts%% | 独立进程只读心跳文件，**不依赖 agent 存活**。一次失活**只喊一次**（反复喊会淹掉通知与审计）；**心跳读不到按失活处理**（fail-closed：误报代价是"多停一次"，漏报是"该停没停"，不对称）；**恢复也留痕** |
-| %%desk-loop.ts%% | 每轮落一次心跳（%%heartbeatPath%% 可选）。**先落心跳再判定** —— 宁可让人看到"还在跳但已降级"，也不要让看门狗因一次长判定误判失活 |
+| `heartbeat.ts` | **原子写**心跳（临时文件 + rename）。崩溃时不会留半个 JSON —— 否则看门狗会把"文件坏了"误判成"心跳停了"（其实两者都该按失活处理，但原因要能分清）|
+| `watchdog.ts` | 独立进程只读心跳文件，**不依赖 agent 存活**。一次失活**只喊一次**（反复喊会淹掉通知与审计）；**心跳读不到按失活处理**（fail-closed：误报代价是"多停一次"，漏报是"该停没停"，不对称）；**恢复也留痕** |
+| `desk-loop.ts` | 每轮落一次心跳（`heartbeatPath` 可选）。**先落心跳再判定** —— 宁可让人看到"还在跳但已降级"，也不要让看门狗因一次长判定误判失活 |
 
-**装配演练第五幕**（desk-loop-drill）：心跳新鲜 ⇒ 不判失活；时钟推进 30 秒且不再有心跳 ⇒ 判失活（%%heartbeat-stale%%）且**只喊一次**；恢复写心跳 ⇒ 判恢复并留痕。
+**装配演练第五幕**（desk-loop-drill）：心跳新鲜 ⇒ 不判失活；时钟推进 30 秒且不再有心跳 ⇒ 判失活（`heartbeat-stale`）且**只喊一次**；恢复写心跳 ⇒ 判恢复并留痕。
 
 **测试**：watchdog 5 例 + 环路心跳 1 例（真文件、注入时钟、手工调度器；无 sleep）。
 
@@ -141,11 +141,11 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 
 ### 时钟漂移检测（2026-10-01 补）
 
-%%clock-drift.ts%%：用**两条独立时钟互校** —— 墙上时钟（会被人调、会被 NTP 拨）与单调时钟（只会前进）。增量显著不一致 ⇒ 墙钟被动过，而按墙钟算的年龄预算与窗口切分都会因此失真。
+`clock-drift.ts`：用**两条独立时钟互校** —— 墙上时钟（会被人调、会被 NTP 拨）与单调时钟（只会前进）。增量显著不一致 ⇒ 墙钟被动过，而按墙钟算的年龄预算与窗口切分都会因此失真。
 
 三条立场：**首样本只做基线**（没有前一样本就没有增量，报 0 而不是报漂移）；**单调钟倒退视为最大可疑**（理论上它不会倒退）；**只报告不决策**（是否降级由 decideDegradation 定）。
 
-**检测层同步**：%%MonitorSignals%% 新增 %%clockDriftMs%% / %%clockDriftToleranceMs%%；**没给就是"没测"** ⇒ 进 %%unknownSignals%%，不假装健康（与心跳、对齐态同一纪律）。测试：检测器 6 例 + 检测层 2 例（超容差触发、未测记未知、等于容差不触发）。
+**检测层同步**：`MonitorSignals` 新增 `clockDriftMs` / `clockDriftToleranceMs`；**没给就是"没测"** ⇒ 进 `unknownSignals`，不假装健康（与心跳、对齐态同一纪律）。测试：检测器 6 例 + 检测层 2 例（超容差触发、未测记未知、等于容差不触发）。
 
 **仍未做**：真实拨钟演练（目前只验了注入读数）。
 
@@ -155,12 +155,12 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 
 | 检测器 | 语义要点 |
 |---|---|
-| %%probeWritable(dir)%% | **真去写一小段再删**，而不是查 %%statfs%% —— 能查到的空间不等于写得进去（配额、只读挂载、inode 耗尽、容器层限制都可能在空间充足时报错）。审计与 journal 是这套系统的命根子，所以用最贵也最准的办法。按 errno 给出**可读原因**（ENOSPC/EROFS/EACCES），不是笼统的"失败" |
-| %%createVenueErrorStreak({threshold})%% | **只有连续错误**才算交易所不正常（偶发限频/单次超时不该拉低档位）；**任何一次成功即清零**，而不是等时间窗（时间窗会让恢复变慢且难以解释）；阈值 ≤ 0 视为禁用 |
+| `probeWritable(dir)` | **真去写一小段再删**，而不是查 `statfs` —— 能查到的空间不等于写得进去（配额、只读挂载、inode 耗尽、容器层限制都可能在空间充足时报错）。审计与 journal 是这套系统的命根子，所以用最贵也最准的办法。按 errno 给出**可读原因**（ENOSPC/EROFS/EACCES），不是笼统的"失败" |
+| `createVenueErrorStreak({threshold})` | **只有连续错误**才算交易所不正常（偶发限频/单次超时不该拉低档位）；**任何一次成功即清零**，而不是等时间窗（时间窗会让恢复变慢且难以解释）；阈值 ≤ 0 视为禁用 |
 
-**装配演练第六幕**把它们接通：连错 2 次（阈值 3）⇒ 无触发源；第 3 次 ⇒ %%venue-error%% 且 desk 降为 %%reduce_only%%；一次成功 ⇒ 触发源清空、档位回 %%normal%%；写探针在临时 home 上如实报可写。
+**装配演练第六幕**把它们接通：连错 2 次（阈值 3）⇒ 无触发源；第 3 次 ⇒ `venue-error` 且 desk 降为 `reduce_only`；一次成功 ⇒ 触发源清空、档位回 `normal`；写探针在临时 home 上如实报可写。
 
-**第六幕第一版断言又漏了上下文**：第五幕把时钟推后 30 秒，环路看到的仍是心跳陈旧（%%heartbeat-lost%% 一直在触发）⇒ 档位永远回不到 normal，venue-error 的恢复路径验不出来。补了"第五幕收尾：心跳恢复"这一步才对。**又一次证明：断言写错时先怀疑断言，别急着改实现。**
+**第六幕第一版断言又漏了上下文**：第五幕把时钟推后 30 秒，环路看到的仍是心跳陈旧（`heartbeat-lost` 一直在触发）⇒ 档位永远回不到 normal，venue-error 的恢复路径验不出来。补了"第五幕收尾：心跳恢复"这一步才对。**又一次证明：断言写错时先怀疑断言，别急着改实现。**
 
 **测试 6 例**（写探针：可写/深层路径自建/只读目录报 EACCES 且有可读原因；错误计数：成功清零、达阈值、阈值 ≤ 0 禁用）。
 
@@ -170,22 +170,22 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 
 | 层 | 证据 |
 |---|---|
-| 探测 | %%probeWritable%% 真写探针，按 errno 给出可读原因（ENOSPC/EROFS/EACCES）|
-| **写入失败是否响亮** | 用 SQLite 自己的 %%PRAGMA max_page_count%%（压到当前页数）制造**真实的** "database or disk is full" ⇒ %%journal.append%% **抛错**，调用方无法把它当成成功 |
+| 探测 | `probeWritable` 真写探针，按 errno 给出可读原因（ENOSPC/EROFS/EACCES）|
+| **写入失败是否响亮** | 用 SQLite 自己的 `PRAGMA max_page_count`（压到当前页数）制造**真实的** "database or disk is full" ⇒ `journal.append` **抛错**，调用方无法把它当成成功 |
 | **环路是否 fail-safe** | 记录失败**不打断判定**（抛出去会连风控状态都不再更新），而是计数 + 记住原因，并把"存储坏了"并进触发源 ⇒ **下一轮按 disk-full 降级、停止新增风险** |
 
-**测试 4 例**：只读/满库下写入抛错（不静默）；记录失败时环路不崩且计数可见；失败过的下一轮 %%triggers%% 含 %%disk-full%% 且档位 %%reduce_only%%、开新仓被拒；记录正常时计数为 0（不把健康说成坏）。
+**测试 4 例**：只读/满库下写入抛错（不静默）；记录失败时环路不崩且计数可见；失败过的下一轮 `triggers` 含 `disk-full` 且档位 `reduce_only`、开新仓被拒；记录正常时计数为 0（不把健康说成坏）。
 
 ### 两条方法论教训（本轮都踩到了）
 
-1. **chmod 不能模拟"写不进去"**：我先把库文件改成 0444，结果写入照常成功 —— 因为 **POSIX 下已打开描述符的权限在 open 时就固定了**，chmod 不影响它。改用 SQLite 的 %%max_page_count%% 才是真模拟（它等价于 SQLITE_FULL）。**差点据此写下"审计会静默丢"的错误结论。**
-2. **契约假件的默认值要选"永不失败"**：我写 %%failFrom ?? 0%% ⇒ 默认永远失败，于是"健康路径"的用例其实一直在失败（断言恰好把它抓出来）。
+1. **chmod 不能模拟"写不进去"**：我先把库文件改成 0444，结果写入照常成功 —— 因为 **POSIX 下已打开描述符的权限在 open 时就固定了**，chmod 不影响它。改用 SQLite 的 `max_page_count` 才是真模拟（它等价于 SQLITE_FULL）。**差点据此写下"审计会静默丢"的错误结论。**
+2. **契约假件的默认值要选"永不失败"**：我写 `failFrom ?? 0` ⇒ 默认永远失败，于是"健康路径"的用例其实一直在失败（断言恰好把它抓出来）。
 
 ### 环路自带写探针（2026-10-01 补完磁盘满最后一环）
 
-%%createDeskLoop%% 新增 %%probeDir%%：每轮**真写一次探针**并把结果并进本轮信号（与调用方上报的 %%diskWriteFailed%% 取"或"）。
+`createDeskLoop` 新增 `probeDir`：每轮**真写一次探针**并把结果并进本轮信号（与调用方上报的 `diskWriteFailed` 取"或"）。
 
-**为什么由环路自己探**：%%diskWriteFailed%% 是调用方喂的，而"审计库所在的盘还能不能写"这件事**环路比调用方更该关心** —— 它的记录就写在那里。自己探一次比等人上报更早发现问题。
+**为什么由环路自己探**：`diskWriteFailed` 是调用方喂的，而"审计库所在的盘还能不能写"这件事**环路比调用方更该关心** —— 它的记录就写在那里。自己探一次比等人上报更早发现问题。
 
 **测试 3 例**（真目录）：可写 ⇒ 无 disk-full、档位 normal、探针结论进 stats；**只读目录 ⇒ 当轮即 disk-full、reduce_only、开新仓被拒**，且原因可读；盘可写但调用方明确上报失败 ⇒ 仍然降级（不能因为探针恰好成功就忽略写入方的实测失败）。
 

@@ -137,7 +137,7 @@ Tier 1 的 `static-gates` job 里新增两步（见 .github/workflows/ci.yml）�
 
 ### 第三个新成员：`pnpm home-guard:check`（2026-10-01 同日）
 
-%%static-gates%% 现在是 16 步，最后三步依次是 %%node scripts/e2e-smoke.mjs%%、%%pnpm home-guard:check%%（前者端到端冒烟、后者读 DSH_HOME 的脚本必须带守卫）。判据与理由见 [home 契约](../process/2026-09-08-separate-dsh-home.md) 的"home 守卫门禁"一节。
+`static-gates` 现在是 16 步，最后三步依次是 `node scripts/e2e-smoke.mjs`、`pnpm home-guard:check`（前者端到端冒烟、后者读 DSH_HOME 的脚本必须带守卫）。判据与理由见 [home 契约](../process/2026-09-08-separate-dsh-home.md) 的"home 守卫门禁"一节。
 
 ## 统一门禁入口 gates:all（2026-10-01）
 
@@ -162,29 +162,29 @@ scripts/gates-all.mjs 顺序跑 14 条门禁，**显式收集每条退出码**�
 
 ## CI 接线检查 ci-wiring:check（2026-10-01）
 
-%%scripts/ci-wiring-check.mjs%% 检查 workflow 里引用的**每个 pnpm 脚本与 node 脚本是否真的存在**。
+`scripts/ci-wiring-check.mjs` 检查 workflow 里引用的**每个 pnpm 脚本与 node 脚本是否真的存在**。
 
 **堵的方向与本会话此前发现的那个相反**：此前是"门禁建好了却没接进 CI"（contract-id:check）；这里堵的是"CI 里写了但脚本没了"（改名、删除、手误）—— 后者的后果是 **push 之后 CI 才红**，而那时人已经走了。**本地能查的事不该留给 CI。**
 
-**实现要点（第一版踩坑）**：%%node scripts/x.mjs%% **必须按所在步骤的 %%working-directory%% 解析**。第一版没做，于是把 %%desktop-release.yml%% 里 %%working-directory: desktop%% 下的 %%node scripts/verify-runtime-toolchain.mjs%% 误报成断裂（实际文件在 %%desktop/scripts/%%）。自测里专门有一条守着这个语义，另一条守着"别把守卫修成永真"（子目录下真缺文件时仍要报错）。
+**实现要点（第一版踩坑）**：`node scripts/x.mjs` **必须按所在步骤的 `working-directory` 解析**。第一版没做，于是把 `desktop-release.yml` 里 `working-directory: desktop` 下的 `node scripts/verify-runtime-toolchain.mjs` 误报成断裂（实际文件在 `desktop/scripts/`）。自测里专门有一条守着这个语义，另一条守着"别把守卫修成永真"（子目录下真缺文件时仍要报错）。
 
-**实测**：3 个 workflow、18 处 pnpm 脚本、8 处 node 脚本 ⇒ **接线完整**，exit 0。自测 3 例（进 %%test:scripts%%）。
+**实测**：3 个 workflow、18 处 pnpm 脚本、8 处 node 脚本 ⇒ **接线完整**，exit 0。自测 3 例（进 `test:scripts`）。
 
 ### 覆盖方向 + 一次 **grep 假零命中**事故（2026-10-01）
 
-%%ci-wiring-check.mjs%% 现在查**两个方向**：① 引用完整性（workflow 里写的脚本必须存在，按步骤的 %%working-directory%% 解析）；② **覆盖完整性** —— 一份 %%MUST_BE_WIRED%%（13 条）必须真的出现在 CI 或 %%gates:all%% 里，而**不进 CI 的门禁必须写明原因**（%%INTENTIONALLY_UNWIRED%%：%%ui:check%% 需 headless Chrome 真起实例、%%bot-closure:check%% 需已构建的 bot profile）。
+`ci-wiring-check.mjs` 现在查**两个方向**：① 引用完整性（workflow 里写的脚本必须存在，按步骤的 `working-directory` 解析）；② **覆盖完整性** —— 一份 `MUST_BE_WIRED`（13 条）必须真的出现在 CI 或 `gates:all` 里，而**不进 CI 的门禁必须写明原因**（`INTENTIONALLY_UNWIRED`：`ui:check` 需 headless Chrome 真起实例、`bot-closure:check` 需已构建的 bot profile）。
 
-**事故记录（值得单独记）**：本轮我用 %%grep -rn "e2e\|smoke" .github/%% 得到**零命中**，据此几乎写下"我此前记录 e2e-smoke 已进 CI 是错的"这条更正 —— 而 %%tools.read%% 打开 ci.yml 一看，**第 69 行就是 %%node scripts/e2e-smoke.mjs%%**（contract-id 在 64、home-guard 在 74）。改用 node 精确复核后确认：**三条门禁确实都在 CI 里，我原来的记录是对的，那次 grep 才是错的**。
+**事故记录（值得单独记）**：本轮我用 `grep -rn "e2e\|smoke" .github/` 得到**零命中**，据此几乎写下"我此前记录 e2e-smoke 已进 CI 是错的"这条更正 —— 而 `tools.read` 打开 ci.yml 一看，**第 69 行就是 `node scripts/e2e-smoke.mjs`**（contract-id 在 64、home-guard 在 74）。改用 node 精确复核后确认：**三条门禁确实都在 CI 里，我原来的记录是对的，那次 grep 才是错的**。
 
 **教训**：当一次搜索对"你认为存在的东西"报告"不存在"时，**必须换一种方法复核再下结论**（读文件 / 用 node 扫），否则会把一条假更正写进仓库 —— 这比不写更正更糟。本会话的同类事故已累计：摘要不可靠（3 次）、单次搜索不可靠（1 次）。
 
 ### 文档相对链接门禁（2026-10-01）
 
-%%scripts/docs-link-check.mjs%%：markdown 里的 %%](相对路径)%% 必须指向存在的文件。**断链不会报错**，只会让后人顺着链接找不到那份 Owning Note —— 于是要么重造一份（违反"一个事实只有一个家"），要么照旧做法继续错下去。
+`scripts/docs-link-check.mjs`：markdown 里的 `](相对路径)` 必须指向存在的文件。**断链不会报错**，只会让后人顺着链接找不到那份 Owning Note —— 于是要么重造一份（违反"一个事实只有一个家"），要么照旧做法继续错下去。
 
 **两条踩坑（都值得记）**：
 
-1. **本仓两种链接写法并存**：相对**所在文件** 与 相对**仓库根**（如 %%](.agents/notes/…)%%）。第一版只按文件目录解析 ⇒ 23 条里大半是误报。判据改成"先按文件解析、失败再按仓库根解析，**两者都不存在**才算断链"。
-2. **不要在同一步里"改完就 --update 基线"**：我修 4 条链接时把 %%process/x.md%% 写成了相对文件目录的错误形态（正确是 %%../process/x.md%%），随即 %%--update%% 把自己造的 2 条断链**洗进了基线**。识破方式很朴素：**核对算术** —— 22 条修掉 4 条就该是 18，而基线报 20 ⇒ 有 2 条是新造的。改对后基线回到 18，算术对上。
+1. **本仓两种链接写法并存**：相对**所在文件** 与 相对**仓库根**（如 `](.agents/notes/…)`）。第一版只按文件目录解析 ⇒ 23 条里大半是误报。判据改成"先按文件解析、失败再按仓库根解析，**两者都不存在**才算断链"。
+2. **不要在同一步里"改完就 --update 基线"**：我修 4 条链接时把 `process/x.md` 写成了相对文件目录的错误形态（正确是 `../process/x.md`），随即 `--update` 把自己造的 2 条断链**洗进了基线**。识破方式很朴素：**核对算术** —— 22 条修掉 4 条就该是 18，而基线报 20 ⇒ 有 2 条是新造的。改对后基线回到 18，算术对上。
 
-**存量 18 条入基线**（archived 笔记里的历史断链 + bug-fix 笔记里 %%../../desktop/…%% 少写两级的路径），与 %%typecheck-baseline.json%% / %%test-audit-baseline.json%% 同一惯例：只拦新增。
+**存量 18 条入基线**（archived 笔记里的历史断链 + bug-fix 笔记里 `../../desktop/…` 少写两级的路径），与 `typecheck-baseline.json` / `test-audit-baseline.json` 同一惯例：只拦新增。

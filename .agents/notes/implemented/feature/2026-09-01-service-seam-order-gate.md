@@ -36,4 +36,4 @@ Status: implemented
 - tsc --noEmit 在部分 connector 存在**存量** exactOptionalPropertyTypes 报错（dataplane/rest 与脚手架 cancelOrder 签名），非本变更引入（CI 门禁为 build+test，未劣化）。
 - 验证：`pnpm build` 全绿；`pnpm test` 549 通过（新增 65：okx 服务缝 5 + 10×connector 矩阵 60）；spike 证据见 `spikes/impl-service-seam-gate/NET-VERIFY.md`。
 
-> **2026-10-01 原地补充（闸门第一段的权威来源）**：本记录的三态语义与「撤单同门槛」不变，但第一段的判定输入换了——18 个连接器的 43 处判定点从读 %%config.liveTrading%% 改为经 %%@dshtrading/authority%% 的 %%liveTradingEnabled(config.liveTrading)%%（镜像与人工签署平面取合取）。服务缝仍是实盘路径的必经点，关闭语义仍是 fail-closed；变的是「谁有权授予」。见 [2026-10-01-live-trading-authority-plane](../architecture/2026-10-01-live-trading-authority-plane.md)。
+> **2026-10-01 原地补充（闸门第一段的权威来源）**：本记录的三态语义与「撤单同门槛」不变，但第一段的判定输入换了——18 个连接器的 43 处判定点从读 `config.liveTrading` 改为经 `@dshtrading/authority` 的 `liveTradingEnabled(config.liveTrading)`（镜像与人工签署平面取合取）。服务缝仍是实盘路径的必经点，关闭语义仍是 fail-closed；变的是「谁有权授予」。见 [2026-10-01-live-trading-authority-plane](../architecture/2026-10-01-live-trading-authority-plane.md)。

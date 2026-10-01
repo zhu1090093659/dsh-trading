@@ -37,7 +37,24 @@ const problems = []
 let checked = 0
 for (const file of files) {
   const text = readFileSync(file, 'utf8')
-  for (const match of text.matchAll(/\]\(([^)\s]+)\)/g)) {
+  // **跳过围栏代码块**：文档里常拿链接语法当例子（本文件自己就写过 `](相对路径)`），
+  // 那些不是链接。第一版没跳，于是我自己刚写的说明文字被当成 2 条新增断链。
+  let insideFence = false
+  const prose = text
+    .split(NL)
+    .filter((line) => {
+      if (/^\s*(```|~~~)/.test(line)) {
+        insideFence = !insideFence
+        return false
+      }
+      return !insideFence
+    })
+    .join(NL)
+    // **再剥掉行内代码**（单反引号包起来的部分）：文档里拿链接语法当例子时多半写成行内代码
+    // 而不是围栏块 —— 我自己的笔记就是这样，只跳围栏实测仍报 2 条新增。
+    .replace(/`[^`]*`/g, '')
+
+  for (const match of prose.matchAll(/\]\(([^)\s]+)\)/g)) {
     const target = match[1]
     if (/^(https?:|mailto:|#)/.test(target)) continue
     const withoutAnchor = target.split('#')[0]

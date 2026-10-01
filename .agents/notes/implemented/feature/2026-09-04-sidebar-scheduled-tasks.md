@@ -29,6 +29,6 @@ Status: implemented
 - 执行消耗 API 额度：定时任务是宿主行为，到点即建真实会话；高于会话默认权限的任务有确认门兜底，cron 不补跑漏掉的触发点。
 - 验证证据：包内 vitest 191 用例全绿（新增 28：cron 引擎 10 / 账本 10 / 调度编排 4 / 桥接线 4，含幂等、确认门、目录锁、损坏隔离、重启对账、假网关全链路），`pnpm build` 全仓绿，i18n 审计 OK（zh 761 键对齐）；UI 托管 HTTP + 无头 Chrome 截图另录。
 
-> **2026-10-01 原地修正（目录锁的进程探针，fail-closed 语义恢复）**：本记录第 1 条里的「目录锁防多宿主双写」有一处**保守性反转**的缺陷，已修：%%.packages/client-ui-trading/src/tasks/ledger.ts%% 的 %%processAlive%% 原先按 %%spawnSync('ps', …)%% 的 %%status !== 0%% 判定「进程已死」——但**探针不可用**（无 %%ps%%、权限拒绝、超时）与**进程已死**是两件事，前者也被判成死，于是活着的持有者被接管，直接违反不变量 #15（同一份 home 同一时刻只允许一个 dsh host 写者）。
+> **2026-10-01 原地修正（目录锁的进程探针，fail-closed 语义恢复）**：本记录第 1 条里的「目录锁防多宿主双写」有一处**保守性反转**的缺陷，已修：`.packages/client-ui-trading/src/tasks/ledger.ts` 的 `processAlive` 原先按 `spawnSync('ps', …)` 的 `status !== 0` 判定「进程已死」——但**探针不可用**（无 `ps`、权限拒绝、超时）与**进程已死**是两件事，前者也被判成死，于是活着的持有者被接管，直接违反不变量 #15（同一份 home 同一时刻只允许一个 dsh host 写者）。
 >
-> 实证：2026-10-01 在文件沙箱下 %%ps -o stat= -p $$%% 返回 %%Operation not permitted%%（exit 126），Node 侧 %%spawnSync%% 得到 %%status: null, error.code: 'EPERM'%% —— 旧实现据此接管锁，%%目录锁：活锁拒绝（报持有者 pid）%% 用例红。判据已收口为纯函数 %%interpretProcessProbe%%（%%ledger.ts%%）：探针报错 ⇒ 活（保守）；跑完无输出 ⇒ 死；%%Z%%/%%X%% ⇒ 死；其余 ⇒ 活。三条分支各有用例（%%.packages/client-ui-trading/test/tasks-ledger.test.ts%%），该用例在沙箱内恢复绿。
+> 实证：2026-10-01 在文件沙箱下 `ps -o stat= -p $$` 返回 `Operation not permitted`（exit 126），Node 侧 `spawnSync` 得到 `status: null, error.code: 'EPERM'` —— 旧实现据此接管锁，`目录锁：活锁拒绝（报持有者 pid）` 用例红。判据已收口为纯函数 `interpretProcessProbe`（`ledger.ts`）：探针报错 ⇒ 活（保守）；跑完无输出 ⇒ 死；`Z`/`X` ⇒ 死；其余 ⇒ 活。三条分支各有用例（`.packages/client-ui-trading/test/tasks-ledger.test.ts`），该用例在沙箱内恢复绿。

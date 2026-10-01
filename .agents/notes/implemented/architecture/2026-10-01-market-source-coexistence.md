@@ -28,12 +28,12 @@
 
 ## 参数守卫：配错就大声失败（2026-10-01）
 
-**踩中的坑**：新增的"环路 + 真实行情"演练跑不通 —— 对齐层**恒 stale**（%%droppedTicks%% 全量），即使快照只有 300ms 新鲜度。根因是**参数名写错**：调用方写了 %%snapshotMaxAgeMs%%，真名是 %%snapshotAgeBudgetMs%% ⇒ %%atMs - snapshotAtMs <= undefined%% 恒为 false ⇒ 每一帧都被判陈旧。
+**踩中的坑**：新增的"环路 + 真实行情"演练跑不通 —— 对齐层**恒 stale**（`droppedTicks` 全量），即使快照只有 300ms 新鲜度。根因是**参数名写错**：调用方写了 `snapshotMaxAgeMs`，真名是 `snapshotAgeBudgetMs` ⇒ `atMs - snapshotAtMs <= undefined` 恒为 false ⇒ 每一帧都被判陈旧。
 
-**为什么能静默通过**：%%packages/tradectl/tsconfig.json%% 的 %%include%% 只有 %%["src"]%% ⇒ **drills 与 tests 都不在 tsc 范围内**，对象字面量的字段名拼错拿不到编译期检查；而运行期表现是"行情接不通"，不是"参数写错了"。
+**为什么能静默通过**：`packages/tradectl/tsconfig.json` 的 `include` 只有 `["src"]` ⇒ **drills 与 tests 都不在 tsc 范围内**，对象字面量的字段名拼错拿不到编译期检查；而运行期表现是"行情接不通"，不是"参数写错了"。
 
-**修法**：%%createAlignment%% 增加 %%assertAlignmentParams%% —— 所有必需字段必须是**有限数**（拼错名即 undefined，当场抛错），其中结构性参数（%%snapshotAgeBudgetMs%% / %%bufferMaxTicks%% / %%bufferMaxBytes%%）还要求 > 0；其余允许 0（例如"不回填令牌桶"是合法配置）。错误信息直接点名"常见原因：字段名拼错"。
+**修法**：`createAlignment` 增加 `assertAlignmentParams` —— 所有必需字段必须是**有限数**（拼错名即 undefined，当场抛错），其中结构性参数（`snapshotAgeBudgetMs` / `bufferMaxTicks` / `bufferMaxBytes`）还要求 > 0；其余允许 0（例如"不回填令牌桶"是合法配置）。错误信息直接点名"常见原因：字段名拼错"。
 
-**测试 2 例**：拼错名字 ⇒ 抛错且提示含字段名与"拼错"；结构性参数为 0 ⇒ 抛错（同时确认 %%*RefillPerSec: 0%% 合法）。
+**测试 2 例**：拼错名字 ⇒ 抛错且提示含字段名与"拼错"；结构性参数为 0 ⇒ 抛错（同时确认 `*RefillPerSec: 0` 合法）。
 
-**顺带核对**：其余四个演练（binance/okx/bybit-smoke 与 shadow-live）用的都是**正确名** %%snapshotAgeBudgetMs%% —— 错只出现在新写的那个演练里，既有产物不受影响。
+**顺带核对**：其余四个演练（binance/okx/bybit-smoke 与 shadow-live）用的都是**正确名** `snapshotAgeBudgetMs` —— 错只出现在新写的那个演练里，既有产物不受影响。

@@ -72,16 +72,16 @@
 
 ## gap report 收集器（2026-10-01 补，P5 步骤 1 第二根线）
 
-%%packages/tractectl%%… 更正：%%packages/tradectl/src/gap-collector.ts%% 的 %%collectGapReport({orders, audit}, window)%%：能从库里取的就取，**取不到的逐条点名**（%%missingInputs%%）—— 不用空数组冒充"期间什么都没发生"，后者是最危险的谎。
+`packages/tractectl`… 更正：`packages/tradectl/src/gap-collector.ts` 的 `collectGapReport({orders, audit}, window)`：能从库里取的就取，**取不到的逐条点名**（`missingInputs`）—— 不用空数组冒充"期间什么都没发生"，后者是最危险的谎。
 
 **实测出来的数据源完整度**（四类里只有一类齐全）：
 
 | 输入 | 数据源 | 状态 |
 |---|---|---|
-| 错过的触发 | %%occurrences.missed%% + %%due_at_ms%% | ✅ 齐全 |
-| 被拒意图 | %%intents.state = 'rejected'%% | ⚠️ 能数条数，**没有理由列** |
-| 降级动作 | journal 的 %%degradation*%% 事件 | ⚠️ **没有写入点**（现有写入点是 shadow.decision 与 reconcile.*） |
-| 持仓变化 | %%positions%% | ⚠️ **只有当前值、无历史** ⇒ 只能给"之后" |
+| 错过的触发 | `occurrences.missed` + `due_at_ms` | ✅ 齐全 |
+| 被拒意图 | `intents.state = 'rejected'` | ⚠️ 能数条数，**没有理由列** |
+| 降级动作 | journal 的 `degradation*` 事件 | ⚠️ **没有写入点**（现有写入点是 shadow.decision 与 reconcile.*） |
+| 持仓变化 | `positions` | ⚠️ **只有当前值、无历史** ⇒ 只能给"之后" |
 
 **这条发现改变了工作量判断**：让"恢复必须产出 gap report"成立，不是接一根线，而是要先补三处**记录** —— 而这三处记录本身就是审计要求（被拒理由、降级动作、持仓变化都该留痕）。
 

@@ -159,23 +159,23 @@ Status: implemented
 
 四处同类缺陷（ui-functional-check / clean-knowledge-author-tags / profile-config-preflight / dsh-trading wrapper）修完后，**把判据写成门禁** —— 四个补丁挡不住第五个脚本：
 
-%%pnpm home-guard:check%%（%%scripts/home-guard-check.mjs%%）：扫描仓库里所有 %%*.mjs/*.ts/*.sh%% ，凡是出现**代码级** DSH_HOME 读取（%%process.env.DSH_HOME%% 或 shell 的 %%%%{DSH_HOME%%）的文件，必须同时出现 %%-trading%% 这个守卫记号，否则违规退出 1。
+`pnpm home-guard:check`（`scripts/home-guard-check.mjs`）：扫描仓库里所有 `*.mjs/*.ts/*.sh` ，凡是出现**代码级** DSH_HOME 读取（`process.env.DSH_HOME` 或 shell 的 ``{DSH_HOME`）的文件，必须同时出现 `-trading` 这个守卫记号，否则违规退出 1。
 
 - **注释里的提及不算**（避免把"用法说明"当成读取）；
-- **显式豁免**：文件里写一行 %%home-guard-allow: <理由>%% 即放行（理由必须落在源码里，可被审查）——与 contract-id 的 %%id-gate-allow%% 同一风格。当前两处豁免都是**测试**把 DSH_HOME 钉到受控临时路径（mkdtemp / 仓库内 .tmp-home-guard + finally 恢复）。
+- **显式豁免**：文件里写一行 `home-guard-allow: <理由>` 即放行（理由必须落在源码里，可被审查）——与 contract-id 的 `id-gate-allow` 同一风格。当前两处豁免都是**测试**把 DSH_HOME 钉到受控临时路径（mkdtemp / 仓库内 .tmp-home-guard + finally 恢复）。
 
-**门禁自己也被验过会红**：删掉一处豁免标记后 %%node scripts/home-guard-check.mjs%% 立刻 exit 1 并点名该文件；恢复后 exit 0。自测 5 例（scripts/ 的门禁自测，%%pnpm test:scripts%% 收集）覆盖：无守卫的 JS 读取被抓；带守卫放行；无守卫的 shell 读取被抓；注释提及不算；豁免标记放行。
+**门禁自己也被验过会红**：删掉一处豁免标记后 `node scripts/home-guard-check.mjs` 立刻 exit 1 并点名该文件；恢复后 exit 0。自测 5 例（scripts/ 的门禁自测，`pnpm test:scripts` 收集）覆盖：无守卫的 JS 读取被抓；带守卫放行；无守卫的 shell 读取被抓；注释提及不算；豁免标记放行。
 
-**第一版自测还把样本写错了**：我给 shell 用的样本里带了 %%-trading%%（那是守卫记号），于是"应该违规"的样本其实合规、测试红。修法是换成一个**回落宿主 home** 的样本（%%~/.dsh%%）。这条也说明判据是**内容级**的：文件里任何位置出现守卫记号即视为已守卫。
+**第一版自测还把样本写错了**：我给 shell 用的样本里带了 `-trading`（那是守卫记号），于是"应该违规"的样本其实合规、测试红。修法是换成一个**回落宿主 home** 的样本（`~/.dsh`）。这条也说明判据是**内容级**的：文件里任何位置出现守卫记号即视为已守卫。
 
 ## 缺省 home 告警（B 方案落地，2026-10-01）
 
-%%dshHomeDir(env, { warn })%% 新增一条**告警**：解析结果落在缺省 home（%%~/.dsh%%）而本机存在 %%~/.dsh-trading%% 时，提示"交易数据可能正被写到宿主 home"。
+`dshHomeDir(env, { warn })` 新增一条**告警**：解析结果落在缺省 home（`~/.dsh`）而本机存在 `~/.dsh-trading` 时，提示"交易数据可能正被写到宿主 home"。
 
-**这是 B 方案，不是 A/C 的取舍**：**返回值、优先级、语义全部不变**（缺省仍是 %%~/.dsh%%）；改默认值属架构决策，仍待裁决。它只把 2026-10-01 实测过的那种失败模式 —— **继承宿主的 %%DSH_HOME%% 后静默把交易数据写到宿主 home** —— 从"悄无声息"变成"响亮但可忽略"。
+**这是 B 方案，不是 A/C 的取舍**：**返回值、优先级、语义全部不变**（缺省仍是 `~/.dsh`）；改默认值属架构决策，仍待裁决。它只把 2026-10-01 实测过的那种失败模式 —— **继承宿主的 `DSH_HOME` 后静默把交易数据写到宿主 home** —— 从"悄无声息"变成"响亮但可忽略"。
 
-**去重的位置很关键**：去重只在**默认出口**（stderr 写一次）；注入的 %%warn%% **每次都调**，否则测试无法确定地断言（第一版把去重放在调用点，测试就会随执行顺序漂移）。
+**去重的位置很关键**：去重只在**默认出口**（stderr 写一次）；注入的 `warn` **每次都调**，否则测试无法确定地断言（第一版把去重放在调用点，测试就会随执行顺序漂移）。
 
-**测试 4 例**：未设 DSH_HOME 且本机有 trading home ⇒ 告警且返回值仍是缺省 home；显式指向 trading home ⇒ 安静；显式指向别的目录 ⇒ 安静（那是用户的选择，不是误用）；空白 %%DSH_HOME%% 视为未设（与既有语义一致）。
+**测试 4 例**：未设 DSH_HOME 且本机有 trading home ⇒ 告警且返回值仍是缺省 home；显式指向 trading home ⇒ 安静；显式指向别的目录 ⇒ 安静（那是用户的选择，不是误用）；空白 `DSH_HOME` 视为未设（与既有语义一致）。
 
-**踩坑记录**：加 import 时没先看文件头，重复声明了 %%existsSync%% ⇒ 构建失败（rolldown PARSE_ERROR）⇒ 该包 %%lib/%% 未产出 ⇒ 测试连锁失败成"找不到入口"。**症状在测试、根因在构建** —— 先看构建日志而不是测试堆栈。
+**踩坑记录**：加 import 时没先看文件头，重复声明了 `existsSync` ⇒ 构建失败（rolldown PARSE_ERROR）⇒ 该包 `lib/` 未产出 ⇒ 测试连锁失败成"找不到入口"。**症状在测试、根因在构建** —— 先看构建日志而不是测试堆栈。
