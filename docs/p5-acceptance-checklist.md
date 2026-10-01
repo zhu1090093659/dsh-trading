@@ -148,3 +148,13 @@ connector-okx 自带测试已覆盖 demo/live 边界，**不必新写判据**：
 **设凭证后应变成**：Test Files 8 passed | 0 skipped；Tests **94 passed | 0 skipped**，且 demo-account.test.ts 显示为通过而非跳过。
 
 ⇒ **第 2 档的"真的打到模拟盘"以"那 2 条不再跳过、且它们带 x-simulated-trading: 1"为准**（请求头证据由 signature/trade 两条测试在无凭证下也会断言）。把这两次输出贴进验收记录即可对照。
+
+### 机制的家在别处：docs/okx-integration.md
+
+本节只写**验收怎么判**；OKX 机制本身（header 级模拟盘开关、demo 与实盘 REST 同域名、
+demo key 单独创建且不过期、凭证三 ref 模型、只勾 Read+Trade 绝不勾 Withdraw 的纪律）
+以 **docs/okx-integration.md** 为准，不在此重述（一个事实只有一个家）。
+
+交叉印证：该文档写明"REST host 相同、完全靠 x-simulated-trading 头区分"，
+与 2026-10-01 在 ccxt 4.5.84 里实测到的行为（setSandboxMode(true) 只加该头、域名不变）一致 ——
+两处独立来源得出同一结论。
