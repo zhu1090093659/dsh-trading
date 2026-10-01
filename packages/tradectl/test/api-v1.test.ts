@@ -4,6 +4,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CARD_LIMITS, type Card } from '@dshtrading/contract'
 import { handleV1, parseVersionedPath, serveStatic } from '../src/api-v1.ts'
@@ -183,5 +184,61 @@ describe('静态资源托管', () => {
     // Then 前者 200、后者 404
     expect(withRoot.status).toBe(200)
     expect(withoutRoot.status).toBe(404)
+  })
+})
+
+describe('静态资源的预压缩协商', () => {
+  it('管理员：支持 gzip 且存在预压缩产物时回字节 + content-encoding，并声明 vary', () => {
+    // Given 一个静态根（含 .gz 兄弟文件）
+    const root = staticRoot()
+    writeFileSync(join(root, 'assets', 'app.js.gz'), gzipSync(Buffer.from('console.log(1)')))
+    // When 客户端声明支持 gzip
+    const response = serveStatic('assets/app.js', root, 'gzip, deflate, br')
+    // Then 回字节路径、带 content-encoding 与 vary，且 content-type 仍按原扩展名
+    expect(response.status).toBe(200)
+    expect(response.headers['content-encoding']).toBe('gzip')
+    expect(response.headers.vary).toBe('accept-encoding')
+    expect(response.headers['content-type']).toContain('text/javascript')
+    expect(response.body).toBe('')
+    // 字节是真的 gzip（magic 1f 8b）且解压回原文
+    const bytes = response.bodyBytes as Uint8Array
+    expect(bytes[0]).toBe(0x1f)
+    expect(bytes[1]).toBe(0x8b)
+    expect(gunzipSync(bytes).toString('utf8')).toBe('console.log(1)')
+  })
+
+  it('管理员：没有预压缩产物时照常发明文（绝不假装压缩过），但仍声明 vary', () => {
+    // Given 一个只有明文的静态根
+    const root = staticRoot()
+    // When 客户端声明支持 gzip
+    const response = serveStatic('assets/app.js', root, 'gzip')
+    // Then 走明文、无 content-encoding，但 vary 仍在（缓存不该把两种表示混起来）
+    expect(response.bodyBytes).toBeUndefined()
+    expect(response.headers['content-encoding']).toBeUndefined()
+    expect(response.headers.vary).toBe('accept-encoding')
+    expect(response.body).toBe('console.log(1)')
+  })
+
+  it('管理员：客户端不支持 gzip 时不发预压缩产物，也不声明 vary', () => {
+    // Given 一个有预压缩产物的静态根
+    const root = staticRoot()
+    writeFileSync(join(root, 'assets', 'app.js.gz'), gzipSync(Buffer.from('x')))
+    // When 客户端不接受 gzip
+    const response = serveStatic('assets/app.js', root, 'identity')
+    // Then 发明文、无 vary
+    expect(response.bodyBytes).toBeUndefined()
+    expect(response.headers.vary).toBeUndefined()
+    expect(response.body).toBe('console.log(1)')
+  })
+
+  it('管理员：预压缩路径同样受目录遍历与扩展名白名单约束（压缩不是绕过口）', () => {
+    // Given 一个静态根
+    const root = staticRoot()
+    // When 试着越界取 .gz
+    const escape = serveStatic('../outside.js', root, 'gzip')
+    const txt = serveStatic('secret.txt', root, 'gzip')
+    // Then 仍是 403 / 415
+    expect(escape.status).toBe(403)
+    expect(txt.status).toBe(415)
   })
 })

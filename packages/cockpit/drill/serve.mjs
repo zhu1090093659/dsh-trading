@@ -47,7 +47,7 @@ const server = createServer((req, res) => {
         const request = { method: req.method ?? 'GET', path, headers, body: Buffer.concat(chunks).toString('utf8') }
         return req.method === 'POST' ? handleV1Async(request, options) : handleV1(request, options)
       }
-      return serveStatic(path.replace('/v1/assets/', ''), dist)
+      return serveStatic(path.replace('/v1/assets/', ''), dist, headers['accept-encoding'])
     }
     void handle().then((result) => {
       res.writeHead(result.status, result.headers)

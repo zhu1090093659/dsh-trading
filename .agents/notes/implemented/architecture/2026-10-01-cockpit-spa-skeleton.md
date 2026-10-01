@@ -71,7 +71,21 @@
 
 **这份测量证明了什么、没证明什么**：证明了产物小、静态托管路径没有额外开销（TTFB 毫秒级）；**没有**证明"慢网首屏时间"—— 回环网络不构成任何真实网络证据，卡片要求的"首屏体积预算"目前只有构建期闸门（`chunkSizeWarningLimit: 300`）+ 体积数字，没有 RUM 或节流实测。
 
-**顺手实测出的一个真缺口**：`serveStatic` **不做任何压缩** —— 上面的 147752 字节是**未压缩传输**，而同一份产物 gzip 后只有 48234 字节（约 1/3）。真实网络下（非回环）浏览器会多下 3 倍的字节，而这是纯服务端一行 `content-encoding` 协商就能拿回的收益。修法有两条，都还没做：① `serveStatic` 按 `accept-encoding` 协商返回 gzip（或 br）；② 构建期预压缩成 `.gz` 并让 `serveStatic` 优先发它（省 CPU，推荐）。**在修之前，"首屏预算达标"这句话只在"构建产物体积"的意义上成立，不等于"用户实际下载量达标"。**
+**顺手实测出的一个真缺口**：`serveStatic` **不做任何压缩** —— 上面的 147752 字节是**未压缩传输**，而同一份产物 gzip 后只有 48234 字节（约 1/3）。真实网络下（非回环）浏览器会多下 3 倍的字节，而这是纯服务端一行 `content-encoding` 协商就能拿回的收益。修法有两条，都还没做：① `serveStatic` 按 `accept-encoding` 协商返回 gzip（或 br）；② 构建期预压缩成 `.gz` 并让 `serveStatic` 优先发它（省 CPU，推荐）。**已修**（见下节）：预压缩 + 协商后，实际传输量回到 gzip 后的大小。
+
+
+## 预压缩修复（同日补完，兑现上节的实测缺口）
+
+两处改动：
+
+1. **`serveStatic(relativePath, staticDir, acceptEncoding)`** 按 `accept-encoding` 协商：有 `.gz` 兄弟文件且客户端接受 gzip ⇒ 走**字节路径**（`bodyBytes`）+ `content-encoding: gzip` + `vary: accept-encoding`；没有预压缩产物 ⇒ 照常发明文（**绝不假装压缩过**），但 `vary` 仍在（缓存不该把两种表示混起来）；客户端不接受 gzip ⇒ 明文且无 `vary`。
+2. **构建期预压缩**（`packages/cockpit/scripts/precompress.mjs`，接在 `vite build` 之后）：给 `.html/.js/.css/.svg/.json/.map` 生成 `.gz`；**压不动就不写**（避免出现比原文更大的 `.gz` 反而拖慢）。
+
+为什么预压缩而不是每次请求临时压：省 CPU；产物与源码同源可控（压缩结果可审计）；`serveStatic` 只需协商取用，逻辑最薄。
+
+**关键不变式仍然成立**：预压缩路径同样受目录遍历（403）与扩展名白名单（415）约束 —— 测试专门盯这一点（压缩不是绕过授权的口子）；`attachV1Surface` 在有 `bodyBytes` 时写字节，否则写字符串（把 gzip 写进 string 会破坏字节流）。
+
+测试 4 例：gzip 协商回字节 + magic 1f8b + 解压回原文 + content-type 仍按原扩展名；无 `.gz` 时发明文但仍声明 vary；客户端不支持 gzip 时明文且无 vary；预压缩路径同样受遍历/白名单约束。
 
 ## 未验证项（如实标注）
 

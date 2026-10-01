@@ -6,7 +6,7 @@
   "description": "交易驾驶舱 SPA（独立构建产物，由 bot 的 edge 行托管静态资源）",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/precompress.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
