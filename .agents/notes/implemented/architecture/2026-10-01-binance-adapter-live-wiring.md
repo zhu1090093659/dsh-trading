@@ -37,12 +37,37 @@ aggTrade 推流只有 tick、没有快照，所以对齐层永远停在 `unalign
 
 两个新口子的分工：`bootstrap(symbols)` 在连上后拉一批基准（失败只记事件、不打断流）；`deliverSnapshot()` 供外部周期刷新（真实部署可以是 kline 收盘事件）。两者都直接喂对齐层，不经过传输层。
 
+
+## 第二家适配器：OKX（同日补完）
+
+卡片给的优先级是 Binance → OKX → Bybit → CCXT。做第二家的价值不在"多一家"，而在**它走的是另一条路径**：
+
+| | Binance | OKX |
+|---|---|---|
+| 订阅形态 | 流名写在 **URL** 里 | 连上后发**订阅帧** |
+| 基准（快照） | aggTrade 没有基准 ⇒ 需 REST 轮询 | `tickers` 频道**持续推送最新价** ⇒ 基准自动刷新 |
+| 世代号 | 无（用连接世代顶替） | 无（同上） |
+
+第二条差异正好解掉了上一轮实测出来的约束（"快照年龄预算必须 ≥ 快照刷新节奏"）：**把 venue 自己的 ticker 频道当作基准刷新源**，比定时 REST 轮询更省、更及时、也更少被限频。
+
+真实冒烟（`node packages/tradectl/drill/okx-smoke.ts`）：
+
+    connecting: wss://ws.okx.com:8443/ws/v5/public
+    [feed] open: transport open
+    统计: {"connects":1,"reconnects":0,"messages":227,"badFrames":4,"heartbeatTimeouts":0,"state":"live"}
+    对齐态: {"epoch":1,"alignment":"aligned","buffered":0,"bytes":0,"droppedTicks":0}
+
+**注意 `badFrames: 4`**：那四条是订阅确认帧（`{"event":"subscribe",...}`），我的解码器对"事件帧"与"畸形帧"都返回 undefined，于是被计入坏帧。这是个**已知的粗糙处**（后续应让解码器区分 ignored 与 malformed），不是数据丢失——本轮如实记下，不假装它是 0。
+
+订阅帧按**标的**拆（一个标的一帧、含 trades + tickers 两个 arg）：ws-feed 的 `subscribePayload` 本来就是逐标的调的，适配器顺着端口的形状走，比让端口为某一家交易所改形更划算。
+
 ## 未验证项（如实标注）
 
-- **仍只有 Binance 一家**：OKX / Bybit / CCXT 适配器未写（端口与策略已就绪，各自只差 URL、订阅形态与字段映射）。
+- **已有两家**（Binance + OKX，均真跑验证）；**Bybit / CCXT 适配器未写**（端口与策略已就绪，各自只差 URL、订阅形态与字段映射）。
 - ~~快照源未接~~ **已接**（公共 REST + bootstrap/deliverSnapshot），真实链路已到 aligned；剩下的约束是**刷新节奏必须 ≤ 年龄预算**（见上）。
 - **epoch 语义**：Binance 公共流不提供世代号，适配器把"连接世代"当作 epoch；这与"交易所侧真实世代"不是一回事，交易所重连后的市场状态连续性未验证。
-- **交易所侧限制未实测**：Binance 的 24h 断连、单连接订阅上限、限频权重都未核对。
+- **交易所侧限制未实测**：Binance 的 24h 断连、单连接订阅上限、限频权重；OKX 的 30s 无互动断连（需文本 ping）都未核对。
+- **解码器无法区分"事件帧"与"畸形帧"**：订阅确认等事件帧被计入 badFrames（OKX 冒烟里 4 条），后续应把返回值扩展成 ignored/malformed 两类。
 - **未接真实下单通道**（本阶段不该接）：shadow/paper 边界不变，仍然零 venue 写。
 
 ## 被否决的方案
