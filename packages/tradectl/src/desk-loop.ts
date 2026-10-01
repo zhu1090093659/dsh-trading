@@ -22,6 +22,7 @@ import { recordDegradation } from './desk-records.ts'
 import { applyRiskEvent, initialRiskState, openRiskAllowedFor, type RiskGateOptions, type RiskState } from './risk-gate.ts'
 import { scanDegradation, type MonitorSignals } from './degradation-monitor.ts'
 import { writeHeartbeat } from './heartbeat.ts'
+import { probeWritable } from './detectors.ts'
 
 /** 调度端口（与事件泵同一接口，便于测试注入）。 */
 export interface LoopScheduler {
@@ -44,6 +45,12 @@ export interface DeskLoopOptions {
    * 所以心跳必须落在独立于 agent 会话的文件里，而不是靠问进程。
    */
   readonly heartbeatPath?: string | undefined
+  /**
+   * 写探针目录（可选）：给了就每轮真写一次探针，**并把结果并进本轮信号**。
+   * 为什么由环路自己探：%%diskWriteFailed%% 是调用方喂的，而"审计库所在的盘还能不能写"这件事
+   * 环路比调用方更该关心（它的记录写在那里）。自己探一次比等人上报更早发现问题。
+   */
+  readonly probeDir?: string | undefined
 }
 
 /** 一轮的结果（名字带 Desk 前缀：triggers.ts 已导出过 TickResult，避免 barrel 重名）。 */
@@ -62,6 +69,8 @@ export interface LoopStats {
   /** 记录（审计）写入失败的次数：**不为 0 就是"审计可能缺行"的信号**，必须被看见。 */
   readonly recordFailures: number
   readonly lastRecordFailure: string | null
+  /** 最近一次写探针的结论（null = 未配置 probeDir）。 */
+  readonly lastProbeReason: string | null
 }
 
 export function createDeskLoop(options: DeskLoopOptions): {
@@ -84,6 +93,8 @@ export function createDeskLoop(options: DeskLoopOptions): {
   let lastRecordFailure: string | null = null
   /** 记录写入是否已经失败过：失败本身就是"存储坏了"的证据，要按 disk-full 处理。 */
   let storeBroken = false
+  /** 最近一次写探针的结论（null = 没配探针目录）。 */
+  let lastProbeReason: string | null = null
 
   /**
    * 记录一次降级过渡。
@@ -109,7 +120,17 @@ export function createDeskLoop(options: DeskLoopOptions): {
     ticks += 1
     // 先落心跳再判定：宁可让人看到"还在跳但已降级"，也不要让看门狗因为一次长判定误判失活
     if (options.heartbeatPath !== undefined) writeHeartbeat(options.heartbeatPath, { atMs, note: 'desk tick ' + String(ticks) })
-    const scan = scanDegradation(options.signals())
+    const baseSignals = options.signals()
+    // 自己探一次写盘：探针失败 ⇒ 本轮 diskWriteFailed 为真（与调用方给的值是"或"关系）
+    let probeWritableNow: boolean | null = null
+    if (options.probeDir !== undefined) {
+      const probe = probeWritable(options.probeDir)
+      probeWritableNow = probe.writable
+      lastProbeReason = probe.reason
+    }
+    const effectiveSignals =
+      probeWritableNow === null ? baseSignals : { ...baseSignals, diskWriteFailed: baseSignals.diskWriteFailed || !probeWritableNow }
+    const scan = scanDegradation(effectiveSignals)
     // 记录写入失败过 ⇒ 这条证据必须并进本轮的触发源（审计写不进去就等于盘坏了）
     const triggers: DegradationTrigger[] = storeBroken && !scan.triggers.includes('disk-full') ? [...scan.triggers, 'disk-full'] : [...scan.triggers]
     let written = 0
@@ -188,7 +209,7 @@ export function createDeskLoop(options: DeskLoopOptions): {
       gapReports += 1
       return collected.report
     },
-    stats: () => ({ ticks, transitions, gapReports, running, recordFailures, lastRecordFailure }),
+    stats: () => ({ ticks, transitions, gapReports, running, recordFailures, lastRecordFailure, lastProbeReason }),
     openAllowed: (symbol) => openRiskAllowedFor(state, symbol, options.now()),
   }
 }
