@@ -7,6 +7,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CardView, DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, UnknownCards, freshnessText, type CockpitCard } from '../src/blocks.tsx'
+import { CONTROL_ACTIONS, CockpitShell } from '../src/shell.tsx'
 
 const T0 = 1_700_000_000_000
 
@@ -126,5 +127,41 @@ describe('信息架构分块', () => {
     const html = renderToStaticMarkup(<EscalationInbox cards={[card({ cardId: 'x', cardType: 'decision' })]} />)
     // Then 有明确文案（空白会让人以为界面坏了）
     expect(html).toContain('没有待处理升级')
+  })
+})
+
+describe('控制面不依赖数据面（行情/agent 全挂时仍可用）', () => {
+  it('管理员：数据面报错时四个控制按钮仍然渲染且可用（控制面与 A0 同源）', () => {
+    // Given 一个数据面完全失败的驾驶舱状态
+    const html = renderToStaticMarkup(
+      <CockpitShell cards={[]} error="无法连接交易机器人：fetch failed" fetchedAtMs={undefined} nowMs={T0} pending={undefined} onRefresh={() => {}} onCommand={() => {}} />,
+    )
+    // When 渲染
+    // Then 错误可见，但四个控制动作照常在（且未禁用）
+    expect(html).toContain('无法连接交易机器人')
+    for (const action of CONTROL_ACTIONS) expect(html, action).toContain('>' + action + '<')
+    expect(html).not.toContain('disabled=""')
+  })
+
+  it('管理员：数据陈旧时明说陈旧，控制面同样不受影响', () => {
+    // Given 十分钟前取到的数据 + 一条错误
+    const html = renderToStaticMarkup(
+      <CockpitShell cards={[]} error="命令被拒绝：403" fetchedAtMs={T0} nowMs={T0 + 600_000} pending={undefined} onRefresh={() => {}} onCommand={() => {}} />,
+    )
+    // When 渲染
+    // Then 同时出现"数据已陈旧"与四个控制按钮
+    expect(html).toContain('数据已陈旧')
+    for (const action of CONTROL_ACTIONS) expect(html, action).toContain('>' + action + '<')
+  })
+
+  it('管理员：有命令在执行时四个按钮都被禁用（避免并发控制动作互相打架）', () => {
+    // Given 一个正在执行 kill 的状态
+    const html = renderToStaticMarkup(
+      <CockpitShell cards={[]} error={undefined} fetchedAtMs={T0} nowMs={T0} pending="kill" onRefresh={() => {}} onCommand={() => {}} />,
+    )
+    // When 渲染
+    // Then 四个按钮全部 disabled，且 kill 显示"执行中"
+    expect((html.match(/disabled=""/g) ?? [])).toHaveLength(4)
+    expect(html).toContain('执行中')
   })
 })

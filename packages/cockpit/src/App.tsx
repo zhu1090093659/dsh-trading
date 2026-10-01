@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Card } from '@dshtrading/contract'
-import { DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, UnknownCards, freshnessText, type CockpitCard } from './blocks.tsx'
+import { CockpitShell } from './shell.tsx'
+import type { CockpitCard } from './blocks.tsx'
 
 /**
- * 驾驶舱外壳：取数（/v1/cards）+ 组装四块 + 控制区。
+ * 驾驶舱的数据外壳：取数（/v1/cards）+ 发命令（POST /v1/commands），渲染交给 CockpitShell。
  *
  * 三条卡片要求落在这里：
  *   - **观测面不依赖 tick 流**：一次拉取 + 手动刷新，新鲜度靠数据时间与当前时间的差表达；
- *   - **控制按钮要有二次确认**：kill / pause / flatten 都不是单击即发（协议层已要求
- *     控制类动作 confirm: true，界面这一层再拦一道）；
- *   - **不做手动下单面板**：控制区只接控制类动作，不提供买卖标的与数量输入。
+ *   - **控制类动作要二次确认**（协议层已要求 confirm: true，这一层再拦一道）；
+ *   - **不做手动下单面板**：控制区只接控制类动作。
+ * 数据面失败时**控制区照常渲染**（见 shell.tsx 的说明：控制面与 A0 同源，不依赖数据面）。
  */
 interface CardPage {
   readonly cards: readonly CockpitCard[]
-  readonly truncated?: boolean | undefined
 }
 
 const CAPS = 'action:ack,action:dismiss,action:pause,action:resume,action:kill,action:flatten'
@@ -45,7 +45,6 @@ export function App(): JSX.Element {
   }, [load])
 
   const command = useCallback(async (action: string): Promise<void> => {
-    // 二次确认：控制类动作不允许单击即发
     if (!window.confirm('确认执行「' + action + '」？这是控制类动作。')) return
     setPending(action)
     try {
@@ -62,32 +61,14 @@ export function App(): JSX.Element {
   }, [])
 
   return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '1.5rem', lineHeight: 1.6, maxWidth: '60rem', margin: '0 auto' }}>
-      <header>
-        <h1 style={{ margin: 0 }}>交易驾驶舱</h1>
-        <p style={{ margin: '0.25rem 0 1rem', color: '#666' }}>
-          服务端驱动：界面由卡片协议决定，客户端只渲染。{freshnessText(fetchedAtMs, Date.now())}
-        </p>
-        <button type="button" onClick={() => void load()}>
-          刷新
-        </button>
-      </header>
-      <section aria-label="control">
-        <h2>控制</h2>
-        <p style={{ color: '#666', margin: '0 0 0.5rem' }}>控制类动作需要二次确认；此处不提供下单入口。</p>
-        {(['pause', 'resume', 'kill', 'flatten'] as const).map((action) => (
-          <button key={action} type="button" disabled={pending !== undefined} onClick={() => void command(action)}>
-            {pending === action ? '执行中…' : action}
-          </button>
-        ))}
-      </section>
-      {error === undefined ? null : <p style={{ color: '#b00' }}>{error}</p>}
-      {/* 未识别卡片放在最前：需要升级客户端是一件不能埋在页面底部的事 */}
-      <UnknownCards cards={cards} />
-      <DeskHome cards={cards} />
-      <DecisionFeed cards={cards} />
-      <PositionsAndOrders cards={cards} />
-      <EscalationInbox cards={cards} />
-    </main>
+    <CockpitShell
+      cards={cards}
+      error={error}
+      fetchedAtMs={fetchedAtMs}
+      nowMs={Date.now()}
+      pending={pending}
+      onRefresh={() => void load()}
+      onCommand={(action) => void command(action)}
+    />
   )
 }
