@@ -52,6 +52,14 @@ bot（无图形界面的 Linux 服务器形态）之前不存在，代价是**�
 闭包：`.packages/base` 的 dependencies 从 23 项降到 12 项，**零 `@dshtrading/client-ui-*`**；11 条 UI 依赖与它们的行一起落到 `.packages/gui`。
 行为不变：`pnpm build` 全绿、`pnpm -r test` 50 个 test file 全绿（`RECURSIVE_EXIT=0`）、`pnpm live-trading:check` 绿、`pnpm patch-id:check` 绿。
 
+**安装态验收（P1 步骤 4，`scripts/bot-closure-acceptance.mjs`）**：在**干净 home**（`DSH_HOME=/tmp/dsh-bot-acceptance`，仓库工作区内/临时区都行，不碰用户 home）里按 profile 清单装一遍，再对落盘的 `node_modules` 断言：
+
+- bot profile（base + bot + bot-api + crypto）：顶层包 **54** / `@dshtrading` **24** / GUI 平面包 **0** / UI 重依赖 **[]** / 体积 **13.5 MB**；
+- 对照 GUI profile：顶层包 192 / `@dshtrading` 53 / GUI 平面包 8 / UI 重依赖 `[lightweight-charts, force-graph]` / 体积 60.5 MB；
+- **差值：138 个包 / 47 MB**。AC1（零 `client-ui-*`）、AC2（零 UI 重依赖）、AC3（`@dshtrading/*` 集合不含 GUI 平面包）全部通过，退出码 0。
+
+这条验收为什么不在 CI：它的对象是「装出来的 node_modules」，CI 里没有安装态。按设计文档 §13 的执行方式分类，它属于「只能留证据（准入门禁 + 可查记录）」那一类——脚本可重复执行（`pnpm bot-closure:check -- --bot-profile <dir>`），记录留在本记录与检查点里；源码依赖图那一半由 `pnpm plane:check` 在 CI 里盯。
+
 ## Alternatives considered
 
 - **逐包从 base 摘依赖、不建新 bundle**：行还得有人拥有；把 11 行留在 base 就等于 GUI 与 bot 共用一个平面，判据「bot 闭包零 client-ui」不可能成立（base 是 host 平面，bot 必装）。败。
