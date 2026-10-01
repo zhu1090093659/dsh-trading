@@ -5,7 +5,11 @@
 ## 现状
 
 - **客户端契约面已完成**：设备配对（一次性配对码 → 设备令牌，作用域 `read`/`command`/`control`，**配对永不签发 `control`**）、数据源守卫（跨源不混、切换即只读、双源对账）、推送载荷契约、离线陈旧度、深链开放集、确认策略（控制类要求 `biometric`）。
-- **工程本体未落仓**：App 尚未创建。
+- **工程本体已落仓**（分支 feat/p4-mobile-app，**未合并**）：apps/mobile 是独立 npm 工程，不进 pnpm workspace（与 desktop/ 同一先例）。
+- **构建已实测**：仓库内骨架跑通 npm install → npx expo install → npx expo prebuild -p ios → xcodebuild（Xcode 27.0 / iOS SDK 27.0），结果为 BUILD SUCCEEDED。
+- **契约面已接线并带测试**：apps/mobile 共 39 例测试全绿 —— 版本与能力协商、设备配对（真 HTTP 服务器，5 例）、凭据安全存储（fail closed）、带令牌的 /v1 客户端（含跨源拒绝）、数据源守卫、离线陈旧度（过期不渲染）、动作确认闸门（未知动作 fail closed）、推送处理（非法载荷与外部深链一律 drop）、客户端流水（配对成功才落库）。
+- **CI 已接**：ci.yml 的 mobile job 跑 typecheck 与契约测试；**不跑 iOS 构建**（需 macOS runner，留给本地/发布流程）。
+- **未落地**：真机验收、推送服务（APNs/FCM）、生物识别设备验证、弱网。落 main 需 issue 号 + PR + 至少一个审查批准（跨多包新功能，按 AGENTS.md 交付流分级）。
 
 ## 可行性（已实测，不是推断）
 
