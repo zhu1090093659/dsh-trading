@@ -16,6 +16,7 @@
     "contract-id:check": "node scripts/contract-id-gate.mjs",
     "coverage:check": "node scripts/coverage-gate.mjs --check",
     "coverage:update": "node scripts/coverage-gate.mjs --update",
+    "e2e:smoke": "node scripts/e2e-smoke.mjs",
     "i18n:check": "node scripts/i18n-audit.mjs --check",
     "i18n:report": "node scripts/i18n-audit.mjs --report",
     "live-trading:check": "node scripts/live-trading-gate.mjs",
