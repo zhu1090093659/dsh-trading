@@ -59,6 +59,9 @@ export interface LoopStats {
   readonly transitions: number
   readonly gapReports: number
   readonly running: boolean
+  /** 记录（审计）写入失败的次数：**不为 0 就是"审计可能缺行"的信号**，必须被看见。 */
+  readonly recordFailures: number
+  readonly lastRecordFailure: string | null
 }
 
 export function createDeskLoop(options: DeskLoopOptions): {
@@ -77,6 +80,26 @@ export function createDeskLoop(options: DeskLoopOptions): {
   let gapReports = 0
   let running = false
   let cancel: (() => void) | undefined
+  let recordFailures = 0
+  let lastRecordFailure: string | null = null
+  /** 记录写入是否已经失败过：失败本身就是"存储坏了"的证据，要按 disk-full 处理。 */
+  let storeBroken = false
+
+  /**
+   * 记录一次降级过渡。
+   * **失败不吞**：计数 + 记住原因（stats 里可见），并把 %%storeBroken%% 置位 —— 下一次判定就会按
+   * disk-full 降级。为什么不让它直接抛：抛出去会打断整轮判定（连风控状态都不再更新），
+   * 而"审计写不进去"的正确反应是**停止新增风险 + 大声可见**，不是让 desk 停摆。
+   */
+  const recordOrCount = (write: () => void): void => {
+    try {
+      write()
+    } catch (error) {
+      recordFailures += 1
+      lastRecordFailure = error instanceof Error ? error.message : String(error)
+      storeBroken = true
+    }
+  }
 
   /** 当前状态里某标的的对齐态（没有则视为 aligned）。 */
   const alignmentOfState = (symbol: string): string => state.symbols[symbol]?.alignment ?? 'aligned'
@@ -87,9 +110,11 @@ export function createDeskLoop(options: DeskLoopOptions): {
     // 先落心跳再判定：宁可让人看到"还在跳但已降级"，也不要让看门狗因为一次长判定误判失活
     if (options.heartbeatPath !== undefined) writeHeartbeat(options.heartbeatPath, { atMs, note: 'desk tick ' + String(ticks) })
     const scan = scanDegradation(options.signals())
+    // 记录写入失败过 ⇒ 这条证据必须并进本轮的触发源（审计写不进去就等于盘坏了）
+    const triggers: DegradationTrigger[] = storeBroken && !scan.triggers.includes('disk-full') ? [...scan.triggers, 'disk-full'] : [...scan.triggers]
     let written = 0
 
-    for (const trigger of scan.triggers) {
+    for (const trigger of triggers) {
       const symbols = scan.symbolsByTrigger[trigger] ?? []
       if (symbols.length > 0) {
         // 单标的故障：只降级这些标的（#24 不牵连全局）
@@ -97,7 +122,7 @@ export function createDeskLoop(options: DeskLoopOptions): {
           if (alignmentOfState(symbol) === 'stale') continue
           const decision = decideDegradation({ trigger, symbol })
           state = applyRiskEvent(state, { scope: 'symbol', kind: 'alignment', symbol, alignment: 'stale', atMs }, options.gate).state
-          recordDegradation(options.journal, { trigger, from: 'aligned', to: 'stale', reason: decision.reason + ' (' + symbol + ')', atMs })
+          recordOrCount(() => recordDegradation(options.journal, { trigger, from: 'aligned', to: 'stale', reason: decision.reason + ' (' + symbol + ')', atMs }))
           written += 1
         }
         continue
@@ -112,29 +137,29 @@ export function createDeskLoop(options: DeskLoopOptions): {
       if (state.level === autoLevel) continue
       const from = state.level
       state = applyRiskEvent(state, { scope: 'desk', kind: 'desk-level', level: autoLevel, atMs, reason: decision.reason }, options.gate).state
-      recordDegradation(options.journal, { trigger, from, to: state.level, reason: decision.reason, atMs })
+      recordOrCount(() => recordDegradation(options.journal, { trigger, from, to: state.level, reason: decision.reason, atMs }))
       written += 1
     }
 
     // 恢复：本轮没有任何触发源 ⇒ 把降过的都提回来（自愈而非闩锁，#24）
-    if (scan.triggers.length === 0) {
+    if (triggers.length === 0) {
       for (const [symbol, risk] of Object.entries(state.symbols)) {
         if (risk.alignment === 'stale') {
           state = applyRiskEvent(state, { scope: 'symbol', kind: 'alignment', symbol, alignment: 'aligned', atMs }, options.gate).state
-          recordDegradation(options.journal, { trigger: 'market-stale', from: 'stale', to: 'aligned', reason: 'fresh snapshot accepted: back to aligned', atMs })
+          recordOrCount(() => recordDegradation(options.journal, { trigger: 'market-stale', from: 'stale', to: 'aligned', reason: 'fresh snapshot accepted: back to aligned', atMs }))
           written += 1
         }
       }
       if (state.level === 'reduce_only' || state.level === 'caution') {
         const from = state.level
         state = applyRiskEvent(state, { scope: 'desk', kind: 'desk-level', level: 'normal', atMs, reason: 'all signals healthy: back to normal' }, options.gate).state
-        recordDegradation(options.journal, { trigger: 'recovered', from, to: state.level, reason: 'all signals healthy', atMs })
+        recordOrCount(() => recordDegradation(options.journal, { trigger: 'recovered', from, to: state.level, reason: 'all signals healthy', atMs }))
         written += 1
       }
     }
 
     transitions += written
-    return { triggers: scan.triggers, state, transitions: written }
+    return { triggers, state, transitions: written }
   }
 
   const arm = (): void => {
@@ -163,7 +188,7 @@ export function createDeskLoop(options: DeskLoopOptions): {
       gapReports += 1
       return collected.report
     },
-    stats: () => ({ ticks, transitions, gapReports, running }),
+    stats: () => ({ ticks, transitions, gapReports, running, recordFailures, lastRecordFailure }),
     openAllowed: (symbol) => openRiskAllowedFor(state, symbol, options.now()),
   }
 }
