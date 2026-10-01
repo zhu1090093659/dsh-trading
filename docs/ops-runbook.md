@@ -92,7 +92,7 @@
 | 快照年龄预算 → 判定 stale | `alignment.ts`（`snapshot age budget`；超龄即 `stale` 并丢弃 tick、要求重新快照） | 对齐测试（stale-epoch / snapshot-stale 分支） |
 | 客户端侧陈旧度呈现 | `@dshtrading/contract` 的 `STALENESS` 五级 + `offlineView`（**过期数据永不渲染**） | contract 测试 |
 | **开仓闸门**（stale ⇒ 只允许减仓） | ✅ **已实现**：`risk-gate.ts` 的 `openRiskAllowedFor(state, symbol, atMs)` 是合取判定 —— desk 档位 `halt`/`reduce_only`、标的被 eliminate、以及 `alignment !== "aligned"` 任一命中即**拒绝开新仓** | `risk-gate.test.ts` 覆盖（含"只挡该标的、其他标的不受影响"）；`drill/shadow-run.ts` 每次跑批都调用它 |
-| **live 喂入**（把真实行情的 alignment 连续写进 `RiskState`） | ⚠️ **缺口**：当前喂入点是 shadow drill 与测试（合成行情）；**没有真实运行时把 live 行情接进来** | 属 P5 步骤 1（paper/live）|
+| **live 喂入**（把真实行情的 alignment 写进风控状态） | ✅ **已由演练验证**：`packages/tradectl/drill/desk-loop-live.ts` 用 **Binance 公共流**的真实对齐态驱动环路（实测 `alignment aligned, droppedTicks 0`、`allowed: true`、无 halt），并已进冒烟包 `--with-network` 项 | ⚠️ 仍未做的是**长驻进程装配**（属 P5 步骤 1 的 paper/live）|
 
 **当前可依赖的**：① 陈旧数据不会被渲染成"实时"（契约层）；② **闸门逻辑本身成立且有测试** —— 只要 `alignment` 走进 `RiskState`，陈旧标的就开不了新仓。
 
@@ -152,7 +152,7 @@
     参与人：agent（无人参与）—— **不等于**卡片要求的带外退出演练（那次必须有人在环 + venue 侧）
     我方状态：bot 停 / edge 停 / 通知停 / agent 会话在
     场景与结论：
-      ① 行情断流：stale 判定会命中；**开仓闸门存在且有测试**（openRiskAllowedFor 合取判定），但 **live 喂入未接** ⇒ "可平不可开"在**门禁层成立、在真实运行时未验证**（§4）
+      ① 行情断流：stale 判定会命中；**开仓闸门存在且有测试**（openRiskAllowedFor 合取判定），且**真实行情已能驱动它**（desk-loop-live 演练，15 秒真实流）；未验的是**长驻进程**下连续数小时的表现（§4）
       ② edge 全挂：A0 六条路径实测仍可用（`pnpm e2e:smoke 第 1 项，业务面全挂仍 200）⇒ 带外通道成立
       ③ bot 崩溃：safe-boot 决定启动形态，禁用形态有测试 ⇒ 成立
       ④ venue 端处置：**无实现**（未接真实 venue）⇒ 我方全挂时**没有**venue 侧替代 ⇒ 这正是 P5 步骤 1 必须先解决的事
