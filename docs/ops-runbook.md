@@ -292,3 +292,16 @@
 剩余 7 个零调用点：memorySourceRegistry / pairingClient / triggerPump / riskGate / countingVenue / v1Stream / frameDecoder —— 接线点均在 P5 步骤 1 的进程装配（见上表"给装配者的清单"）。
 
 **复现命令**：pnpm wiring:ledger（scripts/wiring-ledger.mjs）—— 输出每个工厂的生产/演练引用数与判定；无调用点的会单独列出清单。
+
+## 演练记录：P5 三档验收 · 第 2 档 paper（待执行）
+
+**状态：未执行。** 前置条件都在人这一侧：在 OKX 模拟盘单独创建 demo key（三项），并运行。
+
+**判据与入口**（不在此重述，一个事实只有一个家）：
+- 准入与验收判据、设凭证前后的对照基线（92 passed | 2 skipped → 期望 94 passed | 0 skipped）、
+  routing 证据要求：见 docs/p5-acceptance-checklist.md；
+- OKX 机制本身（header 级模拟盘开关、同域名、demo key 不过期、凭证三 ref、只勾 Read+Trade）：
+  见 docs/okx-integration.md。
+
+**执行后**：按本手册 §7 的登记格式，把记录（时间、命令、输出、含 x-simulated-trading 的证据、
+异常与处置）写在本节下方，并更新 docs/p5-acceptance-checklist.md 的三档现状表。
