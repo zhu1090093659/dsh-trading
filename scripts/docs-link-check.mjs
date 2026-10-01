@@ -95,4 +95,16 @@ if (added.length > 0) {
 if (fixed.length > 0) {
   process.stdout.write('[docs-link] 提示：基线里有 ' + String(fixed.length) + ' 条已经修好，可跑 --update 收紧基线' + NL)
 }
+// ② 占位符扫描：文档里出现 %% 是「agent 写的占位符没被替换」的味道 —— 它渲染成字面百分号，
+// 读者看到的是噪音（2026-10-01 一次清理就在 10 份笔记里发现 158 对）。现为 0，所以直接拦新出现的。
+const placeholderHits = []
+for (const file of files) {
+  if (readFileSync(file, 'utf8').includes('%%')) placeholderHits.push(file.replace(ROOT + '/', ''))
+}
+if (placeholderHits.length > 0) {
+  for (const hit of placeholderHits) process.stderr.write('[docs-link] ✗ 文档里有未替换的 %% 占位符：' + hit + NL)
+  process.exit(1)
+}
+process.stdout.write('[docs-link] ✓ 无未替换的 %% 占位符' + NL)
+
 process.stdout.write('[docs-link] ✓ 无新增断链' + NL)
