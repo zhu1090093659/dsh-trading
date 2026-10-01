@@ -4,7 +4,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gunzipSync, gzipSync } from 'node:zlib'
+import { brotliCompressSync, gunzipSync, gzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CARD_LIMITS, type Card } from '@dshtrading/contract'
 import { handleV1, parseVersionedPath, serveStatic, writeV1Response } from '../src/api-v1.ts'
@@ -267,5 +267,35 @@ describe('下行写出口', () => {
     // Then 第一个写的是字节（不是空串），第二个写文本
     expect(written[0]).toBe(bytes)
     expect(written[1]).toBe('plain')
+  })
+})
+
+describe('brotli 协商', () => {
+  it('管理员：同时支持 br 与 gzip 且有两者产物时优先发 br', () => {
+    // Given 一个同时有 .gz 与 .br 的静态根
+    const root = staticRoot()
+    writeFileSync(join(root, 'assets', 'app.js.gz'), gzipSync(Buffer.from('console.log(1)')))
+    const br = brotliCompressSync(Buffer.from('console.log(1)'))
+    writeFileSync(join(root, 'assets', 'app.js.br'), br)
+    // When 客户端两种都接受
+    const response = serveStatic('assets/app.js', root, 'gzip, br')
+    // Then 发 br（更小），content-type 仍按原扩展名
+    expect(response.headers['content-encoding']).toBe('br')
+    expect(response.headers['content-type']).toContain('text/javascript')
+    expect(Buffer.from(response.bodyBytes as Uint8Array).equals(br)).toBe(true)
+  })
+
+  it('管理员：只支持 gzip 时回落 gzip；只支持 br 但没有 .br 产物时回落明文', () => {
+    // Given 一个有 .gz 无 .br 的静态根
+    const root = staticRoot()
+    writeFileSync(join(root, 'assets', 'app.js.gz'), gzipSync(Buffer.from('console.log(1)')))
+    // When 分别用 gzip 与 br 请求
+    const gzipOnly = serveStatic('assets/app.js', root, 'gzip')
+    const brOnly = serveStatic('assets/app.js', root, 'br')
+    // Then 前者发 gzip，后者发明文（不假装有 br 产物）
+    expect(gzipOnly.headers['content-encoding']).toBe('gzip')
+    expect(brOnly.headers['content-encoding']).toBeUndefined()
+    expect(brOnly.body).toBe('console.log(1)')
+    expect(brOnly.headers.vary).toBe('accept-encoding')
   })
 })

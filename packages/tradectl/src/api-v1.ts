@@ -196,25 +196,28 @@ export function serveStatic(relativePath: string, staticDir: string, acceptEncod
     if (!statSync(target).isFile()) throw new Error('not a file')
     const immutable = !target.endsWith('index.html')
     const cacheControl = immutable ? 'public, max-age=31536000, immutable' : 'no-store'
-    const wantsGzip = (acceptEncoding ?? '').toLowerCase().split(',').some((part) => part.trim().split(';')[0] === 'gzip')
-    if (wantsGzip) {
-      // 预压缩优先：省掉每次请求的 CPU，且产物与源码同源可控
+    const accepted = (acceptEncoding ?? '').toLowerCase().split(',').map((part) => part.trim().split(';')[0])
+    // br 优先于 gzip：同一份文本 br 通常再小一截，代价只是多探一次文件（2026-10-01 实测追加）
+    const candidates: { encoding: string; suffix: string }[] = []
+    if (accepted.includes('br')) candidates.push({ encoding: 'br', suffix: '.br' })
+    if (accepted.includes('gzip')) candidates.push({ encoding: 'gzip', suffix: '.gz' })
+    for (const candidate of candidates) {
       try {
-        const gzipped = readFileSync(target + '.gz')
+        const compressed = readFileSync(target + candidate.suffix)
         return {
           status: 200,
-          headers: { 'content-type': type, 'cache-control': cacheControl, 'content-encoding': 'gzip', vary: 'accept-encoding' },
+          headers: { 'content-type': type, 'cache-control': cacheControl, 'content-encoding': candidate.encoding, vary: 'accept-encoding' },
           body: '',
-          bodyBytes: gzipped,
+          bodyBytes: compressed,
         }
       } catch {
-        // 没有预压缩产物就照常发明文：**绝不为了省字节而假装压缩过**
+        // 这个编码没有预压缩产物：试下一个；都没有就发明文（**绝不假装压缩过**）
       }
     }
     const body = readFileSync(target, 'utf8')
     return {
       status: 200,
-      headers: { 'content-type': type, 'cache-control': cacheControl, ...(wantsGzip ? { vary: 'accept-encoding' } : {}) },
+      headers: { 'content-type': type, 'cache-control': cacheControl, ...(candidates.length > 0 ? { vary: 'accept-encoding' } : {}) },
       body,
     }
   } catch {
