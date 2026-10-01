@@ -170,10 +170,14 @@ export function apply(ctx: Context): void {
   // 已迁移至 @dshtrading/indicators/plugin 与 @dshtrading/knowledge/plugin
   // （base patch 行，host 平面），emit 接线随迁；本插件不再重复注册。
 
-  ctx.inject(['webServer', 'connection'], (webCtx) => {
-    const webServer = webCtx.get('webServer') as unknown as WebServerLike | undefined
-    const connection = webCtx.get('connection') as unknown as ConnectionLike | undefined
-    if (webServer === undefined || connection === undefined) return
+  let bridgeMounted = false
+  // 双宿主挂载：GUI 宿主给官方 webServer + connection 栅栏，bot 宿主
+  // （@dshtrading/bot/http）给自带 botHttp + botFence。两对名字刻意不同——官方
+  // dsh-api-gateway 会 inject webServer 并要求 registerUpgrade（完整宿主传输契约），
+  // bot 面只实现自己那半，冒充就会被官方行按完整契约要求。
+  const mountOn = (webCtx: Context, webServer: WebServerLike, connection: ConnectionLike): void => {
+    if (bridgeMounted) return
+    bridgeMounted = true
     // registry-first（2026-08-30 注册表模式）：每请求经注册表按路由当前值解析——
     // settings 切换交易所 GUI 即刻生效（热切换）；注册表缺席回退旧市场键直读。
     const host = createBridgeHost({
@@ -316,6 +320,16 @@ export function apply(ctx: Context): void {
       },
     }
     ctx.effect(() => webServer.register(route), 'dsh-trading-client-ui-trading: /dshtrading/api route')
+  }
+  ctx.inject(['webServer', 'connection'], (c) => {
+    const webServer = c.get('webServer') as unknown as WebServerLike | undefined
+    const connection = c.get('connection') as unknown as ConnectionLike | undefined
+    if (webServer !== undefined && connection !== undefined) mountOn(c, webServer, connection)
+  })
+  ctx.inject(['botHttp', 'botFence'], (c) => {
+    const botHttp = c.get('botHttp') as unknown as WebServerLike | undefined
+    const botFence = c.get('botFence') as unknown as ConnectionLike | undefined
+    if (botHttp !== undefined && botFence !== undefined) mountOn(c, botHttp, botFence)
   })
 }
 

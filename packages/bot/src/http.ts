@@ -1,11 +1,13 @@
 /**
  * bot 面自带的 HTTP 传输行 —— 不踩官方 web 栈（卡片 §2.2）。
  *
- * 提供的两个服务沿用官方**服务名**（webServer / connection），因为
- * @dshtrading/bot-api 的路由挂载与认证栅栏就是按这两个名字写的；但实现是本包自己的：
- * 只有 node:http + 一张路由表 + 一个 Host 白名单栅栏。这样 bot profile 不需要
- * 官方 webserver / connection / modules 三行（它们进全局必需集，任一失败就 dispose
- * 整个 app），行 id 也不叫 webserver（走 dsh-trading-* 命名空间）。
+ * 提供的服务用**本包自己的名字**：botHttp（传输）与 botFence（栅栏）。刻意不沿用官方
+ * webServer / connection —— 那不是"名字"，那是官方宿主传输契约：2026-10-01 实测，只要
+ * provide webServer，官方 dsh-api-gateway 行就会 inject 它并调用 registerUpgrade，
+ * 只实现一半立刻 fatal（TypeError: webCtx.webServer.registerUpgrade is not a function）。
+ * 所以 bot 面只实现自己那半用自己名字，由 @dshtrading/bot-api 在挂载时二选一。
+ * 官方 webserver / connection / modules 三行仍然不引（它们进全局必需集，任一失败就
+ * dispose 整个 app）。
  *
  * 栅栏的语义与官方 browser-trust fence 同源：Host 不在回环字面量也不在可信名单里
  * 就拒（403）——防 DNS rebinding 的同一类问题；不用 cookie，所以没有 CSRF 面。
@@ -156,8 +158,8 @@ export async function createBotHttp(options: {
 }
 
 /**
- * Host 行体：绑定 bot 面，并把 webServer / connection 两个服务提供出去，
- * 让 @dshtrading/bot-api 的路由挂载与认证栅栏原样生效。停止时关服务器。
+ * Host 行体：绑定 bot 面，并把 botHttp / botFence 两个服务提供出去，
+ * 让 @dshtrading/bot-api 的路由挂载与认证栅栏原样生效（它按服务名二选一）。停止时关服务器。
  * @param ctx - 携带 botStartup 的 Host 上下文。
  */
 export function apply(ctx: Context): void {
@@ -175,8 +177,8 @@ export function apply(ctx: Context): void {
       if (disposed) { void host.close(); return }
       close = host.close
       const provide = (ctx as unknown as { provide(key: string, value: unknown): void }).provide
-      provide.call(ctx, 'webServer', host.webServer)
-      provide.call(ctx, 'connection', host.connection)
+      provide.call(ctx, 'botHttp', host.webServer)
+      provide.call(ctx, 'botFence', host.connection)
       process.stdout.write('dsh-trading bot surface: ' + host.url + String.fromCharCode(10))
     })
     return () => {
