@@ -38,6 +38,8 @@ const GATES = [
   { name: 'contract-id:check', command: 'pnpm', args: ['contract-id:check'] },
   { name: 'home-guard:check', command: 'pnpm', args: ['home-guard:check'] },
   { name: 'typecheck-gate', command: 'node', args: ['scripts/typecheck-gate.mjs'] },
+  // CI 接线：workflow 引用的脚本必须存在 —— 让"push 之后才发现"的断裂尽量在本地暴露
+  { name: 'ci-wiring:check', command: 'node', args: ['scripts/ci-wiring-check.mjs'] },
   { name: 'e2e:smoke', command: 'node', args: withNetwork ? ['scripts/e2e-smoke.mjs', '--with-network'] : ['scripts/e2e-smoke.mjs'] },
 ]
 

@@ -159,3 +159,13 @@ scripts/gates-all.mjs 顺序跑 14 条门禁，**显式收集每条退出码**�
 2. **选不中要报错** —— `--only 拼错的名字` 必须 exit 2 并说明原因。**这条是新发现的漏洞**：初版 `--only bogus` 会选中 0 条门禁然后输出"全部通过"，**门禁工具自己空洞成功**（最讽刺的一种）。
 
 实测：`--only no-such-gate` ⇒ `✗ 没有选中任何门禁：检查 --only 的名字`、exit 2；`--self-test` ⇒ exit 0；`--only home-guard:check` ⇒ 跑 1 条并绿。
+
+## CI 接线检查 ci-wiring:check（2026-10-01）
+
+%%scripts/ci-wiring-check.mjs%% 检查 workflow 里引用的**每个 pnpm 脚本与 node 脚本是否真的存在**。
+
+**堵的方向与本会话此前发现的那个相反**：此前是"门禁建好了却没接进 CI"（contract-id:check）；这里堵的是"CI 里写了但脚本没了"（改名、删除、手误）—— 后者的后果是 **push 之后 CI 才红**，而那时人已经走了。**本地能查的事不该留给 CI。**
+
+**实现要点（第一版踩坑）**：%%node scripts/x.mjs%% **必须按所在步骤的 %%working-directory%% 解析**。第一版没做，于是把 %%desktop-release.yml%% 里 %%working-directory: desktop%% 下的 %%node scripts/verify-runtime-toolchain.mjs%% 误报成断裂（实际文件在 %%desktop/scripts/%%）。自测里专门有一条守着这个语义，另一条守着"别把守卫修成永真"（子目录下真缺文件时仍要报错）。
+
+**实测**：3 个 workflow、18 处 pnpm 脚本、8 处 node 脚本 ⇒ **接线完整**，exit 0。自测 3 例（进 %%test:scripts%%）。

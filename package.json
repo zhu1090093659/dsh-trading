@@ -13,6 +13,7 @@
     "bot-closure:check": "node scripts/bot-closure-acceptance.mjs",
     "build": "pnpm sync:skills && pnpm -r build",
     "changeset": "changeset",
+    "ci-wiring:check": "node scripts/ci-wiring-check.mjs",
     "contract-id:check": "node scripts/contract-id-gate.mjs",
     "coverage:check": "node scripts/coverage-gate.mjs --check",
     "coverage:update": "node scripts/coverage-gate.mjs --update",
