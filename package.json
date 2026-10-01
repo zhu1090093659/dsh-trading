@@ -37,7 +37,8 @@
     "test:desktop": "node --test \"desktop/tests/*.test.mjs\"",
     "test:scripts": "vitest run scripts --passWithNoTests",
     "ui:check": "node scripts/ui-functional-check.mjs",
-    "version-packages": "changeset version"
+    "version-packages": "changeset version",
+    "wiring:ledger": "node scripts/wiring-ledger.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.0",

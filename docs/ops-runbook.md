@@ -290,3 +290,5 @@
 | 合计 | 21 个工厂：**无调用点 7 个**（原 8）、仅演练 6 个、生产已接线 8 个 |
 
 剩余 7 个零调用点：memorySourceRegistry / pairingClient / triggerPump / riskGate / countingVenue / v1Stream / frameDecoder —— 接线点均在 P5 步骤 1 的进程装配（见上表"给装配者的清单"）。
+
+**复现命令**：pnpm wiring:ledger（scripts/wiring-ledger.mjs）—— 输出每个工厂的生产/演练引用数与判定；无调用点的会单独列出清单。
