@@ -39,6 +39,16 @@
 
 `routes:1` 就是 bot-api 的桥挂上来了；未知路径由桥自己回协议错误（`{"ok":false,"code":"TRADING_PROTOCOL","message":"no such endpoint: /watchlist"}`），说明请求确实穿过栅栏进到桥的路由处理。`packages/bot` 的 9 例行为测试（真起服务器、真发请求，不 mock 不 sleep）覆盖健康面、路由注册/注销、prefix 边界、栅栏与处理器抛错；其中一条测出并修掉实现真 bug：`Promise.resolve(route.handler(req,res))` 会先求值再包装，同步抛错逃出 request 回调导致连接挂死，改为 `Promise.resolve().then(() => handler(...))`。
 
+
+## 后续修正：bot-closure:check 变成可运行的门禁（2026-10-01）
+
+%%pnpm bot-closure:check%% 此前**按名称跑必定失败**（脚本强制 %%--bot-profile%% 参数，npm script 没传）。一个跑不起来的门禁形同虚设 —— 已修为：
+
+- 没给参数时默认到 trading home 的标准 profile（%%~/.dsh-trading/profiles/trading-bot%%）；
+- **继承的宿主 home 一律拒绝猜测**：%%DSH_HOME%% 存在且不像交易 home 时报错退出并让人显式传参（实测输出：%%DSH_HOME=/Users/zcl/.dsh 看起来是宿主实例的 home，不是交易 home；拒绝猜测。%%）。这条守卫当场抓到了 agent 会话自身的环境。
+
+修后按名称运行的真实输出：bot 顶层包 54 / 24 个 @dshtrading / **0 个 GUI 平面包 / 0 个 UI 重依赖** / 13.5 MB；GUI 195 / 56 / 8 / 60.7 MB；差 141 包 47.2 MB；**AC1–AC3 通过**。这是在新增加 %%@dshtrading/cockpit%% 之后重测的 —— 驾驶舱没有污染 bot 闭包。
+
 ## 未验证项（如实标注）
 
 - `dsh-trading-role-presets` 仍 pending：bot profile 没有 `agent-preset-registry` 行（那是 `dsh-web-app` 层的），base 的 presets 行等不到 `agentPresets` 服务。步骤 1 只要求"面起得来"，agent 面归后续步骤。

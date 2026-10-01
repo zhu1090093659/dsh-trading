@@ -117,6 +117,27 @@ function summarize(label, profileDir) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2))
+  // 没给 --bot-profile 时默认到 **trading home** 的标准 profile。
+  // 两条讲究：① 门禁要能被自己的名字直接跑起来（pnpm bot-closure:check），否则它形同虚设；
+  // ② agent 会话会继承宿主的 DSH_HOME（~/.dsh），那种情况下**绝不猜**——宁可报错让人显式传参，
+  //    也不能拿宿主实例的 profile 去验交易面（2026-10-01 本会话踩过这个坑）。
+  if (typeof args['bot-profile'] !== 'string') {
+    const inheritedHome = process.env.DSH_HOME
+    const tradingHome = join(homedir(), '.dsh-trading')
+    if (inheritedHome !== undefined && inheritedHome !== '' && !inheritedHome.includes('-trading')) {
+      console.error('DSH_HOME=' + inheritedHome + ' 看起来是宿主实例的 home，不是交易 home；拒绝猜测。')
+      console.error('请显式传参：--bot-profile <dir>')
+      process.exit(2)
+    }
+    const candidate = join(tradingHome, 'profiles', 'trading-bot')
+    if (!existsSync(candidate)) {
+      console.error('未找到默认 profile：' + candidate)
+      console.error('用法：node scripts/bot-closure-acceptance.mjs --bot-profile <dir> [--gui-profile <dir>] [--json]')
+      process.exit(2)
+    }
+    args['bot-profile'] = candidate
+    console.log('[bot-closure] 使用默认 profile：' + candidate)
+  }
   if (typeof args['bot-profile'] !== 'string') {
     console.error('用法：node scripts/bot-closure-acceptance.mjs --bot-profile <dir> [--gui-profile <dir>] [--json]')
     return 2
