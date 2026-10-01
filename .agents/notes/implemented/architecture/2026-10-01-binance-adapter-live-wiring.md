@@ -85,9 +85,30 @@ aggTrade 推流只有 tick、没有快照，所以对齐层永远停在 `unalign
 
 **三家真跑汇总**：Binance（URL 订阅 + REST 基准）、OKX（订阅帧 + tickers 基准）、Bybit（订阅帧 + tickers 基准对象形状）——三家的 `alignment` 都到过 `aligned` 且 `droppedTicks: 0`。
 
+
+## 第四家：CCXT 快照适配器（同日补完，卡片清单齐）
+
+卡片列的四家是 **Binance → OKX → Bybit → CCXT**。前三家是原生 WS 适配器；CCXT 的角色是**聚合兜底**（一次 REST 拿一个可信的最新价），所以它只产快照、不产 tick。
+
+### 关键设计：**本模块不 import ccxt**
+
+理由有三条，都写进了模块头注：
+
+1. 依赖已在仓里（`packages/connector-ccxt`），但那是 **host 平面**的连接器包；
+2. 把 ccxt 装进 `@dshtrading/tradectl` 会把它拖进 **bot 平面的安装闭包** —— P1 实测的那条边界（bot 54 包 / GUI 195 包，差 141 包 47.2MB）会被吃掉一大块；
+3. 于是走与 `FeedTransport` / `PumpScheduler` 同一套做法：**端口注入**。谁装 ccxt 谁构造 exchange 传进来，核心只认一份**契约子集**（`fetchTicker` 返回的 `last` 与 `timestamp` 两个字段 —— 依赖面越小，ccxt 升级时越不容易碎）。
+
+**当场验证**：加了适配器之后 `pnpm plane:check` 仍报"bot 平面闭包 18 包（零 client-ui-*、零 UI 重依赖）" —— 设计目标不是嘴上说的。
+
+### 容错语义（与"先缓冲后发布"配套）
+
+`createCcxtSnapshotSource` 的形状与 `FeedOptions.bootstrap` 一致，可以直接接进 ws-feed；三类情况**都不抛**：某只标的 fetchTicker 抛错 ⇒ 跳过它；返回里没有可用 last（空值/NaN/≤0）⇒ 跳过它；没有 timestamp ⇒ 用注入时钟（时间来自交易所时以交易所为准）。**聚合兜底的价值就在于"能拿到几只算几只"，而不是整批失败。**
+
+测试 4 例（契约假件，无网络无 mock 框架）：映射正确且 epoch 如实传递；单只失败/价格不可用 ⇒ 跳过其余照常；无 timestamp 用注入时钟且字符串价格能解析；只产快照不产 tick。
+
 ## 未验证项（如实标注）
 
-- **已有三家**（Binance + OKX + Bybit，均真跑验证到 aligned）；**CCXT 适配器未写**。
+- **四家齐**：Binance / OKX / Bybit 均真跑验证到 aligned；**CCXT 为注入式快照兜底**（不引依赖，见下节）。
 - ~~快照源未接~~ **已接**（公共 REST + bootstrap/deliverSnapshot），真实链路已到 aligned；剩下的约束是**刷新节奏必须 ≤ 年龄预算**（见上）。
 - **epoch 语义**：Binance 公共流不提供世代号，适配器把"连接世代"当作 epoch；这与"交易所侧真实世代"不是一回事，交易所重连后的市场状态连续性未验证。
 - **交易所侧限制未实测**：Binance 的 24h 断连、单连接订阅上限、限频权重；OKX 的 30s 无互动断连（需文本 ping）都未核对。
