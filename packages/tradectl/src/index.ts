@@ -8,3 +8,4 @@
 export * from './db.ts'
 export * from './journal.ts'
 export * from './safe-boot.ts'
+export * from './uds.ts'
