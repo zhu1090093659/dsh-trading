@@ -14,7 +14,9 @@ bot（无图形界面的 Linux 服务器形态）之前不存在，代价是**�
 
 **Plane B · GUI（新建 `@dshtrading/gui`）**：从 base **原样搬来** 11 行——6 个浏览器半行（`.packages/base/cordis.patch.yml` 的 settings / client-ui-trading / -indicators / -strategies / -knowledge / -masters-quotes / -updater）+ 1 个纯浏览器半语言包（dsh-i18n）+ 3 个只有 web 宿主才有意义的双半行（im / plugin-manager / model-capabilities：host 半硬 inject webServer/connection，headless 下必然 pending，靠 `.packages/base/cordis.patch.yml` 的 `disabled: !!js` 条件禁用兜底）。依赖与版本从 base 的 `.package.json` 原样搬进 gui。
 
-**Plane C · bot API（待落地）**：承接 `.packages/client-ui-trading/src/bridge.ts` 的 `\@dshtrading/api` HTTP 前缀与 SSE。该文件 2135 行、GUI 专用逻辑（holdings 聚合、GUI 下单）与服务面混在一起，必须按「HTTP/SSE 服务面 vs 浏览器调用面」切开而不是整文件搬——本记录只登记边界，落地见后续变更。
+**Plane C · bot API（边界已定，代码未搬）**：承接 `/dshtrading/api` HTTP 前缀与 SSE。搬之前先确认了一件事实：**bridge.ts 本来就与浏览器无关**——它的 import 全部落在 host 平面（api / kit-* / indicators / knowledge / strategies / watchlist / holdings / eventbus / dsh-home），客户端半只经 `api.ts` 走 HTTP。所以搬法是「把 node 半整体移出、client 半留在原包」，不是把一个文件劈成两片。要移的：`bridge.ts`、`sse.ts`、`tasks/*`、`ttl-cache.ts` 与它们的用例；`client-ui-trading/src/index.ts` 退化为空 apply 的桩（保留包名与 `.` 导出，行 id/name 不动）；新包带自己的 patch 层插入新行 `dsh-trading-bot-api`（新行 id 必须显式 `--update` 登记），bot 与 GUI 两个 profile 都把它列进 bundles——这正是「bot API 平面：两者都装」的形态。**落地见后续变更。**
+
+**bot 平面骨架（本变更同批）**：新建 `@dshtrading/bot` bundle——设计文档 §2.2「bot 是一个 dsh surface，不是自建程序」，所以它不自建 bin、不自建 cordis app，**不含** webserver/connection/modules 行。今天它的 patch 层**有意为空的 `[]`**（空层必须写字面量数组，注释-only 会让启动失败——官方 README 明说），只承担一件事：让 `pnpm plane:check` 从今天起按**真实 bot 平面**（base + bot）量闭包，而不是拿 base 当代理。P2 在这个层里加 bot-startup provider 行与 UDS 传输行（文件里已列出待办与「不得引入 web 栈行」的约束）。
 
 **为什么 dsh-i18n 也归 GUI（卡片未点名）**：卡片步骤 4 的判据是「bot 安装闭包内**零** `@dshtrading/client-ui-*`」；dsh-i18n 依赖 5 个 client-ui-*，不搬则判据永远不成立。这是判据强制的，不是自主扩权。
 
@@ -43,7 +45,7 @@ bot（无图形界面的 Linux 服务器形态）之前不存在，代价是**�
 - **把 dsh-i18n 留在 base、只把它的 client-ui 依赖改成 optional/peer**：语言包的价值就在于随包分发词典；改成 peer 只会把同名依赖问题推给安装者，且「语言包属于浏览器面」这个事实没有变。败。
 - **把 im 留在 host 平面（未来 bot 推送用）**：它的 host 半硬 inject connection/credentials/typertGateway，bot 上必然 pending；真要做 bot 推送，应当新写一个不依赖 web 栈的通道行，而不是把 web 双半行塞进 bot 平面。败（将来要做时按新行评估）。
 - **把 plugin-manager 留在 base**：运行时插件安装器在 bot 平面就是"持久化代码落地通道"；红队 RT-25 的结论是上线前必须关闭。败。
-- **整文件把 bridge.ts 搬进 bot API 包**：2135 行里 GUI 专用逻辑（holdings 聚合、GUI 下单）与服务面混在一起，整搬等于把 GUI 依赖带进 bot 平面。败——改为按面切开，留待 Plane C 落地。
+- **把 bridge.ts 劈成「服务面 / 展示面」两片**：复核后发现这个前提不成立——bridge.ts 本来就是 node 半、零浏览器依赖，GUI 逻辑在同包的 `src/client/`，不在同一个文件里。劈文件只会制造两处都要维护的边界。败，改为「node 半整体移出、client 半留在原包」。
 
 ## Consequences
 

@@ -225,6 +225,22 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.19.0)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
 
+  packages/bot:
+    dependencies:
+      '@dshtrading/base':
+        specifier: workspace:^
+        version: link:../base
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.15)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.19.0)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
+
   packages/client-ui-indicators:
     dependencies:
       '@deepseek-ai/cordis':
@@ -1375,7 +1391,7 @@ importers:
         version: 0.3.24(react@18.3.1)
       '@xmanrui/dsh-im':
         specifier: ^4.20.2
-        version: 4.29.0(@types/node@24.19.0)
+        version: 4.29.0(@types/node@24.19.0)(debug@4.4.3)
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -6444,7 +6460,7 @@ snapshots:
       loupe: 3.2.1
       tinyrainbow: 2.0.0
 
-  '@wecom/aibot-node-sdk@1.0.7':
+  '@wecom/aibot-node-sdk@1.0.7(debug@4.4.3)':
     dependencies:
       axios: 1.20.0(debug@4.4.3)
       eventemitter3: 5.0.4
@@ -6455,12 +6471,12 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@xmanrui/dsh-im@4.29.0(@types/node@24.19.0)':
+  '@xmanrui/dsh-im@4.29.0(@types/node@24.19.0)(debug@4.4.3)':
     dependencies:
       '@matrix-org/olm': 3.2.15
       '@tencent-connect/qqbot-connector': 1.2.0
       '@tencent-connect/qqbot-nodejs': 1.0.4
-      '@wecom/aibot-node-sdk': 1.0.7
+      '@wecom/aibot-node-sdk': 1.0.7(debug@4.4.3)
       dingtalk-stream: 2.1.4
       imapflow: 2.1.1
       mailparser: 3.9.30
