@@ -31,10 +31,39 @@
 
 ## 未验证项（如实标注）
 
-- **三个 uid 与 systemd unit 从未真实安装**：需要 root 且属系统级改动，按路线纪律留给人工执行。四类演练（断连/重启/核心挂掉/带外退出）因此**尚无演练记录**——按 §13 的口径，缺记录即视为未满足，这里不假装测过。
+- **三个 uid 与 systemd unit 从未真实安装**：需要 root 且属系统级改动，按路线纪律留给人工执行；因此「uid 隔离生效」这一维**未验证**。断连/重启/核心挂掉三类演练已在**开发形态**下真跑出记录（见下节），第 4 类带外退出仍未演练。
 - `halt` 依赖 venue 原生条件单/OCO：目标 venue 是否具备**未核实**；按 #25，不具备时 halt 必须降级为 `reduce_only` 并作为接入准入条件。
 - dead-man 的"心跳失活"判定尚未实现（本轮只定义了触发源与封顶规则）。
 - `buildGapReport` 的输入由调用方提供：断连期间的"错过触发/被拒意图"如何采集，属 P3 的接线。
+
+
+## 三类演练记录（2026-10-01，**开发形态**）
+
+跑法：`node packages/tradectl/drill/three-drills.mjs`（脚本随包提交，可重复执行）。形态声明：与 edge、宿主**同 uid**、无 systemd、无独立凭据目录——即 §13 #18-4 要求显式声明的开发形态。因此本记录**不覆盖**"uid 隔离生效"这一维。
+
+    $ node packages/tradectl/drill/three-drills.mjs
+    0) 演练环境（开发形态）：/var/folders/.../tradectl-drill-FsHbPB
+    1) 核心启动：READY 35194 /var/folders/.../core.sock
+       行情新鲜时 place: {"allowed":true,"reason":"fresh quotes and no kill flag"}
+       行情断流后 place: {"allowed":false,"reason":"market-stale: reduce_only, may not open"}
+       核心状态: {"gate":true,"journal":4}
+    2) 核心被 SIGKILL：pid=35194 已退出
+       重启后 safe boot: BOOT {"rolledBack":0,"markedUnknown":1,"cancelled":0,"settled":1,"adopted":0}
+       重开账本后的本地状态: [{"intent_id":"i-live","state":"terminal"},{"intent_id":"i-roll","state":"terminal"},{"intent_id":"i-unknown","state":"submitted-unknown"}]
+       venue 侧收到的撤销调用: v-live
+    3) 核心再次被 SIGKILL（模拟核心挂掉）
+       核心已死，edge 的 /a0/kill: HTTP 200 {"ok":true,"state":{"killed":true,...}}
+       kill 文件内容: {"killed":true,"paused":false,"reason":"dev_de6f92427b24f7a0","atMs":1790844501564}
+       核心重启后 place: {"allowed":false,"reason":"halted by out-of-band kill"}
+    4) 演练结束，临时目录已清理
+
+三类各自证明了什么：
+
+1. **断连**（行情断流）：同一个 `place` 请求在行情新鲜时 `allowed:true`、断流后 `allowed:false + market-stale: reduce_only, may not open` —— "可平不可开"在真实 UDS 往返上成立，不是文档里的一句话。
+2. **重启**（SIGKILL 后重开同一账本）：safe boot 与 venue 对账；`i-unknown`（本地 submitted、venue 查不到）被钉成 `submitted-unknown` 且**没有发生任何重发**；`i-live` 收敛为 `terminal`，venue 侧如实收到 `v-live` 的撤销调用（首次启动阶段）。
+3. **核心挂掉**：核心进程已死的情况下 edge 仍然服务 `/a0/kill`（HTTP 200，kill 文件原子落盘）；核心重启后同一个请求被拒（`halted by out-of-band kill`）——A0 与核心解耦、kill 对核心生效两件事同时被证明。
+
+**仍未演练**：带外退出（需要 venue 侧原生保护先存在，属 P3/P5）；生产形态下的 uid 隔离（需要人执行系统级安装）。
 
 ## 被否决的方案
 
