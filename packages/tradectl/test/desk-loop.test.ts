@@ -2,7 +2,7 @@
  * desk 运行时环路测试：把整条链（信号 → 触发源 → 决策 → 风控状态 → 留痕 → gap report）跑通。
  * 真 node:sqlite + 真 journal + 注入时钟与调度器；无 sleep、无 mock 框架。
  */
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -142,5 +142,44 @@ describe('desk 运行时环路', () => {
     // Then 不再推进
     expect(f.loop.stats().running).toBe(false)
     expect(f.loop.stats().ticks).toBe(1)
+  })
+
+  it('管理员：环路每轮落心跳（dead-man 看门狗据此判断失活，不依赖问进程）', () => {
+    // Given 一个带心跳路径的环路
+    const dir = mkdtempSync(join(tmpdir(), 'desk-loop-hb-'))
+    dirs.push(dir)
+    const heartbeatPath = join(dir, 'heartbeat.json')
+    const ledgers = openLedgers(dir)
+    migrateDeskRecords(ledgers.orders)
+    migrateTriggers(ledgers.orders)
+    let tick = T0
+    const journal = createJournal(ledgers.audit, { now: () => (tick += 1) })
+    const clock = manualScheduler()
+    const loop = createDeskLoop({
+      orders: ledgers.orders,
+      audit: ledgers.audit,
+      journal,
+      gate: { protectiveOrdersAtVenue: false },
+      signals: () => ({
+        symbols: ['BTC/USDT'],
+        alignmentOf: () => 'aligned',
+        lastHeartbeatAtMs: T0,
+        heartbeatTimeoutMs: 30_000,
+        venueErrorStreak: 0,
+        venueErrorThreshold: 3,
+        diskWriteFailed: false,
+        now: () => (tick += 1),
+      }),
+      scheduler: clock.scheduler,
+      now: () => (tick += 1),
+      intervalMs: 1_000,
+      heartbeatPath,
+    })
+    // When 跑一轮
+    loop.tickOnce()
+    // Then 心跳文件存在且内容可解析（原子写：不会留下半个 JSON）
+    const beaten = JSON.parse(readFileSync(heartbeatPath, 'utf8')) as { atMs: number; note: string }
+    expect(beaten.atMs).toBeGreaterThan(0)
+    expect(beaten.note).toContain('desk tick 1')
   })
 })

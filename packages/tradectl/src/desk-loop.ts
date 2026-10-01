@@ -21,6 +21,7 @@ import type { Journal } from './journal.ts'
 import { recordDegradation } from './desk-records.ts'
 import { applyRiskEvent, initialRiskState, openRiskAllowedFor, type RiskGateOptions, type RiskState } from './risk-gate.ts'
 import { scanDegradation, type MonitorSignals } from './degradation-monitor.ts'
+import { writeHeartbeat } from './heartbeat.ts'
 
 /** 调度端口（与事件泵同一接口，便于测试注入）。 */
 export interface LoopScheduler {
@@ -37,6 +38,12 @@ export interface DeskLoopOptions {
   readonly scheduler: LoopScheduler
   readonly now: () => number
   readonly intervalMs: number
+  /**
+   * 心跳文件路径（可选）：给了就每轮原子写一次。
+   * **dead-man 第一层的前提**：看门狗要在"bot 已经死了"的前提下还能判断失活，
+   * 所以心跳必须落在独立于 agent 会话的文件里，而不是靠问进程。
+   */
+  readonly heartbeatPath?: string | undefined
 }
 
 /** 一轮的结果（名字带 Desk 前缀：triggers.ts 已导出过 TickResult，避免 barrel 重名）。 */
@@ -77,6 +84,8 @@ export function createDeskLoop(options: DeskLoopOptions): {
   const tickOnce = (): DeskTickResult => {
     const atMs = options.now()
     ticks += 1
+    // 先落心跳再判定：宁可让人看到"还在跳但已降级"，也不要让看门狗因为一次长判定误判失活
+    if (options.heartbeatPath !== undefined) writeHeartbeat(options.heartbeatPath, { atMs, note: 'desk tick ' + String(ticks) })
     const scan = scanDegradation(options.signals())
     let written = 0
 

@@ -16,6 +16,7 @@ import { createJournal } from '../src/journal.ts'
 import { migrateDeskRecords } from '../src/desk-records.ts'
 import { migrateTriggers } from '../src/triggers.ts'
 import { createDeskLoop } from '../src/desk-loop.ts'
+import { createWatchdog } from '../src/watchdog.ts'
 import type { MonitorSignals } from '../src/degradation-monitor.ts'
 
 const T0 = 1_700_000_000_000
@@ -56,6 +57,9 @@ const loop = createDeskLoop({
   scheduler: { schedule: () => () => {} },
   now: () => (tick += 1),
   intervalMs: 1_000,
+  // 环路自己产心跳：dead-man 第一层（快环看门狗）据此判断"bot 自己心跳失活"，
+  // 而不是靠问进程或看手机连没连上（设计 §13 #19）。
+  heartbeatPath: join(home, "heartbeat.json"),
 })
 
 const observe: string[] = []
@@ -110,6 +114,35 @@ try {
   void phase
   if (gapReports.length !== 1) failures.push('journal 里没有 gap.report 事件')
 
+  // 第五幕：dead-man 第一层 —— 快环看门狗（不依赖 agent 存活）
+  const stales: string[] = []
+  const recoveries: number[] = []
+  const watchdog = createWatchdog({
+    heartbeatPath: join(home, "heartbeat.json"),
+    timeoutMs: 10_000,
+    scheduler: { schedule: () => () => {} },
+    now: () => tick,
+    intervalMs: 1_000,
+    onStale: (reason) => stales.push(reason),
+    onRecovered: (silentMs) => recoveries.push(silentMs),
+  })
+  const fresh = watchdog.checkOnce()
+  process.stdout.write("  第五幕 心跳新鲜 → " + JSON.stringify({ stale: fresh.stale, silentMs: fresh.silentMs }) + NL)
+  if (fresh.stale) failures.push("环路刚跑过，看门狗却判失活")
+  // 模拟 desk 死了：时钟推进 30 秒且不再有心跳
+  tick += 30_000
+  const dead = watchdog.checkOnce()
+  watchdog.checkOnce()
+  process.stdout.write("  第五幕 desk 停摆 → " + JSON.stringify({ stale: dead.stale, reason: dead.reason, 喊次数: stales.length }) + NL)
+  if (!dead.stale) failures.push("心跳静默 30 秒（阈值 10 秒）却没判失活")
+  if (stales.length !== 1) failures.push("一次失活应只喊一次，实际 " + String(stales.length) + " 次")
+  // desk 回来：写一次心跳
+  const loopAgain = loop.tickOnce()
+  const back = watchdog.checkOnce()
+  process.stdout.write("  第五幕 恢复 → " + JSON.stringify({ stale: back.stale, 恢复留痕: recoveries.length, 环路档位: loopAgain.state.level }) + NL)
+  if (back.stale) failures.push("心跳已恢复却仍判失活")
+  if (recoveries.length !== 1) failures.push("恢复没有留痕")
+
   // 复述判据：任何一条过渡都不能是 halt
   for (const event of transitions) {
     if ((event.payload as { to?: string }).to === 'halt') failures.push('journal 里出现了 halt 过渡：' + JSON.stringify(event.payload))
@@ -123,5 +156,5 @@ if (failures.length > 0) {
   for (const failure of failures) process.stderr.write('  - ' + failure + NL)
   process.exit(1)
 }
-process.stdout.write('[desk-loop-drill] ✓ 四幕 + 重连全部通过（#24 单标的不连坐、#25 全局封顶 reduce_only 且无 halt、恢复自愈、gap report 齐全）' + NL)
+process.stdout.write('[desk-loop-drill] ✓ 五幕 + 重连全部通过（#24 单标的不连坐、#25 全局封顶且无 halt、恢复自愈、gap report 齐全、dead-man 第一层看门狗生效且只喊一次）' + NL)
 process.exit(0)
