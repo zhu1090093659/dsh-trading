@@ -7,7 +7,7 @@
  */
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { gzipSync } from 'node:zlib'
+import { brotliCompressSync, constants, gzipSync } from 'node:zlib'
 
 const root = new URL('../dist/', import.meta.url).pathname
 const COMPRESSIBLE = ['.html', '.js', '.css', '.svg', '.json', '.map']
@@ -21,13 +21,16 @@ function walk(dir) {
       walk(full)
       continue
     }
-    if (entry.endsWith('.gz')) continue
+    if (entry.endsWith('.gz') || entry.endsWith('.br')) continue
     if (!COMPRESSIBLE.some((ext) => entry.endsWith(ext))) continue
     const raw = readFileSync(full)
     const gz = gzipSync(raw, { level: 9 })
     // 压不动就不写（避免出现比原文更大的 .gz 反而拖慢）
     if (gz.length >= raw.length) continue
     writeFileSync(full + '.gz', gz)
+    // brotli 同时产出：serveStatic 在客户端接受 br 时优先发它（实测 br 比 gzip 更小）
+    const br = brotliCompressSync(raw, { params: { [constants.BROTLI_PARAM_QUALITY]: 11 } })
+    if (br.length < raw.length) writeFileSync(full + '.br', br)
     written += 1
     saved += raw.length - gz.length
   }
