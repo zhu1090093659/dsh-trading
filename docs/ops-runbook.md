@@ -71,7 +71,11 @@
 | **策略/生成层**（9 类触发源、`decideDegradation`、`buildGapReport`、启动形态、禁止自动 `halt`） | ✅ **完整且有测试**（`degradation.test.ts` 覆盖各触发源与 gap report 生成） |
 | **检测层**（把信号变成触发源） | ✅ **部分补齐**：`degradation-monitor.ts` 的 `scanDegradation(signals)` 把「各标的对齐态 / 核心心跳时间 / 交易所连续报错数 / 磁盘写失败」映射成触发源；两条纪律有测试：**未知不当健康**（拿不到心跳或对齐态时进 `unknownSignals` 并如实报告）、**检测层永不产 `out-of-band-halt`** |
 | **真实检测器**（谁去发现 ENOSPC、谁去比时钟、谁去数交易所错误） | ⚠️ **缺**：`scanDegradation` 的信号全部注入，目前只有测试在喂 |
-| **恢复时调用** | ⚠️ **缺**：没有代码在重连后调用 `buildGapReport` ⇒ "恢复必须产出 gap report"**目前不成立**（这是 P5 步骤 1 该接的第一根线）|
+| **收集器**（从库里取四类输入） | ✅ **已落地** `gap-collector.ts`：`collectGapReport({orders, audit}, window)` 取 missed 触发（`occurrences`）、被拒意图条数（`intents.state`）、journal 里的 degradation* 事件、当前持仓，并**逐条点名取不到的输入**（`missingInputs`）|
+| **数据源本身的完整度** | ⚠️ **四类里只有一类齐全**（2026-10-01 实测）：① missed 触发 ✅；② 被拒意图 ⚠️ **没有理由列**（只能给条数）；③ 降级动作 ⚠️ **journal 无 degradation* 写入点**；④ 持仓 ⚠️ **只有当前值、无历史** ⇒ `positionsBefore` 只能为空、持仓变化不完整 |
+| **恢复时自动调用** | ⚠️ **缺**：收集器有了，但**没有任何运行时在重连后调用它** |
+
+**结论（比"调个函数"重）**：要让"恢复必须产出 gap report"真正成立，得先补三处**记录**：被拒意图的理由、降级动作的 journal 写入点、持仓变化事件。**这三处记录本身就是审计要求**，不是为 gap report 临时加的。
 
 > **初版本节写的是"没有任何代码产出 GapReport"** —— 不准：生成函数 `buildGapReport` 就在 `degradation.ts` 里，而我那一次 grep **恰好把该文件排除在结果之外**，于是"没找到"被写成了"不存在"。**准确的说法是"没人调用它"**，两者对 P5 的工作量判断完全不同：前者要发明，后者只要接线。
 
