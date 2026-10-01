@@ -17,6 +17,8 @@ Status: implemented
 
 `@dsh-trading/base` bundle 是市场无关共享行（审批闸门、agent-presets root 配置）的唯一拥有者。
 
+> **2026-10-01 原地补充（平面再切一刀）**：本记录的"市场 bundle"之外又加了**平面**维度——base 里 11 条浏览器半行（6 个 client-ui-* 视图 + dsh-i18n 语言包 + im / plugin-manager / model-capabilities 三个仅 web 宿主有意义的双半行）搬到新的 `@dshtrading/gui` bundle，行 id 与 name 一字不改；base 只留 host 平面行，因而 bot 的安装闭包第一次不含任何 `@dshtrading/client-ui-*`。市场仍是发行单位，平面是**谁装**的问题——两把刀不冲突。见 [2026-10-01-three-plane-package-split](2026-10-01-three-plane-package-split.md)。
+
 市场预设划分与自安装职责此后由[三角色预设与市场能力整合](2026-09-06-unified-trading-role-presets.md)取代：市场仍为发行单位，base 按启用市场统一生成交易员、研究员和风险审查员。
 
 ## Alternatives considered

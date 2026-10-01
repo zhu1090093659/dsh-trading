@@ -187,36 +187,12 @@ importers:
       '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
-      '@dshtrading/client-ui-indicators':
-        specifier: workspace:^
-        version: link:../client-ui-indicators
-      '@dshtrading/client-ui-knowledge':
-        specifier: workspace:^
-        version: link:../client-ui-knowledge
-      '@dshtrading/client-ui-masters-quotes':
-        specifier: workspace:^
-        version: link:../client-ui-masters-quotes
-      '@dshtrading/client-ui-settings':
-        specifier: workspace:^
-        version: link:../client-ui-settings
-      '@dshtrading/client-ui-strategies':
-        specifier: workspace:^
-        version: link:../client-ui-strategies
-      '@dshtrading/client-ui-trading':
-        specifier: workspace:^
-        version: link:../client-ui-trading
-      '@dshtrading/client-ui-updater':
-        specifier: workspace:^
-        version: link:../client-ui-updater
       '@dshtrading/connector-jin10':
         specifier: workspace:^
         version: link:../connector-jin10
       '@dshtrading/dsh-home':
         specifier: workspace:^
         version: link:../dsh-home
-      '@dshtrading/dsh-i18n':
-        specifier: workspace:^
-        version: link:../dsh-i18n
       '@dshtrading/eventbus':
         specifier: workspace:^
         version: link:../eventbus
@@ -238,15 +214,6 @@ importers:
       '@dshtrading/watchlist':
         specifier: workspace:^
         version: link:../watchlist
-      '@linxin666/dsh-client-ui-model-capabilities':
-        specifier: ^0.3.21
-        version: 0.3.24(react@18.3.1)
-      '@linxin666/dsh-client-ui-plugin-manager':
-        specifier: ^0.3.21
-        version: 0.3.24(react@18.3.1)
-      '@xmanrui/dsh-im':
-        specifier: ^4.20.2
-        version: 4.29.0(@types/node@24.19.0)(debug@4.4.3)
       yaml:
         specifier: ^2.9.0
         version: 2.9.1
@@ -1369,6 +1336,46 @@ importers:
       '@dshtrading/kit-global':
         specifier: workspace:*
         version: link:../kit-global
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.15)(typescript@5.9.3)
+
+  packages/gui:
+    dependencies:
+      '@dshtrading/client-ui-indicators':
+        specifier: workspace:^
+        version: link:../client-ui-indicators
+      '@dshtrading/client-ui-knowledge':
+        specifier: workspace:^
+        version: link:../client-ui-knowledge
+      '@dshtrading/client-ui-masters-quotes':
+        specifier: workspace:^
+        version: link:../client-ui-masters-quotes
+      '@dshtrading/client-ui-settings':
+        specifier: workspace:^
+        version: link:../client-ui-settings
+      '@dshtrading/client-ui-strategies':
+        specifier: workspace:^
+        version: link:../client-ui-strategies
+      '@dshtrading/client-ui-trading':
+        specifier: workspace:^
+        version: link:../client-ui-trading
+      '@dshtrading/client-ui-updater':
+        specifier: workspace:^
+        version: link:../client-ui-updater
+      '@dshtrading/dsh-i18n':
+        specifier: workspace:^
+        version: link:../dsh-i18n
+      '@linxin666/dsh-client-ui-model-capabilities':
+        specifier: ^0.3.21
+        version: 0.3.24(react@18.3.1)
+      '@linxin666/dsh-client-ui-plugin-manager':
+        specifier: ^0.3.21
+        version: 0.3.24(react@18.3.1)
+      '@xmanrui/dsh-im':
+        specifier: ^4.20.2
+        version: 4.29.0(@types/node@24.19.0)
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -6437,7 +6444,7 @@ snapshots:
       loupe: 3.2.1
       tinyrainbow: 2.0.0
 
-  '@wecom/aibot-node-sdk@1.0.7(debug@4.4.3)':
+  '@wecom/aibot-node-sdk@1.0.7':
     dependencies:
       axios: 1.20.0(debug@4.4.3)
       eventemitter3: 5.0.4
@@ -6448,12 +6455,12 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@xmanrui/dsh-im@4.29.0(@types/node@24.19.0)(debug@4.4.3)':
+  '@xmanrui/dsh-im@4.29.0(@types/node@24.19.0)':
     dependencies:
       '@matrix-org/olm': 3.2.15
       '@tencent-connect/qqbot-connector': 1.2.0
       '@tencent-connect/qqbot-nodejs': 1.0.4
-      '@wecom/aibot-node-sdk': 1.0.7(debug@4.4.3)
+      '@wecom/aibot-node-sdk': 1.0.7
       dingtalk-stream: 2.1.4
       imapflow: 2.1.1
       mailparser: 3.9.30

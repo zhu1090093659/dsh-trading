@@ -47,16 +47,8 @@
   "dependencies": {
     "@deepseek-ai/dsh-agent-preset-registry": ">=0.2.0-rc.2",
     "@dshtrading/api": "workspace:^",
-    "@dshtrading/client-ui-indicators": "workspace:^",
-    "@dshtrading/client-ui-knowledge": "workspace:^",
-    "@dshtrading/client-ui-masters-quotes": "workspace:^",
-    "@dshtrading/client-ui-settings": "workspace:^",
-    "@dshtrading/client-ui-strategies": "workspace:^",
-    "@dshtrading/client-ui-trading": "workspace:^",
-    "@dshtrading/client-ui-updater": "workspace:^",
     "@dshtrading/connector-jin10": "workspace:^",
     "@dshtrading/dsh-home": "workspace:^",
-    "@dshtrading/dsh-i18n": "workspace:^",
     "@dshtrading/eventbus": "workspace:^",
     "@dshtrading/holdings": "workspace:^",
     "@dshtrading/indicators": "workspace:^",
@@ -64,9 +56,6 @@
     "@dshtrading/router": "workspace:^",
     "@dshtrading/strategies": "workspace:^",
     "@dshtrading/watchlist": "workspace:^",
-    "@linxin666/dsh-client-ui-model-capabilities": "^0.3.21",
-    "@linxin666/dsh-client-ui-plugin-manager": "^0.3.21",
-    "@xmanrui/dsh-im": "^4.20.2",
     "yaml": "^2.9.0"
   },
   "peerDependencies": {

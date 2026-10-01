@@ -12,19 +12,19 @@
       "name": "@dshtrading/base"
     },
     "dsh-trading-client-ui-indicators": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@dshtrading/client-ui-indicators"
     },
     "dsh-trading-client-ui-knowledge": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@dshtrading/client-ui-knowledge"
     },
     "dsh-trading-client-ui-masters-quotes": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@dshtrading/client-ui-masters-quotes"
     },
     "dsh-trading-client-ui-settings": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@dshtrading/client-ui-settings"
     },
     "dsh-trading-client-ui-special-indicators": {
@@ -32,15 +32,15 @@
       "name": "@dshtrading/client-ui-special-indicators"
     },
     "dsh-trading-client-ui-strategies": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@dshtrading/client-ui-strategies"
     },
     "dsh-trading-client-ui-trading": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@dshtrading/client-ui-trading"
     },
     "dsh-trading-client-ui-updater": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@dshtrading/client-ui-updater"
     },
     "dsh-trading-cn-dataplane": {
@@ -100,7 +100,7 @@
       "name": "@dshtrading/crypto"
     },
     "dsh-trading-dsh-i18n": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@dshtrading/dsh-i18n"
     },
     "dsh-trading-eventbus": {
@@ -152,7 +152,7 @@
       "name": "@dshtrading/holdings/plugin"
     },
     "dsh-trading-im": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@xmanrui/dsh-im"
     },
     "dsh-trading-indicators": {
@@ -172,11 +172,11 @@
       "name": "@dshtrading/base/market-tools"
     },
     "dsh-trading-model-capabilities": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@linxin666/dsh-client-ui-model-capabilities"
     },
     "dsh-trading-plugin-manager": {
-      "owner": "bundle:base",
+      "owner": "bundle:gui",
       "name": "@linxin666/dsh-client-ui-plugin-manager"
     },
     "dsh-trading-role-presets": {

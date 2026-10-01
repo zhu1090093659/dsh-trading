@@ -1,0 +1,45 @@
+{
+  "name": "@dshtrading/gui",
+  "description": "GUI-plane bundle for dsh-trading: the browser-half rows (settings shell, stage views, language packs, updater dialog) and the web-host-only dual-half rows (IM, plugin manager, model capabilities). Split out of @dshtrading/base on 2026-10-01 so the bot install closure carries no @dshtrading/client-ui-* dependency. Row ids and names moved verbatim (they are a cross-version public contract).",
+  "version": "0.5.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown"
+  },
+  "dependencies": {
+    "@dshtrading/client-ui-settings": "workspace:^",
+    "@dshtrading/client-ui-trading": "workspace:^",
+    "@dshtrading/client-ui-indicators": "workspace:^",
+    "@dshtrading/client-ui-strategies": "workspace:^",
+    "@dshtrading/client-ui-knowledge": "workspace:^",
+    "@dshtrading/client-ui-masters-quotes": "workspace:^",
+    "@dshtrading/client-ui-updater": "workspace:^",
+    "@dshtrading/dsh-i18n": "workspace:^",
+    "@xmanrui/dsh-im": "^4.20.2",
+    "@linxin666/dsh-client-ui-plugin-manager": "^0.3.21",
+    "@linxin666/dsh-client-ui-model-capabilities": "^0.3.21"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0"
+  }
+}

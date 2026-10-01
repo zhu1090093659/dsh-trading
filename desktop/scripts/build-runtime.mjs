@@ -42,6 +42,7 @@ const stagingRoot = path.join(desktopDir, 'resources', 'runtime');
 /** Direct profile dependencies mirroring the live trading-web profile. */
 const DIRECT_TRADING_PACKAGES = [
   '@dshtrading/base',
+  '@dshtrading/gui',
   '@dshtrading/crypto',
   '@dshtrading/us',
   '@dshtrading/cn',
@@ -71,6 +72,7 @@ const PROFILE_BUNDLES = [
   '@deepseek-ai/dsh-base',
   '@deepseek-ai/dsh-web-app',
   '@dshtrading/base',
+  '@dshtrading/gui',
   '@dshtrading/crypto',
   '@dshtrading/us',
   '@dshtrading/cn',
