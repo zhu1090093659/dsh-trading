@@ -3,7 +3,20 @@
 # （2026-09-08 DSH_HOME 分离，与 dsh web 宿主 ~/.dsh 互不污染；
 #   note: .agents/notes/implemented/process/2026-09-08-separate-dsh-home.md）
 # 安装：cp scripts/home/dsh-trading ~/.local/bin/ && chmod +x ~/.local/bin/dsh-trading
-# 已显式设置 DSH_HOME 时尊重现有值。
+# 已显式设置 DSH_HOME 时尊重现有值——**但仅当它看起来是 trading home（路径含 -trading）**；
+# 继承来的宿主 home（~/.dsh）会被忽略并告警，见下方守卫。
+# 守卫（2026-10-01 实证）：agent 会话会继承**宿主实例**的 DSH_HOME（~/.dsh）。
+# 只在环境里没有 DSH_HOME、或它确实是 trading home（路径含 -trading）时沿用；
+# 否则忽略继承值并回落到 ~/.dsh-trading —— 「尊重现有值」不能用来把交易实例跑到宿主 home 上
+# （这正是 ui:check / clean-knowledge / preflight 三处同类缺陷的统一策略）。
+case "${DSH_HOME:-}" in
+  *-trading*) ;;
+  "") ;;
+  *)
+    echo "dsh-trading: 忽略继承的 DSH_HOME=$DSH_HOME（不是 trading home），改用 $HOME/.dsh-trading" >&2
+    DSH_HOME=""
+    ;;
+esac
 DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
 export DSH_HOME
 
