@@ -138,3 +138,15 @@ Tier 1 的 `static-gates` job 里新增两步（见 .github/workflows/ci.yml）�
 ### 第三个新成员：`pnpm home-guard:check`（2026-10-01 同日）
 
 %%static-gates%% 现在是 16 步，最后三步依次是 %%node scripts/e2e-smoke.mjs%%、%%pnpm home-guard:check%%（前者端到端冒烟、后者读 DSH_HOME 的脚本必须带守卫）。判据与理由见 [home 契约](2026-09-08-separate-dsh-home.md) 的"home 守卫门禁"一节。
+
+## 统一门禁入口 gates:all（2026-10-01）
+
+scripts/gates-all.mjs 顺序跑 14 条门禁，**显式收集每条退出码**，任一条失败 ⇒ 整体 exit 1；末尾打印红绿表，失败时附该门禁输出尾部 8 行。
+
+**存在理由（一句话）**：本会话两次带着红灯提交，根因都不是门禁没发现，而是**跑门禁的脚本没判退出码** —— "打印了红字"与"这一步算失败"之间有缝。这个脚本把缝焊死。
+
+支持 --only a,b,c（子集）、--with-network（透传给 e2e:smoke）、--self-test（用一个必然失败的命令验证退出码传播）。
+
+**全量实测**：14 通过 / 0 失败，exit 0（build 21.9s / -r test 31.7s / coverage 30.2s / typecheck 32.1s / 其余 <1.4s）。
+
+**用法**：收尾一律 `pnpm gates:all`。

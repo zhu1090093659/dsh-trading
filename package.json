@@ -17,6 +17,7 @@
     "coverage:check": "node scripts/coverage-gate.mjs --check",
     "coverage:update": "node scripts/coverage-gate.mjs --update",
     "e2e:smoke": "node scripts/e2e-smoke.mjs",
+    "gates:all": "node scripts/gates-all.mjs",
     "home-guard:check": "node scripts/home-guard-check.mjs",
     "i18n:check": "node scripts/i18n-audit.mjs --check",
     "i18n:report": "node scripts/i18n-audit.mjs --report",
