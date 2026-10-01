@@ -50,6 +50,7 @@
   "packages/connector-tushare/tsconfig.json": 16,
   "packages/connector-xysz/tsconfig.json": 0,
   "packages/connector-yahoo/tsconfig.json": 1,
+  "packages/contract/tsconfig.json": 0,
   "packages/crypto/tsconfig.json": 0,
   "packages/dsh-home/tsconfig.json": 0,
   "packages/dsh-i18n/tsconfig.client.json": 0,
