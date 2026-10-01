@@ -1,0 +1,27 @@
+# edge：唯一网络暴露面。最弱权：不碰账本、不碰凭据，只读核心的 kill 状态文件。
+[Unit]
+Description=dsh-trading edge gateway (the only network exposure; A0 stays up)
+Documentation=file:///Users/zcl/code/dsh-trading/deploy/README.md
+After=dsh-tradectl.service
+Requires=dsh-tradectl.service
+PartOf=dsh-tradectl.service
+
+[Service]
+User=dsh-trade-edge
+Group=dsh-trade
+Environment=DSH_HOME=/var/lib/dsh-trading
+# 只监听内网/回环，绝不 0.0.0.0（代码里显式拒绝）。
+Environment=EDGE_BIND=127.0.0.1
+UMask=0077
+ExecStart=/usr/bin/env node /opt/dsh-trading/tradectl/bin/edge.js
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# 只读挂载核心的 kill 状态目录（不需要写）。
+ReadOnlyPaths=/run/dsh-tradectl
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,34 @@
+# 执行核：三进程里唯一持有凭据与账本的进程（§13 #18-3 凭据只住核心侧）。
+# 安装前请读 deploy/README.md；本文件**不**由 agent 自动安装。
+[Unit]
+Description=dsh-trading execution core (ledgers, safe boot, UDS, A0 kill state)
+Documentation=file:///Users/zcl/code/dsh-trading/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify-reload
+User=dsh-trade-core
+Group=dsh-trade
+# 独立 uid（§13 #18-4）：核心 = dsh-trade-core，edge = dsh-trade-edge，宿主 = dsh-trade-bot。
+SupplementaryGroups=dsh-trade
+Environment=DSH_HOME=/var/lib/dsh-trading
+Environment=NODE_ENV=production
+# 账本与凭据目录归核心，0700/0600（其它两个 uid 连读都不行）。
+UMask=0077
+RuntimeDirectory=dsh-tradectl
+RuntimeDirectoryMode=0750
+StateDirectory=dsh-tradectl
+StateDirectoryMode=0700
+ExecStart=/usr/bin/env node /opt/dsh-trading/tradectl/bin/core.js
+Restart=on-failure
+RestartSec=2
+# 保护：不允许核心以外的东西写它的账本
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dsh-trading /run/dsh-tradectl
+
+[Install]
+WantedBy=multi-user.target

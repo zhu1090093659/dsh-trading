@@ -1,0 +1,25 @@
+# Agent 宿主：启动顺序在核心 safe boot 完成之后（After= + 核心开门才接受连接）。
+[Unit]
+Description=dsh-trading bot surface (agent host; no credentials, cannot place orders)
+Documentation=file:///Users/zcl/code/dsh-trading/deploy/README.md
+After=dsh-tradectl.service
+Wants=dsh-tradectl.service
+
+[Service]
+User=dsh-trade-bot
+Group=dsh-trade
+Environment=DSH_HOME=/var/lib/dsh-trading
+Environment=DSH_PROFILE=trading-bot
+UMask=0077
+ExecStart=/usr/bin/env dsh --profile trading-bot
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# 宿主不持有凭据（§13 #18-3），也不写账本目录。
+ReadWritePaths=/var/lib/dsh-trading/profiles
+
+[Install]
+WantedBy=multi-user.target
