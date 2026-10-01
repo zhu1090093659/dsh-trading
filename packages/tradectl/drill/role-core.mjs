@@ -10,6 +10,20 @@ const arg = (name) => {
   const i = process.argv.indexOf('--' + name)
   return i < 0 ? undefined : process.argv[i + 1]
 }
+/**
+ * 必填参数校验：缺参数时给一句人话，而不是让 openLedgers(undefined) 抛
+ * TypeError: The path argument must be of type string ...（那个报错看起来像库的 bug，实际是用法错误）。
+ * 本脚本**由 three-drills.mjs spawn**，不单独运行 —— 2026-10-01 我自己就先误判成回归，故补此校验。
+ */
+const REQUIRED = ['dir', 'socket', 'venue', 'kill', 'quotes']
+const missing = REQUIRED.filter((name) => arg(name) === undefined)
+if (missing.length > 0) {
+  process.stderr.write('role-core: 缺少必填参数 ' + missing.join(', ') + String.fromCharCode(10))
+  process.stderr.write('用法：node role-core.mjs --dir D --socket S --venue V --kill K --quotes Q' + String.fromCharCode(10))
+  process.stderr.write('注意：本脚本是演练角色，通常由 three-drills.mjs spawn，不单独运行。' + String.fromCharCode(10))
+  process.exit(2)
+}
+
 const dir = arg('dir')
 const socketPath = arg('socket')
 const venuePath = arg('venue')
