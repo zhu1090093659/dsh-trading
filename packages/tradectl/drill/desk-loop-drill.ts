@@ -7,6 +7,9 @@
  * 它不证明什么：**没有接真实 venue**（下单端口不存在），信号是脚本化的而非从真实行情检测器读的。
  *
  * 退出码即断言（同 a0-e2e / attach-drill 的做法）。
+ *
+ * **跨文件契约**：末行总结（[desk-loop-drill] ✓ 五幕 + 重连全部通过 …）被 scripts/e2e-smoke.mjs 断言。
+ * 改这一行就要同批改那边的 expect —— 2026-10-01 就因为这个包报红才发现漏改。
  */
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
