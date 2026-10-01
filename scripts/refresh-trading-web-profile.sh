@@ -17,6 +17,16 @@ set -euo pipefail
 
 # dsh-trading 独立 home（2026-09-08 DSH_HOME 分离）；可用环境变量 DSH_HOME 覆盖。
 export DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
+
+# 守卫（2026-10-01 实测踩中）：agent 会话会继承**宿主实例**的 DSH_HOME
+# （~/.dsh + DSH_PROFILE=desktop）。那种情况下这里的缺省回落拿到的是宿主 home，
+# 本脚本就会在另一个 home 里刷新同名 profile：preflight 报一堆 vendor 死路径，
+# 人却在修对的仓库。破坏性脚本不该在这种歧义下继续——显式拒绝并给出正解。
+if [ "$DSH_HOME" = "$HOME/.dsh" ]; then
+  echo "拒绝执行：DSH_HOME 指向宿主 dsh home（${DSH_HOME}），不是 trading home。" >&2
+  echo "本项目一律用 ~/.dsh-trading；请显式设置 DSH_HOME=$HOME/.dsh-trading 后重试。" >&2
+  exit 2
+fi
 PROFILE="$DSH_HOME/profiles/trading-web"
 HOST_ROOT="/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
 # 与宿主 CLI 树重叠、必须保持单一模块实例的核心包（模块级状态/Symbol 载体）。

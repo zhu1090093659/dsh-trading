@@ -60,6 +60,17 @@ bot（无图形界面的 Linux 服务器形态）之前不存在，代价是**�
 
 这条验收为什么不在 CI：它的对象是「装出来的 node_modules」，CI 里没有安装态。按设计文档 §13 的执行方式分类，它属于「只能留证据（准入门禁 + 可查记录）」那一类——脚本可重复执行（`pnpm bot-closure:check -- --bot-profile <dir>`），记录留在本记录与检查点里；源码依赖图那一半由 `pnpm plane:check` 在 CI 里盯。
 
+**安装态落地与两处实测发现（2026-10-01 同日，权限放开后补完）**：
+
+- `~/.dsh-trading/profiles/trading-web` 已迁到新分层（清单加 `@dshtrading/gui` + `@dshtrading/bot-api`，overrides 同步，`scripts/refresh-trading-web-profile.sh` 刷新成功，56 个 `@dshtrading/*` 副本）；UI 冒烟（宿主 tokenized URL 303 + 无头 Chrome 截图）显示三栏壳、中栏四 tab、自选列表、设置/更新入口全部正常渲染——**既有行为不变**这条判据在真实实例上成立。
+- `trading-bot` profile 已在同一 home 建好并安装成功（`dsh plugin --profile trading-bot install` 退出码 0，24 个 `@dshtrading/*`）；安装态验收在**真实 home** 上复跑：bot 54 包 / 24 个 `@dshtrading` / GUI 平面 0 / UI 重依赖 0 / 13.5 MB，对照 GUI profile 195 包 / 60.7 MB ⇒ **差值 141 包 / 47.2 MB**。
+- bot profile 启动到 loader 阶段（`dsh --profile trading-bot`）：条目激活状态如实打印——`dsh-trading-role-presets` 因缺 `agentPresets` 服务 pending（headless 无 registry 行的既定语义），`web-search-exa` 导入失败（该行不在 bot 平面，属 profile 依赖面）；随后提示 a task is required —— **这正是 P2 步骤 1 要补的 bot surface/startup provider**：在那之前 bot 只能作为任务宿主被调用，还不是常驻 surface。
+
+**实测踩中并修掉的两个坑**：
+
+1. `@dshtrading/bot-api` 的 `files` 白名单漏了 `cordis.patch.yml`——声明成 bundle 却不随包分发自己的 patch 层，pnpm 只拷白名单，`dsh` 安装校验直接拒绝（`failed to read overlay .../cordis.patch.yml`）。补白名单与 `./cordis.patch.yml` 导出后刷新通过。**这条只有真装一次才会暴露**：静态门禁（R5 层可达性）查的是仓库内文件，查不到打包白名单。
+2. **DSH_HOME 继承陷阱（AGENTS.md 警告的实例）**：agent 会话里 `DSH_HOME=~/.dsh`、`DSH_PROFILE=desktop` 是宿主实例的值；`refresh-trading-web-profile.sh` 与 `sync-profile-overrides.mjs` 的缺省回落都会因此指向宿主 home，于是**静默操作另一个 home 的同名 profile**（实测：preflight 报一堆 `./vendor/*.tgz` 死路径，人却在修对的仓库）。两个脚本都加了守卫：DSH_HOME 解析成 `$HOME/.dsh` 时拒绝执行（refresh 退出码 2 并打印正解）。
+
 ## Alternatives considered
 
 - **逐包从 base 摘依赖、不建新 bundle**：行还得有人拥有；把 11 行留在 base 就等于 GUI 与 bot 共用一个平面，判据「bot 闭包零 client-ui」不可能成立（base 是 host 平面，bot 必装）。败。

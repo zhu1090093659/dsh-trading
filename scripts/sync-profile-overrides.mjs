@@ -21,11 +21,23 @@
 import { readdir, readFile, writeFile, stat } from 'node:fs/promises'
 import { existsSync, realpathSync } from 'node:fs'
 import { execSync } from 'node:child_process'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
+
+/**
+ * 守卫（2026-10-01 实测踩中）：agent 会话会继承宿主实例的 DSH_HOME（~/.dsh，
+ * DSH_PROFILE=desktop）。本脚本会**写** profile 的 pnpm-workspace.yaml，跑错 home
+ * 就是往宿主的同名 profile 里追加本仓的 override。歧义下直接拒绝，不静默跑错家。
+ */
+function assertTradingHome(dshHome) {
+  const hostHome = join(homedir(), ".dsh")
+  if (resolve(dshHome) === resolve(hostHome)) {
+    throw new Error("拒绝执行：--dsh-home/DSH_HOME 指向宿主 dsh home（" + dshHome + "），不是 trading home。请显式传 --dsh-home $HOME/.dsh-trading。")
+  }
+}
 
 /** 手工解析 argv：--profile 可重复（Map 会塌掉重复键），--key value / 布尔 --flag。 */
 function parseArgs(argv) {
@@ -66,6 +78,8 @@ const DSH_HOME = String(
   opts.get('dsh-home')
   ?? (DSH_HOME_ENV !== undefined && DSH_HOME_ENV.trim() !== '' ? DSH_HOME_ENV : join(homedir(), '.dsh-trading')),
 )
+assertTradingHome(DSH_HOME)
+
 const DRY = opts.get('dry-run') === true
 
 /** SDK 包在 DSH 本体内的路径映射（npm 安装树为扁平布局：node_modules/@deepseek-ai/<pkg>；
