@@ -208,3 +208,56 @@ describe('落盘与辅助函数', () => {
     expect(text).toContain('risk')
   })
 })
+
+describe('积压折叠（可选，默认关闭）', () => {
+  it('管理员：启用折叠时，落后上百个间隔只产出一条并如实记录跳过的次数', () => {
+    // Given 一个落后 100 个间隔（每 1s）的调度
+    const opened = fixture()
+    const now = T0 + 100_000
+    addSchedule(opened.orders, { id: 'w-many', intervalMs: 1_000, atMs: null, nextAtMs: T0, enabled: true, kind: 'wake' })
+    // When 启用折叠
+    const folded = dueOccurrences(opened.orders, now, { collapseMissedBeyond: 3 })
+    // Then 只有一条，且 skipped 如实记下（卡片要求"错过不得静默消失"）
+    expect(folded).toHaveLength(1)
+    expect(folded[0]?.missed).toBe(true)
+    expect(folded[0]?.skipped).toBe(100)
+    expect(folded[0]?.dueAtMs).toBe(T0 + 100_000)
+  })
+
+  it('管理员：不启用折叠时保持既有语义（逐条列出，且没有 skipped 字段）', () => {
+    // Given 同一份落后 100 个间隔的调度
+    const opened = fixture()
+    const now = T0 + 100_000
+    addSchedule(opened.orders, { id: 'w-many', intervalMs: 1_000, atMs: null, nextAtMs: T0, enabled: true, kind: 'wake' })
+    // When 用默认参数
+    const plain = dueOccurrences(opened.orders, now)
+    // Then 逐条列出（含起点，共 101 条），且**没有** skipped 字段
+    expect(plain.length).toBe(101)
+    expect(plain.every((occurrence) => occurrence.skipped === undefined)).toBe(true)
+  })
+
+  it('管理员：折叠对一次性调度（intervalMs 为 null）不生效', () => {
+    // Given 一个早已到点的一次性调度
+    const opened = fixture()
+    addSchedule(opened.orders, { id: 'w-once', intervalMs: null, atMs: T0, nextAtMs: T0, enabled: true, kind: 'wake' })
+    // When 启用折叠
+    const folded = dueOccurrences(opened.orders, T0 + 999_999, { collapseMissedBeyond: 1 })
+    // Then 照常产出那一条（一次性的没有"下一次"，谈不上积压）
+    expect(folded).toHaveLength(1)
+    expect(folded[0]?.dueAtMs).toBe(T0)
+    expect(folded[0]?.skipped).toBeUndefined()
+  })
+
+  it('管理员：折叠结果幂等——记过账之后同一次不再重复产出', () => {
+    // Given 一条已折叠并记过账的 occurrence
+    const opened = fixture()
+    const now = T0 + 50_000
+    addSchedule(opened.orders, { id: 'w-many', intervalMs: 1_000, atMs: null, nextAtMs: T0, enabled: true, kind: 'wake' })
+    const first = dueOccurrences(opened.orders, now, { collapseMissedBeyond: 3 })
+    markFired(opened.orders, first[0]!, now, 'fired')
+    // When 再列一次
+    const second = dueOccurrences(opened.orders, now, { collapseMissedBeyond: 3 })
+    // Then 不再重复产出同一条
+    expect(second).toHaveLength(0)
+  })
+})

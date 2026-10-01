@@ -44,7 +44,8 @@ function fixture() {
   const dir = mkdtempSync(join(tmpdir(), 'pump-'))
   dirs.push(dir)
   const ledgers = openLedgers(dir)
-  migrateTriggers(ledgers.audit)
+  // 触发器表挂在 **orders** 库（本仓约定；audit 是审计流）
+  migrateTriggers(ledgers.orders)
   // 时间固定：夹具要让调度"刚刚过去一点"，而不是落后几亿个间隔 ——
   // 落后太多时 dueOccurrences 每轮会吐满 guard(1000) 条 missed，每条一次 INSERT+UPDATE，
   // 在 WAL+FULL 同步下会跑成几分钟（第一版夹具就是这么写的，实测单例 363 秒）。
@@ -53,7 +54,7 @@ function fixture() {
   let shouldThrow = false
   const clock = manualScheduler()
   const pump = createTriggerPump({
-    db: ledgers.audit,
+    db: ledgers.orders,
     dispatch: async (sessionId, occurrences) => {
       calls.push({ sessionId, occurrences })
       if (shouldThrow) throw new Error('followup 不可用（模拟）')
@@ -80,7 +81,7 @@ function fixture() {
 
 function scheduleAt(ledgers: ReturnType<typeof fixture>['ledgers'], nextAtMs: number) {
   // 默认：到点时间比 now 早 1 秒（真实场景：机器刚醒、只错过一个间隔）
-  addSchedule(ledgers.audit, { id: 'w-1', intervalMs: 5_000, atMs: null, nextAtMs: nextAtMs === 0 ? 1_699_999_999_000 : nextAtMs, enabled: true, kind: 'wake' })
+  addSchedule(ledgers.orders, { id: 'w-1', intervalMs: 5_000, atMs: null, nextAtMs: nextAtMs === 0 ? 1_699_999_999_000 : nextAtMs, enabled: true, kind: 'wake' })
 }
 
 describe('事件泵', () => {

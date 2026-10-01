@@ -41,6 +41,12 @@ export interface Occurrence {
   readonly dueAtMs: number
   readonly missed: boolean
   readonly kind: string
+  /**
+   * 折叠掉了几次（仅在启用积压折叠时出现）。
+   * **必须在记录里留痕** —— 卡片要求"错过不得静默消失"：折叠是为了不把最坏情况拖成 O(积压)，
+   * 但被跳过的次数要如实写下来，否则折叠本身就成了静默丢失。
+   */
+  readonly skipped?: number | undefined
 }
 
 /** 扇出器（注入 followup 与时钟）。 */
@@ -124,12 +130,39 @@ function readSchedules(db: DatabaseSync): Schedule[] {
  * @param db - 账本库（orders.db）。
  * @param nowMs - 注入时钟。
  */
-export function dueOccurrences(db: DatabaseSync, nowMs: number): Occurrence[] {
+/**
+ * 列出到点但尚未记账的 occurrence。
+ * @param db - orders/audit 库。
+ * @param nowMs - 当前时间。
+ * @param options.collapseMissedBeyond - **积压折叠**（可选，默认关闭 = 既有语义不变）：
+ *   某个调度落后超过 N 个间隔时，只产出**一条** occurrence（%%)%% 取最近的过去点），
+ *   并把跳过的次数写进 %%skipped%%。
+ *   为什么需要它：2026-10-01 实测，落后 3.4 亿个间隔的夹具让单条用例跑了 363 秒 ——
+ *   每轮按 guard 上限吐 1000 条 missed，每条一次 INSERT，在 WAL + synchronous=FULL 下逐个落盘；
+ *   机器长时间停机后重启会真的遇到这个积压。折叠把最坏情况从 O(积压) 降到 O(调度数)。
+ *   默认关闭是刻意的：它改变的是**核心触发器语义**，是否启用由人决定（见检查点待决策项）。
+ */
+export function dueOccurrences(db: DatabaseSync, nowMs: number, options: { readonly collapseMissedBeyond?: number | undefined } = {}): Occurrence[] {
   const due: Occurrence[] = []
   for (const schedule of readSchedules(db)) {
     if (!schedule.enabled) continue
     let cursor = schedule.nextAtMs
     let guard = 0
+    // 积压折叠：落后太多时只报一条（带 skipped 计数），而不是逐条吐满 guard
+    const collapse = options.collapseMissedBeyond
+    if (collapse !== undefined && schedule.intervalMs !== null && schedule.intervalMs > 0) {
+      const behindIntervals = Math.floor((nowMs - schedule.nextAtMs) / schedule.intervalMs)
+      if (behindIntervals > collapse) {
+        const dueAtMs = nowMs - ((nowMs - schedule.nextAtMs) % schedule.intervalMs)
+        const existing = db
+          .prepare('SELECT status FROM occurrences WHERE schedule_id = ? AND due_at_ms = ?')
+          .get(schedule.id, dueAtMs) as { status: string } | undefined
+        if (existing === undefined) {
+          due.push({ scheduleId: schedule.id, dueAtMs, missed: true, kind: schedule.kind, skipped: behindIntervals })
+        }
+        continue
+      }
+    }
     while (cursor <= nowMs && guard < 1000) {
       const existing = db
         .prepare('SELECT status FROM occurrences WHERE schedule_id = ? AND due_at_ms = ?')
