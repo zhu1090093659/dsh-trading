@@ -31,11 +31,24 @@
 
 **仍未验证**：ignoredFrames 在真实 OKX/Bybit 连接上的实际计数未复核（此前实测是 OKX 4 条、Bybit 2 条确认帧，改成 ignored 后应当记在 ignoredFrames 而不是 badFrames）——下次跑冒烟时核对。
 
+
+## 真实连接复核（2026-10-01 同日，三家实测）
+
+    # OKX    统计: {"messages":203,"badFrames":0,"ignoredFrames":4,"state":"live"}  对齐态: {"alignment":"aligned","droppedTicks":0}
+    # Bybit  统计: {"messages":95,"badFrames":0,"ignoredFrames":2,"state":"live"}   对齐态: {"alignment":"aligned","droppedTicks":0}
+    # Binance 统计: {"messages":75,"badFrames":0,"ignoredFrames":0,"state":"live"}  对齐态: {"alignment":"aligned","droppedTicks":0}
+
+改前的 4 条（OKX）与 2 条（Bybit）确认帧，现在如实记在 `ignoredFrames` 上，`badFrames` 归零。Binance 是 0/0 —— 它的订阅在 URL 里、没有确认帧，pong 也是协议级的，这与设计一致。三家都 `aligned` 且 `droppedTicks: 0`。
+
+## 复核过程中踩到的一个流程坑（值得记）
+
+第一次复核时统计里**根本没有 `ignoredFrames` 字段** —— 因为 drill 脚本 import 的是构建产物 `lib/`：上一轮我只跑了测试与 typecheck，**没有 rebuild**，于是冒烟跑的是旧代码。**规矩：改完 `src/` 再跑 drill 之前必须先 build**，否则 drill 验证的是上一版行为（这类"验证了旧代码"的错误比不验证更危险，因为它给出的是假证据）。
+
 ## 未验证项（如实标注）
 
 - **真实交易所适配器仍未写**：Binance / OKX / Bybit / CCXT 的 URL、订阅载荷、消息字段映射（→ `FeedMessage`）都还没有；本模块提供的是它们要实现的端口与策略。
 - **真实 WebSocket 绑定未接**：没有引入 `ws` 或 `undici` 的 WebSocket；本轮只定义端口，真实实现是薄薄一层。
-- **未在真实行情上跑过**：与步骤 4 的既有结论一致——首批报告仍是合成行情。
+- ~~未在真实行情上跑过~~ **已在真实行情上跑过**：三家交易所冒烟到 aligned（见上），shadow 也有真实行情报告；但真实样本只有几十秒，不构成策略证据。
 - 交易所侧的心跳/重连限制（例如 Binance 的 24h 断连、订阅上限）未实测核对，属适配器落地时的必做项。
 
 ## 被否决的方案
