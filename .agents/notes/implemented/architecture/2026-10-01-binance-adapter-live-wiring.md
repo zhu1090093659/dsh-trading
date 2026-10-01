@@ -1,4 +1,4 @@
-# 真实行情接线：Binance 适配器、Node 内置 WebSocket、以及两个只有真跑才暴露的问题
+# 真实行情接线：三家交易所适配器、Node 内置 WebSocket、以及只有真跑才暴露的问题
 
 日期：2026-10-01 · 阶段：P3 步骤 4 · 卡片：317a623f · 包：`@dshtrading/tradectl/{adapters/binance,transport/node-ws}`
 
@@ -61,9 +61,33 @@ aggTrade 推流只有 tick、没有快照，所以对齐层永远停在 `unalign
 
 订阅帧按**标的**拆（一个标的一帧、含 trades + tickers 两个 arg）：ws-feed 的 `subscribePayload` 本来就是逐标的调的，适配器顺着端口的形状走，比让端口为某一家交易所改形更划算。
 
+
+## 第三家适配器：Bybit（同日补完）
+
+第三家的价值是**第三种帧形状**：
+
+| | 语义来源 | `data` 形状 | 保活 | 订阅 |
+|---|---|---|---|---|
+| Binance | `e` 字段 | 对象（combined 包裹） | 协议级 ping | 流名在 URL |
+| OKX | `arg.channel` | **数组** | **文本** `ping` | JSON 订阅帧 |
+| Bybit | `topic` | tickers 是**对象**、publicTrade 是**数组** | **JSON** `{"op":"ping"}` | JSON 订阅帧 |
+
+三种形状都走通了，"解码钩子 + 逐标的订阅帧"这个端口设计才算真的被验证过——如果只做一家，端口是照着那一家的样子长的，换一家就要动端口。
+
+真实冒烟（`node packages/tradectl/drill/bybit-smoke.ts`）：
+
+    connecting: wss://stream.bybit.com/v5/public/spot
+    [feed] open: transport open
+    统计: {"connects":1,"reconnects":0,"messages":97,"badFrames":2,"heartbeatTimeouts":0,"state":"live"}
+    对齐态: {"epoch":1,"alignment":"aligned","buffered":0,"bytes":0,"droppedTicks":0}
+
+`badFrames: 2` 同样是订阅确认帧（与 OKX 那 4 条同源，属已知粗糙处）。
+
+**三家真跑汇总**：Binance（URL 订阅 + REST 基准）、OKX（订阅帧 + tickers 基准）、Bybit（订阅帧 + tickers 基准对象形状）——三家的 `alignment` 都到过 `aligned` 且 `droppedTicks: 0`。
+
 ## 未验证项（如实标注）
 
-- **已有两家**（Binance + OKX，均真跑验证）；**Bybit / CCXT 适配器未写**（端口与策略已就绪，各自只差 URL、订阅形态与字段映射）。
+- **已有三家**（Binance + OKX + Bybit，均真跑验证到 aligned）；**CCXT 适配器未写**。
 - ~~快照源未接~~ **已接**（公共 REST + bootstrap/deliverSnapshot），真实链路已到 aligned；剩下的约束是**刷新节奏必须 ≤ 年龄预算**（见上）。
 - **epoch 语义**：Binance 公共流不提供世代号，适配器把"连接世代"当作 epoch；这与"交易所侧真实世代"不是一回事，交易所重连后的市场状态连续性未验证。
 - **交易所侧限制未实测**：Binance 的 24h 断连、单连接订阅上限、限频权重；OKX 的 30s 无互动断连（需文本 ping）都未核对。
