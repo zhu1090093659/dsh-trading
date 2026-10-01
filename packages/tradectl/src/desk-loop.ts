@@ -23,6 +23,7 @@ import { applyRiskEvent, initialRiskState, openRiskAllowedFor, type RiskGateOpti
 import { scanDegradation, type MonitorSignals } from './degradation-monitor.ts'
 import { writeHeartbeat } from './heartbeat.ts'
 import { probeWritable } from './detectors.ts'
+import { createClockDriftDetector } from './clock-drift.ts'
 
 /** 调度端口（与事件泵同一接口，便于测试注入）。 */
 export interface LoopScheduler {
@@ -51,6 +52,14 @@ export interface DeskLoopOptions {
    * 环路比调用方更该关心（它的记录写在那里）。自己探一次比等人上报更早发现问题。
    */
   readonly probeDir?: string | undefined
+  /**
+   * 时钟漂移容差（可选）：给了就每轮自己采两条时钟（注入的墙钟 + 单调钟），
+   * 超容差即把漂移喂进本轮信号 ⇒ clock-drift 触发。照 probeDir 的先例 ——
+   * "这件事环路比调用方更该关心"。没给就是没测（不假装健康）。
+   */
+  readonly clockDriftToleranceMs?: number | undefined
+  /** 单调钟读数（默认 process.hrtime.bigint；测试注入假时钟）。 */
+  readonly monotonicNow?: (() => number) | undefined
 }
 
 /** 一轮的结果（名字带 Desk 前缀：triggers.ts 已导出过 TickResult，避免 barrel 重名）。 */
@@ -95,6 +104,9 @@ export function createDeskLoop(options: DeskLoopOptions): {
   let storeBroken = false
   /** 最近一次写探针的结论（null = 没配探针目录）。 */
   let lastProbeReason: string | null = null
+  /** 漂移检测器：只在给了容差时创建（没给 = 没测，不制造假读数）。 */
+  const clockDrift =
+    options.clockDriftToleranceMs === undefined ? null : createClockDriftDetector({ toleranceMs: options.clockDriftToleranceMs })
 
   /**
    * 记录一次降级过渡。
@@ -128,8 +140,16 @@ export function createDeskLoop(options: DeskLoopOptions): {
       probeWritableNow = probe.writable
       lastProbeReason = probe.reason
     }
-    const effectiveSignals =
+    // 自己采两条时钟：漂移超容差 ⇒ 本轮 clock-drift 触发（与调用方给的值取"或"）
+    let driftNow: number | null = null
+    if (clockDrift !== null) {
+      const monotonic = options.monotonicNow ?? (() => Number(process.hrtime.bigint() / 1_000_000n))
+      driftNow = clockDrift.sample({ wallNowMs: options.now(), monotonicNowMs: monotonic() }).driftMs
+    }
+    const withProbe =
       probeWritableNow === null ? baseSignals : { ...baseSignals, diskWriteFailed: baseSignals.diskWriteFailed || !probeWritableNow }
+    const effectiveSignals =
+      driftNow === null ? withProbe : { ...withProbe, clockDriftMs: driftNow, clockDriftToleranceMs: options.clockDriftToleranceMs }
     const scan = scanDegradation(effectiveSignals)
     // 记录写入失败过 ⇒ 这条证据必须并进本轮的触发源（审计写不进去就等于盘坏了）
     const triggers: DegradationTrigger[] = storeBroken && !scan.triggers.includes('disk-full') ? [...scan.triggers, 'disk-full'] : [...scan.triggers]
