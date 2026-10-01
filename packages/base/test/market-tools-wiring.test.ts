@@ -28,6 +28,7 @@ interface Harness {
 }
 
 async function makeHarness(): Promise<Harness> {
+  // home-guard-allow: 测试把 DSH_HOME 钉到 mkdtemp 临时目录 —— 受控路径，不会碰宿主 home
   const home = await mkdtemp(join(tmpdir(), 'dsh-market-tools-'))
   process.env.DSH_HOME = home
   const ctx = new CordisContext()

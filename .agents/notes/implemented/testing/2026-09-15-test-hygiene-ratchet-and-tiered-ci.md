@@ -134,3 +134,7 @@ Tier 1 的 `static-gates` job 里新增两步（见 .github/workflows/ci.yml）�
 **为什么端到端冒烟必须进 CI**：本仓已有 **7 个「单元测试全绿、真实路径坏掉」的先例**（解码钩子缺失、乱序判定全局、基准不刷新、符号写法不一致、界面丢弃未知卡片、契约包引 node:crypto 使浏览器构建失败、`/v1/assets` 漏传 accept-encoding）。它们的共同点是：**单测喂的是我们自己造的输入**，只有真实链路才现形。细节见 [路线端到端冒烟包](2026-10-01-route-e2e-smoke-pack.md)。
 
 **未验证**：这两步只有在真实 CI 跑过一次才算验证（本地等价命令是绿的，但 CI 的 Node 版本是 22、`setup-node` 的 pnpm 缓存路径与本地不同）。**在 CI 真跑之前，我不把"已进 CI"说成"已在 CI 生效"。**
+
+### 第三个新成员：`pnpm home-guard:check`（2026-10-01 同日）
+
+%%static-gates%% 现在是 16 步，最后三步依次是 %%node scripts/e2e-smoke.mjs%%、%%pnpm home-guard:check%%（前者端到端冒烟、后者读 DSH_HOME 的脚本必须带守卫）。判据与理由见 [home 契约](2026-09-08-separate-dsh-home.md) 的"home 守卫门禁"一节。

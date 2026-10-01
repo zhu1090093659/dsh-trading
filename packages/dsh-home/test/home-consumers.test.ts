@@ -54,6 +54,7 @@ describe('DSH_HOME 消费面守卫', () => {
   })
 
   it('默认路径函数经 dshHomeDir() 派生（DSH_HOME 覆盖即时生效）', async () => {
+    // home-guard-allow: 测试把 DSH_HOME 钉到仓库内 .tmp-home-guard 并在 finally 恢复 —— 受控路径
     const { defaultWatchlistStorePath } = await import('../../watchlist/src/plugin.ts')
     const previous = process.env.DSH_HOME
     process.env.DSH_HOME = join(REPO_ROOT, '.tmp-home-guard')
