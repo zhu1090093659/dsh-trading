@@ -69,11 +69,45 @@ export function collectGapReport(options: GapCollectorOptions, window: GapWindow
     missingInputs.push('降级动作：本窗口内 journal 没有 degradation* 事件（写入点是 recordDegradation；若期间确实没有档位变化，这条会一直在）')
   }
 
-  // ④ 持仓：只能拿"之后"，拿不到"之前"
-  const positionRows = options.orders.prepare('SELECT symbol, quantity FROM positions').all() as { symbol: string; quantity: number }[]
+  // ④ 持仓：**从 journal 的 position.change 事件重建**（desk-records 的 recordPositionChange 写的）
+  // 取法：窗口**开始前**每个标的的最后一条 ⇒ "之前"；窗口**结束前**每个标的的最后一条 ⇒ "之后"。
+  // 同时读 positions 当前值兜底（journal 被裁剪过时至少能拿到"之后"）。
+  const positionEvents = options.audit
+    .prepare("SELECT at_ms, payload FROM journal WHERE kind = 'position.change' AND at_ms <= ? ORDER BY seq")
+    .all(window.reconnectedAtMs) as { at_ms: number; payload: string }[]
+  const positionsBefore: Record<string, number> = {}
   const positionsAfter: Record<string, number> = {}
-  for (const row of positionRows) positionsAfter[row.symbol] = row.quantity
-  missingInputs.push('断连前的持仓：positions 表只有当前值，没有历史 ⇒ positionsBefore 只能给空（因此 positionChanges 不完整）')
+  let beforeEvents = 0
+  for (const event of positionEvents) {
+    let parsed: { symbol?: unknown; to?: unknown }
+    try {
+      parsed = JSON.parse(event.payload) as { symbol?: unknown; to?: unknown }
+    } catch {
+      continue
+    }
+    if (typeof parsed.symbol !== 'string' || typeof parsed.to !== 'number') continue
+    // 窗口开始前的事件只影响"之前"；窗口内（含结束）的事件同时更新两者
+    if (event.at_ms <= window.disconnectedFromMs) {
+      positionsBefore[parsed.symbol] = parsed.to
+      beforeEvents += 1
+    }
+    positionsAfter[parsed.symbol] = parsed.to
+  }
+  // 兜底：journal 里没有的标的，用 positions 当前值当"之后"
+  const currentPositions = options.orders.prepare('SELECT symbol, quantity FROM positions').all() as { symbol: string; quantity: number }[]
+  let fallbackUsed = 0
+  for (const row of currentPositions) {
+    if (positionsAfter[row.symbol] === undefined) {
+      positionsAfter[row.symbol] = row.quantity
+      fallbackUsed += 1
+    }
+  }
+  if (beforeEvents === 0 && Object.keys(positionsAfter).length > 0) {
+    missingInputs.push('断连前的持仓：journal 里没有窗口之前的 position.change 事件（可能被裁剪，或写入者未接线）⇒ positionsBefore 为空、持仓变化只反映窗口内')
+  }
+  if (fallbackUsed > 0) {
+    missingInputs.push('部分标的的"之后"持仓取自 positions 当前值（journal 无记录），与断连时刻可能有偏差（' + String(fallbackUsed) + ' 个标的）')
+  }
 
   const report = buildGapReport({
     disconnectedFromMs: window.disconnectedFromMs,
@@ -81,7 +115,7 @@ export function collectGapReport(options: GapCollectorOptions, window: GapWindow
     missedTriggers,
     rejectedIntents,
     degradationActions,
-    positionsBefore: {},
+    positionsBefore,
     positionsAfter,
   })
 

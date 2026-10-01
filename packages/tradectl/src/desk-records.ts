@@ -68,19 +68,19 @@ export function recordPositionChange(
     .run(change.symbol, change.quantity, change.atMs)
   const from = previous?.quantity ?? 0
   if (from === change.quantity) return false
-  journal.append('position.change', { symbol: change.symbol, from, to: change.quantity })
+  journal.append('position.change', { symbol: change.symbol, from, to: change.quantity }, change.atMs)
   return true
 }
 
 /** 记一次降级档位变化（gap report 的一类输入，也是"事后必须能回答"的事）。 */
 export function recordDegradation(
   journal: Journal,
-  transition: { readonly trigger: string; readonly from: string; readonly to: string; readonly reason: string },
+  transition: { readonly trigger: string; readonly from: string; readonly to: string; readonly reason: string; readonly atMs?: number | undefined },
 ): void {
   journal.append('degradation.transition', {
     trigger: transition.trigger,
     from: transition.from,
     to: transition.to,
     reason: transition.reason,
-  })
+  }, transition.atMs)
 }

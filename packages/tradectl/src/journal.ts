@@ -52,7 +52,13 @@ export interface JournalOptions {
 }
 
 export interface Journal {
-  append(kind: string, payload: unknown): JournalEvent
+  /**
+   * 追加一条事件。
+   * @param atMs 事件**发生**的时间；缺省用注入时钟的"现在"。
+   *   记录类调用（持仓变化、降级动作）必须传它 —— 否则一条晚写的记录会带上写入时刻，
+   *   而 gap report 是按事件时间切窗口的（2026-10-01 实测踩中：窗口判定全落到同一时刻）。
+   */
+  append(kind: string, payload: unknown, atMs?: number): JournalEvent
   read(cursor: number, limit?: number): JournalPage
   latestSeq(): number
   /** 裁剪到保留窗口并（按粒度）落快照；返回这次裁掉的条数与快照 seq。 */
@@ -79,11 +85,12 @@ export function createJournal(db: DatabaseSync, options: JournalOptions): Journa
   const retention = options.retention ?? DEFAULT_RETENTION
   const now = options.now
 
-  const append: Journal['append'] = (kind, payload) => {
-    const atMs = now()
-    const info = db.prepare('INSERT INTO journal (at_ms, kind, payload) VALUES (?, ?, ?)').run(atMs, kind, JSON.stringify(payload ?? null))
+  const append: Journal['append'] = (kind, payload, atMs) => {
+    // 事件时间优先用调用方给的（记录类调用必须给），否则用注入时钟的"现在"
+    const eventAtMs = atMs ?? now()
+    const info = db.prepare('INSERT INTO journal (at_ms, kind, payload) VALUES (?, ?, ?)').run(eventAtMs, kind, JSON.stringify(payload ?? null))
     const seq = Number(info.lastInsertRowid)
-    return { seq, atMs, kind, payload: payload ?? null }
+    return { seq, atMs: eventAtMs, kind, payload: payload ?? null }
   }
 
   const latestSeq = (): number => {

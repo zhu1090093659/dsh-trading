@@ -9,6 +9,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { openLedgers } from '../src/db.ts'
 import { addSchedule, markFired, migrateTriggers, type Occurrence } from '../src/triggers.ts'
 import { collectGapReport } from '../src/gap-collector.ts'
+import { createJournal } from '../src/journal.ts'
+import { recordPositionChange } from '../src/desk-records.ts'
 
 const T0 = 1_700_000_000_000
 const dirs: string[] = []
@@ -44,9 +46,10 @@ describe('gap report 收集器', () => {
     const collected = collectGapReport(ledgers, { disconnectedFromMs: T0, reconnectedAtMs: T0 + 1_000 })
     // Then 报告为空，但**缺口清单不为空**（降级动作无写入点、持仓无历史）
     expect(collected.report.missedTriggers).toEqual([])
-    expect(collected.missingInputs.length).toBeGreaterThanOrEqual(2)
+    expect(collected.missingInputs.length).toBeGreaterThanOrEqual(1)
     expect(collected.missingInputs.join(' ')).toContain('降级动作')
-    expect(collected.missingInputs.join(' ')).toContain('持仓')
+    // 空库没有任何持仓 ⇒ 不再无中生有地报"持仓"缺口（重建能力已补齐，见后两例）
+    expect(collected.missingInputs.join(' ')).toContain('降级动作')
   })
 
   it('管理员：被拒意图能数条数，并明确说明"理由取不到"', () => {
@@ -73,5 +76,29 @@ describe('gap report 收集器', () => {
     // Then 只有窗口内那条
     expect(collected.report.missedTriggers).toEqual(['w-1@' + String(T0 + 5_000)])
     expect(collected.report.disconnectedMs).toBe(10_000)
+  })
+
+  it('管理员：从 journal 重建"之前/之后"持仓，持仓变化因此完整', () => {
+    // Given journal 里窗口前有 0.5（先 0 → 0.5），窗口内变成 0.2
+    const ledgers = fixture()
+    const journal = createJournal(ledgers.audit, { now: () => T0 })
+    recordPositionChange(ledgers.orders, journal, { symbol: 'BTC/USDT', quantity: 0.5, atMs: T0 - 10_000 })
+    recordPositionChange(ledgers.orders, journal, { symbol: 'BTC/USDT', quantity: 0.2, atMs: T0 + 5_000 })
+    // When 收集窗口 [T0, T0+10s]
+    const collected = collectGapReport(ledgers, { disconnectedFromMs: T0, reconnectedAtMs: T0 + 10_000 })
+    // Then 之前的持仓来自 journal（0.5），变化被报出来
+    expect(collected.report.positionChanges).toEqual([{ symbol: 'BTC/USDT', from: 0.5, to: 0.2 }])
+    expect(collected.missingInputs.join(' ')).not.toContain('positionsBefore 为空')
+  })
+
+  it('管理员：journal 里没有历史时，兜底用当前持仓并如实说明偏差', () => {
+    // Given 只有 positions 当前值、journal 无记录
+    const ledgers = fixture()
+    ledgers.orders.prepare('INSERT INTO positions (symbol, quantity, updated_ms) VALUES (?, ?, ?)').run('ETH/USDT', 3, T0)
+    // When 收集
+    const collected = collectGapReport(ledgers, { disconnectedFromMs: T0, reconnectedAtMs: T0 + 1_000 })
+    // Then 报告给出"之后"，并点名偏差
+    expect(collected.report.positionChanges).toEqual([{ symbol: 'ETH/USDT', from: 0, to: 3 }])
+    expect(collected.missingInputs.join(' ')).toContain('positions 当前值')
   })
 })
