@@ -46,6 +46,9 @@ jobs:
       # liveTrading 只是非权威镜像（只许 false），实盘授权由 @dshtrading/authority 的
       # 人工签署平面裁定；运行期不得引用签署侧。
       - run: pnpm live-trading:check
+      # 平面闭包门禁：bot/host 平面的安装闭包不得含 client-ui-* 或 UI 重依赖，
+      # GUI 平面反过来必须覆盖全部 UI 包（P1 步骤 4 判据的静态可执行形式）。
+      - run: pnpm plane:check
       # 测试卫生棘轮（business-testing-ci §6）：BDD 命名/结构、零 mock、零 sleep、
       # 断言完整性；存量债入 scripts/test-audit-baseline.json，只许降不许升。
       - run: pnpm test:audit

@@ -16,6 +16,7 @@
     "patch-id:check": "node scripts/patch-id-gate.mjs",
     "patch-id:report": "node scripts/patch-id-gate.mjs --report",
     "patch-id:update": "node scripts/patch-id-gate.mjs --update",
+    "plane:check": "node scripts/plane-closure-gate.mjs",
     "live-trading:check": "node scripts/live-trading-gate.mjs",
     "live-trading:report": "node scripts/live-trading-gate.mjs --report",
     "authority:sign": "node packages/authority/bin/sign-live-trading.mjs",
