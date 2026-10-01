@@ -18,8 +18,8 @@ P5 卡的三步里：步骤 1（三档验收 + 带外退出演练）**必须有�
 | 缺口 | 影响 |
 |---|---|
 | **dead-man 三层全缺**（快环看门狗 / venue 原生条件单 / systemd 在源码里零命中） | 设计写明"凡可能进入 `halt` 的场景，保护性订单必须已存在于 venue 侧，否则最严状态就是陷阱" ⇒ 因此 **`halt` 自动降级为 `reduce_only` 必须继续有效** |
-| **gap report 没有产出点**（`GapReport`/`GapInputs` 类型存在，grep 无调用） | "恢复连接必须产出 gap report"这条**目前不成立** |
-| **新鲜度开仓闸门未接**（`alignment` 判 stale，但 `risk-gate` 不消费它） | "可平不可开"目前**不成立**：陈旧行情下仍可能开新仓 |
+| **gap report 没有运行时调用点**（生成函数 `buildGapReport` 就在 `degradation.ts` 里且有测试；调用点只有测试） | "恢复连接必须产出 gap report"**目前不成立** —— 但补的是**接线**，不是发明 |
+| **行情 alignment 的 live 喂入未接**（闸门 `openRiskAllowedFor` **已实现且有测试**：`alignment !== "aligned"` 即拒绝开新仓） | "可平不可开"在**门禁层成立**、在**真实运行时未验证** |
 | **venue 侧 cancel-all 未接**（P3 的 shadow 装置结构上没有下单端口） | 我方全挂时没有 venue 侧替代 |
 | 磁盘满 / 交易所限频退避 / 证书过期三类故障的降级 | 未实现或未实测 |
 
