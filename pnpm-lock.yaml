@@ -1299,6 +1299,21 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.19.0)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
 
+  packages/contract:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.4
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.15)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@22.20.4)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
+
   packages/crypto:
     dependencies:
       '@deepseek-ai/cordis':

@@ -13,6 +13,7 @@
     "bot-closure:check": "node scripts/bot-closure-acceptance.mjs",
     "build": "pnpm sync:skills && pnpm -r build",
     "changeset": "changeset",
+    "contract-id:check": "node scripts/contract-id-gate.mjs",
     "coverage:check": "node scripts/coverage-gate.mjs --check",
     "coverage:update": "node scripts/coverage-gate.mjs --update",
     "i18n:check": "node scripts/i18n-audit.mjs --check",
