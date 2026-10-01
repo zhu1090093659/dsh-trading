@@ -10,6 +10,7 @@
  *   - **未知枚举的卡片渲染为不可操作态**：%%operable === false%% 时禁用全部动作并明说原因。
  */
 import { CARD_TYPES, type Card } from '@dshtrading/contract'
+import styles from './cockpit.module.css'
 
 /** 卡片渲染所需的最小视图（/v1 会在协议字段之外附上 operable 与 problems）。 */
 export interface CockpitCard extends Card {
@@ -30,10 +31,15 @@ export function freshnessText(fetchedAtMs: number | undefined, nowMs: number): s
 export function CardView({ card }: { readonly card: CockpitCard }): JSX.Element {
   const operable = card.operable !== false
   return (
-    <li data-card-id={card.cardId} data-card-type={card.cardType} data-operable={operable ? 'true' : 'false'}>
+    <li
+      className={operable ? styles.card : styles.card + ' ' + styles.cardInoperable}
+      data-card-id={card.cardId}
+      data-card-type={card.cardType}
+      data-operable={operable ? 'true' : 'false'}
+    >
       <strong>{card.cardType}</strong>
-      <span> · rev {card.revision}</span>
-      <p>{card.fallbackText}</p>
+      <span className={styles.cardMeta}> · rev {card.revision}</span>
+      <p className={styles.cardBody}>{card.fallbackText}</p>
       {operable ? (
         card.actions.length === 0 ? (
           <p>无可用动作</p>
@@ -41,14 +47,14 @@ export function CardView({ card }: { readonly card: CockpitCard }): JSX.Element 
           <p>
             可用动作：
             {card.actions.map((action) => (
-              <button key={action.kind} type="button" disabled={false}>
+              <button key={action.kind} type="button" className={styles.button} disabled={false}>
                 {action.label}
               </button>
             ))}
           </p>
         )
       ) : (
-        <p role="status">此卡片需要升级客户端后才能操作（含本客户端不认识的取值）</p>
+        <p className={styles.warning} role="status">此卡片需要升级客户端后才能操作（含本客户端不认识的取值）</p>
       )}
     </li>
   )
@@ -58,9 +64,9 @@ export function CardView({ card }: { readonly card: CockpitCard }): JSX.Element 
 export function DeskHome({ cards }: { readonly cards: readonly CockpitCard[] }): JSX.Element {
   const home = cards.filter((card) => card.cardType === 'desk-summary' || card.cardType === 'risk-state' || card.cardType === 'control-panel' || card.cardType === 'freshness')
   return (
-    <section aria-label="desk">
-      <h2>Desk</h2>
-      {home.length === 0 ? <p>没有 desk 卡片</p> : <ul>{home.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
+    <section className={styles.section} aria-label="desk">
+      <h2 className={styles.sectionTitle}>Desk</h2>
+      {home.length === 0 ? <p>没有 desk 卡片</p> : <ul className={styles.list}>{home.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
     </section>
   )
 }
@@ -72,9 +78,9 @@ export function DecisionFeed({ cards }: { readonly cards: readonly CockpitCard[]
     .slice()
     .sort((left, right) => right.revision - left.revision)
   return (
-    <section aria-label="decisions">
-      <h2>决策动态</h2>
-      {feed.length === 0 ? <p>还没有决策</p> : <ul>{feed.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
+    <section className={styles.section} aria-label="decisions">
+      <h2 className={styles.sectionTitle}>决策动态</h2>
+      {feed.length === 0 ? <p>还没有决策</p> : <ul className={styles.list}>{feed.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
     </section>
   )
 }
@@ -83,9 +89,9 @@ export function DecisionFeed({ cards }: { readonly cards: readonly CockpitCard[]
 export function PositionsAndOrders({ cards }: { readonly cards: readonly CockpitCard[] }): JSX.Element {
   const rows = cards.filter((card) => card.cardType === 'position' || card.cardType === 'order')
   return (
-    <section aria-label="positions">
-      <h2>持仓与挂单</h2>
-      {rows.length === 0 ? <p>当前没有持仓或挂单</p> : <ul>{rows.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
+    <section className={styles.section} aria-label="positions">
+      <h2 className={styles.sectionTitle}>持仓与挂单</h2>
+      {rows.length === 0 ? <p>当前没有持仓或挂单</p> : <ul className={styles.list}>{rows.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
     </section>
   )
 }
@@ -94,9 +100,9 @@ export function PositionsAndOrders({ cards }: { readonly cards: readonly Cockpit
 export function EscalationInbox({ cards }: { readonly cards: readonly CockpitCard[] }): JSX.Element {
   const inbox = cards.filter((card) => card.cardType === 'escalation')
   return (
-    <section aria-label="escalations">
-      <h2>升级收件箱</h2>
-      {inbox.length === 0 ? <p>没有待处理升级</p> : <ul>{inbox.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
+    <section className={styles.section} aria-label="escalations">
+      <h2 className={styles.sectionTitle}>升级收件箱</h2>
+      {inbox.length === 0 ? <p>没有待处理升级</p> : <ul className={styles.list}>{inbox.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
     </section>
   )
 }
@@ -113,10 +119,10 @@ export function UnknownCards({ cards }: { readonly cards: readonly CockpitCard[]
   const unknown = cards.filter((card) => !known.has(String(card.cardType)))
   if (unknown.length === 0) return <></>
   return (
-    <section aria-label="unknown-cards">
-      <h2>未识别卡片</h2>
+    <section className={styles.section} aria-label="unknown-cards">
+      <h2 className={styles.sectionTitle}>未识别卡片</h2>
       <p>以下卡片来自更新的协议版本，本客户端只能显示兜底文本、不能操作。</p>
-      <ul>{unknown.map((card) => <CardView key={card.cardId} card={{ ...card, operable: false }} />)}</ul>
+      <ul className={styles.list}>{unknown.map((card) => <CardView key={card.cardId} card={{ ...card, operable: false }} />)}</ul>
     </section>
   )
 }

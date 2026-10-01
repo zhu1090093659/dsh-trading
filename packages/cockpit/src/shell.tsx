@@ -1,4 +1,5 @@
 import type { Card } from '@dshtrading/contract'
+import styles from './cockpit.module.css'
 import { DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, UnknownCards, freshnessText, type CockpitCard } from './blocks.tsx'
 
 /**
@@ -24,27 +25,27 @@ export const CONTROL_ACTIONS = ['pause', 'resume', 'kill', 'flatten'] as const
 export function CockpitShell(props: CockpitShellProps): JSX.Element {
   const cards = props.cards as readonly CockpitCard[]
   return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '1.5rem', lineHeight: 1.6, maxWidth: '60rem', margin: '0 auto' }}>
+    <main className={styles.page}>
       <header>
-        <h1 style={{ margin: 0 }}>交易驾驶舱</h1>
-        <p style={{ margin: '0.25rem 0 1rem', color: '#666' }}>
+        <h1 className={styles.title}>交易驾驶舱</h1>
+        <p className={styles.subtitle}>
           服务端驱动：界面由卡片协议决定，客户端只渲染。{freshnessText(props.fetchedAtMs, props.nowMs)}
         </p>
-        <button type="button" onClick={props.onRefresh}>
+        <button type="button" className={styles.button} onClick={props.onRefresh}>
           刷新
         </button>
       </header>
       <section aria-label="control">
         <h2>控制</h2>
-        <p style={{ color: '#666', margin: '0 0 0.5rem' }}>控制类动作需要二次确认；此处不提供下单入口。</p>
+        <p className={styles.note}>控制类动作需要二次确认；此处不提供下单入口。</p>
         {CONTROL_ACTIONS.map((action) => (
-          <button key={action} type="button" disabled={props.pending !== undefined} onClick={() => props.onCommand(action)}>
+          <button key={action} type="button" className={styles.buttonControl + ' ' + styles.button} disabled={props.pending !== undefined} onClick={() => props.onCommand(action)}>
             {props.pending === action ? '执行中…' : action}
           </button>
         ))}
       </section>
       {props.error === undefined ? null : (
-        <p style={{ color: '#b00' }} role="alert">
+        <p className={styles.error} role="alert">
           {props.error}
         </p>
       )}
