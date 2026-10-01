@@ -39,7 +39,8 @@ export interface DeskLoopOptions {
   readonly intervalMs: number
 }
 
-export interface TickResult {
+/** 一轮的结果（名字带 Desk 前缀：triggers.ts 已导出过 TickResult，避免 barrel 重名）。 */
+export interface DeskTickResult {
   readonly triggers: readonly DegradationTrigger[]
   readonly state: RiskState
   /** 本轮新写进 journal 的降级过渡条数（0 = 档位没变）。 */
@@ -56,7 +57,7 @@ export interface LoopStats {
 export function createDeskLoop(options: DeskLoopOptions): {
   start(): void
   stop(): void
-  tickOnce(): TickResult
+  tickOnce(): DeskTickResult
   /** 重连：产出 gap report 并写进 journal（#19：恢复必须产出）。 */
   onReconnect(window: GapWindow): GapReport
   stats(): LoopStats
@@ -73,7 +74,7 @@ export function createDeskLoop(options: DeskLoopOptions): {
   /** 当前状态里某标的的对齐态（没有则视为 aligned）。 */
   const alignmentOfState = (symbol: string): string => state.symbols[symbol]?.alignment ?? 'aligned'
 
-  const tickOnce = (): TickResult => {
+  const tickOnce = (): DeskTickResult => {
     const atMs = options.now()
     ticks += 1
     const scan = scanDegradation(options.signals())
@@ -95,9 +96,13 @@ export function createDeskLoop(options: DeskLoopOptions): {
       // 全局故障：降到 decideDegradation 给的档位（自动触发封顶 reduce_only）
       const decision = decideDegradation({ trigger })
       if (decision.mode === 'normal') continue
-      if (state.level === decision.mode) continue
+      // fail-safe：自动触发**封顶 reduce_only**（#25）。decideDegradation 已经保证自动路径不产 halt，
+      // 这里再挡一道 —— 万一将来的策略改动放进 halt，宁可多降一级，也不许自动路径拿到最严档位，
+      // 因为 halt 的前提（venue 侧保护性订单）不一定成立，那时最严状态会变成陷阱。
+      const autoLevel = decision.mode === 'halt' ? 'reduce_only' : decision.mode
+      if (state.level === autoLevel) continue
       const from = state.level
-      state = applyRiskEvent(state, { scope: 'desk', kind: 'desk-level', level: decision.mode, atMs, reason: decision.reason }, options.gate).state
+      state = applyRiskEvent(state, { scope: 'desk', kind: 'desk-level', level: autoLevel, atMs, reason: decision.reason }, options.gate).state
       recordDegradation(options.journal, { trigger, from, to: state.level, reason: decision.reason, atMs })
       written += 1
     }
