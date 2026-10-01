@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CardView, DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, UnknownCards, freshnessText, type CockpitCard } from '../src/blocks.tsx'
 import { CONTROL_ACTIONS, CockpitShell } from '../src/shell.tsx'
+import { confirmLevelFor, requiresBiometric } from '@dshtrading/contract'
 
 const T0 = 1_700_000_000_000
 
@@ -163,5 +164,18 @@ describe('控制面不依赖数据面（行情/agent 全挂时仍可用）', () 
     // Then 四个按钮全部 disabled，且 kill 显示"执行中"
     expect((html.match(/disabled=""/g) ?? [])).toHaveLength(4)
     expect(html).toContain('执行中')
+  })
+})
+
+describe('控制面与契约确认策略一致（一个家）', () => {
+  it('管理员：驾驶舱的四个控制动作在契约里都是 biometric（有人降级就会被这条抓住）', () => {
+    // Given 驾驶舱的控制面动作清单与契约的确认策略
+    // When 逐个对照
+    // Then 四个都必须是 biometric —— 否则说明契约被降级，而界面还按老样子渲染
+    for (const action of CONTROL_ACTIONS) {
+      expect(confirmLevelFor(action), action).toBe('biometric')
+      expect(requiresBiometric(action, 'mobile'), action).toBe(true)
+      expect(requiresBiometric(action, 'web'), action).toBe(false)
+    }
   })
 })
