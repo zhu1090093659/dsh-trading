@@ -105,3 +105,28 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 **为什么必须接**：它此前只被"跑过一次"，而它检验的正是"配置改错会不会把桌面壳带到错误的地方或加载不该加载的东西" —— **这类回归没有人会主动去跑**。现在它与 A0 带外、shadow 复现并列。
 
 实测：``通过 3 / 失败 0 / 跳过 1``（``EXIT=0``；三项各 51–112ms；网络项仍需 ``--with-network``）。
+
+### Electron 端到端演练（2026-10-01）：接线已实测，不再是"未验证"
+
+`desktop/scripts/attach-electron-drill.mjs`：真的把桌面壳起起来，验证 (a) 它是否加载远端 bot、(b) **是否没有**派生本地 host。
+
+**观测手段**（刻意不依赖应用内部日志 —— `pushLogLine` 只在 UI 请求日志时才落盘）：
+
+1. 自建一个**记录请求**的 HTTP 服务当"远端 bot"，用它的访问记录证明窗口真的去加载了；
+2. 用进程表证明**没有** ``--profile trading-web`` 的本地 host 被派生。
+
+**实测**：
+
+    [attach-electron] Electron v44.1.1
+      PASS  窗口加载了远端 bot — 收到请求 ["/"]
+      PASS  没有派生本地 host（--profile trading-web 零命中）
+    [attach-electron] 2/2 步通过        ELECTRON_DRILL_EXIT=0
+
+已接进常设冒烟：`pnpm e2e:smoke` 默认跳过它，``--with-electron`` 才跑（需要 Electron 二进制）；``--with-network`` 同理控制真实行情项。
+
+### 本轮踩到的两个环境坑（都值得记）
+
+1. **`ELECTRON_RUN_AS_NODE=1`` 在本会话环境里是设着的**：Electron 因此退化成普通 Node，`require("electron")` 只拿到路径字符串、`app` 是 undefined，主进程立刻崩（报错是 `Cannot read properties of undefined (reading requestSingleInstanceLock)`）。演练里显式 `delete env.ELECTRON_RUN_AS_NODE` —— main.cjs 给子进程也做同样的事，但**父进程自己**要先干净。
+2. **同一变量导致版本读数错**：`electron --version` 在 RUN_AS_NODE 下打印的是 **Node 版本**（`v24.19.0`），去掉后才是真实 Electron 版本（`v44.1.1`）。我把前者当成 Electron 版本记过一版。
+
+**还有一个自造的假通过**：第一版演练在 Electron 根本没起来时，仍然打了"没有派生本地 host"的 PASS —— 因为**什么都没跑**当然零命中。已修：前置探测 Electron 可用性（不可用则 `exit 2`），且该断言只在"窗口确实加载了远端 bot"时才计为证据。

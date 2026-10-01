@@ -20,6 +20,8 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const withNetwork = process.argv.includes('--with-network')
+// Electron 端到端演练需要已下载的 Electron 二进制，默认跳过；`--with-electron` 才跑。
+const withElectron = process.argv.includes('--with-electron')
 
 /** 每条检查：跑什么、断言输出里必须出现什么、需不需要网络。 */
 const CHECKS = [
@@ -45,6 +47,14 @@ const CHECKS = [
     expect: ['6/6 步通过', '⑤ 回滚（删配置）⇒ 回到起本地 host'],
   },
   {
+    // P4 步骤 5 的**接线**验证：真的把桌面壳起起来，看它是否加载远端 bot、是否不起本地 host。
+    // 观测手段是自建的记录型 HTTP 服务 + 进程表；不依赖应用内部日志（它只在 UI 请求时落盘）。
+    name: '桌面壳附着接线（Electron 端到端）',
+    script: 'desktop/scripts/attach-electron-drill.mjs',
+    expect: ['2/2 步通过', '窗口加载了远端 bot', '没有派生本地 host'],
+    electron: true,
+  },
+  {
     name: '真实行情（Binance 公共流，需网络）',
     script: 'packages/tradectl/drill/binance-smoke.ts',
     expect: ['"alignment":"aligned"', '"badFrames":0'],
@@ -63,6 +73,11 @@ for (const check of CHECKS) {
   if (check.network && !withNetwork) {
     results.push({ ...check, skipped: true })
     process.stdout.write('[e2e-smoke] 跳过（需 --with-network）：' + check.name + String.fromCharCode(10))
+    continue
+  }
+  if (check.electron && !withElectron) {
+    results.push({ ...check, skipped: true })
+    process.stdout.write('[e2e-smoke] 跳过（需 --with-electron）：' + check.name + String.fromCharCode(10))
     continue
   }
   const started = Date.now()
