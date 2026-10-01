@@ -37,9 +37,34 @@
 
 测试 7 例（cockpit 包首个测试套件）：新鲜度三档 + 未取数；可操作/不可操作两种渲染；不可操作仍显示内容；首页不混入决策与持仓；动态流倒序且过滤；**持仓块无任何下单入口**；空态文案。
 
+
+## 截图验证（ui-screenshot-verify）与它抓出的两个真问题
+
+流程按 skill：临时服务（仅回环、跑完即杀）托管 dist + 夹具卡片 → curl 可达性 → headless Chrome 截图（--headless=new --timeout）→ **读图断言**（不是"跑完没报错"）。
+
+    GET /            -> 200 text/html
+    GET /v1/cards     -> 200 application/json（8 张夹具卡）
+    GET asset        -> 200 text/javascript
+    截图 1600x1200 / 112027 字节；读图确认：控制区四个按钮、Desk 两张卡（含"可用动作：知道了"）、
+    决策动态 rev 12 → rev 11 倒序、升级卡、**未识别卡片块**（future-card + 兜底文本 + "需要升级客户端"、无按钮）
+
+### 抓出的问题一：界面把"不认识的卡片"丢掉了
+
+协议层做到了"未知枚举的卡片不可操作而**不是丢弃**"，但信息架构按 cardType 分块过滤时把它**在 UI 层丢了** —— 第一版截图里那张 future-card 完全不出现。于是"服务端说了有新东西、客户端装作没有"变成了事实上的静默丢弃：**协议的不丢弃保证必须在渲染层也成立才算数**。修法是新增"未识别卡片"块（任何不在契约 12 个已知类型里的卡片都露出来、强制 operable: false），放在页面**最前面**（需要升级客户端的提示不该埋在底部），并补两条测试（未知卡必须出现且无按钮；没有未知卡时整块不渲染）。
+
+### 抓出的问题二：契约包引了 node:crypto
+
+加上未知卡片块后 vite build 直接失败：
+
+    error during build: ../contract/lib/ids.js (1:9): "randomUUID" is not exported by "__vite-browser-external"
+
+根因：ids.ts 用 node:crypto 的 randomUUID 生成 id，而契约包要**同时被服务端、网页 SPA 与移动 App 引用**（卡片原文）—— 浏览器 bundle 里没有 node:crypto 这个模块。修法是改用 **Web Crypto**（globalThis.crypto.randomUUID）：Node >=19 与所有现代浏览器都有，这条依赖整个消失。**这个错误只有真构建浏览器产物时才会暴露** —— 契约包的 30 条单测（跑在 Node 里）全绿也发现不了。
+
+修后：contract 30 例 ✓、cockpit 9 例 ✓、cockpit 构建 147.75 kB / gzip 48.22 kB ✓。
+
 ## 未验证项（如实标注）
 
 - ~~尚无业务内容~~ **五块信息架构已实现**（见下节）；**ui-screenshot-verify 截图仍未做**。
-- **headless Chrome 渲染验证未做**（下一轮：起 edge 托管 dist + 截图）。
+- ~~headless Chrome 渲染验证未做~~ **已做**（见下节），并抓出两个真问题、都已修。
 - **A0 在行情与 agent 全挂时仍可用**这条卡片证据未在驾驶舱上复验（P2 有 A0 实现）。
 - 首屏预算只有构建期闸门，**没有真实的"慢网首屏时间"测量**。

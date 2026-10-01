@@ -6,7 +6,7 @@
  */
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { CardView, DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, freshnessText, type CockpitCard } from '../src/blocks.tsx'
+import { CardView, DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, UnknownCards, freshnessText, type CockpitCard } from '../src/blocks.tsx'
 
 const T0 = 1_700_000_000_000
 
@@ -98,6 +98,26 @@ describe('信息架构分块', () => {
     expect(html).toContain('data-card-id="o"')
     expect(html).not.toMatch(/买|卖|下单|submit|place/i)
     expect(html).not.toContain('<form')
+  })
+
+  it('管理员：未知类型的卡片在界面上必须露出来且不可操作（不丢弃保证要在渲染层也成立）', () => {
+    // Given 一张未来版本的卡片与一张已知卡片
+    const cards = [card({ cardId: 'future', cardType: 'future-card' as never, fallbackText: '协议已更新' }), card({ cardId: 'known' })]
+    // When 渲染未识别块
+    const html = renderToStaticMarkup(<UnknownCards cards={cards} />)
+    // Then 未来卡片出现、兜底文本可见、不可操作，而已知卡片不在此块
+    expect(html).toContain('data-card-id="future"')
+    expect(html).toContain('协议已更新')
+    expect(html).toContain('data-operable="false"')
+    expect(html).not.toContain('data-card-id="known"')
+    expect(html).not.toContain('<button')
+  })
+
+  it('管理员：没有未识别卡片时该块整体不渲染（不占版面）', () => {
+    // Given 只有已知卡片
+    const html = renderToStaticMarkup(<UnknownCards cards={[card({ cardId: 'a' })]} />)
+    // Then 空输出
+    expect(html).toBe('')
   })
 
   it('管理员：升级收件箱为空时明说"没有待处理升级"而不是渲染空白', () => {

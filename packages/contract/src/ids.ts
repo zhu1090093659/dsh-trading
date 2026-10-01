@@ -15,7 +15,16 @@
  *
  * @module @dshtrading/contract/ids
  */
-import { randomUUID } from 'node:crypto'
+/**
+ * 随机 UUID（Web Crypto）。
+ * **为什么不用 node:crypto**：契约包要同时被服务端、网页 SPA 与移动 App 引用（卡片原文），
+ * 而浏览器 bundle 里没有 node:crypto —— 2026-10-01 驾驶舱首次构建时正是被这一点挡下的
+ * （rollup: "randomUUID" is not exported by "__vite-browser-external"）。
+ * globalThis.crypto 在 Node >=19 与所有现代浏览器里都存在，于是这条依赖整个消失。
+ */
+function randomUuid(): string {
+  return globalThis.crypto.randomUUID()
+}
 
 /** orderId 前缀（唯一允许出现该字面量的地方就是这里）。 */
 export const ORDER_ID_PREFIX = 'ord_'
@@ -25,12 +34,12 @@ export const CLIENT_REQUEST_ID_PREFIX = 'req_'
 
 /** 生成一个 orderId。**只在执行核里调用**；客户端永远收不到 clientOrderId。 */
 export function newOrderId(): string {
-  return ORDER_ID_PREFIX + randomUUID()
+  return ORDER_ID_PREFIX + randomUuid()
 }
 
 /** 生成一个 clientRequestId（幂等键，客户端可见可重试）。 */
 export function newClientRequestId(): string {
-  return CLIENT_REQUEST_ID_PREFIX + randomUUID()
+  return CLIENT_REQUEST_ID_PREFIX + randomUuid()
 }
 
 /** 形如 ord_<uuid> 的判定（**只用于比较与校验，不解析出任何语义**）。 */

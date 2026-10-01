@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Card } from '@dshtrading/contract'
-import { DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, freshnessText, type CockpitCard } from './blocks.tsx'
+import { DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, UnknownCards, freshnessText, type CockpitCard } from './blocks.tsx'
 
 /**
  * 驾驶舱外壳：取数（/v1/cards）+ 组装四块 + 控制区。
@@ -82,6 +82,8 @@ export function App(): JSX.Element {
         ))}
       </section>
       {error === undefined ? null : <p style={{ color: '#b00' }}>{error}</p>}
+      {/* 未识别卡片放在最前：需要升级客户端是一件不能埋在页面底部的事 */}
+      <UnknownCards cards={cards} />
       <DeskHome cards={cards} />
       <DecisionFeed cards={cards} />
       <PositionsAndOrders cards={cards} />

@@ -9,7 +9,7 @@
  *   - **观测面不依赖 tick 流**：每块只吃 %%Card[]%% 与一个 %%fetchedAtMs%%；
  *   - **未知枚举的卡片渲染为不可操作态**：%%operable === false%% 时禁用全部动作并明说原因。
  */
-import type { Card } from '@dshtrading/contract'
+import { CARD_TYPES, type Card } from '@dshtrading/contract'
 
 /** 卡片渲染所需的最小视图（/v1 会在协议字段之外附上 operable 与 problems）。 */
 export interface CockpitCard extends Card {
@@ -97,6 +97,26 @@ export function EscalationInbox({ cards }: { readonly cards: readonly CockpitCar
     <section aria-label="escalations">
       <h2>升级收件箱</h2>
       {inbox.length === 0 ? <p>没有待处理升级</p> : <ul>{inbox.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
+    </section>
+  )
+}
+
+/**
+ * 未识别卡片块：**任何 cardType 不在契约 12 个已知类型里的卡片都必须在这里露出来**。
+ *
+ * 这条是被截图验证抓出来的：协议层做到了"未知枚举的卡片不可操作而不是丢弃"，但界面按
+ * cardType 分块过滤时把它**在 UI 层丢掉了** —— 用户什么都看不到，于是"服务端说了有新东西、
+ * 客户端装作没有"变成了事实上的静默丢弃。协议的不丢弃保证必须在渲染层也成立才算数。
+ */
+export function UnknownCards({ cards }: { readonly cards: readonly CockpitCard[] }): JSX.Element {
+  const known = new Set<string>(CARD_TYPES)
+  const unknown = cards.filter((card) => !known.has(String(card.cardType)))
+  if (unknown.length === 0) return <></>
+  return (
+    <section aria-label="unknown-cards">
+      <h2>未识别卡片</h2>
+      <p>以下卡片来自更新的协议版本，本客户端只能显示兜底文本、不能操作。</p>
+      <ul>{unknown.map((card) => <CardView key={card.cardId} card={{ ...card, operable: false }} />)}</ul>
     </section>
   )
 }
