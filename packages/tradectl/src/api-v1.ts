@@ -232,10 +232,20 @@ export function attachV1Surface(register: (path: string, handler: (req: Incoming
     const headers: Record<string, string | undefined> = {}
     for (const [key, value] of Object.entries(req.headers)) headers[key.toLowerCase()] = Array.isArray(value) ? value.join(',') : value
     const result = handleV1({ method: req.method ?? 'GET', path: new URL(req.url ?? '/', 'http://edge').pathname, headers }, options)
-    res.writeHead(result.status, result.headers)
-    // 预压缩产物是二进制，必须走字节路径（写成 string 会把 gzip 破坏掉）
-    res.end(result.bodyBytes ?? result.body)
+    writeV1Response(res, result)
   })
+}
+
+/**
+ * **唯一的下行写出口**：把 V1Response 写进 node 的 ServerResponse。
+ * 为什么要一个函数而不是让调用方自己 res.end(result.body)：gzip 路径的字节在 bodyBytes 里，
+ * 手写 res.end(result.body) 会发出 **200 + content-encoding: gzip + 空体** —— 一个看起来成功、
+ * 实际没有任何内容的响应（2026-10-01 端到端验证里正是这样抓到的：curl 报 size=0）。
+ * 一个出口，一处正确。
+ */
+export function writeV1Response(res: ServerResponse, result: V1Response): void {
+  res.writeHead(result.status, result.headers)
+  res.end(result.bodyBytes ?? result.body)
 }
 
 /** 供调用方复用的视图投影（见契约包的 id 冻结面）。 */

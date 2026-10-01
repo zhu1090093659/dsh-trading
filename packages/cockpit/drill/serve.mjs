@@ -8,7 +8,7 @@
  * 它不是产品代码，也不改任何线上形态：跑完即杀。用法：node packages/cockpit/drill/serve.mjs <port>
  */
 import { createServer } from 'node:http'
-import { handleV1, handleV1Async, serveStatic } from '../../tradectl/lib/api-v1.js'
+import { handleV1, handleV1Async, serveStatic, writeV1Response } from '../../tradectl/lib/api-v1.js'
 
 const port = Number(process.argv[2] ?? '4571')
 const dist = new URL('../dist/', import.meta.url).pathname
@@ -49,10 +49,8 @@ const server = createServer((req, res) => {
       }
       return serveStatic(path.replace('/v1/assets/', ''), dist, headers['accept-encoding'])
     }
-    void handle().then((result) => {
-      res.writeHead(result.status, result.headers)
-      res.end(result.body)
-    })
+    // 用契约提供的写出口，不自己决定 body/bodyBytes（drill 必须忠实模拟生产）
+    void handle().then((result) => writeV1Response(res, result))
   })
 })
 

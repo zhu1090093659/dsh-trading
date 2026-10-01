@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CARD_LIMITS, type Card } from '@dshtrading/contract'
-import { handleV1, parseVersionedPath, serveStatic } from '../src/api-v1.ts'
+import { handleV1, parseVersionedPath, serveStatic, writeV1Response } from '../src/api-v1.ts'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -252,5 +252,20 @@ describe('静态资源的预压缩协商', () => {
     // Then 仍是 403 / 415
     expect(escape.status).toBe(403)
     expect(txt.status).toBe(415)
+  })
+})
+
+describe('下行写出口', () => {
+  it('管理员：writeV1Response 在有 bodyBytes 时写字节、否则写文本（手写 body 会发出空体）', () => {
+    // Given 两个假 ServerResponse 记录写入内容
+    const written: unknown[] = []
+    const res = { writeHead: () => res, end: (chunk: unknown) => { written.push(chunk); return res } } as never
+    const bytes = new Uint8Array([0x1f, 0x8b, 0x00])
+    // When 分别写一个带字节的响应与一个纯文本响应
+    writeV1Response(res, { status: 200, headers: {}, body: '', bodyBytes: bytes })
+    writeV1Response(res, { status: 200, headers: {}, body: 'plain' })
+    // Then 第一个写的是字节（不是空串），第二个写文本
+    expect(written[0]).toBe(bytes)
+    expect(written[1]).toBe('plain')
   })
 })
