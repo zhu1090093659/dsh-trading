@@ -58,6 +58,15 @@ jobs:
       # desktop/ 是独立 npm 工程（不在 pnpm workspace），pnpm -r test 覆盖不到它，
       # 其 21 个 node:test 用例（runtime payload 解包、host 符号规范化）此前从未进 CI。
       - run: pnpm test:desktop
+      # id 冻结面门禁（P4 步骤 1）：源码里不得写死 orderId 字面量——契约是「只比较不解析」，
+      # 一旦某处写死就有了语义，格式从此不能改。契约包自身的 factory/正则与带 id-gate-allow
+      # 标注的测试样本除外。此前这个门禁建好了却没接线（与散文无异），本轮补上。
+      - run: pnpm contract-id:check
+      # 端到端冒烟（P4 步骤 3）：跑真实链路的三条最短检查——带外 A0 在业务面全挂时仍可用、
+      # 确定性 shadow 跑批逐字复现、以及（加 --with-network 时）真实行情对齐。
+      # 存在理由：本仓已有 7 个「单元测试全绿、真实路径坏掉」的先例，单测喂的是自家输入。
+      # CI 里**默认不带网络项**（不出网也能绿）；网络项由人手动带上。
+      - run: node scripts/e2e-smoke.mjs
 
   # 测试矩阵（Tier 1 主体）：与发版管线同源（install+build+test）。
   test:

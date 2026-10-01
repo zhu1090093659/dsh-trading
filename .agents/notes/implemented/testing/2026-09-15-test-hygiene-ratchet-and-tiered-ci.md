@@ -122,3 +122,15 @@ typecheck-gate / i18n / test:audit / test:scripts / test:desktop；build-desktop
 - `desktop/tests` 与 `scripts/test-*.mjs` 从此在每次 PR、每次发版都被执行；
   此前它们只活在开发者本机。
 - 抖动探测三连跑会把间歇失败变成红——这是刻意的：间歇失败是缺陷，不是重跑噪音。
+
+## static-gates 的两个新成员（2026-10-01）
+
+Tier 1 的 `static-gates` job 里新增两步（见 .github/workflows/ci.yml）：
+
+- **`pnpm contract-id:check`** —— id 冻结面门禁：源码里不得写死 orderId 字面量。契约是「只比较不解析」，一旦某处写死或解析，它就获得了语义，格式从此不能改。契约包自身的 factory/正则与带 `id-gate-allow` 标注的测试样本除外（已实测 725 个文件无违规）。
+  **补记一条教训**：这个门禁是 P4 步骤 1 建的，但**建好后一直没接进 CI** —— 一个不跑的门禁与散文无异。本轮补上。
+- **`node scripts/e2e-smoke.mjs`** —— 端到端冒烟包：带外 A0 在业务面全挂时仍可用、确定性 shadow 跑批逐字复现基线。**CI 里默认不带网络项**（`--with-network` 才加真实行情），所以不出网的 runner 也能绿；网络项留给人工。
+
+**为什么端到端冒烟必须进 CI**：本仓已有 **7 个「单元测试全绿、真实路径坏掉」的先例**（解码钩子缺失、乱序判定全局、基准不刷新、符号写法不一致、界面丢弃未知卡片、契约包引 node:crypto 使浏览器构建失败、`/v1/assets` 漏传 accept-encoding）。它们的共同点是：**单测喂的是我们自己造的输入**，只有真实链路才现形。细节见 [路线端到端冒烟包](2026-10-01-route-e2e-smoke-pack.md)。
+
+**未验证**：这两步只有在真实 CI 跑过一次才算验证（本地等价命令是绿的，但 CI 的 Node 版本是 22、`setup-node` 的 pnpm 缓存路径与本地不同）。**在 CI 真跑之前，我不把"已进 CI"说成"已在 CI 生效"。**
