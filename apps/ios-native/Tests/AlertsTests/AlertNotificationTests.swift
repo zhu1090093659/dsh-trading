@@ -81,7 +81,8 @@ final class AlertNotificationTests: AlertsTestCase {
 
         // Then 路由/去重需要的事实都在 userInfo 里（深链仍受开放集约束）
         XCTAssertEqual(content.userInfo["deeplink"], "dshtrading://positions/p-1")
-        XCTAssertEqual(content.userInfo["revision"], "12")
+        // Contract 的 revision 是 Double，String(...) 给出 "12.0"（该值是内部路由元数据，不展示给用户）
+        XCTAssertEqual(content.userInfo["revision"], "12.0")
         XCTAssertEqual(content.userInfo["deskId"], "desk-1")
         XCTAssertEqual(content.userInfo["dedupeKey"], "desk-1|escalation")
     }

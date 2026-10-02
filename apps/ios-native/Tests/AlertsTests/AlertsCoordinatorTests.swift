@@ -106,6 +106,21 @@ final class AlertsCoordinatorTests: AlertsTestCase {
         XCTAssertEqual(lifecycle.records.first?.occurrences, 2)
     }
 
+    func testFractionalRevisionOrderingIsNotTruncated() async {
+        // Given 已处理 revision 3.5
+        let port = RecordingNotificationPort()
+        let coordinator = makeCoordinator(port: port)
+        _ = await coordinator.receive(json: AlertsTestCase.payloadJSON(revision: 3.5))
+
+        // When 一条 3.4 到达
+        let stale = await coordinator.receive(json: AlertsTestCase.payloadJSON(revision: 3.4))
+
+        // Then 被丢弃 —— 若守卫里做 Int 截断（3.5→3、3.4→3）就会把旧通知误放行
+        guard case .dropped(let reason) = stale else { return XCTFail("期望 dropped，实际 \(stale)") }
+        XCTAssertTrue(reason.contains("乱序"), "实际：" + reason)
+        XCTAssertEqual(port.delivered.count, 1)
+    }
+
     func testNotRegisteredPushTokenDoesNotBlockReceiving() async {
         // Given 尚未注册推送 token
         let port = RecordingNotificationPort()

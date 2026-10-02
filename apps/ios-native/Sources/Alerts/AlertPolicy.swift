@@ -55,7 +55,8 @@ public struct AlertPreferences: Equatable, Sendable {
 /// 一条推送的呈现决定（与 apps/mobile/src/push.ts 的 handlePush 同构）。
 public enum PushDecision: Equatable, Sendable {
     case drop(reason: String)
-    case open(screen: DeeplinkScreen, interrupt: Bool, critical: Bool, revision: Int)
+    /// revision 是 **Double**（与 Contract 一致）：服务端可能发 3.5，整数截断会改变语义。
+    case open(screen: DeeplinkScreen, interrupt: Bool, critical: Bool, revision: Double)
 }
 
 /// 把"契约判据"与"用户偏好"合成一个打开/丢弃的决定。

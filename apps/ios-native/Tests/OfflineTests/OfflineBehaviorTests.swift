@@ -23,7 +23,7 @@ actor ScriptedFetcher: SnapshotFetching {
     }
 }
 
-private func card(_ id: String, _ revision: Int, type: String = "desk-summary") -> Card {
+private func card(_ id: String, _ revision: Double, type: String = "desk-summary") -> Card {
     Card(cardId: id, cardType: type, revision: revision, fallbackText: "fb", fields: [], actions: [], freshnessMs: nil)
 }
 

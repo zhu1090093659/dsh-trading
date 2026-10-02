@@ -16,10 +16,10 @@ class AlertsTestCase: XCTestCase {
         severity: String = "warning",
         deskId: String = "desk-1",
         deeplink: String = "dshtrading://decisions",
-        expiresInMs: Int = 60_000,
+        expiresInMs: Double = 60_000,
         actions: [String] = [],
         fallbackText: String = "dsh-trading 有一条通知",
-        revision: Int = 7
+        revision: Double = 7
     ) -> Data {
         let object: [String: Any] = [
             "kind": kind, "severity": severity, "deskId": deskId, "deeplink": deeplink,

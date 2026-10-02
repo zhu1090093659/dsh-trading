@@ -121,4 +121,18 @@ final class AlertPolicyTests: AlertsTestCase {
         XCTAssertTrue(critical)
         XCTAssertEqual(revision, 9)
     }
+
+    func testFractionalRevisionSurvivesDecisionUnchanged() {
+        // Given 服务端发了一个小数 revision（Contract 用 Double 贴合 TS 的有限数语义）
+        let payload = AlertsTestCase.decode(AlertsTestCase.payloadJSON(revision: 3.5))
+
+        // When 处理
+        let decision = PushHandler.decide(payload, preferences: AlertPreferences(), minuteOfDay: 600)
+
+        // Then 原样带出，**不被整数截断**（截断就是改变语义）
+        guard case .open(_, _, _, let revision) = decision else {
+            return XCTFail("期望 open，实际 \(decision)")
+        }
+        XCTAssertEqual(revision, 3.5)
+    }
 }

@@ -345,12 +345,15 @@ public struct ConnectionObservation: Sendable {
 public struct UnrecognizedCardObservation: Sendable {
     public let cardId: String
     public let cardType: String
-    public let revision: Int
+    /// 卡片重绘版本。**Double 而不是 Int**：TS 侧只要求"有限非负数"，
+    /// 服务端理论上可发 3.5；用 Int 解码会让整页解码失败（IOS-1/Lead 裁决）。
+    /// **不许 Int(...) 截断** —— 那会把 3.5 变成 3，反而制造与契约的分歧。
+    public let revision: Double
     public let fallbackText: String
     public let rawFields: [CardField]
     public let reason: String
 
-    public init(cardId: String, cardType: String, revision: Int, fallbackText: String, rawFields: [CardField], reason: String) {
+    public init(cardId: String, cardType: String, revision: Double, fallbackText: String, rawFields: [CardField], reason: String) {
         self.cardId = cardId
         self.cardType = cardType
         self.revision = revision

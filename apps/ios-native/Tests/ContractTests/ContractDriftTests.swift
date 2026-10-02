@@ -164,7 +164,8 @@ final class ContractDriftTests: XCTestCase {
         XCTAssertEqual(pushLimits.maxFallbackChars, snapInt(limits["maxFallbackChars"]))
         XCTAssertEqual(pushLimits.maxDeeplinkChars, snapInt(limits["maxDeeplinkChars"]))
         XCTAssertEqual(pushLimits.maxDeskIdChars, snapInt(limits["maxDeskIdChars"]))
-        XCTAssertEqual(pushLimits.maxExpiresInMs, snapInt(limits["maxExpiresInMs"]))
+        // maxExpiresInMs 是 Double（与 DTO 的 expiresInMs 同型，避免 Int/Double 混算）
+        XCTAssertEqual(pushLimits.maxExpiresInMs, (limits["maxExpiresInMs"] as? NSNumber)?.doubleValue ?? .nan)
     }
 
     func testOfflineTables() throws {

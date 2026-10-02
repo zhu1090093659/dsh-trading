@@ -63,7 +63,7 @@ struct ObservationRootView: View {
             ))
             VStack(spacing: 0) {
                 if environment.mode == .fixtures {
-                    FixtureBanner()
+                    FixtureBanner(scenario: environment.fixtureScenario?.rawValue ?? "running")
                 }
                 RootTabView(state: state, dispatcher: dispatcher, nowMs: nowMs)
             }
@@ -78,8 +78,10 @@ struct ObservationRootView: View {
 }
 
 struct FixtureBanner: View {
+    let scenario: String
+
     var body: some View {
-        Text("夹具模式：数据是本机造的，不是真实机器人。")
+        Text("夹具模式（scenario=" + scenario + "）：数据是本机造的，不是真实机器人。")
             .font(.caption)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)

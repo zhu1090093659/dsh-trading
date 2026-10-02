@@ -172,7 +172,9 @@ public struct Card: Equatable, Sendable, Decodable {
     public let cardId: String
     /// **字符串**，不是 CardType：未知值要活到 validateCard，而不是在解码期抛掉整张卡。
     public let cardType: String
-    public let revision: Int
+    /// **Double**，不是 Int：TS 只要求"有限非负数"，服务端真发 3.5 时必须原样接受，
+    /// 否则同一份载荷会出现"驾驶舱能显示、iOS 整页解码失败"的分歧（Lead 裁决 2026-10-02）。
+    public let revision: Double
     public let fallbackText: String
     public let fields: [CardField]
     public let actions: [CardAction]
@@ -183,7 +185,7 @@ public struct Card: Equatable, Sendable, Decodable {
     }
 
     public init(
-        cardId: String, cardType: String, revision: Int, fallbackText: String,
+        cardId: String, cardType: String, revision: Double, fallbackText: String,
         fields: [CardField] = [], actions: [CardAction] = [], freshnessMs: Int? = nil
     ) {
         self.cardId = cardId
@@ -199,8 +201,8 @@ public struct Card: Equatable, Sendable, Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         cardId = (try? container.decode(String.self, forKey: .cardId)) ?? ""
         cardType = (try? container.decode(String.self, forKey: .cardType)) ?? ""
-        // 缺失/非数字的 revision 记成 -1：与 TS 一样落进"revision 必须是非负有限数"
-        revision = (try? container.decode(Int.self, forKey: .revision)) ?? -1
+        // 缺失/非数字的 revision 记成 -1：与 TS 一样落进"revision 必须是非负有限数"（不钉整数）
+        revision = (try? container.decode(Double.self, forKey: .revision)) ?? -1
         fallbackText = (try? container.decode(String.self, forKey: .fallbackText)) ?? ""
         fields = ((try? container.decodeIfPresent([CardField].self, forKey: .fields)) ?? nil) ?? []
         actions = ((try? container.decodeIfPresent([CardAction].self, forKey: .actions)) ?? nil) ?? []
@@ -239,7 +241,8 @@ private func cardByteCount(_ card: Card) -> Int {
     var object: [String: Any] = [
         "cardId": card.cardId,
         "cardType": card.cardType,
-        "revision": card.revision,
+        // 整数值写成 Int：对齐 JS 的 JSON.stringify（1.0 会写成 "1" 而不是 "1.0"），否则字节上限判定会漂
+        "revision": card.revision == card.revision.rounded() ? Int(card.revision) : card.revision,
         "fallbackText": card.fallbackText,
         "fields": card.fields.map(fieldObject),
         "actions": card.actions.map(actionObject),
@@ -269,7 +272,7 @@ public func validateCard(_ card: Card, limits: CardLimits = cardLimits) -> CardV
         problems.append("未知 cardType: " + card.cardType)
         operabilityBlocked = true
     }
-    if card.revision < 0 {
+    if !card.revision.isFinite || card.revision < 0 {
         problems.append("revision 必须是非负有限数")
     }
     if card.fallbackText.trimmingCharacters(in: .whitespacesAndNewlines) == "" {

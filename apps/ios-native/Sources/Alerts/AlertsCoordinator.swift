@@ -24,7 +24,8 @@ public final class AlertsCoordinator: @unchecked Sendable {
     private let lock = NSLock()
     private var preferences: AlertPreferences
     private var registration: PushRegistrationState = .notRegistered
-    private var latestRevisionByDesk: [String: Int] = [:]
+    /// 每个 desk 已处理的最大 revision（Double：**不做整数截断**，否则 3.4 会被当成 3 而放行）。
+    private var latestRevisionByDesk: [String: Double] = [:]
 
     /// - Parameters:
     ///   - clock: 毫秒时钟（注入，便于确定性断言；**不用 sleep**）。

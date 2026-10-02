@@ -40,9 +40,10 @@ public struct PushLimits: Equatable, Sendable, Decodable {
     public let maxFallbackChars: Int
     public let maxDeeplinkChars: Int
     public let maxDeskIdChars: Int
-    public let maxExpiresInMs: Int
+    /// **Double**：它与 DTO 的 `expiresInMs`（Double）直接比较，两端同型才不会出现 Int/Double 混算。
+    public let maxExpiresInMs: Double
 
-    public init(maxActions: Int, maxFallbackChars: Int, maxDeeplinkChars: Int, maxDeskIdChars: Int, maxExpiresInMs: Int) {
+    public init(maxActions: Int, maxFallbackChars: Int, maxDeeplinkChars: Int, maxDeskIdChars: Int, maxExpiresInMs: Double) {
         self.maxActions = maxActions
         self.maxFallbackChars = maxFallbackChars
         self.maxDeeplinkChars = maxDeeplinkChars
@@ -60,18 +61,20 @@ public struct PushPayload: Equatable, Sendable, Decodable {
     public let severity: String
     public let deskId: String
     public let deeplink: String
-    public let expiresInMs: Int
+    /// **Double**：TS 只要求"正的有限数"（不钉整数）；收紧会让小数载荷整条被丢。
+    public let expiresInMs: Double
     public let actions: [String]
     public let fallbackText: String
-    public let revision: Int
+    /// **Double**：与卡片 revision 同一裁决（TS 的 number 允许有限小数）。
+    public let revision: Double
 
     private enum CodingKeys: String, CodingKey {
         case kind, severity, deskId, deeplink, expiresInMs, actions, fallbackText, revision
     }
 
     public init(
-        kind: String, severity: String, deskId: String, deeplink: String, expiresInMs: Int,
-        actions: [String] = [], fallbackText: String, revision: Int
+        kind: String, severity: String, deskId: String, deeplink: String, expiresInMs: Double,
+        actions: [String] = [], fallbackText: String, revision: Double
     ) {
         self.kind = kind
         self.severity = severity
@@ -89,10 +92,10 @@ public struct PushPayload: Equatable, Sendable, Decodable {
         severity = (try? container.decode(String.self, forKey: .severity)) ?? ""
         deskId = (try? container.decode(String.self, forKey: .deskId)) ?? ""
         deeplink = (try? container.decode(String.self, forKey: .deeplink)) ?? ""
-        expiresInMs = (try? container.decode(Int.self, forKey: .expiresInMs)) ?? -1
+        expiresInMs = (try? container.decode(Double.self, forKey: .expiresInMs)) ?? -1
         actions = try container.decode([String].self, forKey: .actions)
         fallbackText = (try? container.decode(String.self, forKey: .fallbackText)) ?? ""
-        revision = (try? container.decode(Int.self, forKey: .revision)) ?? -1
+        revision = (try? container.decode(Double.self, forKey: .revision)) ?? -1
     }
 }
 
@@ -109,7 +112,7 @@ public func validatePushPayload(_ payload: PushPayload) -> (valid: Bool, problem
     } else if payload.deeplink.utf16.count > pushLimits.maxDeeplinkChars {
         problems.append("deeplink 超过 " + String(pushLimits.maxDeeplinkChars) + " 字符")
     }
-    if payload.expiresInMs <= 0 {
+    if !payload.expiresInMs.isFinite || payload.expiresInMs <= 0 {
         problems.append("expiresInMs 必须是正的有限数")
     } else if payload.expiresInMs > pushLimits.maxExpiresInMs {
         problems.append("expiresInMs 超过上限 " + String(pushLimits.maxExpiresInMs))
@@ -130,7 +133,7 @@ public func validatePushPayload(_ payload: PushPayload) -> (valid: Bool, problem
     } else if payload.fallbackText.utf16.count > pushLimits.maxFallbackChars {
         problems.append("fallbackText 超过 " + String(pushLimits.maxFallbackChars) + " 字符")
     }
-    if payload.revision < 0 {
+    if !payload.revision.isFinite || payload.revision < 0 {
         problems.append("revision 必须是非负有限数")
     }
     return (problems.isEmpty, problems)

@@ -94,6 +94,27 @@ final class ContractVectorTests: XCTestCase {
         }
     }
 
+    /// 解码保真：revision 是**有限非负数**，不是整数（TS 的 number 允许小数）。
+    /// 服务端真发 3.5 时必须**原样保留** —— 用 Int 解码会让整页解码失败，出现
+    /// "驾驶舱能显示、iOS 观测端整页报错"的分歧（Lead 裁决 2026-10-02）。
+    func testCardRevisionDecodingVectors() throws {
+        let snap = try ContractSnapshotFile.load()
+        let cases = snapArray(snap["cardDecoding"])
+        XCTAssertFalse(
+            cases.isEmpty,
+            "解码保真向量缺失：夹具缺失必须 FAIL，运行 `\(ContractSnapshotFile.regenerateHint)`"
+        )
+        for raw in cases {
+            let vector = snapDict(raw)
+            let name = snapText(vector["name"])
+            let card = try decodeVector(Card.self, from: vector["card"] ?? [:], name)
+            let expected = snapDict(vector["expected"])
+            let expectedRevision = (expected["revision"] as? NSNumber)?.doubleValue ?? .nan
+            XCTAssertEqual(card.revision, expectedRevision, name + "：revision 必须原样保留")
+            XCTAssertEqual(validateCard(card).valid, snapBool(expected["valid"]), name)
+        }
+    }
+
     func testRenderableActionsVectors() throws {
         for raw in try vectors("renderableActions") {
             let vector = snapDict(raw)

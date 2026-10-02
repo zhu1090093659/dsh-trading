@@ -48,8 +48,9 @@ for scenario in running restricted stopped unreachable unknown-enum; do
   xcrun simctl terminate "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
   # 组合根若支持夹具地址注入，用 launch args 传；不支持就在设置页手动填
   #   http://127.0.0.1:PORT + 任意配对码
-  xcrun simctl launch "$UDID" "$BUNDLE_ID" \
-    --args -fixture-origin "http://127.0.0.1:$PORT" -fixture-code "any-code-1" >/dev/null 2>&1 || true
+  # App 内建 fixtures（不需外部服务）：情形经 SIMCTL_CHILD_ 前缀注入为 App 的环境变量
+  SIMCTL_CHILD_DSH_IOS_FIXTURE_SCENARIO="$scenario" \
+    xcrun simctl launch "$UDID" "$BUNDLE_ID" --args --fixtures >/dev/null 2>&1 || true
 
   # 截图不是测试：这里允许一次有界等待让首屏稳定（测试代码禁止 sleep 的纪律不适用于采集脚本）
   sleep 3

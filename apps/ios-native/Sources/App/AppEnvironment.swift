@@ -67,6 +67,7 @@ public final class AppEnvironment {
         self.mode = mode
         self.clock = { Int(Date().timeIntervalSince1970 * 1000) }
         self.gate = AlertsConfirmationGate(biometrics: LocalAuthenticationBiometrics())
+        self.fixtureScenario = mode == .fixtures ? FixtureSnapshotFetcher.scenario() : nil
         let provider = AppEnvironment.makeTokenProvider()
         self.session = provider.keychain.map { TransportSession(tokens: $0) }
         self.environmentProblem = provider.fatal
@@ -97,13 +98,16 @@ public final class AppEnvironment {
 
     // MARK: - 装配
 
+    /// 夹具情形（仅 fixtures 模式有意义）：采集端据此并排取证。
+    public let fixtureScenario: FixtureSnapshotFetcher.Scenario?
+
     private func rebuildStore() {
         switch mode {
         case .fixtures:
             // **显式判据**：fixtures 不依赖任何凭据/安全存储 —— 没有 session 也照样装配观测面。
             // 不靠"Keychain 恰好可用"这种巧合（Lead 裁决 #2）。
             let source = OfflineObservationSource(
-                fetcher: FixtureSnapshotFetcher(clock: clock),
+                fetcher: FixtureSnapshotFetcher(scenario: fixtureScenario ?? .running, clock: clock),
                 persistence: persistence,
                 sourceId: "fixtures",
                 budget: AppEnvironment.stalenessBudget,
@@ -305,28 +309,95 @@ public struct TransportSnapshotFetcher: SnapshotFetching {
 
 /// 没有真实 bot 时的夹具源：让"打不开 App"不再是验收入口的前提。
 /// 它走的是**同一条**离线/领域流水（不是另写一条假路径）。
-public struct FixtureSnapshotFetcher: SnapshotFetching {
-    private let clock: @Sendable () -> Int
+///
+/// **情形由环境变量选**（`DSH_IOS_FIXTURE_SCENARIO`，默认 running）。采集端用 `SIMCTL_CHILD_DSH_IOS_FIXTURE_SCENARIO=…`
+/// 注入。每种情形只证明**一条判据**（Lead 要的并排证据）：
+///   running / restricted / stopped / unreachable / unknown-enum。
+public final class FixtureSnapshotFetcher: SnapshotFetching, @unchecked Sendable {
+    public enum Scenario: String, Sendable, CaseIterable {
+        case running
+        case restricted
+        /// /a0/status 的 killed=true ⇒ 界面必须显示"机器人已停止"。
+        case stopped
+        /// **第一次成功、之后失联**：只有"先有缓存再失联"，界面才可能显示"看不到机器人"
+        /// （若一开始就抛，observation 是 nil，那是另一种显示）。
+        case unreachable
+        /// 未知 cardType + 未知 actionKind：原样列出 + 禁用全部动作。
+        case unknownEnum = "unknown-enum"
+    }
 
-    public init(clock: @escaping @Sendable () -> Int) {
+    private let scenario: Scenario
+    private let clock: @Sendable () -> Int
+    private let lock = NSLock()
+    private var callCount = 0
+
+    public init(scenario: Scenario, clock: @escaping @Sendable () -> Int) {
+        self.scenario = scenario
         self.clock = clock
     }
 
+    /// 从环境变量选情形（不认识的值 ⇒ 默认 running，不猜、不抛）。
+    public static func scenario(
+        from environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Scenario {
+        Scenario(rawValue: environment["DSH_IOS_FIXTURE_SCENARIO"] ?? "") ?? .running
+    }
+
     public func fetch() async throws -> FetchedSnapshot {
+        lock.lock()
+        callCount += 1
+        let call = callCount
+        lock.unlock()
+
+        if scenario == .unreachable && call > 1 {
+            throw ObservationFetchFailure(failure: .unreachable, message: "夹具：第一次之后按失联处理（/a0/ping 无响应）")
+        }
+
         let now = clock()
-        let cards: [Card] = [
+        let killed = (scenario == .stopped)
+        let a0 = A0Status(
+            ok: true,
+            state: KillState(killed: killed, paused: false, reason: killed ? "夹具：带外停机" : "fixtures", atMs: now),
+            device: "fixture-device",
+            scopes: [.read]
+        )
+        return FetchedSnapshot(
+            cards: FixtureSnapshotFetcher.cards(for: scenario, atMs: now),
+            caps: TransportHandshake.clientCaps,
+            downgraded: [],
+            truncated: false,
+            a0: a0,
+            atMs: now
+        )
+    }
+
+    static func cards(for scenario: Scenario, atMs now: Int) -> [Card] {
+        if scenario == .unknownEnum {
+            return [
+                Card(
+                    cardId: "future-1", cardType: "future-card-type", revision: 1,
+                    fallbackText: "这张卡需要更新的客户端（夹具）",
+                    fields: [CardField(key: "unknown", label: "未知", kind: "future-kind", value: "x")],
+                    actions: [CardAction(kind: "future-action", label: "?")], freshnessMs: 1_000
+                ),
+            ]
+        }
+        let level = (scenario == .restricted) ? "reduce_only" : "normal"
+        let riskFallback = (scenario == .restricted) ? "风险：受限（夹具）" : "风险：正常（夹具）"
+        let deskFallback = (scenario == .stopped) ? "交易台：已停机（夹具）" : "交易台：运行中（夹具）"
+        return [
             Card(
-                cardId: "desk-1", cardType: "desk-summary", revision: 1, fallbackText: "交易台：运行中（夹具）",
+                cardId: "desk-1", cardType: "desk-summary", revision: 1, fallbackText: deskFallback,
                 fields: [
                     CardField(key: "deskId", label: "交易台", kind: "symbol", value: "fixture-desk"),
-                    CardField(key: "state", label: "状态", kind: "status", value: "running"),
+                    CardField(key: "state", label: "状态", kind: "status", value: scenario == .stopped ? "killed" : "running"),
                 ],
                 actions: [], freshnessMs: 1_000
             ),
             Card(
-                cardId: "risk-1", cardType: "risk-state", revision: 1, fallbackText: "风险：正常（夹具）",
+                cardId: "risk-1", cardType: "risk-state", revision: 1, fallbackText: riskFallback,
                 fields: [
-                    CardField(key: "level", label: "档位", kind: "enum", value: "normal", values: ["normal", "caution", "reduce_only", "halt"]),
+                    CardField(key: "level", label: "档位", kind: "enum", value: level, values: ["normal", "caution", "reduce_only", "halt"]),
                     CardField(key: "alignment", label: "对齐", kind: "enum", value: "aligned", values: ["aligned", "unaligned", "stale"]),
                 ],
                 actions: [], freshnessMs: 1_000
@@ -341,24 +412,38 @@ public struct FixtureSnapshotFetcher: SnapshotFetching {
                 actions: [CardAction(kind: "open-detail", label: "详情")], freshnessMs: 1_000
             ),
             Card(
-                cardId: "future-1", cardType: "future-card-type", revision: 1, fallbackText: "这张卡需要更新的客户端（夹具）",
-                fields: [CardField(key: "unknown", label: "未知", kind: "future-kind", value: "x")],
-                actions: [CardAction(kind: "future-action", label: "?")], freshnessMs: 1_000
+                cardId: "ord-1", cardType: "order", revision: 1, fallbackText: "订单：限价买单（夹具）",
+                fields: [
+                    CardField(key: "symbol", label: "标的", kind: "symbol", value: "BTC/USDT"),
+                    CardField(key: "side", label: "方向", kind: "enum", value: "buy", values: ["buy", "sell"]),
+                    CardField(key: "price", label: "价格", kind: "currency", value: "60000"),
+                    CardField(key: "quantity", label: "数量", kind: "number", value: "0.1"),
+                    CardField(key: "state", label: "状态", kind: "status", value: "open"),
+                ],
+                actions: [], freshnessMs: 1_000
+            ),
+            Card(
+                cardId: "mandate-1", cardType: "mandate-status", revision: 1, fallbackText: "额度：已用 12%（夹具）",
+                fields: [
+                    CardField(key: "limit", label: "额度上限", kind: "currency", value: "100000"),
+                    CardField(key: "used", label: "已用", kind: "currency", value: "12000"),
+                    CardField(key: "unit", label: "计价", kind: "text", value: "USDT"),
+                ],
+                actions: [], freshnessMs: 1_000
+            ),
+            Card(
+                cardId: "esc-1", cardType: "escalation", revision: 1, fallbackText: "升级：有一条待处理（夹具）",
+                fields: [
+                    CardField(key: "severity", label: "严重度", kind: "severity", value: "warning"),
+                    CardField(key: "title", label: "标题", kind: "text", value: "夹具升级项"),
+                ],
+                actions: [CardAction(kind: "ack", label: "确认")], freshnessMs: 1_000
+            ),
+            Card(
+                cardId: "fresh-1", cardType: "freshness", revision: 1, fallbackText: "数据：最新（夹具）",
+                fields: [CardField(key: "age", label: "账龄", kind: "duration", value: "1", unit: "s")],
+                actions: [], freshnessMs: 1_000
             ),
         ]
-        let a0 = A0Status(
-            ok: true,
-            state: KillState(killed: false, paused: false, reason: "fixtures", atMs: now),
-            device: "fixture-device",
-            scopes: [.read]
-        )
-        return FetchedSnapshot(
-            cards: cards,
-            caps: TransportHandshake.clientCaps,
-            downgraded: [],
-            truncated: false,
-            a0: a0,
-            atMs: now
-        )
     }
 }

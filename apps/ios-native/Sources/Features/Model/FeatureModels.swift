@@ -855,11 +855,11 @@ public struct OverviewPresentation: Sendable, Hashable {
 public struct UnrecognizedCardPresentation: Sendable, Hashable, Identifiable {
     public let id: String
     public let cardType: String
-    public let revision: Int
+    public let revision: Double
     public let fallbackText: String
     public let reason: String
 
-    public init(id: String, cardType: String, revision: Int, fallbackText: String, reason: String) {
+    public init(id: String, cardType: String, revision: Double, fallbackText: String, reason: String) {
         self.id = id
         self.cardType = cardType
         self.revision = revision

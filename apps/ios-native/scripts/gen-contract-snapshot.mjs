@@ -88,6 +88,10 @@ addCard('unknown-action-kind', okCard({ actions: [action({ kind: 'future-action'
 addCard('unknown-action-kind-not-in-caps', okCard({ actions: [action({ kind: 'future-action' })] }))
 addCard('custom-limit-max-fields-2', okCard({ fields: [field({ key: 'a' }), field({ key: 'b' }), field({ key: 'c' })] }), { ...C.CARD_LIMITS, maxFields: 2 })
 addCard('revision-negative', okCard({ revision: -1 }))
+// 小数 revision：TS 只要求"有限非负数"，**不要求整数**（Lead 裁决 2026-10-02）。
+// Swift 侧若用 Int 解码，服务端真发 3.5 时整页解码失败 ⇒ 与驾驶舱分歧；这条向量锁住"必须被接受"。
+addCard('revision-fractional-accepted', okCard({ revision: 3.5 }))
+addCard('revision-zero-accepted', okCard({ revision: 0 }))
 addCard('freshness-does-not-affect-validity', okCard({ freshnessMs: 1200 }))
 
 // 非字符串标量（Lead 裁决 #2）：CardField.value 在 TS 里是 unknown，在 Swift 侧被冻结成 String?。
@@ -322,6 +326,16 @@ const snapshot = {
   pushSeverities: [...C.PUSH_SEVERITIES],
   pushActions: [...C.PUSH_ACTIONS],
   pushLimits: { ...C.PUSH_LIMITS },
+  // 解码保真：不仅判合法，还要断言**值原样保留**（Int 解码会把 3.5 变成失败或截断）。
+  cardDecoding: [
+    { name: 'revision-3.5-preserved', card: okCard({ revision: 3.5 }) },
+    { name: 'revision-0-preserved', card: okCard({ revision: 0 }) },
+    { name: 'revision-7-preserved', card: okCard({ revision: 7 }) },
+  ].map((entry) => ({
+    name: entry.name,
+    card: entry.card,
+    expected: { revision: entry.card.revision, valid: C.validateCard(entry.card).valid },
+  })),
   vectors: {
     negotiateVersion,
     validateCard,
