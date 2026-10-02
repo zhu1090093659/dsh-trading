@@ -236,7 +236,7 @@
 
 ## 待接线：事件泵与积压告警（2026-10-01 核查）
 
-**核查结果**：createTriggerPump **没有任何生产调用点**（grep 全仓只有它自己的定义）；上一轮新增的 onBacklog 也只有测试在传。
+**核查结果（2026-10-02 更新）**：createTriggerPump 已在 P5 步骤 1 的进程装配（packages/tradectl/src/desk-process.ts）里被生产调用（wiring:ledger 实测见下表）；onBacklog 也随之接上（积压告警写审计 trigger.backlog）。
 
 **这意味着**：
 
@@ -259,7 +259,7 @@
 | createClockDriftDetector | 0 | 0 | 无调用点 |
 | createMemorySourceRegistry | 0 | 0 | 无调用点 |
 | createPairingClient | 0 | 0 | 无调用点 |
-| createTriggerPump | 0 | 0 | 无调用点 |
+| createTriggerPump | 5 | 0 | 生产已接线（P5 步骤 1 进程装配） |
 | createRiskGate | 0 | 0 | 无调用点 |
 | createCountingVenue | 0 | 0 | 无调用点 |
 | createV1Stream | 0 | 0 | 无调用点 |
@@ -268,7 +268,7 @@
 | createWatchdog | 0 | 2 | 仅演练 |
 | createDeviceRegistry | 0 | 4 | 仅演练 |
 | createShadowDesk | 0 | 4 | 仅演练 |
-| createDeskLoop | 0 | 6 | 仅演练 |
+| createDeskLoop | 3 | 6 | 生产已接线（desk-process 装配） |
 | createStreamingFeed | 0 | 12 | 仅演练 |
 | createTokenBucket / createIdempotencyLedger / createThrottledFanout / openRiskAllowedFor / createJournal / createAlignment / openLedgers | >0 | — | 生产已接线 |
 
