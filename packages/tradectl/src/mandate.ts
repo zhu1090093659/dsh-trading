@@ -14,11 +14,13 @@
  *
  * Ed25519 的签名与验签**不在这里重复实现**：那是 @dshtrading/authority 的家
  * （canonicalize / signLiveTradingGrant / verifyLiveTradingGrant 一整套已存在）。
- * 本模块只负责 mandate 的**语义判定**（严格性、到期、撤销），并把签名当作已经验过的输入。
+ * 本模块只负责 mandate 的**语义判定**（严格性、到期、撤销、额度上限），并把签名当作
+ * 已经验过的输入。
  *
  * @module @dshtrading/tradectl/mandate
  */
 import { canonicalize } from '@dshtrading/authority'
+import { firstLimitHit, type LimitInputs, type LimitName } from './shadow.ts'
 
 /** 额度字段的类型学：每一种都有自己的"更严"方向。 */
 export type ScopeFieldKind =
@@ -197,4 +199,188 @@ export function revokeMandate(mandate: MandateDoc): MandateEffect {
 /** mandate 的 canonical 载荷（签名覆盖的就是它，交给 authority 签/验）。 */
 export function mandateSigningPayload(mandate: Omit<MandateDoc, 'signature'>): string {
   return canonicalize(mandate)
+}
+
+/* ------------------------------------------- 额度上限：可执行判据（缺省即拒绝） */
+
+/**
+ * 限额字段集 = `SCOPE_FIELDS` 里所有 `upper` 字段（**派生**，不是第二张表）。
+ *
+ * 它恰好就是 `firstLimitHit` 判定时读的那几个字段：任何一个缺席，对应那条判定就变成
+ * 真空（`x > undefined` 恒假 ⇒ 静默放行），所以它同时是"必须显式声明"的清单。
+ */
+export const MANDATE_LIMIT_FIELDS: readonly string[] = Object.entries(SCOPE_FIELDS)
+  .filter(([, kind]) => kind.kind === 'upper')
+  .map(([name]) => name)
+
+/** 从字段表取单位；上限字段才有单位。 */
+function unitOf(field: string): string {
+  const kind = SCOPE_FIELDS[field]
+  return kind !== undefined && kind.kind === 'upper' ? kind.unit : 'unknown-unit'
+}
+
+/**
+ * 上限声明的解析结果：要么表里的上限字段齐全且合法，要么点名缺了什么 ⇒ 拒绝。
+ *
+ * **单位与币种口径**（不要自己发明第二套）：三个 notional 上限的单位是
+ * `quote-currency`（计价货币），与 `notional = quantity × price` 同口径、与敞口快照
+ * （positionNotional / deskNotional）同口径；`maxOpenOrders` 是 `count`、
+ * `leverageMax` 是 `multiple`。判定器**不做汇率换算**——没有汇率来源时，猜一个
+ * 汇率比拒绝更危险；跨币种（例如 USDT 与 USD 混算）必须在 mandate 层面统一，
+ * 由调用方把敞口折算到同一个计价货币后再传进来。
+ */
+export type MandateLimitsResolution =
+  | { readonly declared: true; readonly limits: LimitInputs['limits'] }
+  | { readonly declared: false; readonly missing: readonly string[]; readonly invalid: readonly string[]; readonly reason: string }
+
+/**
+ * 把 mandate 声明的上限读出来；缺一个就不算声明过。
+ *
+ * **缺省语义（本模块的裁决）：没有声明上限 ⇒ 拒绝开新仓，不是"默认无限"。**
+ * 理由：没写进 mandate 的上限不受签名覆盖，任何"缺了当无限"的读法都会把一次漏写字段
+ * 变成一次无人授权的扩权；而拒绝开新仓的代价只是"回去补签一份 mandate"。这也是
+ * "签了实盘 grant 不等于有限额"缺口的落点：grant 只回答"能不能实盘"，上限必须由
+ * mandate 的 upper 字段显式回答。
+ *
+ * 合法取值 = **有限非负数**（与 isScopeSubset 对 upper 的规则同一套）：`Infinity` /
+ * `NaN` / 负数 / 非数字一律算未声明（`Infinity` 正是"无限"的写法，是这里要挡的东西）；
+ * **`0` 是合法声明**，含义是"不允许任何正数新增名义额"，与"没写这个字段"必须区分开。
+ * @param mandate - 待解析的 mandate。
+ */
+export function resolveMandateLimits(mandate: MandateDoc): MandateLimitsResolution {
+  const scope = mandate.scope as unknown as Record<string, unknown>
+  const missing: string[] = []
+  const invalid: string[] = []
+  for (const field of MANDATE_LIMIT_FIELDS) {
+    const value = scope[field]
+    if (value === undefined || value === null) {
+      missing.push(field)
+      continue
+    }
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      invalid.push(field + '=' + JSON.stringify(value) + '（单位 ' + unitOf(field) + '）')
+    }
+  }
+  if (missing.length > 0 || invalid.length > 0) {
+    const parts: string[] = []
+    if (missing.length > 0) parts.push('缺 ' + missing.join('、'))
+    if (invalid.length > 0) parts.push('非法 ' + invalid.join('、'))
+    return {
+      declared: false,
+      missing,
+      invalid,
+      reason: 'mandate 未完整声明额度上限（' + parts.join('；') + '）：缺省语义是拒绝开新仓，不是无限',
+    }
+  }
+  const limits: Record<string, number> = {}
+  for (const field of MANDATE_LIMIT_FIELDS) limits[field] = scope[field] as number
+  return { declared: true, limits: limits as unknown as LimitInputs['limits'] }
+}
+
+/** 一次拟新增风险的提案（形状与 shadow 的 DecisionCard.action 同构：判定只有一个家）。 */
+export interface OpenRiskProposal {
+  readonly kind: 'open' | 'reduce' | 'hold'
+  readonly symbol: string
+  readonly quantity: number
+  /** 名义额 = 数量 × 价格，计价货币口径（见 resolveMandateLimits 的单位说明）。 */
+  readonly notional: number
+}
+
+/** 判定时刻的敞口快照（判定所需的最小输入，单位与上限同口径）。 */
+export interface OpenRiskExposure {
+  readonly positionNotional: number
+  readonly deskNotional: number
+  readonly openOrders: number
+  readonly leverage: number
+}
+
+/** 开新仓判定请求：mandate + 注入时钟 + 提案 + 敞口。 */
+export interface OpenRiskRequest {
+  readonly mandate: MandateDoc
+  readonly atMs: number
+  readonly proposal: OpenRiskProposal
+  readonly exposure: OpenRiskExposure
+}
+
+/**
+ * 拒绝码里属于本模块（而不是某条上限）的那几个：
+ *   - `mandate-not-active`：有效期已过（原因取自 evaluateMandate）；撤销是另一条纯函数
+ *     `revokeMandate` 的结论，调用方把它并进来（两者都只挡开新仓）；
+ *   - `no-declared-limit`：上限没被完整声明（缺省即拒绝）；
+ *   - `invalid-input`：提案或敞口的数值不可信（NaN/负数会让所有比较为假）。
+ */
+export type MandateRefusalCode = 'mandate-not-active' | 'no-declared-limit' | 'invalid-input'
+
+/**
+ * 拒绝时能出现的限额名 = `LimitName` 里除 `none` 之外的全部（`none` 是放行，不是拒绝）。
+ * `riskGate` 由档位判定产出、不由本判定器产出，但它同样落进"非 `none` 即拒绝"这一侧 ——
+ * 不认识的拒绝码不会因为"不是金额"就变成放行。
+ */
+export type MandateLimitName = Exclude<LimitName, 'none'>
+
+export type OpenRiskVerdict =
+  | { readonly allowed: true; readonly limitHit: 'none'; readonly reason: string }
+  | { readonly allowed: false; readonly limitHit: MandateLimitName | MandateRefusalCode; readonly reason: string }
+
+/**
+ * 判定器自己的输入检查：`NaN` / `Infinity` / 负数会让所有比较为假 ⇒ 与"缺上限"同等
+ * 对待（拒绝）。这不是重复校验，是判定成立的前提——拿不到可信的数就不放行。
+ */
+function invalidJudgeInputs(proposal: OpenRiskProposal, exposure: OpenRiskExposure): string[] {
+  const problems: string[] = []
+  if (!Number.isFinite(proposal.notional) || proposal.notional <= 0) {
+    problems.push('proposal.notional=' + String(proposal.notional) + ' 不是有限正数')
+  }
+  const measures: ReadonlyArray<readonly [string, number]> = [
+    ['positionNotional', exposure.positionNotional],
+    ['deskNotional', exposure.deskNotional],
+    ['openOrders', exposure.openOrders],
+    ['leverage', exposure.leverage],
+  ]
+  for (const [name, value] of measures) {
+    if (!Number.isFinite(value) || value < 0) problems.push(name + '=' + String(value) + ' 不是有限非负数')
+  }
+  return problems
+}
+
+/** 人读的一行上限摘要（放行时告诉人"在什么之内放行的"）。 */
+function describeDeclaredLimits(limits: LimitInputs['limits']): string {
+  const record = limits as unknown as Record<string, number>
+  return MANDATE_LIMIT_FIELDS.map((field) => field + '=' + String(record[field])).join(', ')
+}
+
+/**
+ * 开新仓授权判定：**有效期/撤销 ∧ 上限已被声明 ∧ 未超上限**的合取。
+ *
+ * 三个事实各回各家：有效期与撤销取 `evaluateMandate`、限额比较取 `firstLimitHit`
+ * （限额判定顺序的唯一家，见 shadow.ts——本模块不复制那五个比较）；本函数只补上
+ * **"上限是否被显式声明"**这段 fail-closed 前置，并把三者合成一个可执行结论。
+ * 因此新增上限字段时只需要改 `SCOPE_FIELDS` 一处，这里自动跟上。
+ *
+ * 只约束**新增风险**：`reduce` / `hold` 在解析上限之前就放行——到期与撤销都不得被读成
+ * "把人锁在仓位里"（见本模块头部的第 2 条裁决），降风险永远不需要额度。
+ * @param request - mandate、注入时钟、提案与敞口快照。
+ */
+export function openRiskWithinMandate(request: OpenRiskRequest): OpenRiskVerdict {
+  const { mandate, atMs, proposal, exposure } = request
+  if (proposal.kind !== 'open') {
+    return { allowed: true, limitHit: 'none', reason: proposal.kind + ' 不新增风险：上限与有效期只约束开新仓' }
+  }
+  const invalidInput = invalidJudgeInputs(proposal, exposure)
+  if (invalidInput.length > 0) {
+    return { allowed: false, limitHit: 'invalid-input', reason: '判定输入不可信（' + invalidInput.join('；') + '）：拿不到可信的数就不放行' }
+  }
+  const effect = evaluateMandate(mandate, atMs)
+  if (!effect.mayOpenNewRisk) {
+    return { allowed: false, limitHit: 'mandate-not-active', reason: effect.reason }
+  }
+  const resolution = resolveMandateLimits(mandate)
+  if (!resolution.declared) {
+    return { allowed: false, limitHit: 'no-declared-limit', reason: resolution.reason }
+  }
+  const limitHit = firstLimitHit(proposal, { limits: resolution.limits, ...exposure })
+  if (limitHit === 'none') {
+    return { allowed: true, limitHit: 'none', reason: '在 mandate 声明的上限内（' + describeDeclaredLimits(resolution.limits) + '）' }
+  }
+  return { allowed: false, limitHit, reason: '被 ' + limitHit + ' 挡下（单位 ' + unitOf(limitHit) + '）：新增风险未获额度' }
 }

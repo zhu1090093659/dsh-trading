@@ -8,10 +8,15 @@ import {
   isMandateAtLeastAsStrict,
   isScopeSubset,
   mandateSigningPayload,
+  MANDATE_LIMIT_FIELDS,
+  openRiskWithinMandate,
+  resolveMandateLimits,
   revokeMandate,
   SCOPE_FIELDS,
   type MandateDoc,
   type MandateScope,
+  type OpenRiskExposure,
+  type OpenRiskProposal,
 } from '../src/mandate.ts'
 import { assertIntentHasNoQuotaFields, mandateLimits, INTENT_FIELDS } from '../src/intent.ts'
 
@@ -198,6 +203,126 @@ describe('意图不变量：额度不可表达', () => {
     // Then 与 mandate 一致，且导出面里没有 setter/写函数
     expect(limits).toEqual({ notionalMax: 10_000, positionNotionalMax: 50_000, deskNotionalMax: 200_000, maxOpenOrders: 20, leverageMax: 3 })
     expect(INTENT_FIELDS).not.toContain('notionalMax')
+  })
+})
+
+describe('额度上限：可执行判据（缺省即拒绝）', () => {
+  const withinValidity = baseMandate.issuedAtMs + 1
+  const exposure = (over: Partial<OpenRiskExposure> = {}): OpenRiskExposure => ({ positionNotional: 0, deskNotional: 0, openOrders: 0, leverage: 1, ...over })
+  const openProposal = (notional: number, over: Partial<OpenRiskProposal> = {}): OpenRiskProposal => ({ kind: 'open', symbol: 'BTC/USDT', quantity: 1, notional, ...over })
+  const judge = (mandate: MandateDoc, proposal: OpenRiskProposal, atMs = withinValidity, snapshot = exposure()) =>
+    openRiskWithinMandate({ mandate, atMs, proposal, exposure: snapshot })
+  /** 造一份"某个上限字段没被写进 scope"的 mandate（模拟漏签）。 */
+  const withoutField = (field: keyof MandateScope): MandateDoc => {
+    const scope: Record<string, unknown> = { ...baseScope }
+    delete scope[field]
+    return { ...baseMandate, scope: scope as unknown as MandateScope }
+  }
+
+  it('管理员：上限内放行、恰好等于上限放行、超一档拒绝并点名 notionalMax', () => {
+    // Given 一份已声明上限的 mandate（单笔 notionalMax = 10_000）
+    // When 分别判 9_000 / 10_000 / 10_000.01 三档
+    const inside = judge(baseMandate, openProposal(9_000))
+    const exactly = judge(baseMandate, openProposal(10_000))
+    const over = judge(baseMandate, openProposal(10_000.01))
+    // Then 前两档放行、超一档拒绝且原因指向具体限额
+    expect(inside).toMatchObject({ allowed: true, limitHit: 'none' })
+    expect(exactly).toMatchObject({ allowed: true, limitHit: 'none' })
+    expect(over).toMatchObject({ allowed: false, limitHit: 'notionalMax' })
+    expect(over.reason).toContain('quote-currency')
+  })
+
+  it('管理员：累计敞口上限（持仓/desk/挂单数）同样由同一判定挡下', () => {
+    // Given 三种已经贴近上限的敞口
+    const crowdedPosition = judge(baseMandate, openProposal(1_000), withinValidity, exposure({ positionNotional: 49_500 }))
+    const crowdedDesk = judge(baseMandate, openProposal(1_000), withinValidity, exposure({ deskNotional: 199_500 }))
+    const crowdedOrders = judge(baseMandate, openProposal(1_000), withinValidity, exposure({ openOrders: 20 }))
+    // When/Then 各自命中自己的那条限额，不会串味
+    expect(crowdedPosition).toMatchObject({ allowed: false, limitHit: 'positionNotionalMax' })
+    expect(crowdedDesk).toMatchObject({ allowed: false, limitHit: 'deskNotionalMax' })
+    expect(crowdedOrders).toMatchObject({ allowed: false, limitHit: 'maxOpenOrders' })
+  })
+
+  it('管理员：上限缺失即拒绝开新仓（缺省语义是拒绝，不是无限）', () => {
+    // Given 一份没写 notionalMax 的 mandate：金额本身很小、时间也在有效期内
+    const incomplete = withoutField('notionalMax')
+    // When 判定与解析
+    const verdict = judge(incomplete, openProposal(100))
+    const resolution = resolveMandateLimits(incomplete)
+    // Then 拒绝、点名缺了哪个字段，且解析结果明确标成未声明
+    expect(verdict).toMatchObject({ allowed: false, limitHit: 'no-declared-limit' })
+    expect(verdict.reason).toContain('notionalMax')
+    expect(verdict.reason).toContain('拒绝开新仓')
+    expect(resolution).toMatchObject({ declared: false, missing: ['notionalMax'] })
+  })
+
+  it('管理员：上限为 0 是显式声明（拒绝任何正数新增），与"没写"区分开', () => {
+    // Given 一份把 notionalMax 明写成 0 的 mandate
+    const zeroed: MandateDoc = { ...baseMandate, scope: { ...baseScope, notionalMax: 0 } }
+    // When 判一单最小单位的开仓
+    const verdict = judge(zeroed, openProposal(0.01))
+    // Then 上限是"声明过"的（不是缺失），但正数新增一律被拒
+    expect(resolveMandateLimits(zeroed)).toMatchObject({ declared: true })
+    expect(verdict).toMatchObject({ allowed: false, limitHit: 'notionalMax' })
+  })
+
+  it('管理员：非法上限（Infinity/NaN/负数/非数字）按未声明处理 ⇒ 拒绝', () => {
+    // Given 四种"看起来像上限"的写法，其中 Infinity 正是"无限"的写法
+    const bad: readonly (readonly [string, unknown])[] = [['Infinity', Number.POSITIVE_INFINITY], ['NaN', Number.NaN], ['负数', -1], ['字符串', '10000']]
+    // When 逐个判定
+    // Then 一律拒绝并点名该字段（Infinity 不得被读成"无上限"）
+    for (const [label, value] of bad) {
+      const mandate: MandateDoc = { ...baseMandate, scope: { ...baseScope, notionalMax: value } as MandateScope }
+      const verdict = judge(mandate, openProposal(100))
+      expect(verdict.allowed, label).toBe(false)
+      expect(verdict.limitHit, label).toBe('no-declared-limit')
+      expect(resolveMandateLimits(mandate).declared, label).toBe(false)
+    }
+  })
+
+  it('管理员：平仓/降风险不受上限影响（上限缺失且已过期也照放）', () => {
+    // Given 一份既没声明上限、又已经到期的 mandate
+    const expiredIncomplete = withoutField('deskNotionalMax')
+    const afterExpiry = baseMandate.expiresAtMs + 1
+    // When 分别判平仓与持有
+    const reduce = judge(expiredIncomplete, openProposal(1_000_000, { kind: 'reduce' }), afterExpiry)
+    const hold = judge(expiredIncomplete, openProposal(1_000_000, { kind: 'hold' }), afterExpiry)
+    // Then 两者都放行——只约束新增风险，撤销/到期不得被读成把人锁在仓位里
+    expect(reduce).toMatchObject({ allowed: true, limitHit: 'none' })
+    expect(hold).toMatchObject({ allowed: true, limitHit: 'none' })
+  })
+
+  it('管理员：到期与撤销只挡开新仓（时间事实仍归 evaluateMandate 判）', () => {
+    // Given 一份上限齐全的 mandate 与两个越界时刻
+    const open = openProposal(100)
+    // When 在到期时刻判定开仓，再对撤销后的语义取一次
+    const atExpiry = judge(baseMandate, open, baseMandate.expiresAtMs)
+    // Then 开仓被拒且原因是"mandate 不在有效期"，而不是额度
+    expect(atExpiry).toMatchObject({ allowed: false, limitHit: 'mandate-not-active' })
+    expect(revokeMandate(baseMandate).mayOpenNewRisk).toBe(false)
+    expect(revokeMandate(baseMandate).mayReduce).toBe(true)
+  })
+
+  it('管理员：判定输入不可信（NaN/负数敞口）即拒绝，不给静默放行留路', () => {
+    // Given 一个 NaN 名义额与一个负数持仓敞口
+    const nanNotional = judge(baseMandate, openProposal(Number.NaN))
+    const negativeExposure = judge(baseMandate, openProposal(100), withinValidity, exposure({ positionNotional: -1 }))
+    // When/Then 都拒绝并标成输入问题（NaN 会让所有比较为假，正是要挡的形态）
+    expect(nanNotional).toMatchObject({ allowed: false, limitHit: 'invalid-input' })
+    expect(negativeExposure).toMatchObject({ allowed: false, limitHit: 'invalid-input' })
+  })
+
+  it('管理员：限额字段集与判定器读的字段集是同一张表（新增 upper 字段自动进入必须声明集合）', () => {
+    // Given scope 表里的 upper 字段与判定器实际读的字段
+    const uppers = Object.entries(SCOPE_FIELDS).filter(([, kind]) => kind.kind === 'upper').map(([name]) => name)
+    const readByJudge = Object.keys(mandateLimits(baseMandate))
+    // When 比较两个集合
+    // Then 完全一致（少一个就是一条真空判定），且金额上限的单位口径是计价货币
+    expect([...MANDATE_LIMIT_FIELDS].sort()).toEqual([...uppers].sort())
+    expect([...MANDATE_LIMIT_FIELDS].sort()).toEqual([...readByJudge].sort())
+    expect(SCOPE_FIELDS.notionalMax).toEqual({ kind: 'upper', unit: 'quote-currency' })
+    expect(SCOPE_FIELDS.positionNotionalMax).toEqual({ kind: 'upper', unit: 'quote-currency' })
+    expect(SCOPE_FIELDS.deskNotionalMax).toEqual({ kind: 'upper', unit: 'quote-currency' })
   })
 })
 
