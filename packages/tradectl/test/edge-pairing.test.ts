@@ -24,6 +24,21 @@ async function fixture() {
     registry,
     killStatePath: join(dir, 'kill-state.json'),
     now: () => (tick += 1),
+    // 业务面两条：观测面（read）与命令面（显式声明 command）—— 凭据拿到的 scope 在这里见真章。
+    registerBusinessRoutes: (register) => {
+      register('/v1/cards', (_req, res) => {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ cards: [] }))
+      })
+      register(
+        '/v1/commands',
+        (_req, res) => {
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ accepted: true }))
+        },
+        'command',
+      )
+    },
   })
   cleanups.push(() => gateway.close())
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }))
@@ -36,6 +51,13 @@ function postPair(gateway: EdgeGateway, body: unknown, method = 'POST') {
     headers: { 'content-type': 'application/json' },
     body: method === 'POST' ? JSON.stringify(body) : undefined,
   })
+}
+
+async function redeem(gateway: EdgeGateway, registry: ReturnType<typeof createDeviceRegistry>, body: Record<string, unknown>) {
+  const { code } = registry.issuePairingCode()
+  const response = await postPair(gateway, { code, ...body })
+  const parsed = (await response.json()) as { deviceId: string; secret: string; scopes: string[]; deniedScopes: string[] }
+  return { status: response.status, body: parsed, authorization: 'Bearer ' + parsed.deviceId + '.' + parsed.secret }
 }
 
 describe('配对端点 /pair/redeem', () => {
@@ -57,6 +79,52 @@ describe('配对端点 /pair/redeem', () => {
     expect(ping.status).toBe(200)
     const kill = await fetch(f.gateway.url + '/a0/kill', { method: 'POST', headers: { authorization } })
     expect(kill.status).toBe(403)
+  })
+
+  it('管理员：请求里显式要的 command 真的签发了，且这条凭据能打进命令面', async () => {
+    // Given 一个真实网关与一个要 command 的配对请求
+    const f = await fixture()
+    // When 客户端带 scopes:[command] 兑换
+    const paired = await redeem(f.gateway, f.registry, { name: 'iPhone', scopes: ['command'] })
+    // Then 200，实际签发的就是 read+command（不再静默丢弃），deniedScopes 为空
+    expect(paired.status).toBe(200)
+    expect(paired.body.scopes).toEqual(['read', 'command'])
+    expect(paired.body.deniedScopes).toEqual([])
+    // 且这条凭据真的能进观测面与命令面
+    const cards = await fetch(f.gateway.url + '/v1/cards', { headers: { authorization: paired.authorization } })
+    const command = await fetch(f.gateway.url + '/v1/commands', { method: 'POST', headers: { authorization: paired.authorization } })
+    expect([cards.status, command.status]).toEqual([200, 200])
+  })
+
+  it('管理员：请求 control 不被签发，但响应里如实说明（deniedScopes），凭据打 kill 仍 403', async () => {
+    // Given 一个想一次要到 control 的配对请求
+    const f = await fixture()
+    // When 兑换
+    const paired = await redeem(f.gateway, f.registry, { name: 'iPhone', scopes: ['control', 'command'] })
+    // Then 200，签发的是 read+command，被拒的平面在 deniedScopes 里点名（不静默吞掉）
+    expect(paired.status).toBe(200)
+    expect(paired.body.scopes).toEqual(['read', 'command'])
+    expect(paired.body.deniedScopes).toEqual(['control'])
+    // 且 control 真的没到手
+    const kill = await fetch(f.gateway.url + '/a0/kill', { method: 'POST', headers: { authorization: paired.authorization } })
+    expect(kill.status).toBe(403)
+    expect((await kill.json()) as { required: string }).toMatchObject({ required: 'control' })
+  })
+
+  it('管理员：请求里写了不认识的平面 ⇒ 400 明确拒绝，且配对码没有被消耗', async () => {
+    // Given 一个真实网关与一个新配对码
+    const f = await fixture()
+    const { code } = f.registry.issuePairingCode()
+    // When 用不认识的平面兑换
+    const rejected = await postPair(f.gateway, { code, name: 'iPhone', scopes: ['admin'] })
+    // Then 400 明确拒绝（不静默降级成 read）
+    expect(rejected.status).toBe(400)
+    expect((await rejected.json()) as { code: string }).toMatchObject({ code: 'PAIR_SCOPES_INVALID' })
+    // When 用同一个码按合法参数再兑换一次
+    const retried = await postPair(f.gateway, { code, name: 'iPhone', scopes: ['command'] })
+    // Then 仍然成功 —— 参数写错不该把用户的一次性码烧掉
+    expect(retried.status).toBe(200)
+    expect((await retried.json()) as { scopes: string[] }).toMatchObject({ scopes: ['read', 'command'] })
   })
 
   it('管理员：同一个码不能用第二次（一次性）', async () => {
