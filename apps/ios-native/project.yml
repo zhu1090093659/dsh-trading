@@ -32,6 +32,12 @@ settings:
     CODE_SIGNING_ALLOWED: NO
     CODE_SIGNING_REQUIRED: NO
     CODE_SIGN_IDENTITY: ""
+    # 本机会话的 DSH 文件沙箱内，swiftc 无法给**宏插件**再起一层嵌套沙箱
+    # （sandbox-exec: sandbox_apply: Operation not permitted ⇒ 编译报
+    #  "external macro implementation type 'ObservationMacros.ObservableMacro' could not be found"），
+    # @Observable 因此加载不了，模拟器构建被挡。这个 flag 关掉的是**插件执行沙箱**，
+    # 不改变本仓的任何安全边界（不关网络、不关文件权限），加上后标准 xcodebuild 命令可复现。
+    OTHER_SWIFT_FLAGS: -disable-sandbox
 
 targets:
   # ---------------------------------------------------------------- 冻结契约面

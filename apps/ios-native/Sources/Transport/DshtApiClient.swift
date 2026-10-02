@@ -107,7 +107,7 @@ public final class DshtApiClient: ObservationTransport {
                 atMs: state["atMs"] as? Int ?? 0
             ),
             device: object["device"] as? String ?? "",
-            scopes: DshtApiClient.scopePlanes(object["scopes"])
+            scopes: DshtApiClient.parseScopePlanes(object["scopes"])
         )
     }
 
@@ -152,7 +152,7 @@ public final class DshtApiClient: ObservationTransport {
 
     /// 作用域解析：只保留认得出的平面，未知字符串**不授予**（fail-closed），
     /// 并按契约的声明顺序输出（稳定顺序是契约的一部分，客户端可以依赖它做 diff）。
-    static func scopePlanes(_ value: Any?) -> [ScopePlane] {
+    static func parseScopePlanes(_ value: Any?) -> [ScopePlane] {
         guard let raw = value as? [String] else { return [] }
         let known = Set(raw.compactMap { ScopePlane(rawValue: $0) })
         return scopePlanes.filter { known.contains($0) }

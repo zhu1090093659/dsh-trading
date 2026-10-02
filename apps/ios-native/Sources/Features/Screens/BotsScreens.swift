@@ -104,7 +104,7 @@ public struct BotDetailScreen: View {
         switch bot.state {
         case .unreachable, .unknownDisconnected:
             DisconnectedBanner(lastConfirmedAtMs: bot.lastConfirmedHealthyAtMs, nowMs: nowMs)
-        case .unknownStale, .neverConfirmed, .unrecognizedExecutionState:
+        case .unknownStale, .neverConfirmed, .indeterminateExecution, .unrecognizedExecutionState:
             StaleDataBanner(trustAxis: bot.axes.trust)
         case .runningRestricted:
             DependencyAnomalyBanner(issues: bot.dependencyIssues)

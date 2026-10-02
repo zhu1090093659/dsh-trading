@@ -90,7 +90,7 @@ public struct PushPayload: Equatable, Sendable, Decodable {
         deskId = (try? container.decode(String.self, forKey: .deskId)) ?? ""
         deeplink = (try? container.decode(String.self, forKey: .deeplink)) ?? ""
         expiresInMs = (try? container.decode(Int.self, forKey: .expiresInMs)) ?? -1
-        actions = ((try? container.decodeIfPresent([String].self, forKey: .actions)) ?? nil) ?? []
+        actions = try container.decode([String].self, forKey: .actions)
         fallbackText = (try? container.decode(String.self, forKey: .fallbackText)) ?? ""
         revision = (try? container.decode(Int.self, forKey: .revision)) ?? -1
     }
@@ -134,6 +134,13 @@ public func validatePushPayload(_ payload: PushPayload) -> (valid: Bool, problem
         problems.append("revision 必须是非负有限数")
     }
     return (problems.isEmpty, problems)
+}
+
+/// 唯一接收入口：结构、语义与深链任一非法均 drop。
+public func acceptedPush(_ data: Data) -> PushPayload? {
+    guard let payload = try? JSONDecoder().decode(PushPayload.self, from: data), validatePushPayload(payload).valid else { return nil }
+    guard case .ok = parseDeeplink(payload.deeplink) else { return nil }
+    return payload
 }
 
 /// 客户端决定"这条通知值不值得叫醒用户"——**只做展示层筛选，不做业务判断**。

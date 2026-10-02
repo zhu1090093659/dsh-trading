@@ -104,10 +104,20 @@ public struct HealthAssessment: Hashable, Sendable {
         self.blockers = blockers
     }
 
-    /// 业务正常 = 心跳正常 **且** 允许新增风险 **且** 没有阻断项。
+    /// 能不能**真的**新增风险：风控合取 **且** 没有阻断项。
+    ///
+    /// openRiskAllowed 单独为 true 不构成放行 —— 它只是设计文档第 22 条的合取
+    /// （level ∈ {normal, caution} ∧ alignment == aligned），行情不可用这类故障
+    /// 表达在 blockers 上，不改那个合取。把两者混为一谈会让"行情断了但 level 还是
+    /// normal"被读成"可以开仓"。
+    public var allowsNewRisk: Bool {
+        openRiskAllowed && blockers.isEmpty
+    }
+
+    /// 业务正常 = 心跳正常 **且** 真的能新增风险。
     /// 心跳单独为 true 不足以让这里为 true。
     public var businessHealthy: Bool {
-        heartbeatHealthy && openRiskAllowed && blockers.isEmpty
+        heartbeatHealthy && allowsNewRisk
     }
 }
 

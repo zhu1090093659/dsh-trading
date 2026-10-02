@@ -113,6 +113,8 @@ public enum BotStateKind: String, Sendable, Hashable, CaseIterable {
     case unknownDisconnected
     case unknownStale
     case neverConfirmed
+    /// 已连上、也拿到了数据，但拿不到权威执行信号（/a0/status）—— 第三种显示。
+    case indeterminateExecution
     case unrecognizedExecutionState
     case unreachable
 
@@ -128,6 +130,7 @@ public enum BotStateKind: String, Sendable, Hashable, CaseIterable {
         case .unknownDisconnected: return "看不到机器人（连接中断）"
         case .unknownStale: return "状态未知（数据过期）"
         case .neverConfirmed: return "状态尚未确认"
+        case .indeterminateExecution: return "已连上但无法判定执行状态"
         case .unrecognizedExecutionState: return "无法识别运行状态"
         case .unreachable: return "看不到机器人（连接失败/未配对）"
         }
@@ -146,6 +149,7 @@ public enum BotStateKind: String, Sendable, Hashable, CaseIterable {
         case .unknownDisconnected: return "App 与监控服务连接中断，此刻无法确认机器人状态。"
         case .unknownStale: return "手里这份数据已过期，不足以判断机器人现在在做什么。"
         case .neverConfirmed: return "还没有拿到过可信状态，不要按「已停止」理解。"
+        case .indeterminateExecution: return "连接正常，但没有拿到权威执行信号（/a0/status）—— 不能默认成「运行中」，也不能说成「已停止」。"
         case .unrecognizedExecutionState: return "服务端返回了本客户端不认识的执行状态；请升级客户端。"
         case .unreachable: return "App 联系不上监控服务或尚未配对 —— 这是「看不到」，不是「已停止」。"
         }
@@ -159,7 +163,7 @@ public enum BotStateKind: String, Sendable, Hashable, CaseIterable {
         case .paused: return .warning
         case .faulted: return .critical
         case .stoppedConfirmed: return .neutral
-        case .unknownDisconnected, .unreachable, .unknownStale, .neverConfirmed, .unrecognizedExecutionState: return .unknown
+        case .unknownDisconnected, .unreachable, .unknownStale, .neverConfirmed, .indeterminateExecution, .unrecognizedExecutionState: return .unknown
         }
     }
 
@@ -175,6 +179,7 @@ public enum BotStateKind: String, Sendable, Hashable, CaseIterable {
         case .unknownDisconnected: return "wifi.slash"
         case .unknownStale: return "clock.badge.exclamationmark"
         case .neverConfirmed: return "questionmark.circle.fill"
+        case .indeterminateExecution: return "questionmark.circle"
         case .unrecognizedExecutionState: return "questionmark.square.dashed"
         case .unreachable: return "antenna.radiowaves.left.and.right.slash"
         }
@@ -184,7 +189,7 @@ public enum BotStateKind: String, Sendable, Hashable, CaseIterable {
     public var isUnreachable: Bool { self == .unreachable }
     public var isUnknown: Bool {
         switch self {
-        case .unknownDisconnected, .unknownStale, .neverConfirmed, .unrecognizedExecutionState, .unreachable:
+        case .unknownDisconnected, .unknownStale, .neverConfirmed, .indeterminateExecution, .unrecognizedExecutionState, .unreachable:
             return true
         case .starting, .operational, .runningRestricted, .paused, .stopping, .stoppedConfirmed, .faulted:
             return false
@@ -278,6 +283,7 @@ public enum OrderLifecycleStage: Sendable, Hashable {
     case cancelling
     case canceled
     case rejected
+    case expired
     case submittedUnknown
     case neverArrived
     case unknownState(String)
@@ -291,6 +297,7 @@ public enum OrderLifecycleStage: Sendable, Hashable {
         case .cancelling: return "正在撤单"
         case .canceled: return "已撤单"
         case .rejected: return "已拒绝"
+        case .expired: return "已过期"
         case .submittedUnknown: return "结果未知（已提交，未确认）"
         case .neverArrived: return "未到达交易所"
         case let .unknownState(raw): return raw
@@ -302,7 +309,7 @@ public enum OrderLifecycleStage: Sendable, Hashable {
         case .filled: return .positive
         case .partiallyFilled, .cancelPending, .cancelling: return .warning
         case .submittedUnknown: return .critical
-        case .neverArrived, .rejected, .canceled: return .neutral
+        case .neverArrived, .rejected, .canceled, .expired: return .neutral
         case .submitted: return .info
         case .unknownState: return .unknown
         }
@@ -311,7 +318,7 @@ public enum OrderLifecycleStage: Sendable, Hashable {
     public var isAwaiting: Bool {
         switch self {
         case .partiallyFilled, .cancelPending, .cancelling, .submittedUnknown, .submitted: return true
-        case .filled, .canceled, .rejected, .neverArrived, .unknownState: return false
+        case .filled, .canceled, .rejected, .expired, .neverArrived, .unknownState: return false
         }
     }
 }
@@ -843,6 +850,24 @@ public struct OverviewPresentation: Sendable, Hashable {
     }
 }
 
+/// 本客户端不认识的卡片类型：**不丢弃**，只读展示兜底文本。
+/// 驾驶舱的实测教训：协议层不丢弃，界面分块过滤时却把它在 UI 层丢掉了。
+public struct UnrecognizedCardPresentation: Sendable, Hashable, Identifiable {
+    public let id: String
+    public let cardType: String
+    public let revision: Int
+    public let fallbackText: String
+    public let reason: String
+
+    public init(id: String, cardType: String, revision: Int, fallbackText: String, reason: String) {
+        self.id = id
+        self.cardType = cardType
+        self.revision = revision
+        self.fallbackText = fallbackText
+        self.reason = reason
+    }
+}
+
 /// 五入口共享的顶层呈现状态。视图只读它；动作经 FeatureActionDispatching 派发。
 public struct FeaturesState: Sendable, Hashable {
     public let overview: OverviewPresentation
@@ -854,10 +879,12 @@ public struct FeaturesState: Sendable, Hashable {
     public let runtimeMode: RuntimeMode
     /// 还没有任何可信数据时的整页提示（**不是「没有机器人」**）。
     public let emptyMessage: String?
+    /// 本客户端不认识的卡片（未知 closed 枚举）——只读展示，不操作。
+    public let unrecognizedCards: [UnrecognizedCardPresentation]
 
     public init(overview: OverviewPresentation, bots: [BotPresentation], alerts: [AlertPresentation],
                 assets: AssetsPresentation, settings: SettingsPresentation, connection: ConnectionPresentation,
-                runtimeMode: RuntimeMode, emptyMessage: String?) {
+                runtimeMode: RuntimeMode, emptyMessage: String?, unrecognizedCards: [UnrecognizedCardPresentation] = []) {
         self.overview = overview
         self.bots = bots
         self.alerts = alerts
@@ -866,6 +893,7 @@ public struct FeaturesState: Sendable, Hashable {
         self.connection = connection
         self.runtimeMode = runtimeMode
         self.emptyMessage = emptyMessage
+        self.unrecognizedCards = unrecognizedCards
     }
 }
 
@@ -892,5 +920,26 @@ public final class NoopActionDispatcher: FeatureActionDispatching {
     public init() {}
     public func dispatch(_ action: ActionPresentation) async -> FeatureDispatchOutcome {
         FeatureDispatchOutcome(accepted: false, message: "未接线：快照/预览环境不派发动作。")
+    }
+}
+
+/// 设置面的写端口（通知静音 / 隐私 / 显示 / 撤销设备）。
+/// Features 只负责呈现与收集意图；持久化与撤销动作由 App 组合根接到 Offline/Alerts/Transport。
+/// 刻意做成 Sendable + async：设置写入可能落到别的执行器（持久化、钥匙串），
+/// 视图层不假设它一定在主线程上。
+public protocol FeatureSettingsControlling: Sendable {
+    func setNotificationMuted(desk: String, muted: Bool) async
+    func setPrivacyHidesAmounts(_ hidden: Bool) async
+    func setDisplayThemePreference(_ value: String) async
+    func revokeDevice() async -> FeatureDispatchOutcome
+}
+
+public struct NoopSettingsController: FeatureSettingsControlling {
+    public init() {}
+    public func setNotificationMuted(desk: String, muted: Bool) async {}
+    public func setPrivacyHidesAmounts(_ hidden: Bool) async {}
+    public func setDisplayThemePreference(_ value: String) async {}
+    public func revokeDevice() async -> FeatureDispatchOutcome {
+        FeatureDispatchOutcome(accepted: false, message: "未接线：快照/预览环境不撤销设备。")
     }
 }

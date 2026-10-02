@@ -30,6 +30,16 @@ public func confirmLevel(for action: ActionKind) -> ConfirmLevel {
     confirmLevelOf(action)
 }
 
+public func confirmLevel(for action: String) -> ConfirmLevel {
+    guard let known = ActionKind(rawValue: action) else { return .biometric }
+    return confirmLevel(for: known)
+}
+
+public func scopeForAction(_ action: String) -> ScopePlane {
+    guard let known = ActionKind(rawValue: action) else { return .control }
+    return scopeOf(known)
+}
+
 /// 校验确认策略表自身的完整性（**CI 可机检**）。
 public func auditConfirmPolicy() -> (ok: Bool, problems: [String]) {
     var problems: [String] = []

@@ -130,7 +130,10 @@ final class DomainSemanticsTests: XCTestCase {
 
         XCTAssertTrue(assessment.health.heartbeatHealthy)
         XCTAssertFalse(assessment.health.businessHealthy)
-        XCTAssertFalse(assessment.health.openRiskAllowed)
+        // openRiskAllowed 就是第 22 条的合取（level ∧ alignment）：行情不可用不改它；
+        // 真正能不能新增风险是 allowsNewRisk（合取 ∧ 无阻断项）。
+        XCTAssertTrue(assessment.health.openRiskAllowed)
+        XCTAssertFalse(assessment.health.allowsNewRisk)
         XCTAssertEqual(assessment.health.blockers, [.marketDataUnavailable])
         XCTAssertEqual(assessment.verdict, .runningRestricted(reasons: ["行情不可用"]))
     }

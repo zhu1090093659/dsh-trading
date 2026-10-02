@@ -29,7 +29,10 @@ public struct KeychainError: Error, Equatable, Sendable {
 /// 确认闸门的判据（Contract 的 ACTION_CONFIRM），不是"读取令牌"的默认前提。
 public struct KeychainSecureStore: SecureStore {
     /// Keychain 的可访问性策略（测试直接断言这个常量被写进了 add 查询 —— 策略不能只是注释）。
-    public static let accessibility: CFString = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+    ///
+    /// 用计算属性而不是 static let：CFString 非 Sendable，存成静态存储会让 Swift 6 的
+    /// 并发检查直接判红（"not concurrency-safe"）。
+    public static var accessibility: CFString { kSecAttrAccessibleWhenUnlockedThisDeviceOnly }
 
     public let service: String
 

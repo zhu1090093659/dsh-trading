@@ -11,7 +11,10 @@ import Foundation
 ///
 /// 全模块**不读系统时钟**：nowMs 一律由调用方传入。心跳、陈旧度、"最后确认时间"
 /// 因此都是可复现的纯函数 —— 测试里不需要 sleep，也不需要把时钟注入成 mock。
-public typealias EpochMillis = Int64
+/// 用 Int（而不是 Int64）：冻结件 §6 的公共面（ObservationSnapshot.atMs、
+/// BotStatus.lastConfirmedHealthyAtMs、OrderObservation.stateSinceMs 等）都写 Int，
+/// 领域内只保留**一个**时间类型才能避免 Int/Int64 在所有接口上来回摩擦。
+public typealias EpochMillis = Int
 
 /// 领域 id 的标签类型：不同实体的 id 互为**不同类型**，编译期就不能互相顶替。
 public protocol IdTag: Sendable {}

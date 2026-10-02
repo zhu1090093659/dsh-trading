@@ -86,7 +86,7 @@ public struct CardFieldIndex: Sendable {
 /// **这不是契约**（契约里 key 不是封闭枚举）；它是缺口清单的一部分。
 public enum RecognizedFieldKeys {
     public static let deskSummary: Set<String> = ["deskId", "label", "mode", "phase", "waitReason", "level", "currency", "equity", "available", "margin", "realizedPnl", "unrealizedPnl"]
-    public static let riskState: Set<String> = ["level", "alignment", "symbol", "reason"]
+    public static let riskState: Set<String> = ["level", "alignment", "symbol", "reason", "marketData", "tradeChannel", "accountSync"]
     public static let position: Set<String> = ["symbol", "side", "quantity", "entryPrice", "avgPrice", "avgCost", "pnl", "unrealizedPnl", "attribution", "botId", "accountId"]
     public static let order: Set<String> = ["symbol", "side", "price", "quantity", "state", "stateSinceMs", "filledQuantity", "botId", "orderId"]
     public static let mandate: Set<String> = ["limit", "used", "currency", "label", "unit", "equity", "available", "margin", "realizedPnl", "unrealizedPnl", "costs"]
@@ -217,7 +217,8 @@ public enum DeskMapper {
             }
         }
 
-        let focusSymbol = positions.compactMap(\.symbol).first ?? report.priceStates.first?.symbol
+        let focusCandidate = positions.compactMap(\.symbol).first ?? report.priceStates.first?.symbol
+        let focusSymbol = (focusCandidate?.isEmpty == false) ? focusCandidate : nil
         let dependency = DependencyHealth.from(report, symbol: focusSymbol)
         let permission = report.permission(for: focusSymbol)
         let issues = DependencyAssessment.issues(report, permission: permission, symbol: focusSymbol)
@@ -288,19 +289,30 @@ public enum DeskMapper {
         return DataTrustPolicy.trust(age: budget.age(ofMs: nowMs - snapshot.atMs))
     }
 
-    /// risk-state 卡片 -> 依赖零件箱。**缺失就是 .missing（全 unknown）**，不是"全正常"。
+    /// risk-state 卡片 -> 依赖零件箱。
+    /// **只把卡片真正报出来的维度放进去**；没报的留 nil（不声称健康，也不声称坏了）。
     public static func dependencyReport(card: Card, index: CardFieldIndex) -> DependencyReport {
-        let level = ClosedEnum<RiskLevel>(rawValue: index.string("level") ?? "")
         let symbol = index.string("symbol")
-        let alignment = ClosedEnum<InstrumentAlignment>(rawValue: index.string("alignment") ?? "")
-        let priceStates = symbol.map { [InstrumentPriceState(symbol: $0, alignment: alignment)] } ?? []
+        var priceStates: [InstrumentPriceState] = []
+        if let alignmentRaw = index.string("alignment") {
+            priceStates = [InstrumentPriceState(
+                symbol: symbol ?? "",
+                alignment: ClosedEnum<InstrumentAlignment>(rawValue: alignmentRaw)
+            )]
+        }
         return DependencyReport(
-            marketData: .unknown(""),
-            tradeChannel: .unknown(""),
-            accountSync: .unknown(""),
-            riskLevel: level,
+            marketData: closedEnum(index.string("marketData")),
+            tradeChannel: closedEnum(index.string("tradeChannel")),
+            accountSync: closedEnum(index.string("accountSync")),
+            riskLevel: index.string("level").map { ClosedEnum<RiskLevel>(rawValue: $0) },
             priceStates: priceStates
         )
+    }
+
+    /// 有原文才解析；没报就是 nil。
+    private static func closedEnum<Value: ClosedEnumValue>(_ raw: String?) -> ClosedEnum<Value>? {
+        guard let raw else { return nil }
+        return ClosedEnum<Value>(rawValue: raw)
     }
 
     private static func assetRows(card: Card, index: CardFieldIndex, recognized: Set<String>, raw: [CardField]) -> [AssetObservation] {

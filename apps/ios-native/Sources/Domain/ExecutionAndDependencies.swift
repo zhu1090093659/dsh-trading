@@ -179,17 +179,22 @@ public struct InstrumentPriceState: Hashable, Sendable {
 /// 它只是素材；对外结论是 DependencyHealth（冻结件 §6.1）。分开的理由是
 /// "有哪些字段"与"结论是什么"是两件事 —— 混在一起就没法表达"字段缺失"。
 public struct DependencyReport: Hashable, Sendable {
-    public let marketData: ClosedEnum<MarketDataHealth>
-    public let tradeChannel: ClosedEnum<TradeChannelHealth>
-    public let accountSync: ClosedEnum<AccountSyncHealth>
-    public let riskLevel: ClosedEnum<RiskLevel>
+    /// nil = **这张卡片没有报这一维**（与"报了但值不认识"是两件事）。
+    ///
+    /// 这个区分是必须的：冻结件 §6.1 只保证 risk-state 卡片给出 level / alignment，
+    /// 若把"没报"当成"unknown 值"，DependencyHealth 就永远只能是 .unknown ——
+    /// 一个永远为未知的健康维度等于没有这个维度。
+    public let marketData: ClosedEnum<MarketDataHealth>?
+    public let tradeChannel: ClosedEnum<TradeChannelHealth>?
+    public let accountSync: ClosedEnum<AccountSyncHealth>?
+    public let riskLevel: ClosedEnum<RiskLevel>?
     public let priceStates: [InstrumentPriceState]
 
     public init(
-        marketData: ClosedEnum<MarketDataHealth>,
-        tradeChannel: ClosedEnum<TradeChannelHealth>,
-        accountSync: ClosedEnum<AccountSyncHealth>,
-        riskLevel: ClosedEnum<RiskLevel>,
+        marketData: ClosedEnum<MarketDataHealth>?,
+        tradeChannel: ClosedEnum<TradeChannelHealth>?,
+        accountSync: ClosedEnum<AccountSyncHealth>?,
+        riskLevel: ClosedEnum<RiskLevel>?,
         priceStates: [InstrumentPriceState]
     ) {
         self.marketData = marketData
@@ -199,14 +204,19 @@ public struct DependencyReport: Hashable, Sendable {
         self.priceStates = priceStates
     }
 
-    /// risk-state 卡片缺失时的样子：**全 unknown**，不是"全正常"。
+    /// risk-state 卡片缺失时的样子：**什么都没有报**，不是"全正常"。
     public static let missing = DependencyReport(
-        marketData: .unknown(""),
-        tradeChannel: .unknown(""),
-        accountSync: .unknown(""),
-        riskLevel: .unknown(""),
+        marketData: nil,
+        tradeChannel: nil,
+        accountSync: nil,
+        riskLevel: nil,
         priceStates: []
     )
+
+    /// 这张卡片到底报了多少东西（一条都没有 ⇒ 依赖健康只能是 .unknown）。
+    public var reportedAnything: Bool {
+        marketData != nil || tradeChannel != nil || accountSync != nil || riskLevel != nil || !priceStates.isEmpty
+    }
 
     public func alignment(for symbol: String) -> ClosedEnum<InstrumentAlignment> {
         guard let state = priceStates.first(where: { $0.symbol == symbol }) else { return .unknown("") }
@@ -221,7 +231,7 @@ public struct DependencyReport: Hashable, Sendable {
         } else {
             alignment = .unknown("")
         }
-        return TradingPermission(level: riskLevel, alignment: alignment)
+        return TradingPermission(level: riskLevel ?? .unknown(""), alignment: alignment)
     }
 }
 
@@ -299,38 +309,51 @@ public enum DependencyAssessment {
     public static func issues(_ report: DependencyReport, permission: TradingPermission, symbol: String?) -> [DependencyIssue] {
         var issues: [DependencyIssue] = []
 
-        switch report.marketData {
-        case .known(.normal): break
-        case .known(.delayed): issues.append(.marketDataDelayed)
-        case .known(.unavailable): issues.append(.marketDataUnavailable)
-        case let .unknown(raw): issues.append(.unrecognizedClosedEnum(kind: "marketDataHealth", rawValue: raw))
+        // 没报的维度不产生问题（不声称健康，也不声称坏了）；报了但不认识 ⇒ 未知（阻断）。
+        if let marketData = report.marketData {
+            switch marketData {
+            case .known(.normal): break
+            case .known(.delayed): issues.append(.marketDataDelayed)
+            case .known(.unavailable): issues.append(.marketDataUnavailable)
+            case let .unknown(raw): issues.append(.unrecognizedClosedEnum(kind: "marketDataHealth", rawValue: raw))
+            }
         }
 
-        switch report.tradeChannel {
-        case .known(.normal): break
-        case .known(.degraded): issues.append(.tradeChannelDegraded)
-        case .known(.unavailable): issues.append(.tradeChannelUnavailable)
-        case let .unknown(raw): issues.append(.unrecognizedClosedEnum(kind: "tradeChannelHealth", rawValue: raw))
+        if let tradeChannel = report.tradeChannel {
+            switch tradeChannel {
+            case .known(.normal): break
+            case .known(.degraded): issues.append(.tradeChannelDegraded)
+            case .known(.unavailable): issues.append(.tradeChannelUnavailable)
+            case let .unknown(raw): issues.append(.unrecognizedClosedEnum(kind: "tradeChannelHealth", rawValue: raw))
+            }
         }
 
-        switch report.accountSync {
-        case .known(.ok), .known(.inProgress): break
-        case .known(.failed): issues.append(.accountSyncFailed)
-        case let .unknown(raw): issues.append(.unrecognizedClosedEnum(kind: "accountSyncHealth", rawValue: raw))
+        if let accountSync = report.accountSync {
+            switch accountSync {
+            case .known(.ok), .known(.inProgress): break
+            case .known(.failed): issues.append(.accountSyncFailed)
+            case let .unknown(raw): issues.append(.unrecognizedClosedEnum(kind: "accountSyncHealth", rawValue: raw))
+            }
         }
 
-        switch report.riskLevel {
-        case .known(.normal): break
-        case .known(.caution): issues.append(.riskLevelCaution)
-        case .known(.reduceOnly), .known(.halt):
-            if let level = report.riskLevel.value { issues.append(.riskLevelRestricted(level)) }
-        case let .unknown(raw): issues.append(.unrecognizedClosedEnum(kind: "riskLevel", rawValue: raw))
+        if let riskLevel = report.riskLevel {
+            switch riskLevel {
+            case .known(.normal): break
+            case .known(.caution): issues.append(.riskLevelCaution)
+            case .known(.reduceOnly), .known(.halt):
+                if let level = riskLevel.value { issues.append(.riskLevelRestricted(level)) }
+            case let .unknown(raw): issues.append(.unrecognizedClosedEnum(kind: "riskLevel", rawValue: raw))
+            }
         }
 
         switch permission.alignment {
         case .known(.aligned): break
         case let .known(alignment): issues.append(.priceUnaligned(symbol: symbol, alignment: alignment))
-        case let .unknown(raw): issues.append(.unrecognizedClosedEnum(kind: "instrumentAlignment", rawValue: raw))
+        case let .unknown(raw):
+            // 空串 = 这一维没报（没有该标的的价格状态）；非空才是"不认识的值"。
+            if !raw.isEmpty {
+                issues.append(.unrecognizedClosedEnum(kind: "instrumentAlignment", rawValue: raw))
+            }
         }
 
         return issues
@@ -359,7 +382,9 @@ public enum DependencyHealth: Equatable, Sendable, Hashable {
             return false
         }
         if hasUnknown { return .unknown }
-        if let level = report.riskLevel.value, level == .halt { return .halted }
+        if let level = report.riskLevel?.value, level == .halt { return .halted }
+        // 一条证据都没有 ⇒ 未知，绝不默认健康。
+        if !report.reportedAnything { return .unknown }
         if issues.isEmpty { return .healthy }
         return .degraded(reasons: issues.map(\.label))
     }
