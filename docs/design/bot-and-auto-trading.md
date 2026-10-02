@@ -160,6 +160,7 @@ URL major + 只增不减 minor + `X-Dsht-Caps` 能力交集 + `426 CLIENT_TOO_OL
 ### 7.4 客户端技术栈
 
 - **网页驾驶舱**：React 18.3 + TS 5.9 + Vite 7 的**独立 SPA**，由 bot 的 edge 行托管（不引 dsh `webserver` 行），复用现有 CSS Module 设计令牌。
+  - **静态壳 vs 令牌的裁决（2026-10-02）**：SPA 的**静态壳**（HTML/JS/CSS/图标，仅 GET、精确路径白名单）可免令牌——浏览器导航带不了 `Authorization` 头；**一切数据与命令端点一律 Bearer**，壳内 JS 用设备令牌取数、令牌存浏览器存储而非 cookie。白名单**只准列静态资源、永不列数据路径**，写死在常量表里（与 `edge.ts` 的 `PUBLIC_PATHS` 同款）。
 - **移动端**：**React Native / Expo SDK 57（RN 0.86）**，EAS Build 内部分发 + EAS Update OTA 与回滚。
 - **共享**：`@dshtrading/contract`（零第三方依赖，运行期值也在此）+ `@dshtrading/client-core`（transport / store / 卡片渲染器）。诚实比例：**契约 100% / 数据层约 90% / 渲染 0%**（React DOM 组件不能在 RN 复用）。
 - **卡片协议**：12 个封闭 CardType + 封闭 Field/Action 联合 + 必填 `fallbackText`；4 条"不退化"硬规则（可机检）+ 12 个硬上限棘轮；**任何含未知 closed 枚举值的卡片渲染为不可操作态**（禁用全部 Action）。

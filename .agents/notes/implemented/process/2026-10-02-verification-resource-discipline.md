@@ -9,7 +9,7 @@ Status: implemented
 - 主机 load(15m) 冲到 20+、swap 用到 4.4 GB（已影响用户交互）；
 - 两台孤儿进程残留：6 个 `pnpm -r test` 的 vitest worker（父进程退出后 ppid=1）与 1 个真 Electron（附着演练 `desktop/scripts/attach-electron-drill.mjs` 的 `finally` 只杀 `.bin/electron` 包装）。前者自行退出，后者需手工清理。
 
-同期还暴露两条验收口径问题：并发会话在验收窗口内持续改动工作区（10 分钟内未提交项 7 → 20），使"工作区干净/N 例全绿"这类台账数字当场失效；`coverage:check` 在某个包收集失败时会静默把该包移出聚合、再按"无指标下降"判通过。
+同期还暴露两条验收口径问题：并发会话在验收窗口内持续改动工作区（10 分钟内未提交项 7 → 20），使"工作区干净/N 例全绿"这类台账数字当场失效；`coverage:check` 在某个包收集失败时会静默把该包移出聚合、再按"无指标下降"判通过（已于同日修复：无报告即红，见 [测试与 CI 棘轮](../../testing/2026-09-15-test-hygiene-ratchet-and-tiered-ci.md) 的「门禁可信度三修」）。
 
 ## Decision
 

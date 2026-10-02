@@ -240,8 +240,8 @@
 
 **这意味着**：
 
-- 事件泵（P3 的"进程内驱动"）**已实现且有测试**，但**没有运行时在构造它** —— 它的接线点属于 **P5 步骤 1 的进程装配**（paper/live 档）；
-- **积压告警目前不会在生产里响**（没人传 onBacklog）。它现在是"可用的旋钮"，不是"已生效的告警"。
+- 事件泵（P3 的"进程内驱动"）**已由进程入口构造**（2026-10-02，`packages/tradectl/bin/core.mjs` → `createDeskProcess`）；
+- **积压告警已生效**：入口构造泵时传 `onBacklog`，积压写审计 `trigger.backlog`（`--backlog-warn-threshold` 可调；实测 `journalKinds: {trigger.backlog: 1, trigger.dispatch.dry-run: 3}`）。
 
 **接线时必须做的两件事**（写给写装配的人，含未来的我）：
 
@@ -254,33 +254,17 @@
 
 **方法**（可复现）：扫 packages/tradectl/src 里所有 export function create*/open* 工厂，再全仓统计其名字的出现次数，分为"生产引用"（src 与 scripts）与"演练引用"（drill/），排除定义文件自身。
 
-| 组件 | 生产 | 演练 | 判定 |
-|---|---|---|---|
-| createClockDriftDetector | 0 | 0 | 无调用点 |
-| createMemorySourceRegistry | 0 | 0 | 无调用点 |
-| createPairingClient | 0 | 0 | 无调用点 |
-| createTriggerPump | 5 | 0 | 生产已接线（P5 步骤 1 进程装配） |
-| createRiskGate | 0 | 0 | 无调用点 |
-| createCountingVenue | 0 | 0 | 无调用点 |
-| createV1Stream | 0 | 0 | 无调用点 |
-| createFrameDecoder | 0 | 0 | 无调用点 |
-| createVenueErrorStreak | 0 | 2 | 仅演练 |
-| createWatchdog | 0 | 2 | 仅演练 |
-| createDeviceRegistry | 0 | 4 | 仅演练 |
-| createShadowDesk | 0 | 4 | 仅演练 |
-| createDeskLoop | 3 | 6 | 生产已接线（desk-process 装配） |
-| createStreamingFeed | 0 | 12 | 仅演练 |
-| createTokenBucket / createIdempotencyLedger / createThrottledFanout / openRiskAllowedFor / createJournal / createAlignment / openLedgers | >0 | — | 生产已接线 |
+**表格不再手抄**（会烂）：以 `node scripts/wiring-ledger.mjs` 的实时输出为准。2026-10-02 实测：**合计 24 个工厂 / 生产已接线 15 / 仅演练 4 / 无调用点 5**；无调用点清单 = `createPairingClient`、`createRiskGate`、`createCountingVenue`、`createV1Stream`、`createFrameDecoder`。该轮把 `createDeskProcess`、`createTriggerPump`、`createMemorySourceRegistry`、`createUdsServer`、`createEdgeGateway`、`createDeviceRegistry` 接进生产路径，并修掉台账正则漏掉 `export async function` 的问题（`createUdsServer`/`createEdgeGateway` 此前不可见）。
 
 **怎么读这张表（重要，别误读成"死代码"）**：
 
 - 本仓的方法是**先做成可演练的组件、再由进程装配把它们连起来**。所以"仅演练在用"不是缺陷，而是 **P5 步骤 1 进程装配尚未发生**的正常中间态；
-- **真正需要留意的是"无调用点"那 8 个**：它们连演练都没用上，意味着**没有任何证据表明它们被跑过**（只有单测）。
+- **真正需要留意的是"无调用点"那 5 个**：它们连演练都没用上，意味着**没有任何证据表明它们被跑过**（只有单测）。五个各有归属：`createPairingClient`（客户端侧，移动端/桌面壳）、`createRiskGate`（需 venue 与对账数据源，等 P4 venue 接入）、`createCountingVenue`（shadow 验收装置）、`createV1Stream`+`createFrameDecoder`（P4 的 `/v1` 下行面与 UDS 客户端帧解码）。
 - 其中两个可以**在不需要 venue 的前提下先接上**：
   1. **createClockDriftDetector** —— 环路已经有 probeDir 的先例（自己探盘），同理可以自己采两条时钟并把漂移喂进信号，让 clock-drift 从"有实现"变成"运行时真的会响"；
   2. **createTriggerPump 与 onBacklog** —— 泵的接线点属进程装配，但其"积压告警写审计"必须随装配一起做（见上一节）。
 
-**给装配者的清单**（P5 步骤 1 要接的线）：pump（含 onBacklog 写审计）、riskGate、v1Stream、frameDecoder（UDS）、pairingClient、memorySourceRegistry、countingVenue、clockDriftDetector，以及把 deskLoop / watchdog / streamingFeed / shadowDesk / venueErrorStreak 从"演练里构造"改成"运行时构造"。
+**装配进展（2026-10-02）**：pump（含 onBacklog 写审计）、memorySourceRegistry、clockDriftDetector、deskLoop、UdsServer、EdgeGateway、DeviceRegistry 已由进程入口/edge 入口在运行时构造；仍待接的是 riskGate / v1Stream / frameDecoder / pairingClient / countingVenue（理由见上）。
 
 ### 台账更新（round 149 重跑）
 
