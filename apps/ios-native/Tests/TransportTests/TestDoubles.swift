@@ -4,7 +4,8 @@ import Foundation
 /// 记录调用的 HTTP **契约假件（spy）**：实现同一个 HttpClient 接口，把每次调用原样记下来。
 ///
 /// 它的核心用途只有一个：断言"HTTP 层零调用"。真服务器只能证明"没收到"，
-/// 这个缝能证明"没有发出"—— 跨源拒绝的判据正是后者（INTERFACE-FREEZE §5 硬规则 1）。
+/// 这个缝能证明"没有发出"—— 跨源拒绝的判据正是后者（apps/ios-native/README.md §6 不变量 #4；
+/// 用例：DshtApiClientTests.testCrossOriginRequestThrowsOriginNotBoundAndNeverTouchesHttpLayer）。
 final class RecordingHttpClient: HttpClient, @unchecked Sendable {
     typealias Responder = @Sendable (DshtRequest) -> Result<DshtResponse, Error>
 

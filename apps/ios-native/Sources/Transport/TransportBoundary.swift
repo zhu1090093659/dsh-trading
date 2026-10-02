@@ -8,7 +8,9 @@ import Foundation
 ///   - 只依赖 Sources/Contract/**（DshTradingContract）与 Foundation/Security，
 ///     **不自行定义版本/能力/scope 语义**，也不下沉 ids.ts 语义（客户端不自行发号）。
 ///   - 端点清单以服务端为唯一权威（packages/tradectl/src/edge.ts 与 api-v1.ts），本层不造新端点。
-///   - 冻结面见 apps/ios-native/INTERFACE-FREEZE.md §5。
+///   - 传输面清单（端点与类型）的家是 apps/ios-native/README.md §1「各层事实之家」的传输面一行，
+///     并以本目录源码为准（代码即判据）。
+///   - 两条硬规则（令牌只发绑定 origin、配对永不签发 control）见 README.md §6 不变量 #4 与 #5。
 ///
 /// 本目录的文件：
 ///   DshtOrigin          配对绑定的 origin（scheme/host/port 三元组）+ 基址规范化
@@ -23,8 +25,8 @@ import Foundation
 ///   DshtApiClient       /a0 与 /v1 客户端（origin 守卫 + 401/403 映射）
 ///   TransportSession    会话状态（未配对是明确状态）+ 版本能力协商
 ///
-/// 一条**只增**的冻结面修订（2026-10-02，经 Lead 批准）：TransportError 增加
-/// unauthorized(code:message:)。冻结的其余五个 case 逐字保留。消费方请优先用
+/// 一条**只增**的修订（2026-10-02，经 Lead 批准）：TransportError 增加
+/// unauthorized(code:message:)。原有五个 case 逐字保留。消费方请优先用
 /// TransportError.kind（封闭、不带负载）分类，避免被迫写 default 吞掉未知分支。
 public protocol TransportHealthReporting: Sendable {
     /// 当前是否处于只读（切换期 / 未配对）。

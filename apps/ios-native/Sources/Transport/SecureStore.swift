@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-/// 安全存储面（冻结签名来自 INTERFACE-FREEZE.md §5）。
+/// 安全存储面（传输面签名与端点清单的家是 Sources/Transport/：代码即判据）。
 ///
 /// **凭据只进安全存储**：绝不写 UserDefaults / 文件 / 日志 —— 与本仓桌面壳
 /// "凭据留在主进程、落盘 0600"同一立场，移动端用的是更强的等价物（Keychain）。

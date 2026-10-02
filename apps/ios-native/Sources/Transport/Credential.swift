@@ -6,7 +6,7 @@ import Foundation
 ///   1. **令牌与绑定 origin 一起存**：落库的不只是密钥，还有"它属于哪台 bot" —— 重启后才知道
 ///      该把令牌发给谁，也才挡得住"换个地址还用旧令牌"（桌面壳 device-credential 同立场）。
 ///   2. **这里没有 scopes**：作用域的唯一来源是 /a0/status（或 403 的 required）。
-///      配对响应不做授权（INTERFACE-FREEZE §5 硬规则 2：配对永不签发 control）——
+///      配对响应不做授权（apps/ios-native/README.md §6 不变量 #5：配对永不签发 control）——
 ///      把 scopes 存进凭据就等于让"配对时服务端写了什么"变成客户端的授权事实。
 ///   3. **secret 不进日志**：description/debugDescription/反射视图一律脱敏。
 public struct StoredCredential: Equatable, Sendable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {

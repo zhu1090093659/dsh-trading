@@ -3,7 +3,7 @@ import DshTradingContract
 
 /// 带设备令牌的 /v1 与 A0 客户端。
 ///
-/// 两条硬规则就落在这个类型里（INTERFACE-FREEZE §5）：
+/// 两条硬规则就落在这个类型里（apps/ios-native/README.md §6 不变量 #4 与 #5）：
 ///
 /// **1. 令牌只发往配对绑定的 origin。** 每个请求先由 origin 解析出目标 URL，再断言
 /// 目标 origin == 绑定 origin；不等则抛 originNotBound，且 **http.send 一次都不会被调用**。

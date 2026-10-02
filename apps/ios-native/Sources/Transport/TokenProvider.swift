@@ -1,6 +1,6 @@
 import Foundation
 
-/// 设备令牌的提供者（冻结签名来自 INTERFACE-FREEZE.md §5）。
+/// 设备令牌的提供者（签名见 Sources/Transport/：代码即判据）。
 ///
 /// authorization() 返回**完整的 Authorization 头值**（Bearer <deviceId>.<secret>）；
 /// 未配对返回 nil。forget() 是 401 / 用户解绑的唯一入口 —— 解绑一处生效。
@@ -16,7 +16,7 @@ public protocol CredentialSink: Sendable {
 
 /// Keychain 支撑的令牌提供者：**令牌与绑定 origin 一起存**。
 ///
-/// 为什么 authorization() 是同步的：冻结面就是这么定的，所以凭据在 init 时读一次并缓存在
+/// 为什么 authorization() 是同步的：传输面签名就是这么定的，所以凭据在 init 时读一次并缓存在
 /// 内存里（敏感值只在本进程内，且不会出现在 description 里）。写/清都经 CredentialVault，
 /// 落点只有一个。
 public final class KeychainTokenProvider: TokenProvider, CredentialSink, @unchecked Sendable {

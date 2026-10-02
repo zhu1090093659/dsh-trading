@@ -3,7 +3,7 @@ import DshTradingContract
 
 /// A0 的 wire 类型**只有一个家**：Sources/Contract/ContractA0.swift。
 ///
-/// KillState / A0Status 是 Transport 与 Domain 的共同上游，而接口冻结 §3 不允许两者互相
+/// KillState / A0Status 是 Transport 与 Domain 的共同上游，而层间依赖白名单（README.md §1）不允许两者互相
 /// import —— 唯一合法的共同上游就是 Contract。这里给别名：Transport 的公开 API 名保持不变，
 /// 两个家合并成一个（此前 Domain 与 Contract 撞名导致 Offline 的 A0Status 歧义）。
 ///
@@ -32,7 +32,7 @@ public struct CardsPage: Sendable {
     }
 }
 
-/// 观测面唯一的传输端口（冻结签名来自 INTERFACE-FREEZE.md §5）。
+/// 观测面唯一的传输端口（端点与类型清单的家是本目录：代码即判据）。
 ///
 /// 上层（Offline/Domain）只依赖这个协议，不依赖 URLSession、也不自行拼路径 ——
 /// 端点清单是服务端契约，客户端不造第二个家。

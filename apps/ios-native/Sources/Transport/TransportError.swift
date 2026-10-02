@@ -28,8 +28,8 @@ public enum TransportErrorKind: String, CaseIterable, Sendable {
 /// "要重新配对"（unauthorized）、"缺作用域"（scopeRequired）、"客户端过旧"（clientTooOld）、
 /// "根本没发出去"（originNotBound），而不是靠文案猜。
 ///
-/// 冻结来源：apps/ios-native/INTERFACE-FREEZE.md §5。原五个 case 逐字保留；
-/// `unauthorized` 是 2026-10-02 经 Lead 批准的**唯一一次只增**（冻结面漏了 401 分支，
+/// 词汇的家就是本类型（代码即判据）。原有五个 case 逐字保留；
+/// `unauthorized` 是 2026-10-02 经 Lead 批准的**唯一一次只增**（最初的清单漏了 401 分支，
 /// 而 IOS-2 卡明确要求处理 401 EDGE_UNAUTHORIZED）。只增不减：消费方请优先用 kind 分类。
 public enum TransportError: Error, Equatable, Sendable {
     /// 目标 origin ≠ 配对绑定 origin。**抛到它即意味着 HTTP 层一次都没被调用。**
