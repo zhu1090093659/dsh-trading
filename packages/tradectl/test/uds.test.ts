@@ -6,17 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { connect, createServer } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  PROTOCOL_VERSION,
-  SOCKET_DIR_MODE,
-  SOCKET_FILE_MODE,
-  connectUds,
-  createFrameDecoder,
-  createUdsServer,
-  encodeFrame,
-  FrameError,
-  type UdsServer,
-} from '../src/uds.ts'
+import { FrameError, PROTOCOL_VERSION, createFrameDecoder, encodeFrame } from '../src/frame-codec.ts'
+import { SOCKET_DIR_MODE, SOCKET_FILE_MODE, connectUds, createUdsServer, type UdsServer } from '../src/uds.ts'
 
 const dirs: string[] = []
 const servers: UdsServer[] = []

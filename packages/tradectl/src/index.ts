@@ -8,6 +8,7 @@
 export * from './db.ts'
 export * from './journal.ts'
 export * from './safe-boot.ts'
+export * from './frame-codec.ts'
 export * from './uds.ts'
 export * from './edge.ts'
 export * from './degradation.ts'
