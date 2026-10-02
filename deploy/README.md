@@ -169,8 +169,7 @@ control，什么都没变，不当成撤销成功，消息里给出它当前的�
     sudo -u <operator-uid> node <repo>/packages/authority/bin/sign-live-trading.mjs sign \
       --key ~/.dsh-trading-ops/operator.pem --dir /var/lib/dsh-trading-authority --days 30 --agent-uid <同上>
 
-**这一步不做，实盘一律 `dir-not-configured` 拒绝（fail-closed，不是漏洞）。** 要让判定的执行核读到平面，还要给核心单元
-加 `Environment=DSH_TRADING_AUTHORITY_DIR=/var/lib/dsh-trading-authority`（今天的三个单元都没有这一行；改单元要先过第 0 步）。
+**这一步不做，实盘一律 `dir-not-configured` / 平面校验不通过拒绝（fail-closed，不是漏洞）。** 核心单元自 2026-10-02 起**已带** `Environment=DSH_TRADING_AUTHORITY_DIR=/var/lib/dsh-trading-authority`：平面未建时判定照样拒绝（grant 校验不通过），建好平面后无需再改单元。
 
 ### 4. 装单元与 daemon-reload
 
@@ -227,10 +226,10 @@ control，什么都没变，不当成撤销成功，消息里给出它当前的�
 - **静态壳托管要显式开**：edge 入口不给 `--shell-dir` 就一条静态路径都不公开（默认最小暴露面）；给了就按 §7.4 的裁决托管（仅 GET/HEAD 的精确路径免令牌，数据与命令面一律 Bearer）。壳根目录是驾驶舱的构建产物（`packages/cockpit/dist`），**部署时复制到 `/opt/dsh-trading/cockpit` 再把该路径给 `--shell-dir`**。
 - systemd unit 与三个 uid **从未在 Linux 上真实安装过**（`systemd-analyze verify` 未跑），本机能离线做的只有静态校验台架 `node scripts/systemd-units-check.mjs`（2026-10-02 起，13 例自测进 `pnpm test:scripts`）。edge 单元已含 `--device-registry /var/lib/dsh-trading-a0/devices.json`、`--shell-dir /opt/dsh-trading/cockpit` 与 `--ops-socket /run/dsh-trading-edge/ops.sock`，并配 `StateDirectory=dsh-trading-a0`（0770，注册表就住这里）与 `RuntimeDirectory=dsh-trading-edge`（0700）承载 socket 目录；路径随部署副本的实际位置改动。
 
-### 静态校验台架在 2026-10-02 的单元上查出的两处缺口（装之前先处理）
+### 静态校验台架在 2026-10-02 的单元上查出的两处缺口（**均已修复**，留作记录）
 
-1. **宿主单元起不来（台架判红 `path-access`）**：`dsh-trading-bot.service` 的 `DSH_HOME=/var/lib/dsh-trading` 与 `ReadWritePaths=/var/lib/dsh-trading/profiles` 都落在核心的 `StateDirectory=dsh-trading`（`StateDirectoryMode=0700`，`dsh-trade-core:dsh-trade`）**里面** —— 宿主以 `dsh-trade-bot`（组 `dsh-trade`）身份连**穿越**都做不到，而"凭据只住核心侧"（§13 #18-3）又不允许把该目录对组/其他开放，两者不可能同时成立。修法：给宿主**自己的 home**（`StateDirectory=dsh-trading-bot` + `DSH_HOME=/var/lib/dsh-trading-bot` + `ReadWritePaths=/var/lib/dsh-trading-bot`）——台架自测里的"正确形态"就是这个形状；2026-10-02 把这套单元复制到临时目录按此法改过一遍，实测台架全绿。`deploy/systemd/*.service` 属部署物负责人的写域，本台架只负责让它无法静默通过。
-2. **kill 状态到不了核心（台架只提示，运行期才暴露）**：`writeKillState`（`packages/tradectl/src/edge.ts:67`）把 kill 状态写成 **0600**，edge 单元又是 `UMask=0077`；核心却以**组身份**读同一个文件 ⇒ `EACCES`，而 `readKillState`（同文件 55-62 行）把"读不到"当作 `no-state`（fail-open）⇒ **带外 kill 在三个 uid 形态下对核心不生效**。装之前必须先修写入端（显式 chmod 到组可读）与读取端（只有"文件不存在"才算未 kill），再用第 7b 步端到端复核（本机已用 `chmod 000` 复现读取端 fail-open：读不到时返回 `{"killed":false,"reason":"no-state"}`）。
+1. ~~**宿主单元起不来（台架判红 `path-access`）**~~ **已修（2026-10-02）**：`dsh-trading-bot.service` 的 `DSH_HOME` 与 `ReadWritePaths` 原先落在核心的 `StateDirectory=dsh-trading`（`0700`，`dsh-trade-core:dsh-trade`）里面，宿主以 `dsh-trade-bot` 身份连穿越都做不到。现给宿主**自己的 home**：`StateDirectory=dsh-trading-bot`（0750）+ `DSH_HOME=/var/lib/dsh-trading-bot` + `ReadWritePaths=/var/lib/dsh-trading-bot`；`node scripts/systemd-units-check.mjs` 全绿（含六类判据）。
+2. ~~**kill 状态到不了核心**~~ **已修（2026-10-02，`8530e6a6`）**：`writeKillState`（`packages/tradectl/src/edge.ts`）现显式 `chmod 0o640`（组可读，不受 `UMask=0077` 掩蔽）；`readKillState` 只把 `ENOENT` 当 `no-state`，`EACCES`/坏 JSON 一律按**已 kill 且已暂停**处理（fail-closed）。端到端用例：kill 落盘后 `chmod 000` 再读仍判 `killed=true`（修复前回落 `no-state`，带外 kill 对核心失效）；核心侧 `gateNewRisk` 同判。装后仍按第 7b 步做真实三 uid 复核。
 
 ## 演练清单（缺记录即视为未满足）
 

@@ -18,6 +18,9 @@ Group=dsh-trade
 SupplementaryGroups=dsh-trade
 Environment=DSH_HOME=/var/lib/dsh-trading
 Environment=NODE_ENV=production
+# 实盘授权平面（操作员 uid 所有，核心只读）：平面目录/文件由人按 README 第 3 步建立；
+# 未建或未签署时判定一律拒绝（fail-closed）—— 这行只是让"人建好平面"这件事能被核心读到。
+Environment=DSH_TRADING_AUTHORITY_DIR=/var/lib/dsh-trading-authority
 # 账本与凭据目录归核心，0700/0600（其它两个 uid 连读都不行）。
 UMask=0077
 # /run/dsh-tradectl 0750：UDS socket 所在目录（§13 #17，组可进入不可写）。

@@ -10,7 +10,7 @@ Wants=dsh-tradectl.service
 Type=exec
 User=dsh-trade-bot
 Group=dsh-trade
-Environment=DSH_HOME=/var/lib/dsh-trading
+Environment=DSH_HOME=/var/lib/dsh-trading-bot
 Environment=DSH_PROFILE=trading-bot
 # dsh 启动器必须在 PATH 上（安装时自查：sudo -u dsh-trade-bot env dsh --version）；
 # 不在就把它改成绝对路径，别指望 systemd 猜。
@@ -23,8 +23,12 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
+# 宿主持有自己的 home：不能落在核心的 StateDirectory（0700，core:dsh-trade）里 ——
+# 三 uid 形态下宿主连穿越都做不到（部署缺口 #1，2026-10-02 修；台架的"正确形态"即此形状）。
+StateDirectory=dsh-trading-bot
+StateDirectoryMode=0750
 # 宿主不持有凭据（§13 #18-3），也不写账本目录。
-ReadWritePaths=/var/lib/dsh-trading/profiles
+ReadWritePaths=/var/lib/dsh-trading-bot
 
 [Install]
 WantedBy=multi-user.target
