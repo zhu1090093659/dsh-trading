@@ -102,6 +102,20 @@ addCard('enum-boolean-value-in-values', okCard({ fields: [field({ key: 'flag', l
 addCard('enum-object-value-is-not-in-values', okCard({ fields: [field({ key: 'obj', label: '对象', kind: 'enum', value: { a: 1 }, values: ['a'] })] }))
 addCard('action-params-non-string-values', okCard({ actions: [action({ kind: 'approve', label: '批准', params: { amount: 12.5, dryRun: true } })] }))
 
+// **UTF-16 边界**：TS 的 String.length 数码元，Swift 的 String.count 数字素簇。
+// 一个 emoji 在 TS 算 2、Swift 算 1 —— 用错单位时"超限"会在 emoji 上漏判。这几条向量就是判据。
+const emoji = '😀'
+addCard('fallback-emoji-at-limit', okCard({ fallbackText: emoji.repeat(256) }))          // TS length 512
+addCard('fallback-emoji-over-limit', okCard({ fallbackText: emoji.repeat(257) }))         // TS length 514 > 512
+addCard('cardid-emoji-over-limit', okCard({ cardId: emoji.repeat(33) }))                  // TS length 66 > 64
+addCard('label-emoji-over-limit', okCard({ fields: [field({ label: emoji.repeat(33) })] })) // TS length 66 > 64
+addCard('value-emoji-over-limit', okCard({ fields: [field({ value: emoji.repeat(129) })] })) // TS length 258 > 256
+addCard('ascii-at-every-string-limit', okCard({
+  cardId: 'c'.repeat(64),
+  fallbackText: 'f'.repeat(512),
+  fields: [field({ key: 'k', label: 'l'.repeat(64), value: 'v'.repeat(256) })],
+}))
+
 // 卡片体积棘轮：**键序按字母排列**，这样 JS JSON.stringify 与 Swift 的 .sortedKeys 序列化字节一致，
 // 两侧的 maxCardBytes 判定才能真正对齐（这是唯一一条字节级向量）。
 const byteCard = { actions: [], cardId: 'c1', cardType: 'risk-state', fallbackText: 'ok', fields: [], revision: 1 }

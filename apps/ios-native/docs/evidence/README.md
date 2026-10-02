@@ -74,10 +74,26 @@
 
 逐情形启动夹具、安装并启动 App、截**设备画面**，产物落在 docs/evidence/screenshots/<情形>.png。
 
-**当前状态（如实标注）：App 组合根尚未接线**，因此本目录暂不提供五张情形截图 ——
-截图必须反映真实的观测面，不能用占位首页冒充。已先验证**采集通路本身可用**
-（见 screenshots/pipeline-check-placeholder.png：安装 → 启动 → simctl io screenshot 全通），
-所以接线完成后只剩"显示是否正确"这一步待验。
+### 采集通路过，但**组合根目前到不了观测面**（2026-10-02 实测，属 IOS-1 作用域）
+
+已先验证采集通路本身可用：安装 → 启动 → simctl io screenshot 全通
+（见 screenshots/pipeline-check-placeholder.png）。但截出来的是**环境不可用屏**：
+
+    xcrun simctl launch <udid> com.dshtrading.ios-native --args --fixtures
+    xcrun simctl io <udid> screenshot screenshots/fixtures-mode-check.png
+    → 屏幕显示：「环境不可用 / 安全存储（Keychain）不可用：本次运行的设备令牌只放在内存里，重启需重新配对。」
+
+原因（读 Sources/App/AppEnvironment.swift:76-82 与 :131-134）：
+本机 App 以 CODE_SIGNING_ALLOWED=NO 构建，Keychain 不可用，于是 makeTokenProvider() 走内存回退
+并**把回退说明当成 environmentProblem 返回**；而 isObserving 在 fixtures 模式下要求
+environmentProblem == nil（:132），AppRootView 又优先显示 environmentProblem（DshTradingNativeApp.swift:27-29）。
+结果是：**连 --fixtures 也被这条"环境不可用"挡住**，观测面永远到不了。
+
+期望的修法（由 IOS-1 定）：内存回退是**降级告警**而不是致命故障 ——
+fixtures 模式不依赖令牌，不应被它挡住；live 模式也应在配对门里显示这条告警并允许继续配对。
+（Keychain 为何不可用：未验证，最可能是无签名构建缺 entitlement；这条是假设，不是结论。）
+
+在修好之前，本目录**不提供**五张情形截图 —— 截图必须反映真实观测面，不能用别的屏冒充。
 
 ### 未验证项
 

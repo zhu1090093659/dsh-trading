@@ -24,13 +24,19 @@ struct AppRootView: View {
     let environment: AppEnvironment
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
             if let problem = environment.environmentProblem {
                 EnvironmentProblemView(message: problem)
-            } else if environment.isObserving {
-                ObservationRootView(environment: environment)
             } else {
-                PairingGateView(environment: environment)
+                // 告警只提示，不挡路（Keychain 退回内存 ≠ 不能用）。
+                if let warning = environment.environmentWarning {
+                    WarningBanner(message: warning)
+                }
+                if environment.isObserving {
+                    ObservationRootView(environment: environment)
+                } else {
+                    PairingGateView(environment: environment)
+                }
             }
         }
         // 观测面不依赖 tick 流（快照是契约）：这里只是按时重取一次快照，断了也不影响执行。
@@ -78,6 +84,19 @@ struct FixtureBanner: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(.yellow.opacity(0.25))
+    }
+}
+
+/// 可继续的环境告警（例如 Keychain 不可用 ⇒ 退回内存存储）。
+struct WarningBanner: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.caption)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(.orange.opacity(0.2))
     }
 }
 

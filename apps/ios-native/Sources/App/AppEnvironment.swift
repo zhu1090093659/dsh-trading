@@ -30,8 +30,11 @@ public final class AppEnvironment {
     public let mode: Mode
     public let session: TransportSession?
     public let gate: any ConfirmationGate
-    /// 环境本身的故障（安全存储完全不可用等）。非 nil 时界面只显示它，不假装能工作。
+    /// **致命**环境故障（连内存回退都建不起来）。非 nil 时界面只显示它，不假装能工作。
     public let environmentProblem: String?
+    /// **可继续**的环境告警（如 Keychain 不可用、退回内存存储）。界面显示它，但**不挡**观测面：
+    /// fixtures 模式根本不需要令牌，live 模式也仍可走完配对（令牌只活在本进程内，重启重新配对即可）。
+    public let environmentWarning: String?
 
     public private(set) var sessionState: TransportSessionState = .unpaired
     public private(set) var store: ObservationStore?
@@ -64,21 +67,32 @@ public final class AppEnvironment {
         self.mode = mode
         self.clock = { Int(Date().timeIntervalSince1970 * 1000) }
         self.gate = AlertsConfirmationGate(biometrics: LocalAuthenticationBiometrics())
-        let (tokens, problem) = AppEnvironment.makeTokenProvider()
-        self.session = tokens.map { TransportSession(tokens: $0) }
-        self.environmentProblem = problem
+        let provider = AppEnvironment.makeTokenProvider()
+        self.session = provider.keychain.map { TransportSession(tokens: $0) }
+        self.environmentProblem = provider.fatal
+        self.environmentWarning = provider.warning
         if let session { sessionState = session.state() }
         rebuildStore()
     }
 
-    /// 令牌提供者：优先 Keychain；不可用才退回内存，并把这件事如实说出来。
+    /// 令牌提供者：优先 Keychain；不可用才退回内存，并把**原始错误（含 OSStatus）**一起报出来 ——
+    /// 否则"Keychain 不可用"是一句无法定位的断言（缺 entitlement 时是 errSecMissingEntitlement -34018）。
     /// **绝不**为了"能跑"把设备令牌写进 UserDefaults/文件（那等于把凭据降级成明文）。
-    private static func makeTokenProvider() -> (KeychainTokenProvider?, String?) {
-        if let keychain = try? KeychainTokenProvider(store: KeychainSecureStore()) { return (keychain, nil) }
-        if let memory = try? KeychainTokenProvider(store: InMemorySecureStore()) {
-            return (memory, "安全存储（Keychain）不可用：本次运行的设备令牌只放在内存里，重启需重新配对。")
+    static func makeTokenProvider() -> (keychain: KeychainTokenProvider?, warning: String?, fatal: String?) {
+        do {
+            return (try KeychainTokenProvider(store: KeychainSecureStore()), nil, nil)
+        } catch {
+            let detail = String(describing: error)
+            do {
+                return (
+                    try KeychainTokenProvider(store: InMemorySecureStore()),
+                    "安全存储（Keychain）不可用（" + detail + "）：本次运行的设备令牌只放在内存里，重启需重新配对。",
+                    nil
+                )
+            } catch {
+                return (nil, nil, "安全存储与内存回退都不可用（" + detail + "），App 无法保存设备令牌。")
+            }
         }
-        return (nil, "安全存储与内存回退都不可用，App 无法保存设备令牌，观测面不可用。")
     }
 
     // MARK: - 装配
@@ -128,8 +142,11 @@ public final class AppEnvironment {
         mode == .fixtures ? .simulated : .unknown
     }
 
+    /// 能不能进观测面。**告警不算故障**：Keychain 退回内存只影响"重启后要不要重新配对"，
+    /// 不该把 fixtures 模式（根本不需要令牌）一起挡在门外（IOS-3 在模拟器上实测到过这个缺陷）。
     public var isObserving: Bool {
-        if mode == .fixtures { return environmentProblem == nil }
+        if environmentProblem != nil { return false }
+        if mode == .fixtures { return store != nil }
         return sessionState.isPaired && store != nil
     }
 
@@ -139,7 +156,7 @@ public final class AppEnvironment {
 
     public func pair(baseURL: String, code: String, name: String) async {
         guard let session else {
-            pairingMessage = "环境未就绪：" + (environmentProblem ?? "未知原因")
+            pairingMessage = "环境未就绪：" + (environmentProblem ?? environmentWarning ?? "未知原因")
             return
         }
         pairingBusy = true

@@ -105,20 +105,22 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
 
 - [gen-contract-snapshot.mjs](scripts/gen-contract-snapshot.mjs) 从 `@dshtrading/contract` 的**运行期真值**导出：
   常量（version/scopes/limits/deeplinkScheme）、封闭枚举（cardTypes/fieldKinds/actionKinds/push*）、
-  查表（actionScope/actionConfirm）、以及 **136 条行为向量**（negotiateVersion / validateCard /
+  查表（actionScope/actionConfirm）、以及**行为向量**（negotiateVersion / validateCard /
   renderableActions / fallbackFor / stalenessOf / offlineView / parseDeeplink / grantableByDefault /
   parseCaps / formatCaps / requiresBiometric / sourceGuard / validatePushPayload 的输入 → TS 权威输出）。
-  推送校验覆盖 UTF-16 长度边界，诊断与合法性均逐条匹配 TS；现场验证 136 条向量、36 tests / 0 failures，日志见 [本轮契约测试](build/ios1-contract-green.log)。
-  突变自检入口：`node scripts/test-drift-mutation.mjs`（先独占锁、改 maxActions 3→4、断言红、恢复并断言绿；锁忙时退出 75 且不改源码）。
+  **向量条数与用例数随契约扩展，不在此写死** —— 想看当前数字就重跑并读生成器输出（`node scripts/gen-contract-snapshot.mjs`
+  会打印 `vectors <N>`）与测试汇总；长度上限覆盖 UTF-16 码元边界（emoji），诊断与合法性逐条匹配 TS。
+  突变自检入口：`node scripts/test-drift-mutation.mjs`（先独占锁、改 `maxActions` 3→4、断言红、恢复并断言绿；
+  锁忙时退出 75 且不改源码）。
 - [ContractDriftTests.swift](Tests/ContractTests/ContractDriftTests.swift) 逐字段比对常量与表，
   并锁住 fail-closed 行为（未知 cardType ⇒ `valid=false, operable=false`；未知枚举 ⇒ 全动作禁用；
   control ⇒ biometric；过期不渲染数据本身；跨源不混显）。
 - [ContractVectorTests.swift](Tests/ContractTests/ContractVectorTests.swift) 逐条重放行为向量 ——
   只比对常量是弱机检，**行为漂移会被这一层抓住**。
 - **夹具缺失 ⇒ 测试 FAIL** 并打印重新生成命令，绝不 skip（对齐本仓"未验证 ≠ 通过"）。
-- 机检可运行且真的会红：`./scripts/test-contract.sh`，故意改错的红/绿证据见
-  [build/](build/) 下的 `mutation-a.log` / `mutation-b.log` / `mutation-restored.log`
-  （A：让 `grantableByDefault` 放行 control ⇒ 6 例红；B：`maxFields` 24→25 ⇒ 1 例红；改回 ⇒ 全绿。
+- 机检可运行且真的会红：`./scripts/test-contract.sh`。红/绿证据：`node scripts/test-drift-mutation.mjs`
+  会现场改错、断言红、恢复源码、再断言绿（自己重跑即可复现；日志落在 `build/`，那是不入库的生成物，不进文档链接）。
+  两处已复核的突变：让 `grantableByDefault` 放行 control、把 `cardLimits.maxFields` 24 改成 25 —— 两者都会变红，改回即全绿。
 
 ### CI 接线（不需要 Xcode）
 

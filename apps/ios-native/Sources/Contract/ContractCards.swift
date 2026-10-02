@@ -251,6 +251,10 @@ private func cardByteCount(_ card: Card) -> Int {
     return data.count
 }
 
+/// 字符串上限一律用 **UTF-16 码元数**（`utf16.count`），对齐 TS 的 `String.length`
+/// —— Swift 的 `String.count` 数的是字素簇，一个 emoji 在 TS 里算 2、在 Swift 里算 1，
+/// 用错单位会让"超限"在 emoji 上漏判（机检的 emoji 边界向量就是为此而设）。
+///
 /// 校验一张卡片：4 条"不退化"规则 + 12 个硬上限（逐条等价于 TS validateCard）。
 ///
 /// 未知封闭枚举值 ⇒ **不可操作**（禁用全部 Action），不猜默认值、不抛掉整张卡。
@@ -258,7 +262,7 @@ public func validateCard(_ card: Card, limits: CardLimits = cardLimits) -> CardV
     var problems: [String] = []
     var operabilityBlocked = false
 
-    if card.cardId == "" || card.cardId.count > limits.maxIdChars {
+    if card.cardId == "" || card.cardId.utf16.count > limits.maxIdChars {
         problems.append("cardId 必填且不超过 " + String(limits.maxIdChars) + " 字符")
     }
     if CardType(rawValue: card.cardType) == nil {
@@ -270,7 +274,7 @@ public func validateCard(_ card: Card, limits: CardLimits = cardLimits) -> CardV
     }
     if card.fallbackText.trimmingCharacters(in: .whitespacesAndNewlines) == "" {
         problems.append("fallbackText 必填（客户端不会渲染时要有纯文本兜底）")
-    } else if card.fallbackText.count > limits.maxFallbackChars {
+    } else if card.fallbackText.utf16.count > limits.maxFallbackChars {
         problems.append("fallbackText 超过 " + String(limits.maxFallbackChars) + " 字符上限")
     }
     if card.fields.count > limits.maxFields {
@@ -285,10 +289,10 @@ public func validateCard(_ card: Card, limits: CardLimits = cardLimits) -> CardV
             operabilityBlocked = true
             continue
         }
-        if field.label.count > limits.maxLabelChars {
+        if field.label.utf16.count > limits.maxLabelChars {
             problems.append("字段 " + field.key + " 的 label 超过 " + String(limits.maxLabelChars) + " 字符上限")
         }
-        if let value = field.value, value.count > limits.maxValueChars {
+        if let value = field.value, value.utf16.count > limits.maxValueChars {
             problems.append("字段 " + field.key + " 的值超过 " + String(limits.maxValueChars) + " 字符上限")
         }
         if field.kind == FieldKind.enumeration.rawValue {
