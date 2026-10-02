@@ -78,6 +78,35 @@ describe('Swift 分层门禁', () => {
     expect(result.stderr).not.toContain('不许 import struct')
   })
 
+  it('管理员：Domain 与 App 可以用 Observation（经 Lead 批准的 @Observable 宏）⇒ 绿', () => {
+    // Given 真正在用它的两层各引一次
+    const dir = fixture({ Domain: ['import Observation'], App: ['import Observation'] })
+    // When 检查
+    const result = check(dir)
+    // Then 通过（这是正对照：收敛白名单不等于把合法用法也挡了）
+    expect(result.status).toBe(0)
+  })
+
+  it('管理员：Offline 用 Observation ⇒ 红（该层没有批准过）', () => {
+    // Given Offline 引了没批准过的 Observation
+    const dir = fixture({ Offline: ['import Observation'] })
+    // When 检查
+    const result = check(dir)
+    // Then 判红 —— 这条防的是"白名单比裁决宽"再次溜回来
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Offline 层不许 import Observation')
+  })
+
+  it('管理员：Alerts 用 Observation ⇒ 红（该层没有批准过）', () => {
+    // Given Alerts 引了没批准过的 Observation
+    const dir = fixture({ Alerts: ['import Observation'] })
+    // When 检查
+    const result = check(dir)
+    // Then 判红
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Alerts 层不许 import Observation')
+  })
+
   it('管理员：注释里的 import 不算越界', () => {
     // Given Domain 只在注释里提到 SwiftUI
     const dir = fixture({ Domain: ['// import SwiftUI', '/// import UIKit'] })

@@ -29,21 +29,22 @@ const sourcesRoot = resolve(argOf('--sources', resolve(repoRoot, 'apps/ios-nativ
 
 // 每层允许出现的 import。**没登记**的层（或新增目录）同样判红：新增层必须显式登记。
 //
-// Observation 在 Domain/Offline/Alerts/Features/App 上白名单化是**经 Lead 批准**的：
-// @Observable 是随工具链的标准库宏（ObservationMacros），不是第三方包。
-// Combine / Charts **未获批准**，故不在表内（IOS-4 验收 §5.4）。
+// Observation **仅 Domain 与 App 经 Lead 批准**：@Observable 是随工具链的标准库宏（ObservationMacros），
+// 不是第三方包；这两层也是当前**真实在用**它的两层（Domain/DeskObservation.swift、App/AppEnvironment.swift）。
+// **其它层要用必须先提出来**（这份注释只记录发生过的批准，不替裁决说话）。
+// Combine / Charts 未获批准，故不在表内（IOS-4 验收 §5.4）。
 const OBSERVATION_APPROVED = 'Observation'
 const LAYERS = {
   Contract: { allowed: ['Foundation'] },
   Transport: { allowed: ['Foundation', 'Security', 'DshTradingContract'] },
   Domain: { allowed: ['Foundation', OBSERVATION_APPROVED, 'DshTradingContract'] },
-  Offline: { allowed: ['Foundation', OBSERVATION_APPROVED, 'DshTradingContract', 'DshTradingDomain'] },
+  Offline: { allowed: ['Foundation', 'DshTradingContract', 'DshTradingDomain'] },
   Alerts: {
-    allowed: ['Foundation', 'UserNotifications', 'LocalAuthentication', 'UIKit', OBSERVATION_APPROVED, 'DshTradingContract', 'DshTradingDomain'],
+    allowed: ['Foundation', 'UserNotifications', 'LocalAuthentication', 'UIKit', 'DshTradingContract', 'DshTradingDomain'],
   },
   Features: {
     allowed: [
-      'Foundation', 'SwiftUI', 'UIKit', OBSERVATION_APPROVED,
+      'Foundation', 'SwiftUI', 'UIKit',
       'DshTradingContract', 'DshTradingTransport', 'DshTradingDomain', 'DshTradingAlerts', 'DshTradingOffline',
     ],
   },
@@ -114,4 +115,4 @@ if (violations.length > 0) {
   for (const violation of violations) console.error('  - ' + violation)
   process.exit(1)
 }
-console.log('Swift 分层门禁：绿 —— ' + String(seenLayers.length) + ' 层全部合规（Observation 经 Lead 批准）')
+console.log('Swift 分层门禁：绿 —— ' + String(seenLayers.length) + ' 层全部合规（Observation 仅 Domain/App 经 Lead 批准）')
