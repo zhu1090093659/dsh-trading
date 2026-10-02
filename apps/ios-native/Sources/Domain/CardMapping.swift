@@ -64,6 +64,9 @@ public struct CardFieldIndex: Sendable {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    /// 整数 key 的文本形态。`Int(String)` 是**全定义**的：越界或非法都返回 nil，不会 trap
+    /// （与本文件里 Double -> Int 的转换是两回事）。语义保持不变：只认纯整数字面量，
+    /// "3.5"、"1e3" 这类一律判 nil。字符串已在 `string(_:)` 里 trim 过。
     public func int(_ key: String) -> Int? {
         guard let raw = string(key) else { return nil }
         return Int(raw)
@@ -97,6 +100,33 @@ public enum RecognizedFieldKeys {
     public static let mandate: Set<String> = ["limit", "used", "currency", "label", "unit", "equity", "available", "margin", "realizedPnl", "unrealizedPnl", "costs"]
     public static let freshness: Set<String> = ["age", "ageMs", "atMs"]
     public static let alert: Set<String> = ["severity", "title", "reason", "impact", "firstSeenMs", "lastSeenMs", "recoveredAtMs", "repeatCount", "readAtMs", "acknowledgedAtMs", "recovered", "relatedBotId", "relatedAccountId", "relatedOrderId", "atMs", "botId", "accountId", "orderId"]
+}
+
+/// `Double` -> `Int` 的**唯一**安全转换口。
+///
+/// Swift 的 `Int(_: Double)` 在 NaN / ±Inf / 超出 Int 范围时是
+/// **trap（进程终止，不可 catch）**，而卡片字段值只受**字符串长度**约束
+/// （TS cards.ts 的 maxValueChars）——"1e100" 只有 5 个字符，服务端按契约判合法。
+/// 一张"服务端认为完全合法"的卡片因此足以让客户端当场崩溃。
+/// 把范围判据收在这一处：判不出来就返回 nil，由调用方走"未知/不显示"，
+/// **给不出一个可能错的具体数字**。
+enum NumericRangeGuard {
+    /// Int 可无条件表示的上界（2^63，半开区间）。
+    /// Double 在 2^63 附近只能精确表示 2^63 与 2^63 - 1024；用半开区间把"恰好等于 2^63"
+    /// 也判成越界，而不是去赌平台上的舍入行为。
+    static let upperBoundExclusive: Double = 9_223_372_036_854_775_808
+    static let lowerBoundInclusive: Double = -9_223_372_036_854_775_808
+
+    /// 值有限且落在 Int 能无条件表示的范围里。
+    static func isRepresentable(_ value: Double) -> Bool {
+        value.isFinite && value >= lowerBoundInclusive && value < upperBoundExclusive
+    }
+
+    /// 转换成 Int；越界或非有限 ⇒ nil（fail-closed）。
+    static func int(_ value: Double) -> Int? {
+        guard isRepresentable(value) else { return nil }
+        return Int(value)
+    }
 }
 
 /// 卡片 -> 观测态的映射器。纯函数：不读时钟（nowMs 由调用方给），不发网络。
@@ -324,18 +354,26 @@ public enum DeskMapper {
     ///
     /// 为什么必须支持这一形态：契约 offline.ts 的年龄本来就是毫秒数；
     /// 只认档位名会让服务端给 "1"+unit"s" 时整份观测被判成未知（实测过，界面只剩"数据不可渲染"）。
+    ///
+    /// **范围守则在数值域这一侧必须硬**（审查 C4）：字段值只受**字符串长度**约束，
+    /// "1e100" 只有 5 个字符 ⇒ 服务端按契约判合法，而 `Int(Double)` 在 NaN / ±Inf / 越界时
+    /// 是 **trap（进程终止，不可 catch）**。因此**值**与**换算后的乘积**都要过范围检查，
+    /// 任一条不满足 ⇒ nil。返回 nil 的后果是"这个年龄读不出来"，调用方按"未知"处理，
+    /// **绝不**把它当成一个具体的年龄（更不当作 fresh）。
     public static func ageMs(fromField field: CardField?) -> Int? {
         guard let field, let raw = field.value?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
             return nil
         }
-        guard let value = Double(raw), value >= 0 else { return nil }
+        guard let value = Double(raw), value >= 0, NumericRangeGuard.isRepresentable(value) else { return nil }
+        // 每一条单位分支各自做范围检查：值合法**不代表**乘积合法
+        // （1e15 秒 = 1e18 毫秒合法，1e15 分 = 6e19 毫秒越界）。
         switch (field.unit ?? "ms").lowercased() {
         case "s", "sec", "secs", "second", "seconds":
-            return Int(value * 1_000)
+            return NumericRangeGuard.int(value * 1_000)
         case "m", "min", "mins", "minute", "minutes":
-            return Int(value * 60_000)
+            return NumericRangeGuard.int(value * 60_000)
         default:
-            return Int(value)
+            return NumericRangeGuard.int(value)
         }
     }
 

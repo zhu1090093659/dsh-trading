@@ -169,8 +169,39 @@ process），截图只剩主屏。已回滚（重新 build 恢复 linker-signed 
    "运行中"在界面上永远显示成"运行中（受限）"，而同一屏的依赖健康却写着"依赖正常"（一屏之内自相矛盾）。
    修法：未指名（symbol 为空）且**唯一**的那一条按 desk 级对齐兜底；**两条及以上未指名仍然不猜**（fail-closed）。
 
-两条都补了回归用例，Domain 现为 **62 tests, 0 failures**。
+两条都补了回归用例，Domain 现为 **73 tests, 0 failures**（用例数随增删变动，这是 IOS-9 之后的一次实测）。
 另：夹具 desk-summary 的 key「state」IOS-1 已按读取约定改为「phase」（根因仍是 field.key 未冻结，已报 Lead）。
+
+### 数值文本范围守卫（IOS-9 / 独立审查 C4）
+
+**现象**：`DeskMapper.ageMs(fromField:)` 与覆盖比例百分比只查了 `>= 0`，没查有限性与范围；
+Swift 的 `Int(_: Double)` 在 NaN / ±Inf / 越界时是 **trap（进程终止，不可 catch）**。
+
+**为什么是合法输入**：TS 权威 `packages/contract/src/cards.ts` 对字段值只查**字符串长度**上限，
+`"1e100"` 只有 5 个字符 ⇒ 服务端判 `valid` 且 `operable`。一份"服务端认为完全合法"的卡片就能崩客户端。
+
+**证据**（两段都在 gitignored 的 `build/` 下）：
+
+    # 修复前：用例让测试进程直接 SIGTRAP（signal code 5 + Fatal error）
+    apps/ios-native/build/ios9-prefix-red.log
+    # 修复后：模拟器上 build-for-testing + simctl spawn xctest
+    apps/ios-native/build/ios9-logs/{build.log,test.log}
+
+复现命令（两条都自取重活锁 `build/.heavy.lock`，**外面不要**再包同名锁）：
+
+    # macOS 验证宿主（常备，秒级）
+    bash apps/ios-native/Tests/DomainTests/run-tests.sh
+    # iOS 模拟器上的真实目标（常备入口，全量六层）
+    bash apps/ios-native/docs/evidence/run-all-tests.sh
+
+本次取证用的「只跑 Domain 一个目标」的 `xcodegen + build-for-testing + simctl spawn xctest` 脚本与日志
+都是 `build/` 下的一次性生成物，不入库（脚本写法照抄 `run-all-tests.sh` 的 `SCHEMES` 单目标版本即可）。
+
+**范围**：`Sources/Domain/` 内的裸 `Double -> Int` 已清零（负例与边界值见
+[NumericRangeGuardTests.swift](../../Tests/DomainTests/NumericRangeGuardTests.swift)）。
+**未修**：`Sources/Contract/ContractCards.swift` 的 `cardByteCount` 走同一条 trap 且同样可达
+（探针实测：`cardType = escalation`、`revision = 1e300` 经 `DeskMapper.map` 即 SIGTRAP）；
+`Sources/Contract/` 属 IOS-1 冻结面，留待 IOS-6/后续处理。
 
 ### 已知的材料来源
 

@@ -102,10 +102,19 @@ public enum AttributedValue<Value: Hashable & Sendable>: Hashable, Sendable {
     public var note: String? {
         switch self {
         case .exact: return nil
-        case let .partial(_, share): return "仅覆盖 " + String(Int((share * 100).rounded())) + "%"
+        case let .partial(_, share): return Self.coverageText(share)
         case let .estimated(_, note): return note
         case let .unattributable(reason): return reason
         }
+    }
+
+    /// 覆盖比例 -> 展示文本。**同一类数值陷阱的第二个落点**（审查 C4）：`coveredShare` 是
+    /// 外部给的 Double，比例 -> 百分比的转换在 NaN / ±Inf / 极大值下是 trap 而不是可捕获错误。
+    /// 判不出范围就不编一个百分比，如实说"比例未知"（宁可少说，不说错）。
+    static func coverageText(_ share: Double) -> String {
+        let percent = (share * 100).rounded()
+        guard NumericRangeGuard.isRepresentable(percent) else { return "仅覆盖比例未知" }
+        return "仅覆盖 " + String(Int(percent)) + "%"
     }
 }
 
@@ -180,7 +189,7 @@ public enum AttributedDisplay {
         case let .exact(value):
             return format(value)
         case let .partial(value, share):
-            return format(value) + "（仅覆盖 " + String(Int((share * 100).rounded())) + "%）"
+            return format(value) + "（" + AttributedValue<Value>.coverageText(share) + "）"
         case let .estimated(value, note):
             return "约 " + format(value) + "（估算：" + note + "）"
         case let .unattributable(reason):
