@@ -250,32 +250,45 @@
 
 **为什么把它单列**：这类"实现了但没人调用"的缺口不会报错，只会让人以为能力已在运行时生效。本会话已在门禁、行 id、脚本守卫上发现过同类问题四次。
 
-## 接线台账：tradectl 的工厂函数谁在用（2026-10-01 全仓扫描）
+## 接线台账：tradectl 的工厂函数谁在用（2026-10-02 全仓扫描，按 pnpm wiring:ledger 实测重生成）
 
-**方法**（可复现）：扫 packages/tradectl/src 里所有 export function create*/open* 工厂，再全仓统计其名字的出现次数，分为"生产引用"（src 与 scripts）与"演练引用"（drill/），排除定义文件自身。
+**实测**：合计 26 个工厂：生产已接线 17、仅演练 8、**无调用点 1**
 
-**表格不再手抄**（会烂）：以 `node scripts/wiring-ledger.mjs` 的实时输出为准。2026-10-02（修复轮收尾，HEAD `96a1afd7`）实测：**合计 26 个工厂 / 生产已接线 16 / 仅演练 4 / 无调用点 6**；无调用点清单 = `createPairingClient`、`createRiskGate`、`createCountingVenue`、`createV1Stream`、`createV1StreamForDevice`、`createFrameDecoder`（另有"只有单测引用"单独成行——**单测不构成接线**）。扫描范围**不含 `desktop/`**：桌面壳不是 tradectl 工厂的运行时消费者，将来若直接构造再纳入。该轮把 `createDeskProcess`、`createTriggerPump`、`createMemorySourceRegistry`、`createUdsServer`、`createEdgeGateway`、`createDeviceRegistry` 接进生产路径，并修掉台账正则漏掉 `export async function` 的问题（`createUdsServer`/`createEdgeGateway` 此前不可见）。
+| 工厂 | 生产引用 | 演练引用 | 判定 |
+|---|---|---|---|
+| 工厂函数 | 生产引用 | 演练引用 | 测试引用 |
+| createRiskGate (safe-boot.ts) | 0 | 0 | 2 |
+| createStaticShell (edge.ts) | 1 | 0 | 4 |
+| createMemorySourceRegistry (market-source.ts) | 1 | 0 | 5 |
+| createTokenBucket (alignment.ts) | 2 | 0 | 2 |
+| createClockDriftDetector (clock-drift.ts) | 2 | 0 | 8 |
+| createVenueErrorStreak (detectors.ts) | 0 | 2 | 4 |
+| createIdempotencyLedger (idempotency.ts) | 2 | 0 | 2 |
+| createWatchdog (watchdog.ts) | 0 | 2 | 2 |
+| createFrameDecoder (frame-codec.ts) | 3 | 0 | 5 |
+| createPairingClient (pairing-client.ts) | 0 | 3 | 2 |
+| createCountingVenue (shadow.ts) | 0 | 3 | 2 |
+| createShadowDesk (shadow.ts) | 0 | 4 | 2 |
+| createThrottledFanout (triggers.ts) | 4 | 0 | 8 |
+| createTriggerPump (pump.ts) | 5 | 0 | 4 |
+| createDeskProcess (desk-process.ts) | 2 | 4 | 4 |
+| createV1StreamForDevice (stream-v1.ts) | 0 | 6 | 3 |
+| createUdsServer (uds.ts) | 3 | 3 | 2 |
+| openRiskAllowedFor (risk-gate.ts) | 5 | 2 | 8 |
+| createV1Stream (stream-v1.ts) | 0 | 7 | 5 |
+| createDeskLoop (desk-loop.ts) | 3 | 6 | 9 |
+| createDeviceRegistry (edge.ts) | 2 | 7 | 12 |
+| createEdgeGateway (edge.ts) | 2 | 8 | 10 |
+| createStreamingFeed (ws-feed.ts) | 0 | 12 | 4 |
+| createJournal (journal.ts) | 5 | 13 | 26 |
+| createAlignment (alignment.ts) | 3 | 17 | 17 |
+| openLedgers (db.ts) | 2 | 20 | 37 |
 
-**怎么读这张表（重要，别误读成"死代码"）**：
+**清单**：无调用点清单：createRiskGate
 
-- 本仓的方法是**先做成可演练的组件、再由进程装配把它们连起来**。所以"仅演练在用"不是缺陷，而是 **P5 步骤 1 进程装配尚未发生**的正常中间态；
-- **真正需要留意的是"无调用点"那 6 个**：它们连演练都没用上，意味着**没有任何证据表明它们被跑过**（只有单测）。归属：`createPairingClient`（客户端侧，移动端/桌面壳）、`createRiskGate`（需 venue 与对账数据源，等 P4 venue 接入）、`createCountingVenue`（shadow 验收装置）、`createV1Stream`/`createV1StreamForDevice`/`createFrameDecoder`（`/v1` 下行面与 UDS 客户端帧解码，属 P4）。
-- 其中两个可以**在不需要 venue 的前提下先接上**：
-  1. **createClockDriftDetector** —— 环路已经有 probeDir 的先例（自己探盘），同理可以自己采两条时钟并把漂移喂进信号，让 clock-drift 从"有实现"变成"运行时真的会响"；
-  2. **createTriggerPump 与 onBacklog** —— 泵的接线点属进程装配，但其"积压告警写审计"必须随装配一起做（见上一节）。
-
-**装配进展（2026-10-02）**：pump（含 onBacklog 写审计）、memorySourceRegistry、clockDriftDetector、deskLoop、UdsServer、EdgeGateway、DeviceRegistry 已由进程入口/edge 入口在运行时构造；仍待接的是 riskGate / v1Stream / frameDecoder / pairingClient / countingVenue（理由见上）。
-
-### 台账更新（round 149 重跑）
-
-| 项 | 变化 |
-|---|---|
-| createClockDriftDetector | **零调用点 → 生产已接线**（round 148 接进 desk 环路：给了 clockDriftToleranceMs 就每轮自采两条时钟，超容差即降级）|
-| 合计（**历史值，已被上文取代**） | round 149 当时：21 个工厂 / 无调用点 7 / 仅演练 6 / 生产 8 |
-
-> 当前值以上文「表格不再手抄」那段为准（26 / 16 / 4 / 6）；本节保留的是 round 149 的历史快照。
-
-**复现命令**：pnpm wiring:ledger（scripts/wiring-ledger.mjs）—— 输出每个工厂的生产/演练引用数与判定；无调用点的会单独列出清单。
+**复现**：pnpm wiring:ledger（脚本 scripts/wiring-ledger.mjs，自带 3 例自测）。
+**读法**：生产引用＝src/ 下被非定义文件引用；仅演练＝只在 drill/test 里用；无调用点＝需要装配或需要给出理由。
+**2026-10-02 更正**：createFrameDecoder 曾被记为「无调用点」，实为**假阴性** —— 唯一调用点在定义文件自身里而脚本排除定义文件；已把帧层拆为 src/frame-codec.ts（行为零变化），引用图自此如实。createRiskGate 仍为无调用点是**正确结论**（唯一 admitter safeBoot 只在演练里跑，且生产里「新增风险」的动作并不存在）。
 
 ## 演练记录：P5 三档验收 · 第 2 档 paper（待执行）
 
