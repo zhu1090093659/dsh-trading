@@ -5,7 +5,7 @@ import Foundation
 /// **只有一个取令牌入口：authorization(ifBoundTo:)** —— 令牌必须与它绑定的 origin 一起被校验，
 /// 不存在"无绑定地取一个令牌"这个动作。未配对或 origin 不匹配一律返回 nil，调用方 fail-closed（不发请求）。
 ///
-/// 这条纪律是"IOS-8：令牌跨源外发"的修复面：此前存在一个无绑定的 `authorization()`，
+/// 这条纪律是"IOS-8：令牌跨源外发"的修复面：此前存在一个无绑定的取令牌入口（不带 ifBoundTo 的那个），
 /// 生产路径用的正是它（安全版本写好了却只有测试在调）。无绑定入口已从协议里删除，
 /// 并由 scripts/ios-native/check-transport-token-binding.mjs 机检禁止它溜回生产代码
 /// （仓内先例：接线台账/门禁比注释可靠）。

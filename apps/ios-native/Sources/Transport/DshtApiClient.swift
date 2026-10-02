@@ -15,7 +15,7 @@ import DshTradingContract
 /// 426 ⇒ clientTooOld。客户端不重试、不伪装成功、不"猜一个成功"。
 ///
 /// **令牌的取用只有一个入口**：tokens.authorization(ifBoundTo: 绑定 origin)。
-/// 无绑定的 authorization() 已从协议删除（IOS-8）：有绑定版本不匹配就是 nil ⇒ 抛错、不发请求，
+/// 无绑定的那个取令牌入口已从协议删除（IOS-8）：有绑定版本不匹配就是 nil ⇒ 抛错、不发请求，
 /// 绝不回落到"拿一份令牌先发出去再说"。
 public final class DshtApiClient: ObservationTransport {
     /// 创建这份客户端时的**配对身份**：绑定 origin + 配对代际。
