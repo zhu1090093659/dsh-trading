@@ -2,7 +2,7 @@
  * 降级语义与「四条禁止的降级」行为测试（§13 #18/#19/#24/#25）。
  * 真文件（kill 状态原子文件）+ 注入时钟，无 mock 无 sleep。
  */
-import { mkdtempSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -212,5 +212,18 @@ describe('核心侧风险闸门与 edge 的 kill 状态联动（§13 #25）', ()
     // Then 放行
     expect(gated.allowed).toBe(true)
     expect(gated.state.reason).toBe('no-state')
+  })
+
+  it('管理员：状态文件读不到（核心组身份 EACCES）时按失活处理，拒绝新增风险（不是 no-state）', () => {
+    // Given edge 写下的 kill 状态，但文件被收走组可读位（三 uid 形态下核心以组身份读 ⇒ EACCES）
+    const path = statePath()
+    writeKillState(path, { killed: false, paused: false, reason: 'dev_ops', atMs: 1 })
+    chmodSync(path, 0o000)
+    // When 核心判定
+    const gated = gateNewRisk(path)
+    // Then fail-closed：拒绝且说明是状态读不出来，而不是当成"没有刹车"
+    expect(gated.allowed).toBe(false)
+    expect(gated.state.killed).toBe(true)
+    expect(gated.state.reason).toContain('kill-state-unreadable')
   })
 })

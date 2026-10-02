@@ -52,19 +52,33 @@ export interface KillState {
   readonly atMs: number
 }
 
-/** 读 kill 状态；文件缺席视为「未 kill」（首次启动的正常状态）。 */
+/**
+ * kill 状态文件的权限：属主读写 + **组只读**。edge 写、执行核以组身份读 —— 写成 0600 会让
+ * 三 uid 形态下的核心读到 EACCES，紧急刹车到不了核心（"假刹车"）。chmod 是显式做的：
+ * writeFileSync 的 mode 会被 UMask=0077 掩掉，靠 mode 参数给不出组可读位。
+ */
+export const KILL_STATE_FILE_MODE = 0o640
+
+/**
+ * 读 kill 状态。**只有文件不存在才算「未 kill」**（首次启动的正常状态）；其余读取失败
+ * （EACCES、坏 JSON、认不出的结构）一律按**已 kill 且已暂停**处理 —— 与看门狗同一不对称纪律：
+ * "读不到刹车状态"与"没有刹车"是两件事，把前者当成后者等于 fail-open，带外 kill 就成了摆设。
+ * @param path - kill 状态文件路径。
+ */
 export function readKillState(path: string): KillState {
   try {
     return JSON.parse(readFileSync(path, 'utf8')) as KillState
-  } catch {
-    return { killed: false, paused: false, reason: 'no-state', atMs: 0 }
+  } catch (error) {
+    if (errnoOf(error) === 'ENOENT') return { killed: false, paused: false, reason: 'no-state', atMs: 0 }
+    return { killed: true, paused: true, reason: 'kill-state-unreadable: ' + (error instanceof Error ? error.message : String(error)), atMs: 0 }
   }
 }
 
-/** 原子写 kill 状态：同目录临时文件 + rename（POSIX 同分区 rename 是原子的）。 */
+/** 原子写 kill 状态：同目录临时文件 + rename（POSIX 同分区 rename 是原子的），落盘为组可读（KILL_STATE_FILE_MODE）。 */
 export function writeKillState(path: string, state: KillState): void {
   const tmp = path + '.tmp-' + String(process.pid)
   writeFileSync(tmp, JSON.stringify(state), { mode: 0o600 })
+  chmodSync(tmp, KILL_STATE_FILE_MODE)
   renameSync(tmp, path)
 }
 

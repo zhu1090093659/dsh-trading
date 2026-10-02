@@ -1,17 +1,19 @@
 /**
  * edge 网关行为测试：真 HTTP（127.0.0.1:0）、真文件、注入时钟、无 mock 无 sleep。
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   A0_PATHS,
+  KILL_STATE_FILE_MODE,
   PAIR_PATH,
   PUBLIC_PATHS,
   createDeviceRegistry,
   createEdgeGateway,
   readKillState,
+  writeKillState,
   type BusinessRouteRegistrar,
   type EdgeGateway,
 } from '../src/edge.ts'
@@ -310,6 +312,68 @@ describe('kill 通路（真实设备：配对 → 运维授予 control → kill�
     // Then 同一条凭据 kill 200，核心读到的状态里记着是哪台设备按的
     expect(killed.status).toBe(200)
     expect(readKillState(f.killStatePath)).toMatchObject({ killed: true, reason: body.deviceId })
+  })
+})
+
+describe('kill 状态文件的刹车可达性（写入组可读 + 读取端 fail-closed）', () => {
+  it('管理员：kill 状态落盘为 0o640（组可读），核心以组身份才读得到', () => {
+    // Given edge 经 HTTP 写下的 kill 状态
+    const f = fixture()
+    const killStatePath = f.killStatePath
+    writeKillState(killStatePath, { killed: true, paused: false, reason: 'dev_ops', atMs: 1 })
+    // When 读文件权限位
+    const mode = statSync(killStatePath).mode & 0o777
+    // Then 组可读位在，且就是 KILL_STATE_FILE_MODE（显式 chmod，不受 UMask 掩蔽）
+    expect(mode).toBe(KILL_STATE_FILE_MODE)
+    expect(mode & 0o040).toBe(0o040)
+  })
+
+  it('管理员：文件读不到（EACCES）按已 kill 且已暂停处理，不再回落 no-state（fail-open 的反面）', () => {
+    // Given 一个已落盘但被收走全部权限的 kill 状态文件（模拟核心组身份读不到）
+    const f = fixture()
+    writeKillState(f.killStatePath, { killed: false, paused: false, reason: 'dev_ops', atMs: 1 })
+    chmodSync(f.killStatePath, 0o000)
+    // When 核心读
+    const state = readKillState(f.killStatePath)
+    // Then fail-closed：killed 与 paused 都为真，原因说明读不出来
+    expect(state).toMatchObject({ killed: true, paused: true })
+    expect(state.reason).toContain('kill-state-unreadable')
+  })
+
+  it('管理员：状态文件损坏（坏 JSON）也按失活处理，不当成未 kill', () => {
+    // Given 一个被截断的 kill 状态文件
+    const f = fixture()
+    writeKillState(f.killStatePath, { killed: false, paused: false, reason: 'dev_ops', atMs: 1 })
+    rmSync(f.killStatePath)
+    writeFileSync(f.killStatePath, '{"killed":tru', { mode: 0o640 })
+    // When 核心读
+    const state = readKillState(f.killStatePath)
+    // Then fail-closed
+    expect(state).toMatchObject({ killed: true, paused: true })
+  })
+
+  it('管理员：文件缺席仍视为未 kill（首次启动的正常状态不被误伤）', () => {
+    // Given 一个从未写过 kill 状态的核心
+    const f = fixture()
+    // When 核心读
+    const state = readKillState(f.killStatePath)
+    // Then 只有 ENOENT 这一条路给 no-state
+    expect(state).toEqual({ killed: false, paused: false, reason: 'no-state', atMs: 0 })
+  })
+
+  it('管理员：端到端 —— kill 落盘后文件变核心不可读，读到的仍是 killed（刹车不因权限丢失而消失）', async () => {
+    // Given 真实配对 → 授 control → kill 的完整通路
+    const f = fixture()
+    const gateway = await f.start()
+    const { device, token } = pair(f)
+    f.registry.grantControl(device.id)
+    const killed = await call(gateway.port, '/a0/kill', token, 'POST')
+    expect(killed.status).toBe(200)
+    // When 模拟三 uid 形态下核心读不到（权限位被收走）后核心再读
+    chmodSync(f.killStatePath, 0o000)
+    const state = readKillState(f.killStatePath)
+    // Then 判定仍是 killed（旧实现在这里回落 no-state，带外 kill 对核心失效）
+    expect(state.killed).toBe(true)
   })
 })
 
