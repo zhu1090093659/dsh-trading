@@ -2,7 +2,7 @@
 
 > 状态：已全部交付并在交付态演进（含纯函数回测引擎、6大经典参考范式、自定义策略与选股器 Host 调度护栏） · 2026-08-31 定稿交付
 > 决策：项目所有者（Mode 2） · 起草：agent 评审
-> 关联：[docs/design/knowledge-graph.md](knowledge-graph.md)（第三 Tab）、[docs/skills-guide.md](../skills-guide.md)（Skill SSOT）、[docs/crypto-slice-plan.md](../archive/crypto-slice-plan.md)（旧回测 non-goal 的反转说明）
+> 关联：[docs/design/knowledge-graph.md](knowledge-graph.md)（第三 Tab）、[docs/guides/skills-guide.md](../guides/skills-guide.md)（Skill SSOT）、[docs/crypto-slice-plan.md](../archive/crypto-slice-plan.md)（旧回测 non-goal 的反转说明）
 
 ## 1. 背景与决策
 

@@ -1,6 +1,6 @@
 # WS4/us/cn/hk 新闻源 spike 证据（#6 子工作流 #1）
 
-- 母文档：docs/analysis-roadmap.md WS4 #1（us/cn/hk 新闻源）——crypto 新闻模式（PR #7 EVIDENCE + PR #8 工具）已验证，本 spike 按「源差异大、需各市场独立验证」复制该模式。
+- 母文档：docs/roadmap/analysis-roadmap.md WS4 #1（us/cn/hk 新闻源）——crypto 新闻模式（PR #7 EVIDENCE + PR #8 工具）已验证，本 spike 按「源差异大、需各市场独立验证」复制该模式。
 - 出口与环境：macOS / 本出口（与 README ToS 表同口径）；抓取时间见 `fetch-timestamp.txt`（2026-08-30T13:56Z 前后）；UA 统一浏览器串（裸 curl UA 部分源被拒）。
 - 纪律：原始响应作 spike 证据（铁律 #5 允许仓内证据）；工具实现只引用元数据（标题/链接/时间），不取正文、不缓存、不再分发。
 

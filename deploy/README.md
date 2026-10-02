@@ -217,7 +217,7 @@ control，什么都没变，不当成撤销成功，消息里给出它当前的�
     结论：通过 / 失败（失败要写回滚到哪一步）
     回滚点：systemctl stop + rm /etc/systemd/system/dsh-trading-*.service；包树回滚到上一版 /opt/dsh-trading
 
-**缺记录即视为未满足**（与 [ops-runbook](../docs/ops-runbook.md) §7 同一口径）；第 0 步台架的输出也要一并留档。
+**缺记录即视为未满足**（与 [ops-runbook](../docs/ops/ops-runbook.md) §7 同一口径）；第 0 步台架的输出也要一并留档。
 
 ## 今天这个形态**不**具备什么（如实标注，别把"能启动"读成"能交易"）
 

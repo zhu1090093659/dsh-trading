@@ -93,7 +93,7 @@ crypto-trader preset（会话级，单预设）
 - **拒绝语义**：host 拒绝（未挂/只读/revision 过期）时 `ConfigForm.mutate`
   resolve `false`（不抛）；写动作必须检查该布尔（client-ui-settings 走
   `requireAccepted`），否则拒绝会被显示成「已保存」。
-- 决策记录：[交易设置 UX note](../.agents/notes/implemented/feature/2026-09-13-trading-settings-ux-grouping.md)。
+- 决策记录：[交易设置 UX note](../../.agents/notes/implemented/feature/2026-09-13-trading-settings-ux-grouping.md)。
 
 ### 2.2 关键语义裁决
 
@@ -316,7 +316,7 @@ task-board 全局锁导致无法另起 web 实例验证；待用户重启 GUI �
    → 新建 crypto-trader 会话工具面 = OKX 全量（8 工具）+ 闸门 OKX 词汇；改回 binance →
    工具面回 Binance 4 工具。
 4. 未装 router 的旧组合（模拟）：连接器 enabled 语义照旧（向后兼容单测）。
-5. 文档同步：README（单预设 + 设置路由 + 兼容性表）、docs/exchange-routing.md
+5. 文档同步：README（单预设 + 设置路由 + 兼容性表）、docs/guides/exchange-routing.md
    （本文）、Agent Note（决策记录）。
 
 ---

@@ -54,4 +54,4 @@
 
 - [ ] `pnpm -r build && pnpm -r test` 全绿；
 - [ ] trading-web profile 重建 file: 副本后全市场回归（spikes/acceptance-all 六项）；
-- [ ] 发现的新坑回填 docs/replication.md §6 与本清单。
+- [ ] 发现的新坑回填 docs/guides/replication.md §6 与本清单。

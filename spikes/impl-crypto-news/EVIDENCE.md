@@ -1,6 +1,6 @@
 # WS2a/WS2b spike：crypto 新闻源验证证据（#3）
 
-- 母文档：`docs/analysis-roadmap.md` WS2a/WS2b；开工指引见 issue #3 owner 评论（2026-08-30）。
+- 母文档：`docs/roadmap/analysis-roadmap.md` WS2a/WS2b；开工指引见 issue #3 owner 评论（2026-08-30）。
 - 出口与环境：macOS / 本出口（与 README ToS 表「本出口实证」同一口径）；抓取时间见
   `fetch-timestamp.txt`（2026-08-30T13:08Z 前后）；UA 统一 `Mozilla/5.0 (Macintosh; …)` 浏览器串
   （裸 curl UA 对部分源有被拒风险，实测各行响应头见 `*.headers`）。

@@ -2,7 +2,7 @@
 
 > 本手册只写**已在代码里存在的东西**，并逐条给出证据或明确标注缺口。
 > 规则：**缺记录即视为未满足**；任何降级语义若拿不出测试或演练证据，就在下表里标红。
-> 上位定义在 [bot-and-auto-trading.md](design/bot-and-auto-trading.md) §13（26 条不变量），本手册不复述理由，只写**怎么操作与怎么核对**。
+> 上位定义在 [bot-and-auto-trading.md](../design/bot-and-auto-trading.md) §13（26 条不变量），本手册不复述理由，只写**怎么操作与怎么核对**。
 
 ## 0. 复述判据（先记住这一条）
 
@@ -40,7 +40,7 @@
 |---|---|---|---|
 | 快环看门狗 | bot 心跳失活即触发 | ✅ **已落地**：`heartbeat.ts` 原子写心跳（环路每轮落一次）+ `watchdog.ts`（独立进程只读心跳文件，**不依赖 agent 存活**）。三条纪律有测试：一次失活只喊一次、**心跳读不到按失活处理（fail-closed，漏报代价不对称）**、恢复也留痕。装配演练第五幕端到端验过 | ✅ |
 | venue 原生条件单 | 保护不依赖 bot 活着且可信 | **无**（未接真实 venue） | ⚠️ **缺口** |
-| systemd | 进程级拉起与看护 | **单元已写、可静态自查**：`deploy/systemd/*.service`（三个 uid）+ 台架 `scripts/systemd-units-check.mjs`（要素/三 uid 分离/硬化/入口产物/路径可达/授权平面六类判据，13 例自测进 `pnpm test:scripts`）；**从未安装** | ⚠️ **未安装**（本机 macOS 无 systemd；建 uid、`systemd-analyze verify`、启动与安装后核对都得人在 Linux 上做 —— 清单与每步记录格式见 [deploy/README](../deploy/README.md)『安装』。2026-10-02 台架在现单元上判红 1 处：宿主 home 落在核心 0700 StateDirectory 里，装之前先修） |
+| systemd | 进程级拉起与看护 | **单元已写、可静态自查**：`deploy/systemd/*.service`（三个 uid）+ 台架 `scripts/systemd-units-check.mjs`（要素/三 uid 分离/硬化/入口产物/路径可达/授权平面六类判据，13 例自测进 `pnpm test:scripts`）；**从未安装** | ⚠️ **未安装**（本机 macOS 无 systemd；建 uid、`systemd-analyze verify`、启动与安装后核对都得人在 Linux 上做 —— 清单与每步记录格式见 [deploy/README](../../deploy/README.md)『安装』。2026-10-02 台架在现单元上判红 1 处：宿主 home 落在核心 0700 StateDirectory 里，装之前先修） |
 
 **准确说法（2026-10-02 更新）**：第一层（快环看门狗）**已落地并经演练**；第二层（venue 原生条件单）**载体仍缺**；第三层（systemd）**单元与静态台架已就绪、但从未安装**（macOS 本机跑不了 `systemd-analyze verify`，也没有任何一次真实拉起）⇒ 它在真实主机上**仍未验证**，装之前要先过台架的判据与安装后核对。**触发语义的策略分支早已存在且有测试** —— 所以 P5 步骤 1 要补的是**载体与接线**，不是从零发明语义。这仍然**是本手册里最大的风险点**，也是 P5 步骤 1 的前提之一：设计文档写明"凡可能进入 `halt` 的场景，保护性订单必须已经存在于 venue 侧……否则最严状态就是陷阱"。因此在 dead-man 与 venue 原生条件单落地之前，**`halt` 自动降级为 `reduce_only`** 这条规则必须保持有效。
 
@@ -290,18 +290,18 @@
 **读法**：生产引用＝src/ 下被非定义文件引用；仅演练＝只在 drill/test 里用；无调用点＝需要装配或需要给出理由。
 **2026-10-02 更正**：createFrameDecoder 曾被记为「无调用点」，实为**假阴性** —— 唯一调用点在定义文件自身里而脚本排除定义文件；已把帧层拆为 src/frame-codec.ts（行为零变化），引用图自此如实。createRiskGate 仍为无调用点是**正确结论**（唯一 admitter safeBoot 只在演练里跑，且生产里「新增风险」的动作并不存在）。
 
-## 演练记录：P5 三档验收 · 第 2 档 paper（待执行）
+## 演练记录：P5 三档验收 · 第 2 档 paper（已通过 2026-10-02，记录见下）
 
-**状态：未执行。** 前置条件都在人这一侧：在 OKX 模拟盘单独创建 demo key（三项），并运行。
+**状态：已通过。** 判定与档位状态的家在 docs/roadmap/p5-acceptance-checklist.md 的「三档现状」表；本节只承载执行记录本体。
 
 **判据与入口**（不在此重述，一个事实只有一个家）：
 - 准入与验收判据、设凭证前后的对照基线（92 passed | 2 skipped → 期望 94 passed | 0 skipped）、
-  routing 证据要求：见 docs/p5-acceptance-checklist.md；
+  routing 证据要求：见 docs/roadmap/p5-acceptance-checklist.md；
 - OKX 机制本身（header 级模拟盘开关、同域名、demo key 不过期、凭证三 ref、只勾 Read+Trade）：
-  见 docs/okx-integration.md。
+  见 docs/guides/okx-integration.md。
 
 **执行后**：按本手册 §7 的登记格式，把记录（时间、命令、输出、含 x-simulated-trading 的证据、
-异常与处置）写在本节下方，并更新 docs/p5-acceptance-checklist.md 的三档现状表。
+异常与处置）写在本节下方，并更新 docs/roadmap/p5-acceptance-checklist.md 的三档现状表。
 
 ### 第 2 档执行记录（2026-10-02 11:37，agent 执行，凭证由人提供）
 

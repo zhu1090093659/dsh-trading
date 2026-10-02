@@ -39,7 +39,7 @@
 
 **前提（卡片硬要求）**：必须构造"**我方全挂**"的前提 —— 业务面、行情、agent 层都不可用时，退出路径仍然有效。**无记录即视为未满足**；`halt` 在无法触达 venue 时自动降级为 `reduce_only`。
 
-演练步骤与记录格式见 `docs/ops-runbook.md`（kill switch 四级 / dead-man 三层 / 演练记录格式）。**执行者必须是人**，agent 只能准备与核对。
+演练步骤与记录格式见 `docs/ops/ops-runbook.md`（kill switch 四级 / dead-man 三层 / 演练记录格式）。**执行者必须是人**，agent 只能准备与核对。
 
 ## agent 能做与不能做
 
@@ -69,8 +69,8 @@
 
 | 档 | 状态 | 证据 / 复现 |
 |---|---|---|
-| 1. shadow | **已完成** | 10 分钟真实行情验收（消息 4864 / 坏帧 0 / 全程 aligned / tick 238 / 从未 halt / 退出码 0）；记录见 docs/ops-runbook.md 的"演练记录"节；**一条命令复现**：node scripts/e2e-smoke.mjs --with-network（30 秒版）|
-| 2. paper | **已通过（2026-10-02）** | 带真实 demo 凭据复跑：Test Files 8 passed (8) / **Tests 94 passed (94)、0 skipped**（GET balance 1145ms、GET positions 328ms，均带 x-simulated-trading）；记录见 docs/ops-runbook.md 第 2 档执行记录。人这一侧：把经对话传递的 demo key 作废重建 |
+| 1. shadow | **已完成** | 10 分钟真实行情验收（消息 4864 / 坏帧 0 / 全程 aligned / tick 238 / 从未 halt / 退出码 0）；记录见 docs/ops/ops-runbook.md 的"演练记录"节；**一条命令复现**：node scripts/e2e-smoke.mjs --with-network（30 秒版）|
+| 2. paper | **已通过（2026-10-02）** | 带真实 demo 凭据复跑：Test Files 8 passed (8) / **Tests 94 passed (94)、0 skipped**（GET balance 1145ms、GET positions 328ms，均带 x-simulated-trading）；记录见 docs/ops/ops-runbook.md 第 2 档执行记录。人这一侧：把经对话传递的 demo key 作废重建 |
 | 3. 小额 live | 未开始 | 准入见上文；**需你**：主网凭证 + 人工签署授权 + 金额上限 + 在环承诺 |
 | 带外退出演练 | 未开始 | **必须人在环**；卡片硬要求："我方全挂"前提，无记录即视为未满足 |
 
@@ -149,11 +149,11 @@ connector-okx 自带测试已覆盖 demo/live 边界，**不必新写判据**：
 
 ⇒ **第 2 档的"真的打到模拟盘"以"那 2 条不再跳过、且它们带 x-simulated-trading: 1"为准**（请求头证据由 signature/trade 两条测试在无凭证下也会断言）。把这两次输出贴进验收记录即可对照。
 
-### 机制的家在别处：docs/okx-integration.md
+### 机制的家在别处：docs/guides/okx-integration.md
 
 本节只写**验收怎么判**；OKX 机制本身（header 级模拟盘开关、demo 与实盘 REST 同域名、
 demo key 单独创建且不过期、凭证三 ref 模型、只勾 Read+Trade 绝不勾 Withdraw 的纪律）
-以 **docs/okx-integration.md** 为准，不在此重述（一个事实只有一个家）。
+以 **docs/guides/okx-integration.md** 为准，不在此重述（一个事实只有一个家）。
 
 交叉印证：该文档写明"REST host 相同、完全靠 x-simulated-trading 头区分"，
 与 2026-10-01 在 ccxt 4.5.84 里实测到的行为（setSandboxMode(true) 只加该头、域名不变）一致 ——

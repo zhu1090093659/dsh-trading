@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-docs/analysis-roadmap.md Q2 已裁决：定性分析走「基础工具 + skill 知识」而非宏工具。
+docs/roadmap/analysis-roadmap.md Q2 已裁决：定性分析走「基础工具 + skill 知识」而非宏工具。
 WS1b（#2）交付了 crypto_get_indicators 后，知识层缺一块骨架：Agent 有工具但没有
 「五步怎么走、判读规则是什么、什么情况降置信度」的方法论——不同会话的分析深度与
 格式不可控。

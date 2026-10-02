@@ -29,7 +29,7 @@ runtime 用空闲回环端口启动，不走 wrapper，行为不变。
 
 - `dsh-trading --profile trading-web` 缺省在 127.0.0.1:8888，与主 dsh web 宿主 3080 并存。
 - npm-only 用户没有 wrapper，需自行 `DSH_HOME=~/.dsh-trading dsh --profile trading-web --port 8888`；
-  README 快速开始与 [docs/running.md](../../../../docs/running.md) 已按此写清。
+  README 快速开始与 [docs/ops/running.md](../../../../docs/ops/running.md) 已按此写清。
 - `scripts/refresh-trading-web-profile.sh` 收尾提示改为走缺省端口。
 - 本机已按安装步骤重装 `~/.local/bin/dsh-trading`（与仓库副本逐字节一致）。
 

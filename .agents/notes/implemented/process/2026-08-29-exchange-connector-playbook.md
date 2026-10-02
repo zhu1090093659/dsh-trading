@@ -9,7 +9,7 @@ OKX 接入完成后（connector-okx，第一个真实 TradeService），「接�
 解析、互斥激活注册面、preset isolate 组、单位与错误码坑——这些在 okx 切片中都踩实了，
 但没有任何一处把它们当作「可复制的标准」固化。直接复制 connector-okx 源码会被 OKX
 特有代码（签名体系、instId 词汇、ctVal 换算、错误码表）污染，删改成本高于重写；
-而复制手册（docs/replication.md）只覆盖「市场复制」维度，不含「市场内加交易所」维度。
+而复制手册（docs/guides/replication.md）只覆盖「市场复制」维度，不含「市场内加交易所」维度。
 
 ## Decision
 
@@ -24,7 +24,7 @@ OKX 接入完成后（connector-okx，第一个真实 TradeService），「接�
    （__EXCHANGE_SLUG__/__EXCHANGE__/__ENV_PREFIX__/__MARKET__/__MARKET_CAP__），
    package.json name 与目录 slug 强制一致；目标目录存在默认拒绝；任何未替换 token
    收尾报错终止——不可能产出半展开包。
-3. **docs/connector-playbook.md**：交易所接入手册。一张图列全要动的文件、模板填写
+3. **docs/guides/connector-playbook.md**：交易所接入手册。一张图列全要动的文件、模板填写
    顺序表（7 项 TODO 对照 OKX 参照段）、命名契约对照表、preset 接线规范、测试与
    验收 R 序列、坑清单（含复制手册外的交易所维度坑）。
 

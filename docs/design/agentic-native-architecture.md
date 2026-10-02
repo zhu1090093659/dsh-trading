@@ -2,7 +2,7 @@
 
 > 状态：已全部实现（P0–P6 于 2026-09-01 交付，issue #29–#35 关闭） · 2026-08-31 定稿
 > 决策：项目所有者（Mode 2，五项裁决见 §1.2） · 调研与起草：agent（四路代码调研）
-> 关联：[strategy-tab.md](strategy-tab.md)、[knowledge-graph.md](knowledge-graph.md)、[docs/analysis-roadmap.md](../analysis-roadmap.md)、[docs/skills-guide.md](../skills-guide.md)、Agent Notes：[indicator-plugin-split](../../.agents/notes/implemented/architecture/2026-08-30-indicator-plugin-split.md)、[indicator-agent-tool](../../.agents/notes/implemented/architecture/2026-08-31-indicator-agent-tool.md)、[author-custom-indicators](../../.agents/notes/implemented/feature/2026-08-31-author-custom-indicators.md)、[knowledge-data-plane](../../.agents/notes/implemented/feature/2026-08-31-knowledge-data-plane.md)、[middle-stage-tradingview-views](../../.agents/notes/implemented/architecture/2026-08-30-middle-stage-tradingview-views.md)、[market-data-registry-hot-switch](../../.agents/notes/implemented/architecture/2026-08-30-market-data-registry-hot-switch.md)、[watchlist-add-entry](../../.agents/notes/implemented/architecture/2026-08-31-watchlist-add-entry.md)、[决策记录](../../.agents/notes/implemented/architecture/2026-08-31-agentic-native-plugin-decomposition.md)
+> 关联：[strategy-tab.md](strategy-tab.md)、[knowledge-graph.md](knowledge-graph.md)、[docs/roadmap/analysis-roadmap.md](../roadmap/analysis-roadmap.md)、[docs/guides/skills-guide.md](../guides/skills-guide.md)、Agent Notes：[indicator-plugin-split](../../.agents/notes/implemented/architecture/2026-08-30-indicator-plugin-split.md)、[indicator-agent-tool](../../.agents/notes/implemented/architecture/2026-08-31-indicator-agent-tool.md)、[author-custom-indicators](../../.agents/notes/implemented/feature/2026-08-31-author-custom-indicators.md)、[knowledge-data-plane](../../.agents/notes/implemented/feature/2026-08-31-knowledge-data-plane.md)、[middle-stage-tradingview-views](../../.agents/notes/implemented/architecture/2026-08-30-middle-stage-tradingview-views.md)、[market-data-registry-hot-switch](../../.agents/notes/implemented/architecture/2026-08-30-market-data-registry-hot-switch.md)、[watchlist-add-entry](../../.agents/notes/implemented/architecture/2026-08-31-watchlist-add-entry.md)、[决策记录](../../.agents/notes/implemented/architecture/2026-08-31-agentic-native-plugin-decomposition.md)
 
 ## 1. 背景与决策输入
 
@@ -138,7 +138,7 @@ Bundle（分发面）    base patch insert 行挂载，sync-profile-overrides �
 - 迁移（D3）：客户端启动时若 localStorage 有 `dshtrading.watchlist.v1` 且 host store 为空 → `POST /dshtrading/api/watchlists/import` 一次性导入（幂等：非空拒绝）；localStorage 降级为缓存镜像，不再作为 SSOT。
 - 桥端点：`GET/PUT/POST/DELETE /dshtrading/api/watchlists`（列表与行操作）+ `PUT /dshtrading/api/selection`。
 - 工具（§4.3）+ SSE：`watchlist_add` 后左栏实时出现行情行；`watchlist_select` 驱动中栏切图。
-- 市场规范词汇纪律不变（docs/symbol-vocabulary.md）。
+- 市场规范词汇纪律不变（docs/guides/symbol-vocabulary.md）。
 
 ### 5.3 策略管线（strategies 转双面插件）
 

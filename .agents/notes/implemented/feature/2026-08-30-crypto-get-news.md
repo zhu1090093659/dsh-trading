@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-WS2b（docs/analysis-roadmap.md #3）要交付 `<market>_get_news`：入参 symbol/币种过滤 + 时间窗 + 条数上限，
+WS2b（docs/roadmap/analysis-roadmap.md #3）要交付 `<market>_get_news`：入参 symbol/币种过滤 + 时间窗 + 条数上限，
 输出每条带来源名 + 发布时间 + 链接（Agent 引用溯源）。前置 spike（[PR #7](../../../../spikes/impl-crypto-news/EVIDENCE.md)，spike/ws2b-crypto-news-sources）实测了四类候选源的可达性与数据形态，遗留两个实现前必须回答的问题：新闻工具放哪层（kit 内薄工具 vs 完整 connector 包），以及媒体 RSS 是否引入 XML 依赖。
 
 ## Decision

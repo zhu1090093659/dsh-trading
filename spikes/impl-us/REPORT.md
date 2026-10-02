@@ -1,6 +1,6 @@
 # spikes/impl-us — us 市场复制实测证据（2026-08-31）
 
-执行任务：按 `docs/replication.md` 手册落地 us 市场全链路（connector-stooq + kit-us + us bundle）。
+执行任务：按 `docs/guides/replication.md` 手册落地 us 市场全链路（connector-stooq + kit-us + us bundle）。
 本目录是 Stooq 数据源的真实网络验证证据（任务铁律：ticker/klines 必须真实请求 Stooq）。
 
 ## 环境
@@ -8,7 +8,7 @@
 - 出口：本机默认网络出口（经代理/非常规住宅出口的形态特征见结论 2）。
 - 工具：curl（首轮）、Node 22 全局 fetch（probe 脚本，可复跑：`node stooq-probe.mjs` 等）。
 
-## 结论（逐条对应手册修订，见 docs/replication.md §7）
+## 结论（逐条对应手册修订，见 docs/guides/replication.md §7）
 
 1. **报价端点 `/q/l/` 已不存在（手册事实错误）**。stooq.com 与 stooq.pl 均 404
    「The page you requested does not exist or has been moved」，变体（去 `h` 参数、裸

@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-WS2c（docs/analysis-roadmap.md #4）要给新闻工具加用户自备 key：settings `dshtrading.news.cryptoPanicKey`（可选字段），
+WS2c（docs/roadmap/analysis-roadmap.md #4）要给新闻工具加用户自备 key：settings `dshtrading.news.cryptoPanicKey`（可选字段），
 有 key 时 `crypto_get_news` 走 CryptoPanic 免费层（B 增强），无 key 优雅降级到 WS2b 公共源并在输出注明。
 前置 #3 的 `crypto_get_news`（见 [[2026-08-30-crypto-get-news]]）。而 spike（PR #7）实测 CryptoPanic 在本出口
 **不可用**（免费路径 404 退役、legacy 403、api 网关子域 TLS 重置），因此必须回答：B 源如何在不依赖本出口可达

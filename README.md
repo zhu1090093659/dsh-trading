@@ -17,7 +17,7 @@
 
 [![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.2.0--rc.2-blue.svg)](https://github.com/deepseek-ai)
 [![Markets](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK-green.svg)](#one-terminal-every-market)
-[![Connectors](https://img.shields.io/badge/Connectors-19%2B-orange.svg)](docs/connectors-guide.md)
+[![Connectors](https://img.shields.io/badge/Connectors-19%2B-orange.svg)](docs/guides/connectors-guide.md)
 [![License](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-lightgrey.svg)](LICENSE)
 
 </div>
@@ -154,7 +154,7 @@ pnpm install && pnpm build && pnpm test   # Node per engines (^22.19.0 || >=24.0
 ./scripts/refresh-trading-web-profile.sh  # rebuild the profile's file: package copies
 ```
 
-See [docs/running.md](docs/running.md) for the full run, profile and refresh contract.
+See [docs/ops/running.md](docs/ops/running.md) for the full run, profile and refresh contract.
 
 ## The architecture at a glance
 
@@ -202,7 +202,7 @@ It is an AI-assisted trading terminal, not an unattended live-trading bot. Order
 
 ### Which exchanges, brokers and market data APIs can I connect?
 
-Connectors include Binance, OKX, Bybit and CCXT for crypto; Yahoo Finance, Alpaca and Interactive Brokers for US stocks; Tencent Finance, Eastmoney and MiniQMT for China A-shares; and Longbridge, Futu and Tiger for Hong Kong stocks. Data coverage, trading support, credentials and local gateway requirements vary by connector. See the [connector configuration guide](docs/connectors-guide.md).
+Connectors include Binance, OKX, Bybit and CCXT for crypto; Yahoo Finance, Alpaca and Interactive Brokers for US stocks; Tencent Finance, Eastmoney and MiniQMT for China A-shares; and Longbridge, Futu and Tiger for Hong Kong stocks. Data coverage, trading support, credentials and local gateway requirements vary by connector. See the [connector configuration guide](docs/guides/connectors-guide.md).
 
 ### Do I need API keys to use the terminal?
 
@@ -215,13 +215,13 @@ No. The [PolyForm Noncommercial 1.0.0 license](LICENSE) permits noncommercial us
 ## Documentation
 
 - [Documentation Index](docs/README.md)
-- [Running, profiles & development](docs/running.md)
-- [Connectors onboarding & configuration](docs/connectors-guide.md)
-- [New connector playbook](docs/connector-playbook.md)
-- [Skills architecture](docs/skills-guide.md)
-- [Symbol vocabulary](docs/symbol-vocabulary.md)
-- [Exchange routing & data plane](docs/exchange-routing.md)
-- [Analysis & quant roadmap](docs/analysis-roadmap.md)
+- [Running, profiles & development](docs/ops/running.md)
+- [Connectors onboarding & configuration](docs/guides/connectors-guide.md)
+- [New connector playbook](docs/guides/connector-playbook.md)
+- [Skills architecture](docs/guides/skills-guide.md)
+- [Symbol vocabulary](docs/guides/symbol-vocabulary.md)
+- [Exchange routing & data plane](docs/guides/exchange-routing.md)
+- [Analysis & quant roadmap](docs/roadmap/analysis-roadmap.md)
 - [Architecture decision log](spikes/REVIEW-LOG.md)
 - [中文介绍](README_zh.md)
 

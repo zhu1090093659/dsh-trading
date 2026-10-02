@@ -1,6 +1,6 @@
 【任务 K】connector-okx 实现 R1+R2+R3（dsh-trading OKX 阶段）。你是执行子 agent（headless DSH 会话）。
 
-【必读——按序】docs/okx-integration.md（调研全文，端点/签名/错误映射/凭证模型/并存方案都以它为准）、docs/replication.md、packages/connector-binance/src/{index.ts,rest.ts}（实现范式）、packages/api/src/index.ts（契约）、packages/crypto/src/index.ts（安装器现状）。
+【必读——按序】docs/guides/okx-integration.md（调研全文，端点/签名/错误映射/凭证模型/并存方案都以它为准）、docs/guides/replication.md、packages/connector-binance/src/{index.ts,rest.ts}（实现范式）、packages/api/src/index.ts（契约）、packages/crypto/src/index.ts（安装器现状）。
 
 【主 agent 裁决（替代调研建议的未定项）】
 1. 并存方案采 **B+C**：connector-okx 的 Config 含 `enabled`（默认 **false**）与 connector-binance 互斥激活同一服务键 tradingCryptoMarketData + 同名 crypto_* 工具（binance 不动）；okx 额外 provide `tradingCryptoTrade`（TradeService——crypto 市场第一个真实实现；api 包加 declare module 增强）。

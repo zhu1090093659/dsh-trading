@@ -15,7 +15,7 @@
 
 [![DSH 基线](https://img.shields.io/badge/DSH%20Baseline-0.2.0--rc.2-blue.svg)](https://github.com/deepseek-ai)
 [![市场](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK-green.svg)](#一个终端全市场覆盖)
-[![连接器](https://img.shields.io/badge/Connectors-19%2B-orange.svg)](docs/connectors-guide.md)
+[![连接器](https://img.shields.io/badge/Connectors-19%2B-orange.svg)](docs/guides/connectors-guide.md)
 [![许可](https://img.shields.io/badge/License-PolyForm%20NC%201.0.0-lightgrey.svg)](LICENSE)
 
 </div>
@@ -154,7 +154,7 @@ pnpm install && pnpm build && pnpm test   # Node 见 engines（^22.19.0 || >=24.
 ./scripts/refresh-trading-web-profile.sh  # 重建 profile 里的 file: 包副本
 ```
 
-完整的运行、profile 与刷新契约见 [docs/running.md](docs/running.md)。
+完整的运行、profile 与刷新契约见 [docs/ops/running.md](docs/ops/running.md)。
 
 ## 架构一瞥
 
@@ -201,7 +201,7 @@ pnpm install && pnpm build && pnpm test   # Node 见 engines（^22.19.0 || >=24.
 
 ### 支持哪些交易所、券商和行情 API？
 
-加密货币连接器包括 Binance（币安）、OKX（欧易）、Bybit 和 CCXT；美股包括 Yahoo Finance、Alpaca 和盈透证券 IBKR；A 股包括腾讯财经、东方财富和 MiniQMT；港股包括长桥、富途和老虎。各连接器的行情覆盖、交易能力、凭证及本地网关要求不同，详见[连接器接入与配置指南](docs/connectors-guide.md)。
+加密货币连接器包括 Binance（币安）、OKX（欧易）、Bybit 和 CCXT；美股包括 Yahoo Finance、Alpaca 和盈透证券 IBKR；A 股包括腾讯财经、东方财富和 MiniQMT；港股包括长桥、富途和老虎。各连接器的行情覆盖、交易能力、凭证及本地网关要求不同，详见[连接器接入与配置指南](docs/guides/connectors-guide.md)。
 
 ### 使用前必须配置 API Key 吗？
 
@@ -214,13 +214,13 @@ pnpm install && pnpm build && pnpm test   # Node 见 engines（^22.19.0 || >=24.
 ## 文档
 
 - [文档体系索引与全景导航](docs/README.md)
-- [运行、profile 与本地开发](docs/running.md)
-- [连接器接入与配置指南](docs/connectors-guide.md)
-- [新连接器标准手册](docs/connector-playbook.md)
-- [Skills 架构指南](docs/skills-guide.md)
-- [标的符号规范](docs/symbol-vocabulary.md)
-- [交易所路由与数据平面](docs/exchange-routing.md)
-- [定性分析与量化路线图](docs/analysis-roadmap.md)
+- [运行、profile 与本地开发](docs/ops/running.md)
+- [连接器接入与配置指南](docs/guides/connectors-guide.md)
+- [新连接器标准手册](docs/guides/connector-playbook.md)
+- [Skills 架构指南](docs/guides/skills-guide.md)
+- [标的符号规范](docs/guides/symbol-vocabulary.md)
+- [交易所路由与数据平面](docs/guides/exchange-routing.md)
+- [定性分析与量化路线图](docs/roadmap/analysis-roadmap.md)
 - [架构决策与 Spike 裁决史](spikes/REVIEW-LOG.md)
 - [English README](README.md)
 

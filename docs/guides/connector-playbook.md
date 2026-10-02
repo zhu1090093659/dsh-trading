@@ -1,11 +1,11 @@
 # 交易所连接器接入手册（exchange connector playbook）
 
 **适用范围**：向**已有市场**（crypto/us/cn/hk）接入一个新的交易所（或数据源），使其提供
-行情与（可选）真实交易能力。市场复制（从零新建市场）见 [docs/replication.md](replication.md)，
+行情与（可选）真实交易能力。市场复制（从零新建市场）见 [docs/guides/replication.md](replication.md)，
 两者维度不同：本文是「市场内加一个连接器插件」，复制手册是「市场加一层」。
 
 参照系：**connector-okx**（本仓第一个带真实 `TradeService` 的连接器，
-`docs/okx-integration.md` 是它的完整调研与决策记录；**红宝书**）。
+`docs/guides/okx-integration.md` 是它的完整调研与决策记录；**红宝书**）。
 工具链：**connector-template 模板包 + scripts/new-connector.mjs 生成器**。
 
 ---
@@ -88,7 +88,7 @@ connector-okx 的对应实现段：
 | preset 行 id | `dsh-trading-crypto-connector-bybit-group`（组行）/ `dsh-trading-crypto-connector-bybit`（子行） | crypto-trader yml 先例 |
 | 凭证 ref | `BYBIT_API_KEY` / `BYBIT_DEMO_API_KEY` 等 | 模板默认 `${ENV_PREFIX}_*`（生成器展开） |
 | provider slug | 交易所 slug 本身（如 `bybit`），开放词汇 | 2026-08-30 起 schema 不校验（开放字符串），勿复用他人 slug（注册表同键抛错） |
-| 符号词汇 | 输入接受**市场规范形**（docs/symbol-vocabulary.md：crypto=BTCUSDT、us=AAPL、cn=600519.SH、hk=00700.HK）+ 本所原生形；输出 `Ticker/Order/Position.symbol` 一律规范形 | 2026-08-31 规范词汇：消费方与数据源方言解耦（切换 provider 不报废自选/工具参数） |
+| 符号词汇 | 输入接受**市场规范形**（docs/guides/symbol-vocabulary.md：crypto=BTCUSDT、us=AAPL、cn=600519.SH、hk=00700.HK）+ 本所原生形；输出 `Ticker/Order/Position.symbol` 一律规范形 | 2026-08-31 规范词汇：消费方与数据源方言解耦（切换 provider 不报废自选/工具参数） |
 
 ---
 
@@ -117,7 +117,7 @@ connector-okx 的对应实现段：
 
 - **互斥纪律**：preset 平面同一服务键 `tradingCryptoMarketData` 至多一个连接器
   激活（settings 路由裁决；两个交易连接器并存 = 需要新的服务键/工具名方案，
-  方案 A 后缀命名被否，docs/okx-integration.md §8.2 有完整论证），先讨论再动。
+  方案 A 后缀命名被否，docs/guides/okx-integration.md §8.2 有完整论证），先讨论再动。
 
 ### 4.1 host 面数据行（GUI 行情桥配套，2026-08-30 注册表模式）
 
@@ -186,8 +186,8 @@ loader 只从 patch 行 `name` 解析到的**那个模块**读 `name` / `inject`
 | 模板包别进 bundle | connector-template 只是脚手架源，进依赖会让 profile 装到模板 | 本文 §1 |
 | 工具名别带交易所名 | 闸门正则不认 → 下单工具不挂审批（0ca1ea2 历史教训） | README 定稿 2 |
 | 服务类 private 字段 | TS 编译期 `private`，禁 ECMAScript `#`（realm 代理炸） | README 定稿 5 |
-| demo/live 凭证 | 不通用；按 ref 组分离（模板默认） | docs/okx-integration.md §2 |
-| 时间同步 | 首个签名请求对时 + 50102 重试一次（OKX 先例）；其他所同理加护栏 | docs/okx-integration.md §1 |
+| demo/live 凭证 | 不通用；按 ref 组分离（模板默认） | docs/guides/okx-integration.md §2 |
+| 时间同步 | 首个签名请求对时 + 50102 重试一次（OKX 先例）；其他所同理加护栏 | docs/guides/okx-integration.md §1 |
 | 撤单幂等化 | 「已终态」错误码视作成功——语义是「确保不再成交」 | rest.ts 清单 #6 |
 | 腾讯 K 线响应键回落 | hkfqkline 对无前权事件的代码返回 `day` 而非 `qfqday`（美团 hk03690 实证）——解析必须 qfq 键缺失回落裸键，行结构相同 | connector-tencent rest.ts（2026-08-31） |
 
@@ -198,5 +198,5 @@ loader 只从 patch 行 `name` 解析到的**那个模块**读 `name` / `inject`
 **模板不承诺「填完就能跑」**——它承诺的是：生成结果的结构、命名、闸门、凭证、注册面与
 连接器铁律完全一致，且**可编译可测试**；每个 TODO 都指向 connector-okx 的准确参照段。
 真正的交易所特有逻辑（签名、端点、字段、单位、错误码）是研究 + 实测的产物——先按
-docs/okx-integration.md 的调研结构（官方文档锚点、实现前待验证清单、错误码→词汇映射）
+docs/guides/okx-integration.md 的调研结构（官方文档锚点、实现前待验证清单、错误码→词汇映射）
 做一份该交易所的迷你调研文档放 `docs/`（或追加到连接器 README），再动代码。

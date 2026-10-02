@@ -15,7 +15,7 @@ Status: implemented
 ## Decision
 
 1. **正式接入同花顺官方金融数据服务 (`@dsh-trading/connector-hithink`)**：
-   - 依据 `docs/connector-playbook.md` 新增标准 Cordis 连接器包 `packages/connector-hithink`，直连官方 REST API（`https://fuyao.aicubes.cn`），支持 BYOK 环境变量 `HITHINK_FINANCE_API_KEY`；
+   - 依据 `docs/guides/connector-playbook.md` 新增标准 Cordis 连接器包 `packages/connector-hithink`，直连官方 REST API（`https://fuyao.aicubes.cn`），支持 BYOK 环境变量 `HITHINK_FINANCE_API_KEY`；
    - 遵循统一信封协议 `{code, message, request_id, data}` 与标准 `thscode`（如 `600519.SH`、`000001.SZ`）；
    - 提供行情快照（`getTicker`）、多维估值（`getStockFundamentals`，含市盈率 TTM/MRQ、市净率、市销率、市现率）、涨跌停池（`getLimitUpPool`）、连板天梯（`getLimitUpLadder`）、集合竞价快照（`getAuctionSnapshot`）与标的消歧检索。
 2. **系统路由与设置中心注册**：
@@ -34,7 +34,7 @@ Status: implemented
 4. **扩展 Agent 专属短线情绪工具与技能赋能**：
    - 在 `packages/kit-cn` 新增 `cn_get_limit_up_pool` 与 `cn_get_auction_strength` 工具；
    - 在 `.agents/skills/company-analysis/SKILL.md` 中将同花顺纳入 A 级权威金融数据源；
-   - 在 `docs/connectors-guide.md` 中更新全景接入指引。
+   - 在 `docs/guides/connectors-guide.md` 中更新全景接入指引。
 5. **衍生品指标栏布局重构（对齐 Binance/OKX 顶部紧凑流式胶囊）**：
    - 将原先堆叠在 K 线图左下角的竖向大方块彻底移除，完全释放 K 线主图的纵向高度；
    - 将合约指标条（`DerivativesPane`）嵌入顶部行情统计栏（`css.stats`）右侧，采用单行水平胶囊排布（持仓量、资金费率与倒计时、多空比、大户比、主动买卖比），支持点击跳转全景页签（原「一键发给 Agent」入口已于 2026-09-29 下线，见 [composer 填入入口下线](../simplification/2026-09-29-remove-composer-fill-entries.md)）。

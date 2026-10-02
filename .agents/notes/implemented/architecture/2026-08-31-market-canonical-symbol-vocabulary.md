@@ -13,7 +13,7 @@ OKX invalid instId`。根因是架构缺口：api 契约从未定义市场级规
 
 ## Decision
 
-立规 `docs/symbol-vocabulary.md`（规范先行，用户裁决「先做规范再按规范修复」）：
+立规 `docs/guides/symbol-vocabulary.md`（规范先行，用户裁决「先做规范再按规范修复」）：
 
 1. **消费方只说规范形**：crypto=`BTCUSDT`（大写无分隔，多数派词汇）、us=`AAPL`、
    cn=`600519.SH`、hk=`00700.HK`（5 位补零）；衍生品 `-SWAP` 后缀为预留词汇。

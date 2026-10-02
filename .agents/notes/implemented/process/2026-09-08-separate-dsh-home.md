@@ -54,7 +54,7 @@ Status: implemented
    `profile-config-preflight.sh`、`sync-profile-overrides.mjs`、
    `clean-knowledge-author-tags.mjs` 默认 `~/.dsh-trading`，`DSH_HOME` 可覆盖；
    `spikes/launch.sh` 改走 wrapper；README/README_zh 快速上手加
-   `export DSH_HOME=~/.dsh-trading`；`docs/exchange-routing.md` settings 路径
+   `export DSH_HOME=~/.dsh-trading`；`docs/guides/exchange-routing.md` settings 路径
    同步；`AGENTS.md` 增加「DSH_HOME 分离」铁律行。
 5. **交付流**：跨 7 包联动 → `feat/dsh-home-separation` 分支 + PR（挂 Issue），
    本地 profile 从分支工作树 file: 安装即时生效，合并不阻塞本机使用。

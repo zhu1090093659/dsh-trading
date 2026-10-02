@@ -2,7 +2,7 @@
 
 > 状态：已全部交付并在交付态演进（含 Obsidian tag-hub 拓扑、两级检索、证伪下架与作者别名归一） · 2026-08-31 定稿交付
 > 决策：项目所有者（Mode 2） · 起草：agent 评审
-> 关联：[docs/design/strategy-tab.md](strategy-tab.md)（第二 Tab）、[`.agents/skills/content-insight/`](../../.agents/skills/content-insight/SKILL.md)（内容摄取管线 SSOT）、[docs/skills-guide.md](../skills-guide.md)
+> 关联：[docs/design/strategy-tab.md](strategy-tab.md)（第二 Tab）、[`.agents/skills/content-insight/`](../../.agents/skills/content-insight/SKILL.md)（内容摄取管线 SSOT）、[docs/guides/skills-guide.md](../guides/skills-guide.md)
 
 ## 1. 背景与决策
 
@@ -147,4 +147,4 @@ packages/knowledge/src/
 
 - `.agents/skills/content-insight/`（管线与卡片模板 SSOT）、`references/analysis-framework.md`（五维框架与立场红线）
 - `packages/indicators/src/{custom-fs,tool}.ts` 与 `client-ui-trading/src/index.ts` 的工具注册段（#22 定稿形态）——本设计的实现母版
-- `docs/skills-guide.md`（SSOT 与 sync 机制）
+- `docs/guides/skills-guide.md`（SSOT 与 sync 机制）

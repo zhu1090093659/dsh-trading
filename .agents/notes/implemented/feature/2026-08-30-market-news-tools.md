@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-WS4 #1（docs/analysis-roadmap.md，[#6](https://github.com/zhu1090093659/dsh-trading/issues/6) 子工作流）要按 crypto 新闻模式
+WS4 #1（docs/roadmap/analysis-roadmap.md，[#6](https://github.com/zhu1090093659/dsh-trading/issues/6) 子工作流）要按 crypto 新闻模式
 （[#8](../../../../spikes/impl-crypto-news/EVIDENCE.md) 的 `crypto_get_news` 薄工具）复制到 us/cn/hk。前置 spike
 （[PR #10](../../../../spikes/impl-uscnhk-news/EVIDENCE.md)）实测：us 有两源（Yahoo news API + Google News RSS）、cn 有东财快讯（均 A 级），
 hk 无干净公共源。遗留一个复制期结构性坑：kit-us/kit-cn 的 SDK peer 缺 `@deepseek-ai/dsh-tools`。

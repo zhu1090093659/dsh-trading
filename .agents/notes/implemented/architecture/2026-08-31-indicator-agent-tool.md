@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-docs/analysis-roadmap.md 定稿后开工 WS1a（#1）/ WS1b（#2）。开工前盘点发现两个
+docs/roadmap/analysis-roadmap.md 定稿后开工 WS1a（#1）/ WS1b（#2）。开工前盘点发现两个
 前置判断需要修正：
 
 1. **#1 前提错误**：评审时"技术指标只在 GUI"不成立——`@dsh-trading/indicators`

@@ -8,7 +8,7 @@
 - cordis.patch.yml：保持 `[]` 空层（组合经 dependencies，不持有任何行；注释说明为什么——insert-only 铁律 #1 下 all 不替市场包插行；注意空 patch 必须写 [] 不能纯注释，spikes 已实证）
 - 进 pnpm workspace（packages/* 已覆盖），版本 0.0.0 同族
 
-【交付 2：docs/replication.md —— 市场复制手册】
+【交付 2：docs/guides/replication.md —— 市场复制手册】
 把一个新市场（如 us）从零到验收的全流程写成可勾选 checklist，内容从 crypto 切片的实证提炼：
 1. 建包清单（connector-<券商/数据源>、kit-<market>、<market> bundle 三件，各自的模板来源与最小改动面）
 2. 命名约定（行 id/插件名 dsh-trading-<market>-*；工具名 <market>_*；skill 名 <market>-*；服务键 trading<Market>MarketData；isolate 键=服务名）
@@ -18,4 +18,4 @@
 6. 已知坑清单（从 spikes/REVIEW-LOG.md 汇总：file: 快照、空 patch 写 []、# 私有字段、行 id 命名、agent-presets 行在 web-app 不在 base 等）
 要求：每条注明出处（哪个 spike/commit 实证的），不许编造未验证的机制断言；拿不准的标注「待验证」。
 
-【纪律】只动 packages/all/（新建）与 docs/replication.md（新建）；pnpm install + pnpm -r build 全绿（6 包）；git 提交一个 commit（message: 'feat(all): meta bundle + replication playbook'）；回复 ≤150 字。时间盒 25 分钟。不碰其他包、不发布 npm、不碰 DSH checkout 与 ~/.dsh。
+【纪律】只动 packages/all/（新建）与 docs/guides/replication.md（新建）；pnpm install + pnpm -r build 全绿（6 包）；git 提交一个 commit（message: 'feat(all): meta bundle + replication playbook'）；回复 ≤150 字。时间盒 25 分钟。不碰其他包、不发布 npm、不碰 DSH checkout 与 ~/.dsh。

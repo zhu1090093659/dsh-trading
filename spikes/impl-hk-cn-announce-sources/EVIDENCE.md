@@ -9,7 +9,7 @@
   `titlesearch.xhtml` 为 D 级（JS/CSRF 搜索页）——但只测了 XHTML 页面本身，未测
   页面背后的 JSON servlet；cninfo 从未探测。本 spike 补这两块。
 - 出口与环境：macOS / 本出口；抓取时间见 `fetch-timestamp.txt`；UA 为最小浏览器串
-  （docs/replication.md §9），10s 超时，零伪装；原始响应全部落盘（铁律 #5 允许仓内证据）。
+  （docs/guides/replication.md §9），10s 超时，零伪装；原始响应全部落盘（铁律 #5 允许仓内证据）。
 - 脚本：`probe-hkex.mjs` / `probe-cninfo.mjs` / `probe-cninfo-sse.mjs`（可重跑复现）。
 
 ## 分级总表

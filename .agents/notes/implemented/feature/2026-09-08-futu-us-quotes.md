@@ -38,8 +38,8 @@ Status: implemented
 
 - **输入宽容回归（已修）**：分派正则只认「纯数字 / .HK 后缀」，把 Futu 原生形 `HK.00700` 打进美股分支 →
   `TRADING_UNSUPPORTED_SYMBOL`（main 上 `normalizeHkSymbol` 受理该形）。违反
-  docs/symbol-vocabulary.md §2「输入宽容：同时接受规范形与本交易所原生形」。修法：抽出 `HK_FORM`
-  （`^(HK\.)?\d{1,5}(\.HK)?$`）供 `normalizeSymbol`/`toFutuSecurity` 共用，补单测与 `docs/symbol-vocabulary.md`
+  docs/guides/symbol-vocabulary.md §2「输入宽容：同时接受规范形与本交易所原生形」。修法：抽出 `HK_FORM`
+  （`^(HK\.)?\d{1,5}(\.HK)?$`）供 `normalizeSymbol`/`toFutuSecurity` 共用，补单测与 `docs/guides/symbol-vocabulary.md`
   的 futu 行（hk/us 原生形 ↔ 规范形）。实证：`spikes/impl-futu-us/verify-native-hk.mjs`（旁路桥 11113）。
 - **桥 tzdata 可用性（已修）**：`US_TZ = ZoneInfo('America/New_York')` 在 import 期解析，宿主无系统 tz
   库（Windows 未装 tzdata 包）时整个桥起不来、港股面被连带打挂 → 改惰性 `us_tz()`，仅美股请求报可执行错误。

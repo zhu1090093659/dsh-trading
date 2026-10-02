@@ -11,19 +11,9 @@
 - **CI 已接**：ci.yml 的 mobile job 跑 typecheck 与契约测试；**不跑 iOS 构建**（需 macOS runner，留给本地/发布流程）。
 - **未落地**：真机验收、推送服务（APNs/FCM）、生物识别设备验证、弱网。（交付流要求见下文「落仓形态」；本次实际合并未走 PR 与审查 —— 2026-10-02 验收实测。）
 
-## 可行性（已实测，不是推断）
+## 可行性与工程实测
 
-在本机 Xcode 27 上完整跑通：`create-expo-app`（blank 模板）→ `expo prebuild -p ios` → **CocoaPods 安装** → **`xcodebuild` 真编译成功**。
-
-| 项 | 实测值 |
-|---|---|
-| Xcode | 27.0（Build 27A266a）|
-| iOS SDK | 27.0（`iPhoneSimulator27.0.sdk`）|
-| 部署目标 | iOS 16.4（模板默认）|
-| CocoaPods | 1.16.2 |
-| Expo CLI / SDK | `expo@57.0.26`（CLI 自报 57.0.27）|
-| Node | v25.8.1 |
-| 构建结果 | `** BUILD SUCCEEDED **`，`BUILD_EXIT=0`，arm64 + x86_64 模拟器 |
+工具链实测值、构建证据（BUILD SUCCEEDED）与首次引导命令的**家是 [apps/mobile/README.md](../../apps/mobile/README.md)**；本节不再复述，只保留方案决策。
 
 ## 分发方式与代价（需人确认）
 
@@ -44,18 +34,10 @@
 5. CI 只跑 **typecheck + 契约测试**，**不跑 iOS 构建**（避免把 macOS runner 绑进日常 CI）；iOS 构建脚本留给本地/发布流程；
 6. PR 关联 Issue，**至少一个审查批准**后合并 —— 这一步需要人。
 
-## 本地构建命令（已实测）
+## 本地构建命令
 
-```bash
-cd apps/mobile
-npx expo prebuild -p ios          # 生成 ios/（含 pod install）
-xcodebuild -workspace ios/*.xcworkspace -scheme <scheme> \
-  -sdk iphonesimulator -configuration Debug -derivedDataPath /tmp/dd build
-```
+见 [apps/mobile/README.md](../../apps/mobile/README.md) 的「首次引导」与「实测证据」节（家在工程目录，不在此复制）。
 
-## 未验证项（如实标注）
+## 未验证项
 
-- **真机**（本机只有模拟器构建证据；真机签名与部署未验）；
-- 推送（APNs/FCM）只有载荷契约与谓词，**未接真实推送服务**；
-- 生物识别只有谓词与确认策略测试，**未在设备上验证**；
-- 复杂网络/弱网下的驾驶舱与 App 行为未验。
+与 apps/mobile/README.md 的「尚未做」清单同源，**以该清单为准**（真机、推送服务、生物识别、弱网均未验）；本节不另立副本。

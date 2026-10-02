@@ -25,8 +25,8 @@ Status: implemented
 2. **铁律 #5 措辞精确化（README 修订）**：「不缓存」= 不再分发与无差别落盘；
    **用户本地私有缓存允许**（不回传、不共享、不打包进分发物）——回测/量化的历史
    数据落盘按此口径实现即不违规。
-3. **两份收口清单**：`docs/release-checklist.md`（发布前闸门：SDK 钉版解除、合规、
-   license、文档面）与 `docs/upstream-upgrade-checklist.md`（宿主升级对照：复刻构建面/
+3. **两份收口清单**：`docs/ops/release-checklist.md`（发布前闸门：SDK 钉版解除、合规、
+   license、文档面）与 `docs/ops/upstream-upgrade-checklist.md`（宿主升级对照：复刻构建面/
    寄生 UI 面 DOM 锚点清单/机制抽核面/验收）。
 
 ## Alternatives considered

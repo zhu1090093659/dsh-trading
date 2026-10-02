@@ -65,7 +65,7 @@ Status: implemented
 
 - **根入口未重导出 `inject`**：patch 行 `name: '@dshtrading/connector-jin10'` 解析到 `lib/index.js`，而 loader 只从该入口读 `name/inject/Config/apply`。`src/plugin.ts` 里 `export const inject = ['tools']` 有，但 `src/index.ts` 只重导出了 `{ apply, Config, name }` → unbundle 产物把「无模块引用的导出」丢掉（`lib/plugin.js` 的聚合 export 里没有 inject）→ 宿主 `cannot get property "tools" without inject`。**修**：入口重导出 `inject`；并加回归断言「根入口重导出 name/inject/Config/apply」。
 - **数据面行未导出 `Config`**：patch 行不带 `config:` 时，loader 只认**该模块**导出的 schema 补默认值；`dataplane.ts` 当时只 `import type { Config }`，于是 `apply(ctx, undefined)` → `Cannot read properties of undefined (reading 'enabled')`。**修**：`export { Config } from './plugin.js'`（与主行共用同一份 schema，避免默认值漂移）+ `apply(ctx, config?: Partial<Config>)` 对 undefined 给缺省。
-- 教训写进 `docs/connector-playbook.md` §4.2：包内单测直接 `apply(fakeCtx, config)` 不会暴露 loader 元信息缺失——真实宿主启动是这类改动的必要验证面（本轮正是桌面壳启动抓出的）。
+- 教训写进 `docs/guides/connector-playbook.md` §4.2：包内单测直接 `apply(fakeCtx, config)` 不会暴露 loader 元信息缺失——真实宿主启动是这类改动的必要验证面（本轮正是桌面壳启动抓出的）。
 
 ## Verification
 

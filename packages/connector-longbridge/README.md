@@ -7,7 +7,7 @@
 node scripts/new-connector.mjs --slug bybit --title Bybit --market crypto
 ```
 
-生成后按 [docs/connector-playbook.md](../../docs/connector-playbook.md) 的填写顺序
+生成后按 [docs/guides/connector-playbook.md](../../docs/guides/connector-playbook.md) 的填写顺序
 （src/rest.ts 头部清单 7 项）实现 TODO。每个 TODO 的参照段都在 connector-okx
 （packages/connector-okx/），它是本仓第一个真实 TradeService 连接器。
 

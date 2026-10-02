@@ -11,22 +11,33 @@
 ```
 docs/
 ├── README.md                      # 本文档：文档体系全景索引
+├── current-state.md               # ★ 新会话先读：已验收事实、fail-closed 不变量、未完成、文档地图
 ├── design/                        # 核心功能模块架构设计与系统契约
 │   ├── agentic-native-architecture.md  # Agent 原生插件化蓝图（对话驱动一切）
+│   ├── bot-and-auto-trading.md    # Trading Bot 与 GUI 分离目标架构（26 条不变量）
+│   ├── alignment-calibration.md   # 行情对齐三上界实测标定
+│   ├── dsh-seam-inventory.md      # 官方缝清单（三问逐条作答）
 │   ├── strategy-tab.md            # 中栏「策略」板块设计与纯函数本地回测引擎
 │   ├── knowledge-graph.md         # 个人交易知识库与 Obsidian 式力导图谱
 │   └── holdings-ledger.md         # 统一资产台账（Unified Holdings Ledger）设计契约
-├── symbol-vocabulary.md           # 市场规范符号词汇（Market-Canonical Symbol Vocabulary）
-├── exchange-routing.md            # 设置驱动的市场路由与数据平面热插拔
-├── connector-playbook.md          # 交易所连接器接入手册（市场内加源）
-├── replication.md                 # 市场复制手册（从零新建市场）
-├── skills-guide.md                # Agent 技能架构、SSOT 分发与编写指南
-├── connectors-guide.md            # 全市场连接器申请、鉴权与配置全景指引
-├── running.md                     # 运行指引、Profile 管理与独立 Home 契约
-├── release-checklist.md           # 版本发布与分发前门禁检查清单
-├── upstream-upgrade-checklist.md  # DSH 上游 SDK 升级与对照清单
-├── analysis-roadmap.md            # Agent 标的定性分析能力路线图（已结清历史母文档）
-├── okx-integration.md             # OKX API v5 初始调研规格（连接器参照红宝书）
+├── guides/                        # 主题手册（连接器、市场、词汇、技能）
+│   ├── symbol-vocabulary.md       # 市场规范符号词汇（Market-Canonical Symbol Vocabulary）
+│   ├── exchange-routing.md        # 设置驱动的市场路由与数据平面热插拔
+│   ├── connector-playbook.md      # 交易所连接器接入手册（市场内加源）
+│   ├── connectors-guide.md        # 全市场连接器申请、鉴权与配置全景指引
+│   ├── replication.md             # 市场复制手册（从零新建市场）
+│   ├── skills-guide.md            # Agent 技能架构、SSOT 分发与编写指南
+│   └── okx-integration.md         # OKX API v5 初始调研规格（连接器参照红宝书）
+├── ops/                           # 运行、发版与上游升级
+│   ├── running.md                 # 运行指引、Profile 管理与独立 Home 契约
+│   ├── ops-runbook.md             # 运维手册：kill switch、dead-man、演练记录、接线台账
+│   ├── release-checklist.md       # 版本发布与分发前门禁检查清单
+│   └── upstream-upgrade-checklist.md  # DSH 上游 SDK 升级与对照清单
+├── roadmap/                       # 路线图与档位验收
+│   ├── p5-acceptance-checklist.md # P5 三档准入与判据、对照基线
+│   └── analysis-roadmap.md        # Agent 标的定性分析能力路线图（已结清历史母文档）
+├── client/                        # 客户端产物
+│   └── mobile-app-plan.md         # 移动端（P4 ④）落仓方案与实测
 └── archive/                       # 早期研发切片草案归档
     └── crypto-slice-plan.md       # crypto 垂直切片早期草案
 ```
@@ -37,6 +48,8 @@ docs/
 
 这部分文档定义了交易终端的数据模型、双工契约与 Agent 原生交互机制：
 
+0. **[当前状态与交接事实（新会话先读）](current-state.md)** (docs/current-state.md)
+   - 已验收项与复现命令、必须知道的 fail-closed 不变量、未完成与硬停、**文档地图**（一个事实只有一个家的权威索引）。
 1. **[Agent 原生插件化蓝图](design/agentic-native-architecture.md)** (`docs/design/agentic-native-architecture.md`)
    - 阐述「对话驱动一切」的核心架构哲学：Tool × Registry/Store × View 三元组。
    - 规范宿主动态工具注册、Approval 瀑布流拦截与前端卡片接管。
@@ -50,10 +63,10 @@ docs/
 4. **[统一资产台账设计契约](design/holdings-ledger.md)** (`docs/design/holdings-ledger.md`)
    - 规范跨实盘、模拟盘和外部导入截图的资产台账存储模型（`@dshtrading/holdings`）。
    - 规定待确认区（staged）、净持仓回合（FIFO rounds）与 FX 汇率换算契约。
-5. **[市场规范符号词汇](symbol-vocabulary.md)** (`docs/symbol-vocabulary.md`)
+5. **[市场规范符号词汇](./guides/symbol-vocabulary.md)** (`docs/guides/symbol-vocabulary.md`)
    - 确立消费端只认规范符号（`BTCUSDT`、`AAPL`、`600519.SH`、`00700.HK`、`RB2601.SHF`、`XAUUSD`）铁律。
    - 规定各交易所连接器在 REST/WebSocket 边界的双向互译标准。
-6. **[设置驱动的市场路由](exchange-routing.md)** (`docs/exchange-routing.md`)
+6. **[设置驱动的市场路由](./guides/exchange-routing.md)** (`docs/guides/exchange-routing.md`)
    - 确立「一个市场一个预设，由设置决定激活连接器」的单预设架构。
    - 支持数据平面运行时热插拔与免重启生效。
 7. **[Trading Bot 与 GUI 分离、Auto Trading 目标架构](design/bot-and-auto-trading.md)** (`docs/design/bot-and-auto-trading.md`)
@@ -69,13 +82,13 @@ docs/
 
 为开发者与维护者提供向项目横向扩展市场、连接器与 Agent 知识的标准 SOP：
 
-1. **[交易所连接器接入手册](connector-playbook.md)** (`docs/connector-playbook.md`)
+1. **[交易所连接器接入手册](./guides/connector-playbook.md)** (`docs/guides/connector-playbook.md`)
    - 向已有市场接入新数据源/交易网关的全流程（`packages/connector-template` + `scripts/new-connector.mjs`）。
    - 涵盖 REST 管线、签名算法、单位换算陷阱与双路径 dry-run 闸门接线。
-2. **[市场复制手册](replication.md)** (`docs/replication.md`)
+2. **[市场复制手册](./guides/replication.md)** (`docs/guides/replication.md`)
    - 从零新建新市场（Bundle + Kit + Connector + Preset）的全流程。
    - 包含 Cordis 插件包结构、Realm 隔离配置与安装器幂等性验收。
-3. **[Skill 架构与接入指南](skills-guide.md)** (`docs/skills-guide.md`)
+3. **[Skill 架构与接入指南](./guides/skills-guide.md)** (`docs/guides/skills-guide.md`)
    - 遵循「知识与代码分离」（铁律 #2）核心原则。
    - 规范 `.agents/skills/<name>/SKILL.md` 作为单一事实来源（SSOT）自动同步至各市场 Kit 的流水线。
 
@@ -85,14 +98,21 @@ docs/
 
 涵盖真实运行、网络配置、环境切换与发版门禁：
 
-1. **[全市场连接器配置全景指引](connectors-guide.md)** (`docs/connectors-guide.md`)
+1. **[全市场连接器配置全景指引](./guides/connectors-guide.md)** (`docs/guides/connectors-guide.md`)
    - 汇总 A 股、美股、港股、加密、期货和全球品种等 21+ 个连接器的官网、环境变量、申请流程与本地网关桥要求。
-2. **[运行 dsh-trading](running.md)** (`docs/running.md`)
+2. **[运行 dsh-trading](./ops/running.md)** (`docs/ops/running.md`)
    - 独立 Home 目录 `~/.dsh-trading` 隔离规范。
    - 启动命令、`trading-web` 缺省 8888 端口注入、无头 profile 与包热刷新脚本。
-3. **[发布前检查清单](release-checklist.md)** (`docs/release-checklist.md`)
+3. **[发布前检查清单](./ops/release-checklist.md)** (`docs/ops/release-checklist.md`)
    - 从开发态切换到分发态的门禁闸门：PolyForm 许可证、Changeset 版本发布与全市场回归。
-4. **[DSH 上游 SDK 升级检查清单](upstream-upgrade-checklist.md)** (`docs/upstream-upgrade-checklist.md`)
+4. **[DSH 上游 SDK 升级检查清单](./ops/upstream-upgrade-checklist.md)**
+5. **[运维手册](./ops/ops-runbook.md)** (docs/ops/ops-runbook.md)
+   - kill switch 四级、dead-man 三层、演练记录（P5 各档执行记录的家）与接线台账。
+6. **[P5 三档准入清单](./roadmap/p5-acceptance-checklist.md)** (docs/roadmap/p5-acceptance-checklist.md)
+   - shadow / paper / 小额 live 的准入判据、对照基线与三档现状表（档位状态的家）。
+7. **[移动端落仓方案](./client/mobile-app-plan.md)** (docs/client/mobile-app-plan.md)
+   - 移动端落仓形态、分发决策与 CI 策略；工程操作与实测证据在 apps/mobile/README.md。
+ (`docs/ops/upstream-upgrade-checklist.md`)
    - 紧密跟踪官方 `@deepseek-ai/*` SDK 发版（当前基线 0.2.0-rc.2）的抽核、升级与验收指南。
 
 ---
@@ -101,6 +121,6 @@ docs/
 
 记录关键里程碑的探索过程与已结清的母文档：
 
-1. **[定性分析能力路线图](analysis-roadmap.md)** (`docs/analysis-roadmap.md`)：已于 2026-09-04 全部完成的历史定稿，作为任务划分的历史溯源。
-2. **[OKX API v5 集成调研](okx-integration.md)** (`docs/okx-integration.md`)：本仓首个全功能交易连接器的调研红宝书。
+1. **[定性分析能力路线图](./roadmap/analysis-roadmap.md)** (`docs/roadmap/analysis-roadmap.md`)：已于 2026-09-04 全部完成的历史定稿，作为任务划分的历史溯源。
+2. **[OKX API v5 集成调研](./guides/okx-integration.md)** (`docs/guides/okx-integration.md`)：本仓首个全功能交易连接器的调研红宝书。
 3. **[crypto 垂直切片早期草案](archive/crypto-slice-plan.md)** (`docs/archive/crypto-slice-plan.md`)：项目启动初期的范围规划草案。

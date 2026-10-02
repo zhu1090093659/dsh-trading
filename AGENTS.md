@@ -37,8 +37,8 @@ DSH 交易插件 monorepo，按市场组织 bundle（crypto/us/cn/hk）。本文
 
 - 架构、五条铁律、数据源 ToS：[README.md](README.md)。
 - **当前状态与交接事实（先读这个）**：[docs/current-state.md](docs/current-state.md) —— 已验收项与复现命令、必须知道的 fail-closed 不变量、未完成与硬停、文档地图；本机细节见 .local/roadmap/CHECKPOINT.md（gitignored）。
-- 改包结构：[市场复制手册](docs/replication.md)；新增连接器：[接入手册](docs/connector-playbook.md)，先用 `scripts/new-connector.mjs` 生成。
-- 改连接器激活/交易所选择：[设置路由](docs/exchange-routing.md)；查 spike 裁决：[REVIEW-LOG](spikes/REVIEW-LOG.md)。
+- 改包结构：[市场复制手册](docs/guides/replication.md)；新增连接器：[接入手册](docs/guides/connector-playbook.md)，先用 `scripts/new-connector.mjs` 生成。
+- 改连接器激活/交易所选择：[设置路由](docs/guides/exchange-routing.md)；查 spike 裁决：[REVIEW-LOG](spikes/REVIEW-LOG.md)。
 - B站/微信内容提炼：[项目 content-insight](.agents/skills/content-insight/SKILL.md)，只交付请求产物；知识库写入需明确授权与当前工具，禁止直写活 store。
 
 ## 交易会话守则

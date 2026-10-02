@@ -17,7 +17,7 @@ Status: implemented
    三级评分），候选项带市场标签，**点选即加**（addInstrument 带上候选 name，行情行
    直接显示中文名）。
 3. 联想下拉绝对定位悬浮（首版放 flex 行内挤压表单，截图复查发现后改 absolute）。
-4. 词汇纪律：字典 symbol 全部市场规范词汇（docs/symbol-vocabulary.md）。
+4. 词汇纪律：字典 symbol 全部市场规范词汇（docs/guides/symbol-vocabulary.md）。
 
 ## Alternatives considered
 

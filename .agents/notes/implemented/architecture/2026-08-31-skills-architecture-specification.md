@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-确立并落地全仓 **Skill 架构与管理规范**（详见 `docs/skills-guide.md`）：
+确立并落地全仓 **Skill 架构与管理规范**（详见 `docs/guides/skills-guide.md`）：
 
 1. **单一事实来源（SSOT）**：
    - 统一以根目录 `.agents/skills/<skill-name>/SKILL.md` 为唯一标准源，确保所有主流 Agent 工具开箱即用自动加载。
@@ -33,7 +33,7 @@ Status: implemented
 
 ## Consequences
 
-- 产出权威文档：[docs/skills-guide.md](../../../../docs/skills-guide.md) 与索引；
+- 产出权威文档：[docs/guides/skills-guide.md](../../../../docs/guides/skills-guide.md) 与索引；
 - 提供同步工具：`scripts/sync-skills.mjs` 并集成入 root `package.json` 的 `pnpm sync:skills` 和 `pnpm build`；
 - 同步工具自 2026-09-16 起带可分发门禁：源内容是路径指针或低于 512 字节时拒绝写入包资产并使构建失败（[2026-09-16-risk-checklist-pointer-clobber.md](../bug-fix/2026-09-16-risk-checklist-pointer-clobber.md)）；
 - 后续接入 OKX Tradekit 或社区策略时均有据可依，直接在 `.agents/skills/` 下快速扩展。

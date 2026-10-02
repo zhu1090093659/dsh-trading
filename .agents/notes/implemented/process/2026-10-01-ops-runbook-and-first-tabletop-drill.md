@@ -1,6 +1,6 @@
 # 运维手册与首次桌面演练（P5 步骤 3 的首批产出）
 
-日期：2026-10-01 · 产物：[docs/ops-runbook.md](../../../../docs/ops-runbook.md)
+日期：2026-10-01 · 产物：[docs/ops/ops-runbook.md](../../../../docs/ops/ops-runbook.md)
 
 ## 为什么先写它
 

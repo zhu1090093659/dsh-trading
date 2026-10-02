@@ -1,7 +1,7 @@
 # 运行 dsh-trading
 
 本文是运行、profile 与本地开发命令的权威入口。市场复制与新增连接器另见
-[replication.md](replication.md)、[connector-playbook.md](connector-playbook.md)。
+[replication.md](../guides/replication.md)、[connector-playbook.md](../guides/connector-playbook.md)。
 
 ## Home 契约
 

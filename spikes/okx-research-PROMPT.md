@@ -2,7 +2,7 @@
 
 【背景】dsh-trading 四市场插件包已完成（/Users/zcl/code/dsh-trading，README 有架构定稿）。下一阶段：打通真实交易接口，首个目标 OKX。已有设施：@dsh-trading/api 契约（MarketDataService/TradeService 接口、错误词汇）、三段闸门（liveTrading 开关 → dryRun 模拟 → 实盘）、base 审批监听器（<market>_(place|cancel)_order 且 dryRun!==true → ask）、ctx.credentials BYOK 机制（S4 spike 验证过 API 面）。
 
-【调研产出】写 /Users/zcl/code/dsh-trading/docs/okx-integration.md（中文），必须全部基于当前官方文档（用 web_fetch 查 https://www.okx.com/docs-v5/en/ 各页，逐节引用来源 URL），覆盖：
+【调研产出】写 /Users/zcl/code/dsh-trading/docs/guides/okx-integration.md（中文），必须全部基于当前官方文档（用 web_fetch 查 https://www.okx.com/docs-v5/en/ 各页，逐节引用来源 URL），覆盖：
 1. **认证签名**：OK-ACCESS-KEY/SIGN/TIMESTAMP/PASSPHRASE 四头的精确构造（HMAC-SHA256、base64、timestamp 格式、签名串拼接规则 method+path+body）； passphrase 是什么（创建 API key 时自设）；权限分级（读取/交易/提币——我们只需要读取+交易，文档写明不要提币权限）
 2. **模拟盘（关键卖点）**：x-simulated-trading: 1 header 的语义、支持哪些端点、demo 账户如何开通（用户在 OKX 网页开模拟盘 + 创建 demo API key 的流程）；我们 dryRun=false 的「实盘」第一阶段应默认指向模拟盘
 3. **端点清单**（每个给 method+path+关键参数+限频）：公共行情（ticker /api/v5/market/ticker、candles /api/v5/market/candles、资金费率 /api/v5/public/funding-rate）；私有（下单 POST /api/v5/trade/order——ordType 枚举、tdMode cash/cross/isolated 语义；撤单；查单；账户余额 /api/v5/account/balance；持仓 /api/v5/account/positions）

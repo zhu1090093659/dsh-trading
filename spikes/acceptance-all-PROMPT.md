@@ -1,6 +1,6 @@
 【任务 I】多市场联合验收 + @dsh-trading/all 单命令安装验收（dsh-trading 终验）。你是执行子 agent（headless DSH 会话）。
 
-【必读】README.md（验收标准）、spikes/acceptance/REPORT.md（crypto 单市场验收手法——acc-plugin + --patch overlay + 双 agent 隔离对比，直接复用该范式）、spikes/smoke/REPORT.md（profile 创建与 overrides 安装法）、docs/replication.md §5（验收 checklist 市场无关版）。
+【必读】README.md（验收标准）、spikes/acceptance/REPORT.md（crypto 单市场验收手法——acc-plugin + --patch overlay + 双 agent 隔离对比，直接复用该范式）、spikes/smoke/REPORT.md（profile 创建与 overrides 安装法）、docs/guides/replication.md §5（验收 checklist 市场无关版）。
 
 【任务】
 1. 新建 scratch profile `trading-all`：

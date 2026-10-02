@@ -13,7 +13,7 @@
 |---|---|
 | 仓库门禁 | pnpm gates:all ⇒ **16 通过 / 0 失败**（含 build、-r test、覆盖率、typecheck、e2e:smoke 等）|
 | P5 第 1 档 shadow | 10 分钟真实行情验收入册（消息 4864 / 坏帧 0 / 全程 aligned / 从未 halt / 退出码 0）；复现 node scripts/e2e-smoke.mjs --with-network |
-| **P5 第 2 档 paper（OKX）** | 带真实 demo 凭据：Test Files 8 passed / **Tests 94 passed / 0 skipped**；GET balance 1145ms、GET positions 328ms（均带 x-simulated-trading）。记录见 docs/ops-runbook.md「第 2 档执行记录」|
+| **P5 第 2 档 paper（OKX）** | 带真实 demo 凭据：Test Files 8 passed / **Tests 94 passed / 0 skipped**；GET balance 1145ms、GET positions 328ms（均带 x-simulated-trading）。记录见 docs/ops/ops-runbook.md「第 2 档执行记录」|
 | 进程装配 | packages/tradectl/src/desk-process.ts：环路 + 事件泵 + **dry-run 派发**（无下单路径）+ 积压告警入审计；演练 drill/desk-process-shadow.ts 退出码即断言 |
 | 额度上限 | mandate 侧已成**可执行判据**：缺声明 / Infinity / NaN ⇒ 拒绝开新仓（code=no-declared-limit）；0 是合法声明；只约束新增风险 |
 | 凭据语义 | connector-okx：**存在 credentials seam 即 fail-closed**（不再回落 ambient 环境变量）；仅完全无 seam 时回落 process.env |
@@ -57,9 +57,9 @@
 | 项目契约、纪律、硬停 | AGENTS.md |
 | 验收状态、未完成项、不变量（本页） | docs/current-state.md |
 | 目标架构与 26 条不变量 | docs/design/bot-and-auto-trading.md |
-| 运维、kill switch、dead-man、演练记录、接线台账 | docs/ops-runbook.md |
-| P5 三档准入与判据、对照基线 | docs/p5-acceptance-checklist.md |
-| OKX 机制（demo 开关、凭证 ref、权限纪律） | docs/okx-integration.md |
-| 移动端落仓方案与实测 | docs/mobile-app-plan.md |
+| 运维、kill switch、dead-man、演练记录、接线台账 | docs/ops/ops-runbook.md |
+| P5 三档准入与判据、对照基线 | docs/roadmap/p5-acceptance-checklist.md |
+| OKX 机制（demo 开关、凭证 ref、权限纪律） | docs/guides/okx-integration.md |
+| 移动端落仓方案与实测 | docs/client/mobile-app-plan.md |
 | systemd 安装清单 | deploy/README.md |
 | 历史决策（Owning Note） | .agents/notes/implemented/ |
