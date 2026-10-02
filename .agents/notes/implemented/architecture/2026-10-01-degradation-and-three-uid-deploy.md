@@ -6,7 +6,7 @@
 
 | 清单 | 落地成什么 |
 |---|---|
-| #18 四条禁止的降级 | `assertNoForbiddenDegradation(form)`：启动时一次性校验四条，违反即抛 `ForbiddenDegradationError` **拒绝启动**（不是警告后继续）。四条 = 权限不符不得降级为无鉴权／核心不可达不得由宿主自行下单／凭据只住核心侧／独立 uid 不可用必须显式声明为开发形态 |
+| #18 四条禁止的降级 | `assertNoForbiddenDegradation(form)`：启动时一次性校验四条，违反即抛 `ForbiddenDegradationError` **拒绝启动**（不是警告后继续）。四条 = 权限不符不得降级为无鉴权／核心不可达不得由宿主自行下单／凭据只住核心侧／独立 uid 不可用必须显式声明为开发形态。2026-10-02 起这条断言真的在**进程入口** `packages/tradectl/bin/core.mjs` 的启动路径上跑（此前只有单测），退出码 3；其中"凭据只住核心侧"是**实测**：账本目录权限位对组/其他开放即判违规 |
 | #19 控制面不可达 ≠ 授权失效 | `decideDegradation` 把该触发判成 `reduce_only` + `keepProtectiveOrders: true`；dead-man 的触发源单列为 `heartbeat-lost`（我们自己的心跳，不是"手机连不上"）；恢复走 `buildGapReport` |
 | #24 自愈不闩锁 | 单标的触发只降级该标的（`scope: symbol`）；`reduceOnlyForMs > ESCALATE_AFTER_MS`（10 分钟）时 `escalateToHuman: true`；`recoverOnSnapshot()` 回到 `normal` |
 | #25 halt 只由带外触发 | 除 `out-of-band-halt` 外的**八个自动触发全部封顶 `reduce_only`**（有断言逐个验过）；核心下单前用 `gateNewRisk` 重读 edge 写的 kill 文件，中间没有缓存 |
@@ -21,17 +21,22 @@
 
 四条禁止的降级各一条反例 + 全合规放行 + 违规一次性全量列出（不修一条报一条）；八个自动触发逐个断言封顶 `reduce_only`（不含量 halt）；只有带外能得到 halt；控制面不可达保留保护性挂单且原因写明"does NOT invalidate the mandate"；单标的故障作用域正确；超阈值升级到人；新鲜快照回到 aligned；gap report 内容完整且只报变化的持仓（不制造噪声）；带外写入的 kill 让核心拒绝新增风险；状态文件缺席时不误判为 halt。真文件 + 注入时钟，无 mock 无 sleep。
 
-## 部署件（**未安装**，等人工执行）
+## 部署件（**未安装**，等人工执行；2026-10-02 修正为"可执行"）
 
-`deploy/systemd/{dsh-tradectl,dsh-trading-edge,dsh-trading-bot}.service` —— 三个 uid（`dsh-trade-core` / `dsh-trade-edge` / `dsh-trade-bot`）、`UMask=0077`、`ProtectSystem=strict`、edge 只读挂载 kill 状态目录；启动顺序用 `After=/Requires=` 表达：核心先起（safe boot 对账完成才开门）→ edge → 宿主。
+`deploy/systemd/{dsh-tradectl,dsh-trading-edge,dsh-trading-bot}.service` —— 三个 uid（`dsh-trade-core` / `dsh-trade-edge` / `dsh-trade-bot`）、`UMask=0077`、`ProtectSystem=strict`；启动顺序用 `After=/Requires=` 表达：核心先起 → edge → 宿主。
 
-`deploy/README.md` —— 三 uid 各自能碰什么/不能碰什么、权限数值、启动顺序、降级语义、四条禁止的降级、人工安装步骤、**四类演练清单**（断连/重启/核心挂掉/带外退出）。
+`ExecStart` 指向**真实产物**：`/opt/dsh-trading/tradectl/bin/core.mjs` 与 `.../bin/edge.mjs`（部署副本 = 包树含 `bin/` 与构建产物 `lib/`）。旧版写的是 `bin/core.js` / `bin/edge.js` —— 仓库里从来没有这两个文件、也没有任何 package.json 的 `bin` 字段 ⇒ 单元装上也起不来（V2 验收发现 3）。
 
-`deploy/install.sh` —— 刻意**只打印计划不执行**：`bash deploy/install.sh` 的输出是一张待办清单（实测输出四行"会做这些事" + 一句"本脚本不代跑"）。系统级安装不是 agent 该自作主张的动作。
+目录交给 systemd 建（不再依赖手工 `install -d`）：核心 `StateDirectory=dsh-trading`(0700) + `RuntimeDirectory=dsh-tradectl`(0750，UDS socket 目录，#17)；edge `StateDirectory=dsh-trading-a0`(0770)。**kill 状态归 edge 写、核心读**——旧版 edge 单元把它设成 `ReadOnlyPaths=/run/dsh-tradectl` 且无任何可写路径，与 `/a0/kill` 必须 temp+rename 落盘直接矛盾；现在落在 `/var/lib/dsh-trading-a0`（不是 `/run`：kill 状态必须跨 edge 重启存活，丢了等于 kill 被悄悄解除），`bin/edge.mjs` 启动时先探一次目录可写性，写不进去**拒绝启动**（退出码 3）。
+
+`deploy/README.md` —— 三 uid 各自能碰什么/不能碰什么（edge = **写** kill 状态）、权限数值、启动顺序、降级语义、四条禁止的降级、人工安装步骤（含 `/opt/dsh-trading` 包树部署）、**四类演练清单**（断连/重启/核心挂掉/带外退出），以及"今天这个形态**不**具备什么"一节（只实现 shadow、行情/UDS 业务面属 P4、设备注册表不落盘）。
+
+`deploy/install.sh` —— 刻意**只打印计划不执行**：`bash deploy/install.sh` 的输出是一张待办清单（六行"会做这些事" + 一句"本脚本不代跑"）。系统级安装不是 agent 该自作主张的动作。
 
 ## 未验证项（如实标注）
 
-- **三个 uid 与 systemd unit 从未真实安装**：需要 root 且属系统级改动，按路线纪律留给人工执行；因此「uid 隔离生效」这一维**未验证**。断连/重启/核心挂掉三类演练已在**开发形态**下真跑出记录（见下节），第 4 类带外退出仍未演练。
+- **三个 uid 与 systemd unit 从未真实安装**：需要 root 且属系统级改动，按路线纪律留给人工执行；因此「uid 隔离生效」这一维**未验证**（unit 也未跑过 `systemd-analyze verify`，只在 macOS 上静态核对）。断连/重启/核心挂掉三类演练已在**开发形态**下真跑出记录（见下节），第 4 类带外退出仍未演练。
+- **核心入口今天只实现 `--mode=shadow`**：脚本化信号 + dry-run 派发（无下单端口），`--mode=paper|live` 当场拒绝；行情面 / `/v1` 业务面 / UDS 业务帧属 P4 范围（UDS 面对任何帧回 `CORE_SURFACE_NOT_IMPLEMENTED`）。
 - `halt` 依赖 venue 原生条件单/OCO：目标 venue 是否具备**未核实**；按 #25，不具备时 halt 必须降级为 `reduce_only` 并作为接入准入条件。
 - dead-man 的"心跳失活"判定尚未实现（本轮只定义了触发源与封顶规则）。
 - `buildGapReport` 的输入由调用方提供：断连期间的"错过触发/被拒意图"如何采集，属 P3 的接线。

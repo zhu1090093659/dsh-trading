@@ -9,8 +9,14 @@ fi
 
 echo "本脚本会做这些事（当前只打印计划，未执行任何系统改动）："
 echo "  1) groupadd dsh-trade；useradd dsh-trade-core / dsh-trade-edge / dsh-trade-bot"
-echo "  2) 建 /var/lib/dsh-trading (0700, core:dsh-trade) 与 /run/dsh-tradectl (0750)"
-echo "  3) cp deploy/systemd/*.service /etc/systemd/system/ && systemctl daemon-reload"
-echo "  4) 依次 start dsh-tradectl -> dsh-trading-edge -> dsh-trading-bot"
+echo "  2) 部署包树：packages/tradectl -> /opt/dsh-trading/tradectl（含 bin/ 与 lib/，先在仓里 pnpm build）"
+echo "                 deploy           -> /opt/dsh-trading/deploy"
+echo "  3) 目录交给 unit 建（不在本脚本里 install -d）："
+echo "       /var/lib/dsh-trading    0700 core:dsh-trade   (StateDirectory=dsh-trading)"
+echo "       /run/dsh-tradectl       0750 core:dsh-trade   (RuntimeDirectory=dsh-tradectl)"
+echo "       /var/lib/dsh-trading-a0 0770 edge:dsh-trade   (StateDirectory=dsh-trading-a0，kill 状态)"
+echo "  4) cp deploy/systemd/*.service /etc/systemd/system/ && systemctl daemon-reload"
+echo "  5) 依次 start dsh-tradectl -> dsh-trading-edge -> dsh-trading-bot"
+echo "  6) 自查 dsh 启动器在 PATH 上：sudo -u dsh-trade-bot env dsh --version"
 echo
 echo "确认无误后自行执行 deploy/README.md『安装』一节；本脚本不代跑。"

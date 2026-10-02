@@ -49,6 +49,16 @@
 
 修后按名称运行的真实输出：bot 顶层包 54 / 24 个 @dshtrading / **0 个 GUI 平面包 / 0 个 UI 重依赖** / 13.5 MB；GUI 195 / 56 / 8 / 60.7 MB；差 141 包 47.2 MB；**AC1–AC3 通过**。这是在新增加 `@dshtrading/cockpit` 之后重测的 —— 驾驶舱没有污染 bot 闭包。
 
+## 核心与 edge 的进程入口不是 application bin（2026-10-02 补，P5 步骤 1）
+
+`packages/tradectl/bin/core.mjs`（执行核）与 `bin/edge.mjs`（edge 网关）是**库的进程启动器**，不是 §2.2/§2.3 禁的那种 application bin：
+
+- §2.2/§2.3 禁的是**产品面**另起 bin（bot 必须走 `dsh --profile trading-bot` + profile bundle，产品功能进 bundle 不进 bin）；这两个文件不含任何产品功能，只做"读参数 → 用库装配 → 起停"。
+- 核与 edge 是**独立 OS principal 的基础设施进程**（§2.1 三进程 / §13 #2 #16 #18）：把它们做成 dsh profile 行会让它们跑在宿主进程里，"核心与宿主不同 uid"就从结构退化成一句注释（§2.1「诚实边界」）。
+- 形态与既有 `packages/authority/bin/sign-live-trading.mjs` 一致：private 包、不进 `files`、**不声明 `bin` 字段** ⇒ 不是发布出去的应用，只是本仓的进程启动器；`deploy/systemd` 的 `ExecStart` 指向部署副本 `/opt/dsh-trading/tradectl/bin/*.mjs`。
+- 两个入口共用一个 `bin/runtime.mjs` 选实现：`lib/` 比 `src/` 新就用 `lib/`，否则改用源码（Node 类型剥离）——**绝不跑过期构建产物**。
+- `bin/core.mjs` 的 `$DSH_HOME` 判定只认"目录名以 `-trading` 结尾"的家：实测宿主 home（`~/.dsh`）里也有 `profiles/trading-web`，拿"有没有 trading profile"当判据会**恰好放过**最该拦的那一种。
+
 ## 未验证项（如实标注）
 
 - `dsh-trading-role-presets` 仍 pending：bot profile 没有 `agent-preset-registry` 行（那是 `dsh-web-app` 层的），base 的 presets 行等不到 `agentPresets` 服务。步骤 1 只要求"面起得来"，agent 面归后续步骤。
@@ -57,6 +67,7 @@
 
 ## 被否决的方案
 
+- **把核心/edge 也做成 dsh profile 行**（不用库的进程入口）：那会把三个 OS principal 压回一个宿主进程，§2.1 的 uid 分离与 §13 #2 从结构退化成配置约定。
 - **provide 官方服务名 `webServer`/`connection`**：见 why 2，实测 fatal。
 - **在 bot bundle 里整行覆盖 `headless-startup`**：被 `patch-id-gate` R3 挡下，理由成立（bundle patch insert-only）。改为不叠 headless。
 - **给 bot 面加 `registerUpgrade` 假装完整传输**：那会在 WS 通道上制造"能用"的假象，而升级处理并没有实现——属于 §13 意义上的静默降级，不做。

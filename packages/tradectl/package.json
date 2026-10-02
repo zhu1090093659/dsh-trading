@@ -18,7 +18,9 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "test": "vitest run"
+    "test": "vitest run",
+    "core": "node bin/core.mjs",
+    "edge": "node bin/edge.mjs"
   },
   "engines": {
     "node": ">=22.5.0"

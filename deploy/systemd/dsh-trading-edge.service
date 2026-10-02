@@ -1,27 +1,34 @@
-# edge：唯一网络暴露面。最弱权：不碰账本、不碰凭据，只读核心的 kill 状态文件。
+# edge：唯一网络暴露面。最弱权：不碰账本、不碰凭据；**写** A0 的 kill 状态文件（核心只读它）。
+# 与 deploy/README.md 的权限表逐条一致 —— 旧版把这里写成"只读 kill 状态"，与 /a0/kill 必须落盘互相矛盾。
 [Unit]
 Description=dsh-trading edge gateway (the only network exposure; A0 stays up)
-Documentation=file:///Users/zcl/code/dsh-trading/deploy/README.md
+Documentation=file:///opt/dsh-trading/deploy/README.md
 After=dsh-tradectl.service
 Requires=dsh-tradectl.service
 PartOf=dsh-tradectl.service
 
 [Service]
+Type=exec
 User=dsh-trade-edge
 Group=dsh-trade
 Environment=DSH_HOME=/var/lib/dsh-trading
-# 只监听内网/回环，绝不 0.0.0.0（代码里显式拒绝）。
+# 只监听内网/回环，绝不 0.0.0.0（edge 入口与代码里都显式拒绝）。
 Environment=EDGE_BIND=127.0.0.1
+Environment=EDGE_PORT=8899
 UMask=0077
-ExecStart=/usr/bin/env node /opt/dsh-trading/tradectl/bin/edge.js
+# kill 状态目录：归 edge（dsh-trade-edge:dsh-trade, 0770），核心以组身份读。
+# 放在 /var/lib 而不是 /run：kill 状态必须**跨 edge 重启存活**（丢了就等于 kill 被悄悄解除）。
+StateDirectory=dsh-trading-a0
+StateDirectoryMode=0770
+ExecStart=/usr/bin/env node /opt/dsh-trading/tradectl/bin/edge.mjs --kill-state /var/lib/dsh-trading-a0/kill.json
 Restart=always
 RestartSec=2
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-# 只读挂载核心的 kill 状态目录（不需要写）。
-ReadOnlyPaths=/run/dsh-tradectl
+# /a0/kill 落盘是"同目录 temp + rename" ⇒ 目录必须可写；入口启动时先探一次写，写不进去拒绝启动。
+ReadWritePaths=/var/lib/dsh-trading-a0
 
 [Install]
 WantedBy=multi-user.target

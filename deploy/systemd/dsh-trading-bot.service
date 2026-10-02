@@ -1,15 +1,20 @@
 # Agent 宿主：启动顺序在核心 safe boot 完成之后（After= + 核心开门才接受连接）。
+# 形态按设计 §2.2：bot 是 dsh surface（profile 行），不另造 application bin。
 [Unit]
 Description=dsh-trading bot surface (agent host; no credentials, cannot place orders)
-Documentation=file:///Users/zcl/code/dsh-trading/deploy/README.md
+Documentation=file:///opt/dsh-trading/deploy/README.md
 After=dsh-tradectl.service
 Wants=dsh-tradectl.service
 
 [Service]
+Type=exec
 User=dsh-trade-bot
 Group=dsh-trade
 Environment=DSH_HOME=/var/lib/dsh-trading
 Environment=DSH_PROFILE=trading-bot
+# dsh 启动器必须在 PATH 上（安装时自查：sudo -u dsh-trade-bot env dsh --version）；
+# 不在就把它改成绝对路径，别指望 systemd 猜。
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 UMask=0077
 ExecStart=/usr/bin/env dsh --profile trading-bot
 Restart=on-failure

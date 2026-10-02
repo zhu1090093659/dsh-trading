@@ -57,11 +57,20 @@
 
 `migrateTriggers` 按本仓约定挂在 **orders** 库上（audit 是审计流），而我最初把事件泵测试接到了 audit —— 测试能过（表建在哪里都能用），但**示范了错误的接法**。已改为 orders，并加了一行注释说明约定。
 
+## 进程入口：泵真的被一个进程启动了（2026-10-02 补，P5 步骤 1）
+
+`packages/tradectl/bin/core.mjs` 是执行核的进程入口：启动断言（四条禁止的降级 + 两套词汇不相交）→ 带外 kill 闸门（production 形态必填 `--kill-state`，被杀/暂停即拒绝启动）→ **组装 `createDeskProcess`**（环路 + 事件泵 + dry-run 派发 + 积压告警入审计）→（可选）绑 UDS 并**周期调度 `checkIdentity`**（inode 被换 ⇒ 冻结 ⇒ 停机且不重绑）。
+
+- **派发语义只有 dry-run**：入口不构造任何 venue 端口，`--mode=paper|live` 当场拒绝（退出码 2）——"没有下单路径"是装配出来的事实，不是纪律承诺。
+- **泵的驱动换成真实调度器**：`setTimeout` 按 `--interval-ms` 推进，不再是"只在测试里手工 tick"；积压阈值经 `--backlog-warn-threshold` 转交泵的 `onBacklog` ⇒ `trigger.backlog` 进审计（runbook「待接线」第 1 件事落地）。
+- **复现**：`node packages/tradectl/bin/core.mjs --home=<dir> --seed-demo-schedules --run-ms=1500 --interval-ms=200 --backlog-warn-threshold=2`（退出码即断言）；测试 `test/desk-entry.test.ts` 5 例含 SIGTERM 优雅退出。
+- **仍然没做**：与官方 `ctx.agents.get(deskSessionId).followup(...)` 的真实扇出（入口的 dispatch 是 dry-run 记账，真实接线仍落在 bot 宿主进程）；积压折叠开关仍默认关闭。
+
 ## 未验证项（如实标注）
 
 - **与官方 `ctx.agents.get(deskSessionId).followup(...)` 的真实接线未做**：本轮实现的是扇出端口（`FanoutPort`）与节流器，测试用注入的 followup。真实接线要在 bot 宿主进程里落地，属步骤 5（shadow 跑批）的前置。
-- **timer wheel 的驱动频率与 tick 的真实定时器未接**：模块只提供 `tick(nowMs)`（纯函数式推进，测试友好）；进程内的 setInterval/事件泵属接线，未做。
-- **调度表的写入面（谁加调度）未定**：本轮只有 `addSchedule`，编排来源（mandate/风控/宏观日历）属后续步骤。
+- ~~**timer wheel 的驱动频率与 tick 的真实定时器未接**~~（2026-10-02 已接：进程入口按 interval 起真实 `setTimeout`，见上一节）。
+- **调度表的写入面（谁加调度）未定**：本轮只有 `addSchedule`，编排来源（mandate/风控/宏观日历）属后续步骤；入口只在 `--seed-demo-schedules`（演示开关）下种调度，不在生产路径上造调度。
 
 ## 被否决的方案
 

@@ -1,0 +1,178 @@
+#!/usr/bin/env node
+/**
+ * edge 网关的进程入口（§2.1 三进程里的第三个：**唯一对网络暴露的进程**）。
+ *
+ * 它做四件事，其余不做：
+ *   1. **绑定判定**：只接受回环或私网地址（§12.4「只在内网运行，不设公网入口」），
+ *      %%0.0.0.0%% / %%::%% 与公网地址一律拒绝启动；
+ *   2. **kill 状态可写性前置校验**（fail-closed）：%%/a0/kill%% 是"我方全挂时还成立"的那条
+ *      带外通路（§13 #25），而它落盘是**同目录 temp+rename** ⇒ 目录不可写就等于 kill 在最需要
+ *      的时候失败。所以启动时先探一次写，写不进去**拒绝启动**，不是等出事才发现；
+ *   3. **起 %%createEdgeGateway%%**：A0 六端点先于业务面；业务面（%%/v1%%）归 bot/cockpit 后续注册，
+ *      本入口不注册任何业务路由（也就不给"未实现的业务面"制造假象）；
+ *   4. **优雅退出**：SIGINT/SIGTERM 关网关后退出，退出码 0。
+ *
+ * 已知缺口（如实标注，不在这里假装解决）：设备注册表 %%createDeviceRegistry%% 是**进程内**的，
+ * 本入口没有落盘实现 ⇒ edge 重启后设备需要重新配对。这条属于 edge 边界（配对/注册表落盘），
+ * 不在进程装配的范围里。
+ *
+ * 为什么这是"库的可执行入口"而不是设计 §2.2 禁止的"自建 application bin"：同 %%bin/core.mjs%% ——
+ * edge 是独立 OS principal 的基础设施进程，不含任何产品功能，也不进 npm 分发（private 包、无 bin 字段）。
+ *
+ * @module @dshtrading/tradectl/bin/edge
+ */
+import { dirname } from 'node:path'
+
+import { pickImplementation } from './runtime.mjs'
+
+const NL = String.fromCharCode(10)
+
+const VALUE_FLAGS = new Set(['bind', 'port', 'kill-state'])
+const BOOL_FLAGS = new Set(['issue-pairing-code', 'help'])
+
+const USAGE = [
+  '用法：node packages/tradectl/bin/edge.mjs --kill-state=<path> [选项]',
+  '',
+  '  --kill-state=<path>      带外 kill 状态文件（必填：edge 写、核心每次风险判定读）',
+  '  --bind=<host>            监听地址（缺省 $EDGE_BIND，再缺省 127.0.0.1；0.0.0.0/:: 与公网地址拒绝）',
+  '  --port=<n>               端口（缺省 $EDGE_PORT，再缺省 8899）',
+  '  --issue-pairing-code     启动时签发一个配对码并打印（10 分钟有效；缺省不签发）',
+  '  --help',
+].join(NL)
+
+/** 私网/回环判定：§12.4 只在内网运行 —— 公网地址不是"配置错误"，是**架构外**。 */
+function isPrivateBind(host) {
+  if (host === 'localhost' || host === '::1') return true
+  if (/^127\./.test(host)) return true
+  if (/^10\./.test(host)) return true
+  if (/^192\.168\./.test(host)) return true
+  const private172 = /^172\.(\d+)\./.exec(host)
+  if (private172 !== null) {
+    const second = Number(private172[1])
+    if (second >= 16 && second <= 31) return true
+  }
+  return false
+}
+
+function parseArgs(argv) {
+  const values = new Map()
+  const booleans = new Set()
+  const unknown = []
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index]
+    if (!token.startsWith('--')) {
+      unknown.push(token)
+      continue
+    }
+    const eq = token.indexOf('=')
+    const name = eq >= 0 ? token.slice(2, eq) : token.slice(2)
+    if (BOOL_FLAGS.has(name)) {
+      if (eq >= 0) {
+        unknown.push(token)
+        continue
+      }
+      booleans.add(name)
+      continue
+    }
+    if (!VALUE_FLAGS.has(name)) {
+      unknown.push(token)
+      continue
+    }
+    let value = eq >= 0 ? token.slice(eq + 1) : undefined
+    if (value === undefined) {
+      value = argv[index + 1]
+      index += 1
+    }
+    if (value === undefined) {
+      unknown.push(token + '（缺值）')
+      continue
+    }
+    values.set(name, value)
+  }
+  return { values, booleans, unknown }
+}
+
+function fail(message, code) {
+  process.stderr.write('[edge] ' + message + NL)
+  return code
+}
+
+async function main(argv) {
+  const args = parseArgs(argv)
+  if (args.booleans.has('help')) {
+    process.stdout.write(USAGE + NL)
+    return 0
+  }
+  if (args.unknown.length > 0) {
+    return fail('未知参数：' + args.unknown.join('、') + ' —— 未知即放宽，本入口拒绝启动' + NL + USAGE, 2)
+  }
+  const killStatePath = args.values.get('kill-state')
+  if (killStatePath === undefined || killStatePath === '') {
+    return fail('缺少 --kill-state=<path>：A0 kill 落不了盘的 edge 不该启动（fail-closed）' + NL + USAGE, 2)
+  }
+  // 绑定与端口：命令行优先，其次 systemd 单元里那两行 Environment（单一事实，不两处各写一份）。
+  const host = args.values.get('bind') ?? process.env.EDGE_BIND ?? '127.0.0.1'
+  if (!isPrivateBind(host)) {
+    return fail(
+      '拒绝绑定 ' + host + '：edge 只监听回环或私网接口（设计 §12.4 仅内网，无公网入口）。'
+      + '0.0.0.0/:: 与公网地址属架构外，不是"配置问题"。',
+      2,
+    )
+  }
+  const port = Number(args.values.get('port') ?? process.env.EDGE_PORT ?? '8899')
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) return fail('--port 需要一个 1-65535 的整数，收到 ' + String(args.values.get('port')), 2)
+
+  const impl = pickImplementation()
+  const [edge, detectors] = await Promise.all([impl.load('edge'), impl.load('detectors')])
+
+  // kill 状态必须**真的写得进去**（同目录 temp+rename）：写不进去 ⇒ 拒绝启动。
+  const killDir = dirname(killStatePath)
+  const probe = detectors.probeWritable(killDir)
+  if (!probe.writable) {
+    return fail('kill 状态目录不可写（' + killDir + '）：' + probe.reason
+      + '。A0 kill 是最需要时唯一还成立的通路，本入口不允许它在运行期才发现写不进去。', 3)
+  }
+
+  const now = () => Date.now()
+  const registry = edge.createDeviceRegistry({ now })
+  const gateway = await edge.createEdgeGateway({
+    host,
+    port,
+    registry,
+    killStatePath,
+    now,
+    // 业务面（/v1）归 bot/cockpit：本进程不注册任何业务路由 —— 未实现的表面不造假象。
+  })
+
+  let stopping = false
+  const startedAt = Date.now()
+  const stop = async (reason) => {
+    if (stopping) return
+    stopping = true
+    await gateway.close()
+    const state = edge.readKillState(killStatePath)
+    process.stdout.write('[edge] 退出原因=' + reason + ' 运行 ' + String(Date.now() - startedAt) + 'ms' + NL)
+    process.stdout.write('[edge] kill 状态 ' + JSON.stringify(state) + NL)
+    process.exitCode = 0
+  }
+  process.on('SIGINT', () => { void stop('SIGINT') })
+  process.on('SIGTERM', () => { void stop('SIGTERM') })
+
+  process.stdout.write('[edge] 已启动：' + gateway.url + ' 绑定=' + host + ':' + String(port)
+    + ' 实现=' + impl.why + ' kill 状态=' + killStatePath + '（目录可写：' + probe.reason + '）' + NL)
+  process.stdout.write('[edge] A0：' + edge.A0_PATHS.join(' ') + '；设备注册表**进程内**（重启需重新配对，已知缺口）' + NL)
+  if (args.booleans.has('issue-pairing-code')) {
+    const pairing = registry.issuePairingCode()
+    process.stdout.write('[edge] 配对码 ' + pairing.code + '（' + String(Math.round(edge.PAIRING_TTL_MS / 60000)) + ' 分钟内有效；配对只签发 read scope）' + NL)
+  }
+  return 0
+}
+
+main(process.argv.slice(2))
+  .then((code) => {
+    process.exitCode = code
+  })
+  .catch((error) => {
+    process.stderr.write('[edge] 启动失败：' + (error instanceof Error ? error.stack ?? error.message : String(error)) + NL)
+    process.exitCode = 1
+  })

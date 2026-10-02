@@ -5,6 +5,7 @@
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { listFactoryNames } from './wiring-ledger.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
@@ -53,5 +54,46 @@ describe('接线台账脚本', () => {
     const hasList = result.stdout.includes('无调用点清单：')
     // Then 有零调用点就必须有清单；没有就不该有（自洽）
     expect(hasList).toBe(zero > 0)
+  })
+})
+describe('工厂枚举口径（async 与同步同等对待）', () => {
+  it('管理员：枚举同时看得见 export function 与 export async function（V2 验收发现 2 的回归钉）', () => {
+    // Given 一段含同步工厂、async 工厂、open 前缀工厂的源码
+    const source = [
+      'export function createAlpha(): void {}',
+      'export async function createBeta(): Promise<void> {}',
+      'export function openGamma(): void {}',
+      'export async function openDelta(): Promise<void> {}',
+    ].join(String.fromCharCode(10))
+    // When 按台账口径枚举
+    const names = listFactoryNames(source)
+    // Then 四个都点名（第一版正则漏掉全部 async 工厂，台账因此系统性低估未接线面）
+    expect(names).toEqual(['createAlpha', 'createBeta', 'openGamma', 'openDelta'])
+  })
+
+  it('管理员：不把非工厂导出当成工厂（口径只收 create…/open… 函数声明）', () => {
+    // Given 一段只有非工厂导出的源码（async 函数、箭头函数、常量、类型）
+    const source = [
+      'export async function safeBoot(): Promise<void> {}',
+      'export const createArrow = () => undefined',
+      'export function helper(): void {}',
+      'export type createType = string',
+      'const createShadowed = 1',
+    ].join(String.fromCharCode(10))
+    // When 按台账口径枚举
+    const names = listFactoryNames(source)
+    // Then 一个都不收（否则台账会把 helper 之类的东西算成"已接线"，把未接线面稀释掉）
+    expect(names).toEqual([])
+  })
+
+  it('管理员：同一段文本反复枚举结果一致（带 g 的正则不得因 lastIndex 漏匹配）', () => {
+    // Given 一段含 async 工厂的源码
+    const source = 'export async function createBeta(): Promise<void> {}' + String.fromCharCode(10) + 'export function createAlpha(): void {}'
+    // When 连枚举两次
+    const first = listFactoryNames(source)
+    const second = listFactoryNames(source)
+    // Then 两次一致且都看得见 async 工厂（复用同一个带 g 的正则对象会第二次漏掉）
+    expect(first).toEqual(['createBeta', 'createAlpha'])
+    expect(second).toEqual(first)
   })
 })
