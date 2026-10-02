@@ -136,11 +136,43 @@ addCard('action-params-non-string-values', okCard({ actions: [action({ kind: 'ap
 // **UTF-16 边界**：TS 的 String.length 数码元，Swift 的 String.count 数字素簇。
 // 一个 emoji 在 TS 算 2、Swift 算 1 —— 用错单位时"超限"会在 emoji 上漏判。这几条向量就是判据。
 const emoji = '😀'
+const combining = 'e\u0301' // e + combining acute accent (2 UTF-16 code units, 1 grapheme cluster)
+const surrogate = '\uD835\uDC00' // Mathematical Bold Capital A U+1D400 (2 UTF-16 code units, 1 grapheme cluster)
+
 addCard('fallback-emoji-at-limit', okCard({ fallbackText: emoji.repeat(256) }))          // TS length 512
 addCard('fallback-emoji-over-limit', okCard({ fallbackText: emoji.repeat(257) }))         // TS length 514 > 512
 addCard('cardid-emoji-over-limit', okCard({ cardId: emoji.repeat(33) }))                  // TS length 66 > 64
 addCard('label-emoji-over-limit', okCard({ fields: [field({ label: emoji.repeat(33) })] })) // TS length 66 > 64
 addCard('value-emoji-over-limit', okCard({ fields: [field({ value: emoji.repeat(129) })] })) // TS length 258 > 256
+
+// 组合字符与代理对边界向量
+addCard('cardid-combining-over-limit', okCard({ cardId: combining.repeat(33) }))
+addCard('cardid-surrogate-over-limit', okCard({ cardId: surrogate.repeat(33) }))
+addCard('fallback-combining-over-limit', okCard({ fallbackText: combining.repeat(257) }))
+addCard('fallback-surrogate-over-limit', okCard({ fallbackText: surrogate.repeat(257) }))
+addCard('label-combining-over-limit', okCard({ fields: [field({ label: combining.repeat(33) })] }))
+addCard('label-surrogate-over-limit', okCard({ fields: [field({ label: surrogate.repeat(33) })] }))
+addCard('value-combining-over-limit', okCard({ fields: [field({ value: combining.repeat(129) })] }))
+addCard('value-surrogate-over-limit', okCard({ fields: [field({ value: surrogate.repeat(129) })] }))
+
+// 空串与恰在上限边界
+addCard('cardid-empty', okCard({ cardId: '' }))
+addCard('fallback-empty-string', okCard({ fallbackText: '' }))
+addCard('exact-limits-combining', okCard({
+  cardId: combining.repeat(32),
+  fallbackText: combining.repeat(256),
+  fields: [field({ key: 'k', label: combining.repeat(32), value: combining.repeat(128) })],
+}))
+addCard('exact-limits-surrogates', okCard({
+  cardId: surrogate.repeat(32),
+  fallbackText: surrogate.repeat(256),
+  fields: [field({ key: 'k', label: surrogate.repeat(32), value: surrogate.repeat(128) })],
+}))
+
+// 数值域边界：小数与大数 freshnessMs，小数 revision
+addCard('freshness-fractional-accepted', okCard({ freshnessMs: 1200.5 }))
+addCard('freshness-large-number-accepted', okCard({ freshnessMs: 1e12 }))
+addCard('revision-fractional-small', okCard({ revision: 0.25 }))
 addCard('ascii-at-every-string-limit', okCard({
   cardId: 'c'.repeat(64),
   fallbackText: 'f'.repeat(512),
@@ -309,6 +341,18 @@ const validatePushPayload = [
   ['emoji-desk-over-limit', { deskId: '😀'.repeat(33) }],
   ['emoji-fallback-over-limit', { fallbackText: '😀'.repeat(91) }],
   ['emoji-link-over-limit', { deeplink: 'dshtrading://positions/' + '😀'.repeat(128) }],
+  ['combining-desk-over-limit', { deskId: 'e\u0301'.repeat(33) }],
+  ['combining-fallback-over-limit', { fallbackText: 'e\u0301'.repeat(91) }],
+  ['combining-link-over-limit', { deeplink: 'dshtrading://positions/' + 'e\u0301'.repeat(128) }],
+  ['surrogate-desk-over-limit', { deskId: '\uD835\uDC00'.repeat(33) }],
+  ['surrogate-fallback-over-limit', { fallbackText: '\uD835\uDC00'.repeat(91) }],
+  ['surrogate-link-over-limit', { deeplink: 'dshtrading://positions/' + '\uD835\uDC00'.repeat(128) }],
+  ['fractional-expires-in-ms-accepted', { expiresInMs: 1500.5 }],
+  ['fractional-revision-accepted', { revision: 2.75 }],
+  ['zero-revision-accepted', { revision: 0 }],
+  ['exact-limit-combining', { deskId: 'e\u0301'.repeat(32), fallbackText: 'e\u0301'.repeat(90) }],
+  ['exact-limit-surrogates', { deskId: '\uD835\uDC00'.repeat(32), fallbackText: '\uD835\uDC00'.repeat(90) }],
+  ['empty-fallback-string', { fallbackText: '' }],
 ].map(([name, over]) => {
   const payload = { ...pushBase, ...over }
   return { name, payload, expected: C.validatePushPayload(payload) }
@@ -363,10 +407,16 @@ const snapshot = {
     { name: 'revision-1e100-preserved', card: okCard({ revision: 1e100 }) },
     { name: 'revision-max-value-preserved', card: okCard({ revision: Number.MAX_VALUE }) },
     { name: 'revision-1e19-preserved', card: okCard({ revision: 1e19 }) },
+    { name: 'freshness-1200.5-preserved', card: okCard({ freshnessMs: 1200.5 }) },
+    { name: 'freshness-0-preserved', card: okCard({ freshnessMs: 0 }) },
   ].map((entry) => ({
     name: entry.name,
     card: entry.card,
-    expected: { revision: entry.card.revision, valid: C.validateCard(entry.card).valid },
+    expected: {
+      revision: entry.card.revision,
+      freshnessMs: entry.card.freshnessMs ?? null,
+      valid: C.validateCard(entry.card).valid,
+    },
   })),
   // 字段值的 String() 保真：Swift 侧必须把 JSON null 读成 .null（不是 nil）、把字段缺失读成 nil，
   // 且投影出的文本等于 TS 的 String(value)（数组 join / 对象 [object Object] 都在这张表里）。

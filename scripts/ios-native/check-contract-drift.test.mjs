@@ -74,4 +74,35 @@ describe('契约防漂移门禁', () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('红')
   })
+
+  it('管理员：Card.revision 被改回 Int ⇒ 红且点名数值域漂移', () => {
+    // Given 把 Card.revision 从 Double 改回 Int
+    const dir = fixtureContract((files) => ({
+      ...files,
+      'ContractCards.swift': files['ContractCards.swift'].replace('public let revision: Double', 'public let revision: Int'),
+    }))
+    // When 检查
+    const result = check(dir)
+    // Then 拦下并点名
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Card.revision 类型漂移')
+    expect(result.stderr).toContain('红')
+  })
+
+  it('管理员：字符串计量被改成 bare .count ⇒ 红且点名 UTF-16 计量漂移', () => {
+    // Given 把 .utf16.count 改成 .count
+    const dir = fixtureContract((files) => ({
+      ...files,
+      'ContractCards.swift': files['ContractCards.swift'].replace(
+        'card.fallbackText.utf16.count > limits.maxFallbackChars',
+        'card.fallbackText.count > limits.maxFallbackChars',
+      ),
+    }))
+    // When 检查
+    const result = check(dir)
+    // Then 拦下并点名
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('validateCard 字符串计量漂移')
+    expect(result.stderr).toContain('红')
+  })
 })

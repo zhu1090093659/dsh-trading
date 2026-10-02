@@ -193,7 +193,8 @@ public struct Card: Equatable, Sendable, Decodable {
     public let fallbackText: String
     public let fields: [CardField]
     public let actions: [CardAction]
-    public let freshnessMs: Int?
+    /// **Double?**：对齐 TS 的 number（允许小数与极大有限数），不因 Int 解码而截断或失败。
+    public let freshnessMs: Double?
 
     private enum CodingKeys: String, CodingKey {
         case cardId, cardType, revision, fallbackText, fields, actions, freshnessMs
@@ -201,7 +202,7 @@ public struct Card: Equatable, Sendable, Decodable {
 
     public init(
         cardId: String, cardType: String, revision: Double, fallbackText: String,
-        fields: [CardField] = [], actions: [CardAction] = [], freshnessMs: Int? = nil
+        fields: [CardField] = [], actions: [CardAction] = [], freshnessMs: Double? = nil
     ) {
         self.cardId = cardId
         self.cardType = cardType
@@ -210,6 +211,16 @@ public struct Card: Equatable, Sendable, Decodable {
         self.fields = fields
         self.actions = actions
         self.freshnessMs = freshnessMs
+    }
+
+    public init(
+        cardId: String, cardType: String, revision: Double, fallbackText: String,
+        fields: [CardField] = [], actions: [CardAction] = [], freshnessMs: Int?
+    ) {
+        self.init(
+            cardId: cardId, cardType: cardType, revision: revision, fallbackText: fallbackText,
+            fields: fields, actions: actions, freshnessMs: freshnessMs.map(Double.init)
+        )
     }
 
     public init(from decoder: Decoder) throws {
@@ -221,7 +232,7 @@ public struct Card: Equatable, Sendable, Decodable {
         fallbackText = (try? container.decode(String.self, forKey: .fallbackText)) ?? ""
         fields = ((try? container.decodeIfPresent([CardField].self, forKey: .fields)) ?? nil) ?? []
         actions = ((try? container.decodeIfPresent([CardAction].self, forKey: .actions)) ?? nil) ?? []
-        freshnessMs = (try? container.decodeIfPresent(Int.self, forKey: .freshnessMs)) ?? nil
+        freshnessMs = (try? container.decodeIfPresent(Double.self, forKey: .freshnessMs)) ?? nil
     }
 }
 
@@ -255,7 +266,7 @@ private func cardByteCount(_ card: Card) -> Int {
     add("fallbackText", contractJSONString(card.fallbackText))
     add("fields", "[" + card.fields.map(fieldJSON).joined(separator: ",") + "]")
     add("actions", "[" + card.actions.map(actionJSON).joined(separator: ",") + "]")
-    if let freshnessMs = card.freshnessMs { add("freshnessMs", String(freshnessMs)) }
+    if let freshnessMs = card.freshnessMs { add("freshnessMs", contractJSONNumber(freshnessMs)) }
     return jsonObjectText(members).utf8.count
 }
 

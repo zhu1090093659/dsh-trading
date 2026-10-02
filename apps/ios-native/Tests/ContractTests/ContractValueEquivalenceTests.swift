@@ -265,4 +265,107 @@ final class ContractValueEquivalenceTests: XCTestCase {
         let noSnapshot: OfflineSnapshot<String>? = nil
         XCTAssertEqual(stalenessOf(noSnapshot, nowMs: 0, budget: budgets), .unknown)
     }
+
+    // MARK: - UTF-16 码元计量等价性（emoji、组合字符、代理对、空串）
+
+    func testAdminSeesUtf16CountMatchesAuthorityLengthForEmojiCombiningAndSurrogates() throws {
+        // 1. 单个字符计量与 TS .length 对齐
+        let emoji = "😀"
+        let combining = "é" // e + U+0301 combining acute accent
+        let surrogate = "𝐀" // U+1D400 Mathematical Bold Capital A
+        let empty = ""
+
+        XCTAssertEqual(emoji.utf16.count, 2)
+        XCTAssertEqual(emoji.count, 1)
+
+        XCTAssertEqual(combining.utf16.count, 2)
+        XCTAssertEqual(combining.count, 1, "Swift 字符素簇为 1，但 UTF-16 码元必须为 2（对齐 TS .length）")
+
+        XCTAssertEqual(surrogate.utf16.count, 2)
+        XCTAssertEqual(surrogate.count, 1, "代理对在 Swift 字符素簇为 1，但 UTF-16 码元为 2")
+
+        XCTAssertEqual(empty.utf16.count, 0)
+        XCTAssertEqual(empty.count, 0)
+
+        // 2. 组合字符：字素簇数未超限、但 UTF-16 码元超限 ⇒ 必须判非法（不漏判）
+        let combiningCardId = String(repeating: combining, count: 33) // count=33 <= 64, utf16=66 > 64
+        let badCardIdCard = Card(cardId: combiningCardId, cardType: "risk-state", revision: 1, fallbackText: "ok", fields: [], actions: [])
+        XCTAssertFalse(validateCard(badCardIdCard).valid, "组合字符超出 64 码元上限必须判非法")
+
+        let combiningLabel = String(repeating: combining, count: 33) // count=33 <= 64, utf16=66 > 64
+        let badLabelCard = Card(cardId: "c1", cardType: "risk-state", revision: 1, fallbackText: "ok", fields: [CardField(key: "k", label: combiningLabel, kind: "text", rawValue: .text("v"))], actions: [])
+        XCTAssertFalse(validateCard(badLabelCard).valid, "组合字符 label 超出 64 码元上限必须判非法")
+
+        let combiningValue = String(repeating: combining, count: 129) // count=129 <= 256, utf16=258 > 256
+        let badValueCard = Card(cardId: "c1", cardType: "risk-state", revision: 1, fallbackText: "ok", fields: [CardField(key: "k", label: "L", kind: "text", rawValue: .text(combiningValue))], actions: [])
+        XCTAssertFalse(validateCard(badValueCard).valid, "组合字符 value 超出 256 码元上限必须判非法")
+
+        let combiningFallback = String(repeating: combining, count: 257) // count=257 <= 512, utf16=514 > 512
+        let badFallbackCard = Card(cardId: "c1", cardType: "risk-state", revision: 1, fallbackText: combiningFallback, fields: [], actions: [])
+        XCTAssertFalse(validateCard(badFallbackCard).valid, "组合字符 fallbackText 超出 512 码元上限必须判非法")
+
+        // 3. 恰在上限边界（32 个组合字符 = 64 码元，256 个组合字符 = 512 码元）⇒ 必须判合法
+        let exactCombiningCard = Card(
+            cardId: String(repeating: combining, count: 32),
+            cardType: "risk-state",
+            revision: 1,
+            fallbackText: String(repeating: combining, count: 256),
+            fields: [CardField(key: "k", label: String(repeating: combining, count: 32), kind: "text", rawValue: .text(String(repeating: combining, count: 128)))],
+            actions: []
+        )
+        XCTAssertTrue(validateCard(exactCombiningCard).valid, "恰在 UTF-16 上限边界的组合字符必须合法")
+
+        // 4. 推送载荷上的组合字符与代理对上限校验
+        let combiningDesk = String(repeating: combining, count: 33) // 66 > 64
+        let badPush = PushPayload(kind: "escalation", severity: "warning", deskId: combiningDesk, deeplink: "dshtrading://decisions/id", expiresInMs: 1000, fallbackText: "notice", revision: 1)
+        XCTAssertFalse(validatePushPayload(badPush).valid, "推送 deskId 超出 64 码元必须判非法")
+
+        let exactPush = PushPayload(
+            kind: "escalation", severity: "warning",
+            deskId: String(repeating: surrogate, count: 32), // 64 码元
+            deeplink: "dshtrading://positions/p",
+            expiresInMs: 1000,
+            fallbackText: String(repeating: surrogate, count: 90), // 180 码元
+            revision: 1
+        )
+        XCTAssertTrue(validatePushPayload(exactPush).valid, "恰在 64/180 码元上限的代理对推送必须合法")
+    }
+
+    // MARK: - freshnessMs 的保真度与数值域
+
+    func testAdminSeesFreshnessMsPreservedAsDoubleAndDecodedAccurately() throws {
+        // Given 小数与极大有限数 freshnessMs 的 JSON
+        let jsonFractional = #"{"cardId":"c1","cardType":"risk-state","revision":1,"fallbackText":"fb","freshnessMs":1200.5}"#
+        let cardFractional = try JSONDecoder().decode(Card.self, from: Data(jsonFractional.utf8))
+        XCTAssertEqual(cardFractional.freshnessMs, 1200.5, "freshnessMs 必须原样保留小数，不截断成 Int")
+        XCTAssertTrue(validateCard(cardFractional).valid)
+
+        let jsonZero = #"{"cardId":"c1","cardType":"risk-state","revision":1,"fallbackText":"fb","freshnessMs":0}"#
+        let cardZero = try JSONDecoder().decode(Card.self, from: Data(jsonZero.utf8))
+        XCTAssertEqual(cardZero.freshnessMs, 0.0)
+
+        let jsonNil = #"{"cardId":"c1","cardType":"risk-state","revision":1,"fallbackText":"fb"}"#
+        let cardNil = try JSONDecoder().decode(Card.self, from: Data(jsonNil.utf8))
+        XCTAssertNil(cardNil.freshnessMs)
+    }
+
+    // MARK: - Stale 语义与文案（owner 裁决 2026-10-02 / 追加 B.3）
+
+    /// stale 徽标文案与可渲染行为钉在一起：
+    /// 契约面 offlineView 与 TS offline.ts:74 镜像一致；徽标文案写"⚠ 数据陈旧，仅供对照"，
+    /// 但该档位下数据**依然渲染**（kind 为 data 而非 notice），并不阻断操作（仅供对照指参照价值而非禁用）。
+    func testAdminSeesStaleDataRendersWithBadgeAndDoesNotBlock() {
+        let budgets = StalenessBudget(freshMs: 1_000, staleMs: 5_000, ttlMs: 20_000)
+        let snapshot = OfflineSnapshot(data: "cached-data", atMs: 0, sourceId: "src")
+
+        // age = 5000ms ⇒ 恰进入 stale 档位
+        let view = offlineView(snapshot, nowMs: 5_000, budget: budgets)
+        guard case let .data(data, staleness, badge) = view else {
+            return XCTFail("stale 档位必须渲染数据本身（.data），不得降级为 .notice 阻断")
+        }
+        XCTAssertEqual(data, "cached-data")
+        XCTAssertEqual(staleness, .stale)
+        // 文案锁定：TS offline.ts:74 权威镜像，指参照价值
+        XCTAssertEqual(badge, "⚠ 数据陈旧，仅供对照")
+    }
 }

@@ -111,6 +111,9 @@ final class ContractVectorTests: XCTestCase {
             let expected = snapDict(vector["expected"])
             let expectedRevision = (expected["revision"] as? NSNumber)?.doubleValue ?? .nan
             XCTAssertEqual(card.revision, expectedRevision, name + "：revision 必须原样保留")
+            if let expectedFreshnessNum = expected["freshnessMs"] as? NSNumber {
+                XCTAssertEqual(card.freshnessMs, expectedFreshnessNum.doubleValue, name + "：freshnessMs 必须原样保留")
+            }
             XCTAssertEqual(validateCard(card).valid, snapBool(expected["valid"]), name)
         }
     }

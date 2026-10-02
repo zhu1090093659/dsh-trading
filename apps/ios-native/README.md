@@ -162,8 +162,10 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
 
 仓根 `scripts/ios-native/` 有两条**纯 Node** 门禁，跑在 `ci.yml` 的 static-gates job 里：
 
-- `node scripts/ios-native/check-contract-drift.mjs` —— 直接 import TS 契约取权威真值，
-  再从 `Sources/Contract/*.swift` 解析出封闭枚举/查表/上限/常量逐项比对；**解析不出来一律判红**。
+- `node scripts/ios-native/check-contract-drift.mjs` —— **纯 Node 静态防漂移门禁**：直接 import TS 契约取权威真值，
+  解析 `Sources/Contract/*.swift` 的封闭枚举/查表/上限/常量、数值域 Double 规范与 UTF-16 计量规则逐项比对；
+  **解析不出来一律判红**。承诺明确收窄在常量/枚举/查表/类型的静态面（不宣称在 CI 执行 Swift 行为重放）；
+  全部行为向量的动态重放由本地/macOS 上的 `./scripts/test-contract.sh` 承担（遵循本仓 CI 不跑 iOS 构建的既有先例）。
 - `node scripts/ios-native/check-swift-layering.mjs` —— 分层 import 白名单（`Observation` 在名单内，**经 Lead 批准**：
   `@Observable` 是随工具链的标准库宏；`Combine`/`Charts` **未获批准，不在名单内**），越界或新增未登记的分层即红；
   第三方依赖同样拦下。识别**属性前缀与种类词**：`@_exported import SwiftUI`（把禁层模块透传出去）、
@@ -201,10 +203,9 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
 | # | 不变量 | 可执行落点 |
 |---|---|---|
 | 1 | 未知封闭枚举 ⇒ 不可操作（禁用全部 Action，只渲染 `fallbackText`） | `validateCard`/`renderableActions`（[ContractCards.swift](Sources/Contract/ContractCards.swift)）；`testUnknownClosedEnumValuesDisableEveryAction`、`testUnknownCardTypeIsInvalidAndInoperable`；`validateCard`/`renderableActions` 行为向量；[check-contract-drift.mjs](../../scripts/ios-native/check-contract-drift.mjs) 的 rawValue 比对 |
-| 2 | 过期/陈旧数据不渲染数据本身 | `offlineView`（[ContractOffline.swift](Sources/Contract/ContractOffline.swift)）；`testExpiredSnapshotNeverRendersTheDataItself`；`offlineView` 向量；Offline 层单测。**渲染判据是契约面 `StalenessBudget.ttlMs`**，毫秒事实只有一个家（[DataTrust.swift](Sources/Domain/DataTrust.swift) 的 `ObservationStalenessBudget`，`TrustBudget` 由它派生） |
+| 2 | 过期/未知不渲染数据本身 | `offlineView`（[ContractOffline.swift](Sources/Contract/ContractOffline.swift)）；`testExpiredSnapshotNeverRendersTheDataItself`；`offlineView` 向量；Offline 层单测。**渲染判据是契约面 `StalenessBudget.ttlMs`**，毫秒事实只有一个家（[DataTrust.swift](Sources/Domain/DataTrust.swift) 的 `ObservationStalenessBudget`，`TrustBudget` 由它派生） |
 | 3 | 跨源永不混显；切换期只读 | 契约面：`SourceGuard`；`testSourceGuardNeverMixesSourcesAndIsReadOnlyWhileSwitching`；`sourceGuard` 向量；[ContractParityTests.swift](Tests/ContractTests/ContractParityTests.swift)。本地快照面（IOS-7）：来源身份 `SnapshotSourceId`（origin + 配对代际，**不写死**）、`SourceScopedSnapshots.load(sourceId:)` 的来源校验、配对边界 `clear()`；[PairingScopedSnapshotTests.swift](Tests/OfflineTests/PairingScopedSnapshotTests.swift) 的正负例 |
 | 4 | 令牌只发往配对绑定的 origin，跨源**连请求都不发**；重新配对后**旧客户端**一律发不出 | ① [DshtApiClient.swift](Sources/Transport/DshtApiClient.swift) 的四道守卫，顺序即语义（origin → 配对代际 → 取令牌 → 发送）；② 取令牌**只有**带绑定入口 `authorization(ifBoundTo:)`（无绑定版本已删除），[TokenProvider.swift](Sources/Transport/TokenProvider.swift)；③ 配对身份 = 绑定 origin + 配对代际，[PairingIdentity.swift](Sources/Transport/PairingIdentity.swift)（同一身份也决定本地快照的来源，见 #3）；④ 跨源 30x 不跟随（`RedirectPolicyDelegate`）；⑤ 机检 [check-transport-token-binding.mjs](../../scripts/ios-native/check-transport-token-binding.mjs) 把①②③⑤钉成 CI 门禁。**真机未验** |
-| 4 | 令牌只发往配对绑定的 origin，跨源**连请求都不发**；重新配对后**旧客户端**一律发不出 | ① [DshtApiClient.swift](Sources/Transport/DshtApiClient.swift) 的四道守卫，顺序即语义（origin → 配对代际 → 取令牌 → 发送）；② 取令牌**只有**带绑定入口 `authorization(ifBoundTo:)`（无绑定版本已删除），[TokenProvider.swift](Sources/Transport/TokenProvider.swift)；③ 配对身份 = 绑定 origin + 配对代际，[PairingIdentity.swift](Sources/Transport/PairingIdentity.swift)；④ 跨源 30x 不跟随（`RedirectPolicyDelegate`）；⑤ 机检 [check-transport-token-binding.mjs](../../scripts/ios-native/check-transport-token-binding.mjs) 把①②③⑤钉成 CI 门禁。**真机未验** |
 | 5 | 配对永不签发 control；控制类动作一律 biometric 且 fail-closed | `grantableByDefault`（向量 + ContractParityTests）；`auditConfirmPolicy`/`actionConfirm`（`testEveryControlActionRequiresBiometric`）；Alerts 的 `AlertsConfirmationGate` 单测。**设备上的生物识别未验** |
 | 6 | 生物识别不替代服务端授权与风控 | Alerts 的注释 + 单测：闸门只决定"要不要把动作发出去"，服务端仍按 scope 与 mandate 判。**无设备验证** |
 | 7 | 「App 看不到机器人」与「机器人已停止」是两种显示 | Domain 的 reachability 与三维语义单测 + Features 呈现单测（见 [IOS-4 独立验收报告](docs/acceptance/ios4-independent-acceptance.md)）；夹具 `stopped` 与 `unreachable` 两情形可肉眼并排 |

@@ -281,3 +281,63 @@ describe('revision 是有限非负 Double（不得更窄）', () => {
   })
 })
 
+describe('字符串计量与数值域边界向量（向 TS 看齐，Swift 等价）', () => {
+  it('管理员：UTF-16 码元边界（emoji、组合字符、代理对）按 .length 计数超限即非法', () => {
+    // Given emoji、组合字符与代理对
+    const emojiOver = card({ cardId: '😀'.repeat(33) })
+    const combiningCardIdOver = card({ cardId: 'e\u0301'.repeat(33) })
+    const combiningLabelOver = card({ fields: [{ key: 'k', label: 'e\u0301'.repeat(33), kind: 'text', value: 'v' }] })
+    const combiningValueOver = card({ fields: [{ key: 'k', label: 'L', kind: 'text', value: 'e\u0301'.repeat(129) }] })
+    const combiningFallbackOver = card({ fallbackText: 'e\u0301'.repeat(257) })
+    const surrogateCardIdOver = card({ cardId: '\uD835\uDC00'.repeat(33) })
+    const surrogateLabelOver = card({ fields: [{ key: 'k', label: '\uD835\uDC00'.repeat(33), kind: 'text', value: 'v' }] })
+    const surrogateValueOver = card({ fields: [{ key: 'k', label: 'L', kind: 'text', value: '\uD835\uDC00'.repeat(129) }] })
+    const surrogateFallbackOver = card({ fallbackText: '\uD835\uDC00'.repeat(257) })
+    // When 校验超限卡片
+    // Then 凡 UTF-16 码元超限者一律判非法
+    expect(validateCard(emojiOver).valid).toBe(false)
+    expect(validateCard(combiningCardIdOver).valid).toBe(false)
+    expect(validateCard(combiningLabelOver).valid).toBe(false)
+    expect(validateCard(combiningValueOver).valid).toBe(false)
+    expect(validateCard(combiningFallbackOver).valid).toBe(false)
+    expect(validateCard(surrogateCardIdOver).valid).toBe(false)
+    expect(validateCard(surrogateLabelOver).valid).toBe(false)
+    expect(validateCard(surrogateValueOver).valid).toBe(false)
+    expect(validateCard(surrogateFallbackOver).valid).toBe(false)
+  })
+
+  it('管理员：空串与恰在上限边界（组合字符与代理对）合法', () => {
+    // Given 边界卡片
+    const emptyCardId = card({ cardId: '' })
+    const whitespaceFallback = card({ fallbackText: '   ' })
+    const exactCombining = card({
+      cardId: 'e\u0301'.repeat(32),
+      fallbackText: 'e\u0301'.repeat(256),
+      fields: [{ key: 'k', label: 'e\u0301'.repeat(32), kind: 'text', value: 'e\u0301'.repeat(128) }],
+    })
+    const exactSurrogate = card({
+      cardId: '\uD835\uDC00'.repeat(32),
+      fallbackText: '\uD835\uDC00'.repeat(256),
+      fields: [{ key: 'k', label: '\uD835\uDC00'.repeat(32), kind: 'text', value: '\uD835\uDC00'.repeat(128) }],
+    })
+    // When 校验
+    // Then 空串非法、恰在上限合法
+    expect(validateCard(emptyCardId).valid).toBe(false)
+    expect(validateCard(whitespaceFallback).valid).toBe(false)
+    expect(validateCard(exactCombining).valid).toBe(true)
+    expect(validateCard(exactSurrogate).valid).toBe(true)
+  })
+
+  it('管理员：数值域边界（小数 revision 与小数 freshnessMs）被合法接受', () => {
+    // Given 带有小数或极大有限数值的卡片
+    const fractionalRev = card({ revision: 0.5 })
+    const hugeRev = card({ revision: 1e19 })
+    const fractionalFreshness = card({ freshnessMs: 1200.5 })
+    // When 校验
+    // Then 均判合法
+    expect(validateCard(fractionalRev).valid).toBe(true)
+    expect(validateCard(hugeRev).valid).toBe(true)
+    expect(validateCard(fractionalFreshness).valid).toBe(true)
+  })
+})
+

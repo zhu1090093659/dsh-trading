@@ -4,13 +4,18 @@
  *
  * TS 契约（packages/contract/src/core.ts）是唯一权威。本脚本：
  *   1. 运行期 import TS 契约，取到权威真值；
- *   2. 从 apps/ios-native/Sources/Contract/*.swift 解析出 Swift 侧的字面量表
- *      （封闭枚举 rawValue、actionScope/actionConfirm 查表、cardLimits/pushLimits、版本常量）；
+ *   2. 从 apps/ios-native/Sources/Contract/*.swift 解析出 Swift 侧的字面量表与类型规范
+ *      （封闭枚举 rawValue、actionScope/actionConfirm 查表、cardLimits/pushLimits、
+ *       版本常量、数值域 Double 规范、UTF-16 计量规范、未知动作 fail-closed 兜底）；
  *   3. 逐项比对，任何不一致即非零退出。
  *
- * 为什么需要第二道机检：ios-native 的 DshTradingContractTests 要 Xcode/macOS 才能跑，而 CI
- * 不跑 iOS 构建（与 apps/mobile 同一先例）。这一条用纯 Node 跑同一批判据，任何 runner 都能拦漂移。
- * 它是**保守**的：解析不出来一律判红（fail-closed），绝不静默通过。
+ * 架构分工（CI 行为等价门禁承诺边界）：
+ *   - 本脚本（Node 纯静态检查）：在 Linux/Ubuntu CI 上以毫秒级运行，拦截常量、查表、
+ *     封闭枚举、上限棘轮、数值域声明与字符串计量规则的静态漂移；
+ *   - scripts/test-contract.sh（Swift XCTest 动态重放）：在 macOS 本机运行，重放
+ *     全部行为向量（validateCard / validatePushPayload / stalenessOf / sourceGuard 等）。
+ *   既有先例保持：CI 不跑 iOS/macOS Xcode 构建（节约 10x 计算资源），机检承诺明确
+ *   在常量/类型静态面守住边界，动态重放由本地开发门禁与发版前验收把关。
  *
  * 用法：node scripts/ios-native/check-contract-drift.mjs
  */
@@ -217,6 +222,66 @@ try {
   const offlineSource = swift('ContractOffline.swift')
   expectList('Staleness.allCases', enumCases(offlineSource, 'Staleness').map((item) => item.raw), [...C.STALENESS])
   expectList('DeeplinkScreen.allCases', enumCases(offlineSource, 'DeeplinkScreen').map((item) => item.raw), [...C.DEEPLINK_SCREENS])
+
+  // 数值域等价性：TS number 允许有限小数，Swift 对应字段必须使用 Double（不得用 Int 截断或收窄）
+  if (!/public let revision:\s*Double\b/.test(cardsSource)) {
+    note('Card.revision 类型漂移：必须为 Double（对齐 TS number 允许有限小数，不得收窄为 Int）')
+  }
+  if (!/public let freshnessMs:\s*Double\?(?!\w)/.test(cardsSource)) {
+    note('Card.freshnessMs 类型漂移：必须为 Double?（对齐 TS number 允许有限小数，不得收窄为 Int）')
+  }
+  if (!/public let revision:\s*Double\b/.test(pushSource)) {
+    note('PushPayload.revision 类型漂移：必须为 Double（对齐 TS number 允许有限小数，不得收窄为 Int）')
+  }
+  if (!/public let expiresInMs:\s*Double\b/.test(pushSource)) {
+    note('PushPayload.expiresInMs 类型漂移：必须为 Double（对齐 TS number 允许有限小数，不得收窄为 Int）')
+  }
+  if (!/public let maxExpiresInMs:\s*Double\b/.test(pushSource)) {
+    note('PushLimits.maxExpiresInMs 类型漂移：必须为 Double（与 PushPayload.expiresInMs 保持同型）')
+  }
+
+  // 字符串计量等价性：TS 的 String.length 数 UTF-16 码元，Swift 必须使用 utf16.count
+  const cardLengthChecks = [
+    ['cardId', 'card.cardId.utf16.count > limits.maxIdChars'],
+    ['fallbackText', 'card.fallbackText.utf16.count > limits.maxFallbackChars'],
+    ['label', 'field.label.utf16.count > limits.maxLabelChars'],
+    ['value', 'text.utf16.count > limits.maxValueChars'],
+  ]
+  for (const [field, pattern] of cardLengthChecks) {
+    if (!cardsSource.includes(pattern)) {
+      note('validateCard 字符串计量漂移：' + field + ' 必须使用 .utf16.count（对齐 TS .length）')
+    }
+  }
+  if (/\b(?:cardId|fallbackText|label|value)\.count\s*>\s*limits\./.test(cardsSource)) {
+    note('validateCard 存在使用 bare .count 计量字符串长度的缺陷（必须改用 .utf16.count）')
+  }
+
+  const pushLengthChecks = [
+    ['deskId', 'payload.deskId.utf16.count > pushLimits.maxDeskIdChars'],
+    ['deeplink', 'payload.deeplink.utf16.count > pushLimits.maxDeeplinkChars'],
+    ['fallbackText', 'payload.fallbackText.utf16.count > pushLimits.maxFallbackChars'],
+  ]
+  for (const [field, pattern] of pushLengthChecks) {
+    if (!pushSource.includes(pattern)) {
+      note('validatePushPayload 字符串计量漂移：' + field + ' 必须使用 .utf16.count（对齐 TS .length）')
+    }
+  }
+  if (/\b(?:deskId|deeplink|fallbackText)\.count\s*>\s*pushLimits\./.test(pushSource)) {
+    note('validatePushPayload 存在使用 bare .count 计量字符串长度的缺陷（必须改用 .utf16.count）')
+  }
+
+  // 未知动作 fail-closed 门禁：未知动作在确认档位必须兜底到 .biometric、作用域必须兜底到 .control
+  if (!confirmSource.includes('guard let known = ActionKind(rawValue: action) else { return .biometric }')) {
+    note('confirmLevel(for: String) 未知动作未 fail-closed 到 .biometric')
+  }
+  if (!confirmSource.includes('guard let known = ActionKind(rawValue: action) else { return .control }')) {
+    note('scopeForAction(_ action: String) 未知动作未 fail-closed 到 .control')
+  }
+
+  // 保真度门禁：CardField.rawValue 必须保留 CardValue?
+  if (!cardsSource.includes('public let rawValue: CardValue?')) {
+    note('CardField.rawValue 缺失：必须保留 CardValue?（防止 null 与缺失塌缩成同一个 nil）')
+  }
 } catch (error) {
   note('解析 Swift 契约失败（保守判红，不静默通过）：' + String(error && error.message ? error.message : error))
 }

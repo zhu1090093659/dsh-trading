@@ -33,7 +33,7 @@
 3. **额度缺声明即拒绝**（不是"无上限"）；Infinity 明确当"无限"挡掉。
 4. **凭据有 seam 即 fail-closed**；demo 与 live 的 key 不通用，demo 组默认 OKX_DEMO_API_KEY / OKX_DEMO_SECRET_KEY / OKX_DEMO_PASSPHRASE。
 5. **未知 closed 枚举一律不可操作**（卡片渲染为禁用全部 Action），未知动作在确认闸门按最高档处理。
-6. **过期/陈旧数据不渲染**；跨源永不混显（数据源会话级单例、每条数据带 sourceId）。
+6. **过期/未知不渲染**；跨源永不混显（数据源会话级单例、每条数据带 sourceId）。
 7. **自动路径上 halt 永不可达**（普通故障止于 reduce_only）；halt 只由带外触发。
 8. **dry-run 是默认且不可被环境变量悄悄关掉**（desk-process 选项白名单里没有任何键能承载下单能力）。
 
