@@ -25,7 +25,7 @@ DSH 交易插件 monorepo，按市场组织 bundle（crypto/us/cn/hk）。本文
 
 - **重活串行**：`pnpm gates:all`（build + `-r test` + 覆盖率 + typecheck）运行期间，不得再并发跑其他测试、drill 或验收 agent 的动态命令；同一时刻只允许一路重活，其余只做静态核对。2026-10-02 实测：并发运行把 load(15m) 推到 20+、swap 用到 4.4 GB。
 - **跑完必查孤儿**：`ps -eo pid,ppid,command | awk '$2==1' | grep -E "node|electron|chrome"`。已知两类来源：`pnpm -r test` 的 vitest worker（父进程退出后残留）与 Electron 附着演练。
-- **drill/长驻脚本必须按进程组回收**（`setsid` + `kill -- -PGID`），不要依赖脚本自身的清理；已知 `desktop/scripts/attach-electron-drill.mjs` 的 `finally` 只杀 `.bin/electron` 包装、真 Electron 被孤儿化（待修）。
+- **drill/长驻脚本必须按进程组回收**（`setsid` + `kill -- -PGID`），不要依赖脚本自身的清理；`desktop/scripts/attach-electron-drill.mjs` 已照此实现：Electron 以 `detached` 起进程组，`finally` 里 `kill(-pid)` 并等组清空（残留即判 FAIL、不自证清白）。它的"有没有派生本地 host"只看**自身进程树**（进程组 + ppid 链）—— 全机 `ps` grep `--profile trading-web` 会被机器上任何既存 trading-web 实例假红（2026-10-02 修）。
 - **验收结论必须绑 commit**：并发会话会持续改动工作区（实测 10 分钟内未提交项 7 → 20），"工作区干净""N 例全绿""门禁全绿"这类声明必须现场复跑并记录 HEAD sha，不引用台账/检查点里的数字。
 - **退出码不等于通过**：读输出里的 `[无报告]`/FAIL 行，不能只看 exit 0。`coverage:check` 曾在包收集失败时静默剔除该包并判通过，2026-10-02 已修（无报告即红、`--update` 也拒收），但"未验证 ≠ 通过"这条读法对所有门禁继续适用。
 

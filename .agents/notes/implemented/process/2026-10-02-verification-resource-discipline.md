@@ -24,5 +24,5 @@ Status: implemented
 ## Consequences
 
 - 验收/审计类任务不再并发跑重活；subagent 数量与重活数量解耦（静态核对可并行，动态命令串行）。
-- `attach-electron-drill.mjs` 的孤儿缺陷作为已知待修项记录在案（修好后应同批更新本节）。
+- `attach-electron-drill.mjs` 的孤儿缺陷已修：Electron 以 `detached` 起（`setsid` ⇒ 自成进程组），`finally` 里 `kill(-pid)` 回收整组并等组清空，残留即判 FAIL；"没有派生本地 host"的断言限定在**自身进程树**（进程组 + ppid 链），不再全机 `ps` grep `--profile trading-web` —— 机器上任何既存 trading-web 实例都会让旧断言假红。
 - 台账数字不再被当作验收证据；验收报告必须写明 HEAD sha 与复跑命令。
