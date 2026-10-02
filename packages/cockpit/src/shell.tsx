@@ -1,4 +1,5 @@
 import type { Card, CardAction } from '@dshtrading/contract'
+import { useState } from 'react'
 import styles from './cockpit.module.css'
 import { DecisionFeed, DeskHome, EscalationInbox, MandateAndLedger, PositionsAndOrders, SystemNotices, UnknownCards, freshnessText, type CockpitCard } from './blocks.tsx'
 
@@ -23,6 +24,37 @@ export interface CockpitShellProps {
   readonly onCommand: (action: string) => void
   /** 卡片动作接线（升级应答 approve/reject、ack、dismiss、retry-sync 等走这里）。 */
   readonly onCardAction: (action: CardAction, card: CockpitCard) => void
+  /** 设备令牌；未配对时渲染配对表单而不是卡片。 */
+  readonly token: string | undefined
+  readonly onPair: (code: string, name: string) => void
+  readonly onUnpair: () => void
+}
+
+/** 配对表单（纯展示）：一次性配对码 + 设备名；control 由运维授予，界面如实说明。 */
+export function PairingPanel({ onPair }: { readonly onPair: (code: string, name: string) => void }): JSX.Element {
+  const [code, setCode] = useState('')
+  const [name, setName] = useState('')
+  return (
+    <section className={styles.section} aria-label="pairing">
+      <h2 className={styles.sectionTitle}>配对本机</h2>
+      <p className={styles.note}>
+        输入运维在 bot 侧签发的一次性配对码。配对只拿到 read + command；kill/pause/resume/flatten
+        这类 control 动作仍需运维在 bot 侧用 grant-control 显式授予。
+      </p>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (code.trim() !== '') onPair(code, name)
+        }}
+      >
+        <input aria-label="配对码" value={code} onChange={(e) => setCode(e.target.value)} placeholder="配对码" />{' '}
+        <input aria-label="设备名" value={name} onChange={(e) => setName(e.target.value)} placeholder="设备名（可空）" />{' '}
+        <button type="submit" className={styles.button} disabled={code.trim() === ''}>
+          配对
+        </button>
+      </form>
+    </section>
+  )
 }
 
 /** 控制面上的四个动作（顺序固定：先软后硬，kill/flatten 在后）。 */
@@ -30,6 +62,22 @@ export const CONTROL_ACTIONS = ['pause', 'resume', 'kill', 'flatten'] as const
 
 export function CockpitShell(props: CockpitShellProps): JSX.Element {
   const cards = props.cards as readonly CockpitCard[]
+  if (props.token === undefined) {
+    return (
+      <main className={styles.page}>
+        <header>
+          <h1 className={styles.title}>交易驾驶舱</h1>
+          <p className={styles.subtitle}>尚未配对：本机还没有设备令牌，配对后才能读取 bot 的卡片。</p>
+        </header>
+        {props.error === undefined ? null : (
+          <p className={styles.error} role="alert">
+            {props.error}
+          </p>
+        )}
+        <PairingPanel onPair={props.onPair} />
+      </main>
+    )
+  }
   return (
     <main className={styles.page}>
       <header>
@@ -39,6 +87,9 @@ export function CockpitShell(props: CockpitShellProps): JSX.Element {
         </p>
         <button type="button" className={styles.button} onClick={props.onRefresh}>
           刷新
+        </button>{' '}
+        <button type="button" className={styles.button} onClick={props.onUnpair}>
+          解除配对
         </button>
       </header>
       <section aria-label="control">

@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { CARD_TYPES, type CardAction } from '@dshtrading/contract'
 import { CardView, DecisionFeed, DeskHome, EscalationInbox, MandateAndLedger, PositionsAndOrders, SystemNotices, UnknownCards, fieldValueText, freshnessText, type CockpitCard } from '../src/blocks.tsx'
-import { CONTROL_ACTIONS, CockpitShell } from '../src/shell.tsx'
+import { CONTROL_ACTIONS, CockpitShell, PairingPanel } from '../src/shell.tsx'
 import { confirmLevelFor, requiresBiometric } from '@dshtrading/contract'
 
 const T0 = 1_700_000_000_000
@@ -136,7 +136,7 @@ describe('控制面不依赖数据面（行情/agent 全挂时仍可用）', () 
   it('管理员：数据面报错时四个控制按钮仍然渲染且可用（控制面与 A0 同源）', () => {
     // Given 一个数据面完全失败的驾驶舱状态
     const html = renderToStaticMarkup(
-      <CockpitShell cards={[]} error="无法连接交易机器人：fetch failed" fetchedAtMs={undefined} nowMs={T0} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} />,
+      <CockpitShell cards={[]} error="无法连接交易机器人：fetch failed" fetchedAtMs={undefined} nowMs={T0} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} token="dev_0123456789abcdef.t" onPair={() => {}} onUnpair={() => {}} />,
     )
     // When 渲染
     // Then 错误可见，但四个控制动作照常在（且未禁用）
@@ -148,7 +148,7 @@ describe('控制面不依赖数据面（行情/agent 全挂时仍可用）', () 
   it('管理员：数据陈旧时明说陈旧，控制面同样不受影响', () => {
     // Given 十分钟前取到的数据 + 一条错误
     const html = renderToStaticMarkup(
-      <CockpitShell cards={[]} error="命令被拒绝：403" fetchedAtMs={T0} nowMs={T0 + 600_000} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} />,
+      <CockpitShell cards={[]} error="命令被拒绝：403" fetchedAtMs={T0} nowMs={T0 + 600_000} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} token="dev_0123456789abcdef.t" onPair={() => {}} onUnpair={() => {}} />,
     )
     // When 渲染
     // Then 同时出现"数据已陈旧"与四个控制按钮
@@ -159,7 +159,7 @@ describe('控制面不依赖数据面（行情/agent 全挂时仍可用）', () 
   it('管理员：有命令在执行时四个按钮都被禁用（避免并发控制动作互相打架）', () => {
     // Given 一个正在执行 kill 的状态
     const html = renderToStaticMarkup(
-      <CockpitShell cards={[]} error={undefined} fetchedAtMs={T0} nowMs={T0} pending="kill" onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} />,
+      <CockpitShell cards={[]} error={undefined} fetchedAtMs={T0} nowMs={T0} pending="kill" onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} token="dev_0123456789abcdef.t" onPair={() => {}} onUnpair={() => {}} />,
     )
     // When 渲染
     // Then 四个按钮全部 disabled，且 kill 显示"执行中"
@@ -223,7 +223,7 @@ describe('12 个封闭卡片类型全渲染（渲染层不丢弃保证）', () =
     const cards = CARD_TYPES.map((type, i) => card({ cardId: 'x' + String(i), cardType: type }))
     // When 渲染整壳
     const html = renderToStaticMarkup(
-      <CockpitShell cards={cards} error={undefined} fetchedAtMs={T0} nowMs={T0} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} />,
+      <CockpitShell cards={cards} error={undefined} fetchedAtMs={T0} nowMs={T0} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} token="dev_0123456789abcdef.t" onPair={() => {}} onUnpair={() => {}} />,
     )
     // Then 12 张卡全部出现（历史上 mandate-status/journal-gap/system-notice 三类被静默丢弃）
     for (let i = 0; i < CARD_TYPES.length; i++) expect(html, CARD_TYPES[i]).toContain('data-card-id="x' + String(i) + '"')
@@ -261,5 +261,32 @@ describe('控制面与契约确认策略一致（一个家）', () => {
       expect(requiresBiometric(action, 'mobile'), action).toBe(true)
       expect(requiresBiometric(action, 'web'), action).toBe(false)
     }
+  })
+})
+
+describe('设备鉴权门（未配对先配对，不裸取数）', () => {
+  it('管理员：无令牌时渲染配对表单而不是卡片；有令牌时不渲染配对门', () => {
+    // Given 同一台驾驶舱的两种鉴权状态
+    const unpaired = renderToStaticMarkup(
+      <CockpitShell cards={[card({ cardId: 'a' })]} error={undefined} fetchedAtMs={undefined} nowMs={T0} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} token={undefined} onPair={() => {}} onUnpair={() => {}} />,
+    )
+    const paired = renderToStaticMarkup(
+      <CockpitShell cards={[]} error={undefined} fetchedAtMs={undefined} nowMs={T0} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} token="dev_0123456789abcdef.t" onPair={() => {}} onUnpair={() => {}} />,
+    )
+    // Then 未配对只有配对表单（没有卡片、没有控制按钮），配对说明写明 control 要运维授予；配对后配对门消失
+    expect(unpaired).toContain('aria-label="pairing"')
+    expect(unpaired).toContain('配对码')
+    expect(unpaired).toContain('grant-control')
+    expect(unpaired).not.toContain('data-card-id="a"')
+    expect(unpaired).not.toContain('aria-label="control"')
+    expect(paired).not.toContain('aria-label="pairing"')
+    expect(paired).toContain('解除配对')
+  })
+
+  it('管理员：配对码为空时提交按钮禁用（不发明码打 edge 的限频）', () => {
+    // Given 一个空配对码的表单
+    const html = renderToStaticMarkup(<PairingPanel onPair={() => {}} />)
+    // Then 提交按钮 disabled
+    expect(html).toContain('disabled=""')
   })
 })
