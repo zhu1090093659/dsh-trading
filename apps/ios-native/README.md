@@ -218,7 +218,7 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
 | 真机持久化 | `InMemorySnapshotPersistence`（重启丢快照 ⇒ 只影响离线可用性，不影响正确性） | 落盘实现属 Offline 卡范围 |
 | 「解析不在主线程」 | 代码结构如此（`DeskMapper.mapOffMain`） | **无法用断言证明**，需要线程断言基础设施 |
 
-## 8. 契约面 finding（记录，不自行放宽）
+## 8. finding（记录，不自行放宽）
 
 1. **TS 注释与代码不一致**：`cards.ts` 的注释写"未知 cardType ⇒ `valid` 仍可为 true"，
    代码实际会 push problem，于是 `valid = problems.length === 0` ⇒ **`valid=false`**。
@@ -237,6 +237,13 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
    - **`ids.ts` 的 `isOrderId` 把 UUID 版本位钉成 v4**（第三组 `4[0-9a-f]{3}` + 变体位 `[89ab]`），
      与设计文档明文冻结的"不钉版本位（`[0-9a-f]{4}`）"冲突；
    - `cards.ts` 关于未知 cardType 的注释与代码不一致（见 finding 1）。
+5. **`docs-link:check` **不覆盖本目录**（已知缺口，如实记录，留待下一轮补）**：
+   `scripts/docs-link-check.mjs:31-32` 的扫描清单只有 `AGENTS.md` 与 `docs/**`，
+   **不含 `apps/ios-native/**`** —— 本 README 的 34 条相对链接**没有任何门禁保**，只靠人工静态检查兜。
+   2026-10-02 实证：工作冻结件删除后 `apps/ios-native/IOS-1-HANDOFF.md` 里指向 `INTERFACE-FREEZE.md` 的
+   markdown 链接成了断链，而 `node scripts/docs-link-check.mjs --check` 仍 **exit 0**（它连这个文件都没扫）。
+   影响：本目录的文档链接腐烂不会被 CI 发现。修法（下一轮）：把
+   `apps/ios-native/**/*.md` 纳入扫描清单，或显式入基线并写明原因。
 
 ## 9. 文档与决策记录
 

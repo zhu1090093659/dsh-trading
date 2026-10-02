@@ -3,7 +3,8 @@ import Foundation
 /// A0（机器人执行核）的 wire DTO。
 ///
 /// **为什么放在 Contract**：`KillState` / `A0Status` 是 Transport 与 Domain 的共同上游，
-/// 而接口冻结 §3 **不允许 Domain 与 Transport 互相 import**；一个事实只能有一个家，
+/// 而分层白名单（scripts/ios-native/check-swift-layering.mjs，见 README §1「各层事实之家」）
+/// **不允许 Domain 与 Transport 互相 import**；一个事实只能有一个家，
 /// 唯一合法的共同上游就是这里。两侧各自 `public typealias` 指过来即可。
 ///
 /// 来源端点（服务端是唯一权威，本文件不新增端点、不改服务端语义）：

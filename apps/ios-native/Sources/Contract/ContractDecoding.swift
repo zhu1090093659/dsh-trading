@@ -2,7 +2,7 @@ import Foundation
 
 /// DTO 解码的宽松标量：*只*做类型搬运，**不做语义判定，也不猜默认值**。
 ///
-/// 为什么需要它（接口冻结 §4.1）：TS 的 CardField.value 是 `unknown`，而 Swift 的
+/// 为什么需要它（见 README §3「fail-closed 的建模方式」）：TS 的 CardField.value 是 `unknown`，而 Swift 的
 /// `enum: String` 解码未知值会抛错。这里把 JSON 标量原样搬成文本（字符串原样；
 /// bool/number 转成 JSON 文本；null/数组/对象 ⇒ nil），让"未知值"一路走到 validateCard
 /// 里被判成**不可操作**，而不是抛掉整张卡。

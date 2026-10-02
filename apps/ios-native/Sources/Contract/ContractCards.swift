@@ -4,7 +4,7 @@ import Foundation
 ///
 /// **封闭枚举**：CardType / FieldKind / ActionKind 都是封闭集合。未知值不是"错误"而是**信号**
 /// （客户端太旧）：卡片仍要按 fallbackText 显示，但**禁用全部 Action**。
-/// 因此 DTO 里的 cardType / field.kind / action.kind 都是 `String`（接口冻结 §4.1），
+/// 因此 DTO 里的 cardType / field.kind / action.kind 都是 `String`（见 README §3「fail-closed 的建模方式」），
 /// 由本文件的查表判定；**没有 default 分支吞掉未知值**。
 ///
 /// 写作用域：apps/ios-native/Sources/Contract/（IOS-1 冻结面）
@@ -111,7 +111,7 @@ public let cardLimits = CardLimits(
     maxIdChars: 64, maxActionParams: 8
 )
 
-/// 一个字段。`kind` 是**字符串**（保留未知值，见接口冻结 §4.1）。
+/// 一个字段。`kind` 是**字符串**（保留未知值，见 README §3「fail-closed 的建模方式」）。
 public struct CardField: Equatable, Sendable, Decodable {
     public let key: String
     public let label: String

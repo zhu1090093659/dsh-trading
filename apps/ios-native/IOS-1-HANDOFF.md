@@ -10,7 +10,7 @@ Status: implemented
 
 构建与契约测试脚本使用原子 mkdir 取锁。竞争时立即退出 75，并打印 HEAVY_LOCK_BUSY；不等待、不按年龄删除锁、不无锁继续。只有成功取得锁的脚本安装退出清理。调用者不得再包同一把锁。
 
-冻结面及各目录写作用域见 [README](README.md) 与 [接口冻结件](INTERFACE-FREEZE.md)。本轮不变更共享 Swift API，不修改 TS 权威契约，不覆盖其它会话的 Alerts/Domain/Features/Offline 实现。
+冻结面及各目录写作用域见 [README](README.md)（工作冻结件 INTERFACE-FREEZE.md 已在收尾时删除，事实归家于此）。本轮不变更共享 Swift API，不修改 TS 权威契约，不覆盖其它会话的 Alerts/Domain/Features/Offline 实现。
 
 ## Alternatives considered
 
@@ -23,3 +23,12 @@ Status: implemented
 Lead 需要协调所有外部锁持有者与等待者，释放锁后直接（不加外层同名锁）串行运行 scripts/test-contract.sh 与 scripts/build-simulator.sh，；突变红绿验证现已有本轮证据，可用 scripts/test-drift-mutation.mjs 复现。不可把 README 中历史证据当作本轮通过。
 
 静态发现待裁决的等价边界：Swift PushPayload 的 revision/expiresInMs 使用 Int，而 TS 允许有限的小数；推送字符串上限现使用 utf16.count 与 TS length 一致，并新增 15 条 TS 推送校验向量（含 emoji 边界），断言合法性及完整诊断。卡片其它字符串计量与数值小数差异仍待裁决。新增断言已实际执行通过：136 向量 / 36 tests / 0 failures，日志 build/ios1-contract-green.log。新增可复现突变脚本 scripts/test-drift-mutation.mjs（先取锁、编译、断言红、finally 恢复源码、重编译断言绿），语法检查通过；实际突变证明完成：MUTATION_RED_EXIT=1，maxActions 4 != 3 且 too-many-actions 行为 true != false；恢复后 RESTORED_GREEN_EXIT=0，36 tests / 0 failures。日志 build/ios1-mutation-red.log 与 build/ios1-mutation-restored.log。不自行放宽契约；需要 Lead 明确冻结处理并补向量。
+
+## 后续（2026-10-02，冻结件删除后补记）
+
+- 上面那条待裁决已落定：Lead 裁决 **改 Swift 去贴合 TS**（TS 的 number 允许有限小数），
+  `Card.revision` / `PushPayload.revision` / `PushPayload.expiresInMs` 已改 `Double`，
+  判定保持"有限且 >= 0" / "有限、> 0 且 <= 上限"，并补了"3.5 必须被接受且原样保留"的解码保真向量；
+  卡片侧字符串上限同步改用 `utf16.count` 对齐 TS 的 `String.length`。
+- 本文里的用例/向量条数是**当时那轮的观察值**；当前数字一律以重跑
+  `node scripts/gen-contract-snapshot.mjs`（打印 `vectors <N>`）与 `apps/ios-native/scripts/test-contract.sh` 的汇总为准。

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 契约防漂移机检（接口冻结 §4.3）—— **可执行断言**，任何漂移 ⇒ 非零退出。
+# 契约防漂移机检（见 README §4）—— **可执行断言**，任何漂移 ⇒ 非零退出。
 #
 # 两步：
 #   1. 从 packages/contract 的**运行期真值**重新生成 Generated/contract-snapshot.json（TS 是唯一权威）；

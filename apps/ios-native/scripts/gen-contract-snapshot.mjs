@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 契约快照生成器（接口冻结 §4.3）—— **TS 契约是唯一权威**。
+ * 契约快照生成器（见 README §4「契约防漂移机检」）—— **TS 契约是唯一权威**。
  *
  * 从 @dshtrading/contract 的**运行期真值**导出：常量表 + 封闭枚举 + 查表 + **行为向量**
  * （输入 → TS 的权威输出），写入 Generated/contract-snapshot.json（生成物，不入库）。

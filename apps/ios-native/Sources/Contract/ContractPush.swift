@@ -55,7 +55,7 @@ public struct PushLimits: Equatable, Sendable, Decodable {
 /// 生产上限（= TS PUSH_LIMITS）。
 public let pushLimits = PushLimits(maxActions: 3, maxFallbackChars: 180, maxDeeplinkChars: 256, maxDeskIdChars: 64, maxExpiresInMs: 24 * 60 * 60 * 1000)
 
-/// 一条推送载荷。kind / severity / actions 是**字符串**（保留未知值，见接口冻结 §4.1）。
+/// 一条推送载荷。kind / severity / actions 是**字符串**（保留未知值，见 README §3「fail-closed 的建模方式」）。
 public struct PushPayload: Equatable, Sendable, Decodable {
     public let kind: String
     public let severity: String
