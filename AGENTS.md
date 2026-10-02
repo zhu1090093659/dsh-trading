@@ -21,6 +21,14 @@ DSH 交易插件 monorepo，按市场组织 bundle（crypto/us/cn/hk）。本文
 - 构建/测试基线是 `pnpm build` 与 `pnpm test`；连接器另需真实网络原始响应证据（`spikes/impl-*/`）。按改动运行相关验证，完整门禁放在提交/推送及发布边界，不为纯指令编辑生成分发副本。
 - 测试与 CI 棘轮：`pnpm test:audit`（BDD 命名/结构、零 mock、零 sleep、断言完整性）、`pnpm coverage:check`（分支/行/函数/语句四项覆盖率）、`pnpm test:scripts`（scripts/ 门禁自测）、`pnpm test:desktop`（桌面壳用例）。**新写测试必须合规**——棘轮只收存量债，任何规则或单文件计数上升即红，清债后用对应 `--update` 只降/只升地刷新基线。CI 分层：`ci.yml` = 静态门禁 + 三 OS 测试矩阵，`nightly.yml` = 覆盖率棘轮 + 抖动三连跑；发版管线闸门与静态门禁同源。见 [测试与 CI 棘轮](.agents/notes/implemented/testing/2026-09-15-test-hygiene-ratchet-and-tiered-ci.md)。
 
+## 验收与重活执行的资源纪律
+
+- **重活串行**：`pnpm gates:all`（build + `-r test` + 覆盖率 + typecheck）运行期间，不得再并发跑其他测试、drill 或验收 agent 的动态命令；同一时刻只允许一路重活，其余只做静态核对。2026-10-02 实测：并发运行把 load(15m) 推到 20+、swap 用到 4.4 GB。
+- **跑完必查孤儿**：`ps -eo pid,ppid,command | awk '$2==1' | grep -E "node|electron|chrome"`。已知两类来源：`pnpm -r test` 的 vitest worker（父进程退出后残留）与 Electron 附着演练。
+- **drill/长驻脚本必须按进程组回收**（`setsid` + `kill -- -PGID`），不要依赖脚本自身的清理；已知 `desktop/scripts/attach-electron-drill.mjs` 的 `finally` 只杀 `.bin/electron` 包装、真 Electron 被孤儿化（待修）。
+- **验收结论必须绑 commit**：并发会话会持续改动工作区（实测 10 分钟内未提交项 7 → 20），"工作区干净""N 例全绿""门禁全绿"这类声明必须现场复跑并记录 HEAD sha，不引用台账/检查点里的数字。
+- **退出码不等于通过**：`coverage:check` 在某个包收集失败时会静默把它移出聚合、再按"无指标下降"判通过（已知洞）；验收必须读输出里的 `[无报告]`/FAIL 行，不能只看 exit 0。
+
 ## 按需阅读
 
 - 架构、五条铁律、数据源 ToS：[README.md](README.md)。
