@@ -18,6 +18,7 @@ import {
   canonicalize,
   liveTradingDecision,
   liveTradingEnabled,
+  processEuid,
   resetAuthorityCache,
   setAuthorityMismatchSink,
   verifyGrantDocument,
@@ -33,14 +34,21 @@ function tempDir(): string {
   return dir
 }
 
-/** 搭一个真实的授权平面目录：信任锚已就位、授权文档按参数决定写不写。 */
+/**
+ * 搭一个真实的授权平面目录：信任锚已就位、授权文档按参数决定写不写。
+ *
+ * 返回的 decisionOptions 把平面当成**生产形态**（归另一个 uid、判定跑在 agent uid 下）：
+ * 本机同 uid 造不出真实的属主差异，只能注入 euid 表达那种部署关系；直接用 { dir } 判定
+ * 会得到 plane-not-isolated —— 那正是「平面归 agent uid」的诚实结论。
+ */
 function authorityFixture(options: { grant?: string } = {}) {
   const dir = tempDir()
   const pair = generateOperatorKeyPair('operator-1')
   writeFileSync(join(dir, TRUSTED_KEYS_FILENAME), buildTrustedKeysDocument([{ keyId: 'operator-1', alg: 'ed25519', publicKeyPem: pair.publicKeyPem }]))
   if (options.grant !== undefined) writeFileSync(join(dir, GRANT_FILENAME), options.grant)
   resetAuthorityCache()
-  return { dir, pair }
+  const decisionOptions = { dir, env: {}, euid: (processEuid() ?? 0) + 12_345 }
+  return { dir, pair, decisionOptions }
 }
 
 function validGrant(pair: { privateKeyPem: string }, overrides: Record<string, unknown> = {}, now = Date.now()): string {
@@ -209,12 +217,12 @@ describe('verifyGrantDocument（纯验签）', () => {
 
 describe('liveTradingDecision（镜像与授权平面取合取）', () => {
   it('管理员：镜像为 true 但平面没授权时拒绝，并留下可见告警', () => {
-    // Given 一个人为把 liveTrading 写成 true 的镜像，而平面只有信任锚
-    const { dir } = authorityFixture()
+    // Given 一个人为把 liveTrading 写成 true 的镜像，而平面只有信任锚（生产形态：平面归另一个 uid）
+    const { decisionOptions } = authorityFixture()
     const warnings: string[] = []
     setAuthorityMismatchSink((message) => warnings.push(message))
     // When 判定
-    const decision = liveTradingDecision(true, { dir })
+    const decision = liveTradingDecision(true, decisionOptions)
     // Then 拒绝、标记 mismatch，并且告警真的发出（静默失效是不可接受的）
     expect(decision.allowed).toBe(false)
     expect(decision.granted).toBe(false)
@@ -226,11 +234,11 @@ describe('liveTradingDecision（镜像与授权平面取合取）', () => {
 
   it('管理员：镜像为 false 时即使平面已授权也拒绝（镜像只能收紧）', () => {
     // Given 一份有效授权 + 镜像 false
-    const { dir, pair } = authorityFixture()
+    const { dir, pair, decisionOptions } = authorityFixture()
     writeFileSync(join(dir, GRANT_FILENAME), validGrant(pair))
     resetAuthorityCache()
     // When 判定
-    const decision = liveTradingDecision(false, { dir })
+    const decision = liveTradingDecision(false, decisionOptions)
     // Then 拒绝（镜像仍是有效的收紧手段）
     expect(decision.allowed).toBe(false)
     expect(decision.mirror).toBe(false)
@@ -239,36 +247,41 @@ describe('liveTradingDecision（镜像与授权平面取合取）', () => {
 
   it('管理员：镜像为 true 且平面已授权时放行', () => {
     // Given 有效授权 + 镜像 true
-    const { dir, pair } = authorityFixture()
+    const { dir, pair, decisionOptions } = authorityFixture()
     writeFileSync(join(dir, GRANT_FILENAME), validGrant(pair))
     resetAuthorityCache()
     // When 判定
-    const decision = liveTradingDecision(true, { dir })
+    const decision = liveTradingDecision(true, decisionOptions)
     // Then 放行
     expect(decision.allowed).toBe(true)
-    expect(liveTradingEnabled(true, { dir })).toBe(true)
+    expect(liveTradingEnabled(true, decisionOptions)).toBe(true)
   })
 
   it('管理员：删掉授权文档后下一次判定立刻拒绝（撤销不吃缓存）', () => {
     // Given 已经放行过一次的平面
-    const { dir, pair } = authorityFixture()
+    const { dir, pair, decisionOptions } = authorityFixture()
     writeFileSync(join(dir, GRANT_FILENAME), validGrant(pair))
     resetAuthorityCache()
-    expect(liveTradingEnabled(true, { dir })).toBe(true)
+    expect(liveTradingEnabled(true, decisionOptions)).toBe(true)
     // When 人删掉授权文档（撤销动作）
     rmSync(join(dir, GRANT_FILENAME))
     // Then 立刻拒绝——没有 TTL、没有重启
-    expect(liveTradingEnabled(true, { dir })).toBe(false)
+    expect(liveTradingEnabled(true, decisionOptions)).toBe(false)
   })
 
-  it('管理员：授权平面目录缺省从 DSH_HOME 解析，不在仓库工作区里', () => {
-    // Given 一个显式 DSH_HOME
+  it('管理员：未显式配置平面目录时没有默认位置，判定直接拒绝', () => {
+    // Given 一个只有 DSH_HOME、没有 DSH_TRADING_AUTHORITY_DIR 的环境
     const home = tempDir()
-    // When 解析平面目录
+    // When 解析平面目录并判定
     const dir = authorityDir({ env: { DSH_HOME: home } })
-    // Then 它落在 home 下的 authority/，而不是任何 packages/ 路径
-    expect(dir).toBe(join(home, 'authority'))
-    expect(dir.startsWith(ROOT)).toBe(false)
+    const decision = liveTradingDecision(true, { env: { DSH_HOME: home } })
+    // Then 解析不出任何目录（home 不是权威的家），判定以机器可读的 dir-not-configured 拒绝
+    expect(dir).toBeUndefined()
+    expect(decision.dir).toBeUndefined()
+    expect(decision.dirSource).toBe('unset')
+    expect(decision.granted).toBe(false)
+    expect(decision.allowed).toBe(false)
+    expect(decision.reason).toBe('dir-not-configured')
   })
 })
 
@@ -287,8 +300,8 @@ describe('preset 资产篡改（RT-04 回归）', () => {
     // Then 解析出的镜像确实是 true……
     expect(mirror).toBe(true)
     // ……但判定仍拒绝：授权平面（只有信任锚、没有授权文档）说了算
-    const { dir } = authorityFixture()
-    const decision = liveTradingDecision(mirror, { dir })
+    const { decisionOptions } = authorityFixture()
+    const decision = liveTradingDecision(mirror, decisionOptions)
     expect(decision.allowed).toBe(false)
     expect(decision.mismatch).toBe(true)
   })

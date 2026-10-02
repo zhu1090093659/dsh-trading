@@ -13,23 +13,45 @@
  *   <dir>/trusted-keys.json        受信任公钥目录（人类持有私钥；本模块只读）
  *   <dir>/live-trading.grant.json  人工签署的实盘授权（本模块只读）
  *
- * fail-closed：任何「缺失 / 读不到 / 解析失败 / 验签失败 / 过期 / 尚未生效」一律
- * granted=false 并给出机器可读 reason —— 绝不因为读不到而放行。
+ * 位置与隔离规则（fail-closed；**没有默认位置**）：
+ *   1. 平面目录必须**显式配置**（dir 选项或 $DSH_TRADING_AUTHORITY_DIR）。未配置就是拒绝
+ *      （dir-not-configured）—— 曾经缺省落在 $DSH_HOME/authority，那等于让权威住在
+ *      agent 自己 uid 可写的目录里（验收发现 #1：同 uid 可自铸信任锚并自我授权）。
+ *   2. 平面必须与**运行本判定的进程 uid**（= trading agent 的 uid）隔离：平面目录、两份
+ *      文件、以及从根到平面目录的整条祖先链都不得归该 uid 所有（祖先归 agent ⇒ 它可以
+ *      unlink 后替换整个平面），目录与文件还不得带 group/other 写位。任何一条不满足 ⇒
+ *      plane-not-isolated。**这条是 agent 伪造不了的**：它写得进文件，改不了文件的属主。
+ *   3. 可选加固：$DSH_TRADING_AUTHORITY_OWNER_UID 把「允许的属主」钉成某个具体 uid
+ *      （而不是「只要不是 agent 就行」）；把它配成运行 uid 自身按配置错误拒绝。
+ *   4. 开发形态必须**显式 opt-in**：$DSH_TRADING_AUTHORITY_DEV_SAME_UID=1（名字带 dev），
+ *      跳过 2/3，并**每次判定留痕**（decision.devMode=true + 一次可见告警）。dev 形态下
+ *      签出的授权文档带 payload.dev=true，而读取端在没有同一个 opt-in 时拒绝它
+ *      （dev-grant-not-accepted）—— 「开发形态签的东西不构成生产授权」写在签名里，
+ *      抹掉这个标记会让签名失效。
+ *
+ * fail-closed：任何「缺失 / 读不到 / 解析失败 / 验签失败 / 过期 / 尚未生效 / 未配置 /
+ * 未隔离」一律 granted=false 并给出机器可读 reason —— 绝不因为读不到而放行。
  *
  * 撤销语义：删掉 grant 文件即撤销。缓存按文件 stat 指纹失效（不是 TTL），所以撤销
  * 在下一次判定就生效，不需要重启任何进程。
  *
- * 诚实边界：本模块挡得住「agent 改写 preset 资产」，挡不住「agent 拿到签署私钥」。
- * 私钥与 trusted-keys.json 必须由人在另一个 uid 下持有/写入；生产形态里该目录归
- * 执行核 tradectl（P2），本包届时成为核心与连接器共用的读取端，路径与权限模型不变。
+ * 诚实边界：本模块挡得住「agent 改写 preset 资产」与「agent 用自己 uid 自铸平面」，
+ * 挡不住「agent 拿到签署私钥」。私钥必须由人在另一个 uid 下持有（0600）；生产形态里
+ * 该目录归执行核 tradectl（P2）之外的 authority uid，本包届时仍是核心与连接器共用的
+ * 读取端，路径与隔离规则不变。
  */
 import { createPublicKey, verify as verifySignature } from 'node:crypto'
-import { readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
-import { dshHomeDir } from '@dshtrading/dsh-home'
+import { readFileSync, realpathSync, statSync, type Stats } from 'node:fs'
+import { basename, dirname, join, resolve as resolvePath } from 'node:path'
 
-/** 覆盖授权平面根目录的环境变量（部署方用来把平面放到 uid 隔离的目录）。 */
+/** 覆盖授权平面根目录的环境变量（**必须显式配置**；没有默认位置）。 */
 export const AUTHORITY_DIR_ENV = 'DSH_TRADING_AUTHORITY_DIR'
+/** 可选：平面必须归这个 uid（「允许的属主」钉死；缺省只要求 ≠ 运行 uid）。 */
+export const AUTHORITY_OWNER_UID_ENV = 'DSH_TRADING_AUTHORITY_OWNER_UID'
+/** 开发形态显式 opt-in（名字里带 dev）：同 uid 平面放行，但每次判定留痕。 */
+export const AUTHORITY_DEV_ENV = 'DSH_TRADING_AUTHORITY_DEV_SAME_UID'
+/** 运营 CLI 用：声明 trading agent 运行在哪个 uid 下（平面归它就是自铸）。 */
+export const AUTHORITY_AGENT_UID_ENV = 'DSH_TRADING_AUTHORITY_AGENT_UID'
 /** 人工签署的实盘授权文件名。 */
 export const GRANT_FILENAME = 'live-trading.grant.json'
 /** 受信任公钥目录文件名。 */
@@ -48,6 +70,11 @@ export interface GrantPayload {
   operator?: string
   /** 备注（自由文本，只用于审计与展示）。 */
   note?: string
+  /**
+   * 开发形态标记（在**签名覆盖的 payload 里**）：由运营 CLI 在 dev 平面签出。
+   * 读取端没有同一个显式 opt-in 时拒绝它 —— 开发形态的授权不会变成生产授权。
+   */
+  dev?: boolean
 }
 
 export interface TrustedKey {
@@ -59,6 +86,9 @@ export interface TrustedKey {
 /** 拒绝原因（机器可读；新增取值必须同时更新用例的期望表）。 */
 export type LiveTradingDenyReason =
   | 'granted'
+  | 'dir-not-configured'
+  | 'plane-not-isolated'
+  | 'dev-grant-not-accepted'
   | 'no-grant-document'
   | 'no-trusted-keys'
   | 'malformed'
@@ -76,6 +106,44 @@ export interface GrantVerification {
   keyId?: string
 }
 
+/** 平面目录的来源：显式选项 / 环境变量 / 未配置（未配置 ⇒ 拒绝）。 */
+export type AuthorityDirSource = 'option' | 'env' | 'unset'
+
+export interface AuthorityLocation {
+  /** 未显式配置时是 undefined —— 本模块没有默认位置。 */
+  dir: string | undefined
+  source: AuthorityDirSource
+}
+
+/** 平面隔离检查的机器可读结论。 */
+export type PlaneIsolationCode =
+  /** 归另一个 uid、无 group/other 写位、祖先链干净。 */
+  | 'isolated'
+  /** 显式 dev opt-in：跳过检查（留痕见 devMode）。 */
+  | 'dev-opt-in'
+  /** 目录还不存在（还谈不上隔离；判定会继续走到「没有信任锚」）。 */
+  | 'dir-missing'
+  /** 平台没有 uid 语义（process.geteuid 不可用）⇒ 无法证明隔离。 */
+  | 'no-uid-semantics'
+  /** 平面目录/文件归运行 uid 所有。 */
+  | 'owner-is-agent-uid'
+  /** 平面目录/文件属主不是显式配置的「允许的属主」。 */
+  | 'owner-not-allowed'
+  /** 「允许的属主」被配成了运行 uid 自身（等于没有边界）。 */
+  | 'configured-owner-is-agent-uid'
+  /** 平面目录/文件带 group/other 写位。 */
+  | 'group-or-other-writable'
+  /** 祖先目录归运行 uid 所有，或对 group/other 可写且无 sticky 位。 */
+  | 'ancestor-agent-writable'
+
+export interface PlaneIsolationReport {
+  isolated: boolean
+  code: PlaneIsolationCode
+  detail: string
+  /** 本次判定是否在显式开发形态下做出（生产必须为 false）。 */
+  devMode: boolean
+}
+
 export interface LiveTradingDecision extends GrantVerification {
   /** 授权平面是否授予（与 allowed 的区别：镜像可以再收紧一层）。 */
   granted: boolean
@@ -85,29 +153,205 @@ export interface LiveTradingDecision extends GrantVerification {
   mirror: boolean
   /** 镜像为 true 而授权平面未授予 —— 资产被改写或与平面漂移，必须可见。 */
   mismatch: boolean
-  dir: string
+  /** 判定所用的平面目录；未显式配置时 undefined（没有默认位置，见 authorityDir）。 */
+  dir: string | undefined
+  /** 平面目录的来源。 */
+  dirSource: AuthorityDirSource
+  /** 判定是否在显式开发形态下做出。 */
+  devMode: boolean
+  /** 平面隔离检查结论；目录未配置时 undefined。 */
+  isolation: PlaneIsolationReport | undefined
 }
 
 export interface AuthorityOptions {
-  /** 显式指定平面目录（测试与 CLI 用）；缺省见 authorityDir。 */
+  /** 显式指定平面目录（测试与 CLI 用）；缺省见 authorityDir —— 没有默认位置。 */
   dir?: string
   /** 环境变量映射，缺省 process.env。 */
   env?: Record<string, string | undefined>
   /** 判定时刻（毫秒），缺省 Date.now()；测试用来固定时间轴。 */
   now?: number
+  /**
+   * 判定进程的 euid，缺省 process.geteuid()。测试用来**模拟生产形态**（平面归另一个
+   * uid、进程跑在 agent uid 下）——本机同 uid 时无法真实制造这种文件属主。
+   */
+  euid?: number
+}
+
+/** 显式 opt-in 的开发形态（名字里带 dev，且值必须是精确的 '1'）。 */
+export function devOptIn(env: Record<string, string | undefined> = process.env): boolean {
+  return env[AUTHORITY_DEV_ENV] === '1'
+}
+
+/** 当前进程的 euid；没有 uid 语义的平台（Windows）返回 undefined ⇒ 读取端按未隔离拒绝。 */
+export function processEuid(): number | undefined {
+  const geteuid = (process as { geteuid?: () => number }).geteuid
+  return typeof geteuid === 'function' ? geteuid() : undefined
+}
+
+function parseUid(value: string | undefined): { uid?: number; error?: string } {
+  if (value === undefined || value.trim().length === 0) return {}
+  const uid = Number(value.trim())
+  if (!Number.isInteger(uid) || uid < 0) {
+    return { error: 'uid 配置不合法（' + JSON.stringify(value) + '）——必须是非负整数' }
+  }
+  return { uid }
 }
 
 /**
- * 授权平面根目录：显式 dir > $DSH_TRADING_AUTHORITY_DIR > $DSH_HOME/authority。
- * 它**不在**仓库工作区里，也不在安装态 profile 的 preset 资产里 —— 这是「实盘开关
- * 不在 agent 可写路径上」的物理前提。
+ * 授权平面根目录：显式 dir > $DSH_TRADING_AUTHORITY_DIR > **未配置（undefined）**。
+ *
+ * 这里**没有**默认位置：旧的缺省 $DSH_HOME/authority 落在 agent 自己 uid 可写的 home
+ * 里，等于把「谁能授予实盘」交给 agent（验收发现 #1）。要授权就必须显式把平面指到
+ * 一个不属于 agent uid 的目录。
  */
-export function authorityDir(options: AuthorityOptions = {}): string {
-  if (options.dir !== undefined && options.dir.length > 0) return options.dir
+export function resolveAuthorityLocation(options: AuthorityOptions = {}): AuthorityLocation {
+  if (options.dir !== undefined && options.dir.trim().length > 0) return { dir: options.dir, source: 'option' }
   const env = options.env ?? process.env
   const explicit = env[AUTHORITY_DIR_ENV]
-  if (explicit !== undefined && explicit.trim().length > 0) return explicit
-  return join(dshHomeDir(env), 'authority')
+  if (explicit !== undefined && explicit.trim().length > 0) return { dir: explicit, source: 'env' }
+  return { dir: undefined, source: 'unset' }
+}
+
+/** 便捷形式：等价 resolveAuthorityLocation(options).dir（未配置 ⇒ undefined）。 */
+export function authorityDir(options: AuthorityOptions = {}): string | undefined {
+  return resolveAuthorityLocation(options).dir
+}
+
+/** 解析真实路径：目录不存在时，用「最深已存在祖先的 realpath + 剩余段」继续走祖先链。 */
+function resolveRealPath(path: string): string {
+  const missing: string[] = []
+  let cursor = resolvePath(path)
+  for (;;) {
+    try {
+      const real = realpathSync(cursor)
+      return missing.length === 0 ? real : join(real, ...missing.reverse())
+    } catch {
+      const parent = dirname(cursor)
+      if (parent === cursor) return resolvePath(path)
+      missing.push(basename(cursor))
+      cursor = parent
+    }
+  }
+}
+
+function statOrUndefined(path: string) {
+  try {
+    return statSync(path)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 平面隔离检查：平面及其祖先链是否落在「运行 uid（= agent uid）可写」的位置上。
+ *
+ * 检查项逐条见 PlaneIsolationCode；任何一条不过都返回 isolated=false 与机器可读 code。
+ * 这是唯一**agent 无法伪造**的一层：它写得进文件，但改不了属主，也没法把自己的 uid
+ * 从祖先链里去掉。
+ */
+export function inspectPlaneIsolation(dir: string, options: AuthorityOptions = {}): PlaneIsolationReport {
+  const env = options.env ?? process.env
+  if (devOptIn(env)) {
+    return {
+      isolated: true,
+      code: 'dev-opt-in',
+      devMode: true,
+      detail: '开发形态：显式设置了 ' + AUTHORITY_DEV_ENV + '=1，跳过属主/权限检查 —— 这条判定不构成生产授权（每次判定都留痕）',
+    }
+  }
+  const euid = options.euid ?? processEuid()
+  if (euid === undefined) {
+    return {
+      isolated: false,
+      code: 'no-uid-semantics',
+      devMode: false,
+      detail: '本平台没有 uid 语义（process.geteuid 不可用），无法证明平面不归 agent 所有 ⇒ 按未隔离拒绝（开发形态请显式设置 '
+        + AUTHORITY_DEV_ENV + '=1）',
+    }
+  }
+  const pinned = parseUid(env[AUTHORITY_OWNER_UID_ENV])
+  if (pinned.error !== undefined) {
+    return { isolated: false, code: 'owner-not-allowed', devMode: false, detail: AUTHORITY_OWNER_UID_ENV + ' ' + pinned.error }
+  }
+  if (pinned.uid !== undefined && pinned.uid === euid) {
+    return {
+      isolated: false,
+      code: 'configured-owner-is-agent-uid',
+      devMode: false,
+      detail: AUTHORITY_OWNER_UID_ENV + '=' + pinned.uid + ' 就是运行 uid 自身 —— 允许属主不能是 agent（那等于没有边界）',
+    }
+  }
+  const real = resolveRealPath(dir)
+  // 祖先链：归运行 uid 所有 ⇒ agent 可以 unlink/替换整个平面；对 group/other 可写且无
+  // sticky 位同理（有 sticky 位时非属主无法删除他人条目，如 /tmp）。
+  const ancestors: string[] = []
+  for (let cursor = dirname(real); ; cursor = dirname(cursor)) {
+    ancestors.push(cursor)
+    if (dirname(cursor) === cursor) break
+  }
+  for (const ancestor of ancestors) {
+    const stat = statOrUndefined(ancestor)
+    if (stat === undefined) continue
+    if (stat.uid === euid) {
+      return {
+        isolated: false,
+        code: 'ancestor-agent-writable',
+        devMode: false,
+        detail: '祖先目录 ' + ancestor + ' 归运行 uid ' + euid + ' 所有 —— agent 可以删掉/替换整个平面，授权平面必须放在它够不到的位置',
+      }
+    }
+    if ((stat.mode & 0o022) !== 0 && (stat.mode & 0o1000) === 0) {
+      return {
+        isolated: false,
+        code: 'ancestor-agent-writable',
+        devMode: false,
+        detail: '祖先目录 ' + ancestor + ' 对 group/other 可写且没有 sticky 位（mode ' + (stat.mode & 0o7777).toString(8)
+          + '）—— agent 可以替换平面里的条目',
+      }
+    }
+  }
+  const offenders: Array<{ path: string; stat: Stats }> = []
+  const dirStat = statOrUndefined(real)
+  if (dirStat === undefined) {
+    return { isolated: false, code: 'dir-missing', devMode: false, detail: '授权平面目录不存在：' + dir }
+  }
+  offenders.push({ path: real, stat: dirStat })
+  for (const name of [TRUSTED_KEYS_FILENAME, GRANT_FILENAME]) {
+    const stat = statOrUndefined(join(real, name))
+    if (stat !== undefined) offenders.push({ path: join(real, name), stat })
+  }
+  for (const entry of offenders) {
+    if (entry.stat.uid === euid) {
+      return {
+        isolated: false,
+        code: 'owner-is-agent-uid',
+        devMode: false,
+        detail: entry.path + ' 归运行 uid ' + euid + ' 所有 —— 这正是「agent 自铸信任锚」的形态；平面必须由人在另一个 uid 下持有',
+      }
+    }
+    if (pinned.uid !== undefined && entry.stat.uid !== pinned.uid) {
+      return {
+        isolated: false,
+        code: 'owner-not-allowed',
+        devMode: false,
+        detail: entry.path + ' 的属主 uid 是 ' + entry.stat.uid + '，而 ' + AUTHORITY_OWNER_UID_ENV + ' 要求 ' + pinned.uid,
+      }
+    }
+    if ((entry.stat.mode & 0o022) !== 0) {
+      return {
+        isolated: false,
+        code: 'group-or-other-writable',
+        devMode: false,
+        detail: entry.path + ' 带 group/other 写位（mode ' + (entry.stat.mode & 0o7777).toString(8) + '）—— 别的 uid 能改它就不是权威',
+      }
+    }
+  }
+  return {
+    isolated: true,
+    code: 'isolated',
+    devMode: false,
+    detail: '平面归 uid ' + dirStat.uid + '（≠ 运行 uid ' + euid + '），目录与文件无 group/other 写位，祖先链无 agent 可写目录',
+  }
 }
 
 /**
@@ -154,14 +398,21 @@ function isGrantPayload(value: unknown): value is GrantPayload {
     && typeof payload.expiresAt === 'string'
 }
 
+export interface VerifyOptions {
+  /** 是否接受带 payload.dev=true 的开发形态授权；缺省 false（fail-closed）。 */
+  allowDevGrant?: boolean
+}
+
 /**
  * 纯验签：给定授权文档文本与信任锚文本，判定是否授予实盘。
  * 不做任何 IO、不读环境、不抛异常 —— 全部失败路径都变成 { ok: false, reason }。
+ * 开发形态授权（payload.dev=true）缺省一律拒绝，只有显式 allowDevGrant 才接受。
  */
 export function verifyGrantDocument(
   grantText: string | undefined,
   trustedKeysText: string | undefined,
   now: number = Date.now(),
+  options: VerifyOptions = {},
 ): GrantVerification {
   const trustedKeys = parseTrustedKeys(trustedKeysText)
   if (trustedKeys.length === 0) {
@@ -212,6 +463,16 @@ export function verifyGrantDocument(
   if (payload.liveTrading !== true) {
     return { ok: false, reason: 'not-a-grant', detail: '授权文档 payload.liveTrading 不是 true —— 这份签名不构成实盘授权', payload, keyId: trusted.keyId }
   }
+  if (payload.dev === true && options.allowDevGrant !== true) {
+    return {
+      ok: false,
+      reason: 'dev-grant-not-accepted',
+      detail: '这份授权是开发形态（payload.dev=true）签出的：它只对同样显式设置 ' + AUTHORITY_DEV_ENV
+        + '=1 的读取端生效。生产形态请在另一个 uid 下重新签署（dev 标记在签名覆盖范围内，抹掉它会让签名失效）',
+      payload,
+      keyId: trusted.keyId,
+    }
+  }
   const issuedAt = Date.parse(payload.issuedAt)
   const expiresAt = Date.parse(payload.expiresAt)
   if (Number.isNaN(issuedAt) || Number.isNaN(expiresAt)) {
@@ -236,10 +497,11 @@ function readTextOrUndefined(file: string): string | undefined {
   }
 }
 
+/** 指纹含属主与权限位：光看 mtime/size 会让一次 chown/chmod 逃过缓存。 */
 function stampOf(file: string): string {
   try {
     const stat = statSync(file)
-    return stat.mtimeMs + ':' + stat.size
+    return stat.uid + ':' + stat.mode + ':' + stat.mtimeMs + ':' + stat.size
   } catch {
     return 'missing'
   }
@@ -248,37 +510,69 @@ function stampOf(file: string): string {
 interface CacheEntry {
   grantStamp: string
   keysStamp: string
+  dirStamp: string
+  /** 隔离检查的输入（euid / 允许属主 / dev opt-in）——它们一变，结论就不能复用。 */
+  planeKey: string
+  isolation: PlaneIsolationReport
   verification: GrantVerification
 }
 
 const cache = new Map<string, CacheEntry>()
 
-/** 判定平面当前状态（按 stat 指纹缓存，文件一变立刻重算）。 */
-export function verifyAtDirectory(dir: string, now: number = Date.now()): GrantVerification {
+export interface PlaneInspection {
+  isolation: PlaneIsolationReport
+  verification: GrantVerification
+}
+
+function planeKeyOf(euid: number | undefined, env: Record<string, string | undefined>): string {
+  return String(euid) + '|' + String(env[AUTHORITY_OWNER_UID_ENV] ?? '') + '|' + String(devOptIn(env))
+}
+
+/**
+ * 判定一个平面目录：先做隔离检查，再验签（两者都按 stat 指纹缓存，文件/属主一变立刻重算）。
+ * 目录不存在时隔离检查返回 dir-missing，验签照旧走到「没有信任锚」。
+ */
+export function inspectPlane(dir: string, options: AuthorityOptions = {}): PlaneInspection {
+  const env = options.env ?? process.env
+  const now = options.now ?? Date.now()
   const grantFile = join(dir, GRANT_FILENAME)
   const keysFile = join(dir, TRUSTED_KEYS_FILENAME)
   const grantStamp = stampOf(grantFile)
   const keysStamp = stampOf(keysFile)
+  const dirStamp = stampOf(dir)
+  const planeKey = planeKeyOf(options.euid ?? processEuid(), env)
   const cached = cache.get(dir)
-  if (cached !== undefined && cached.grantStamp === grantStamp && cached.keysStamp === keysStamp) {
+  if (cached !== undefined && cached.grantStamp === grantStamp && cached.keysStamp === keysStamp
+    && cached.dirStamp === dirStamp && cached.planeKey === planeKey) {
     // 与时间相关的判定（expired / not-yet-valid）不能吃缓存：文件没变，时间在走。
     const payload = cached.verification.payload
     const timeStable = cached.verification.reason !== 'granted' || payload === undefined
       || (now >= Date.parse(payload.issuedAt) && now < Date.parse(payload.expiresAt))
-    if (timeStable) return cached.verification
+    if (timeStable) return { isolation: cached.isolation, verification: cached.verification }
   }
-  const verification = verifyGrantDocument(readTextOrUndefined(grantFile), readTextOrUndefined(keysFile), now)
-  cache.set(dir, { grantStamp, keysStamp, verification })
-  return verification
+  const isolation = inspectPlaneIsolation(dir, { ...options, env })
+  const verification = verifyGrantDocument(
+    readTextOrUndefined(grantFile),
+    readTextOrUndefined(keysFile),
+    now,
+    { allowDevGrant: devOptIn(env) },
+  )
+  cache.set(dir, { grantStamp, keysStamp, dirStamp, planeKey, isolation, verification })
+  return { isolation, verification }
 }
 
-let mismatchSink: (message: string) => void = (message) => {
+/** 判定平面当前状态（按 stat 指纹缓存，文件一变立刻重算）。dev 形态授权缺省被拒。 */
+export function verifyAtDirectory(dir: string, now: number = Date.now()): GrantVerification {
+  return inspectPlane(dir, { now }).verification
+}
+
+let warningSink: (message: string) => void = (message) => {
   process.emitWarning(message, { code: 'DSH_TRADING_LIVE_AUTHORITY_MISMATCH' })
 }
 
-/** 替换镜像漂移的告警出口（测试记录用；生产缺省走 process.emitWarning）。 */
+/** 替换告警出口（测试记录用；生产缺省走 process.emitWarning）。 */
 export function setAuthorityMismatchSink(sink: ((message: string) => void) | undefined): void {
-  mismatchSink = sink ?? ((message) => process.emitWarning(message, { code: 'DSH_TRADING_LIVE_AUTHORITY_MISMATCH' }))
+  warningSink = sink ?? ((message) => process.emitWarning(message, { code: 'DSH_TRADING_LIVE_AUTHORITY_MISMATCH' }))
 }
 
 const reportedMismatch = new Set<string>()
@@ -287,10 +581,21 @@ function reportMismatch(dir: string, mirror: boolean, verification: GrantVerific
   const key = dir + '|' + verification.reason
   if (reportedMismatch.has(key)) return
   reportedMismatch.add(key)
-  mismatchSink(
+  warningSink(
     '[dsh-trading] 实盘镜像与授权平面不一致：preset 资产里 liveTrading=' + String(mirror)
     + '，但 ' + dir + ' 未授予实盘（' + verification.reason + '：' + verification.detail + '）。'
     + '授权平面是唯一授予者，镜像不能授予 —— 资产写 true 只会产生这条告警，不会打开实盘。',
+  )
+}
+
+const reportedDev = new Set<string>()
+/** 开发形态每次判定留痕（同一个目录只吼一次，避免热路径刷屏）。 */
+function reportDevMode(dir: string, isolation: PlaneIsolationReport): void {
+  if (reportedDev.has(dir)) return
+  reportedDev.add(dir)
+  warningSink(
+    '[dsh-trading][DEV] 实盘授权平面在开发形态下判定：' + dir + ' —— ' + isolation.detail
+    + '。生产形态必须把平面放在不属于 agent uid 的目录下（' + AUTHORITY_DIR_ENV + ' + 属主隔离）。',
   )
 }
 
@@ -299,20 +604,49 @@ function reportMismatch(dir: string, mirror: boolean, verification: GrantVerific
  *
  * 合取语义（只收紧）：allowed = mirror===true && 授权平面授予。
  * 镜像为 false 一律拒绝；镜像为 true 但平面未授予 ⇒ 拒绝 + 一次可见告警（mismatch）。
+ * 平面未配置 / 未与 agent uid 隔离 ⇒ 直接拒绝，**不读任何文件**（没有默认位置可读）。
  */
 export function liveTradingDecision(mirror: boolean | undefined, options: AuthorityOptions = {}): LiveTradingDecision {
-  const dir = authorityDir(options)
-  const verification = verifyAtDirectory(dir, options.now ?? Date.now())
+  const env = options.env ?? process.env
+  const location = resolveAuthorityLocation(options)
   const mirrorValue = mirror === true
+  const dev = devOptIn(env)
+  let isolation: PlaneIsolationReport | undefined
+  let verification: GrantVerification
+  if (location.dir === undefined) {
+    verification = {
+      ok: false,
+      reason: 'dir-not-configured',
+      detail: '授权平面目录未显式配置（' + AUTHORITY_DIR_ENV + ' 或 dir 选项）—— 本模块没有默认位置：'
+        + '缺省落在 $DSH_HOME/authority 等于把权威放进 agent 自己 uid 可写的目录（验收发现 #1）。'
+        + '请把平面指向一个不属于 agent uid 的目录。',
+    }
+  } else {
+    const inspection = inspectPlane(location.dir, { ...options, env })
+    isolation = inspection.isolation
+    verification = inspection.verification
+    if (!inspection.isolation.isolated && inspection.isolation.code !== 'dir-missing') {
+      verification = {
+        ok: false,
+        reason: 'plane-not-isolated',
+        detail: '授权平面未与 agent uid 隔离（' + inspection.isolation.code + '）：' + inspection.isolation.detail
+          + '。签名机制只解决「谁签的」，属主隔离才解决「平面归谁」—— 自铸的信任锚在这一步被挡下。',
+      }
+    }
+  }
+  if (dev && location.dir !== undefined && isolation !== undefined) reportDevMode(location.dir, isolation)
   const mismatch = mirrorValue && !verification.ok
-  if (mismatch) reportMismatch(dir, mirrorValue, verification)
+  if (mismatch && location.dir !== undefined) reportMismatch(location.dir, mirrorValue, verification)
   return {
     ...verification,
     granted: verification.ok,
     allowed: mirrorValue && verification.ok,
     mirror: mirrorValue,
     mismatch,
-    dir,
+    dir: location.dir,
+    dirSource: location.source,
+    devMode: dev,
+    isolation,
   }
 }
 
@@ -325,4 +659,5 @@ export function liveTradingEnabled(mirror: boolean | undefined, options: Authori
 export function resetAuthorityCache(): void {
   cache.clear()
   reportedMismatch.clear()
+  reportedDev.clear()
 }

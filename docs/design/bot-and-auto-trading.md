@@ -115,7 +115,7 @@ Rust/Go 侧车（判据未触发，见 §3）、Postgres / NATS / Redis、自建
 - 结构含范围（市场/标的白名单/现货或合约）、硬限额（单笔名义额、总敞口、杠杆、日亏、回撤、下单频率）、软限额（超计划仓位但仍在上限内 → 升级）、时段与有效期、升级通道、撤销方式；带版本与哈希；**intent 结构里没有额度字段**——不可表达即不可自我扩权。
 - **收紧随时可做；放宽必须重新授权**（主密钥 + 可信界面 + `isSubset` 判定；**未知字段视为放宽**）。
 - 撤销默认 `allow-reduce-only`。
-- **实盘开关必须迁出 agent 可写路径**：今天 `liveTrading: false` 写在 preset 资产 YAML（`packages/crypto/assets/preset/crypto-trader/agent.cordis.yml:48` 等）与 `packages/base/src/presets.ts:99`，位于 agent 可写文件里 ⇒ 实盘闸门第一段可被改写抹掉（红队 RT-04，已复核）。它必须迁到核心侧、uid 保护、人工签署的状态平面。
+- **实盘开关必须迁出 agent 可写路径**：今天 `liveTrading: false` 写在 preset 资产 YAML（`packages/crypto/assets/preset/crypto-trader/agent.cordis.yml:48` 等）与 `packages/base/src/presets.ts:99`，位于 agent 可写文件里 ⇒ 实盘闸门第一段可被改写抹掉（红队 RT-04，已复核）。它已迁到人工签署的状态平面（`@dshtrading/authority`，见 §13.3 的可执行形式）：平面目录**必须显式配置**（`$DSH_TRADING_AUTHORITY_DIR`，没有默认位置）；读取端拒绝任何归运行 uid（即 agent uid）所有的平面——平面目录、两份文件与整条祖先链都要与 agent uid 分离，且目录/文件不得带 group/other 写位（`plane-not-isolated`）；开发形态必须由名字里带 dev 的显式 opt-in 打开（`$DSH_TRADING_AUTHORITY_DEV_SAME_UID=1`）并留痕，其授权带 `payload.dev=true`（在签名覆盖范围内，抹掉即验签失败），生产读取端拒绝。运营侧 `init`/`sign` 必须声明 agent 的 uid，声明成运行 uid 自身即拒绝；`init` 拒绝覆盖已存在的信任锚。
 - 对外 API 里**永远不存在"打开实盘"这个端点**；「解除 kill」「放宽」属 `control` scope，**永不默认签发**。
 
 **官方 `approval/request` 只做人工升级适配器**，不承担 mandate 判定：它要求 open turn、派发不带工具参数、唯一授予词是一次性的 `allowed-once`，语义不足以承载授权。
@@ -246,7 +246,7 @@ shadow（只决策不下单，记录"本会怎么做"）→ paper（交易所模
 ### 授权与凭据
 1. **唯一凭据持有者 = 唯一授权判定者**：只有执行核持有交易凭据、只有执行核判 mandate、只有执行核能触达 venue。
 2. **核心与 agent 宿主不得共享 OS principal**（负面不变量：不写"某工具当前不存在"，只写"不得共享"）。
-3. **实盘开关不在 agent 可写路径上**：它属于核心侧、uid 保护、人工签署的状态平面；对外 API 永远不存在"打开实盘"这个端点。
+3. **实盘开关不在 agent 可写路径上**：它属于核心侧、uid 保护、人工签署的状态平面；对外 API 永远不存在"打开实盘"这个端点。**可执行形式（已落地）**：`packages/authority` 的读取端（a）要求平面目录显式配置，未配置一律拒绝（`dir-not-configured`）；（b）拒绝任何归运行 uid（agent uid）所有的平面——检查平面目录、两份文件与**整条祖先链**的属主，并拒绝带 group/other 写位的目录/文件（`plane-not-isolated`）；（c）开发形态只能由名字里带 dev 的显式 opt-in 打开并留痕，其授权带签名覆盖的 `payload.dev=true`，生产读取端拒绝（`dev-grant-not-accepted`）。`scripts/live-trading-gate.mjs` 的 LG4 每次真跑一遍「自铸信任锚 + 自签授权」并断言仍被拒。**仍未落地的是部署属性**：生产上的两个真实 uid 分离要等 P2/P5 的部署验证——本机同 uid 只能证明「同 uid 拿不到授权」，不能证明生产隔离强度。
 4. **`intent` 结构里没有额度字段**——不可表达即不可自我扩权；收紧自动生效，放宽需主密钥 + 可信界面 + `isSubset`，**未知字段视为放宽**。
 5. **approval seam 失效不得放行**：宿主侧只做单调拒绝，永不作为授权来源；`approval/request` 只承担人工升级适配器。
 6. **撤销默认 `allow-reduce-only`**；任何"停止/中断"路径都不得被理解为"已回滚"（取消不是补偿动作）；`cancel_all` 作用域必填，不接受裸"全撤"。
