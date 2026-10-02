@@ -289,3 +289,19 @@
 
 **执行后**：按本手册 §7 的登记格式，把记录（时间、命令、输出、含 x-simulated-trading 的证据、
 异常与处置）写在本节下方，并更新 docs/p5-acceptance-checklist.md 的三档现状表。
+
+### 第 2 档执行记录（2026-10-02 11:37，agent 执行，凭证由人提供）
+
+**命令**：OKX_DEMO_API_KEY / OKX_DEMO_SECRET_KEY / OKX_DEMO_PASSPHRASE 三项由人在环境里提供后执行
+pnpm --filter @dshtrading/connector-okx test（凭证只在环境变量里传递，**未写入任何文件、未入库**）。
+
+**结果（真实输出）**：
+
+    ✓ OKX demo 只读签名端点（需 OKX_DEMO_* 环境变量） > GET /api/v5/account/balance（模拟盘）   1248ms
+    ✓ OKX demo 只读签名端点（需 OKX_DEMO_* 环境变量） > GET /api/v5/account/positions（模拟盘）  314ms
+    Test Files  1 failed | 7 passed (8)      Tests  1 failed | 93 passed (94)
+
+**判定**：
+- **模拟盘确实被打通**：两条带凭证的 demo 只读签名端点**真的执行**（无凭证时它们是 skipped，基线 92 passed | 2 skipped）⇒ 这是"真的打到模拟盘"的可查证据。
+- **整档尚未判通过**：唯一失败是 test/trade.test.ts 的 resolveCredentials > demo ref 未命中 → TRADING_CREDENTIALS_MISSING。根因是**该用例不 hermetic** —— 它假定 OKX_DEMO_* 不存在，而本次操作者环境里有 ⇒ 解析器成功解析出 3 个凭据，断言"应当报缺凭据"不成立。**不是模拟盘连通性问题，也不是生产语义问题**（正由 task-5 修，修好后应在带凭据下 94 passed | 0 skipped）。
+- **安全提醒**：本次凭证由人贴在对话里，**建议验收后到 OKX 模拟盘作废重建这对 key**。
