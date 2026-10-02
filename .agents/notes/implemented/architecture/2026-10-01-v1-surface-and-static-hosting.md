@@ -65,12 +65,48 @@
 
 测试 6 例：带游标续推且 seq 严格递增；不带游标只推新事件；**游标过期 ⇒ resync + 从快照续读且不重复推旧 seq**；单向下行下客户端消息一律 ignored；缺 read 平面 ⇒ 只发 error 帧并关闭；maxBatch 限制每轮帧数。tradectl 累计 **153 例全绿**。
 
+## 宿主接线：平面只能来自设备（2026-10-02 补）
+
+`attachV1Surface(register, options)` 从"挂一条 `/v1` 的 drill 口"变成**真实宿主**：它接受 edge 的
+`BusinessRouteRegistrar`（第三参数是已鉴权设备），登记 `/v<major>/cards`（read）与
+`/v<major>/commands`（下限 read），并**逐请求**把 `device.scopes` 传进 `handleV1`/`handleV1Async`。
+契约上不给宿主持有一份平面的机会：宿主配置类型是 `V1HostOptions = Omit<V1SurfaceOptions,'scopes'>`
+——留一个可传入的 `scopes` 就是留一条"宿主写死三个平面"的路（`packages/cockpit/drill/serve.mjs`
+正是那样写的），而那种形态下**撤销一台设备后它的令牌在 edge 那层失效、宿主里那份平面却仍然
+让每个请求有全部权限**。
+
+**命令面在路径层的作用域下限是 read，不是 command**（订正 F2 的一处注释）：`POST /v1/commands`
+上的动作横跨三个平面（`ACTION_SCOPE`：ack/dismiss 是 read、approve/reject 是 command、
+kill/flatten/grant-control 是 control），而 edge 只看路径、不看请求体。在这一层声明 command 会把
+read 类动作对只有 read 的设备变成 403 —— 而那正是"我能看到这条升级"与"我要不要批准它"的分界。
+三个平面的权威判定在**动作级**（`handleCommand` 逐动作查 `ACTION_SCOPE`，缺平面回
+`403 SCOPE_REQUIRED` + `required` + `granted`）。
+
+**每台设备一份面对象（`WeakMap<Device, V1SurfaceOptions>`）**：命令面的幂等账挂在 options 的
+**对象身份**上（`ledgerFor` 用 WeakMap 取账），逐请求 `{...options}` 会让每个请求拿到一本空账
+—— 同一个 `clientRequestId` 重放会**再执行一次**且没有任何报错。按设备建对象顺带把账按客户端分开
+（两台设备的同号请求不再互相判冲突），设备对象被换掉或回收时旧账随之消失。
+
+**下行流同样只能由已鉴权设备建**：`createV1StreamForDevice(device, options)`（`stream-v1.ts`）
+把 `scopes` 钉死在设备上，会话多一个 `deviceId`；缺平面时拒绝帧带 `required`
+（`{type:'error',code:'SCOPE_REQUIRED',required:'read'}`）。下行是有状态的长连接，宿主自带一份
+`scopes` 的后果比一次请求严重得多（撤销后那条连接还能继续推持仓与决策）。
+
+**测试 5 例**（`api-v1-host.test.ts`：真 edge、真 HTTP、真设备令牌，无 mock 无 sleep）：
+卡片面用设备的平面取数（配对设备 200、伪造令牌 401、撤销后同一令牌立刻 401）；
+命令面按 ACTION_SCOPE 逐动作判平面（read 设备 ack 200 且执行核只被调用一次；approve 403
+`required=command`、kill 403 `required=control`，两条的 `granted` 都如实回 `["read"]` —— 宿主若
+自带一份三平面，这里会显示三个平面）；显式授予 control 后同一个 kill 动作 200；
+同一 `clientRequestId` 经宿主重放 `replayed=true` 且执行核只被调用一次；
+只有 command 平面的设备连不上下行流（只发带 `required` 的拒绝帧、一个事件都不推），
+持 read 的设备经宿主拿到事件帧且会话带 `deviceId`。
+
 ## 未验证项（如实标注）
 
-- **SPA 本体未做**：本步只落地服务端一半（/v1 面 + 静态托管）；React/Vite 前端与 ui-screenshot-verify 截图属客户端一半。
-- ~~写路径未实现~~ **一元写端点与 WS 单向下行都已就绪**（见下两节）；服务端三件套（读面 / 写面 / 下行面）齐了，缺的是**前端一半**。
-- ~~scope 校验尚未接进 /v1~~ **已接入**（协商 → scope → 取数，见上）；仍未做的是**写路径的 scope 判定**（写路径本身还没实现）。
-- **静态托管的性能与压缩未测**（没有 gzip/br、没有 ETag）。
+- ~~SPA 本体未做~~ **已做**：React/Vite 独立 SPA 与 ui-screenshot-verify 截图在 `@dshtrading/cockpit`，事实的家是 `2026-10-01-cockpit-spa-skeleton.md`。本面仍保留 `/v1/assets/**` 的**鉴权**静态分支（面自己的托管口，drill 与 API 客户端用它）；**免令牌的静态壳**由 edge 托管（§7.4 裁决，见 edge 的 Note）。
+- ~~写路径未实现~~ **一元写端点与 WS 单向下行都已就绪**（见下两节）；服务端三件套（读面 / 写面 / 下行面）齐了。
+- ~~scope 校验尚未接进 /v1~~ **已接入**（协商 → scope → 取数）**且写路径是动作级判定**（`handleCommand` 查 `ACTION_SCOPE`）；平面逐请求来自 edge 交下来的设备（见"宿主接线"）。
+- **静态托管还没有 ETag**（条件请求未做）；压缩已做（gzip + br 预压缩协商），**真实网络下的收益仍未测**。
 
 ## 被否决的方案
 

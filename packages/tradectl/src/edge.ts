@@ -21,11 +21,14 @@
  * @module @dshtrading/tradectl/edge
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { join } from 'node:path'
+import { extname, join, resolve } from 'node:path'
 import { SCOPE_PLANES, grantableByDefault, isScopePlane, type ScopePlane } from '@dshtrading/contract'
+// 运行期单向依赖：edge → api-v1（api-v1 只从本模块取类型）。静态壳的发送规则（遍历/扩展名/
+// 缓存/预压缩协商）只有一处家，edge 不复制第二份。
+import { CONTENT_TYPES, serveStatic, writeV1Response } from './api-v1.ts'
 
 /** 作用域。control = 紧急刹车，永不默认签发；词汇表的家是 %%@dshtrading/contract/scopes%%。 */
 export const SCOPES = SCOPE_PLANES
@@ -68,6 +71,19 @@ export interface Device {
   readonly scopes: readonly Scope[]
   readonly secretHash: string
   readonly createdAtMs: number
+}
+
+/** 设备 id 的形态（注册表签发它）：%%dev_%% + 8 字节十六进制。**只比较不解析**。 */
+export const DEVICE_ID_PATTERN = /^dev_[0-9a-f]{16}$/
+
+/**
+ * 判一个值是不是设备 id。运维入口（%%bin/grant-control.mjs%%）用它把通配、批量与半截 id
+ * 挡在注册表之前：一个 %%*%% 或一个逗号列表如果能通过，"授予一台设备的紧急刹车"就变成了
+ * "授予所有人" —— 而 control 是停掉一切的开关。
+ * @param value - 待判值（命令行、JSON 体都可能是任意类型）。
+ */
+export function isDeviceId(value: unknown): value is string {
+  return typeof value === 'string' && DEVICE_ID_PATTERN.test(value)
 }
 
 /** 设备注册表（内存 + 明文密钥一次性返回；本轮不落盘，见 Note 的未验证项）。 */
@@ -153,6 +169,11 @@ export type BusinessHandler = (req: IncomingMessage, res: ServerResponse, device
 /** 登记一条业务路由；%%requiredScope%% 缺省 read —— 命令面路径必须显式声明 command。 */
 export type BusinessRouteRegistrar = (path: string, handler: BusinessHandler, requiredScope?: Scope) => void
 
+/** 静态壳的托管配置（设计 §7.4 裁决）：给了就把该目录当作驾驶舱的静态壳。 */
+export interface StaticShellOptions {
+  readonly dir: string
+}
+
 export interface EdgeOptions {
   readonly host: string
   readonly port: number
@@ -161,6 +182,11 @@ export interface EdgeOptions {
   readonly now: () => number
   /** 行情/agent 面：注册在 A0 之后、鉴权之后（可抛错，A0 不受影响）。 */
   readonly registerBusinessRoutes?: (register: BusinessRouteRegistrar) => void
+  /**
+   * 静态壳目录（可选）：给了就按 §7.4 的裁决托管它 —— 壳入口与壳资源免令牌（仅 GET/HEAD、
+   * 精确路径），其余一律 Bearer。不给就一条静态路径都不开（默认是"最小暴露面"）。
+   */
+  readonly shell?: StaticShellOptions | undefined
 }
 
 export interface EdgeGateway {
@@ -180,6 +206,147 @@ export const HEALTH_PATH = '/healthz'
  * 会顺手把整个数据面都放行。
  */
 export const PUBLIC_PATHS = [PAIR_PATH, HEALTH_PATH] as const
+
+/**
+ * **静态壳的固定入口路径**（写死的常量表，与 %%PUBLIC_PATHS%% 同款）。
+ *
+ * 设计 §7.4「静态壳 vs 令牌的裁决（2026-10-02）」：SPA 的静态壳（HTML/JS/CSS/图标）可以
+ * 免令牌 —— 浏览器导航带不了 %%Authorization%% 头，要令牌等于驾驶舱在浏览器里永远打不开；
+ * **一切数据与命令端点一律 Bearer**。白名单里**只准列静态资源、永不列数据路径**。
+ *
+ * 两个必须同时成立的性质：
+ *   1. **仅 GET/HEAD**：其它方法不落在壳分支上，照常走鉴权（`POST /index.html` 无令牌 = 401）；
+ *   2. **精确路径**：不做任何前缀匹配 —— 一个形如 %%/v1/%% 的前缀会在"放行壳资源"的名义下
+ *      把整个数据面放行（P2 的 %%PUBLIC_PATHS%% 已经因为同一条理由拒绝过前缀匹配）。
+ *
+ * 壳资源的路径**不能**写死在这张表里：构建产物带内容哈希（%%index-DzJBWwwi.js%%），
+ * 写死等于"每次重新构建驾驶舱都要改 edge 源码"，而漏改的失效形态是**壳 404**（不是报错）。
+ * 所以资源的精确路径在启动时从壳目录枚举（%%createStaticShell%%），并与这张表一起构成
+ * 免令牌集合：规则是常量（这张表 + 扩展名白名单 + 命名空间守卫），集合在启动时定死。
+ */
+export const SHELL_ENTRY_PATHS = ['/', '/index.html'] as const
+
+/** 壳资源只准落在这个前缀下（SPA 构建的 base）；%%/v1%% 下的其它路径一律是数据路径。 */
+export const SHELL_ASSET_PREFIX = '/v1/assets/'
+
+/**
+ * 壳目录里允许出现的扩展名 —— **比 api-v1 的静态白名单更窄**：
+ * 没有 %%'.json'%%（那是数据的形状）、没有 %%'.map'%%（源码不该走免令牌通道）。
+ */
+export const SHELL_EXTENSIONS = ['.html', '.js', '.mjs', '.css', '.svg', '.png', '.ico', '.webmanifest', '.woff2'] as const
+
+/** 构建期预压缩产物的后缀：它们是 %%serveStatic%% 的兄弟文件，不单独成为一条公开路径。 */
+const SHELL_COMPRESSION_SUFFIXES = ['.gz', '.br'] as const
+
+/** 一个已解析的静态壳：精确路径集合 + 每条路径对应的文件。 */
+export interface StaticShell {
+  readonly dir: string
+  /** 免令牌的**精确路径**集合（已排序、无重复；不含任何数据路径）。 */
+  readonly paths: readonly string[]
+  /** URL 路径 → 相对 %%dir%% 的相对路径。 */
+  readonly files: ReadonlyMap<string, string>
+}
+
+/**
+ * 判一条路径是不是**数据路径**（永远不许进壳白名单）。
+ * 这里刻意不列举 %%/v1/cards%% 这类具体路径：壳白名单只准待在 %%/v1/assets/%% 命名空间里，
+ * 而数据面的路径名是宿主的事（在 edge 里再抄一份就是第二个事实之家）。
+ * @param path - 待判路径。
+ */
+export function isDataPath(path: string): boolean {
+  if (path === HEALTH_PATH || path === PAIR_PATH) return true
+  if (path === '/a0' || path.startsWith('/a0/')) return true
+  if (path === '/pair' || path.startsWith('/pair/')) return true
+  // /v1 下的壳资源只在 SHELL_ASSET_PREFIX 之下；其余（/v1/cards、/v1/commands、/v1/…）
+  // 一律按数据路径处理 —— 这条是"数据路径落到壳白名单里"的正面守卫（启动即抛错）。
+  if (path === '/v1' || path.startsWith('/v1/')) return !path.startsWith(SHELL_ASSET_PREFIX)
+  return false
+}
+
+/**
+ * **碰撞守卫**：一条路径要么是壳入口，要么待在 %%/v1/assets/%% 命名空间里；落在数据命名空间
+ * （%%/a0/*%%、%%/pair/*%%、%%/healthz%%、%%/v1/%% 下非壳资源的路径）即抛错。
+ * 为什么必须是启动期抛错：数据路径混进免令牌集合的形态是"这条数据不用令牌就能取"，
+ * 而它**不会有任何报错** —— 只有在拿到数据的人那里才看得出来。调用点有三处：
+ * 枚举出的每条壳资源、常量入口表本身（常量也可能被人改错）、以及业务路由登记。
+ * @param path - 候选路径。
+ */
+export function assertShellPathAllowed(path: string): void {
+  if (isDataPath(path)) {
+    throw new Error('createStaticShell: ' + path + ' 落在数据命名空间里 —— 壳白名单永不列数据路径（§7.4 裁决）')
+  }
+}
+
+/**
+ * 壳文件的 URL 路径：**镜像构建产物自己的布局**，不发明一套更漂亮的。
+ *
+ * 两条规则，来自 2026-10-02 用真实产物（`packages/cockpit/dist`）对齐后的实测：
+ *   - **根下的文件**按根路径（`index.html`、`favicon.svg`）；
+ *   - **子目录里的文件**镜像到 `SHELL_ASSET_PREFIX + 相对路径`。
+ * 第二条看着"多了一层"是有原因的：构建的 `base = '/v1/assets/'` 与 `entryFileNames = 'assets/…'`
+ * 叠加后，产物 index.html 里引用的就是 **`/v1/assets/assets/index-DzJBWwwi.js`**（实测）。
+ * 若按"更顺眼"的写法去掉一层，浏览器真正请求的 URL 就不在白名单里 ⇒ **壳资源 401**
+ * —— 而这条失效在单测里看不出来（单测用的是我自己造的目录形状）。
+ */
+function shellUrlPathOf(relativePath: string): string {
+  return relativePath.includes('/') ? SHELL_ASSET_PREFIX + relativePath : '/' + relativePath
+}
+
+/**
+ * 解析一个静态壳目录：枚举出**精确**的免令牌路径集合，任何一条不合规即抛错（fail-closed）。
+ *
+ * 六条守卫，每条都对应一种"看起来能跑"的坏形态：
+ *   1. 没有 %%index.html%% ⇒ 抛错（指向一个空壳等于把驾驶舱变成 404 页）；
+ *   2. 扩展名不在 %%SHELL_EXTENSIONS%% ⇒ 抛错（壳目录里出现 %%secret.json%% 这类文件时，
+ *      静默忽略会让"它到底公不公开"变成一个没人知道答案的问题）；
+ *   3. 每条扩展名必须在 %%CONTENT_TYPES%% 里有 content-type ⇒ 抛错（两张表漂移会发出发不出的类型）；
+ *   4. 路径落在数据命名空间（%%isDataPath%%）⇒ 抛错（数据路径落到壳白名单里 = 数据免令牌）；
+ *   5. 枚举出的每条路径（以及常量入口表本身）都过 %%assertShellPathAllowed%% —— 命名空间守卫，见它自己的说明；
+ *   6. %%'/index.html'%% 必须真的在集合里（入口表与目录内容对不上就抛错）。
+ *
+ * @param dir - SPA 构建产物根目录。
+ */
+export function createStaticShell(dir: string): StaticShell {
+  const root = resolve(dir)
+  if (!existsSync(join(root, 'index.html'))) {
+    throw new Error('createStaticShell: ' + root + ' has no index.html —— 拒绝把空目录当成静态壳（驾驶舱会变成 404）')
+  }
+  const files = new Map<string, string>()
+  const walk = (relativeDir: string): void => {
+    const absoluteDir = relativeDir === '' ? root : join(root, relativeDir)
+    for (const entry of readdirSync(absoluteDir, { withFileTypes: true })) {
+      const relativePath = relativeDir === '' ? entry.name : relativeDir + '/' + entry.name
+      if (entry.isDirectory()) {
+        walk(relativePath)
+        continue
+      }
+      if (!entry.isFile()) continue
+      const extension = extname(entry.name).toLowerCase()
+      if ((SHELL_COMPRESSION_SUFFIXES as readonly string[]).includes(extension)) continue
+      if (!(SHELL_EXTENSIONS as readonly string[]).includes(extension)) {
+        throw new Error(
+          'createStaticShell: ' + relativePath + ' 的扩展名 ' + extension + ' 不在壳白名单里（'
+          + SHELL_EXTENSIONS.join('/') + '）—— 壳目录里不放数据文件；要么移走它，要么显式加进白名单',
+        )
+      }
+      if (CONTENT_TYPES[extension] === undefined) {
+        throw new Error('createStaticShell: 壳扩展名 ' + extension + ' 在 api-v1 的静态白名单里没有 content-type（两张表漂移了）')
+      }
+      const urlPath = shellUrlPathOf(relativePath)
+      assertShellPathAllowed(urlPath)
+      files.set(urlPath, relativePath)
+    }
+  }
+  walk('')
+  if (!files.has('/index.html')) throw new Error('createStaticShell: 枚举后没有 /index.html（壳入口表与目录内容对不上）')
+  // '/' 就是壳入口本身（浏览器打开站点根拿到的应该是驾驶舱，而不是 404）。它是**入口表里
+  // 唯一的非文件路径**，在 files 里指向 index.html —— 于是"路径在不在白名单里"仍是一张表说了算。
+  files.set('/', 'index.html')
+  // 入口表也要过守卫：它现在是常量、是对的，但"是常量"不等于"不会被人改成数据路径"
+  for (const entry of SHELL_ENTRY_PATHS) assertShellPathAllowed(entry)
+  const paths = [...new Set([...SHELL_ENTRY_PATHS, ...files.keys()])].sort()
+  return { dir: root, paths, files }
+}
 
 const PAIR_MAX_BODY_BYTES = 4 * 1024
 /** 同源窗口内失败上限与窗口长度（防爆破；成功即清零）。 */
@@ -225,9 +392,13 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
 /**
  * 业务路由的缺省作用域 = read。分档的粒度在**动作**上而不是在 HTTP 方法上：契约的
  * ACTION_SCOPE 里 ack/dismiss 是 read，approve/reject 是 command，kill/flatten 是 control，
- * 它们走的是同一条 POST 路径 —— 所以命令面路径必须自己声明 command（edge 只看路径，
- * 不看请求体），动作级的判定由 %%/v1%% 面（handleV1Async 的 ACTION_SCOPE）用 edge 交下来的
- * 设备 scopes 做。
+ * 它们走的是同一条 POST 路径 —— 而 edge 只看路径、不看请求体。
+ *
+ * 由此有一条容易被写反的结论（2026-10-02 订正）：命令面路径在这一层的作用域下限是
+ * **read，不是 command**。声明 command 会把同一路径上的 read 类动作（ack/dismiss）对
+ * 只有 read 的设备变成 403 —— 而那正是"我能看到这条升级"与"我要不要批准它"的分界。
+ * 三个平面的权威判定在动作级（api-v1 的 handleCommand 用 ACTION_SCOPE 逐动作判，
+ * 缺平面回 403 且带 required）；这一层只管"没令牌、没 read 的调用方根本进不来"。
  */
 const DEFAULT_BUSINESS_SCOPE: Scope = 'read'
 
@@ -250,6 +421,10 @@ export async function createEdgeGateway(options: EdgeOptions): Promise<EdgeGatew
     throw new Error('edge gateway refuses to bind ' + options.host + ': the only network exposure must stay on loopback or a private interface')
   }
   mkdirSync(join(options.killStatePath, '..'), { recursive: true, mode: 0o700 })
+  // 静态壳在**起服务之前**解析：目录不合规（数据文件混进来、入口缺失）必须表现为启动失败，
+  // 而不是运行期某条路径 404 —— 壳白名单是安全边界，边界只能在启动时定死一次。
+  const shell = options.shell === undefined ? null : createStaticShell(options.shell.dir)
+  const shellPaths = new Set<string>(shell?.paths ?? [])
   const business = new Map<string, { handler: BusinessHandler; requiredScope?: Scope }>()
   /** 配对失败计数（同源维度，防爆破）。 */
   const pairFailures = new Map<string, { count: number; firstAtMs: number }>()
@@ -310,6 +485,19 @@ export async function createEdgeGateway(options: EdgeOptions): Promise<EdgeGatew
       sendJson(res, 200, { ok: true, atMs: options.now() })
       return
     }
+    // 静态壳（设计 §7.4 裁决）：**仅 GET/HEAD + 精确路径**命中壳资源时免令牌。
+    // 非 GET/HEAD 的请求刻意**不**落进这个分支（不在这里回 405）：它要继续走鉴权，
+    // 于是 `POST /index.html` 无令牌是 401 而不是 405 —— "非 GET 方法不免令牌"是可用测试
+    // 钉住的边界，而"先看路径存在再谈鉴权"正是这条闸门要避免的形态。
+    if (shell !== null && (req.method === 'GET' || req.method === 'HEAD')) {
+      const relative = shell.files.get(path)
+      if (relative !== undefined) {
+        // 发送规则复用 api-v1 的 serveStatic：目录遍历、扩展名白名单、index 不缓存、
+        // 预压缩协商（.br/.gz）只有一处家。预压缩路径也因此**不会**绕过壳白名单。
+        writeV1Response(res, serveStatic(relative, shell.dir, req.headers['accept-encoding']))
+        return
+      }
+    }
     // 表外的一切路径都要设备令牌 —— A0 与业务面（%%/v1%% 数据面与命令面）共用这一道闸门。
     // 业务面曾经直连 handler：那是"内网所以放过"的默认，等于把持仓/决策/命令面交给任何一个
     // 能连上内网的东西（§12.4：设备级令牌、逐设备撤销、作用域分级一条都不省）。
@@ -319,6 +507,12 @@ export async function createEdgeGateway(options: EdgeOptions): Promise<EdgeGatew
       return
     }
     if (!(A0_PATHS as readonly string[]).includes(path)) {
+      // 壳路径 + 错方法：能走到这里说明方法不是 GET/HEAD（GET/HEAD 已在鉴权前命中壳分支）。
+      // 鉴权已经过了，所以这里回 405 是安全的 —— 未鉴权的调用方在上一步就收到 401。
+      if (shellPaths.has(path)) {
+        sendJson(res, 405, { code: 'EDGE_METHOD_NOT_ALLOWED', message: 'the static shell only serves GET/HEAD: ' + path })
+        return
+      }
       // 业务面（行情/agent）：先鉴权、再判 scope、最后才碰 handler —— 顺序不能反，
       // 反了就等于"没令牌也能看出哪条路径存在、并且把它跑起来"。
       const route = business.get(path)
@@ -378,9 +572,13 @@ export async function createEdgeGateway(options: EdgeOptions): Promise<EdgeGatew
   })
 
   options.registerBusinessRoutes?.((path, handler, requiredScope) => {
-    // 会静默失效的登记一律 fail-fast：公开路径由网关自己服务，A0 路径在业务面之前就分支掉了。
+    // 会静默失效的登记一律 fail-fast：公开路径由网关自己服务，A0 路径在业务面之前就分支掉了，
+    // 静态壳路径在鉴权之前就命中 —— 登记到它们上面等于这条路由永远轮不到（而"永远轮不到"
+    // 的表现是接口 404/200 混乱，不是报错）。这一条同时是"数据路径落到壳白名单里"的
+    // 启动期守卫：真撞上就起不来（§7.4 裁决的碰撞守卫）。
     if ((PUBLIC_PATHS as readonly string[]).includes(path)) throw new Error('edge business route ' + path + ' collides with a public path')
     if ((A0_PATHS as readonly string[]).includes(path)) throw new Error('edge business route ' + path + ' collides with an A0 path')
+    if (shellPaths.has(path)) throw new Error('edge business route ' + path + ' collides with a static shell path')
     if (requiredScope !== undefined && !isScopePlane(requiredScope)) throw new Error('edge business route ' + path + ' declares an unknown scope')
     business.set(path, requiredScope === undefined ? { handler } : { handler, requiredScope })
   })

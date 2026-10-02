@@ -27,9 +27,14 @@ import {
   type ScopePlane,
   type Card,
 } from '@dshtrading/contract'
+// 只有类型从这里来（运行期 edge → api-v1 单向依赖 serveStatic），所以没有循环导入
+import type { BusinessRouteRegistrar, Device } from './edge.ts'
 
-/** 允许的静态资源扩展名与 content-type（白名单，不做 MIME 嗅探）。 */
-const CONTENT_TYPES: Record<string, string> = {
+/**
+ * 允许的静态资源扩展名与 content-type（白名单，不做 MIME 嗅探）。
+ * 导出：edge 的静态壳托管要按**同一张表**判"这个扩展名能不能发"，两处各写一份会漂移。
+ */
+export const CONTENT_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
@@ -37,6 +42,8 @@ const CONTENT_TYPES: Record<string, string> = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
   '.woff2': 'font/woff2',
   '.map': 'application/json; charset=utf-8',
 }
@@ -226,17 +233,124 @@ export function serveStatic(relativePath: string, staticDir: string, acceptEncod
 }
 
 /**
- * 把 /v1 面挂到一个与 edge 的 register 同形的端口上（复用 P2 的 edge 网关）。
- * @param register - edge 提供的路由注册口。
- * @param options - 面配置。
+ * 宿主配置：**没有 scopes 字段**。
+ *
+ * 为什么用 Omit 而不是"把 scopes 标成可选"：平面只能来自 edge 交下来的已鉴权设备
+ * （`register` 的 handler 第三参数）。留一个可传入的 scopes 就等于留了一条"宿主自己
+ * 写死三个平面"的路 —— 2026-10-02 的 drill 宿主正是那样写的（`scopes: ['read','command','control']`），
+ * 于是任何一台只有 read 的设备都能下 control 动作。类型上不给这个口子，比注释里要求更可靠。
  */
-export function attachV1Surface(register: (path: string, handler: (req: IncomingMessage, res: ServerResponse) => void) => void, options: V1SurfaceOptions): void {
-  register('/v1', (req, res) => {
-    const headers: Record<string, string | undefined> = {}
-    for (const [key, value] of Object.entries(req.headers)) headers[key.toLowerCase()] = Array.isArray(value) ? value.join(',') : value
-    const result = handleV1({ method: req.method ?? 'GET', path: new URL(req.url ?? '/', 'http://edge').pathname, headers }, options)
-    writeV1Response(res, result)
+export type V1HostOptions = Omit<V1SurfaceOptions, 'scopes'>
+
+/** 卡片读面的路径后缀（版本前缀之外的部分）。 */
+export const V1_CARDS_SUFFIX = 'cards'
+/** 命令写面的路径后缀。 */
+export const V1_COMMANDS_SUFFIX = 'commands'
+
+/**
+ * 命令面路径在 **edge 这一层**的作用域下限 = read。
+ *
+ * 为什么不是 command：`POST /v1/commands` 上的动作横跨三个平面（契约 `ACTION_SCOPE`：
+ * ack/dismiss/open-detail 是 read，approve/reject 是 command，kill/flatten/grant-control 是 control），
+ * 而 edge **只看路径、不看请求体**。在这一层声明 command 会把 read 类动作对只有 read 的
+ * 设备变成不可达 —— 而 read 正是"我能看这条升级但要不要批准得先有 command"的那个平面。
+ * 权威判定在动作级（`handleCommand` 用 ACTION_SCOPE 逐动作判），缺平面一律
+ * `403 SCOPE_REQUIRED` + `required`；这一层只保证"没令牌/没 read 的调用方根本进不来"。
+ */
+export const COMMAND_PATH_FLOOR_SCOPE: ScopePlane = 'read'
+
+/** 请求头映射（小写键；同名多值合并，与 edge 的口径一致）。 */
+function headersOf(req: IncomingMessage): Record<string, string | undefined> {
+  const headers: Record<string, string | undefined> = {}
+  for (const [key, value] of Object.entries(req.headers)) headers[key.toLowerCase()] = Array.isArray(value) ? value.join(',') : value
+  return headers
+}
+
+/**
+ * 读请求体，**到上限就停**（limitBytes + 1 字节即足够让面判 413）。
+ * 不设界等于把内存交给对端：这条路径在鉴权之后，但"已鉴权"不代表"可以拿内存打它"。
+ */
+function readBodyWithin(req: IncomingMessage, limitBytes: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    req.on('data', (chunk: Buffer) => {
+      if (size > limitBytes) return
+      chunks.push(chunk)
+      size += chunk.length
+    })
+    req.on('end', () => resolve(Buffer.concat(chunks).subarray(0, limitBytes + 1).toString('utf8')))
+    req.on('error', reject)
   })
+}
+
+/**
+ * 把 /v1 面挂到 edge 的路由注册口上（宿主接线，P4 步骤 3 的下半段）。
+ *
+ * 三条接线纪律，每条都对应一种"看起来正常"的失效：
+ *   1. **平面来自设备**：`device.scopes`（handler 第三参数，edge 已经验过令牌）逐请求传进
+ *      `handleV1`/`handleV1Async`；宿主**不自带**一份 scopes（`V1HostOptions` 里没有这个字段）。
+ *      自带一份的形态是：撤销一台设备后它的令牌在 edge 那层失效，但宿主里写死的三个平面
+ *      仍然让每个请求"有全部权限"。
+ *   2. **卡片面要 read、命令面在动作级判**：路径层只声明下限（命令面是 read，理由见
+ *      `COMMAND_PATH_FLOOR_SCOPE`），动作级判定在 `handleCommand` 的 ACTION_SCOPE 上。
+ *   3. **异步结果也要走唯一写出口**：命令面是 async 的，写回仍必须经 `writeV1Response`
+ *      （手写 `res.end(result.body)` 会把 gzip 的字节路径写成空体）。
+ *
+ * @param register - edge 提供的路由注册口（第三参数是已鉴权设备）。
+ * @param options - 面配置（不含 scopes）。
+ */
+export function attachV1Surface(register: BusinessRouteRegistrar, options: V1HostOptions): void {
+  const version = '/v' + String(options.serverMajor)
+  /**
+   * 每台设备一份面配置对象，**身份稳定**。
+   * 为什么不能每请求 `{ ...options, scopes }` 出一个新对象：命令面的幂等账挂在 options
+   * 的对象身份上（%%ledgerFor%% 用 WeakMap 取账）。每请求一个新对象 ⇒ 每个请求都拿到一本
+   * **空账** ⇒ 同一个 clientRequestId 重放会**再执行一次**，而且没有任何报错 ——
+   * 幂等在最需要它的地方（重试）静默失效。
+   * 顺带得到的两条事实：账按设备分（两个客户端的同号请求不再互相判冲突），
+   * 设备对象被换掉（重新授予/重新配对）或回收时旧账随之消失（WeakMap）。
+   */
+  const perDevice = new WeakMap<Device, V1SurfaceOptions>()
+  const perRequest = (device: Device): V1SurfaceOptions => {
+    const existing = perDevice.get(device)
+    if (existing !== undefined) return existing
+    const created: V1SurfaceOptions = { ...options, scopes: device.scopes }
+    perDevice.set(device, created)
+    return created
+  }
+
+  register(version + '/' + V1_CARDS_SUFFIX, (req, res, device) => {
+    const request: V1Request = {
+      method: req.method ?? 'GET',
+      path: new URL(req.url ?? '/', 'http://edge').pathname,
+      headers: headersOf(req),
+    }
+    writeV1Response(res, handleV1(request, perRequest(device)))
+  }, 'read')
+
+  register(version + '/' + V1_COMMANDS_SUFFIX, (req, res, device) => {
+    const maxBytes = options.maxBodyBytes ?? 8_192
+    void readBodyWithin(req, maxBytes)
+      .then((body) => {
+        const request: V1Request = {
+          method: req.method ?? 'POST',
+          path: new URL(req.url ?? '/', 'http://edge').pathname,
+          headers: headersOf(req),
+          body,
+        }
+        return handleV1Async(request, perRequest(device))
+      })
+      .then((result) => { writeV1Response(res, result) })
+      .catch((error: unknown) => {
+        if (res.headersSent) return
+        writeV1Response(res, {
+          status: 500,
+          headers: { 'content-type': 'application/json; charset=utf-8' },
+          body: JSON.stringify({ code: 'V1_HOST_FAILED', message: error instanceof Error ? error.message : String(error) }),
+        })
+      })
+  }, COMMAND_PATH_FLOOR_SCOPE)
 }
 
 /**

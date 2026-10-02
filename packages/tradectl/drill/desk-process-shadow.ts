@@ -20,17 +20,40 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setTimeout as waitMs } from 'node:timers/promises'
+import { createAlignment } from '../src/alignment.ts'
 import { openLedgers } from '../src/db.ts'
 import { createJournal } from '../src/journal.ts'
 import { migrateDeskRecords } from '../src/desk-records.ts'
 import { addSchedule, migrateTriggers } from '../src/triggers.ts'
 import { createDeskProcess, type DeskProcessOptions } from '../src/desk-process.ts'
+import { DRILL_ALIGNMENT_PARAMS, DRILL_ALIGNMENT_PARAMS_NOTE, SNAPSHOT_REFRESH_MS } from './alignment-params.ts'
 
 const NL = String.fromCharCode(10)
 const RUN_MS = Number(process.env.DESK_PROCESS_RUN_MS ?? 4_000)
 const INTERVAL_MS = 500
 const BACKLOG_THRESHOLD = 3
 const T0 = Date.now()
+
+/** 演练盯的两只标的：一只**有基准快照**、一只**只有 tick 从无快照**（两种真实状态）。 */
+const SYMBOLS = ['BTC/USDT', 'ETH/USDT'] as const
+const [FED_SYMBOL, UNFED_SYMBOL] = SYMBOLS
+
+/**
+ * 对齐态来自**真实的对齐状态机**，不是常量。
+ *
+ * 修前这里是 `alignmentOf: () => 'aligned'`（2026-10-02 验收发现 F6）：一个恒为 aligned 的
+ * 输入让"降级链真的会动"在演练里**不可证伪** —— 跑绿只说明"没事发生"，而没事发生既可能是
+ * "系统健康"，也可能是"信号从来没接上"。演练里出现"永远 aligned"等于把这条断言变成装饰。
+ *
+ * 现在按标的喂两种真实状态（同一个状态机、同一份未标定参数来源）：
+ *   - BTC/USDT：有 epoch 1 的基准快照 ⇒ aligned；
+ *   - ETH/USDT：只有 tick、从无基准 ⇒ unaligned（`alignment.ts` 对"从未见过"的标的就是这个态）。
+ * 于是"对齐态流进环路"这件事可以被审计记录证伪：ETH 必须产生一条 market-stale 降级。
+ */
+const alignment = createAlignment(DRILL_ALIGNMENT_PARAMS, T0)
+alignment.onSnapshot({ epoch: 1, symbol: FED_SYMBOL, price: 83_000, atMs: T0 }, T0)
+alignment.onTick({ epoch: 1, symbol: UNFED_SYMBOL, price: 3_100, atMs: T0, seq: 1 }, T0)
+const alignmentOf = (symbol: string): 'aligned' | 'unaligned' | 'stale' => alignment.state(Date.now(), symbol).alignment
 
 const home = mkdtempSync(join(tmpdir(), 'desk-process-shadow-'))
 const ledgers = openLedgers(home)
@@ -49,8 +72,9 @@ const options: DeskProcessOptions = {
   journal,
   gate: { protectiveOrdersAtVenue: false },
   signals: () => ({
-    symbols: ['BTC/USDT', 'ETH/USDT'],
-    alignmentOf: () => 'aligned',
+    symbols: SYMBOLS,
+    // 真实状态机的逐标的读数（不是常量）：见上面 alignmentOf 的说明
+    alignmentOf,
     lastHeartbeatAtMs: Date.now(),
     heartbeatTimeoutMs: 30_000,
     venueErrorStreak: 0,
@@ -103,6 +127,13 @@ try {
 
   const events = journal.read(0, 500).events
   const backlogRows = events.filter((event) => event.kind === 'trigger.backlog')
+  const degradationRows = events.filter((event) => event.kind === 'degradation.transition')
+  // 未喂快照的那只标的必须产生一条 market-stale：这是"真实对齐态真的流进了环路"的**证据**，
+  // 不是"跑完没报错"。恒为 aligned 的假信号下这一条必然是空的（修前就是这样）。
+  const staleRows = degradationRows.filter((event) => {
+    const payload = event.payload as { trigger?: string; reason?: string }
+    return payload.trigger === 'market-stale' && String(payload.reason ?? '').includes(UNFED_SYMBOL)
+  })
   const dispatchRows = events.filter((event) => event.kind === 'trigger.dispatch.dry-run')
   const gapRows = events.filter((event) => event.kind === 'gap.report')
   const dueTotal = dispatchRows.reduce((sum, row) => sum + Number((row.payload as { count?: number }).count ?? 0), 0)
@@ -131,6 +162,18 @@ try {
     running: stoppedB.running,
   }) + NL)
   process.stdout.write('  fail-closed: ' + JSON.stringify({ 'venue 端口被拒': rejectedVenue, 'live 模式被拒': rejectedLive }) + NL)
+  // 对齐输入**逐标的**打出来：这一行是"信号不是常量"的现场记录（常量不会给出两个不同的值）
+  process.stdout.write('  对齐输入: ' + JSON.stringify({
+    [FED_SYMBOL]: alignmentOf(FED_SYMBOL),
+    [UNFED_SYMBOL]: alignmentOf(UNFED_SYMBOL),
+    快照节奏ms: SNAPSHOT_REFRESH_MS,
+    参数来源: DRILL_ALIGNMENT_PARAMS_NOTE,
+  }) + NL)
+  process.stdout.write('  降级记录: ' + JSON.stringify({
+    'degradation.transition 总数': degradationRows.length,
+    'market-stale（未对齐标的）': staleRows.length,
+    '命中标的': staleRows.map((row) => String((row.payload as { reason?: string }).reason)),
+  }) + NL)
 
   // —— 断言 ——
   if (running.mode !== 'dry-run') failures.push('装配不是 dry-run：' + String(running.mode))
@@ -144,6 +187,11 @@ try {
   if (running.backlog.warnings < 1) failures.push('积压超过阈值（' + String(BACKLOG_THRESHOLD) + '）却没有告警')
   if (running.backlog.recordFailures !== 0) failures.push('积压告警没能留痕：' + String(running.backlog.recordFailures))
   if (backlogRows.length < 1) failures.push('审计里没有 trigger.backlog 记录')
+  // —— 对齐输入必须是真的（2026-10-02 验收发现 F6：这里曾经是 `() => 'aligned'`）——
+  if (alignmentOf(FED_SYMBOL) !== 'aligned') failures.push('有基准快照的 ' + FED_SYMBOL + ' 不是 aligned：' + alignmentOf(FED_SYMBOL))
+  if (alignmentOf(UNFED_SYMBOL) === 'aligned') failures.push('从无基准快照的 ' + UNFED_SYMBOL + ' 却报 aligned —— 对齐输入又变成常量了')
+  if (degradationRows.length === 0) failures.push('审计里一条 degradation.transition 都没有：真实对齐态没有流进环路')
+  if (staleRows.length === 0) failures.push('未喂快照的 ' + UNFED_SYMBOL + ' 没有产生 market-stale 降级记录 —— 对齐输入可能还是常量')
   if (!rejectedVenue) failures.push('未知选项（venue 下单端口）没有被拒绝 —— fail-closed 失效')
   if (!rejectedLive) failures.push('未实现的 live 模式没有被拒绝 —— fail-closed 失效')
   if (stoppedB.loop.ticks !== stoppedA.loop.ticks) failures.push('stop 之后环路仍在推进：' + String(stoppedA.loop.ticks) + '→' + String(stoppedB.loop.ticks))

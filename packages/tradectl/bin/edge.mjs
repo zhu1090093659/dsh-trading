@@ -27,7 +27,7 @@ import { pickImplementation } from './runtime.mjs'
 
 const NL = String.fromCharCode(10)
 
-const VALUE_FLAGS = new Set(['bind', 'port', 'kill-state'])
+const VALUE_FLAGS = new Set(['bind', 'port', 'kill-state', 'shell-dir', 'ops-socket'])
 const BOOL_FLAGS = new Set(['issue-pairing-code', 'help'])
 
 const USAGE = [
@@ -36,6 +36,10 @@ const USAGE = [
   '  --kill-state=<path>      带外 kill 状态文件（必填：edge 写、核心每次风险判定读）',
   '  --bind=<host>            监听地址（缺省 $EDGE_BIND，再缺省 127.0.0.1；0.0.0.0/:: 与公网地址拒绝）',
   '  --port=<n>               端口（缺省 $EDGE_PORT，再缺省 8899）',
+  '  --shell-dir=<path>       驾驶舱静态壳目录（§7.4：壳入口与壳资源免令牌，仅 GET/HEAD 精确路径；',
+  '                           目录里出现非静态文件即拒绝启动。不给就一条静态路径都不开）',
+  '  --ops-socket=<path>      运维通道（本地 UDS）：只服务 grant-control。不给就不开这条通路 ——',
+  '                           于是"授予 control"只能拒绝（fail-closed），不是在网络面开一个口子',
   '  --issue-pairing-code     启动时签发一个配对码并打印（10 分钟有效；缺省不签发）',
   '  --help',
 ].join(NL)
@@ -123,7 +127,19 @@ async function main(argv) {
   if (!Number.isInteger(port) || port <= 0 || port > 65535) return fail('--port 需要一个 1-65535 的整数，收到 ' + String(args.values.get('port')), 2)
 
   const impl = pickImplementation()
-  const [edge, detectors] = await Promise.all([impl.load('edge'), impl.load('detectors')])
+  const [edge, detectors, uds] = await Promise.all([impl.load('edge'), impl.load('detectors'), impl.load('uds')])
+
+  // 静态壳：**在起服务之前**解析一次（目录不合规必须表现为启动失败，而不是运行期某条路径 404）。
+  // 解析结果同时用于打印"到底公开了几条路径"—— 这是运维最该看见的一行。
+  const shellDir = args.values.get('shell-dir')
+  let shell = null
+  if (shellDir !== undefined && shellDir !== '') {
+    try {
+      shell = edge.createStaticShell(shellDir)
+    } catch (error) {
+      return fail('静态壳目录不合规：' + (error instanceof Error ? error.message : String(error)), 4)
+    }
+  }
 
   // kill 状态必须**真的写得进去**（同目录 temp+rename）：写不进去 ⇒ 拒绝启动。
   const killDir = dirname(killStatePath)
@@ -135,12 +151,45 @@ async function main(argv) {
 
   const now = () => Date.now()
   const registry = edge.createDeviceRegistry({ now })
+
+  /**
+   * 运维通道（本地 UDS，不是网络面）：**唯一**的生产 grant-control 入口。
+   * 为什么是 UDS 而不是再开一条 HTTP 端点：授予 control 是"把紧急刹车交给某台设备"，
+   * 而这个动作需要有权限的人在一台能碰到 edge socket 的机器上完成；放到网络面上就等于
+   * 给"第一台 control 设备"这件事加了一条远程攻击面（先有 control 才能授权 control 是死锁，
+   * 所以那条端点必然要免令牌）。socket 的权限（0750/0660）就是这里的边界。
+   * 只服务一个方法：unknown 一律结构化拒绝（未知即放宽）。
+   */
+  const opsSocketPath = args.values.get('ops-socket')
+  const ops = opsSocketPath === undefined || opsSocketPath === ''
+    ? null
+    : await uds.createUdsServer({
+      socketPath: opsSocketPath,
+      handle: (frame) => {
+        if (frame.method !== 'grant-control') {
+          return { error: { code: 'OPS_METHOD_UNKNOWN', message: '本通道只服务 grant-control，收到 ' + String(frame.method) } }
+        }
+        const params = (frame.params ?? {})
+        const deviceId = params.deviceId
+        // 形态校验在**这里**再做一遍（CLI 也做）：通道是边界，边界不信任调用方。
+        if (!edge.isDeviceId(deviceId)) {
+          return { error: { code: 'OPS_DEVICE_ID_INVALID', message: '需要一个 dev_ + 16 位十六进制的设备 id；通配与批量一律拒绝（control 是停掉一切的开关）' } }
+        }
+        if (!registry.grantControl(deviceId)) {
+          return { error: { code: 'OPS_DEVICE_UNKNOWN', message: '注册表里没有这台设备：' + deviceId } }
+        }
+        const device = registry.list().find((entry) => entry.id === deviceId)
+        return { result: { deviceId, scopes: device === undefined ? [] : device.scopes } }
+      },
+    })
+
   const gateway = await edge.createEdgeGateway({
     host,
     port,
     registry,
     killStatePath,
     now,
+    ...(shell === null ? {} : { shell: { dir: shell.dir } }),
     // 业务面（/v1）归 bot/cockpit：本进程不注册任何业务路由 —— 未实现的表面不造假象。
   })
 
@@ -150,6 +199,7 @@ async function main(argv) {
     if (stopping) return
     stopping = true
     await gateway.close()
+    if (ops !== null) await ops.close()
     const state = edge.readKillState(killStatePath)
     process.stdout.write('[edge] 退出原因=' + reason + ' 运行 ' + String(Date.now() - startedAt) + 'ms' + NL)
     process.stdout.write('[edge] kill 状态 ' + JSON.stringify(state) + NL)
@@ -161,6 +211,12 @@ async function main(argv) {
   process.stdout.write('[edge] 已启动：' + gateway.url + ' 绑定=' + host + ':' + String(port)
     + ' 实现=' + impl.why + ' kill 状态=' + killStatePath + '（目录可写：' + probe.reason + '）' + NL)
   process.stdout.write('[edge] A0：' + edge.A0_PATHS.join(' ') + '；设备注册表**进程内**（重启需重新配对，已知缺口）' + NL)
+  process.stdout.write('[edge] 静态壳：' + (shell === null
+    ? '未托管（--shell-dir 未给：一条静态路径都不公开）'
+    : shell.dir + ' ⇒ 免令牌精确路径 ' + String(shell.paths.length) + ' 条（仅 GET/HEAD）：' + shell.paths.join(' ')) + NL)
+  process.stdout.write('[edge] 运维通道：' + (ops === null
+    ? '未开（--ops-socket 未给 ⇒ grant-control 只会失败，fail-closed）'
+    : ops.socketPath + '（只服务 grant-control；本地 UDS，不在网络面上）') + NL)
   if (args.booleans.has('issue-pairing-code')) {
     const pairing = registry.issuePairingCode()
     process.stdout.write('[edge] 配对码 ' + pairing.code + '（' + String(Math.round(edge.PAIRING_TTL_MS / 60000)) + ' 分钟内有效；配对只签发 read scope）' + NL)

@@ -27,7 +27,9 @@ export interface DownstreamSocket {
 export type DownstreamFrame =
   | { readonly type: 'event'; readonly seq: number; readonly atMs: number; readonly kind: string; readonly payload: unknown }
   | { readonly type: 'resync'; readonly snapshotSeq: number; readonly state: unknown; readonly reason: string }
-  | { readonly type: 'error'; readonly code: string; readonly detail: string }
+  // 拒绝帧带 %%required%%：客户端要能说清"缺的是哪个平面"，只说"被拒了"会把
+  // "令牌没有这个平面"与"令牌坏了"混成同一条提示（HTTP 面同口径：403 + required）。
+  | { readonly type: 'error'; readonly code: string; readonly detail: string; readonly required?: ScopePlane | undefined }
 
 export interface V1StreamOptions {
   readonly journal: Journal
@@ -47,6 +49,17 @@ export interface V1StreamSession {
   onClientMessage(text: string): 'ignored'
   readonly closed: boolean
   readonly cursor: number
+}
+
+/** 一条**已鉴权**设备的下行会话：多一个 %%deviceId%% —— 断了要知道是谁断的（审计与撤销都要它）。 */
+export interface V1DeviceStreamSession extends V1StreamSession {
+  readonly deviceId: string
+}
+
+/** edge 交下来的已鉴权设备（只取本面要用的两项；edge 的 %%Device%% 结构上满足它）。 */
+export interface AuthenticatedDevice {
+  readonly id: string
+  readonly scopes: readonly ScopePlane[]
 }
 
 /**
@@ -70,7 +83,7 @@ export function createV1Stream(options: V1StreamOptions): { attach(socket: Downs
         }
       }
       if (!options.scopes.includes(requiredPlane)) {
-        send({ type: 'error', code: 'SCOPE_REQUIRED', detail: 'this connection requires the ' + requiredPlane + ' plane' })
+        send({ type: 'error', code: 'SCOPE_REQUIRED', detail: 'this connection requires the ' + requiredPlane + ' plane', required: requiredPlane })
         socket.close()
         closed = true
       }
@@ -111,6 +124,42 @@ export function createV1Stream(options: V1StreamOptions): { attach(socket: Downs
           // 单向下行：上行的一切都不是业务指令。真想下命令就走 POST /v1/commands（有 scope 与幂等）。
           return 'ignored'
         },
+      }
+    },
+  }
+}
+
+/**
+ * 由 **edge 交下来的已鉴权设备**建下行面（宿主接线）。
+ *
+ * 为什么不直接让宿主调 %%createV1Stream({ scopes })%%：那正是"宿主自带一份平面"的入口。
+ * 下行流是有状态的长连接，一旦宿主写死 scopes，撤销一台设备后这条连接还能继续推
+ * 持仓与决策 —— 而它比一次请求严重得多（一次请求是一次判断，一条连接是持续泄露）。
+ * 这里把 scopes 钉死在设备上：**要建面就得先有已鉴权设备**。
+ *
+ * @param device - edge 的 %%register%% 交给 handler 的那个设备。
+ * @param options - 除 scopes 外的下行面配置。
+ */
+export function createV1StreamForDevice(
+  device: AuthenticatedDevice,
+  options: Omit<V1StreamOptions, 'scopes'>,
+): { attach(socket: DownstreamSocket, cursor?: number): V1DeviceStreamSession } {
+  const stream = createV1Stream({ ...options, scopes: device.scopes })
+  return {
+    attach(socket, cursor) {
+      const session = stream.attach(socket, cursor)
+      // 逐字段转发而不是展开：V1StreamSession 的 closed/cursor 是取值器，
+      // %%{ ...session }%% 会把它们求值成静态快照（连接关了还报没关）。
+      return {
+        deviceId: device.id,
+        get closed() {
+          return session.closed
+        },
+        get cursor() {
+          return session.cursor
+        },
+        pump: () => session.pump(),
+        onClientMessage: (text: string) => session.onClientMessage(text),
       }
     },
   }
