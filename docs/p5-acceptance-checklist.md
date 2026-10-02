@@ -70,7 +70,7 @@
 | 档 | 状态 | 证据 / 复现 |
 |---|---|---|
 | 1. shadow | **已完成** | 10 分钟真实行情验收（消息 4864 / 坏帧 0 / 全程 aligned / tick 238 / 从未 halt / 退出码 0）；记录见 docs/ops-runbook.md 的"演练记录"节；**一条命令复现**：node scripts/e2e-smoke.mjs --with-network（30 秒版）|
-| 2. paper | **进行中（模拟盘已打通）** | 2026-10-02 实测：带 OKX_DEMO_* 时 demo 只读签名端点真的跑起来（GET balance 1248ms / GET positions 314ms，无凭证时为 skipped）。整档待一条环境依赖用例修好后在带凭据下 94 passed | 0 skipped；记录见 docs/ops-runbook.md 第 2 档执行记录 |
+| 2. paper | **已通过（2026-10-02）** | 带真实 demo 凭据复跑：Test Files 8 passed (8) / **Tests 94 passed (94)、0 skipped**（GET balance 1145ms、GET positions 328ms，均带 x-simulated-trading）；记录见 docs/ops-runbook.md 第 2 档执行记录。人这一侧：把经对话传递的 demo key 作废重建 |
 | 3. 小额 live | 未开始 | 准入见上文；**需你**：主网凭证 + 人工签署授权 + 金额上限 + 在环承诺 |
 | 带外退出演练 | 未开始 | **必须人在环**；卡片硬要求："我方全挂"前提，无记录即视为未满足 |
 

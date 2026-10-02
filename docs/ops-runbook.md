@@ -305,3 +305,15 @@ pnpm --filter @dshtrading/connector-okx test（凭证只在环境变量里传递
 - **模拟盘确实被打通**：两条带凭证的 demo 只读签名端点**真的执行**（无凭证时它们是 skipped，基线 92 passed | 2 skipped）⇒ 这是"真的打到模拟盘"的可查证据。
 - **整档尚未判通过**：唯一失败是 test/trade.test.ts 的 resolveCredentials > demo ref 未命中 → TRADING_CREDENTIALS_MISSING。根因是**该用例不 hermetic** —— 它假定 OKX_DEMO_* 不存在，而本次操作者环境里有 ⇒ 解析器成功解析出 3 个凭据，断言"应当报缺凭据"不成立。**不是模拟盘连通性问题，也不是生产语义问题**（正由 task-5 修，修好后应在带凭据下 94 passed | 0 skipped）。
 - **安全提醒**：本次凭证由人贴在对话里，**建议验收后到 OKX 模拟盘作废重建这对 key**。
+
+**正式判定（2026-10-02，带真实 demo 凭据复跑）**：
+
+    Test Files  8 passed (8)
+    Tests       94 passed (94)        ← 0 skipped，期望值达成
+    ✓ GET /api/v5/account/balance（模拟盘）  1145ms
+    ✓ GET /api/v5/account/positions（模拟盘） 328ms
+    退出码 0
+
+⇒ **第 2 档（paper / OKX 模拟盘）通过**：带签名的 demo REST 只读调用真实执行、无跳过；此前那条非 hermetic 用例已由 fa829f9f 修好（隔离启动环境，不削弱断言）。
+**人这一侧**：建议现在到 OKX 模拟盘把本次经对话传递的这对 demo key 作废重建。
+**仍未做（不属本档）**：真实下单（本档只读）；长驻进程与看护者；折叠策略；第 3 档小额 live。
