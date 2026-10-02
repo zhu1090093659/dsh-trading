@@ -25,12 +25,12 @@ struct AppRootView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let problem = environment.environmentProblem {
+            if let problem = environment.blockingProblem {
                 EnvironmentProblemView(message: problem)
             } else {
-                // 告警只提示，不挡路（Keychain 退回内存 ≠ 不能用）。
-                if let warning = environment.environmentWarning {
-                    WarningBanner(message: warning)
+                // 告警只提示，不挡路（Keychain 退回内存 ≠ 不能用；fixtures 更不依赖令牌）。
+                ForEach(environment.notices, id: \.self) { notice in
+                    WarningBanner(message: notice)
                 }
                 if environment.isObserving {
                     ObservationRootView(environment: environment)

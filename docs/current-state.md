@@ -18,7 +18,7 @@
 | 额度上限 | mandate 侧已成**可执行判据**：缺声明 / Infinity / NaN ⇒ 拒绝开新仓（code=no-declared-limit）；0 是合法声明；只约束新增风险 |
 | 凭据语义 | connector-okx：**存在 credentials seam 即 fail-closed**（不再回落 ambient 环境变量）；仅完全无 seam 时回落 process.env |
 | 驾驶舱 | packages/cockpit：**独立 SPA**（零依赖、不复用 client-ui-*），由 bot 的 edge 行托管；只调 /v1/cards 与 /v1/commands |
-| 移动端（观测端，iOS 原生） | **apps/ios-native**（XcodeGen 生成的独立 Xcode 工程，不进 pnpm workspace）：契约等价实现 + 121 条行为向量 + **35 例 XCTest 机检**（改错必红）；六个分层 scheme 全绿、冷构建 BUILD SUCCEEDED；CI 跑两条纯 Node 门禁（防漂移 + 分层白名单）。见 apps/ios-native/README.md |
+| 移动端（观测端，iOS 原生） | **apps/ios-native**（XcodeGen 生成的独立 Xcode 工程，不进 pnpm workspace）：契约等价实现 + 行为向量 + **XCTest 机检**（向量/用例数随契约扩展，不写死；改错必红）；六个分层 scheme 全绿、冷构建 BUILD SUCCEEDED；CI 跑两条纯 Node 门禁（防漂移 + 分层白名单）。见 apps/ios-native/README.md |
 | 移动端（Expo/RN 旧工程） | apps/mobile（独立 npm 工程）：契约 ./core 入口 + 配对 + SecureStore + 首屏流程；60 例测试 + Metro 真打包 599 modules。（与原生侧**并存**，去留待裁决）|
 | systemd 台架 | scripts/systemd-units-check.mjs（六类静态判据，退出码即结论）+ 人执行安装清单（deploy/README.md）。**本机无 systemd，安装未做** |
 | 假刹车修复 | edge kill 状态写 0o640（组可读）+ 读取端仅 ENOENT 视为未 kill（EACCES/坏 JSON ⇒ 已 kill 且已暂停）；复现 `pnpm --filter @dshtrading/tradectl exec vitest run test/edge.test.ts test/degradation.test.ts`（38 例，含 chmod 000 端到端）|
@@ -52,7 +52,7 @@
     pnpm wiring:ledger                                        # 工厂接线台账
     node scripts/systemd-units-check.mjs                      # 单元静态校验（退出码即结论）
     cd apps/mobile && npx vitest run && npx tsc --noEmit      # 移动端（Expo/RN）
-    cd apps/ios-native && ./scripts/test-contract.sh          # 移动端（原生）：契约防漂移机检，35 例
+    cd apps/ios-native && ./scripts/test-contract.sh          # 移动端（原生）：契约防漂移机检
     node scripts/ios-native/check-contract-drift.mjs           # 同上判据的纯 Node 版（CI 用）
     node scripts/ios-native/check-swift-layering.mjs           # Swift 分层白名单（含 Domain 的 Observation 宏）
 

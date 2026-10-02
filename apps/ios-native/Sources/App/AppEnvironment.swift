@@ -98,13 +98,10 @@ public final class AppEnvironment {
     // MARK: - 装配
 
     private func rebuildStore() {
-        guard let session else {
-            store = nil
-            dispatcher = nil
-            return
-        }
         switch mode {
         case .fixtures:
+            // **显式判据**：fixtures 不依赖任何凭据/安全存储 —— 没有 session 也照样装配观测面。
+            // 不靠"Keychain 恰好可用"这种巧合（Lead 裁决 #2）。
             let source = OfflineObservationSource(
                 fetcher: FixtureSnapshotFetcher(clock: clock),
                 persistence: persistence,
@@ -116,7 +113,9 @@ public final class AppEnvironment {
             self.store = store
             self.dispatcher = StoreActionDispatcher(store: store, gate: gate)
         case .live:
-            guard let client = session.apiClient() else {
+            // 生产路径**不放宽 fail-closed**：没有令牌就没有 api client，也就不发匿名请求，
+            // 界面停在配对门（Lead 裁决 #3）。
+            guard let session, let client = session.apiClient() else {
                 store = nil
                 dispatcher = nil
                 return
@@ -142,12 +141,27 @@ public final class AppEnvironment {
         mode == .fixtures ? .simulated : .unknown
     }
 
-    /// 能不能进观测面。**告警不算故障**：Keychain 退回内存只影响"重启后要不要重新配对"，
-    /// 不该把 fixtures 模式（根本不需要令牌）一起挡在门外（IOS-3 在模拟器上实测到过这个缺陷）。
+    /// 能不能进观测面。**告警不算故障**：Keychain 退回内存只影响"重启后要不要重新配对"。
+    /// fixtures 走**显式判据**（只看观测面装配没有，凭据类问题一律不挡）；live 仍要求"已配对 + 有观测源"。
     public var isObserving: Bool {
-        if environmentProblem != nil { return false }
         if mode == .fixtures { return store != nil }
+        if environmentProblem != nil { return false }
         return sessionState.isPaired && store != nil
+    }
+
+    /// 真正**挡路**的故障。fixtures 模式不依赖令牌 ⇒ 任何凭据/存储问题都不挡它（显式判据，不靠巧合）。
+    public var blockingProblem: String? {
+        mode == .fixtures ? nil : environmentProblem
+    }
+
+    /// 顶部横幅：降级告警；fixtures 下连"本来会致命"的凭据问题也只提示、不挡路。
+    public var notices: [String] {
+        var list: [String] = []
+        if let environmentWarning { list.append(environmentWarning) }
+        if mode == .fixtures, let environmentProblem {
+            list.append("夹具模式不依赖设备令牌，已忽略凭据问题：" + environmentProblem)
+        }
+        return list
     }
 
     public func refresh() async {

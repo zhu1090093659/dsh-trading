@@ -11,10 +11,10 @@
 - **形态**：由 XcodeGen 从 `project.yml` 生成工程，**独立工程、不进 pnpm workspace**（与 desktop/ 同一先例）；
   **一个子目录 = 一个 framework target**（Contract / Transport / Domain / Features / Alerts / Offline / App），
   层间依赖由**编译器**强制；`*.xcodeproj` / `build` / `Generated` 等生成物不入库。
-- **契约**：Swift 侧是 `packages/contract/src` 的等价实现，由**机检**绑定 —— 生成器导出 121 条行为向量，
-  `DshTradingContractTests` 35 例逐字段/逐向量断言；CI 侧另有两条**纯 Node** 门禁
+- **契约**：Swift 侧是 `packages/contract/src` 的等价实现，由**机检**绑定 —— 生成器从 TS 契约导出行为向量
+  （条数随契约扩展，不写死），`DshTradingContractTests` 逐字段/逐向量断言；CI 侧另有两条**纯 Node** 门禁
   （`scripts/ios-native/check-contract-drift.mjs`、`check-swift-layering.mjs`），不需要 Xcode。
-- **已实测**：冷构建 `BUILD SUCCEEDED`（0 error），六个分层 scheme 全绿，契约机检 35 例 0 失败，
+- **已实测**：冷构建 `BUILD SUCCEEDED`（0 error），六个分层 scheme 全绿，契约机检 0 失败，
   故意改错必红、改回必绿。
 - **工程细节之家**：[apps/ios-native/README.md](../../apps/ios-native/README.md)（构建命令、冻结符号表、finding、未验证项）。
 - **未验证**：真机、APNs/FCM 推送、生物识别设备验证、弱网、沙箱外的 `xcodebuild test`。
@@ -45,7 +45,7 @@
 |---|---|---|---|
 | **保留两者并行** | 两份客户端壳长期维护；契约面每次变更要过两套机检；CI 两条 job | 风险最低、不丢已有工作；可先让原生侧跑通真机再收口 | owner（产品定位） |
 | **以 A 为准，B 退役** | 需确认 B 没有 A 还不具备的能力（真机签名/推送/生物识别设备验证都未做，所以不是"B 独有"）；退役动作本身需一次性 PR | 单一客户端形态，维护面减半 | owner + 一次退役 PR |
-| **以 B 为准，A 退役** | 放弃本轮原生的分层/编译期强制与 35 例契约机检；与"观测端只读、不得影响执行"的定位需要重新对齐 | 保留 Expo 的多端能力 | owner（产品定位） |
+| **以 B 为准，A 退役** | 放弃本轮原生的分层/编译期强制与契约机检；与"观测端只读、不得影响执行"的定位需要重新对齐 | 保留 Expo 的多端能力 | owner（产品定位） |
 
 **本轮不做任何删除**：`apps/mobile/**` 保持原样，A 与 B 并存，去留由人裁决。
 

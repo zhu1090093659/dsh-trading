@@ -23,7 +23,8 @@ Status: implemented
   工程细节、构建命令与冻结符号表之家是 [apps/ios-native/README.md](../../../../apps/ios-native/README.md)。
 - **契约实现方式**：`packages/contract/src` 的 TS 是**唯一权威**，Swift 侧是等价实现，
   两边由**机检**绑定：`apps/ios-native/scripts/gen-contract-snapshot.mjs` 从 TS 运行期真值导出
-  常量、封闭枚举与**121 条行为向量**；`DshTradingContractTests`（35 例，macOS 逻辑测试）逐字段比对并逐条重放。
+  常量、封闭枚举与**行为向量**（条数由生成器从 TS 契约导出，随契约扩展，不写死）；
+  `DshTradingContractTests`（macOS 逻辑测试）逐字段比对并逐条重放，重放入口见 [apps/ios-native/README.md](../../../../apps/ios-native/README.md)。
   纯 Node 的 `scripts/ios-native/check-contract-drift.mjs` 把同一批判据带进 CI（不需要 Xcode）。
 - **契约包的客户端入口仍然保留**：`@dshtrading/contract/core` 导出
   version/scopes/cards/push/confirm/offline/source-guard 且**排除 `ids.ts`**（RN 与任何 JS 客户端可用）；
@@ -37,8 +38,9 @@ Status: implemented
 - 本机工具链：Xcode 27.0（27A266a）/ iOS SDK 27.0 / Swift 6.4 / XcodeGen 2.45.3（2026-10-02 实测）。
 - `apps/ios-native` 冷构建 `xcodebuild -scheme DshTradingNative -sdk iphonesimulator build` ⇒
   **BUILD SUCCEEDED**（0 error）；六个分层 scheme 全部 BUILD SUCCEEDED（2026-10-02 实测）。
-- 契约机检 35 例 0 失败；**故意改错必红**：让 `grantableByDefault` 放行 control ⇒ 6 例红，
-  `cardLimits.maxFields` 24→25 ⇒ 1 例红，改回后 35 例全绿且源文件逐字节还原（2026-10-02 实测）。
+- 契约机检全绿；**故意改错必红**：让 `grantableByDefault` 放行 control、把 `cardLimits.maxFields` 从 24 改成 25，
+  断言都会变红；改回后全绿且源文件逐字节还原（2026-10-02 实测）。红/绿证据与重放命令见
+  apps/ios-native/README.md 的"契约防漂移机检"一节。
 - `scripts/ios-native/check-contract-drift.mjs` 与 `check-swift-layering.mjs` 同样验证过「改错必红」（同上日期）。
 - `apps/mobile`（Expo/RN）的落仓事实与工程实测之家是 [docs/client/mobile-app-plan.md](../../../../docs/client/mobile-app-plan.md)。
 

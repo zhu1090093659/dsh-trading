@@ -95,6 +95,27 @@ fixtures 模式不依赖令牌，不应被它挡住；live 模式也应在配对
 
 在修好之前，本目录**不提供**五张情形截图 —— 截图必须反映真实观测面，不能用别的屏冒充。
 
+### 试过并**失败**的绕过（记录在此，别重复走）
+
+给已构建的 .app 补一份 entitlements（application-identifier + keychain-access-groups）后
+codesign --force --sign - 重签，再 install + launch：
+结果 **启动直接失败**（simctl launch 返回 Simulator device failed to launch … No such
+process），截图只剩主屏。已回滚（重新 build 恢复 linker-signed 产物），相关临时文件已删除。
+结论：这条路走不通，**必须改源码**（内存回退不该 fatal）。
+
+### 待补：五张情形截图与判据对照表（等 IOS-1 修复后采集）
+
+| 截图 | 夹具情形 | 它必须证明的判据 |
+|---|---|---|
+| running.png | --scenario running | 看得见 + 运行中 + 依赖正常；持仓/订单/额度/告警/新鲜度都有值 |
+| restricted.png | --scenario restricted | **看得见 + 运行中但禁止新增仓位**（与"已停止"不同屏） |
+| stopped.png | --scenario stopped | **机器人已停止**（与"看不见"必须是两种显示） |
+| unreachable.png | --scenario unreachable | **看不到机器人**（不得显示成"已停止"） |
+| unknown-enum.png | --scenario unknown-enum | 未知类型/未知动作 ⇒ 原样列出且**禁用全部动作**（fail-closed） |
+
+其中 stopped.png 与 unreachable.png 需**并排**展示，作为
+「App 看不到机器人 ≠ 机器人已停止」的直接证据（本仓不变量 7）。
+
 ### 未验证项
 
 - 五张情形截图：等组合根接线（IOS-1）后补；判据是上表"观测端应当显示"一列肉眼可辨。
