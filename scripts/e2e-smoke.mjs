@@ -11,6 +11,7 @@
  * 用法：
  *   node scripts/e2e-smoke.mjs                 # 不需要网络的项（默认）
  *   node scripts/e2e-smoke.mjs --with-network  # 加上真实行情（约 20 秒）
+ *   node scripts/e2e-smoke.mjs --list          # 只打印检查清单（JSON；给 scripts 自测钉默认模式，不跑任何项）
  * 前置：先在根跑过 pnpm build（drill import 的是构建产物 lib/）。
  */
 import { spawnSync } from 'node:child_process'
@@ -20,6 +21,8 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const withNetwork = process.argv.includes('--with-network')
+/** 单条检查的默认超时上限；只走回环的演练用不着 2 分钟，单条可用 timeoutMs 收紧。 */
+const DEFAULT_TIMEOUT_MS = 120_000
 // Electron 端到端演练需要已下载的 Electron 二进制，默认跳过；`--with-electron` 才跑。
 const withElectron = process.argv.includes('--with-electron')
 
@@ -68,6 +71,19 @@ const CHECKS = [
     network: false,
   },
   {
+    // P4 客户端链路的**运行时**证据：真 edge（只绑 127.0.0.1 的临时端口）+ 真 HTTP ——
+    // 配对码真兑换、拿到的 Authorization 真能打 /a0/status 200、游标过界先收 resync 再从快照续读、
+    // 缺 read 平面只发 SCOPE_REQUIRED（零事件帧）、revoke 后同一条令牌立刻 401 且业务 handler 零调用。
+    // 它只走回环、不依赖外网（实测约 200ms），所以进默认模式，而不是 --with-network。
+    // 契约：下面的 expect 钉的是 drill 的末行总结 + 摘要 JSON 里的帧形态，改一边必须改另一边；
+    // scripts/e2e-smoke.test.mjs 会拿 drill 的真实输出复核这组片段真的出现。
+    name: '客户端链路（真 HTTP 配对 + /v1 下行按游标补页 + 撤销即时 401）',
+    script: 'packages/tradectl/drill/v1-client-flow.ts',
+    expect: ['[v1-client-flow] ✓ 客户端链路通过', '"type":"resync"', '"code":"SCOPE_REQUIRED"'],
+    network: false,
+    timeoutMs: 30_000,
+  },
+  {
     // P4 步骤 5 的切换演练：真文件 + 真环境变量 + 临时 DSH_HOME + 回滚点，退出码即断言。
     // 接进常设冒烟的理由：它此前只被"跑过一次"，而它检验的正是"配置改错会不会把桌面壳
     // 带到错误的地方或加载不该加载的东西"——这类回归没有人会主动去跑。
@@ -99,6 +115,21 @@ const CHECKS = [
   },
 ]
 
+// 机器可读的检查清单：scripts/e2e-smoke.test.mjs 用它把"默认模式必须包含哪些演练"钉在
+// 冒烟自己声明的事实上（测试里不抄第二份清单）。只列不跑，因此不需要构建产物。
+if (process.argv.includes('--list')) {
+  const listing = CHECKS.map((check) => ({
+    name: check.name,
+    script: check.script,
+    expect: check.expect,
+    network: check.network === true,
+    electron: check.electron === true,
+    timeoutMs: check.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+  }))
+  process.stdout.write(JSON.stringify(listing, null, 2) + String.fromCharCode(10))
+  process.exit(0)
+}
+
 if (!existsSync(join(ROOT, 'packages/tradectl/lib/index.js'))) {
   process.stderr.write('[e2e-smoke] 找不到构建产物 packages/tradectl/lib/index.js' + String.fromCharCode(10))
   process.stderr.write('[e2e-smoke] 先在仓库根跑 pnpm build（drill import 的是 lib/，不是 src/）' + String.fromCharCode(10))
@@ -118,7 +149,8 @@ for (const check of CHECKS) {
     continue
   }
   const started = Date.now()
-  const run = spawnSync(process.execPath, [check.script], { cwd: ROOT, encoding: 'utf8', timeout: 120_000 })
+  const timeoutMs = check.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const run = spawnSync(process.execPath, [check.script], { cwd: ROOT, encoding: 'utf8', timeout: timeoutMs })
   const output = (run.stdout ?? '') + (run.stderr ?? '')
   const missing = check.expect.filter((needle) => !output.includes(needle))
   const ok = run.status === 0 && missing.length === 0
@@ -126,6 +158,9 @@ for (const check of CHECKS) {
   process.stdout.write('[e2e-smoke] ' + (ok ? '✓' : '✗') + ' ' + check.name + '（' + String(Date.now() - started) + 'ms）' + String.fromCharCode(10))
   if (!ok) {
     process.stdout.write('            退出码 ' + String(run.status) + '；缺少断言片段：' + JSON.stringify(missing) + String.fromCharCode(10))
+    // 超时/启动失败时 status 是 null、output 可能为空：不把这两条线索打出来就没法诊断。
+    if (run.error !== undefined && run.error !== null) process.stdout.write('            进程错误：' + String(run.error.message ?? run.error) + String.fromCharCode(10))
+    if (run.signal !== null && run.signal !== undefined) process.stdout.write('            被信号终止：' + String(run.signal) + '（本条超时上限 ' + String(timeoutMs) + 'ms）' + String.fromCharCode(10))
     process.stdout.write('            最后几行输出：' + output.split(String.fromCharCode(10)).slice(-4).join(' | ') + String.fromCharCode(10))
   }
 }
