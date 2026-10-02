@@ -56,6 +56,11 @@ xcodebuild -project DshTradingNative.xcodeproj -scheme DshTradingNative \
    `build-for-testing` + `xcrun xctest <同一个 .xctest 包>` 执行**同一次编译产物**；在没有该限制的机器上，
    `xcodebuild ... -scheme DshTradingContractTests -destination 'platform=macOS' test` 同样可用。
 
+3. **新增/删除源文件后必须先 `xcodegen generate`**：`DshTradingNative.xcodeproj` 是生成物、不入库，
+   而源文件是按目录 glob 进 target 的 —— 新文件只有重新生成工程才会进构建。不重新生成直接 build 会报
+   `cannot find 'X' in scope`（看起来像"代码没写完"，其实是工程没刷新）。`scripts/build-simulator.sh` 与
+   `scripts/test-contract.sh` 都已经把 `xcodegen generate` 放在 `xcodebuild` 之前。
+
 本机实测工具链：Xcode 27.0（27A266a）/ iOS SDK 27.0 / Swift 6.4 / XcodeGen 2.45.3；模拟器 `DshtTrading`（iOS 27.0）。
 
 ## 3. 冻结的契约面（`Sources/Contract/`）
@@ -103,7 +108,8 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
   查表（actionScope/actionConfirm）、以及 **136 条行为向量**（negotiateVersion / validateCard /
   renderableActions / fallbackFor / stalenessOf / offlineView / parseDeeplink / grantableByDefault /
   parseCaps / formatCaps / requiresBiometric / sourceGuard / validatePushPayload 的输入 → TS 权威输出）。
-  推送校验覆盖 UTF-16 长度边界，诊断与合法性均逐条匹配 TS；新增向量待串行测试验证。
+  推送校验覆盖 UTF-16 长度边界，诊断与合法性均逐条匹配 TS；现场验证 136 条向量、36 tests / 0 failures，日志见 [本轮契约测试](build/ios1-contract-green.log)。
+  突变自检入口：`node scripts/test-drift-mutation.mjs`（先独占锁、改 maxActions 3→4、断言红、恢复并断言绿；锁忙时退出 75 且不改源码）。
 - [ContractDriftTests.swift](Tests/ContractTests/ContractDriftTests.swift) 逐字段比对常量与表，
   并锁住 fail-closed 行为（未知 cardType ⇒ `valid=false, operable=false`；未知枚举 ⇒ 全动作禁用；
   control ⇒ biometric；过期不渲染数据本身；跨源不混显）。
@@ -112,7 +118,7 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
 - **夹具缺失 ⇒ 测试 FAIL** 并打印重新生成命令，绝不 skip（对齐本仓"未验证 ≠ 通过"）。
 - 机检可运行且真的会红：`./scripts/test-contract.sh`，故意改错的红/绿证据见
   [build/](build/) 下的 `mutation-a.log` / `mutation-b.log` / `mutation-restored.log`
-  （A：让 `grantableByDefault` 放行 control ⇒ 6 例红；B：`maxFields` 24→25 ⇒ 1 例红；改回 ⇒ 31 例全绿。
+  （A：让 `grantableByDefault` 放行 control ⇒ 6 例红；B：`maxFields` 24→25 ⇒ 1 例红；改回 ⇒ 全绿。
 
 ### CI 接线（不需要 Xcode）
 
@@ -124,9 +130,27 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
   越界或新增未登记的分层即红；第三方依赖同样拦下。
 
 两者都验证过「故意改错 ⇒ 红」（改 `kill` 的确认档位、给 Transport 加 `import SwiftUI`）。
-CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift 断言（35 例）留本机 `./scripts/test-contract.sh`。
+CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift 断言留本机 `./scripts/test-contract.sh`（用例数随契约扩展）。
 
-## 5. 契约面 finding（记录，不自行放宽）
+## 5. App 组合根（`Sources/App/`）
+
+`DshTradingNativeApp` → `AppEnvironment` → 三屏：环境不可用 / **配对门**（`PairingClient`）/ 观测面（`RootTabView`）。
+
+- **装配链**：`TransportSession`（Keychain 令牌）→ `TransportSnapshotFetcher`（`Sources/App` 里的
+  Transport → `SnapshotFetching` 适配器：先 `/a0/ping`，失败抛 `.unreachable`；`/a0/status` 拿不到就传 nil）
+  → `OfflineObservationSource` → `ObservationStore` → `FeaturesAdapter.featuresState(from:)` → `RootTabView`。
+  适配器放 App 是为了让 **Offline 保持零 Transport 依赖**（分层表不动）。
+- **动作派发**：Features 只给 `ActionPresentation`，`StoreActionDispatcher` 接到 `ObservationStore.send(_:params:gate:)`，
+  gate 用 Alerts 的 `AlertsConfirmationGate`（`LocalAuthentication`）；未知动作在派发口**再 fail-closed 一次**。
+- **未配对就是未配对**：`TransportSession.apiClient()` 在未配对时返回 nil，不建"没有令牌的客户端"、不发匿名请求；
+  配对**不做授权**（配对永不签发 control），作用域只来自 `/a0/status`。
+- **夹具模式**（`--fixtures` 或 `DSH_IOS_FIXTURES=1`）：没有真实 bot 也能跑起来，走**同一条**离线/领域流水
+  （不是另写假路径），首屏顶部有横幅。夹具里含一张**未知 cardType** 的卡，用来肉眼确认 fail-closed 渲染。
+- **客户端不发号**：唯一自造的 id 是幂等键 `clientRequestId`（契约明文可见可重试）；**orderId 永不自造**。
+- **Keychain 不可用的退路**：退回内存存储并如实提示（重启需重新配对）；**绝不**把设备令牌写进 UserDefaults/文件。
+- 未接线：真机签名、APNs 注册、设备上的生物识别验证、持久化快照落盘实现（Offline 卡范围；当前离线可用性只靠"重取一次快照"）。
+
+## 6. 契约面 finding（记录，不自行放宽）
 
 1. **TS 注释与代码不一致**：`cards.ts` 的注释写"未知 cardType ⇒ `valid` 仍可为 true"，
    代码实际会 push problem，于是 `valid = problems.length === 0` ⇒ **`valid=false`**。
@@ -146,7 +170,7 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
      与设计文档明文冻结的"不钉版本位（`[0-9a-f]{4}`）"冲突；
    - `cards.ts` 关于未知 cardType 的注释与代码不一致（见 finding 1）。
 
-## 6. 文档与决策记录
+## 7. 文档与决策记录
 
 本轮的接口冻结件是 `INTERFACE-FREEZE.md`（Lead 所有，收尾时删除）；其事实并入本 README 与
 [Owning Note](../../.agents/notes/implemented/architecture/2026-10-01-mobile-app-and-contract-core-entry.md)。

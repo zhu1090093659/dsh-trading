@@ -22,4 +22,4 @@ Status: implemented
 
 Lead 需要协调所有外部锁持有者与等待者，释放锁后直接（不加外层同名锁）串行运行 scripts/test-contract.sh 与 scripts/build-simulator.sh，并重新做故意改错、红、恢复、绿验证。不可把 README 中历史证据当作本轮通过。
 
-静态发现待裁决的等价边界：Swift PushPayload 的 revision/expiresInMs 使用 Int，而 TS 允许有限的小数；推送字符串上限现使用 utf16.count 与 TS length 一致，并新增 15 条 TS 推送校验向量（含 emoji 边界），断言合法性及完整诊断。卡片其它字符串计量与数值小数差异仍待裁决。新增断言尚待串行执行。不自行放宽契约；需要 Lead 明确冻结处理并补向量。
+静态发现待裁决的等价边界：Swift PushPayload 的 revision/expiresInMs 使用 Int，而 TS 允许有限的小数；推送字符串上限现使用 utf16.count 与 TS length 一致，并新增 15 条 TS 推送校验向量（含 emoji 边界），断言合法性及完整诊断。卡片其它字符串计量与数值小数差异仍待裁决。新增断言已实际执行通过：136 向量 / 36 tests / 0 failures，日志 build/ios1-contract-green.log。新增可复现突变脚本 scripts/test-drift-mutation.mjs（先取锁、编译、断言红、finally 恢复源码、重编译断言绿），语法检查通过；实际运行因新一轮锁竞争退出 75，尚未取得突变红绿证明。不自行放宽契约；需要 Lead 明确冻结处理并补向量。
