@@ -25,7 +25,9 @@ function runDrill(script: string, env: Record<string, string> = {}): { status: n
 }
 
 describe('接线演练：工厂的运行时调用点', () => {
-  it('管理员：客户端链路演练跑通，配对、游标补页与设备绑定都给出具体结果', () => {
+  // 显式超时：两个用例都要 spawn 一个真实演练（单跑 ~0.3–3s，spawn 自身上限 120s）。
+  // vitest 默认 5s 在 `pnpm -r test` 的并行负载下会把「跑得慢」判成红（2026-10-02 实测）。
+  it('管理员：客户端链路演练跑通，配对、游标补页与设备绑定都给出具体结果', { timeout: 60_000 }, () => {
     // Given 一条只由演练装配起来的客户端链路（配对客户端 + /v1 下行会话，真 HTTP）
     const { status, output } = runDrill('v1-client-flow.ts')
     // When 演练跑完（退出码即断言）
@@ -37,7 +39,7 @@ describe('接线演练：工厂的运行时调用点', () => {
     expect(output).toContain('✓ 客户端链路通过')
   })
 
-  it('管理员：desk 进程装配演练用计数假 venue 证明拒绝发生在碰下单端口之前', () => {
+  it('管理员：desk 进程装配演练用计数假 venue 证明拒绝发生在碰下单端口之前', { timeout: 60_000 }, () => {
     // Given 装配演练的一条灯下黑检查：把 venue 下单端口塞进白名单之外的选项键
     const { status, output } = runDrill('desk-process-shadow.ts', { DESK_PROCESS_RUN_MS: '1200' })
     // When 装配拒绝启动
