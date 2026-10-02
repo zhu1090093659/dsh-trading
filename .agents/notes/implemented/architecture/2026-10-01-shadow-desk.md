@@ -69,3 +69,5 @@
 - **把 venue 端口传进来但约定不调用**：约定挡不住重构；结构上不给才是保证。
 - **卡片不记限额归属**：事后无法回答"这单被哪条额度挡下的"，审计就退化成叙述。
 - **超龄卡片照常标记为可重建**：那会让"可重建"这个断言失去意义。
+
+**2026-10-02 额度上限成为可执行判据**：限额比较的唯一家仍是 shadow.ts 的 firstLimitHit（顺序不变），上限的值的唯一家是 mandate 的 5 个 upper 字段（SCOPE_FIELDS）。新增三件：MANDATE_LIMIT_FIELDS（由 SCOPE_FIELDS 的 upper 派生，不是第二张表）、resolveMandateLimits()（声明完整性 fail-closed 前置）、openRiskWithinMandate()（有效期 ∧ 声明完整 ∧ 未超的合取，内部直接调用 firstLimitHit，一行比较都没复制）。**缺省语义**：字段缺席 / Infinity / NaN / 负数 / 非数字 ⇒ declared:false ⇒ 拒绝开新仓，code=no-declared-limit（Infinity 明确当无限挡掉）；0 是合法声明（拒绝任何正数新增，code=notionalMax）；判定输入 NaN/负数 ⇒ code=invalid-input（否则比较恒假=静默放行）；到期 ⇒ mandate-not-active。**只约束新增风险**：reduce/hold 在解析上限之前放行。**单位口径**：notionalMax / positionNotionalMax / deskNotionalMax = quote-currency（与 notional = quantity × price 同口径），maxOpenOrders = count，leverageMax = multiple；不做汇率换算，跨币种须在 mandate 层统一后传入。**未接线**：目前唯一消费 limits 的是 shadow 装置（drill 里硬编码）；L0 下单路径出现时必须改用 resolveMandateLimits(mandate) 或直接调 openRiskWithinMandate。
