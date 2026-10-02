@@ -12,6 +12,7 @@
   "dependencies": {
     "@dshtrading/contract": "file:../../packages/contract",
     "expo": "^57.0.26",
+    "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.3"

@@ -24,7 +24,7 @@ export type PairingResult =
   | { readonly ok: false; readonly status: number; readonly code: string; readonly message: string }
 
 export interface PairingInput {
-  /** edge 的基址，例如 http://192.168.1.10:3081 */
+  /** edge 的基址，例如 http://192.168.1.10:3081（内部按 normalizeBaseUrl 规范化）。 */
   readonly baseUrl: string
   /** 一次性配对码（人从桌面/CLI 读出）。 */
   readonly code: string
@@ -44,13 +44,21 @@ function toDevice(payload: unknown): PairedDevice | null {
 }
 
 /**
+ * 规范化基址：去首尾空白、去尾部斜杠。
+ * 配对请求与落库**用同一个值** —— 否则"绑定地址"和"实际请求地址"会差一个斜杠。
+ * @param raw - 用户输入的地址。
+ */
+export function normalizeBaseUrl(raw: string): string {
+  return raw.trim().replace(/\/+$/, '')
+}
+
+/**
  * 兑换配对码。
  * @param input - 基址、配对码与设备名。
  * @returns 成功时给出设备凭据；失败时给出服务端的 status/code/message。
  */
 export async function redeemPairingCode(input: PairingInput): Promise<PairingResult> {
-  const trimmed = input.baseUrl.endsWith('/') ? input.baseUrl.slice(0, -1) : input.baseUrl
-  const url = trimmed + '/pair/redeem'
+  const url = normalizeBaseUrl(input.baseUrl) + '/pair/redeem'
   let response: Response
   try {
     response = await fetch(url, {

@@ -1,21 +1,26 @@
 /**
  * 设备凭据的存取（配对成功后用）。
  *
- * 两条纪律：
+ * 三条纪律：
  *   1. **凭据只进安全存储**（iOS Keychain / Android Keystore，经 expo-secure-store），
  *      绝不写 AsyncStorage / 文件 / 日志 —— 与桌面壳"凭据留在主进程"同一思路；
  *   2. 平台 API **注入**进来（getItem/setItem/deleteItem），这样模块本身可测，
- *      也让"用哪套存储"成为一个显式选择，而不是藏在 import 里。
+ *      也让"用哪套存储"成为一个显式选择，而不是藏在 import 里；
+ *   3. **凭据与配对地址绑定**（与桌面壳 desktop/src/device-credential.cjs 同一立场）：
+ *      落库的不只是密钥，还有"它属于哪台 bot"—— 重启后才知道该把令牌发给谁，
+ *      也才挡得住"换个地址还用旧令牌"。
  *
  * 读不到或读到坏数据一律返回 null（fail closed）：宁可让用户重新配对，
  * 也不要把半截凭据当成可用凭据。
  */
 
-/** 配对成功后拿到的设备凭据（与 pairing.ts 的 PairedDevice 同形状）。 */
+/** 配对成功后拿到的设备凭据（在 pairing.ts 的 PairedDevice 之上，多一个绑定地址）。 */
 export interface StoredDevice {
   readonly deviceId: string
   readonly secret: string
   readonly scopes: readonly string[]
+  /** 配对时用的 bot 基址（规范化后）。换地址一律重新配对，不复用旧令牌。 */
+  readonly baseUrl: string
 }
 
 /** 平台键值存储的最小面（expo-secure-store 满足它）。 */
@@ -33,6 +38,16 @@ export interface CredentialStore {
 
 const STORAGE_KEY = 'dshtrading.device'
 
+/** 是不是一个能解析的绝对 URL（坏地址不能进存储：它会被拿去发请求）。 */
+function isAbsoluteUrl(value: string): boolean {
+  try {
+    new URL(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** 校验存储里的 JSON 是否仍是一份完整凭据。 */
 function parseDevice(raw: string | null): StoredDevice | null {
   if (raw === null || raw === '') return null
@@ -44,11 +59,12 @@ function parseDevice(raw: string | null): StoredDevice | null {
   }
   if (parsed === null || typeof parsed !== 'object') return null
   const record = parsed as Record<string, unknown>
-  const { deviceId, secret, scopes } = record
+  const { deviceId, secret, scopes, baseUrl } = record
   if (typeof deviceId !== 'string' || deviceId === '') return null
   if (typeof secret !== 'string' || secret === '') return null
   if (!Array.isArray(scopes) || scopes.some((scope) => typeof scope !== 'string')) return null
-  return { deviceId, secret, scopes: scopes as string[] }
+  if (typeof baseUrl !== 'string' || baseUrl === '' || !isAbsoluteUrl(baseUrl)) return null
+  return { deviceId, secret, scopes: scopes as string[], baseUrl }
 }
 
 /**
@@ -58,7 +74,10 @@ function parseDevice(raw: string | null): StoredDevice | null {
 export function createCredentialStore(backend: SecureKeyValue): CredentialStore {
   return {
     async save(device) {
-      await backend.setItem(STORAGE_KEY, JSON.stringify({ deviceId: device.deviceId, secret: device.secret, scopes: device.scopes }))
+      await backend.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ deviceId: device.deviceId, secret: device.secret, scopes: device.scopes, baseUrl: device.baseUrl }),
+      )
     },
     async load() {
       try {
