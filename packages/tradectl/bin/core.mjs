@@ -290,7 +290,7 @@ async function main(argv) {
     gate: { protectiveOrdersAtVenue: false },
     signals: () => ({
       symbols: symbols(),
-      // shadow 形态：没有真实行情面（P4），对齐态由脚本给定 —— 运行输出里逐字标注这件事。
+      // shadow 形态：没有真实行情面（P4），对齐态由脚本给定 —— 启动与退出各标注一次这件事。
       alignmentOf: () => 'aligned',
       lastHeartbeatAtMs: now(),
       heartbeatTimeoutMs: 30_000,

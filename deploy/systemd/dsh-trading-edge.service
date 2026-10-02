@@ -20,7 +20,12 @@ UMask=0077
 # 放在 /var/lib 而不是 /run：kill 状态必须**跨 edge 重启存活**（丢了就等于 kill 被悄悄解除）。
 StateDirectory=dsh-trading-a0
 StateDirectoryMode=0770
-ExecStart=/usr/bin/env node /opt/dsh-trading/tradectl/bin/edge.mjs --kill-state /var/lib/dsh-trading-a0/kill.json
+# 运维通道（grant-control）的本地 UDS 目录：归 edge、仅本机可达（socket 权限由入口设为 0660）。
+RuntimeDirectory=dsh-trading-edge
+RuntimeDirectoryMode=0700
+# --shell-dir：驾驶舱静态壳（部署时从 packages/cockpit/dist 复制到 /opt/dsh-trading/cockpit）；
+# --ops-socket：grant-control 的本地通道。两者都显式开启，不给就不存在（默认最小暴露面）。
+ExecStart=/usr/bin/env node /opt/dsh-trading/tradectl/bin/edge.mjs --kill-state /var/lib/dsh-trading-a0/kill.json --shell-dir /opt/dsh-trading/cockpit --ops-socket /run/dsh-trading-edge/ops.sock
 Restart=always
 RestartSec=2
 NoNewPrivileges=true

@@ -107,7 +107,7 @@
 - 行情面未接：真实行情（WS 适配）与 `/v1` 业务面、UDS 业务帧都属 P4；UDS 面对任何帧一律回结构化拒绝（`CORE_SURFACE_NOT_IMPLEMENTED`），本入口不假装能服务。
 - edge 的设备注册表是**进程内**的（`createDeviceRegistry` 未落盘）⇒ edge 重启后设备需重新配对，`control` 也要重新授予。作用域签发现在是：配对发 `read`（+ 请求里显式给出的 `command`），`control` 只能由上面的 `grant-control.mjs` 走本地 socket 授予；**撤销（`revoke`）仍没有 CLI**。
 - **静态壳托管要显式开**：edge 入口不给 `--shell-dir` 就一条静态路径都不公开（默认最小暴露面）；给了就按 §7.4 的裁决托管（仅 GET/HEAD 的精确路径免令牌，数据与命令面一律 Bearer）。壳根目录是驾驶舱的构建产物（`packages/cockpit/dist`），**部署时复制到 `/opt/dsh-trading/cockpit` 再把该路径给 `--shell-dir`**。
-- systemd unit 只在本机静态核对过（`systemd-analyze verify` 未跑），三个 uid 从未真实部署；`deploy/systemd/*.service` 目前**还没有** `--shell-dir` / `--ops-socket` 这两行与对应的 `RuntimeDirectory`（运维 socket 需要一个 edge 可写的目录，例如 `RuntimeDirectory=dsh-trading-edge` ⇒ `--ops-socket=/run/dsh-trading-edge/ops.sock`）。落地部署前补这两行，否则静态壳与运维通路都不会存在。
+- systemd unit 只在本机静态核对过（`systemd-analyze verify` 未跑），三个 uid 从未真实部署。edge 单元已含 `--shell-dir /opt/dsh-trading/cockpit` 与 `--ops-socket /run/dsh-trading-edge/ops.sock`，并配 `RuntimeDirectory=dsh-trading-edge`（0700）承载 socket 目录；路径随部署副本的实际位置改动。
 
 ## 演练清单（缺记录即视为未满足）
 
