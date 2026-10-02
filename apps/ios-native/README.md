@@ -23,6 +23,21 @@
 - 每个子目录与 `Tests/<Area>Tests/` 都被整体 glob 进对应 target：**加文件不用改 project.yml**。
 - 生成物不入库（见 [.gitignore](.gitignore)）：`*.xcodeproj/`、`build/`、`Generated/`、`xcuserdata/`、`*.xcuserstate`。
 
+### 各层事实之家（一个事实只有一个家）
+
+| 面 | 事实之家 |
+|---|---|
+| 工程形态、构建与测试命令、沙箱环境事实 | 本 README §1 / §2 |
+| 层间依赖白名单 | [check-swift-layering.mjs](../../scripts/ios-native/check-swift-layering.mjs)（可执行判据）+ 上面的 target 表 |
+| 契约面（版本 / 作用域 / 卡片 / 确认 / 推送 / 离线 / 数据源守卫 / A0） | [Sources/Contract/](Sources/Contract/) + 本 README §3 / §4 |
+| 传输面（配对、设备令牌、origin 绑定、`/a0/*`、`/v1/*`） | [Sources/Transport/](Sources/Transport/)：`ObservationTransport` / `DshtApiClient` / `PairingClient` / `TransportSession`（**代码即判据，端点清单不在此复述**，避免第二个家） |
+| 领域面（三维语义、跨层端口、观测态） | [Sources/Domain/](Sources/Domain/)（`Ports.swift` 是跨层端口的家） |
+| 界面面（五入口、Domain→Features 翻译） | [Sources/Features/](Sources/Features/)（`FeaturesAdapter` 是唯一翻译点） |
+| 告警面（推送载荷、深链、生物识别闸门） | [Sources/Alerts/](Sources/Alerts/) |
+| 离线面（快照、陈旧度、退避、gap report） | [Sources/Offline/](Sources/Offline/) |
+| 组合根（装配、配对门、夹具情形） | 本 README §5 + [Sources/App/](Sources/App/) |
+| 决策与被否决方案 | [Owning Note](../../.agents/notes/implemented/architecture/2026-10-01-mobile-app-and-contract-core-entry.md) |
+
 ## 2. 构建与测试（可复现命令）
 
 ```bash
@@ -31,7 +46,7 @@ cd apps/ios-native
 ./scripts/test-contract.sh        # 契约防漂移机检（含重新生成快照 + 重放行为向量）
 ```
 
-两个脚本都先取重活锁 `build/.heavy.lock`（接口冻结 §2「重活串行」：同一时刻只允许一路 xcodegen/xcodebuild；
+两个脚本都先取重活锁 `build/.heavy.lock`（重活串行纪律：同一时刻只允许一路 xcodegen/xcodebuild；
 取锁失败立即退出 75，绝不无锁继续或按时间删除他人锁；调用者不得再包同一把锁）。
 
 等价的裸命令：
@@ -44,7 +59,7 @@ xcodebuild -project DshTradingNative.xcodeproj -scheme DshTradingNative \
   -configuration Debug -derivedDataPath build/DerivedData build
 ```
 
-### 两个本机环境事实（都不是代码问题，已在工程里处理）
+### 本机环境事实（5 条；都不是代码问题，已在工程里处理）
 
 1. **宏插件嵌套沙箱**：本机会话的 DSH 文件沙箱内，swiftc 给宏插件起不了嵌套沙箱
    （`sandbox-exec: sandbox_apply: Operation not permitted` ⇒
@@ -75,7 +90,7 @@ Swift 侧是等价实现。客户端**不自行发号**（不引入 `ids.ts` 语
 
 > **权威边界（8/9）**：`Sources/Contract/` 有 9 个文件，其中 [ContractA0.swift](Sources/Contract/ContractA0.swift)
 > （`KillState` / `A0Status`）在 `packages/contract/src/` 里**没有对应模块** —— 它是客户端侧的 wire DTO，
-> 出处是接口冻结 §5 的 `GET /a0/status` 响应形状。也就是说"TS 是唯一权威 + 防漂移机检"目前覆盖 **8/9**，
+> 出处是 `GET /a0/status` 的响应形状（由 [ObservationTransport.swift](Sources/Transport/ObservationTransport.swift) 消费）。也就是说"TS 是唯一权威 + 防漂移机检"目前覆盖 **8/9**，
 > A0 那两个类型由 [ContractA0Tests.swift](Tests/ContractTests/ContractA0Tests.swift) 的 fail-closed 行为断言守着
 > （`killed`/`paused` 读不到就抛错、未知 scope 丢弃、不默认 false）。
 
@@ -90,7 +105,7 @@ Swift 侧是等价实现。客户端**不自行发号**（不引入 `ids.ts` 语
 | [ContractSourceGuard.swift](Sources/Contract/ContractSourceGuard.swift) | `SourcedDatum`、`ReconcileReport`、`SourceGuard` |
 | [ContractDecoding.swift](Sources/Contract/ContractDecoding.swift) | 宽松标量解码（`LenientText`/`LenientTextMap`）：**只搬类型，不判语义、不猜默认值** |
 
-### fail-closed 的建模方式（接口冻结 §4.1）
+### fail-closed 的建模方式
 
 封闭枚举项（`cardType` / `field.kind` / `action.kind` / `push.kind` / `push.severity`）在 DTO 里**保留为 `String`**，
 由 `CardType(rawValue:)` 一类查表判定；**查表落空 ⇒ 不可操作**（禁用全部 Action，只渲染 `fallbackText`），
@@ -168,7 +183,42 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
 - **Keychain 不可用的退路**：退回内存存储并如实提示（重启需重新配对）；**绝不**把设备令牌写进 UserDefaults/文件。
 - 未接线：真机签名、APNs 注册、设备上的生物识别验证、持久化快照落盘实现（Offline 卡范围；当前离线可用性只靠"重取一次快照"）。
 
-## 6. 契约面 finding（记录，不自行放宽）
+## 6. 不变量与验收判据（每条都要有可执行落点）
+
+> 判据来自本轮工作冻结件；冻结件已删除，**家在这里**。每条后面是它的可执行落点：
+> 能机检的给门禁/测试，**测不到的如实标注**。
+
+| # | 不变量 | 可执行落点 |
+|---|---|---|
+| 1 | 未知封闭枚举 ⇒ 不可操作（禁用全部 Action，只渲染 `fallbackText`） | `validateCard`/`renderableActions`（[ContractCards.swift](Sources/Contract/ContractCards.swift)）；`testUnknownClosedEnumValuesDisableEveryAction`、`testUnknownCardTypeIsInvalidAndInoperable`；`validateCard`/`renderableActions` 行为向量；[check-contract-drift.mjs](../../scripts/ios-native/check-contract-drift.mjs) 的 rawValue 比对 |
+| 2 | 过期/陈旧数据不渲染数据本身 | `offlineView`（[ContractOffline.swift](Sources/Contract/ContractOffline.swift)）；`testExpiredSnapshotNeverRendersTheDataItself`；`offlineView` 向量；Offline 层单测 |
+| 3 | 跨源永不混显；切换期只读 | `SourceGuard`；`testSourceGuardNeverMixesSourcesAndIsReadOnlyWhileSwitching`；`sourceGuard` 向量；[ContractParityTests.swift](Tests/ContractTests/ContractParityTests.swift) |
+| 4 | 令牌只发往配对绑定的 origin，跨源**连请求都不发** | [DshtApiClient.swift](Sources/Transport/DshtApiClient.swift) 的 origin 守卫（先判 origin → 再碰令牌 → 再发请求）；Transport 层单测含"跨源零 HTTP 调用"断言。**真机未验** |
+| 5 | 配对永不签发 control；控制类动作一律 biometric 且 fail-closed | `grantableByDefault`（向量 + ContractParityTests）；`auditConfirmPolicy`/`actionConfirm`（`testEveryControlActionRequiresBiometric`）；Alerts 的 `AlertsConfirmationGate` 单测。**设备上的生物识别未验** |
+| 6 | 生物识别不替代服务端授权与风控 | Alerts 的注释 + 单测：闸门只决定"要不要把动作发出去"，服务端仍按 scope 与 mandate 判。**无设备验证** |
+| 7 | 「App 看不到机器人」与「机器人已停止」是两种显示 | Domain 的 reachability 与三维语义单测 + Features 呈现单测（见 [IOS-4 独立验收报告](docs/acceptance/ios4-independent-acceptance.md)）；夹具 `stopped` 与 `unreachable` 两情形可肉眼并排 |
+| 8 | 三维语义（执行状态 / 依赖健康 / 数据可信度）互不顶替；`alignment` 与 `level` 两套词汇不相交 | Domain 的状态语义机与 `ClosedEnum` 单测（[Sources/Domain/](Sources/Domain/)） |
+| 9 | 客户端不含交易所密钥；不依赖 bot 平面运行时包 | `pnpm plane:check`（CI 静态门禁）；本目录只消费 `@dshtrading/contract` 的语义，源码内无任何密钥 |
+| 10 | 观测面不依赖 tick 流（快照是契约） | 结构事实：`ObservationSource.fetchSnapshot()` 是唯一数据入口，**WS 事件续读未实现**；`Sources/App` 只是定时重取快照。**"不依赖"是结构性质，无法用断言证明** |
+| 11 | 不改服务端语义；需要契约变更先记录 | `packages/contract` 只读消费；缺口清单见 §8 finding 4 与 Owning Note |
+
+**测不到的部分如实说**：4 / 5 / 6 目前只有单测或代码结构证据，**真机（Keychain 持久化、生物识别、推送）未验**；
+10 的"不依赖 tick 流"是结构事实（没有 WS 客户端），不是断言；7 的并排图由 IOS-3 采集。
+
+## 7. 未验证项（不得计入验收）
+
+| 项 | 现状 | 为什么没验 |
+|---|---|---|
+| 真机签名与部署 | 只有模拟器构建证据 | 无签名/账号 |
+| APNs 真实送达与授权弹窗 | 只有载荷契约与 `acceptedPush` 闸门 | 未接推送服务、无设备 |
+| 设备上的生物识别（Face ID / 密码回退）、锁屏渲染、专注模式 | 只有 `BiometricAuthenticating` 端口与闸门单测 | 无设备 |
+| 弱网（超时 / 半开 / 抖动） | 有 `OfflineBackoff` 与 gap report 的结构与单测 | 未做真机弱网 |
+| 沙箱外的 `xcodebuild test` | 本机只能 `build-for-testing` + `xcrun xctest` 绕过 PTY 限制 | 沙箱环境限制 |
+| 事件续读（WS 流） | **未实现**：快照是唯一数据入口 | 本轮范围外 |
+| 真机持久化 | `InMemorySnapshotPersistence`（重启丢快照 ⇒ 只影响离线可用性，不影响正确性） | 落盘实现属 Offline 卡范围 |
+| 「解析不在主线程」 | 代码结构如此（`DeskMapper.mapOffMain`） | **无法用断言证明**，需要线程断言基础设施 |
+
+## 8. 契约面 finding（记录，不自行放宽）
 
 1. **TS 注释与代码不一致**：`cards.ts` 的注释写"未知 cardType ⇒ `valid` 仍可为 true"，
    代码实际会 push problem，于是 `valid = problems.length === 0` ⇒ **`valid=false`**。
@@ -188,8 +238,11 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
      与设计文档明文冻结的"不钉版本位（`[0-9a-f]{4}`）"冲突；
    - `cards.ts` 关于未知 cardType 的注释与代码不一致（见 finding 1）。
 
-## 7. 文档与决策记录
+## 9. 文档与决策记录
 
-本轮的接口冻结件是 `INTERFACE-FREEZE.md`（Lead 所有，收尾时删除）；其事实并入本 README 与
-[Owning Note](../../.agents/notes/implemented/architecture/2026-10-01-mobile-app-and-contract-core-entry.md)。
+本轮的工作冻结件 `INTERFACE-FREEZE.md` **已在收尾时删除**，其事实已归家：
+- 工程形态 / 构建与测试命令 / 契约面与防漂移 / 组合根 / 不变量与验收判据 / 未验证项 → **本 README**；
+- 决策、被否决方案与契约缺口 → [Owning Note](../../.agents/notes/implemented/architecture/2026-10-01-mobile-app-and-contract-core-entry.md)；
+- 分层白名单 → [check-swift-layering.mjs](../../scripts/ios-native/check-swift-layering.mjs)（可执行判据即事实）。
+
 `packages/contract` 只被**只读消费**：本目录不修改任何 TS 契约。
