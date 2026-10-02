@@ -61,12 +61,23 @@ xcodebuild -project DshTradingNative.xcodeproj -scheme DshTradingNative \
    `cannot find 'X' in scope`（看起来像"代码没写完"，其实是工程没刷新）。`scripts/build-simulator.sh` 与
    `scripts/test-contract.sh` 都已经把 `xcodegen generate` 放在 `xcodebuild` 之前。
 
+4. **不带 `-derivedDataPath` 会红，且不是代码问题**：`xcodebuild … build`（没有 `-derivedDataPath`）在沙箱内 exit 65，
+   日志里 **0 条 `error:`**，真因是写不了 `~/Library/Developer/Xcode/DerivedData/...`（permission 513）。
+   一律带 `-derivedDataPath build/DerivedData`（脚本已如此）。
+5. **`ps` 在沙箱内被拒**（`/bin/ps: Operation not permitted`）：孤儿进程检查要换 `pgrep` 或到宿主侧做。
+
 本机实测工具链：Xcode 27.0（27A266a）/ iOS SDK 27.0 / Swift 6.4 / XcodeGen 2.45.3；模拟器 `DshtTrading`（iOS 27.0）。
 
 ## 3. 冻结的契约面（`Sources/Contract/`）
 
 **TS 契约是唯一权威**（`packages/contract/src/{version,scopes,cards,push,confirm,offline,source-guard}.ts`），
 Swift 侧是等价实现。客户端**不自行发号**（不引入 `ids.ts` 语义）。
+
+> **权威边界（8/9）**：`Sources/Contract/` 有 9 个文件，其中 [ContractA0.swift](Sources/Contract/ContractA0.swift)
+> （`KillState` / `A0Status`）在 `packages/contract/src/` 里**没有对应模块** —— 它是客户端侧的 wire DTO，
+> 出处是接口冻结 §5 的 `GET /a0/status` 响应形状。也就是说"TS 是唯一权威 + 防漂移机检"目前覆盖 **8/9**，
+> A0 那两个类型由 [ContractA0Tests.swift](Tests/ContractTests/ContractA0Tests.swift) 的 fail-closed 行为断言守着
+> （`killed`/`paused` 读不到就抛错、未知 scope 丢弃、不默认 false）。
 
 | 文件 | 冻结符号 |
 |---|---|
@@ -128,8 +139,13 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
 
 - `node scripts/ios-native/check-contract-drift.mjs` —— 直接 import TS 契约取权威真值，
   再从 `Sources/Contract/*.swift` 解析出封闭枚举/查表/上限/常量逐项比对；**解析不出来一律判红**。
-- `node scripts/ios-native/check-swift-layering.mjs` —— 分层 import 白名单（Domain 的 `Observation` 宏在名单内），
-  越界或新增未登记的分层即红；第三方依赖同样拦下。
+- `node scripts/ios-native/check-swift-layering.mjs` —— 分层 import 白名单（`Observation` 在名单内，**经 Lead 批准**：
+  `@Observable` 是随工具链的标准库宏；`Combine`/`Charts` **未获批准，不在名单内**），越界或新增未登记的分层即红；
+  第三方依赖同样拦下。识别**属性前缀与种类词**：`@_exported import SwiftUI`（把禁层模块透传出去）、
+  `@testable import DshTradingFeatures`、`import struct SwiftUI.Color`（模块名取 `SwiftUI` 而不是关键字 `struct`）
+  都会被抓住并给出正确诊断。
+- 两条门禁都有自测（`scripts/ios-native/*.test.mjs`，夹具驱动）：真契约副本 ⇒ 绿、改常量 ⇒ 红并点名、
+  缺文件 ⇒ fail-closed 红、`@_exported` 绕过 ⇒ 红。
 
 两者都验证过「故意改错 ⇒ 红」（改 `kill` 的确认档位、给 Transport 加 `import SwiftUI`）。
 CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift 断言留本机 `./scripts/test-contract.sh`（用例数随契约扩展）。

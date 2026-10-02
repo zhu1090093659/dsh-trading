@@ -270,3 +270,22 @@ ACC_DONE
 - App `BUILD SUCCEEDED`；两条门禁绿；
 - `DIRTY_AFTER=1` 是我跑完之后才出现的编辑（IOS-1 继续改 `AppEnvironment.swift`），**不影响本次矩阵结论**，
   但也说明：任何"当前全绿"的说法都有保质期，必须绑 sha 与时刻。
+## 12. 复跑清单（等 Lead 给最终 HEAD 后执行；本文件 §11 届时应被新的 §13 取代）
+
+§11 的结论绑 `95b70ff9`，**不能沿用到新 HEAD**。重跑时用同一套加强判据，一次锁内跑完：
+
+- 先记录 `HEAD_BEFORE` 与 `git status --porcelain apps/ios-native/Sources apps/ios-native/Tests | wc -l`；
+- 若脏文件 ≠ 0，结论只能写成「HEAD + 列出的脏文件」，不得写成「HEAD 绿」；
+- 每个 iOS 目标：`rm -rf <bundle>` → `build-for-testing`（**非 0 立即判红并跳过 xctest**）→ 记 bundle mtime → `xcrun simctl spawn … xctest`；
+- Contract 走 macOS：`-destination platform=macOS` + `xcrun xctest`；
+- 两条门禁在跑构建前先跑（`check-contract-drift.mjs` 前先 `gen-contract-snapshot.mjs`）；
+- 跑完再记 `HEAD_AFTER`（与 BEFORE 相同才可声称「绑这个 sha」）与收尾时的脏文件数。
+
+锁：`apps/ios-native/build/.heavy.lock`（`mkdir` 抢锁 + `trap rmdir` 释放）。
+
+重跑时**特别复核** IOS-1 的四项处置是否真的成立（这是本轮 findings 的验收）：
+
+1. `@_exported import SwiftUI` / `@testable import DshTradingFeatures` 写在 Domain 下 ⇒ 分层门禁**必须红**（§5.2）；
+2. `import struct SwiftUI.Color` 报的越界对象必须是 `SwiftUI` 而不是 `struct`（§5.3）；
+3. Offline/Alerts 的 `Observation`、Features 的 `Combine`/`Charts` 若未获批准，写到对应层里**必须红**（§5.4）；
+4. `scripts/ios-native/` 下若加了 `*.test.mjs`，`pnpm test:scripts` 必须真的跑到它们（§5.5）。

@@ -20,8 +20,15 @@ import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, '../..')
-const contractSrc = resolve(repoRoot, 'packages/contract/src/core.ts')
-const swiftDir = resolve(repoRoot, 'apps/ios-native/Sources/Contract')
+
+// --swift-dir / --contract 供自测（scripts/ios-native/check-contract-drift.test.mjs）指向夹具；
+// 默认值是仓内真路径，CI 与本地用法不变。
+const argOf = (name, fallback) => {
+  const index = process.argv.indexOf(name)
+  return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback
+}
+const contractSrc = resolve(argOf('--contract', resolve(repoRoot, 'packages/contract/src/core.ts')))
+const swiftDir = resolve(argOf('--swift-dir', resolve(repoRoot, 'apps/ios-native/Sources/Contract')))
 
 const C = await import(contractSrc)
 const problems = []
