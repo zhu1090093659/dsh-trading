@@ -42,8 +42,9 @@
  *
  * 三个上界参数（年龄预算 / 缓冲条数与字节 / 重对齐令牌桶容量）**必须先经
  * replay-harness 标定**才能写成常量——本模块不提供缺省值，调用方必须显式传入
- * （缺省猜测值会让"没标定"变成"看起来标定过"）。drill 侧目前只有一份**明确标注
- * 未标定**的单一来源占位值（`drill/alignment-params.ts`，不变量 #23）。
+ * （缺省猜测值会让"没标定"变成"看起来标定过"）。当前取值是 **harness 实测标定值**
+ * （`drill/alignment-params.ts`，来源见 `docs/design/alignment-calibration.md`，2026-10-02，
+ * 不变量 #23）；它是**演练标定**，接入真实行情录音后必须重标。
  *
  * @module @dshtrading/tractl/alignment
  */
