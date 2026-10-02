@@ -46,14 +46,15 @@ final class DshtApiClientTests: TransportTestCase {
         // When 取 A0 状态
         let status = try await apiClient.a0Status()
 
-        // Then kill 事实原样带出；未知平面**不授予**，输出按契约声明顺序
+        // Then kill 事实原样带出；未知平面**不授予**（解码在 Contract，未知 scope 丢弃）
         XCTAssertTrue(status.ok)
         XCTAssertTrue(status.state.killed)
         XCTAssertFalse(status.state.paused)
         XCTAssertEqual(status.state.reason, "ops")
         XCTAssertEqual(status.state.atMs, 5)
         XCTAssertEqual(status.device, "dev_1")
-        XCTAssertEqual(status.scopes, [.read, .control])
+        XCTAssertEqual(status.scopes, [.control, .read])
+        XCTAssertTrue(status.hasControl)
     }
 
     func testA0StatusWithMalformedStateThrowsInsteadOfAssumingNotKilled() async throws {

@@ -76,7 +76,7 @@ final class ContractDriftTests: XCTestCase {
         let required = [
             "negotiateVersion", "validateCard", "renderableActions", "fallbackFor", "stalenessOf",
             "offlineView", "parseDeeplink", "grantableByDefault", "parseCaps", "formatCaps",
-            "requiresBiometric", "sourceGuard",
+            "requiresBiometric", "sourceGuard", "validatePushPayload",
         ]
         for key in required {
             XCTAssertFalse(

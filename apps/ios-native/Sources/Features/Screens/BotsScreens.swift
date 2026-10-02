@@ -132,8 +132,8 @@ public struct BotDetailScreen: View {
     }
 
     private var axesCard: some View {
-        SectionCard("三维状态") {
-            StateAxesView(bot.axes)
+        SectionCard("三维状态", subtitle: "执行状态 / 依赖健康 / 数据可信度分列，互不顶替。") {
+            StateAxesView(bot.axes, showsTitles: false)
             if let detail = bot.stateDetail {
                 InfoRow("最后确认", value: detail, tone: .neutral)
             }

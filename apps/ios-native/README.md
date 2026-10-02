@@ -32,7 +32,7 @@ cd apps/ios-native
 ```
 
 两个脚本都先取重活锁 `build/.heavy.lock`（接口冻结 §2「重活串行」：同一时刻只允许一路 xcodegen/xcodebuild；
-锁超过 15 分钟视为陈旧自动破除，避免有人崩在锁里让全队死锁）。
+取锁失败立即退出 75，绝不无锁继续或按时间删除他人锁；调用者不得再包同一把锁）。
 
 等价的裸命令：
 
@@ -100,9 +100,10 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
 
 - [gen-contract-snapshot.mjs](scripts/gen-contract-snapshot.mjs) 从 `@dshtrading/contract` 的**运行期真值**导出：
   常量（version/scopes/limits/deeplinkScheme）、封闭枚举（cardTypes/fieldKinds/actionKinds/push*）、
-  查表（actionScope/actionConfirm）、以及 **121 条行为向量**（negotiateVersion / validateCard /
+  查表（actionScope/actionConfirm）、以及 **136 条行为向量**（negotiateVersion / validateCard /
   renderableActions / fallbackFor / stalenessOf / offlineView / parseDeeplink / grantableByDefault /
-  parseCaps / formatCaps / requiresBiometric / sourceGuard 的输入 → TS 权威输出）。
+  parseCaps / formatCaps / requiresBiometric / sourceGuard / validatePushPayload 的输入 → TS 权威输出）。
+  推送校验覆盖 UTF-16 长度边界，诊断与合法性均逐条匹配 TS；新增向量待串行测试验证。
 - [ContractDriftTests.swift](Tests/ContractTests/ContractDriftTests.swift) 逐字段比对常量与表，
   并锁住 fail-closed 行为（未知 cardType ⇒ `valid=false, operable=false`；未知枚举 ⇒ 全动作禁用；
   control ⇒ biometric；过期不渲染数据本身；跨源不混显）。
@@ -112,6 +113,18 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
 - 机检可运行且真的会红：`./scripts/test-contract.sh`，故意改错的红/绿证据见
   [build/](build/) 下的 `mutation-a.log` / `mutation-b.log` / `mutation-restored.log`
   （A：让 `grantableByDefault` 放行 control ⇒ 6 例红；B：`maxFields` 24→25 ⇒ 1 例红；改回 ⇒ 31 例全绿。
+
+### CI 接线（不需要 Xcode）
+
+仓根 `scripts/ios-native/` 有两条**纯 Node** 门禁，跑在 `ci.yml` 的 static-gates job 里：
+
+- `node scripts/ios-native/check-contract-drift.mjs` —— 直接 import TS 契约取权威真值，
+  再从 `Sources/Contract/*.swift` 解析出封闭枚举/查表/上限/常量逐项比对；**解析不出来一律判红**。
+- `node scripts/ios-native/check-swift-layering.mjs` —— 分层 import 白名单（Domain 的 `Observation` 宏在名单内），
+  越界或新增未登记的分层即红；第三方依赖同样拦下。
+
+两者都验证过「故意改错 ⇒ 红」（改 `kill` 的确认档位、给 Transport 加 `import SwiftUI`）。
+CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift 断言（35 例）留本机 `./scripts/test-contract.sh`。
 
 ## 5. 契约面 finding（记录，不自行放宽）
 
@@ -125,6 +138,13 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
    在可达范围内两侧等价 —— 机检覆盖，而不是只写在说明里。
 3. **`PushPayload.actions` 解码是严格的**（缺失或非字符串数组 ⇒ 抛错 ⇒ 整条载荷 drop），
    与卡片的"绝不抛掉整张卡"相反：推送是"非法载荷一律 drop"（`acceptedPush` 同时校验深链）。
+4. **契约缺口（只报告，不改服务端；同一份清单也在 Owning Note 里）**：
+   - `field.key` **未冻结**（仓内只有夹具用过 `level`）：服务端应冻结每张卡的 key，
+     否则客户端"认识的 key 走结构化映射、不认识的进 raw 列表"这条只能靠约定；
+   - **资产没有独立卡片类型**；成交/资金变动/事件/订单 `stateSince`/等待原因在**卡片面与 A0 面都拿不到**；
+   - **`ids.ts` 的 `isOrderId` 把 UUID 版本位钉成 v4**（第三组 `4[0-9a-f]{3}` + 变体位 `[89ab]`），
+     与设计文档明文冻结的"不钉版本位（`[0-9a-f]{4}`）"冲突；
+   - `cards.ts` 关于未知 cardType 的注释与代码不一致（见 finding 1）。
 
 ## 6. 文档与决策记录
 

@@ -89,26 +89,15 @@ public final class DshtApiClient: ObservationTransport {
     /// 拿不到就由上层渲染 .indeterminate，不许默认成 .running。
     public func a0Status() async throws -> A0Status {
         let response = try await request(method: "GET", path: "/a0/status")
-        guard let object = (try? JSONSerialization.jsonObject(with: response.body)) as? [String: Any] else {
-            throw TransportError.badResponse("A0_STATUS_INVALID: 响应体不是 JSON 对象")
+        do {
+            // 解码语义在 Contract（唯一一个家）：ok/state/killed/paused 缺失即抛错，
+            // 未知 scope 丢弃。这里只把解码失败翻成传输错误。
+            return try JSONDecoder().decode(A0Status.self, from: response.body)
+        } catch {
+            throw TransportError.badResponse(
+                "A0_STATUS_INVALID: 响应体不符合 A0 契约（" + String(describing: error) + "）"
+            )
         }
-        guard let state = object["state"] as? [String: Any] else {
-            throw TransportError.badResponse("A0_STATUS_INVALID: 缺 state")
-        }
-        guard let killed = state["killed"] as? Bool, let paused = state["paused"] as? Bool else {
-            throw TransportError.badResponse("A0_STATUS_INVALID: state.killed/paused 缺失或类型不对")
-        }
-        return A0Status(
-            ok: object["ok"] as? Bool ?? false,
-            state: KillState(
-                killed: killed,
-                paused: paused,
-                reason: state["reason"] as? String ?? "",
-                atMs: state["atMs"] as? Int ?? 0
-            ),
-            device: object["device"] as? String ?? "",
-            scopes: DshtApiClient.parseScopePlanes(object["scopes"])
-        )
     }
 
     /// GET /v1/cards —— 请求头带客户端能力，响应体带服务端能力与降级项。
@@ -149,14 +138,6 @@ public final class DshtApiClient: ObservationTransport {
     }
 
     // MARK: - wire 解码
-
-    /// 作用域解析：只保留认得出的平面，未知字符串**不授予**（fail-closed），
-    /// 并按契约的声明顺序输出（稳定顺序是契约的一部分，客户端可以依赖它做 diff）。
-    static func parseScopePlanes(_ value: Any?) -> [ScopePlane] {
-        guard let raw = value as? [String] else { return [] }
-        let known = Set(raw.compactMap { ScopePlane(rawValue: $0) })
-        return scopePlanes.filter { known.contains($0) }
-    }
 
     /// 卡片解码：走 **Contract 自己的 Decodable**（§4.1 的宽松标量语义在那里，
     /// 客户端不自造第二份解码规则）。cardId 为空说明这一项根本不是卡片，丢弃该张但保留整页。

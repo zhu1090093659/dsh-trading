@@ -243,6 +243,22 @@ final class ContractVectorTests: XCTestCase {
         }
     }
 
+    func testUserReceivesOnlyPushPayloadsMatchingAuthority() throws {
+        // Given: TS authority inputs and outputs, including UTF-16 length limits.
+        let cases = try vectors("validatePushPayload")
+        for raw in cases {
+            let vector = snapDict(raw)
+            let name = snapText(vector["name"])
+            let payload = try decodeVector(PushPayload.self, from: vector["payload"] ?? [:], name)
+            // When: user receives a payload through the actual decoder and validator.
+            let verdict = validatePushPayload(payload)
+            let expected = snapDict(vector["expected"])
+            // Then: validity and every diagnostic match the TS contract.
+            XCTAssertEqual(verdict.valid, snapBool(expected["valid"]), name)
+            XCTAssertEqual(verdict.problems, snapStrings(expected["problems"]), name)
+        }
+    }
+
     // MARK: - 推送载荷
 
     func testPushPayloadVectorsFromCardsContract() {

@@ -11,11 +11,10 @@ cd "$(dirname "$0")/.."
 # 重活锁（接口冻结 §2「重活串行」）：同一时刻只允许一路 xcodegen/xcodebuild。
 LOCK=build/.heavy.lock
 mkdir -p "$(dirname "$LOCK")"
-for _ in $(seq 1 90); do
-  if mkdir "$LOCK" 2>/dev/null; then break; fi
-  if [ -d "$LOCK" ] && [ -n "$(find "$LOCK" -maxdepth 0 -mmin +15 2>/dev/null)" ]; then rmdir "$LOCK" 2>/dev/null; fi
-  sleep 10
-done
+if ! mkdir "$LOCK" 2>/dev/null; then
+  echo "HEAVY_LOCK_BUSY: $LOCK (do not wrap this script in the same lock)" >&2
+  exit 75
+fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 node scripts/gen-contract-snapshot.mjs

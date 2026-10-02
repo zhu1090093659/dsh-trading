@@ -568,7 +568,8 @@ public final class ObservationStore {
         do {
             let snapshot = try await source.fetchSnapshot()
             let nowMs = clock()
-            var mapped = DeskMapper.map(snapshot: snapshot, nowMs: nowMs)
+            // 冻结件 §9：解析不在主线程做，只有赋值回到 MainActor。
+            var mapped = await DeskMapper.mapOffMain(snapshot: snapshot, nowMs: nowMs)
             // 只有真的观测到"业务正常"才更新确认时间：心跳正常不算。
             if mapped.bot.assessment?.health.businessHealthy == true {
                 lastConfirmedHealthyAtMs = nowMs

@@ -93,6 +93,10 @@ public enum AlertPolicy {
     /// 契约的 shouldInterrupt 是**唯一**的"值不值得叫醒用户"判据，这里只叠加用户自己的静默时段，
     /// 不放宽也不放宽它的 critical 例外。
     public static func shouldInterrupt(_ payload: PushPayload, preferences: AlertPreferences, minuteOfDay: Int) -> Bool {
+        // critical 是**所有**静音手段的例外：desk 静音与静默时段都挡不住它。
+        // （这条必须在最前面：契约的 shouldInterrupt 对 critical 返回 true，
+        //   若之后再用静默时段覆盖，就等于客户端把 critical 例外吃掉了。）
+        if payload.severity == PushSeverity.critical.rawValue { return true }
         guard DshTradingContract.shouldInterrupt(payload, muted: preferences.mutedDesks) else { return false }
         if preferences.quietHours?.contains(minuteOfDay: minuteOfDay) == true { return false }
         return true

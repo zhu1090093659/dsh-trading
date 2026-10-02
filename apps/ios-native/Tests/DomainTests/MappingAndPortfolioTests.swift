@@ -72,6 +72,22 @@ final class CardMappingTests: XCTestCase {
         XCTAssertEqual(DeskMapper.map(snapshot: Fixtures.snapshot(cards: [fresh]), nowMs: 1_000).bot.trust, .fresh)
     }
 
+    /// 断线期间：卡片自称 fresh，但快照账龄已经很老 ⇒ 只能取更保守的一档。
+    func test_givenFreshClaimingCardInAnOldSnapshot_whenMapped_thenTrustIsDowngradedNotFresh() {
+        let budget = TrustBudget(freshMs: 1_000, agingMs: 2_000, staleMs: 3_000, ttlMs: 4_000)
+        let freshness = Fixtures.card("fresh-1", "freshness", fields: [("age", "fresh")])
+        let snapshot = Fixtures.snapshot(cards: [freshness], atMs: 0)
+
+        // 抓取当时确实 fresh
+        XCTAssertEqual(DeskMapper.map(snapshot: snapshot, nowMs: 500, budget: budget).bot.trust, .fresh)
+        // 断线 5 秒后，同一份快照不能再自称 fresh
+        XCTAssertEqual(DeskMapper.map(snapshot: snapshot, nowMs: 5_000, budget: budget).bot.trust, .expired)
+        XCTAssertFalse(DeskMapper.map(snapshot: snapshot, nowMs: 5_000, budget: budget).bot.trust.rendersData)
+        XCTAssertEqual(DeskMapper.moreCautious(.fresh, .stale), .stale)
+        XCTAssertEqual(DeskMapper.moreCautious(.expired, .fresh), .expired)
+        XCTAssertEqual(DeskMapper.moreCautious(.fresh, .unknown), .unknown)
+    }
+
     func test_givenNoFreshnessCard_whenSnapshotIsOld_thenTrustFallsBackToSnapshotAge() {
         let budget = TrustBudget(freshMs: 1_000, agingMs: 2_000, staleMs: 3_000, ttlMs: 4_000)
         let snapshot = Fixtures.snapshot(cards: [], atMs: 0)

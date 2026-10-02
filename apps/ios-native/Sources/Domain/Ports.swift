@@ -13,44 +13,23 @@ import DshTradingContract
 
 // MARK: - A0 状态（/a0/status）
 
-/// /a0/status 的 state 字段。**这是"机器人是否已停止"的唯一权威信号**（带外）。
+/// A0 的 wire DTO **住在 Contract**（一个事实只有一个家）。
 ///
-/// 归属说明（已报 Lead）：冻结件 §5 把 A0Status 声明在 Transport，§6.3 又要求 Domain 的
-/// ObservationSnapshot 携带它；而 §3 的分层不允许 Domain -> Transport。
-/// 当前按 §6.3 在 Domain 侧声明，Transport 侧发布时由 Offline/App 适配。
-public struct KillState: Hashable, Sendable {
-    public let killed: Bool
-    public let paused: Bool
-    public let reason: String
-    public let atMs: Int
+/// 理由（Lead 2026-10-02 裁决）：§5 把它声明在 Transport、§6.3 又要求 Domain 的
+/// ObservationSnapshot 携带它，而 §3 不允许 Domain 与 Transport 互相 import ——
+/// 唯一合法的共同上游是 Contract。Domain 侧用 typealias 指过去，**公共名字不变**。
+public typealias KillState = DshTradingContract.KillState
+public typealias A0Status = DshTradingContract.A0Status
 
-    public init(killed: Bool, paused: Bool, reason: String, atMs: Int) {
-        self.killed = killed
-        self.paused = paused
-        self.reason = reason
-        self.atMs = atMs
-    }
-
+extension KillState {
     /// 由权威信号导出执行状态。**没有 A0Status 时不要调它**，那是 .indeterminate。
     public var executionState: ExecutionState {
         ExecutionState.fromA0(killed: killed, paused: paused)
     }
 }
 
-/// /a0/status 的响应。拿不到就是 nil，**不许编**。
-public struct A0Status: Hashable, Sendable {
-    public let ok: Bool
-    public let state: KillState
-    public let device: String
-    public let scopes: [ScopePlane]
-
-    public init(ok: Bool, state: KillState, device: String, scopes: [ScopePlane]) {
-        self.ok = ok
-        self.state = state
-        self.device = device
-        self.scopes = scopes
-    }
-
+extension A0Status {
+    /// 执行核给出的执行状态（拿不到 A0Status 时不要用这个，那是 .indeterminate）。
     public var execution: ExecutionState { state.executionState }
 }
 

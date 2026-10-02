@@ -202,6 +202,24 @@ final class ObservationStoreTests: XCTestCase {
         XCTAssertEqual(store.observation?.bot.lastConfirmedHealthyAtMs, 1_000)
     }
 
+    /// 大快照的解析走 detached 路径（§9：解析不在主线程），结果必须完整且有序。
+    func test_givenManyCards_whenRefreshed_thenEveryPositionIsParsedOffMainAndKeptInOrder() async {
+        let cards = (0..<500).map { index in
+            Fixtures.card("p-\(index)", "position", fields: [("symbol", "S\(index)"), ("quantity", "1")])
+        }
+        let source = SequencedSource([
+            .success(Fixtures.snapshot(cards: cards, heartbeat: Fixtures.healthyHeartbeat)),
+        ])
+        let store = ObservationStore(source: source, commands: nil, clock: { 1_000 })
+
+        await store.refresh()
+
+        XCTAssertEqual(store.observation?.positions.count, 500)
+        XCTAssertEqual(store.observation?.positions.first?.symbol, "S0")
+        XCTAssertEqual(store.observation?.positions.last?.symbol, "S499")
+        XCTAssertNil(store.lastError)
+    }
+
     func test_givenCommandSinkAndApprovedGate_whenSendingAction_thenCommandReachesSink() async {
         let source = SequencedSource([.success(healthySnapshot())])
         let sink = RecordingSink()

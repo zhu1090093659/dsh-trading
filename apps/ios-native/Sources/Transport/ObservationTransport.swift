@@ -1,38 +1,21 @@
 import Foundation
 import DshTradingContract
 
-/// 核心侧的 kill 状态（wire 形状见 packages/tradectl/src/edge.ts 的 KillState）。
-public struct KillState: Equatable, Sendable {
-    public let killed: Bool
-    public let paused: Bool
-    public let reason: String
-    public let atMs: Int
+/// A0 的 wire 类型**只有一个家**：Sources/Contract/ContractA0.swift。
+///
+/// KillState / A0Status 是 Transport 与 Domain 的共同上游，而接口冻结 §3 不允许两者互相
+/// import —— 唯一合法的共同上游就是 Contract。这里给别名：Transport 的公开 API 名保持不变，
+/// 两个家合并成一个（此前 Domain 与 Contract 撞名导致 Offline 的 A0Status 歧义）。
+///
+/// 解码语义也随之上移：Contract 的 A0Status 是 Decodable，killed/paused/ok 缺失即抛错
+/// （绝不默认 false），未知 scope 丢弃（不授权）。
+public typealias KillState = DshTradingContract.KillState
 
-    public init(killed: Bool, paused: Bool, reason: String, atMs: Int) {
-        self.killed = killed
-        self.paused = paused
-        self.reason = reason
-        self.atMs = atMs
-    }
-}
-
-/// GET /a0/status 的结果。
+/// GET /a0/status 的结果（Contract 的 A0Status）。
 ///
 /// `scopes` 是**授权事实的唯一来源**（配对响应不做授权）：客户端拿到的作用域只有两条路——
 /// 这里的 /a0/status，或 403 的 required。不得自己假设有 control。
-public struct A0Status: Equatable, Sendable {
-    public let ok: Bool
-    public let state: KillState
-    public let device: String
-    public let scopes: [ScopePlane]
-
-    public init(ok: Bool, state: KillState, device: String, scopes: [ScopePlane]) {
-        self.ok = ok
-        self.state = state
-        self.device = device
-        self.scopes = scopes
-    }
-}
+public typealias A0Status = DshTradingContract.A0Status
 
 /// GET /v1/cards 的结果。
 public struct CardsPage: Sendable {

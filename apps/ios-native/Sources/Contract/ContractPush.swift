@@ -101,12 +101,12 @@ public func validatePushPayload(_ payload: PushPayload) -> (valid: Bool, problem
     var problems: [String] = []
     if PushKind(rawValue: payload.kind) == nil { problems.append("未知 kind: " + payload.kind) }
     if PushSeverity(rawValue: payload.severity) == nil { problems.append("未知 severity: " + payload.severity) }
-    if payload.deskId == "" || payload.deskId.count > pushLimits.maxDeskIdChars {
+    if payload.deskId == "" || payload.deskId.utf16.count > pushLimits.maxDeskIdChars {
         problems.append("deskId 必填且不超过 " + String(pushLimits.maxDeskIdChars) + " 字符")
     }
     if !payload.deeplink.hasPrefix(deeplinkScheme) {
         problems.append("deeplink 必须以 " + deeplinkScheme + " 开头（不允许外部链接）")
-    } else if payload.deeplink.count > pushLimits.maxDeeplinkChars {
+    } else if payload.deeplink.utf16.count > pushLimits.maxDeeplinkChars {
         problems.append("deeplink 超过 " + String(pushLimits.maxDeeplinkChars) + " 字符")
     }
     if payload.expiresInMs <= 0 {
@@ -127,7 +127,7 @@ public func validatePushPayload(_ payload: PushPayload) -> (valid: Bool, problem
     }
     if payload.fallbackText.trimmingCharacters(in: .whitespacesAndNewlines) == "" {
         problems.append("fallbackText 必填")
-    } else if payload.fallbackText.count > pushLimits.maxFallbackChars {
+    } else if payload.fallbackText.utf16.count > pushLimits.maxFallbackChars {
         problems.append("fallbackText 超过 " + String(pushLimits.maxFallbackChars) + " 字符")
     }
     if payload.revision < 0 {

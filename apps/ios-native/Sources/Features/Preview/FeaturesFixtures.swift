@@ -46,6 +46,30 @@ public enum FeaturesFixtures {
         )
     }
 
+    public static func stoppedAxes() -> StateAxesPresentation {
+        axes(
+            execution: axis("执行状态", "已停止", .neutral, "stop.circle.fill"),
+            dependency: axis("依赖健康", "依赖正常", .positive, "link"),
+            trust: axis("数据可信度", "最新", .positive, "checkmark.circle")
+        )
+    }
+
+    public static func pausedAxes() -> StateAxesPresentation {
+        axes(
+            execution: axis("执行状态", "已暂停", .warning, "pause.circle.fill"),
+            dependency: axis("依赖健康", "依赖正常", .positive, "link"),
+            trust: axis("数据可信度", "最新", .positive, "checkmark.circle")
+        )
+    }
+
+    public static func indeterminateAxes() -> StateAxesPresentation {
+        axes(
+            execution: axis("执行状态", "无法判定", .unknown, "questionmark.circle"),
+            dependency: axis("依赖健康", "依赖正常", .positive, "link"),
+            trust: axis("数据可信度", "最新", .positive, "checkmark.circle")
+        )
+    }
+
     public static func expiredAxes() -> StateAxesPresentation {
         axes(
             execution: axis("执行状态", "运行中", .positive, "circle.fill"),
@@ -67,9 +91,11 @@ public enum FeaturesFixtures {
 
     // MARK: - 告警
 
-    public static func alerts(trust: TrustFixture) -> [AlertPresentation] {
+    public static func alerts(trust: TrustFixture, includeRestricted: Bool = true) -> [AlertPresentation] {
         let renders = trust == .fresh
-        return [
+        var rows: [AlertPresentation] = []
+        if includeRestricted {
+            rows.append(
             AlertPresentation(
                 id: "esc-1",
                 severity: .critical,
@@ -87,7 +113,9 @@ public enum FeaturesFixtures {
                 notice: trust.notice,
                 axes: trust == .fresh ? restrictedAxes() : expiredAxes(),
                 actions: actions()
-            ),
+            ))
+        }
+        rows.append(contentsOf: [
             AlertPresentation(
                 id: "esc-2",
                 severity: .warning,
@@ -124,7 +152,8 @@ public enum FeaturesFixtures {
                 axes: trust == .fresh ? healthyAxes() : expiredAxes(),
                 actions: [ActionPresentation.unknown(rawKind: "escalate-to-operator")]
             )
-        ]
+        ])
+        return rows
     }
 
     // MARK: - 机器人
@@ -270,11 +299,17 @@ public enum FeaturesFixtures {
     ) -> FeaturesState {
         let axesValue: StateAxesPresentation
         switch primaryState {
-        case .unreachable, .unknownDisconnected, .neverConfirmed, .indeterminateExecution:
+        case .unreachable, .unknownDisconnected, .unknownStale, .neverConfirmed, .unrecognizedExecutionState:
             axesValue = unreachableAxes()
-        case .runningRestricted, .paused, .faulted:
+        case .indeterminateExecution:
+            axesValue = indeterminateAxes()
+        case .runningRestricted, .faulted:
             axesValue = restrictedAxes()
-        default:
+        case .paused:
+            axesValue = pausedAxes()
+        case .stoppedConfirmed, .stopping:
+            axesValue = stoppedAxes()
+        case .starting, .operational:
             axesValue = trust == .fresh ? healthyAxes() : expiredAxes()
         }
         let primary = bot(
@@ -298,7 +333,7 @@ public enum FeaturesFixtures {
             trust: trust
         )
         let connectionValue = connection(trust: trust, reachable: reachable)
-        let alertsValue = alerts(trust: trust)
+        let alertsValue = alerts(trust: trust, includeRestricted: primaryState == .runningRestricted || primaryState.isUnknown)
         let assetsValue = AssetsPresentation(
             summary: summary(trust: trust),
             positions: trust == .fresh ? positions() : [],
@@ -309,8 +344,11 @@ public enum FeaturesFixtures {
             generatedAtMs: sampleNowMs - 12_000,
             sourceId: "okx-demo"
         )
-        let warning = primaryState.isUnknown || primaryState == .runningRestricted
-            ? "当前有 2 台机器人依赖异常、1 台状态未知/看不到。账户收益即使为正，也不能说明自动交易系统正常。"
+        // 夹具也不许自相矛盾：告警文案里的数字必须与实际分桶一致。
+        let dependencyAnomalies = primaryState == .runningRestricted ? 1 : 0
+        let unknownCount = primaryState.isUnknown ? 1 : 0
+        let warning = (dependencyAnomalies > 0 || unknownCount > 0)
+            ? "当前有 " + String(dependencyAnomalies) + " 台机器人依赖异常、" + String(unknownCount) + " 台状态未知/看不到。账户收益即使为正，也不能说明自动交易系统正常。"
             : nil
         let overview = OverviewPresentation(
             connection: connectionValue,
@@ -325,8 +363,8 @@ public enum FeaturesFixtures {
                 HealthBucketPresentation(id: "stoppedConfirmed", label: "已停止", count: primaryState == .stoppedConfirmed ? 1 : 0, tone: .neutral),
                 HealthBucketPresentation(id: "unknown", label: "状态未知/看不到", count: primaryState.isUnknown ? 1 : 0, tone: .unknown)
             ],
-            dependencyAnomalyCount: primaryState == .runningRestricted ? 1 : 0,
-            unknownCount: primaryState.isUnknown ? 1 : 0,
+            dependencyAnomalyCount: dependencyAnomalies,
+            unknownCount: unknownCount,
             profitIsNotHealthWarning: warning,
             topAlerts: alertsValue,
             recentEvents: events(trust: trust),

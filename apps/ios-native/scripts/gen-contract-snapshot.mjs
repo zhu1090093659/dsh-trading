@@ -252,6 +252,23 @@ const sourceGuard = [
   return { name: scenario.name, activeSourceId: scenario.activeSourceId, ops }
 })
 
+// ---- user receives push: Given payload, When TS validates, Then Swift must match
+const pushBase = { kind: 'escalation', severity: 'warning', deskId: 'desk-1', deeplink: 'dshtrading://decisions/id', expiresInMs: 1000, actions: ['ack'], fallbackText: 'notice', revision: 0 }
+const validatePushPayload = [
+  ['valid', {}], ['unknown-kind', { kind: 'future' }], ['unknown-severity', { severity: 'future' }],
+  ['external-link', { deeplink: 'https://example.com' }], ['empty-desk', { deskId: '' }],
+  ['zero-ttl', { expiresInMs: 0 }], ['negative-revision', { revision: -1 }],
+  ['critical-no-action', { severity: 'critical', actions: [] }], ['unknown-action', { actions: ['future'] }],
+  ['too-many-actions', { actions: ['ack', 'approve', 'reject', 'kill'] }],
+  ['empty-fallback', { fallbackText: '  ' }], ['emoji-desk-exact-limit', { deskId: '😀'.repeat(32) }],
+  ['emoji-desk-over-limit', { deskId: '😀'.repeat(33) }],
+  ['emoji-fallback-over-limit', { fallbackText: '😀'.repeat(91) }],
+  ['emoji-link-over-limit', { deeplink: 'dshtrading://positions/' + '😀'.repeat(128) }],
+].map(([name, over]) => {
+  const payload = { ...pushBase, ...over }
+  return { name, payload, expected: C.validatePushPayload(payload) }
+})
+
 // ---------------------------------------------------------------- 快照
 
 const snapshot = {
@@ -304,6 +321,7 @@ const snapshot = {
     formatCaps,
     requiresBiometric,
     sourceGuard,
+    validatePushPayload,
   },
 }
 

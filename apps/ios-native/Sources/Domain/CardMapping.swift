@@ -96,6 +96,21 @@ public enum RecognizedFieldKeys {
 
 /// 卡片 -> 观测态的映射器。纯函数：不读时钟（nowMs 由调用方给），不发网络。
 public enum DeskMapper {
+    /// 在**非主线程**上做卡片解析（冻结件 §9：ObservationStore 的刷新不得在主线程做解析）。
+    ///
+    /// 纯函数 + Sendable 输入输出，detached 任务里没有共享可变状态；
+    /// 只有最终赋值回到 MainActor。用 detached 而不是普通 Task，是因为调用方在主 actor 上，
+    /// 普通 Task 会继承主 actor 而达不到"离开主线程"的目的。
+    public static func mapOffMain(
+        snapshot: ObservationSnapshot,
+        nowMs: Int,
+        budget: TrustBudget = .clientDefault
+    ) async -> DeskObservation {
+        await Task.detached(priority: .userInitiated) {
+            DeskMapper.map(snapshot: snapshot, nowMs: nowMs, budget: budget)
+        }.value
+    }
+
     /// 未知卡片类型一律进 unrecognizedCards，**不丢弃**。
     public static func map(
         snapshot: ObservationSnapshot,
@@ -275,18 +290,40 @@ public enum DeskMapper {
         )
     }
 
-    /// 可信度：优先认 freshness 卡片的 age 字段；缺失则用快照自身年龄 + 展示预算。
+    /// 可信度：**取快照自身年龄与 freshness 卡片自述中更保守的一档**。
+    ///
+    /// 为什么要取更保守：freshness 卡片的 age 是**服务端在抓取时**的自述，
+    /// 而快照年龄是**客户端手里这份数据的真实账龄**。断线期间账龄继续增长，
+    /// 若因为卡片自称 fresh 就判 fresh，就会把"断线前的一瞬间"当成"现在" ——
+    /// 这正是冻结件 §9「断线不得清空本地最后快照，但 DataTrust 必须如实降档」要防的事。
     public static func trustValue(snapshot: ObservationSnapshot, nowMs: Int, budget: TrustBudget) -> DataTrust {
-        if let freshness = snapshot.cards.first(where: { $0.cardType == CardType.freshness.rawValue }) {
-            let index = CardFieldIndex(freshness.fields)
-            if let raw = index.string("age") {
-                return DataTrustPolicy.trust(stalenessRawValue: raw)
-            }
-            if let ageMs = index.int("ageMs") {
-                return DataTrustPolicy.trust(age: budget.age(ofMs: ageMs))
-            }
+        let bySnapshotAge = DataTrustPolicy.trust(age: budget.age(ofMs: nowMs - snapshot.atMs))
+        guard let freshness = snapshot.cards.first(where: { $0.cardType == CardType.freshness.rawValue }) else {
+            return bySnapshotAge
         }
-        return DataTrustPolicy.trust(age: budget.age(ofMs: nowMs - snapshot.atMs))
+        let index = CardFieldIndex(freshness.fields)
+        if let raw = index.string("age") {
+            return moreCautious(bySnapshotAge, DataTrustPolicy.trust(stalenessRawValue: raw))
+        }
+        if let ageMs = index.int("ageMs") {
+            return moreCautious(bySnapshotAge, DataTrustPolicy.trust(age: budget.age(ofMs: ageMs)))
+        }
+        return bySnapshotAge
+    }
+
+    /// 取更保守的一档（fresh < aging < stale < expired，unknown 最保守）。
+    public static func moreCautious(_ left: DataTrust, _ right: DataTrust) -> DataTrust {
+        rank(left) >= rank(right) ? left : right
+    }
+
+    private static func rank(_ trust: DataTrust) -> Int {
+        switch trust {
+        case .fresh: return 0
+        case .aging: return 1
+        case .stale: return 2
+        case .expired: return 3
+        case .unknown: return 4
+        }
     }
 
     /// risk-state 卡片 -> 依赖零件箱。
