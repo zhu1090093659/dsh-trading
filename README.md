@@ -1,5 +1,7 @@
 # dsh-trading — AI Trading Terminal for Crypto & Stocks
 
+> **当前状态与交接**：见 [docs/current-state.md](docs/current-state.md)（已验收项、必须知道的 fail-closed 不变量、未完成与硬停、验证命令、文档地图）。
+
 **English** | [简体中文](README_zh.md)
 
 **DSH Trading (dsh-trading)** is an AI trading terminal built on DeepSeek Harness (DSH) for cryptocurrency, US equities, China A-shares and Hong Kong stocks. It brings market data, technical analysis, AI-assisted investment research and human-approved order execution into one modular workspace. Orders default to dry-run simulation; live trading requires explicit opt-in and approval.
