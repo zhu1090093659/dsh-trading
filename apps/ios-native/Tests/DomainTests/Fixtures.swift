@@ -19,7 +19,7 @@ enum Fixtures {
             fallbackText: fallback,
             fields: fields.map { CardField(key: $0.0, label: $0.0, kind: "text", value: $0.1) },
             actions: actions,
-            freshnessMs: nil
+            freshnessMs: nil as Double?
         )
     }
 

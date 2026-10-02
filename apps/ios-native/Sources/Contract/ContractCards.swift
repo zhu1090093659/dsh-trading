@@ -213,16 +213,6 @@ public struct Card: Equatable, Sendable, Decodable {
         self.freshnessMs = freshnessMs
     }
 
-    public init(
-        cardId: String, cardType: String, revision: Double, fallbackText: String,
-        fields: [CardField] = [], actions: [CardAction] = [], freshnessMs: Int?
-    ) {
-        self.init(
-            cardId: cardId, cardType: cardType, revision: revision, fallbackText: fallbackText,
-            fields: fields, actions: actions, freshnessMs: freshnessMs.map(Double.init)
-        )
-    }
-
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         cardId = (try? container.decode(String.self, forKey: .cardId)) ?? ""

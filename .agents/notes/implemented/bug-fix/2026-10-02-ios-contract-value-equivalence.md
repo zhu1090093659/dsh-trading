@@ -23,6 +23,15 @@ TS 权威（[cards.ts](../../../../packages/contract/src/cards.ts) `String(field
 **三、同类第三处**：`stalenessOf` 用 `Int` 做 `nowMs - snapshot.atMs`。两端异号且量级极端时
 Swift 的 `Int` 减法**溢出 trap**，而 TS 的 number 运算恒成立。
 
+**四、同名重载让 `nil` 歧义，两个测试目标编不过**。本卡把 `freshnessMs` 从 `Int?` 改成 `Double?` 时，
+为兼容旧的 Int 字面量调用**同时保留了 `freshnessMs: Int?` 的重载**。两个构造器标签完全相同、只有可选类型不同，
+于是 `freshnessMs: nil` 在重载解析里歧义：`DshTradingDomainTests` 与 `DshTradingOfflineTests` 的
+build-for-testing **exit 65**（报错点 `Tests/DomainTests/Fixtures.swift:22`、
+`Tests/OfflineTests/PairingScopedSnapshotTests.swift:17`，同类的第三处
+`Tests/OfflineTests/OfflineBehaviorTests.swift:27` 被前两条挡住未报）。当时 `run-all-tests.sh` 还在跑
+上一次留下的旧 bundle，这两层的"0 失败"是**旧产物的假绿**、不绑定当前 HEAD（IOS-12 独立验收发现，
+IOS-13 先修脚本判据、本卡修编译错误）。
+
 ## 决策
 
 - **字段值按真实形状保真**：新增 `CardValue`（`.null` / `.bool` / `.number` / `.unrepresentableNumber` /
@@ -41,6 +50,9 @@ Swift 的 `Int` 减法**溢出 trap**，而 TS 的 number 运算恒成立。
 - **数值转换不再有裸 `Int(Double)`**：revision 走 `contractJSONNumber`（有限 ⇒ `contractNumberText`，
   非有限 ⇒ `null`，与 `JSON.stringify` 同）；`stalenessOf` 的差值与离线秒数改在 Double 里算
   （`contractAgeMs`），再转 Int 前已有明确上界。
+- **`Card` 只留一个构造器**（`freshnessMs: Double?`）：删掉同名 `freshnessMs: Int?` 重载，歧义从根上消失；
+  传 nil 的调用点写成 `nil as Double?`，把"这个字段是 TS number 域"表达在调用处而不靠重载解析。
+  Int 字面量（App 夹具的 `freshnessMs: 1_000`）由 `Double?` 直接接受，那个重载本无必要。
 - **fail-closed 不动**：未知 enum 值、未知封闭枚举、控制类动作缺 confirm 的行为逐条不变；
   本卡只改"null 是已知值"这一等价性，**不放宽未知值**。
 
@@ -53,15 +65,19 @@ Swift 的 `Int` 减法**溢出 trap**，而 TS 的 number 运算恒成立。
 - **修复后绿（同探针，当前源码）**：C6 `projection=Optional("null") valid=true operable=true problems=[]`；
   revision `survived valid=true`；offline `survived view=notice(.expired, "本地数据已过期（18446744073709552 秒前）…")`；三者 exit=0。
 - **契约测试目标**：`cd apps/ios-native && ./scripts/test-contract.sh` ⇒
-  **Executed 54 tests, with 0 failures**（基线 37 例 0 失败，本轮新增 17 例）；快照 `vectors 164`。
-- **六个分层测试目标**（模拟器 `xcrun simctl spawn` + `xctest`）：Contract 54 / Transport 44 / Domain 76 /
-  Features 22 / Offline 27 / Alerts 62，**全部 0 failures**；`xcodebuild -scheme DshTradingNative` **BUILD SUCCEEDED**。
-- **TS 权威侧**：`packages/contract` 78 例 0 失败（基线 55 例，本轮新增 23 例；其中
-  `test/cards.test.ts` 15 → 38 例）—— 每条 Swift 向量都有对应的 TS 期望值对照。
+  **Executed 57 tests, with 0 failures**（基线 37 例，本卡新增 17 例，d5776342 再 +3）；快照 `vectors 164`。
+- **六个分层测试目标**（模拟器 `xcrun simctl spawn` + `xctest`）：Contract 57 / Transport 44 / Domain 76 /
+  Features 22 / Alerts 62 / Offline 27，**全部 0 failures**；`xcodebuild -scheme DshTradingNative` **BUILD SUCCEEDED**。
+  这一组数字是**清空 `build/DerivedData` 后干净重建**、由 `docs/evidence/run-all-tests.sh`（exit 0，
+  逐目标删旧 `.xctest` + 校验产物 mtime 晚于本次 build 开始）实测的，绑定当前源码。
+  本卡原先记的 Domain 76 / Offline 27 取自 d5776342 **之前**构建的旧 bundle，不绑定当时 HEAD，
+  该两组数字作废、以本次干净重建为准（重测恰为同数）。
+- **TS 权威侧**：`packages/contract` 84 例 0 失败（本卡完成时 78 例 = 基线 55 + 本卡 23，
+  其中 `test/cards.test.ts` 15 → 38 例；其后 d5776342 再 +6）—— 每条 Swift 向量都有对应的 TS 期望值对照。
 - **数字格式等价性**（用于校准 `contractNumberText`）：299,924 个随机 Double 位型 +
   4,007 个构造字面量，与 `node` 的 `String(d)` 逐条比对 **0 差异**；JSON token 亦 0 差异。
 - **机检**：`check-contract-drift.mjs` 与 `check-swift-layering.mjs` 均绿；`test-drift-mutation.mjs`
-  照常 RED→RESTORED_GREEN（改错必红、还原后 54 例全绿）。
+  照常 RED→RESTORED_GREEN（改错必红、还原后 57 例全绿）。
 
 ## Alternatives considered
 

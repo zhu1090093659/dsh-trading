@@ -14,7 +14,7 @@ final class PairingScopedSnapshotTests: XCTestCase {
     private let budget = StalenessBudget(freshMs: 1_000, staleMs: 2_000, ttlMs: 3_000)
 
     private func card(_ id: String, _ revision: Double) -> Card {
-        Card(cardId: id, cardType: "desk-summary", revision: revision, fallbackText: "fb", fields: [], actions: [], freshnessMs: nil)
+        Card(cardId: id, cardType: "desk-summary", revision: revision, fallbackText: "fb", fields: [], actions: [], freshnessMs: nil as Double?)
     }
 
     private func failing() -> ScriptedFetcher {
