@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Card, CardAction } from '@dshtrading/contract'
+import { ACTION_KINDS, type Card, type CardAction } from '@dshtrading/contract'
 import { CockpitShell } from './shell.tsx'
 import type { CockpitCard } from './blocks.tsx'
 import { forgetToken, loadStoredToken, pairRequestBody, storeToken, tokenFromPairResponse, type PairResponse } from './auth.ts'
@@ -19,7 +19,9 @@ interface CardPage {
   readonly cards: readonly CockpitCard[]
 }
 
-const CAPS = 'action:ack,action:dismiss,action:pause,action:resume,action:kill,action:flatten'
+// caps 对齐契约 12 个动作：卡片动作已全部接线（CardView 渲染动作、App 发命令），
+// 少报会让服务端把对应 Action 剥掉 —— 升级卡的 approve/reject 曾经就这样消失。
+const CAPS = ACTION_KINDS.map((kind) => 'action:' + kind).join(',')
 
 export function App(): JSX.Element {
   const [cards, setCards] = useState<readonly Card[]>([])
