@@ -30,3 +30,5 @@ crypto 市场需要第二个交易所连接器（OKX），与 connector-binance 
 - 真实网络证据 6/6（`spikes/impl-okx/r3-real-network-verify.mjs`）：ticker/candles 日界实证/funding/instruments（ctVal=0.01）/与 Binance 相对差 2.7e-5；demo 签名端点 skip-if-no-creds，等用户提供 demo key 后跑模拟闭环。
 - 迁移面：四市场安装器升级后，**旧代安装器装的 preset 文件（无戳）会被视为用户文件而跳过更新**（log 提示删除后重装）——一次性迁移成本，方向保守。
 - 待办：demo 下单闭环实测（等凭证）、R4 live 手册与验收、cordis 同键重复 provide 行为的实证（当前以互斥纪律 + isolate 组规避）。
+
+**2026-10-02 凭证回落语义收紧**：resolveCredentials 只在**完全没有 credentials seam** 时才回落启动环境变量（process.env[ref]）；**存在 seam 时不得回落** —— 该 slot 未命中即 TRADING_CREDENTIALS_MISSING（消息带 slot=ref 名、不带值），错误文案区分两种来源（有 seam：the launching environment is not consulted；无 seam：no credentials seam is configured）。理由是避免显式配置与 ambient 凭据混用（demo 路径可能拿到 live key，反之亦然）。实现与测试见 packages/connector-okx/src/index.ts 与 test/trade.test.ts（两个方向各有用例，并有反证记录）；本级前的逐 slot 回落已废止。
