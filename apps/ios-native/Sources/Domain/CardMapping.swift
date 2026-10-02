@@ -69,6 +69,11 @@ public struct CardFieldIndex: Sendable {
         return Int(raw)
     }
 
+    /// 取整条字段（需要 unit 之类元信息时用）。
+    public func field(_ key: String) -> CardField? {
+        fields.first { $0.key == key }
+    }
+
     public func bool(_ key: String) -> Bool? {
         guard let raw = string(key)?.lowercased() else { return nil }
         if raw == "true" { return true }
@@ -302,13 +307,36 @@ public enum DeskMapper {
             return bySnapshotAge
         }
         let index = CardFieldIndex(freshness.fields)
-        if let raw = index.string("age") {
-            return moreCautious(bySnapshotAge, DataTrustPolicy.trust(stalenessRawValue: raw))
+        // 形状一：age 是**档位名**（fresh/aging/stale/expired）。
+        if let raw = index.string("age"), let band = DataTrust(rawValue: raw) {
+            return moreCautious(bySnapshotAge, band)
         }
-        if let ageMs = index.int("ageMs") {
+        // 形状二：age 是**时长**（服务端常给 "1" + unit "s"）；ageMs 同理。
+        if let ageMs = index.int("ageMs") ?? DeskMapper.ageMs(fromField: index.field("age")) {
             return moreCautious(bySnapshotAge, DataTrustPolicy.trust(age: budget.age(ofMs: ageMs)))
         }
+        // 认不出来的 age 值**不把整份数据判成未知** —— 回退到我们自己量到的快照账龄，
+        // 那是独立证据，比"因为一个字段看不懂就什么都不显示"更保守也更诚实。
         return bySnapshotAge
+    }
+
+    /// 把 freshness 的 age 字段当**时长**解析：默认毫秒，"s"/"m" 按单位换算。
+    ///
+    /// 为什么必须支持这一形态：契约 offline.ts 的年龄本来就是毫秒数；
+    /// 只认档位名会让服务端给 "1"+unit"s" 时整份观测被判成未知（实测过，界面只剩"数据不可渲染"）。
+    public static func ageMs(fromField field: CardField?) -> Int? {
+        guard let field, let raw = field.value?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return nil
+        }
+        guard let value = Double(raw), value >= 0 else { return nil }
+        switch (field.unit ?? "ms").lowercased() {
+        case "s", "sec", "secs", "second", "seconds":
+            return Int(value * 1_000)
+        case "m", "min", "mins", "minute", "minutes":
+            return Int(value * 60_000)
+        default:
+            return Int(value)
+        }
     }
 
     /// 取更保守的一档（fresh < aging < stale < expired，unknown 最保守）。

@@ -88,6 +88,42 @@ final class CardMappingTests: XCTestCase {
         XCTAssertEqual(DeskMapper.moreCautious(.fresh, .unknown), .unknown)
     }
 
+    /// 实测缺陷回归：freshness 的 age 给的是**时长**（"1" + unit "s"）时，
+    /// 不能因为"1 不是档位名"就把整份观测判成未知 —— 那会让界面只剩"数据不可渲染"，
+    /// 连"机器人已停止"都显示不出来。
+    func test_givenFreshnessAgeAsDuration_whenMapped_thenTrustIsFreshNotUnknown() {
+        let card = Fixtures.card("fresh-dur", "freshness", fields: [("age", "1")])
+        let observation = DeskMapper.map(snapshot: Fixtures.snapshot(cards: [card]), nowMs: 1_000)
+
+        XCTAssertEqual(observation.bot.trust, .fresh)
+        XCTAssertTrue(observation.bot.trust.rendersData)
+        XCTAssertNotEqual(observation.bot.trust, .unknown)
+    }
+
+    func test_givenAgeFieldWithUnit_whenParsingDuration_thenUnitIsHonoured() {
+        let seconds = CardField(key: "age", label: "账龄", kind: "duration", value: "2", unit: "s")
+        let minutes = CardField(key: "age", label: "账龄", kind: "duration", value: "3", unit: "m")
+        let millis = CardField(key: "age", label: "账龄", kind: "duration", value: "500", unit: nil)
+
+        XCTAssertEqual(DeskMapper.ageMs(fromField: seconds), 2_000)
+        XCTAssertEqual(DeskMapper.ageMs(fromField: minutes), 180_000)
+        XCTAssertEqual(DeskMapper.ageMs(fromField: millis), 500)
+        XCTAssertNil(DeskMapper.ageMs(fromField: nil))
+        XCTAssertNil(DeskMapper.ageMs(fromField: CardField(key: "age", label: "x", kind: "text", value: "not-a-number")))
+    }
+
+    /// 认不出的 age 值 ⇒ 回退到快照账龄（独立证据），而不是把整份判成未知。
+    func test_givenUnrecognizableAgeValue_whenMapped_thenFallsBackToSnapshotAgeNotUnknown() {
+        let budget = TrustBudget(freshMs: 1_000, agingMs: 2_000, staleMs: 3_000, ttlMs: 4_000)
+        let card = Fixtures.card("fresh-weird", "freshness", fields: [("age", "very-new")])
+
+        let freshSnapshot = DeskMapper.map(snapshot: Fixtures.snapshot(cards: [card], atMs: 0), nowMs: 500, budget: budget)
+        XCTAssertEqual(freshSnapshot.bot.trust, .fresh)
+
+        let oldSnapshot = DeskMapper.map(snapshot: Fixtures.snapshot(cards: [card], atMs: 0), nowMs: 5_000, budget: budget)
+        XCTAssertEqual(oldSnapshot.bot.trust, .expired)
+    }
+
     func test_givenNoFreshnessCard_whenSnapshotIsOld_thenTrustFallsBackToSnapshotAge() {
         let budget = TrustBudget(freshMs: 1_000, agingMs: 2_000, staleMs: 3_000, ttlMs: 4_000)
         let snapshot = Fixtures.snapshot(cards: [], atMs: 0)

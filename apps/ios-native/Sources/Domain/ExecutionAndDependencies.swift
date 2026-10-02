@@ -219,8 +219,20 @@ public struct DependencyReport: Hashable, Sendable {
     }
 
     public func alignment(for symbol: String) -> ClosedEnum<InstrumentAlignment> {
-        guard let state = priceStates.first(where: { $0.symbol == symbol }) else { return .unknown("") }
-        return state.alignment
+        if let exact = priceStates.first(where: { $0.symbol == symbol }) {
+            return exact.alignment
+        }
+        // 卡片没给 symbol 时，那条是**未指名/desk 级**的对齐状态。只有当它是**唯一**一条时才兜底用它 ——
+        // 两条及以上未指名就不能猜（把 A 标的的对齐状态安到 B 标的上是安全事故）。
+        //
+        // 为什么需要这条兜底：实测发现 risk-state 不带 symbol 时，所有标的都取不到 alignment，
+        // openRiskAllowed 恒为 false，于是"运行中"在界面上永远显示成"运行中（受限）"，
+        // 而同一屏的依赖健康却写着"依赖正常" —— 一屏之内自相矛盾。
+        let unnamed = priceStates.filter { $0.symbol.isEmpty }
+        if priceStates.count == 1, let only = unnamed.first {
+            return only.alignment
+        }
+        return .unknown("")
     }
 
     /// 面向某个标的的交易权限：desk 级 level 与标的级 alignment 各自独立判定后取与。

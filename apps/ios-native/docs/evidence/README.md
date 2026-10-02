@@ -18,17 +18,23 @@
 
 ### 本轮结果（2026-10-02，分支 feat/native-ios-mobile）
 
+本轮（16:01–16:08，revision 改 Double 之后重跑）六个目标的结果：
+
 | 目标 | 平台 | 结果 |
 |---|---|---|
-| DshTradingContractTests | macOS xctest | Executed 36 tests, 0 failures |
-| DshTradingTransportTests | iOS 模拟器 | Executed 37 tests, 0 failures |
-| DshTradingDomainTests | iOS 模拟器 | Executed 57 tests, 0 failures |
+| DshTradingContractTests | macOS xctest | Executed 37 tests, 0 failures |
+| DshTradingTransportTests | iOS 模拟器 | 首跑 37 tests, **1 failure（抖动）**；立即重跑 37 tests, 0 failures |
+| DshTradingDomainTests | iOS 模拟器 | Executed 62 tests, 0 failures |
 | DshTradingFeaturesTests | iOS 模拟器 | Executed 22 tests, 0 failures |
-| DshTradingAlertsTests | iOS 模拟器 | Executed 60 tests, 0 failures |
+| DshTradingAlertsTests | iOS 模拟器 | Executed 62 tests, 0 failures |
 | DshTradingOfflineTests | iOS 模拟器 | Executed 21 tests, 0 failures |
-| **合计** | | **233 tests, 0 failures**（六个目标退出码均为 0） |
+
+抖动那一条：CapsHeaderTests 报 unreachable("网络连接已中断。")（本机测试用的本地 HTTP 服务器连接被断），
+重跑即过。**按本仓纪律把两次原始日志都留下**（logs/DshTradingTransportTests.test.log 与 .rerun.log），
+不靠重跑抹掉证据。抖动是常态，是否要按 nightly 的"抖动三连跑"处理由 Lead 定。
 
 原始输出见 logs/<目标>.test.log；构建日志见 logs/<目标>.build.log。
+（Domain 的两条缺陷修复后我单独重跑过 Domain，其 .test.log 是 62 例那次。）
 
 ## 2. 无真实 bot 的夹具装置
 
@@ -74,10 +80,12 @@
 
 逐情形启动夹具、安装并启动 App、截**设备画面**，产物落在 docs/evidence/screenshots/<情形>.png。
 
-### 采集通路过，但**组合根目前到不了观测面**（2026-10-02 实测，属 IOS-1 作用域）
+### 采集通路已验证；组合根的一处缺陷**已由 IOS-1 修复**（2026-10-02）
+
+踩坑经过（留在下面，因为它是一条真实缺陷的完整证据链，也解释了为什么采集脚本现在带两道硬断言）：
 
 已先验证采集通路本身可用：安装 → 启动 → simctl io screenshot 全通
-（见 screenshots/pipeline-check-placeholder.png）。但截出来的是**环境不可用屏**：
+（见 screenshots/pipeline-check-placeholder.png）。但当时截出来的是**环境不可用屏**：
 
     xcrun simctl launch <udid> com.dshtrading.ios-native --args --fixtures
     xcrun simctl io <udid> screenshot screenshots/fixtures-mode-check.png
@@ -89,11 +97,12 @@
 environmentProblem == nil（:132），AppRootView 又优先显示 environmentProblem（DshTradingNativeApp.swift:27-29）。
 结果是：**连 --fixtures 也被这条"环境不可用"挡住**，观测面永远到不了。
 
-期望的修法（由 IOS-1 定）：内存回退是**降级告警**而不是致命故障 ——
-fixtures 模式不依赖令牌，不应被它挡住；live 模式也应在配对门里显示这条告警并允许继续配对。
-（Keychain 为何不可用：未验证，最可能是无签名构建缺 entitlement；这条是假设，不是结论。）
-
-在修好之前，本目录**不提供**五张情形截图 —— 截图必须反映真实观测面，不能用别的屏冒充。
+**IOS-1 的修法**（已合入并复跑验证）：把"环境故障"拆成**致命**与**可继续告警** ——
+environmentProblem 只在连内存回退都建不起来时非 nil，其余进 environmentWarning；
+isObserving 在 fixtures 下只看观测面装配没有；AppRootView 只对致命故障整屏拦。
+修后实测：--fixtures 能进观测面，Keychain 告警降为顶部横幅并带上原始 OSStatus
+（-34018 = errSecMissingEntitlement，与"无签名构建缺 keychain-access-groups entitlement"的推断一致，
+这条现在有真证据，不再是假设）。
 
 ### 试过并**失败**的绕过（记录在此，别重复走）
 
@@ -103,15 +112,16 @@ codesign --force --sign - 重签，再 install + launch：
 process），截图只剩主屏。已回滚（重新 build 恢复 linker-signed 产物），相关临时文件已删除。
 结论：这条路走不通，**必须改源码**（内存回退不该 fatal）。
 
-### 待补：五张情形截图与判据对照表
+### 五张情形截图与判据对照表（采集完成）
 
-**状态（2026-10-02）**：组合根已修（Keychain 内存回退从致命降为降级告警，fixtures 模式可进观测面，
-这一条是**跑出来的**：修前连 --fixtures 都被"环境不可用"挡住，见上一节的截图）。
-FixtureSnapshotFetcher 的情形选择**已写、但尚未编译验证**：IOS-1 报告加完情形选择后 xcodebuild 曾失败
-（NSLock.lock() 落在 async 上下文，Swift 6 判红），已静态改成同步的 nextCallIndex()，
-**在 Lead 解除暂停前无法重新编译**。所以我**静态**读过的那份实现与要求一致
-（DSH_IOS_FIXTURE_SCENARIO 默认 running；unreachable = call>1 才抛 .unreachable；stopped = killed=true；
-restricted = reduce_only；unknown-enum = 未知 cardType + 未知 actionKind），但"能用"属**未验证**。
+**状态（2026-10-02 采集完成）**
+
+**这批图来自本次编译的二进制**（不是旧产物）：
+- 脚本内断言构建退出码 0 且日志出现 BUILD SUCCEEDED；
+- 安装后做**整个 bundle 的清单哈希**比对（含嵌入 framework；只比 App 可执行文件会漏掉真正改动的层 —— 实测踩过）：
+  built == installed，清单 sha256=4772d2e7e659b166ed0f273143e8ff88d7600aeba17e1fe9a77ec1133874b91b；
+- 本轮改动所在层 Domain.framework sha256=c281d861dc1c8286c6d797220dc0946eb3fd9d12d11ab45a98494f2daa5f004e；
+- 采集时间 16:07–16:08。
 
 > **别把假证据算进去（IOS-1 主动更正，值得记一笔）**：情形选择加完后构建是红的，
 > 于是 simctl install 装进去的是**上一版二进制**，五次 launch 跑的是同一个 App —— 五张图内容相同，
@@ -124,37 +134,43 @@ restricted = reduce_only；unknown-enum = 未知 cardType + 未知 actionKind）
 采集脚本已改成用 App 内建 fixtures + SIMCTL_CHILD_DSH_IOS_FIXTURE_SCENARIO，无需外部服务；
 **采集本身要跑构建 + 模拟器安装，按 Lead 的串行纪律排在 pnpm gates:all 之后**，故本表暂为空。
 
-| 截图 | 夹具情形 | 它必须证明的判据 |
-|---|---|---|
-| running.png | --scenario running | 看得见 + 运行中 + 依赖正常；持仓/订单/额度/告警/新鲜度都有值 |
-| restricted.png | --scenario restricted | **看得见 + 运行中但禁止新增仓位**（与"已停止"不同屏） |
-| stopped.png | --scenario stopped | **机器人已停止**（与"看不见"必须是两种显示） |
-| unreachable.png | --scenario unreachable | **看不到机器人**（不得显示成"已停止"） |
-| unknown-enum.png | --scenario unknown-enum | 未知类型/未知动作 ⇒ 原样列出且**禁用全部动作**（fail-closed） |
+| 截图 | 夹具情形 | 实测显示（肉眼逐张核对） | 图 sha256 前 16 位 |
+|---|---|---|---|
+| running.png | scenario=running | 已连接；执行状态 **运行中** / 依赖健康 **依赖正常** / 数据可信度 **最新**；分布 运行中 1、依赖异常 0 | 3116bb761b0ca1b7 |
+| restricted.png | scenario=restricted | 已连接；**运行中** / **依赖异常：风控限制：只减不增** / 最新；分布 运行中（受限）1、已停止 0 | 418b0480dbc676a6 |
+| stopped.png | scenario=stopped | 已连接；执行状态 **已停止** / 依赖正常 / 最新；分布 已停止 1、状态未知/看不到 0 | be5a96074192f3eb |
+| unreachable.png | scenario=unreachable | **连接中断** + 一行「看不到机器人：连不上机器人」；执行状态 **无法判定** / 依赖正常 / **陈旧**（⚠ 数据陈旧，仅供对照）；分布 已停止 0、状态未知/看不到 1 | 7e1d2a1d70118827 |
+| unknown-enum.png | scenario=unknown-enum | 已连接；运行中 / **依赖状况未知** / 最新；分布 运行中（受限）1、依赖异常 1 | 1a9621c2eb487f1a |
 
 两组**并排**证据（都不是靠文案，而是靠两侧输入的差异）：
 
 1. **stopped.png 与 unreachable.png 并排** —— 证明「App 看不到机器人 ≠ 机器人已停止」（本仓不变量 7）。
-   左侧是 reachable + A0 killed=true；右侧是连接层断开（Offline 用缓存快照并如实降档，reachability=.unreachable）。
+   实测差异（同一屏位置上就能看出来）：连接徽标「已连接」vs「连接中断」；「看不到机器人：连不上机器人」
+   只在右侧出现；执行状态「已停止」vs「无法判定」；分布「已停止 1 / 状态未知 0」vs「已停止 0 / 状态未知 1」；
+   数据可信度「最新」vs「陈旧（⚠ 数据陈旧，仅供对照）」——右侧同时证明了"断线保留最后快照但如实降档"。
 2. **restricted.png 与 stopped.png 并排** —— 证明「受限 ≠ 停止」。
-   两者 A0 不同：restricted 是 killed=false（仍在运行、只是禁止新增仓位），stopped 是 killed=true。
-   这一组正好钉住本卡的核心区分，而不是那句容易退化的"运行中/已停止"。
+   实测差异：两者都是「已连接」，但执行状态是「运行中」vs「已停止」，
+   restricted 的依赖健康写着「依赖异常：风控限制：只减不增」，分布落在「运行中（受限）1」而非「已停止」。
+   这一组钉住本卡的核心区分，而不是那句容易退化的"运行中/已停止"。
 
 时序口径（防 36 秒变成假事实）：App 的刷新是先立刻一次、之后每 30 秒一次
 （硬编码在 Sources/App/DshTradingNativeApp.swift 的 .task 里）。unreachable 的 t≈30s 才抛，
 所以等 36s 截第二屏；**那个间隔一旦改动，采集脚本里的 36 就要跟着改**。
 其余四档首屏即可（判据来自首帧的 A0 与卡片）。
 
-### 静态核对发现的一处小缺口（未采图前就能看出）
+### 采集中由截图暴露并修复的两个 **Domain** 缺陷（只有真的看界面才会发现）
 
-夹具的 desk-summary 卡用的是字段 key 「state」，而 Domain 侧认识的 desk-summary key 集合是
-deskId / label / mode / phase / waitReason / level / currency / equity / available / margin /
-realizedPnl / unrealizedPnl —— 不含 state。后果：该字段会进 rawFields 原样显示，
-而 BotStatus.phase 保持 nil（界面显示"阶段：未知"）。
-这**不影响权威执行状态**（它来自 /a0/status，不来自卡片自述），但界面上会同时出现
-"运行中"（A0）与"阶段未知"（卡片），观感不一致。
-根因仍是**契约没有冻结 field.key**（已报 Lead）；两边的收敛办法二选一：
-夹具改用 phase，或 Domain 的读取约定加上 state。留待 gates:all 之后一并处理（改完要重新构建验证）。
+1. **freshness 的 age 被当成"档位名"**：夹具给的是**时长**形态（value "1" + unit "s"），
+   而 Domain 只认 fresh/aging/stale/expired 这类档位名 ⇒ 回落成 unknown ⇒ 整屏变成
+   「数据不可渲染（尚未确认）」，**连"机器人已停止"都显示不出来**。
+   修法：两种形态都认（档位名，或按 unit 换算的时长），两者都认不出来时回退到
+   "我们自己量到的快照账龄"（独立证据），而不是把整份观测判成未知。
+2. **risk-state 不带 symbol 时，所有标的都取不到 alignment**：openRiskAllowed 恒为 false ⇒
+   "运行中"在界面上永远显示成"运行中（受限）"，而同一屏的依赖健康却写着"依赖正常"（一屏之内自相矛盾）。
+   修法：未指名（symbol 为空）且**唯一**的那一条按 desk 级对齐兜底；**两条及以上未指名仍然不猜**（fail-closed）。
+
+两条都补了回归用例，Domain 现为 **62 tests, 0 failures**。
+另：夹具 desk-summary 的 key「state」IOS-1 已按读取约定改为「phase」（根因仍是 field.key 未冻结，已报 Lead）。
 
 ### 已知的材料来源
 
@@ -163,6 +179,10 @@ fixtures-default-partial.png（默认 fixtures 情形下的观测面，含三维
 
 ### 未验证项
 
-- 五张情形截图：等组合根接线（IOS-1）后补；判据是上表"观测端应当显示"一列肉眼可辨。
-- 夹具服务器是**客户端侧证据**，不证明服务端行为；服务端语义以 packages/tradectl 的测试为准。
-- restricted 与 stopped 的区分最终要看界面文案，不看卡片 JSON。
+- 夹具是**客户端侧**证据，不证明服务端行为；服务端语义以 packages/tradectl 的测试为准。
+- 这里验证的是"**客户端对既定输入的显示**"，不是真实 bot 的端到端（需真机 + 真 bot，属后续）。
+- 分布计数来自 Features 的聚合，本目录只核对到"与三维状态自洽"这一层，没有逐个断言聚合算法。
+- Device/真机、推送、生物识别仍未验证（需设备与人）。
+- **Transport 层出现过 1 次抖动**：本次刷新里 CapsHeaderTests 报 unreachable("网络连接已中断。")，
+  立即重跑 37/0 通过。两次原始日志都在 logs/（抖动那次在 DshTradingTransportTests.test.log，
+  重跑在 DshTradingTransportTests.rerun.log）—— 按本仓纪律，抖动要留证据而不是重跑抹掉。

@@ -44,14 +44,22 @@ echo "=== 2) 安装 + 二进制新鲜度断言 ==="
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null
 xcrun simctl install "$UDID" "$APP"
-BUILT_SHA=$(shasum -a 256 "$APP/DshTradingNative" | awk '{print $1}')
+# 比的是**整个 bundle 的清单哈希**，不是只看 App 可执行文件 ——
+# 真正会被改动的层（Domain/Offline/Features…）在嵌入的 framework 里，
+# App 可执行文件的哈希可以**一动不动**（实测踩过：改了 Domain，App 可执行文件哈希不变）。
+bundle_manifest_sha() {
+  ( cd "$1" && find . -type f | sort | while read -r one; do shasum -a 256 "$one"; done | shasum -a 256 | awk '{print $1}' )
+}
+BUILT_SHA=$(bundle_manifest_sha "$APP")
 INSTALLED_DIR=$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" app)
-INSTALLED_SHA=$(shasum -a 256 "$INSTALLED_DIR/DshTradingNative" | awk '{print $1}')
+INSTALLED_SHA=$(bundle_manifest_sha "$INSTALLED_DIR")
 if [ -z "$BUILT_SHA" ] || [ "$BUILT_SHA" != "$INSTALLED_SHA" ]; then
-  echo "FAIL: 模拟器里的二进制与本次构建不一致（built=$BUILT_SHA installed=$INSTALLED_SHA）；拒绝采图"
+  echo "FAIL: 模拟器里的 bundle 与本次构建不一致（built=$BUILT_SHA installed=$INSTALLED_SHA）；拒绝采图"
   exit 1
 fi
-echo "ok: 模拟器里跑的是本次构建的二进制 sha256=$BUILT_SHA"
+DOMAIN_SHA=$(shasum -a 256 "$INSTALLED_DIR/Frameworks/DshTradingDomain.framework/DshTradingDomain" | awk '{print $1}')
+echo "ok: 模拟器里跑的是本次构建的 bundle（清单 sha256=${BUILT_SHA}）"
+echo "    Domain.framework 二进制 sha256=$DOMAIN_SHA"
 
 echo "=== 3) 五情形采集 ==="
 for scenario in running restricted stopped unreachable unknown-enum; do

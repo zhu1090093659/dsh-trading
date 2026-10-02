@@ -189,6 +189,38 @@ final class DomainSemanticsTests: XCTestCase {
         XCTAssertFalse(permission.deskRestricted)
     }
 
+    /// 实测缺陷回归：risk-state 不带 symbol（desk 级那一条）时，
+    /// 不能让所有标的都取不到 alignment —— 那会让"运行中"永远显示成"受限"。
+    func test_givenUnnamedAlignmentSingleEntry_whenDerivingPermission_thenDeskLevelAppliesToFocusSymbol() {
+        let unnamed = DependencyReport(
+            marketData: .known(.normal),
+            tradeChannel: .known(.normal),
+            accountSync: .known(.ok),
+            riskLevel: .known(.normal),
+            priceStates: [InstrumentPriceState(symbol: "", alignment: .known(.aligned))]
+        )
+
+        XCTAssertEqual(unnamed.alignment(for: "BTC/USDT").value, .aligned)
+        XCTAssertTrue(unnamed.permission(for: "BTC/USDT").openRiskAllowed)
+    }
+
+    /// 但两条及以上未指名时**不许猜**（fail-closed）。
+    func test_givenTwoUnnamedPriceStates_whenDerivingAlignment_thenUnknownNotGuessed() {
+        let ambiguous = DependencyReport(
+            marketData: .known(.normal),
+            tradeChannel: .known(.normal),
+            accountSync: .known(.ok),
+            riskLevel: .known(.normal),
+            priceStates: [
+                InstrumentPriceState(symbol: "", alignment: .known(.aligned)),
+                InstrumentPriceState(symbol: "", alignment: .known(.unaligned)),
+            ]
+        )
+
+        XCTAssertEqual(ambiguous.alignment(for: "BTC/USDT"), .unknown(""))
+        XCTAssertFalse(ambiguous.permission(for: "BTC/USDT").openRiskAllowed)
+    }
+
     func test_givenRiskLevelVocabulary_whenComparedWithAlignmentVocabulary_thenDisjoint() {
         let deskVocabulary = Set(RiskLevel.allCases.map(\.rawValue))
         let instrumentVocabulary = Set(InstrumentAlignment.allCases.map(\.rawValue))
