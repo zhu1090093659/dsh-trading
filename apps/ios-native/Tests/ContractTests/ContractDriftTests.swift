@@ -11,15 +11,18 @@ enum ContractSnapshotFile {
 
     static func load() throws -> [String: Any] {
         var urls: [URL] = []
-        if let url = Bundle(for: BundleToken.self).url(forResource: "contract-snapshot", withExtension: "json") {
-            urls.append(url)
-        }
-        // 源码相对路径兜底：#filePath = Tests/ContractTests/<本文件>
+        // 首选**源码相对路径**：#filePath = Tests/ContractTests/<本文件>（编译期绝对路径）。
+        // 快照是生成物、不入库，所以不能作为工程 source 列进去（否则干净工作区 xcodegen generate 就红）；
+        // 本地可复现构建里编译与运行在同一 checkout，这条路径稳定。
         let testsDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         urls.append(
             testsDir.deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("Generated/contract-snapshot.json")
         )
+        // 次选 bundle resource（若将来有人把它作为资源打进测试包，这里也能读到）
+        if let url = Bundle(for: BundleToken.self).url(forResource: "contract-snapshot", withExtension: "json") {
+            urls.append(url)
+        }
         var tried: [String] = []
         for url in urls {
             tried.append(url.path)

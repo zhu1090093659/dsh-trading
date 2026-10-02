@@ -135,11 +135,12 @@ targets:
   DshTradingContractTests:
     type: bundle.unit-test
     platform: macOS
+    # 注意：**不**把 Generated/contract-snapshot.json 列进 sources —— 它是生成物、不入库，
+    # 列进来会让干净工作区里的 \`xcodegen generate\` 直接报 "missing source directory"。
+    # 测试从源码相对路径读取快照（#filePath），见 ContractSnapshotFile.load()。
     sources:
       - path: Sources/Contract
       - path: Tests/ContractTests
-      - path: Generated/contract-snapshot.json
-        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.dshtrading.ios-native.contract-tests

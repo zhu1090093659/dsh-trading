@@ -181,7 +181,7 @@ public enum OrderFilter: String, Sendable, Hashable, CaseIterable, Identifiable 
             return false
         case .terminal:
             switch order.stage {
-            case .filled, .canceled, .rejected, .neverArrived: return true
+            case .filled, .canceled, .rejected, .expired, .neverArrived: return true
             case .submitted, .partiallyFilled, .cancelPending, .cancelling, .submittedUnknown, .unknownState: return false
             }
         }
