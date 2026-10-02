@@ -164,6 +164,11 @@ final class TestHTTPServer: @unchecked Sendable {
     private static func reason(_ status: Int) -> String {
         switch status {
         case 200: return "OK"
+        case 301: return "Moved Permanently"
+        case 302: return "Found"
+        case 303: return "See Other"
+        case 307: return "Temporary Redirect"
+        case 308: return "Permanent Redirect"
         case 400: return "Bad Request"
         case 401: return "Unauthorized"
         case 403: return "Forbidden"

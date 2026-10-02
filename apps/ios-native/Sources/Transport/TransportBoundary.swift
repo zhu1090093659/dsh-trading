@@ -20,14 +20,15 @@ import Foundation
 ///   SecureStore         SecureStore 协议 + KeychainSecureStore + 测试用内存假件
 ///   DeviceToken         两段式令牌 deviceId.secret 的组装与切分
 ///   Credential          StoredCredential（含绑定 origin、脱敏）+ CredentialVault（fail-closed）
-///   TokenProvider       令牌提供者协议 + KeychainTokenProvider
+///   PairingIdentity      配对身份（绑定 origin + 配对代际）—— IOS-7/IOS-8 共用的一处事实
+///   TokenProvider       令牌提供者协议 + KeychainTokenProvider（唯一取令牌入口带 origin 绑定）
 ///   PairingClient       POST /pair/redeem（成功才落库）
 ///   DshtApiClient       /a0 与 /v1 客户端（origin 守卫 + 401/403 映射）
 ///   TransportSession    会话状态（未配对是明确状态）+ 版本能力协商
 ///
-/// 一条**只增**的修订（2026-10-02，经 Lead 批准）：TransportError 增加
-/// unauthorized(code:message:)。原有五个 case 逐字保留。消费方请优先用
-/// TransportError.kind（封闭、不带负载）分类，避免被迫写 default 吞掉未知分支。
+/// 两条**只增**的修订（2026-10-02，经 Lead 批准）：TransportError 增加
+/// unauthorized(code:message:) 与 stalePairing(expected:actual:)。原有五个 case 逐字保留。
+/// 消费方请优先用 TransportError.kind（封闭、不带负载）分类，避免被迫写 default 吞掉未知分支。
 public protocol TransportHealthReporting: Sendable {
     /// 当前是否处于只读（切换期 / 未配对）。
     var isReadOnly: Bool { get }

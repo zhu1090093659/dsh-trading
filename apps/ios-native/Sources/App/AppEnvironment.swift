@@ -298,6 +298,7 @@ public struct TransportSnapshotFetcher: SnapshotFetching {
     static func category(_ kind: TransportErrorKind) -> FetchFailure {
         switch kind {
         case .originNotBound: return .originNotBound
+        case .stalePairing: return .originNotBound
         case .unreachable: return .unreachable
         case .badResponse: return .badResponse
         case .unauthorized: return .unauthorized

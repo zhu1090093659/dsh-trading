@@ -72,6 +72,7 @@ public enum TransportHandshake {
 ///   - 未配对时 apiClient() 返回 nil（不建一个没有令牌的客户端，也不发匿名请求）；
 ///   - 需要令牌的操作一律从存储读，不把 secret 在调用点之间传来传去；
 ///   - 客户端只用配对时绑定的那个 origin，调用方给不了别处；
+///   - 客户端记下**创建时的配对代际**：重新配对后旧客户端一律 fail-closed（IOS-8）；
 ///   - 解绑只需 forget（清存储），不需要逐个调用点改。
 public final class TransportSession: Sendable {
     public let tokens: KeychainTokenProvider
@@ -87,10 +88,12 @@ public final class TransportSession: Sendable {
         return .paired(credential)
     }
 
-    /// 未配对 ⇒ nil（**不是**一个"没有令牌的客户端"）。地址取自配对时绑定的那个。
+    /// 当前配对身份（绑定 origin + 配对代际）。
+    public var identity: PairingIdentity? { tokens.pairingIdentity }
+
+    /// 未配对 ⇒ nil（**不是**一个"没有令牌的客户端"）。地址与代际取自**当前**配对身份。
     public func apiClient() -> DshtApiClient? {
-        guard let origin = tokens.boundOrigin else { return nil }
-        return DshtApiClient(origin: origin, tokens: tokens, http: http)
+        DshtApiClient(tokens: tokens, identities: tokens, http: http)
     }
 
     public func pairingClient() -> PairingClient {

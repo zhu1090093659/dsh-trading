@@ -2,6 +2,18 @@ import XCTest
 import DshTradingContract
 @testable import DshTradingTransport
 
+/// 配对请求的发放计数器（真服务器的回调在别的队列上，闭包必须是 Sendable ⇒ 计数器要自己加锁）。
+private final class PairingIssueCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    func next() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        value += 1
+        return value
+    }
+}
+
 /// 会话管理：未配对是明确状态、配对→存储→客户端流水、解绑一处生效、版本与能力协商。
 final class TransportSessionTests: TransportTestCase {
     func testUnpairedSessionIsAnExplicitStateNotABlankScreen() throws {
@@ -38,6 +50,36 @@ final class TransportSessionTests: TransportTestCase {
         XCTAssertEqual(session.state().origin, DshtOrigin.parse(baseURL))
         XCTAssertTrue(ok)
         XCTAssertEqual(server.requests.last?.headers["authorization"], "Bearer dev_1.s3cr3t")
+    }
+
+    func testRepairingTheSameOriginSupersedesTheClientThatWasHandedOutBefore() async throws {
+        // Given 一个机器人（第一次配对发 dev_1，之后重发 dev_2）
+        let issued = PairingIssueCounter()
+        let (server, baseURL) = try await startServer { request in
+            if request.path == "/pair/redeem" {
+                return TestHTTPServer.Reply(
+                    status: 200,
+                    json: ["deviceId": "dev_" + String(issued.next()), "secret": "s3cr3t"]
+                )
+            }
+            return TestHTTPServer.Reply(status: 200, json: ["ok": true, "atMs": 1, "device": "dev"])
+        }
+        let tokens = try KeychainTokenProvider(store: InMemorySecureStore())
+        let session = TransportSession(tokens: tokens, http: URLSessionHttpClient())
+        _ = try await session.pairingClient().pair(baseURL: baseURL, code: "AAAA", name: "iPhone")
+        let handedOutBefore = try XCTUnwrap(session.apiClient())
+
+        // When 用同一个地址再配对一次（origin 完全没变，只有配对身份换了）
+        _ = try await session.pairingClient().pair(baseURL: baseURL, code: "BBBB", name: "iPhone")
+        let handedOutAfter = try XCTUnwrap(session.apiClient())
+
+        // Then 新客户端可用；**旧客户端发不出请求**（它连 /a0/ping 都没发出去）
+        let alive = try await handedOutAfter.ping()
+        XCTAssertTrue(alive)
+        let before = server.requestCount
+        let error = await captureTransportError { _ = try await handedOutBefore.ping() }
+        XCTAssertEqual(error?.kind, .stalePairing)
+        XCTAssertEqual(server.requestCount, before)
     }
 
     func testForgetReturnsSessionToUnpairedAndEmptiesStorage() async throws {

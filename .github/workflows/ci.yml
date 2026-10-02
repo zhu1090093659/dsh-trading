@@ -64,11 +64,13 @@ jobs:
       - run: pnpm contract-id:check
       # iOS 原生观测端（apps/ios-native）的**纯 Node** 门禁：① Swift 侧封闭枚举/查表/上限/常量
       # 必须与 packages/contract/src 的运行期真值一致（防漂移）；② Swift 分层白名单（含 Domain 的
-      # Observation 宏）越界即红。两者都不需要 Xcode，所以能在 ubuntu 上跑；真正的 Swift 断言
-      # （DshTradingContractTests，35 例）留本机 `apps/ios-native/scripts/test-contract.sh`，
-      # CI 不跑 iOS 构建（与 mobile job 同一先例）。
+      # Observation 宏）越界即红；③ 传输层取令牌必须带 origin 绑定、request 的四道守卫顺序不得调换、
+      # 生产 HTTP 实现必须挂重定向 delegate（IOS-8：无绑定取令牌那条路会让令牌跨源外发）。
+      # 三者都不需要 Xcode，所以能在 ubuntu 上跑；真正的 Swift 断言（DshTradingTransportTests 等）
+      # 留本机 `apps/ios-native/build/transport-tests.sh` 那一类跑法，CI 不跑 iOS 构建（与 mobile job 同一先例）。
       - run: node scripts/ios-native/check-contract-drift.mjs
       - run: node scripts/ios-native/check-swift-layering.mjs
+      - run: node scripts/ios-native/check-transport-token-binding.mjs
       # 端到端冒烟（P4 步骤 3）：跑真实链路的三条最短检查——带外 A0 在业务面全挂时仍可用、
       # 确定性 shadow 跑批逐字复现、以及（加 --with-network 时）真实行情对齐。
       # 存在理由：本仓已有 7 个「单元测试全绿、真实路径坏掉」的先例，单测喂的是自家输入。

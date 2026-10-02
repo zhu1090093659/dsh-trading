@@ -45,7 +45,7 @@ public struct DshtResponse: Sendable {
     public var bodyText: String { String(decoding: body, as: UTF8.self) }
 }
 
-/// 生产 HTTP 实现：URLSession + **ephemeral** 配置。
+/// 生产 HTTP 实现：URLSession + **ephemeral** 配置 + **跨源不跟随重定向**的 delegate。
 ///
 /// ephemeral 是刻意的：设备令牌与 /v1 数据不进磁盘缓存、不带 cookie —— 与
 /// "凭据不写普通缓存"同一条纪律。
@@ -60,7 +60,14 @@ public struct URLSessionHttpClient: HttpClient {
         configuration.urlCache = nil
         configuration.httpShouldSetCookies = false
         configuration.httpCookieAcceptPolicy = .never
-        self.session = URLSession(configuration: configuration)
+        // delegate 必须真的挂上：URLSession(configuration:) 不设 delegate 时，跨源 30x
+        // 会被**默认跟随**——请求（以及其 Authorization 头）就被发去了另一个 origin，
+        // 而 DshtApiClient 的 origin 守卫只看原始 URL。显式挂载是本层的事实，不靠"默认行为恰好如何"。
+        self.session = URLSession(
+            configuration: configuration,
+            delegate: RedirectPolicyDelegate(),
+            delegateQueue: nil
+        )
     }
 
     public func send(_ request: DshtRequest) async throws -> DshtResponse {
@@ -91,5 +98,51 @@ public struct URLSessionHttpClient: HttpClient {
             }
         }
         return DshtResponse(status: http.statusCode, headers: headers, body: data)
+    }
+}
+
+/// 重定向策略：**跨源一律不跟随**，同源才跟。
+///
+/// 跨源时返回 nil（"不重定向"）⇒ URLSession 把**原始的 3xx 响应**交给上层：
+///   1. 新 origin 一个字节都收不到（比"跟过去但剥掉 Authorization"更没有可泄露面）；
+///   2. 3xx 非 200 ⇒ DshtApiClient 走 ServerFailure 映射，如实报错，不伪装成功。
+///
+/// 不返回同一份 newRequest 是刻意的：那会让 URLSession 在跟随同源重定向时重新走一遍
+/// 头合并，Authorization 的去留取决于它的内部规则。这里每个决定都用**显式请求**
+/// （BaseURL + 自己的头），"令牌带不带到新 origin"是一个本地可读的事实。
+final class RedirectPolicyDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        redirect(from: task.originalRequest, willPerform: response, newRequest: request, completionHandler: completionHandler)
+    }
+
+    /// 判定与返回值的**唯一**实现。
+    private func redirect(
+        from original: URLRequest?,
+        willPerform response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        // 原始请求地址与重定向目标地址都可能是 nil（URLRequest.url 是可选的）：
+        // 任一取不出来 ⇒ 当作跨源，不跟随（fail-closed）。
+        guard let originURL = response.url ?? original?.url, let origin = DshtOrigin(url: originURL),
+              let redirectURL = request.url, let redirectOrigin = DshtOrigin(url: redirectURL),
+              redirectOrigin == origin
+        else {
+            // 跨源（含解析不出目标的 scheme/端口）⇒ 不跟随，把 3xx 原样交回上层。
+            completionHandler(nil)
+            return
+        }
+        // 同源：显式构造请求——只保留方法/请求体，**不重放 Authorization**（同源重定向也未必还是同一个资源），
+        // 其余头由 URLSession 按 HTTP 语义处理。
+        var explicit = URLRequest(url: redirectURL)
+        explicit.httpMethod = original?.httpMethod ?? "GET"
+        explicit.httpBody = original?.httpBody
+        completionHandler(explicit)
     }
 }

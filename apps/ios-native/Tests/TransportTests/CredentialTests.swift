@@ -89,9 +89,8 @@ final class CredentialTests: XCTestCase {
         try tokens.save(makeCredential())
 
         // When 分别问绑定 origin 与另一个 origin
-        // Then 只对绑定的那个给令牌（换地址一律不外发）
+        // Then 只对绑定的那个给令牌（换地址一律不外发）；**没有**不带绑定的取令牌入口
         XCTAssertEqual(tokens.authorization(ifBoundTo: .loopback), "Bearer dev_1.s3cr3t")
-        XCTAssertEqual(tokens.authorization(), "Bearer dev_1.s3cr3t")
         XCTAssertNil(tokens.authorization(ifBoundTo: DshtOrigin(scheme: "http", host: "127.0.0.1", port: 9999)))
         XCTAssertNil(tokens.authorization(ifBoundTo: DshtOrigin(scheme: "http", host: "evil.example.com", port: 80)))
     }
@@ -106,9 +105,10 @@ final class CredentialTests: XCTestCase {
         // When 解绑
         tokens.forget()
 
-        // Then 内存与安全存储都空了（解绑一处生效）
+        // Then 内存与安全存储都空了（解绑一处生效），配对身份也没了
         XCTAssertNil(tokens.current)
-        XCTAssertNil(tokens.authorization())
+        XCTAssertNil(tokens.authorization(ifBoundTo: .loopback))
+        XCTAssertNil(tokens.pairingIdentity)
         XCTAssertEqual(store.dump, [:])
     }
 
@@ -153,8 +153,32 @@ final class CredentialTests: XCTestCase {
         // When 重新构造一个提供者（模拟重启后从安全存储读回）
         let reopened = try KeychainTokenProvider(store: store, key: "dshtrading.test.device")
 
-        // Then 令牌与绑定 origin 一起回来了
-        XCTAssertEqual(reopened.authorization(), "Bearer dev_1.s3cr3t")
+        // Then 令牌与绑定 origin 一起回来了（重启后代际从 0 起，不要求跨重启一致）
+        XCTAssertEqual(reopened.authorization(ifBoundTo: .loopback), "Bearer dev_1.s3cr3t")
         XCTAssertEqual(reopened.boundOrigin, .loopback)
+        XCTAssertEqual(reopened.pairingIdentity, PairingIdentity(origin: .loopback, epoch: 0))
+    }
+
+    func testPairingEpochAdvancesOnEverySuccessfulSaveAndNotOnARefusedWrite() throws {
+        // Given 一个空的安全存储（从未配对 ⇒ 没有配对身份）
+        let store = InMemorySecureStore()
+        let tokens = try KeychainTokenProvider(store: store)
+        XCTAssertNil(tokens.pairingIdentity)
+
+        // When 配对到同一个 origin 两次（服务端重发凭据 / 换一台设备）
+        try tokens.save(makeCredential(deviceId: "dev_1"))
+        let first = try XCTUnwrap(tokens.pairingIdentity)
+        try tokens.save(makeCredential(deviceId: "dev_2"))
+        let second = try XCTUnwrap(tokens.pairingIdentity)
+
+        // Then 代际每次成功配对前移一格、origin 不变 —— 这就是"重新配对到同一个 origin
+        // 也能被认出来"的判据（只看 origin 时两次完全相同）
+        XCTAssertEqual(first.epoch + 1, second.epoch)
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(second.origin, .loopback)
+
+        // And 落库被 fail-closed 拒绝（段里含点号的凭据）时**不**前移：那次配对没有成立
+        XCTAssertThrowsError(try tokens.save(makeCredential(deviceId: "dev.3")))
+        XCTAssertEqual(tokens.pairingIdentity, second)
     }
 }

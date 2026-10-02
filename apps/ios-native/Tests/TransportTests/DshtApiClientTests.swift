@@ -235,4 +235,90 @@ final class DshtApiClientTests: TransportTestCase {
         let receiptObject = try XCTUnwrap(JSONSerialization.jsonObject(with: receipt) as? [String: Any])
         XCTAssertEqual(receiptObject["clientRequestId"] as? String, "req-1")
     }
+
+    // MARK: - IOS-8：令牌跨源外发与配对代际（负例）
+
+    /// 已配对客户端的常规装配（origin 与令牌绑定一致）。
+    private func pairedClient(
+        serverBaseURL: String,
+        deviceId: String = "dev_1",
+        secret: String = "s3cr3t",
+        http: any HttpClient
+    ) throws -> (client: DshtApiClient, tokens: SpyTokenProvider) {
+        let origin = try XCTUnwrap(DshtOrigin.parse(serverBaseURL))
+        let tokens = SpyTokenProvider(credential: StoredCredential(origin: origin, deviceId: deviceId, secret: secret))
+        let client = try XCTUnwrap(DshtApiClient(tokens: tokens, identities: tokens, http: http))
+        return (client, tokens)
+    }
+
+    func testRequestFromAClientOfASupersededPairingFailsAndSendsNothingToTheOldOrigin() async throws {
+        // Given 为 origin A 配对的客户端，然后**重新配对到 B**（同一进程、同一份会话）
+        let (serverA, baseA) = try await startServer { _ in
+            TestHTTPServer.Reply(status: 200, json: ["deviceId": "dev_A", "secret": "sec_A"])
+        }
+        let (_, baseB) = try await startServer { _ in
+            TestHTTPServer.Reply(status: 200, json: ["deviceId": "dev_B", "secret": "sec_B"])
+        }
+        let tokens = try KeychainTokenProvider(store: InMemorySecureStore())
+        let session = TransportSession(tokens: tokens, http: URLSessionHttpClient())
+        _ = try await session.pairingClient().pair(baseURL: baseA, code: "AAAA", name: "iPhone")
+        // 旧客户端的 Authorization 是 B 配对**之前**的那一份；B 的令牌必须永远不出现在 A 上
+        let oldClient = try XCTUnwrap(session.apiClient())
+        let tokenOfA = try XCTUnwrap(tokens.authorization(ifBoundTo: try XCTUnwrap(DshtOrigin.parse(baseA))))
+
+        _ = try await session.pairingClient().pair(baseURL: baseB, code: "BBBB", name: "iPhone")
+
+        // When 调用**旧 A 客户端**
+        let error = await captureTransportError { _ = try await oldClient.ping() }
+
+        // Then 失败，且 A 上**没有任何 /a0 请求**（A 只收到过那一次配对请求）—— B 的 Bearer 没有被发去 A
+        XCTAssertEqual(error?.kind, .stalePairing)
+        XCTAssertEqual(serverA.requestCount, 1)
+        XCTAssertEqual(serverA.requests.first?.path, "/pair/redeem")
+        XCTAssertFalse(serverA.requests.contains { $0.path == "/a0/ping" })
+        XCTAssertFalse(
+            serverA.requests.contains { ($0.headers["authorization"] ?? "").contains("dev_B") },
+            "旧 A 客户端不得把 B 的 Bearer 发去 A"
+        )
+        // And 服务端那份 B 的令牌确实换过了（否则这条用例可能因为"根本没换"而假绿）
+        let tokenOfB = try XCTUnwrap(tokens.authorization(ifBoundTo: try XCTUnwrap(DshtOrigin.parse(baseB))))
+        XCTAssertNotEqual(tokenOfB, tokenOfA)
+        XCTAssertEqual(tokenOfB, "Bearer dev_B.sec_B")
+    }
+
+    func testRequestIsRefusedInsteadOfSendingAnAnonymousRequestWhenTheTokenIsBoundToAnotherOrigin() async throws {
+        // Given 一份绑定在 127.0.0.1:3081 的令牌，而客户端要打的是一个**别的** origin（真服务器）
+        let (server, baseURL) = try await startServer { _ in
+            TestHTTPServer.Reply(status: 200, json: ["ok": true])
+        }
+        let tokens = SpyTokenProvider(credential: StoredCredential(origin: .loopback, deviceId: "dev_1", secret: "s3cr3t"))
+        let origin = try XCTUnwrap(DshtOrigin.parse(baseURL))
+        let apiClient = DshtApiClient(origin: origin, tokens: tokens, http: URLSessionHttpClient())
+
+        // When / Then 明确拒绝，**不**降级成匿名请求（服务器一个请求都没收到）
+        let error = await captureTransportError { _ = try await apiClient.ping() }
+        guard case .unreachable? = error else {
+            return XCTFail("期望 unreachable（没有可用的绑定令牌），实际 " + String(describing: error))
+        }
+        XCTAssertEqual(server.requestCount, 0)
+    }
+
+    func testCrossOriginRedirectOnAValidRequestIsNotFollowedAndTheClientReportsFailure() async throws {
+        // Given 一个已配对的 A 客户端，和一个会记录是否收到请求的 B
+        let (target, targetBase) = try await startServer { _ in
+            TestHTTPServer.Reply(status: 200, json: ["ok": true])
+        }
+        let (source, sourceBase) = try await startServer { _ in
+            TestHTTPServer.Reply(status: 302, json: ["code": "REDIRECTED"], headers: ["location": targetBase + "/a0/ping"])
+        }
+        let (client, _) = try pairedClient(serverBaseURL: sourceBase, http: URLSessionHttpClient())
+
+        // When 触发一次跨源 30x
+        let error = await captureTransportError { _ = try await client.ping() }
+
+        // Then 客户端如实报错（3xx 不是 200），且 B **一个请求都没收到**、A 只收到最初那一次
+        XCTAssertEqual(error?.kind, .badResponse)
+        XCTAssertEqual(target.requestCount, 0)
+        XCTAssertEqual(source.requestCount, 1)
+    }
 }

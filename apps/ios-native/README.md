@@ -30,7 +30,7 @@
 | 工程形态、构建与测试命令、沙箱环境事实 | 本 README §1 / §2 |
 | 层间依赖白名单 | [check-swift-layering.mjs](../../scripts/ios-native/check-swift-layering.mjs)（可执行判据）+ 上面的 target 表 |
 | 契约面（版本 / 作用域 / 卡片 / 确认 / 推送 / 离线 / 数据源守卫 / A0） | [Sources/Contract/](Sources/Contract/) + 本 README §3 / §4 |
-| 传输面（配对、设备令牌、origin 绑定、`/a0/*`、`/v1/*`） | [Sources/Transport/](Sources/Transport/)：`ObservationTransport` / `DshtApiClient` / `PairingClient` / `TransportSession`（**代码即判据，端点清单不在此复述**，避免第二个家） |
+| 传输面（配对、设备令牌、origin 绑定、配对身份、`/a0/*`、`/v1/*`） | [Sources/Transport/](Sources/Transport/)：`ObservationTransport` / `DshtApiClient` / `PairingClient` / `TransportSession` / `PairingIdentity`（**代码即判据，端点清单不在此复述**，避免第二个家） |
 | 领域面（三维语义、跨层端口、观测态） | [Sources/Domain/](Sources/Domain/)（`Ports.swift` 是跨层端口的家） |
 | 界面面（五入口、Domain→Features 翻译） | [Sources/Features/](Sources/Features/)（`FeaturesAdapter` 是唯一翻译点） |
 | 告警面（推送载荷、深链、生物识别闸门） | [Sources/Alerts/](Sources/Alerts/) |
@@ -193,7 +193,7 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
 | 1 | 未知封闭枚举 ⇒ 不可操作（禁用全部 Action，只渲染 `fallbackText`） | `validateCard`/`renderableActions`（[ContractCards.swift](Sources/Contract/ContractCards.swift)）；`testUnknownClosedEnumValuesDisableEveryAction`、`testUnknownCardTypeIsInvalidAndInoperable`；`validateCard`/`renderableActions` 行为向量；[check-contract-drift.mjs](../../scripts/ios-native/check-contract-drift.mjs) 的 rawValue 比对 |
 | 2 | 过期/陈旧数据不渲染数据本身 | `offlineView`（[ContractOffline.swift](Sources/Contract/ContractOffline.swift)）；`testExpiredSnapshotNeverRendersTheDataItself`；`offlineView` 向量；Offline 层单测 |
 | 3 | 跨源永不混显；切换期只读 | `SourceGuard`；`testSourceGuardNeverMixesSourcesAndIsReadOnlyWhileSwitching`；`sourceGuard` 向量；[ContractParityTests.swift](Tests/ContractTests/ContractParityTests.swift) |
-| 4 | 令牌只发往配对绑定的 origin，跨源**连请求都不发** | [DshtApiClient.swift](Sources/Transport/DshtApiClient.swift) 的 origin 守卫（先判 origin → 再碰令牌 → 再发请求）；Transport 层单测含"跨源零 HTTP 调用"断言。**真机未验** |
+| 4 | 令牌只发往配对绑定的 origin，跨源**连请求都不发**；重新配对后**旧客户端**一律发不出 | ① [DshtApiClient.swift](Sources/Transport/DshtApiClient.swift) 的四道守卫，顺序即语义（origin → 配对代际 → 取令牌 → 发送）；② 取令牌**只有**带绑定入口 `authorization(ifBoundTo:)`（无绑定版本已删除），[TokenProvider.swift](Sources/Transport/TokenProvider.swift)；③ 配对身份 = 绑定 origin + 配对代际，[PairingIdentity.swift](Sources/Transport/PairingIdentity.swift)；④ 跨源 30x 不跟随（`RedirectPolicyDelegate`）；⑤ 机检 [check-transport-token-binding.mjs](../../scripts/ios-native/check-transport-token-binding.mjs) 把①②③⑤钉成 CI 门禁。**真机未验** |
 | 5 | 配对永不签发 control；控制类动作一律 biometric 且 fail-closed | `grantableByDefault`（向量 + ContractParityTests）；`auditConfirmPolicy`/`actionConfirm`（`testEveryControlActionRequiresBiometric`）；Alerts 的 `AlertsConfirmationGate` 单测。**设备上的生物识别未验** |
 | 6 | 生物识别不替代服务端授权与风控 | Alerts 的注释 + 单测：闸门只决定"要不要把动作发出去"，服务端仍按 scope 与 mandate 判。**无设备验证** |
 | 7 | 「App 看不到机器人」与「机器人已停止」是两种显示 | Domain 的 reachability 与三维语义单测 + Features 呈现单测（见 [IOS-4 独立验收报告](docs/acceptance/ios4-independent-acceptance.md)）；夹具 `stopped` 与 `unreachable` 两情形可肉眼并排 |
@@ -237,7 +237,13 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
    - **`ids.ts` 的 `isOrderId` 把 UUID 版本位钉成 v4**（第三组 `4[0-9a-f]{3}` + 变体位 `[89ab]`），
      与设计文档明文冻结的"不钉版本位（`[0-9a-f]{4}`）"冲突；
    - `cards.ts` 关于未知 cardType 的注释与代码不一致（见 finding 1）。
-5. **`docs-link:check` **不覆盖本目录**（已知缺口，如实记录，留待下一轮补）**：
+5. **传输面曾有"安全实现写好了却没接线"（2026-10-02 已修，IOS-8）**：带 origin 绑定的
+   `authorization(ifBoundTo:)` 一直存在，但生产路径调的是**无绑定**的 `authorization()`，
+   且 `URLSession(configuration:)` 没挂 delegate ⇒ 跨源 30x 默认跟随。两处都已收敛：
+   无绑定入口**从协议删除**（机检 ① 挡它回来）、重定向 delegate 挂上（机检 ⑤ 挡它被摘掉）、
+   配对身份增加**代际**（守卫 ④ 挡"重新配对到同一 origin 后旧客户端仍可用"）。
+   负例与突变演练证据见 [Agent Note](../../.agents/notes/implemented/bug-fix/2026-10-02-ios-token-origin-binding-and-pairing-epoch.md)。
+6. **`docs-link:check` **不覆盖本目录**（已知缺口，如实记录，留待下一轮补）**：
    `scripts/docs-link-check.mjs:31-32` 的扫描清单只有 `AGENTS.md` 与 `docs/**`，
    **不含 `apps/ios-native/**`** —— 本 README 的 34 条相对链接**没有任何门禁保**，只靠人工静态检查兜。
    2026-10-02 实证：工作冻结件删除后 `apps/ios-native/IOS-1-HANDOFF.md` 里指向 `INTERFACE-FREEZE.md` 的

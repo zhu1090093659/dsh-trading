@@ -13,21 +13,54 @@ import DshTradingContract
 /// **2. 401/403 各有明确分支。** 401（EDGE_UNAUTHORIZED）⇒ 清掉本地令牌回到未配对，
 /// 抛 unauthorized；403（EDGE_SCOPE_REQUIRED / SCOPE_REQUIRED）⇒ 抛 scopeRequired(required:)；
 /// 426 ⇒ clientTooOld。客户端不重试、不伪装成功、不"猜一个成功"。
+///
+/// **令牌的取用只有一个入口**：tokens.authorization(ifBoundTo: 绑定 origin)。
+/// 无绑定的 authorization() 已从协议删除（IOS-8）：有绑定版本不匹配就是 nil ⇒ 抛错、不发请求，
+/// 绝不回落到"拿一份令牌先发出去再说"。
 public final class DshtApiClient: ObservationTransport {
-    /// 配对时绑定的 origin。与令牌一起存（见 StoredCredential），调用方无法另给一个。
-    public let origin: DshtOrigin
+    /// 创建这份客户端时的**配对身份**：绑定 origin + 配对代际。
+    ///
+    /// 为什么连代际一起记：重新配对到**同一个** origin 时，仅靠 origin 断言看不出"这是旧客户端"
+    /// （origin 仍然相等），旧客户端就会拿新凭据继续打同一个地址 —— 那是"旧客户端还在用新身份"。
+    /// 代际前移后，旧客户端的每次请求都 fail-closed。
+    public let identity: PairingIdentity
     private let tokens: any TokenProvider
+    private let identities: any PairingIdentityProviding
     private let http: any HttpClient
 
+    /// 绑定 origin（配对时绑定的那个）。与令牌一起存（见 StoredCredential），调用方无法另给一个。
+    public var origin: DshtOrigin { identity.origin }
+
     public init(origin: DshtOrigin, tokens: any TokenProvider, http: any HttpClient) {
-        self.origin = origin
+        self.identity = PairingIdentity(origin: origin, epoch: 0)
         self.tokens = tokens
+        self.identities = Self.snapshotIdentity(origin: origin)
         self.http = http
+    }
+
+    /// 常规装配入口：从提供者取**当前**配对身份建立客户端。未配对时返回 nil
+    /// （不建一个没有令牌的客户端，也不发匿名请求）。
+    public init?(tokens: any TokenProvider, identities: any PairingIdentityProviding, http: any HttpClient) {
+        guard let identity = identities.pairingIdentity else { return nil }
+        self.identity = identity
+        self.tokens = tokens
+        self.identities = identities
+        self.http = http
+    }
+
+    /// 只认一个 origin 的静态身份来源（见上面那个 init）。
+    private struct FixedIdentity: PairingIdentityProviding {
+        let identity: PairingIdentity
+        var pairingIdentity: PairingIdentity? { identity }
+    }
+
+    private static func snapshotIdentity(origin: DshtOrigin) -> any PairingIdentityProviding {
+        FixedIdentity(identity: PairingIdentity(origin: origin, epoch: 0))
     }
 
     // MARK: - 发请求（唯一入口）
 
-    /// 发一次请求：origin 守卫 → 注入令牌 → 发送 → 错误映射。
+    /// 发一次请求：origin 守卫 → 配对代际守卫 → 注入令牌 → 发送 → 错误映射。
     ///
     /// path 既接受相对路径（/v1/cards），也接受绝对 URL —— 后者正是跨源守卫要拦下的输入，
     /// 所以守卫必须是这一层的事实，而不是"调用方约定只传相对路径"。
@@ -48,8 +81,16 @@ public final class DshtApiClient: ObservationTransport {
                 actual: actual?.value ?? url.absoluteString
             )
         }
-        guard let authorization = tokens.authorization() else {
-            // 未配对：没有令牌就不发请求（不建一个没有令牌的客户端，也不发匿名请求）。
+        // 配对代际守卫：重新配对之后，创建于上一次配对的客户端一律过期。
+        // 只判 origin 会漏掉"重新配对到同一个 origin"——那时 origin 相等，但身份已经换了。
+        guard let current = identities.pairingIdentity, current == identity else {
+            throw TransportError.stalePairing(
+                expected: identity.value,
+                actual: identities.pairingIdentity?.value ?? "unpaired"
+            )
+        }
+        // 令牌的**唯一**取用入口：带上绑定 origin 校验。不匹配 / 未配对 ⇒ nil ⇒ 不发请求。
+        guard let authorization = tokens.authorization(ifBoundTo: origin) else {
             throw TransportError.unreachable("未配对：没有可用的设备令牌")
         }
 
