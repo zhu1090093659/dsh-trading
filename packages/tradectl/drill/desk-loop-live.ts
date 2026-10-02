@@ -19,6 +19,7 @@ import { createJournal } from '../lib/journal.js'
 import { migrateDeskRecords } from '../lib/desk-records.js'
 import { migrateTriggers } from '../lib/triggers.js'
 import { createDeskLoop } from '../lib/desk-loop.js'
+import { DRILL_ALIGNMENT_PARAMS, SNAPSHOT_REFRESH_MS } from './alignment-params.ts'
 
 const NL = String.fromCharCode(10)
 const SYMBOL = 'BTC/USDT'
@@ -31,21 +32,8 @@ migrateDeskRecords(ledgers.orders)
 migrateTriggers(ledgers.orders)
 const journal = createJournal(ledgers.audit, { now: () => Date.now() })
 
-const alignment = createAlignment(
-  {
-    symbols: [SYMBOL],
-    snapshotAgeBudgetMs: 60_000,
-    bufferMaxTicks: 1_000,
-    bufferMaxBytes: 1_048_576,
-    realignTokenCapacity: 3,
-    realignRefillPerSec: 1,
-    divergenceBps: 50,
-    divergenceStrikes: 3,
-    orderTokenCapacity: 3,
-    orderRefillPerSec: 1,
-  },
-  T0,
-)
+// 对齐上界：drill/alignment-params.ts 的**单一来源**（明确标注未标定，不变量 #23）
+const alignment = createAlignment(DRILL_ALIGNMENT_PARAMS, T0)
 
 const feed = createStreamingFeed({
   url: binanceStreamUrl([SYMBOL]),
@@ -66,8 +54,14 @@ const feed = createStreamingFeed({
   reconnectMaxMs: 5_000,
   bootstrapSymbols: [SYMBOL],
   bootstrap: async (symbols) => Promise.all(symbols.map((symbol) => fetchBinanceSnapshot(symbol, 0))),
-  maxBatch: 64,
 })
+
+// 周期刷新基准快照：刷新节奏必须快于年龄预算，否则 15 秒跑批的末尾必然 stale
+const refresh = setInterval(() => {
+  void fetchBinanceSnapshot(SYMBOL, 0).then((snapshot) => {
+    if (snapshot !== undefined) feed.deliverSnapshot(snapshot)
+  })
+}, SNAPSHOT_REFRESH_MS)
 
 const loop = createDeskLoop({
   orders: ledgers.orders,
@@ -76,7 +70,8 @@ const loop = createDeskLoop({
   gate: { protectiveOrdersAtVenue: false },
   signals: () => ({
     symbols: [SYMBOL],
-    alignmentOf: (symbol) => (symbol === SYMBOL ? (alignment.state(Date.now()).alignment as 'aligned' | 'unaligned' | 'stale') : undefined),
+    // 标的级：按标的读（验收发现 F3 前这里读的是全局对齐态）
+    alignmentOf: (symbol) => (symbol === SYMBOL ? (alignment.state(Date.now(), symbol).alignment as 'aligned' | 'unaligned' | 'stale') : undefined),
     lastHeartbeatAtMs: feed.stats().lastMessageAtMs,
     heartbeatTimeoutMs: 30_000,
     venueErrorStreak: 0,
@@ -107,8 +102,9 @@ process.stdout.write('[desk-loop-live] 真实行情接入中（' + String(RUN_MS
 setTimeout(() => {
   try {
     clearInterval(sampler)
+    clearInterval(refresh)
     const stats = feed.stats()
-    const alignmentState = alignment.state(Date.now())
+    const alignmentState = alignment.state(Date.now(), SYMBOL)
     const report = loop.onReconnect({ disconnectedFromMs: T0, reconnectedAtMs: Date.now() })
     const events = journal.read(0, 200).events
     const gapReports = events.filter((event) => event.kind === 'gap.report')

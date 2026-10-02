@@ -19,6 +19,7 @@ import {
   rebuildDecision,
   type Provenance,
 } from '../lib/index.js'
+import { DRILL_ALIGNMENT_PARAMS, DRILL_ALIGNMENT_PARAMS_NOTE } from './alignment-params.ts'
 
 const dir = mkdtempSync(join(tmpdir(), 'shadow-run-'))
 const { openLedgers } = await import('../lib/index.js')
@@ -27,20 +28,11 @@ const T0 = 1_700_000_000_000
 let tick = T0
 const now = () => (tick += 1)
 
-// 标定过的上界（示例值：本轮用合成场景，真实部署必须重标——报告里会如实标注）
-const params = {
-  snapshotAgeBudgetMs: 5_000,
-  bufferMaxTicks: 64,
-  bufferMaxBytes: 64 * 128,
-  realignTokenCapacity: 4,
-  realignRefillPerSec: 1,
-  divergenceBps: 50,
-  divergenceStrikes: 2,
-  orderTokenCapacity: 8,
-  orderRefillPerSec: 2,
-}
+// 对齐上界：drill/alignment-params.ts 的**单一来源**（明确标注未标定，不变量 #23）。
+// 生产常量必须来自一次真实的 replay-harness.calibrate，不能引用这个占位值。
+const params = DRILL_ALIGNMENT_PARAMS
 const limits = { notionalMax: 10_000, positionNotionalMax: 50_000, deskNotionalMax: 200_000, maxOpenOrders: 20, leverageMax: 3 }
-const priceAgeBudgetMs = 5_000
+const priceAgeBudgetMs = params.snapshotAgeBudgetMs
 
 const alignment = createAlignment(params, T0)
 let risk = initialRiskState(T0)
@@ -69,7 +61,7 @@ for (let index = 0; index < BARS; index += 1) {
   alignment.onTick({ epoch: 1, symbol: 'BTC/USDT', price, atMs, seq: index + 1 }, atMs)
   if (index % 10 !== 0) continue
 
-  const alignmentState = alignment.state(atMs)
+  const alignmentState = alignment.state(atMs, 'BTC/USDT')
   const movePct = Math.abs(price - referencePrice) / referencePrice
   const thesis = movePct > 0.005
     ? 'synthetic breakout: price moved ' + (movePct * 100).toFixed(2) + '% since the last decision'
@@ -122,6 +114,7 @@ const journalRows = ledgers.audit.prepare('SELECT COUNT(*) AS n FROM journal').g
 
 console.log('# shadow 首批跑批（合成行情，确定性）')
 console.log('')
+console.log('- 对齐参数（' + DRILL_ALIGNMENT_PARAMS_NOTE + '）：' + JSON.stringify(params))
 console.log('- 标的：BTC/USDT；bar 数：' + String(BARS) + '（每 ' + String(STEP_MS) + 'ms 一根，共 ' + String(BARS * STEP_MS / 1000) + 's 合成时间）')
 console.log('- 决策点：每 10 根一次 ⇒ 决策 ' + String(decisions) + ' 次；其中 open ' + String(opens) + '、blocked ' + String(blocked) + '、其余 hold')
 console.log('- 状态叙述：' + narrative)

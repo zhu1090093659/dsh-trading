@@ -73,7 +73,11 @@ export function parseFeedMessage(text: string): FeedMessage | undefined {
 export interface AlignmentSink {
   onSnapshot(snapshot: { epoch: number; symbol: string; price: number; atMs: number }, atMs: number): unknown
   onTick(tick: { epoch: number; symbol: string; price: number; atMs: number; seq: number }, atMs: number): unknown
-  state(atMs: number): { alignment: string }
+  /**
+   * 读对齐态：**必须带标的**。对齐态在设计 §9/§13 #22 里就是标的级词汇，一个没有
+   * symbol 的全局读法会让"某只标的的健康"冒充"全 desk 的健康"（2026-10-02 F3）。
+   */
+  state(atMs: number, symbol: string): { alignment: string }
 }
 
 export interface FeedOptions {

@@ -83,14 +83,37 @@ function manualScheduler() {
   }
 }
 
-function fixture(overrides: Partial<Parameters<typeof createStreamingFeed>[0]> = {}) {
+/**
+ * 契约假件：把 feed 的消息转发给**真实**对齐层，并记录被发布的 tick。
+ * 对齐态是标的级的，所以要证明"某条 tick 没被发布"必须看得见发布流本身。
+ */
+function recordingSink(alignment: ReturnType<typeof createAlignment>) {
+  const published: { symbol: string; price: number }[] = []
+  return {
+    published,
+    sink: {
+      onSnapshot: (snapshot: { epoch: number; symbol: string; price: number; atMs: number }, atMs: number) => alignment.onSnapshot(snapshot, atMs),
+      onTick: (tick: { epoch: number; symbol: string; price: number; atMs: number; seq: number }, atMs: number) => {
+        const outcome = alignment.onTick(tick, atMs)
+        for (const item of outcome.published) published.push({ symbol: item.symbol, price: item.price })
+        return outcome
+      },
+      state: (atMs: number, symbol: string) => alignment.state(atMs, symbol),
+    },
+  }
+}
+
+function fixture(
+  overrides: Partial<Parameters<typeof createStreamingFeed>[0]> = {},
+  sink?: Parameters<typeof createStreamingFeed>[0]['sink'],
+) {
   const clock = manualScheduler()
   const fake = fakeTransport()
   const alignment = createAlignment(params, T0)
   const feed = createStreamingFeed({
     transport: fake.transport,
     scheduler: clock.scheduler,
-    sink: alignment,
+    sink: sink ?? alignment,
     now: clock.now,
     url: 'wss://example.invalid/stream',
     subscribePayload: (symbol) => JSON.stringify({ op: 'subscribe', symbol }),
@@ -128,7 +151,7 @@ describe('连接、订阅与心跳', () => {
     fake.message(JSON.stringify({ kind: 'tick', epoch: 1, symbol: 'BTC/USDT', price: 60_100, atMs: T0, seq: 1 }))
     // Then 订阅已发出、对齐层进入 aligned
     expect(fake.sent).toEqual([JSON.stringify({ op: 'subscribe', symbol: 'BTC/USDT' })])
-    expect(alignment.state(T0).alignment).toBe('aligned')
+    expect(alignment.state(T0, 'BTC/USDT').alignment).toBe('aligned')
     expect(feed.stats()).toMatchObject({ connects: 1, messages: 2, badFrames: 0, state: 'live' })
   })
 
@@ -155,7 +178,7 @@ describe('连接、订阅与心跳', () => {
     fake.message(JSON.stringify({ kind: 'snapshot', epoch: 1, symbol: 'BTC/USDT', price: 60_000, atMs: T0 }))
     // Then 坏帧计数为 1，好帧照常生效
     expect(feed.stats()).toMatchObject({ badFrames: 1, messages: 2 })
-    expect(alignment.state(T0).alignment).toBe('aligned')
+    expect(alignment.state(T0, 'BTC/USDT').alignment).toBe('aligned')
   })
 })
 
@@ -226,7 +249,7 @@ describe('世代号如实下传', () => {
     // When 收到 epoch=2 的 tick（还没收到新快照）
     fake.message(JSON.stringify({ kind: 'tick', epoch: 2, symbol: 'BTC/USDT', price: 61_000, atMs: T0, seq: 9 }))
     // Then 对齐层把它判为 unaligned（世代不符）——传输层不越权处理
-    expect(alignment.state(T0).alignment).toBe('unaligned')
+    expect(alignment.state(T0, 'BTC/USDT').alignment).toBe('unaligned')
     expect(feed.stats().badFrames).toBe(0)
   })
 })
@@ -244,7 +267,7 @@ describe('快照世代号由 feed 盖章', () => {
     // When 引导完成后再来一条同世代的 tick
     fake.message(JSON.stringify({ kind: 'tick', epoch: 1, symbol: 'BTC/USDT', price: 60_100, atMs: T0, seq: 1 }))
     // Then 对齐层进入 aligned（若 epoch 仍是 999，这条 tick 会被判 unaligned）
-    expect(alignment.state(T0).alignment).toBe('aligned')
+    expect(alignment.state(T0, 'BTC/USDT').alignment).toBe('aligned')
   })
 
   it('管理员：deliverSnapshot 同样被盖章（周期刷新不需要知道自己是第几次连接）', () => {
@@ -256,7 +279,7 @@ describe('快照世代号由 feed 盖章', () => {
     feed.deliverSnapshot({ kind: 'snapshot', epoch: 42, symbol: 'BTC/USDT', price: 60_000, atMs: T0 })
     fake.message(JSON.stringify({ kind: 'tick', epoch: 1, symbol: 'BTC/USDT', price: 60_050, atMs: T0, seq: 1 }))
     // Then 仍然对齐
-    expect(alignment.state(T0).alignment).toBe('aligned')
+    expect(alignment.state(T0, 'BTC/USDT').alignment).toBe('aligned')
   })
 })
 describe('重连路径', () => {
@@ -270,7 +293,7 @@ describe('重连路径', () => {
     fake.open()
     await new Promise((resolve) => setImmediate(resolve))
     fake.message(JSON.stringify({ kind: 'tick', epoch: 1, symbol: 'BTC/USDT', price: 60_100, atMs: T0, seq: 1 }))
-    expect(alignment.state(T0).alignment).toBe('aligned')
+    expect(alignment.state(T0, 'BTC/USDT').alignment).toBe('aligned')
     // When 服务端断开、重连（新一代连接）并重新引导
     fake.serverClose('server said bye')
     clock.advance(1_000)
@@ -279,7 +302,7 @@ describe('重连路径', () => {
     // Then 新世代的 tick 仍然能对齐（若快照 epoch 仍是 999，这里会永远 unaligned）
     const later = T0 + 1_000
     fake.message(JSON.stringify({ kind: 'tick', epoch: 2, symbol: 'BTC/USDT', price: 60_200, atMs: later, seq: 2 }))
-    expect(alignment.state(later).alignment).toBe('aligned')
+    expect(alignment.state(later, 'BTC/USDT').alignment).toBe('aligned')
     expect(feed.stats().reconnects).toBe(1)
   })
 })
@@ -305,4 +328,25 @@ describe('订阅载荷为空时不发送', () => {
     expect(fake.sent).toEqual(['sub:BTC/USDT', 'sub:ETH/USDT'])
   })
 })
+})
+
+describe('多标的传输（验收发现 F3 的传输侧回归）', () => {
+  it('管理员：ETH 的快照经传输层到达，也不会让 BTC 超龄的 tick 进入发布流', () => {
+    // Given 一条同时订阅 BTC 与 ETH 的流（发布流可观测），BTC 的基准快照在 T0 到达
+    const alignment = createAlignment(params, T0)
+    const recorder = recordingSink(alignment)
+    const { clock, fake, feed } = fixture({ symbols: ['BTC/USDT', 'ETH/USDT'], heartbeatTimeoutMs: 60_000 }, recorder.sink)
+    feed.start()
+    fake.open()
+    fake.message(JSON.stringify({ kind: 'snapshot', epoch: 1, symbol: 'BTC/USDT', price: 60_000, atMs: T0 }))
+    // When 时钟推进 6 秒（超过 5 秒的年龄预算）后 ETH 来了一张新快照，随后两只标的各来一条 tick
+    clock.advance(6_000)
+    fake.message(JSON.stringify({ kind: 'snapshot', epoch: 1, symbol: 'ETH/USDT', price: 3_000, atMs: T0 + 6_000 }))
+    fake.message(JSON.stringify({ kind: 'tick', epoch: 1, symbol: 'BTC/USDT', price: 60_000, atMs: T0 + 6_000, seq: 1 }))
+    fake.message(JSON.stringify({ kind: 'tick', epoch: 1, symbol: 'ETH/USDT', price: 3_100, atMs: T0 + 6_000, seq: 1 }))
+    // Then 只有 ETH 的 tick 被发布；BTC 因自己的快照超龄而未发布、态为 stale
+    expect(recorder.published).toEqual([{ symbol: 'ETH/USDT', price: 3_100 }])
+    expect(alignment.state(T0 + 6_000, 'BTC/USDT').alignment).toBe('stale')
+    expect(alignment.state(T0 + 6_000, 'ETH/USDT').alignment).toBe('aligned')
+  })
 })

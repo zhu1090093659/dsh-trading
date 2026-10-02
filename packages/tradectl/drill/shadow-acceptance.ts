@@ -19,6 +19,7 @@ import { createJournal } from '../lib/journal.js'
 import { migrateDeskRecords } from '../lib/desk-records.js'
 import { migrateTriggers } from '../lib/triggers.js'
 import { createDeskLoop } from '../lib/desk-loop.js'
+import { DRILL_ALIGNMENT_PARAMS, DRILL_ALIGNMENT_PARAMS_NOTE, SNAPSHOT_REFRESH_MS } from './alignment-params.ts'
 
 const NL = String.fromCharCode(10)
 const SYMBOL = 'BTC/USDT'
@@ -36,21 +37,11 @@ migrateTriggers(ledgers.orders)
 let tick = T0
 const journal = createJournal(ledgers.audit, { now: () => (tick += 1) })
 
-const alignment = createAlignment(
-  {
-    symbols: [SYMBOL],
-    snapshotAgeBudgetMs: Math.max(60_000, RUN_MS),
-    bufferMaxTicks: 10_000,
-    bufferMaxBytes: 8 * 1024 * 1024,
-    realignTokenCapacity: 5,
-    realignRefillPerSec: 1,
-    divergenceBps: 50,
-    divergenceStrikes: 3,
-    orderTokenCapacity: 3,
-    orderRefillPerSec: 1,
-  },
-  T0,
-)
+// 对齐上界：drill/alignment-params.ts 的**单一来源**（明确标注未标定，不变量 #23）。
+// 2026-10-02 前这里写的是 Math.max(60_000, RUN_MS)：把预算设成跑批时长等于把年龄检查关掉
+// （跑 10 分钟就 10 分钟不判陈旧），而 SHADOW_RUN_MS 一改，预算跟着变 —— 那不是参数。
+// 现在预算是单一来源里的定值，基准新鲜度由下面的周期快照刷新保证。
+const alignment = createAlignment(DRILL_ALIGNMENT_PARAMS, T0)
 
 const feed = createStreamingFeed({
   url: binanceStreamUrl([SYMBOL]),
@@ -66,8 +57,15 @@ const feed = createStreamingFeed({
   reconnectMaxMs: 10_000,
   bootstrapSymbols: [SYMBOL],
   bootstrap: async (symbols) => Promise.all(symbols.map((s) => fetchBinanceSnapshot(s, 0))),
-  maxBatch: 64,
 })
+
+// 周期刷新基准快照：刷新节奏必须快于年龄预算（drill/alignment-params.ts 加载时断言这条自洽性）。
+// 没有这一步，"保持在 aligned"只能靠把预算调大来假装。
+const refresh = setInterval(() => {
+  void fetchBinanceSnapshot(SYMBOL, 0).then((snapshot) => {
+    if (snapshot !== undefined) feed.deliverSnapshot(snapshot)
+  })
+}, SNAPSHOT_REFRESH_MS)
 
 const loop = createDeskLoop({
   orders: ledgers.orders,
@@ -76,7 +74,8 @@ const loop = createDeskLoop({
   gate: { protectiveOrdersAtVenue: false },
   signals: () => ({
     symbols: [SYMBOL],
-    alignmentOf: () => alignment.state(Date.now()).alignment,
+    // 标的级：按标的读，绝不把某一只标的的对齐态喂给全部标的（验收发现 F3）
+    alignmentOf: (symbol: string) => alignment.state(Date.now(), symbol).alignment,
     lastHeartbeatAtMs: feed.stats().lastMessageAtMs,
     heartbeatTimeoutMs: 60_000,
     venueErrorStreak: 0,
@@ -107,8 +106,9 @@ process.stdout.write('[shadow-acceptance] 第 1 档开始：' + String(RUN_MS / 
 
 setTimeout(() => {
   clearInterval(sampler)
+  clearInterval(refresh)
   const stats = feed.stats()
-  const alignmentState = alignment.state(Date.now())
+  const alignmentState = alignment.state(Date.now(), SYMBOL)
   const gap = loop.onReconnect({ disconnectedFromMs: T0, reconnectedAtMs: Date.now() })
   const events = journal.read(0, 5_000).events
   const byKind = {}
@@ -121,6 +121,8 @@ setTimeout(() => {
     home,
     market: { messages: stats.messages, badFrames: stats.badFrames, ignoredFrames: stats.ignoredFrames, state: stats.state },
     alignment: { alignment: alignmentState.alignment, droppedTicks: alignmentState.droppedTicks },
+    alignmentBounds: DRILL_ALIGNMENT_PARAMS,
+    alignmentBoundsProvenance: DRILL_ALIGNMENT_PARAMS_NOTE,
     loop: { ticks: loop.stats().ticks, transitions: loop.stats().transitions, recordFailures: loop.stats().recordFailures, lastProbeReason: loop.stats().lastProbeReason },
     levelsSeen,
     triggerTally,

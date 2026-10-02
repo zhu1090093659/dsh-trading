@@ -19,21 +19,13 @@ import {
   type AlignmentParams,
   type FeedMessage,
 } from '../lib/index.js'
+import { DRILL_ALIGNMENT_PARAMS, SNAPSHOT_REFRESH_MS } from './alignment-params.ts'
 import { binanceStreamUrl, fetchBinanceSnapshot, parseBinanceFrame } from '../lib/adapters/binance.js'
 import { createNodeWebSocketTransport } from '../lib/transport/node-ws.js'
 
 const seconds = Number(process.argv[2] ?? '45')
-const params: AlignmentParams = {
-  snapshotAgeBudgetMs: 12_000,
-  bufferMaxTicks: 4096,
-  bufferMaxBytes: 4096 * 128,
-  realignTokenCapacity: 8,
-  realignRefillPerSec: 1,
-  divergenceBps: 50,
-  divergenceStrikes: 2,
-  orderTokenCapacity: 8,
-  orderRefillPerSec: 1,
-}
+// 对齐上界：drill/alignment-params.ts 的**单一来源**（明确标注未标定，不变量 #23）
+const params: AlignmentParams = DRILL_ALIGNMENT_PARAMS
 
 const dir = mkdtempSync(join(tmpdir(), 'shadow-live-'))
 const ledgers = openLedgers(dir)
@@ -53,7 +45,8 @@ const sink = {
     }
     return outcome
   },
-  state: (atMs: number) => alignment.state(atMs),
+  // 对齐态是**标的级**的：端口也要求带标的（否则等于把某只标的的健康当成全 desk 的）
+  state: (atMs: number, symbol: string) => alignment.state(atMs, symbol),
 }
 
 const limits = { notionalMax: 10_000, positionNotionalMax: 50_000, deskNotionalMax: 200_000, maxOpenOrders: 20, leverageMax: 3 }
@@ -84,12 +77,12 @@ const feed = createStreamingFeed({
   subscribeRefillPerSec: 0.5,
 })
 
-// 基准周期刷新（年龄预算 12s ⇒ 5s 刷新）
+// 基准周期刷新（刷新节奏必须快于年龄预算；单一来源见 drill/alignment-params.ts）
 const refresh = setInterval(() => {
   void fetchBinanceSnapshot('BTC/USDT', 1).then((snapshot) => {
     if (snapshot !== undefined) feed.deliverSnapshot(snapshot)
   })
-}, 5_000)
+}, SNAPSHOT_REFRESH_MS)
 
 process.stdout.write('connecting: ' + url + String.fromCharCode(10))
 feed.start()
@@ -103,7 +96,7 @@ const samplePrices: number[] = []
 
 const decide = setInterval(() => {
   const atMs = Date.now()
-  const state = alignment.state(atMs)
+  const state = alignment.state(atMs, 'BTC/USDT')
   const price = lastPublished?.price
   if (price === undefined || state.alignment !== 'aligned') return
   samplePrices.push(price)
@@ -145,7 +138,7 @@ setTimeout(() => {
   clearInterval(refresh)
   clearInterval(decide)
   const stats = feed.stats()
-  const state = alignment.state(Date.now())
+  const state = alignment.state(Date.now(), 'BTC/USDT')
   process.stdout.write(String.fromCharCode(10) + '=== shadow 真实行情跑批（' + String(seconds) + 's）===' + String.fromCharCode(10))
   process.stdout.write('行情：Binance aggTrade（公共流）· 传输：' + JSON.stringify(stats) + String.fromCharCode(10))
   process.stdout.write('对齐态：' + JSON.stringify(state) + String.fromCharCode(10))
