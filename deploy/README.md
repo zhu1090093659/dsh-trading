@@ -1,6 +1,8 @@
 # 三进程部署（P2 步骤 5）
 
 > **本目录里的东西没有被自动安装过。** 三个 uid 与 systemd unit 属于系统级改动，agent 只负责把它们写出来并跑通可离线验证的那部分；真正的安装由人来执行。
+> 本机是 macOS：能离线做的只有**静态校验台架** `node scripts/systemd-units-check.mjs`（六类判据，见『安装』第 0 步）；
+> `systemd-analyze verify`、`systemctl start`、建 uid 都必须在 Linux 主机上由人执行。
 
 ## 三个进程与三个 uid（§13 #18-4）
 
@@ -33,6 +35,7 @@
 - **设备注册表由 edge 独占读写**：`/var/lib/dsh-trading-a0/devices.json`，权限 **0600**（比 kill 状态更紧：连 `dsh-trade` 组都读不到），属主 `dsh-trade-edge`。它同样在 `/var/lib`：注册表必须**跨 edge 重启存活**，否则重启一次全部设备静默失联（重新配对 + control 重新授予）。
   - 文件里**只有 `sha256(secret)`**，没有明文密钥；明文只在配对响应里出现一次，鉴权按散列做常数时间比对。
   - 写入同样是**同目录 temp + rename**（0600，umask 之外再显式 chmod 一次）；`--device-registry` 是 edge 的**必填**参数，入口启动时先探目录可写、再加载文件：文件不存在 = 空表（首次启动），**损坏/版本认不出/条目不合规 ⇒ 拒绝启动**（退出码 5，fail-closed，不当成空表）。
+- **授权平面目录 `/var/lib/dsh-trading-authority`（操作员 uid 所有，`0750 operator:dsh-trade`，两份文件 `0640`）**：实盘许可（`trusted-keys.json` + `live-trading.grant.json`）只住这里，判定的进程以**组身份只读**。它必须与 **agent uid** 隔离——目录、文件以及从根到它的整条祖先链都不得归 `dsh-trade-bot` 所有、也不得对它可写（`packages/authority` 的读取端每次判定都查这条，不满足即 `plane-not-isolated`）。单元里没有 `DSH_TRADING_AUTHORITY_DIR` 时实盘一律 `dir-not-configured` 拒绝：**启用实盘 = 人建平面 + 给判定的执行核加这一行 Environment**（两步都要做，见『安装』第 3 步与第 7a 步）。
 
 ## 启动顺序
 
@@ -122,19 +125,99 @@ control，什么都没变，不当成撤销成功，消息里给出它当前的�
 
 ## 安装（需要人执行；`deploy/install.sh` 只打印计划，不代跑）
 
+> **本机是 macOS，装不了 systemd。** 下面每一步都在 **Linux 主机**上由人执行：建 uid、写 `/etc/systemd/system`、
+> 起服务、`systemd-analyze verify` 都是系统级操作，仓库侧只交付单元文件与静态校验台架。
+> 台架跑绿只说明"单元文件自身没矛盾"，**不代表已经安装**；"能启动"也不等于"能交易"（见下节）。
+
+### 0. 静态预检（任何平台可跑；判红不要往下走）
+
+    node scripts/systemd-units-check.mjs            # 有违规 exit 1；--report 打印全部明细且总是 exit 0
+
+六类判据：要素齐备 / 三 uid 分离 / 硬化项存在且值正确 / ExecStart 与 Documentation 指向的产物真的在仓库里 /
+跨单元路径对该 uid **真的可进入**（按 StateDirectory/RuntimeDirectory 声明的 Mode 与 User/Group 算权限位）/
+授权平面隔离与"禁 dev opt-in"。
+
+### 1. 建组与三个 uid（agent 一个、服务两个；操作员 uid 是"人"，不是服务账号）
+
     sudo groupadd --system dsh-trade
-    sudo useradd --system --gid dsh-trade --home /var/lib/dsh-trading --shell /usr/sbin/nologin dsh-trade-core
-    sudo useradd --system --gid dsh-trade --home /nonexistent          --shell /usr/sbin/nologin dsh-trade-edge
-    sudo useradd --system --gid dsh-trade --home /var/lib/dsh-trading --shell /usr/sbin/nologin dsh-trade-bot
-    # 目录不必手工 install -d：unit 的 StateDirectory/RuntimeDirectory 会按 ownership 与 mode 建
-    #   /var/lib/dsh-trading (0700, core:dsh-trade) /run/dsh-tradectl (0750) /var/lib/dsh-trading-a0 (0770, edge:dsh-trade)
+    sudo useradd --system --gid dsh-trade --home /var/lib/dsh-trading      --shell /usr/sbin/nologin dsh-trade-core
+    sudo useradd --system --gid dsh-trade --home /nonexistent              --shell /usr/sbin/nologin dsh-trade-edge
+    sudo useradd --system --gid dsh-trade --home /var/lib/dsh-trading-bot  --shell /usr/sbin/nologin dsh-trade-bot
+    getent passwd dsh-trade-core dsh-trade-edge dsh-trade-bot | cut -d: -f1,3
+    # 期望：三行、三个互不相同的 uid，且都不是 0；dsh-trade-bot 就是"agent uid"（授权平面必须与它隔离）
+
+目录不必手工 `install -d`：unit 的 `StateDirectory`/`RuntimeDirectory` 会按声明的 ownership 与 mode 建
+（`/var/lib/dsh-trading` 0700 core:dsh-trade、`/run/dsh-tradectl` 0750、`/var/lib/dsh-trading-a0` 0770 edge:dsh-trade）。
+注意 `/var/lib/dsh-trading` 是**核心的** home：宿主（agent）另有 `/var/lib/dsh-trading-bot` —— 两个 uid 共用 0700 的
+核心 home 时宿主连目录都进不去，而核心的启动断言又禁止把账本目录对组/其他开放（§13 #18-3），两者不可能同时成立。
+
+### 2. 部署包树与构建产物
+
+    pnpm build                                          # tradectl 的 lib/ 与驾驶舱壳 packages/cockpit/dist 必须先有
     sudo install -d -o root -g root -m 0755 /opt/dsh-trading
-    sudo cp -a <repo>/packages/tradectl /opt/dsh-trading/tradectl     # 含 bin/ 与 lib/（先在仓里跑 pnpm build）
-    sudo cp -a <repo>/deploy /opt/dsh-trading/deploy
-    sudo cp deploy/systemd/*.service /etc/systemd/system/ && sudo systemctl daemon-reload
-    sudo -u dsh-trade-bot env dsh --version    # 自查启动器在 PATH 上（bot unit 靠它）
+    sudo cp -a <repo>/packages/tradectl     /opt/dsh-trading/tradectl
+    sudo cp -a <repo>/packages/cockpit/dist /opt/dsh-trading/cockpit
+    sudo cp -a <repo>/deploy                /opt/dsh-trading/deploy
+    test -f /opt/dsh-trading/tradectl/bin/core.mjs && test -f /opt/dsh-trading/tradectl/bin/edge.mjs
+
+### 3. 建授权平面（操作员 uid 所有；判定进程只读）
+
+    sudo install -d -o <operator-uid> -g dsh-trade -m 0750 /var/lib/dsh-trading-authority
+    # 私钥由人在**另一个 uid** 下持有（0600）；平面里只放公钥（trusted-keys.json）与签署结果：
+    sudo -u <operator-uid> node <repo>/packages/authority/bin/sign-live-trading.mjs init \
+      --key ~/.dsh-trading-ops/operator.pem --dir /var/lib/dsh-trading-authority --agent-uid <dsh-trade-bot 的 uid>
+    sudo -u <operator-uid> node <repo>/packages/authority/bin/sign-live-trading.mjs sign \
+      --key ~/.dsh-trading-ops/operator.pem --dir /var/lib/dsh-trading-authority --days 30 --agent-uid <同上>
+
+**这一步不做，实盘一律 `dir-not-configured` 拒绝（fail-closed，不是漏洞）。** 要让判定的执行核读到平面，还要给核心单元
+加 `Environment=DSH_TRADING_AUTHORITY_DIR=/var/lib/dsh-trading-authority`（今天的三个单元都没有这一行；改单元要先过第 0 步）。
+
+### 4. 装单元与 daemon-reload
+
+    sudo cp deploy/systemd/*.service /etc/systemd/system/
+    sudo systemctl daemon-reload
+
+### 5. Linux 上的第一道静态校验
+
+    sudo systemd-analyze verify /etc/systemd/system/dsh-tradectl.service \
+      /etc/systemd/system/dsh-trading-edge.service /etc/systemd/system/dsh-trading-bot.service
+    # 期望：无输出、exit 0。任何 warning 都要原样记进记录 —— 它预示装完起不来
+
+### 6. 启动与状态
+
+    sudo -u dsh-trade-bot env dsh --version                     # 宿主单元靠 PATH 上的启动器（不在就改成绝对路径）
     sudo systemctl start dsh-tradectl && journalctl -u dsh-tradectl -f   # 等核心打出"已启动"
     sudo systemctl start dsh-trading-edge dsh-trading-bot
+    systemctl is-active dsh-tradectl dsh-trading-edge dsh-trading-bot    # 期望三行 active
+
+### 7. 安装后核对（每条都要留输出；缺记录即视为未满足）
+
+    # a) 授权平面不属于 agent uid —— 这条是三个 uid 分离存在的理由
+    AGENT_UID=$(getent passwd dsh-trade-bot | cut -d: -f3)
+    stat -c '%u:%g %U:%G %a %n' /var/lib/dsh-trading-authority      # 期望属主 uid ≠ $AGENT_UID、mode 750
+    sudo -u dsh-trade-bot test -w /var/lib/dsh-trading-authority; echo "agent 可写? exit=$?"        # 期望非 0
+    sudo -u dsh-trade-bot ls /var/lib/dsh-trading-authority >/dev/null 2>&1; echo "agent 可读? exit=$?"  # 期望非 0
+
+    # b) kill 状态跨 uid 可读（edge 写、核心读；两边不同 uid，权限不会自己变对）
+    stat -c '%U:%G %a %n' /var/lib/dsh-trading-a0/kill.json         # 期望 dsh-trade-edge:dsh-trade 640
+    sudo -u dsh-trade-core test -r /var/lib/dsh-trading-a0/kill.json; echo "核心可读? exit=$?"       # 期望 0
+    # 端到端复核：用已 granted control 的设备 POST /a0/kill，随后核心必须拒绝新增风险（只验文件权限不够）
+
+    # c) 宿主与核心的隔离
+    sudo -u dsh-trade-bot test -x /var/lib/dsh-trading; echo "宿主进得了核心 home? exit=$?"          # 期望非 0
+    sudo -u dsh-trade-bot test -r /var/lib/dsh-trading/tradectl/orders.db; echo "宿主读得了账本? exit=$?"  # 期望非 0
+
+### 记录格式（每步一行；写进 `.local/roadmap/CHECKPOINT.md` 或本机运维日志）
+
+    步骤：静态预检 / 建 uid / 部署包树 / 建平面 / 装单元 / systemd-analyze verify / 启动 / 安装后核对 a|b|c
+    时间：<ISO-8601>
+    执行人：<主机名 + 谁>
+    命令：<原样>
+    输出：<关键行原样贴出，不写摘要>
+    结论：通过 / 失败（失败要写回滚到哪一步）
+    回滚点：systemctl stop + rm /etc/systemd/system/dsh-trading-*.service；包树回滚到上一版 /opt/dsh-trading
+
+**缺记录即视为未满足**（与 [ops-runbook](../docs/ops-runbook.md) §7 同一口径）；第 0 步台架的输出也要一并留档。
 
 ## 今天这个形态**不**具备什么（如实标注，别把"能启动"读成"能交易"）
 
@@ -142,7 +225,12 @@ control，什么都没变，不当成撤销成功，消息里给出它当前的�
 - 行情面未接：真实行情（WS 适配）与 `/v1` 业务面、UDS 业务帧都属 P4；UDS 面对任何帧一律回结构化拒绝（`CORE_SURFACE_NOT_IMPLEMENTED`），本入口不假装能服务。
 - edge 的设备注册表**落盘**（`--device-registry` 必填，`/var/lib/dsh-trading-a0/devices.json`，0600、只存 `sha256(secret)`、同目录 temp+rename）：edge 重启后设备仍在册，`control` 的授予与撤销也一并存活。文件损坏即拒绝启动（fail-closed）。作用域签发是：配对发 `read`（+ 请求里显式给出的 `command`），`control` 只能由 `grant-control.mjs` 走本地 socket 授予、由 `revoke-control.mjs` 收回或整台作废（见上）。
 - **静态壳托管要显式开**：edge 入口不给 `--shell-dir` 就一条静态路径都不公开（默认最小暴露面）；给了就按 §7.4 的裁决托管（仅 GET/HEAD 的精确路径免令牌，数据与命令面一律 Bearer）。壳根目录是驾驶舱的构建产物（`packages/cockpit/dist`），**部署时复制到 `/opt/dsh-trading/cockpit` 再把该路径给 `--shell-dir`**。
-- systemd unit 只在本机静态核对过（`systemd-analyze verify` 未跑），三个 uid 从未真实部署。edge 单元已含 `--device-registry /var/lib/dsh-trading-a0/devices.json`、`--shell-dir /opt/dsh-trading/cockpit` 与 `--ops-socket /run/dsh-trading-edge/ops.sock`，并配 `StateDirectory=dsh-trading-a0`（0770，注册表就住这里）与 `RuntimeDirectory=dsh-trading-edge`（0700）承载 socket 目录；路径随部署副本的实际位置改动。
+- systemd unit 与三个 uid **从未在 Linux 上真实安装过**（`systemd-analyze verify` 未跑），本机能离线做的只有静态校验台架 `node scripts/systemd-units-check.mjs`（2026-10-02 起，13 例自测进 `pnpm test:scripts`）。edge 单元已含 `--device-registry /var/lib/dsh-trading-a0/devices.json`、`--shell-dir /opt/dsh-trading/cockpit` 与 `--ops-socket /run/dsh-trading-edge/ops.sock`，并配 `StateDirectory=dsh-trading-a0`（0770，注册表就住这里）与 `RuntimeDirectory=dsh-trading-edge`（0700）承载 socket 目录；路径随部署副本的实际位置改动。
+
+### 静态校验台架在 2026-10-02 的单元上查出的两处缺口（装之前先处理）
+
+1. **宿主单元起不来（台架判红 `path-access`）**：`dsh-trading-bot.service` 的 `DSH_HOME=/var/lib/dsh-trading` 与 `ReadWritePaths=/var/lib/dsh-trading/profiles` 都落在核心的 `StateDirectory=dsh-trading`（`StateDirectoryMode=0700`，`dsh-trade-core:dsh-trade`）**里面** —— 宿主以 `dsh-trade-bot`（组 `dsh-trade`）身份连**穿越**都做不到，而"凭据只住核心侧"（§13 #18-3）又不允许把该目录对组/其他开放，两者不可能同时成立。修法：给宿主**自己的 home**（`StateDirectory=dsh-trading-bot` + `DSH_HOME=/var/lib/dsh-trading-bot` + `ReadWritePaths=/var/lib/dsh-trading-bot`）——台架自测里的"正确形态"就是这个形状；2026-10-02 把这套单元复制到临时目录按此法改过一遍，实测台架全绿。`deploy/systemd/*.service` 属部署物负责人的写域，本台架只负责让它无法静默通过。
+2. **kill 状态到不了核心（台架只提示，运行期才暴露）**：`writeKillState`（`packages/tradectl/src/edge.ts:67`）把 kill 状态写成 **0600**，edge 单元又是 `UMask=0077`；核心却以**组身份**读同一个文件 ⇒ `EACCES`，而 `readKillState`（同文件 55-62 行）把"读不到"当作 `no-state`（fail-open）⇒ **带外 kill 在三个 uid 形态下对核心不生效**。装之前必须先修写入端（显式 chmod 到组可读）与读取端（只有"文件不存在"才算未 kill），再用第 7b 步端到端复核（本机已用 `chmod 000` 复现读取端 fail-open：读不到时返回 `{"killed":false,"reason":"no-state"}`）。
 
 ## 演练清单（缺记录即视为未满足）
 

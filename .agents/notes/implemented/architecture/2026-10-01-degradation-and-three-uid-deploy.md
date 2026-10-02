@@ -33,9 +33,21 @@
 
 `deploy/install.sh` —— 刻意**只打印计划不执行**：`bash deploy/install.sh` 的输出是一张待办清单（六行"会做这些事" + 一句"本脚本不代跑"）。系统级安装不是 agent 该自作主张的动作。
 
+### 静态校验台架与人执行清单（2026-10-02）
+
+`scripts/systemd-units-check.mjs`（自测 `scripts/systemd-units-check.test.mjs`，13 例，进 `pnpm test:scripts`）—— macOS 上没有 systemd，本机能判定的只有"单元文件自身有没有矛盾"，于是把它写成台架，退出码即结论（`--report` 打印全部明细且总是 exit 0）：要素齐备（ExecStart/User/Group/Restart/RestartSec/Environment/UMask/硬化项/ReadWritePaths/[Install]）；三 uid 分离（User 两两不同、非 root、至少三个 principal、除 agent 宿主单元外不得跑在 agent uid 下）；硬化项的值（`UMask=0077`、`ProtectSystem=strict`、`NoNewPrivileges=true`、`PrivateTmp=true`）；`ExecStart`/`Documentation` 指向的 `/opt/dsh-trading/**` 必须映射到仓库里真实存在的产物（`tradectl/**→packages/tradectl/**`，`deploy/**→deploy/**`，`cockpit`→`packages/cockpit/dist` 的部署副本）；跨单元路径按声明的 `StateDirectoryMode`/`RuntimeDirectoryMode` 与 User/Group **算权限位**（"配了 ReadWritePaths 却进不去那个目录"是静态可判的）；授权平面隔离（平面不得落在 agent uid 可写路径里、不得由 agent 宿主单元声明、不得进 ReadWritePaths、禁 `DSH_TRADING_AUTHORITY_DEV_SAME_UID`）。
+
+`deploy/README.md` 的『安装』一节同时改成**人执行清单**：静态预检 → 建组与三个 uid → 部署包树（含 `packages/cockpit/dist` 副本）→ 建授权平面（操作员 uid）→ 装单元 → `systemd-analyze verify` → 启动 → 安装后核对（平面不属于 agent uid 的 `stat`/`sudo -u … test -w` 核对、kill 状态跨 uid 可读、宿主进不了账本），并给出**每步的记录格式**（步骤/时间/执行人/命令/输出/结论/回滚点；缺记录即视为未满足）。明确边界：本机 macOS 无法执行 systemd 安装。
+
+**台架在 2026-10-02 的单元上判红 1 处（真缺口，未修）**：`dsh-trading-bot.service` 的 `DSH_HOME=/var/lib/dsh-trading`（连同 `ReadWritePaths=/var/lib/dsh-trading/profiles`）落在核心 `StateDirectory=dsh-trading`（`StateDirectoryMode=0700`，`dsh-trade-core:dsh-trade`）**里面** —— 宿主以 `dsh-trade-bot`（组 `dsh-trade`）身份连穿越都做不到；而核心启动断言（#18-3：账本目录对组/其他开放即拒绝启动）不允许把该目录放开 ⇒ 三个 uid 形态下宿主起不来。修法是给宿主独立 home（`StateDirectory=dsh-trading-bot` + `DSH_HOME=/var/lib/dsh-trading-bot` + `ReadWritePaths=/var/lib/dsh-trading-bot`）：2026-10-02 把三个单元复制到临时目录按此法改过一遍，实测台架全绿。`deploy/systemd/*.service` 属部署物负责人的写域，本记录只登记事实。
+
+**同一轮核对发现的第二处缺口（代码侧，未修）**：kill 状态跨 uid 读不到 ⇒ 带外 kill 对核心失效。`writeKillState`（`packages/tradectl/src/edge.ts:67`）以 **0600** 写文件、edge 单元又是 `UMask=0077`，而核心以**组身份**读 ⇒ `EACCES`；`readKillState`（同文件 55-62 行）把任何读失败都当成 `no-state`（fail-open）。本机复现（同 uid 下用 `chmod 000` 制造 EACCES，命中同一分支）：读不到时返回 `{"killed":false,"reason":"no-state"}`。修法：写入端显式 chmod 到组可读 + 读取端只把"文件不存在"当未 kill（与看门狗"心跳读不到按失活处理"同一条漏报不对称纪律）。
+
+**授权平面的生产约定**同时定下：`/var/lib/dsh-trading-authority`（操作员 uid 所有、`0750 operator:dsh-trade`、两份文件 0640），判定的执行核以组身份**只读**。三个单元目前都没有 `DSH_TRADING_AUTHORITY_DIR` ⇒ 实盘判定一律 `dir-not-configured` 拒绝（fail-closed，不是漏洞）；启用实盘 = 人建平面 + 给做判定的单元加这一行 Environment（两步都要做）。
+
 ## 未验证项（如实标注）
 
-- **三个 uid 与 systemd unit 从未真实安装**：需要 root 且属系统级改动，按路线纪律留给人工执行；因此「uid 隔离生效」这一维**未验证**（unit 也未跑过 `systemd-analyze verify`，只在 macOS 上静态核对）。断连/重启/核心挂掉三类演练已在**开发形态**下真跑出记录（见下节），第 4 类带外退出仍未演练。
+- **三个 uid 与 systemd unit 从未真实安装**：需要 root 且属系统级改动，按路线纪律留给人工执行；因此「uid 隔离生效」这一维**未验证**（unit 也未跑过 `systemd-analyze verify`；2026-10-02 起本机可跑的是静态台架 `node scripts/systemd-units-check.mjs`，它判红的那处见上——"静态能判定的"与"装过"仍是两件事）。断连/重启/核心挂掉三类演练已在**开发形态**下真跑出记录（见下节），第 4 类带外退出仍未演练。
 - **核心入口今天只实现 `--mode=shadow`**：脚本化信号 + dry-run 派发（无下单端口），`--mode=paper|live` 当场拒绝；行情面 / `/v1` 业务面 / UDS 业务帧属 P4 范围（UDS 面对任何帧回 `CORE_SURFACE_NOT_IMPLEMENTED`）。
 - `halt` 依赖 venue 原生条件单/OCO：目标 venue 是否具备**未核实**；按 #25，不具备时 halt 必须降级为 `reduce_only` 并作为接入准入条件。
 - dead-man 的"心跳失活"判定尚未实现（本轮只定义了触发源与封顶规则）。
