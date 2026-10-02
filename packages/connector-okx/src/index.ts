@@ -21,8 +21,8 @@
  *
  * 凭证（调研 §6 建议 4）：三 ref（apiKeyRef/secretRef/passphraseRef）= 环境变量名；
  * demo/live 用不同 ref 组（demo 默认 OKX_DEMO_*，live 默认 OKX_*），每次操作经
- * ctx.credentials.resolve() 解析（换 key 无需重启），未命中 → TRADING_CREDENTIALS_MISSING
- * 带 ref 名。
+ * ctx.credentials.resolve() 解析（换 key 无需重启）；有 seam 时未命中即
+ * TRADING_CREDENTIALS_MISSING 带 ref 名（不回退启动环境变量），无 seam 才回落。
  *
  * @module @dshtrading/connector-okx
  */
@@ -152,7 +152,9 @@ export function credentialRefsFor(config: Config, env: 'demo' | 'live' = config.
 
 /**
  * 三 ref 凭证解析：每次操作调用（ctx.credentials 的设计意图——换 key 无需重启插件）。
- * 无 credentials seam 时回落启动环境变量（llm-deepseek 同款降级）。
+ * **有 credentials seam 即 fail-closed**：seam 存在时只认 seam，某 slot 未命中不再回退
+ * 启动环境变量——显式配置与 ambient 凭据混用会让 demo 路径拿到 live key（反之亦然）；
+ * 仅当 seam 完全缺席时才回落启动环境变量（llm-deepseek 同款降级）。
  * 任何一处未命中/无效 → TRADING_CREDENTIALS_MISSING，消息只带 ref 名（绝不带值）。
  */
 export async function resolveCredentials(ctx: CredentialsContext, config: Config): Promise<OkxCredentials> {
@@ -183,18 +185,21 @@ export async function resolveCredentials(ctx: CredentialsContext, config: Config
     ['passphraseRef', refs.passphraseRef],
   ]
   const resolved = await Promise.all(entries.map(async ([slot, ref]) => {
-    let value: string | undefined
-    if (resolver !== undefined) value = (await resolver.resolve(ref))?.value
-    if (value === undefined || value === '') value = process.env[ref]
+    // 有 seam 时只认 seam：process.env 绝不作为 seam 未命中的兜底（否则显式配置与
+    // ambient 凭据混用，demo 路径可能拿到 live key，反之亦然）。无 seam 才读启动环境变量。
+    const value = resolver === undefined ? process.env[ref] : (await resolver.resolve(ref))?.value
     return { slot, ref, value }
   }))
   const missing = resolved.filter((part) => part.value === undefined || part.value === '')
   if (missing.length > 0) {
+    const sourceHint = resolver === undefined
+      ? 'through the launching environment (no credentials seam is configured)'
+      : 'through the credentials service (a credentials seam is configured; the launching environment is not consulted)'
     throw new TradingServiceError(
       'TRADING_CREDENTIALS_MISSING',
       `connector-okx: missing OKX ${config.env} credentials — provide `
         + missing.map((part) => `${part.slot}=${part.ref}`).join(', ')
-        + ` through the credentials service or the launching environment (env=${config.env}; `
+        + ` ${sourceHint} (env=${config.env}; `
         + 'demo and live API keys are separate and not interchangeable)',
     )
   }

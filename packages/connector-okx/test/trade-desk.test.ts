@@ -116,7 +116,8 @@ describe('OkxTradeService.listOpenOrders/listTradeFills（issue #40）', () => {
 
   it('凭证缺失 → fail-closed（TRADING_CREDENTIALS_MISSING），不静默返回空', async () => {
     const rest = new OkxRestClient({ baseUrl: 'https://okx.test', fetchImpl: routeByPath({}), clockSync: false, clockOffsetMs: 0 })
-    // 环境无 OKX_DEMO_* → resolveCredentials 环境回退也失败。
+    // 凭证解析失败由注入的 getCredentials 抛出（本用例不经 resolveCredentials）：
+    // 服务层不吞错、不静默返回空，原样透传结构化错误。
     const trade = new OkxTradeService(makeServiceCtx(), { client: rest, config: baseConfig(), getCredentials: () => resolveFailing() }, 'test-trade')
     await expect(trade.listOpenOrders()).rejects.toMatchObject({ code: 'TRADING_CREDENTIALS_MISSING' })
     function resolveFailing(): Promise<never> {

@@ -51,8 +51,8 @@ const MARKET_ARGS: PlaceOrderArgs = { instId: 'btc-usdt', side: 'buy', type: 'ma
 const DEMO_REF_NAMES = ['OKX_DEMO_API_KEY', 'OKX_DEMO_SECRET_KEY', 'OKX_DEMO_PASSPHRASE'] as const
 
 /** 启动环境隔离：临时清空这些变量，结束后按原值（含「原本未设置」）恢复。
- *  resolveCredentials 对 resolver 未命中的 ref 会回退 process.env，不隔离就等于
- *  把操作者的 ambient OKX_DEMO_* 当成用例前提。 */
+ *  只有「完全无 credentials seam」的回落路径才读 process.env；有 seam 的用例把
+ *  ambient 值铺回来，正是要证明它不参与解析（有 seam 即 fail-closed）。 */
 async function withEnvIsolated<T>(refs: readonly string[], run: () => Promise<T>): Promise<T> {
   const saved = refs.map((ref) => [ref, process.env[ref]] as const)
   for (const ref of refs) delete process.env[ref]
@@ -247,28 +247,45 @@ describe('resolveCredentials（三 ref，每次操作解析）', () => {
         return ref === 'OKX_DEMO_API_KEY' ? undefined : { value: 'v' }
       },
     }
-    // 清空 ambient demo 变量：实现会用 process.env 兜底未命中的 ref（见下一条用例），
-    // 不清空则「未命中」被操作者环境救活，带 OKX_DEMO_* 的机器上必红。
-    const error = await withEnvIsolated(DEMO_REF_NAMES, () =>
-      resolveCredentials(fakeCtx(resolver), baseConfig()).catch((e: unknown) => e))
+    // Given: credentials seam 已配置，仅 apiKey slot 未命中（其余两 slot 命中）
+    // When: 解析三值凭证
+    const error = await resolveCredentials(fakeCtx(resolver), baseConfig()).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(TradingServiceError)
     expect((error as TradingServiceError).code).toBe('TRADING_CREDENTIALS_MISSING')
     expect((error as TradingServiceError).message).toContain('OKX_DEMO_API_KEY')
     expect((error as TradingServiceError).message).toContain('env=demo')
   })
 
-  it('无 credentials seam 时回落启动环境变量（llm-deepseek 同款降级）', async () => {
-    // 隔离后再自己铺 ambient 值：结束后恢复操作者原值，而不是把变量删掉（那会把
-    // 环境泄漏给后续用例/进程）。
-    await withEnvIsolated(['OKX_DEMO_SECRET_KEY'], async () => {
+  it('管理员：有 credentials seam 且 slot 未命中 → 报错，ambient 环境变量不得兜底', async () => {
+    // Given: 启动环境里铺好了 OKX_DEMO_SECRET_KEY 的值（ambient 兜底的诱惑），
+    //        且 credentials seam 对该 slot 返回 undefined（其余两 slot 命中）
+    await withEnvIsolated(DEMO_REF_NAMES, async () => {
       process.env.OKX_DEMO_SECRET_KEY = 'ambient-secret'
       const resolver: CredentialResolverLike = {
         async resolve(ref) {
           return ref === 'OKX_DEMO_SECRET_KEY' ? undefined : { value: 'v' }
         },
       }
-      const creds = await resolveCredentials(fakeCtx(resolver), baseConfig())
-      expect(creds.secret).toBe('ambient-secret')
+      // When: 解析三值凭证
+      const error = await resolveCredentials(fakeCtx(resolver), baseConfig()).catch((e: unknown) => e)
+      // Then: 按 ref 名报 TRADING_CREDENTIALS_MISSING，绝不静默用 ambient 值补位——
+      //       显式配置与启动环境混用会让 demo 路径拿到 live key，反之亦然。
+      expect(error).toBeInstanceOf(TradingServiceError)
+      expect((error as TradingServiceError).code).toBe('TRADING_CREDENTIALS_MISSING')
+      expect((error as TradingServiceError).message).toContain('OKX_DEMO_SECRET_KEY')
+    })
+  })
+
+  it('管理员：完全没有 credentials seam 时回落启动环境变量（llm-deepseek 同款降级）', async () => {
+    // Given: ctx 无 credentials seam；启动环境给出 demo 组三值
+    await withEnvIsolated(DEMO_REF_NAMES, async () => {
+      process.env.OKX_DEMO_API_KEY = 'env-key'
+      process.env.OKX_DEMO_SECRET_KEY = 'env-secret'
+      process.env.OKX_DEMO_PASSPHRASE = 'env-passphrase'
+      // When: 解析三值凭证
+      const creds = await resolveCredentials(fakeCtx(undefined), baseConfig())
+      // Then: 三值逐 slot 取自启动环境变量（这是唯一允许读 process.env 的路径）
+      expect(creds).toEqual({ key: 'env-key', secret: 'env-secret', passphrase: 'env-passphrase' })
     })
   })
 
