@@ -131,6 +131,10 @@
 设备不会复活"（`edge-registry-restart.test.ts` 用真进程在同一文件路径上钉住了这一点）。
 edge 侧的形态校验在 CLI 与运维帧**各做一次**：通道是边界，边界不信任调用方。
 
+## kill 状态文件的刹车可达性（2026-10-02 修「假刹车」）
+
+三 uid 形态下曾出现过一组合取缺陷：`writeKillState` 落盘 **0600**（edge 单元 `UMask=0077` 也不给组可读位），执行核却以**组身份**读 ⇒ EACCES；而 `readKillState` 把一切读失败当 `no-state`（fail-open）⇒ 带外 kill 对核心不生效。现改为：写入端显式 `chmod 0o640`（`KILL_STATE_FILE_MODE`，chmod 不受 UMask 掩蔽）；读取端**只有 ENOENT** 才是「未 kill」，EACCES/坏 JSON 一律按**已 kill 且已暂停**处理（与看门狗同一条不对称纪律：「读不到刹车」≠「没有刹车」）。端到端用例：kill 落盘后 `chmod 000` 再读仍判 `killed=true`（修复前回落 `no-state`）。
+
 ## 被否决的方案
 
 - **cookie 会话**：浏览器自动带凭据 ⇒ 引入 CSRF 面，且与"设备"模型不匹配。

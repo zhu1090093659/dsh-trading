@@ -20,6 +20,10 @@
 | 驾驶舱 | packages/cockpit：**独立 SPA**（零依赖、不复用 client-ui-*），由 bot 的 edge 行托管；只调 /v1/cards 与 /v1/commands |
 | 移动端 | apps/mobile（独立 npm 工程，不进 pnpm workspace）：契约 ./core 入口 + 配对 + SecureStore + 首屏流程；60 例测试 + Metro 真打包 599 modules |
 | systemd 台架 | scripts/systemd-units-check.mjs（六类静态判据，退出码即结论）+ 人执行安装清单（deploy/README.md）。**本机无 systemd，安装未做** |
+| 假刹车修复 | edge kill 状态写 0o640（组可读）+ 读取端仅 ENOENT 视为未 kill（EACCES/坏 JSON ⇒ 已 kill 且已暂停）；复现 `pnpm --filter @dshtrading/tradectl exec vitest run test/edge.test.ts test/degradation.test.ts`（38 例，含 chmod 000 端到端）|
+| 部署缺口修复 | bot 单元独立 home（StateDirectory=dsh-trading-bot）+ 核心单元显式 `DSH_TRADING_AUTHORITY_DIR`；复现 `node scripts/systemd-units-check.mjs`（全绿）|
+| 驾驶舱补完 | 12 封闭卡片类型全渲染（补 mandate/journal/system 三类）、字段排版、卡片动作接线、设备配对 + Bearer 令牌；截图 `.local/acceptance/cockpit-2026-10-02/`（不入库，本机）；复现 `cd packages/cockpit && npx vitest run`（23 例）|
+| 两形态对照 | 配了 bot ⇒ 纯客户端：`node desktop/scripts/attach-electron-drill.mjs`（窗口加载远端 bot、本地 host 零命中，2/2）；没配 bot ⇒ 本地 host 保持现状：`node desktop/scripts/attach-drill.mjs`（6/6 含回滚与坏配置）；不混显判据：contract 55 例（source-guard 跨源拒绝）|
 
 ## 必须知道的 fail-closed 不变量（改代码前先读）
 
@@ -37,7 +41,7 @@
 - **第 3 档小额 live**：主网凭证 + **人本人** pnpm authority:sign + 金额上限 + 在环。
 - **带外退出演练**：卡片硬要求人在环。
 - **推送 main**：需明确授权（本机 main 领先 origin 且从未推送）。
-- 已知缺口（见看板卡 cf869789）：**edge kill 的 fail-open（"假刹车"，最高优先）**、三 uid 下宿主 home 冲突、三个单元未带 DSH_TRADING_AUTHORITY_DIR、驾驶舱功能/视觉未打磨、两形态对照验收未做、L0 下单路径未接线。
+- 已知缺口（见看板卡 cf869789）：~~edge kill 的 fail-open~~（**已修 2026-10-02**）、~~三 uid 下宿主 home 冲突~~（**已修**）、~~三个单元未带 DSH_TRADING_AUTHORITY_DIR~~（**核心单元已带**；人建平面后生效）、~~驾驶舱功能/视觉未打磨~~（**功能补完**：12 类型全渲染 + 配对鉴权；视觉仍骨架级）、~~两形态对照验收未做~~（**已做**，见上表）、L0 下单路径未接线（**结构上尚不存在**：openRiskWithinMandate 与 createRiskGate 的无调用点是当前正确状态，接线点 = 将来的 L0 派发器与 safe boot 生产装配；理由与复现见 docs/ops/ops-runbook.md「接线台账」）、移动端设备项（真机/推送/生物识别，需设备与人）。
 
 ## 怎么验证（照 AGENTS.md 的资源纪律）
 

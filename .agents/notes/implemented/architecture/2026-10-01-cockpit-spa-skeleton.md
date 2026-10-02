@@ -197,9 +197,16 @@
 **仍未做的**：`--shell-dir` 是显式的（不给就一条静态路径都不公开），`deploy/systemd` 里还没有这
 一行与壳产物的部署步骤；壳的 `.map` 与图标资源目前取决于构建产物里有什么（构建配置未改过）。
 
+## 12 类型全渲染 + 鉴权接线（2026-10-02 补完）
+
+- **分块过滤曾静默丢三类已知卡片**：`mandate-status`/`journal-gap`/`system-notice` 是已知类型，`UnknownCards` 放行它们，但按 cardType 分块的各块都不收 —— 协议层「不丢弃」保证必须在渲染层也成立。现补「额度与账本」「系统通告」两块，并用一枚钉子测试遍历契约 12 个 `CARD_TYPES` 断言每个类型都在壳里出现。
+- **字段与动作从骨架级补成真的**：`CardView` 渲染 12 个封闭 FieldKind（时间 ISO / 布尔是否 / 货币百分比带单位），动作按钮带 `data-action-kind` 并接到 `POST /v1/commands`（params 带 cardId；App 层二次确认）。A0 六项的界面可达：kill/pause/resume/flatten 在控制区、ack/升级应答走卡片动作、status 由 desk/risk-state/freshness 卡表达、ping 的连通性由刷新按钮表达。
+- **设备鉴权接进来了**：此前 App 裸取数（无 Authorization）。现 `/pair/redeem` 配对 → 令牌存 localStorage（不是 cookie）→ `/v1/*` 带 Bearer；401 清令牌回配对门。caps 对齐契约 12 个动作 —— caps 少报会让服务端把对应 Action 剥掉（升级卡的 approve/reject 曾这样消失）。
+- **截图证据**：`.local/acceptance/cockpit-2026-10-02/full-12-types.png`（12 类型 + 字段 + 升级动作 + 未识别卡不可操作）与 `pairing-gate.png`（未配对门），经 `drill/serve.mjs`（回环夹具服务，含令牌注入路由）+ headless Chrome 实拍。
+
 ## 未验证项（如实标注）
 
-- ~~尚无业务内容~~ **五块信息架构已实现**（见下节）；**ui-screenshot-verify 截图仍未做**。
+- ~~尚无业务内容~~ **五块信息架构已实现**（见下节）；~~ui-screenshot-verify 截图仍未做~~ **已做**（见下节 2026-10-02 补完节，含 12 类型全渲染与配对门两态截图）。
 - ~~headless Chrome 渲染验证未做~~ **已做**（见下节），并抓出两个真问题、都已修。
 - ~~A0 端到端复验~~ **已做**（见下节：真实 edge + 业务面全挂 + A0 六路径全 200）；**生产形态**的带外演练仍按 deploy/README.md 四类演练执行（需 root 安装后）。
 - 首屏：构建期闸门 + 本地回环实测 + 限速实测（方法结论见下节）；**真实网络条件下的 TTFB/请求数测量仍未做**（且限速法已证明测不了这个量级）。压缩已做（gzip + br）。

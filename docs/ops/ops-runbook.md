@@ -252,43 +252,48 @@
 
 ## 接线台账：tradectl 的工厂函数谁在用（2026-10-02 全仓扫描，按 pnpm wiring:ledger 实测重生成）
 
-**实测**：合计 26 个工厂：生产已接线 17、仅演练 8、**无调用点 1**
+**实测（2026-10-02 下午复扫）**：合计 27 个工厂：生产已接线 17、仅演练 8、**无调用点 2**
 
-| 工厂 | 生产引用 | 演练引用 | 判定 |
-|---|---|---|---|
-| 工厂函数 | 生产引用 | 演练引用 | 测试引用 |
-| createRiskGate (safe-boot.ts) | 0 | 0 | 2 |
-| createStaticShell (edge.ts) | 1 | 0 | 4 |
-| createMemorySourceRegistry (market-source.ts) | 1 | 0 | 5 |
-| createTokenBucket (alignment.ts) | 2 | 0 | 2 |
-| createClockDriftDetector (clock-drift.ts) | 2 | 0 | 8 |
-| createVenueErrorStreak (detectors.ts) | 0 | 2 | 4 |
-| createIdempotencyLedger (idempotency.ts) | 2 | 0 | 2 |
-| createWatchdog (watchdog.ts) | 0 | 2 | 2 |
-| createFrameDecoder (frame-codec.ts) | 3 | 0 | 5 |
-| createPairingClient (pairing-client.ts) | 0 | 3 | 2 |
-| createCountingVenue (shadow.ts) | 0 | 3 | 2 |
-| createShadowDesk (shadow.ts) | 0 | 4 | 2 |
-| createThrottledFanout (triggers.ts) | 4 | 0 | 8 |
-| createTriggerPump (pump.ts) | 5 | 0 | 4 |
-| createDeskProcess (desk-process.ts) | 2 | 4 | 4 |
-| createV1StreamForDevice (stream-v1.ts) | 0 | 6 | 3 |
-| createUdsServer (uds.ts) | 3 | 3 | 2 |
-| openRiskAllowedFor (risk-gate.ts) | 5 | 2 | 8 |
-| createV1Stream (stream-v1.ts) | 0 | 7 | 5 |
-| createDeskLoop (desk-loop.ts) | 3 | 6 | 9 |
-| createDeviceRegistry (edge.ts) | 2 | 7 | 12 |
-| createEdgeGateway (edge.ts) | 2 | 8 | 10 |
-| createStreamingFeed (ws-feed.ts) | 0 | 12 | 4 |
-| createJournal (journal.ts) | 5 | 13 | 26 |
-| createAlignment (alignment.ts) | 3 | 17 | 17 |
-| openLedgers (db.ts) | 2 | 20 | 37 |
+| 工厂 | 生产引用 | 演练引用 | 测试引用 | 判定 |
+|---|---|---|---|---|
+| openRiskWithinMandate (mandate.ts) | 0 | 0 | 2 | 无调用点 |
+| createRiskGate (safe-boot.ts) | 0 | 0 | 2 | 无调用点 |
+| createStaticShell (edge.ts) | 1 | 0 | 4 | 生产已接线 |
+| createMemorySourceRegistry (market-source.ts) | 1 | 0 | 5 | 生产已接线 |
+| createTokenBucket (alignment.ts) | 2 | 0 | 2 | 生产已接线 |
+| createClockDriftDetector (clock-drift.ts) | 2 | 0 | 8 | 生产已接线 |
+| createVenueErrorStreak (detectors.ts) | 0 | 2 | 4 | 仅演练在用 |
+| createIdempotencyLedger (idempotency.ts) | 2 | 0 | 2 | 生产已接线 |
+| createWatchdog (watchdog.ts) | 0 | 2 | 2 | 仅演练在用 |
+| createFrameDecoder (frame-codec.ts) | 3 | 0 | 5 | 生产已接线 |
+| createPairingClient (pairing-client.ts) | 0 | 3 | 2 | 仅演练在用 |
+| createCountingVenue (shadow.ts) | 0 | 3 | 2 | 仅演练在用 |
+| createShadowDesk (shadow.ts) | 0 | 4 | 2 | 仅演练在用 |
+| createThrottledFanout (triggers.ts) | 4 | 0 | 8 | 生产已接线 |
+| createTriggerPump (pump.ts) | 5 | 0 | 4 | 生产已接线 |
+| createDeskProcess (desk-process.ts) | 2 | 4 | 4 | 生产已接线 |
+| createV1StreamForDevice (stream-v1.ts) | 0 | 6 | 3 | 仅演练在用 |
+| createUdsServer (uds.ts) | 3 | 3 | 2 | 生产已接线 |
+| openRiskAllowedFor (risk-gate.ts) | 5 | 2 | 8 | 生产已接线 |
+| createV1Stream (stream-v1.ts) | 0 | 7 | 5 | 仅演练在用 |
+| createDeviceRegistry (edge.ts) | 1 | 7 | 16 | 生产已接线 |
+| createDeskLoop (desk-loop.ts) | 3 | 6 | 9 | 生产已接线 |
+| createEdgeGateway (edge.ts) | 2 | 8 | 10 | 生产已接线 |
+| createStreamingFeed (ws-feed.ts) | 0 | 12 | 4 | 仅演练在用 |
+| createJournal (journal.ts) | 5 | 13 | 26 | 生产已接线 |
+| createAlignment (alignment.ts) | 3 | 17 | 17 | 生产已接线 |
+| openLedgers (db.ts) | 2 | 20 | 37 | 生产已接线 |
 
-**清单**：无调用点清单：createRiskGate
+**清单**：无调用点清单：openRiskWithinMandate、createRiskGate
 
 **复现**：pnpm wiring:ledger（脚本 scripts/wiring-ledger.mjs，自带 3 例自测）。
 **读法**：生产引用＝src/ 下被非定义文件引用；仅演练＝只在 drill/test 里用；无调用点＝需要装配或需要给出理由。
-**2026-10-02 更正**：createFrameDecoder 曾被记为「无调用点」，实为**假阴性** —— 唯一调用点在定义文件自身里而脚本排除定义文件；已把帧层拆为 src/frame-codec.ts（行为零变化），引用图自此如实。createRiskGate 仍为无调用点是**正确结论**（唯一 admitter safeBoot 只在演练里跑，且生产里「新增风险」的动作并不存在）。
+**2026-10-02 更正**：createFrameDecoder 曾被记为「无调用点」，实为**假阴性** —— 唯一调用点在定义文件自身里而脚本排除定义文件；已把帧层拆为 src/frame-codec.ts（行为零变化），引用图自此如实。
+
+**两个无调用点的可核对理由（2026-10-02 复核，均为当前正确状态，不是遗漏）**：
+
+- `createRiskGate`（safe-boot.ts）：唯一开门人 `safeBoot` 需要 venue 对账；生产装配（`bin/core.mjs`）尚无 venue 连接，启动期只有带外 kill 闸门（`gateNewRisk`）。safeBoot 一进生产启动序列，`createRiskGate` 自然获得生产调用点 —— 接线点是「safe boot 进程装配」，不是新发明。
+- `openRiskWithinMandate`（mandate.ts）：它是**新增风险**的额度判据（缺声明 / Infinity / NaN ⇒ 拒绝），而生产里「新增风险」的动作并不存在 —— desk-process 是 dry-run 白名单装配（选项表里没有任何键能承载下单能力，§13 #3/#4）。它的接线点是**将来出现的 L0 派发器**：那条路径落地的同一批变更**必须**消费 `resolveMandateLimits`/`openRiskWithinMandate`，并把 `safeBoot` 接进启动序列；在那之前把它接进 trigger 派发或 shadow 装置都是假接线（那里不产生新风险）。
 
 ## 演练记录：P5 三档验收 · 第 2 档 paper（已通过 2026-10-02，记录见下）
 

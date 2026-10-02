@@ -82,6 +82,13 @@
 
 **仍未演练**：带外退出（需要 venue 侧原生保护先存在，属 P3/P5）；生产形态下的 uid 隔离（需要人执行系统级安装）。
 
+## 台架查出的两处部署缺口（2026-10-02 已修）
+
+静态校验台架（`scripts/systemd-units-check.mjs`）在当时的单元上查出两处，均已修复、记录留在 deploy/README.md：
+
+1. **宿主单元起不来**：`dsh-trading-bot.service` 的 `DSH_HOME`/`ReadWritePaths` 原先落在核心的 `StateDirectory=dsh-trading`（0700，core:dsh-trade）里面，`dsh-trade-bot` 连穿越都做不到。现给宿主独立 home：`StateDirectory=dsh-trading-bot`（0750）+ `DSH_HOME=/var/lib/dsh-trading-bot` + `ReadWritePaths=/var/lib/dsh-trading-bot`；台架全绿。
+2. **核心单元显式声明授权平面**：`dsh-tradectl.service` 加 `Environment=DSH_TRADING_AUTHORITY_DIR=/var/lib/dsh-trading-authority`。平面未建/未签署时判定照样拒绝（grant 校验不通过，fail-closed 不变）；人建好平面后无需再改单元。agent 宿主单元**不得**指向平面（台架判红，属主隔离边界）。
+
 ## 被否决的方案
 
 - **违反四条禁止降级时只 warn**：等于让"开发形态"在生产里默认成立，违反 #18 的立意。
