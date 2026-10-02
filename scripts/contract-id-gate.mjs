@@ -30,16 +30,17 @@ const EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'
  */
 const LITERAL = /ord_(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9a-f]{6,})/g
 /**
- * 整文件豁免：只放"必须写出这些字面量"的文件 ——
+ * 整文件豁免：只放"整个文件都必须写出这些字面量"的文件 ——
  *   - 契约包的 factory/正则自身（唯一允许出现前缀的地方）；
- *   - 门禁自测（它必须包含"能被抓出来"的样本，否则这条门禁无法被证明会红）；
- *   - contract.test.ts（它断言 isOrderId 必须拒绝哪些形态，样本必须能被写出来）。
+ *   - 门禁自测（它必须包含"能被抓出来"的样本，否则这条门禁无法被证明会红）。
  * 其余测试文件里的伪造样本一律走**行内** id-gate-allow 标注（标注只在测试文件生效）。
+ * contract.test.ts 曾为让门禁在现状下为绿被整文件豁免过（2026-10-02 验收修复轮的临时口子）：
+ * 它只有一个字面量、且只在一行上，整文件豁免会顺带永久放行该文件里将来新增的写死字面量 ——
+ * 现在改成只给那一行加标注（门禁自测钉住"它不得回到整文件豁免名单"）。
  */
-const ALLOWED_FILES = [
+export const ALLOWED_FILES = [
   'packages/contract/src/ids.ts',
   'packages/contract/test/id-gate.test.ts',
-  'packages/contract/test/contract.test.ts',
 ]
 const ALLOW_MARKER = 'id-gate-allow'
 /**

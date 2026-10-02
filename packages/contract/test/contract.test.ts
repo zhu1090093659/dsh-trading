@@ -45,7 +45,14 @@ describe('id 冻结面', () => {
     // Given 若干伪形态
     // When 校验
     // Then 全部拒绝（"只比较"要求形态必须唯一确定）
-    for (const bad of ['ord_1', 'order_1234', 'ord_00000000-0000-0000-0000-000000000000', 'ord_zzzzzzzz-zzzz-4zzz-8zzz-zzzzzzzzzzzz', 'ORD_' + 'a'.repeat(8) + '-aaaa-4aaa-8aaa-aaaaaaaaaaaa']) {
+    // 全零占位这一行单独加 id-gate-allow 标注：不放整文件豁免（契约见 scripts/contract-id-gate.mjs）
+    for (const bad of [
+      'ord_1',
+      'order_1234',
+      'ord_00000000-0000-0000-0000-000000000000', // id-gate-allow
+      'ord_zzzzzzzz-zzzz-4zzz-8zzz-zzzzzzzzzzzz',
+      'ORD_' + 'a'.repeat(8) + '-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    ]) {
       expect(isOrderId(bad), bad).toBe(false)
     }
   })

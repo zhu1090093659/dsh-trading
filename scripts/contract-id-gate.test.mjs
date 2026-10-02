@@ -6,9 +6,10 @@
  * 这里只钉**文件作用域**与**字面量形态**两条边界。
  * 样本一律运行期拼接：完整字面量不该出现在任何源码里（含本文件）—— 门禁会扫到它。
  */
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error 门禁脚本是 .mjs，无类型声明
-import { violationsIn } from './contract-id-gate.mjs'
+import { ALLOWED_FILES, violationsIn } from './contract-id-gate.mjs'
 
 const SRC = 'packages/tradectl/src/desk-order.ts'
 const V4 = 'ord_' + '12345678-1234-4abc-8def-1234567890ab'
@@ -40,6 +41,26 @@ describe('contract-id-gate 的文件作用域', () => {
     const hits = violationsIn(source, 'packages/contract/test/a.test.ts')
     // Then 放行（伪造样本是测试的正当需求）
     expect(hits).toEqual([])
+  })
+
+  it('管理员：整文件豁免只留"整文件都必须写出字面量"的两个文件（契约包测试不得回到名单）', () => {
+    // Given 门禁的整文件豁免名单
+    // When 看它包含谁
+    // Then 只有契约包的 factory/正则自身与门禁自测；契约包测试走行内标注
+    // （2026-10-02 验收修复轮曾为让门禁在现状下为绿把 contract.test.ts 整文件豁免，
+    //  那等于它将来新增的写死字面量也永久放行 —— 行内标注才是"只放这一行"）
+    expect(ALLOWED_FILES).toEqual(['packages/contract/src/ids.ts', 'packages/contract/test/id-gate.test.ts'])
+  })
+
+  it('管理员：契约包测试靠行内标注放行，删掉标注即命中（豁免没有整文件化）', () => {
+    // Given 契约包测试的真实内容（它必须能写出全零占位这种伪造样本）
+    const text = readFileSync(new URL('../packages/contract/test/contract.test.ts', import.meta.url), 'utf8')
+    // When 过门禁；再抽掉行内标注重过一次
+    const hits = violationsIn(text, 'packages/contract/test/contract.test.ts')
+    const withoutMarker = violationsIn(text.split(' // id-gate-allow').join(''), 'packages/contract/test/contract.test.ts')
+    // Then 带标注零命中；不带标注恰好命中那一处（否则"行内标注"只是摆设）
+    expect(hits).toEqual([])
+    expect(withoutMarker.map((hit) => hit.sample)).toEqual([ZERO])
   })
 })
 
