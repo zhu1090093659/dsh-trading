@@ -58,6 +58,12 @@ jobs:
       # desktop/ 是独立 npm 工程（不在 pnpm workspace），pnpm -r test 覆盖不到它，
       # 其 21 个 node:test 用例（runtime payload 解包、host 符号规范化）此前从未进 CI。
       - run: pnpm test:desktop
+      # iOS 证据跑批脚本（apps/ios-native/docs/evidence/run-all-tests.sh）的门禁自测：
+      # 用 xcodebuild/xcrun/xcodegen 桩（scripts/ios-native/evidence-stubs/）驱动真实脚本，
+      # 断言「坏源 ⇒ 判红且不跑旧 bundle」「取锁失败 ⇒ exit 75 且不动别人的锁」等七个场景。
+      # 2026-10-02 IOS-12 验收实证过一次假绿：build exit=65 仍跑了上一次的旧 xctest 并判绿。
+      # 纯 Node + bash，不需要 Xcode，所以能进 ubuntu static-gates。
+      - run: pnpm test:ios-evidence
       # id 冻结面门禁（P4 步骤 1）：源码里不得写死 orderId 字面量——契约是「只比较不解析」，
       # 一旦某处写死就有了语义，格式从此不能改。契约包自身的 factory/正则与带 id-gate-allow
       # 标注的测试样本除外。此前这个门禁建好了却没接线（与散文无异），本轮补上。

@@ -160,7 +160,7 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
 
 ### CI 接线（不需要 Xcode）
 
-仓根 `scripts/ios-native/` 有两条**纯 Node** 门禁，跑在 `ci.yml` 的 static-gates job 里：
+仓根 `scripts/ios-native/` 有三条**纯 Node** 门禁（都不需要 Xcode），跑在 `ci.yml` 的 static-gates job 里：
 
 - `node scripts/ios-native/check-contract-drift.mjs` —— **纯 Node 静态防漂移门禁**：直接 import TS 契约取权威真值，
   解析 `Sources/Contract/*.swift` 的封闭枚举/查表/上限/常量、数值域 Double 规范与 UTF-16 计量规则逐项比对；
@@ -171,10 +171,15 @@ packages/contract/src/*.ts  ──(scripts/gen-contract-snapshot.mjs)──▶  
   第三方依赖同样拦下。识别**属性前缀与种类词**：`@_exported import SwiftUI`（把禁层模块透传出去）、
   `@testable import DshTradingFeatures`、`import struct SwiftUI.Color`（模块名取 `SwiftUI` 而不是关键字 `struct`）
   都会被抓住并给出正确诊断。
-- 两条门禁都有自测（`scripts/ios-native/*.test.mjs`，夹具驱动）：真契约副本 ⇒ 绿、改常量 ⇒ 红并点名、
-  缺文件 ⇒ fail-closed 红、`@_exported` 绕过 ⇒ 红。
+- `node scripts/ios-native/check-evidence-runner.mjs`（`pnpm test:ios-evidence`）—— **证据跑批脚本的门禁自测**：
+  用 [evidence-stubs/](../../scripts/ios-native/evidence-stubs/) 里的 xcodebuild / xcrun / xcodegen 桩驱动
+  `docs/evidence/run-all-tests.sh` 本体，断言七个场景：坏源 ⇒ 判红且**不跑旧 bundle**、build 成功但产物缺失或陈旧 ⇒ 判红、
+  取锁失败 ⇒ **exit 75 且不动别人的锁**、缺报告 ⇒ 判红、六目标全绿 ⇒ exit 0。
+  存在理由：2026-10-02 IOS-12 验收实证过一次假绿 —— Domain / Offline 的 build exit=65，脚本仍跑上一次的旧 xctest 并判绿。
+- 前两条门禁都有自测（`scripts/ios-native/*.test.mjs`，夹具驱动）：真契约副本 ⇒ 绿、改常量 ⇒ 红并点名、
+  缺文件 ⇒ fail-closed 红、`@_exported` 绕过 ⇒ 红；证据脚本门禁的自测用「把真脚本改回旧假绿形态 ⇒ 必须红」证明它不空转。
 
-两者都验证过「故意改错 ⇒ 红」（改 `kill` 的确认档位、给 Transport 加 `import SwiftUI`）。
+这三条都验证过「故意改错 ⇒ 红」（改 `kill` 的确认档位、给 Transport 加 `import SwiftUI`）。
 CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift 断言留本机 `./scripts/test-contract.sh`（用例数随契约扩展）。
 
 ## 5. App 组合根（`Sources/App/`）

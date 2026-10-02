@@ -35,6 +35,7 @@
     "test:audit": "node scripts/test-audit.mjs --check",
     "test:audit:report": "node scripts/test-audit.mjs --report",
     "test:desktop": "node --test \"desktop/tests/*.test.mjs\"",
+    "test:ios-evidence": "node scripts/ios-native/check-evidence-runner.mjs",
     "test:scripts": "vitest run scripts --passWithNoTests",
     "ui:check": "node scripts/ui-functional-check.mjs",
     "version-packages": "changeset version",

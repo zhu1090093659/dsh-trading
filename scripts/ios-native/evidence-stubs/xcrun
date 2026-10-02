@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# 门禁自测桩：冒充 xcrun（xctest / simctl spawn 两种形态），只打印一份报告并给退出码。
+set -u
+echo "test $*" >> "$STUB_CALLS"
+mode="${STUB_XCRUN_MODE:-ok}"
+if [ "$mode" = 'fail-one' ]; then
+  echo "Executed 7 tests, with 1 failure (1 unexpected) in 0.01 (0.01) seconds"
+  exit 1
+fi
+if [ "$mode" = 'no-report' ]; then
+  echo "Test Suite started."
+  exit 0
+fi
+echo "Executed 7 tests, with 0 failures (0 unexpected) in 0.01 (0.01) seconds"
+exit 0

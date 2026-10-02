@@ -11,12 +11,37 @@
 
 会重新构建六个测试目标、逐个执行，并把日志写进 docs/evidence/logs/，末尾打印汇总。
 
+### 判据（2026-10-02 硬化，IOS-13）
+
+每个目标都**先删自己的旧 .xctest**，再 `build-for-testing`；脚本的退出码就是结论：
+
+| 情形 | 行为 |
+|---|---|
+| 任一目标 build 非 0 | 立即点名该目标并非零退出（exit 1），**绝不再跑 xctest**（旧产物已删） |
+| build 成功但产物路径缺失，或产物 mtime 早于本次 build 开始 | 判红，不执行 xctest |
+| xctest 退出码非 0，或日志里没有 `Executed N tests, with M failures`（缺报告），或 M ≠ 0 | 判红 |
+| 六目标 build / test / 报告全绿 | exit 0 |
+
+- 每个目标分别记录 build / test 两个退出码，末尾打印 `=== matrix ===`；任一项非零 ⇒ 脚本整体非零
+  （build 失败立即中止，test 失败继续把六目标的账记完）。
+- 重活锁 `build/.heavy.lock`：取不到（默认重试 60 × 10s）就 **exit 75**，不会"无锁也跑"；
+  只有本进程确实创建了锁才在 trap 里清理 —— 不会删掉别人持有的锁。
+- 退出码：`0` 全绿、`1` 判红、`75` 取锁失败。
+
+为什么必须先删旧 bundle：2026-10-02 IOS-12 验收抓到一次**假绿** —— Domain / Offline 的
+`build-for-testing` exit=65，脚本仍执行上一次留下的旧 `.xctest` 并打印 `0 failures`，整体 exit 0。
+
+这条判据有机检自测（**桩驱动，不需要 Xcode**）：`pnpm test:ios-evidence`
+（[check-evidence-runner.mjs](../../../../scripts/ios-native/check-evidence-runner.mjs) +
+[evidence-stubs/](../../../../scripts/ios-native/evidence-stubs/)）。它现场把坏源 / 脏缓存 / 占用锁 /
+缺报告喂给**真实脚本**，断言脚本红、且不跑旧 bundle；接在 `ci.yml` 的 static-gates 里。
+
 为什么不用 xcodebuild test：本机 DSH 文件沙箱下，xcodebuild 的测试启动器拿不到 PTY
 （Pseudo Terminal Setup Error），而 xcrun simctl spawn <udid> xctest <bundle> 直接跑同一个
 测试 bundle 可行。同理 Swift 宏插件需要 OTHER_SWIFT_FLAGS='-disable-sandbox' 才能在沙箱内加载；
 不经 xcodebuild test 启动器的路径因此是本机能拿到真实测试输出的唯一通路。
 
-### 本轮结果（2026-10-02，分支 feat/native-ios-mobile）
+### 历史结果（2026-10-02，分支 feat/native-ios-mobile —— 绑当时的 HEAD，**不能沿用到新 HEAD**）
 
 本轮（16:01–16:08，revision 改 Double 之后重跑）六个目标的结果：
 

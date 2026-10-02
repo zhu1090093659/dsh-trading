@@ -89,6 +89,7 @@ const MUST_BE_WIRED = [
   'test:audit',
   'test:scripts',
   'test:desktop',
+  'test:ios-evidence',
   'contract-id:check',
   'home-guard:check',
   'coverage:check',

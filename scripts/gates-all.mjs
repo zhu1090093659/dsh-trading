@@ -35,6 +35,8 @@ const GATES = [
   { name: 'test:audit', command: 'pnpm', args: ['test:audit'] },
   { name: 'test:scripts', command: 'pnpm', args: ['test:scripts'] },
   { name: 'test:desktop', command: 'pnpm', args: ['test:desktop'] },
+  // iOS 证据跑批脚本的门禁自测（桩驱动，不需要 Xcode）：build 失败必须传播、不许沿用旧 bundle
+  { name: 'test:ios-evidence', command: 'node', args: ['scripts/ios-native/check-evidence-runner.mjs'] },
   { name: 'coverage:check', command: 'pnpm', args: ['coverage:check'] },
   { name: 'patch-id:check', command: 'pnpm', args: ['patch-id:check'] },
   { name: 'live-trading:check', command: 'pnpm', args: ['live-trading:check'] },

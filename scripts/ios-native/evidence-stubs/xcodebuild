@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# 门禁自测桩：冒充 xcodebuild，只认 -scheme / -destination / -derivedDataPath。
+# 它同时扮演"编译器"：夹具树里出现坏源就交出非 0 —— 让坏源场景有真实触发点。
+set -u
+scheme=''
+destination=''
+derived='build/DerivedData'
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -scheme) scheme="$2"; shift 2 ;;
+    -destination) destination="$2"; shift 2 ;;
+    -derivedDataPath) derived="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+echo "build $scheme" >> "$STUB_CALLS"
+mode="${STUB_XCODEBUILD_MODE:-ok}"
+if [ -f Tests/DomainTests/Broken.swift ] && [ "$scheme" = 'DshTradingDomainTests' ]; then
+  echo "Tests/DomainTests/Broken.swift:1:1: error: injected bad source" >&2
+  exit 65
+fi
+if [ "$mode" = 'no-artifact-domain' ] && [ "$scheme" = 'DshTradingDomainTests' ]; then exit 0; fi
+products="$derived/Build/Products/Debug"
+if [ "$destination" != "platform=macOS" ]; then products="$products-iphonesimulator"; fi
+bundle="$products/$scheme.xctest"
+rm -rf "$bundle"
+if [ "$destination" = "platform=macOS" ]; then
+  binary_dir="$bundle/Contents/MacOS"
+else
+  binary_dir="$bundle"
+fi
+mkdir -p "$binary_dir"
+echo "#!/bin/sh" > "$binary_dir/$scheme"
+echo "exit 0" >> "$binary_dir/$scheme"
+chmod +x "$binary_dir/$scheme"
+if [ "$mode" = 'stale-domain' ] && [ "$scheme" = 'DshTradingDomainTests' ]; then
+  touch -t 200001010000 "$binary_dir/$scheme"
+fi
+exit 0
