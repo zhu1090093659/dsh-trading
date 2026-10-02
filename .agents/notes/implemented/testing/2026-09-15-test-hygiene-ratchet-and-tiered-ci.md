@@ -67,7 +67,8 @@ desktop 是独立 npm 工程（`pnpm-workspace.yaml` 只收 `packages/*`），`p
 **4. 覆盖率棘轮 `scripts/coverage-gate.mjs`（v8，all=true）。**
 逐包跑 `vitest run --coverage`（`--coverage.all` + `include=src/**`，未测文件按
 0% 计入，才是真实覆盖面），按 metric 的 total/covered 求和聚合，与
-`scripts/coverage-baseline.json` 比较，任何指标下降即红。基线：
+`scripts/coverage-baseline.json` 比较，任何指标下降即红。**任何一个包产出不了覆盖率报告同样即红**
+（2026-10-02 修，见下「门禁可信度三修」）。基线：
 **branches 73.85% / lines 61.96% / functions 71.47% / statements 61.96%**。
 
 为什么逐包而不是 root 单进程：`pnpm -r test` 与 root `vitest run` 语义不同——
@@ -127,7 +128,7 @@ typecheck-gate / i18n / test:audit / test:scripts / test:desktop；build-desktop
 
 Tier 1 的 `static-gates` job 里新增两步（见 .github/workflows/ci.yml）：
 
-- **`pnpm contract-id:check`** —— id 冻结面门禁：源码里不得写死 orderId 字面量。契约是「只比较不解析」，一旦某处写死或解析，它就获得了语义，格式从此不能改。契约包自身的 factory/正则与带 `id-gate-allow` 标注的测试样本除外（已实测 725 个文件无违规）。
+- **`pnpm contract-id:check`** —— id 冻结面门禁：源码里不得写死 orderId 字面量。契约是「只比较不解析」，一旦某处写死或解析，它就获得了语义，格式从此不能改。契约包自身的 factory/正则与带 `id-gate-allow` 标注的**测试文件**里的样本除外；2026-10-02 实测 806 个文件无违规，同日收紧了两处绕过口，见下「门禁可信度三修」。
   **补记一条教训**：这个门禁是 P4 步骤 1 建的，但**建好后一直没接进 CI** —— 一个不跑的门禁与散文无异。本轮补上。
 - **`node scripts/e2e-smoke.mjs`** —— 端到端冒烟包：带外 A0 在业务面全挂时仍可用、确定性 shadow 跑批逐字复现基线。**CI 里默认不带网络项**（`--with-network` 才加真实行情），所以不出网的 runner 也能绿；网络项留给人工。
 
@@ -188,3 +189,39 @@ scripts/gates-all.mjs 顺序跑 14 条门禁，**显式收集每条退出码**�
 2. **不要在同一步里"改完就 --update 基线"**：我修 4 条链接时把 `process/x.md` 写成了相对文件目录的错误形态（正确是 `../process/x.md`），随即 `--update` 把自己造的 2 条断链**洗进了基线**。识破方式很朴素：**核对算术** —— 22 条修掉 4 条就该是 18，而基线报 20 ⇒ 有 2 条是新造的。改对后基线回到 18，算术对上。
 
 **存量 18 条入基线**（archived 笔记里的历史断链 + bug-fix 笔记里 `../../desktop/…` 少写两级的路径），与 `typecheck-baseline.json` / `test-audit-baseline.json` 同一惯例：只拦新增。
+
+## 门禁可信度三修（2026-10-02）
+
+验收（`.local/acceptance/v5-hygiene.md` §3.1/§3.3、`.local/acceptance/v4-p4-p5.md` F4）实测到几处
+**门禁自己的可信度**缺口，同日修掉：
+
+**1. `coverage:check` 曾把"未验证"打成"通过"。** 某个包收集失败（依赖没构建、import 路径坏）时，
+旧版把它 push 进 failures 就 `continue`（等于移出聚合），判红时又只看 dropped ⇒ 该包的覆盖率
+**凭空消失**（不是变成 0）、剩余包的百分比反而可能上升，最后打印「通过（无指标下降）」并 exit 0。
+现在 `judge()` 把 failures（无报告的包）与 dropped（低于基线）**一起判红**，输出点名到包；
+`--update` 同样拒绝把无报告的包写进基线 —— 把"未验证"固化进基线等于把它洗成"已验证"。
+为可复跑新增测试缝：`--packages-dir` / `--coverage-dir` / `--baseline` / `--vitest-bin` /
+`--reuse-reports` / `--only=a,b`（子集模式不与仓库级基线比百分比，但"每个选中的包都必须有报告"照旧判红）。
+自测 `scripts/coverage-gate.test.mjs`（7 例）用**临时仓库根**构造"某包无报告"，不跑真覆盖率。
+
+**2. 真跑门禁的用例曾把机器负载算成代码缺陷。** `scripts/gates-all.test.mjs` 里 `--only home-guard:check`
+那条真的要起子进程跑门禁（实测 4.5~7.7s），vitest 默认超时 5000ms ⇒ 空闲绿、并发假红
+（验收实测 `1 failed | 79 passed`）。现在该用例显式 `60_000ms` 上界：**是上界不是期望耗时**，
+真卡死照样红，只是不再把负载抖动算成回归。任何"真的起子进程跑门禁"的 scripts/ 用例同理。
+
+**3. `contract-id:check` 的两个绕过口。** `id-gate-allow` 原先对**任意文件**豁免（生产源码里加一行
+注释即可关掉门禁）⇒ 现在只对测试文件（`test/`、`tests/` 目录，或 `*.test.*`/`*.spec.*` 命名）生效；
+字面量正则原先只认 v4 UUID（v1/v5 形态与全零占位漏网）⇒ 现在匹配「`ord_` + 任意版本 UUID」与
+「`ord_` + 6 位以上十六进制短字面量」，裸前缀、模板拼接（`ord_` 后接插值）、非十六进制后缀仍不误报。
+`packages/contract/test/contract.test.ts` 进整文件豁免（它断言 `isOrderId` 必须拒绝哪些形态，样本必须能被写出来）。
+
+**4. 主模块守卫的静默空转（同批修）。** `coverage-gate.mjs` 与 `contract-id-gate.mjs` 结尾的
+"是否主模块"判断原先直接比较 `process.argv[1]` 与 `import.meta.url`：经符号链接调用（macOS 的
+`/tmp`、`/var` 都是链接）时两者文字形态不同 ⇒ main() 根本不执行，进程**零输出、exit 0** ——
+门禁最坏的失败形态（"看起来跑过了"）。两侧现在都先 `realpathSync` 再比，并有回归用例。
+
+**验证（2026-10-02，`d9eeb3bf`）**：`npx vitest run scripts/coverage-gate.test.mjs scripts/gates-all.test.mjs
+scripts/contract-id-gate.test.mjs` = 3 文件 / 14 例全绿；`node scripts/test-audit.mjs --check` 无新增测试债；
+`node scripts/contract-id-gate.mjs` = 806 文件 / 0 违规；旧版对"两个包都没有报告"的场景实测 exit 0 +
+「通过（无指标下降）」，新版 exit 1 并点名两个包。
+
