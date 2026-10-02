@@ -115,6 +115,74 @@ final class ContractVectorTests: XCTestCase {
         }
     }
 
+    /// 字段值的 `String()` 保真：**JSON null 与字段缺失必须是两件事**。
+    /// 快照里的每条都带 TS 的 `String(value)`，Swift 侧走真实解码路径后必须逐条复现。
+    func testUserSeesTheSameFieldValueTextAsTheAuthorityForEveryJsonShape() throws {
+        let cases = snapArray((try ContractSnapshotFile.load())["cardValueText"])
+        XCTAssertFalse(
+            cases.isEmpty,
+            "字段值向量缺失：夹具缺失必须 FAIL，运行 `\(ContractSnapshotFile.regenerateHint)`"
+        )
+        for raw in cases {
+            let vector = snapDict(raw)
+            let name = snapText(vector["name"])
+            let hasValue = snapBool(vector["hasValue"])
+            var field: [String: Any] = ["key": "k", "label": "L", "kind": "enum"]
+            if hasValue { field["value"] = vector["value"] as Any }
+            let json = try JSONSerialization.data(withJSONObject: field)
+            let decoded = try JSONDecoder().decode(CardField.self, from: json)
+            // Given 快照里 TS 的 String(value) 就是权威文本
+            let expected = snapText(vector["expected"])
+            // When 走真实解码，再取用于判定的转换（缺 value 键 ⇒ undefined，JSON null ⇒ "null"）
+            // Then 判定文本逐条等于 TS 的 String(value)
+            XCTAssertEqual(contractValueText(decoded.rawValue), expected, name + "：判定文本必须等于 TS 的 String(value)")
+            if hasValue {
+                XCTAssertNotNil(decoded.rawValue, name + "：JSON 里有 value 键就必须留下形状，不许塌成 nil")
+                XCTAssertEqual(decoded.value, expected, name + "：展示文本也等于 String(value)")
+            } else {
+                XCTAssertNil(decoded.rawValue, name + "：字段缺失才是 nil")
+                XCTAssertNil(decoded.value, name + "：缺失在 String? 投影里仍是 nil")
+            }
+        }
+    }
+
+    /// 含 null / 数组 / 对象 / 极大 revision 的卡片：字节棘轮与 TS 的 JSON.stringify 一致 —— 也证明不 trap。
+    func testAdminSeesByteLimitJudgedFromTheSameSerializationAsTheAuthority() throws {
+        let cases = snapArray((try ContractSnapshotFile.load())["byteShapes"])
+        XCTAssertFalse(
+            cases.isEmpty,
+            "字节形状向量缺失：夹具缺失必须 FAIL，运行 `\(ContractSnapshotFile.regenerateHint)`"
+        )
+        for raw in cases {
+            let vector = snapDict(raw)
+            let name = snapText(vector["name"])
+            let card = try decodeVector(Card.self, from: vector["card"] ?? [:], name)
+            let expectedBytes = snapInt(vector["expectedBytes"])
+            // Given 一条把 maxCardBytes 收紧到"恰好差一字节"的上限
+            let limits = CardLimits(
+                maxFields: cardLimits.maxFields, maxActions: cardLimits.maxActions,
+                maxFallbackChars: cardLimits.maxFallbackChars, maxLabelChars: cardLimits.maxLabelChars,
+                maxValueChars: cardLimits.maxValueChars, maxCardsPerPage: cardLimits.maxCardsPerPage,
+                maxTextChars: cardLimits.maxTextChars, maxEnumValues: cardLimits.maxEnumValues,
+                maxDepth: cardLimits.maxDepth, maxCardBytes: expectedBytes,
+                maxIdChars: cardLimits.maxIdChars, maxActionParams: cardLimits.maxActionParams
+            )
+            // When 校验：恰好等于 TS 字节数 ⇒ 合法；差一字节 ⇒ 非法
+            let atLimit = validateCard(card, limits: limits)
+            let oneOver = validateCard(card, limits: CardLimits(
+                maxFields: limits.maxFields, maxActions: limits.maxActions,
+                maxFallbackChars: limits.maxFallbackChars, maxLabelChars: limits.maxLabelChars,
+                maxValueChars: limits.maxValueChars, maxCardsPerPage: limits.maxCardsPerPage,
+                maxTextChars: limits.maxTextChars, maxEnumValues: limits.maxEnumValues,
+                maxDepth: limits.maxDepth, maxCardBytes: expectedBytes - 1,
+                maxIdChars: limits.maxIdChars, maxActionParams: limits.maxActionParams
+            ))
+            // Then 判定与 TS 逐字节对齐（而不是把 null/数组值塌成一个更短的形状）
+            XCTAssertTrue(atLimit.valid, name + "：TS 的字节数就是上限，正好等于时必须合法")
+            XCTAssertFalse(oneOver.valid, name + "：少一个字节必须判非法（棘轮不许静默通过）")
+        }
+    }
+
     func testRenderableActionsVectors() throws {
         for raw in try vectors("renderableActions") {
             let vector = snapDict(raw)

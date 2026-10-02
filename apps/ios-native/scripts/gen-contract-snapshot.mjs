@@ -101,6 +101,33 @@ addCard('freshness-does-not-affect-validity', okCard({ freshnessMs: 1200 }))
 addCard('value-number-scalar', okCard({ fields: [field({ key: 'qty', label: '数量', kind: 'number', value: 42 })] }))
 addCard('value-boolean-scalar', okCard({ fields: [field({ key: 'flag', label: '开关', kind: 'bool', value: true })] }))
 addCard('value-huge-integer-scalar', okCard({ fields: [field({ key: 'big', label: '大数', kind: 'number', value: 123456789012345678901234567890 })] }))
+// **String(field.value) 的转换语义**（独立审查 C6，Lead 复核为真）：Swift 旧实现把 JSON null 与
+// "字段缺失"都解成 nil，于是 {value: null, values: ["null"]} 被判成"值 undefined 不在 values 内"而
+// 不可操作 —— 一份 TS 判 valid+operable 的卡片在 iOS 端变成不可操作，且展示值也丢了。
+// 下面每条都以 TS 的 String() 为权威，Swift 必须逐条复现（含数组 join、对象 [object Object]）。
+addCard('enum-null-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: null, values: ['null'] })] }))
+addCard('enum-null-value-not-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: null, values: ['undefined'] })] }))
+addCard('enum-absent-value-in-values-undefined', okCard({ fields: [{ key: 'mode', label: '模式', kind: 'enum', values: ['undefined'] }] }))
+addCard('enum-true-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: true, values: ['true'] })] }))
+addCard('enum-false-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: false, values: ['false'] })] }))
+addCard('enum-int-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: 42, values: ['42'] })] }))
+addCard('enum-float-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: 3.5, values: ['3.5'] })] }))
+addCard('enum-small-exponent-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: 1e-7, values: ['1e-7'] })] }))
+addCard('enum-expanded-large-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: 1e20, values: ['100000000000000000000'] })] }))
+addCard('enum-scientific-large-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: 1e21, values: ['1e+21'] })] }))
+addCard('enum-empty-string-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: '', values: [''] })] }))
+addCard('enum-array-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: [1, 2], values: ['1,2'] })] }))
+addCard('enum-nested-array-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: [[1, 2], [3]], values: ['1,2,3'] })] }))
+addCard('enum-array-with-null-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: [null, 1], values: [',1'] })] }))
+addCard('enum-object-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: { a: 1 }, values: ['[object Object]'] })] }))
+addCard('enum-array-of-objects-value-in-values', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: [{}, {}], values: ['[object Object],[object Object]'] })] }))
+// 长度上限只对 **string** 生效（TS 的 typeof 判据）：数组值再长也不因此判非法。
+const longArrayValue = Array.from({ length: 60 }, () => 'x'.repeat(10))
+addCard('enum-long-array-value-not-length-limited', okCard({ fields: [field({ key: 'mode', label: '模式', kind: 'enum', value: longArrayValue, values: [longArrayValue.join(',')] })] }))
+// revision 是**有限非负 Double**：1e100 / Number.MAX_VALUE / 1e19 都合法（Swift 不得因 Int 转换溢出而 trap 或收窄）。
+addCard('revision-huge-finite-accepted', okCard({ revision: 1e100 }))
+addCard('revision-greatest-finite-accepted', okCard({ revision: Number.MAX_VALUE }))
+addCard('revision-beyond-int64-accepted', okCard({ revision: 1e19 }))
 addCard('enum-number-value-in-values', okCard({ fields: [field({ key: 'qty', label: '数量', kind: 'enum', value: 1, values: ['1', '2'] })] }))
 addCard('enum-boolean-value-in-values', okCard({ fields: [field({ key: 'flag', label: '开关', kind: 'enum', value: false, values: ['true', 'false'] })] }))
 addCard('enum-object-value-is-not-in-values', okCard({ fields: [field({ key: 'obj', label: '对象', kind: 'enum', value: { a: 1 }, values: ['a'] })] }))
@@ -327,15 +354,48 @@ const snapshot = {
   pushActions: [...C.PUSH_ACTIONS],
   pushLimits: { ...C.PUSH_LIMITS },
   // 解码保真：不仅判合法，还要断言**值原样保留**（Int 解码会把 3.5 变成失败或截断）。
+  // revision 另加极端有限值：1e100 / Number.MAX_VALUE / 1e19 都必须原样保留、断言不崩
+  // （Swift 侧的 Int(Double) 在这些值上会 trap —— 独立审查 C6/IOS-9 的第二个家）。
   cardDecoding: [
     { name: 'revision-3.5-preserved', card: okCard({ revision: 3.5 }) },
     { name: 'revision-0-preserved', card: okCard({ revision: 0 }) },
     { name: 'revision-7-preserved', card: okCard({ revision: 7 }) },
+    { name: 'revision-1e100-preserved', card: okCard({ revision: 1e100 }) },
+    { name: 'revision-max-value-preserved', card: okCard({ revision: Number.MAX_VALUE }) },
+    { name: 'revision-1e19-preserved', card: okCard({ revision: 1e19 }) },
   ].map((entry) => ({
     name: entry.name,
     card: entry.card,
     expected: { revision: entry.card.revision, valid: C.validateCard(entry.card).valid },
   })),
+  // 字段值的 String() 保真：Swift 侧必须把 JSON null 读成 .null（不是 nil）、把字段缺失读成 nil，
+  // 且投影出的文本等于 TS 的 String(value)（数组 join / 对象 [object Object] 都在这张表里）。
+  cardValueText: [
+    { name: 'null-value', hasValue: true, value: null },
+    { name: 'absent-value', hasValue: false },
+    { name: 'true-value', hasValue: true, value: true },
+    { name: 'false-value', hasValue: true, value: false },
+    { name: 'int-value', hasValue: true, value: 42 },
+    { name: 'float-value', hasValue: true, value: 3.5 },
+    { name: 'small-exponent-value', hasValue: true, value: 1e-7 },
+    { name: 'expanded-large-value', hasValue: true, value: 1e20 },
+    { name: 'scientific-large-value', hasValue: true, value: 1e21 },
+    { name: 'empty-string-value', hasValue: true, value: '' },
+    { name: 'array-value', hasValue: true, value: [1, 2] },
+    { name: 'nested-array-value', hasValue: true, value: [[1, 2], [3]] },
+    { name: 'array-with-null-element', hasValue: true, value: [null, 1] },
+    { name: 'object-value', hasValue: true, value: { a: 1 } },
+    { name: 'array-of-objects', hasValue: true, value: [{}, {}] },
+  ].map((entry) => ({ ...entry, expected: String(entry.hasValue ? entry.value : undefined) })),
+  // 字节棘轮：含 null / 数组 / 对象值的卡片，TS 的 JSON.stringify 字节数就是判据。
+  byteShapes: [
+    { name: 'null-value-card', card: okCard({ fields: [field({ key: 'k', label: 'L', kind: 'enum', value: null, values: ['null'] })] }) },
+    { name: 'number-value-card', card: okCard({ fields: [field({ key: 'k', label: 'L', kind: 'number', value: 42 })] }) },
+    { name: 'array-value-card', card: okCard({ fields: [field({ key: 'k', label: 'L', kind: 'enum', value: [1, 2], values: ['1,2'] })] }) },
+    { name: 'object-value-card', card: okCard({ fields: [field({ key: 'k', label: 'L', kind: 'enum', value: { a: 1 }, values: ['[object Object]'] })] }) },
+    { name: 'huge-revision-card', card: okCard({ revision: 1e100 }) },
+    { name: 'max-revision-card', card: okCard({ revision: Number.MAX_VALUE }) },
+  ].map((entry) => ({ ...entry, expectedBytes: Buffer.byteLength(JSON.stringify(entry.card), 'utf8') })),
   vectors: {
     negotiateVersion,
     validateCard,

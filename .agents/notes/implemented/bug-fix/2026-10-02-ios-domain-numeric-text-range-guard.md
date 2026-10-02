@@ -56,11 +56,12 @@ Status: implemented
   以及 unit=s / unit=m 下的乘积溢出（`"1e18"`+s、`"1e15"`+m）；正向边界
   `"9223372036854774784"`（2^63 - 1024）仍解析、`"1e18"`(ms)/`"1e15"`(s) 仍解析，
   常规值（0 / 500 / 1.9 / 2s / 3min / 500ms）与负例、空串、非数字一并锁住。
-- **第二个家的可达性实证（不在本卡写作范围，未改）**：`ContractCards.swift:245` 的
-  `Int(card.revision)` 走同一条 trap —— 一张 `cardType = escalation`、`revision = 1e300` 的卡片
-  经 `DeskMapper.map` → `alertRow` → `validateCard` → `cardByteCount` 会让客户端同样 SIGTRAP
-  （探针实测：`exited with unexpected signal code 5` + 同一条 `Fatal error`）。
-  `Sources/Contract/` 属 IOS-1 冻结面，本卡只报告不动手。
+- **第二个家已由 IOS-1 收口**（本卡只报告不动手）：`cardByteCount` 里的 `Int(card.revision)`
+  走同一条 trap —— 一张 `revision = 1e100` 的卡片经 `validateCard` 会让客户端 SIGTRAP
+  （本卡探针实测：`exited with unexpected signal code 5` + 同一条 `Fatal error`）。
+  `Sources/Contract/` 属 IOS-1 冻结面，当时不改。现已在
+  [契约面字段值等价性与数值转换守卫](2026-10-02-ios-contract-value-equivalence.md) 中改为
+  `contractJSONNumber`（有限 ⇒ ECMAScript 数字文本，非有限 ⇒ `null`），不再有裸 `Int(Double)`。
 - 机检：`node scripts/ios-native/check-swift-layering.mjs` 与 `check-contract-drift.mjs` 均绿。
 
 ## 被否决 / 已知边界
@@ -78,5 +79,5 @@ Status: implemented
 - **真机**：证据只在模拟器（`simctl spawn xctest`）与 macOS 验证宿主上；真机未跑。
 - **服务端是否会真的发 `"1e100"`**：本卡只证明"这份载荷合法且会让客户端崩 / 已不崩"，
   没有服务端真实样本；端到端（真 bot 发异常年龄文本）未验。
-- **同层其它层**：`Sources/Contract/` 的 `cardByteCount` 与拟议中的 IOS-6 数值域对齐
-  （看板卡「IOS-6 契约数值域/计量向 TS 看齐」）都还留在这条 trap 的可达路径上，**本次未修**。
+- **同层其它层**：`Sources/Contract/` 的 `cardByteCount` 已由 IOS-1 收口（见上）；
+  拟议中的 IOS-6 数值域对齐（看板卡「IOS-6 契约数值域/计量向 TS 看齐」）仍在推进。

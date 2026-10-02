@@ -43,14 +43,24 @@ public struct StalenessBudget: Equatable, Sendable {
 }
 
 /// 判断陈旧度：age < freshMs ⇒ fresh；< staleMs ⇒ aging；< ttlMs ⇒ stale；>= ttlMs ⇒ expired。
+///
+/// **差值在 Double 里算**：TS 的 `nowMs - atMs` 是 number 运算，对任意有限输入都成立；
+/// Swift 的 `Int` 减法在两端异号且量级极端时会**溢出 trap（进程终止）**，比 TS 窄。
+/// `Double(nowMs) - Double(atMs)` 上界为 |Int.max - Int.min| ≈ 1.8e19，始终有限，
+/// 且对 |差值| ≤ 2^53 与 TS 逐位相同（纪元毫秒与预算都在这个区间内）。
 public func stalenessOf<T>(_ snapshot: OfflineSnapshot<T>?, nowMs: Int, budget: StalenessBudget) -> Staleness {
     guard let snapshot else { return .unknown }
     if budget.freshMs > budget.staleMs || budget.staleMs > budget.ttlMs { return .unknown }
-    let age = max(0, nowMs - snapshot.atMs)
-    if age < budget.freshMs { return .fresh }
-    if age < budget.staleMs { return .aging }
-    if age < budget.ttlMs { return .stale }
+    let age = max(0, contractAgeMs(nowMs: nowMs, atMs: snapshot.atMs))
+    if age < Double(budget.freshMs) { return .fresh }
+    if age < Double(budget.staleMs) { return .aging }
+    if age < Double(budget.ttlMs) { return .stale }
     return .expired
+}
+
+/// TS `nowMs - atMs` 的等价差值（总是有限，绝不 trap）。
+func contractAgeMs(nowMs: Int, atMs: Int) -> Double {
+    Double(nowMs) - Double(atMs)
 }
 
 /// 一份可以拿去渲染的东西（或明确的"不能渲染"）。
@@ -69,7 +79,9 @@ public func offlineView<T>(_ snapshot: OfflineSnapshot<T>?, nowMs: Int, budget: 
         return .notice(staleness, "还没有本地数据，请联网获取")
     }
     if staleness == .expired {
-        let ageSeconds = Int(((Double(nowMs - snapshot!.atMs)) / 1000).rounded())
+        // 差值上界 1.8e19，除以 1000 后 ≤ 1.8e16，远在 Int 可表示范围内 ⇒ 转换不可能 trap
+        // （对照 TS：Math.round((nowMs - atMs)/1000)，同为 Double 运算）。
+        let ageSeconds = Int((contractAgeMs(nowMs: nowMs, atMs: snapshot!.atMs) / 1000).rounded())
         return .notice(staleness, "本地数据已过期（" + String(ageSeconds) + " 秒前），请联网获取后再操作")
     }
     let badge = staleness == .fresh ? nil : (staleness == .aging ? "数据可能已变化" : "⚠ 数据陈旧，仅供对照")

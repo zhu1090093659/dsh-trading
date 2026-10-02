@@ -98,12 +98,12 @@ Swift 侧是等价实现。客户端**不自行发号**（不引入 `ids.ts` 语
 |---|---|
 | [ContractVersion.swift](Sources/Contract/ContractVersion.swift) | `ApiContract`（major/minor/compatibleMajorSpan/capsHeader/clientTooOldStatus）、`VersionVerdict`、`parseCaps`、`formatCaps`、`negotiateVersion` |
 | [ContractScopes.swift](Sources/Contract/ContractScopes.swift) | `ScopePlane`、`scopePlanes`、`defaultScopePlanes`、`explicitScopePlanes`、`isScopePlane`、`grantableByDefault` |
-| [ContractCards.swift](Sources/Contract/ContractCards.swift) | `CardType`/`FieldKind`/`ActionKind`（12/12/12 封闭枚举，rawValue 与 TS 逐字相同）、`actionScope`、`CardLimits`/`cardLimits`、`CardField`/`CardAction`/`Card`/`CardVerdict`、`validateCard`、`renderableActions`、`fallbackFor` |
+| [ContractCards.swift](Sources/Contract/ContractCards.swift) | `CardType`/`FieldKind`/`ActionKind`（12/12/12 封闭枚举，rawValue 与 TS 逐字相同）、`actionScope`、`CardLimits`/`cardLimits`、`CardField`（`rawValue` 保真 / `value` 投影）/`CardAction`/`Card`/`CardVerdict`、`validateCard`、`renderableActions`、`fallbackFor` |
 | [ContractConfirm.swift](Sources/Contract/ContractConfirm.swift) | `ConfirmLevel`、`actionConfirm`、`confirmLevel(for:)`（`ActionKind` 与 `String` 两个重载）、`scopeForAction`、`auditConfirmPolicy`、`ClientPlatform`、`requiresBiometric` |
 | [ContractPush.swift](Sources/Contract/ContractPush.swift) | `PushSeverity`/`PushKind`/`PushAction`、`deeplinkScheme`、`PushLimits`/`pushLimits`、`PushPayload`、`validatePushPayload`、`acceptedPush`、`shouldInterrupt` |
 | [ContractOffline.swift](Sources/Contract/ContractOffline.swift) | `Staleness`、`StalenessBudget`、`OfflineSnapshot`、`stalenessOf`、`OfflineView`、`offlineView`、`DeeplinkScreen`、`DeeplinkResult`、`parseDeeplink` |
 | [ContractSourceGuard.swift](Sources/Contract/ContractSourceGuard.swift) | `SourcedDatum`、`ReconcileReport`、`SourceGuard` |
-| [ContractDecoding.swift](Sources/Contract/ContractDecoding.swift) | 宽松标量解码（`LenientText`/`LenientTextMap`）：**只搬类型，不判语义、不猜默认值** |
+| [ContractDecoding.swift](Sources/Contract/ContractDecoding.swift) | `CardValue`（字段值保真形状：null/bool/number/unrepresentableNumber/text/array/object）、`cardValueText`/`contractValueText`（`String(value)` 等价：null ⇒ "null"、缺失 ⇒ "undefined"、数组 join、对象 `[object Object]`）、`contractNumberText`/`contractJSONNumber`/`contractJSONString`/`contractJSONValue`（ECMAScript `Number::toString` 与 `JSON.stringify` 等价）、宽松标量解码（`LenientText`/`LenientTextMap`）：**只搬类型，不判语义、不猜默认值** |
 
 ### fail-closed 的建模方式
 
@@ -114,6 +114,16 @@ Swift 侧是等价实现。客户端**不自行发号**（不引入 `ids.ts` 语
 
 未知动作字符串另有第二道保险：`scopeForAction("future-action") == .control`、
 `confirmLevel(for: "future-action") == .biometric`（**最高档**）。
+
+### 字段值的等价性（`String(value)`）
+
+TS 的 `CardField.value` 是 `unknown`，权威判定用 `String(field.value)`。Swift 侧因此**不能把 JSON `null`
+与"字段缺失"混成同一个 nil**：`CardField.rawValue` 里 nil 只表示缺键，JSON null 是 `CardValue.null`；
+`CardField.value` 是前者的 `String?` 投影（缺失 ⇒ nil，null ⇒ `"null"`）。`String()` 的转换逐条对齐
+ECMAScript ToString：数组 `join(",")`（null 元素成空串）、对象固定 `[object Object]`，**非标量不塌缩成 nil**。
+数值文本由 `contractNumberText` 复刻 ECMAScript `Number::toString`（`1e21` 才切科学记数法、`1e-7` 才切、
+`-0` 写 `"0"`），字节棘轮与 `JSON.stringify` 同源 —— 这条也顺带保证了 `revision` 的转换路径**不存在裸
+`Int(Double)`**（极大有限数会 trap，见 [契约面字段值等价性](../../.agents/notes/implemented/bug-fix/2026-10-02-ios-contract-value-equivalence.md)）。
 
 ### 唯一的签名偏离
 

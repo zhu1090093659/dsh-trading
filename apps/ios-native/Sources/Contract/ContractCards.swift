@@ -116,17 +116,30 @@ public struct CardField: Equatable, Sendable, Decodable {
     public let key: String
     public let label: String
     public let kind: String
-    public let value: String?
+    /// JSON 值原样保留（对齐 TS 的 `value: unknown`）。**nil 表示"JSON 里没有 value 键"**，
+    /// 而 JSON `null` 是 `.null` —— 这两件事在 TS 里分别是 `undefined` 与 `null`，必须分开表达。
+    /// 旧实现把二者都解成 `String?` 的 nil，于是 `{value: null, values: ["null"]}` 被判成
+    /// "值 undefined 不在 values 内"而不可操作 —— Swift 比 TS 窄，本字段就是那条缺陷的落点。
+    public let rawValue: CardValue?
     public let unit: String?
     public let values: [String]?
+
+    /// TS `String(field.value)` 的投影（`undefined` ⇒ nil，`null` ⇒ `"null"`）。
+    /// 展示/解析路径沿用它；**判定路径必须用 `rawValue`**，否则又会塌回"null 与缺失同形"。
+    public var value: String? { rawValue.map(cardValueText) }
 
     private enum CodingKeys: String, CodingKey { case key, label, kind, value, unit, values }
 
     public init(key: String, label: String, kind: String, value: String? = nil, unit: String? = nil, values: [String]? = nil) {
+        self.init(key: key, label: label, kind: kind, rawValue: value.map { CardValue.text($0) }, unit: unit, values: values)
+    }
+
+    /// 保真构造：`rawValue` 传 `.null` 表示 JSON null、传 nil 表示字段缺失。
+    public init(key: String, label: String, kind: String, rawValue: CardValue?, unit: String? = nil, values: [String]? = nil) {
         self.key = key
         self.label = label
         self.kind = kind
-        self.value = value
+        self.rawValue = rawValue
         self.unit = unit
         self.values = values
     }
@@ -136,7 +149,9 @@ public struct CardField: Equatable, Sendable, Decodable {
         key = (try? container.decode(String.self, forKey: .key)) ?? ""
         label = (try? container.decode(String.self, forKey: .label)) ?? ""
         kind = (try? container.decode(String.self, forKey: .kind)) ?? ""
-        value = ((try? container.decodeIfPresent(LenientText.self, forKey: .value)) ?? nil)?.value
+        // **用 contains 区分"缺失"与"JSON null"**：decodeIfPresent 对 null 与缺失都返回 nil，
+        // 那正是本缺陷的成因（null 被当成 undefined）。
+        rawValue = container.contains(.value) ? (try? container.decode(CardValue.self, forKey: .value)) : nil
         unit = (try? container.decodeIfPresent(String.self, forKey: .unit)) ?? nil
         values = (try? container.decodeIfPresent([String].self, forKey: .values)) ?? nil
     }
@@ -223,35 +238,56 @@ public struct CardVerdict: Equatable, Sendable {
     }
 }
 
-/// 卡片体积（maxCardBytes 棘轮用）：稳定序列化后的 UTF-8 字节数。
+/// 卡片体积（maxCardBytes 棘轮用）：`JSON.stringify(card)` 的 UTF-8 字节数。
+///
+/// **不再走 `JSONSerialization`**，两个理由：
+///   1. 它给保真值（数组/对象/null）的序列化结果与 TS 的形状不同；
+///   2. **它对非有限 Double 会抛不可捕获的 NSException**（进程终止），而 revision 只要求
+///      "非负有限数"是校验**之后**的事 —— 一份 `revision: 1e400` 的载荷会先序列化再判非法。
+/// 这里按 TS `JSON.stringify` 的键序与数字格式自己拼文本，判定与 TS 逐字节一致、且绝不 trap。
+/// 键序取字段的字典序（TS 用插入序 —— 见 Agent Note 的已知边界）。
 private func cardByteCount(_ card: Card) -> Int {
-    func fieldObject(_ field: CardField) -> [String: Any] {
-        var object: [String: Any] = ["key": field.key, "label": field.label, "kind": field.kind]
-        if let value = field.value { object["value"] = value }
-        if let unit = field.unit { object["unit"] = unit }
-        if let values = field.values { object["values"] = values }
-        return object
+    var members: [(String, String)] = []
+    func add(_ key: String, _ text: String) { members.append((key, text)) }
+    add("cardId", contractJSONString(card.cardId))
+    add("cardType", contractJSONString(card.cardType))
+    add("revision", contractJSONNumber(card.revision))
+    add("fallbackText", contractJSONString(card.fallbackText))
+    add("fields", "[" + card.fields.map(fieldJSON).joined(separator: ",") + "]")
+    add("actions", "[" + card.actions.map(actionJSON).joined(separator: ",") + "]")
+    if let freshnessMs = card.freshnessMs { add("freshnessMs", String(freshnessMs)) }
+    return jsonObjectText(members).utf8.count
+}
+
+/// `JSON.stringify(object)` 的形状：键按字典序、键名同样转义（TS 用插入序 —— 见 Agent Note 边界）。
+private func jsonObjectText(_ members: [(String, String)]) -> String {
+    let body = members.sorted { $0.0 < $1.0 }
+        .map { contractJSONString($0.0) + ":" + $0.1 }
+        .joined(separator: ",")
+    return "{" + body + "}"
+}
+
+private func fieldJSON(_ field: CardField) -> String {
+    var members: [(String, String)] = []
+    members.append(("key", contractJSONString(field.key)))
+    members.append(("label", contractJSONString(field.label)))
+    members.append(("kind", contractJSONString(field.kind)))
+    if let rawValue = field.rawValue { members.append(("value", contractJSONValue(rawValue))) }
+    if let unit = field.unit { members.append(("unit", contractJSONString(unit))) }
+    if let values = field.values { members.append(("values", "[" + values.map(contractJSONString).joined(separator: ",") + "]")) }
+    return jsonObjectText(members)
+}
+
+private func actionJSON(_ action: CardAction) -> String {
+    var members: [(String, String)] = []
+    members.append(("kind", contractJSONString(action.kind)))
+    members.append(("label", contractJSONString(action.label)))
+    if let params = action.params {
+        let body = params.keys.sorted().map { contractJSONString($0) + ":" + contractJSONString(params[$0]!) }.joined(separator: ",")
+        members.append(("params", "{" + body + "}"))
     }
-    func actionObject(_ action: CardAction) -> [String: Any] {
-        var object: [String: Any] = ["kind": action.kind, "label": action.label]
-        if let params = action.params { object["params"] = params }
-        if let confirm = action.confirm { object["confirm"] = confirm }
-        return object
-    }
-    var object: [String: Any] = [
-        "cardId": card.cardId,
-        "cardType": card.cardType,
-        // 整数值写成 Int：对齐 JS 的 JSON.stringify（1.0 会写成 "1" 而不是 "1.0"），否则字节上限判定会漂
-        "revision": card.revision == card.revision.rounded() ? Int(card.revision) : card.revision,
-        "fallbackText": card.fallbackText,
-        "fields": card.fields.map(fieldObject),
-        "actions": card.actions.map(actionObject),
-    ]
-    if let freshnessMs = card.freshnessMs { object["freshnessMs"] = freshnessMs }
-    guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]) else {
-        return 0
-    }
-    return data.count
+    if let confirm = action.confirm { members.append(("confirm", confirm ? "true" : "false")) }
+    return jsonObjectText(members)
 }
 
 /// 字符串上限一律用 **UTF-16 码元数**（`utf16.count`），对齐 TS 的 `String.length`
@@ -295,18 +331,23 @@ public func validateCard(_ card: Card, limits: CardLimits = cardLimits) -> CardV
         if field.label.utf16.count > limits.maxLabelChars {
             problems.append("字段 " + field.key + " 的 label 超过 " + String(limits.maxLabelChars) + " 字符上限")
         }
-        if let value = field.value, value.utf16.count > limits.maxValueChars {
+        // 与 TS 一致：**只对字符串**查 maxValueChars（TS 的 typeof value === 'string'）。
+        // 数组/对象也能投影出文本，但它们不受长度上限约束，不能因此把合法卡片判非法。
+        if case .text(let text)? = field.rawValue, text.utf16.count > limits.maxValueChars {
             problems.append("字段 " + field.key + " 的值超过 " + String(limits.maxValueChars) + " 字符上限")
         }
         if field.kind == FieldKind.enumeration.rawValue {
             let values = field.values
+            // TS 的 String(field.value)：JSON null ⇒ "null"，字段缺失 ⇒ "undefined"。
+            // 用 rawValue 判定而不是投影后的 String?，否则 null 与缺失又会被混成同一个值。
+            let valueText = contractValueText(field.rawValue)
             if values == nil || values!.isEmpty {
                 problems.append("enum 字段 " + field.key + " 必须给出 values")
                 operabilityBlocked = true
             } else if values!.count > limits.maxEnumValues {
                 problems.append("enum 字段 " + field.key + " 的 values 超过 " + String(limits.maxEnumValues) + " 个")
-            } else if !values!.contains(field.value ?? "undefined") {
-                problems.append("enum 字段 " + field.key + " 的值 " + (field.value ?? "undefined") + " 不在 values 内")
+            } else if !values!.contains(valueText) {
+                problems.append("enum 字段 " + field.key + " 的值 " + valueText + " 不在 values 内")
                 operabilityBlocked = true
             }
         }

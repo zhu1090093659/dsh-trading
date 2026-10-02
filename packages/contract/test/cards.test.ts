@@ -184,3 +184,100 @@ describe('渲染层的两个出口', () => {
     expect(fallbackFor(card())).toBe('desk 正常，无待处理升级')
   })
 })
+
+describe('字段值的 String() 转换语义（Swift 必须等价，不得更窄）', () => {
+  // 为什么单独锁这一组：Swift 旧实现把 JSON null 与"字段缺失"都解成 nil，
+  // 于是 {value: null, values: ['null']} 被判成'值 undefined 不在 values 内'——
+  // 一份 TS 判 valid 且 operable 的卡片，在 iOS 观测端变成不可操作，
+  // 且展示值也丢了。这违反「Swift 是 TS 的等价实现，不得更窄」。
+  const enumField = (value: unknown, values: readonly string[], withValue = true) =>
+    withValue
+      ? ({ key: 'mode', label: '模式', kind: 'enum' as const, value, values })
+      : ({ key: 'mode', label: '模式', kind: 'enum' as const, values })
+
+  const cases: readonly { name: string; field: { key: string; label: string; kind: 'enum'; value?: unknown; values: readonly string[] }; text: string }[] = [
+    { name: 'null 是已知值 "null"（不是 undefined）', field: enumField(null, ['null']), text: 'null' },
+    { name: '缺失才是 "undefined"', field: enumField(undefined, ['undefined'], false), text: 'undefined' },
+    { name: 'true / false 各自成文本', field: enumField(true, ['true']), text: 'true' },
+    { name: 'false 不与 true 混同', field: enumField(false, ['false']), text: 'false' },
+    { name: '整数不带小数点', field: enumField(42, ['42']), text: '42' },
+    { name: '浮点保留小数', field: enumField(3.5, ['3.5']), text: '3.5' },
+    { name: '小指数用科学记数法', field: enumField(1e-7, ['1e-7']), text: '1e-7' },
+    { name: '大数按 ECMAScript 阈值展开', field: enumField(1e20, ['100000000000000000000']), text: '100000000000000000000' },
+    { name: '超过阈值才用科学记数法', field: enumField(1e21, ['1e+21']), text: '1e+21' },
+    { name: '空字符串是合法值', field: enumField('', ['']), text: '' },
+    { name: '数组按 join(",") 拼接', field: enumField([1, 2], ['1,2']), text: '1,2' },
+    { name: '嵌套数组拍平成 join', field: enumField([[1, 2], [3]], ['1,2,3']), text: '1,2,3' },
+    { name: '数组里的 null 元素变空串', field: enumField([null, 1], [',1']), text: ',1' },
+    { name: '对象固定成 [object Object]', field: enumField({ a: 1 }, ['[object Object]']), text: '[object Object]' },
+    { name: '对象数组逐个成 [object Object]', field: enumField([{}, {}], ['[object Object],[object Object]']), text: '[object Object],[object Object]' },
+  ]
+
+  for (const entry of cases) {
+    it(`管理员：${entry.name} —— values 命中即合法可操作`, () => {
+      // Given 一个 enum 字段，其 values 恰是 TS String(value) 的结果
+      // When 校验卡片
+      const verdict = validateCard(card({ fields: [entry.field] }))
+      // Then JS 的 String() 就是那条文本，卡片合法且可操作（Swift 必须同样判）
+      expect(String(entry.field.value)).toBe(entry.text)
+      expect(verdict).toMatchObject({ valid: true, operable: true })
+      expect(verdict.problems).toEqual([])
+    })
+  }
+
+  it('管理员：null 不在 values 内时仍不可操作（null 是已知值，不是万能通行证）', () => {
+    // Given values 里只有 "undefined"（旧 Swift 会误把 null 当成它）
+    const field = enumField(null, ['undefined'])
+    // When 校验
+    const verdict = validateCard(card({ fields: [field] }))
+    // Then TS 用的是 String(null) = "null"，因此不在集合里 ⇒ 不可操作
+    expect(String(field.value)).toBe('null')
+    expect(verdict.operable).toBe(false)
+    expect(verdict.problems.join(' ')).toContain('不在 values 内')
+  })
+
+  it('管理员：未知 enum 值依旧不可操作（本组只改 null 的等价性，不放宽未知值）', () => {
+    // Given 一个值越界的 enum 字段
+    const verdict = validateCard(card({ fields: [enumField('halt', ['normal'])] }))
+    // When / Then 仍然 fail-closed
+    expect(verdict.valid).toBe(false)
+    expect(verdict.operable).toBe(false)
+    expect(verdict.problems.join(' ')).toContain('不在 values 内')
+  })
+
+  it('管理员：非字符串值不参与 maxValueChars（数组/对象再长也不因此判非法）', () => {
+    // Given 一个很长的数组值，values 用 join 后的文本命中
+    const long = Array.from({ length: 60 }, () => 'x'.repeat(10))
+    const verdict = validateCard(card({ fields: [enumField(long, [long.join(',')])] }))
+    // When / Then 长度上限只对 string 生效（TS 的 typeof 判据），命中即合法
+    expect(long.join(',').length).toBeGreaterThan(CARD_LIMITS.maxValueChars)
+    expect(verdict).toMatchObject({ valid: true, operable: true })
+  })
+})
+
+describe('revision 是有限非负 Double（不得更窄）', () => {
+  const revisionCase = (name: string, revision: number) =>
+    it(`管理员：${name} —— 有限非负即合法，且不超过字节上限`, () => {
+      // Given 一个合法卡片，只把 revision 换成极端但有限的值
+      const candidate = card({ revision })
+      // When 校验
+      const verdict = validateCard(candidate)
+      // Then 合法可操作（客户端不得因转换溢出而崩溃或收窄）
+      expect(Number.isFinite(revision)).toBe(true)
+      expect(verdict).toMatchObject({ valid: true, operable: true })
+      expect(JSON.stringify(candidate)).toContain(String(revision))
+    })
+
+  revisionCase('1e100', 1e100)
+  revisionCase('Double.greatestFiniteMagnitude', Number.MAX_VALUE)
+  revisionCase('1e19（超出 Int64 的整数）', 1e19)
+  revisionCase('小数 3.5', 3.5)
+
+  it('管理员：非有限 revision 依旧非法（NaN / Infinity 不放宽）', () => {
+    // Given 两个非有限 revision
+    // When / Then 仍然非法
+    expect(validateCard(card({ revision: Number.NaN })).valid).toBe(false)
+    expect(validateCard(card({ revision: Number.POSITIVE_INFINITY })).valid).toBe(false)
+  })
+})
+
