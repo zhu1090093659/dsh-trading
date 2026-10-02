@@ -6,7 +6,8 @@
  */
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { CardView, DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, UnknownCards, freshnessText, type CockpitCard } from '../src/blocks.tsx'
+import { CARD_TYPES, type CardAction } from '@dshtrading/contract'
+import { CardView, DecisionFeed, DeskHome, EscalationInbox, MandateAndLedger, PositionsAndOrders, SystemNotices, UnknownCards, fieldValueText, freshnessText, type CockpitCard } from '../src/blocks.tsx'
 import { CONTROL_ACTIONS, CockpitShell } from '../src/shell.tsx'
 import { confirmLevelFor, requiresBiometric } from '@dshtrading/contract'
 
@@ -135,7 +136,7 @@ describe('控制面不依赖数据面（行情/agent 全挂时仍可用）', () 
   it('管理员：数据面报错时四个控制按钮仍然渲染且可用（控制面与 A0 同源）', () => {
     // Given 一个数据面完全失败的驾驶舱状态
     const html = renderToStaticMarkup(
-      <CockpitShell cards={[]} error="无法连接交易机器人：fetch failed" fetchedAtMs={undefined} nowMs={T0} pending={undefined} onRefresh={() => {}} onCommand={() => {}} />,
+      <CockpitShell cards={[]} error="无法连接交易机器人：fetch failed" fetchedAtMs={undefined} nowMs={T0} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} />,
     )
     // When 渲染
     // Then 错误可见，但四个控制动作照常在（且未禁用）
@@ -147,7 +148,7 @@ describe('控制面不依赖数据面（行情/agent 全挂时仍可用）', () 
   it('管理员：数据陈旧时明说陈旧，控制面同样不受影响', () => {
     // Given 十分钟前取到的数据 + 一条错误
     const html = renderToStaticMarkup(
-      <CockpitShell cards={[]} error="命令被拒绝：403" fetchedAtMs={T0} nowMs={T0 + 600_000} pending={undefined} onRefresh={() => {}} onCommand={() => {}} />,
+      <CockpitShell cards={[]} error="命令被拒绝：403" fetchedAtMs={T0} nowMs={T0 + 600_000} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} />,
     )
     // When 渲染
     // Then 同时出现"数据已陈旧"与四个控制按钮
@@ -158,12 +159,95 @@ describe('控制面不依赖数据面（行情/agent 全挂时仍可用）', () 
   it('管理员：有命令在执行时四个按钮都被禁用（避免并发控制动作互相打架）', () => {
     // Given 一个正在执行 kill 的状态
     const html = renderToStaticMarkup(
-      <CockpitShell cards={[]} error={undefined} fetchedAtMs={T0} nowMs={T0} pending="kill" onRefresh={() => {}} onCommand={() => {}} />,
+      <CockpitShell cards={[]} error={undefined} fetchedAtMs={T0} nowMs={T0} pending="kill" onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} />,
     )
     // When 渲染
     // Then 四个按钮全部 disabled，且 kill 显示"执行中"
     expect((html.match(/disabled=""/g) ?? [])).toHaveLength(4)
     expect(html).toContain('执行中')
+  })
+})
+
+describe('字段渲染', () => {
+  it('管理员：字段按封闭 FieldKind 排版（时间 ISO / 布尔是否 / 货币带单位），并带 data-field-kind 锚点', () => {
+    // Given 一张含各类型字段的卡片
+    const c = card({
+      cardId: 'f1',
+      fields: [
+        { key: 't', label: '更新时间', kind: 'timestamp', value: T0 },
+        { key: 'b', label: '已授权', kind: 'bool', value: true },
+        { key: 'm', label: '额度', kind: 'currency', value: '120.50', unit: 'USDT' },
+        { key: 'p', label: '占比', kind: 'percent', value: '12.5' },
+        { key: 's', label: '标的', kind: 'symbol', value: 'BTC-USDT' },
+      ],
+    })
+    // When 渲染
+    const html = renderToStaticMarkup(<CardView card={c} />)
+    // Then 各字段出现且带 kind 锚点；值按判据排版
+    expect(html).toContain('data-field-kind="timestamp"')
+    expect(html).toContain(new Date(T0).toISOString())
+    expect(html).toContain('>是</span>')
+    expect(html).toContain('120.50USDT')
+    expect(html).toContain('12.5%')
+    expect(html).toContain('BTC-USDT')
+    expect(fieldValueText({ key: 'b', label: 'x', kind: 'bool', value: false })).toBe('否')
+  })
+})
+
+describe('卡片动作接线', () => {
+  it('管理员：动作按钮带 data-action-kind 并调用 onAction（升级应答/ack 从卡片可达）', () => {
+    // Given 一张带 approve/ack 动作的升级卡与一个收集调用的桩
+    const calls: string[] = []
+    const onAction: (action: CardAction, card: CockpitCard) => void = (action, c) => calls.push(action.kind + ':' + c.cardId)
+    const c = card({ cardId: 'esc1', cardType: 'escalation', actions: [{ kind: 'approve', label: '批准', confirm: true }, { kind: 'ack', label: '知道了' }] })
+    // When 渲染
+    const html = renderToStaticMarkup(<CardView card={c} onAction={onAction} />)
+    // Then 两个按钮都在且带 kind 锚点（SSR 不触发 onClick，接线由 data 属性钉住结构）
+    expect(html).toContain('data-action-kind="approve"')
+    expect(html).toContain('data-action-kind="ack"')
+  })
+
+  it('管理员：命令在途时卡片动作按钮一并禁用（避免与控制动作并发）', () => {
+    // Given 同一张卡但 disabled
+    const c = card({ cardId: 'esc2', cardType: 'escalation', actions: [{ kind: 'ack', label: '知道了' }] })
+    // When 渲染
+    const html = renderToStaticMarkup(<CardView card={c} onAction={() => {}} disabled />)
+    // Then 按钮 disabled
+    expect(html).toContain('disabled=""')
+  })
+})
+
+describe('12 个封闭卡片类型全渲染（渲染层不丢弃保证）', () => {
+  it('管理员：协议 12 个 cardType 每个都在驾驶舱某一块里露出来，一个都不许被分块过滤丢掉', () => {
+    // Given 每个类型各一张卡（id 即类型名）+ 一个空 onAction
+    const cards = CARD_TYPES.map((type, i) => card({ cardId: 'x' + String(i), cardType: type }))
+    // When 渲染整壳
+    const html = renderToStaticMarkup(
+      <CockpitShell cards={cards} error={undefined} fetchedAtMs={T0} nowMs={T0} pending={undefined} onRefresh={() => {}} onCommand={() => {}} onCardAction={() => {}} />,
+    )
+    // Then 12 张卡全部出现（历史上 mandate-status/journal-gap/system-notice 三类被静默丢弃）
+    for (let i = 0; i < CARD_TYPES.length; i++) expect(html, CARD_TYPES[i]).toContain('data-card-id="x' + String(i) + '"')
+    expect(html).not.toContain('data-operable="false"')
+  })
+
+  it('管理员：额度与账本块只收 mandate-status 与 journal-gap；系统通告块只收 system-notice', () => {
+    // Given 五类卡片
+    const cards = [
+      card({ cardId: 'm', cardType: 'mandate-status' }),
+      card({ cardId: 'g', cardType: 'journal-gap' }),
+      card({ cardId: 'n', cardType: 'system-notice' }),
+      card({ cardId: 'd', cardType: 'decision' }),
+      card({ cardId: 'u', cardType: 'future-card' as never }),
+    ]
+    // When 渲染两块
+    const mandateHtml = renderToStaticMarkup(<MandateAndLedger cards={cards} />)
+    const noticeHtml = renderToStaticMarkup(<SystemNotices cards={cards} />)
+    // Then 各自只收自己的类型；未知卡不在这两块（它属于未识别块）
+    expect(mandateHtml).toContain('data-card-id="m"')
+    expect(mandateHtml).toContain('data-card-id="g"')
+    expect(mandateHtml).not.toContain('data-card-id="d"')
+    expect(noticeHtml).toContain('data-card-id="n"')
+    expect(noticeHtml).not.toContain('data-card-id="u"')
   })
 })
 

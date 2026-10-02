@@ -9,13 +9,41 @@
  *   - **观测面不依赖 tick 流**：每块只吃 %%Card[]%% 与一个 %%fetchedAtMs%%；
  *   - **未知枚举的卡片渲染为不可操作态**：%%operable === false%% 时禁用全部动作并明说原因。
  */
-import { CARD_TYPES, type Card } from '@dshtrading/contract'
+import { CARD_TYPES, type Card, type CardAction, type CardField } from '@dshtrading/contract'
 import styles from './cockpit.module.css'
 
 /** 卡片渲染所需的最小视图（/v1 会在协议字段之外附上 operable 与 problems）。 */
 export interface CockpitCard extends Card {
   readonly operable?: boolean | undefined
   readonly problems?: readonly string[] | undefined
+}
+
+/** 卡片动作被按下时的回调（App 层负责二次确认与 POST /v1/commands）。 */
+export type CardActionHandler = (action: CardAction, card: CockpitCard) => void
+
+/** 卡片块共同的渲染参数：动作接线与禁用态（命令在途时禁全部按钮）。 */
+export interface BlockRenderProps {
+  readonly onAction?: CardActionHandler | undefined
+  readonly disabled?: boolean | undefined
+}
+
+/** 字段值文案：12 个封闭 FieldKind 各有判据；时间/时长/布尔/货币/百分比有专门排版。 */
+export function fieldValueText(field: CardField): string {
+  const raw = field.value
+  switch (field.kind) {
+    case 'timestamp':
+      return typeof raw === 'number' ? new Date(raw).toISOString() : String(raw)
+    case 'duration':
+      return typeof raw === 'number' ? String(raw) + (field.unit ?? 'ms') : String(raw)
+    case 'bool':
+      return raw === true ? '是' : raw === false ? '否' : String(raw)
+    case 'currency':
+      return String(raw) + (field.unit ?? '')
+    case 'percent':
+      return String(raw) + (field.unit ?? '%')
+    default:
+      return String(raw)
+  }
 }
 
 /** 新鲜度文案：观测面唯一的"时间感"来源（没有 tick 流）。 */
@@ -27,8 +55,8 @@ export function freshnessText(fetchedAtMs: number | undefined, nowMs: number): s
   return '数据已陈旧：' + String(Math.round(seconds / 60)) + ' 分钟前'
 }
 
-/** 一张卡片的渲染（不可操作时禁用全部动作）。 */
-export function CardView({ card }: { readonly card: CockpitCard }): JSX.Element {
+/** 一张卡片的渲染（不可操作时禁用全部动作；动作按下交给 onAction，App 层二次确认）。 */
+export function CardView({ card, onAction, disabled = false }: { readonly card: CockpitCard } & BlockRenderProps): JSX.Element {
   const operable = card.operable !== false
   return (
     <li
@@ -40,6 +68,16 @@ export function CardView({ card }: { readonly card: CockpitCard }): JSX.Element 
       <strong>{card.cardType}</strong>
       <span className={styles.cardMeta}> · rev {card.revision}</span>
       <p className={styles.cardBody}>{card.fallbackText}</p>
+      {card.fields.length > 0 ? (
+        <ul className={styles.fields}>
+          {card.fields.map((field) => (
+            <li key={field.key} className={styles.fieldRow} data-field-kind={field.kind}>
+              <span className={styles.fieldLabel}>{field.label}</span>
+              <span className={styles.fieldValue}>{fieldValueText(field)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {operable ? (
         card.actions.length === 0 ? (
           <p>无可用动作</p>
@@ -47,7 +85,14 @@ export function CardView({ card }: { readonly card: CockpitCard }): JSX.Element 
           <p>
             可用动作：
             {card.actions.map((action) => (
-              <button key={action.kind} type="button" className={styles.button} disabled={false}>
+              <button
+                key={action.kind}
+                type="button"
+                className={styles.button}
+                data-action-kind={action.kind}
+                disabled={disabled}
+                onClick={onAction === undefined ? undefined : () => onAction(action, card)}
+              >
                 {action.label}
               </button>
             ))}
@@ -61,18 +106,18 @@ export function CardView({ card }: { readonly card: CockpitCard }): JSX.Element 
 }
 
 /** 首页：desk 概览 —— 只显示 desk/风险/指令状态类卡片。 */
-export function DeskHome({ cards }: { readonly cards: readonly CockpitCard[] }): JSX.Element {
+export function DeskHome({ cards, onAction, disabled }: { readonly cards: readonly CockpitCard[] } & BlockRenderProps): JSX.Element {
   const home = cards.filter((card) => card.cardType === 'desk-summary' || card.cardType === 'risk-state' || card.cardType === 'control-panel' || card.cardType === 'freshness')
   return (
     <section className={styles.section} aria-label="desk">
       <h2 className={styles.sectionTitle}>Desk</h2>
-      {home.length === 0 ? <p>没有 desk 卡片</p> : <ul className={styles.list}>{home.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
+      {home.length === 0 ? <p>没有 desk 卡片</p> : <ul className={styles.list}>{home.map((card) => <CardView key={card.cardId} card={card} onAction={onAction} disabled={disabled} />)}</ul>}
     </section>
   )
 }
 
 /** 决策动态流：决策/触发/升级三类卡片按 revision 倒序（新的在上）。 */
-export function DecisionFeed({ cards }: { readonly cards: readonly CockpitCard[] }): JSX.Element {
+export function DecisionFeed({ cards, onAction, disabled }: { readonly cards: readonly CockpitCard[] } & BlockRenderProps): JSX.Element {
   const feed = cards
     .filter((card) => card.cardType === 'decision' || card.cardType === 'trigger-trace' || card.cardType === 'escalation')
     .slice()
@@ -80,29 +125,57 @@ export function DecisionFeed({ cards }: { readonly cards: readonly CockpitCard[]
   return (
     <section className={styles.section} aria-label="decisions">
       <h2 className={styles.sectionTitle}>决策动态</h2>
-      {feed.length === 0 ? <p>还没有决策</p> : <ul className={styles.list}>{feed.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
+      {feed.length === 0 ? <p>还没有决策</p> : <ul className={styles.list}>{feed.map((card) => <CardView key={card.cardId} card={card} onAction={onAction} disabled={disabled} />)}</ul>}
     </section>
   )
 }
 
 /** 持仓与挂单：只显示 position/order；**这里没有下单入口**（卡片硬要求）。 */
-export function PositionsAndOrders({ cards }: { readonly cards: readonly CockpitCard[] }): JSX.Element {
+export function PositionsAndOrders({ cards, onAction, disabled }: { readonly cards: readonly CockpitCard[] } & BlockRenderProps): JSX.Element {
   const rows = cards.filter((card) => card.cardType === 'position' || card.cardType === 'order')
   return (
     <section className={styles.section} aria-label="positions">
       <h2 className={styles.sectionTitle}>持仓与挂单</h2>
-      {rows.length === 0 ? <p>当前没有持仓或挂单</p> : <ul className={styles.list}>{rows.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
+      {rows.length === 0 ? <p>当前没有持仓或挂单</p> : <ul className={styles.list}>{rows.map((card) => <CardView key={card.cardId} card={card} onAction={onAction} disabled={disabled} />)}</ul>}
     </section>
   )
 }
 
 /** 升级收件箱：需要人决策的卡片。 */
-export function EscalationInbox({ cards }: { readonly cards: readonly CockpitCard[] }): JSX.Element {
+export function EscalationInbox({ cards, onAction, disabled }: { readonly cards: readonly CockpitCard[] } & BlockRenderProps): JSX.Element {
   const inbox = cards.filter((card) => card.cardType === 'escalation')
   return (
     <section className={styles.section} aria-label="escalations">
       <h2 className={styles.sectionTitle}>升级收件箱</h2>
-      {inbox.length === 0 ? <p>没有待处理升级</p> : <ul className={styles.list}>{inbox.map((card) => <CardView key={card.cardId} card={card} />)}</ul>}
+      {inbox.length === 0 ? <p>没有待处理升级</p> : <ul className={styles.list}>{inbox.map((card) => <CardView key={card.cardId} card={card} onAction={onAction} disabled={disabled} />)}</ul>}
+    </section>
+  )
+}
+
+/**
+ * 额度与账本块：mandate-status（额度上限声明与用量）+ journal-gap（账本缺口）。
+ *
+ * 这两类与 system-notice 一道，曾是被分块过滤在 UI 层静默丢弃的三类 —— 协议认得它们、
+ * UnknownCards 的"未识别"判定也放行它们（它们是已知类型），于是哪一块都不显示。
+ * 渲染层的"不丢弃保证"必须覆盖全部 12 个封闭类型才算数（见测试：12 类型全渲染钉住）。
+ */
+export function MandateAndLedger({ cards, onAction, disabled }: { readonly cards: readonly CockpitCard[] } & BlockRenderProps): JSX.Element {
+  const rows = cards.filter((card) => card.cardType === 'mandate-status' || card.cardType === 'journal-gap')
+  return (
+    <section className={styles.section} aria-label="mandate">
+      <h2 className={styles.sectionTitle}>额度与账本</h2>
+      {rows.length === 0 ? <p>没有额度或账本卡片</p> : <ul className={styles.list}>{rows.map((card) => <CardView key={card.cardId} card={card} onAction={onAction} disabled={disabled} />)}</ul>}
+    </section>
+  )
+}
+
+/** 系统通告块：system-notice（升级提示、降级通告这类只读告知）。 */
+export function SystemNotices({ cards, onAction, disabled }: { readonly cards: readonly CockpitCard[] } & BlockRenderProps): JSX.Element {
+  const notices = cards.filter((card) => card.cardType === 'system-notice')
+  return (
+    <section className={styles.section} aria-label="system">
+      <h2 className={styles.sectionTitle}>系统通告</h2>
+      {notices.length === 0 ? <p>没有系统通告</p> : <ul className={styles.list}>{notices.map((card) => <CardView key={card.cardId} card={card} onAction={onAction} disabled={disabled} />)}</ul>}
     </section>
   )
 }

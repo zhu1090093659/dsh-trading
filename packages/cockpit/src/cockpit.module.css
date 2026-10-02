@@ -100,3 +100,26 @@
   color: var(--dsw-futu-warning-text, #8a5a00);
   margin: 0;
 }
+
+/* 卡片字段：标签-值成对横排，值右侧留白对齐读数 */
+.fields {
+  list-style: none;
+  padding: 0;
+  margin: 0.35rem 0 0.25rem;
+}
+
+.fieldRow {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.fieldLabel {
+  color: var(--dsw-futu-text-muted, #666);
+  min-width: 8rem;
+}
+
+.fieldValue {
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}

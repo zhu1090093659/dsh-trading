@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Card } from '@dshtrading/contract'
+import type { Card, CardAction } from '@dshtrading/contract'
 import { CockpitShell } from './shell.tsx'
 import type { CockpitCard } from './blocks.tsx'
 
@@ -44,21 +44,29 @@ export function App(): JSX.Element {
     void load()
   }, [load])
 
-  const command = useCallback(async (action: string): Promise<void> => {
+  const command = useCallback(async (action: string, params: Readonly<Record<string, unknown>> = {}): Promise<void> => {
     if (!window.confirm('确认执行「' + action + '」？这是控制类动作。')) return
     setPending(action)
     try {
       const response = await fetch('/v1/commands', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-dsht-caps': CAPS },
-        body: JSON.stringify({ clientRequestId: 'web-' + String(Date.now()) + '-' + action, action }),
+        body: JSON.stringify({ clientRequestId: 'web-' + String(Date.now()) + '-' + action, action, params }),
       })
       if (!response.ok) setError('命令被拒绝：' + String(response.status) + ' ' + (await response.text()))
-      else setError(undefined)
+      else {
+        setError(undefined)
+        void load()
+      }
     } finally {
       setPending(undefined)
     }
-  }, [])
+  }, [load])
+
+  /** 卡片动作接线：动作 kind 即命令 action，params 里带上 cardId 与动作自带参数（幂等键含卡片）。 */
+  const cardAction = useCallback((action: CardAction, card: CockpitCard): void => {
+    void command(action.kind, { cardId: card.cardId, ...(action.params ?? {}) })
+  }, [command])
 
   return (
     <CockpitShell
@@ -69,6 +77,7 @@ export function App(): JSX.Element {
       pending={pending}
       onRefresh={() => void load()}
       onCommand={(action) => void command(action)}
+      onCardAction={cardAction}
     />
   )
 }

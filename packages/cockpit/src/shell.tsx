@@ -1,6 +1,6 @@
-import type { Card } from '@dshtrading/contract'
+import type { Card, CardAction } from '@dshtrading/contract'
 import styles from './cockpit.module.css'
-import { DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, UnknownCards, freshnessText, type CockpitCard } from './blocks.tsx'
+import { DecisionFeed, DeskHome, EscalationInbox, MandateAndLedger, PositionsAndOrders, SystemNotices, UnknownCards, freshnessText, type CockpitCard } from './blocks.tsx'
 
 /**
  * 驾驶舱外壳（**纯展示**）：数据与副作用都在 App.tsx 里，这里只决定"给定数据与错误，长什么样"。
@@ -8,6 +8,10 @@ import { DecisionFeed, DeskHome, EscalationInbox, PositionsAndOrders, UnknownCar
  * 抽出来的理由是一条卡片证据：**行情与 agent 全挂时控制面仍可用**。控制区（pause/resume/kill/flatten）
  * 与 A0 同源，不该依赖数据面 —— 所以它必须渲染在 error 分支**之外**，并且这条性质要能被断言
  * （而不是靠"看代码觉得应该没事"）。
+ *
+ * A0 六项的界面可达（2026-10-02 补全）：kill/pause/resume + flatten 在控制区；**ack / 升级应答**
+ * 走卡片动作（CardView 接线，App 层 POST /v1/commands）；**status** 由 desk/risk-state/freshness 卡
+ * 表达；**ping** 的连通性由刷新按钮表达（失败即 error 条）。
  */
 export interface CockpitShellProps {
   readonly cards: readonly Card[]
@@ -17,6 +21,8 @@ export interface CockpitShellProps {
   readonly pending: string | undefined
   readonly onRefresh: () => void
   readonly onCommand: (action: string) => void
+  /** 卡片动作接线（升级应答 approve/reject、ack、dismiss、retry-sync 等走这里）。 */
+  readonly onCardAction: (action: CardAction, card: CockpitCard) => void
 }
 
 /** 控制面上的四个动作（顺序固定：先软后硬，kill/flatten 在后）。 */
@@ -50,10 +56,12 @@ export function CockpitShell(props: CockpitShellProps): JSX.Element {
         </p>
       )}
       <UnknownCards cards={cards} />
-      <DeskHome cards={cards} />
-      <DecisionFeed cards={cards} />
-      <PositionsAndOrders cards={cards} />
-      <EscalationInbox cards={cards} />
+      <DeskHome cards={cards} onAction={props.onCardAction} disabled={props.pending !== undefined} />
+      <DecisionFeed cards={cards} onAction={props.onCardAction} disabled={props.pending !== undefined} />
+      <PositionsAndOrders cards={cards} onAction={props.onCardAction} disabled={props.pending !== undefined} />
+      <MandateAndLedger cards={cards} onAction={props.onCardAction} disabled={props.pending !== undefined} />
+      <EscalationInbox cards={cards} onAction={props.onCardAction} disabled={props.pending !== undefined} />
+      <SystemNotices cards={cards} onAction={props.onCardAction} disabled={props.pending !== undefined} />
     </main>
   )
 }
