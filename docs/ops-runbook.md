@@ -254,12 +254,12 @@
 
 **方法**（可复现）：扫 packages/tradectl/src 里所有 export function create*/open* 工厂，再全仓统计其名字的出现次数，分为"生产引用"（src 与 scripts）与"演练引用"（drill/），排除定义文件自身。
 
-**表格不再手抄**（会烂）：以 `node scripts/wiring-ledger.mjs` 的实时输出为准。2026-10-02 实测：**合计 24 个工厂 / 生产已接线 15 / 仅演练 4 / 无调用点 5**；无调用点清单 = `createPairingClient`、`createRiskGate`、`createCountingVenue`、`createV1Stream`、`createFrameDecoder`。该轮把 `createDeskProcess`、`createTriggerPump`、`createMemorySourceRegistry`、`createUdsServer`、`createEdgeGateway`、`createDeviceRegistry` 接进生产路径，并修掉台账正则漏掉 `export async function` 的问题（`createUdsServer`/`createEdgeGateway` 此前不可见）。
+**表格不再手抄**（会烂）：以 `node scripts/wiring-ledger.mjs` 的实时输出为准。2026-10-02（修复轮收尾，HEAD `96a1afd7`）实测：**合计 26 个工厂 / 生产已接线 16 / 仅演练 4 / 无调用点 6**；无调用点清单 = `createPairingClient`、`createRiskGate`、`createCountingVenue`、`createV1Stream`、`createV1StreamForDevice`、`createFrameDecoder`（另有"只有单测引用"单独成行——**单测不构成接线**）。扫描范围**不含 `desktop/`**：桌面壳不是 tradectl 工厂的运行时消费者，将来若直接构造再纳入。该轮把 `createDeskProcess`、`createTriggerPump`、`createMemorySourceRegistry`、`createUdsServer`、`createEdgeGateway`、`createDeviceRegistry` 接进生产路径，并修掉台账正则漏掉 `export async function` 的问题（`createUdsServer`/`createEdgeGateway` 此前不可见）。
 
 **怎么读这张表（重要，别误读成"死代码"）**：
 
 - 本仓的方法是**先做成可演练的组件、再由进程装配把它们连起来**。所以"仅演练在用"不是缺陷，而是 **P5 步骤 1 进程装配尚未发生**的正常中间态；
-- **真正需要留意的是"无调用点"那 5 个**：它们连演练都没用上，意味着**没有任何证据表明它们被跑过**（只有单测）。五个各有归属：`createPairingClient`（客户端侧，移动端/桌面壳）、`createRiskGate`（需 venue 与对账数据源，等 P4 venue 接入）、`createCountingVenue`（shadow 验收装置）、`createV1Stream`+`createFrameDecoder`（P4 的 `/v1` 下行面与 UDS 客户端帧解码）。
+- **真正需要留意的是"无调用点"那 6 个**：它们连演练都没用上，意味着**没有任何证据表明它们被跑过**（只有单测）。归属：`createPairingClient`（客户端侧，移动端/桌面壳）、`createRiskGate`（需 venue 与对账数据源，等 P4 venue 接入）、`createCountingVenue`（shadow 验收装置）、`createV1Stream`/`createV1StreamForDevice`/`createFrameDecoder`（`/v1` 下行面与 UDS 客户端帧解码，属 P4）。
 - 其中两个可以**在不需要 venue 的前提下先接上**：
   1. **createClockDriftDetector** —— 环路已经有 probeDir 的先例（自己探盘），同理可以自己采两条时钟并把漂移喂进信号，让 clock-drift 从"有实现"变成"运行时真的会响"；
   2. **createTriggerPump 与 onBacklog** —— 泵的接线点属进程装配，但其"积压告警写审计"必须随装配一起做（见上一节）。
@@ -271,9 +271,9 @@
 | 项 | 变化 |
 |---|---|
 | createClockDriftDetector | **零调用点 → 生产已接线**（round 148 接进 desk 环路：给了 clockDriftToleranceMs 就每轮自采两条时钟，超容差即降级）|
-| 合计 | 21 个工厂：**无调用点 7 个**（原 8）、仅演练 6 个、生产已接线 8 个 |
+| 合计（**历史值，已被上文取代**） | round 149 当时：21 个工厂 / 无调用点 7 / 仅演练 6 / 生产 8 |
 
-剩余 7 个零调用点：memorySourceRegistry / pairingClient / triggerPump / riskGate / countingVenue / v1Stream / frameDecoder —— 接线点均在 P5 步骤 1 的进程装配（见上表"给装配者的清单"）。
+> 当前值以上文「表格不再手抄」那段为准（26 / 16 / 4 / 6）；本节保留的是 round 149 的历史快照。
 
 **复现命令**：pnpm wiring:ledger（scripts/wiring-ledger.mjs）—— 输出每个工厂的生产/演练引用数与判定；无调用点的会单独列出清单。
 
