@@ -13,6 +13,8 @@
 //  < staleMs ⇒ aging；< ttlMs ⇒ stale；≥ ttlMs ⇒ expired；没有快照 ⇒ unknown。
 //
 
+import DshTradingContract
+
 /// 观测链路（App <-> 监控服务）状态。它是**传输事实**，不是数据年龄，也不是执行状态。
 public enum MonitorLinkState: String, ClosedEnumValue, CaseIterable, Sendable {
     case connected
@@ -81,6 +83,21 @@ public enum DataTrust: String, CaseIterable, Sendable, Hashable {
         case .expired, .unknown: return true
         }
     }
+}
+
+/// 观测端陈旧度预算的**唯一毫秒事实**（Domain 是 Contract 与 Offline 的共同下游）。
+///
+/// 这里曾经有两份各自定义的毫秒常量：Offline 收到的是 App 传的 30 分钟档，
+/// 而 Domain 渲染判据用的是自己的 60 分钟档，于是"同一份缓存算不算过期"在两个层里
+/// 得到两个答案。现在只留这一份：渲染（TrustBudget）与缓存视图（Offline 的
+/// StalenessBudget）都由它派生，谁都不许再写死第二组毫秒数。
+public enum ObservationStalenessBudget {
+    /// 契约三档语义的客户端取值。**渲染判据就是这里的 ttlMs**。
+    public static let clientDefault = StalenessBudget(
+        freshMs: 30_000,
+        staleMs: 5 * 60_000,
+        ttlMs: 30 * 60_000
+    )
 }
 
 /// 年龄 -> 可信度。**只吃年龄**：链路中断属于 BotReachability，不在这里折叠。

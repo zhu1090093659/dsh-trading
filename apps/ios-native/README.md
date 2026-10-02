@@ -191,8 +191,9 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
 | # | 不变量 | 可执行落点 |
 |---|---|---|
 | 1 | 未知封闭枚举 ⇒ 不可操作（禁用全部 Action，只渲染 `fallbackText`） | `validateCard`/`renderableActions`（[ContractCards.swift](Sources/Contract/ContractCards.swift)）；`testUnknownClosedEnumValuesDisableEveryAction`、`testUnknownCardTypeIsInvalidAndInoperable`；`validateCard`/`renderableActions` 行为向量；[check-contract-drift.mjs](../../scripts/ios-native/check-contract-drift.mjs) 的 rawValue 比对 |
-| 2 | 过期/陈旧数据不渲染数据本身 | `offlineView`（[ContractOffline.swift](Sources/Contract/ContractOffline.swift)）；`testExpiredSnapshotNeverRendersTheDataItself`；`offlineView` 向量；Offline 层单测 |
-| 3 | 跨源永不混显；切换期只读 | `SourceGuard`；`testSourceGuardNeverMixesSourcesAndIsReadOnlyWhileSwitching`；`sourceGuard` 向量；[ContractParityTests.swift](Tests/ContractTests/ContractParityTests.swift) |
+| 2 | 过期/陈旧数据不渲染数据本身 | `offlineView`（[ContractOffline.swift](Sources/Contract/ContractOffline.swift)）；`testExpiredSnapshotNeverRendersTheDataItself`；`offlineView` 向量；Offline 层单测。**渲染判据是契约面 `StalenessBudget.ttlMs`**，毫秒事实只有一个家（[DataTrust.swift](Sources/Domain/DataTrust.swift) 的 `ObservationStalenessBudget`，`TrustBudget` 由它派生） |
+| 3 | 跨源永不混显；切换期只读 | 契约面：`SourceGuard`；`testSourceGuardNeverMixesSourcesAndIsReadOnlyWhileSwitching`；`sourceGuard` 向量；[ContractParityTests.swift](Tests/ContractTests/ContractParityTests.swift)。本地快照面（IOS-7）：来源身份 `SnapshotSourceId`（origin + 配对代际，**不写死**）、`SourceScopedSnapshots.load(sourceId:)` 的来源校验、配对边界 `clear()`；[PairingScopedSnapshotTests.swift](Tests/OfflineTests/PairingScopedSnapshotTests.swift) 的正负例 |
+| 4 | 令牌只发往配对绑定的 origin，跨源**连请求都不发**；重新配对后**旧客户端**一律发不出 | ① [DshtApiClient.swift](Sources/Transport/DshtApiClient.swift) 的四道守卫，顺序即语义（origin → 配对代际 → 取令牌 → 发送）；② 取令牌**只有**带绑定入口 `authorization(ifBoundTo:)`（无绑定版本已删除），[TokenProvider.swift](Sources/Transport/TokenProvider.swift)；③ 配对身份 = 绑定 origin + 配对代际，[PairingIdentity.swift](Sources/Transport/PairingIdentity.swift)（同一身份也决定本地快照的来源，见 #3）；④ 跨源 30x 不跟随（`RedirectPolicyDelegate`）；⑤ 机检 [check-transport-token-binding.mjs](../../scripts/ios-native/check-transport-token-binding.mjs) 把①②③⑤钉成 CI 门禁。**真机未验** |
 | 4 | 令牌只发往配对绑定的 origin，跨源**连请求都不发**；重新配对后**旧客户端**一律发不出 | ① [DshtApiClient.swift](Sources/Transport/DshtApiClient.swift) 的四道守卫，顺序即语义（origin → 配对代际 → 取令牌 → 发送）；② 取令牌**只有**带绑定入口 `authorization(ifBoundTo:)`（无绑定版本已删除），[TokenProvider.swift](Sources/Transport/TokenProvider.swift)；③ 配对身份 = 绑定 origin + 配对代际，[PairingIdentity.swift](Sources/Transport/PairingIdentity.swift)；④ 跨源 30x 不跟随（`RedirectPolicyDelegate`）；⑤ 机检 [check-transport-token-binding.mjs](../../scripts/ios-native/check-transport-token-binding.mjs) 把①②③⑤钉成 CI 门禁。**真机未验** |
 | 5 | 配对永不签发 control；控制类动作一律 biometric 且 fail-closed | `grantableByDefault`（向量 + ContractParityTests）；`auditConfirmPolicy`/`actionConfirm`（`testEveryControlActionRequiresBiometric`）；Alerts 的 `AlertsConfirmationGate` 单测。**设备上的生物识别未验** |
 | 6 | 生物识别不替代服务端授权与风控 | Alerts 的注释 + 单测：闸门只决定"要不要把动作发出去"，服务端仍按 scope 与 mandate 判。**无设备验证** |
@@ -215,7 +216,8 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
 | 弱网（超时 / 半开 / 抖动） | 有 `OfflineBackoff` 与 gap report 的结构与单测 | 未做真机弱网 |
 | 沙箱外的 `xcodebuild test` | 本机只能 `build-for-testing` + `xcrun xctest` 绕过 PTY 限制 | 沙箱环境限制 |
 | 事件续读（WS 流） | **未实现**：快照是唯一数据入口 | 本轮范围外 |
-| 真机持久化 | `InMemorySnapshotPersistence`（重启丢快照 ⇒ 只影响离线可用性，不影响正确性） | 落盘实现属 Offline 卡范围 |
+| 真机持久化 | `InMemorySnapshotPersistence`（重启丢快照 ⇒ 只影响离线可用性，不影响正确性）；来源身份校验在 `SourceScopedSnapshots`，落盘实现换上来时自动继承 | 落盘实现的原子性未验 |
+| App 组合根（`Sources/App`）的接线 | `observationSourceId` 从配对身份派生、`pair()/unpair()` 清空快照 | 该层无测试目标；派生规则由 `PairingScopedSnapshotTests` 直接断言，接线本身只有编译期/结构证据 |
 | 「解析不在主线程」 | 代码结构如此（`DeskMapper.mapOffMain`） | **无法用断言证明**，需要线程断言基础设施 |
 
 ## 8. finding（记录，不自行放宽）
@@ -243,9 +245,12 @@ CI **不跑 iOS 构建**（与 `apps/mobile` 同一先例）：真正的 Swift �
    无绑定入口**从协议删除**（机检 ① 挡它回来）、重定向 delegate 挂上（机检 ⑤ 挡它被摘掉）、
    配对身份增加**代际**（守卫 ④ 挡"重新配对到同一 origin 后旧客户端仍可用"）。
    负例与突变演练证据见 [Agent Note](../../.agents/notes/implemented/bug-fix/2026-10-02-ios-token-origin-binding-and-pairing-epoch.md)。
-6. **`docs-link:check` **不覆盖本目录**（已知缺口，如实记录，留待下一轮补）**：
+6. **IOS-7（本地快照的来源身份）已修**：来源身份 `SnapshotSourceId`（规范化 origin + 配对代际）、
+   读路径来源校验 `SourceScopedSnapshots`、配对边界清空、命令通道的数据可信度闸门（`DataTrust.blocksCommands`）。
+   决策与红/绿证据见 [Agent Note](../../.agents/notes/implemented/bug-fix/2026-10-02-ios-offline-cache-source-identity.md)。
+7. **`docs-link:check` **不覆盖本目录**（已知缺口，如实记录，留待下一轮补）**：
    `scripts/docs-link-check.mjs:31-32` 的扫描清单只有 `AGENTS.md` 与 `docs/**`，
-   **不含 `apps/ios-native/**`** —— 本 README 的 34 条相对链接**没有任何门禁保**，只靠人工静态检查兜。
+   **不含 `apps/ios-native/**`** —— 本 README 的 45 条相对链接**没有任何门禁保**，只靠人工静态检查兜。
    2026-10-02 实证：工作冻结件删除后 `apps/ios-native/IOS-1-HANDOFF.md` 里指向 `INTERFACE-FREEZE.md` 的
    markdown 链接成了断链，而 `node scripts/docs-link-check.mjs --check` 仍 **exit 0**（它连这个文件都没扫）。
    影响：本目录的文档链接腐烂不会被 CI 发现。修法（下一轮）：把

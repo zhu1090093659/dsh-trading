@@ -45,8 +45,11 @@ public final class AppEnvironment {
     private let clock: @Sendable () -> Int
     private let persistence = InMemorySnapshotPersistence()
 
-    /// 陈旧度预算（契约只定义分档，具体毫秒数由客户端定；这里是观测端的默认值）。
-    public static let stalenessBudget = StalenessBudget(freshMs: 30_000, staleMs: 5 * 60_000, ttlMs: 30 * 60_000)
+    /// 陈旧度预算（契约只定义分档，具体毫秒数由客户端定）。
+    /// **毫秒事实只有一个家**：Domain 的 `ObservationStalenessBudget.clientDefault`。
+    /// 这里只是把它交给两处消费者（Offline 的缓存视图、Domain 的渲染判据），
+    /// 不再各写一组数 —— 曾经 30 分钟与 60 分钟并存，让"算不算过期"有两个答案。
+    public static let stalenessBudget = ObservationStalenessBudget.clientDefault
 
     /// IOS-3 报的契约缺口：呈现面把它们如实显示为"缺口"，而不是猜一个值。
     public static let contractGaps: [String] = [
@@ -101,6 +104,18 @@ public final class AppEnvironment {
     /// 夹具情形（仅 fixtures 模式有意义）：采集端据此并排取证。
     public let fixtureScenario: FixtureSnapshotFetcher.Scenario?
 
+    /// 观测来源的**规范化身份**：绑定 origin + 配对代际。
+    ///
+    /// 为什么不是常量 `"live"`：sourceId 是"这份数据属于哪个实例"的判据，
+    /// 所有配对都长成同一个字符串时，`cached.sourceId == sourceId` 这条校验
+    /// 在结构上就不可能失败 —— 一个永不触发的守卫等于没有守卫。
+    /// fixtures 不绑定任何实例，用固定身份（它的数据是本机造的）。
+    private var observationSourceId: String {
+        guard mode == .live else { return SnapshotSourceId.fixtures }
+        guard let identity = session?.identity else { return SnapshotSourceId.unpaired }
+        return SnapshotSourceId.live(origin: identity.origin.value, epoch: identity.epoch)
+    }
+
     private func rebuildStore() {
         switch mode {
         case .fixtures:
@@ -109,7 +124,7 @@ public final class AppEnvironment {
             let source = OfflineObservationSource(
                 fetcher: FixtureSnapshotFetcher(scenario: fixtureScenario ?? .running, clock: clock),
                 persistence: persistence,
-                sourceId: "fixtures",
+                sourceId: SnapshotSourceId.fixtures,
                 budget: AppEnvironment.stalenessBudget,
                 clock: clock
             )
@@ -127,7 +142,7 @@ public final class AppEnvironment {
             let source = OfflineObservationSource(
                 fetcher: TransportSnapshotFetcher(client: client, clock: clock),
                 persistence: persistence,
-                sourceId: "live",
+                sourceId: observationSourceId,
                 budget: AppEnvironment.stalenessBudget,
                 clock: clock
             )
@@ -183,6 +198,8 @@ public final class AppEnvironment {
         do {
             let outcome = try await session.pairingClient().pair(baseURL: baseURL, code: code, name: name)
             sessionState = session.state()
+            // 重新配对 = 新实例：旧实例的本地快照当场失效，不留给下一个实例当"最后快照"。
+            persistence.clear()
             rebuildStore()
             // 配对**不做授权**：服务端如实回报的 deniedScopes 只是诊断信息，作用域只认 /a0/status。
             let denied = outcome.deniedScopes.isEmpty ? "" : "（服务端未签发的平面：" + outcome.deniedScopes.joined(separator: ",") + "）"
@@ -192,9 +209,16 @@ public final class AppEnvironment {
         }
     }
 
+    /// 解绑：清凭据 + **清本地快照**，然后重建观测面。
+    ///
+    /// 为什么要清快照：配对实例的缓存属于那个实例。只清凭据会让同一份旧卡片
+    /// 在下一个实例（可能连的是另一台机器人）下继续当"本地最后快照"用。
+    /// 这是"配对边界"的事实，不依赖 sourceId 恰好不同 —— 同一 origin 重新配对时
+    /// 它的 origin 相同，只有代际变了。
     public func unpair() {
         session?.forget()
         sessionState = session?.state() ?? .unpaired
+        persistence.clear()
         rebuildStore()
     }
 }

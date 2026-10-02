@@ -31,13 +31,26 @@ public struct TrustBudget: Hashable, Sendable {
         self.ttlMs = ttlMs
     }
 
+    /// 客户端展示预算：**由契约面的 StalenessBudget 派生**（一个事实只有一个家）。
+    ///
+    /// 为什么必须派生而不是各写各的：Domain 的渲染判据与 Offline 的缓存判据曾经是
+    /// 两个独立的毫秒常量（3_600_000 与 30 分钟），于是"同一份缓存算不算过期"
+    /// 在两个层里得到两个答案 —— 跨源污染的暴露窗口也就有了两个口径。
+    /// 现在唯一的毫秒事实是 `StalenessBudget`（App 组合根注入），TrustBudget 只做
+    /// "契约三档 → 渲染四档"的同构映射；契约面的 ttlMs 是渲染判据。
+    public static func from(_ budget: StalenessBudget) -> TrustBudget {
+        TrustBudget(
+            freshMs: budget.freshMs,
+            // 契约三档没有独立的"aging"边界：aging 在这里取 fresh 与 stale 的中点，
+            // 只影响徽标措辞（"可能已变化"），不影响"能不能渲染"。
+            agingMs: budget.freshMs + (budget.staleMs - budget.freshMs) / 2,
+            staleMs: budget.staleMs,
+            ttlMs: budget.ttlMs
+        )
+    }
+
     /// 客户端展示预算（与契约 offline.ts 的三档语义同构）。
-    public static let clientDefault = TrustBudget(
-        freshMs: 5_000,
-        agingMs: 30_000,
-        staleMs: 300_000,
-        ttlMs: 3_600_000
-    )
+    public static let clientDefault = TrustBudget.from(ObservationStalenessBudget.clientDefault)
 
     /// 由年龄分档。边界不满足 freshMs <= agingMs <= staleMs <= ttlMs 时返回 nil（口径不自洽）。
     public func age(ofMs ageMs: Int) -> DataAge? {

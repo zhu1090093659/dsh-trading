@@ -589,8 +589,22 @@ public final class ObservationStore {
         }
     }
 
-    /// 下发动作：**先过确认闸门，闸门不可用即 fail-closed**。
+    /// 下发动作：**先过数据可信度闸门，再过确认闸门**；任一道不放行即 fail-closed。
+    ///
+    /// 第一道是 IOS-7 第 4 条：**旧数据在屏时不得把控制动作发到新实例**。
+    /// 屏上还没有观测态、或屏上数据的可信度禁止下发（过期 / 尚未确认）时，
+    /// 命令**不进入传输层** —— 不是"发出去让服务端拒"，而是本地就不发。
+    /// 判据只有一个家：`DataTrust.blocksCommands`。
     public func send(_ action: ActionKind, params: [String: String], gate: ConfirmationGate) async -> CommandOutcome {
+        guard let current = observation else {
+            return CommandOutcome(accepted: false, message: "还没有可信的观测数据，动作不下发（fail-closed）")
+        }
+        guard !current.bot.trust.blocksCommands else {
+            return CommandOutcome(
+                accepted: false,
+                message: "屏上数据不可信（" + current.bot.trust.rawValue + "），动作不下发（fail-closed）：请先取到可信数据"
+            )
+        }
         guard let commands else {
             return CommandOutcome(accepted: false, message: "未配置命令通道")
         }

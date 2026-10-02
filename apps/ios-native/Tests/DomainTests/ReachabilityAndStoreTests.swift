@@ -224,6 +224,8 @@ final class ObservationStoreTests: XCTestCase {
         let source = SequencedSource([.success(healthySnapshot())])
         let sink = RecordingSink()
         let store = ObservationStore(source: source, commands: sink, clock: { 1_000 })
+        // 可信数据在屏是下发的前提（IOS-7 第 4 条：没有可信观测就不发命令）
+        await store.refresh()
 
         let outcome = await store.send(
             ActionKind.ack,
@@ -243,6 +245,7 @@ final class ObservationStoreTests: XCTestCase {
         let source = SequencedSource([.success(healthySnapshot())])
         let sink = RecordingSink()
         let store = ObservationStore(source: source, commands: sink, clock: { 1_000 })
+        await store.refresh()
 
         let outcome = await store.send(
             ActionKind.kill,
@@ -260,6 +263,7 @@ final class ObservationStoreTests: XCTestCase {
         let source = SequencedSource([.success(healthySnapshot())])
         let sink = RecordingSink()
         let store = ObservationStore(source: source, commands: sink, clock: { 1_000 })
+        await store.refresh()
 
         let outcome = await store.send(
             ActionKind.flatten,
@@ -275,6 +279,7 @@ final class ObservationStoreTests: XCTestCase {
     func test_givenNoCommandSink_whenSendingAction_thenRejectedWithoutCallingGate() async {
         let source = SequencedSource([.success(healthySnapshot())])
         let store = ObservationStore(source: source, commands: nil, clock: { 1_000 })
+        await store.refresh()
 
         let outcome = await store.send(
             ActionKind.ack,
