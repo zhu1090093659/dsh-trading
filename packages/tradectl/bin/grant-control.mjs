@@ -134,7 +134,8 @@ async function main(argv) {
     const result = response.result
     const scopes = result !== null && typeof result === 'object' && Array.isArray(result.scopes) ? result.scopes : []
     process.stdout.write('[grant-control] ✓ 已授予 ' + deviceId + ' control；该设备现有平面 ' + JSON.stringify(scopes) + NL)
-    process.stdout.write('[grant-control] 撤销入口：本命令只签发；撤销走 registry.revoke（部署面入口待接线）' + NL)
+    process.stdout.write('[grant-control] 撤销入口：bin/revoke-control.mjs（--revoke-control 只收回 control，'
+      + '--revoke-device 整台作废）—— 本命令只签发，撤销不在这里' + NL)
     return 0
   } catch (error) {
     return fail('授予失败：' + (error instanceof Error ? error.message : String(error)) + '（注册表不可达或 edge 无响应 ⇒ 拒绝，不当成成功）', 3)

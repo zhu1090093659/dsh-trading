@@ -12,9 +12,11 @@
  *      本入口不注册任何业务路由（也就不给"未实现的业务面"制造假象）；
  *   4. **优雅退出**：SIGINT/SIGTERM 关网关后退出，退出码 0。
  *
- * 已知缺口（如实标注，不在这里假装解决）：设备注册表 %%createDeviceRegistry%% 是**进程内**的，
- * 本入口没有落盘实现 ⇒ edge 重启后设备需要重新配对。这条属于 edge 边界（配对/注册表落盘），
- * 不在进程装配的范围里。
+ * 设备注册表**落盘**（2026-10-02 补）：%%--device-registry=<path>%% 是必填项 —— 注册表文件是
+ * 授权事实的家（配对结果、control 授予、逐设备撤销），不落盘就等于"edge 一重启，所有设备与
+ * 授权一起消失"。启动时加载：文件不存在 = 空表（首次启动的正常状态），**损坏/认不出即拒绝启动**
+ * （退出码 5，fail-closed，不许静默当空表）；文件只有 sha256(secret)，没有明文密钥。
+ * 为什么必填而不是"不给就退回内存表"：那正是"看起来在跑、其实授权一重启就没了"的静默降级。
  *
  * 为什么这是"库的可执行入口"而不是设计 §2.2 禁止的"自建 application bin"：同 %%bin/core.mjs%% ——
  * edge 是独立 OS principal 的基础设施进程，不含任何产品功能，也不进 npm 分发（private 包、无 bin 字段）。
@@ -27,19 +29,23 @@ import { pickImplementation } from './runtime.mjs'
 
 const NL = String.fromCharCode(10)
 
-const VALUE_FLAGS = new Set(['bind', 'port', 'kill-state', 'shell-dir', 'ops-socket'])
+const VALUE_FLAGS = new Set(['bind', 'port', 'kill-state', 'device-registry', 'shell-dir', 'ops-socket'])
 const BOOL_FLAGS = new Set(['issue-pairing-code', 'help'])
 
 const USAGE = [
-  '用法：node packages/tradectl/bin/edge.mjs --kill-state=<path> [选项]',
+  '用法：node packages/tradectl/bin/edge.mjs --kill-state=<path> --device-registry=<path> [选项]',
   '',
   '  --kill-state=<path>      带外 kill 状态文件（必填：edge 写、核心每次风险判定读）',
+  '  --device-registry=<path> 设备注册表文件（必填：配对/授予/撤销都落在这里，重启后仍在册）。',
+  '                           文件不存在 = 空表；损坏或认不出 ⇒ 拒绝启动（退出码 5）。只存 sha256(secret)',
+  '                           且权限 0600。不给就拒绝启动：内存表 = 重启即全部设备失效的静默降级',
   '  --bind=<host>            监听地址（缺省 $EDGE_BIND，再缺省 127.0.0.1；0.0.0.0/:: 与公网地址拒绝）',
   '  --port=<n>               端口（缺省 $EDGE_PORT，再缺省 8899）',
   '  --shell-dir=<path>       驾驶舱静态壳目录（§7.4：壳入口与壳资源免令牌，仅 GET/HEAD 精确路径；',
   '                           目录里出现非静态文件即拒绝启动。不给就一条静态路径都不开）',
-  '  --ops-socket=<path>      运维通道（本地 UDS）：只服务 grant-control。不给就不开这条通路 ——',
-  '                           于是"授予 control"只能拒绝（fail-closed），不是在网络面开一个口子',
+  '  --ops-socket=<path>      运维通道（本地 UDS）：只服务 grant-control / revoke-control /',
+  '                           revoke-device。不给就不开这条通路 —— 于是"授予/撤销 control"只能拒绝',
+  '                           （fail-closed），不是在网络面开一个口子',
   '  --issue-pairing-code     启动时签发一个配对码并打印（10 分钟有效；缺省不签发）',
   '  --help',
 ].join(NL)
@@ -149,8 +155,30 @@ async function main(argv) {
       + '。A0 kill 是最需要时唯一还成立的通路，本入口不允许它在运行期才发现写不进去。', 3)
   }
 
+  // 设备注册表：路径必填（见文件头"为什么必填"），目录同样先探一次写 —— 注册表的每次授权变更
+  // 都是"先落盘再改内存"，目录不可写 ⇒ 第一台设备配对就会失败，而那正是最需要它成功的时候。
+  const registryPath = args.values.get('device-registry')
+  if (registryPath === undefined || registryPath === '') {
+    return fail('缺少 --device-registry=<path>：注册表落不了盘的 edge 不该启动'
+      + '（设备与授权会在重启后全部消失，那是静默降级）' + NL + USAGE, 2)
+  }
+  const registryDir = dirname(registryPath)
+  const registryProbe = detectors.probeWritable(registryDir)
+  if (!registryProbe.writable) {
+    return fail('设备注册表目录不可写（' + registryDir + '）：' + registryProbe.reason
+      + '。注册表每次授权变更都先落盘再改内存，写不进去就不要启动。', 5)
+  }
+
   const now = () => Date.now()
-  const registry = edge.createDeviceRegistry({ now })
+  // 加载失败（文件损坏、版本认不出、条目形态不合规）⇒ 拒绝启动，不当成空表：空表意味着
+  // "所有设备都不在册"，而那会让每一次鉴权都 401 —— 一个没人知道为什么的全面失联。
+  let registry
+  try {
+    registry = edge.createDeviceRegistry({ now, storePath: registryPath })
+  } catch (error) {
+    return fail('设备注册表不可用（' + registryPath + '）：' + (error instanceof Error ? error.message : String(error))
+      + '。拒绝启动：注册表读不懂时"设备还在不在册"不允许变成没人知道答案的问题。', 5)
+  }
 
   /**
    * 运维通道（本地 UDS，不是网络面）：**唯一**的生产 grant-control 入口。
@@ -158,16 +186,24 @@ async function main(argv) {
    * 而这个动作需要有权限的人在一台能碰到 edge socket 的机器上完成；放到网络面上就等于
    * 给"第一台 control 设备"这件事加了一条远程攻击面（先有 control 才能授权 control 是死锁，
    * 所以那条端点必然要免令牌）。socket 的权限（0750/0660）就是这里的边界。
-   * 只服务一个方法：unknown 一律结构化拒绝（未知即放宽）。
+   * 只服务三个方法（grant-control / revoke-control / revoke-device）：unknown 一律结构化拒绝
+   * （未知即放宽）。三个方法都**只碰在册设备**：不在册 ⇒ OPS_DEVICE_UNKNOWN，不"顺手建一台"。
    */
+  const OPS_METHODS = ['grant-control', 'revoke-control', 'revoke-device']
+  /** 撤销之后"到底还剩什么"必须可读：每次改完都从注册表里把当前平面取回来回给调用方。 */
+  const scopesOf = (deviceId) => {
+    const entry = registry.list().find((device) => device.id === deviceId)
+    return entry === undefined ? [] : entry.scopes
+  }
   const opsSocketPath = args.values.get('ops-socket')
   const ops = opsSocketPath === undefined || opsSocketPath === ''
     ? null
     : await uds.createUdsServer({
       socketPath: opsSocketPath,
       handle: (frame) => {
-        if (frame.method !== 'grant-control') {
-          return { error: { code: 'OPS_METHOD_UNKNOWN', message: '本通道只服务 grant-control，收到 ' + String(frame.method) } }
+        const method = String(frame.method)
+        if (!OPS_METHODS.includes(method)) {
+          return { error: { code: 'OPS_METHOD_UNKNOWN', message: '本通道只服务 ' + OPS_METHODS.join(' / ') + '，收到 ' + method } }
         }
         const params = (frame.params ?? {})
         const deviceId = params.deviceId
@@ -175,11 +211,28 @@ async function main(argv) {
         if (!edge.isDeviceId(deviceId)) {
           return { error: { code: 'OPS_DEVICE_ID_INVALID', message: '需要一个 dev_ + 16 位十六进制的设备 id；通配与批量一律拒绝（control 是停掉一切的开关）' } }
         }
-        if (!registry.grantControl(deviceId)) {
+        const device = registry.list().find((entry) => entry.id === deviceId)
+        if (device === undefined) {
           return { error: { code: 'OPS_DEVICE_UNKNOWN', message: '注册表里没有这台设备：' + deviceId } }
         }
-        const device = registry.list().find((entry) => entry.id === deviceId)
-        return { result: { deviceId, scopes: device === undefined ? [] : device.scopes } }
+        if (method === 'grant-control') {
+          // 授予是幂等的：已经持有 control 的设备再授一次不算错误（目标状态已经达成）。
+          registry.grantControl(deviceId)
+          return { result: { deviceId, scopes: scopesOf(deviceId) } }
+        }
+        if (method === 'revoke-control') {
+          // "本来就没有 control" ⇒ 明确拒绝，不当成成功：撤销的退出码 0 必须意味着**真的收回了**，
+          // 而这里什么都没变。消息里带上当前平面，操作者一眼看到还剩什么（不必再跑一条查询）。
+          if (!device.scopes.includes('control')) {
+            return { error: { code: 'OPS_CONTROL_ABSENT', message: '这台设备本来就没有 control（当前平面 ' + JSON.stringify(device.scopes) + '），没有可撤销的东西' } }
+          }
+          registry.revokeControl(deviceId)
+          return { result: { deviceId, scopes: scopesOf(deviceId) } }
+        }
+        // revoke-device：整台设备作废。撤销后该设备**什么都不剩**（scopes 空数组），
+        // 另报注册表里还剩几台 —— 那是"整台作废"之后运维最需要知道的那个数。
+        registry.revoke(deviceId)
+        return { result: { deviceId, scopes: [], devicesRemaining: registry.list().length } }
       },
     })
 
@@ -210,13 +263,15 @@ async function main(argv) {
 
   process.stdout.write('[edge] 已启动：' + gateway.url + ' 绑定=' + host + ':' + String(port)
     + ' 实现=' + impl.why + ' kill 状态=' + killStatePath + '（目录可写：' + probe.reason + '）' + NL)
-  process.stdout.write('[edge] A0：' + edge.A0_PATHS.join(' ') + '；设备注册表**进程内**（重启需重新配对，已知缺口）' + NL)
+  process.stdout.write('[edge] A0：' + edge.A0_PATHS.join(' ')
+    + '；设备注册表=' + registryPath + '（在册 ' + String(registry.list().length) + ' 台，'
+    + '只存 sha256 散列、权限 0600、目录可写：' + registryProbe.reason + '）' + NL)
   process.stdout.write('[edge] 静态壳：' + (shell === null
     ? '未托管（--shell-dir 未给：一条静态路径都不公开）'
     : shell.dir + ' ⇒ 免令牌精确路径 ' + String(shell.paths.length) + ' 条（仅 GET/HEAD）：' + shell.paths.join(' ')) + NL)
   process.stdout.write('[edge] 运维通道：' + (ops === null
-    ? '未开（--ops-socket 未给 ⇒ grant-control 只会失败，fail-closed）'
-    : ops.socketPath + '（只服务 grant-control；本地 UDS，不在网络面上）') + NL)
+    ? '未开（--ops-socket 未给 ⇒ 授予/撤销 control 只会失败，fail-closed）'
+    : ops.socketPath + '（只服务 ' + OPS_METHODS.join(' / ') + '；本地 UDS，不在网络面上）') + NL)
   if (args.booleans.has('issue-pairing-code')) {
     const pairing = registry.issuePairingCode()
     process.stdout.write('[edge] 配对码 ' + pairing.code + '（' + String(Math.round(edge.PAIRING_TTL_MS / 60000)) + ' 分钟内有效；配对只签发 read scope）' + NL)

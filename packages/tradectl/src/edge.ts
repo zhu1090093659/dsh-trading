@@ -13,6 +13,10 @@
  *   4. **不用 cookie**：令牌走 Authorization 头，于是没有"浏览器自动带凭据"这条路径，
  *      也就没有 CSRF 面要防。
  *
+ * **设备注册表可落盘**（另见 createDeviceRegistry）：给了 %%storePath%% 就把设备（**只有
+ * sha256(secret)**，没有明文密钥）原子写进文件，edge 重启后设备仍在册；授予与撤销（收回
+ * control / 整台作废）都落盘且**立即生效**。文件损坏或认不出 ⇒ 拒绝启动，不当成空表。
+ *
  * A0「永不下线」：kill / pause / resume / status / ack / ping 六端点注册**先于**行情与
  * agent 面，并且只依赖边缘自己的状态与核心的 kill 文件——行情挂了、agent 挂了、账本锁死
  * 了，kill 仍然要生效。kill 落成**原子状态文件**（临时文件 + rename），核心每次风险判定
@@ -21,7 +25,7 @@
  * @module @dshtrading/tradectl/edge
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { extname, join, resolve } from 'node:path'
@@ -86,11 +90,19 @@ export function isDeviceId(value: unknown): value is string {
   return typeof value === 'string' && DEVICE_ID_PATTERN.test(value)
 }
 
-/** 设备注册表（内存 + 明文密钥一次性返回；本轮不落盘，见 Note 的未验证项）。 */
+/**
+ * 设备注册表（内存索引 + 可选文件后端；明文密钥一次性返回，库里只有 sha256）。
+ *
+ * 逐设备撤销（`revokeControl` / `revoke`）在内存里**立即生效**：鉴权每次都查这张表，
+ * 没有任何缓存窗口。给了落盘路径时每次授权变更都先落盘再改内存（见 createDeviceRegistry）。
+ */
 export interface DeviceRegistry {
   issuePairingCode(): { code: string; expiresAtMs: number }
   redeem(input: { code: string; name: string; scopes?: readonly Scope[] }): { device: Device; secret: string } | { error: string }
   grantControl(deviceId: string): boolean
+  /** 只收回 control，其余作用域原样保留；设备不在册返回 false（变更落盘，见 createDeviceRegistry）。 */
+  revokeControl(deviceId: string): boolean
+  /** 整台设备作废：令牌立即失效（不是"下次重启才生效"）。 */
   revoke(deviceId: string): boolean
   authenticate(header: string | undefined): { device: Device } | { error: 'missing' | 'invalid' }
   list(): readonly Device[]
@@ -101,14 +113,135 @@ function hashSecret(secret: string): string {
 }
 
 /**
+ * 注册表落盘文件的版本。版本认不出就**拒绝启动**：字段语义可能已经变了，
+ * 按旧读法解释等于猜授权边界。
+ */
+export const DEVICE_REGISTRY_VERSION = 1
+
+/**
+ * 落盘文件的权限：**只有 edge 自己**读得到（连密钥散列也不给同组看）。文件里没有明文密钥
+ * —— Device 只存 %%sha256(secret)%%；明文只在配对响应里出现那一次。
+ */
+export const DEVICE_REGISTRY_FILE_MODE = 0o600
+
+/** 散列的形态：sha256 的 64 位小写十六进制。 */
+const SECRET_HASH_PATTERN = /^[0-9a-f]{64}$/
+
+/** 注册表读不懂时的统一出口：**拒绝启动**，不静默当成空表（空表 = 全部设备被悄悄降权）。 */
+function registryUnusable(source: string, why: string): never {
+  throw new Error(
+    'device registry ' + source + ' 不可用：' + why
+    + '。注册表是授权事实的家：读不懂就拒绝启动（fail-closed），不当成空表 —— '
+    + '"设备还在不在册"不允许变成一个没人知道答案的问题。',
+  )
+}
+
+/** 取 errno 代码（不假设 catch 到的一定是 Error）。 */
+function errnoOf(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' ? code : undefined
+}
+
+/**
+ * 解析落盘内容，返回设备列表。**任何一条不合规即抛错**：不跳过坏条目、不给缺省值。
+ * 静默跳过一条等于悄悄作废一台设备（或悄悄放行一个认不出的作用域），而这两种都不会报错。
+ * @param text - 文件内容。
+ * @param source - 文件路径（只进错误消息，便于运维直接找到那个文件）。
+ */
+export function parseDeviceRegistryFile(text: string, source: string): Device[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch (error) {
+    registryUnusable(source, '不是合法 JSON（' + (error instanceof Error ? error.message : String(error)) + '）')
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) registryUnusable(source, '顶层不是一个 JSON 对象')
+  const record = parsed as Record<string, unknown>
+  if (record.version !== DEVICE_REGISTRY_VERSION) {
+    registryUnusable(source, '版本不是 ' + String(DEVICE_REGISTRY_VERSION) + '（收到 ' + JSON.stringify(record.version) + '）')
+  }
+  if (!Array.isArray(record.devices)) registryUnusable(source, 'devices 不是数组')
+  const devices: Device[] = []
+  const seen = new Set<string>()
+  for (const [index, raw] of record.devices.entries()) {
+    const where = 'devices[' + String(index) + ']'
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) registryUnusable(source, where + ' 不是对象')
+    const entry = raw as Record<string, unknown>
+    const id = entry.id
+    if (!isDeviceId(id)) registryUnusable(source, where + '.id 不是设备 id 形态（dev_ + 16 位十六进制）')
+    if (seen.has(id)) registryUnusable(source, where + '.id 重复：' + id)
+    seen.add(id)
+    const name = entry.name
+    if (typeof name !== 'string') registryUnusable(source, where + '.name 不是字符串')
+    const scopes = entry.scopes
+    if (!Array.isArray(scopes) || scopes.some((scope) => !isScopePlane(scope))) {
+      registryUnusable(source, where + '.scopes 必须是 ' + SCOPE_PLANES.join('/') + ' 的数组')
+    }
+    const secretHash = entry.secretHash
+    if (typeof secretHash !== 'string' || !SECRET_HASH_PATTERN.test(secretHash)) registryUnusable(source, where + '.secretHash 不是 sha256 十六进制')
+    const createdAtMs = entry.createdAtMs
+    if (typeof createdAtMs !== 'number' || !Number.isFinite(createdAtMs)) registryUnusable(source, where + '.createdAtMs 不是有限数')
+    devices.push({ id, name, scopes: [...(scopes as Scope[])], secretHash, createdAtMs })
+  }
+  return devices
+}
+
+/**
+ * 读注册表文件。**文件不存在 ⇒ 空注册表**（首次启动的正常状态，不是错误）；
+ * 其余读取失败（权限、坏 JSON、认不出的结构）一律抛错 —— "读不到"与"没有设备"是两件事，
+ * 把前者当成后者等于把全部设备静默降权。
+ * @param path - 注册表文件路径。
+ */
+export function readDeviceRegistryFile(path: string): Device[] {
+  let text: string
+  try {
+    text = readFileSync(path, 'utf8')
+  } catch (error) {
+    if (errnoOf(error) === 'ENOENT') return []
+    registryUnusable(path, '读不出来（' + (error instanceof Error ? error.message : String(error)) + '）')
+  }
+  return parseDeviceRegistryFile(text, path)
+}
+
+/**
+ * 原子写注册表文件：**同目录临时文件 + rename**（POSIX 同分区 rename 是原子的）⇒ 崩溃或断电
+ * 只会留下"上一份完整状态"，不会留下半截 JSON 被下次启动读成"设备少了几台"（那等于凭空
+ * 作废设备）。权限显式定死 %%0600%%：writeFileSync 的 mode 会被 umask 收窄，再 chmod 一次
+ * 让"只有 edge 读得到"是定死的，而不是取决于环境。
+ * @param path - 注册表文件路径（目录必须已存在且可写；systemd StateDirectory 提供）。
+ * @param devices - 要落盘的完整设备列表（调用方保证是内存里那份的全量快照）。
+ */
+export function writeDeviceRegistryFile(path: string, devices: readonly Device[]): void {
+  const payload = JSON.stringify({ version: DEVICE_REGISTRY_VERSION, devices }, null, 2) + '\n'
+  const tmp = path + '.tmp-' + String(process.pid)
+  writeFileSync(tmp, payload, { mode: DEVICE_REGISTRY_FILE_MODE })
+  chmodSync(tmp, DEVICE_REGISTRY_FILE_MODE)
+  renameSync(tmp, path)
+}
+
+/**
  * 造一个设备注册表。配对码一次性、带 TTL；兑换按契约只签发 read（+ 请求里显式给出的
  * command），认不出的平面既不签发也不冒充成已签发；control 只能事后 grantControl。
- * @param options - now 注入时钟；pairingTtlMs 覆盖有效期。
+ *
+ * 给了 %%storePath%% 就是**文件后端**：启动时加载（文件不存在 = 空表；损坏/认不出即抛错，
+ * 见 readDeviceRegistryFile），此后每次授权变更（兑换、授予 control、收回 control、作废设备）
+ * **先落盘再改内存** —— 磁盘是授权事实的家，写不进去就当场抛错，不出现"内存里已生效、
+ * 重启就没了"。配对码仍是进程内的：它是一次性短时凭据（TTL 10 分钟），跨重启存活没有意义。
+ * @param options - now 注入时钟；pairingTtlMs 覆盖有效期；storePath 落盘路径（不给则纯内存）。
  */
-export function createDeviceRegistry(options: { now: () => number; pairingTtlMs?: number }): DeviceRegistry {
+export function createDeviceRegistry(options: { now: () => number; pairingTtlMs?: number; storePath?: string }): DeviceRegistry {
   const ttl = options.pairingTtlMs ?? PAIRING_TTL_MS
   const codes = new Map<string, number>()
   const devices = new Map<string, Device>()
+  const storePath = options.storePath
+  for (const device of storePath === undefined ? [] : readDeviceRegistryFile(storePath)) devices.set(device.id, device)
+  /** 先落盘再改内存：写失败 ⇒ 内存保持旧状态、调用方拿到异常，不出现"两处不一致"。 */
+  const commit = (next: readonly Device[]): void => {
+    if (storePath !== undefined) writeDeviceRegistryFile(storePath, next)
+    devices.clear()
+    for (const device of next) devices.set(device.id, device)
+  }
   return {
     issuePairingCode() {
       const code = randomBytes(16).toString('base64url')
@@ -133,7 +266,7 @@ export function createDeviceRegistry(options: { now: () => number; pairingTtlMs?
         secretHash: hashSecret(secret),
         createdAtMs: options.now(),
       }
-      devices.set(device.id, device)
+      commit([...devices.values(), device])
       return { device, secret }
     },
     grantControl(deviceId) {
@@ -141,11 +274,22 @@ export function createDeviceRegistry(options: { now: () => number; pairingTtlMs?
       if (device === undefined) return false
       // 只追加、不收回已签发的平面，输出保持契约的声明顺序（客户端可以依赖它做 diff）。
       const scopes = SCOPE_PLANES.filter((plane) => plane === 'control' || device.scopes.includes(plane))
-      devices.set(deviceId, { ...device, scopes })
+      commit([...devices.values()].map((entry) => (entry.id === deviceId ? { ...device, scopes } : entry)))
+      return true
+    },
+    revokeControl(deviceId) {
+      const device = devices.get(deviceId)
+      if (device === undefined) return false
+      // 只收回这一个平面：其余作用域原样保留（撤销 control 不是"顺手把设备降成什么都没有"）。
+      const scopes = device.scopes.filter((plane) => plane !== 'control')
+      commit([...devices.values()].map((entry) => (entry.id === deviceId ? { ...device, scopes } : entry)))
       return true
     },
     revoke(deviceId) {
-      return devices.delete(deviceId)
+      if (!devices.has(deviceId)) return false
+      // 整台设备作废：从注册表里删掉 ⇒ 下一次鉴权就查不到它（令牌立即失效，无需重启）。
+      commit([...devices.values()].filter((entry) => entry.id !== deviceId))
+      return true
     },
     authenticate(header) {
       if (header === undefined || !header.startsWith('Bearer ')) return { error: 'missing' }

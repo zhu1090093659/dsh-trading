@@ -16,16 +16,21 @@ Environment=DSH_HOME=/var/lib/dsh-trading
 Environment=EDGE_BIND=127.0.0.1
 Environment=EDGE_PORT=8899
 UMask=0077
-# kill 状态目录：归 edge（dsh-trade-edge:dsh-trade, 0770），核心以组身份读。
-# 放在 /var/lib 而不是 /run：kill 状态必须**跨 edge 重启存活**（丢了就等于 kill 被悄悄解除）。
+# kill 状态目录 + 设备注册表目录：归 edge（dsh-trade-edge:dsh-trade, 0770），核心以组身份读 kill。
+# 放在 /var/lib 而不是 /run：kill 状态与设备注册表都必须**跨 edge 重启存活** ——
+# kill 丢了等于 kill 被悄悄解除，注册表丢了等于全部设备静默失联（要重新配对、control 重新授予）。
+# 注册表文件本身由 edge 写成 0600（只存 sha256(secret)，没有明文密钥）。
 StateDirectory=dsh-trading-a0
 StateDirectoryMode=0770
 # 运维通道（grant-control）的本地 UDS 目录：归 edge、仅本机可达（socket 权限由入口设为 0660）。
 RuntimeDirectory=dsh-trading-edge
 RuntimeDirectoryMode=0700
+# --device-registry：设备注册表文件（必填）—— 配对/授予/撤销都落在这里，edge 重启后仍在册；
+#   文件损坏或认不出 ⇒ 拒绝启动（退出码 5，fail-closed），不当成空表。
 # --shell-dir：驾驶舱静态壳（部署时从 packages/cockpit/dist 复制到 /opt/dsh-trading/cockpit）；
-# --ops-socket：grant-control 的本地通道。两者都显式开启，不给就不存在（默认最小暴露面）。
-ExecStart=/usr/bin/env node /opt/dsh-trading/tradectl/bin/edge.mjs --kill-state /var/lib/dsh-trading-a0/kill.json --shell-dir /opt/dsh-trading/cockpit --ops-socket /run/dsh-trading-edge/ops.sock
+# --ops-socket：grant-control / revoke-control / revoke-device 的本地通道。
+# 三者都显式开启，不给就不存在（默认最小暴露面）。
+ExecStart=/usr/bin/env node /opt/dsh-trading/tradectl/bin/edge.mjs --kill-state /var/lib/dsh-trading-a0/kill.json --device-registry /var/lib/dsh-trading-a0/devices.json --shell-dir /opt/dsh-trading/cockpit --ops-socket /run/dsh-trading-edge/ops.sock
 Restart=always
 RestartSec=2
 NoNewPrivileges=true
