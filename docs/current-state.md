@@ -19,7 +19,7 @@
 | 凭据语义 | connector-okx：**存在 credentials seam 即 fail-closed**（不再回落 ambient 环境变量）；仅完全无 seam 时回落 process.env |
 | 驾驶舱 | packages/cockpit：**独立 SPA**（零依赖、不复用 client-ui-*），由 bot 的 edge 行托管；只调 /v1/cards 与 /v1/commands |
 | 移动端（观测端，iOS 原生） | **apps/ios-native**（XcodeGen 生成的独立 Xcode 工程，不进 pnpm workspace）：契约等价实现 + 行为向量 + **XCTest 机检**（向量/用例数随契约扩展，不写死；改错必红）；六个分层 scheme 全绿、冷构建 BUILD SUCCEEDED；CI 跑两条纯 Node 门禁（防漂移 + 分层白名单）。见 apps/ios-native/README.md |
-| 移动端（Expo/RN 旧工程） | apps/mobile（独立 npm 工程）：契约 ./core 入口 + 配对 + SecureStore + 首屏流程；60 例测试 + Metro 真打包 599 modules。（与原生侧**并存**，去留待裁决）|
+| 移动端（Expo/RN 旧工程） | **已退役并删除**（owner 2026-10-02 决定，以 iOS 原生为准）：apps/mobile/** 用 `git rm -r` 移除、ci.yml 的 mobile job 一并删除，历史只留提交记录。裁决与理由见 [移动端落仓方案](client/mobile-app-plan.md) 的「去留裁决」节 |
 | systemd 台架 | scripts/systemd-units-check.mjs（六类静态判据，退出码即结论）+ 人执行安装清单（deploy/README.md）。**本机无 systemd，安装未做** |
 | 假刹车修复 | edge kill 状态写 0o640（组可读）+ 读取端仅 ENOENT 视为未 kill（EACCES/坏 JSON ⇒ 已 kill 且已暂停）；复现 `pnpm --filter @dshtrading/tradectl exec vitest run test/edge.test.ts test/degradation.test.ts`（38 例，含 chmod 000 端到端）|
 | 部署缺口修复 | bot 单元独立 home（StateDirectory=dsh-trading-bot）+ 核心单元显式 `DSH_TRADING_AUTHORITY_DIR`；复现 `node scripts/systemd-units-check.mjs`（全绿）|
@@ -51,7 +51,6 @@
     node scripts/e2e-smoke.mjs [--with-network|--with-electron]
     pnpm wiring:ledger                                        # 工厂接线台账
     node scripts/systemd-units-check.mjs                      # 单元静态校验（退出码即结论）
-    cd apps/mobile && npx vitest run && npx tsc --noEmit      # 移动端（Expo/RN）
     cd apps/ios-native && ./scripts/test-contract.sh          # 移动端（原生）：契约防漂移机检
     node scripts/ios-native/check-contract-drift.mjs           # 同上判据的纯 Node 版（CI 用）
     node scripts/ios-native/check-swift-layering.mjs           # Swift 分层白名单（含 Domain 的 Observation 宏）
@@ -69,6 +68,6 @@
 | P5 三档准入与判据、对照基线 | docs/roadmap/p5-acceptance-checklist.md |
 | OKX 机制（demo 开关、凭证 ref、权限纪律） | docs/guides/okx-integration.md |
 | 移动端（原生观测端）工程形态、构建、冻结契约面与防漂移机检 | apps/ios-native/README.md |
-| 移动端落仓方案与实测（含原生/Expo 两工程的去留方案） | docs/client/mobile-app-plan.md |
+| 移动端落仓方案（含 Expo/RN 退役裁决）与分发决策 | docs/client/mobile-app-plan.md |
 | systemd 安装清单 | deploy/README.md |
 | 历史决策（Owning Note） | .agents/notes/implemented/ |

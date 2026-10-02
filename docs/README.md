@@ -37,7 +37,7 @@ docs/
 │   ├── p5-acceptance-checklist.md # P5 三档准入与判据、对照基线
 │   └── analysis-roadmap.md        # Agent 标的定性分析能力路线图（已结清历史母文档）
 ├── client/                        # 客户端产物
-│   └── mobile-app-plan.md         # 移动端（P4 ④）落仓方案与实测
+│   └── mobile-app-plan.md         # 移动端（P4 ④）落仓方案与 Expo/RN 退役裁决
 └── archive/                       # 早期研发切片草案归档
     └── crypto-slice-plan.md       # crypto 垂直切片早期草案
 ```
@@ -111,7 +111,8 @@ docs/
 6. **[P5 三档准入清单](./roadmap/p5-acceptance-checklist.md)** (docs/roadmap/p5-acceptance-checklist.md)
    - shadow / paper / 小额 live 的准入判据、对照基线与三档现状表（档位状态的家）。
 7. **[移动端落仓方案](./client/mobile-app-plan.md)** (docs/client/mobile-app-plan.md)
-   - 移动端落仓形态、分发决策与 CI 策略；工程操作与实测证据在 apps/mobile/README.md。
+   - 移动端落仓形态、分发决策与 CI 策略；Expo/RN 旧工程（apps/mobile）已按 owner 2026-10-02 决定退役删除，
+     原生观测端工程操作与实测证据在 apps/ios-native/README.md。
  (`docs/ops/upstream-upgrade-checklist.md`)
    - 紧密跟踪官方 `@deepseek-ai/*` SDK 发版（当前基线 0.2.0-rc.2）的抽核、升级与验收指南。
 

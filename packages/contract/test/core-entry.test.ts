@@ -1,5 +1,8 @@
 /**
- * 守住「契约核心面可在客户端（React Native）安全引入」这条边界。
+ * 守住「契约核心面可在无 WebCrypto 的客户端安全引入」这条边界。
+ *
+ * 入口的初因是 Hermes/React Native（见 packages/contract/src/core.ts 头注）；Expo/RN 工程已于
+ * 2026-10-02 退役，但 src/core.ts 仍是 iOS 原生防漂移机检与 tsdown 的权威入口，本测试继续守它。
  *
  * 两条事实（2026-10-01 核实，第一版测试曾写错）：
  *   1. 全 src **零** node: import —— 契约包刻意只用 Web Crypto，避免被 node 运行时绑死；

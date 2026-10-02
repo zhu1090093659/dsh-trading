@@ -7,8 +7,10 @@ Status: implemented
 交易机器人的客户端有网页驾驶舱与移动端两种形态。移动端要复用服务端的契约面（版本协商、数据源守卫、
 推送载荷、离线陈旧度、确认策略、深链开放集），但直接照搬会遇到四件事：
 
-1. **契约包不能整体在客户端用**：`ids.ts` 调 `globalThis.crypto.randomUUID()`，而当时计划采用的
-   Hermes（React Native 的 JS 引擎）默认没有 WebCrypto —— 客户端引到 id 工厂会在运行时炸；
+1. **契约包不能整体在客户端用**：`ids.ts` 调 `globalThis.crypto.randomUUID()`，而 Hermes
+   （React Native 的 JS 引擎）默认没有 WebCrypto —— 客户端引到 id 工厂会在运行时炸
+   （Hermes 是 2026-10-01 立这条入口的初因；该入口现在的消费者见「决策」节）。
+
 2. **工程形态冲突**：RN 在 pnpm 硬链接布局下解析不稳，而本仓是 pnpm workspace；
 3. **分发方式需要决定**：上架还是本地构建；
 4. **产品定位需要决定**：移动端是「辅助交易的手机版」还是「交易机器人的观测端」。前者要下单面板，
@@ -17,7 +19,7 @@ Status: implemented
 ## 决策
 
 - **移动端 = 交易机器人的 iOS 原生（SwiftUI）观测端**，落在 `apps/ios-native/`：
-  XcodeGen 从 `project.yml` 生成工程，**独立工程、不进 pnpm workspace**（与 `desktop/`、`apps/mobile` 同一先例），
+  XcodeGen 从 `project.yml` 生成工程，**独立工程、不进 pnpm workspace**（与 `desktop/` 同一先例），
   生成物（`.xcodeproj` / `build` / `Generated`）不入库。**一个子目录 = 一个 framework target**
   （Contract / Transport / Domain / Features / Alerts / Offline / App），层间依赖由**编译器**强制。
   工程细节、构建命令与冻结符号表之家是 [apps/ios-native/README.md](../../../../apps/ios-native/README.md)。
@@ -26,9 +28,18 @@ Status: implemented
   常量、封闭枚举与**行为向量**（条数由生成器从 TS 契约导出，随契约扩展，不写死）；
   `DshTradingContractTests`（macOS 逻辑测试）逐字段比对并逐条重放，重放入口见 [apps/ios-native/README.md](../../../../apps/ios-native/README.md)。
   纯 Node 的 `scripts/ios-native/check-contract-drift.mjs` 把同一批判据带进 CI（不需要 Xcode）。
-- **契约包的客户端入口仍然保留**：`@dshtrading/contract/core` 导出
-  version/scopes/cards/push/confirm/offline/source-guard 且**排除 `ids.ts`**（RN 与任何 JS 客户端可用）；
+- **契约包的客户端入口 `@dshtrading/contract/core` 保留**：它导出
+  version/scopes/cards/push/confirm/offline/source-guard 且**排除 `ids.ts`**；
   边界由 `packages/contract/test/core-entry.test.ts` 沿相对导入走图谱守住。
+  **消费者裁定（2026-10-02，随 Expo/RN 工程退役复核）**：唯一从 npm 子路径 `@dshtrading/contract/core`
+  import 的 JS 客户端是 `apps/mobile`，它已退役删除；但**绝不可随之移除该入口** ——
+  iOS 原生侧的契约防漂移工具链直接以 `packages/contract/src/core.ts` 为权威入口：
+  `apps/ios-native/scripts/gen-contract-snapshot.mjs`（快照生成器）与
+  `scripts/ios-native/check-contract-drift.mjs`（CI 纯 Node 门禁）都 import 它，
+  `apps/ios-native/Tests/ContractTests/ContractDriftTests.swift` 断言快照的 `contractEntry` 就是
+  `packages/contract/src/core.ts`（`gen-contract-snapshot.mjs` 第 21/365 行）。
+  它同时是 `tsdown` 的构建入口之一（`tsdown.config.ts`）。因此 `src/core.ts`、`package.json` 的
+  `./core` export、构建入口与 `test/core-entry.test.ts` 全部**保留**；退役的是 Expo 工程，不是这个入口。
 - **分发取本地构建**（owner 2026-10-01 确认）：不依赖任何外部账号。
 - **CI 只跑静态门禁与契约测试，不跑 iOS 构建**（不把 macOS runner 绑进日常 CI）；
   iOS 构建与 Swift 断言留在本机/发布流程。
@@ -42,7 +53,9 @@ Status: implemented
   断言都会变红；改回后全绿且源文件逐字节还原（2026-10-02 实测）。红/绿证据与重放命令见
   apps/ios-native/README.md 的"契约防漂移机检"一节。
 - `scripts/ios-native/check-contract-drift.mjs` 与 `check-swift-layering.mjs` 同样验证过「改错必红」（同上日期）。
-- `apps/mobile`（Expo/RN）的落仓事实与工程实测之家是 [docs/client/mobile-app-plan.md](../../../../docs/client/mobile-app-plan.md)。
+- **Expo/RN 工程（`apps/mobile`）已于 2026-10-02 退役删除**（owner 裁决：以 iOS 原生为准）。退役经过与
+  裁决理由的家是 [docs/client/mobile-app-plan.md](../../../../docs/client/mobile-app-plan.md)「去留裁决」节；
+  历史工程实测只留在这批删除前的提交历史里。
 
 ## 被否决 / 已知边界
 

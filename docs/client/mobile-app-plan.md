@@ -2,7 +2,7 @@
 
 > 本文只写**已验证的事实**与**可执行的下一步**。可行性证据见文末。
 
-## 现状（两条工程并存，2026-10-02）
+## 现状（单一客户端：iOS 原生，2026-10-02）
 
 **A. iOS 原生观测端 —— `apps/ios-native`（本轮落仓）**
 
@@ -19,50 +19,52 @@
 - **工程细节之家**：[apps/ios-native/README.md](../../apps/ios-native/README.md)（构建命令、冻结符号表、finding、未验证项）。
 - **未验证**：真机、APNs/FCM 推送、生物识别设备验证、弱网、沙箱外的 `xcodebuild test`。
 
-**B. Expo/RN 工程 —— `apps/mobile`（2026-10-01 并入 main）**
+**B. Expo/RN 工程 —— `apps/mobile`（已退役，owner 2026-10-02 决定）**
 
-- **客户端契约面已完成**：设备配对（一次性配对码 → 设备令牌，作用域 `read`/`command`/`control`，**配对永不签发 `control`**）、
-  数据源守卫（跨源不混、切换即只读、双源对账）、推送载荷契约、离线陈旧度、深链开放集、确认策略（控制类要求 `biometric`）。
-- **工程本体已落仓并入 main**（`f617b964` 起 HEAD 树里有 apps/mobile；分支 feat/p4-mobile-app 是快进合并，
-  **无 PR、无审查记录** —— 2026-10-02 验收实测）：apps/mobile 是独立 npm 工程，不进 pnpm workspace。
-- **构建已实测**：仓库内骨架跑通 npm install → npx expo install → npx expo prebuild -p ios → xcodebuild
-  （Xcode 27.0 / iOS SDK 27.0），结果为 BUILD SUCCEEDED。
-- **契约面已接线并带测试**：用例由 CI 的 mobile job 与本地 `cd apps/mobile && npx vitest run` 跑，例数随开发漂移、
-  不在此写死（落仓基线：9 文件 / 39 例，`f617b964`）。
-- **CI 已接**：ci.yml 的 mobile job 跑 typecheck 与契约测试；**不跑 iOS 构建**。
+- **处置**：以 iOS 原生（A）为准，Expo/RN 工程退役；`apps/mobile/**` 已于 2026-10-02 用 `git rm -r` 删除
+  （历史保留在删除前的提交里），ci.yml 的 mobile job 一并移除。
+- **退役理由**：A 已具备 B 的契约面能力，且多出编译期分层强制与契约防漂移机检；B 没有 A 还不具备的能力
+  （真机签名/推送/生物识别设备验证两侧都未做，不是 B 独有）。裁决见
+  [Owning Note](../../.agents/notes/implemented/architecture/2026-10-01-mobile-app-and-contract-core-entry.md)。
+- **工程操作与实测证据**：退役后不再有 `apps/mobile/README.md`；历史工程实测（工具链表、首次引导命令）
+  只留在这批删除前的提交历史里，不再维护。
 
-## 迁移缺口（A 相对 B 还缺什么）
+## 迁移缺口（客户端整体还缺什么）
 
-- **设备配对与安全存储**：A 的 Transport 层已有配对/令牌/origin 绑定与 `SecureStore` 协议，
-  但 Expo 侧用的 `expo-secure-store` 在原生侧要换 Keychain 实现（协议已在，实现未验）。
-- **推送**：A 只有载荷契约与校验闸门（`acceptedPush`），未接 APNs；B 同样未接（只有载荷契约）。
-- **真机签名与部署**：两者都只有模拟器/本机证据，真机未验。
-- **UI 能力对照**：B 的首屏流程是 RN 组件；A 的观测面是 SwiftUI（五入口 Tab）。两者尚未做同屏对照验收。
+Expo/RN 旧工程（B）已退役，不再构成“迁移”对象；下列是**客户端整体**的未交付项：
 
-## 去留：三种处置的代价（**决定权在人**，本文不代为决定）
+- **设备配对与安全存储**：Transport 层已有配对/令牌/origin 绑定与 `SecureStore` 协议，
+  Keychain 实现尚未在设备上验证。
+- **推送**：只有载荷契约与校验闸门（`acceptedPush`），未接 APNs。
+- **真机签名与部署**：只有模拟器/本机证据，真机未验。
+- **UI 能力对照**：观测面是 SwiftUI（五入口 Tab）；旧 RN 首屏流程已随工程退役，不再作为对照对象。
 
-| 处置 | 代价 | 收益 | 需要谁决定 |
-|---|---|---|---|
-| **保留两者并行** | 两份客户端壳长期维护；契约面每次变更要过两套机检；CI 两条 job | 风险最低、不丢已有工作；可先让原生侧跑通真机再收口 | owner（产品定位） |
-| **以 A 为准，B 退役** | 需确认 B 没有 A 还不具备的能力（真机签名/推送/生物识别设备验证都未做，所以不是"B 独有"）；退役动作本身需一次性 PR | 单一客户端形态，维护面减半 | owner + 一次退役 PR |
-| **以 B 为准，A 退役** | 放弃本轮原生的分层/编译期强制与契约机检；与"观测端只读、不得影响执行"的定位需要重新对齐 | 保留 Expo 的多端能力 | owner（产品定位） |
+## 去留裁决（owner 2026-10-02）
 
-**本轮不做任何删除**：`apps/mobile/**` 保持原样，A 与 B 并存，去留由人裁决。
+以 **A（iOS 原生）为准，B（Expo/RN）退役**，已执行：`apps/mobile/**` 用 `git rm -r` 删除，ci.yml 不再有 mobile job。
+
+裁决要点（曾评估三种处置）：
+
+| 处置 | 代价 | 收益 |
+|---|---|---|
+| 保留两者并行 | 两份客户端壳长期维护；契约面每次变更要过两套机检；CI 两条 job | 风险最低、不丢已有工作 |
+| **以 A 为准，B 退役（已选）** | 需确认 B 没有 A 还不具备的能力 —— 真机签名/推送/生物识别设备验证两侧都未做，不是 B 独有 | 单一客户端形态，维护面减半 |
+| 以 B 为准，A 退役 | 放弃原生分层/编译期强制与契约机检；与“观测端只读、不得影响执行”的定位需重新对齐 | 保留 Expo 的多端能力 |
+
+**删除不可逆**：执行前已在当前 HEAD 现场验过 A 可构建（`BUILD SUCCEEDED`），确认存在可用替代客户端后才删。
 
 ## 可行性与工程实测
 
-工具链实测值、构建证据（BUILD SUCCEEDED）与首次引导命令的**家**：
-- 原生（A）：[apps/ios-native/README.md](../../apps/ios-native/README.md)
-- Expo（B）：[apps/mobile/README.md](../../apps/mobile/README.md)
+工具链实测值、构建证据（BUILD SUCCEEDED）与构建/测试命令的**家**：
+[apps/ios-native/README.md](../../apps/ios-native/README.md)（退役的 Expo 工程不再有家，其历史实测只留提交历史）。
 
 本节不复述，只保留方案决策。
 
-## 分发方式与代价（需人确认）
+## 分发方式与代价（已定：本地构建）
 
 | 方式 | 代价 | 说明 |
 |---|---|---|
 | **本地构建（推荐）** | 0 元；免费凭据 **7 天重签** | 已实测可行；无需任何外部账号 |
-| EAS（Expo 云构建） | 需 Expo 账号 | 免本机工具链，但把构建放到第三方 |
 | 企业签名 | **299 USD/年** | 对自用过重 |
 
 ## 落仓形态（对新建客户端工程仍然有效）
@@ -80,10 +82,8 @@
 
 - 原生（A）：`cd apps/ios-native && ./scripts/build-simulator.sh`、`./scripts/test-contract.sh`
   （详见 [apps/ios-native/README.md](../../apps/ios-native/README.md)）
-- Expo（B）：见 [apps/mobile/README.md](../../apps/mobile/README.md) 的「首次引导」与「实测证据」节
 
 ## 未验证项
 
-- 原生（A）：真机、APNs 推送、生物识别设备验证、弱网、沙箱外的 `xcodebuild test` —— 以
+- 真机、APNs 推送、生物识别设备验证、弱网、沙箱外的 `xcodebuild test` —— 以
   [apps/ios-native/README.md](../../apps/ios-native/README.md) 的清单为准。
-- Expo（B）：与 [apps/mobile/README.md](../../apps/mobile/README.md) 的「尚未做」清单同源，以该清单为准。

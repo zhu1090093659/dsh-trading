@@ -180,7 +180,7 @@ The roadmap pieces below exist in this repository today. **None of them changes 
 - **Web cockpit** — a standalone SPA served by the bot edge, rendering server-driven cards from a self-hosted `/v1` surface (versioned, scope-gated), plus an unknown-card fallback so an older client never silently drops a newer card.
 - **Desktop attach mode** — a machine configured with a bot URL stops starting a local host and attaches instead; the decision is **configuration-driven and never probes ports** (a probe once handed off to an unrelated instance).
 
-Not shipped yet: the mobile client (contract surface and device-pairing flow are in place; the app itself is not built) and any venue-side protective orders. Until the latter exists, `halt` degrades to `reduce_only` by design.
+Not shipped yet: the mobile client (the iOS-native observation app lives in `apps/ios-native` with the contract surface and device-pairing flow; device verification and distribution are outstanding — the earlier Expo/RN app was retired and removed on 2026-10-02) and any venue-side protective orders. Until the latter exists, `halt` degrades to `reduce_only` by design.
 
 > Wording note: the FAQ answer below ("not an unattended live-trading bot") still stands. The public narrative changes only together with the shadow → paper → small-live acceptance, which is gated on a human in the loop.
 ## Data sources & terms
