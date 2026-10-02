@@ -26,6 +26,7 @@ import { createJournal } from '../src/journal.ts'
 import { migrateDeskRecords } from '../src/desk-records.ts'
 import { addSchedule, migrateTriggers } from '../src/triggers.ts'
 import { createDeskProcess, type DeskProcessOptions } from '../src/desk-process.ts'
+import { createCountingVenue } from '../src/shadow.ts'
 import { DRILL_ALIGNMENT_PARAMS, DRILL_ALIGNMENT_PARAMS_NOTE, SNAPSHOT_REFRESH_MS } from './alignment-params.ts'
 
 const NL = String.fromCharCode(10)
@@ -111,10 +112,13 @@ try {
   await waitMs(INTERVAL_MS * 2)
   const stoppedB = desk.stats()
 
-  // 灯下黑检查：装配不接受任何下单端口，也不接受未实现的 live 模式
+  // 灯下黑检查：装配不接受任何下单端口，也不接受未实现的 live 模式。
+  // 探针用 shadow 装置的**计数假 venue**（%%createCountingVenue%%）而不是内联字面量：
+  // "被拒"与"一次都没被调用"是两件事 —— 前者只看抛错，后者才证明拒绝之后没有留下任何下单路径。
+  const probeVenue = createCountingVenue()
   let rejectedVenue = false
   try {
-    createDeskProcess({ ...options, venue: { placeOrder: () => undefined } } as unknown as DeskProcessOptions)
+    createDeskProcess({ ...options, venue: probeVenue } as unknown as DeskProcessOptions)
   } catch {
     rejectedVenue = true
   }
@@ -161,7 +165,11 @@ try {
     pumpTicks: stoppedA.pump.ticks + '→' + stoppedB.pump.ticks,
     running: stoppedB.running,
   }) + NL)
-  process.stdout.write('  fail-closed: ' + JSON.stringify({ 'venue 端口被拒': rejectedVenue, 'live 模式被拒': rejectedLive }) + NL)
+  process.stdout.write('  fail-closed: ' + JSON.stringify({
+    'venue 端口被拒': rejectedVenue,
+    'live 模式被拒': rejectedLive,
+    'venue 探针被调用次数': probeVenue.calls,
+  }) + NL)
   // 对齐输入**逐标的**打出来：这一行是"信号不是常量"的现场记录（常量不会给出两个不同的值）
   process.stdout.write('  对齐输入: ' + JSON.stringify({
     [FED_SYMBOL]: alignmentOf(FED_SYMBOL),
@@ -193,6 +201,8 @@ try {
   if (degradationRows.length === 0) failures.push('审计里一条 degradation.transition 都没有：真实对齐态没有流进环路')
   if (staleRows.length === 0) failures.push('未喂快照的 ' + UNFED_SYMBOL + ' 没有产生 market-stale 降级记录 —— 对齐输入可能还是常量')
   if (!rejectedVenue) failures.push('未知选项（venue 下单端口）没有被拒绝 —— fail-closed 失效')
+  // 计数假 venue 的调用次数：拒绝必须发生在**碰它之前**（0 才算"没有下单路径"）
+  if (probeVenue.calls !== 0) failures.push('计数假 venue 被调用了 ' + String(probeVenue.calls) + ' 次 —— 装配拒绝之前先碰了下单端口')
   if (!rejectedLive) failures.push('未实现的 live 模式没有被拒绝 —— fail-closed 失效')
   if (stoppedB.loop.ticks !== stoppedA.loop.ticks) failures.push('stop 之后环路仍在推进：' + String(stoppedA.loop.ticks) + '→' + String(stoppedB.loop.ticks))
   if (stoppedB.pump.ticks !== stoppedA.pump.ticks) failures.push('stop 之后泵仍在推进：' + String(stoppedA.pump.ticks) + '→' + String(stoppedB.pump.ticks))
