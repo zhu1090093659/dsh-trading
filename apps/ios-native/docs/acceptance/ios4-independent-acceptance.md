@@ -289,3 +289,205 @@ ACC_DONE
 2. `import struct SwiftUI.Color` 报的越界对象必须是 `SwiftUI` 而不是 `struct`（§5.3）；
 3. Offline/Alerts 的 `Observation`、Features 的 `Combine`/`Charts` 若未获批准，写到对应层里**必须红**（§5.4）；
 4. `scripts/ios-native/` 下若加了 `*.test.mjs`，`pnpm test:scripts` 必须真的跑到它们（§5.5）。
+## 13. 绑最终 HEAD 的验收复跑（HEAD `e26ef6f6`，工作区 clean）
+
+Lead 指定最终 HEAD = `e26ef6f6430c29d106d11f60013654d41bdd2fa9`。本轮按 §12 清单执行，全程持重活锁串行。
+
+### 13.1 完整矩阵（HEAD_BEFORE == HEAD_AFTER，脏文件 0）
+
+```
+HEAD_BEFORE=e26ef6f6430c29d106d11f60013654d41bdd2fa9
+DIRTY_BEFORE=0        DIRTY_SRC_BEFORE=0
+snapshot_gen_exit=0   contract 0.5.0 | vectors 144 | byte-card 97 bytes
+契约防漂移门禁：绿 —— Swift 侧封闭枚举 / 查表 / 上限 / 常量与 TS 权威一致   (drift_exit=0)
+Swift 分层门禁：绿 —— 7 层全部合规（Observation 经 Lead 批准）              (layering_exit=0)
+RESULT Contract                 bft=0 mtime=16:18:58 xctest=0  Executed 37 tests, with 0 failures
+RESULT DshTradingTransportTests bft=0 mtime=16:19:03 xctest=0  Executed 37 tests, with 0 failures
+RESULT DshTradingDomainTests    bft=0 mtime=16:19:06 xctest=0  Executed 62 tests, with 0 failures
+RESULT DshTradingAlertsTests    bft=0 mtime=16:19:08 xctest=0  Executed 62 tests, with 0 failures
+RESULT DshTradingOfflineTests   bft=0 mtime=16:19:10 xctest=0  Executed 21 tests, with 0 failures
+RESULT DshTradingFeaturesTests  bft=0 mtime=16:19:12 xctest=0  Executed 22 tests, with 0 failures
+RESULT App build=0 ** BUILD SUCCEEDED ** compile_errors=0
+HEAD_AFTER=e26ef6f6430c29d106d11f60013654d41bdd2fa9    DIRTY_SRC_AFTER=0
+```
+
+合计 **241 例 / 0 失败**；六个目标 mtime 各不相同且都是本次编译 ⇒ 无陈旧 bundle 假绿。
+
+### 13.2 四项 findings 的处置复核（破坏性实验，全部已还原）
+
+每个探针：注入 -> 跑分层门禁 -> 还原 -> 再跑一次确认绿。收尾 `git status` 干净。
+
+| 探针 | 注入内容 | 期望 | 实测 | 结论 |
+|---|---|---|---|---|
+| A | Domain + `@_exported import SwiftUI` | 红 | **红** | §5.2 已修 |
+| B | Domain + `@testable import DshTradingFeatures` | 红 | **红** | §5.2 已修 |
+| C | Domain + `import struct SwiftUI.Color` | 红且报 `SwiftUI` | **红，诊断=SwiftUI** | §5.3 已修 |
+| D0 | Domain + `import Observation` | 绿（批准） | **绿** | 正对照通过 |
+| D1 | Offline + `import Observation` | 红 | **绿** | **未修，见 13.3** |
+| D2 | Alerts + `import Observation` | 红 | **绿** | **未修，见 13.3** |
+| D3 | Features + `import Combine` | 红 | **红** | §5.4 已修 |
+| D4 | Features + `import Charts` | 红 | **红** | §5.4 已修 |
+
+原始输出（红/绿两段）：
+
+```
+### A: Domain + @_exported import SwiftUI  [expect RED -> got RED]
+Swift 分层门禁：红（1 处越界）
+  - .../Domain/DomainBoundary.swift：Domain 层不许 import SwiftUI（@_exported 会把该模块再透传出去，所以更要拦）
+
+### B: Domain + @testable import DshTradingFeatures  [expect RED -> got RED]
+  - .../Domain/DomainBoundary.swift：Domain 层不许 import DshTradingFeatures
+
+### C: Domain + import struct SwiftUI.Color  [expect RED(报 SwiftUI) -> got RED]
+  - .../Domain/DomainBoundary.swift：Domain 层不许 import SwiftUI        <-- 诊断对象已是模块名
+
+### D0 正对照: Domain + Observation (批准)  [expect GREEN -> got GREEN]
+Swift 分层门禁：绿 —— 7 层全部合规（Observation 经 Lead 批准）
+
+### D3: Features + Combine  [RED]   - Features 层不许 import Combine
+### D4: Features + Charts   [RED]   - Features 层不许 import Charts
+```
+
+### 13.3 【新发现，需 Lead 裁决】Offline / Alerts 仍白名单化 `Observation`，且门禁注释与你的裁决矛盾
+
+实测：把 `import Observation` 写进 Offline 与 Alerts，分层门禁**仍绿**（D1 / D2）。
+
+两处相互矛盾的说法，都需要你定：
+
+1. **你的裁决**（本轮指令）：「未获批准的 Observation（Offline/Alerts）=> 必须红；注意 Observation 在 Domain 是经 Lead 批准的」。
+2. **门禁里的注释**（`scripts/ios-native/check-swift-layering.mjs:32-33`）：「Observation 在 Domain/Offline/Alerts/Features/App 上白名单化是**经 Lead 批准**的」。
+   白名单实现也照此把 `OBSERVATION_APPROVED` 放进了 Offline（:40）、Alerts（:42）、Features（:46）、App（:52）。
+
+事实核对：Offline 与 Alerts 的**实际 import 里都没有 Observation**（`grep -rh "^import"` 结果里 0 次；
+两层也没有任何 `@Observable`）。所以这是**潜在的宽松**而不是当前的越界：
+今天绿是真绿，但将来谁在 Offline/Alerts 里加一个 `@Observable` 都不会被拦 —— 而这正是 §5.4 要防的形态。
+
+建议（二选一，请你或 IOS-1 定）：
+- 若确如你的裁决（只有 Domain 批准）：把 Offline/Alerts 的 `OBSERVATION_APPROVED` 移除，并改掉 :32-33 的注释；
+- 若 IOS-1 手上的确有更宽的批准：请更新裁决口径，让注释与裁决一致（注释不能单方面替裁决说话）。
+
+### 13.4 门禁自测已接入 `pnpm test:scripts`（§5.5 已修）
+
+```
+$ pnpm test:scripts        # exit 0
+ ✓ scripts/ios-native/check-contract-drift.test.mjs (3 tests) 550ms
+ ✓ scripts/ios-native/check-swift-layering.test.mjs (6 tests) 681ms
+ Test Files  17 passed (17)
+      Tests  128 passed (128)
+```
+
+两条门禁的断言现在真的在 CI 的 `test:scripts` 里跑（此前是 0 自测）。
+
+### 13.5 本轮结论
+
+- 绑 `e26ef6f6`：**两条门禁绿 + 六层 241 例 0 失败 + App BUILD SUCCEEDED + test:scripts 128 例绿**；
+- findings §5.1（陈旧假绿，方法固化）、§5.2（前缀绕过）、§5.3（诊断对象）、§5.4 的 Combine/Charts、§5.5（门禁自测）均**已修并现场复核**；
+- **唯一未闭合**：§13.3 的 Offline/Alerts `Observation` 白名单与裁决口径不一致（潜在宽松，非当前越界），需人定；
+- 所有破坏性实验均已还原，收尾 `git status` 对 `apps/ios-native/Sources` 与 `Tests` 为 0 项。
+## 14. 下一轮复跑的判据（**先写下，后执行**）
+
+Lead 对本轮 §13.3 的裁决（2026-10-02）：「Observation 只保留 Domain 与 App（今天真的在用这两处），
+Offline / Alerts / Features 三层移除，注释改为与实际裁决一致，自测补 Offline/Alerts 必红。」
+
+下一轮在**新 HEAD** 上要跑的不只是矩阵：门禁脚本本身变了，结论必须绑新 commit。
+先固定判据如下，跑完只做「符合 / 不符合」判定，不改标准：
+
+| 编号 | 注入位置与内容 | 期望 | 前置依据 |
+|---|---|---|---|
+| A | Domain + `@_exported import SwiftUI` | 红 | §5.2 修复已复核（§13.2） |
+| B | Domain + `@testable import DshTradingFeatures` | 红 | 同上 |
+| C | Domain + `import struct SwiftUI.Color` | 红，且诊断对象为 `SwiftUI` | §5.3 |
+| D0 | Domain + `import Observation` | **绿** | Lead 裁决：Domain 保留 |
+| D1 | Offline + `import Observation` | **红** | Lead 裁决：Offline 移除 |
+| D2 | Alerts + `import Observation` | **红** | Lead 裁决：Alerts 移除 |
+| D3 | Features + `import Observation` | **红** | Lead 裁决：Features 移除 |
+| D4 | Features + `import Combine` | 红 | §5.4 |
+| D5 | Features + `import Charts` | 红 | §5.4 |
+| D6 | App + `import Observation` | **绿** | Lead 裁决：App 保留 |
+
+另需复核（同一轮的"元"判据）：
+
+- 门禁注释（`check-swift-layering.mjs` 顶部）必须与上表一致，不得再出现「Offline/Alerts 也经批准」这类与裁决相反的表述；
+- `scripts/ios-native/check-swift-layering.test.mjs` 必须补上 Offline/Alerts 必红的用例，且 `pnpm test:scripts` 真的跑到（用例数增量证明，不看"应该会跑"）；
+- 矩阵与探针都在**同一个新 HEAD** 上完成，且 `HEAD_BEFORE == HEAD_AFTER`、Sources/Tests 脏文件为 0；
+- 任何破坏性实验逐条还原，收尾 `git status` 对 Sources/Tests 为 0 项。
+## 15. 最终验收（HEAD `2f1c753d`）——按 §14 事先写好的判据执行，未改标准
+
+### 15.1 完整矩阵
+
+```
+HEAD_BEFORE=2f1c753d01faf8bb716a4e6af628b8a6d73e3fc4
+DIRTY_BEFORE=1        DIRTY_SRC_BEFORE=0
+snapshot_gen_exit=0   contract 0.5.0 | vectors 144 | byte-card 97 bytes
+契约防漂移门禁：绿 —— Swift 侧封闭枚举 / 查表 / 上限 / 常量与 TS 权威一致   (drift_exit=0)
+Swift 分层门禁：绿 —— 7 层全部合规（Observation 仅 Domain/App 经 Lead 批准）  (layering_exit=0)
+RESULT Contract                 bft=0 mtime=16:24:18 xctest=0  Executed 37 tests, with 0 failures
+RESULT DshTradingTransportTests bft=0 mtime=16:24:20 xctest=0  Executed 37 tests, with 0 failures
+RESULT DshTradingDomainTests    bft=0 mtime=16:24:25 xctest=0  Executed 62 tests, with 0 failures
+RESULT DshTradingAlertsTests    bft=0 mtime=16:24:28 xctest=0  Executed 62 tests, with 0 failures
+RESULT DshTradingOfflineTests   bft=0 mtime=16:24:30 xctest=0  Executed 21 tests, with 0 failures
+RESULT DshTradingFeaturesTests  bft=0 mtime=16:24:33 xctest=0  Executed 22 tests, with 0 failures
+RESULT App build=0 ** BUILD SUCCEEDED ** compile_errors=0
+HEAD_AFTER=2f1c753d01faf8bb716a4e6af628b8a6d73e3fc4   DIRTY_SRC_AFTER=0
+```
+
+合计 **241 例 / 0 失败**，六个目标 mtime 各不相同且均为本次编译。
+
+说明 `DIRTY_BEFORE=1`：那一条脏文件是**本验收报告自己**（我在跑之前追加了 §14），
+`apps/ios-native/Sources` 与 `Tests` 的脏文件数为 **0**。所以结论可以写成「在 `2f1c753d` 上绿」，
+不是「HEAD + 一串在飞源文件」。
+
+### 15.2 A–D6 探针（10/10 命中事先写下的期望；每条注入后立即还原）
+
+| 编号 | 注入 | 事先期望 | 实测 |
+|---|---|---|---|
+| A | Domain + `@_exported import SwiftUI` | 红 | **红** |
+| B | Domain + `@testable import DshTradingFeatures` | 红 | **红** |
+| C | Domain + `import struct SwiftUI.Color` | 红，诊断=`SwiftUI` | **红，诊断=`SwiftUI`** |
+| D0 | Domain + `import Observation` | 绿 | **绿** |
+| D1 | Offline + `import Observation` | 红 | **红** |
+| D2 | Alerts + `import Observation` | 红 | **红** |
+| D3 | Features + `import Observation` | 红 | **红** |
+| D4 | Features + `import Combine` | 红 | **红** |
+| D5 | Features + `import Charts` | 红 | **红** |
+| D6 | App + `import Observation` | 绿 | **绿** |
+
+```
+### D1 Offline + import Observation  [expect RED -> got RED]
+  - .../Offline/OfflineBoundary.swift：Offline 层不许 import Observation
+### D2 Alerts + import Observation   [expect RED -> got RED]
+  - .../Alerts/AlertsBoundary.swift：Alerts 层不许 import Observation
+### D3 Features + import Observation [expect RED -> got RED]
+  - .../Features/FeaturesBoundary.swift：Features 层不许 import Observation
+### D0 Domain + import Observation   [expect GREEN -> got GREEN]
+Swift 分层门禁：绿 —— 7 层全部合规（Observation 仅 Domain/App 经 Lead 批准）
+### D6 App + import Observation      [expect GREEN -> got GREEN]
+Swift 分层门禁：绿 —— 7 层全部合规（Observation 仅 Domain/App 经 Lead 批准）
+```
+
+§13.3 那条「Offline/Alerts 潜在宽松」**已闭合**。
+
+### 15.3 元判据（§14 里一并写下的那些）
+
+1. **注释与裁决一致**：`check-swift-layering.mjs:32-34` 已改为「Observation **仅 Domain 与 App 经 Lead 批准**」，
+   并补了一句「这份注释只记录发生过的批准，不替裁决说话」；白名单实现同步（Offline :41 / Alerts :43 / Features :47 均已移除）。
+2. **门禁自测补齐**：`check-swift-layering.test.mjs` 现有 9 个用例（此前 6），含
+   `@_exported` 透传必红、`@testable` 上层必红、`import struct SwiftUI.Color` 必报 `SwiftUI`、
+   **Offline/Alerts 用 Observation 必红**、Domain/App 用 Observation 必绿、注释里的 import 不算越界、未登记分层必红。
+3. **自测真的被跑到（用例数增量证明）**：`pnpm test:scripts` ⇒ `Test Files 17 passed (17)`、`Tests 131 passed (131)`，
+   其中 `check-swift-layering.test.mjs (9 tests)`（上一轮 6 ⇒ +3，与 Lead 观察一致；总例数 128 ⇒ 131）。
+4. **finding §5.6 已落地**：`apps/ios-native/README.md:91-94` 写明「权威边界（8/9）」：
+   `ContractA0.swift` 在 `packages/contract/src/` 无对应模块，其 fail-closed 行为由 `ContractA0Tests.swift` 断言守着。
+
+### 15.4 结论
+
+- 绑 `2f1c753d`：**两条门禁绿 + 六层 241 例 0 失败 + App BUILD SUCCEEDED + test:scripts 131 例绿**；
+- §14 事先写下的 10 条探针判据**全部命中**，无一条需要事后调整；
+- 本轮**没有发现新的不一致**；此前 6 条 finding 全部闭合（§5.1 方法已固化、§5.2/§5.3/§5.4/§5.5/§5.6 均已修复并现场复核）；
+- 破坏性实验逐条还原；收尾 `git status`：`Sources` / `Tests` 脏文件 **0**，全仓唯一脏文件是本报告自身。
+
+### 15.5 仍未验证（不因本轮绿而改变）
+
+- 真机、部署构型、签名、APNs 真推送、生物识别真设备、弱网：未验；
+- 渲染证据是夹具驱动的静态快照，不含交互与像素基线；
+- 门禁是**静态文本判据**：它拦"写出来的 import"，不拦运行时通过反射/动态手段达成的跨层耦合（本仓目前没有这种用法）。
