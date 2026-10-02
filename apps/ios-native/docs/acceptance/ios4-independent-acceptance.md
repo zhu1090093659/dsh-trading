@@ -225,11 +225,9 @@ bundle_mtime_after_test=15:52:57
 ```
 bundle mtime 与本次编译一致 ⇒ 跑的是新产物，不是旧 bundle。
 
-## 9. 待办（本文件会随复跑更新）
+## 9. 待办
 
-- [ ] 等 IOS-1（Contract）、IOS-3（Domain）、IOS-5（Alerts）的类型 ripple 落定后，跑**绑 sha 的完整矩阵**
-      （六层 + App），并记录当时的 HEAD 与脏文件清单；
-- [ ] 若那时 Sources 仍脏，矩阵结论只对"HEAD + 列出的脏文件"成立，不得写成"HEAD 绿"。
+- [x] 类型 ripple 落定后跑**绑 sha 的完整矩阵** —— 见 §11（HEAD `95b70ff9`，Sources/Tests 干净）。
 
 ## 10. 本轮未验证（如实标注）
 
@@ -237,3 +235,38 @@ bundle mtime 与本次编译一致 ⇒ 跑的是新产物，不是旧 bundle。
 - 快照渲染是夹具驱动的静态图，不含交互；
 - Alerts 的 APNs 与生物识别、Offline 的弱网与性能：仅单元层面（60 / 21 例），无设备验证；
 - 门禁的 5.2 绕过**尚未修复**（我只验证了它存在，未改别人的门禁）。
+## 11. 最终：绑 sha 的完整矩阵（HEAD `95b70ff9`，Sources/Tests **干净**）
+
+这一轮是 Lead 要求的那次：**开跑前 `git status` 显示 Sources/Tests 脏文件数 = 0**，所以结论可以写成"在这个 sha 上绿"，
+而不是"HEAD + 一串在飞文件"。全程持重活锁串行；每个 iOS 目标都先删旧 bundle、断言 build-for-testing 退出码为 0、
+再记 bundle mtime 后跑 xctest（§1 的加强判据）。
+
+```
+HEAD_BEFORE=95b70ff91db56b6b2bbb9298ed966ea5698b3fd7
+DIRTY_BEFORE=0
+snapshot_gen_exit=0
+契约防漂移门禁：绿 —— Swift 侧封闭枚举 / 查表 / 上限 / 常量与 TS 权威一致
+drift_exit=0
+Swift 分层门禁：绿 —— 7 层全部合规（Domain 的 Observation 宏在白名单内）
+layering_exit=0
+--- Contract (macOS) ---
+RESULT Contract                    bft=0 mtime=15:55:21 xctest=0  Executed 37 tests, with 0 failures (0 unexpected)
+RESULT DshTradingTransportTests    bft=0 mtime=15:55:33 xctest=0  Executed 37 tests, with 0 failures (0 unexpected)
+RESULT DshTradingDomainTests       bft=0 mtime=15:55:46 xctest=0  Executed 57 tests, with 0 failures (0 unexpected)
+RESULT DshTradingAlertsTests       bft=0 mtime=15:55:54 xctest=0  Executed 62 tests, with 0 failures (0 unexpected)
+RESULT DshTradingOfflineTests      bft=0 mtime=15:56:01 xctest=0  Executed 21 tests, with 0 failures (0 unexpected)
+RESULT DshTradingFeaturesTests     bft=0 mtime=15:56:05 xctest=0  Executed 22 tests, with 0 failures (0 unexpected)
+--- App ---
+RESULT App build=0 ** BUILD SUCCEEDED **
+HEAD_AFTER=95b70ff91db56b6b2bbb9298ed966ea5698b3fd7
+DIRTY_AFTER=1   (Sources/App/AppEnvironment.swift 在我跑完后被 IOS-1 开始编辑)
+ACC_DONE
+```
+
+判读：
+
+- **HEAD 前后一致**（`95b70ff9`），且 6 个目标的 mtime 各不相同、都是本次编译产物 ⇒ 不存在陈旧 bundle 假绿；
+- 合计 **236 例，0 失败**（Contract 37 / Transport 37 / Domain 57 / Alerts 62 / Offline 21 / Features 22）；
+- App `BUILD SUCCEEDED`；两条门禁绿；
+- `DIRTY_AFTER=1` 是我跑完之后才出现的编辑（IOS-1 继续改 `AppEnvironment.swift`），**不影响本次矩阵结论**，
+  但也说明：任何"当前全绿"的说法都有保质期，必须绑 sha 与时刻。

@@ -103,7 +103,26 @@ codesign --force --sign - 重签，再 install + launch：
 process），截图只剩主屏。已回滚（重新 build 恢复 linker-signed 产物），相关临时文件已删除。
 结论：这条路走不通，**必须改源码**（内存回退不该 fatal）。
 
-### 待补：五张情形截图与判据对照表（等 IOS-1 修复后采集）
+### 待补：五张情形截图与判据对照表
+
+**状态（2026-10-02）**：组合根已修（Keychain 内存回退从致命降为降级告警，fixtures 模式可进观测面，
+这一条是**跑出来的**：修前连 --fixtures 都被"环境不可用"挡住，见上一节的截图）。
+FixtureSnapshotFetcher 的情形选择**已写、但尚未编译验证**：IOS-1 报告加完情形选择后 xcodebuild 曾失败
+（NSLock.lock() 落在 async 上下文，Swift 6 判红），已静态改成同步的 nextCallIndex()，
+**在 Lead 解除暂停前无法重新编译**。所以我**静态**读过的那份实现与要求一致
+（DSH_IOS_FIXTURE_SCENARIO 默认 running；unreachable = call>1 才抛 .unreachable；stopped = killed=true；
+restricted = reduce_only；unknown-enum = 未知 cardType + 未知 actionKind），但"能用"属**未验证**。
+
+> **别把假证据算进去（IOS-1 主动更正，值得记一笔）**：情形选择加完后构建是红的，
+> 于是 simctl install 装进去的是**上一版二进制**，五次 launch 跑的是同一个 App —— 五张图内容相同，
+> 那**不是**五情形的证据。这类"跑了但跑的是旧 bundle"的假绿，正是本仓"未验证 ≠ 通过"要防的形态。
+> 采集脚本必须在 install 之后**确认二进制是本次构建的**（例如比对 mtime/哈希）再截图。
+
+**fixtures-default-partial.png 的效力边界**：它来自**不含情形选择**的那次构建，
+只能证明"观测面能出图（三维状态分列 + 五入口 TabView）"，**不证明**情形切换。
+
+采集脚本已改成用 App 内建 fixtures + SIMCTL_CHILD_DSH_IOS_FIXTURE_SCENARIO，无需外部服务；
+**采集本身要跑构建 + 模拟器安装，按 Lead 的串行纪律排在 pnpm gates:all 之后**，故本表暂为空。
 
 | 截图 | 夹具情形 | 它必须证明的判据 |
 |---|---|---|
@@ -113,8 +132,34 @@ process），截图只剩主屏。已回滚（重新 build 恢复 linker-signed 
 | unreachable.png | --scenario unreachable | **看不到机器人**（不得显示成"已停止"） |
 | unknown-enum.png | --scenario unknown-enum | 未知类型/未知动作 ⇒ 原样列出且**禁用全部动作**（fail-closed） |
 
-其中 stopped.png 与 unreachable.png 需**并排**展示，作为
-「App 看不到机器人 ≠ 机器人已停止」的直接证据（本仓不变量 7）。
+两组**并排**证据（都不是靠文案，而是靠两侧输入的差异）：
+
+1. **stopped.png 与 unreachable.png 并排** —— 证明「App 看不到机器人 ≠ 机器人已停止」（本仓不变量 7）。
+   左侧是 reachable + A0 killed=true；右侧是连接层断开（Offline 用缓存快照并如实降档，reachability=.unreachable）。
+2. **restricted.png 与 stopped.png 并排** —— 证明「受限 ≠ 停止」。
+   两者 A0 不同：restricted 是 killed=false（仍在运行、只是禁止新增仓位），stopped 是 killed=true。
+   这一组正好钉住本卡的核心区分，而不是那句容易退化的"运行中/已停止"。
+
+时序口径（防 36 秒变成假事实）：App 的刷新是先立刻一次、之后每 30 秒一次
+（硬编码在 Sources/App/DshTradingNativeApp.swift 的 .task 里）。unreachable 的 t≈30s 才抛，
+所以等 36s 截第二屏；**那个间隔一旦改动，采集脚本里的 36 就要跟着改**。
+其余四档首屏即可（判据来自首帧的 A0 与卡片）。
+
+### 静态核对发现的一处小缺口（未采图前就能看出）
+
+夹具的 desk-summary 卡用的是字段 key 「state」，而 Domain 侧认识的 desk-summary key 集合是
+deskId / label / mode / phase / waitReason / level / currency / equity / available / margin /
+realizedPnl / unrealizedPnl —— 不含 state。后果：该字段会进 rawFields 原样显示，
+而 BotStatus.phase 保持 nil（界面显示"阶段：未知"）。
+这**不影响权威执行状态**（它来自 /a0/status，不来自卡片自述），但界面上会同时出现
+"运行中"（A0）与"阶段未知"（卡片），观感不一致。
+根因仍是**契约没有冻结 field.key**（已报 Lead）；两边的收敛办法二选一：
+夹具改用 phase，或 Domain 的读取约定加上 state。留待 gates:all 之后一并处理（改完要重新构建验证）。
+
+### 已知的材料来源
+
+上一段里的两张证据图：pipeline-check-placeholder.png（采集通路可用）、
+fixtures-default-partial.png（默认 fixtures 情形下的观测面，含三维状态分列与五入口 TabView）。
 
 ### 未验证项
 

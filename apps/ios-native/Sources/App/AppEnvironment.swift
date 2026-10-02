@@ -343,11 +343,17 @@ public final class FixtureSnapshotFetcher: SnapshotFetching, @unchecked Sendable
         Scenario(rawValue: environment["DSH_IOS_FIXTURE_SCENARIO"] ?? "") ?? .running
     }
 
-    public func fetch() async throws -> FetchedSnapshot {
+    /// 计数放在**同步**方法里：`NSLock.lock()/unlock()` 在 async 上下文里是编译错误
+    /// （Swift 6 并发检查：async 上下文中不可用阻塞锁）。
+    private func nextCallIndex() -> Int {
         lock.lock()
+        defer { lock.unlock() }
         callCount += 1
-        let call = callCount
-        lock.unlock()
+        return callCount
+    }
+
+    public func fetch() async throws -> FetchedSnapshot {
+        let call = nextCallIndex()
 
         if scenario == .unreachable && call > 1 {
             throw ObservationFetchFailure(failure: .unreachable, message: "夹具：第一次之后按失联处理（/a0/ping 无响应）")
@@ -390,7 +396,9 @@ public final class FixtureSnapshotFetcher: SnapshotFetching, @unchecked Sendable
                 cardId: "desk-1", cardType: "desk-summary", revision: 1, fallbackText: deskFallback,
                 fields: [
                     CardField(key: "deskId", label: "交易台", kind: "symbol", value: "fixture-desk"),
-                    CardField(key: "state", label: "状态", kind: "status", value: scenario == .stopped ? "killed" : "running"),
+                    // key 用 `phase`：Domain 侧认识的 desk-summary key 里有它（`state` 不在读取约定内，
+                    // 会落进 rawFields 并让 BotStatus.phase 变 nil）。根因是 field.key 未冻结，已报 Lead。
+                    CardField(key: "phase", label: "阶段", kind: "status", value: scenario == .stopped ? "killed" : "running"),
                 ],
                 actions: [], freshnessMs: 1_000
             ),

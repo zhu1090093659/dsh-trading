@@ -1,63 +1,71 @@
 #!/usr/bin/env bash
-# 观测面截图（只截模拟器设备画面：simctl io screenshot）。
-# 禁止全屏桌面截图 —— 会卷入用户隐私且遮挡不可控（AGENTS.md 明文禁止）。
+# 观测面截图（只截模拟器设备画面：simctl io screenshot）。禁止全屏桌面截图。
 #
-# 前提：
-#   1. 组合根已接线（IOS-1）：Transport + Offline + Domain + Features 装配完成；
-#   2. App bundle id = com.dshtrading.ios-native；
-#   3. 夹具服务器可用（同目录 fixture-server.mjs）。
+# 采集纪律（每条都是踩过的坑，不是风格）：
+#   1. 构建退出码必须为 0 才继续 —— 构建红时旧 .app 还留在 DerivedData，install 照装会造假绿；
+#   2. 装完比对**安装容器里**的可执行文件哈希与本次构建产物，不一致拒绝采图；
+#   3. 情形经 SIMCTL_CHILD_DSH_IOS_FIXTURE_SCENARIO 注入（simctl 会剥掉 SIMCTL_CHILD_ 前缀）；
+#   4. unreachable 要截**第二屏**：首屏是"先有缓存"的正常态。
+#      **时序来源**（写在这里，是为了让它在间隔被改时先过期）：刷新循环在
+#      Sources/App/DshTradingNativeApp.swift 的 .task 里 —— 先立刻 refresh() 一次，之后每 30 秒一次
+#      （硬编码 Task.sleep(for: .seconds(30))）。故时间线是 t≈0 成功、t≈30s 抛 .unreachable，
+#      36s 落在第二次之后。**那 30 秒一旦改动，本文件的 36 就不再正确。**
+#      另外四档（running/restricted/stopped/unknown-enum）首屏即可：判据来自首帧的 A0 与卡片。
 #
 # 用法：bash docs/evidence/capture-screenshots.sh
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 
 UDID=536D8D31-6BA6-4535-BCEF-842E9A47078D
-PORT=8787
 BUNDLE_ID=com.dshtrading.ios-native
 APP="$PWD/build/DerivedData/Build/Products/Debug-iphonesimulator/DshTradingNative.app"
 OUT="$PWD/docs/evidence/screenshots"
 mkdir -p "$OUT"
 
-if [ ! -d "$APP" ]; then
-  echo "缺少 App：先跑 xcodebuild -scheme DshTradingNative build"
-  exit 2
-fi
+LOCK=build/.heavy.lock
+mkdir -p "$(dirname "$LOCK")"
+for _ in $(seq 1 60); do mkdir "$LOCK" 2>/dev/null && break; sleep 10; done
+export TMPDIR="$PWD/build/tmp"
+mkdir -p "$TMPDIR"
 
+echo "=== 1) 构建（退出码必须为 0）==="
+xcodegen generate >/dev/null 2>&1 || { echo "FAIL: xcodegen 未成功"; exit 1; }
+if ! xcodebuild -project DshTradingNative.xcodeproj -scheme DshTradingNative \
+      -destination "id=$UDID" -derivedDataPath build/DerivedData \
+      OTHER_SWIFT_FLAGS='-disable-sandbox' build >/tmp/ios-capture-build.log 2>&1; then
+  echo "FAIL: 构建未成功（见 /tmp/ios-capture-build.log）—— 拒绝采图，否则会装旧产物造假绿"
+  exit 1
+fi
+grep -q "BUILD SUCCEEDED" /tmp/ios-capture-build.log || { echo "FAIL: 未见到 BUILD SUCCEEDED"; exit 1; }
+rmdir "$LOCK" 2>/dev/null || true
+echo "构建 OK（Release 前的重活锁已释放）"
+
+echo "=== 2) 安装 + 二进制新鲜度断言 ==="
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null
-
 xcrun simctl install "$UDID" "$APP"
+BUILT_SHA=$(shasum -a 256 "$APP/DshTradingNative" | awk '{print $1}')
+INSTALLED_DIR=$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" app)
+INSTALLED_SHA=$(shasum -a 256 "$INSTALLED_DIR/DshTradingNative" | awk '{print $1}')
+if [ -z "$BUILT_SHA" ] || [ "$BUILT_SHA" != "$INSTALLED_SHA" ]; then
+  echo "FAIL: 模拟器里的二进制与本次构建不一致（built=$BUILT_SHA installed=$INSTALLED_SHA）；拒绝采图"
+  exit 1
+fi
+echo "ok: 模拟器里跑的是本次构建的二进制 sha256=$BUILT_SHA"
 
-wait_fixture() {
-  for _ in $(seq 1 50); do
-    curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 && return 0
-    sleep 0.1
-  done
-  return 1
-}
-
+echo "=== 3) 五情形采集 ==="
 for scenario in running restricted stopped unreachable unknown-enum; do
-  node "$PWD/docs/evidence/fixture-server.mjs" --scenario "$scenario" --port "$PORT" \
-    >"/tmp/fixture-capture-$scenario.log" 2>&1 &
-  server_pid=$!
-
-  if [ "$scenario" != "unreachable" ]; then
-    wait_fixture || { echo "FAIL $scenario: 夹具未就绪"; kill $server_pid 2>/dev/null; continue; }
-  fi
-
   xcrun simctl terminate "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-  # 组合根若支持夹具地址注入，用 launch args 传；不支持就在设置页手动填
-  #   http://127.0.0.1:PORT + 任意配对码
-  # App 内建 fixtures（不需外部服务）：情形经 SIMCTL_CHILD_ 前缀注入为 App 的环境变量
   SIMCTL_CHILD_DSH_IOS_FIXTURE_SCENARIO="$scenario" \
     xcrun simctl launch "$UDID" "$BUNDLE_ID" --args --fixtures >/dev/null 2>&1 || true
-
-  # 截图不是测试：这里允许一次有界等待让首屏稳定（测试代码禁止 sleep 的纪律不适用于采集脚本）
-  sleep 3
+  if [ "$scenario" = "unreachable" ]; then
+    echo "  unreachable: 等第二次刷新后再截（依赖 App 的 30s 刷新间隔，见文件头时序来源）"
+    sleep 36
+  else
+    sleep 4
+  fi
   xcrun simctl io "$UDID" screenshot "$OUT/$scenario.png" >/dev/null 2>&1
-  echo "captured $scenario -> $OUT/$scenario.png"
-  kill $server_pid 2>/dev/null
-  wait $server_pid 2>/dev/null
+  echo "  captured $scenario"
 done
 
 echo "完成：$OUT"
