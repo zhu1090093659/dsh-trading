@@ -1,0 +1,14 @@
+# apps/ios-native 生成物不入库（先例：desktop/.gitignore、apps/mobile/.gitignore）
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+build/
+
+# 契约快照：由 scripts/gen-contract-snapshot.mjs 每次生成，不入库
+Generated/
+*.xcuserstate
+*.log
+.DS_Store
+.swiftpm/
+Package.resolved
