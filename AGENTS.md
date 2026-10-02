@@ -2,6 +2,10 @@
 
 DSH 交易插件 monorepo，按市场组织 bundle（crypto/us/cn/hk）。本文件只保留项目契约；通用执行、并发与授权纪律遵循用户级指令。
 
+## 工作约定（owner 口径）
+
+- owner 口中的「**任务**」一律指**任务看板（task board）上的卡**。要"建任务 / 记任务 / 推进任务 / 剩下哪些任务"都走看板工具：建卡后落在 todo 列、需要执行再 run；不要在对话里另立一套清单或只写进文档。看板是本仓跨会话的工作台账。
+- 看板是**多项目共用**的：本项目的卡打 dsh-trading 相关标签（如 dsh-trading / roadmap-p4-p5），查卡时按标签或关键词过滤，别把其它项目的卡当成本项目的待办。
 ## 安全与当前授权
 
 - bundle patch insert-only；知识进 skill 随包分发；base 拥有全部市场无关行；不内置密钥、不再分发数据。下单默认 dry-run，liveTrading 必须显式开启，base 统一审批闸门不得绕过。
