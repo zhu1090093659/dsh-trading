@@ -39,6 +39,12 @@ Status: implemented
   而不是 URLSession 内部头合并的结果。
 - **这一处身份概念同时服务 IOS-7**：跨源缓存污染与令牌跨源外发都收敛到 `PairingIdentity`
   （一个事实只有一个家），IOS-7 复用同一个身份，不另造一份。
+  复用**必须遵守分层白名单**：`PairingIdentity` 住在 Transport，而分层表允许 import
+  `DshTradingTransport` 的只有 `Features` 与 `App`（Domain / Offline 都不在白名单里）。
+  因此 Domain / Offline 侧要拿"配对身份"只有两条路：由 App 把
+  `PairingIdentity.value` 的字符串快照注入给它们，或（若确有必要）把值类型搬到 `Contract` 后
+  三处（Transport / Domain / Offline）共同 import —— 后者属 IOS-7 的写作用域决定，
+  本卡不预先搬动，避免两卡各修一半。
 - **机检取代注释**：`scripts/ios-native/check-transport-token-binding.mjs` 五条判据进 CI
   （无绑定调用、协议不得再声明无绑定入口、Transport 之外不得取令牌、守卫顺序、重定向 delegate 已挂载），
   与 `wiring-ledger` / `ci-wiring-check` / `patch-id` 冻结面同一立场。
