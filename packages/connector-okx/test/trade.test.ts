@@ -47,6 +47,25 @@ function baseConfig(overrides: Partial<Config> = {}): Config {
 
 const MARKET_ARGS: PlaceOrderArgs = { instId: 'btc-usdt', side: 'buy', type: 'market', quantity: 0.01 }
 
+/** baseConfig 的 demo 三 ref 名（用例按名隔离启动环境）。 */
+const DEMO_REF_NAMES = ['OKX_DEMO_API_KEY', 'OKX_DEMO_SECRET_KEY', 'OKX_DEMO_PASSPHRASE'] as const
+
+/** 启动环境隔离：临时清空这些变量，结束后按原值（含「原本未设置」）恢复。
+ *  resolveCredentials 对 resolver 未命中的 ref 会回退 process.env，不隔离就等于
+ *  把操作者的 ambient OKX_DEMO_* 当成用例前提。 */
+async function withEnvIsolated<T>(refs: readonly string[], run: () => Promise<T>): Promise<T> {
+  const saved = refs.map((ref) => [ref, process.env[ref]] as const)
+  for (const ref of refs) delete process.env[ref]
+  try {
+    return await run()
+  } finally {
+    for (const [ref, value] of saved) {
+      if (value === undefined) delete process.env[ref]
+      else process.env[ref] = value
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* 三态闸门矩阵（主 agent 裁决 #2）                                          */
 /* ------------------------------------------------------------------ */
@@ -228,7 +247,10 @@ describe('resolveCredentials（三 ref，每次操作解析）', () => {
         return ref === 'OKX_DEMO_API_KEY' ? undefined : { value: 'v' }
       },
     }
-    const error = await resolveCredentials(fakeCtx(resolver), baseConfig()).catch((e: unknown) => e)
+    // 清空 ambient demo 变量：实现会用 process.env 兜底未命中的 ref（见下一条用例），
+    // 不清空则「未命中」被操作者环境救活，带 OKX_DEMO_* 的机器上必红。
+    const error = await withEnvIsolated(DEMO_REF_NAMES, () =>
+      resolveCredentials(fakeCtx(resolver), baseConfig()).catch((e: unknown) => e))
     expect(error).toBeInstanceOf(TradingServiceError)
     expect((error as TradingServiceError).code).toBe('TRADING_CREDENTIALS_MISSING')
     expect((error as TradingServiceError).message).toContain('OKX_DEMO_API_KEY')
@@ -236,8 +258,10 @@ describe('resolveCredentials（三 ref，每次操作解析）', () => {
   })
 
   it('无 credentials seam 时回落启动环境变量（llm-deepseek 同款降级）', async () => {
-    process.env.OKX_DEMO_SECRET_KEY = 'ambient-secret'
-    try {
+    // 隔离后再自己铺 ambient 值：结束后恢复操作者原值，而不是把变量删掉（那会把
+    // 环境泄漏给后续用例/进程）。
+    await withEnvIsolated(['OKX_DEMO_SECRET_KEY'], async () => {
+      process.env.OKX_DEMO_SECRET_KEY = 'ambient-secret'
       const resolver: CredentialResolverLike = {
         async resolve(ref) {
           return ref === 'OKX_DEMO_SECRET_KEY' ? undefined : { value: 'v' }
@@ -245,9 +269,7 @@ describe('resolveCredentials（三 ref，每次操作解析）', () => {
       }
       const creds = await resolveCredentials(fakeCtx(resolver), baseConfig())
       expect(creds.secret).toBe('ambient-secret')
-    } finally {
-      delete process.env.OKX_DEMO_SECRET_KEY
-    }
+    })
   })
 
   it('非法 ref 名（非环境变量名形态）→ TRADING_CREDENTIALS_MISSING', async () => {
