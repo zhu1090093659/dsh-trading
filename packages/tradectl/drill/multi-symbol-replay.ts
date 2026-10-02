@@ -74,9 +74,13 @@ if (starvedEth.publishedTicks === 0) failures.push('① 健康的 ETH 一条都�
 if (starvedMetrics.worstAlignment !== 'unaligned') failures.push('① 聚合态应如实标出 unaligned，实际 ' + starvedMetrics.worstAlignment)
 if (JSON.stringify(starvedMetrics.symbolsNeverAligned) !== JSON.stringify([BTC])) failures.push('① 断供标的清单应为 [BTC]，实际 ' + JSON.stringify(starvedMetrics.symbolsNeverAligned))
 
-// ② 每 100ms 一条 tick、预算 15s、虚拟时长 30s ⇒ 前 151 条新鲜（0..15000ms 含端点）发布，其后 150 条按 snapshot-stale 丢弃
-if (oneShotBtc.publishedTicks !== 151) failures.push('② BTC 应发布预算内的 151 条，实际 ' + String(oneShotBtc.publishedTicks))
-if (oneShotBtc.staleDrops !== 150) failures.push('② BTC 应有 150 条按 snapshot-stale 丢弃，实际 ' + String(oneShotBtc.staleDrops))
+// ② 每 100ms 一条 tick、虚拟时长 30s、预算取自标定值（drill/alignment-params.ts）
+//    ⇒ 新鲜窗口 = 0..snapshotAgeBudgetMs（含端点），其余按 snapshot-stale 丢弃。
+//    期望值**从标定值算**（换行情源重标后这里自动跟着走，不会变成第二个写死的地方）。
+const budgetTicks = Math.floor(DRILL_ALIGNMENT_PARAMS.snapshotAgeBudgetMs / 100) + 1
+const totalTicks = 30_000 / 100 + 1
+if (oneShotBtc.publishedTicks !== budgetTicks) failures.push('② BTC 应发布预算内的 ' + String(budgetTicks) + ' 条，实际 ' + String(oneShotBtc.publishedTicks))
+if (oneShotBtc.staleDrops !== totalTicks - budgetTicks) failures.push('② BTC 应有 ' + String(totalTicks - budgetTicks) + ' 条按 snapshot-stale 丢弃，实际 ' + String(oneShotBtc.staleDrops))
 if (oneShotBtc.finalAlignment !== 'stale') failures.push('② BTC 末态应为 stale，实际 ' + oneShotBtc.finalAlignment)
 if (oneShotEth.publishedTicks !== 301) failures.push('② ETH 应发布全部 301 条，实际 ' + String(oneShotEth.publishedTicks))
 if (oneShotEth.finalAlignment !== 'aligned') failures.push('② ETH 末态应为 aligned，实际 ' + oneShotEth.finalAlignment)
