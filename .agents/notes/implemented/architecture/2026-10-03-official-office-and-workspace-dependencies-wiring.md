@@ -31,5 +31,6 @@ Status: implemented
 - 真实会话实测（trading-dev，`DSH_PRIMARY_RUNTIME` 指向官方载荷）：catalog 三条 provider=`dsh-office` source=`bundled`、resourceBase 指向包内目录；正文含加载期注入的 `Installed LibreOffice Kit` 段（当前 process.execPath 与 kit cli.js 绝对路径）；`load_workspace_dependencies` 在工具列表内；无 env 时 catalog 为空且无该工具。
 - 官方结构检查器与 LibreOffice Kit 已用真实样品验证：DOCX/PPTX/XLSX 创建 → `check_office.py` 结构检查通过 → DOCX `convert` 出 PDF、`render` 出 PNG 清单、XLSX `recalculate` 后公式缓存值 = 5。
 - **部署边界（CLI）**：Office/依赖能力需要部署方提供 primary-runtime 形状载荷并设置 `DSH_PRIMARY_RUNTIME`（或 `DSH_BUNDLED_PRIMARY_RUNTIME`）。本机可只读沿用官方桌面已安装的 `$HOME/.dsh/dsh-runtimes/dsh-primary-runtime`。
-- **桌面边界（见下节）**：桌面壳当前不设置该 env，也不自带载荷，因此桌面会话这两条行保持 disabled（显式缺席）；用 `DSH_PRIMARY_RUNTIME` 指向外部载荷即可启用。
+- **桌面自动接线（2026-10-03，方案 B）**：桌面壳在 spawn host 前用 `resolvePrimaryRuntime(runtimeRoot, home)` 决议一个载荷目录（纯函数，只在目录含 `runtime.json` 时命中），命中即给子进程设 `DSH_PRIMARY_RUNTIME` 并在启动日志写明；候选只有两个：应用自带的 `resources/runtime/primary-runtime`（将来若 stage）与本 trading home 的 `$DSH_HOME/dsh-runtimes/dsh-primary-runtime`（官方 carrier 惯例路径）。**刻意不指向 `~/.dsh`**：跨 home 取用是用户决策，不是壳的默认行为。
+- **桌面边界**：本仓桌面载荷当前不带 primary-runtime，且不下载、不复制（359MB，官方分发源不在本仓授权内），所以开箱桌面会话这两条行仍是 disabled（显式缺席，不静默回退）；用户把兼容载荷放进上述任一候选路径（或在 shell 里 `DSH_PRIMARY_RUNTIME=...` 启动），桌面壳下次启动即自动通电。
 - 回归防护：`packages/base/test/office-wiring.test.ts` 断言两条行的官方 id/name、office 行不写 config、source 派生自 env、以及无 env 时两行均 disabled（用合成 process 求值 `!!js` 表达式，不改真实环境）。

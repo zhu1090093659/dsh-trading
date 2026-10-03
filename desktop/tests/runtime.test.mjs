@@ -12,6 +12,7 @@ const {
   hostCliShimPath,
   writeHostCliShims,
   resolveDshHome,
+  resolvePrimaryRuntime,
   profileSeedFingerprint,
   runtimeSeedStamp,
   profileAction,
@@ -262,4 +263,68 @@ test('toNodeImportSpecifier converts paths to valid file URLs safe for --import'
     const posixSpec = toNodeImportSpecifier('/Applications/App/loader.mjs');
     assert.equal(posixSpec, 'file:///Applications/App/loader.mjs');
   }
+});
+
+test('operator gets an absolute payload from the app resources when one is staged', (t) => {
+  // Given a staged payload carrying runtime.json inside the app runtime resources
+  const resources = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-primary-app-'));
+  t.after(() => fs.rmSync(resources, { recursive: true, force: true }));
+  const runtimeRoot = path.join(resources, 'runtime');
+  const payload = path.join(runtimeRoot, 'primary-runtime');
+  fs.mkdirSync(payload, { recursive: true });
+  fs.writeFileSync(path.join(payload, 'runtime.json'), '{}');
+
+  // When the primary runtime is resolved
+  const resolved = resolvePrimaryRuntime(runtimeRoot, path.join(resources, 'home'));
+
+  // Then the staged directory is returned.
+  assert.equal(resolved, payload);
+});
+
+test('operator falls back to the trading home payload when the app stages none', (t) => {
+  // Given no app payload but a home payload under dsh-runtimes/dsh-primary-runtime
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-primary-home-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const home = path.join(root, 'home');
+  const payload = path.join(home, 'dsh-runtimes', 'dsh-primary-runtime');
+  fs.mkdirSync(payload, { recursive: true });
+  fs.writeFileSync(path.join(payload, 'runtime.json'), '{}');
+
+  // When the primary runtime is resolved
+  const resolved = resolvePrimaryRuntime(path.join(root, 'runtime'), home);
+
+  // Then the home payload is returned.
+  assert.equal(resolved, payload);
+});
+
+test('operator keeps the capability absent when no payload carries runtime.json', (t) => {
+  // Given an app directory and a home directory without a valid payload
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-primary-none-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const home = path.join(root, 'home');
+  const empty = path.join(root, 'runtime', 'primary-runtime');
+  fs.mkdirSync(empty, { recursive: true });
+  fs.writeFileSync(path.join(empty, 'not-runtime.json'), '{}');
+
+  // When the primary runtime is resolved
+  const resolved = resolvePrimaryRuntime(path.join(root, 'runtime'), home);
+
+  // Then nothing is returned: the rows stay explicitly disabled and never fall back to a system Python.
+  assert.equal(resolved, undefined);
+});
+
+test('operator never reaches across to the host ~/.dsh payload', (t) => {
+  // Given a home whose sibling dsh home holds a payload (the host instance)
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-primary-cross-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const home = path.join(root, 'home', '.dsh-trading');
+  const hostPayload = path.join(root, 'home', '.dsh', 'dsh-runtimes', 'dsh-primary-runtime');
+  fs.mkdirSync(hostPayload, { recursive: true });
+  fs.writeFileSync(path.join(hostPayload, 'runtime.json'), '{}');
+
+  // When the primary runtime is resolved for the trading home
+  const resolved = resolvePrimaryRuntime(path.join(root, 'runtime'), home);
+
+  // Then the cross-home payload is not used.
+  assert.equal(resolved, undefined);
 });

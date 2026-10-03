@@ -20,6 +20,7 @@ const path = require('node:path');
 const {
   resolveRuntimePaths,
   resolveDshHome,
+  resolvePrimaryRuntime,
   readStampFile,
   runtimeSeedStamp,
   profileAction,
@@ -76,8 +77,18 @@ function setStatus(text) {
   if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.webContents.send('desktop:status', text);
 }
 
-function childEnv(home, nodeHome) {
+/**
+ * Environment for the host child. `primaryRuntime` is supplied only when the
+ * dependency payload actually exists on disk, so the Office and
+ * workspace-dependency rows stay explicitly disabled (not silently replaced)
+ * on an installation that carries no payload.
+ * @param {string} home - Resolved DSH home.
+ * @param {string} nodeHome - Bundled Node distribution root.
+ * @param {string} [primaryRuntime] - Absolute payload directory, when one exists.
+ */
+function childEnv(home, nodeHome, primaryRuntime) {
   const env = { ...process.env, DSH_HOME: home };
+  if (primaryRuntime !== undefined) env.DSH_PRIMARY_RUNTIME = primaryRuntime;
   // The bundled Node distribution comes first so anything the host shells out
   // to (npm, corepack) resolves against the bundled runtime, never the system.
   const nodeBinDir = process.platform === 'win32' ? nodeHome : path.join(nodeHome, 'bin');
@@ -107,6 +118,8 @@ function hostSymbolNormalizerPath() {
 }
 
 function startHost(runtime, home, port) {
+  const primaryRuntime = resolvePrimaryRuntime(runtime.runtimeRoot, home);
+  pushLogLine('[desktop] primary runtime: ' + (primaryRuntime ?? 'absent (Office skills and load_workspace_dependencies stay disabled)'));
   const symbolNormalizer = hostSymbolNormalizerPath();
   const normalizerImport = toNodeImportSpecifier(symbolNormalizer);
   if (normalizerImport === undefined) {
@@ -121,7 +134,7 @@ function startHost(runtime, home, port) {
   ];
   const child = spawn(runtime.nodeBin, args, {
     cwd: home,
-    env: childEnv(home, runtime.nodeHome),
+    env: childEnv(home, runtime.nodeHome, primaryRuntime),
     detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   });

@@ -182,7 +182,9 @@ export DSH_PRIMARY_RUNTIME="$HOME/.dsh/dsh-runtimes/dsh-primary-runtime"
 dsh-trading --profile trading-web
 ```
 
-载荷需含 `runtime.json` 与 `dependencies/{python,node,pnpm}`。缺失时 `load_workspace_dependencies` 与三个 Office 技能都不出现；这是官方门控语义，不是故障。桌面壳当前不设置该 env、也不自带载荷，桌面会话同样按显式缺席处理（见 owning note 的部署边界）。
+载荷需含 `runtime.json` 与 `dependencies/{python,node,pnpm}`。缺失时 `load_workspace_dependencies` 与三个 Office 技能都不出现；这是官方门控语义，不是故障。
+
+桌面壳会在启动 host 前自动决议一个载荷目录（命中即设 `DSH_PRIMARY_RUNTIME`，否则显式缺席），候选为 `resources/runtime/primary-runtime` 与 `$DSH_HOME/dsh-runtimes/dsh-primary-runtime` 两个；**不跨到宿主 `~/.dsh`**。本仓桌面载荷当前不带 primary-runtime（不下载、不复制）。把兼容载荷放到任一候选路径，桌面下次启动即启用。
 
 ---
 

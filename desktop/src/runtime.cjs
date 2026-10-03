@@ -62,6 +62,34 @@ function resolveDshHome(env, homedir) {
 }
 
 /**
+ * Resolve the bundled dependency payload the Office and workspace-dependency rows
+ * consume. The payload is never copied or downloaded by this app: it is read in
+ * place when the installation or the trading home already carries one, and the
+ * rows stay explicitly disabled otherwise (no silent system-Python fallback).
+ *
+ * Candidates, in order: a payload staged inside this app's runtime resources (for
+ * a carrier that ships one), then the conventional per-home location used by the
+ * official desktop. Only a directory holding runtime.json qualifies.
+ *
+ * The host "$HOME/.dsh/dsh-runtimes/..." instance is deliberately NOT a candidate:
+ * this project runs under the dedicated trading home, and reaching across homes is
+ * the user's decision, not this shell's.
+ * @param {string} runtimeRoot - Absolute runtime payload directory.
+ * @param {string} home - Resolved DSH home (the trading home by default).
+ * @returns {string|undefined} Absolute payload directory, or undefined when neither candidate exists.
+ */
+function resolvePrimaryRuntime(runtimeRoot, home) {
+  const candidates = [
+    path.join(runtimeRoot, 'primary-runtime'),
+    path.join(home, 'dsh-runtimes', 'dsh-primary-runtime'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(candidate, 'runtime.json'))) return candidate;
+  }
+  return undefined;
+}
+
+/**
  * Read a JSON stamp file; undefined when missing or unreadable.
  * @param {string} stampFile
  */
@@ -484,6 +512,7 @@ module.exports = {
   writeHostCliShims,
   normalizeProfileCohort,
   resolveDshHome,
+  resolvePrimaryRuntime,
   readStampFile,
   profileSeedFingerprint,
   runtimeSeedStamp,
