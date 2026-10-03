@@ -234,11 +234,10 @@ function renderNewsItem(item: { source: string; title: string; url: string; publ
 
 export function createGetNewsTool(toolOptions: { getSources?: () => readonly string[] | undefined } = {}) {
   const description =
-    'Get recent Hong Kong stock market news, derived from Eastmoney financial fast-news (HK column) filtered to HK-relevant items '
-    + '(HKEX-listed marketId=116 codes or HK keywords). '
-    + 'DEGRADED SOURCE — Eastmoney is a unified CN financial feed; HK coverage is PARTIAL (HK news without an HK-listed code or HK keyword is not captured; not a dedicated HK news source). '
-    + 'Each item carries source name (东方财富), publish time and a link for traceability; fetches metadata only, never redistributes article bodies. '
-    + 'Optionally filter by symbol (HK code, e.g. 00700 / 00700.HK) and by a time window. No credentials required.'
+    'Get recent Hong Kong stock news from the Eastmoney fast-news HK column, filtered to HK-relevant items (HKEX marketId=116 or HK keywords). '
+    + 'DEGRADED SOURCE — Eastmoney is a unified CN feed; HK coverage is PARTIAL (news without an HK code or keyword is missed), not a dedicated HK source. '
+    + 'Each item carries source (东方财富), time and link; metadata only, never article bodies. '
+    + 'Optional symbol filter (e.g. 00700 / 00700.HK) and window; no credentials required.'
   return defineTool({
     name: 'hk_get_news',
     description,

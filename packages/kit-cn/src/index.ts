@@ -248,11 +248,10 @@ function renderNewsItem(item: { source: string; title: string; url: string; publ
 
 export function createGetNewsTool(toolOptions: { getSources?: () => readonly string[] | undefined } = {}) {
   const description =
-    'Get recent China A-share market news, announcements, and macro financial updates from Eastmoney. '
-    + 'Aggregates and sorts newest-first; each item carries source name, publish time and a link for traceability. '
-    + 'Without symbol it returns the market-wide fast-news feed (default 24h window). '
-    + 'With symbol (A-share code, e.g. 600519 / 000001) it additionally returns per-symbol news from Eastmoney news search (relevance-ranked, looking back up to 7 days) and per-symbol announcements. '
-    + 'Fetches metadata only, never redistributes article bodies. No credentials required.'
+    'Get recent China A-share news, announcements and macro updates from Eastmoney, newest-first, each item with source, publish time and link. '
+    + 'Without symbol: market-wide fast-news feed (default 24h window). '
+    + 'With symbol (e.g. 600519 / 000001): also per-symbol news from Eastmoney search (relevance-ranked, up to 7 days back) plus per-symbol announcements. '
+    + 'Metadata only, never article bodies. No credentials required.'
   return defineTool({
     name: 'cn_get_news',
     description,

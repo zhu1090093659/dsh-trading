@@ -510,13 +510,12 @@ function renderNewsItem(item: { source: string; title: string; url: string; publ
 
 export function createGetNewsTool(toolOptions: { cryptoPanicKey?: string; getSources?: () => readonly string[] | undefined } = {}) {
   const description =
-    'Get recent crypto news from public no-key sources (Binance listing/delisting/API announcements, OKX announcements, CoinDesk & The Block RSS). '
+    'Get recent crypto news from public no-key sources (Binance/OKX announcements, CoinDesk & The Block RSS), newest-first with source, time and link per item. '
     + (toolOptions.cryptoPanicKey
-      ? 'CryptoPanic user key is set — the CryptoPanic free tier is queried as an additional source and degrades gracefully if it fails. '
+      ? 'CryptoPanic key set — its free tier is queried too and degrades gracefully on failure. '
       : '')
-    + 'Aggregates and sorts newest-first; each item carries source name, publish time and a link for traceability. '
-    + 'Optionally filter by symbol (matched against item titles; note media headlines often use asset names like "Bitcoin" rather than tickers) and by a time window. '
-    + 'Source failures are tolerated and reported instead of failing the whole call. No credentials required. Distinguish announcements (listing, delisting, regulatory) from opinion (media) when citing.'
+    + 'Optional symbol filter matches item titles; headlines often use asset names not tickers. '
+    + 'Source failures are reported, not fatal. No credentials required. Cite announcements (listing, delisting, regulatory) separately from media opinion.'
   return defineTool({
     name: 'crypto_get_news',
     description,
