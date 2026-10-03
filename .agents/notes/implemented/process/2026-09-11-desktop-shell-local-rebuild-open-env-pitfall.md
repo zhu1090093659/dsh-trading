@@ -52,3 +52,12 @@ Status: implemented
 - 「Failed to load plugins / failed to import loader entry」的真实根因是 dsh 会话 cookie 按端口累积、撑爆宿主请求头预算（HTTP 431），见 [auth cookie note](../bug-fix/2026-09-11-desktop-auth-cookie-header-overflow.md)；本条早期把同一现象归因于 profile cohort 链接漂移属误判——Electron cookie jar 持久化在 user-data-dir，重启 app 不清，归一后仍复现。
 - `~/.dsh/profiles/trading-web` 残留现状：已被本次误启动 reseed 成新载荷 + 旧用户层 patch，处于「若用 DSH_HOME=~/.dsh 启动会崩 overlay」状态；正常 Dock 启动（`~/.dsh-trading`）不触碰它。
 - 本次重建已交付：`dsh-trading-desktop-0.2.1-mac-arm64.dmg/.zip` 与已安装 `/Applications/DSH Trading.app` 均为 2026-09-11T03:07Z 载荷，GUI 实测渲染正常。
+
+## 补充实证（2026-10-03：把工具面优化带上桌面壳）
+
+工具注入面优化（R3-B1 Batch 1 输出声明化、S1 描述口径收敛）落地后，桌面端分两条通路吃新版，两条都要各自确认：
+
+- **live profile 通路（桌面壳实际服务的那个）**：GUI 的行情/工具插件全部来自 `~/.dsh-trading/profiles/trading-web`，它不是桌面壳 seed、`profileAction` 判 `leave`，所以 app 重建不影响它。刷新按本记录「补充实证（2026-09-12）」一节的四步（`sync-profile-overrides` → `dsh plugin add file:` → `rm -rf node_modules/@dshtrading/*` + `dsh plugin install` → `profile-config-preflight`），或直接 `scripts/refresh-trading-web-profile.sh`。本次先修了该脚本被死路径挡住的问题（`@dshtrading/bot` 残留，见工具面 Note），刷新后 `base/lib/market-tools.js` 与工作区构建产物 md5 一致。
+- **app 自带 seed 通路（全新 home / 新装分发）**：`desktop/resources/runtime/profile-trading` 也要重建，否则新机器播种的是旧载荷。本次 `npm run build-runtime` + `npm run dist:mac`，`VERSION.json` `builtAt 2026-10-03T06:42:18Z`、`profileHash 56ef2856…`；产物 `dsh-trading-desktop-0.2.1-mac-arm64.{dmg,zip}`（`dist/`），已安装 `/Applications/DSH Trading.app` 一并替换（旧包备份 `/tmp/DSH-Trading-0.5.0-old-20261003144557.app`）。脚本已按第 28 行的同版本陷阱在 install 前清生成态 lock+node_modules。
+- **验证（本次实测）**：安装位 `profile-trading/.../base/lib/market-tools.js` 与工作区构建产物 md5 同为 `1be4a276…`；`desktop npm test` 29/29；干净启动（`env -u DSH_HOME -u ELECTRON_RUN_AS_NODE open`）后 `dsh-host.log` 出现 `GUI ready`，tokenized URL `curl` 得 303，带 cookie 的 `/dshtrading/api/markets` 返回六市场 `crypto:okx / us:yahoo / cn:tencent / hk:tencent / futures:hithink / global:jin10`；headless Chrome 截图 1600x1000 实测渲染（左栏自选、行情/策略/知识库/特殊指标页签、空态提示），非空白页（unique colors 1571、主色占比 0.949）。冒烟用的临时实例已停止，临时 home 已清理。
+- **口径边界**：本次只验证「桌面壳起来、六市场在、UI 正常渲染」这条链路；不构成对"桌面内实际调工具返回值形状"的运行时验收——那属于 headless 侧已记录的证据范围。
