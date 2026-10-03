@@ -392,8 +392,9 @@ export function createGetDerivativesHistoryTool(options: { getRegistry: () => Cr
     description:
       'Read-only derivatives history for a crypto perpetual: funding-rate and open-interest series, time-ascending, from the currently '
       + 'routed crypto provider (registry-first, never a hardcoded exchange). The returned symbol is the provider-canonical form; optional '
-      + 'limit keeps the most recent N points per series. Without the capability the call fails with TRADING_NOT_IMPLEMENTED — an empty '
-      + 'series is never "no data"; with no provider routed it fails with TRADING_NO_PROVIDER.',
+      + 'limit keeps the most recent N points per series. If the provider does not implement getDerivativesHistory the call fails with '
+      + 'TRADING_NOT_IMPLEMENTED — an empty series is never substituted for "no data"; with no crypto provider routed it fails with '
+      + 'TRADING_NO_PROVIDER.',
     parameters: {
       symbol: {
         type: 'string',

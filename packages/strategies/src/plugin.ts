@@ -131,12 +131,12 @@ export function createStrategyAuthorTool(options: StrategyAuthorToolOptions) {
       title: {
         type: 'string',
         required: true,
-        description: 'Display name (1-32 chars), e.g. "双均线止损止盈"',
+        description: 'Display name (1-32 chars), e.g. "double-MA stop loss and take profit".'
       },
       horizon: {
         type: 'string',
         required: true,
-        description: 'Strategy horizon: "short" (短线), "swing" (波段), or "long" (长线)',
+        description: 'Strategy horizon: "short" (intraday), "swing" (days to weeks) or "long" (months or more).'
       },
       summary: {
         type: 'string',
@@ -683,7 +683,7 @@ export function createScreenerAuthorTool(options: ScreenerAuthorToolOptions) {
       title: {
         type: 'string',
         required: true,
-        description: 'Display name (1-32 chars), e.g. "量价双确认"',
+        description: 'Display name (1-32 chars), e.g. "price-volume double confirmation".'
       },
       summary: {
         type: 'string',

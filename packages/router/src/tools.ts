@@ -61,7 +61,7 @@ export function createInstrumentsSearchTool(services: RouterToolServices) {
       query: {
         type: 'string',
         required: true,
-        description: 'Substring to match against symbol or name, e.g. "腾讯" / "BTC" / "apple"',
+        description: 'Substring to match against symbol or name, e.g. "腾讯" / "BTC" / "apple".',
       },
       market: {
         type: 'string',

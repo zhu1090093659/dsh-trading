@@ -135,7 +135,7 @@ export function apply(ctx: Context, config: Config): void {
     register(defineTool({
       name: 'cn_get_ticker',
       description:
-        'Get the latest Level-1 quote for an A-share stock from 中国银河证券星耀数智 (AmazingData). '
+        'Get the latest Level-1 quote for an A-share stock from China Galaxy Securities Xingyao Shuzhi (AmazingData). '
         + 'Symbol accepts the canonical A-share form (600519.SH) or a bare 6-digit code (600519). '
         + 'Returns last price, previous close, change percent and bid/ask-1 from the authoritative exchange feed.',
       parameters: {
@@ -150,7 +150,7 @@ export function apply(ctx: Context, config: Config): void {
     register(defineTool({
       name: 'cn_get_klines',
       description:
-        'Get historical K-lines for A-share stocks from 中国银河证券星耀数智 (AmazingData). '
+        'Get historical K-lines for A-share stocks from China Galaxy Securities Xingyao Shuzhi (AmazingData). '
         + 'Intervals: ' + INTERVAL_VOCABULARY.join('/') + ' (dsh-trading vocabulary; upstream serves the full A-share history since 2013). '
         + 'Returns up to limit most recent candles in ascending time order.',
       parameters: {
@@ -168,7 +168,7 @@ export function apply(ctx: Context, config: Config): void {
     register(defineTool({
       name: 'cn_get_orderbook',
       description:
-        'Get the 5-level order book (bid/ask prices and sizes) for an A-share stock from 中国银河证券星耀数智 (AmazingData). '
+        'Get the 5-level order book (bid/ask prices and sizes) for an A-share stock from China Galaxy Securities Xingyao Shuzhi (AmazingData). '
         + 'Derived from the latest exchange Level-1 snapshot row of the current trading day.',
       parameters: {
         symbol: { type: 'string', required: true, description: 'A-share symbol, e.g. 600519.SH (or 600519)' },
@@ -183,7 +183,7 @@ export function apply(ctx: Context, config: Config): void {
       name: 'cn_list_instruments',
       description:
         'List the A-share instrument universe (Shanghai/Shenzhen/Beijing, about 5500 symbols with Chinese short names) from '
-        + '中国银河证券星耀数智 (AmazingData). Optional query filters by code or name substring.',
+        + 'China Galaxy Securities Xingyao Shuzhi (AmazingData). Optional query filters by code or name substring.',
       parameters: {
         query: { type: 'string', description: 'Optional code or name filter, e.g. 茅台 or 6005' },
       },
@@ -196,7 +196,7 @@ export function apply(ctx: Context, config: Config): void {
     register(defineTool({
       name: 'cn_get_fundamentals',
       description:
-        'Get an A-share fundamental snapshot from 中国银河证券星耀数智 (AmazingData): company short name, listing board/date '
+        'Get an A-share fundamental snapshot from China Galaxy Securities Xingyao Shuzhi (AmazingData): company short name, listing board/date '
         + 'and the 52-week high/low derived from weekly K-lines.',
       parameters: {
         symbol: { type: 'string', required: true, description: 'A-share symbol, e.g. 600519.SH (or 600519)' },

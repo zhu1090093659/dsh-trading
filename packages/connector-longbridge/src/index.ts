@@ -260,7 +260,7 @@ export function apply(ctx: Context, config: Config): void {
 
     register(defineTool({
       name: 'hk_cancel_order',
-      description: 'Cancel a HK stock order on Longbridge by order ID.',
+      description: 'Cancel a HK stock order on Longbridge by order ID; an already-terminal order is reported as such, not as an error.',
       parameters: { ordId: { type: 'string', required: true, description: 'Order ID' } },
       output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
       async execute(args) {

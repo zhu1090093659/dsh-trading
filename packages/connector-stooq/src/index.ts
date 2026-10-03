@@ -312,9 +312,9 @@ export function apply(ctx: Context, config: Config): void {
       defineTool({
         name: 'us_get_ticker',
         description:
-          'Get the latest market snapshot for a US stock via the Stooq public CSV endpoint. NOTE: the original Stooq '
-          + 'quote endpoint is gone, so this returns the latest DAILY close (price, volume, close time) — it does not '
-          + 'reflect intraday or pre/post-market moves. No credentials required; personal/non-commercial use per stooq.com terms.',
+          'Get the latest market snapshot for a US stock via Stooq. The original Stooq quote endpoint is gone, so this returns the '
+          + 'latest DAILY close (price, volume, close time) and does not reflect intraday or pre/post-market moves. '
+          + 'No credentials required; personal/non-commercial use per stooq.com terms.',
         parameters: {
           symbol: {
             type: 'string',
@@ -337,9 +337,8 @@ export function apply(ctx: Context, config: Config): void {
       defineTool({
         name: 'us_get_klines',
         description:
-          'Get recent OHLCV candles for a US stock via the Stooq public CSV endpoint. Supported intervals: 1/5/15/30 '
-          + 'minute (intraday availability depends on Stooq policy), 1h, 1d, 1w, 1M. No credentials required; '
-          + 'personal/non-commercial use per stooq.com terms.',
+          'Get recent OHLCV candles for a US stock via Stooq. Supported intervals: 1/5/15/30 minute (intraday availability depends '
+          + 'on Stooq policy), 1h, 1d, 1w, 1M. No credentials required; personal/non-commercial use per stooq.com terms.',
         parameters: {
           symbol: {
             type: 'string',

@@ -201,7 +201,7 @@ export function apply(ctx: Context, config: Config): void {
 
     register(defineTool({
       name: 'us_place_order',
-      description: 'Place or simulate a US stock order via Interactive Brokers.',
+      description: 'Place a US stock order via Interactive Brokers, or simulate one.',
       parameters: {
         symbol: { type: 'string', required: true, description: 'US symbol, e.g. AAPL' },
         side: { type: 'string', enum: ['buy', 'sell'], required: true, description: 'Side' },
