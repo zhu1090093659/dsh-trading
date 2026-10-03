@@ -21,6 +21,7 @@
 | 移动端（观测端，iOS 原生） | **apps/ios-native**（XcodeGen 生成的独立 Xcode 工程，不进 pnpm workspace）：契约等价实现 + 行为向量 + **XCTest 机检**（向量/用例数随契约扩展，不写死；改错必红）；六个分层 scheme 全绿、冷构建 BUILD SUCCEEDED；CI 跑两条纯 Node 门禁（防漂移 + 分层白名单）。见 apps/ios-native/README.md |
 | 移动端（Expo/RN 旧工程） | **已退役并删除**（owner 2026-10-02 决定，以 iOS 原生为准）：apps/mobile/** 用 `git rm -r` 移除、ci.yml 的 mobile job 一并删除，历史只留提交记录。裁决与理由见 [移动端落仓方案]（自动交易平面已迁往私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)） 的「去留裁决」节 |
 | systemd 台架 | scripts/systemd-units-check.mjs（六类静态判据，退出码即结论）+ 人执行安装清单（deploy/README.md）。**本机无 systemd，安装未做** |
+| 官方 Office 技能与依赖加载 | base 层两条官方行（id `skill-office` / `workspace-dependencies`，`DSH_PRIMARY_RUNTIME` 门控，无载荷显式缺席）。真实会话实测 catalog/provider/resourceBase、加载期注入的 LibreOffice Kit 段、`load_workspace_dependencies` 可见；DOCX/PPTX/XLSX 创建 + `check_office.py` 结构检查 + PDF 转换 + 渲染 + 公式重算（缓存值 5）全过。见 [官方 Office 接线 note](.agents/notes/implemented/architecture/2026-10-03-official-office-and-workspace-dependencies-wiring.md)；**桌面形态未带载荷，能力显式缺席** |
 | 假刹车修复 | edge kill 状态写 0o640（组可读）+ 读取端仅 ENOENT 视为未 kill（EACCES/坏 JSON ⇒ 已 kill 且已暂停）；复现 `pnpm --filter @dshtrading/tradectl exec vitest run test/edge.test.ts test/degradation.test.ts`（38 例，含 chmod 000 端到端）|
 | 部署缺口修复 | bot 单元独立 home（StateDirectory=dsh-trading-bot）+ 核心单元显式 `DSH_TRADING_AUTHORITY_DIR`；复现 `node scripts/systemd-units-check.mjs`（全绿）|
 | 驾驶舱补完 | 12 封闭卡片类型全渲染（补 mandate/journal/system 三类）、字段排版、卡片动作接线、设备配对 + Bearer 令牌；截图 `.local/acceptance/cockpit-2026-10-02/`（不入库，本机）；复现 `cd packages/cockpit && npx vitest run`（23 例）|

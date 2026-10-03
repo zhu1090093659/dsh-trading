@@ -161,6 +161,31 @@ description: 加密资产交易计划生成器：当用户询问交易计划、�
 
 ---
 
+## 📄 官方 Office 技能与依赖加载（base 层两条官方行）
+
+`packages/base/cordis.patch.yml` 以官方 id 挂载两条官方负载行（细则与实测见 [官方 Office 技能与依赖加载接入](../../.agents/notes/implemented/architecture/2026-10-03-official-office-and-workspace-dependencies-wiring.md)）：
+
+| 行 id | 官方包 | 提供 |
+|---|---|---|
+| `skill-office` | `@deepseek-ai/dsh-skill-office` | `office-docx` / `office-pptx` / `office-xlsx` 三个 bundled 技能与共享结构检查器 |
+| `workspace-dependencies` | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies`：随包 Python（python-docx/python-pptx/openpyxl/pandas/lxml/Pillow/XlsxWriter）与 node/pnpm 的绝对路径 |
+
+两条行**不写 assetRoot/node/cli**（官方默认值在 CLI 与桌面两种形态都成立），但都按 `DSH_PRIMARY_RUNTIME` / `DSH_BUNDLED_PRIMARY_RUNTIME` 门控：**没有 primary-runtime 载荷时能力整块显式缺席**，绝不回退系统 Python 或 PATH。
+
+### 部署边界（启用 Office/依赖能力）
+
+载荷由部署方提供（不随本仓捆绑，约 359MB）。只读沿用、不复制：
+
+```sh
+# CLI：指向已存在的 primary-runtime 载荷（例如官方桌面已安装的实例），再启动 trading-web
+export DSH_PRIMARY_RUNTIME="$HOME/.dsh/dsh-runtimes/dsh-primary-runtime"
+dsh-trading --profile trading-web
+```
+
+载荷需含 `runtime.json` 与 `dependencies/{python,node,pnpm}`。缺失时 `load_workspace_dependencies` 与三个 Office 技能都不出现；这是官方门控语义，不是故障。桌面壳当前不设置该 env、也不自带载荷，桌面会话同样按显式缺席处理（见 owning note 的部署边界）。
+
+---
+
 ## 🛠️ 同步与发布命令
 
 开发期修改或新增 Skill 后：

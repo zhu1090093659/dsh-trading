@@ -123,6 +123,38 @@
     # 仍由上一行的主连接器闭包承载（设置中心 dshtrading.credentials.jin10.token
     # 优先、JIN10_MCP_TOKEN 兜底，逐请求惰性解析）。
 
+    # 官方 Office 技能（2026-10-03）：Word/PPT/Excel 的创建、编辑与结构检查正文由官方
+    # @deepseek-ai/dsh-skill-office 随包提供，本仓只接线不复制正文（一个事实只有一个家）。
+    # **沿用官方 id skill-office**：宿主插件按 id 整行替换（last write wins），将来载体层或
+    # 用户 profile 再挂同一行是覆盖而非双挂；另起 dsh-trading- 前缀会让两个 provider 同时
+    # 注册同样三个技能，同名优先级与卸载清理直接回归。
+    # 不写 assetRoot/node/cli —— 官方默认值在 CLI 与桌面两种形态都成立（2026-10-03 实测）：
+    #   assetRoot = 包内 assets/（含 office-docx/pptx/xlsx + scripts/check_office.py）
+    #   node      = process.execPath（桌面 host 是 spawn 出来的真 Node 子进程，非 Electron 进程）
+    #   cli       = import.meta.resolve('@deepseek-ai/libreoffice-kit/package.json') 同级 lib/cli.js
+    # 三者都落在宿主安装树（全局 dsh 的 node_modules，或 desktop resources/runtime/host）；
+    # trading-web 的 profile node_modules 不提供它们，但 loader 从安装锚点解析，本仓 node_modules
+    # 也不在 asar 内，所以不需要官方桌面那个 ASAR 重定向钩子。
+    # 与 workspace-dependencies 同门控：没有 primary-runtime 载荷时 Office 能力整块显式缺席，
+    # 绝不回退系统 Python / PATH。行安全：office provider 只 inject skills，web 宿主不 disable 本行。
+    - id: skill-office
+      name: '@deepseek-ai/dsh-skill-office'
+      disabled: !!js "!(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME)"
+
+    # 官方独立解释器与依赖绝对路径（2026-10-03）：load_workspace_dependencies 返回随包 Python
+    # （python-docx/python-pptx/openpyxl/pandas/lxml/Pillow/XlsxWriter）与 node/pnpm 的绝对路径，
+    # 供 Office 技能在不依赖系统 Python、不改 PATH 的前提下执行。
+    # 形态与官方 @deepseek-ai/dsh-sdk-app 完全一致：source 由 env 派生，缺 env 整行缺席（显式失败，
+    # 绝不静默换系统实现）。**不捆绑 359MB 载荷**：payload 由部署方提供（例如官方桌面已安装的
+    # $HOME/.dsh/dsh-runtimes/dsh-primary-runtime，或本仓桌面载荷将来 stage 的同名目录），只读沿用、
+    # 不复制。省略 root ⇒ 就地校验、零拷贝；需要装进 trading home 的部署可在 profile 层补
+    # root=$DSH_HOME/dsh-runtimes/dsh-primary-runtime。
+    - id: workspace-dependencies
+      name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+      disabled: !!js "!(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME)"
+      config:
+        source: !!js "process.getBuiltinModule('node:path').resolve(process.env.DSH_PRIMARY_RUNTIME ?? process.env.DSH_BUNDLED_PRIMARY_RUNTIME ?? '')"
+
 
 - id: agent-preset-registry
   name: '@deepseek-ai/dsh-agent-preset-registry'
