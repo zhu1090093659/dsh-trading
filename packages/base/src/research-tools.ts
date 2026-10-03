@@ -2,6 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { jsonItems, jsonOutput, jsonPayload } from './tool-output.ts'
 import type { Interval, MarketDataService } from '@dshtrading/api'
 export const name = 'dsh-trading-research-market-data'
 export const inject = ['tools']
@@ -18,16 +19,33 @@ export function createResearchTools(market: string, getRegistry: () => Registry 
     return entry
   }
   const symbolParam = { type: 'string' as const, required: true as const, description: 'Market-canonical instrument id, e.g. BTCUSDT / AAPL / 600519.SH / 00700.HK. Required.' }
-  const output = { schema: { type: 'string' as const }, render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }] }
+  const tickerOutput = jsonOutput({
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      market: { type: 'string', required: true },
+      provider: { type: 'string', required: true },
+      ticker: { type: 'json', required: true },
+    },
+  })
+  const klinesOutput = jsonOutput({
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      market: { type: 'string', required: true },
+      provider: { type: 'string', required: true },
+      klines: { type: 'array', items: { type: 'json' }, required: true },
+    },
+  })
   return [
     defineTool({
       name: `${market}_get_ticker`,
       description: `Read-only ${market} quote from the currently routed project data provider. Check timestamp, currency and provider; quotes may be delayed.`,
-      parameters: { symbol: symbolParam }, output,
+      parameters: { symbol: symbolParam }, output: tickerOutput,
       async execute(args) {
         const entry = active()
         const ticker = await entry.service.getTicker(String(args.symbol))
-        return JSON.stringify({ market, provider: entry.provider, ticker })
+        return { market, provider: entry.provider, ticker: jsonPayload(ticker) }
       },
     }),
     defineTool({
@@ -37,13 +55,13 @@ export function createResearchTools(market: string, getRegistry: () => Registry 
         symbol: symbolParam,
         interval: { type: 'string', enum: INTERVALS, default: '1d', description: 'Candle interval; provider support varies.' },
         limit: { type: 'number', default: 200, description: 'Maximum candles, integer 1–1000.' },
-      }, output,
+      }, output: klinesOutput,
       async execute(args) {
         const limit = Number(args.limit ?? 200)
         if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('limit must be an integer from 1 to 1000')
         const entry = active()
         const klines = await entry.service.getKlines(String(args.symbol), (args.interval ?? '1d') as Interval, limit)
-        return JSON.stringify({ market, provider: entry.provider, klines })
+        return { market, provider: entry.provider, klines: jsonItems(klines) }
       },
     }),
   ]

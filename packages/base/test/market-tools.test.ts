@@ -39,9 +39,10 @@ describe('market read tools（G2）', () => {
       getRecentTrades: vi.fn(async () => [{ price: 100, size: 1, side: 'buy', ts: 1 }]),
     }
     const [orderbook, trades] = createMarketReadTools('us', () => marketRegistry({ provider: 'alpaca', service }))
-    const book = JSON.parse(String(await orderbook.execute({ symbol: 'AAPL' }))) as Json
+    // 声明式输出：execute 返回被 schema 校验过的值本身（不再是 JSON 文本）。
+    const book = await orderbook.execute({ symbol: 'AAPL' }) as unknown as Json
     expect(book).toMatchObject({ ok: true, market: 'us', provider: 'alpaca', symbol: 'AAPL', orderbook: ORDERBOOK })
-    const tape = JSON.parse(String(await trades.execute({ symbol: 'AAPL', limit: 10 }))) as Json
+    const tape = await trades.execute({ symbol: 'AAPL', limit: 10 }) as unknown as Json
     expect(tape.ok).toBe(true)
     expect(service.getRecentTrades).toHaveBeenCalledWith('AAPL', 10)
     await expect(trades.execute({ symbol: 'AAPL', limit: MAX_TRADES_LIMIT + 1 })).rejects.toThrow(/limit must be an integer/)
@@ -78,17 +79,17 @@ describe('account tools（G1）', () => {
     expect(tools.map(tool => tool.name)).toEqual([
       'us_get_positions', 'us_get_orders', 'us_get_fills', 'us_get_balance', 'us_get_order',
     ])
-    const positions = JSON.parse(String(await tools[0]!.execute({}))) as Json
+    const positions = await tools[0]!.execute({}) as unknown as Json
     expect(positions).toMatchObject({ ok: true, provider: 'alpaca', environment: { env: 'demo', simulated: true } })
-    const orders = JSON.parse(String(await tools[1]!.execute({ symbol: 'AAPL' }))) as Json
+    const orders = await tools[1]!.execute({ symbol: 'AAPL' }) as unknown as Json
     expect(orders).toMatchObject({ ok: true, symbol: 'AAPL' })
     expect(fullService.listOpenOrders).toHaveBeenCalledWith('AAPL')
-    const fills = JSON.parse(String(await tools[2]!.execute({ limit: 5 }))) as Json
+    const fills = await tools[2]!.execute({ limit: 5 }) as unknown as Json
     expect(fills.ok).toBe(true)
     expect(fullService.listTradeFills).toHaveBeenCalledWith(undefined, 5)
-    const balance = JSON.parse(String(await tools[3]!.execute({}))) as Json
+    const balance = await tools[3]!.execute({}) as unknown as Json
     expect(balance.ok).toBe(true)
-    const order = JSON.parse(String(await tools[4]!.execute({ symbol: 'AAPL', orderId: 'o1' }))) as Json
+    const order = await tools[4]!.execute({ symbol: 'AAPL', orderId: 'o1' }) as unknown as Json
     expect(order).toMatchObject({ ok: true, symbol: 'AAPL', orderId: 'o1', order: { symbol: 'AAPL', id: 'o1' } })
     await expect(tools[4]!.execute({ symbol: 'AAPL' })).rejects.toThrow(/missing required property/)
   })
@@ -100,7 +101,7 @@ describe('account tools（G1）', () => {
     await expect(tools[2]!.execute({})).rejects.toThrow(/TRADING_NOT_IMPLEMENTED/)
     await expect(tools[3]!.execute({})).rejects.toThrow(/TRADING_NOT_IMPLEMENTED/)
     // 已实现的必需方法照常可用。
-    expect(JSON.parse(String(await tools[0]!.execute({}))) as Json).toMatchObject({ ok: true, positions: [] })
+    expect(await tools[0]!.execute({}) as unknown as Json).toMatchObject({ ok: true, positions: [] })
   })
 
   it('无交易连接器 → TRADING_NO_TRADE_SERVICE', async () => {

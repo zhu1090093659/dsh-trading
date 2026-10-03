@@ -89,7 +89,7 @@ describe('host 平面工具族接线（真实 registry）', () => {
       getKlines: async () => BARS,
       listInstruments: async () => [{ symbol: 'BTCUSDT', name: 'Bitcoin' }, { symbol: 'ETHUSDT' }],
     })
-    const book = JSON.parse(String(await h.tools.get('crypto_get_orderbook')!.execute({ symbol: 'BTCUSDT' }))) as Record<string, unknown>
+    const book = await h.tools.get('crypto_get_orderbook')!.execute({ symbol: 'BTCUSDT' }) as unknown as Record<string, unknown>
     expect(book).toMatchObject({ ok: true, market: 'crypto', provider: 'fake', symbol: 'BTCUSDT' })
     expect(book.orderbook).toMatchObject({ timestamp: 7 })
     await expect(h.tools.get('crypto_get_trades')!.execute({ symbol: 'BTCUSDT' })).rejects.toThrow(/TRADING_NOT_IMPLEMENTED/)
@@ -101,7 +101,7 @@ describe('host 平面工具族接线（真实 registry）', () => {
       listOpenOrders: async () => [{ id: 'o1', symbol: 'AAPL' }],
       environment: () => ({ env: 'demo', simulated: true }),
     })
-    const positions = JSON.parse(String(await h.tools.get('us_get_positions')!.execute({}))) as Record<string, unknown>
+    const positions = await h.tools.get('us_get_positions')!.execute({}) as unknown as Record<string, unknown>
     expect(positions).toMatchObject({ ok: true, provider: 'fake', environment: { simulated: true } })
     await expect(h.tools.get('us_get_fills')!.execute({})).rejects.toThrow(/TRADING_NOT_IMPLEMENTED/)
     await expect(h.tools.get('cn_get_positions')!.execute({})).rejects.toThrow(/TRADING_NO_TRADE_SERVICE/)

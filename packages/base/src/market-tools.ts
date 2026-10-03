@@ -24,6 +24,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { MarketDataService, TradeService } from '@dshtrading/api'
+import { jsonItems, jsonOutput, jsonPayload } from './tool-output.ts'
 
 /** Cordis 插件名 = patch 行 id（TEMPLATES §8），市场无关共享行命名空间。 */
 export const name = 'dsh-trading-market-tools'
@@ -120,10 +121,100 @@ function environmentOf(service: TradeService): { env?: string; simulated?: boole
   }
 }
 
-const textOutput = {
-  schema: { type: 'string' as const },
-  render: (_args: unknown, value: string) => [{ type: 'text' as const, text: value }],
-}
+/**
+ * 声明式输出契约（官方 jsonOutput 形态）：env 自述字段用可选 json 节点，
+ * 其余字段 required 齐备；additionalProperties:false 让多余键在运行时被拒。
+ * 值与改造前逐字段同形（模型可见文本仍是同一份紧凑 JSON）。
+ */
+const environmentSchema = { type: 'json' as const, description: 'Connector self-report (env / simulated); omitted when the connector exposes none.' }
+
+const orderbookOutput = jsonOutput({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ok: { type: 'boolean', const: true, required: true },
+    market: { type: 'string', required: true },
+    provider: { type: 'string', required: true },
+    symbol: { type: 'string', required: true },
+    orderbook: { type: 'json', required: true },
+  },
+})
+
+const tradesOutput = jsonOutput({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ok: { type: 'boolean', const: true, required: true },
+    market: { type: 'string', required: true },
+    provider: { type: 'string', required: true },
+    symbol: { type: 'string', required: true },
+    trades: { type: 'array', items: { type: 'json' }, required: true },
+  },
+})
+
+const positionsOutput = jsonOutput({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ok: { type: 'boolean', const: true, required: true },
+    market: { type: 'string', required: true },
+    provider: { type: 'string', required: true },
+    environment: environmentSchema,
+    positions: { type: 'array', items: { type: 'json' }, required: true },
+  },
+})
+
+const ordersOutput = jsonOutput({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ok: { type: 'boolean', const: true, required: true },
+    market: { type: 'string', required: true },
+    provider: { type: 'string', required: true },
+    environment: environmentSchema,
+    symbol: { type: 'string' },
+    orders: { type: 'array', items: { type: 'json' }, required: true },
+  },
+})
+
+const fillsOutput = jsonOutput({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ok: { type: 'boolean', const: true, required: true },
+    market: { type: 'string', required: true },
+    provider: { type: 'string', required: true },
+    environment: environmentSchema,
+    symbol: { type: 'string' },
+    fills: { type: 'array', items: { type: 'json' }, required: true },
+  },
+})
+
+const balancesOutput = jsonOutput({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ok: { type: 'boolean', const: true, required: true },
+    market: { type: 'string', required: true },
+    provider: { type: 'string', required: true },
+    environment: environmentSchema,
+    balances: { type: 'array', items: { type: 'json' }, required: true },
+  },
+})
+
+const singleOrderOutput = jsonOutput({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ok: { type: 'boolean', const: true, required: true },
+    market: { type: 'string', required: true },
+    provider: { type: 'string', required: true },
+    environment: environmentSchema,
+    symbol: { type: 'string', required: true },
+    orderId: { type: 'string', required: true },
+    order: { type: 'json', required: true },
+  },
+})
 
 /**
  * 市场面只读工具（G2）：盘口快照与最近逐笔。
@@ -148,7 +239,7 @@ export function createMarketReadTools(market: string, getRegistry: () => MarketD
         + 'This is a snapshot, not a live stream. If the provider does not implement orderbook the call fails with '
         + 'TRADING_NOT_IMPLEMENTED — that is "not available", NOT an empty book; never report it as no liquidity.',
       parameters: { symbol: symbolParam },
-      output: textOutput,
+      output: orderbookOutput,
       async execute(raw) {
         const entry = active()
         const symbol = parseSymbol(((raw ?? {}) as Record<string, unknown>).symbol, `${market}_get_orderbook`)
@@ -157,7 +248,7 @@ export function createMarketReadTools(market: string, getRegistry: () => MarketD
           throw notImplementedError(market, entry.provider, 'getOrderbook', 'orderbook snapshot')
         }
         const orderbook = await getOrderbook.call(entry.service, symbol)
-        return JSON.stringify({ ok: true, market, provider: entry.provider, symbol, orderbook })
+        return { ok: true as const, market, provider: entry.provider, symbol, orderbook: jsonPayload(orderbook) }
       },
     }),
     defineTool({
@@ -173,7 +264,7 @@ export function createMarketReadTools(market: string, getRegistry: () => MarketD
           description: `Number of most recent trades to return (integer 1..${MAX_TRADES_LIMIT}; default provider value)`,
         },
       },
-      output: textOutput,
+      output: tradesOutput,
       async execute(raw) {
         const entry = active()
         const args = (raw ?? {}) as Record<string, unknown>
@@ -184,7 +275,7 @@ export function createMarketReadTools(market: string, getRegistry: () => MarketD
           throw notImplementedError(market, entry.provider, 'getRecentTrades', 'recent trades')
         }
         const trades = await getRecentTrades.call(entry.service, symbol, limit)
-        return JSON.stringify({ ok: true, market, provider: entry.provider, symbol, trades })
+        return { ok: true as const, market, provider: entry.provider, symbol, trades: jsonItems(trades) }
       },
     }),
   ]
@@ -222,7 +313,7 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
         + 'If the connector does not expose positions the call fails with TRADING_NOT_IMPLEMENTED — that is "not available", '
         + 'NOT a flat account; never report it as no positions.',
       parameters: {},
-      output: textOutput,
+      output: positionsOutput,
       async execute() {
         const entry = active()
         const getPositions = entry.service.getPositions
@@ -231,7 +322,7 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
         }
         const positions = await getPositions.call(entry.service)
         const environment = environmentOf(entry.service)
-        return JSON.stringify({ ok: true, market, provider: entry.provider, ...(environment !== undefined ? { environment } : {}), positions })
+        return { ok: true as const, market, provider: entry.provider, ...(environment !== undefined ? { environment: jsonPayload(environment) } : {}), positions: jsonItems(positions) }
       },
     }),
     defineTool({
@@ -241,7 +332,7 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
         + 'If the connector does not expose open orders the call fails with TRADING_NOT_IMPLEMENTED — that is "not available", '
         + 'NOT "no open orders".',
       parameters: { symbol: optionalSymbolParam },
-      output: textOutput,
+      output: ordersOutput,
       async execute(raw) {
         const entry = active()
         const symbol = typeof ((raw ?? {}) as Record<string, unknown>).symbol === 'string'
@@ -253,12 +344,12 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
         }
         const orders = await listOpenOrders.call(entry.service, symbol)
         const environment = environmentOf(entry.service)
-        return JSON.stringify({
-          ok: true, market, provider: entry.provider,
-          ...(environment !== undefined ? { environment } : {}),
+        return {
+          ok: true as const, market, provider: entry.provider,
+          ...(environment !== undefined ? { environment: jsonPayload(environment) } : {}),
           ...(symbol !== undefined ? { symbol } : {}),
-          orders,
-        })
+          orders: jsonItems(orders),
+        }
       },
     }),
     defineTool({
@@ -274,7 +365,7 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
           description: `Number of most recent fills to return (integer 1..${MAX_TRADES_LIMIT}; default provider value)`,
         },
       },
-      output: textOutput,
+      output: fillsOutput,
       async execute(raw) {
         const entry = active()
         const args = (raw ?? {}) as Record<string, unknown>
@@ -286,12 +377,12 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
         }
         const fills = await listTradeFills.call(entry.service, symbol, limit)
         const environment = environmentOf(entry.service)
-        return JSON.stringify({
-          ok: true, market, provider: entry.provider,
-          ...(environment !== undefined ? { environment } : {}),
+        return {
+          ok: true as const, market, provider: entry.provider,
+          ...(environment !== undefined ? { environment: jsonPayload(environment) } : {}),
           ...(symbol !== undefined ? { symbol } : {}),
-          fills,
-        })
+          fills: jsonItems(fills),
+        }
       },
     }),
     defineTool({
@@ -301,7 +392,7 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
         + 'If the connector does not expose balances the call fails with TRADING_NOT_IMPLEMENTED — that is "not available", '
         + 'NOT a zero balance.',
       parameters: {},
-      output: textOutput,
+      output: balancesOutput,
       async execute() {
         const entry = active()
         const getBalances = entry.service.getBalances
@@ -310,7 +401,7 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
         }
         const balances = await getBalances.call(entry.service)
         const environment = environmentOf(entry.service)
-        return JSON.stringify({ ok: true, market, provider: entry.provider, ...(environment !== undefined ? { environment } : {}), balances })
+        return { ok: true as const, market, provider: entry.provider, ...(environment !== undefined ? { environment: jsonPayload(environment) } : {}), balances: jsonItems(balances) }
       },
     }),
     defineTool({
@@ -327,7 +418,7 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
           description: 'Order id from a previous orders/fills query or the user',
         },
       },
-      output: textOutput,
+      output: singleOrderOutput,
       async execute(raw) {
         const entry = active()
         const args = (raw ?? {}) as Record<string, unknown>
@@ -340,11 +431,11 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
         }
         const order = await getOrder.call(entry.service, symbol, orderId)
         const environment = environmentOf(entry.service)
-        return JSON.stringify({
-          ok: true, market, provider: entry.provider,
-          ...(environment !== undefined ? { environment } : {}),
-          symbol, orderId, order,
-        })
+        return {
+          ok: true as const, market, provider: entry.provider,
+          ...(environment !== undefined ? { environment: jsonPayload(environment) } : {}),
+          symbol, orderId, order: jsonPayload(order),
+        }
       },
     }),
   ]

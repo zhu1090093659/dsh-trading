@@ -11,10 +11,11 @@ it('routed research tools execute ticker/klines, react to route changes, and nev
   let provider = 'yahoo'
   const tools = createResearchTools('us', () => ({ active: () => ({ provider, service: service as never }) }))
   expect(tools.map(t => t.name)).toEqual(['us_get_ticker', 'us_get_klines'])
-  const result = await tools[0].execute({ symbol: 'AAPL' } as never)
-  expect(JSON.parse(result as string).provider).toBe('yahoo')
+  // 声明式输出：execute 直接返回被 schema 校验过的值（不再是 JSON 文本）。
+  const result = await tools[0].execute({ symbol: 'AAPL' } as never) as unknown as { provider: string }
+  expect(result.provider).toBe('yahoo')
   provider = 'alpaca'
-  expect(JSON.parse(await tools[1].execute({ symbol: 'AAPL', interval: '1d', limit: 20 } as never) as string).provider).toBe('alpaca')
+  expect((await tools[1].execute({ symbol: 'AAPL', interval: '1d', limit: 20 } as never) as unknown as { provider: string }).provider).toBe('alpaca')
   expect(service.getKlines).toHaveBeenCalledWith('AAPL', '1d', 20)
   await expect(tools[1].execute({ symbol: 'AAPL', limit: 1001 } as never)).rejects.toThrow('limit')
   await expect(createResearchTools('cn', () => undefined)[0].execute({ symbol: '600519.SH' } as never)).rejects.toThrow('unavailable')
