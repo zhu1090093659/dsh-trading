@@ -89,6 +89,7 @@ const MUST_BE_WIRED = [
   'test:scripts',
   'test:desktop',
   'home-guard:check',
+  'repo-boundary:check',
   'coverage:check',
   'ci-wiring:check',
   'docs-link:check',

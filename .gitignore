@@ -6,3 +6,7 @@ dist/
 .DS_Store
 .zcode/
 .local/
+
+# 私有卫星仓（自动交易平面）产物的投放槽位：只放 .tgz，且绝不入库。
+# 产物里含自动交易源码，是"可部署能力"的载体，不是主仓内容。
+desktop/satellite-vendor/

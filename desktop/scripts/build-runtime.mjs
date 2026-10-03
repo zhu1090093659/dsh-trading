@@ -43,7 +43,8 @@ const stagingRoot = path.join(desktopDir, 'resources', 'runtime');
 const DIRECT_TRADING_PACKAGES = [
   '@dshtrading/base',
   '@dshtrading/gui',
-  '@dshtrading/bot-api',
+  // '@dshtrading/bot-api'、'@dshtrading/bot'、'@dshtrading/tradectl' 等由私有卫星仓
+  // 提供（见 SATELLITE_OWNED_PACKAGES）：产物放进 satellite-vendor/ 才装配，缺席跳过。
   '@dshtrading/crypto',
   '@dshtrading/us',
   '@dshtrading/cn',
@@ -67,10 +68,51 @@ const PRIVATE_VENDOR_PACKAGES = new Set([
 /**
  * 卫星仓拥有的包（自动交易平面）：源码在私有仓 dsh-trading-bot，不随主仓发布。
  * 主仓只在构建时装配它们提供的 vendor tarball——缺席即跳过，不视为错误。
+ *
+ * 部署接缝：把卫星仓 `pnpm pack` 出的 tgz 放进 desktop/satellite-vendor/ 即可被
+ * 自动装上（也可用 DSH_SATELLITE_VENDOR 指向别处）。目录本身是 gitignore 的生成物，
+ * 所以公开仓任何时候都不含自动交易源码。
  */
 const SATELLITE_OWNED_PACKAGES = new Set([
+  '@dshtrading/bot',
+  '@dshtrading/bot-api',
+  '@dshtrading/tradectl',
+  '@dshtrading/cockpit',
+  '@dshtrading/contract',
+]);
+
+/** 其中带 cordis.patch.yml 的才是 profile bundle；其余是纯库依赖。 */
+const SATELLITE_BUNDLES = new Set([
+  '@dshtrading/bot',
   '@dshtrading/bot-api',
 ]);
+
+/** 卫星产物投放槽位。 */
+function satelliteVendorDir() {
+  return process.env.DSH_SATELLITE_VENDOR ?? path.join(desktopDir, 'satellite-vendor');
+}
+
+/**
+ * 把卫星槽位里现成的 tgz 收进 vendor 目录，并登记到 tarballs。
+ * 只收本仓没有的包（卫星包），不覆盖主仓自己打包的产物。
+ */
+function adoptSatelliteTarballs(vendorDir, tarballs) {
+  const src = satelliteVendorDir();
+  if (!fs.existsSync(src)) return;
+  const files = fs.readdirSync(src).filter((f) => f.endsWith('.tgz') || f.endsWith('.tar.gz'));
+  // 降序匹配：`dshtrading-bot-api-*.tgz` 也以 `dshtrading-bot-` 开头，按短名先匹会认错包
+  const byLength = [...SATELLITE_OWNED_PACKAGES].sort((a, b) => b.length - a.length);
+  for (const file of files) {
+    // 文件名形如 dshtrading-bot-api-0.5.0.tgz：反查它属于哪个卫星包
+    const name = byLength.find((pkg) =>
+      file.startsWith('dshtrading-' + pkg.split('/')[1] + '-'));
+    if (name === undefined) continue;
+    if (tarballs.has(name)) continue;
+    fs.copyFileSync(path.join(src, file), path.join(vendorDir, file));
+    tarballs.set(name, file);
+    console.log('[build-runtime] adopt satellite ' + name + ' <- ' + file);
+  }
+}
 
 /** Registry package carried alongside the trading bundles. */
 const REGISTRY_DEPENDENCIES = {
@@ -157,13 +199,17 @@ function writeProfileManifest(profileDir, tarballs) {
     }
     dependencies[name] = tarballSpec(file);
   }
+  // 卫星仓的产物一旦被采纳，就直接进 dependencies（它们不在 DIRECT_TRADING_PACKAGES 里）。
+  for (const name of SATELLITE_OWNED_PACKAGES) {
+    const file = tarballs.get(name);
+    if (file !== undefined && dependencies[name] === undefined) dependencies[name] = tarballSpec(file);
+  }
   Object.assign(dependencies, REGISTRY_DEPENDENCIES);
 
   // 卫星仓拥有的 bundle 只有真装配上了才进 bundles 列表：否则 profile 启动会
   // 因解析不到该 bundle 而失败（issue #60 同款 ERR_MODULE_NOT_FOUND 语义）。
   const bundles = PROFILE_BUNDLES
-    .concat([...SATELLITE_OWNED_PACKAGES].filter((name) => tarballs.has(name)))
-    .filter((name) => !SATELLITE_OWNED_PACKAGES.has(name) || dependencies[name] !== undefined);
+    .concat([...SATELLITE_BUNDLES].filter((name) => dependencies[name] !== undefined));
 
   const overrides = {};
   for (const [name, file] of tarballs) {
@@ -317,6 +363,7 @@ function main() {
   buildWorkspace();
   const vendorDir = path.join(runtimeSrc, 'profile-trading', 'vendor');
   const tarballs = packWorkspacePackages(vendorDir);
+  adoptSatelliteTarballs(vendorDir, tarballs);
   const profileDir = path.join(runtimeSrc, 'profile-trading');
   writeProfileManifest(profileDir, tarballs);
 

@@ -42,6 +42,8 @@ const GATES = [
   { name: 'i18n:check', command: 'pnpm', args: ['i18n:check'] },
   { name: 'home-guard:check', command: 'pnpm', args: ['home-guard:check'] },
   { name: 'typecheck-gate', command: 'node', args: ['scripts/typecheck-gate.mjs'] },
+  // 仓库边界：主仓不得再长出自动交易实现（2026-10-03 私有卫星仓拆分后的回归守卫）
+  { name: 'repo-boundary:check', command: 'node', args: ['scripts/repo-boundary-check.mjs'] },
   // CI 接线：workflow 引用的脚本必须存在 —— 让"push 之后才发现"的断裂尽量在本地暴露
   { name: 'ci-wiring:check', command: 'node', args: ['scripts/ci-wiring-check.mjs'] },
   // 文档相对链接：断链不会报错，只会让后人找不到那份 Owning Note（存量债入基线，只拦新增）

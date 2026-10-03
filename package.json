@@ -17,6 +17,7 @@
     "coverage:update": "node scripts/coverage-gate.mjs --update",
     "docs-link:check": "node scripts/docs-link-check.mjs",
     "gates:all": "node scripts/gates-all.mjs",
+    "repo-boundary:check": "node scripts/repo-boundary-check.mjs",
     "home-guard:check": "node scripts/home-guard-check.mjs",
     "i18n:check": "node scripts/i18n-audit.mjs --check",
     "i18n:report": "node scripts/i18n-audit.mjs --report",
