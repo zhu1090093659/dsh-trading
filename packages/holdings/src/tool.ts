@@ -176,15 +176,10 @@ export function createHoldingsStageTool(store: HoldingsStore, options: HoldingsW
   return defineTool({
     name: 'holdings_stage',
     description:
-      'Stage screenshot-parsed positions into the staged area of the holdings ledger; the user confirms them in the asset panel later. '
-      + 'Stage only, never confirm, and remind the user in the reply that the items await confirmation. Parsing discipline: market is '
-      + 'crypto|us|cn|hk (crypto exchange→crypto, US broker→us, A-share→cn, HK→hk); symbol uses connector vocabulary matching the '
-      + 'market-data API (AAPL / 002714.SZ / BTCUSDT / 00700.HK) and the screenshot display name goes to name; size/entryPrice come '
-      + 'verbatim from the screenshot — omit unreadable values, never invent, and skip entryPrice when absent; one screenshot gives one '
-      + 'account name (default to the broker/exchange shown); simulated accounts must set kind="sim", otherwise the account counts as '
-      + 'real; currency is normally omitted and derived from market (crypto→USDT, us→USD, cn→CNY, hk→HKD), overridden only when the '
-      + 'screenshot states it; cash/available balances are recorded as a cash row — the currency code as symbol, the balance as size and '
-      + 'no entryPrice (a worked example is in the holdings-ledger design note).',
+      'Stage screenshot-parsed positions into the staged area for the user to confirm in the asset panel — stage only, never confirm, and '
+      + 'mention the pending confirmation in the reply. Copy size/entryPrice verbatim from the screenshot; omit unreadable or absent '
+      + 'values and never invent them. One screenshot gives one account name. See the itemsJson parameter for the field vocabulary, the '
+      + 'account/kind/currency defaults and the cash-row convention.',
     parameters: {
       itemsJson: {
         type: 'string',
@@ -193,7 +188,10 @@ export function createHoldingsStageTool(store: HoldingsStore, options: HoldingsW
           'JSON array of position items, e.g. '
           + '[{"market":"us","symbol":"AAPL","size":10,"entryPrice":178.5,"name":"苹果","account":"富途"},...]. '
           + 'Required market/symbol/size; optional name/entryPrice/currency/account/kind/note. '
-          + 'Numbers come verbatim from the screenshot; omit any uncertain field rather than inventing it.',
+          + 'market is crypto|us|cn|hk; symbol uses connector vocabulary (AAPL / 002714.SZ / BTCUSDT / 00700.HK) with the screenshot '
+          + 'display name in name; account defaults to the broker shown; simulated accounts set kind="sim" (otherwise real); currency is '
+          + 'omitted and derived from market (crypto→USDT, us→USD, cn→CNY, hk→HKD); a cash balance is a row with the currency code as '
+          + 'symbol and no entryPrice. Numbers come verbatim from the screenshot; omit any uncertain field.',
       },
     },
     output: textOutput,
@@ -400,19 +398,16 @@ export function createHoldingsAddTool(store: HoldingsStore, options: HoldingsWri
     description:
       'Record positions directly into the confirmed holdings ledger, for positions the user dictates or manually backfills; screenshot '
       + 'imports still go through holdings_stage for review first. Numbers come verbatim from the user — never invented or rounded. '
-      + 'symbol uses connector vocabulary (AAPL / 002714.SZ / BTCUSDT / 00700.HK) with the display name in name; cash balances are a row '
-      + 'with the currency code as symbol, the balance as size and no entryPrice (the asset panel values it at par). Echo the id and key '
-      + 'fields afterwards and point the user to the asset panel for review.',
+      + 'Echo the id and key fields afterwards and point the user to the asset panel for review.',
     parameters: {
       itemsJson: {
         type: 'json',
         required: true,
         description:
           'Item array, e.g. [{"market":"cn","symbol":"159869.SZ","name":"游戏ETF华夏","size":5000,"entryPrice":1.023,"account":"国金证券"},...]. '
-          + 'Required market/symbol/size; optional name/entryPrice/currency/account/kind/note. Copy numbers verbatim; omit uncertain fields. '
-          + 'symbol uses connector vocabulary (AAPL / 002714.SZ / BTCUSDT / 00700.HK) with the display name in name; '
-          + 'cash balances put the currency code in symbol and the balance in size, with no entryPrice. '
-          + 'Also accepts a JSON string.',
+          + 'Required market/symbol/size; optional name/entryPrice/currency/account/kind/note. Copy numbers verbatim and omit uncertain '
+          + 'fields. symbol uses connector vocabulary (AAPL / 002714.SZ / BTCUSDT / 00700.HK) with the display name in name; cash balances '
+          + 'use the currency code as symbol and no entryPrice. Also accepts a JSON string.',
       },
     },
     output: textOutput,
@@ -478,10 +473,9 @@ export function createHoldingsUpdateTool(store: HoldingsStore, options: Holdings
     name: 'holdings_update',
     description:
       'Revise one confirmed holdings entry: id is required and patchJson carries only the fields to change '
-      + '(size / entryPrice / account / name / symbol / market / currency / kind / note), for a corrected quantity, cost or account, or a '
-      + 'field recorded wrong. Changing market re-derives currency unless given explicitly (cn→CNY, hk→HKD, us→USD, crypto→USDT). Staged '
-      + 'entries cannot be revised here — use editsJson on holdings_confirm, or confirm first. Echo the old → new values and tell the user '
-      + 'to verify; never guess numbers.',
+      + '(size / entryPrice / account / name / symbol / market / currency / kind / note). Changing market re-derives currency unless given '
+      + 'explicitly (cn→CNY, hk→HKD, us→USD, crypto→USDT). Staged entries cannot be revised here — use editsJson on holdings_confirm or '
+      + 'confirm first. Echo the old → new values and tell the user to verify; never guess numbers.',
     parameters: {
       id: {
         type: 'string',
@@ -617,12 +611,10 @@ export function createFxGetTool(deps: { fx: FxService }) {
   return defineTool({
     name: 'fx_get',
     description:
-      'Read-only FX rate snapshot shared with the asset panel and the bridge GET /fx, for converting and aggregating multi-currency '
-      + 'holdings. Semantics: rates[c] is how much base one unit of c is worth (with base=USD, rates.CNY is the USD value of one CNY; '
-      + 'rates[base] is always 1) and USDT is pegged to USD. base accepts USD | CNY | HKD, default USD, case-insensitive. stale=true means '
-      + 'an expired cache or the identity fallback (no live data): report it as approximate or possibly stale, never as a live rate; '
-      + 'stale=false means rates fresh within the 1-hour TTL. Returns JSON { ok, base, rates, asOf, stale, note }, where note can be '
-      + 'relayed to the user as is. Read-only: no ledger writes, no orders.',
+      'Read-only FX rate snapshot shared with the asset panel and the bridge GET /fx. rates[c] is how much base one unit of c is worth; '
+      + 'rates[base] is always 1 and USDT is pegged to USD. base accepts USD | CNY | HKD (default USD). stale=true means an expired cache or '
+      + 'the identity fallback — report it to the user as approximate or possibly stale, never as live; stale=false means fresh within the '
+      + '1-hour TTL. Returns JSON { ok, base, rates, asOf, stale, note }.',
     parameters: {
       base: {
         type: 'string',
