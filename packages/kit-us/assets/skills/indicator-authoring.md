@@ -1,3 +1,7 @@
+---
+name: indicator-authoring
+description: 自定义技术指标创作指南：根据用户自然语言需求生成符合契约的指标代码（TD9/SuperTrend/OBV+MA等），并通过 indicator_author 工具验证与落库。
+---
 # 指标创作指南（Indicator Authoring Guide）
 
 当用户在会话列中用自然语言提出编写或添加技术指标的需求时（例如："帮我写一个 TD9 指标"、"帮我写一个 SuperTrend 指标"、"给 OBV 加一个 34 天均线"），请遵循本指南生成符合 `@dshtrading/indicators` 契约规范的 JavaScript 纯函数代码，并调用 `indicator_author` 工具进行沙箱校验与落库。
