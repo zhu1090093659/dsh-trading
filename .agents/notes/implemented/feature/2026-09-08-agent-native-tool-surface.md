@@ -49,7 +49,7 @@ Status: implemented
 
 - **工具面增量**：host 平面 +36（28 市场/账户 + `strategy_list`/`screener_list`/`screener_run` 3 + `watchlist_group_create/_rename/_delete/_assign` 4 + `fx_get` 1），preset 平面 +1（`crypto_get_derivatives_history`）。审计 §5.6 的「一次成型后冻结」窗口按记录重开一次并再次冻结（见 `docs/design/agentic-native-architecture.md` §5.6）。
 - **测试**：`packages/base/test/market-tools.test.ts`（工具级：成功/NOT_IMPLEMENTED/无 provider/无交易连接器/注册面幂等/闸门命名族零命中）、`packages/base/test/market-tools-wiring.test.ts`（真实 cordis Context 上 router + market-tools + watchlist + strategies + holdings 同表接线，含 screener_run 端到端与分组写读闭环）、`packages/strategies/test/{plugin-list,backtest-params,screener-run}.test.ts`、`packages/watchlist/test/groups-tools.test.ts`、`packages/holdings/test/tool-fx.test.ts`、`packages/kit-crypto/test/derivatives-history.test.ts`。
-- **门禁**：`pnpm -r build` / `pnpm test`（165 文件 / 1370 用例通过，基线 157/1319）/ `node scripts/typecheck-gate.mjs`（481 = 基线，棘轮通过）/ `pnpm i18n:check` 全绿。
+- **2026-09-08 历史门禁**：165 文件 / 1370 用例、typecheck 481 是当时证据，不是当前基线；当前收口证据见下节。
 - **运行时实证（真实宿主，2026-09-08）**：
   - `trading-dev` profile 刷新包副本后 `--dump-config` 确认新 host 行 `dsh-trading-market-tools` 进组合树；一次真实 headless 会话（`dsh-trading --profile trading-dev --patch <禁用 web 专属社区行> "Reply with exactly: ok"`）的 session transcript 里 93 个工具，含四市场 `_get_orderbook/_get_trades/_get_positions/_get_orders/_get_fills/_get_balance/_get_order`、`fx_get`、`strategy_list`、`screener_list`、`screener_run`、`watchlist_group_create/_rename/_delete/_assign`。
   - **真实调用实证**（同 profile，master 预设，只读提示词）：`routing_get`、`strategy_list`（6 范式）、`screener_list`（5 内置）、`watchlist_list`（含 groups/selection 回显）、`crypto_get_orderbook(BTCUSDT)`（provider=okx，真实盘口 20 档）、`fx_get(USD)`（ECB 汇率，stale=false）全部 `ok:true`；preset 平面的 `crypto_get_derivatives_history` 在该 headless 一次性会话里未进入工具面（preset scope 工具与 headless 一次性会话的已知行为），其行为由 `packages/kit-crypto/test/derivatives-history.test.ts` 与 `pnpm --filter @dshtrading/kit-crypto test` 覆盖。
@@ -60,7 +60,7 @@ Status: implemented
 - **待裁决（本轮不做）**：
   - G6 `routing_set`（B 类）：需先定 settings 写契约（深层合并语义）、`'routing'` 事件语义与审计留痕格式；agent 侧目前仍只能读 `routing_get` 并引导用户到设置面板。
   - G9 图表指标名册迁移导入、G10 更新器：维持审计 §5 的「不做」判定。
-  - **审计 Wave 3 的文案项已部分落地**（2026-10-03，见下「工具描述体例」）：`Read-only` / `No credentials required` / `dryRun` 三类跨工具重复纪律**尚未**上移 persona（R3-A4，会同时改 4 个角色前缀，需先加后删两步），同名双源（`crypto_funding_rate` kit-crypto vs okx、`us_get_news` kit-us vs finnhub）**不做合并**——两处语义不同（当前+下期 vs 历史序列）或供应商不同，2026-10-03 复测确认 48 组跨文件同名里没有一组文本全等。
+  - **审计 Wave 3 的文案项已部分落地**（2026-10-03，见下「工具描述体例」）：`Read-only` / `No credentials required` / `dryRun` 三类跨工具重复纪律**尚未**上移 persona（R3-A4，会同时改 4 个角色前缀，需先加后删两步），同名双源（`crypto_funding_rate` kit-crypto vs okx、`us_get_news` kit-us vs finnhub）**不做合并**——两处语义不同（当前+下期 vs 历史序列）或供应商不同，跨文件同名统计是静态候选，不是运行时碰撞；固定 MARKET 修正与 scope 决策归 [作用域 Note](../architecture/2026-08-31-agentic-native-plugin-decomposition.md#L32-L55)。
   - C/D 类（下单/撤单/paper/liveTrading 开关/凭据）：按铁律 #3 与 §5 一律不开放。
   - **默认路由下 us/cn 账户读面不可用（需 owner 裁决）**：`TradeRegistryService` 按 `tradeProvider ?? provider` 严格解析且不静默降级，而默认配置 us=yahoo（数据）/ alpaca（交易）、cn=tencent / qmt 数据面与交易面不同名，因此账户工具在默认配置下只能返回 `TRADING_TRADE_PROVIDER_NOT_ROUTED`。三条可选路径：(a) 用户在 settings.yaml 显式设 `markets.us.tradeProvider: alpaca`（当前唯一可行，已写进 `docs/guides/exchange-routing.md` §2.4）；(b) 设置面板补 tradeProvider 行；(c) 改注册表语义（数据 provider 无交易面时回落该市场唯一注册的交易服务——会推翻 `router/test` 里「选中了但未注册 → undefined，不静默降级」的既有裁决）。本轮选 (a)+精确报错，未擅自改语义。
 - **实证发现（与本变更无关，已登记 [issue #88](https://github.com/zhu1090093659/dsh-trading/issues/88)）**：
@@ -68,13 +68,21 @@ Status: implemented
   - `trading-dev`（headless）profile 在 `dsh --profile trading-dev "..."` 下启动失败——`@linxin666/dsh-session-archive`、`@xmanrui/dsh-im`、`@linxin666/dsh-usage`、`@linxin666/dsh-client-ui-plugin-manager` 四行等待 `webServer`/`connection` 服务而 headless 宿主没有，`assertEntriesActivated` 直接抛错。来自 2026-09-08 的 `466cbe1`（另一会话的三插件内置），修法可参照同文件 `dsh-trading-dynamic-capabilities` 行的条件禁用范式；本变更未改。
 - **时效**：`trading-web` profile 的包副本是 `file:` 拷贝而非 symlink，运行时生效需 `scripts/refresh-trading-web-profile.sh` 刷新副本 + 重启宿主（桌面壳需重启 App）。本变更只跑通包级与真实 cordis 接线验证，未动用户正在运行的桌面实例。
 
-## 工具描述体例（2026-10-03，S1 落地；R3 分级方案 A 档）
+## 工具描述体例（2026-10-03，S1 与 Lead 收尾）
 
-工具面冻结期（`docs/design/agentic-native-architecture.md` §5.6）内**不新增工具**，只统一既有 149 个工具的模型可见文本。体例与事实：
+工具面冻结期（`docs/design/agentic-native-architecture.md` §5.6）内**不新增工具**，只统一既有工具的模型可见文本。当前静态扫描含独立 bot-api 回迁的 6 个定义，共 155 个 defineTool 定义；这不是会话实际可见工具数。体例与事实：
 
 - **体例**：工具级 `description` = [做什么 一句] + [本工具特有约束] + [失败语义]，**<=480 字符且 <=90 词**、英文、无 Markdown/emoji/换行/URL；参数级 `description` 单句 3-16 词。官方参照 `@deepseek-ai/dsh-experimental-tool-agent-team@0.2.0-rc.2` 九工具（实测 62-259 字符 / 11-39 词，参数 26 个全部有说明）。参数级超长时，字段词汇表与默认值约定下沉到该工具自己的参数 description——模型在同一次工具调用里仍看得到，请求前缀不额外膨胀。
 - **边界**：只改 `description` 与参数 `description` 文本。工具名、patch 行 id、`parameters` 结构与必填性、`output.schema` 类型、执行逻辑与运行时返回文本（holdings 的 `[tool]` 前缀、renderFundingRates 输出等随用户语言）**一律不动**。
 - **语言口径**：描述统一英文，依据 [预设注入文本统一英文](2026-09-06-english-persona-unification.md)。中文只保留在**值示例**里（`贵州茅台`、`600519.SH` 这类标的/标签字面量），说明文字本身不得是中文。
 - **失败语义三态**保持可区分：`TRADING_NOT_IMPLEMENTED`（provider 未实现该能力 ≠ 无数据）、`TRADING_NO_PROVIDER`（市场无激活 provider）、`TRADING_NO_TRADE_SERVICE` / `TRADING_TRADE_PROVIDER_NOT_ROUTED`（未注册 vs 注册了但路由指不到）。基准文本仍是 `packages/base/src/market-tools.ts` 的 `notImplementedError`。
-- **落地结果**：15 条超限 description（max `watchlist_list` 954 字符）压入预算，超限条数降为 0；22 条中文工具/参数描述英文化（holdings 8、knowledge 4、xysz 4、kit-cn 2、jin10 2、watchlist 2）；base 的必填 `symbol` 参数补齐说明。对照表与逐条保留约束见 gitignored 的 `.local/tool-surface/S1-changes.md`；量化脚本 `scripts/tool-surface-inventory.mjs`（R2 产物）可复跑数字。
-- **未做的部分（明确记录，避免下次从零讨论）**：跨工具重复的通用纪律（`Read-only` / `No credentials required` / `dryRun` 提示）**未上移** `composePresets()` persona——那会同时改变 4 个角色的系统提示词前缀，按「先加 persona、验证一轮真实会话、再删工具层重复句」两步执行，属独立窗口；48 组跨文件同名工具的 provider 可辨识度只补了 xysz/stooq/ibkr/longbridge 四处，统一的 "which provider serves this call is decided by routing_get" 句需与 persona 上移同批做（否则会把 7 条已接近上限的描述推过 480 字符）。
+- **落地结果**：S1 压缩长描述后，Lead 的 `ff5f454d` 补齐三条新闻工具的遗漏；该 SHA 的 R3 口径（>480 字符或 >90 词）超限为 0。inventory 的 >400 字符观察阈值仍有 29 条，阈值不同，不表示 R3 体例未完成；22 条中文工具/参数描述英文化（holdings 8、knowledge 4、xysz 4、kit-cn 2、jin10 2、watchlist 2）；base 的必填 `symbol` 参数补齐说明。对照表与逐条保留约束见 gitignored 的 `.local/tool-surface/S1-changes.md`；量化脚本 `scripts/tool-surface-inventory.mjs`（R2 产物）可复跑数字。
+- **未做的部分（明确记录，避免下次从零讨论）**：跨工具重复的通用纪律（`Read-only` / `No credentials required` / `dryRun` 提示）**未上移** `composePresets()` persona——那会同时改变 4 个角色的系统提示词前缀，按「先加 persona、验证一轮真实会话、再删工具层重复句」两步执行，属独立窗口；同名来源的 provider 可辨识度只补了 xysz/stooq/ibkr/longbridge 四处，统一的 "which provider serves this call is decided by routing_get" 句需与 persona 上移同批做（否则会把 7 条已接近上限的描述推过 480 字符）。
+
+## 2026-10-03 工具面收口（S4）
+
+- **决策归属**：本记录拥有描述体例与总收口；S2 的 watchlist_add/remove 对象 canonical 输出与外部直接 execute API 变化归 [自选 SSOT Note](2026-09-01-watchlist-host-ssot.md)，S3 维持 preset/host 现状与 fork 继承边界归 [作用域 Note](../architecture/2026-08-31-agentic-native-plugin-decomposition.md#L32-L55)。不扩大 schema 试点、不复制逐 Agent 安装器，避免把共享工具重装误作权限收窄。
+- **绑定证据**：受测 HEAD `ff5f454d367e277340498f2761945c17d9af39a5`，工作区在完整门禁前后均干净。`pnpm gates:all` 默认 14/14 通过，build 59 项完成；递归测试 52 包报告、1717 passed、2 skipped（OKX demo 无凭证）；scripts 11 文件/94 例、desktop 29/29；独立 `pnpm test:scripts` 同为 94/94。逐项完整输出保存在本机 gitignored `.local/tool-surface/S4-logs/`，定稿 `.local/tool-surface/S4-final.md`。没有使用 --update。
+- **棘轮事实**：test:audit 1777 用例，mock/sleep/bdd-title/bdd-gwt/weak-assert 为 199/0/1527/1526/0，相对 199/0/1528/1528/0 无逐文件新增债；覆盖率 branches/lines/functions/statements 为 74.31/62.63/71.99/62.63%，高于 74.25/60.89/70.22/60.89%，52 包无缺报告。typecheck 75 tsconfig、429 存量错误等于基线；patch-id 54 行/1 覆盖等于冻结表；repo-boundary 零违规；i18n 5 namespace/992 zh keys、29 豁免/163 host warning；docs-link 无新增断链（18 存量）。
+- **安全回归**：相对 `03296370`，base 审批代码/测试、authority 整目录、presets 与既存交易镜像配置无改动。S1 与 Lead 仅改描述（附带尾逗号格式），S2 仅改自选输出契约及消费测试。ORDER_GATE_PATTERN 仍收口六市场下单/撤单；schema dryRun 默认 true，审批层仅显式 true 继续 next，缺省/false/异常仍 ask。live-trading 门禁实测 7 镜像全部 false、281 源文件无裸判定/签署引用、自铸授权平面被拒。独立 bot-api 回迁不归 S1/S2，不把全树 diff 冒称纯文本。
+- **残留边界**：本轮没有 live trading、profile 刷新或重启，没有当前 trading-web 工具可见集、live cohort、preset 卸载/切换与 fork 硬隔离验收。静态定义数/同名候选不证明运行时注册顺序；>400 存量、通用纪律 persona 上移、开放字典输出与其他工具 string schema 保留。不用门禁绿替代这些实证。进程检查仅见既存 Typeless/Chrome crashpad，无本轮 node/vitest 孤儿。
