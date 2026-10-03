@@ -119,8 +119,9 @@ python <skill目录>/scripts/wechat_fetch.py "<文章链接>" <工作目录>
 ### S2: 深度分析报告（仅用户要求深度报告时）
 
 **先读 `references/analysis-framework.md`**（五维分析框架+报告模板），再按用户确认的格式：
-- 默认 Word 时用当前可用的 Office 工具（如 `officecli`）按其规范生成，保存到
-  `download/深度分析报告_<主题>.docx`；用户指定 PDF/PPT 时按可用能力生成，缺工具时说明限制。
+- 默认 Word 时先加载官方 `office-docx` 技能，按其规范用 `load_workspace_dependencies` 返回的 Python（python-docx）生成，
+  保存到 `download/深度分析报告_<主题>.docx`；用户指定 PPT 用 `office-pptx`，PDF 用该技能正文里的 LibreOffice Kit 路径转换。
+  这些官方技能与依赖工具在当前部署不可用（未提供 primary-runtime 载荷）时，如实说明限制，不自造工具名、不搜索系统 Office、不安装替代方案。
 - 报告第1节"内容基本信息"按来源取字段：视频→UP主/时长/链接；文章→公众号/作者/发布时间。
 - 篇幅基准：5-10分钟视频或3000字内文章 → 2000-3000字正文；核查表至少覆盖5-8条关键声称。
 - 生成后按所用文档工具的质检流程校验，无错误才交付。
