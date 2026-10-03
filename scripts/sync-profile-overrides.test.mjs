@@ -40,7 +40,7 @@ function sync(home) {
 }
 
 describe('sync-profile-overrides', () => {
-  it('removes a repo-domain row whose package directory is gone, keeping live rows and the SDK block', () => {
+  it('管理员：删掉仓库已无此包的 @dshtrading 行，保留在用的行与 SDK 行', () => {
     // Given: a profile carrying one stale repo @dshtrading row plus a live one and an SDK row
     const basePkg = join(ROOT, 'packages', 'base')
     const stalePkg = join(ROOT, 'packages', 'bot')
@@ -61,7 +61,7 @@ describe('sync-profile-overrides', () => {
     expect(result.stdout).toMatch(/removed stale repo package row: @dshtrading\/bot ->/)
   })
 
-  it('keeps a repo-domain row whose package directory still exists', () => {
+  it('管理员：包目录仍在的 @dshtrading 行原样保留', () => {
     // Given: a profile whose only repo row points at a real package
     const basePkg = join(ROOT, 'packages', 'base')
     const { home, file } = fixtureHome(["  '@dshtrading/base': 'file:" + basePkg + "'"])
