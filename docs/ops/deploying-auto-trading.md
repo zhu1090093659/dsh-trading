@@ -8,10 +8,10 @@
 
 ## 怎么投放
 
-在卫星仓里打包：
+在卫星仓里打包（这四个是卫星仓拥有的）：
 
     pnpm -r build
-    for p in bot bot-api tradectl cockpit contract; do
+    for p in bot tradectl cockpit contract; do
       pnpm --filter "@dshtrading/$p" pack --pack-destination ../../satellite-out
     done
 
@@ -24,7 +24,9 @@
 
 1. 只采纳 SATELLITE_OWNED_PACKAGES 里的包（其余忽略）；
 2. 把它们登记进 profile 的 dependencies 与 pnpm overrides；
-3. 只把带 cordis.patch.yml 的两个（bot、bot-api）接进 bundles，其余是纯库依赖。
+3. 只把带 cordis.patch.yml 的（bot）接进 bundles，其余是纯库依赖。
+
+注意 bot-api 不在投放清单里：它名字带 bot，但实际是**本仓公开 GUI 的服务端半**（client-ui-trading 经 /dshtrading/api/markets 取行情，注册该路由的只有它），所以留在本仓与 GUI 同装。2026-10-03 桌面重建实测过误移走的后果：GUI 左栏报「行情桥不可用」。
 
 ## 缺席会怎样
 
@@ -34,7 +36,7 @@
 
 pnpm repo-boundary:check（scripts/repo-boundary-check.mjs）四条判据：
 
-- BD1 主仓不得存在 packages/{bot,bot-api,tradectl,cockpit,contract} 实现目录
+- BD1 主仓不得存在 packages/{bot,tradectl,cockpit,contract} 实现目录
 - BD2 不得出现这些包的源码级 import（注释与显式接缝声明放行）
 - BD3 vendor 槽位只允许 .tgz，不允许解包目录
 - BD4 被 git 跟踪的 tar 里不得含卫星包源码（防 git add --force 绕过 .gitignore）

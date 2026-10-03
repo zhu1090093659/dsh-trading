@@ -49,14 +49,14 @@ describe('repo-boundary-check', () => {
 
   it('管理员：注释里提到包名放行（接缝必须可被记录，否则等于禁止写事实）', () => {
     // Given 只把包名写在注释里
-    const text = '// 实现已迁往私有卫星仓：@dshtrading/bot-api 不再在主仓'
+    const text = '// 实现已迁往私有卫星仓：@dshtrading/bot 不再在主仓'
     // When / Then
     expect(importViolationsIn(text, 'scripts/x.mjs')).toEqual([])
   })
 
   it('管理员：写一行 repo-boundary-allow 附理由即可豁免（豁免必须显式可审查）', () => {
     // Given 带豁免标记的真实 import
-    const text = "import { x } from '@dshtrading/bot-api' // repo-boundary-allow: 说明接缝形态\n"
+    const text = "import { x } from '@dshtrading/bot' // repo-boundary-allow: 说明接缝形态\n"
     // When / Then
     expect(importViolationsIn(text, 'scripts/seam.mjs')).toEqual([])
   })
@@ -65,7 +65,7 @@ describe('repo-boundary-check', () => {
     // Given vendor 下既有产物又有解包源码
     const root = fixture()
     mkdirSync(join(root, 'vendor', 'dshtrading-bot-0.5.0'), { recursive: true })
-    writeFileSync(join(root, 'vendor', 'dshtrading-bot-api-0.5.0.tgz'), '')
+    writeFileSync(join(root, 'vendor', 'dshtrading-bot-0.5.0.tgz'), '')
     // When
     const problems = vendorSourceViolations(root)
     // Then 只报解包目录，产物放行

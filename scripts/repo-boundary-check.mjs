@@ -29,8 +29,15 @@ import { fileURLToPath } from 'node:url'
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const NL = String.fromCharCode(10)
 
-/** 属于私有卫星仓 dsh-trading-bot 的包目录。 */
-export const SATELLITE_PACKAGES = ['bot', 'bot-api', 'tradectl', 'cockpit', 'contract']
+/**
+ * 属于私有卫星仓 dsh-trading-bot 的包目录。
+ *
+ * 注意 bot-api 不在列：它名字带 bot，但实际是**公开 GUI 的服务端半**——
+ * client-ui-trading 经 /dshtrading/api/markets 取行情，而注册该路由的只有它，
+ * 卫星仓无人依赖它（2026-10-03 桌面重建实测：误移走会让 GUI 左栏报
+ * 「行情桥不可用」，故回迁主仓）。
+ */
+export const SATELLITE_PACKAGES = ['bot', 'tradectl', 'cockpit', 'contract']
 /** 卫星仓的包名（源码级 import 判据用）。 */
 export const SATELLITE_PACKAGE_NAMES = SATELLITE_PACKAGES.map((name) => '@dshtrading/' + name)
 

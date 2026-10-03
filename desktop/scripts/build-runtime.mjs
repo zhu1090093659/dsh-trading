@@ -43,8 +43,10 @@ const stagingRoot = path.join(desktopDir, 'resources', 'runtime');
 const DIRECT_TRADING_PACKAGES = [
   '@dshtrading/base',
   '@dshtrading/gui',
-  // '@dshtrading/bot-api'、'@dshtrading/bot'、'@dshtrading/tradectl' 等由私有卫星仓
-  // 提供（见 SATELLITE_OWNED_PACKAGES）：产物放进 satellite-vendor/ 才装配，缺席跳过。
+  // 注意：'@dshtrading/bot-api' 名字带 bot，但它是**公开 GUI 的服务端半**
+  // （client-ui-trading 经 /dshtrading/api/markets 取行情，路由只有它注册），
+  // 所以它留在主仓。真正由卫星仓提供的见 SATELLITE_OWNED_PACKAGES。
+  '@dshtrading/bot-api',
   '@dshtrading/crypto',
   '@dshtrading/us',
   '@dshtrading/cn',
@@ -75,7 +77,6 @@ const PRIVATE_VENDOR_PACKAGES = new Set([
  */
 const SATELLITE_OWNED_PACKAGES = new Set([
   '@dshtrading/bot',
-  '@dshtrading/bot-api',
   '@dshtrading/tradectl',
   '@dshtrading/cockpit',
   '@dshtrading/contract',
@@ -84,7 +85,6 @@ const SATELLITE_OWNED_PACKAGES = new Set([
 /** 其中带 cordis.patch.yml 的才是 profile bundle；其余是纯库依赖。 */
 const SATELLITE_BUNDLES = new Set([
   '@dshtrading/bot',
-  '@dshtrading/bot-api',
 ]);
 
 /** 卫星产物投放槽位。 */
@@ -124,8 +124,8 @@ const PROFILE_BUNDLES = [
   '@deepseek-ai/dsh-web-app',
   '@dshtrading/base',
   '@dshtrading/gui',
-  // '@dshtrading/bot-api' 由私有卫星仓提供（见 SATELLITE_OWNED_PACKAGES）：
-  // 装配时若 vendor/ 里带上了它，下面的 filter 会自动把它接回 bundles 列表。
+  // '@dshtrading/bot-api' 是公开 GUI 的行情桥服务端半，留在主仓与 GUI 同装。
+  '@dshtrading/bot-api',
   '@dshtrading/crypto',
   '@dshtrading/us',
   '@dshtrading/cn',

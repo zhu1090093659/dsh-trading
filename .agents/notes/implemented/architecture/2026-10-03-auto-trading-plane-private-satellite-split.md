@@ -12,8 +12,8 @@ Status: implemented
 
 边界按"谁能独立构建"划，而不是按"哪些文件提到 bot"划：
 
-- **私有卫星仓** `dsh-trading-bot`：`packages/{bot,bot-api,tradectl,cockpit,contract}` + `apps/ios-native` + `deploy`。
-- **主仓（公开）**：辅助交易全量 + `packages/authority`。authority 是 fail-closed 实盘闸门，18 个公开连接器 `import { liveTradingEnabled }`——私有化会让公开仓无法独立构建；且闸门公开可审计本身是优点。
+- **私有卫星仓** `dsh-trading-bot`：`packages/{bot,tradectl,cockpit,contract}` + `apps/ios-native` + `deploy`。
+- **主仓（公开）**：辅助交易全量 + `packages/authority` + `packages/bot-api`。authority 是 fail-closed 实盘闸门，18 个公开连接器 `import { liveTradingEnabled }`——私有化会让公开仓无法独立构建；且闸门公开可审计本身是优点。bot-api 名字带 bot，但它是公开 GUI 的服务端半（`/dshtrading/api` 路由只有它注册），2026-10-03 桌面重建误移走后 GUI 左栏立即报「行情桥不可用」，故回迁。
 
 ## Seam
 
@@ -31,4 +31,4 @@ Status: implemented
 
 主仓：`pnpm install` / `pnpm build` / `pnpm gates:all` 13 条门禁全绿（`coverage-baseline.json` 与 `typecheck-baseline.json` 按移除规模下调，走门禁自带的 `--force` / `--update` 显式路径）。
 
-卫星仓：独立 `pnpm install` / `pnpm -r build` 通过；633 例测试 0 失败（bot 9、contract 84、bot-api 162、cockpit 23、tradectl 355）；匿名访问 404 确认私有。
+卫星仓：独立 `pnpm install` / `pnpm -r build` 通过；471 例测试 0 失败（bot 9、contract 84、cockpit 23、tradectl 355）；匿名访问 404 确认私有。卫星仓消费主仓打包的 `vendor/dshtrading-bot-api-0.5.0.tgz`（设计文档 §10 的 bot 平面本就含 base + bot-api + bot）。

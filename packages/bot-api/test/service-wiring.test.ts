@@ -1,0 +1,141 @@
+/**
+ * 服务→桥接线集成测试（2026-09-01 store.list 回归防波）。
+ *
+ * 实证坑：能力包 ./plugin 以 cordis Service 类 provide `tradingKnowledgeCards` /
+ * `tradingCustomIndicators`——ctx.get 取到的是 Service 实例（store 挂 .store 属性），
+ * 桥若直取当 store 用即 "store.list is not a function"。旧 bridge.test.ts 直接
+ * createBridgeHost({ knowledgeStore })，绕过了 apply() 的服务解析层，单测全绿但
+ * 真实接线断裂。本文件走真实 cordis Context + apply() 全链路封住这一层。
+ */
+import { describe, expect, it } from 'vitest'
+import { Context as CordisContext } from '@deepseek-ai/cordis'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { apply } from '../src/index.ts'
+import { KnowledgeCardsService } from '@dshtrading/knowledge/plugin'
+import { CustomIndicatorsService } from '@dshtrading/indicators/plugin'
+import { WatchlistStoreService } from '@dshtrading/watchlist/plugin'
+import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
+import { createMemoryCustomIndicatorStore } from '@dshtrading/indicators'
+import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
+
+interface Route {
+  kind: string
+  path: string
+  handler: (req: Partial<IncomingMessage>, res: Partial<ServerResponse>) => Promise<void>
+}
+
+/**
+ * 真实 cordis context：先布服务（与各能力包 plugin.apply() 同款 Service provide
+ * 形状）再 apply——cordis inject 回调只在依赖就绪后触发，顺序与真实宿主启动一致。
+ */
+async function makeCtx(services?: (ctx: CordisContext) => void) {
+  const registered: Route[] = []
+  const ctx = new CordisContext()
+  services?.(ctx)
+  ctx.provide('webServer', {
+    register: (route: Route) => { registered.push(route) },
+  })
+  ctx.provide('connection', { requestRejection: () => undefined })
+  apply(ctx as never)
+  await new Promise(resolve => setImmediate(resolve))
+  return { ctx, registered }
+}
+
+async function dispatch(registered: Route[], method: string, sub: string, body?: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  let status = 0
+  let text = ''
+  const res = {
+    writeHead: (s: number) => { status = s },
+    end: (b?: string) => { text = b ?? '' },
+  } as unknown as ServerResponse
+  // 写端点经 readJsonBody 以 for-await 读请求体：假 req 用 async iterator 供数据。
+  const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body), 'utf8')]
+  const req = {
+    method,
+    url: `/dshtrading/api${sub}`,
+    async *[Symbol.asyncIterator]() { for (const chunk of chunks) yield chunk },
+  }
+  await registered[0].handler(req as never, res)
+  return { status, body: JSON.parse(text) as Record<string, unknown> }
+}
+
+describe('apply() 服务→桥接线（Service 实例解包）', () => {
+  it('knowledge 服务以 Service 实例 provide → GET /knowledge/cards 返回卡片而非 store.list 崩溃', async () => {
+    const store = createMemoryKnowledgeCardStore()
+    await store.save({
+      id: 'kc_test1', title: '接线测试卡', summary: 'x',
+      coreClaims: [], takeaways: [], boundaries: [], tags: ['t'], credibility: 'high',
+      factCheck: { verified: [], discrepancies: [], unverifiable: [] },
+      source: { type: 'manual', url: '', author: 'test' },
+      createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z',
+    })
+
+    const { registered } = await makeCtx(ctx => { new KnowledgeCardsService(ctx, store) })
+    expect(registered).toHaveLength(1)
+
+    const res = await dispatch(registered, 'GET', '/knowledge/cards')
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ ok: true, cards: [{ id: 'kc_test1', title: '接线测试卡' }] })
+  })
+
+  it('customIndicators 服务同款解包 → GET /indicators/custom 正常', async () => {
+    const store = createMemoryCustomIndicatorStore()
+    await store.save({
+      id: 'ci_test1', title: '接线指标', pane: 'sub', params: [], computeSource: '(bars) => []',
+      createdAt: 0,
+    })
+
+    const { registered } = await makeCtx(ctx => { new CustomIndicatorsService(ctx, store) })
+
+    const res = await dispatch(registered, 'GET', '/indicators/custom')
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ ok: true, indicators: [{ id: 'ci_test1' }] })
+  })
+
+  it('tradingWatchlist 服务以 Service 实例 provide → 桥复用同一 store（审查 H1 防双实例回归）', async () => {
+    const store = createMemoryWatchlistStore()
+    await store.add('us', { market: 'us', symbol: 'AAPL', name: '苹果' })
+
+    const { registered } = await makeCtx(ctx => {
+      new WatchlistStoreService(ctx, {
+        watchlists: store,
+        selection: createMemorySelectionStore(),
+        groups: createMemoryWatchlistGroupsStore(),
+      })
+    })
+
+    const res = await dispatch(registered, 'GET', '/watchlists')
+    expect(res.status).toBe(200)
+    // 桥读到的就是服务提供的实例（若桥自建第二个 file store，这里会是空表）。
+    expect(res.body).toMatchObject({ ok: true, watchlists: { us: [{ market: 'us', symbol: 'AAPL', name: '苹果' }] } })
+  })
+
+  it('分组注册表同样复用注入实例（GET/POST /watchlist-groups 双 store 防回归，issue #86）', async () => {
+    const groups = createMemoryWatchlistGroupsStore()
+    const seeded = await groups.create('注入组')
+    const { registered } = await makeCtx(ctx => {
+      new WatchlistStoreService(ctx, {
+        watchlists: createMemoryWatchlistStore(),
+        selection: createMemorySelectionStore(),
+        groups,
+      })
+    })
+
+    const listed = await dispatch(registered, 'GET', '/watchlist-groups')
+    expect(listed.body).toMatchObject({ ok: true, groups: [{ id: seeded.group?.id, name: '注入组' }] })
+
+    const posted = await dispatch(registered, 'POST', '/watchlist-groups', { name: '桥建组' })
+    expect(posted.body).toMatchObject({ ok: true, created: true })
+    // 写入落在注入实例上（桥自建第二个 store 时这里读不到新组）。
+    expect((await groups.list()).map(group => group.name).sort()).toEqual(['桥建组', '注入组'])
+  })
+
+  it('服务缺席（老部署）→ 回退自建 file store，端点仍可用', async () => {
+    const { registered } = await makeCtx()
+    const res = await dispatch(registered, 'GET', '/knowledge/cards')
+    expect(res.status).toBe(200)
+    // 回退 file store 指向真实 ~/.dsh/knowledge/cards.json，不断言条数只验信封。
+    expect(res.body).toMatchObject({ ok: true })
+    expect(Array.isArray(res.body.cards)).toBe(true)
+  })
+})
