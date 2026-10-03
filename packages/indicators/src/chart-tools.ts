@@ -66,14 +66,10 @@ export function createIndicatorActivateTool(options: IndicatorActivateToolOption
   return defineTool({
     name: 'indicator_activate',
     description:
-      'Mount an indicator onto the user\'s open chart (the GUI renders it live over SSE; no reload needed). '
-      + 'The id must be a preset indicator or a custom indicator authored via indicator_author. '
-      + 'Activating an already-active id updates its parameters in place (one instance per id). '
-      + 'Optionally pass paramsJson to override schema defaults; values are clamped to each parameter\'s min/max. '
-      + 'Pass market AND symbol together to write a per-symbol parameter override (for indicators whose params are per-instrument): '
-      + 'the override replaces the global params when that instrument is on the chart; other instruments keep the global params. '
-      + 'Activating with a scope also makes the indicator visible again for that instrument (clears per-symbol and per-market hides). '
-      + 'Use indicator_list to discover ids and parameter schemas.',
+      'Mount an indicator on the user\'s open chart, rendered live over SSE without a reload; the id must be a preset or one authored via '
+      + 'indicator_author. Activating an already-active id updates its parameters in place; paramsJson overrides schema defaults and values '
+      + 'are clamped to each parameter min/max. Pass market AND symbol together to write a per-symbol parameter override that replaces the '
+      + 'global params for that instrument. See indicator_list for ids and parameter schemas.',
     parameters: {
       id: {
         type: 'string',
@@ -180,13 +176,10 @@ export function createIndicatorDeactivateTool(options: IndicatorDeactivateToolOp
   return defineTool({
     name: 'indicator_deactivate',
     description:
-      'Unmount an indicator from the user\'s open chart, or hide it for specific markets/instruments. '
-      + 'Without market/symbol: removes the active chart instance entirely — the indicator definition stays in the library '
-      + '(use indicator_delete to remove a custom indicator definition entirely). '
-      + 'With market (optionally plus symbol): the instance stays active but is hidden for that whole market '
-      + '(e.g. hide an HK/CN-only indicator on us and crypto) or just that one instrument — '
-      + 'other scopes keep rendering it; indicator_activate with the same market+symbol shows it again. '
-      + 'Use indicator_list to see the currently active roster.',
+      'Unmount an indicator from the user\'s open chart, or hide it for specific markets/instruments. Without market/symbol the chart '
+      + 'instance is removed while the definition stays in the library. With market, optionally plus symbol, the instance stays active but '
+      + 'is hidden for that whole market or that one instrument; indicator_activate with the same market+symbol shows it again. See '
+      + 'indicator_list for the active roster.',
     parameters: {
       id: {
         type: 'string',
