@@ -29,6 +29,30 @@ Implemented: 2026-09-01（P0–P6 全部交付，issue #29–#35 关闭）
 
 其余实现提交：P0=f304d4f、P1=0ec58d3、P2=8830dac、P3=9da1288、P4=68c325d、P5=fd07b2b、P6=4cc9289（均在 main，各 issue 关闭时附验收证据）。
 
+## Scoped 注入复核（2026-10-03，S3）
+
+**结论：维持现状，不增加 host 插件逐 Agent 的工具安装器。** 共享工具继续 host 注册，交易执行工具由 preset 提供；这不表示本仓没有 scoped 能力，也不表示角色是安全沙箱。
+
+- **两层机制不等价**：服务的 cordis:group + isolate 把指定服务键放进 entry-local realm，防 root 同键冲突，不选择工具可见的 Agent；工具注册由调用 ctx 的 scope 决定，scoped 可遮蔽继承工具、同层重复失败。preset ctx 已在 Agent 平面，0 处显式 agent.ctx/scoped.tools 不等于全局注册。证据：[贡献入口](../../../../packages/us/src/index.ts#L8-L13)、[realm 组](../../../../packages/us/assets/preset/us-trader/agent.cordis.yml#L30-L60)、[只读注册](../../../../packages/base/src/research-tools.ts#L51-L55)。SDK 契约：dsh-tools/lib/types/index.d.ts:630–674。
+- **独立角色已覆盖**：[presets](../../../../packages/base/src/presets.ts#L108-L122) 仅 trader/master 挂 connector；研究/风险只挂 kit 与只读行情。master fork 专员继承父工具（含执行工具），不是重选专家 preset；接受的边界归 [统一角色 Note](./2026-09-06-unified-trading-role-presets.md#L33)。工具可见性也不隔离 Bash、服务直调或业务数据。
+- **同名语义保持**：[Alpaca](../../../../packages/connector-alpaca/src/index.ts#L376-L406) 先 provider 互斥再先到先得；[OKX](../../../../packages/connector-okx/src/index.ts#L1030-L1042) 与 [base](../../../../packages/base/src/market-tools.ts#L372-L380) 同名跳过。迁到 scoped 并删守卫会把 host 工厂胜出变成 connector 遮蔽，可能改变参数/输出，不是机械重构；共享账户面仍依 [工具增强 Note](../feature/2026-09-08-agent-native-tool-surface.md#L28-L31)。
+- **候选收益**：connector-alpaca 的 us_place_order、connector-okx 的 crypto_place_order/crypto_cancel_order 可能需按成员过滤；独立 preset 已覆盖，fork 未覆盖。重新注册不能移除继承工具，fork 收窄需 child restriction/guard 与可靠身份时机。报价分发亦已有 preset；知识查询、自选、台账、路由、策略全会话可见是 D4 意图，不为仿照官方而收窄。[base 审批](../../../../packages/base/src/index.ts#L53-L56) 与全局监听保持不变。
+- **生命周期**：SDK dsh-tools/lib/index.js:2878–2886 通过 layers.effect(this.ctx, ...) 注册并返回 disposer；插件按组合生命周期持有，未捕获返回值不等于泄漏。官方逐成员安装器另外解决成员筛选、创建/销毁、HMR 与半安装逆序回滚；本仓暂无逐成员工具域，当前卸载时序未实测。
+
+### 前置核验与重开条件
+
+仓库根能力探针：
+
+```sh
+node -e 'for (const n of ["dsh-tools","dsh-agent","dsh-scope","dsh-system-prompt"]) { try { console.log(n, require.resolve("@deepseek-ai/"+n)) } catch(e) { console.log(n,e.code) } }'
+```
+
+现场 dsh-tools 为 0.2.0-rc.2，另三项 MODULE_NOT_FOUND；只证明根未显式提供 imports，不证明宿主缺能力。SDK peer 表 dsh-tools/package.json:43–54 要求 agent/scope/system-prompt 等同 rc.2 cohort、cordis ~4.0.4。安装器消费包须显式声明实际使用的 agent peer/类型；scope/tools 由一致 cohort 提供，仅注入工具不要求调用 systemPrompt，加 section 才需要其消费声明。核验 trading-web profile、file 副本与运行宿主实际 cohort；补 peer 不等于必须升到更高版本，不借未声明的 pnpm 传递路径。升级遵守 dsh-sdk-upgrade，未授权不做。
+
+已有 agents 服务、Agent.ctx 和 created/disposed 时插件可实现，不天然需改宿主；fork 身份/继承过滤或预设卸载若宿主未提供，先补宿主契约。tools.restrict 只允许 scoped ctx（SDK lib/index.js:2895–2909），过滤继承面、不滤自身层，root 不能全局限制。
+
+**驳回条件**：owner 要求 fork 研究/风险硬性无执行工具；出现同会话成员需同名不同实现/凭据且 preset 无法表达；复现组合卸载/HMR 留工具或半安装；工具量与上下文实测要求按成员收窄。重开后先取得前置授权，核验创建/销毁、失败回滚、HMR、preset 切换、fork 前后工具集与闸门不弱化。本次无运行宿主验收，未改依赖、工具、审批或交易行为。
+
 ## Context & Efficiency Impact
 
 - host 平面新增约 10 个工具 schema：一次性常驻 token 成本（估算 +1.5–2k/请求），换取全会话能力；此后工具面冻结不再增长。
@@ -37,6 +61,8 @@ Implemented: 2026-09-01（P0–P6 全部交付，issue #29–#35 关闭）
 - 拆包成本：每新增一包跑一次 `scripts/sync-profile-overrides.mjs --all`（幂等脚本，2026-08-30 已消除手工同步坑）；UI 拆包验收需重启宿主（无 live 卸载，既有纪律）。
 
 ## Alternatives considered
+
+- **全量迁到 agent.ctx 或先为交易工具加逐成员安装器（S3）**：独立角色已有 preset，成员装卸没有当前需求；全量迁移会改 D4 共享可见性或同名胜出语义，且显式 peer/cohort 与 fork 身份时机尚未核验。先升级 cohort 亦不产生本身的业务收益，故本次维持现状，前置条件只在决策重开时执行。
 
 - **注册表为粒度、不拆包**（agent 初版建议）：owner 裁决否决——「一切皆插件」核心理念优先，且 overrides 同步成本已被脚本化消除大半；细粒度包是社区生态接入的前提。
 - **版本号轮询替代 SSE**：owner 选 SSE；轮询仅保留为 EventSource 失败的隐式降级（现状一次性加载），不作为主通道。
