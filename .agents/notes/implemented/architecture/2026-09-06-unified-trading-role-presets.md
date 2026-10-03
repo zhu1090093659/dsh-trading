@@ -63,3 +63,19 @@ master 委派边界如实声明：fork 子代理继承会话工具面（含下�
   需要对应迁移；owner 2026-09-06 裁决的「用户层优先」口径不变）。
 - 已知宿主缺陷记录保留：0.1.5 实测的「创建后切预设不切 persona」在 0.1.7 的
   复验纳入本轮 profile 验收清单（registry 时代 select 路径重写，可能已修复）。
+- （2026-10-03 owner 裁决）trading-web 的名册只保留本仓四角色：官方内置四条
+  （standard / ptc / minimal / cordis）在 profile 级 `cordis.patch.yml` 按 id 覆盖
+  `disabled: true` 屏蔽。它们不是磁盘文件，而是 `@deepseek-ai/dsh-web-app` 的
+  `presets/*.patch.yml` 在 boot 时 insert 的声明行（0.1.7 起 harness 不再扫磁盘
+  roots，预设中心只管 `$DSH_HOME/agent-presets/` 的市场下载），所以「删除」= 按 id
+  覆盖禁用，行仍在组合树里但不向 `agentPresets` 注册；不改 `node_modules` 与官方包。
+  生效边界：新会话与 GUI 名册立即按新组合解析；运行中的宿主不重挂已挂 fiber
+  （`patchReload: live` 的既有口径，见
+  [indicator-plugin-split](2026-08-30-indicator-plugin-split.md)），需重启宿主才
+  在 GUI 里看到名册变化。默认预设 `master` 不受影响（`preset-ptc` 已不被任何默认
+  引用）。副作用如实记录：`cordis` preset 是官方「让 Agent 帮我创建预设模式」入口与
+  `cordis_inspect_*` / Plugin Manager 工具面的唯一载体（`dsh-client-ui-agent-preset`
+  仅在名册存在 id `cordis` 时渲染 Creator 按钮；见
+  [dynamic-capabilities](../../../skills/dynamic-capabilities/SKILL.md) 第 1 节）；禁用后
+  trading-web 不再有该通路，需要时删掉对应条目即可恢复。桌面壳重播种保留
+  `cordis.patch.yml*`，升级 / 重装后该节仍在。
