@@ -17,13 +17,20 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, type InferValue, type ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 import path from 'node:path'
 import { dshHomeDir } from '@dshtrading/dsh-home'
 import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore } from './index.ts'
 import type { SelectionStore, WatchlistGroup, WatchlistGroupsStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from './index.ts'
 import { effectiveWatchlistRows, WATCHLIST_SEEDS, watchlistRowSource } from './seeds.ts'
 import { createFileSelectionStore, createFileWatchlistGroupsStore, createFileWatchlistStore } from './file-store.ts'
+
+function jsonOutput<const S extends ValueSchemaSpec>(schema: S) {
+  return {
+    schema,
+    render: (_args: unknown, value: InferValue<S>) => [{ type: 'text' as const, text: JSON.stringify(value) }],
+  }
+}
 
 // 桥（client-ui-trading node 半）经本子路径取 file store（knowledge/tool 同款再导出先例）。
 export { createFileSelectionStore, createFileWatchlistGroupsStore, createFileWatchlistStore }
@@ -178,21 +185,26 @@ export function createWatchlistAddTool(deps: WatchlistToolDeps) {
         description: 'Optional display name, e.g. 贵州茅台',
       },
     },
-    output: {
-      schema: { type: 'string' },
-      render: (_args, value) => [{ type: 'text', text: value }],
-    },
+    output: jsonOutput({
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        ok: { type: 'boolean', const: true, required: true },
+        added: { type: 'boolean', required: true },
+        note: { type: 'string', required: true },
+      },
+    }),
     async execute(raw) {
       const instrument = parseInstrumentArgs((raw ?? {}) as Record<string, unknown>)
       const added = await deps.watchlists.add(instrument.market, instrument)
       if (added) deps.onWatchlistsChanged?.()
-      return JSON.stringify({
+      return {
         ok: true,
         added,
         note: added
           ? `Added ${instrument.symbol} (${instrument.market}) to the watchlist.`
           : `${instrument.symbol} is already in the ${instrument.market} watchlist (deduplicated, nothing changed).`,
-      })
+      }
     },
   })
 }
@@ -215,21 +227,26 @@ export function createWatchlistRemoveTool(deps: WatchlistToolDeps) {
         description: 'Market-canonical symbol to remove',
       },
     },
-    output: {
-      schema: { type: 'string' },
-      render: (_args, value) => [{ type: 'text', text: value }],
-    },
+    output: jsonOutput({
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        ok: { type: 'boolean', const: true, required: true },
+        removed: { type: 'boolean', required: true },
+        note: { type: 'string', required: true },
+      },
+    }),
     async execute(raw) {
       const { market, symbol } = parseInstrumentArgs((raw ?? {}) as Record<string, unknown>)
       const removed = await deps.watchlists.remove(market, symbol)
       if (removed) deps.onWatchlistsChanged?.()
-      return JSON.stringify({
+      return {
         ok: true,
         removed,
         note: removed
           ? `Removed ${symbol} from the ${market} watchlist.`
           : `${symbol} was not in the ${market} watchlist (nothing changed).`,
-      })
+      }
     },
   })
 }

@@ -97,10 +97,10 @@ describe('watchlist_* tools', () => {
   it('watchlist_add：去重 + 事件回调仅在实际新增时触发', async () => {
     const { deps, onWatchlistsChanged } = makeDeps()
     const tool = createWatchlistAddTool(deps)
-    const first = JSON.parse(String(await tool.execute({ market: 'us', symbol: 'AAPL' }))) as { added: boolean }
+    const first = await tool.execute({ market: 'us', symbol: 'AAPL' })
     expect(first.added).toBe(true)
     expect(onWatchlistsChanged).toHaveBeenCalledTimes(1)
-    const second = JSON.parse(String(await tool.execute({ market: 'us', symbol: 'AAPL' }))) as { added: boolean }
+    const second = await tool.execute({ market: 'us', symbol: 'AAPL' })
     expect(second.added).toBe(false)
     expect(onWatchlistsChanged).toHaveBeenCalledTimes(1)
   })
@@ -114,7 +114,7 @@ describe('watchlist_* tools', () => {
     const { deps, onWatchlistsChanged } = makeDeps()
     await createWatchlistAddTool(deps).execute({ market: 'us', symbol: 'AAPL' })
     onWatchlistsChanged.mockClear()
-    const wire = JSON.parse(String(await createWatchlistRemoveTool(deps).execute({ market: 'us', symbol: 'AAPL' }))) as { removed: boolean }
+    const wire = await createWatchlistRemoveTool(deps).execute({ market: 'us', symbol: 'AAPL' })
     expect(wire.removed).toBe(true)
     expect(onWatchlistsChanged).toHaveBeenCalledTimes(1)
   })
@@ -133,7 +133,7 @@ describe('watchlist_* tools', () => {
     expect(before.watchlists.us.map(r => r.symbol)).toEqual(['AAPL', 'MSFT', 'NVDA', 'GOOGL'])
 
     // 空库未定制状态下，直接删除 AAPL
-    const wire = JSON.parse(String(await removeTool.execute({ market: 'us', symbol: 'AAPL' }))) as { removed: boolean }
+    const wire = await removeTool.execute({ market: 'us', symbol: 'AAPL' })
     expect(wire.removed).toBe(true)
     expect(onWatchlistsChanged).toHaveBeenCalledTimes(1)
 
@@ -146,7 +146,7 @@ describe('watchlist_* tools', () => {
     expect(after.watchlists.us.map(r => r.symbol)).toEqual(['MSFT', 'NVDA', 'GOOGL'])
 
     // 删除不存在的 symbol：返回 removed: false
-    const notFound = JSON.parse(String(await removeTool.execute({ market: 'us', symbol: 'NONEXISTENT' }))) as { removed: boolean }
+    const notFound = await removeTool.execute({ market: 'us', symbol: 'NONEXISTENT' })
     expect(notFound.removed).toBe(false)
   })
 

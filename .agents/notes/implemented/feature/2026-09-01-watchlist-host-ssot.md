@@ -23,8 +23,15 @@ Status: implemented
      会回落旧镜像，见 [host 落地镜像持久化](../bug-fix/2026-09-16-host-apply-mirror-persistence.md)。）
 5. **测试**：watchlist 包 8 例（store/原子写/工具链/事件接线）+ 桥 5 例（端点/幂等/形状校验/降级）+ 同步模块 6 例（vi.mock api：启动同步/迁移幂等/host-first 失败保持/SSE 刷新）；全量 608 通过、build 全绿。
 
+### add/remove 的 canonical 输出（S2）
+
+`watchlist_add` 与 `watchlist_remove` 使用本地泛型 `jsonOutput(valueSchema)`：对象闭合，`ok:true`、`added`/`removed:boolean`、`note:string` 全部必填，execute 返回对象，render 从同一值生成原有紧凑 JSON。直接工厂调用测试按对象消费；GUI 文本消费者保持兼容。去重/不存在仍为成功值，参数与业务校验仍 throw，写入及失效事件语义不变。其余工具及动态市场字典不迁移。
+
+包内真实 ToolRuntime + 同 cohort SystemPrompt 合同测试验证四个成功/幂等结果，以及类型错、缺字段、额外键、ok 常量错的 ToolOutputError；源码 tsc 的故意 added:string 负例实报 TS2322，恢复后通过。SystemPrompt 仅在测试中从已安装 dsh-tools 传递依赖解析，不新增依赖。
+
 ## Alternatives considered
 
+- **execute 保留 string、只改 render**：对象 schema 会拒绝 string canonical 值，维持 string schema 则无法获得字段校验；采用迁移直接调用测试到对象，保留模型 JSON 文本，不做两套合同。
 - **host store 含市场种子行**：种子是展示兜底不是用户数据，进 host 会让「空 = 未定制」语义失效、迁移幂等判断复杂化（种子行会挡住真用户数据的导入）——否决，种子留客户端。
 - **变更本地先行（乐观更新）+ SSE 收敛**：本 POST 未落盘期间收到他源 SSE 重拉会把行闪掉再闪回（竞态抖动）；host-first 天然无抖动，代价是桥不可用时本地不更新——host 是 SSOT，本就该如此（且 fail 后有 console 警告）。
 - **迁移放 host 插件 boot（读 localStorage 不可达）**：localStorage 只在浏览器——迁移只能由客户端发起、host 落盘；幂等守卫放 host（非空拒绝）防止客户端重复触发——采纳。
