@@ -138,7 +138,7 @@ export function createMarketReadTools(market: string, getRegistry: () => MarketD
   const symbolParam = {
     type: 'string' as const,
     required: true as const,
-    description: 'Market-canonical symbol, e.g. BTCUSDT / AAPL / 600519.SH / 00700.HK',
+    description: 'Market-canonical instrument id, e.g. BTCUSDT / AAPL / 600519.SH / 00700.HK. Required.',
   }
   return [
     defineTool({
@@ -206,11 +206,11 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
   const symbolParam = {
     type: 'string' as const,
     required: true as const,
-    description: 'Market-canonical symbol, e.g. BTCUSDT / AAPL / 600519.SH / 00700.HK',
+    description: 'Market-canonical instrument id, e.g. BTCUSDT / AAPL / 600519.SH / 00700.HK. Required.',
   }
   const optionalSymbolParam = {
     type: 'string' as const,
-    description: 'Optional market-canonical symbol filter; omit for the whole account',
+    description: 'Optional market-canonical instrument id filter; omit for the whole account.',
   }
   const accountNote =
     'This reads the broker/exchange account truth (live), not the local holdings ledger — reconcile the ledger with this result.'

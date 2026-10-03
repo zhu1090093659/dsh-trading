@@ -176,27 +176,24 @@ export function createHoldingsStageTool(store: HoldingsStore, options: HoldingsW
   return defineTool({
     name: 'holdings_stage',
     description:
-      '把券商/交易所账户截图解析出的持仓条目放入统一资产台账的「待确认区」（staged），'
-      + '等待用户在资产面板确认入账。这是截图导入的默认写入口：**只 stage 不 confirm**；'
-      + '调用后必须在回复中提醒用户「持仓已放入待确认区，请到资产面板确认入账」。'
-      + '解析纪律：'
-      + '① market 用词汇表 crypto|us|cn|hk（币安/OKX 等加密所→crypto，美股券商→us，A 股→cn，港股→hk）；'
-      + '② symbol 用连接器词汇（与行情 API 对齐：AAPL / 002714.SZ / BTCUSDT / 00700.HK），截图里的中文名放 name；'
-      + '③ 数字（size/entryPrice）必须原样取自截图，看不清就缺省，绝不编造；entryPrice 截图没有就不填；'
-      + '④ 一张截图一个 account 名：用户未说明时用截图里的券商/交易所名（如「富途」「币安」），都拿不准则缺省；'
-      + '⑤ 模拟盘截图须显式 kind="sim"，拿不准时缺省（缺省按真实账户 real 处理）；'
-      + '⑥ currency 一般缺省（按 market 自动推导 crypto→USDT/us→USD/cn→CNY/hk→HKD），仅截图明示币种与推导不符时才覆盖；'
-      + '⑦ 截图里的现金/可用余额按现金行约定记入：symbol 用币种代码（USD/CNY/HKD/USDT）、size 为余额、'
-      + '不填 entryPrice（如 {"market":"us","symbol":"USD","size":8746.49,"currency":"USD","name":"现金(USD)","account":"大象银行"}）。',
+      'Stage screenshot-parsed positions into the staged area of the holdings ledger; the user confirms them in the asset panel later. '
+      + 'Stage only, never confirm, and remind the user in the reply that the items await confirmation. Parsing discipline: market is '
+      + 'crypto|us|cn|hk (crypto exchange→crypto, US broker→us, A-share→cn, HK→hk); symbol uses connector vocabulary matching the '
+      + 'market-data API (AAPL / 002714.SZ / BTCUSDT / 00700.HK) and the screenshot display name goes to name; size/entryPrice come '
+      + 'verbatim from the screenshot — omit unreadable values, never invent, and skip entryPrice when absent; one screenshot gives one '
+      + 'account name (default to the broker/exchange shown); simulated accounts must set kind="sim", otherwise the account counts as '
+      + 'real; currency is normally omitted and derived from market (crypto→USDT, us→USD, cn→CNY, hk→HKD), overridden only when the '
+      + 'screenshot states it; cash/available balances are recorded as a cash row — the currency code as symbol, the balance as size and '
+      + 'no entryPrice (a worked example is in the holdings-ledger design note).',
     parameters: {
       itemsJson: {
         type: 'string',
         required: true,
         description:
-          'JSON 数组，每项一个持仓条目：'
-          + '[{"market":"us","symbol":"AAPL","size":10,"entryPrice":178.5,"name":"苹果","account":"富途"},...]。'
-          + '必填 market/symbol/size；可选 name/entryPrice/currency/account/kind/note。'
-          + '数字原样取自截图；不确定的字段整个缺省，不要编造。',
+          'JSON array of position items, e.g. '
+          + '[{"market":"us","symbol":"AAPL","size":10,"entryPrice":178.5,"name":"苹果","account":"富途"},...]. '
+          + 'Required market/symbol/size; optional name/entryPrice/currency/account/kind/note. '
+          + 'Numbers come verbatim from the screenshot; omit any uncertain field rather than inventing it.',
       },
     },
     output: textOutput,
@@ -260,9 +257,9 @@ export function createHoldingsListTool(store: HoldingsStore) {
   return defineTool({
     name: 'holdings_list',
     description:
-      '只读查看统一资产台账：返回当前待确认区（staged）与正式持仓（holdings）两区概要（含 id），'
-      + '供回答「我录入了什么 / 台账里有什么」，也供后续 confirm/discard/update/remove 取 id。'
-      + '市值、折算与汇总看资产面板 UI；不要凭记忆复述本列表之外的持仓。',
+      'Read-only view of the holdings ledger: a summary of the staged area and the confirmed holdings with their ids, for answering '
+      + 'what the user recorded and for taking ids for confirm/discard/update/remove. Market value, FX conversion and aggregation live in '
+      + 'the asset panel; never restate positions from memory beyond this list.',
     parameters: {},
     output: textOutput,
     async execute() {
@@ -292,21 +289,19 @@ export function createHoldingsConfirmTool(store: HoldingsStore, options: Holding
   return defineTool({
     name: 'holdings_confirm',
     description:
-      '把「待确认区」（staged）条目确认入正式持仓（holdings）。'
-      + '用在：用户口述「确认入账 / 这条对的」，或你已核过截图与行情、确认条目无误。'
-      + 'editsJson 可选，按 id 附带确认时的字段修订（如改 size/account/entryPrice），'
-      + '修订只在入账时生效，不修改待确认区原件。'
-      + '纪律：确认后必须在回复中列出确认了哪几条（含 id 与关键字段），并提示用户可在资产面板复核/编辑；'
-      + '不确定的条目不要确认——宁可留着待确认或 holdings_discard 丢弃。',
+      'Confirm staged entries into the confirmed holdings ledger. Use it when the user says an entry is correct, or after you verified the '
+      + 'screenshot. editsJson optionally carries per-id field revisions applied only at confirmation; the staged original is untouched. '
+      + 'Discipline: list what was confirmed (id and key fields) and point the user to the asset panel for review; leave entries you are '
+      + 'unsure about staged, or discard them with holdings_discard.',
     parameters: {
       idsJson: {
         type: 'json',
         required: true,
-        description: '待确认区条目的 id 数组（如 ["hd-1788..."]；也接受 JSON 字符串或单个 id 字符串）。用 holdings_list 取 id。',
+        description: 'Staged entry ids, e.g. ["hd-1788..."]. Also accepts a JSON string or a single id string. Get ids from holdings_list.',
       },
       editsJson: {
         type: 'json',
-        description: '可选：{ "hd-...": { "size": 5000, "entryPrice": 1.023, "account": "国金证券" } }。只写要改的字段。',
+        description: 'Optional per-id field revisions, e.g. { "hd-...": { "size": 5000, "entryPrice": 1.023, "account": "国金证券" } }. Include only the fields to change.',
       },
     },
     output: textOutput,
@@ -359,14 +354,14 @@ export function createHoldingsDiscardTool(store: HoldingsStore, options: Holding
   return defineTool({
     name: 'holdings_discard',
     description:
-      '丢弃「待确认区」（staged）条目——用于用户说「这条不对 / 不要了」，或截图解析出的条目确认有误。'
-      + '只作用于待确认区，不入正式持仓；正式持仓的删除用 holdings_remove。'
-      + '纪律：丢弃前先说明丢的是哪几条（id + 标的 + 数量），丢弃后回显剩余条数。',
+      'Discard staged entries, when the user says an entry is wrong or the screenshot parse was incorrect. It acts on the staged area only '
+      + 'and never touches confirmed holdings, which are removed with holdings_remove. Discipline: state which entries are dropped '
+      + '(id, instrument, size) before dropping, then report the remaining count.',
     parameters: {
       idsJson: {
         type: 'json',
         required: true,
-        description: '待确认区条目 id 数组（也接受 JSON 字符串或单个 id 字符串）。用 holdings_list 取 id。',
+        description: 'Staged entry ids. Also accepts a JSON string or a single id string. Get ids from holdings_list.',
       },
     },
     output: textOutput,
@@ -403,20 +398,21 @@ export function createHoldingsAddTool(store: HoldingsStore, options: HoldingsWri
   return defineTool({
     name: 'holdings_add',
     description:
-      '直接把持仓录入「正式持仓」（holdings），用于用户口述的持仓（如「我买了 5000 股 159869.SZ，成本 1.023」）'
-      + '或手动补录。截图导入仍优先走 holdings_stage（待确认区），让用户先复核。'
-      + '纪律：数字原样取自用户口述，不编造、不四舍五入；不确定的字段整个缺省；'
-      + 'symbol 用连接器词汇（AAPL / 002714.SZ / BTCUSDT / 00700.HK），中文名放 name；'
-      + '现金余额同表记入：symbol 用币种代码（USD/CNY/HKD/USDT）、size 为余额、不填 entryPrice，'
-      + '资产面板按面值估值；'
-      + '录入后回显 id 与关键字段，提醒用户可在资产面板复核/编辑。',
+      'Record positions directly into the confirmed holdings ledger, for positions the user dictates or manually backfills; screenshot '
+      + 'imports still go through holdings_stage for review first. Numbers come verbatim from the user — never invented or rounded. '
+      + 'symbol uses connector vocabulary (AAPL / 002714.SZ / BTCUSDT / 00700.HK) with the display name in name; cash balances are a row '
+      + 'with the currency code as symbol, the balance as size and no entryPrice (the asset panel values it at par). Echo the id and key '
+      + 'fields afterwards and point the user to the asset panel for review.',
     parameters: {
       itemsJson: {
         type: 'json',
         required: true,
         description:
-          '条目数组：[{"market":"cn","symbol":"159869.SZ","name":"游戏ETF华夏","size":5000,"entryPrice":1.023,"account":"国金证券"},...]。'
-          + '必填 market/symbol/size；可选 name/entryPrice/currency/account/kind/note。也接受 JSON 字符串。',
+          'Item array, e.g. [{"market":"cn","symbol":"159869.SZ","name":"游戏ETF华夏","size":5000,"entryPrice":1.023,"account":"国金证券"},...]. '
+          + 'Required market/symbol/size; optional name/entryPrice/currency/account/kind/note. Copy numbers verbatim; omit uncertain fields. '
+          + 'symbol uses connector vocabulary (AAPL / 002714.SZ / BTCUSDT / 00700.HK) with the display name in name; '
+          + 'cash balances put the currency code in symbol and the balance in size, with no entryPrice. '
+          + 'Also accepts a JSON string.',
       },
     },
     output: textOutput,
@@ -481,22 +477,21 @@ export function createHoldingsUpdateTool(store: HoldingsStore, options: Holdings
   return defineTool({
     name: 'holdings_update',
     description:
-      '修订「正式持仓」（holdings）里的一条记录：id 必填，patchJson 只写要改的字段'
-      + '（size / entryPrice / account / name / symbol / market / currency / kind / note）。'
-      + '用在：用户口述「这条数量改成…/成本价是…/换个账户」，或录入后发现字段有误。'
-      + '注意：改 market 且未显式给 currency 时，currency 会按新 market 重新推导（cn→CNY, hk→HKD, us→USD, crypto→USDT）。'
-      + '待确认区（staged）的条目不能用本工具——用 holdings_confirm 的 editsJson，或先确认再改。'
-      + '纪律：改完回显「旧 → 新」对比，并提醒用户核对；不要凭猜测改数字。',
+      'Revise one confirmed holdings entry: id is required and patchJson carries only the fields to change '
+      + '(size / entryPrice / account / name / symbol / market / currency / kind / note), for a corrected quantity, cost or account, or a '
+      + 'field recorded wrong. Changing market re-derives currency unless given explicitly (cn→CNY, hk→HKD, us→USD, crypto→USDT). Staged '
+      + 'entries cannot be revised here — use editsJson on holdings_confirm, or confirm first. Echo the old → new values and tell the user '
+      + 'to verify; never guess numbers.',
     parameters: {
       id: {
         type: 'string',
         required: true,
-        description: '正式持仓条目的 id（hd-...）。用 holdings_list 取。',
+        description: 'Confirmed holdings entry id (hd-...). Get it from holdings_list.',
       },
       patchJson: {
         type: 'json',
         required: true,
-        description: '要改的字段对象，如 {"size":5000,"entryPrice":1.023,"account":"国金证券"}。只写要改的键。也接受 JSON 字符串。',
+        description: 'Object of fields to change, e.g. {"size":5000,"entryPrice":1.023,"account":"国金证券"}. Include only the keys to change. Also accepts a JSON string.',
       },
     },
     output: textOutput,
@@ -561,16 +556,15 @@ export function createHoldingsRemoveTool(store: HoldingsStore, options: Holdings
   return defineTool({
     name: 'holdings_remove',
     description:
-      '删除「正式持仓」（holdings）记录：平仓/清仓后清理台账，或删除重复/错误条目。'
-      + '用在：用户说「我平仓了 / 清仓了 / 删掉这条」。'
-      + '注意：这是本地台账的记录变更，**不是下单**，不会触发任何买卖，也不改变券商/交易所账户里的真实持仓。'
-      + '待确认区（staged）条目的移除用 holdings_discard。'
-      + '纪律：删除前先用 holdings_list 核对 id 与标的；删除后回显被删条目与剩余条数，并提醒用户「台账已清理，请自行核对账户真实状态」。',
+      'Delete confirmed holdings entries, after a close or to remove duplicate or wrong rows. This changes the local ledger only: it is not '
+      + 'an order, triggers no trade, and never alters the real broker/exchange position. Staged entries are removed with holdings_discard. '
+      + 'Discipline: verify the id and instrument with holdings_list first; afterwards echo the deleted rows and the remaining count, and tell '
+      + 'the user the account itself must be checked separately.',
     parameters: {
       idsJson: {
         type: 'json',
         required: true,
-        description: '要删除的正式持仓 id 数组（如 ["hd-1788..."]；也接受 JSON 字符串或单个 id 字符串）。用 holdings_list 取 id。',
+        description: 'Confirmed holdings ids to delete, e.g. ["hd-1788..."]. Also accepts a JSON string or a single id string. Get ids from holdings_list.',
       },
     },
     output: textOutput,
@@ -623,17 +617,16 @@ export function createFxGetTool(deps: { fx: FxService }) {
   return defineTool({
     name: 'fx_get',
     description:
-      '只读读取 FX 汇率快照（与资产面板、桥 GET /fx 共享同一服务实例与缓存），用于多币种持仓的折算与汇总。'
-      + '语义：rates[c] = 1 单位 c 折合多少 base（base=USD 时 rates.CNY 即 1 元人民币折合多少美元，恒含 rates[base]=1）；'
-      + 'USDT 恒定锚定 USD。base 仅支持 USD | CNY | HKD，缺省 USD（不区分大小写）。'
-      + 'stale=true 表示本次汇率走了过期缓存或恒等兜底（无实时数据），是近似值——向用户汇报时必须显式标注「近似/可能过期」，'
-      + '不得当作实时汇率使用；stale=false 表示 1 小时 TTL 内的新鲜汇率（新拉取或内存缓存命中）。'
-      + '返回 JSON：{ ok, base, rates, asOf, stale, note }，note 为可直接转述给用户的提示文案。'
-      + '本工具只读：不改台账、不下单。',
+      'Read-only FX rate snapshot shared with the asset panel and the bridge GET /fx, for converting and aggregating multi-currency '
+      + 'holdings. Semantics: rates[c] is how much base one unit of c is worth (with base=USD, rates.CNY is the USD value of one CNY; '
+      + 'rates[base] is always 1) and USDT is pegged to USD. base accepts USD | CNY | HKD, default USD, case-insensitive. stale=true means '
+      + 'an expired cache or the identity fallback (no live data): report it as approximate or possibly stale, never as a live rate; '
+      + 'stale=false means rates fresh within the 1-hour TTL. Returns JSON { ok, base, rates, asOf, stale, note }, where note can be '
+      + 'relayed to the user as is. Read-only: no ledger writes, no orders.',
     parameters: {
       base: {
         type: 'string',
-        description: '基准币种，缺省 USD；仅支持 USD | CNY | HKD（不区分大小写，如 usd/cny/hkd 亦可）。',
+        description: 'Base currency, default USD; only USD | CNY | HKD (case-insensitive, so usd/cny/hkd work).',
       },
     },
     output: textOutput,
