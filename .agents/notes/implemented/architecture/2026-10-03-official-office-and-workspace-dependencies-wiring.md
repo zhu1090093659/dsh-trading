@@ -34,3 +34,4 @@ Status: implemented
 - **桌面自动接线（2026-10-03，方案 B）**：桌面壳在 spawn host 前用 `resolvePrimaryRuntime(runtimeRoot, home)` 决议一个载荷目录（纯函数，只在目录含 `runtime.json` 时命中），命中即给子进程设 `DSH_PRIMARY_RUNTIME` 并在启动日志写明；候选只有两个：应用自带的 `resources/runtime/primary-runtime`（将来若 stage）与本 trading home 的 `$DSH_HOME/dsh-runtimes/dsh-primary-runtime`（官方 carrier 惯例路径）。**刻意不指向 `~/.dsh`**：跨 home 取用是用户决策，不是壳的默认行为。
 - **桌面边界**：本仓桌面载荷当前不带 primary-runtime，且不下载、不复制（359MB，官方分发源不在本仓授权内），所以开箱桌面会话这两条行仍是 disabled（显式缺席，不静默回退）；用户把兼容载荷放进上述任一候选路径（或在 shell 里 `DSH_PRIMARY_RUNTIME=...` 启动），桌面壳下次启动即自动通电。
 - 回归防护：`packages/base/test/office-wiring.test.ts` 断言两条行的官方 id/name、office 行不写 config、source 派生自 env、以及无 env 时两行均 disabled（用合成 process 求值 `!!js` 表达式，不改真实环境）。
+- 生命周期与资源清理（2026-10-03 实测）：`ctx.skills.list()` 在有载荷时给出三条 office 技能；dispose 掉 office provider 的插件句柄后目录立即回落到空（`[]`），说明卸载即回收、无双份残留。作用域隔离与同名优先级由官方 `dsh-skill` 负责（本仓沿用既有 project-agents/bundled rank 语义，office 为 bundled 600，未与项目技能同名）。
