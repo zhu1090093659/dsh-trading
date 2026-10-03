@@ -60,10 +60,21 @@ Status: implemented
 - **待裁决（本轮不做）**：
   - G6 `routing_set`（B 类）：需先定 settings 写契约（深层合并语义）、`'routing'` 事件语义与审计留痕格式；agent 侧目前仍只能读 `routing_get` 并引导用户到设置面板。
   - G9 图表指标名册迁移导入、G10 更新器：维持审计 §5 的「不做」判定。
-  - 审计 Wave 3 的纯文案/一致性项未做：connector/kit 工具 description 的「操作后必须回显」纪律文案、同名双源收敛（`crypto_funding_rate` kit-crypto vs okx、`us_get_news` kit-us vs finnhub）——均不改权限，可另开小 PR。
+  - **审计 Wave 3 的文案项已部分落地**（2026-10-03，见下「工具描述体例」）：`Read-only` / `No credentials required` / `dryRun` 三类跨工具重复纪律**尚未**上移 persona（R3-A4，会同时改 4 个角色前缀，需先加后删两步），同名双源（`crypto_funding_rate` kit-crypto vs okx、`us_get_news` kit-us vs finnhub）**不做合并**——两处语义不同（当前+下期 vs 历史序列）或供应商不同，2026-10-03 复测确认 48 组跨文件同名里没有一组文本全等。
   - C/D 类（下单/撤单/paper/liveTrading 开关/凭据）：按铁律 #3 与 §5 一律不开放。
   - **默认路由下 us/cn 账户读面不可用（需 owner 裁决）**：`TradeRegistryService` 按 `tradeProvider ?? provider` 严格解析且不静默降级，而默认配置 us=yahoo（数据）/ alpaca（交易）、cn=tencent / qmt 数据面与交易面不同名，因此账户工具在默认配置下只能返回 `TRADING_TRADE_PROVIDER_NOT_ROUTED`。三条可选路径：(a) 用户在 settings.yaml 显式设 `markets.us.tradeProvider: alpaca`（当前唯一可行，已写进 `docs/guides/exchange-routing.md` §2.4）；(b) 设置面板补 tradeProvider 行；(c) 改注册表语义（数据 provider 无交易面时回落该市场唯一注册的交易服务——会推翻 `router/test` 里「选中了但未注册 → undefined，不静默降级」的既有裁决）。本轮选 (a)+精确报错，未擅自改语义。
 - **实证发现（与本变更无关，已登记 [issue #88](https://github.com/zhu1090093659/dsh-trading/issues/88)）**：
   - Windows CI flake：`packages/indicators` 试算 100ms 超时（`validate.ts:26`），docs-only 提交同样复现，重跑即绿。
   - `trading-dev`（headless）profile 在 `dsh --profile trading-dev "..."` 下启动失败——`@linxin666/dsh-session-archive`、`@xmanrui/dsh-im`、`@linxin666/dsh-usage`、`@linxin666/dsh-client-ui-plugin-manager` 四行等待 `webServer`/`connection` 服务而 headless 宿主没有，`assertEntriesActivated` 直接抛错。来自 2026-09-08 的 `466cbe1`（另一会话的三插件内置），修法可参照同文件 `dsh-trading-dynamic-capabilities` 行的条件禁用范式；本变更未改。
 - **时效**：`trading-web` profile 的包副本是 `file:` 拷贝而非 symlink，运行时生效需 `scripts/refresh-trading-web-profile.sh` 刷新副本 + 重启宿主（桌面壳需重启 App）。本变更只跑通包级与真实 cordis 接线验证，未动用户正在运行的桌面实例。
+
+## 工具描述体例（2026-10-03，S1 落地；R3 分级方案 A 档）
+
+工具面冻结期（`docs/design/agentic-native-architecture.md` §5.6）内**不新增工具**，只统一既有 149 个工具的模型可见文本。体例与事实：
+
+- **体例**：工具级 `description` = [做什么 一句] + [本工具特有约束] + [失败语义]，**<=480 字符且 <=90 词**、英文、无 Markdown/emoji/换行/URL；参数级 `description` 单句 3-16 词。官方参照 `@deepseek-ai/dsh-experimental-tool-agent-team@0.2.0-rc.2` 九工具（实测 62-259 字符 / 11-39 词，参数 26 个全部有说明）。参数级超长时，字段词汇表与默认值约定下沉到该工具自己的参数 description——模型在同一次工具调用里仍看得到，请求前缀不额外膨胀。
+- **边界**：只改 `description` 与参数 `description` 文本。工具名、patch 行 id、`parameters` 结构与必填性、`output.schema` 类型、执行逻辑与运行时返回文本（holdings 的 `[tool]` 前缀、renderFundingRates 输出等随用户语言）**一律不动**。
+- **语言口径**：描述统一英文，依据 [预设注入文本统一英文](2026-09-06-english-persona-unification.md)。中文只保留在**值示例**里（`贵州茅台`、`600519.SH` 这类标的/标签字面量），说明文字本身不得是中文。
+- **失败语义三态**保持可区分：`TRADING_NOT_IMPLEMENTED`（provider 未实现该能力 ≠ 无数据）、`TRADING_NO_PROVIDER`（市场无激活 provider）、`TRADING_NO_TRADE_SERVICE` / `TRADING_TRADE_PROVIDER_NOT_ROUTED`（未注册 vs 注册了但路由指不到）。基准文本仍是 `packages/base/src/market-tools.ts` 的 `notImplementedError`。
+- **落地结果**：15 条超限 description（max `watchlist_list` 954 字符）压入预算，超限条数降为 0；22 条中文工具/参数描述英文化（holdings 8、knowledge 4、xysz 4、kit-cn 2、jin10 2、watchlist 2）；base 的必填 `symbol` 参数补齐说明。对照表与逐条保留约束见 gitignored 的 `.local/tool-surface/S1-changes.md`；量化脚本 `scripts/tool-surface-inventory.mjs`（R2 产物）可复跑数字。
+- **未做的部分（明确记录，避免下次从零讨论）**：跨工具重复的通用纪律（`Read-only` / `No credentials required` / `dryRun` 提示）**未上移** `composePresets()` persona——那会同时改变 4 个角色的系统提示词前缀，按「先加 persona、验证一轮真实会话、再删工具层重复句」两步执行，属独立窗口；48 组跨文件同名工具的 provider 可辨识度只补了 xysz/stooq/ibkr/longbridge 四处，统一的 "which provider serves this call is decided by routing_get" 句需与 persona 上移同批做（否则会把 7 条已接近上限的描述推过 480 字符）。
