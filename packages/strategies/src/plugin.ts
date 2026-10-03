@@ -118,12 +118,10 @@ export function createStrategyAuthorTool(options: StrategyAuthorToolOptions) {
   return defineTool({
     name: 'strategy_author',
     description:
-      'Author, validate, and persist a custom trading strategy from JavaScript compute source. '
-      + 'compute(bars, params) must return StrategySignal[] (entry/exit at bar close, filled at next bar open by the backtest engine). '
-      + 'The validator runs sandbox trial calculations across multiple kline scenarios and replays the signal sequence for engine-replayability. '
-      + 'If valid, the strategy is persisted and immediately available for backtesting and the strategy roster. '
-      + 'Submitting an id equal to a built-in paradigm id (donchian-breakout / rsi-reversion / ema-crossover / bollinger-reversion / sma-baseline / momentum-12m) '
-      + 'OVERRIDES that built-in strategy (the factory default stays recoverable via strategy_reset).',
+      'Author, validate and persist a custom trading strategy from JavaScript compute source. compute(bars, params) must return '
+      + 'StrategySignal[] (entry/exit at bar close, filled at the next bar open). The validator runs sandbox trials over kline scenarios '
+      + 'and replays the sequence for engine replayability; a valid strategy is persisted and immediately backtestable. A built-in paradigm '
+      + 'id overrides that built-in; strategy_reset restores the factory default.',
     parameters: {
       id: {
         type: 'string',
@@ -224,12 +222,10 @@ export function createStrategyListTool(options: StrategyListToolOptions) {
   return defineTool({
     name: 'strategy_list',
     description:
-      'List the user strategy roster: built-in paradigms (with their parameter keys/defaults), custom strategies authored via '
-      + 'strategy_author, and tombstoned (deleted) built-in ids. Read-only. '
-      + 'ALWAYS call this before strategy_backtest / strategy_delete / strategy_reset when you do not already have an id from this '
-      + 'session, and before strategy_backtest with paramsJson so you know the declared parameter keys. '
-      + 'A paradigm with overridden=true is a built-in currently replaced by a user record; deleted=true means the built-in is '
-      + 'tombstoned and hidden from the roster until strategy_reset restores it.',
+      'List the strategy roster: built-in paradigms with their parameter keys/defaults, custom strategies authored via strategy_author, and '
+      + 'tombstoned built-in ids. Read-only. Call it before strategy_backtest / strategy_delete / strategy_reset when you have no id from '
+      + 'this session, and before passing paramsJson so you know the parameter keys. overridden=true means a built-in currently replaced by '
+      + 'a user record; deleted=true means it is tombstoned until strategy_reset restores it.',
     parameters: {},
     output: {
       schema: { type: 'string' },
@@ -302,11 +298,10 @@ export function createScreenerListTool(options: ScreenerListToolOptions) {
   return defineTool({
     name: 'screener_list',
     description:
-      'List the screener roster: built-in screeners (with their parameter keys and result column keys), custom screeners authored via '
-      + 'screener_author, and tombstoned (deleted) built-in screener ids. Read-only. '
-      + 'ALWAYS call this before screener_run / screener_delete / screener_reset when you do not already have an id from this session. '
-      + 'A screener with overridden=true is a built-in currently replaced by a user record; deleted=true means the built-in is tombstoned '
-      + 'and hidden from the roster until screener_reset restores it.',
+      'List the screener roster: built-in screeners with their parameter and result-column keys, custom screeners authored via '
+      + 'screener_author, and tombstoned built-in ids. Read-only. Call it before screener_run / screener_delete / screener_reset when you '
+      + 'have no id from this session. overridden=true means a built-in currently replaced by a user record; deleted=true means the '
+      + 'built-in is tombstoned until screener_reset restores it.',
     parameters: {},
     output: {
       schema: { type: 'string' },
@@ -402,12 +397,10 @@ export function createStrategyBacktestTool(deps: StrategyBacktestToolDeps) {
   return defineTool({
     name: 'strategy_backtest',
     description:
-      'Backtest a strategy (custom authored via strategy_author, or a built-in paradigm like ema-crossover / donchian-breakout '
-      + '/ rsi-reversion / bollinger-reversion / sma-baseline / momentum-12m) on a symbol and interval using the pure-function engine. '
-      + 'Returns 8 metrics (totalReturn, cagr, maxDrawdown, sharpe, winRate, profitFactor, tradeCount, exposure), the trade list, and the equity curve. '
-      + 'Signals confirm at bar close and fill at the next bar open with fee/slippage modeling; this is simulation only — it never places orders. '
-      + 'Pass paramsJson to override declared parameters (values clamped to min/max) and read the echoed params.effective; '
-      + 'call strategy_list first when you need an id or its parameter keys.',
+      'Backtest a strategy (custom from strategy_author, or a built-in paradigm) on a symbol and interval with the pure-function engine. '
+      + 'Returns 8 metrics (totalReturn, cagr, maxDrawdown, sharpe, winRate, profitFactor, tradeCount, exposure), the trade list and the '
+      + 'equity curve. Signals confirm at bar close and fill at the next bar open with fee/slippage modeling; simulation only, never places '
+      + 'orders. paramsJson overrides declared parameters and is echoed in params.effective.',
     parameters: {
       strategyId: {
         type: 'string',
@@ -677,13 +670,10 @@ export function createScreenerAuthorTool(options: ScreenerAuthorToolOptions) {
   return defineTool({
     name: 'screener_author',
     description:
-      'Author, validate, and persist a custom stock screener from JavaScript evaluate source. '
-      + 'evaluate(bars, params) is a single-point cross-section predicate: return a ScreenerMatch '
-      + '({ metrics: Record<string, number> with keys declared in columns, reason }) or null when the symbol '
-      + 'does not match / lacks data. The validator runs sandbox trial calculations across multiple kline scenarios. '
-      + 'If valid, the screener is persisted and immediately available in the GUI screener roster. '
-      + 'Submitting an id equal to a built-in screener id (scr.ma-bull-align / scr.volume-breakout / scr.rsi-oversold '
-      + '/ scr.near-high / scr.above-ma) OVERRIDES that built-in screener (factory default stays recoverable via screener_reset).',
+      'Author, validate and persist a custom stock screener from JavaScript evaluate source. evaluate(bars, params) is a single-point '
+      + 'cross-section predicate returning a ScreenerMatch ({ metrics with keys declared in columns, reason }) or null when the symbol does '
+      + 'not match or lacks data. A valid screener is persisted into the GUI roster. An id equal to a built-in screener id overrides that '
+      + 'built-in; screener_reset restores the factory default.',
     parameters: {
       id: {
         type: 'string',
@@ -1102,13 +1092,10 @@ export function createScreenerRunTool(deps: ScreenerRunToolDeps) {
   return defineTool({
     name: 'screener_run',
     description:
-      'Run one screener (built-in or custom, by id from screener_list) over a market and return the matched instruments with their '
-      + 'metric columns and a one-line reason. Read-only cross-sectional scan: it fetches daily candles from the routed market data '
-      + 'provider, evaluates a pure function per instrument, and never places orders or emits trading signals. '
-      + 'Instruments whose window is too short are skipped silently (contract semantics); per-instrument fetch/evaluate failures are '
-      + 'counted, never fatal. Cost guards are explicit in the result: scanPool (pool cap), scanned, failed, insufficient, '
-      + 'resultLimit, truncated, budgetMs and deadlineExceeded (no cancellation channel exists — the scan stops taking new instruments '
-      + 'once the time budget is spent). ALWAYS call screener_list first to get the id and its parameter/column keys.',
+      'Run one screener (id from screener_list) over a market and return matched instruments with their metric columns and a one-line '
+      + 'reason. Read-only cross-sectional scan: daily candles come from the routed market-data provider, a pure function runs per '
+      + 'instrument, and no order is ever placed. Instruments with too short a window are skipped silently; per-instrument failures are '
+      + 'counted, never fatal. The result carries the cost guards (scanned, failed, truncated, deadlineExceeded).',
     parameters: {
       screenerId: {
         type: 'string',

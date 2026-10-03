@@ -224,10 +224,10 @@ export function createJin10Tools(service: Jin10Service): Array<ReturnType<typeof
     defineTool({
       name: 'global_klines',
       description:
-        `Minute-level candles for one ${SOURCE} instrument. Upstream semantics: \`time\` is the START Unix timestamp in seconds and candles are returned forward from it, within a 24-hour window `
-        + '(omit it and the window starts at the current minute, which often yields an empty result — pass a start time inside the last 24h for real data). '
+        `Minute-level candles for one ${SOURCE} instrument. \`time\` is the START Unix timestamp in seconds; candles return forward from it within a 24-hour window `
+        + '(omit it and the window starts at the current minute, often returning an empty result — pass a start inside the last 24h). '
         + 'count is 1..100 (default 100). An empty array means no candles in that window (closed market/weekend), not an upstream failure. '
-        + 'Upstream rate limit: 1500 calls per tool per Beijing calendar day.',
+        + 'Rate limit: 1500 calls per tool per Beijing day.',
       parameters: {
         code: { type: 'string', required: true as const, description: 'Publisher code, e.g. XAUUSD / USOIL / USDJPY' },
         time: { type: 'number', description: 'Start Unix timestamp in seconds (from the last 24 hours)' },

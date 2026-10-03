@@ -938,11 +938,10 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
   return defineTool({
     name: 'crypto_place_order',
     description:
-      'Place an OKX spot or perpetual-swap (SWAP) order, or simulate one. instId accepts market-canonical (BTCUSDT, BTCUSDT-SWAP) or OKX native (BTC-USDT, BTC-USDT-SWAP) vocabulary. '
-      + 'quantity is in BASE-ASSET coins: spot MARKET orders are sent with tgtCcy=base_ccy (OKX default for buys is quote-currency amount — a known trap), '
-      + 'and SWAP quantities are converted to contracts via ctVal automatically. dryRun defaults to true and returns a DRY-RUN simulated fill receipt '
-      + 'with the current market price as reference. Real execution (dryRun=false) requires a signed live-trading grant plus user approval; '
-      + 'with env=demo (default) the order is signed and routed to the OKX demo exchange (simulated trading), env=live is real money.',
+      'Place an OKX spot or perpetual-swap order, or simulate one. instId accepts market-canonical (BTCUSDT, BTCUSDT-SWAP) or OKX native '
+      + '(BTC-USDT). quantity is in BASE-ASSET coins: spot MARKET orders are sent with tgtCcy=base_ccy (the OKX buy default is a '
+      + 'quote-currency amount — a known trap) and SWAP quantities convert via ctVal. dryRun defaults to true and returns a DRY-RUN receipt; '
+      + 'dryRun=false needs a signed live-trading grant plus approval. env=live is real money.',
     parameters: {
       instId: {
         type: 'string',
