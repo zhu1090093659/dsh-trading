@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# 门禁自测桩：xcodegen 成功即可（夹具树没有真工程）。
-set -u
-exit 0

@@ -1,6 +1,6 @@
 # 运维手册与首次桌面演练（P5 步骤 3 的首批产出）
 
-日期：2026-10-01 · 产物：[docs/ops/ops-runbook.md](../../../../docs/ops/ops-runbook.md)
+日期：2026-10-01 · 产物：docs/ops/ops-runbook.md（随自动交易平面迁往私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)）
 
 ## 为什么先写它
 

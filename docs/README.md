@@ -106,13 +106,13 @@ docs/
 3. **[发布前检查清单](./ops/release-checklist.md)** (`docs/ops/release-checklist.md`)
    - 从开发态切换到分发态的门禁闸门：PolyForm 许可证、Changeset 版本发布与全市场回归。
 4. **[DSH 上游 SDK 升级检查清单](./ops/upstream-upgrade-checklist.md)**
-5. **[运维手册](./ops/ops-runbook.md)** (docs/ops/ops-runbook.md)
+5. **运维手册**（随自动交易平面迁往私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)：docs/ops/ops-runbook.md）
    - kill switch 四级、dead-man 三层、演练记录（P5 各档执行记录的家）与接线台账。
 6. **[P5 三档准入清单](./roadmap/p5-acceptance-checklist.md)** (docs/roadmap/p5-acceptance-checklist.md)
    - shadow / paper / 小额 live 的准入判据、对照基线与三档现状表（档位状态的家）。
-7. **[移动端落仓方案](./client/mobile-app-plan.md)** (docs/client/mobile-app-plan.md)
+7. **移动端落仓方案**（随 iOS 观测端迁往私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)：docs/client/mobile-app-plan.md）
    - 移动端落仓形态、分发决策与 CI 策略；Expo/RN 旧工程（apps/mobile）已按 owner 2026-10-02 决定退役删除，
-     原生观测端工程操作与实测证据在 apps/ios-native/README.md。
+     原生观测端工程操作与实测证据在该仓的 apps/ios-native/README.md。
  (`docs/ops/upstream-upgrade-checklist.md`)
    - 紧密跟踪官方 `@deepseek-ai/*` SDK 发版（当前基线 0.2.0-rc.2）的抽核、升级与验收指南。
 

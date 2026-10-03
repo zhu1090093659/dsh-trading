@@ -36,20 +36,17 @@ const GATES = [
   { name: 'test:scripts', command: 'pnpm', args: ['test:scripts'] },
   { name: 'test:desktop', command: 'pnpm', args: ['test:desktop'] },
   // iOS 证据跑批脚本的门禁自测（桩驱动，不需要 Xcode）：build 失败必须传播、不许沿用旧 bundle
-  { name: 'test:ios-evidence', command: 'node', args: ['scripts/ios-native/check-evidence-runner.mjs'] },
   { name: 'coverage:check', command: 'pnpm', args: ['coverage:check'] },
   { name: 'patch-id:check', command: 'pnpm', args: ['patch-id:check'] },
   { name: 'live-trading:check', command: 'pnpm', args: ['live-trading:check'] },
-  { name: 'plane:check', command: 'pnpm', args: ['plane:check'] },
   { name: 'i18n:check', command: 'pnpm', args: ['i18n:check'] },
-  { name: 'contract-id:check', command: 'pnpm', args: ['contract-id:check'] },
   { name: 'home-guard:check', command: 'pnpm', args: ['home-guard:check'] },
   { name: 'typecheck-gate', command: 'node', args: ['scripts/typecheck-gate.mjs'] },
   // CI 接线：workflow 引用的脚本必须存在 —— 让"push 之后才发现"的断裂尽量在本地暴露
   { name: 'ci-wiring:check', command: 'node', args: ['scripts/ci-wiring-check.mjs'] },
   // 文档相对链接：断链不会报错，只会让后人找不到那份 Owning Note（存量债入基线，只拦新增）
   { name: 'docs-link:check', command: 'node', args: ['scripts/docs-link-check.mjs'] },
-  { name: 'e2e:smoke', command: 'node', args: withNetwork ? ['scripts/e2e-smoke.mjs', '--with-network'] : ['scripts/e2e-smoke.mjs'] },
+  // e2e:smoke 已随自动交易平面迁往私有卫星仓 dsh-trading-bot（drill 全在 tradectl）。
 ]
 
 /** 安装态门禁：只在 --with-installed 时加入（需要 ~/.dsh-trading 下已构建的 bot profile）。 */

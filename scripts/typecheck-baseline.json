@@ -3,8 +3,6 @@
   "packages/api/tsconfig.json": 0,
   "packages/authority/tsconfig.json": 0,
   "packages/base/tsconfig.json": 0,
-  "packages/bot/tsconfig.json": 0,
-  "packages/bot-api/tsconfig.json": 0,
   "packages/client-ui-indicators/tsconfig.client.json": 0,
   "packages/client-ui-indicators/tsconfig.host.json": 0,
   "packages/client-ui-indicators/tsconfig.json": 0,
@@ -27,7 +25,6 @@
   "packages/client-ui-trading/tsconfig.json": 0,
   "packages/client-ui-updater/tsconfig.json": 0,
   "packages/cn/tsconfig.json": 0,
-  "packages/cockpit/tsconfig.json": 0,
   "packages/connector-akshare/tsconfig.json": 12,
   "packages/connector-alpaca/tsconfig.json": 10,
   "packages/connector-binance/tsconfig.json": 1,
@@ -51,7 +48,6 @@
   "packages/connector-tushare/tsconfig.json": 16,
   "packages/connector-xysz/tsconfig.json": 0,
   "packages/connector-yahoo/tsconfig.json": 1,
-  "packages/contract/tsconfig.json": 0,
   "packages/crypto/tsconfig.json": 0,
   "packages/dsh-home/tsconfig.json": 0,
   "packages/dsh-i18n/tsconfig.client.json": 0,
@@ -75,7 +71,6 @@
   "packages/knowledge/tsconfig.json": 24,
   "packages/router/tsconfig.json": 5,
   "packages/strategies/tsconfig.json": 42,
-  "packages/tradectl/tsconfig.json": 0,
   "packages/us/tsconfig.json": 0,
   "packages/watchlist/tsconfig.json": 0
 }

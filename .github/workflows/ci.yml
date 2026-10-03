@@ -46,9 +46,9 @@ jobs:
       # liveTrading 只是非权威镜像（只许 false），实盘授权由 @dshtrading/authority 的
       # 人工签署平面裁定；运行期不得引用签署侧。
       - run: pnpm live-trading:check
-      # 平面闭包门禁：bot/host 平面的安装闭包不得含 client-ui-* 或 UI 重依赖，
-      # GUI 平面反过来必须覆盖全部 UI 包（P1 步骤 4 判据的静态可执行形式）。
-      - run: pnpm plane:check
+      # 平面闭包门禁（plane:check）与 bot 安装闭包验收（bot-closure:check）已随自动交易
+      # 平面迁往私有卫星仓 dsh-trading-bot：它们判据的对象是 bot/GUI 平面的包集合，
+      # 主仓不再含 bot 实现，留在主仓只会变成永假的断言。
       # 测试卫生棘轮（business-testing-ci §6）：BDD 命名/结构、零 mock、零 sleep、
       # 断言完整性；存量债入 scripts/test-audit-baseline.json，只许降不许升。
       - run: pnpm test:audit
@@ -58,30 +58,13 @@ jobs:
       # desktop/ 是独立 npm 工程（不在 pnpm workspace），pnpm -r test 覆盖不到它，
       # 其 21 个 node:test 用例（runtime payload 解包、host 符号规范化）此前从未进 CI。
       - run: pnpm test:desktop
-      # iOS 证据跑批脚本（apps/ios-native/docs/evidence/run-all-tests.sh）的门禁自测：
-      # 用 xcodebuild/xcrun/xcodegen 桩（scripts/ios-native/evidence-stubs/）驱动真实脚本，
-      # 断言「坏源 ⇒ 判红且不跑旧 bundle」「取锁失败 ⇒ exit 75 且不动别人的锁」等七个场景。
-      # 2026-10-02 IOS-12 验收实证过一次假绿：build exit=65 仍跑了上一次的旧 xctest 并判绿。
-      # 纯 Node + bash，不需要 Xcode，所以能进 ubuntu static-gates。
-      - run: pnpm test:ios-evidence
-      # id 冻结面门禁（P4 步骤 1）：源码里不得写死 orderId 字面量——契约是「只比较不解析」，
-      # 一旦某处写死就有了语义，格式从此不能改。契约包自身的 factory/正则与带 id-gate-allow
-      # 标注的测试样本除外。此前这个门禁建好了却没接线（与散文无异），本轮补上。
-      - run: pnpm contract-id:check
-      # iOS 原生观测端（apps/ios-native）的**纯 Node** 门禁：① Swift 侧封闭枚举/查表/上限/常量
-      # 必须与 packages/contract/src 的运行期真值一致（防漂移）；② Swift 分层白名单（含 Domain 的
-      # Observation 宏）越界即红；③ 传输层取令牌必须带 origin 绑定、request 的四道守卫顺序不得调换、
-      # 生产 HTTP 实现必须挂重定向 delegate（IOS-8：无绑定取令牌那条路会让令牌跨源外发）。
-      # 三者都不需要 Xcode，所以能在 ubuntu 上跑；真正的 Swift 断言（DshTradingTransportTests 等）
-      # 留本机 `apps/ios-native/build/transport-tests.sh` 那一类跑法，CI 不跑 iOS 构建。
-      - run: node scripts/ios-native/check-contract-drift.mjs
-      - run: node scripts/ios-native/check-swift-layering.mjs
-      - run: node scripts/ios-native/check-transport-token-binding.mjs
-      # 端到端冒烟（P4 步骤 3）：跑真实链路的三条最短检查——带外 A0 在业务面全挂时仍可用、
-      # 确定性 shadow 跑批逐字复现、以及（加 --with-network 时）真实行情对齐。
-      # 存在理由：本仓已有 7 个「单元测试全绿、真实路径坏掉」的先例，单测喂的是自家输入。
-      # CI 里**默认不带网络项**（不出网也能绿）；网络项由人手动带上。
-      - run: node scripts/e2e-smoke.mjs
+      # iOS 证据跑批门禁（test:ios-evidence）已随 apps/ios-native 迁往私有卫星仓。
+      # id 冻结面门禁（contract-id:check）已随 packages/contract 迁往私有卫星仓。
+      # iOS 原生观测端的三条纯 Node 门禁（check-contract-drift / check-swift-layering /
+      # check-transport-token-binding）已随 apps/ios-native 迁往私有卫星仓，在那边与 Swift
+      # 源码同仓演进（它们比对的 packages/contract 真值也在那个仓里）。
+      # 端到端冒烟（e2e:smoke）已随自动交易平面迁往私有卫星仓 dsh-trading-bot：
+      # 它跑的 drill（shadow-run / desk-loop / v1-client-flow 等）全在 packages/tradectl。
       # home 守卫门禁：读 DSH_HOME 的脚本必须带「拒绝继承宿主 home」的守卫。
       # 存在理由：2026-10-01 一天内在四处发现同一缺陷（脚本拿继承的宿主 home 起实例、
       # 写宿主数据、对着宿主 home 做预检），而它们**都不报错**——脚本照常成功，只是作用在

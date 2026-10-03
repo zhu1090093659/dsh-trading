@@ -11,18 +11,6 @@
       "owner": "bundle:base",
       "name": "@dshtrading/base"
     },
-    "dsh-trading-bot-api": {
-      "owner": "bundle:bot-api",
-      "name": "@dshtrading/bot-api"
-    },
-    "dsh-trading-bot-http": {
-      "owner": "bundle:bot",
-      "name": "@dshtrading/bot/http"
-    },
-    "dsh-trading-bot-startup": {
-      "owner": "bundle:bot",
-      "name": "@dshtrading/bot/startup"
-    },
     "dsh-trading-client-ui-indicators": {
       "owner": "bundle:gui",
       "name": "@dshtrading/client-ui-indicators"

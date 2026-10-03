@@ -64,6 +64,14 @@ const DIRECT_TRADING_PACKAGES = [
 const PRIVATE_VENDOR_PACKAGES = new Set([
   '@dshtrading/client-ui-special-indicators',
 ]);
+/**
+ * 卫星仓拥有的包（自动交易平面）：源码在私有仓 dsh-trading-bot，不随主仓发布。
+ * 主仓只在构建时装配它们提供的 vendor tarball——缺席即跳过，不视为错误。
+ */
+const SATELLITE_OWNED_PACKAGES = new Set([
+  '@dshtrading/bot-api',
+]);
+
 /** Registry package carried alongside the trading bundles. */
 const REGISTRY_DEPENDENCIES = {
   '@deepseek-ai/dsh-web-search-exa': '0.2.0-rc.2',
@@ -74,7 +82,8 @@ const PROFILE_BUNDLES = [
   '@deepseek-ai/dsh-web-app',
   '@dshtrading/base',
   '@dshtrading/gui',
-  '@dshtrading/bot-api',
+  // '@dshtrading/bot-api' 由私有卫星仓提供（见 SATELLITE_OWNED_PACKAGES）：
+  // 装配时若 vendor/ 里带上了它，下面的 filter 会自动把它接回 bundles 列表。
   '@dshtrading/crypto',
   '@dshtrading/us',
   '@dshtrading/cn',
@@ -140,10 +149,21 @@ function writeProfileManifest(profileDir, tarballs) {
   const dependencies = {};
   for (const name of DIRECT_TRADING_PACKAGES) {
     const file = tarballs.get(name);
-    if (file === undefined) throw new Error('no packed tarball for direct dependency ' + name);
+    if (file === undefined) {
+      // 自动交易实现已迁往私有卫星仓（dsh-trading-bot）。主仓只保留部署接缝：
+      // 卫星仓把它的 tgz 放进 vendor/ 时这里照常装配；缺席即跳过，主仓仍可独立构建。
+      if (SATELLITE_OWNED_PACKAGES.has(name)) continue;
+      throw new Error('no packed tarball for direct dependency ' + name);
+    }
     dependencies[name] = tarballSpec(file);
   }
   Object.assign(dependencies, REGISTRY_DEPENDENCIES);
+
+  // 卫星仓拥有的 bundle 只有真装配上了才进 bundles 列表：否则 profile 启动会
+  // 因解析不到该 bundle 而失败（issue #60 同款 ERR_MODULE_NOT_FOUND 语义）。
+  const bundles = PROFILE_BUNDLES
+    .concat([...SATELLITE_OWNED_PACKAGES].filter((name) => tarballs.has(name)))
+    .filter((name) => !SATELLITE_OWNED_PACKAGES.has(name) || dependencies[name] !== undefined);
 
   const overrides = {};
   for (const [name, file] of tarballs) {
@@ -154,7 +174,7 @@ function writeProfileManifest(profileDir, tarballs) {
     name: 'dsh-profile-trading-web',
     private: true,
     dependencies,
-    dsh: { profile: { bundles: PROFILE_BUNDLES, patchReload: 'live' } },
+    dsh: { profile: { bundles, patchReload: 'live' } },
   }, null, 2) + '\n');
 
   fs.writeFileSync(path.join(profileDir, 'pnpm-workspace.yaml'), [
