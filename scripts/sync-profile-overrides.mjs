@@ -190,6 +190,15 @@ async function syncProfile(profileDir, packages) {
           return `  '${row[1]}': '${scheme}:${fallback}'`
         }
       }
+      // 仓库内 @dshtrading/* 包已消失（如 2026-10-03 自动交易平面切走 packages/bot）：
+      // 该行指向本仓路径却已无同名单，是上一轮的残留。删掉它——留着会让
+      // profile-config-preflight 报死路径并中止 install（2026-10-03 实测
+      // trading-web 因 @dshtrading/bot 残留被拒绝刷新）。只删本仓域名的行，
+      // @deepseek-ai/* 的未知行仍保守保留并告警。
+      if (row[1].startsWith('@dshtrading/') && row[2].startsWith(join(ROOT, 'packages') + '/')) {
+        repaired.push(`removed stale repo package row: ${row[1]} -> ${row[2]}`)
+        return null
+      }
       console.warn(`[stale] ${profileDir}: row for ${row[1]} points at missing ${row[2]} and no replacement was found — left as-is`)
     }
     return line
