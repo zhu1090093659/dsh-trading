@@ -120,15 +120,10 @@ export function createWatchlistListTool(deps: WatchlistToolDeps) {
   return defineTool({
     name: 'watchlist_list',
     description:
-      'List the user\'s watchlist exactly as displayed in the trading GUI sidebar, across all markets (crypto/us/cn/hk). '
-      + 'Rows merge the user\'s customized entries (source "custom") with each market\'s default seed rows (source "seed", '
-      + 'shown while that market has no custom edits) — the GUI shows the same rows, so this list IS what the user sees. '
-      + 'It also maps display names to symbols (e.g. 苹果 → AAPL / us, 贵州茅台 → 600519 / cn). '
-      + 'It also returns "groups" (the user\'s custom groups with id, name and member count) and "selection" (the instrument '
-      + 'currently focused in the GUI chart, or null). Group membership lives on each row as row.groups (group ids); rows without '
-      + 'groups are ungrouped. ALWAYS call this first when the user mentions any instrument by name or symbol, when you need a group '
-      + 'id for watchlist_group_assign/rename/delete, or when you need the current selection; never conclude an instrument '
-      + 'is untracked from docs or connector coverage alone. Read-only.',
+      'List the user\'s watchlist across all markets (crypto/us/cn/hk), exactly as the trading GUI sidebar shows it. Rows merge '
+      + 'customized entries (source "custom") with market seed rows (source "seed"), so this list IS what the user sees, and display names '
+      + 'map to symbols (e.g. 苹果 → AAPL / us). Returns "groups" (id, name, member count) and "selection" (chart-focused instrument or '
+      + 'null); membership is row.groups. Call it first when the user names an instrument or you need a group id.',
     parameters: {},
     output: {
       schema: { type: 'string' },
@@ -182,7 +177,7 @@ export function createWatchlistAddTool(deps: WatchlistToolDeps) {
       },
       name: {
         type: 'string',
-        description: 'Optional display name, e.g. 贵州茅台',
+        description: 'Optional display name, e.g. 贵州茅台 (Kweichow Moutai).',
       },
     },
     output: jsonOutput({
@@ -296,10 +291,10 @@ export function createWatchlistGroupCreateTool(deps: WatchlistToolDeps) {
   return defineTool({
     name: 'watchlist_group_create',
     description:
-      'Create a named custom watchlist group (a cross-market bucket for organizing the user watchlist, e.g. "港股观察" / "核心仓"). '
-      + 'Group names are unique (trimmed, 24 chars max); creating an existing name is refused. '
-      + 'The returned id is what watchlist_group_assign / watchlist_group_rename / watchlist_group_delete take — call watchlist_list first '
-      + 'to see existing groups and their member counts. The open GUI sidebar refreshes live over the SSE invalidation channel.',
+      'Create a named custom watchlist group — a cross-market bucket for organizing the user watchlist, e.g. "港股观察". Names are '
+      + 'trimmed, unique and at most 24 characters; an existing name is refused. The returned id is what watchlist_group_assign / '
+      + 'watchlist_group_rename / watchlist_group_delete take, so call watchlist_list first to see existing groups and member counts. '
+      + 'The open GUI sidebar refreshes live over the SSE channel.',
     parameters: {
       name: {
         type: 'string',
@@ -391,11 +386,10 @@ export function createWatchlistGroupDeleteTool(deps: WatchlistToolDeps) {
   return defineTool({
     name: 'watchlist_group_delete',
     description:
-      'Delete a custom watchlist group by id. Deleting a group clears its membership from every watchlist row but NEVER deletes '
-      + 'watchlist rows themselves (the instruments stay in the watchlist, only the grouping is dropped). '
-      + 'DISCIPLINE: before calling this, tell the user the group name and how many member rows it has (watchlist_list returns members), '
-      + 'and call it only after they confirm; then report the same numbers back after the call. '
-      + 'Refused when the id is unknown. The open GUI sidebar refreshes live over the SSE invalidation channel.',
+      'Delete a custom watchlist group by id. Deleting a group clears its membership on every watchlist row but NEVER deletes watchlist '
+      + 'rows — the instruments stay, only the grouping goes. DISCIPLINE: tell the user the group name and member count (watchlist_list '
+      + 'returns members) and call it only after they confirm; report the same numbers afterwards. Refused for an unknown id. The GUI '
+      + 'sidebar refreshes live over the SSE invalidation channel.',
     parameters: {
       id: {
         type: 'string',
@@ -436,11 +430,10 @@ export function createWatchlistGroupAssignTool(deps: WatchlistToolDeps) {
   return defineTool({
     name: 'watchlist_group_assign',
     description:
-      'Add or remove one watchlist instrument to/from a custom group (set member=true to add, member=false to remove). '
-      + 'The instrument must already be in the watchlist or be a market seed row; when the market has no customized rows yet the '
-      + 'target row is materialized from that market seed baseline first (result field materialized=true) — this mirrors the GUI drag '
-      + 'behavior, and no other rows are lost. Removing membership never deletes the watchlist row. '
-      + 'Unknown group ids are refused (no dangling membership). The open GUI sidebar refreshes live over the SSE invalidation channel.',
+      'Add or remove one watchlist instrument to/from a custom group (member=true adds, false removes). The instrument must already be in '
+      + 'the watchlist or be a market seed row; when the market has no customized rows the target row is materialized from its seed '
+      + 'baseline first (result field materialized=true) and no other rows are lost. Removing membership never deletes the row, and an '
+      + 'unknown group id is refused. The GUI sidebar refreshes live over the SSE invalidation channel.',
     parameters: {
       id: {
         type: 'string',
@@ -464,7 +457,7 @@ export function createWatchlistGroupAssignTool(deps: WatchlistToolDeps) {
       },
       name: {
         type: 'string',
-        description: 'Optional display name used only when the row must be materialized, e.g. 贵州茅台',
+        description: 'Optional display name used only when the row must be materialized, e.g. 贵州茅台 (Kweichow Moutai).',
       },
     },
     output: {

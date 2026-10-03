@@ -341,10 +341,12 @@ export function createGetLimitUpPoolTool(options: { fetch?: typeof globalThis.fe
   return defineTool({
     name: 'cn_get_limit_up_pool',
     description:
-      '获取 A 股当日涨停股票池、连板天梯、封单金额与题材涨停原因（同花顺数据源，需在「设置 → 交易」配置同花顺 API Key，或设环境变量 HITHINK_FINANCE_API_KEY）。',
+      'Get the A-share limit-up pool for the current trading day: consecutive-board ladder, sealed order amount and the theme reason '
+      + 'behind each limit-up (Hithink source). Requires the Hithink API key in Settings → Trading, or the HITHINK_FINANCE_API_KEY '
+      + 'environment variable.',
     parameters: {
-      page: { type: 'number', description: '页码，默认 1' },
-      size: { type: 'number', description: '每页条数，默认 50' },
+      page: { type: 'number', description: 'Page number, default 1.' },
+      size: { type: 'number', description: 'Rows per page, default 50.' },
     },
     output: {
       schema: { type: 'string' },
@@ -382,12 +384,13 @@ export function createGetAuctionStrengthTool(options: { fetch?: typeof globalThi
   return defineTool({
     name: 'cn_get_auction_strength',
     description:
-      '获取 A 股标的早盘集合竞价匹配量、未匹配金额与强弱基准（同花顺数据源，需在「设置 → 交易」配置同花顺 API Key，或设环境变量 HITHINK_FINANCE_API_KEY）。',
+      'Get one A-share symbol\'s opening call-auction matched volume, unmatched amount and strength baseline (Hithink source). Requires the '
+      + 'Hithink API key in Settings → Trading, or the HITHINK_FINANCE_API_KEY environment variable.',
     parameters: {
       symbol: {
         type: 'string',
         required: true,
-        description: 'A 股股票代码，如 600519.SH 或 600519',
+        description: 'A-share symbol, e.g. 600519.SH or 600519.',
       },
     },
     output: {

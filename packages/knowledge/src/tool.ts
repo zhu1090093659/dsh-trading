@@ -46,73 +46,74 @@ export function createKnowledgeIngestTool(store: KnowledgeCardStore, options: Kn
   return defineTool({
     name: 'knowledge_ingest',
     description:
-      '将经事实核查后的结构化知识卡片（Content Insight 产物）入库到本地知识库。'
-      + '支持自动 URL 查重（重复 URL 自动走更新且保持 ID 不变）及关联关系验证。',
+      'Ingest one fact-checked knowledge card (a Content Insight product) into the local knowledge base. '
+      + 'Duplicate source URLs are detected automatically: an existing card with the same URL is updated in place and keeps its id. '
+      + 'Related-card references are validated.',
     parameters: {
       title: {
         type: 'string',
         required: true,
-        description: '知识卡片主题（例如「高股息策略在低利率环境下的防御逻辑」）',
+        description: 'Card subject, e.g. the defensive logic of high-dividend strategies in a low-rate environment.',
       },
       summary: {
         type: 'string',
         required: true,
-        description: '2-4 条核心论点合并的一句话概述（图谱 hover 与快速导读展示）',
+        description: 'One-sentence overview merging the 2-4 core claims; shown in the graph hover and quick read.',
       },
       sourceType: {
         type: 'string',
         required: true,
-        description: '素材来源类型："bilibili"（B站）、"wechat"（微信公众号）、"manual"（手工录入）',
+        description: 'Source kind: "bilibili" | "wechat" | "manual".',
       },
       sourceUrl: {
         type: 'string',
         required: true,
-        description: '素材链接或去重标识（例如 B 站 BV 链接、公众号文章链接）',
+        description: 'Source link or dedup key, e.g. a Bilibili BV link or a WeChat article link.',
       },
       sourceAuthor: {
         type: 'string',
         required: true,
-        description: '来源作者/UP主/公众号名称',
+        description: 'Source author, channel or account name.',
       },
       publishedAt: {
         type: 'string',
-        description: '素材发布日期（ISO 格式如 2026-08-30，可选）',
+        description: 'Optional source publish date, ISO format such as 2026-08-30.',
       },
       credibility: {
         type: 'string',
         required: true,
-        description: '依据事实核查整体定级："high"（事实严密证据充分）、"medium"（观点可取但部分有出入）、"low"（存在重大未核实或明显漏洞）',
+        description: 'Overall fact-check grade: "high" | "medium" | "low".',
       },
       coreClaimsJson: {
         type: 'string',
         required: true,
-        description: 'JSON 字符串数组，核心论点列表（保留原作者推理链条），例如 \'["论点1", "论点2"]\'',
+        description: 'JSON string array of core claims, preserving the author\'s reasoning chain, e.g. \'["claim1", "claim2"]\'.',
       },
       factCheckJson: {
         type: 'string',
         required: true,
-        description: 'JSON 对象，事实核查三档分类，例如 \'{"verified":["证实1"],"discrepancies":["出入1"],"unverifiable":[]}\'',
+        description: 'JSON object with the three fact-check buckets, e.g. \'{"verified":["..."],"discrepancies":["..."],"unverifiable":[]}\'.',
       },
       takeawaysJson: {
         type: 'string',
-        description: '可选 JSON 字符串数组，可复用的分析框架与经验总结，例如 \'["经验1"]\'',
+        description: 'Optional JSON string array of reusable analysis frameworks and lessons.',
       },
       boundariesJson: {
         type: 'string',
-        description: '可选 JSON 字符串数组，适用边界、失效情景与避坑指南，例如 \'["边界1"]\'',
+        description: 'Optional JSON string array of applicability boundaries, invalidation cases and pitfalls.',
       },
       tagsJson: {
         type: 'string',
         required: true,
-        description: 'JSON 字符串数组，受控主题标签列表，例如 \'["宏观", "高股息", "红利策略"]\'',
+        description: 'JSON string array of controlled topic tags, e.g. \'["宏观", "高股息", "红利策略"]\'.',
       },
       tickersJson: {
         type: 'string',
-        description: '可选 JSON 字符串数组，关联标的代码列表，例如 \'["BTCUSDT", "600519.SH"]\'',
+        description: 'Optional JSON string array of related instrument codes, e.g. \'["BTCUSDT", "600519.SH"]\'.',
       },
       relatedJson: {
         type: 'string',
-        description: '可选 JSON 字符串数组，显式关联的其他已入库卡片 ID 列表，例如 \'["kc_01j...", "kc_01k..."]\'',
+        description: 'Optional JSON string array of related card ids already in the library, e.g. \'["kc_01j...", "kc_01k..."]\'.',
       },
     },
     output: {
@@ -228,43 +229,43 @@ export function createKnowledgeSearchTool(store: KnowledgeCardStore) {
   return defineTool({
     name: 'knowledge_search',
     description:
-      '检索本地知识库中的知识卡片。'
-      + '有关键词时按字段命中相关度排序（标签 > 标题 > 核心论点 > 摘要/作者），无关键词时按更新时间倒序；'
-      + '支持按主体（cluster，配合 knowledge_graph 两级检索）、作者、来源类型、可信度多维过滤。'
-      + 'detail="full" 时同时返回核心论点、事实核查与可复用经验全文（上限 20 张）。',
+      'Search knowledge cards in the local library. With a keyword the results rank by field hit weight (tags > title > core claims > '
+      + 'summary/author); without one they come newest-updated first. Filters: cluster (the graph clustering key, pair with '
+      + 'knowledge_graph for two-stage retrieval), author, source kind and credibility. detail="full" also returns core claims, the '
+      + 'fact-check buckets and reusable lessons (capped at 20 cards).',
     parameters: {
       query: {
         type: 'string',
-        description: '搜索关键词（在标题、摘要、核心论点、标签中模糊匹配）',
+        description: 'Search keyword, fuzzy-matched against title, summary, core claims and tags.',
       },
       tags: {
         type: 'string',
-        description: '逗号分隔的标签过滤（例如 "宏观,高股息"，匹配其中任意一个）',
+        description: 'Comma-separated tag filter, e.g. "宏观,高股息"; matches any one of them.',
       },
       cluster: {
         type: 'string',
-        description: '按主体精确过滤（主体 = 图谱聚类键 = 卡片首个标签）。两级检索第二级：先 knowledge_graph 看主体分布，再用本参数钻取该主体下的卡片',
+        description: 'Exact subject filter (subject = graph clustering key = the card first tag). Second stage of a two-stage retrieval: call knowledge_graph for the subject distribution, then drill in here.',
       },
       author: {
         type: 'string',
-        description: '按作者/UP主/公众号过滤（子串匹配）',
+        description: 'Author/channel filter (substring match).',
       },
       sourceType: {
         type: 'string',
-        description: '按来源类型过滤："bilibili" | "wechat" | "manual"',
+        description: 'Source kind filter: "bilibili" | "wechat" | "manual".',
       },
       credibility: {
         type: 'string',
-        description: '按可信度过滤："high" | "medium" | "low"',
+        description: 'Credibility filter: "high" | "medium" | "low".',
       },
       limit: {
         type: 'number',
-        description: '最大返回数量（默认 20）',
+        description: 'Maximum results to return (default 20).',
         default: 20,
       },
       detail: {
         type: 'string',
-        description: '返回详略："summary"（默认，摘要级）| "full"（附核心论点/事实核查/经验/边界全文）',
+        description: 'Detail level: "summary" (default) | "full" (adds core claims, fact check, lessons and boundaries).',
         default: 'summary',
       },
     },
@@ -372,13 +373,13 @@ export function createKnowledgeGetTool(store: KnowledgeCardStore) {
   return defineTool({
     name: 'knowledge_get',
     description:
-      '按 id 读取单张知识卡片的完整内容（核心论点、事实核查三桶、可复用经验、适用边界）。'
-      + 'id 可来自 knowledge_search 结果或历史分析中的引用标注。',
+      'Read one knowledge card in full by id: core claims, the three fact-check buckets, reusable lessons and applicability boundaries. '
+      + 'Ids come from knowledge_search results or citation markers in earlier analyses.',
     parameters: {
       id: {
         type: 'string',
         required: true,
-        description: '知识卡片 id（kc_...）',
+        description: 'Knowledge card id (kc_...).',
       },
     },
     output: {
@@ -416,18 +417,18 @@ export function createKnowledgeDeleteTool(store: KnowledgeCardStore, options: Kn
   return defineTool({
     name: 'knowledge_delete',
     description:
-      '从本地知识库删除（下架）指定知识卡片。用于知识点/经验被事实证伪、来源撤稿或卡片重复等场景。'
-      + '删除时自动清理其他卡片指向本卡片的 related 引用，并在输出中回显被删卡片的标题与核心论点留痕；'
-      + '证伪结论本身应另行记入交易日志或对话沉淀。',
+      'Delete (retire) one knowledge card from the local library, for a claim disproved by evidence, a retracted source or a duplicate '
+      + 'card. Other cards\' related references to it are cleaned up automatically, and the deleted title and core claims are echoed as a '
+      + 'trail. Record the disproof itself separately in the trading journal or the conversation.',
     parameters: {
       id: {
         type: 'string',
         required: true,
-        description: '要删除的知识卡片 id（kc_...）。不确定 id 时先用 knowledge_search 查询确认，不要凭模糊记忆删除。',
+        description: 'Knowledge card id to delete (kc_...). Confirm the id with knowledge_search first; never delete from vague memory.',
       },
       reason: {
         type: 'string',
-        description: '删除原因（如「核心论点被 XX 数据证伪」「来源撤稿」），回显在结果中供留痕',
+        description: 'Deletion reason, echoed in the result as a trail.',
       },
     },
     output: {
