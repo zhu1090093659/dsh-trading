@@ -137,13 +137,14 @@ dsh-trading --profile trading-web        # 缺省监听 8888 端口
 DSH_HOME=~/.dsh-trading dsh --profile trading-web --port 8888
 ```
 
-内置三个 profile，按用途选择：
+内置四个 profile，按用途选择（`trading-bot` 属自动交易平面，源码在私有卫星仓）：
 
 | profile | 界面 | 组合 |
 |---|---|---|
-| `trading-web` | 浏览器 GUI（推荐） | dsh-base + dsh-web-app + base + crypto + us + cn + hk + futures |
+| `trading-web` | 浏览器 GUI（推荐） | dsh-base + dsh-web-app + base + gui + bot-api + crypto + us + cn + hk + futures + global |
 | `trading-dev` | 无头，单市场 | dsh-base + dsh-headless + base + crypto |
 | `trading-all` | 无头，全市场 | dsh-base + dsh-headless + base + all + cn + crypto + hk + us |
+| `trading-bot` | bot 面：Agent 宿主 + `/dshtrading/api`，仅回环 | dsh-base + base + bot + bot-api + crypto（源码见私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)，下文详述） |
 
 打开终端打印的 URL：左边自选，中间图表，右边是你的 Agent。新建会话 → 选市场预设 → 先问它「你看到了什么」。
 

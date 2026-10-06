@@ -25,9 +25,10 @@ DSH_HOME=~/.dsh-trading dsh --profile trading-web --port 8888
 
 | profile | 界面 | 组合 |
 |---|---|---|
-| `trading-web` | 浏览器 GUI（推荐，缺省 8888 端口） | dsh-base + dsh-web-app + base + crypto + us + cn + hk + futures |
+| `trading-web` | 浏览器 GUI（推荐，缺省 8888 端口） | dsh-base + dsh-web-app + base + gui + bot-api + crypto + us + cn + hk + futures + global |
 | `trading-dev` | 无头，单市场 | dsh-base + dsh-headless + base + crypto |
 | `trading-all` | 无头，全市场 | dsh-base + dsh-headless + base + all + cn + crypto + hk + us |
+| `trading-bot` | bot 面：Agent 宿主 + `/dshtrading/api`，仅回环 | dsh-base + base + bot + bot-api + crypto（源码在卫星仓） |
 
 常用变体：
 
@@ -36,7 +37,23 @@ dsh-trading --profile trading-web --no-open             # 8888，不自动开浏
 dsh-trading --profile trading-web --port 3090           # 覆盖缺省端口
 dsh-trading --profile trading-dev                       # 无头会话，仅 crypto
 dsh-trading --profile trading-all                       # 无头全市场
+dsh-trading --profile trading-bot --port 8891           # bot 宿主，仅回环
 ```
+
+### trading-bot（自动交易平面）
+
+bot 面是 `dsh` surface：Agent 宿主 + `/dshtrading/api`，无浏览器壳，`--host` 锁回环
+（`0.0.0.0` 显式拒绝，网络暴露归 edge 网关）。驾驶舱（Web UI）、配对与 A0 带外通道由
+edge 提供，启动命令、配对流程与运维手册都在私有卫星仓
+[dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)
+（`docs/ops/ops-runbook.md`「驾驶舱端到端」与 `deploy/README.md`）。本仓只保留
+`@dshtrading/bot-api`（公开 GUI 的服务端半）与设计文档
+[bot-and-auto-trading.md](../design/bot-and-auto-trading.md)。
+
+注意：本地 `~/.dsh-trading/profiles/trading-bot` 的 `file:` 依赖指向主仓
+`packages/bot`，该包已随 2026-10-03 拆分迁往卫星仓（现为死路径）；实例仍从
+node_modules 的自包含副本启动，**从源码刷新此 profile 必须改走卫星仓**，主仓的
+refresh 脚本不覆盖它。
 
 ## 本地开发
 

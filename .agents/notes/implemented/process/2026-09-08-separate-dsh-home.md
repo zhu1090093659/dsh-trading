@@ -133,7 +133,7 @@ Status: implemented
 
 **修法**：沿用同一策略 —— 只有不含 `-trading` 的继承值会被忽略，并打印一行告警后回落到 `~/.dsh-trading`；未设 DSH_HOME 时行为不变（回落）。已验证 `sh -n` 通过，并用 `case` 模拟确认「继承宿主 home ⇒ 忽略并回落」这一分支生效。
 
-**注意**：仓库里的是**源**；用户主目录下 `~/.local/bin/dsh-trading` 那份**仍是旧版**，需要重新 `cp` 安装才生效（我没有改你的主目录）。
+**注意**：仓库里的是**源**；用户主目录下 `~/.local/bin/dsh-trading` 那份需要重新 `cp` 安装才生效。**2026-10-05 已重装并实测**：这份旧副本一直没更新，导致当天 `trading-bot` 启动直接踩坑——继承 `~/.dsh` 后去宿主 home 找 profile，报 `profile "trading-bot" does not exist`；重装后继承宿主 home 时告警并回落 `~/.dsh-trading`（`--dump-config` 实证）。
 
 ### 2. 包级默认值（**未修，需要你决定**）
 

@@ -137,13 +137,14 @@ dsh-trading --profile trading-web        # serves on port 8888 by default
 DSH_HOME=~/.dsh-trading dsh --profile trading-web --port 8888
 ```
 
-Three profiles ship for different jobs:
+Profiles ship for different jobs:
 
 | Profile | Surface | Bundles |
 |---|---|---|
-| `trading-web` | Browser GUI (recommended) | dsh-base + dsh-web-app + base + crypto + us + cn + hk + futures |
+| `trading-web` | Browser GUI (recommended) | dsh-base + dsh-web-app + base + gui + bot-api + crypto + us + cn + hk + futures + global |
 | `trading-dev` | Headless, single market | dsh-base + dsh-headless + base + crypto |
 | `trading-all` | Headless, all markets | dsh-base + dsh-headless + base + all + cn + crypto + hk + us |
+| `trading-bot` | Bot surface: agent host + `/dshtrading/api`, loopback-only | dsh-base + base + bot + bot-api + crypto — source in the private [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot) repo, see below |
 
 Open the printed URL: watchlist left, chart center, your agent right. New conversation → pick a market preset → first ask it what it sees.
 

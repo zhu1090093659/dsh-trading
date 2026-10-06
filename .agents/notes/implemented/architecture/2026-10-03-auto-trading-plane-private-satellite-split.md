@@ -26,6 +26,7 @@ Status: implemented
 - 耦合点变成 **vendor tgz**：主仓公共包一改，卫星仓要重新打包 tgz。已记录在卫星仓 README。
 - **公开历史仍含自动交易代码**（方案 b 的既定代价，owner 已知悉并选择接受）。
 - 门禁随之分工：`plane:check` / `bot-closure:check` / `contract-id:check` / `test:ios-evidence` / `e2e:smoke` 随实现迁往卫星仓，在主仓 `ci-wiring-check.mjs` 的 `INTENTIONALLY_UNWIRED` 里逐条记明原因——**豁免必须带原因，否则仍算漏接线**。
+- **本机 `~/.dsh-trading/profiles/trading-bot` 是拆分前的安装快照**（2026-10-05 核实）：manifest 的 `file:` 依赖仍指向主仓 `packages/bot`（已随本拆分移除，现为死路径）；实例靠 node_modules 里的自包含副本照常启动（`dsh-trading --profile trading-bot --port 8891` 实测可用，2 条非致命 warning：`dsh-trading-role-presets` 等 agentPresets 服务、`web-search-exa` 导入失败）。**从源码刷新此 profile 必须改走卫星仓**，主仓 refresh 脚本不覆盖它；docs/ops/running.md 的 profile 表已按四 profile + 卫星仓指向更新（2026-10-05）。
 
 ## 验证
 
