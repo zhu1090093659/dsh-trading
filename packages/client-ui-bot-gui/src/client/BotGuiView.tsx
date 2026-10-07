@@ -16,8 +16,10 @@ import {
   PositionsAndOrders,
   SystemNotices,
   UnknownCards,
+  detectRunMode,
   freshnessText,
   type CockpitCard,
+  type RunMode,
 } from './blocks.tsx'
 import styles from './cockpit.module.css'
 
@@ -176,6 +178,9 @@ export function BotGuiView({ t }: BotGuiViewProps): JSX.Element {
     [executeCommand],
   )
 
+  // 运行档位：由本次已取的卡片（通道字段）推导，与服务端同源，不另开事实源。
+  const runMode: RunMode = detectRunMode(cards)
+
   if (bots.length === 0) {
     return (
       <main className={styles.page}>
@@ -210,6 +215,17 @@ export function BotGuiView({ t }: BotGuiViewProps): JSX.Element {
             </div>
           </div>
           <div className={styles.headerActions}>
+            <span
+              className={
+                styles.runModeBadge +
+                ' ' +
+                (runMode === 'paper' ? styles.runModePaper : runMode === 'dry-run' ? styles.runModeDryRun : styles.runModeUnknown)
+              }
+              data-run-mode={runMode}
+              title={t('bot.runMode.' + runMode)}
+            >
+              {t('bot.runMode.label')}: {t('bot.runMode.' + runMode)}
+            </span>
             <button
               type="button"
               className={styles.button}

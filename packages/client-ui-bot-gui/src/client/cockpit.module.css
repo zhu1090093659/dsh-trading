@@ -69,6 +69,49 @@
   gap: 0.5rem;
 }
 
+.runModeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  border: 1px solid var(--dsw-futu-border-default, #ccc);
+  white-space: nowrap;
+}
+
+.runModePaper {
+  color: var(--dsw-futu-success-text, #1b7f4d);
+  background: var(--dsw-futu-success-bg, #e6f6ee);
+  border-color: var(--dsw-futu-success-border, #9ed8ba);
+}
+
+.runModeDryRun {
+  color: var(--dsw-futu-text-muted, #666);
+  background: var(--dsw-futu-bg-hover, #f0f0f0);
+  border-color: var(--dsw-futu-border-default, #ccc);
+}
+
+.runModeUnknown {
+  color: var(--dsw-futu-text-muted, #888);
+  background: transparent;
+  border-style: dashed;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.pagerStatus {
+  font-size: 0.8rem;
+  color: var(--dsw-futu-text-muted, #888);
+  font-variant-numeric: tabular-nums;
+}
+
 .subtitle {
   margin: 0;
   font-size: 0.85rem;

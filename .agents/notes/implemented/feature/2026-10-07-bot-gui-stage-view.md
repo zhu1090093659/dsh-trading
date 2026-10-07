@@ -7,11 +7,13 @@
 - **Contract**: Inlines closed enums (`CARD_TYPES`, `FIELD_KINDS`, `ACTION_KINDS`, `CONFIRM_LEVELS`, `CARD_LIMITS`) matching satellite repo `packages/contract`.
 - **Security & Confirmation**: High-risk actions (`pause`, `resume`, `kill`, `flatten`, `grant-control`, `revoke-device`) require strong confirmation via `ACTION_CONFIRM` modal dialog prior to forwarding.
 - **Multi-bot**: Supports switcher selector dropdown loaded from `/dshtrading/api/bot-gui/status`.
+- **Run-mode badge**: The header shows the desk's current dispatch mode derived from the cards themselves (`detectRunMode` in `blocks.tsx`): the latest `trigger-trace` card's `channel`/`mode` field decides — `demo`/`paper` renders "Paper 模拟盘", `dry-run`/`shadow` renders "dry-run 只记录", no channel evidence renders "未知". No second fact source: the mode is whatever the server's card protocol already carries (satellite `card-projector` writes `trigger.dispatch.*` channel into fields). A live "switch to paper" control would need a new server-side action kind (contract change) and does not exist client-side.
+- **Decision feed pagination**: `DecisionFeed` (decision + trigger-trace cards, newest first) renders at most `DECISION_PAGE_SIZE = 5` records per page with a prev/next pager (`bot.page.*` locale keys); the page clamps when the record count shrinks, and the pager is hidden for a single page.
 - **Profile Wiring**: Configured in `~/.dsh-trading/profiles/trading-web/cordis.patch.yml` (and `package.json`) with multi-bot credentials, keeping secrets out of Git.
 
 ## Verification Evidence
 - `pnpm build`: clean build across all workspace packages.
-- `pnpm --filter @dshtrading/client-ui-bot-gui test`: 4 test suites, 15 tests passing.
+- `pnpm --filter @dshtrading/client-ui-bot-gui test`: 5 test suites, 24 tests passing (includes `decision-feed.test.tsx`: 5-per-page pagination, page clamp, mixed-type counting, run-mode derivation).
 - `node scripts/i18n-audit.mjs --check`: passed cleanly.
 - `node scripts/test-audit.mjs`: passed cleanly.
 - `node scripts/typecheck-gate.mjs`: passed cleanly.

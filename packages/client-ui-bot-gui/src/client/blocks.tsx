@@ -4,8 +4,45 @@
  * 零第三方依赖。
  */
 // Pure React block components
+import { useMemo, useState } from 'react'
 import { CARD_TYPES, type Card, type CardAction, type CardField } from './contract.ts'
 import styles from './cockpit.module.css'
+
+/** 决策记录每页最多展示的条数（owner 定：5 条）。 */
+export const DECISION_PAGE_SIZE = 5
+
+/** 机器人当前运行档位（由卡片协议的通道字段推导，客户端不发明数据）。 */
+export type RunMode = 'paper' | 'dry-run' | 'unknown'
+
+/**
+ * 从卡片推导运行档位：取**最新**的 trigger-trace 卡（freshnessMs 最小，平局取数组靠后者 =
+ * journal 更靠尾部 = 更新），读它的通道字段。
+ * - %%'demo'%% / %%'paper'%% → paper（模拟盘真实派发）；
+ * - %%'dry-run'%% / %%'shadow'%% → dry-run（只记录意图）；
+ * - 没有任何通道证据 → unknown（不猜）。
+ *
+ * 为什么不另开接口：档位已经由服务端按卡片协议下发（投影器把 %%trigger.dispatch.*%% 的
+ * %%channel%%/%%mode%% 写进字段），客户端照字段渲染即与服务端同源，不发明第二套事实。
+ */
+export function detectRunMode(cards: readonly CockpitCard[]): RunMode {
+  let latest: { readonly freshness: number; readonly paper: boolean } | undefined
+  for (let index = 0; index < cards.length; index += 1) {
+    const card = cards[index]
+    if (card === undefined || card.cardType !== 'trigger-trace') continue
+    const channel = card.fields.find((f) => f.key === 'channel' || f.key === 'mode')
+    if (channel === undefined) continue
+    const value = String(channel.value)
+    const paper = value === 'demo' || value === 'paper'
+    const dryRun = value === 'dry-run' || value === 'shadow'
+    if (!paper && !dryRun) continue
+    const freshness = card.freshnessMs ?? Number.MAX_SAFE_INTEGER
+    if (latest === undefined || freshness <= latest.freshness) {
+      latest = { freshness, paper }
+    }
+  }
+  if (latest === undefined) return 'unknown'
+  return latest.paper ? 'paper' : 'dry-run'
+}
 
 export interface CockpitCard extends Card {
   readonly operable?: boolean | undefined
@@ -109,10 +146,49 @@ export function DeskHome({ cards, onAction, disabled, t }: { readonly cards: rea
 
 export function DecisionFeed({ cards, onAction, disabled, t }: { readonly cards: readonly CockpitCard[] } & BlockRenderProps): JSX.Element {
   const feed = cards.filter((c) => c.cardType === 'decision' || c.cardType === 'trigger-trace')
+  // 最新在前：服务端按 journal 顺序（旧→新）下发，反转成新→旧再切页，第 1 页即最新记录。
+  const newestFirst = useMemo(() => [...feed].reverse(), [cards, feed.length])
+  const totalPages = Math.max(1, Math.ceil(newestFirst.length / DECISION_PAGE_SIZE))
+  // 渲染期收敛页码：数据变少时 current 自动回缩，不靠 effect 回写。
+  const [requestedPage, setPage] = useState(1)
+  const current = Math.min(requestedPage, totalPages)
+  const start = (current - 1) * DECISION_PAGE_SIZE
+  const visible = newestFirst.slice(start, start + DECISION_PAGE_SIZE)
   return (
     <section className={styles.section} aria-label="decision-feed">
       <h2 className={styles.sectionTitle}>{t('bot.decisionFeed')}</h2>
-      {feed.length === 0 ? <p className={styles.note}>{t('bot.decisionEmpty')}</p> : <ul className={styles.list}>{feed.map((card) => <CardView key={card.cardId} card={card} onAction={onAction} disabled={disabled} t={t} />)}</ul>}
+      {feed.length === 0 ? (
+        <p className={styles.note}>{t('bot.decisionEmpty')}</p>
+      ) : (
+        <>
+          <ul className={styles.list}>
+            {visible.map((card) => (
+              <CardView key={card.cardId} card={card} onAction={onAction} disabled={disabled} t={t} />
+            ))}
+          </ul>
+          {totalPages > 1 ? (
+            <nav className={styles.pager} aria-label="decision-feed-pager">
+              <button
+                type="button"
+                className={styles.button}
+                disabled={current <= 1}
+                onClick={() => setPage(Math.max(1, current - 1))}
+              >
+                {t('bot.page.prev')}
+              </button>
+              <span className={styles.pagerStatus}>{t('bot.page.status', { page: current, total: totalPages })}</span>
+              <button
+                type="button"
+                className={styles.button}
+                disabled={current >= totalPages}
+                onClick={() => setPage(Math.min(totalPages, current + 1))}
+              >
+                {t('bot.page.next')}
+              </button>
+            </nav>
+          ) : null}
+        </>
+      )}
     </section>
   )
 }
