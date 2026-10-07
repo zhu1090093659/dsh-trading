@@ -43,7 +43,14 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 - `desktop/tests/runtime.test.mjs`（node --test，7 例）覆盖路径解析（打包/未打包布局）、DSH_HOME 查找顺序、seed/reseed/leave 判定与补丁层保留、token URL 行解析、SHASUMS 解析。
 - 实机验证（2026-09-03，隔离 `DSH_HOME`）：dev 模式启动播种 → 宿主拉起 → token URL 加载 → trading GUI 完整渲染（行情/策略/知识库/自选/K线指标，截图多模态验证）；宿主 stdout token 行、移交检查、错误页与日志文件按当前实现工作。
 
-## 附着模式决策（P4 步骤 5，2026-10-01 落地决策层）
+> **【重大决策推翻声明（2026-10-07）】**
+> 本文后续章节记录的「桌面壳附着模式（Attach Mode）」已被全面推翻并物理移除。
+> - **关联任务卡**：`6e0eac84-1d2d-43fc-ac15-4b7813423f87`（移除桌面壳附着模式；父卡 `1718e406-bd8c-4aa0-96e3-7e74cea2f2a0`）。
+> - **替代方案**：机器人观测与控制面全面收拢至交易终端内，由 `@dshtrading/client-ui-bot-gui` 插件承载（交易终端中台「机器人」Tab），桌面壳回归单一本地终端形态。
+> - **推翻背景与裁决**：2026-10-07 发生实测事故，桌面壳双入口模式（本地 vs 附着）因环境配置误切，导致 Electron 窗口整窗被替换为附着配对页，原交易终端完全不可用，严重破坏交易操作连续性与安全预期。Owner 裁决彻底否决桌面壳整窗附着形态。
+> - **现状事实**：桌面壳附着分支代码（`desktop/src/attach-mode.cjs`、`desktop/src/device-credential.cjs`、`desktop/scripts/attach-drill.mjs`、`desktop/scripts/attach-electron-drill.mjs`、`desktop/tests/attach-mode.test.mjs`）与 `desktop/src/main.cjs` 附着启动分支均已彻底删除，桌面壳回归单一自启本地 host 形态。下文相关附着模式讨论仅保留作为历史演进过程记录。
+
+## 附着模式决策（P4 步骤 5，2026-10-01 落地决策层，【已于 2026-10-07 推翻移除】）
 
 卡片要求：配了 bot 的机器默认**不再起本地 host**，把现有 handoff 扩到远端 bot URL；没配 bot 时保持现状。
 
