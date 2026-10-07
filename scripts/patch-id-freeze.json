@@ -15,6 +15,10 @@
       "owner": "bundle:bot-api",
       "name": "@dshtrading/bot-api"
     },
+    "dsh-trading-client-ui-bot-gui": {
+      "owner": "profile:trading",
+      "name": "@dshtrading/client-ui-bot-gui"
+    },
     "dsh-trading-client-ui-indicators": {
       "owner": "bundle:gui",
       "name": "@dshtrading/client-ui-indicators"

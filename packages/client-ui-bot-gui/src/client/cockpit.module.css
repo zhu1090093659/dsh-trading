@@ -1,0 +1,243 @@
+/**
+ * @dshtrading/client-ui-bot-gui 样式定义
+ * 复用宿主设计令牌，支持亮暗色与自适应中栏。
+ */
+
+.page {
+  font-family: var(--dsw-futu-font-sans, system-ui, -apple-system, "Segoe UI", sans-serif);
+  line-height: 1.5;
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  color: var(--dsw-futu-text-primary, #1a1a1a);
+  background: var(--dsw-futu-bg-base, transparent);
+  box-sizing: border-box;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--dsw-futu-border-subtle, #e5e5e5);
+}
+
+.headerTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.botSelector {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.select {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--dsw-futu-border-default, #ddd);
+  border-radius: 4px;
+  background: var(--dsw-futu-bg-surface, #fff);
+  color: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--dsw-futu-text-muted, #888);
+}
+
+.section {
+  margin-top: 1rem;
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+  color: var(--dsw-futu-text-primary, #1a1a1a);
+}
+
+.note {
+  color: var(--dsw-futu-text-muted, #777);
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+}
+
+.error {
+  color: var(--dsw-futu-danger-text, #d32f2f);
+  background: var(--dsw-futu-danger-bg, #fdecea);
+  border-left: 3px solid var(--dsw-futu-danger-border, #d32f2f);
+  padding: 0.5rem 0.75rem;
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+  border-radius: 0 4px 4px 0;
+}
+
+.controlSection {
+  background: var(--dsw-futu-bg-surface, #fafafa);
+  border: 1px solid var(--dsw-futu-border-subtle, #e0e0e0);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.controlActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.button {
+  background: var(--dsw-futu-bg-surface, #f6f6f6);
+  border: 1px solid var(--dsw-futu-border-default, #ccc);
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+  color: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--dsw-futu-bg-hover, #eee);
+  border-color: var(--dsw-futu-border-hover, #bbb);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.buttonControl {
+  border-color: var(--dsw-futu-warning-border, #d08a00);
+  font-weight: 500;
+}
+
+.buttonControl:hover:not(:disabled) {
+  background: var(--dsw-futu-warning-bg, #fff8e1);
+  border-color: var(--dsw-futu-warning-text, #b76e00);
+}
+
+.buttonDanger {
+  color: var(--dsw-futu-danger-text, #d32f2f);
+  border-color: var(--dsw-futu-danger-border, #d32f2f);
+}
+
+.buttonDanger:hover:not(:disabled) {
+  background: var(--dsw-futu-danger-bg, #fdecea);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.card {
+  border: 1px solid var(--dsw-futu-border-subtle, #e5e5e5);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background: var(--dsw-futu-bg-surface, #fff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.cardInoperable {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.cardMeta {
+  color: var(--dsw-futu-text-muted, #888);
+  font-size: 0.8rem;
+}
+
+.cardBody {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.warning {
+  color: var(--dsw-futu-warning-text, #b76e00);
+  font-size: 0.8rem;
+  margin: 0.35rem 0 0;
+}
+
+.fields {
+  list-style: none;
+  padding: 0;
+  margin: 0.35rem 0 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 0.25rem 1rem;
+}
+
+.fieldRow {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.fieldLabel {
+  color: var(--dsw-futu-text-muted, #888);
+  min-width: 6.5rem;
+  flex-shrink: 0;
+}
+
+.fieldValue {
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--dsw-futu-border-subtle, #eee);
+}
+
+.unconfigured {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--dsw-futu-text-muted, #888);
+}
+
+.unconfigured h2 {
+  font-size: 1.25rem;
+  margin: 0 0 0.5rem;
+  color: var(--dsw-futu-text-primary, #333);
+}

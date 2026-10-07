@@ -503,6 +503,7 @@ export type MarketLocaleKey =
   | 'stage.strategy'
   | 'stage.knowledge'
   | 'stage.special'
+  | 'stage.bot'
   | 'stage.flash'
   | 'stage.macro'
   | 'files.open'

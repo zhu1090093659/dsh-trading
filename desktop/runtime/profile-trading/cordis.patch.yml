@@ -9,3 +9,5 @@
 - insert:
     - id: dsh-trading-client-ui-special-indicators
       name: '@dshtrading/client-ui-special-indicators'
+    - id: dsh-trading-client-ui-bot-gui
+      name: '@dshtrading/client-ui-bot-gui'

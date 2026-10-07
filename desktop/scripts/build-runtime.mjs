@@ -66,6 +66,7 @@ const DIRECT_TRADING_PACKAGES = [
  */
 const PRIVATE_VENDOR_PACKAGES = new Set([
   '@dshtrading/client-ui-special-indicators',
+  '@dshtrading/client-ui-bot-gui',
 ]);
 /**
  * 卫星仓拥有的包（自动交易平面）：源码在私有仓 dsh-trading-bot，不随主仓发布。

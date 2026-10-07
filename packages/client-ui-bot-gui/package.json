@@ -1,0 +1,64 @@
+{
+  "name": "@dshtrading/client-ui-bot-gui",
+  "description": "Trading bot GUI stage view plugin for dsh-trading (LOCAL ONLY, never published): registers the 中栏「机器人」tab via tradingStageViews. Node half proxies /v1/cards and /v1/commands to multiple bot edges with credential authentication and x-dsht-caps action support.",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./locales": {
+      "types": "./lib/client/locales.d.ts",
+      "default": "./lib/client/locales.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "UNLICENSED",
+  "scripts": {
+    "bundle": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "build": "tsdown && tsdown --config tsdown.client.config.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.0-rc.2",
+    "@deepseek-ai/schemastery": ">=3.18.0",
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.7",
+    "lightningcss": "^1.0.0",
+    "react": "^18.2.0",
+    "jsdom": "^30.0.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.5.0",
+    "vitest": "^3.0.0"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  }
+}
