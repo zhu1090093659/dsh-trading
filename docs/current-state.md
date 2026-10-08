@@ -11,7 +11,7 @@
 
 | 项 | 证据 / 复现 |
 |---|---|
-| 仓库门禁 | pnpm gates:all ⇒ **16 通过 / 0 失败**（含 build、-r test、覆盖率、typecheck、e2e:smoke 等）|
+| 仓库门禁 | pnpm gates:all ⇒ **13 通过 / 1 失败**（2026-10-08 现场复跑，14 条：build、-r test、覆盖率、typecheck、docs-link…）；唯一失败项 test:audit 的根因是 packages/client-ui-trading/test/kdas-menu.test.ts 从未入基线（**HEAD 即红，非本轮引入**，见看板卡 `fe6a417a`）|
 | P5 第 1 档 shadow | 10 分钟真实行情验收入册（消息 4864 / 坏帧 0 / 全程 aligned / 从未 halt / 退出码 0）；复现 node scripts/e2e-smoke.mjs --with-network |
 | **P5 第 2 档 paper（OKX）** | 带真实 demo 凭据：Test Files 8 passed / **Tests 94 passed / 0 skipped**；GET balance 1145ms、GET positions 328ms（均带 x-simulated-trading）。记录见 docs/ops/ops-runbook.md「第 2 档执行记录」|
 | 进程装配 | packages/tradectl/src/desk-process.ts：环路 + 事件泵 + **dry-run 派发**（无下单路径）+ 积压告警入审计；演练 drill/desk-process-shadow.ts 退出码即断言 |
@@ -26,6 +26,7 @@
 | 部署缺口修复 | bot 单元独立 home（StateDirectory=dsh-trading-bot）+ 核心单元显式 `DSH_TRADING_AUTHORITY_DIR`；复现 `node scripts/systemd-units-check.mjs`（全绿）|
 | 驾驶舱补完 | 12 封闭卡片类型全渲染（补 mandate/journal/system 三类）、字段排版、卡片动作接线、设备配对 + Bearer 令牌；截图 `.local/acceptance/cockpit-2026-10-02/`（不入库，本机）；复现 `cd packages/cockpit && npx vitest run`（23 例）|
 | 两形态对照 | 配了 bot ⇒ 纯客户端：`node desktop/scripts/attach-electron-drill.mjs`（窗口加载远端 bot、本地 host 零命中，2/2）；没配 bot ⇒ 本地 host 保持现状：`node desktop/scripts/attach-drill.mjs`（6/6 含回滚与坏配置）；不混显判据：contract 55 例（source-guard 跨源拒绝）|
+| 加密永续与 TradFi 永续（Tier 1，只读） | 形态轴 `form`（spot/perp）契约在 `@dshtrading/api`（唯一判据 `instrumentFormOf` / `SWAP_SYMBOL_SUFFIX`）；Binance/OKX/Bybit 名册汇入永续与 TradFi 元数据、行情按 `-SWAP` 分流（CCXT 显式拒绝）；检索面 `instruments_search type=` 与 `/symbols` wire 透传 form/assetClass。OKX 名册 1644（1144 spot + 500 perp）真实网络复核、`SPX`(迷因币 SPX6900) vs `US500` 反例零错标；**Binance 451 / Bybit 403 两处真值 blocked**（见下）。设计与卡拆分见 docs/roadmap/crypto-perp-and-tradfi.md |
 
 ## 必须知道的 fail-closed 不变量（改代码前先读）
 
@@ -44,6 +45,10 @@
 - **带外退出演练**：卡片硬要求人在环。
 - **推送 main**：需明确授权（本机 main 领先 origin 且从未推送）。
 - 已知缺口（见看板卡 cf869789）：~~edge kill 的 fail-open~~（**已修 2026-10-02**）、~~三 uid 下宿主 home 冲突~~（**已修**）、~~三个单元未带 DSH_TRADING_AUTHORITY_DIR~~（**核心单元已带**；人建平面后生效）、~~驾驶舱功能/视觉未打磨~~（**功能补完**：12 类型全渲染 + 配对鉴权；视觉仍骨架级）、~~两形态对照验收未做~~（**已做**，见上表）、L0 下单路径未接线（**结构上尚不存在**：openRiskWithinMandate 与 createRiskGate 的无调用点是当前正确状态，接线点 = 将来的 L0 派发器与 safe boot 生产装配；理由与复现见 docs/ops/ops-runbook.md「接线台账」）、移动端设备项（真机/推送/生物识别，需设备与人）。
+
+- **加密永续真值待复验（出口阻断）**：Binance `api.binance.com`/`fapi.binance.com` 全量 HTTP 451、Bybit `api.bybit.com` 系全量 HTTP 403 ⇒ Binance USDT-M 名册字段与 Bybit 线性合约真值未验。代码已 fail-closed（未登记即留空、合约端点失败结构化报错、不回落现货价），补测判据见看板卡 `7c7b7e3d`，原始响应在 spikes/impl-crypto-perp-tradfi/。
+- **合约下单未落地（Tier 2，卡 P7 未开跑）**：Tier 1 是只读面；P7 落地前任何界面与工具描述都不得暗示可下合约单。
+- `pnpm test:audit` 在 HEAD 即红：packages/client-ui-trading/test/kdas-menu.test.ts 从未入基线（非本轮变更引入），清债见看板卡 `fe6a417a`。
 
 ## 怎么验证（照 AGENTS.md 的资源纪律）
 
@@ -71,4 +76,5 @@
 | 移动端（原生观测端）工程形态、构建、冻结契约面与防漂移机检 | apps/ios-native/README.md |
 | 移动端落仓方案（含 Expo/RN 退役裁决）与分发决策 | docs/client/mobile-app-plan.md |
 | systemd 安装清单 | deploy/README.md |
+| 加密永续与 TradFi 永续（形态轴、名册/行情分流、检索面） | docs/roadmap/crypto-perp-and-tradfi.md（设计与卡拆分）、docs/guides/symbol-vocabulary.md（词汇权威） |
 | 历史决策（Owning Note） | .agents/notes/implemented/ |
