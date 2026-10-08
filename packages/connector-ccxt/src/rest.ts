@@ -3,15 +3,16 @@
  * CCXT 跨所加密通用 REST 客户端。
  */
 
-import type {
-  AccountBalance,
-  Interval,
-  Kline,
-  Order,
-  OrderRequest,
-  Position,
-  Ticker,
-  TradingErrorCode,
+import {
+  instrumentFormOf,
+  type AccountBalance,
+  type Interval,
+  type Kline,
+  type Order,
+  type OrderRequest,
+  type Position,
+  type Ticker,
+  type TradingErrorCode,
 } from '@dshtrading/api'
 
 export class TradingServiceError extends Error {
@@ -39,8 +40,22 @@ export const SUPPORTED_EXCHANGES = [
   'htx',
 ] as const
 
+/**
+ * 现货符号归一化（本轮 CCXT 面只做现货）。
+ *
+ * 入参带规范永续后缀 `-SWAP` 时**显式报 TRADING_UNSUPPORTED_SYMBOL**：此前实现会先剥掉
+ * 后缀、再拿同一个符号去打现货端点，等于把永续静默报成现货价（P3 硬不变量：任何路径
+ * 不得把 `-SWAP` 落到 spot 端点）。CCXT 的合约面不属本轮范围，要做得走单独的卡。
+ */
 export function normalizeSymbol(raw: string): string {
-  const clean = raw.trim().toUpperCase().replace(/[-_]/g, '')
+  const upper = raw.trim().toUpperCase()
+  if (instrumentFormOf(upper) === 'perp') {
+    throw new TradingServiceError(
+      'TRADING_UNSUPPORTED_SYMBOL',
+      `CCXT connector is spot-only: ${upper} is a perpetual (form=perp). Use a spot symbol such as ${upper.replace(/-SWAP$/, '')}, or a perpetual-capable connector (okx/bybit) for contract quotes.`,
+    )
+  }
+  const clean = upper.replace(/[-_]/g, '')
   if (clean.includes('/')) return clean.replace('/', '')
   return clean
 }

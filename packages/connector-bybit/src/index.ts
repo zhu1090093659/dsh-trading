@@ -13,6 +13,7 @@ import type {
   DerivativesData,
   DerivativesHistory,
   Disposable,
+  InstrumentRef,
   Interval,
   Kline,
   MarketDataService,
@@ -76,6 +77,14 @@ export class BybitMarketDataService extends Service implements MarketDataService
 
   async getKlines(symbol: string, interval: Interval = '1d', limit: number = 100): Promise<Kline[]> {
     return this.client.getKlines(symbol, interval, limit)
+  }
+
+  /**
+   * 标的名册（P3）：现货 ∪ 线性永续；永续输出规范形 `BTCUSDT-SWAP`（form=perp）。
+   * assetClass 留空由交易所元数据缺该项决定，不本地推断（见 rest.ts toInstrumentRef）。
+   */
+  async listInstruments(): Promise<InstrumentRef[]> {
+    return this.client.listInstruments()
   }
 
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void, options?: { intervalMs?: number }): Disposable {
@@ -301,8 +310,8 @@ export function apply(ctx: Context, config: Config): void {
 
     register(defineTool({
       name: 'crypto_get_ticker',
-      description: 'Get the latest trade price and quote for a crypto pair via Bybit API.',
-      parameters: { symbol: { type: 'string', required: true, description: 'Crypto pair symbol, e.g. BTCUSDT' } },
+      description: 'Get the latest trade price and quote for a crypto pair via Bybit API (spot, or perpetual with the -SWAP suffix).',
+      parameters: { symbol: { type: 'string', required: true, description: 'Pair symbol: BTCUSDT for spot, BTCUSDT-SWAP for the USDT perpetual' } },
       output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
       async execute(args) {
         return JSON.stringify(await marketData.getTicker(args.symbol))
@@ -311,9 +320,9 @@ export function apply(ctx: Context, config: Config): void {
 
     register(defineTool({
       name: 'crypto_get_klines',
-      description: 'Get recent public klines for a crypto pair via Bybit API. Supports 1m/5m/15m/30m/1h/4h/1d/1w/1M.',
+      description: 'Get recent public klines for a crypto pair via Bybit API (spot, or perpetual with the -SWAP suffix). Supports 1m/5m/15m/30m/1h/4h/1d/1w/1M.',
       parameters: {
-        symbol: { type: 'string', required: true, description: 'Crypto pair symbol, e.g. BTCUSDT' },
+        symbol: { type: 'string', required: true, description: 'Pair symbol: BTCUSDT for spot, BTCUSDT-SWAP for the USDT perpetual' },
         interval: { type: 'string', enum: INTERVAL_VOCABULARY, default: '1d', description: 'Interval' },
         limit: { type: 'integer', default: 100, description: 'Limit' },
       },

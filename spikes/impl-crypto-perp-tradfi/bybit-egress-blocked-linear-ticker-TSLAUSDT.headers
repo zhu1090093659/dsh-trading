@@ -1,0 +1,10 @@
+HTTP/2 403 
+server: CloudFront
+date: Thu, 08 Oct 2026 10:07:59 GMT
+content-length: 96
+content-type: application/json
+x-cache: Error from cloudfront
+via: 1.1 f38dffa5f68963b42a7e9d52afc9ea08.cloudfront.net (CloudFront)
+x-amz-cf-pop: SFO53-P8
+x-amz-cf-id: s0b1jQ4i8VZBEuC_jkJwo_X1bHsXkdWTc_vq86HUMssfgj3dqik0bA==
+
