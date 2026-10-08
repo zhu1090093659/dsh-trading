@@ -32,7 +32,7 @@
   "packages/connector-akshare/tsconfig.json": 12,
   "packages/connector-alpaca/tsconfig.json": 10,
   "packages/connector-binance/tsconfig.json": 1,
-  "packages/connector-bybit/tsconfig.json": 14,
+  "packages/connector-bybit/tsconfig.json": 13,
   "packages/connector-ccxt/tsconfig.json": 10,
   "packages/connector-eastmoney/tsconfig.json": 9,
   "packages/connector-finnhub/tsconfig.json": 13,
@@ -73,7 +73,7 @@
   "packages/kit-hk/tsconfig.json": 13,
   "packages/kit-us/tsconfig.json": 12,
   "packages/knowledge/tsconfig.json": 24,
-  "packages/router/tsconfig.json": 5,
+  "packages/router/tsconfig.json": 2,
   "packages/strategies/tsconfig.json": 42,
   "packages/us/tsconfig.json": 0,
   "packages/watchlist/tsconfig.json": 0
