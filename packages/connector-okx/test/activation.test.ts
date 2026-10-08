@@ -79,7 +79,7 @@ const BINANCE_TOOLS = ['crypto_get_ticker', 'crypto_get_klines', 'crypto_get_ind
 const OKX_TOOLS = [
   'crypto_get_ticker', 'crypto_get_klines', 'crypto_get_indicators', 'crypto_funding_rate',
   'crypto_place_order', 'crypto_cancel_order', 'crypto_get_order',
-  'crypto_get_balance', 'crypto_get_positions',
+  'crypto_get_balance', 'crypto_get_positions', 'crypto_set_leverage',
 ]
 
 describe('互斥激活（enabled 默认 false）', () => {
@@ -106,7 +106,7 @@ describe('互斥激活（enabled 默认 false）', () => {
     }
   })
 
-  it('okx 单独激活：全量注册（9 工具，含 tradingCryptoTrade 面的 5 个）', async () => {
+  it('okx 单独激活：全量注册（10 工具，含 tradingCryptoTrade 面的 6 个）', async () => {
     const host = makeHost()
     applyOkx(host.newCtx() as never, { ...OKX_DEFAULTS, enabled: true })
     await wait(() => host.registered.size >= OKX_TOOLS.length)

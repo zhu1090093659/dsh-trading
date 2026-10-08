@@ -160,6 +160,20 @@ describe('crypto_place_order execute', () => {
     ).rejects.toThrow(/invalid symbol/)
   })
 
+  it('管理员：永续（-SWAP）符号被显式拒绝，绝不落到现货端点（P7 边界）', async () => {
+    // Given 一个 Binance 现货工具与永续符号（行情面走 fapi，交易面无实现）
+    const { tool, getTicker } = makeTool({ dryRun: false, liveTrading: true })
+    // When 用规范永续符号下单
+    const error = await tool.execute({ symbol: 'BTCUSDT-SWAP', side: 'BUY', type: 'MARKET', quantity: 0.01, dryRun: false })
+      .catch((e: unknown) => e)
+    // Then 结构化拒绝为「符号不支持」，并点明合约下单未实现、不得回落现货
+    expect(error).toBeInstanceOf(TradingServiceError)
+    expect((error as TradingServiceError).code).toBe('TRADING_UNSUPPORTED_SYMBOL')
+    expect((error as TradingServiceError).message).toContain('contract order placement is not implemented')
+    expect((error as TradingServiceError).message).toContain('never falls back to the spot endpoint')
+    expect(getTicker).not.toHaveBeenCalled()
+  })
+
   it('工具契约：名称与 dryRun schema 默认值（defineTool 编译后的 JSON Schema）', () => {
     const { tool } = makeTool()
     expect(tool.name).toBe('crypto_place_order')

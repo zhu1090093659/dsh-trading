@@ -479,16 +479,33 @@ export interface FundamentalsPackage {
 
 export type PositionSide = 'long' | 'short'
 
+/**
+ * 保证金模式（合约交易语义，P7）：`cross` = 全仓、`isolated` = 逐仓。
+ * 现货（cash）不使用该字段——缺席即「非保证金/未设置」。
+ */
+export type MarginMode = 'cross' | 'isolated'
+
 /** 持仓快照。 */
 export interface Position {
   readonly symbol: string
   readonly side: PositionSide
-  /** 仓位数量（正数；方向由 side 表达）。 */
+  /** 仓位数量（正数；方向由 side 表达）。合约仓位是 **base 币数**（连接器已按合约乘数 ctVal 由张换算）。 */
   readonly size: number
   readonly entryPrice: number
   readonly markPrice?: number
   readonly unrealizedPnl?: number
   readonly leverage?: number
+  /**
+   * 强平价（交易所回传原样透传；交易所未提供或不适用时缺席，绝不本地推算强平价——
+   * 强平口径与保证金模式、账户级保证金、维持保证金率有关，本地公式会给出错误的安全感）。
+   */
+  readonly liquidationPrice?: number
+  /** 维持保证金率（OKX `mgnRatio`；口径由交易所定义，原样透传，不在本地换算或反推）。 */
+  readonly marginRatio?: number
+  /** 该仓位的保证金模式；现货持仓与交易所未提供时缺席。 */
+  readonly marginMode?: MarginMode
+  /** 名义价值（USD，交易所口径；用于敞口核对，不参与本地风控公式）。 */
+  readonly notionalUsd?: number
   readonly timestamp: number
 }
 
@@ -501,9 +518,17 @@ export interface OrderRequest {
   readonly symbol: string
   readonly side: OrderSide
   readonly type: OrderType
+  /** **base 币数量**：合约（永续）由连接器按合约乘数换算成张，消费方恒用币数语义。 */
   readonly quantity: number
   /** limit 单必填。 */
   readonly price?: number
+  /**
+   * 合约订单的保证金模式（缺省 `cross`）。仅对永续（`-SWAP`）有效：
+   * 现货订单只允许 cash 语义，传该字段由连接器结构化拒绝
+   * （现货逐仓/杠杆是另一个产品面，本仓未接线）。
+   * `isolated` 需先在交易所侧设好该标的的逐仓杠杆（OKX `setLeverage`）。
+   */
+  readonly marginMode?: MarginMode
   /** 缺省/true 时仅模拟，不触碰交易所。实盘还受 @dshtrading/authority 的人工签署授权与 approval 约束 [S4]。 */
   readonly dryRun?: boolean
 }
@@ -652,11 +677,43 @@ export interface MarketDataService {
 }
 
 /**
+ * 杠杆设置请求（合约交易语义，P7；仅 `form=perp` 的标的可传）。
+ * dryRun 缺省视为 true：只回本地模拟回执，不触碰交易所（与 placeOrder 同语义）。
+ */
+export interface SetLeverageRequest {
+  readonly symbol: string
+  /** 目标杠杆倍数（> 0；上限以交易所规格 `InstrumentContract.maxLeverage` 为准，超出即结构化拒绝）。 */
+  readonly leverage: number
+  readonly marginMode: MarginMode
+  /** 双向持仓模式下的方向（OKX `posSide`）；净持仓模式下缺席。 */
+  readonly posSide?: 'long' | 'short'
+  /** 全仓模式下按币种设置杠杆时的保证金币（OKX `ccy`）；逐仓与净持仓模式缺席。 */
+  readonly ccy?: string
+  /** 缺省/true 时仅模拟。实盘还受 @dshtrading/authority 的人工签署授权与 approval 约束 [S4]。 */
+  readonly dryRun?: boolean
+}
+
+/** 杠杆设置回执（dryRun=true 时是本地模拟回执，不触网）。 */
+export interface LeverageSetting {
+  readonly symbol: string
+  readonly leverage: number
+  readonly marginMode: MarginMode
+  readonly posSide?: 'long' | 'short'
+  readonly ccy?: string
+  /** 本次是否为模拟回执（回执必须显式回带，防 dry-run 语义丢失）。 */
+  readonly dryRun: boolean
+  readonly timestamp: number
+}
+
+/**
  * 交易服务契约：placeOrder 默认 dry-run；实盘前必须过 @dshtrading/authority 的人工签署授权与
  * ctx.approval.request（交互形态；headless 下 ask=deny，fail-closed [S4]）。
  *
  * R3（okx 切片 2026-08-29）修订：cancelOrder 增加可选 symbol、新增 getOrder——
  * OKX 按 (instId, ordId) 双键定位订单，单参 id 形态不够；无其他实现方，扩展向后兼容。
+ *
+ * P7（合约交易 Tier 2，2026-10-08）修订：新增可选 `setLeverage`——杠杆/保证金模式变更
+ * 是实盘动作，必须与下单同门槛（服务缝三态闸门 + base 审批闸门 + 人工签署授权）。
  */
 export interface TradeService {
   placeOrder(req: OrderRequest): Promise<Order>
@@ -681,6 +738,13 @@ export interface TradeService {
    * 可选方法：时间升序（旧→新），最多 limit 条（缺省 ≤50）。
    */
   listTradeFills?(symbol?: string, limit?: number): Promise<TradeFill[]>
+  /**
+   * 设置合约杠杆与保证金模式（P7 合约交易 Tier 2；仅支持合约的交易所实现）。
+   * 可选方法：不实现的连接器缺席即可，消费方按 TRADING_NOT_IMPLEMENTED 语义处理。
+   * 这是会改变账户真实风险参数的实盘动作：dryRun 缺省 true（只回本地模拟回执），
+   * dryRun=false 必须同时具备人工签署的实盘授权，并经 base 审批闸门。
+   */
+  setLeverage?(req: SetLeverageRequest): Promise<LeverageSetting>
 }
 
 /**

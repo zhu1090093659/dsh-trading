@@ -6,7 +6,8 @@
  *      `tools/pre-execute` waterfall（S4 结论的事件面；签名/返回形状以
  *      dsh core packages/core/tools/src/index.ts 的 Events 声明为准：
  *      `(exec, next) => Promise<PreToolDecision>`，`{kind:'ask'}` 交宿主
- *      approval 面裁决）。对 `/^dsh-trading-.*_(place|cancel)_order$/` 且参数
+ *      approval 面裁决）。对命中 `LIVE_ACTION_GATE_PATTERN`（下单/撤单 +
+ *      `crypto_set_leverage` 等会改变真实风险参数的实盘动作）且参数
  *      `dryRun !== true` 的调用返回 `{kind:'ask'}`，其余一律 `next()` 放行，
  *      绝不代替下游策略直接 allow。
  *   2. `cordis.patch.yml`（由 package.json 的 `dsh.bundle.patch` 声明）：
@@ -44,16 +45,29 @@ export const Config: Schema<Config> = Schema.object({
 })
 
 /**
- * 下单/撤单工具名模式（跨市场统一词汇：`<market>_<action>_order`，如
+ * 实盘动作工具名模式（跨市场统一词汇：`<market>_<action>_order`，如
  * `crypto_place_order`）。工具名是模型面向词汇，用短市场前缀
  * （crypto/us/cn/hk/futures/global；global 为预防性收口——纯数据市场无下单工具）；
  * `dsh-trading-` 前缀只属于插件名/patch 行 id，不进工具名（与 crypto_get_ticker
  * 等只读工具一致）。锚定首尾 + 市场段枚举，避免误拦同名他方工具。
+ *
+ * **P7（合约交易 Tier 2，2026-10-08）**：集合从「下单/撤单」扩为「一切会改变交易所
+ * 真实风险参数的实盘动作」——首例是合约杠杆/保证金模式变更 `crypto_set_leverage`
+ * （调大杠杆等于放大强平风险，必须先过审批）。新增同类动作时加进本模式，
+ * 不要让一个实盘动作绕过审批面。
  */
-export const ORDER_GATE_PATTERN = /^(?:crypto|us|cn|hk|futures|global)_(?:place|cancel)_order$/
+export const LIVE_ACTION_GATE_PATTERN = /^(?:(?:crypto|us|cn|hk|futures|global)_(?:place|cancel)_order|crypto_set_leverage)$/
 
+/** 旧名（语义已扩为实盘动作集合）：新代码用 {@link LIVE_ACTION_GATE_PATTERN}。 */
+export const ORDER_GATE_PATTERN = LIVE_ACTION_GATE_PATTERN
+
+export function isLiveActionGateTool(toolName: string): boolean {
+  return LIVE_ACTION_GATE_PATTERN.test(toolName)
+}
+
+/** 旧名，等价于 {@link isLiveActionGateTool}。 */
 export function isOrderGateTool(toolName: string): boolean {
-  return ORDER_GATE_PATTERN.test(toolName)
+  return isLiveActionGateTool(toolName)
 }
 
 /** 只读取 dryRun 标志，args 形状不信任（工具自校验 schema，闸门只做保守判断）。 */
@@ -64,8 +78,8 @@ interface GateArgs {
 /**
  * 纯判定：这次工具调用是否需要用户审批。
  *
- * - 非下单/撤单工具 → undefined（不拦截）；
- * - 下单/撤单且 `dryRun === true` → undefined（模拟单无需审批）；
+ * - 非实盘动作工具 → undefined（不拦截）；
+ * - 实盘动作且 `dryRun === true` → undefined（模拟不改变交易所状态，无需审批）；
  * - 其余（dryRun 缺省/false/形状异常）→ `{kind:'ask'}`。
  *   缺省也 ask 是故意的保守面：工具 schema 的 dryRun 默认 true 在工具层生效，
  *   闸门层只认显式 `true`；宁可在交互形态多问一次，不在实盘形态漏拦一次。
@@ -73,17 +87,22 @@ interface GateArgs {
  * 返回 undefined 时调用方必须 `next()` 继续 waterfall —— 本监听器永不直接
  * 返回 allow，避免越过宿主其他策略层。
  */
-export function decideOrderGate(toolName: string, args: unknown): PreToolDecision | undefined {
-  if (!isOrderGateTool(toolName)) return undefined
+export function decideLiveActionGate(toolName: string, args: unknown): PreToolDecision | undefined {
+  if (!isLiveActionGateTool(toolName)) return undefined
   const dryRun = (args as GateArgs | null | undefined)?.dryRun
   if (dryRun === true) return undefined
   return {
     kind: 'ask',
     reason:
-      `order tool "${toolName}" was called without explicit dryRun=true (live trading intent); `
+      `live trading action "${toolName}" was called without explicit dryRun=true (live trading intent); `
       + 'the dsh-trading safety gate requires user approval (README iron rule #3). '
       + 'Note: headless deployments with no approver will deny this call — fail closed by design.',
   }
+}
+
+/** 旧名，等价于 {@link decideLiveActionGate}。 */
+export function decideOrderGate(toolName: string, args: unknown): PreToolDecision | undefined {
+  return decideLiveActionGate(toolName, args)
 }
 
 /**
@@ -96,7 +115,7 @@ export function createGateListener(): (
   next: () => Promise<PreToolDecision>,
 ) => Promise<PreToolDecision> {
   return async (exec, next) => {
-    const decision = decideOrderGate(exec.name, exec.arguments)
+    const decision = decideLiveActionGate(exec.name, exec.arguments)
     return decision ?? next()
   }
 }

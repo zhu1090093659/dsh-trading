@@ -19,6 +19,12 @@
  *   是 demo 而非真钱）；
  * - env='live' → 真实实盘（无模拟盘头；base 统一审批闸门照旧 ask，headless fail-closed）。
  *
+ * 合约交易语义（P7，2026-10-08）：永续可下单（tdMode 缺省 cross，isolated 需先
+ * crypto_set_leverage 设好该标的的逐仓杠杆）、杠杆/保证金模式设置工具
+ * crypto_set_leverage（与下单同一套三态闸门 + base 审批闸门），持仓回带
+ * 强平价/维持保证金率/名义价值；张↔币换算的唯一实现在 rest.ts 的
+ * coinsToContracts（向下取整，绝不上取放大敞口）。
+ *
  * 凭证（调研 §6 建议 4）：三 ref（apiKeyRef/secretRef/passphraseRef）= 环境变量名；
  * demo/live 用不同 ref 组（demo 默认 OKX_DEMO_*，live 默认 OKX_*），每次操作经
  * ctx.credentials.resolve() 解析（换 key 无需重启）；有 seam 时未命中即
@@ -41,12 +47,15 @@ import type {
   InstrumentRef,
   Interval,
   Kline,
+  LeverageSetting,
+  MarginMode,
   MarketDataService,
   Order,
   OrderRequest,
   OrderStatus,
   Orderbook,
   Position,
+  SetLeverageRequest,
   Ticker,
   TradeService,
   TradeFill,
@@ -58,6 +67,7 @@ import {
   type OkxCredentials,
   type OkxInstrument,
   type OkxRestOptions,
+  type OkxSetLeverageParams,
   OKX_INTERVAL_VOCABULARY,
   OkxRestClient,
   TradingServiceError,
@@ -488,6 +498,22 @@ export class OkxTradeService extends Service implements TradeService {
    *   ctVal/lotSz/minSz 换算并本地校验（向下取整，省一次 51000 往返）。
    */
   async placeOrder(req: OrderRequest): Promise<Order> {
+    // 保证金模式只对永续有意义（P7）：现货（cash）不做杠杆/逐仓，这是另一个产品面。
+    // 放在闸门之前判定——参数非法不因 dryRun=true 而被模拟回执掩盖。
+    if (req.marginMode !== undefined) {
+      if (req.marginMode !== 'cross' && req.marginMode !== 'isolated') {
+        throw new TradingServiceError(
+          'TRADING_NOT_IMPLEMENTED',
+          `OKX place order: unknown marginMode ${JSON.stringify(req.marginMode)} — only 'cross' and 'isolated' are implemented`,
+        )
+      }
+      if (instrumentFormOf(req.symbol) !== 'perp') {
+        throw new TradingServiceError(
+          'TRADING_UNSUPPORTED_SYMBOL',
+          `OKX place order: marginMode=${req.marginMode} is only valid for perpetual (${req.symbol}-SWAP shaped) symbols; spot orders must stay cash (spot margin trading is not implemented)`,
+        )
+      }
+    }
     // 服务缝闸门（P0）：与工具层 evaluateOrderGate 同源的三态判定（单点语义，双保险）。
     const verdict = evaluateOrderGate(this.config, {
       instId: req.symbol,
@@ -520,10 +546,13 @@ export class OkxTradeService extends Service implements TradeService {
     const instId = normalizeOkxSymbol(req.symbol)
     const instrument = await this.getInstrument(instId)
     const normalized = normalizeSize(instId, instrument, req.quantity)
+    // tdMode（调研 §3.1 + P7）：现货=cash（非杠杆）；永续按 marginMode 分流，
+    // 缺省 cross（全仓）。isolated 需先在交易所侧对该标的设好逐仓杠杆
+    // （crypto_set_leverage），否则交易所按 51000/51012 拒绝——本仓不猜、不代设。
+    const marginMode: MarginMode = req.marginMode ?? 'cross'
     const params = {
       instId,
-      // tdMode（调研 §3.1）：现货=cash（非杠杆）；永续=cross（全仓；isolated 需先设杠杆，二期）。
-      tdMode: instrument.instType === 'SWAP' ? ('cross' as const) : ('cash' as const),
+      tdMode: instrument.instType === 'SWAP' ? marginMode : ('cash' as const),
       side: req.side,
       ordType: req.type,
       sz: normalized.sz,
@@ -549,6 +578,76 @@ export class OkxTradeService extends Service implements TradeService {
       dryRun: false,
       timestamp: Date.now(),
     }
+  }
+
+  /**
+   * 设置合约杠杆与保证金模式（P7；api TradeService.setLeverage）。
+   *
+   * 与 placeOrder 共用同一套三态闸门（服务缝第一步——绕过工具层的直调同样 fail-closed）：
+   * - ① dryRun=false 而未获实盘授权 → TRADING_LIVE_TRADING_DISABLED；
+   * - ② dryRun 缺省/true（或被 config.dryRun 强制）→ 本地模拟回执，不触网；
+   * - ③ dryRun=false 且已获授权 → 真实签名 POST /api/v5/account/set-leverage
+   *   （env=demo 带 x-simulated-trading:1）。
+   *
+   * 本地判据（先于上游往返，给出可读原因、不静默改写调用方意图）：
+   * - 仅永续（form=perp）：现货传 setLeverage 报 TRADING_UNSUPPORTED_SYMBOL；
+   * - leverage > 交易所规格 lever（InstrumentContract.maxLeverage）→ 结构化拒绝，
+   *   **不做上限截断**（静默改小杠杆会让调用方以为自己设定的数字已生效）；
+   * - mgnMode 只认 cross/isolated；isolated + 双向持仓模式的 posSide 由调用方传，
+   *   本仓不猜账户持仓模式（缺席即原样透传，交交易所裁定）。
+   */
+  async setLeverage(req: SetLeverageRequest): Promise<LeverageSetting> {
+    const marginMode = req.marginMode
+    if (marginMode !== 'cross' && marginMode !== 'isolated') {
+      throw new TradingServiceError(
+        'TRADING_NOT_IMPLEMENTED',
+        `OKX set leverage: unknown marginMode ${JSON.stringify(marginMode)} — only 'cross' and 'isolated' are implemented`,
+      )
+    }
+    if (!Number.isFinite(req.leverage) || req.leverage <= 0) {
+      throw new TradingServiceError(
+        'TRADING_EXCHANGE_ERROR',
+        `OKX set leverage: leverage ${String(req.leverage)} must be a positive number`,
+      )
+    }
+    if (instrumentFormOf(req.symbol) !== 'perp') {
+      throw new TradingServiceError(
+        'TRADING_UNSUPPORTED_SYMBOL',
+        `OKX set leverage: ${req.symbol} is not a perpetual — leverage/margin mode only applies to -SWAP symbols`,
+      )
+    }
+    const requestedDryRun = req.dryRun ?? true
+    if (!requestedDryRun && !liveTradingEnabled(this.config.liveTrading)) {
+      throw new TradingServiceError(
+        'TRADING_LIVE_TRADING_DISABLED',
+        `crypto_set_leverage rejected: the call requests real execution (dryRun=${String(req.dryRun)}) `
+          + 'but live trading is disabled (no signed live-trading grant from the authority plane). Ask the operator to sign a live-trading grant '
+          + 'after confirmation, or keep dryRun=true for a simulated receipt.',
+      )
+    }
+    const canonical = toCanonicalOkxSymbol(normalizeOkxSymbol(req.symbol))
+    const optional = {
+      ...(req.posSide !== undefined ? { posSide: req.posSide } : {}),
+      ...(req.ccy !== undefined ? { ccy: req.ccy } : {}),
+    }
+    if (requestedDryRun || this.config.dryRun) {
+      // 闸门 ②：本地模拟回执。不触网 ⇒ 也不校验交易所上限（工具层文案会说明这一点）。
+      return { symbol: canonical, leverage: req.leverage, marginMode, ...optional, dryRun: true, timestamp: Date.now() }
+    }
+    // 闸门 ③：真实签名设置（env 决定是否带模拟盘头）。
+    const instId = normalizeOkxSymbol(req.symbol)
+    const instrument = await this.getInstrument(instId)
+    const max = instrument.maxLeverage
+    if (max !== undefined && Number.isFinite(max) && req.leverage > max) {
+      throw new TradingServiceError(
+        'TRADING_EXCHANGE_ERROR',
+        `OKX set leverage for ${instId}: requested ${req.leverage}x exceeds the exchange maximum lever ${max}x — refusing (no silent clamp)`,
+      )
+    }
+    const params: OkxSetLeverageParams = { instId, lever: String(req.leverage), mgnMode: marginMode, ...optional }
+    const credentials = await this.getCredentials()
+    await this.client.setLeverage(params, this.auth(credentials))
+    return { symbol: canonical, leverage: req.leverage, marginMode, ...optional, dryRun: false, timestamp: Date.now() }
   }
 
   /**
@@ -625,7 +724,12 @@ export class OkxTradeService extends Service implements TradeService {
     }
   }
 
-  /** 只读持仓（SWAP 的 pos 单位是张 → 经 ctVal 换算成币；net 模式负 pos = short）。 */
+  /**
+   * 只读持仓（SWAP 的 pos 单位是张 → 经 ctVal 换算成币；net 模式负 pos = short）。
+   * 合约仓位附带交易所回传的强平价（liqPx）、维持保证金率（mgnRatio）、保证金模式
+   * （mgnMode）与名义价值（notionalUsd）——风控清单的「强平距离」判据读这些字段，
+   * 每条都是交易所口径，缺席即不展示（不本地补算）。
+   */
   async getPositions(): Promise<Position[]> {
     const credentials = await this.getCredentials()
     const rows = await this.client.getPositions(this.auth(credentials))
@@ -648,6 +752,12 @@ export class OkxTradeService extends Service implements TradeService {
       const markPrice = typeof d.markPx === 'string' ? Number(d.markPx) : undefined
       const unrealizedPnl = typeof d.upl === 'string' ? Number(d.upl) : undefined
       const leverage = typeof d.lever === 'string' ? Number(d.lever) : undefined
+      // 强平/保证金语义（P7）：交易所回传原样透传，本地不推算强平价、不换算保证金率
+      // （口径依赖保证金模式与账户级参数，本地公式只会给出错误的安全感）。
+      const liquidationPrice = pickNumber(d.liqPx)
+      const marginRatio = pickNumber(d.mgnRatio)
+      const marginMode = d.mgnMode === 'isolated' ? 'isolated' as const : d.mgnMode === 'cross' ? 'cross' as const : undefined
+      const notionalUsd = pickNumber(d.notionalUsd)
       const timestamp = typeof d.uTime === 'string' ? Number(d.uTime) : Date.now()
       positions.push({
         symbol: toCanonicalOkxSymbol(instId),
@@ -657,6 +767,10 @@ export class OkxTradeService extends Service implements TradeService {
         ...(markPrice !== undefined && Number.isFinite(markPrice) ? { markPrice } : {}),
         ...(unrealizedPnl !== undefined && Number.isFinite(unrealizedPnl) ? { unrealizedPnl } : {}),
         ...(leverage !== undefined && Number.isFinite(leverage) ? { leverage } : {}),
+        ...(liquidationPrice !== undefined ? { liquidationPrice } : {}),
+        ...(marginRatio !== undefined ? { marginRatio } : {}),
+        ...(marginMode !== undefined ? { marginMode } : {}),
+        ...(notionalUsd !== undefined ? { notionalUsd } : {}),
         timestamp: Number.isFinite(timestamp) ? timestamp : Date.now(),
       })
     }
@@ -814,6 +928,11 @@ export interface PlaceOrderArgs {
   readonly quantity: number
   /** LIMIT 单必填（schema 无法条件必填，execute 内校验），必须 > 0。 */
   readonly price?: number
+  /**
+   * 合约订单的保证金模式（缺省 cross 全仓）；仅永续有效，现货传该字段报
+   * TRADING_UNSUPPORTED_SYMBOL。isolated 需先用 crypto_set_leverage 设好该标的的逐仓杠杆。
+   */
+  readonly marginMode?: MarginMode
   /** 缺省视为 true：仅模拟。显式 false 即实盘意图，进入三态闸门 ②/③。 */
   readonly dryRun?: boolean
 }
@@ -916,6 +1035,7 @@ export async function buildDryRunReceipt(
     quantity: args.quantity,
     quantityUnit: 'base-asset coins (SWAP orders would be converted to contracts by ctVal)',
     ...(args.type === 'limit' ? { price: args.price } : {}),
+    ...(args.marginMode !== undefined ? { marginMode: args.marginMode } : {}),
     reference,
     timestamp: Date.now(),
   })
@@ -943,8 +1063,9 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
     description:
       'Place an OKX spot or perpetual-swap order, or simulate one. instId accepts market-canonical (BTCUSDT, BTCUSDT-SWAP) or OKX native '
       + '(BTC-USDT). quantity is in BASE-ASSET coins: spot MARKET orders are sent with tgtCcy=base_ccy (the OKX buy default is a '
-      + 'quote-currency amount — a known trap) and SWAP quantities convert via ctVal. dryRun defaults to true and returns a DRY-RUN receipt; '
-      + 'dryRun=false needs a signed live-trading grant plus approval. env=live is real money.',
+      + 'quote-currency amount — a known trap) and SWAP quantities convert via ctVal. Perpetual orders default to cross margin; pass '
+      + 'marginMode=isolated only after crypto_set_leverage has set the per-instrument isolated leverage. dryRun defaults to true and returns a '
+      + 'DRY-RUN receipt; dryRun=false needs a signed live-trading grant plus approval. env=live is real money.',
     parameters: {
       instId: {
         type: 'string',
@@ -971,6 +1092,11 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
       price: {
         type: 'number',
         description: 'Limit price; required when type=limit',
+      },
+      marginMode: {
+        type: 'string',
+        enum: ['cross', 'isolated'],
+        description: 'Perpetual margin mode (default cross). Isolated requires crypto_set_leverage for the instrument first; spot orders reject this field.',
       },
       dryRun: {
         type: 'boolean',
@@ -1003,11 +1129,141 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
         type: args.type,
         quantity: args.quantity,
         ...(args.type === 'limit' ? { price: args.price } : {}),
+        ...(args.marginMode !== undefined ? { marginMode: args.marginMode } : {}),
         dryRun: false,
       })
       return JSON.stringify(order)
     },
   })
+}
+
+/* ------------------------------------------------------------------ */
+/* 杠杆/保证金模式工具（P7：与下单同一套闸门）                                  */
+/* ------------------------------------------------------------------ */
+
+/** crypto_set_leverage 参数契约（仅永续；dryRun 缺省 true）。 */
+export interface SetLeverageArgs {
+  /** 永续 instId：规范形（BTCUSDT-SWAP）或 OKX 原生形（BTC-USDT-SWAP）皆收。 */
+  readonly instId: string
+  /** 目标杠杆倍数（> 0；上限以交易所规格为准，超出即拒绝，不静默截断）。 */
+  readonly leverage: number
+  /** 保证金模式：'cross'（缺省，全仓）| 'isolated'（逐仓）。 */
+  readonly marginMode?: MarginMode
+  /** 双向持仓模式（long/short）下的方向；净持仓模式（net）缺席。 */
+  readonly posSide?: 'long' | 'short'
+  /** 全仓多币种保证金模式下按币种设置时的保证金币。 */
+  readonly ccy?: string
+  /** 缺省视为 true：仅模拟。显式 false 即实盘意图，进入与下单同门槛的闸门。 */
+  readonly dryRun?: boolean
+}
+
+/** 参数校验（模型调用问题抛普通 Error，与 createPlaceOrderTool 先例一致）。 */
+function validateSetLeverageArgs(args: SetLeverageArgs): void {
+  try {
+    normalizeOkxSymbol(args.instId)
+  } catch {
+    throw new Error(`crypto_set_leverage: invalid instId ${JSON.stringify(args.instId)} — expected a perpetual id (BTCUSDT-SWAP canonical or BTC-USDT-SWAP native)`)
+  }
+  if (instrumentFormOf(args.instId) !== 'perp') {
+    throw new Error(`crypto_set_leverage: ${args.instId} is not a perpetual — leverage/margin mode only applies to -SWAP symbols`)
+  }
+  if (typeof args.leverage !== 'number' || !Number.isFinite(args.leverage) || args.leverage <= 0) {
+    throw new Error(`crypto_set_leverage: invalid leverage ${JSON.stringify(args.leverage)} — expected a positive multiplier`)
+  }
+  if (args.marginMode !== undefined && args.marginMode !== 'cross' && args.marginMode !== 'isolated') {
+    throw new Error(`crypto_set_leverage: invalid marginMode ${JSON.stringify(args.marginMode)} — expected cross or isolated`)
+  }
+  if (args.posSide !== undefined && args.posSide !== 'long' && args.posSide !== 'short') {
+    throw new Error(`crypto_set_leverage: invalid posSide ${JSON.stringify(args.posSide)} — expected long or short`)
+  }
+}
+
+export interface SetLeverageToolDeps {
+  /** 交易服务（服务缝三态闸门在实现内第一步）。 */
+  readonly trade: TradeService
+}
+
+/**
+ * crypto_set_leverage 工具工厂（独立导出便于单测闸门与参数矩阵）。
+ *
+ * 审批不在这里做：dryRun!==true 的调用由 @dshtrading/base 的统一审批闸门在
+ * `tools/pre-execute` waterfall ask（headless 下 ask=deny，fail-closed）；
+ * 工具内不再重复调 ctx.approval。
+ */
+export function createSetLeverageTool(deps: SetLeverageToolDeps) {
+  return defineTool({
+    name: 'crypto_set_leverage',
+    description:
+      'Set the OKX perpetual leverage and margin mode for one instrument. This changes real account risk parameters, so it is gated exactly like an '
+      + 'order: dryRun defaults to true and returns a DRY-RUN receipt without sending any request; dryRun=false needs a signed live-trading grant plus '
+      + 'user approval (env=live is real money). The exchange maximum leverage is enforced on the real path; an out-of-range value is rejected, never '
+      + 'silently clamped. Isolated margin also requires this call for the instrument before placing isolated orders.',
+    parameters: {
+      instId: {
+        type: 'string',
+        required: true,
+        description: 'Perpetual instrument id — market-canonical (BTCUSDT-SWAP) or OKX native (BTC-USDT-SWAP); spot symbols are rejected',
+      },
+      leverage: {
+        type: 'number',
+        required: true,
+        description: 'Target leverage multiplier (> 0). Must not exceed the exchange maximum (contract.maxLeverage); it is rejected, never clamped.',
+      },
+      marginMode: {
+        type: 'string',
+        enum: ['cross', 'isolated'],
+        description: 'Margin mode: cross (default, whole-account) or isolated (per-position; OKX also needs posSide in long/short position mode)',
+        default: 'cross',
+      },
+      posSide: {
+        type: 'string',
+        enum: ['long', 'short'],
+        description: 'Position direction — required by OKX in long/short position mode, omit in net mode',
+      },
+      ccy: {
+        type: 'string',
+        description: 'Margin currency for cross mode under multi-currency margin; omit otherwise',
+      },
+      dryRun: {
+        type: 'boolean',
+        description:
+          'true (default) = simulate only and return a DRY-RUN receipt; false = request real execution (gated by the signed live-trading authority, env and user approval)',
+        default: true,
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(raw) {
+      const args = normalizeSetLeverageArgs(raw)
+      validateSetLeverageArgs(args)
+      const setLeverage = deps.trade.setLeverage
+      if (typeof setLeverage !== 'function') {
+        throw new TradingServiceError('TRADING_NOT_IMPLEMENTED', 'crypto_set_leverage: the routed trade connector does not implement setLeverage')
+      }
+      const setting = await setLeverage.call(deps.trade, {
+        symbol: args.instId,
+        leverage: args.leverage,
+        marginMode: args.marginMode ?? 'cross',
+        ...(args.posSide !== undefined ? { posSide: args.posSide } : {}),
+        ...(args.ccy !== undefined ? { ccy: args.ccy } : {}),
+        ...(args.dryRun !== undefined ? { dryRun: args.dryRun } : {}),
+      })
+      return JSON.stringify(setting.dryRun
+        ? {
+            ...setting,
+            note: 'DRY-RUN — simulated leverage change; no request was sent to OKX. The exchange maximum leverage is validated only on a real (dryRun=false) request.',
+          }
+        : setting)
+    },
+  })
+}
+
+function normalizeSetLeverageArgs(raw: unknown): SetLeverageArgs {
+  const args = (raw ?? {}) as SetLeverageArgs
+  const instId = typeof args.instId === 'string' ? args.instId.trim().toUpperCase() : (undefined as unknown as string)
+  return { ...args, instId }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1187,6 +1443,9 @@ export function apply(ctx: Context, config: Config): void {
   ctx.inject(['tradingCryptoTrade'], () => {
     registerTool(ctx, createPlaceOrderTool({ marketData, trade, config }), log)
 
+    // 杠杆/保证金模式（P7）：与下单同门槛的实盘动作，base 审批闸门按同名模式覆盖。
+    registerTool(ctx, createSetLeverageTool({ trade }), log)
+
     registerTool(ctx, defineTool({
       name: 'crypto_cancel_order',
       description: 'Cancel an OKX order by (instId, ordId). Cancelling an already-terminal order (filled/canceled) is reported as already-terminal, not an error.',
@@ -1237,7 +1496,10 @@ export function apply(ctx: Context, config: Config): void {
 
     registerTool(ctx, defineTool({
       name: 'crypto_get_positions',
-      description: 'Read the OKX account positions (size converted from contracts to coins for swaps, entry/mark price, unrealized PnL, leverage). Read-only.',
+      description:
+        'Read the OKX account positions: size is converted from contracts to coins for swaps, with entry/mark price, unrealized PnL and leverage. '
+        + 'Perpetual positions also carry the exchange-reported liquidation price, maintenance margin ratio, margin mode (cross/isolated) and USD notional '
+        + 'when OKX returns them — these drive the pre-trade risk checklist; absent means the exchange did not report it, never a locally computed value. Read-only.',
       parameters: {},
       output: {
         schema: { type: 'string' },

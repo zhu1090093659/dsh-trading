@@ -15,8 +15,8 @@
  *   绝不返回空数组冒充「无持仓 / 无挂单 / 空盘口」。
  * - **账户数据是券商/交易所真实状态**，与资产台账（holdings，导入型记账）无关；
  *   核对真实持仓必须用本族工具。
- * - 纯只读：不命中 ORDER_GATE_PATTERN（/^(?:crypto|us|cn|hk|futures|global)_(?:place|cancel)_order$/），
- *   无交易语义，不进审批闸门（铁律 #3 不涉及）。
+ * - 纯只读：不命中 LIVE_ACTION_GATE_PATTERN（下单/撤单 + `crypto_set_leverage` 等
+ *   实盘动作；见 ./index.ts），无交易语义，不进审批闸门（铁律 #3 不涉及）。
  *
  * @module @dshtrading/base/market-tools
  */
@@ -310,6 +310,9 @@ export function createAccountTools(market: string, getRegistry: () => TradeRegis
       name: `${market}_get_positions`,
       description:
         `Read-only ${market} account positions from the currently routed trade connector. ${accountNote} `
+        + 'Perpetual/contract positions carry the exchange-reported leverage, liquidation price, maintenance margin ratio, margin mode and USD notional '
+        + 'when the connector and exchange provide them (size is converted to base coins); an absent field means the exchange did not report it, never a '
+        + 'locally computed value. '
         + 'If the connector does not expose positions the call fails with TRADING_NOT_IMPLEMENTED — that is "not available", '
         + 'NOT a flat account; never report it as no positions.',
       parameters: {},

@@ -19,6 +19,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { createGetIndicatorsTool } from '@dshtrading/indicators/tool'
 import type { DerivativesData, DerivativesHistory, Disposable, InstrumentRef, Interval, Kline, MarketDataService, Orderbook, Ticker, TradeTick } from '@dshtrading/api'
+import { instrumentFormOf } from '@dshtrading/api'
 import { BinanceRestClient, INTERVAL_VOCABULARY, TradingServiceError, normalizeBinanceFuturesSymbol } from './rest.js'
 import type { BinanceRestOptions } from './rest.js'
 
@@ -288,8 +289,17 @@ export function evaluateOrderGate(config: Config, args: PlaceOrderArgs): OrderGa
 /** Binance 现货符号形如 BTCUSDT / ETHUSDT：大写字母数字（kit 同款词汇）。 */
 const SPOT_SYMBOL_PATTERN = /^[A-Z0-9]{4,20}$/
 
-/** 参数校验（模型调用问题抛普通 Error，与 kit 先例一致；服务故障才用错误词汇）。 */
+/** 参数校验（模型调用错误词汇：合约输入必须显式拒绝，不能落到现货端点）。 */
 function validatePlaceOrderArgs(args: PlaceOrderArgs): void {
+  // 合约（-SWAP）下单在本连接器未实现：显式结构化拒绝，绝不剥后缀后按现货语义下单
+  // （docs/symbol-vocabulary.md §3.4「不做合约的连接器显式拒绝」；行情面走 fapi，交易面无实现）。
+  if (instrumentFormOf(args.symbol) === 'perp') {
+    throw new TradingServiceError(
+      'TRADING_UNSUPPORTED_SYMBOL',
+      `crypto_place_order: ${args.symbol} is a perpetual — Binance contract order placement is not implemented in this connector (market data only); `
+        + 'use a spot symbol here or route crypto trades to the OKX connector. This path never falls back to the spot endpoint.',
+    )
+  }
   if (!SPOT_SYMBOL_PATTERN.test(args.symbol)) {
     throw new Error(`crypto_place_order: invalid symbol ${JSON.stringify(args.symbol)} — expected an uppercase Binance symbol like BTCUSDT`)
   }
@@ -377,7 +387,9 @@ export function createPlaceOrderTool(deps: PlaceOrderToolDeps) {
   return defineTool({
     name: 'crypto_place_order',
     description:
-      'Place a Binance spot order, or simulate one. dryRun defaults to true and returns a DRY-RUN simulated fill receipt with the current market price as reference. Real execution (dryRun=false) requires a signed live-trading grant plus user approval, and is not implemented yet in this slice.',
+      'Place a Binance SPOT order, or simulate one. dryRun defaults to true and returns a DRY-RUN simulated fill receipt with the current market price as reference. '
+      + 'Real execution (dryRun=false) requires a signed live-trading grant plus user approval, and is not implemented yet in this slice. '
+      + 'Perpetual (-SWAP) symbols are rejected with TRADING_UNSUPPORTED_SYMBOL — Binance contract order placement is not implemented; only contract market data is available.',
     parameters: {
       symbol: {
         type: 'string',

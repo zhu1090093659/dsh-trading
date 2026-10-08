@@ -136,6 +136,14 @@ P2 与 P3 包目录不重叠 → 可并发。P4 只依赖 P1 的类型定义 →
 
 不做则在 Tier 1 完成后明确「合约只读」。要做须覆盖：杠杆与保证金模式（OKX `tdMode` 已按 instType 分流，但杠杆设置端点 `set-leverage` 未接线）、张↔币换算（`ctVal`，源码已实现部分）、强平与追保语义、合约仓位进 `getPositions`、额度/mandate 判据（现货口径 `leverage=1` 会永不命中，需合约口径）、以及 `futures-risk-checklist` 与 `crypto-risk-checklist` 的归属划分。**触碰交易安全语义，需单独评审 + 人签署**。
 
+**已落地（2026-10-08，本仓）**：
+
+- OKX：`crypto_place_order` 永续下单按 `marginMode` 分 `tdMode`（缺省 `cross`，`isolated` 需先设杠杆）；`quantity` 恒为 base 币数，`rest.ts` 的 `coinsToContracts`/`contractsToCoins` 是张↔币换算的唯一实现（`ctVal` + `lotSz` **向下**取整，浮点容差不得上取）；`crypto_set_leverage` 接线 `POST /api/v5/account/set-leverage`（超交易所上限即拒绝、不静默截断）；`getPositions` 回带 `liquidationPrice`/`marginRatio`/`marginMode`/`notionalUsd`（交易所口径，缺席不本地补算）。
+- 闸门：杠杆/保证金变更与下单同门槛（服务缝三态 + 工具层 + base `LIVE_ACTION_GATE_PATTERN` 审批；headless ask=deny）；dry-run 仍是缺省，实盘仍需人工签署授权。Binance 路由下 `-SWAP` 下单显式 `TRADING_UNSUPPORTED_SYMBOL`，不回落现货端点。
+- 知识归属：`crypto-risk-checklist` 拥有加密/TradFi 永续（含杠杆与保证金模式、强平口径），`futures-risk-checklist` 只管国内期货，两份清单各有归属表。
+- **未落地（跨仓）**：额度/mandate 的合约口径判定（`leverage=1` 现货口径永不命中）在私有卫星仓 `dsh-trading-bot` 的 tradectl，本仓只提供交易所侧语义与读数；本仓不接线该面。
+- 判据：`packages/connector-okx/test/contract-trading.test.ts`（换算向量/闸门矩阵/tdMode 分流/持仓字段）、`packages/base/test/live-action-gate.test.ts`、`packages/connector-binance/test/place-order.test.ts`（`-SWAP` 拒绝）。
+
 ## 3. 验收判据
 
 ### 3.1 卡级
@@ -148,7 +156,7 @@ P2 与 P3 包目录不重叠 → 可并发。P4 只依赖 P1 的类型定义 →
 | P4 | `instruments_search query=BTCUSDT-SWAP` 与 `query=TSLA` 命中含 form 的行（当前必空）；`query=BTC` 结果里现货与永续都能出现且不被截断吞掉 |
 | P5 | 侧栏能搜到并加入 `TSLAUSDT-SWAP`，报价/K 线渲染正常（OKX 路由）；截图存 `.local/acceptance/`；现货页签回归截图对比 |
 | P6 | `crypto_get_derivatives` 在 provider=okx 时打到 OKX（fetch 断言），Binance 路由下行为不变；两个 Skill 的 diff 只增合约条目 |
-| P7 | 独立卡自带判据（dry-run 默认、liveTrading 关闭时的结构化拒绝、张↔币换算向量） |
+| P7 | 已落地：dry-run 默认（服务缝不触网断言）、liveTrading 关闭时结构化拒绝、张↔币换算向量（含「略低于整数张不上取」回归样本）、`marginMode=isolated` → `tdMode=isolated`、超上限杠杆拒绝；Binance `-SWAP` 下单结构化拒绝 |
 
 ### 3.2 端到端（Tier 1 完成）
 

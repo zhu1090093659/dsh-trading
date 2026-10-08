@@ -110,7 +110,8 @@ API key 安全（`#overview-api-key-creation-api-key-security`）：
 | `POST /api/v5/trade/cancel-order` | `instId` + `ordId` 或 `clOrdId`（都传时 `ordId` 优先） | 60 次/2 秒（除期权按 UserID+instId） | `#order-book-trading-trade-post-cancel-order` |
 | `GET /api/v5/trade/order` | `instId`（必填）+ `ordId`/`clOrdId`；返回 `state/accFillSz/avgPx/...` | 60 次/2 秒 | `#order-book-trading-trade-get-order-details` |
 | `GET /api/v5/account/balance` | `ccy` 可选（逗号分隔 ≤20 币种）；返回各币 `availEq/availBal/frozenBal` 等 | 10 次/2 秒（按 UserID） | `#trading-account-rest-api-get-balance` |
-| `GET /api/v5/account/positions` | `instId`/`instType` 可选过滤；返回 `pos/posSide/avgPx/upl/lever` 等 | 10 次/2 秒（按 UserID） | `#trading-account-rest-api-get-positions` |
+| `GET /api/v5/account/positions` | `instId`/`instType` 可选过滤；返回 `pos/posSide/avgPx/upl/lever/liqPx/mgnRatio/mgnMode/notionalUsd` 等 | 10 次/2 秒（按 UserID） | `#trading-account-rest-api-get-positions` |
+| `POST /api/v5/account/set-leverage` | `instId` + `lever` + `mgnMode`（`cross`/`isolated`）+ `posSide`（双向持仓模式）；实盘动作，与下单同门槛 | —（实现时查） | `#trading-account-rest-api-set-leverage` |
 
 `POST /api/v5/trade/order` 关键参数：
 
@@ -121,7 +122,7 @@ API key 安全（`#overview-api-key-creation-api-key-security`）：
   - `cross` —— 全仓杠杆/合约；
   - `isolated` —— 逐仓；**文档注明仅适用于现货逐仓（spot margin isolated），且多币种保证金/组合保证金模式下不可用**；
   - `spot_isolated` —— 仅 SPOT 带单场景。
-  - 第一期映射：现货 → `cash`；永续 → `cross`（默认）或 `isolated`（需先设杠杆，`POST /api/v5/account/set-leverage`，二期）。
+  - 映射（P7 已接线，见 §9）：现货 → `cash`；永续 → `cross`（缺省）或 `isolated`（须先用 `POST /api/v5/account/set-leverage` 设好该标的的逐仓杠杆）。现货订单传 marginMode 一律结构化拒绝（现货杠杆/逐仓是另一个未接线产品面）。
 - 市价单现货专用 `tgtCcy`：`base_ccy`/`quote_ccy`，**缺省 buy=quote_ccy（按 USDT 金额）、sell=base_ccy（按币数）**——§4 的坑。
 
 ## 4. instId 词汇与数量单位
@@ -237,6 +238,20 @@ passphraseRef: OKX_PASSPHRASE
 3. **R3 demo 下单闭环（核心验收）**：`env='demo'` 强制 `x-simulated-trading: 1`；place/cancel/get-order；三段闸门 + base 审批联动；`sz` 单位换算（instruments 缓存 `ctVal/lotSz/minSz`）。
 4. **R4 live**：`env='live'` 显式解锁 + 用户手册（权限只勾 Read+Trade、IP 白名单与 14 天过期提示、passphrase 不可找回）。
 5. 同步产物：`@dshtrading/api` 增加 `tradingCryptoTrade`（若走 C）；kit-crypto 的 crypto-risk-checklist skill 补 OKX demo 使用法。
+
+## 9. 实现现状（2026-10-08，P7 合约交易 Tier 2）
+
+上面的调研清单里，合约相关项现在这样落地（代码是权威，本节只记实现口径与理由）：
+
+| 语义 | 实现口径 |
+|---|---|
+| 数量单位 | 对外（工具/服务）`quantity` 恒为 **base 币数**；SWAP 在 `rest.ts` 的 `coinsToContracts` 按 `ctVal` 折算张数并按 `lotSz` **向下**取整（浮点容差是相对量级 + 硬性兜底，任何输入都不上取放大敞口）；`contractsToCoins` 是逆运算。 |
+| 保证金模式 | `crypto_place_order` 的 `marginMode`（缺省 `cross`）决定 `tdMode`；`isolated` 需先经 `crypto_set_leverage` 设好该标的的逐仓杠杆。现货传 `marginMode` → `TRADING_UNSUPPORTED_SYMBOL`，不静默回落 `cash`。 |
+| 杠杆设置 | `crypto_set_leverage`（`POST /api/v5/account/set-leverage`）：dryRun 缺省 true（本地回执不触网）；`dryRun=false` 须人工签署的实盘授权；超过交易所规格 `lever` 的请求结构化拒绝，**不静默截断**。 |
+| 强平/保证金读数 | `getPositions` 透传 `liqPx` → `liquidationPrice`、`mgnRatio` → `marginRatio`、`mgnMode` → `marginMode`、`notionalUsd` → `notionalUsd`；缺席即不展示，本地不倒算强平价。 |
+| 闸门 | 杠杆/保证金变更与下单共用同一套三态闸门（服务缝第一步 + 工具层 + base 统一审批 `LIVE_ACTION_GATE_PATTERN`），headless 下 ask=deny，fail-closed。 |
+
+不在本仓的能力面：额度/mandate 的合约口径判定（`leverage=1` 现货口径永不命中）在私有卫星仓 `dsh-trading-bot` 的 tradectl 里，本仓只提供交易所侧语义与读数。
 
 ### 8.4 待验证清单（实现期第一件事）
 

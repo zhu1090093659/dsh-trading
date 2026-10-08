@@ -330,16 +330,29 @@ export interface OkxInstrument {
   readonly instCategory?: number
 }
 
-/** POST /api/v5/trade/order 请求体词汇（R3 只做 market/limit；tdMode 现货=cash、永续=cross）。 */
+/** POST /api/v5/trade/order 请求体词汇（R3 只做 market/limit；tdMode 现货=cash、永续=cross/isolated）。 */
 export interface OkxPlaceOrderParams {
   readonly instId: string
-  readonly tdMode: 'cash' | 'cross'
+  readonly tdMode: 'cash' | 'cross' | 'isolated'
   readonly side: 'buy' | 'sell'
   readonly ordType: 'market' | 'limit'
   /** 字符串数量：SPOT=base 币数（market 单显式 tgtCcy=base_ccy）；SWAP=张（=coins/ctVal）。 */
   readonly sz: string
   readonly px?: string
   readonly tgtCcy?: 'base_ccy' | 'quote_ccy'
+}
+
+/**
+ * POST /api/v5/account/set-leverage 请求体词汇（P7；仅 SWAP 走本仓接线）。
+ * `mgnMode` 与下单 `tdMode` 同词汇；逐仓/双向持仓模式下 `posSide` 必填（交易所裁定，
+ * 本仓不猜账户持仓模式：缺席即按原样透传，由交易所报错，不本地补位）。
+ */
+export interface OkxSetLeverageParams {
+  readonly instId: string
+  readonly lever: string
+  readonly mgnMode: 'cross' | 'isolated'
+  readonly posSide?: 'long' | 'short'
+  readonly ccy?: string
 }
 
 /** 客户端侧 sz 纪律校验结果：换算后的交易所数量字符串 + 提示（index.ts 组装请求体）。 */
@@ -350,6 +363,83 @@ export interface NormalizedSize {
   readonly tgtCcy?: 'base_ccy'
 }
 
+/**
+ * 张 ↔ 币换算（P7 的唯一换算实现，向量判据在 test/contract-trading.test.ts）：
+ * 合约数量（张）= 币数 / ctVal，再按 lotSz 步进**向下**取整。
+ *
+ * 向下取整是安全方向：宁可少开，绝不因浮点误差把敞口放大一档。实现用
+ * **相对**容差吸收 `0.9999999999` 这类表示误差，并用一次硬性比较兜底
+ * （步进结果超过请求张数就退一档）——旧实现的 `Math.floor(x + 1e-9)`
+ * 在商刚好略小于整数时会向上跳一档，与「绝不上取」的注释不符。
+ */
+export function coinsToContracts(instId: string, instrument: OkxInstrument, quantityCoins: number): number {
+  const ctVal = instrument.ctVal
+  if (ctVal === undefined || !Number.isFinite(ctVal) || ctVal <= 0) {
+    throw new TradingServiceError(
+      'TRADING_EXCHANGE_ERROR',
+      `OKX ${instId}: swap instrument has no usable ctVal (${String(ctVal)}) — refusing to guess a contract multiplier`,
+    )
+  }
+  const rawContracts = quantityCoins / ctVal
+  if (!Number.isFinite(rawContracts) || rawContracts <= 0) {
+    throw new TradingServiceError(
+      'TRADING_EXCHANGE_ERROR',
+      `OKX ${instId}: quantity ${quantityCoins} coins does not convert to a positive contract amount (ctVal=${ctVal})`,
+    )
+  }
+  // minSz 在合约侧是「最小张数」（交易所元数据，单位同 lotSz）：先按张校验，再按 lotSz 步进。
+  if (rawContracts < instrument.minSz) {
+    throw new TradingServiceError(
+      'TRADING_EXCHANGE_ERROR',
+      `OKX ${instId}: quantity ${quantityCoins} coins = ${rawContracts} contracts is below minSz ${instrument.minSz}`,
+    )
+  }
+  return stepDown(instId, rawContracts, instrument.lotSz, `coins=${quantityCoins}`)
+}
+
+/** 张 → 币（基币数量 = 张数 × ctVal；ctVal 缺席即拒绝，不虚构换算）。 */
+export function contractsToCoins(instId: string, instrument: OkxInstrument, contracts: number): number {
+  const ctVal = instrument.ctVal
+  if (ctVal === undefined || !Number.isFinite(ctVal) || ctVal <= 0) {
+    throw new TradingServiceError(
+      'TRADING_EXCHANGE_ERROR',
+      `OKX ${instId}: swap instrument has no usable ctVal (${String(ctVal)})`,
+    )
+  }
+  return contracts * ctVal
+}
+
+/**
+ * 按步进向下取整（安全方向：结果恒不超过 `amount`）。
+ * 容差是相对的（`Number.EPSILON` 量级），只吸收浮点表示误差；随后用一次
+ * 硬比较兜底，保证任何输入都不会被向上放大一档。
+ */
+function stepDown(instId: string, amount: number, step: number, label: string): number {
+  if (!Number.isFinite(step) || step <= 0) {
+    throw new TradingServiceError(
+      'TRADING_EXCHANGE_ERROR',
+      `OKX ${instId}: instrument has no usable lot step (${String(step)})`,
+    )
+  }
+  if (amount < step) {
+    throw new TradingServiceError(
+      'TRADING_EXCHANGE_ERROR',
+      `OKX ${instId}: ${label} is below the minimum lot step ${step}`,
+    )
+  }
+  const rawSteps = amount / step
+  const tolerance = Math.max(Number.EPSILON * 8 * Math.abs(rawSteps), 1e-12)
+  let steps = Math.floor(rawSteps + tolerance)
+  if (steps * step > amount * (1 + 1e-12)) steps -= 1
+  if (steps <= 0) {
+    throw new TradingServiceError(
+      'TRADING_EXCHANGE_ERROR',
+      `OKX ${instId}: ${label} rounds down to 0 at lotSz ${step}`,
+    )
+  }
+  return steps * step
+}
+
 /** 把 api 语义的 base 币数量换算成 OKX sz（本地精度校验：minSz/lotSz，省一次 51000 往返）。 */
 export function normalizeSize(
   instId: string,
@@ -357,33 +447,23 @@ export function normalizeSize(
   quantityCoins: number,
 ): NormalizedSize {
   const isSwap = instrument.instType === 'SWAP'
-  const amountInExchangeUnit = isSwap
-    ? quantityCoins / (instrument.ctVal ?? Number.NaN)
-    : quantityCoins
-  if (!Number.isFinite(amountInExchangeUnit) || amountInExchangeUnit <= 0) {
+  if (isSwap) {
+    // 张↔币换算（含 minSz 与 lotSz 两道本地校验）的唯一实现在 coinsToContracts。
+    return { sz: trimNumber(coinsToContracts(instId, instrument, quantityCoins)) }
+  }
+  if (!Number.isFinite(quantityCoins) || quantityCoins <= 0) {
     throw new TradingServiceError(
       'TRADING_EXCHANGE_ERROR',
-      `OKX ${instId}: quantity ${quantityCoins} does not convert to a positive exchange amount`
-        + (isSwap ? ` (ctVal=${String(instrument.ctVal)})` : ''),
+      `OKX ${instId}: quantity ${quantityCoins} is not a positive base-asset amount`,
     )
   }
-  if (amountInExchangeUnit < instrument.minSz) {
+  if (quantityCoins < instrument.minSz) {
     throw new TradingServiceError(
       'TRADING_EXCHANGE_ERROR',
-      `OKX ${instId}: quantity ${quantityCoins} coins = ${amountInExchangeUnit} ${isSwap ? 'contracts' : 'base units'} is below minSz ${instrument.minSz}`,
+      `OKX ${instId}: quantity ${quantityCoins} coins is below minSz ${instrument.minSz}`,
     )
   }
-  // 按 lotSz 步进向下取整（浮点噪声用 epsilon 消化）；向下保守，绝不上取放大敞口。
-  const step = instrument.lotSz
-  const units = Math.floor(amountInExchangeUnit / step + 1e-9) * step
-  if (units <= 0) {
-    throw new TradingServiceError(
-      'TRADING_EXCHANGE_ERROR',
-      `OKX ${instId}: quantity ${quantityCoins} coins rounds down to 0 at lotSz ${step}`,
-    )
-  }
-  const sz = trimNumber(units)
-  return isSwap ? { sz } : { sz, tgtCcy: 'base_ccy' }
+  return { sz: trimNumber(stepDown(instId, quantityCoins, instrument.lotSz, `quantity=${quantityCoins} coins`)), tgtCcy: 'base_ccy' }
 }
 
 /** 输出无尾随浮点噪声的数量字符串（最多 12 位有效小数）。 */
@@ -943,6 +1023,18 @@ export class OkxRestClient {
   /** 下单：POST /api/v5/trade/order（60 次/2s）。 */
   async placeOrder(params: OkxPlaceOrderParams, auth: SignedAuth): Promise<unknown[]> {
     return this.request('/api/v5/trade/order', {
+      method: 'POST',
+      body: JSON.stringify(params),
+      auth,
+    })
+  }
+
+  /**
+   * 设置杠杆/保证金模式：POST /api/v5/account/set-leverage（P7；实盘动作，与下单同门槛）。
+   * 只发请求不判定闸门——三态闸门由 OkxTradeService.setLeverage 在调用本方法前执行。
+   */
+  async setLeverage(params: OkxSetLeverageParams, auth: SignedAuth): Promise<unknown[]> {
+    return this.request('/api/v5/account/set-leverage', {
       method: 'POST',
       body: JSON.stringify(params),
       auth,
