@@ -83,3 +83,5 @@ connector-futu 的 HTTP 契约（GET /api/qot/*）没有真实载体：原版 Fu
 `placeOrder`/`cancelOrder` 改 POST 并带 `trdEnv`（由**同一道实盘闸门** `liveTradingEnabled` 决定，
 缺省 SIMULATE）+ 可选 `accId`；新增 `getPendingOrders()`（`FutuPendingOrder[]`）与 `Config.accId`；
 `TradeService.listOpenOrders()` 从 `[]` 改成真挂单列表（`getOrders()` 同源）。
+  同日收紧一处旧兜底：**下单回执缺 `orderId`/`orderID` 时抛 `TRADING_UPSTREAM_ERROR`**，
+  不再回退到自编的 `futu-<时间戳>`（与执行核适配器「绝不编 id」同口径；桥现在也保证缺 id 就 `retType:-1`）。

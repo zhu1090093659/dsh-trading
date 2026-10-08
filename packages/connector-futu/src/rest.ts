@@ -351,7 +351,13 @@ export class FutuRestClient {
       ...(accId !== undefined ? { accId } : {}),
     })
 
-    const id = data.orderId ?? data.orderID ?? `futu-${Date.now()}`
+    // 回执缺 id 时**抛错**，绝不自己编一个：执行核拿这个 id 当 venue 句柄写进 intent 账本，
+    // 编出来的 id 会让"这单在不在 venue 上"变成一句假话（与执行核适配器同口径）。
+    const id = data.orderId ?? data.orderID
+    if (typeof id !== 'string' || id.trim() === '') {
+      throw new TradingServiceError('TRADING_UPSTREAM_ERROR',
+        `FutuOpenD 下单回执缺少 orderId/orderID（${JSON.stringify(data)}）：拿不到 venue 侧句柄就不算已提交`)
+    }
     // 真实回执：side/type 落 OrderSide/OrderType 契约词汇，dryRun 显式回带 false
     // （回执必须显式回带，防 dry-run 语义丢失；issue #58）。
     return {

@@ -111,6 +111,17 @@ describe('FutuRestClient 交易面（POST + JSON）', () => {
     expect(calls[0]?.body).toEqual({ orderId: '9769893', trdEnv: 'SIMULATE', accId: 11704133 })
   })
 
+  it('operator 下单回执缺 orderId 时抛错：绝不自己编一个 venue 句柄', async () => {
+    // Given 桥回了成功但没有 orderId（历史实现会在这里回退到 futu-<时间戳>）
+    const { impl } = stubFetch([{ match: '/api/trd/place-order', body: { retType: 0, data: {} } }])
+    const client = new FutuRestClient({ fetchImpl: impl })
+    // When 下单
+    // Then 抛错（编出来的 id 会进 intent 账本与启动对账，等式两边都错）
+    await expect(client.placeOrder(undefined, {
+      symbol: '00700.HK', side: 'BUY', type: 'LIMIT', quantity: 100, price: 380,
+    })).rejects.toMatchObject({ code: 'TRADING_UPSTREAM_ERROR' })
+  })
+
   it('operator 账户配 0 时不发 accId 格子（交给 OpenD 的默认账户）', async () => {
     // Given 没配账户 id（缺省 0）
     const { impl, calls } = stubFetch([{ match: '/api/trd/place-order', body: { retType: 0, data: { orderId: 'futu-ord-1' } } }])
