@@ -149,7 +149,7 @@ export function orderTypeOf(venueType: string): Order['type'] {
  *
  * `dryRun: false`：这是 venue 侧真存在的单子（不是本地模拟回执）。时间戳取 venue 的
  * `createTime`（桥已转成 ISO UTC）；认不出就抛，**不用读表时刻顶替**（顶替会让"这单什么时候挂的"
- * 变成一句假话）。
+ * 变成一句假话）。`qty` 同理：桥没给就抛，**不折成 0**（0 会让"挂了多少股"变成另一句假话）。
  */
 export function toOrder(row: FutuPendingOrder): Order {
   const side = row.trdSide?.trim().toUpperCase()
@@ -162,6 +162,12 @@ export function toOrder(row: FutuPendingOrder): Order {
     throw new TradingServiceError('TRADING_EXCHANGE_ERROR',
       `Futu: 挂单 ${row.orderId} 的 createTime 认不出（${JSON.stringify(row.createTime)}）`)
   }
+  // 数量缺了就抛：历史的 `row.qty ?? 0` 会把"挂了多少股"静默变成 0 —— 挂单行是对账的输入，
+  // 一句假数量比一句报错更坏（与 createTime／方向／类型同一条口径：认不出即抛）。
+  if (row.qty === undefined) {
+    throw new TradingServiceError('TRADING_EXCHANGE_ERROR',
+      `Futu: 挂单 ${row.orderId} 缺 qty（${JSON.stringify(row.qty)}）——挂了多少股不许折成 0`)
+  }
   return {
     id: row.orderId,
     symbol: normalizeSymbol(row.code),
@@ -169,7 +175,7 @@ export function toOrder(row: FutuPendingOrder): Order {
     type: orderTypeOf(row.orderType ?? ''),
     status: orderStatusOf(row.orderStatus),
     ...(row.price !== undefined ? { price: row.price } : {}),
-    quantity: row.qty ?? 0,
+    quantity: row.qty,
     ...(row.dealtQty !== undefined ? { filledQuantity: row.dealtQty } : {}),
     dryRun: false,
     timestamp: createdMs,

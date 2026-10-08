@@ -1,0 +1,115 @@
+# PR #103 三条非阻断发现的现场复验（2026-10-09）
+
+PR #103（已合并 `ea4986ac`）的独立审查给了四条非阻断发现，其中三条在本次逐条修掉并复验：
+
+| # | 发现 | 修在哪 |
+|---|---|---|
+| ① | 默认 `accId=0` 时客户端"能下单、不能撤单"：缺 accId 时只能等 OpenD/桥回一句上游错误串，不是结构化拒绝，也无 `accId=0` 撤单的用例 | `packages/connector-futu/src/rest.ts`（`requireAccId`） |
+| ② | 桥对 `trdSide`/`orderType` 接受 JSON 布尔（Python 的 `True in (1, 2)` 为真 ⇒ `true` 被当"买入/限价"放行） | `scripts/futu-openapi-bridge.py`（`handle_place_order` 加布尔闸） |
+| ③ | `toOrder` 对缺失 `qty` 静默落 0（`row.qty ?? 0`） | `packages/connector-futu/src/index.ts` |
+
+（审查的第 4 条发现——"账户 id 已脱敏"与事实不符——不在本次范围；本文件按既有纪律
+**不把账户号写进仓库**，一律用 `<redacted-accId>`。）
+
+## 运行环境
+
+- OpenD：`Futu_OpenD` 本机 127.0.0.1:11111（人本已登录，2026-10-09 复验时在线）。
+- 桥：本仓 `scripts/futu-openapi-bridge.py`，**旁路端口 11113**（`FUTU_BRIDGE_PORT=11113`）。
+  **常驻桥 11112 与它的 LaunchAgent（`com.dshtrading.futu-openapi-bridge`）全程未动**：
+  11112 当时本来就无监听，LaunchAgent 服务未加载，plist 未改。
+- 账户：OpenD `get_acc_list` 列出 HK SIMULATE 两个（CASH / MARGIN）+ US SIMULATE 一个，
+  与 PR #103 现场同一台 OpenD。本次用 HK CASH 与 US 那个，**账户号已替换为
+  `<redacted-accId>`**。**一律 SIMULATE**，没有 REAL 账户，也没有做 `unlock_trade`
+  （SIMULATE 下单不需要）。
+- 复验探针产生的挂单**全部撤掉**，复验结束时 HK / US 现场挂单均为 0 单。
+
+## ② 桥拒 JSON 布尔（原始响应，`curl` 直打 11113）
+
+    $ B=http://127.0.0.1:11113
+    $ curl -s -X POST -H 'content-type: application/json' \
+        -d '{"security":"HK.00700","trdSide":true,"orderType":1,"qty":100,"price":300,"trdEnv":"SIMULATE","accId":<redacted-accId>}' \
+        $B/api/trd/place-order
+    {"retType": -1, "retMsg": "place-order: trdSide \u5fc5\u987b\u662f 1(\u4e70)/2(\u5356) \u7684\u6574\u6570\uff0c\u6536\u5230 True", "data": null}
+    $ curl -s ... -d '{"security":"HK.00700","trdSide":false,...}'
+    {"retType": -1, "retMsg": "place-order: trdSide ... 收到 False", "data": null}
+    $ curl -s ... -d '{"security":"HK.00700","trdSide":1,"orderType":true,...}'
+    {"retType": -1, "retMsg": "place-order: orderType ... 收到 True", "data": null}
+
+（`retMsg` 中文在原始 JSON 里是 `\uXXXX` 转义，解码即
+「place-order: trdSide 必须是 1(买)/2(卖) 的整数，收到 True」。）
+
+**对照：整数形态照常放行**——证明上面拒的是"布尔"这件事本身，不是把整条下单面关掉：
+
+    $ curl -s ... -d '{"security":"HK.00700","trdSide":1,"orderType":1,"qty":100,"price":300,"trdEnv":"SIMULATE","accId":<redacted-accId>,"remark":"guard-control-2026-10-09"}' $B/api/trd/place-order
+    {"retType": 0, "retMsg": "", "data": {"orderId": "9771470", "code": "HK.00700"}}
+    $ curl -s ... -d '{"market":"HK","trdEnv":"SIMULATE","accId":<redacted-accId>}' $B/api/trd/get-orders
+    {"retType": 0, "retMsg": "", "data": {"orders": [{"orderId": "9771470", "code": "HK.00700", "orderStatus": "SUBMITTED",
+      "remark": "guard-control-2026-10-09", "stockName": "\u817e\u8baf\u63a7\u80a1", "trdSide": "BUY",
+      "orderType": "ABSOLUTE_LIMIT", "qty": 100.0, "price": 300.0, "dealtQty": 0.0,
+      "dealtAvgPrice": 0.0, "createTime": "2026-10-08T23:46:24Z"}]}}
+
+## ① 撤单缺 accId（桥侧 + 客户端侧）
+
+桥侧（原始响应）：
+
+    $ curl -s ... -d '{"orderId":"1","trdEnv":"SIMULATE"}' $B/api/trd/cancel-order
+    {"retType": -1, "retMsg": "cancel-order: \u5fc5\u987b\u7ed9 accId \u2014\u2014 \u8fd9\u6761\u8bf7\u6c42\u91cc\u6ca1\u6709 market ...", "data": null}
+    $ curl -s ... -d '{"orderId":"1","trdEnv":"SIMULATE","accId":0}' $B/api/trd/cancel-order
+    {"retType": -1, "retMsg": "cancel-order: 必须给 accId ...", "data": null}
+
+客户端侧（`npx tsx` 真跑 `FutuRestClient` → 桥 11113 → 真 OpenD；输出原样，账户号已脱敏）：
+
+    [①a] code=TRADING_ACCOUNT_REQUIRED name=TradingServiceError
+    [①a] message=Futu: cancel-order 必须显式给 accId（config.accId 或 credentials.accId）——这条请求里没有
+          market，HK / US 是两套 trd 上下文，桥不替你猜账户；0 / 缺省在其它调用里意为"用 OpenD 的默认账户"，
+          但撤单不接受它
+    [①b] code=TRADING_ACCOUNT_REQUIRED          # accId 显式配 0
+    [①c] 撤单前挂单 1 单；首行 orderId=9771470 qty=100 trdSide=BUY orderType=ABSOLUTE_LIMIT
+    [①c] cancelOrder -> {"orderId":"9771470","status":"canceled"}
+    [①c] 撤单后挂单 0 单
+
+**桥日志证明"结构化拒绝"是出站前发生的**（①② 三次布尔拒绝与 ①a/①b 两次缺账户拒绝
+都**没有**在桥日志里留下请求——桥根本没被敲到）：
+
+    POST /api/trd/place-order -> retType=-1      # trdSide=true
+    POST /api/trd/place-order -> retType=-1      # trdSide=false
+    POST /api/trd/place-order -> retType=-1      # orderType=true
+    POST /api/trd/place-order -> retType=0       # 对照：整数形态
+    POST /api/trd/get-orders -> retType=0        # 对照：挂单快照
+    POST /api/trd/cancel-order -> retType=-1     # curl 直打：缺 accId
+    POST /api/trd/cancel-order -> retType=-1     # curl 直打：accId=0
+    POST /api/trd/get-orders -> retType=0        # ①c 真客户端读挂单
+    POST /api/trd/cancel-order -> retType=0      # ①c 真客户端撤单（唯一一条 cancel 出站）
+
+## 执行核侧未回归（卫星仓 dsh-trading-bot）
+
+用 PR #103 证据里那同一条探针（`drill/futu-bridge-probe.ts`）打**同一份修好的桥**：
+
+    $ node packages/tradectl/drill/futu-bridge-probe.ts --bridge=http://127.0.0.1:11113 \
+        --hk-account=<redacted-accId> --us-account=<redacted-accId>
+    [futu-probe] 路由证据：futu 非加密：markets=hk,us channel=demo(trdEnv=SIMULATE) 账户=hk:<redacted-accId>,us:<redacted-accId> ...
+    [futu-probe] 挂单快照：0 单（HK + US 各自的账户各问了一次）
+    [futu-probe] {"ok":true,"stage":"read-only","markets":["hk","us"],"pending":0}
+    probe exit 0
+
+    $ FUTU_BRIDGE_ALLOW_ORDERS=1 node packages/tradectl/drill/futu-bridge-probe.ts --bridge=http://127.0.0.1:11113 \
+        --hk-account=<redacted-accId> --allow-orders --symbol=00700.HK --price=300 --size=100
+    [futu-probe] 已下单（HK.00700 限价买 100 @ 300）：venueOrderId=9771471
+    [futu-probe] 读回：挂单里看得见这一单
+    [futu-probe] 收尾：三面都用过一遍（下单 → 读回 → 撤单 → 确认不在挂单里）
+    [futu-probe] {"ok":true,"stage":"full-round-trip","markets":["hk"],"visibleInPending":true,"venueOrderId":"9771471"}
+    probe exit 0
+
+（`--size=1` 那次被 OpenD 以**碎股**拒绝（"您所下订单包含不足1手数量的碎股"），与本次
+改动无关，HK 手数是 100；整数形态的 100 股链路 exit 0 已如上。）
+
+## 读法
+
+- 账户号一律 `<redacted-accId>`（`get_acc_list` 现场拿到真值后仅用于本次复验，不进仓库）；
+  `orderId` / `createTime` 等 venue 侧事实保留原值，与 `trd-*.json` 的处理一致。
+- 自动化判据（不依赖 OpenD、无网络）：
+  - `scripts/futu-openapi-bridge.test.mjs` 起**真桥进程**（`FUTU_BRIDGE_PORT=0`，内核选端口、
+    只监听回环）打 ② 的两条布尔 + `accId` 布尔 + `cancel-order` 缺 accId + GET 落 trd 路径 +
+    日志不落请求体；已接线进 `pnpm test:scripts`（CI static-gates 跑）。
+  - `packages/connector-futu/test/trade-face.test.ts` 打 ①（缺账户 / `accId=0` 都结构化拒绝、
+    **零出站**）与 ③（缺 `qty` 即抛），跑 `pnpm --filter @dshtrading/connector-futu test`。

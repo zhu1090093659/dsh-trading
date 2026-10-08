@@ -85,3 +85,29 @@ connector-futu 的 HTTP 契约（GET /api/qot/*）没有真实载体：原版 Fu
 `TradeService.listOpenOrders()` 从 `[]` 改成真挂单列表（`getOrders()` 同源）。
   同日收紧一处旧兜底：**下单回执缺 `orderId`/`orderID` 时抛 `TRADING_UPSTREAM_ERROR`**，
   不再回退到自编的 `futu-<时间戳>`（与执行核适配器「绝不编 id」同口径；桥现在也保证缺 id 就 `retType:-1`）。
+
+## Addendum (2026-10-09，PR #103 审查三条非阻断发现收口)
+
+PR #103 合并后，其独立审查的三条非阻断发现逐条修掉；每条都在**真 OpenD 的 SIMULATE 上复验过**
+（旁路端口 11113，未动常驻 11112 与它的 LaunchAgent），原始响应见
+`spikes/impl-futu-bridge/probe-guards-2026-10-09.txt`。
+
+- **① 撤单缺 `accId` 由客户端结构化拒绝**：桥的 `cancel-order` 必须显式给 `accId`（请求里没有 market，
+  HK / US 是两套 trd 上下文），但客户端此前沿用了通用的「0 / 缺省 = OpenD 默认账户」口径把这格省掉 ⇒
+  缺账户时只能等上游回一句错误串，读起来像"venue 拒了这笔单"，而事实是请求本身缺格。现在
+  `FutuRestClient.cancelOrder()` 走 `requireAccId()`：0 / 缺省**在出站前**抛 `TRADING_ACCOUNT_REQUIRED`
+  （`packages/api` 新增该错误码），一个请求都不发。`Config.accId` 的注释同批写明「撤单必须显式给」。
+- **② 桥拒 JSON 布尔 `trdSide`/`orderType`**：Python 的 `True in (1, 2)` 为真，此前 `trdSide: true`
+  会被静默读成"买入"、`orderType: true` 读成"限价"放行（`false` 恰好被拒）。桥现在对这两个格子
+  显式拦布尔（`accId`/`qty`/`price` 本就有这一拦）。
+- **③ `toOrder` 缺 `qty` 即抛**：历史实现是 `row.qty ?? 0`，会把"挂了多少股"静默变成 0；挂单行是
+  对账的输入，一句假数量比一句报错更坏。现在与方向 / `createTime` / 类型同一条口径：认不出即抛。
+
+**判据（自动化，不依赖 OpenD、无网络）**：新增 `scripts/futu-openapi-bridge.test.mjs`（起真桥进程、
+`FUTU_BRIDGE_PORT=0` 由内核选端口、只监听回环，打 ② 的两条布尔 + `accId` 布尔 + 缺 `accId` 撤单 +
+GET 落 trd 路径 + 日志不落请求体；已接线进 `pnpm test:scripts`，CI 的 static-gates 会跑）；
+`packages/connector-futu/test/trade-face.test.ts` 补 ①（缺账户 / `accId=0` 都结构化拒绝且**零出站**）
+与 ③（缺 `qty` 即抛）。
+
+**执行核侧未回归**：卫星仓同一条 `drill/futu-bridge-probe.ts` 打修好的桥，只读段 exit 0、
+`full-round-trip`（下单 → 读回 → 撤单 → 确认消失）exit 0。

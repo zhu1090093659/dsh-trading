@@ -42,7 +42,11 @@ export interface FutuRestOptions {
   market?: FutuMarket
   /** 交易面环境（缺省 `SIMULATE`）。 */
   trdEnv?: FutuTrdEnv
-  /** OpenD 账户 id（accId）。0 / 缺省 = 不发这一格，由 OpenD 用它的默认账户。 */
+  /**
+   * OpenD 账户 id（accId）。0 / 缺省 = 不发这一格，由 OpenD 用它的默认账户；
+   * **但撤单例外**：桥的 `cancel-order` 必须显式给，缺了在出站前就报
+   * `TRADING_ACCOUNT_REQUIRED`（见 `FutuRestClient.cancelOrder`）。
+   */
   accId?: number
 }
 
@@ -50,7 +54,7 @@ export interface FutuCredentials {
   readonly unlockPwd?: string
   /** 本次调用的交易环境（缺省用构造时的值，再缺省 SIMULATE）。 */
   readonly trdEnv?: FutuTrdEnv
-  /** 本次调用用的账户 id（缺省用构造时的值）。 */
+  /** 本次调用用的账户 id（缺省用构造时的值）。**撤单必须有正的 accId**（0/缺省会被拒）。 */
   readonly accId?: number
 }
 
@@ -202,6 +206,26 @@ export class FutuRestClient {
   private accIdOf(credentials?: FutuCredentials): number | undefined {
     const value = credentials?.accId ?? this.accId
     return value === undefined || value <= 0 ? undefined : value
+  }
+
+  /**
+   * 撤单的账户 id —— **必填，缺了在出站前抛**（不把"我们没给账户"变成一趟网络往返）。
+   *
+   * 为什么是客户端的事：桥的 `cancel-order` 请求里没有 market，而 HK / US 是两套 trd
+   * 上下文，桥不猜账户 ⇒ 它要求显式 `accId`。此前客户端沿用"0 / 缺省 = OpenD 默认账户"
+   * 的通用口径把这个空格省掉，于是缺账户时只能等 OpenD/桥回一句上游错误串（读起来像
+   * venue 拒单，实际是请求本身缺格）；而客户端手里本来就有全部信息。fail-closed：
+   * 宁可不出站，也不拿"某个默认账户"去撤一张不知道属于谁的挂单。
+   */
+  private requireAccId(credentials: FutuCredentials | undefined): number {
+    const accId = this.accIdOf(credentials)
+    if (accId === undefined) {
+      throw new TradingServiceError('TRADING_ACCOUNT_REQUIRED',
+        'Futu: cancel-order 必须显式给 accId（config.accId 或 credentials.accId）——'
+        + '这条请求里没有 market，HK / US 是两套 trd 上下文，桥不替你猜账户；'
+        + '0 / 缺省在其它调用里意为"用 OpenD 的默认账户"，但撤单不接受它')
+    }
+    return accId
   }
 
   /** 发一次请求，把 `{retType, retMsg, data}` 信封折成契约语义（GET / POST 共用）。 */
@@ -374,12 +398,13 @@ export class FutuRestClient {
   }
 
   async cancelOrder(credentials: FutuCredentials | undefined, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
-    const accId = this.accIdOf(credentials)
-    // 桥要求这条请求带 accId：请求里没有 market，而 HK / US 是两套 trd 上下文（桥不猜是哪个市场）。
+    // 桥要求这条请求带 accId（请求里没有 market，HK / US 是两套 trd 上下文）——
+    // 由 requireAccId 在出站前要出来：缺账户是**结构化拒绝**，不是一趟往返后的上游错误串。
+    const accId = this.requireAccId(credentials)
     await this.post('/api/trd/cancel-order', {
       orderId,
       trdEnv: this.trdEnvOf(credentials),
-      ...(accId !== undefined ? { accId } : {}),
+      accId,
     })
     return { orderId, status: 'canceled' }
   }

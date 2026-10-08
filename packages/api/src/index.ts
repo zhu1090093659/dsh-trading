@@ -776,6 +776,13 @@ export type TradingErrorCode =
   | 'TRADING_INSUFFICIENT_BALANCE'
   /** 未获人工签署实盘授权时拒绝实盘（铁律 #3）。 */
   | 'TRADING_LIVE_TRADING_DISABLED'
+  /**
+   * 请求缺一个**必填**的账户定位（当前用点：桥的 `cancel-order` 必须显式 `accId`——
+   * 请求里没有 market，HK / US 是两套 trd 上下文，桥不猜）。
+   * 与 TRADING_EXCHANGE_ERROR 分开：上游对同类缺格回的是它自己那句错误串，读起来像
+   * "venue 拒绝了这笔单"，而事实是**我们发错了请求**（客户端手里本来就有全部信息）。
+   */
+  | 'TRADING_ACCOUNT_REQUIRED'
   /** approval 被拒/无应答（headless fail-closed [S4]）。 */
   | 'TRADING_APPROVAL_DENIED'
   /** 本次为 dry-run 模拟结果（非故障语义）。 */

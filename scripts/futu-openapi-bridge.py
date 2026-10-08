@@ -26,6 +26,8 @@ with @dshtrading/connector-futu 的假定契约（GET + query，响应 {retType,
   GET 落到这三条 → retType:-1（trd paths are POST-only）；其它路径 → retType:-1（unsupported path）
   trdEnv 必填（没有"默认实盘"，也不替你挑环境）；accId 缺省/0 = OpenD 默认账户；
   **一个市场的账户不能拿去交易另一个市场**（accId 与 security/market 不符即拒）。
+  trdSide / orderType 只认整数 1/2：**JSON 布尔一律拒** —— Python 里 True == 1，
+  放行等于把 JSON 的 true 静默读成"买入/限价"（判据 scripts/futu-openapi-bridge.test.mjs）。
   unlock_trade 不在桥里做：账户密码是**人本**前置，不进仓库、不进本脚本。
 
 时区：time_key/update_time 按市场本地墙钟解析（US=美东含夏令时，HK=北京），统一转 ISO UTC。
@@ -331,11 +333,13 @@ def handle_place_order(body: dict) -> dict:
     if market == '':
         return err(f'place-order: 认不出的 security {security!r}（只服务 HK.* / US.*）')
     trd_side = body.get('trdSide')
-    if trd_side not in (1, 2):
-        return err(f'place-order: trdSide 必须是 1(买)/2(卖)，收到 {trd_side!r}')
+    # 布尔要单独拦：Python 里 True == 1、False == 0，`True in (1, 2)` 为真 ——
+    # 不拦就会把 JSON 的 true/false 静默读成交易方向（见 scripts/futu-openapi-bridge.test.mjs）。
+    if isinstance(trd_side, bool) or trd_side not in (1, 2):
+        return err(f'place-order: trdSide 必须是 1(买)/2(卖) 的整数，收到 {trd_side!r}')
     order_type = body.get('orderType')
-    if order_type not in (1, 2):
-        return err(f'place-order: orderType 必须是 1(限价)/2(市价)，收到 {order_type!r}')
+    if isinstance(order_type, bool) or order_type not in (1, 2):
+        return err(f'place-order: orderType 必须是 1(限价)/2(市价) 的整数，收到 {order_type!r}')
     qty = body.get('qty')
     if isinstance(qty, bool) or not isinstance(qty, (int, float)) or qty <= 0:
         return err(f'place-order: qty 必须是正数，收到 {qty!r}')
@@ -503,5 +507,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    print(f'futu-openapi-bridge listening on {LISTEN_HOST}:{LISTEN_PORT} -> OpenD {OPEND_HOST}:{OPEND_PORT}', flush=True)
-    ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler).serve_forever()
+    server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler)
+    # 打印**实际绑定的**端口（FUTU_BRIDGE_PORT=0 让内核选端口时，只回声环境变量会报出 0，
+    # 读日志的人/判据就拿不到真端口 —— 见 scripts/futu-openapi-bridge.test.mjs）。
+    print(f'futu-openapi-bridge listening on {LISTEN_HOST}:{server.server_address[1]} -> OpenD {OPEND_HOST}:{OPEND_PORT}', flush=True)
+    server.serve_forever()

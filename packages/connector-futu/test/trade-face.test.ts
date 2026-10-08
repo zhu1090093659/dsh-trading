@@ -1,9 +1,11 @@
 /**
  * 交易面客户端契约（卡 0b3ec007 的 A：桥加交易面 + connector-futu 补挂单列表）。
  *
- * 两条纪律在这里被钉住：
+ * 三条纪律在这里被钉住：
  *   1. 三条 `/api/trd/*` **只有 POST + JSON 一种传输**（owner 2026-10-08 裁决）；
- *   2. 挂单行的 `remark` 是执行核的**对账锚**（= clientOrderId），必须原样带回。
+ *   2. 挂单行的 `remark` 是执行核的**对账锚**（= clientOrderId），必须原样带回；
+ *   3. 挂单行是对账的输入：**缺字段即抛，不许折成看似合理的默认值**——
+ *      `qty` 缺了不许变 0（PR #103 审查发现 ③），撤单缺 `accId` 不许变成一趟上游往返（审查发现 ①）。
  *
  * 夹具里的行取自真 OpenD 的原始响应（spikes/impl-futu-bridge/trd-get-orders.json，
  * 账户 id 已脱敏）——不是照文档编的形状。
@@ -120,6 +122,43 @@ describe('FutuRestClient 交易面（POST + JSON）', () => {
     await expect(client.placeOrder(undefined, {
       symbol: '00700.HK', side: 'BUY', type: 'LIMIT', quantity: 100, price: 380,
     })).rejects.toMatchObject({ code: 'TRADING_UPSTREAM_ERROR' })
+  })
+
+  it('operator 挂单行缺 qty 时抛错：不把"挂了多少股"静默折成 0', () => {
+    // Given 桥的一行挂单少了 qty（消费方历史上有 row.qty ?? 0 的兜底）
+    const rowWithoutQty = {
+      orderId: '9769894',
+      code: 'HK.00700',
+      orderStatus: 'SUBMITTED',
+      remark: 'e2e-bridge-anchor-2',
+      trdSide: 'BUY',
+      orderType: 'ABSOLUTE_LIMIT',
+      createTime: '2026-10-08T13:02:03Z',
+    }
+    // When 映射成 api Order
+    // Then 抛错点名 qty（折成 0 会让挂单行对账时"挂了多少股"变成一句假话）
+    expect(() => toOrder(rowWithoutQty)).toThrowError(/缺 qty/)
+  })
+
+  it('operator 撤单在没配账户时结构化拒绝，且一个请求都不发（不把缺格变成上游错误串）', async () => {
+    // Given 没配账户 id（config 缺省 0）的客户端
+    const { impl, calls } = stubFetch([{ match: '/api/trd/cancel-order', body: { retType: 0, data: {} } }])
+    const client = new FutuRestClient({ fetchImpl: impl })
+    // When 撤单
+    // Then 在出站前抛结构化的 TRADING_ACCOUNT_REQUIRED（桥的 cancel-order 必须显式 accId：
+    //      请求里没有 market，HK / US 是两套 trd 上下文），且没有任何出站请求
+    await expect(client.cancelOrder(undefined, '9769893')).rejects.toMatchObject({ code: 'TRADING_ACCOUNT_REQUIRED' })
+    expect(calls).toHaveLength(0)
+  })
+
+  it('operator 撤单在账户配 0 时同样结构化拒绝：0 在撤单里不等于"用默认账户"', async () => {
+    // Given accId 显式配 0（其它调用里 0 = 用 OpenD 默认账户）
+    const { impl, calls } = stubFetch([{ match: '/api/trd/cancel-order', body: { retType: 0, data: {} } }])
+    const client = new FutuRestClient({ fetchImpl: impl, accId: 0 })
+    // When 撤单
+    // Then 同样在出站前被拒 —— 撤单不接受"默认账户"这个语义
+    await expect(client.cancelOrder(undefined, '9769893')).rejects.toMatchObject({ code: 'TRADING_ACCOUNT_REQUIRED' })
+    expect(calls).toHaveLength(0)
   })
 
   it('operator 账户配 0 时不发 accId 格子（交给 OpenD 的默认账户）', async () => {
