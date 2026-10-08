@@ -36,5 +36,6 @@ P1–P4 已把形态轴落进契约与数据面：`form`（spot/perp）/ `assetC
 - 左栏与自选管理都能搜到并添加 `TSLAUSDT-SWAP`，行上带「股票合约」徽标；中栏选中后报价页出现合成合约明示位。形态不再是只有 Agent 面才看得见的事实。
 - 现货路径的行为由既有测试 + 新增判据共同钉住：`instrument-meta` 单测断言现货行不挂标、`entryMeta` 现货不落键；左栏/自选管理/报价页的 jsdom 冒烟覆盖永续徽标、形态过滤与明示位的正反两面。
 - 资产的形态事实仍只有一个家（符号后缀 + `instrumentFormOf`），资产类别事实只有一个家（交易所元数据：静态冷启动字典 ∪ 动态名册），本变更没有新增第二份词汇表。
+- **验收证据（绑 commit `d7b5a227`）**：在隔离 home（复制 profile + 覆盖本仓构建产物，**未触碰用户运行实例与 `~/.dsh-trading`**）实测 OKX 路由下 `/symbols?query=TSLA` 返回 `TSLAUSDT-SWAP`（`form=perp`、`assetClass=equity`）、ticker 374.1 与 3 根日 K 有数；headless Chrome 驱动 10 条交互断言全过（形态过滤循环 全部→现货→永续、现货行零徽标、加入永续后现货行稳定结构签名不变、TradFi 明示位、全程无异常）。截图与报告：`.local/acceptance/crypto-perp-gui-2026-10-08/`（本机证据，不入库）。
 - **已知边界**：P7（Tier 2 合约交易）未落地前，界面只做只读展示与检索，不放行任何合约下单路径；资产类别取不到时界面按「永续（未知归属）」显示，不假装知道是股票还是大宗。
 - 设计与卡拆分见 [crypto-perp-and-tradfi.md](../../../../docs/roadmap/crypto-perp-and-tradfi.md)（P5）；词汇权威见 [symbol-vocabulary.md](../../../../docs/guides/symbol-vocabulary.md)。
