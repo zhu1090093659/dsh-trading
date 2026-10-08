@@ -30,8 +30,10 @@ KDAS（关键日 Anchored VWAP）的 Key Day 存储就是激活实例参数 kd1.
 - packages/client-ui-trading/src/client/contract.ts + locales.ts（kdas.menu.* 词条 zh/en）
 - packages/client-ui-trading/src/client/quote-stage.module.css（kdasMenu* 类）
 
-## 验证
+## 验证（commit 89a9c7c0）
 
 - pnpm test（client-ui-trading）：34 文件 275 例全绿（含新增 13 例）。
 - tsc tsconfig.client.json：错误计数与基线一致（24，全为存量债），本次改动零新增。
 - 后端（indicators/bot-api 桥）零改动：写通道复用 issue #72/#63 既有 PUT /chart/indicators 语义。
+- 影子 profile 实机（trading-web-shadow-kdas @3421，独立 headless Chrome + CDP，用后即毁；不触碰运行中的桌面实例）：cn:002714.SZ 日 K 右键弹菜单（标题/设为关键日/底列 4 条带线色 Key Day/4·8 提示）；点「设为关键日 2026-08-17」→ host chart.json 该标的 kd3=20260817 落盘、读数行与图出现第 5 条线；右键锚点柱 → 菜单项变「移除关键日 2026-08-17」→ 点击后 host 归 0、线消失；底列点「2026-10-08 移除」（锚点在视野外）→ host kd7 归 0、线消失。验证产生的数据改动已现场还原原值并核对。
+- 「挂载 KDAS」单项（实例缺席态）未单独实机走查：与已验证的添加路径同代码（kdasAddDay 空参 → setParams(scopeKey) 建实例），由单测覆盖。
