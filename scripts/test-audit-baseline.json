@@ -2,8 +2,8 @@
   "rules": {
     "mock": 199,
     "sleep": 0,
-    "bdd-title": 1528,
-    "bdd-gwt": 1528,
+    "bdd-title": 1541,
+    "bdd-gwt": 1540,
     "weak-assert": 0
   },
   "files": {
@@ -200,6 +200,10 @@
       "bdd-title": 14,
       "bdd-gwt": 14
     },
+    "packages/client-ui-trading/test/kdas-menu.test.ts": {
+      "bdd-title": 18,
+      "bdd-gwt": 18
+    },
     "packages/client-ui-trading/test/macro-panel.smoke.test.tsx": {
       "mock": 1,
       "bdd-title": 10,
@@ -320,12 +324,12 @@
       "bdd-gwt": 9
     },
     "packages/connector-binance/test/market-data.test.ts": {
-      "bdd-title": 12,
-      "bdd-gwt": 12
+      "bdd-title": 10,
+      "bdd-gwt": 10
     },
     "packages/connector-binance/test/orderbook-trades.test.ts": {
-      "bdd-title": 3,
-      "bdd-gwt": 3
+      "bdd-title": 2,
+      "bdd-gwt": 2
     },
     "packages/connector-binance/test/place-order.test.ts": {
       "mock": 2,
@@ -479,8 +483,8 @@
       "bdd-gwt": 2
     },
     "packages/connector-okx/test/public-market-data.test.ts": {
-      "bdd-title": 26,
-      "bdd-gwt": 26
+      "bdd-title": 25,
+      "bdd-gwt": 25
     },
     "packages/connector-okx/test/signature.test.ts": {
       "bdd-title": 7,
@@ -492,8 +496,8 @@
     },
     "packages/connector-okx/test/trade.test.ts": {
       "mock": 2,
-      "bdd-title": 34,
-      "bdd-gwt": 34
+      "bdd-title": 33,
+      "bdd-gwt": 32
     },
     "packages/connector-polygon/test/template.test.ts": {
       "bdd-title": 4,
@@ -829,6 +833,6 @@
       "bdd-gwt": 11
     }
   },
-  "tests": 1704,
+  "tests": 1868,
   "scanned": 3
 }

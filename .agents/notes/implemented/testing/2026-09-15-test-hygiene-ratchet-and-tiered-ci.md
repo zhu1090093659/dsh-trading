@@ -225,3 +225,16 @@ scripts/contract-id-gate.test.mjs` = 3 文件 / 14 例全绿；`node scripts/tes
 `node scripts/contract-id-gate.mjs` = 806 文件 / 0 违规；旧版对"两个包都没有报告"的场景实测 exit 0 +
 「通过（无指标下降）」，新版 exit 1 并点名两个包。
 
+## KDAS 菜单用例整文件入基线（owner 裁决，2026-10-08）
+
+`packages/client-ui-trading/test/kdas-menu.test.ts`（随 KDAS 关键日图表右键菜单在 `fe1f6d14` 落地）带来的 18 条 `bdd-title` + 18 条 `bdd-gwt` 从未登记进基线，该提交之后 HEAD 上的 `pnpm test:audit` 一直是红的。发现于 roadmap-crypto-perp 的集成门禁：用 `git archive d42cba14`（本任务之前的 HEAD）复现同样的红与同一个「新文件带债」条目，证明非该轮变更引入。
+
+owner 2026-10-08 裁决：**不做机械改写，整文件入基线**。执行 `node scripts/test-audit.mjs --update --force`（棘轮默认只降，强升必须 `--force`，本条即那次显式强升），基线变化：
+
+- 新增 `packages/client-ui-trading/test/kdas-menu.test.ts`：`bdd-title` 18 / `bdd-gwt` 18；
+- 规则总量 `bdd-title` 1528→1541、`bdd-gwt` 1528→1540（同一次刷新顺带吸收了 4 个既有文件的清债下调：binance market-data 12→10、binance orderbook 3→2、okx public-market-data 26→25、okx trade 34→33/32）；
+- `tests` 1704→1868：叶用例总数按现场重扫（旧值已陈旧，与违规计数无关）。
+
+刷新后 `pnpm test:audit` 通过、`pnpm gates:all` 回到 14 通过 / 0 失败（2026-10-08 实测）。**棘轮语义不变**：该文件此后任何计数上升、或任何新文件带债，仍然红；这次 `--force` 不是对后续债的豁免。
+
+

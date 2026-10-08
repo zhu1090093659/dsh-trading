@@ -11,7 +11,7 @@
 
 | 项 | 证据 / 复现 |
 |---|---|
-| 仓库门禁 | pnpm gates:all ⇒ **13 通过 / 1 失败**（2026-10-08 现场复跑，14 条：build、-r test、覆盖率、typecheck、docs-link…）；唯一失败项 test:audit 的根因是 packages/client-ui-trading/test/kdas-menu.test.ts 从未入基线（**HEAD 即红，非本轮引入**，见看板卡 `fe6a417a`）|
+| 仓库门禁 | pnpm gates:all ⇒ **14 通过 / 0 失败**（2026-10-08 现场复跑，14 条：build、-r test、覆盖率、typecheck、docs-link…）；test:audit 此前在 HEAD 即红（kdas-menu.test.ts 未入基线，非本轮引入），已按 owner 裁决整文件入基线后转绿 |
 | P5 第 1 档 shadow | 10 分钟真实行情验收入册（消息 4864 / 坏帧 0 / 全程 aligned / 从未 halt / 退出码 0）；复现 node scripts/e2e-smoke.mjs --with-network |
 | **P5 第 2 档 paper（OKX）** | 带真实 demo 凭据：Test Files 8 passed / **Tests 94 passed / 0 skipped**；GET balance 1145ms、GET positions 328ms（均带 x-simulated-trading）。记录见 docs/ops/ops-runbook.md「第 2 档执行记录」|
 | 进程装配 | packages/tradectl/src/desk-process.ts：环路 + 事件泵 + **dry-run 派发**（无下单路径）+ 积压告警入审计；演练 drill/desk-process-shadow.ts 退出码即断言 |
@@ -48,7 +48,7 @@
 
 - **加密永续真值待复验（出口阻断）**：Binance `api.binance.com`/`fapi.binance.com` 全量 HTTP 451、Bybit `api.bybit.com` 系全量 HTTP 403 ⇒ Binance USDT-M 名册字段与 Bybit 线性合约真值未验。代码已 fail-closed（未登记即留空、合约端点失败结构化报错、不回落现货价），补测判据见看板卡 `7c7b7e3d`，原始响应在 spikes/impl-crypto-perp-tradfi/。
 - **合约下单未落地（Tier 2，卡 P7 未开跑）**：Tier 1 是只读面；P7 落地前任何界面与工具描述都不得暗示可下合约单。
-- `pnpm test:audit` 在 HEAD 即红：packages/client-ui-trading/test/kdas-menu.test.ts 从未入基线（非本轮变更引入），清债见看板卡 `fe6a417a`。
+- **KDAS 菜单用例的审计债已按 owner 裁决整文件入基线（2026-10-08）**：packages/client-ui-trading/test/kdas-menu.test.ts 的 18+18 条 bdd 债经 `test-audit --update --force` 强升入基线（该文件此后任何计数上升、或任何新文件带债仍红），算术与理由见 [测试卫生棘轮 note](.agents/notes/implemented/testing/2026-09-15-test-hygiene-ratchet-and-tiered-ci.md)。
 
 ## 怎么验证（照 AGENTS.md 的资源纪律）
 
