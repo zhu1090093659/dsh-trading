@@ -50,7 +50,7 @@ node_modules/.bin/tsx spikes/impl-crypto-perp-tradfi/run-p2-roster-probe.ts
 - [okx-instruments-SWAP.json](okx-instruments-SWAP.json) —— SWAP 全量原始响应（500 行，含 instCategory/ctVal/lever/settleCcy）。
 - [okx-instruments-SPOT-category-index.json](okx-instruments-SPOT-category-index.json) —— SPOT 原始响应 1.2MB 未全量落库，只落分类索引与样本；重跑探针可再取全量。
 
-## 3. Binance：本机全量 HTTP 451，半边保持 blocked
+## 3. Binance：本机出口全量 HTTP 451（可达出口已补测转正）
 
 四个端点（现货 + USDT-M 合约，名册与行情）全部 451，原始响应体见
 [binance-geo-block.json](binance-geo-block.json)：
@@ -67,15 +67,18 @@ node_modules/.bin/tsx spikes/impl-crypto-perp-tradfi/run-p2-roster-probe.ts
 - `listInstruments()` → 结构化 `TRADING_EXCHANGE_ERROR`（`Binance /fapi/v1/exchangeInfo: 451 code=0 Service unavailable…`），**不返回半份名册**。
 - `getTicker('BTCUSDT-SWAP')` → 结构化 `TRADING_EXCHANGE_ERROR`，请求全部落在 `/fapi/v1/`，**不回落现货报价**。
 
-**结论（硬停）**：Binance 半边的代码路径与单测已落地（现货 ∪ 合约名册、form 分流、assetClass 映射），
-但**没有任何真实网络原始响应**——按卡的要求，Binance 半边在拿到可达环境响应前保持 **blocked**，
-不得据公告标题断言已支持。以下取值因此标注为**待验**：
+**已补测转正（2026-10-08，可达出口，commit `25d18c7b`）**：把出口切到可达地域后，上表四个端点全部 200，
+Binance USDT-M 名册真值（924 行）逐条对照完毕 —— 抓取与方法见
+[EVIDENCE-reverify-2026-10-08.md](EVIDENCE-reverify-2026-10-08.md)。补测同时暴露两处解析缺陷并已修：
 
-- `underlyingType`/underlyingSubType 的具体字面（`COIN`/STOCK/EQUITY/INDEX/COMMODITY` 映射表）；
-- `contractSize`、`filters[PRICE_FILTER].tickSize`、`filters[LOT_SIZE].stepSize`、`marginAsset` 的字段形状。
+- `contractType`：**PERPETUAL 703 / `TRADIFI_PERPETUAL` 217** —— 原白名单只认 `PERPETUAL`，
+  **217 行 TradFi 永续（股票/ETF/大宗/Pre-IPO/外汇）整批进不了名册**；
+- `underlyingType` 实测字面：COIN / EQUITY / HK_EQUITY / KR_EQUITY / CN_EQUITY / COMMODITY / INDEX / PREMARKET / FX，
+  原映射表缺 HK/KR/CN/PREMARKET（FX 现仍故意留空：枚举无外汇成员）；
+- `contractSize`：924 行里 **0 行携带**（USDT-M 无该字段）⇒ `contract.multiplier` 只能缺省；
+- `filters[PRICE_FILTER].tickSize` / `filters[LOT_SIZE].stepSize` / `marginAsset`：形状与解析一致（实测）。
 
-兜底纪律：映射表未登记的取值一律 `assetClass` **留空**（不按符号猜），因此待验风险的上限是
-「漏标」而非「错标」。
+兜底纪律未变：映射表未登记的取值一律 `assetClass` **留空**（不按符号猜），风险上限仍是「漏标」而非「错标」。
 
 ## 4. 与卡级验收判据的对应
 

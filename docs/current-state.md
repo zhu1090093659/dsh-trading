@@ -26,7 +26,7 @@
 | 部署缺口修复 | bot 单元独立 home（StateDirectory=dsh-trading-bot）+ 核心单元显式 `DSH_TRADING_AUTHORITY_DIR`；复现 `node scripts/systemd-units-check.mjs`（全绿）|
 | 驾驶舱补完 | 12 封闭卡片类型全渲染（补 mandate/journal/system 三类）、字段排版、卡片动作接线、设备配对 + Bearer 令牌；截图 `.local/acceptance/cockpit-2026-10-02/`（不入库，本机）；复现 `cd packages/cockpit && npx vitest run`（23 例）|
 | 两形态对照 | 配了 bot ⇒ 纯客户端：`node desktop/scripts/attach-electron-drill.mjs`（窗口加载远端 bot、本地 host 零命中，2/2）；没配 bot ⇒ 本地 host 保持现状：`node desktop/scripts/attach-drill.mjs`（6/6 含回滚与坏配置）；不混显判据：contract 55 例（source-guard 跨源拒绝）|
-| 加密永续与 TradFi 永续（Tier 1，只读） | 形态轴 `form`（spot/perp）契约在 `@dshtrading/api`（唯一判据 `instrumentFormOf` / `SWAP_SYMBOL_SUFFIX`）；Binance/OKX/Bybit 名册汇入永续与 TradFi 元数据、行情按 `-SWAP` 分流（CCXT 显式拒绝）；检索面 `instruments_search type=` 与 `/symbols` wire 透传 form/assetClass。OKX 名册 1644（1144 spot + 500 perp）真实网络复核、`SPX`(迷因币 SPX6900) vs `US500` 反例零错标；**Binance 451 / Bybit 403 两处真值 blocked**（见下）。设计与卡拆分见 docs/roadmap/crypto-perp-and-tradfi.md |
+| 加密永续与 TradFi 永续（Tier 1，只读） | 形态轴 `form`（spot/perp）契约在 `@dshtrading/api`（唯一判据 `instrumentFormOf` / `SWAP_SYMBOL_SUFFIX`）；Binance/OKX/Bybit 名册汇入永续与 TradFi 元数据、行情按 `-SWAP` 分流（CCXT 显式拒绝）；检索面 `instruments_search type=` 与 `/symbols` wire 透传 form/assetClass。OKX 名册 1644（1144 spot + 500 perp）真实网络复核、`SPX`(迷因币 SPX6900) vs `US500` 反例零错标；**Binance/Bybit 的真值已在可达出口补测转正**（2026-10-08）：Binance 名册 2160（1375 spot + 785 perp）、Bybit 1381（528 + 853），20 条判据全过（见下）。设计与卡拆分见 docs/roadmap/crypto-perp-and-tradfi.md |
 
 ## 必须知道的 fail-closed 不变量（改代码前先读）
 
@@ -46,7 +46,7 @@
 - **推送 main**：需明确授权（本机 main 领先 origin 且从未推送）。
 - 已知缺口（见看板卡 cf869789）：~~edge kill 的 fail-open~~（**已修 2026-10-02**）、~~三 uid 下宿主 home 冲突~~（**已修**）、~~三个单元未带 DSH_TRADING_AUTHORITY_DIR~~（**核心单元已带**；人建平面后生效）、~~驾驶舱功能/视觉未打磨~~（**功能补完**：12 类型全渲染 + 配对鉴权；视觉仍骨架级）、~~两形态对照验收未做~~（**已做**，见上表）、L0 下单路径未接线（**结构上尚不存在**：openRiskWithinMandate 与 createRiskGate 的无调用点是当前正确状态，接线点 = 将来的 L0 派发器与 safe boot 生产装配；理由与复现见 docs/ops/ops-runbook.md「接线台账」）、移动端设备项（真机/推送/生物识别，需设备与人）。
 
-- **加密永续真值待复验（出口阻断）**：Binance `api.binance.com`/`fapi.binance.com` 全量 HTTP 451、Bybit `api.bybit.com` 系全量 HTTP 403 ⇒ Binance USDT-M 名册字段与 Bybit 线性合约真值未验。代码已 fail-closed（未登记即留空、合约端点失败结构化报错、不回落现货价），补测判据见看板卡 `7c7b7e3d`，原始响应在 spikes/impl-crypto-perp-tradfi/。
+- **加密永续真值已复验（可达出口补测，2026-10-08，commit `25d18c7b`）**：本机默认出口（美国节点）仍是 Binance `api.binance.com`/`fapi.binance.com` 全量 451、Bybit `api.bybit.com` 系全量 403（地域拦截）——但同机的 clash 多地域节点（SG/JP/HK/TW/DE/KR/GB）全部可达，换出口后已完成补测：**20 条判据全过、探针退出码 0**（含 `crypto_get_ticker` 底层服务路径的真价）。补测暴露并修好两处真值不符：Binance 原白名单漏掉 **217 行 `TRADIFI_PERPETUAL`**（TradFi 永续整批进不了名册）、Bybit 原把交易所自带的 `symbolType` 分类字段整个丢弃。FX/forex（Binance `USDBRLUSDT-SWAP`、Bybit `EURUSDUSDT-SWAP` 等）无枚举成员故留空——要不要加 `fx` 属 P1 契约决定。原始响应、复现命令与逐条对照见 spikes/impl-crypto-perp-tradfi/EVIDENCE-reverify-2026-10-08.md（卡 `7c7b7e3d`）。
 - **合约下单未落地（Tier 2，卡 P7 未开跑）**：Tier 1 是只读面；P7 落地前任何界面与工具描述都不得暗示可下合约单。
 - **KDAS 菜单用例的审计债已清零（2026-10-08）**：packages/client-ui-trading/test/kdas-menu.test.ts 的 18 条 bdd 债先按 owner 裁决整文件入基线（`--update --force`），同日按追加要求改成结构合规——标题加角色前缀、正文补 Given/When/Then，断言一条未改（18 条 leaf 原本都有具体期望值，`weak-assert` 全程 0）——再把基线继续下调，该条目已从基线移除（`bdd-title` 1541→1523、`bdd-gwt` 1540→1522）。理由与算术见 [测试卫生棘轮 note](.agents/notes/implemented/testing/2026-09-15-test-hygiene-ratchet-and-tiered-ci.md)。
 

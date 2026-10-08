@@ -1,0 +1,64 @@
+{
+  "testedAt": "2026-10-08T12:40:00Z",
+  "method": "curl -x http://127.0.0.1:7890 (clash/mihomo mixed-port) after PUT /proxies/Proxies {\"name\":<region>} on the controller unix socket",
+  "controllerSocket": "/var/run/clash-verge-service/users/501/verge-mihomo.sock",
+  "mihomoVersion": "v1.19.32",
+  "originalSelector": "US",
+  "restoredSelector": "US",
+  "probes": {
+    "binance": "https://fapi.binance.com/fapi/v1/ping",
+    "bybit": "https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1",
+    "egressIp": "https://api.ipify.org"
+  },
+  "results": [
+    {
+      "selector": "SG",
+      "egressIp": "188.253.121.148",
+      "binance": 200,
+      "bybit": 200
+    },
+    {
+      "selector": "JP",
+      "egressIp": "212.87.194.60",
+      "binance": 200,
+      "bybit": 200
+    },
+    {
+      "selector": "HK",
+      "egressIp": "216.236.45.163",
+      "binance": 200,
+      "bybit": 200
+    },
+    {
+      "selector": "TW",
+      "egressIp": "185.220.236.133",
+      "binance": 200,
+      "bybit": 200
+    },
+    {
+      "selector": "DE",
+      "egressIp": "45.142.247.98",
+      "binance": 200,
+      "bybit": 200
+    },
+    {
+      "selector": "KR",
+      "egressIp": "158.247.222.153",
+      "binance": 200,
+      "bybit": 200
+    },
+    {
+      "selector": "GB",
+      "egressIp": "51.241.130.199",
+      "binance": 200,
+      "bybit": 200
+    },
+    {
+      "selector": "US (本机默认/已还原)",
+      "egressIp": "216.195.208.136",
+      "binance": 451,
+      "bybit": 403
+    }
+  ],
+  "note": "US 出口的 451/403 与 P2/P3 首轮捕获一致：阻断是出口地区造成的，不是端点消失。复验选 SG。"
+}

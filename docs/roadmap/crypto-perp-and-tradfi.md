@@ -17,12 +17,12 @@
 | 下单 | Binance 只支持现货；OKX 能下永续 |
 | TradFi | 仓内零支持（除 spike 留档的 Binance 公告标题） |
 
-真实网络实测（OKX 可达、Binance 本机 451）：
+真实网络实测（OKX 可达；Binance/Bybit 本机默认出口 451/403，换出口地区后可测，补测见 spikes/impl-crypto-perp-tradfi/EVIDENCE-reverify-2026-10-08.md）：
 
 - OKX `instType=SWAP` 共 **500** 个，全部 `state=live`，按交易所自带 `instCategory` 分布：**1 = 加密 301 个、3 = 股票/ETF 190 个、4 = 大宗 9 个**（XAU/XAG/XCU/XPT/XPD/BZ/CL/NG/H100）。
 - TradFi 永续的 ticker / candles / funding-rate 三端点均正常（实测 TSLA 376.25、XAU 4135.7、AAPL 337.93、US500 7781.7）。
 - **命名陷阱（硬证据）**：`SPX-USDT-SWAP` 报价 **0.384**、`instCategory=1`；`US500-USDT-SWAP` 报价 **7781.7**、`instCategory=3`。符号字面 "SPX" 在 OKX 是迷因币 SPX6900，标普 500 叫 US500。**TradFi 归属只能取自交易所元数据，禁止按符号猜。**
-- Binance 本机 `api.binance.com` / `fapi.binance.com` 全量 HTTP 451（地域），**Binance TradFi 永续本轮无法本机实测**，只能按「存在但字段未验」处理。
+- Binance/Bybit 在本机默认出口（美国节点）分别全量 451/403（地域）；2026-10-08 已换可达出口补测：**Binance USDT-M 924 行**（`contractType` PERPETUAL 703 / `TRADIFI_PERPETUAL` 217）、**Bybit 线性 893 行**（`symbolType` stock 202 / innovation 128 / ETF 54 / commodity 4 / forex 3），TradFi 归属全部取自交易所字段。
 
 范围内：OKX 与 Binance 的加密永续 + TradFi 永续，只读行情与标的检索（Tier 1）；合约下单另立卡（Tier 2）。
 范围外：jin10 的 `global` 市场（XAUUSD 现货贵金属/外汇/指数，与 OKX 的 `XAU-USDT-SWAP` 是两个不同产品，**不合并、不互相映射**）；交割合约、期权、COIN-M。
@@ -100,11 +100,11 @@ P2 与 P3 包目录不重叠 → 可并发。P4 只依赖 P1 的类型定义 →
 
 ### P2 · Binance + OKX 数据面
 
-- **名册**：Binance `listInstruments` 改为现货 ∪ `/fapi/v1/exchangeInfo`（`contractType=PERPETUAL` 且 `status=TRADING`），输出 `BTCUSDT`（spot）+ `BTCUSDT-SWAP`（perp），`assetClass` 取自 `underlyingType`/`underlyingSubType`。OKX 改为 `instType=SPOT` ∪ `instType=SWAP`，`assetClass` 由 `instCategory`（1→crypto、3→equity、4→commodity）映射，`contract` 取 `ctVal/tickSz/lotSz/lever/settleCcy`。
+- **名册**：Binance `listInstruments` 改为现货 ∪ `/fapi/v1/exchangeInfo`（`contractType` ∈ {`PERPETUAL`, `TRADIFI_PERPETUAL`} 且 `status=TRADING`；实测 TradFi 永续用后者，只认前者会整批漏掉），输出 `BTCUSDT`（spot）+ `BTCUSDT-SWAP`（perp），`assetClass` 取自 `underlyingType`/`underlyingSubType`（实测字面含 HK_EQUITY/KR_EQUITY/CN_EQUITY/PREMARKET；FX 无枚举成员 ⇒ 留空）。OKX 改为 `instType=SPOT` ∪ `instType=SWAP`，`assetClass` 由 `instCategory`（1→crypto、3→equity、4→commodity）映射，`contract` 取 `ctVal/tickSz/lotSz/lever/settleCcy`。
 - **行情**：`getTicker`/`getKlines` 按 form 选 base（Binance 现货 `api.binance.com` / 合约 `fapi.binance.com`；`/fapi/v1/ticker/24hr`、`/fapi/v1/klines`）；OKX 走既有 `instId` 互译即可。
 - **form 传递**：`MarketDataService` 现有方法签名是 `(symbol, ...)`，而 `-SWAP` 后缀本身已能表达 form ⇒ **不新增 form 参数**，由符号后缀裁决；`form` 只出现在名册/检索/wire 元数据里。这条要写进 Note 以免后人再加一层参数。
 - **降级纪律**：合约端点失败（地域 451、符号不存在）报结构化错误，绝不回落现货报价伪装成合约价。
-- Binance 侧因本机 451，落地前必须先拿到可达环境的原始响应（`spikes/impl-*` 留档），否则该半张卡标 blocked。
+- Binance 侧的可达环境原始响应已留档（`spikes/impl-crypto-perp-tradfi/binance-usdm-exchangeInfo.json` + EVIDENCE-reverify-2026-10-08.md），该硬停解除；残留契约决策：`FX`/`forex` 标的的 `assetClass` 现留空，加 `fx` 成员属 P1。
 
 ### P3 · Bybit + CCXT
 
@@ -166,7 +166,7 @@ Tier 1 完成**不等于**能交易合约。卡 P7 未落地前，任何界面�
 | 风险 | 处置 |
 |---|---|
 | OKX `instCategory` 无公开文档，语义靠实测反推 | P2 内加**元数据契约测试**（固定样本对照），并把「不可推断时留空」写进代码；`SPX` vs `US500` 作反例样本入夹具 |
-| Binance 本机 451 | P2 的 Binance 半边在拿到可达网络原始响应前标 blocked；不得凭公告标题断言已支持 |
+| Binance/Bybit 地域阻断 | 本机默认出口 451/403 属实；换出口地区可达，2026-10-08 已补测转正（原始响应入 spikes/）。教训保留：不得凭公告标题断言已支持，必须拿到真实响应 |
 | TradFi 合约 24/7 报价而股票有闭市时段 | P5 在合约图表上明示「交易所合成合约」；不把它当作股票行情替代 |
 | TradFi 上市/下架频繁（实测 2026 年大量新上线） | 名册走动态全集 + 缓存，静态字典只做冷启动；下架标的不落自选硬编码 |
 | 与 jin10 `global` 市场撞名（XAU） | 两个市场各自独立，标签区分；不做跨市场映射 |

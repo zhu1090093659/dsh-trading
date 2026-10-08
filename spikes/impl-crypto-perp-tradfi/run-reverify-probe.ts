@@ -23,7 +23,10 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { Context } from '@deepseek-ai/cordis'
+import { BinanceMarketDataService } from '../../packages/connector-binance/src/index.ts'
 import { BinanceRestClient } from '../../packages/connector-binance/src/rest.ts'
+import { BybitMarketDataService } from '../../packages/connector-bybit/src/index.ts'
 import { BybitRestClient } from '../../packages/connector-bybit/src/rest.ts'
 
 const DIR = dirname(fileURLToPath(import.meta.url))
@@ -46,9 +49,19 @@ const tracedFetch = (async (input: unknown, init?: unknown) => {
   return globalThis.fetch(input as string, init as RequestInit)
 }) as typeof fetch
 
+/** 取原始响应；出口节点偶发 ECONNRESET 时重试 3 次（证据要的是上游真值，不是网络抖动）。 */
 async function getRaw(url: string): Promise<{ status: number; text: string }> {
-  const res = await globalThis.fetch(url)
-  return { status: res.status, text: await res.text() }
+  let lastError: unknown
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await globalThis.fetch(url)
+      return { status: res.status, text: await res.text() }
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, 400 * attempt))
+    }
+  }
+  throw lastError
 }
 
 const stamp = new Date().toISOString()
@@ -124,10 +137,10 @@ check('Binance SPXUSDT-SWAP 不得判为指数（SPX6900 是迷因币 => crypto�
 check('Binance FX（USDBRLUSDT-SWAP）无枚举成员 => assetClass 留空', binancePick('USDBRLUSDT-SWAP') !== null && binancePick('USDBRLUSDT-SWAP')?.assetClass === undefined)
 check('Binance 名册 form 与符号后缀一致', binanceRoster.every((i) => i.symbol.endsWith('-SWAP') === (i.form === 'perp')))
 check('Binance 合约名册无 contractSize => contract 不出现 multiplier', binancePerp.every((i) => i.contract === undefined || i.contract.multiplier === undefined))
-const bnPerpTickerUrl = trace.find((u) => u.includes('/ticker/24hr') && u.includes('BTCUSDT')) ?? ''
-check('Binance 永续 ticker 打 fapi.binance.com/fapi/v1（非 api/v3）', bnPerpTickerUrl.includes('fapi.binance.com/fapi/v1/ticker/24hr') && !bnPerpTickerUrl.includes('api.binance.com'))
-check('Binance 永续 ticker 返回真实价（BTCUSDT-SWAP last>1000）', Number(binancePerpTicker.last) > 1000)
-check('Binance TradFi 永续 ticker 返回真实价（TSLAUSDT-SWAP 100<last<1000）', Number(binanceTradFiTicker.last) > 100 && Number(binanceTradFiTicker.last) < 1000)
+const bnPerpTickerUrl = trace.find((u) => u.includes('BTCUSDT') && u.includes('/ticker/24hr')) ?? ''
+check('Binance 永续 ticker 打 fapi.binance.com/fapi/v1（不是 api.binance.com/api/v3）', bnPerpTickerUrl.startsWith('https://fapi.binance.com/fapi/v1/ticker/24hr') && !trace.some((u) => u.includes('BTCUSDT') && u.includes('api.binance.com/api/v3/ticker')))
+check('Binance 永续 ticker 返回真实价（BTCUSDT-SWAP price>1000）', Number(binancePerpTicker.price) > 1000)
+check('Binance TradFi 永续 ticker 返回真实价（TSLAUSDT-SWAP 100<price<1000）', Number(binanceTradFiTicker.price) > 100 && Number(binanceTradFiTicker.price) < 1000)
 
 check('Bybit 名册含 TSLAUSDT-SWAP（线性合约）', bybitPick('TSLAUSDT-SWAP')?.form === 'perp')
 check('Bybit TSLAUSDT-SWAP.assetClass=equity（交易所 symbolType=stock）', bybitPick('TSLAUSDT-SWAP')?.assetClass === 'equity')
@@ -136,7 +149,17 @@ check('Bybit 空 symbolType 的标准加密行留空（不推断成 crypto）', 
 check('Bybit 名册 form 与符号后缀一致', bybitRoster.every((i) => i.symbol.endsWith('-SWAP') === (i.form === 'perp')))
 const byTickerUrl = trace.find((u) => u.includes('/v5/market/tickers') && u.includes('TSLAUSDT')) ?? ''
 check('Bybit TSLAUSDT-SWAP ticker 只打 category=linear（无 category=spot）', byTickerUrl.includes('category=linear') && !trace.some((u) => u.includes('/v5/market/tickers') && u.includes('category=spot')))
-check('Bybit 线性 ticker 返回真实价（TSLAUSDT-SWAP 100<last<1000）', Number(bybitTradFiTicker.last) > 100 && Number(bybitTradFiTicker.last) < 1000)
+check('Bybit 线性 ticker 返回真实价（TSLAUSDT-SWAP 100<price<1000）', Number(bybitTradFiTicker.price) > 100 && Number(bybitTradFiTicker.price) < 1000)
+
+/* 4) 工具路径：crypto_get_ticker 的 execute 就是 marketData.getTicker(...)（connector-{binance,bybit}/src/index.ts），
+      这里用与工具同一个服务类（最小 ctx 与单测同款）再走一遍真实网络。 */
+const serviceCtx = { get: () => undefined, reflect: { provide: () => {} } } as unknown as Context
+const bybitService = new BybitMarketDataService(serviceCtx, { fetchImpl: tracedFetch }, 'reverify-bybit')
+const binanceService = new BinanceMarketDataService(serviceCtx, { timeoutMs: 30_000, fetchImpl: tracedFetch }, 'reverify-binance')
+const bybitToolTicker = await bybitService.getTicker('TSLAUSDT-SWAP')
+const binanceToolTicker = await binanceService.getTicker('BTCUSDT-SWAP')
+check('工具路径 Bybit crypto_get_ticker(TSLAUSDT-SWAP) 返回真合约价', Number(bybitToolTicker.price) > 100 && Number(bybitToolTicker.price) < 1000)
+check('工具路径 Binance crypto_get_ticker(BTCUSDT-SWAP) 返回真合约价', Number(binanceToolTicker.price) > 1000)
 
 const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: DIR, encoding: 'utf8' }).trim()
 const summary = {
@@ -175,7 +198,9 @@ const summary = {
       'XAUUSDT-SWAP': bybitPick('XAUUSDT-SWAP'),
     },
     tradFiTicker: bybitTradFiTicker,
+    toolPathTicker: bybitToolTicker,
   },
+  toolPath: { binance: binanceToolTicker, bybit: bybitToolTicker, note: 'crypto_get_ticker execute 即 marketData.getTicker（服务类与工具同款，最小 ctx 与单测同款）' },
   requestTrail: trace,
   failures,
 }

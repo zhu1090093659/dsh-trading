@@ -1,0 +1,43 @@
+{
+  "note": "现货名册原始响应约 17MB，不落全量；此处落计数、状态分布与样本。全量可重跑探针再取。",
+  "fetchedAt": "2026-10-08T12:44:42.344Z",
+  "fetchedFrom": "https://api.binance.com/api/v3/exchangeInfo",
+  "httpStatus": 200,
+  "total": 3724,
+  "statusCounts": {
+    "TRADING": 1375,
+    "BREAK": 2349
+  },
+  "samples": [
+    {
+      "symbol": "ETHBTC",
+      "status": "TRADING",
+      "baseAsset": "ETH",
+      "quoteAsset": "BTC"
+    },
+    {
+      "symbol": "LTCBTC",
+      "status": "TRADING",
+      "baseAsset": "LTC",
+      "quoteAsset": "BTC"
+    },
+    {
+      "symbol": "BNBBTC",
+      "status": "TRADING",
+      "baseAsset": "BNB",
+      "quoteAsset": "BTC"
+    },
+    {
+      "symbol": "NEOBTC",
+      "status": "BREAK",
+      "baseAsset": "NEO",
+      "quoteAsset": "BTC"
+    },
+    {
+      "symbol": "QTUMETH",
+      "status": "BREAK",
+      "baseAsset": "QTUM",
+      "quoteAsset": "ETH"
+    }
+  ]
+}

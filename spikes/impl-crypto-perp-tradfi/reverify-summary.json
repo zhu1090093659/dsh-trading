@@ -1,0 +1,200 @@
+{
+  "fetchedAt": "2026-10-08T12:44:42.344Z",
+  "egressIp": "188.253.121.148",
+  "headSha": "25d18c7bbbc7191951b82fbc263b9deafe4d64e0",
+  "upstreamStatus": {
+    "binanceUsdmExchangeInfo": 200,
+    "binanceSpotExchangeInfo": 200,
+    "bybitLinearInstruments": 200,
+    "bybitSpotInstruments": 200,
+    "tickers": {
+      "binance-usdm-ticker-BTCUSDT": 200,
+      "binance-usdm-ticker-TSLAUSDT": 200,
+      "binance-usdm-klines-BTCUSDT": 200,
+      "bybit-linear-ticker-BTCUSDT": 200,
+      "bybit-linear-ticker-TSLAUSDT": 200,
+      "bybit-linear-kline-BTCUSDT": 200
+    }
+  },
+  "binance": {
+    "rosterTotal": 2160,
+    "spotCount": 1375,
+    "perpCount": 785,
+    "perpAssetClassCounts": {
+      "crypto": 566,
+      "index": 2,
+      "commodity": 8,
+      "equity": 208,
+      "undefined": 1
+    },
+    "samples": {
+      "BTCUSDT-SWAP": {
+        "symbol": "BTCUSDT-SWAP",
+        "name": "BTC/USDT",
+        "form": "perp",
+        "assetClass": "crypto",
+        "contract": {
+          "tickSize": 0.1,
+          "lotSize": 0.001,
+          "settleCcy": "USDT"
+        }
+      },
+      "TSLAUSDT-SWAP": {
+        "symbol": "TSLAUSDT-SWAP",
+        "name": "TSLA/USDT",
+        "form": "perp",
+        "assetClass": "equity",
+        "contract": {
+          "tickSize": 0.01,
+          "lotSize": 0.01,
+          "settleCcy": "USDT"
+        }
+      },
+      "XAUUSDT-SWAP": {
+        "symbol": "XAUUSDT-SWAP",
+        "name": "XAU/USDT",
+        "form": "perp",
+        "assetClass": "commodity",
+        "contract": {
+          "tickSize": 0.01,
+          "lotSize": 0.001,
+          "settleCcy": "USDT"
+        }
+      },
+      "USDBRLUSDT-SWAP": {
+        "symbol": "USDBRLUSDT-SWAP",
+        "name": "USDBRL/USDT",
+        "form": "perp",
+        "contract": {
+          "tickSize": 0.0001,
+          "lotSize": 0.01,
+          "settleCcy": "USDT"
+        }
+      },
+      "SPXUSDT-SWAP": {
+        "symbol": "SPXUSDT-SWAP",
+        "name": "SPX/USDT",
+        "form": "perp",
+        "assetClass": "crypto",
+        "contract": {
+          "tickSize": 0.0001,
+          "lotSize": 1,
+          "settleCcy": "USDT"
+        }
+      }
+    },
+    "perpTicker": {
+      "symbol": "BTCUSDT-SWAP",
+      "price": 82352.6,
+      "timestamp": 1791463485886,
+      "bid": 82353.6,
+      "ask": 82353.7,
+      "volume": 146769.671,
+      "changePercent": -1.361
+    },
+    "tradFiTicker": {
+      "symbol": "TSLAUSDT-SWAP",
+      "price": 374.28,
+      "timestamp": 1791463486041,
+      "bid": 374.29,
+      "ask": 374.3,
+      "volume": 276594.86,
+      "changePercent": -0.995
+    }
+  },
+  "bybit": {
+    "rosterTotal": 1381,
+    "perpCount": 853,
+    "perpAssetClassCounts": {
+      "undefined": 465,
+      "crypto": 128,
+      "equity": 256,
+      "commodity": 4
+    },
+    "samples": {
+      "BTCUSDT-SWAP": {
+        "symbol": "BTCUSDT-SWAP",
+        "form": "perp",
+        "contract": {
+          "tickSize": 0.1,
+          "lotSize": 0.001,
+          "maxLeverage": 150,
+          "settleCcy": "USDT"
+        }
+      },
+      "TSLAUSDT-SWAP": {
+        "symbol": "TSLAUSDT-SWAP",
+        "form": "perp",
+        "assetClass": "equity",
+        "contract": {
+          "tickSize": 0.01,
+          "lotSize": 0.01,
+          "maxLeverage": 100,
+          "settleCcy": "USDT"
+        }
+      },
+      "XAUUSDT-SWAP": {
+        "symbol": "XAUUSDT-SWAP",
+        "form": "perp",
+        "assetClass": "commodity",
+        "contract": {
+          "tickSize": 0.01,
+          "lotSize": 0.001,
+          "maxLeverage": 150,
+          "settleCcy": "USDT"
+        }
+      }
+    },
+    "tradFiTicker": {
+      "symbol": "TSLAUSDT-SWAP",
+      "price": 374.24,
+      "volume": 15263.85,
+      "timestamp": 1791463486310,
+      "prevClose": 378.08,
+      "changePercent": -1.0156
+    },
+    "toolPathTicker": {
+      "symbol": "TSLAUSDT-SWAP",
+      "price": 374.24,
+      "volume": 15263.85,
+      "timestamp": 1791463486419,
+      "prevClose": 378.08,
+      "changePercent": -1.0156
+    }
+  },
+  "toolPath": {
+    "binance": {
+      "symbol": "BTCUSDT-SWAP",
+      "price": 82352.6,
+      "timestamp": 1791463486570,
+      "bid": 82353.6,
+      "ask": 82353.7,
+      "volume": 146769.671,
+      "changePercent": -1.361
+    },
+    "bybit": {
+      "symbol": "TSLAUSDT-SWAP",
+      "price": 374.24,
+      "volume": 15263.85,
+      "timestamp": 1791463486419,
+      "prevClose": 378.08,
+      "changePercent": -1.0156
+    },
+    "note": "crypto_get_ticker execute 即 marketData.getTicker（服务类与工具同款，最小 ctx 与单测同款）"
+  },
+  "requestTrail": [
+    "https://api.binance.com/api/v3/exchangeInfo",
+    "https://fapi.binance.com/fapi/v1/exchangeInfo",
+    "https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=BTCUSDT",
+    "https://fapi.binance.com/fapi/v1/ticker/bookTicker?symbol=BTCUSDT",
+    "https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=TSLAUSDT",
+    "https://fapi.binance.com/fapi/v1/ticker/bookTicker?symbol=TSLAUSDT",
+    "https://api.bybit.com/v5/market/instruments-info?category=spot&limit=1000",
+    "https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000",
+    "https://api.bybit.com/v5/market/tickers?category=linear&symbol=TSLAUSDT",
+    "https://api.bybit.com/v5/market/tickers?category=linear&symbol=TSLAUSDT",
+    "https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=BTCUSDT",
+    "https://fapi.binance.com/fapi/v1/ticker/bookTicker?symbol=BTCUSDT"
+  ],
+  "failures": []
+}
