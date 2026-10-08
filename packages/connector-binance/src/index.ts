@@ -18,7 +18,7 @@ import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import { createGetIndicatorsTool } from '@dshtrading/indicators/tool'
-import type { DerivativesData, DerivativesHistory, Disposable, Interval, Kline, MarketDataService, Orderbook, Ticker, TradeTick } from '@dshtrading/api'
+import type { DerivativesData, DerivativesHistory, Disposable, InstrumentRef, Interval, Kline, MarketDataService, Orderbook, Ticker, TradeTick } from '@dshtrading/api'
 import { BinanceRestClient, INTERVAL_VOCABULARY, TradingServiceError, normalizeBinanceFuturesSymbol } from './rest.js'
 import type { BinanceRestOptions } from './rest.js'
 
@@ -105,7 +105,7 @@ export class BinanceMarketDataService extends Service implements MarketDataServi
     return this.client.getKlines(symbol, interval, limit)
   }
 
-  listInstruments(): Promise<Array<{ symbol: string; name?: string }>> {
+  listInstruments(): Promise<InstrumentRef[]> {
     return this.client.listInstruments()
   }
 

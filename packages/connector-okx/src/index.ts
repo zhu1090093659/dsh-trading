@@ -32,11 +32,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
+import { instrumentFormOf } from '@dshtrading/api'
 import type {
   AccountBalance,
   DerivativesData,
   DerivativesHistory,
   Disposable,
+  InstrumentRef,
   Interval,
   Kline,
   MarketDataService,
@@ -237,7 +239,7 @@ export class OkxMarketDataService extends Service implements MarketDataService {
     return this.client.getKlines(instId, interval, limit)
   }
 
-  listInstruments(): Promise<Array<{ symbol: string; name?: string }>> {
+  listInstruments(): Promise<InstrumentRef[]> {
     return this.client.listInstruments()
   }
 
@@ -421,7 +423,8 @@ export class OkxTradeService extends Service implements TradeService {
     const bucket = `${this.simulated ? 'demo' : 'live'}:${instId}`
     const cached = this.instruments.get(bucket)
     if (cached !== undefined && Date.now() - cached.at < INSTRUMENT_TTL_MS) return cached.instrument
-    const instType = instId.endsWith('-SWAP') ? 'SWAP' as const : 'SPOT' as const
+    // 形态判据走 api 的唯一实现（instrumentFormOf），不在这里另写 endsWith。
+    const instType = instrumentFormOf(instId) === 'perp' ? 'SWAP' as const : 'SPOT' as const
     const rows = await this.client.getInstruments(instType, instId)
     const row = rows[0]
     if (row === undefined) {
@@ -448,7 +451,7 @@ export class OkxTradeService extends Service implements TradeService {
    * 返回 Map 只含成功项：查不到的 instId 缺席，调用点按原语义保留张数原值（不再逐行重试）。
    */
   private async prefetchInstruments(instIds: Iterable<string>): Promise<Map<string, OkxInstrument>> {
-    const distinct = [...new Set([...instIds].filter(id => id.endsWith('-SWAP')))]
+    const distinct = [...new Set([...instIds].filter(id => instrumentFormOf(id) === 'perp'))]
     const resolved = new Map<string, OkxInstrument>()
     for (let i = 0; i < distinct.length; i += INSTRUMENT_PREFETCH_CONCURRENCY) {
       await Promise.all(distinct.slice(i, i + INSTRUMENT_PREFETCH_CONCURRENCY).map(async (id) => {
@@ -635,7 +638,7 @@ export class OkxTradeService extends Service implements TradeService {
       if (instId === undefined || !Number.isFinite(pos)) continue
       let size = Math.abs(pos)
       // 张 → 币（预取命中才换算；规格查不到保留原值——不虚构换算）。
-      if (instId.endsWith('-SWAP')) {
+      if (instrumentFormOf(instId) === 'perp') {
         const instrument = instruments.get(instId)
         if (instrument?.ctVal !== undefined) size = size * instrument.ctVal
       }
@@ -689,7 +692,7 @@ export class OkxTradeService extends Service implements TradeService {
       ? Number(exchangeAmount)
       : Number.NaN
     if (!Number.isFinite(n)) return undefined
-    if (!instId.endsWith('-SWAP')) return n
+    if (instrumentFormOf(instId) !== 'perp') return n
     if (instruments !== undefined) {
       const instrument = instruments.get(instId)
       return instrument?.ctVal !== undefined ? n * instrument.ctVal : n

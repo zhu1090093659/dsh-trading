@@ -2,14 +2,22 @@
  * Binance 公共 REST 客户端（dsh-trading crypto 切片）。
  *
  * 独立于插件 glue：仅依赖 @dshtrading/api 的类型词汇，无 cordis/dsh-tools 运行时依赖，
- * 便于单测与脚本直接消费（fetch 可注入）。数据面：api.binance.com 公共 REST（/api/v3），
- * 全局 fetch（Node 22+ 内置），AbortController 10s 超时，零凭证（铁律 #3：公共行情无需 key）。
+ * 便于单测与脚本直接消费（fetch 可注入）。数据面：api.binance.com 公共 REST（/api/v3）
+ * 与 USDT-M 合约 fapi.binance.com（/fapi/v1），全局 fetch（Node 22+ 内置），
+ * AbortController 10s 超时，零凭证（铁律 #3：公共行情无需 key）。
+ *
+ * 形态分流（2026-10-08）：名册 = 现货 ∪ 永续（`BTCUSDT` 与 `BTCUSDT-SWAP` 成对）；
+ * 行情方法按规范后缀选 base（`resolveBinanceInstrument`），不新增 form 形参。
  *
  * @module @dshtrading/connector-binance/rest
  */
 
 import type {
   DerivativesPoint,
+  InstrumentAssetClass,
+  InstrumentContract,
+  InstrumentForm,
+  InstrumentRef,
   Interval,
   Kline,
   Orderbook,
@@ -18,6 +26,7 @@ import type {
   TradeTick,
   TradingErrorCode,
 } from '@dshtrading/api'
+import { SWAP_SYMBOL_SUFFIX, instrumentFormOf } from '@dshtrading/api'
 
 /* ------------------------------------------------------------------ */
 /* 错误载体（api 包词汇的运行时映射）                                      */
@@ -98,6 +107,28 @@ function requireSymbol(symbol: string): string {
 export function normalizeBinanceFuturesSymbol(raw: string): string {
   const clean = requireSymbol(raw).replace(/[-_]/g, '')
   return clean.endsWith('SWAP') ? clean.slice(0, -4) : clean
+}
+
+/**
+ * 输入符号 → 形态 + 交易所词汇（2026-10-08 加密永续落地）。
+ *
+ * Binance 现货与永续在交易所侧**同形**（都叫 `BTCUSDT`），形态只能由规范后缀
+ * `-SWAP` 裁决——单一实现是 @dshtrading/api 的 `instrumentFormOf`，这里不另写
+ * 一份 endsWith。永续剥掉后缀后复用既有衍生品归一（同时容忍 OKX 原生形
+ * `BTC-USDT-SWAP`）；现货保持原样交给交易所判存在性（未知符号仍报 -1121）。
+ */
+export function resolveBinanceInstrument(symbol: string): { form: InstrumentForm; venueSymbol: string } {
+  const upper = requireSymbol(symbol)
+  const form = instrumentFormOf(upper)
+  if (form === 'spot') return { form, venueSymbol: upper }
+  const venueSymbol = normalizeBinanceFuturesSymbol(upper)
+  if (venueSymbol === '') {
+    throw new TradingServiceError(
+      'TRADING_UNSUPPORTED_SYMBOL',
+      `Binance: ${JSON.stringify(symbol)} carries the ${SWAP_SYMBOL_SUFFIX} suffix but has no base symbol`,
+    )
+  }
+  return { form, venueSymbol }
 }
 
 /** Binance 返回数值均为字符串，宽松转 number（非有限值返回 undefined）。 */
@@ -212,6 +243,69 @@ function parseTradeRow(row: unknown, symbol: string): TradeTick {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* 名册元数据（2026-10-08：现货 ∪ USDT-M 永续，形态/资产类别/合约规格透传）    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Binance 合约 underlying 元数据 → 资产类别标签。
+ *
+ * 只登记 Binance 公开字段的已知取值；**未登记一律 undefined（留空），禁止按符号猜**
+ * （硬不变量 #2：TradFi 归属只信交易所元数据）。本机数据面 HTTP 451，取值待验：
+ * COIN 是 USDT-M 加密合约的既有公开取值，STOCK/EQUITY/INDEX/COMMODITY 是 TradFi
+ * 合约的候选词——取不到即留空，错标由「未登记即留空」兜底
+ * （见 spikes/impl-crypto-perp-tradfi/EVIDENCE.md 的硬停记录）。
+ */
+const BINANCE_UNDERLYING_ASSET_CLASS: Readonly<Record<string, InstrumentAssetClass>> = {
+  COIN: 'crypto',
+  CRYPTO: 'crypto',
+  STOCK: 'equity',
+  EQUITY: 'equity',
+  INDEX: 'index',
+  COMMODITY: 'commodity',
+}
+
+/** underlyingType（含 underlyingSubType 逐项兜底）→ 资产类别；未登记/缺失 = undefined。 */
+export function binanceAssetClassOf(underlyingType: unknown, underlyingSubType: unknown): InstrumentAssetClass | undefined {
+  const candidates: unknown[] = [underlyingType]
+  if (Array.isArray(underlyingSubType)) candidates.push(...underlyingSubType)
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    const mapped = BINANCE_UNDERLYING_ASSET_CLASS[candidate.trim().toUpperCase()]
+    if (mapped !== undefined) return mapped
+  }
+  return undefined
+}
+
+/** exchangeInfo filter 行（PRICE_FILTER.tickSize / LOT_SIZE.stepSize）。 */
+interface BinanceFilterRow {
+  readonly filterType?: unknown
+  readonly tickSize?: unknown
+  readonly stepSize?: unknown
+}
+
+/** USDT-M 合约规格 → InstrumentContract（交易所元数据原样透传；字段缺失即缺省）。 */
+export function binanceContractOf(row: {
+  readonly contractSize?: unknown
+  readonly marginAsset?: unknown
+  readonly filters?: unknown
+}): InstrumentContract | undefined {
+  const filters = Array.isArray(row.filters) ? row.filters as BinanceFilterRow[] : []
+  const multiplier = num(row.contractSize)
+  const tickSize = num(filters.find((f) => f.filterType === 'PRICE_FILTER')?.tickSize)
+  const lotSize = num(filters.find((f) => f.filterType === 'LOT_SIZE')?.stepSize)
+  const settleCcy = typeof row.marginAsset === 'string' && row.marginAsset !== '' ? row.marginAsset : undefined
+  if (multiplier === undefined && tickSize === undefined && lotSize === undefined && settleCcy === undefined) {
+    return undefined
+  }
+  return {
+    ...(multiplier !== undefined ? { multiplier } : {}),
+    ...(tickSize !== undefined ? { tickSize } : {}),
+    ...(lotSize !== undefined ? { lotSize } : {}),
+    ...(settleCcy !== undefined ? { settleCcy } : {}),
+  }
+}
+
 export class BinanceRestClient {
   readonly #baseUrl: string
   readonly #fapiBaseUrl: string
@@ -256,28 +350,34 @@ export class BinanceRestClient {
   }
 
   /**
-   * 最新行情：/api/v3/ticker/24hr 提供最新价与 24h 量，/api/v3/ticker/bookTicker 补充 bid/ask。
+   * 最新行情（2026-10-08 形态分流）：现货 /api/v3/ticker/24hr + bookTicker；
+   * 永续（`-SWAP` 后缀）走 USDT-M /fapi/v1/ticker/24hr + bookTicker。
+   * 两条路径各自报结构化错误——绝不用现货报价冒充合约价（降级纪律）。
    */
   async getTicker(symbol: string): Promise<Ticker> {
-    const sym = requireSymbol(symbol)
+    const { form, venueSymbol } = resolveBinanceInstrument(symbol)
+    const perp = form === 'perp'
+    const prefix = perp ? '/fapi/v1/ticker' : '/api/v3/ticker'
+    const base = perp ? this.#fapiBaseUrl : this.#baseUrl
     const [day, book] = await Promise.all([
-      this.#request('/api/v3/ticker/24hr', { symbol: sym }),
-      this.#request('/api/v3/ticker/bookTicker', { symbol: sym }),
+      this.#request(`${prefix}/24hr`, { symbol: venueSymbol }, base),
+      this.#request(`${prefix}/bookTicker`, { symbol: venueSymbol }, base),
     ])
     const d = day as Record<string, unknown>
     const b = book as Record<string, unknown>
     const price = num(d.lastPrice)
     if (price === undefined) {
-      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance ticker for ${sym}: missing/invalid lastPrice`)
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance ticker for ${venueSymbol}: missing/invalid lastPrice`)
     }
     const bid = num(b.bidPrice)
     const ask = num(b.askPrice)
     const volume = num(d.volume)
     const prevClose = num(d.prevClosePrice)
     const changePercent = num(d.priceChangePercent)
-    const resolvedSymbol = typeof d.symbol === 'string' && d.symbol ? d.symbol : sym
+    const resolvedSymbol = typeof d.symbol === 'string' && d.symbol ? d.symbol : venueSymbol
     return {
-      symbol: resolvedSymbol,
+      // 输出恒为规范形：合约价必须以 -SWAP 形回到下游（否则现货/合约在消费方同名）。
+      symbol: perp ? `${resolvedSymbol}${SWAP_SYMBOL_SUFFIX}` : resolvedSymbol,
       price,
       timestamp: Date.now(),
       ...(bid !== undefined ? { bid } : {}),
@@ -288,59 +388,134 @@ export class BinanceRestClient {
     }
   }
 
+  /** K 线（2026-10-08 形态分流）：现货 /api/v3/klines；永续 /fapi/v1/klines，行结构同形。 */
   async getKlines(symbol: string, interval: Interval, limit = 100): Promise<Kline[]> {
-    const sym = requireSymbol(symbol)
+    const { form, venueSymbol } = resolveBinanceInstrument(symbol)
+    const perp = form === 'perp'
     if (!isInterval(interval)) {
       throw new TradingServiceError('TRADING_UNSUPPORTED_INTERVAL', `Binance klines: unsupported interval ${String(interval)}`)
     }
     if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance klines: limit must be an integer within 1..1000, got ${limit}`)
     }
-    const body = await this.#request('/api/v3/klines', { symbol: sym, interval, limit: String(limit) })
+    const body = await this.#request(
+      perp ? '/fapi/v1/klines' : '/api/v3/klines',
+      { symbol: venueSymbol, interval, limit: String(limit) },
+      perp ? this.#fapiBaseUrl : this.#baseUrl,
+    )
     if (!Array.isArray(body)) {
-      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance klines for ${sym}: unexpected response shape`)
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance klines for ${venueSymbol}: unexpected response shape`)
     }
-    return body.map((row) => parseKlineRow(row, sym))
+    return body.map((row) => parseKlineRow(row, venueSymbol))
   }
 
   /**
-   * 全部可交易现货标的名册（GET /api/v3/exchangeInfo，status=TRADING 过滤，Issue #15）。
-   * 输出 symbol 为规范形（BTCUSDT），name 为 baseAsset/quoteAsset（如 BTC/USDT）。
+   * 全部可交易标的名册 = 现货 ∪ USDT-M 永续（2026-10-08 形态维度落地，Issue #15 扩展）。
+   *
+   * - 现货：GET /api/v3/exchangeInfo，`status=TRADING` → `BTCUSDT`（form=spot，
+   *   assetClass=crypto：Binance 现货名册无 TradFi 条目）。
+   * - 永续：GET /fapi/v1/exchangeInfo，`contractType=PERPETUAL` 且 `status=TRADING`
+   *   → `BTCUSDT-SWAP`（form=perp，与现货成对）；assetClass 取
+   *   underlyingType/underlyingSubType（取不到留空），contract 取 contractSize/
+   *   filters/marginAsset。
+   *
+   * 两半都是名册契约的一部分：任一半失败即抛结构化错误，**不返回半份名册**
+   * （静默半份会让检索排序与可用性判断失真，调用方按错误决定自己的兜底目录）。
    */
-  async listInstruments(): Promise<Array<{ symbol: string; name?: string }>> {
-    const body = await this.#request('/api/v3/exchangeInfo', {})
-    const info = body as { symbols?: Array<{ symbol?: string; status?: string; baseAsset?: string; quoteAsset?: string }> }
-    if (!Array.isArray(info?.symbols)) {
+  async listInstruments(): Promise<InstrumentRef[]> {
+    const [spotBody, futuresBody] = await Promise.all([
+      this.#request('/api/v3/exchangeInfo', {}),
+      this.#request('/fapi/v1/exchangeInfo', {}, this.#fapiBaseUrl),
+    ])
+    const spotSymbols = (spotBody as { symbols?: unknown }).symbols
+    if (!Array.isArray(spotSymbols)) {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', 'Binance exchangeInfo: invalid response shape')
     }
-    const result: Array<{ symbol: string; name?: string }> = []
-    for (const item of info.symbols) {
-      if (item && item.status === 'TRADING' && typeof item.symbol === 'string' && item.symbol) {
-        const name = item.baseAsset && item.quoteAsset ? `${item.baseAsset}/${item.quoteAsset}` : undefined
-        result.push({ symbol: item.symbol, ...(name ? { name } : {}) })
+    const futuresSymbols = (futuresBody as { symbols?: unknown }).symbols
+    if (!Array.isArray(futuresSymbols)) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', 'Binance futures exchangeInfo: invalid response shape')
+    }
+
+    const result: InstrumentRef[] = []
+    for (const raw of spotSymbols) {
+      const item = raw as { symbol?: unknown; status?: unknown; baseAsset?: unknown; quoteAsset?: unknown }
+      if (item?.status !== 'TRADING' || typeof item.symbol !== 'string' || item.symbol === '') continue
+      const name = typeof item.baseAsset === 'string' && item.baseAsset !== ''
+        && typeof item.quoteAsset === 'string' && item.quoteAsset !== ''
+        ? `${item.baseAsset}/${item.quoteAsset}`
+        : undefined
+      result.push({
+        symbol: item.symbol,
+        ...(name !== undefined ? { name } : {}),
+        form: 'spot',
+        assetClass: 'crypto',
+      })
+    }
+    for (const raw of futuresSymbols) {
+      const item = raw as {
+        symbol?: unknown
+        status?: unknown
+        contractType?: unknown
+        baseAsset?: unknown
+        quoteAsset?: unknown
+        underlyingType?: unknown
+        underlyingSubType?: unknown
+        marginAsset?: unknown
+        contractSize?: unknown
+        filters?: unknown
       }
+      if (item?.contractType !== 'PERPETUAL' || item.status !== 'TRADING'
+        || typeof item.symbol !== 'string' || item.symbol === '') continue
+      const name = typeof item.baseAsset === 'string' && item.baseAsset !== ''
+        && typeof item.quoteAsset === 'string' && item.quoteAsset !== ''
+        ? `${item.baseAsset}/${item.quoteAsset}`
+        : undefined
+      const assetClass = binanceAssetClassOf(item.underlyingType, item.underlyingSubType)
+      const contract = binanceContractOf(item)
+      result.push({
+        symbol: `${item.symbol}${SWAP_SYMBOL_SUFFIX}`,
+        ...(name !== undefined ? { name } : {}),
+        form: 'perp',
+        ...(assetClass !== undefined ? { assetClass } : {}),
+        ...(contract !== undefined ? { contract } : {}),
+      })
     }
     return result
   }
 
   /* -- 盘口与逐笔（issue #39）---------------------------------------------- */
 
-  /** 盘口快照：GET /api/v3/depth（limit=20 档；bids 降序 / asks 升序，Binance 原生序）。 */
+  /**
+   * 盘口快照：GET /api/v3/depth（现货）或 /fapi/v1/depth（永续），limit=20 档；
+   * bids 降序 / asks 升序，Binance 原生序。永续不再回落现货 depth（合约盘口
+   * 落到现货端点等于把现货深度伪装成合约深度）。
+   */
   async getOrderbook(symbol: string): Promise<Orderbook> {
-    const sym = normalizeBinanceFuturesSymbol(symbol)
-    const body = await this.#request('/api/v3/depth', { symbol: sym, limit: '20' })
-    return parseDepthBody(body, sym)
+    const { form, venueSymbol } = resolveBinanceInstrument(symbol)
+    const perp = form === 'perp'
+    const body = await this.#request(
+      perp ? '/fapi/v1/depth' : '/api/v3/depth',
+      { symbol: venueSymbol, limit: '20' },
+      perp ? this.#fapiBaseUrl : this.#baseUrl,
+    )
+    return parseDepthBody(body, perp ? `${venueSymbol}${SWAP_SYMBOL_SUFFIX}` : venueSymbol)
   }
 
-  /** 最近逐笔成交：GET /api/v3/trades（时间升序；isBuyerMaker=true → 主动卖）。 */
+  /** 最近逐笔成交：GET /api/v3/trades（现货）或 /fapi/v1/trades（永续），时间升序。 */
   async getRecentTrades(symbol: string, limit = 50): Promise<TradeTick[]> {
-    const sym = normalizeBinanceFuturesSymbol(symbol)
+    const { form, venueSymbol } = resolveBinanceInstrument(symbol)
+    const perp = form === 'perp'
+    const outputSymbol = perp ? `${venueSymbol}${SWAP_SYMBOL_SUFFIX}` : venueSymbol
     const capped = Math.max(1, Math.min(Math.floor(limit) || 50, 100))
-    const body = await this.#request('/api/v3/trades', { symbol: sym, limit: String(capped) })
+    const body = await this.#request(
+      perp ? '/fapi/v1/trades' : '/api/v3/trades',
+      { symbol: venueSymbol, limit: String(capped) },
+      perp ? this.#fapiBaseUrl : this.#baseUrl,
+    )
     if (!Array.isArray(body)) {
-      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance trades for ${sym}: unexpected response shape`)
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Binance trades for ${outputSymbol}: unexpected response shape`)
     }
-    return body.map((row) => parseTradeRow(row, sym))
+    return body.map((row) => parseTradeRow(row, outputSymbol))
   }
 
   /* -- USDT-M 合约公共端点（fapi，无凭证；issue #38 衍生品面板底料）---------- */

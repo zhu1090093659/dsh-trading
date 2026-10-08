@@ -1,0 +1,26 @@
+[
+  {
+    "label": "spot-exchangeInfo",
+    "url": "https://api.binance.com/api/v3/exchangeInfo",
+    "httpStatus": 451,
+    "body": "{\n  \"code\": 0,\n  \"msg\": \"Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact customer service if you believe you received this message in error.\"\n}"
+  },
+  {
+    "label": "fapi-exchangeInfo",
+    "url": "https://fapi.binance.com/fapi/v1/exchangeInfo",
+    "httpStatus": 451,
+    "body": "{\n  \"code\": 0,\n  \"msg\": \"Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact customer service if you believe you received this message in error.\"\n}"
+  },
+  {
+    "label": "spot-ticker-24hr",
+    "url": "https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT",
+    "httpStatus": 451,
+    "body": "{\n  \"code\": 0,\n  \"msg\": \"Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact customer service if you believe you received this message in error.\"\n}"
+  },
+  {
+    "label": "fapi-ticker-24hr",
+    "url": "https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=BTCUSDT",
+    "httpStatus": 451,
+    "body": "{\n  \"code\": 0,\n  \"msg\": \"Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact customer service if you believe you received this message in error.\"\n}"
+  }
+]

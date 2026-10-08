@@ -160,34 +160,172 @@ describe('BinanceRestClient timeout', () => {
   })
 })
 
-describe('BinanceRestClient.listInstruments', () => {
-  it('filters TRADING status and maps baseAsset/quoteAsset names', async () => {
-    const exchangeInfoBody = {
-      timezone: 'UTC',
-      serverTime: 1735689600000,
-      symbols: [
-        { symbol: 'BTCUSDT', status: 'TRADING', baseAsset: 'BTC', quoteAsset: 'USDT' },
-        { symbol: 'ETHUSDT', status: 'TRADING', baseAsset: 'ETH', quoteAsset: 'USDT' },
-        { symbol: 'OLDCOIN', status: 'BREAK', baseAsset: 'OLD', quoteAsset: 'USDT' },
-        { symbol: 'DELISTED', status: 'HALT', baseAsset: 'DELIST', quoteAsset: 'USDT' },
-      ],
-    }
-    const { impl, urls } = stubFetch([{ match: '/api/v3/exchangeInfo', body: exchangeInfoBody }])
-    const client = new BinanceRestClient({ fetchImpl: impl })
-    const instruments = await client.listInstruments()
+describe('BinanceRestClient.listInstruments（现货 ∪ USDT-M 永续，2026-10-08 P2）', () => {
+  const SPOT_BODY = {
+    timezone: 'UTC',
+    serverTime: 1735689600000,
+    symbols: [
+      { symbol: 'BTCUSDT', status: 'TRADING', baseAsset: 'BTC', quoteAsset: 'USDT' },
+      { symbol: 'ETHUSDT', status: 'TRADING', baseAsset: 'ETH', quoteAsset: 'USDT' },
+      { symbol: 'OLDCOIN', status: 'BREAK', baseAsset: 'OLD', quoteAsset: 'USDT' },
+      { symbol: 'DELISTED', status: 'HALT', baseAsset: 'DELIST', quoteAsset: 'USDT' },
+    ],
+  }
+  const FAPI_BODY = {
+    timezone: 'UTC',
+    serverTime: 1735689600000,
+    symbols: [
+      {
+        symbol: 'BTCUSDT',
+        status: 'TRADING',
+        contractType: 'PERPETUAL',
+        baseAsset: 'BTC',
+        quoteAsset: 'USDT',
+        marginAsset: 'USDT',
+        contractSize: 1,
+        underlyingType: 'COIN',
+        underlyingSubType: ['PoW'],
+        filters: [
+          { filterType: 'PRICE_FILTER', tickSize: '0.10' },
+          { filterType: 'LOT_SIZE', stepSize: '0.001' },
+        ],
+      },
+      { symbol: 'ETHUSDT_250926', status: 'TRADING', contractType: 'CURRENT_QUARTER', baseAsset: 'ETH', quoteAsset: 'USDT', underlyingType: 'COIN' },
+      { symbol: 'HALTEDUSDT', status: 'BREAK', contractType: 'PERPETUAL', baseAsset: 'HALTED', quoteAsset: 'USDT' },
+    ],
+  }
 
+  it('用户 在 Binance 名册里同时看到现货与 USDT-M 永续（形态成对 + 合约规格透传）', async () => {
+    // Given: 现货与合约两侧的 exchangeInfo 样本（含非 TRADING / 非 PERPETUAL 噪音行）
+    const { impl, urls } = stubFetch([
+      { match: '/api/v3/exchangeInfo', body: SPOT_BODY },
+      { match: '/fapi/v1/exchangeInfo', body: FAPI_BODY },
+    ])
+    // When: 拉取名册
+    const instruments = await new BinanceRestClient({ fetchImpl: impl }).listInstruments()
+    // Then: 现货保留原形、永续加 -SWAP 后缀，噪音行剔除，两半各打各的端点
     expect(urls[0]).toContain('/api/v3/exchangeInfo')
+    expect(urls[1]).toContain('/fapi/v1/exchangeInfo')
     expect(instruments).toEqual([
-      { symbol: 'BTCUSDT', name: 'BTC/USDT' },
-      { symbol: 'ETHUSDT', name: 'ETH/USDT' },
+      { symbol: 'BTCUSDT', name: 'BTC/USDT', form: 'spot', assetClass: 'crypto' },
+      { symbol: 'ETHUSDT', name: 'ETH/USDT', form: 'spot', assetClass: 'crypto' },
+      {
+        symbol: 'BTCUSDT-SWAP',
+        name: 'BTC/USDT',
+        form: 'perp',
+        assetClass: 'crypto',
+        contract: { multiplier: 1, tickSize: 0.1, lotSize: 0.001, settleCcy: 'USDT' },
+      },
     ])
   })
 
-  it('handles empty or malformed exchangeInfo response', async () => {
-    const { impl } = stubFetch([{ match: '/api/v3/exchangeInfo', body: { symbols: 'not-array' } }])
-    const client = new BinanceRestClient({ fetchImpl: impl })
-    await expect(client.listInstruments()).rejects.toMatchObject({
-      code: 'TRADING_EXCHANGE_ERROR',
-    })
+  it('用户 看到 Binance 合约的资产类别只由 underlying 元数据裁决（未登记即留空，不按符号猜）', async () => {
+    // Given: underlyingType 已知（STOCK）、只在 underlyingSubType 出现（INDEX）、完全取不到 三类合约行
+    const { impl } = stubFetch([
+      { match: '/api/v3/exchangeInfo', body: { symbols: [] } },
+      {
+        match: '/fapi/v1/exchangeInfo',
+        body: {
+          symbols: [
+            { symbol: 'TSLAUSDT', status: 'TRADING', contractType: 'PERPETUAL', baseAsset: 'TSLA', quoteAsset: 'USDT', underlyingType: 'STOCK' },
+            { symbol: 'SPXUSDT', status: 'TRADING', contractType: 'PERPETUAL', baseAsset: 'SPX', quoteAsset: 'USDT', underlyingType: 'UNKNOWN', underlyingSubType: ['INDEX'] },
+            { symbol: 'MYSTERYUSDT', status: 'TRADING', contractType: 'PERPETUAL', baseAsset: 'MYSTERY', quoteAsset: 'USDT' },
+          ],
+        },
+      },
+    ])
+    // When: 拉取名册
+    const instruments = await new BinanceRestClient({ fetchImpl: impl }).listInstruments()
+    // Then: 已知字段给标签，取不到留空（符号字面不参与裁决）
+    expect(instruments.map((inst) => [inst.symbol, inst.assetClass])).toEqual([
+      ['TSLAUSDT-SWAP', 'equity'],
+      ['SPXUSDT-SWAP', 'index'],
+      ['MYSTERYUSDT-SWAP', undefined],
+    ])
+  })
+
+  it('用户 在名册任一半失败时拿到结构化错误（不返回半份名册）', async () => {
+    // Given: 现货端点不可用（地域 451），合约端点正常
+    const { impl } = stubFetch([
+      { match: '/api/v3/exchangeInfo', body: { code: 0, msg: 'Service unavailable from a restricted location' }, status: 451 },
+      { match: '/fapi/v1/exchangeInfo', body: FAPI_BODY },
+    ])
+    // When: 拉取名册
+    const err = await new BinanceRestClient({ fetchImpl: impl }).listInstruments().catch((e: unknown) => e)
+    // Then: 结构化错误，而不是悄悄少一半的名册
+    expect(err).toBeInstanceOf(TradingServiceError)
+    expect((err as TradingServiceError).code).toBe('TRADING_EXCHANGE_ERROR')
+  })
+
+  it('用户 遇到交易所返回畸形名册响应时拿到结构化错误', async () => {
+    // Given: 现货响应 symbols 不是数组，合约响应正常
+    const { impl } = stubFetch([
+      { match: '/api/v3/exchangeInfo', body: { symbols: 'not-array' } },
+      { match: '/fapi/v1/exchangeInfo', body: FAPI_BODY },
+    ])
+    // When: 拉取名册
+    const err = await new BinanceRestClient({ fetchImpl: impl }).listInstruments().catch((e: unknown) => e)
+    // Then: TRADING_EXCHANGE_ERROR
+    expect(err).toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
+  })
+})
+
+describe('BinanceRestClient 形态分流（getTicker/getKlines 按 -SWAP 后缀选 base）', () => {
+  const PERP_DAY = { symbol: 'BTCUSDT', lastPrice: '42000.50', volume: '800', prevClosePrice: '41000', priceChangePercent: '2.4' }
+  const PERP_BOOK = { symbol: 'BTCUSDT', bidPrice: '42000.10', askPrice: '42000.30' }
+
+  it('用户 对永续符号取报价时请求打到 fapi，且拿回规范 -SWAP 形', async () => {
+    // Given: 合约侧 24hr 与 bookTicker 样本
+    const { impl, urls } = stubFetch([
+      { match: '/fapi/v1/ticker/24hr', body: PERP_DAY },
+      { match: '/fapi/v1/ticker/bookTicker', body: PERP_BOOK },
+    ])
+    // When: 取 BTCUSDT-SWAP 报价
+    const ticker = await new BinanceRestClient({ fetchImpl: impl }).getTicker('btcusdt-swap')
+    // Then: 两个端点都在 fapi，输出符号保持规范永续形
+    expect(urls).toHaveLength(2)
+    expect(urls.every((url) => url.startsWith('https://fapi.binance.com/fapi/v1/ticker/'))).toBe(true)
+    expect(urls[0]).toContain('/fapi/v1/ticker/24hr?symbol=BTCUSDT')
+    expect(ticker).toMatchObject({ symbol: 'BTCUSDT-SWAP', price: 42000.5, bid: 42000.1, ask: 42000.3, prevClose: 41000 })
+  })
+
+  it('用户 对现货符号取报价时仍打到 /api/v3（现货路径零回归）', async () => {
+    // Given: 现货侧 24hr 与 bookTicker 样本
+    const { impl, urls } = stubFetch([
+      { match: '/api/v3/ticker/24hr', body: PERP_DAY },
+      { match: '/api/v3/ticker/bookTicker', body: PERP_BOOK },
+    ])
+    // When: 取 BTCUSDT 报价
+    const ticker = await new BinanceRestClient({ fetchImpl: impl }).getTicker('BTCUSDT')
+    // Then: 走的还是现货端点，符号不带后缀
+    expect(urls[0]).toContain('/api/v3/ticker/24hr?symbol=BTCUSDT')
+    expect(ticker.symbol).toBe('BTCUSDT')
+  })
+
+  it('用户 对永续符号取 K 线时打到 /fapi/v1/klines 且交易所符号剥掉 -SWAP 后缀', async () => {
+    // Given: 合约 K 线样例行
+    const ROW = [1735680000000, '42000', '42100', '41900', '42050', '12.5', 1735683599999]
+    const { impl, urls } = stubFetch([{ match: '/fapi/v1/klines', body: [ROW] }])
+    // When: 取 BTCUSDT-SWAP 日线
+    const klines = await new BinanceRestClient({ fetchImpl: impl }).getKlines('BTCUSDT-SWAP', '1d', 1)
+    // Then: fapi 端点 + 剥后缀的交易所符号
+    expect(urls[0]).toContain('/fapi/v1/klines?symbol=BTCUSDT&interval=1d&limit=1')
+    expect(klines).toHaveLength(1)
+    expect(klines[0]?.close).toBe(42050)
+  })
+
+  it('用户 在合约端点地域受限（HTTP 451）时拿到结构化错误，不会拿到现货报价冒充的合约价', async () => {
+    // Given: fapi 451（本机实测形态），现货端点可用
+    const { impl, urls } = stubFetch([
+      { match: '/api/v3/ticker/24hr', body: DAY_BODY },
+      { match: '/api/v3/ticker/bookTicker', body: BOOK_BODY },
+      { match: '/fapi/v1/ticker/24hr', body: { code: 0, msg: 'Service unavailable from a restricted location' }, status: 451 },
+      { match: '/fapi/v1/ticker/bookTicker', body: { code: 0, msg: 'Service unavailable from a restricted location' }, status: 451 },
+    ])
+    // When: 取 BTCUSDT-SWAP 报价
+    const err = await new BinanceRestClient({ fetchImpl: impl }).getTicker('BTCUSDT-SWAP').catch((e: unknown) => e)
+    // Then: 结构化错误，且没有任何请求落到现货端点
+    expect((err as TradingServiceError).code).toBe('TRADING_EXCHANGE_ERROR')
+    expect(urls.every((url) => url.includes('/fapi/v1/'))).toBe(true)
   })
 })

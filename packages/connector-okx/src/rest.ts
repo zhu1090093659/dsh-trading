@@ -23,6 +23,10 @@
 import { createHmac } from 'node:crypto'
 import type {
   DerivativesPoint,
+  InstrumentAssetClass,
+  InstrumentContract,
+  InstrumentForm,
+  InstrumentRef,
   Interval,
   Kline,
   Orderbook,
@@ -31,6 +35,7 @@ import type {
   TradeTick,
   TradingErrorCode,
 } from '@dshtrading/api'
+import { instrumentFormOf } from '@dshtrading/api'
 
 /* ------------------------------------------------------------------ */
 /* 错误载体（api 包词汇的运行时映射）                                      */
@@ -316,6 +321,13 @@ export interface OkxInstrument {
   readonly settleCcy?: string
   readonly baseCcy?: string
   readonly quoteCcy?: string
+  /** 最大杠杆（lever）。 */
+  readonly maxLeverage?: number
+  /**
+   * 交易所分类标签（instCategory：1=加密、3=股票/ETF、4=大宗）。
+   * **无公开文档**（调研受限），语义靠真实网络实测反推；未登记即留空。
+   */
+  readonly instCategory?: number
 }
 
 /** POST /api/v5/trade/order 请求体词汇（R3 只做 market/limit；tdMode 现货=cash、永续=cross）。 */
@@ -383,6 +395,44 @@ function trimNumber(n: number): string {
 /* ------------------------------------------------------------------ */
 /* 客户端                                                                  */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* 名册元数据（2026-10-08：SPOT ∪ SWAP，instCategory 资产类别 + 合约规格）    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * OKX instCategory → 资产类别。
+ *
+ * **无公开文档**（调研受限），语义靠 2026-10-08 真实网络实测反推：SWAP 共 500 个
+ * （全部 state=live）中 1=加密 301、3=股票/ETF 190、4=大宗 9；SPOT 1144 个中同样
+ * 出现 3（127）/4（4）类。只登记实测到的取值；**未登记/缺失一律 undefined（留空），
+ * 禁止按符号猜**——反例硬证据：`SPX-USDT-SWAP` 的 instCategory=1（那是迷因币
+ * SPX6900），标普 500 是 `US500-USDT-SWAP`（instCategory=3）。
+ * 原始响应与计数见 spikes/impl-crypto-perp-tradfi/EVIDENCE.md。
+ */
+const OKX_INST_CATEGORY_ASSET_CLASS: Readonly<Record<string, InstrumentAssetClass>> = {
+  '1': 'crypto',
+  '3': 'equity',
+  '4': 'commodity',
+}
+
+/** instCategory（OKX 回字符串数字，实测；容忍 number 输入）→ 资产类别；未登记 = undefined。 */
+export function okxAssetClassOf(instCategory: unknown): InstrumentAssetClass | undefined {
+  if (typeof instCategory !== 'string' && typeof instCategory !== 'number') return undefined
+  return OKX_INST_CATEGORY_ASSET_CLASS[String(instCategory).trim()]
+}
+
+/** SWAP 规格 → InstrumentContract（ctVal/tickSz/lotSz/lever/settleCcy 原样透传，不本地推断）。 */
+export function okxContractOf(inst: OkxInstrument): InstrumentContract | undefined {
+  if (inst.instType !== 'SWAP') return undefined
+  return {
+    tickSize: inst.tickSz,
+    lotSize: inst.lotSz,
+    ...(inst.ctVal !== undefined ? { multiplier: inst.ctVal } : {}),
+    ...(inst.maxLeverage !== undefined ? { maxLeverage: inst.maxLeverage } : {}),
+    ...(inst.settleCcy !== undefined ? { settleCcy: inst.settleCcy } : {}),
+  }
+}
 
 export class OkxRestClient {
   // TS 编译期 private（cordis 跨 realm 代理下 # 私有字段按类身份炸，replication 坑清单）。
@@ -516,7 +566,8 @@ export class OkxRestClient {
       throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX ticker for ${id}: missing/invalid last price`)
     }
     // 24h 量：SPOT 的 vol24h 即 base 币量；SWAP 的 vol24h 是张数，base 币量在 volCcy24h。
-    const isSwap = id.endsWith('-SWAP')
+    // 形态判据用 api 的唯一实现（不在这里另写 endsWith）。
+    const isSwap = instrumentFormOf(id) === 'perp'
     const volume = isSwap ? (num(d?.volCcy24h) ?? num(d?.vol24h)) : num(d?.vol24h)
     const prevClose = num(d?.open24h) ?? num(d?.sodUtc0)
     const changePercent = price !== undefined && prevClose !== undefined && prevClose > 0
@@ -589,7 +640,7 @@ export class OkxRestClient {
   /** 资金费率：GET /api/v5/public/funding-rate（仅 SWAP；10 次/2s）。 */
   async getFundingRate(instId: string): Promise<OkxFundingRate> {
     const id = normalizeOkxSymbol(instId)
-    if (!id.endsWith('-SWAP')) {
+    if (instrumentFormOf(id) !== 'perp') {
       throw new TradingServiceError(
         'TRADING_UNSUPPORTED_SYMBOL',
         `OKX funding rate requires a perpetual swap instId (e.g. BTC-USDT-SWAP), got ${id}`,
@@ -735,7 +786,7 @@ export class OkxRestClient {
 
   /** 未平仓合约量：GET /api/v5/public/open-interest（仅 SWAP；oi=张、oiCcy=币、oiUsd=USD）。 */  async getOpenInterest(instId: string): Promise<OkxOpenInterest> {
     const id = normalizeOkxSymbol(instId)
-    if (!id.endsWith('-SWAP')) {
+    if (instrumentFormOf(id) !== 'perp') {
       throw new TradingServiceError(
         'TRADING_UNSUPPORTED_SYMBOL',
         `OKX open interest requires a perpetual swap instId (e.g. BTC-USDT-SWAP), got ${id}`,
@@ -814,6 +865,8 @@ export class OkxRestClient {
         throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `OKX instruments: malformed row`)
       }
       const ctVal = num(d.ctVal)
+      const maxLeverage = num(d.lever)
+      const instCategory = num(d.instCategory)
       return {
         instId: id,
         instType: str(d.instType) ?? instType,
@@ -825,21 +878,48 @@ export class OkxRestClient {
         ...(str(d.settleCcy) !== undefined ? { settleCcy: str(d.settleCcy) } : {}),
         ...(str(d.baseCcy) !== undefined ? { baseCcy: str(d.baseCcy) } : {}),
         ...(str(d.quoteCcy) !== undefined ? { quoteCcy: str(d.quoteCcy) } : {}),
+        ...(maxLeverage !== undefined ? { maxLeverage } : {}),
+        ...(instCategory !== undefined ? { instCategory } : {}),
       }
     })
   }
 
   /**
-   * 全部可交易现货标的名册（GET /api/v5/public/instruments?instType=SPOT，Issue #15）。
-   * 输出 symbol 归一化为市场规范形（BTC-USDT → BTCUSDT），name 为 baseCcy/quoteCcy。
+   * 全部可交易标的名册 = 现货 ∪ 永续（GET /api/v5/public/instruments，Issue #15 扩展；
+   * 2026-10-08 形态维度落地）。
+   *
+   * - 现货：instType=SPOT → `BTCUSDT`（form=spot），name 取 baseCcy/quoteCcy。
+   * - 永续：instType=SWAP → `BTCUSDT-SWAP`（form=perp，与现货成对），name 取
+   *   ctValCcy 与 instId 的计价段（SWAP 行的 baseCcy/quoteCcy 为空串，实测）；
+   *   assetClass 只由 instCategory 映射，contract 透传 ctVal/tickSz/lotSz/lever/settleCcy。
+   *
+   * 两半都拉取（Promise.all）；任一半失败即抛结构化错误，不返回半份名册。
    */
-  async listInstruments(): Promise<Array<{ symbol: string; name?: string }>> {
-    const instruments = await this.getInstruments('SPOT')
-    return instruments.map((inst) => {
-      const canonical = toCanonicalOkxSymbol(inst.instId)
-      const name = inst.baseCcy && inst.quoteCcy ? `${inst.baseCcy}/${inst.quoteCcy}` : undefined
-      return { symbol: canonical, ...(name ? { name } : {}) }
-    })
+  async listInstruments(): Promise<InstrumentRef[]> {
+    const [spot, swap] = await Promise.all([this.getInstruments('SPOT'), this.getInstruments('SWAP')])
+    return [
+      ...spot.map((inst) => this.#toInstrumentRef(inst, 'spot')),
+      ...swap.map((inst) => this.#toInstrumentRef(inst, 'perp')),
+    ]
+  }
+
+  /** 名册条目 → InstrumentRef：形态由来源端点裁决，类别只信 instCategory（取不到留空）。 */
+  #toInstrumentRef(inst: OkxInstrument, form: InstrumentForm): InstrumentRef {
+    const parts = inst.instId.split('-')
+    const base = inst.baseCcy ?? inst.ctValCcy ?? parts[0]
+    const quote = inst.quoteCcy ?? parts[1]
+    const name = base !== undefined && base !== '' && quote !== undefined && quote !== ''
+      ? `${base}/${quote}`
+      : undefined
+    const assetClass = okxAssetClassOf(inst.instCategory)
+    const contract = form === 'perp' ? okxContractOf(inst) : undefined
+    return {
+      symbol: toCanonicalOkxSymbol(inst.instId),
+      ...(name !== undefined ? { name } : {}),
+      form,
+      ...(assetClass !== undefined ? { assetClass } : {}),
+      ...(contract !== undefined ? { contract } : {}),
+    }
   }
 
   /* -- 签名端点（四头 + demo 头；凭证由调用方每次操作解析） ------------------ */
@@ -981,5 +1061,5 @@ export function toCanonicalOkxSymbol(symbol: string): string {
  */
 export function toOkxSwapInstId(input: string): string {
   const id = normalizeOkxSymbol(input)
-  return id.endsWith('-SWAP') ? id : `${id}-SWAP`
+  return instrumentFormOf(id) === 'perp' ? id : `${id}-SWAP`
 }

@@ -58,10 +58,18 @@ describe('BinanceMarketDataService.getOrderbook/getRecentTrades（issue #39）',
     expect(orderbook.asks).toEqual([{ price: 42000.3, amount: 0.8 }, { price: 42001, amount: 2 }])
   })
 
-  it('SWAP 输入归一到现货 depth 词汇（BTCUSDT-SWAP → BTCUSDT）', async () => {
-    const { impl, urls } = stubFetch(ROUTES)
-    await service(impl).getOrderbook('BTCUSDT-SWAP')
-    expect(urls.find(url => url.includes('/api/v3/depth'))).toContain('symbol=BTCUSDT')
+  it('用户 对永续符号取盘口时走 fapi depth（BTCUSDT-SWAP → /fapi/v1/depth?symbol=BTCUSDT）', async () => {
+    // Given: 现货与合约 depth 端点各就位
+    const { impl, urls } = stubFetch({
+      ...ROUTES,
+      '/fapi/v1/depth': { body: { lastUpdateId: 1, bids: [['42000.10', '1.2']], asks: [['42000.30', '0.8']] } },
+    })
+    // When: 取 BTCUSDT-SWAP 盘口
+    const orderbook = await service(impl).getOrderbook('BTCUSDT-SWAP')
+    // Then: 请求落在 fapi depth，输出保持规范永续形，且不回落现货端点
+    expect(urls.find(url => url.includes('/fapi/v1/depth'))).toContain('symbol=BTCUSDT')
+    expect(urls.some(url => url.includes('/api/v3/depth'))).toBe(false)
+    expect(orderbook.symbol).toBe('BTCUSDT-SWAP')
   })
 
   it('逐笔：isBuyerMaker → 主动方向，响应升序透传', async () => {

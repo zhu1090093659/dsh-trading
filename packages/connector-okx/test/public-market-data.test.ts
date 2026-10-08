@@ -245,21 +245,105 @@ describe('网络层', () => {
   })
 })
 
-describe('listInstruments', () => {
-  it('拉取 SPOT instruments 并转换为规范形 symbol 与 base/quote name', async () => {
-    const { fetchImpl, requests } = routeMock(() => okResponse({
-      code: '0',
-      data: [
-        { instId: 'BTC-USDT', instType: 'SPOT', lotSz: '0.00001', minSz: '0.00001', tickSz: '0.1', baseCcy: 'BTC', quoteCcy: 'USDT' },
-        { instId: 'ETH-USDT', instType: 'SPOT', lotSz: '0.001', minSz: '0.001', tickSz: '0.01', baseCcy: 'ETH', quoteCcy: 'USDT' },
-      ],
-    }))
+describe('listInstruments（SPOT ∪ SWAP，2026-10-08 P2）', () => {
+  // 真实响应形状（2026-10-08 实测，spikes/impl-crypto-perp-tradfi/okx-instruments-SWAP.json）：
+  // SWAP 行 baseCcy/quoteCcy 为空串，base 在 ctValCcy；instCategory 回字符串数字。
+  const SPOT_ROWS = [
+    { instId: 'BTC-USDT', instType: 'SPOT', lotSz: '0.00001', minSz: '0.00001', tickSz: '0.1', baseCcy: 'BTC', quoteCcy: 'USDT', instCategory: '1' },
+    { instId: 'ETH-USDT', instType: 'SPOT', lotSz: '0.001', minSz: '0.001', tickSz: '0.01', baseCcy: 'ETH', quoteCcy: 'USDT', instCategory: '1' },
+  ]
+  const SWAP_ROWS = [
+    { instId: 'BTC-USDT-SWAP', instType: 'SWAP', lotSz: '0.01', minSz: '0.01', tickSz: '0.1', ctVal: '0.01', ctValCcy: 'BTC', settleCcy: 'USDT', lever: '100', instCategory: '1', baseCcy: '', quoteCcy: '' },
+    { instId: 'TSLA-USDT-SWAP', instType: 'SWAP', lotSz: '0.01', minSz: '0.01', tickSz: '0.01', ctVal: '1', ctValCcy: 'TSLA', settleCcy: 'USDT', lever: '25', instCategory: '3', baseCcy: '', quoteCcy: '' },
+    { instId: 'XAU-USDT-SWAP', instType: 'SWAP', lotSz: '1', minSz: '1', tickSz: '0.1', ctVal: '0.001', ctValCcy: 'XAU', settleCcy: 'USDT', lever: '100', instCategory: '4', baseCcy: '', quoteCcy: '' },
+  ]
+
+  /** 名册 Fake：只回 instruments 端点，按 instType 分发；其余请求即错。 */
+  function roster(spotRows: unknown, swapRows: unknown) {
+    return routeMock((req) => {
+      const instType = new URL(req.url).searchParams.get('instType')
+      if (instType === 'SPOT') return okResponse({ code: '0', data: spotRows })
+      if (instType === 'SWAP') return okResponse({ code: '0', data: swapRows })
+      throw new Error(`unexpected request: ${req.url}`)
+    })
+  }
+
+  it('用户 在 OKX 名册里同时拿到现货与永续（instType 两半 + 形态/名称/合约规格）', async () => {
+    // Given: SPOT 与 SWAP 两侧名册样本
+    const { fetchImpl, requests } = roster(SPOT_ROWS, SWAP_ROWS)
+    // When: 拉取名册
     const instruments = await client(fetchImpl).listInstruments()
-    expect(requests[0]?.url).toBe('https://okx.test/api/v5/public/instruments?instType=SPOT')
+    // Then: 两次实例类型请求都在，条目带形态、名称与永续合约规格
+    expect(requests.map(r => new URL(r.url).searchParams.get('instType')).sort()).toEqual(['SPOT', 'SWAP'])
     expect(instruments).toEqual([
-      { symbol: 'BTCUSDT', name: 'BTC/USDT' },
-      { symbol: 'ETHUSDT', name: 'ETH/USDT' },
+      { symbol: 'BTCUSDT', name: 'BTC/USDT', form: 'spot', assetClass: 'crypto' },
+      { symbol: 'ETHUSDT', name: 'ETH/USDT', form: 'spot', assetClass: 'crypto' },
+      {
+        symbol: 'BTCUSDT-SWAP',
+        name: 'BTC/USDT',
+        form: 'perp',
+        assetClass: 'crypto',
+        contract: { tickSize: 0.1, lotSize: 0.01, multiplier: 0.01, maxLeverage: 100, settleCcy: 'USDT' },
+      },
+      {
+        symbol: 'TSLAUSDT-SWAP',
+        name: 'TSLA/USDT',
+        form: 'perp',
+        assetClass: 'equity',
+        contract: { tickSize: 0.01, lotSize: 0.01, multiplier: 1, maxLeverage: 25, settleCcy: 'USDT' },
+      },
+      {
+        symbol: 'XAUUSDT-SWAP',
+        name: 'XAU/USDT',
+        form: 'perp',
+        assetClass: 'commodity',
+        contract: { tickSize: 0.1, lotSize: 1, multiplier: 0.001, maxLeverage: 100, settleCcy: 'USDT' },
+      },
     ])
+  })
+
+  it('用户 看到的 SPX 永续是加密资产而不是指数（标普 500 合约叫 US500）', async () => {
+    // Given: 实测反例样本——SPX 是迷因币 SPX6900（instCategory 1），US500 才挂 3 类
+    const { fetchImpl } = roster([], [
+      { instId: 'SPX-USDT-SWAP', instType: 'SWAP', lotSz: '1', minSz: '1', tickSz: '0.0001', ctVal: '1', ctValCcy: 'SPX', instCategory: '1' },
+      { instId: 'US500-USDT-SWAP', instType: 'SWAP', lotSz: '0.001', minSz: '0.001', tickSz: '0.1', ctVal: '1', ctValCcy: 'US500', instCategory: '3' },
+    ])
+    // When: 拉取名册
+    const instruments = await client(fetchImpl).listInstruments()
+    // Then: 归属来自交易所元数据，SPX 不得被字面猜成指数
+    expect(instruments.map(i => [i.symbol, i.assetClass])).toEqual([
+      ['SPXUSDT-SWAP', 'crypto'],
+      ['US500USDT-SWAP', 'equity'],
+    ])
+    expect(instruments.some(i => i.assetClass === 'index')).toBe(false)
+  })
+
+  it('用户 看到资产类别只由 instCategory 裁决（未登记/缺失留空，SPOT 的 3 类照标股票）', async () => {
+    // Given: SPOT 的 3 类行（实测存在）+ SWAP 的未登记类别行与缺字段行
+    const { fetchImpl } = roster(
+      [{ instId: 'AAPLX-USDT', instType: 'SPOT', lotSz: '1', minSz: '1', tickSz: '0.1', baseCcy: 'AAPLX', quoteCcy: 'USDT', instCategory: '3' }],
+      [
+        { instId: 'MYSTERY-USDT-SWAP', instType: 'SWAP', lotSz: '1', minSz: '1', tickSz: '0.1', ctVal: '1', ctValCcy: 'MYSTERY', instCategory: '9' },
+        { instId: 'NOFIELD-USDT-SWAP', instType: 'SWAP', lotSz: '1', minSz: '1', tickSz: '0.1', ctVal: '1', ctValCcy: 'NOFIELD' },
+      ],
+    )
+    // When: 拉取名册
+    const instruments = await client(fetchImpl).listInstruments()
+    // Then: 3 类标 equity；未登记与缺失都留空（字段直接缺席，不写 undefined）
+    expect(instruments[0]).toMatchObject({ symbol: 'AAPLXUSDT', form: 'spot', assetClass: 'equity' })
+    expect(instruments[1]?.assetClass).toBeUndefined()
+    expect(instruments[2]?.assetClass).toBeUndefined()
+    expect('assetClass' in (instruments[1] ?? {})).toBe(false)
+  })
+
+  it('用户 看到现货条目不带合约规格（contract 只属于永续）', async () => {
+    // Given: 只有现货行的名册
+    const { fetchImpl } = roster(SPOT_ROWS, [])
+    // When: 拉取名册
+    const instruments = await client(fetchImpl).listInstruments()
+    // Then: 现货行没有 contract 字段
+    expect(instruments).toHaveLength(2)
+    expect(instruments.every(i => !('contract' in i))).toBe(true)
   })
 })
 
