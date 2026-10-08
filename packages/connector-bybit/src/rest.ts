@@ -8,6 +8,7 @@ import {
   instrumentFormOf,
   type DerivativesPoint,
   type AccountBalance,
+  type InstrumentAssetClass,
   type InstrumentContract,
   type InstrumentForm,
   type InstrumentRef,
@@ -135,9 +136,39 @@ function parseContractMeta(row: Record<string, unknown>): InstrumentContract | u
 }
 
 /**
+ * Bybit `symbolType` 字面量 → 资产类别标签。
+ *
+ * `symbolType` 是 instruments-info 行上的**可选**分类字段，官方枚举页列出的取值有
+ * innovation/adventure/xstocks/commodity/stock/forex/ETF/mstocks。2026-10-08 可达环境实测
+ * （线性 893 行 + 现货 528 行，见 spikes/impl-crypto-perp-tradfi/EVIDENCE-reverify-2026-10-08.md）：
+ * 线性侧 stock 202 / innovation 128 / ETF 54 / commodity 4 / forex 3 / 空串 502；
+ * 现货侧 空串 514 / xstocks 11（NVDAXUSDT、AAPLXUSDT 等代币化股票）/ adventure 3。
+ *
+ * 只登记**实测过的**字面量：
+ * - 空串 = 交易所没给分类（标准加密品种）⇒ **留空而不是推断成 crypto**（不变量：取不到即留空，
+ *   漏标而非错标；空串不是分类值）。
+ * - `forex`（EURUSD/GBPUSD/USDJPY）与 `mstocks` 未登记：枚举无外汇成员，mstocks 未在实测中出现；
+ *   要不要扩枚举属契约层决定，不在本连接器内定。
+ */
+const BYBIT_SYMBOL_TYPE_ASSET_CLASS: Readonly<Record<string, InstrumentAssetClass>> = {
+  innovation: 'crypto',
+  adventure: 'crypto',
+  stock: 'equity',
+  ETF: 'equity',
+  xstocks: 'equity',
+  commodity: 'commodity',
+}
+
+/** symbolType → 资产类别；空串/未登记/缺失 = undefined（不推断）。 */
+export function bybitAssetClassOf(symbolType: unknown): InstrumentAssetClass | undefined {
+  if (typeof symbolType !== 'string') return undefined
+  return BYBIT_SYMBOL_TYPE_ASSET_CLASS[symbolType.trim()]
+}
+
+/**
  * instruments-info 行 → InstrumentRef（输出规范形）。
- * assetClass 故意不填：Bybit 的 instruments-info 不携带资产类别字段，而 TradFi 归属
- * 只信交易所元数据（SPX/US500 事故为判据样本）⇒ 按硬不变量留空而不是猜。
+ * assetClass 只由交易所 `symbolType` 字面量裁决（现货与线性同一规则）；交易所没给
+ * （空串/未登记）即留空，绝不按符号猜（硬不变量 #2：TradFi 归属只信交易所元数据）。
  */
 function toInstrumentRef(row: Record<string, unknown>, form: InstrumentForm): InstrumentRef | undefined {
   // 规范形由交易所自带 symbol 派生：不拿 baseCoin+quoteCoin 拼——Bybit 线性面除
@@ -145,9 +176,17 @@ function toInstrumentRef(row: Record<string, unknown>, form: InstrumentForm): In
   // 拼出来的名字交易所不认（发出去必 404）。
   const exchangeSymbol = typeof row.symbol === 'string' ? row.symbol.trim().toUpperCase() : ''
   if (exchangeSymbol === '') return undefined
-  if (form === 'spot') return { symbol: exchangeSymbol, form }
+  const assetClass = bybitAssetClassOf(row.symbolType)
+  if (form === 'spot') {
+    return { symbol: exchangeSymbol, form, ...(assetClass !== undefined ? { assetClass } : {}) }
+  }
   const contract = parseContractMeta(row)
-  return { symbol: `${exchangeSymbol}${SWAP_SYMBOL_SUFFIX}`, form, ...(contract !== undefined ? { contract } : {}) }
+  return {
+    symbol: `${exchangeSymbol}${SWAP_SYMBOL_SUFFIX}`,
+    form,
+    ...(assetClass !== undefined ? { assetClass } : {}),
+    ...(contract !== undefined ? { contract } : {}),
+  }
 }
 
 export interface BybitRestOptions {

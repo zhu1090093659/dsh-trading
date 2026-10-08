@@ -244,6 +244,39 @@ describe('BinanceRestClient.listInstruments（现货 ∪ USDT-M 永续，2026-10
     ])
   })
 
+  it('用户 看到 Binance TradFi 永续（TRADIFI_PERPETUAL）与各地区股票/Pre-IPO 字面量各归其类', async () => {
+    // Given: 可达环境实测的行（`contractType=TRADIFI_PERPETUAL` + EQUITY/HK_EQUITY/KR_EQUITY/CN_EQUITY/PREMARKET/FX 字面量，且响应里没有 contractSize）
+    const { impl } = stubFetch([
+      { match: '/api/v3/exchangeInfo', body: { symbols: [] } },
+      {
+        match: '/fapi/v1/exchangeInfo',
+        body: {
+          symbols: [
+            { symbol: 'TSLAUSDT', status: 'TRADING', contractType: 'TRADIFI_PERPETUAL', baseAsset: 'TSLA', quoteAsset: 'USDT', marginAsset: 'USDT', underlyingType: 'EQUITY', underlyingSubType: ['TradFi'], filters: [{ filterType: 'PRICE_FILTER', tickSize: '0.01000' }, { filterType: 'LOT_SIZE', stepSize: '0.01' }] },
+            { symbol: 'TENCENTUSDT', status: 'TRADING', contractType: 'TRADIFI_PERPETUAL', baseAsset: 'TENCENT', quoteAsset: 'USDT', underlyingType: 'HK_EQUITY' },
+            { symbol: 'SAMSUNGUSDT', status: 'TRADING', contractType: 'TRADIFI_PERPETUAL', baseAsset: 'SAMSUNG', quoteAsset: 'USDT', underlyingType: 'KR_EQUITY' },
+            { symbol: 'CXMTUSDT', status: 'TRADING', contractType: 'TRADIFI_PERPETUAL', baseAsset: 'CXMT', quoteAsset: 'USDT', underlyingType: 'CN_EQUITY' },
+            { symbol: 'OPENAIUSDT', status: 'TRADING', contractType: 'TRADIFI_PERPETUAL', baseAsset: 'OPENAI', quoteAsset: 'USDT', underlyingType: 'PREMARKET', underlyingSubType: ['Pre-IPO', 'TradFi'] },
+            { symbol: 'USDBRLUSDT', status: 'TRADING', contractType: 'TRADIFI_PERPETUAL', baseAsset: 'USDBRL', quoteAsset: 'USDT', underlyingType: 'FX' },
+          ],
+        },
+      },
+    ])
+    // When: 拉取名册
+    const instruments = await new BinanceRestClient({ fetchImpl: impl }).listInstruments()
+    // Then: TradFi 永续不再被 PERPETUAL 白名单整批漏掉；FX 无枚举成员 ⇒ 留空而不是硬塞进 equity/commodity
+    expect(instruments.map((inst) => [inst.symbol, inst.assetClass])).toEqual([
+      ['TSLAUSDT-SWAP', 'equity'],
+      ['TENCENTUSDT-SWAP', 'equity'],
+      ['SAMSUNGUSDT-SWAP', 'equity'],
+      ['CXMTUSDT-SWAP', 'equity'],
+      ['OPENAIUSDT-SWAP', 'equity'],
+      ['USDBRLUSDT-SWAP', undefined],
+    ])
+    // And: 实测 USDT-M 响应没有 contractSize ⇒ 合约规格不出现 multiplier（不按猜测补 1）
+    expect(instruments[0].contract).toEqual({ tickSize: 0.01, lotSize: 0.01, settleCcy: 'USDT' })
+  })
+
   it('用户 在名册任一半失败时拿到结构化错误（不返回半份名册）', async () => {
     // Given: 现货端点不可用（地域 451），合约端点正常
     const { impl } = stubFetch([

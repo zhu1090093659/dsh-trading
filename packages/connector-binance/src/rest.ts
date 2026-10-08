@@ -250,20 +250,36 @@ function parseTradeRow(row: unknown, symbol: string): TradeTick {
 /**
  * Binance 合约 underlying 元数据 → 资产类别标签。
  *
- * 只登记 Binance 公开字段的已知取值；**未登记一律 undefined（留空），禁止按符号猜**
- * （硬不变量 #2：TradFi 归属只信交易所元数据）。本机数据面 HTTP 451，取值待验：
- * COIN 是 USDT-M 加密合约的既有公开取值，STOCK/EQUITY/INDEX/COMMODITY 是 TradFi
- * 合约的候选词——取不到即留空，错标由「未登记即留空」兜底
- * （见 spikes/impl-crypto-perp-tradfi/EVIDENCE.md 的硬停记录）。
+ * 只登记 Binance 公开字段的**实测取值**；未登记一律 undefined（留空），禁止按符号猜
+ * （硬不变量 #2：TradFi 归属只信交易所元数据）。
+ *
+ * 2026-10-08 可达环境实测取值（924 行 USDT-M exchangeInfo，见
+ * spikes/impl-crypto-perp-tradfi/EVIDENCE-reverify-2026-10-08.md）：
+ * COIN 704 / EQUITY 179 / HK_EQUITY 15 / COMMODITY 8 / KR_EQUITY 8 / PREMARKET 4 /
+ * INDEX 3 / CN_EQUITY 2 / FX 1。
+ * - PREMARKET 是 Pre-IPO 股票合约（OPENAI/ANTHROPIC/MOONSHOT/OURA，underlyingSubType
+ *   ["Pre-IPO","TradFi"]）⇒ 归 equity；枚举里没有 premarket 成员，投影由字面量裁决而非符号。
+ * - FX（USDBRLUSDT）**故意不登记**：枚举没有外汇成员，硬塞进 equity/commodity 就是错标，
+ *   按「未登记即留空」兜底（漏标而非错标）。要不要加 FX 成员属契约层决定，不在本连接器内定。
  */
 const BINANCE_UNDERLYING_ASSET_CLASS: Readonly<Record<string, InstrumentAssetClass>> = {
   COIN: 'crypto',
   CRYPTO: 'crypto',
   STOCK: 'equity',
   EQUITY: 'equity',
+  HK_EQUITY: 'equity',
+  KR_EQUITY: 'equity',
+  CN_EQUITY: 'equity',
+  PREMARKET: 'equity',
   INDEX: 'index',
   COMMODITY: 'commodity',
 }
+
+/**
+ * USDT-M 名册里的永续字面量：加密永续 `PERPETUAL`、TradFi 永续 `TRADIFI_PERPETUAL`
+ * （2026-10-08 实测 703 / 217）。只按 `PERPETUAL` 过滤会把全部 TradFi 永续整批漏掉。
+ */
+const BINANCE_PERPETUAL_CONTRACT_TYPES: ReadonlySet<string> = new Set(['PERPETUAL', 'TRADIFI_PERPETUAL'])
 
 /** underlyingType（含 underlyingSubType 逐项兜底）→ 资产类别；未登记/缺失 = undefined。 */
 export function binanceAssetClassOf(underlyingType: unknown, underlyingSubType: unknown): InstrumentAssetClass | undefined {
@@ -414,10 +430,11 @@ export class BinanceRestClient {
    *
    * - 现货：GET /api/v3/exchangeInfo，`status=TRADING` → `BTCUSDT`（form=spot，
    *   assetClass=crypto：Binance 现货名册无 TradFi 条目）。
-   * - 永续：GET /fapi/v1/exchangeInfo，`contractType=PERPETUAL` 且 `status=TRADING`
-   *   → `BTCUSDT-SWAP`（form=perp，与现货成对）；assetClass 取
+   * - 永续：GET /fapi/v1/exchangeInfo，`contractType` ∈ {PERPETUAL, TRADIFI_PERPETUAL}
+   *   且 `status=TRADING` → `BTCUSDT-SWAP`（form=perp，与现货成对）；assetClass 取
    *   underlyingType/underlyingSubType（取不到留空），contract 取 contractSize/
-   *   filters/marginAsset。
+   *   filters/marginAsset。TradFi 永续的字面量是 TRADIFI_PERPETUAL（实测 217 行），
+   *   只认 PERPETUAL 会把股票/大宗/外汇合约整批漏掉。
    *
    * 两半都是名册契约的一部分：任一半失败即抛结构化错误，**不返回半份名册**
    * （静默半份会让检索排序与可用性判断失真，调用方按错误决定自己的兜底目录）。
@@ -464,7 +481,8 @@ export class BinanceRestClient {
         contractSize?: unknown
         filters?: unknown
       }
-      if (item?.contractType !== 'PERPETUAL' || item.status !== 'TRADING'
+      if (typeof item?.contractType !== 'string' || !BINANCE_PERPETUAL_CONTRACT_TYPES.has(item.contractType)
+        || item.status !== 'TRADING'
         || typeof item.symbol !== 'string' || item.symbol === '') continue
       const name = typeof item.baseAsset === 'string' && item.baseAsset !== ''
         && typeof item.quoteAsset === 'string' && item.quoteAsset !== ''

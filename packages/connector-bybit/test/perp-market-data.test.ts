@@ -3,7 +3,8 @@
  *
  * 判据（docs/roadmap/crypto-perp-and-tradfi.md P3）：`-SWAP` 一律打
  * `category=linear`，任何路径都不得落到 `category=spot`；输出 symbol 为规范形；
- * 名册输出 form/contract，assetClass 因交易所元数据缺项留空。
+ * 名册输出 form/contract/assetClass：assetClass 只由交易所 symbolType 字面量裁决，
+ * 空串（无分类）与未登记字面量（forex/mstocks）留空。
  * fetch 为契约化注入缝（未登记的路径直接失败，把「多发一条现货请求」变成红）。
  */
 import { describe, expect, it } from 'vitest'
@@ -188,6 +189,74 @@ describe('BybitMarketDataService.listInstruments', () => {
       },
     ])
     expect(instruments.every((row) => row.assetClass === undefined)).toBe(true)
+  })
+
+  it('运营按交易所 symbolType 分辨线性合约的资产类别，未登记或空串一律留空', async () => {
+    // Given 线性面给出 stock/ETF/commodity/forex/空串 五种 symbolType（可达环境实测取值）
+    const { impl } = strictFetch([
+      {
+        match: '/v5/market/instruments-info?category=spot&limit=1000',
+        body: { retCode: 0, retMsg: 'OK', result: { list: [], nextPageCursor: '' } },
+      },
+      {
+        match: '/v5/market/instruments-info?category=linear&limit=1000',
+        body: {
+          retCode: 0,
+          retMsg: 'OK',
+          result: {
+            list: [
+              { symbol: 'TSLAUSDT', baseCoin: 'TSLA', quoteCoin: 'USDT', status: 'Trading', contractType: 'LinearPerpetual', symbolType: 'stock', settleCoin: 'USDT', priceFilter: { tickSize: '0.01' }, lotSizeFilter: { qtyStep: '0.01' }, leverageFilter: { maxLeverage: '100' } },
+              { symbol: 'ARKKUSDT', baseCoin: 'ARKK', quoteCoin: 'USDT', status: 'Trading', contractType: 'LinearPerpetual', symbolType: 'ETF' },
+              { symbol: 'XAUUSDT', baseCoin: 'XAU', quoteCoin: 'USDT', status: 'Trading', contractType: 'LinearPerpetual', symbolType: 'commodity' },
+              { symbol: 'EURUSDUSDT', baseCoin: 'EURUSD', quoteCoin: 'USDT', status: 'Trading', contractType: 'LinearPerpetual', symbolType: 'forex' },
+              { symbol: 'BTCUSDT', baseCoin: 'BTC', quoteCoin: 'USDT', status: 'Trading', contractType: 'LinearPerpetual', symbolType: '' },
+            ],
+            nextPageCursor: '',
+          },
+        },
+      },
+    ])
+    // When 运营拉取名册
+    const instruments = await service(impl).listInstruments()
+    // Then 有交易所字面量的标出类别；forex 无枚举成员、空串不是分类值 ⇒ 留空（漏标而非错标）
+    expect(instruments.map((row) => [row.symbol, row.assetClass])).toEqual([
+      ['TSLAUSDT-SWAP', 'equity'],
+      ['ARKKUSDT-SWAP', 'equity'],
+      ['XAUUSDT-SWAP', 'commodity'],
+      ['EURUSDUSDT-SWAP', undefined],
+      ['BTCUSDT-SWAP', undefined],
+    ])
+  })
+
+  it('运营看到 Bybit 现货里的代币化股票按 symbolType=xstocks 标为 equity', async () => {
+    // Given 现货面给出 xstocks（代币化股票）与无分类的标准加密行
+    const { impl } = strictFetch([
+      {
+        match: '/v5/market/instruments-info?category=spot&limit=1000',
+        body: {
+          retCode: 0,
+          retMsg: 'OK',
+          result: {
+            list: [
+              { symbol: 'AAPLXUSDT', baseCoin: 'AAPLX', quoteCoin: 'USDT', status: 'Trading', symbolType: 'xstocks' },
+              { symbol: 'BTCUSDT', baseCoin: 'BTC', quoteCoin: 'USDT', status: 'Trading', symbolType: '' },
+            ],
+            nextPageCursor: '',
+          },
+        },
+      },
+      {
+        match: '/v5/market/instruments-info?category=linear&limit=1000',
+        body: { retCode: 0, retMsg: 'OK', result: { list: [], nextPageCursor: '' } },
+      },
+    ])
+    // When 运营拉取名册
+    const instruments = await service(impl).listInstruments()
+    // Then 代币化股票带 equity 标签，标准加密行不带（不留空白标签冒充已分类）
+    expect(instruments.map((row) => [row.symbol, row.assetClass])).toEqual([
+      ['AAPLXUSDT', 'equity'],
+      ['BTCUSDT', undefined],
+    ])
   })
 
   it('运营拉取名册时按交易所游标翻页取全集', async () => {

@@ -81,7 +81,9 @@ export class BybitMarketDataService extends Service implements MarketDataService
 
   /**
    * 标的名册（P3）：现货 ∪ 线性永续；永续输出规范形 `BTCUSDT-SWAP`（form=perp）。
-   * assetClass 留空由交易所元数据缺该项决定，不本地推断（见 rest.ts toInstrumentRef）。
+   * assetClass 只由交易所 `symbolType` 字面量裁决（stock/ETF/xstocks→equity、
+   * commodity→commodity、innovation/adventure→crypto）；交易所没给（空串）或未登记
+   * （forex/mstocks）即留空，不本地推断（见 rest.ts bybitAssetClassOf）。
    */
   async listInstruments(): Promise<InstrumentRef[]> {
     return this.client.listInstruments()
