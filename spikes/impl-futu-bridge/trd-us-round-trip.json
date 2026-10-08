@@ -1,0 +1,124 @@
+{
+  "note": "US face on real OpenD (SIMULATE); account ids redacted. HK 面见 trd-*.json。",
+  "steps": [
+    {
+      "case": "美股下单（US.AAPL 限价买 1 @ 330）",
+      "path": "/api/trd/place-order",
+      "request": {
+        "security": "US.AAPL",
+        "trdSide": 1,
+        "orderType": 1,
+        "qty": 1,
+        "price": 330.0,
+        "trdEnv": "SIMULATE",
+        "accId": 11704132,
+        "remark": "us-bridge-anchor-1"
+      },
+      "httpStatus": 200,
+      "raw": {
+        "retType": 0,
+        "retMsg": "",
+        "data": {
+          "orderId": "9769923",
+          "code": "US.AAPL"
+        }
+      }
+    },
+    {
+      "case": "美股挂单列表（读回这一单与锚）",
+      "path": "/api/trd/get-orders",
+      "request": {
+        "market": "US",
+        "trdEnv": "SIMULATE",
+        "accId": 11704132
+      },
+      "httpStatus": 200,
+      "raw": {
+        "retType": 0,
+        "retMsg": "",
+        "data": {
+          "orders": [
+            {
+              "orderId": "9769923",
+              "code": "US.AAPL",
+              "orderStatus": "SUBMITTED",
+              "remark": "us-bridge-anchor-1",
+              "stockName": "苹果",
+              "trdSide": "BUY",
+              "orderType": "NORMAL",
+              "qty": 1.0,
+              "price": 330.0,
+              "dealtQty": 0.0,
+              "dealtAvgPrice": 0.0,
+              "createTime": "2026-10-08T13:19:34Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "case": "美股撤单",
+      "path": "/api/trd/cancel-order",
+      "request": {
+        "orderId": "9769923",
+        "trdEnv": "SIMULATE",
+        "accId": 11704132
+      },
+      "httpStatus": 200,
+      "raw": {
+        "retType": 0,
+        "retMsg": "",
+        "data": {
+          "orderId": "9769923"
+        }
+      }
+    },
+    {
+      "case": "美股撤单后（空）",
+      "path": "/api/trd/get-orders",
+      "request": {
+        "market": "US",
+        "trdEnv": "SIMULATE",
+        "accId": 11704132
+      },
+      "httpStatus": 200,
+      "raw": {
+        "retType": 0,
+        "retMsg": "",
+        "data": {
+          "orders": []
+        }
+      }
+    },
+    {
+      "case": "跨市场顶替被拒：US 账户拿去交易 HK",
+      "path": "/api/trd/get-orders",
+      "request": {
+        "market": "HK",
+        "trdEnv": "SIMULATE",
+        "accId": 11704132
+      },
+      "httpStatus": 200,
+      "raw": {
+        "retType": -1,
+        "retMsg": "bridge: accId <redacted-usAccId> 属于 US，不能拿去交易 HK",
+        "data": null
+      }
+    },
+    {
+      "case": "跨市场顶替被拒：HK 账户拿去交易 US",
+      "path": "/api/trd/get-orders",
+      "request": {
+        "market": "US",
+        "trdEnv": "SIMULATE",
+        "accId": 11704133
+      },
+      "httpStatus": 200,
+      "raw": {
+        "retType": -1,
+        "retMsg": "bridge: accId <redacted-hkAccId> 属于 HK，不能拿去交易 US",
+        "data": null
+      }
+    }
+  ]
+}

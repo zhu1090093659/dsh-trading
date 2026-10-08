@@ -24,9 +24,11 @@ import type {
 } from '@dshtrading/api'
 import {
   type FutuCredentials,
+  type FutuPendingOrder,
   type FutuRestOptions,
   FutuRestClient,
   INTERVAL_VOCABULARY,
+  normalizeSymbol,
   TradingServiceError,
 } from './rest.js'
 
@@ -40,6 +42,8 @@ export interface Config {
   dryRun: boolean
   liveTrading: boolean
   unlockPwdRef: string
+  /** OpenD 账户 id（accId）。0 = 用 OpenD 的默认账户；**撤单必须显式给**（见 cancelOrder）。 */
+  accId: number
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -48,6 +52,7 @@ export const Config: Schema<Config> = Schema.object({
   dryRun: Schema.boolean().default(true),
   liveTrading: Schema.boolean().default(false),
   unlockPwdRef: Schema.string().default('FUTU_UNLOCK_PWD'),
+  accId: Schema.number().default(0),
 })
 
 export const inject = ['tools']
@@ -91,6 +96,86 @@ export class FutuMarketDataService extends Service implements MarketDataService 
   }
 }
 
+/** OpenD 回报的市价类订单类型（`place_order` 入参写 NORMAL/MARKET，挂单列表回它自己的枚举）。 */
+const MARKET_ORDER_TYPES = new Set(['MARKET', 'MARKET_IF_TOUCHED'])
+
+/** 其余都按限价/条件类处理：成交语义都是"带价挂出"。 */
+const LIMIT_ORDER_TYPES = new Set([
+  'NORMAL', 'ABSOLUTE_LIMIT', 'SPECIAL_LIMIT', 'SPECIAL_LIMIT_ALL', 'AUCTION', 'AUCTION_LIMIT',
+  'LIMIT_IF_TOUCHED', 'STOP', 'STOP_LIMIT', 'TRAILING_STOP', 'TRAILING_STOP_LIMIT',
+  'TWAP', 'TWAP_LIMIT', 'VWAP', 'VWAP_LIMIT',
+])
+
+/** OpenD 挂单状态串 → api 的状态词汇。**认不出即抛**（不猜成 new，也不猜成终态）。 */
+export function orderStatusOf(venueStatus: string): Order['status'] {
+  switch (venueStatus.trim().toUpperCase()) {
+    case 'SUBMITTED':
+    case 'SUBMITTING':
+    case 'WAITING_SUBMIT':
+    case 'UNSUBMITTED':
+    case 'CANCELLING_ALL':
+    case 'CANCELLING_PART':
+      return 'new'
+    case 'FILLED_PART':
+      return 'partially_filled'
+    case 'FILLED_ALL':
+      return 'filled'
+    case 'CANCELLED_ALL':
+    case 'CANCELLED_PART':
+    case 'FILL_CANCELLED':
+    case 'DELETED':
+    case 'DISABLED':
+      return 'canceled'
+    case 'FAILED':
+    case 'SUBMIT_FAILED':
+      return 'rejected'
+    case 'TIMEOUT':
+      return 'expired'
+    default:
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Futu: 认不出的挂单状态 ${JSON.stringify(venueStatus)}`)
+  }
+}
+
+/** OpenD 订单类型串 → limit / market。**认不出即抛**。 */
+export function orderTypeOf(venueType: string): Order['type'] {
+  const upper = venueType.trim().toUpperCase()
+  if (MARKET_ORDER_TYPES.has(upper)) return 'market'
+  if (LIMIT_ORDER_TYPES.has(upper)) return 'limit'
+  throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Futu: 认不出的订单类型 ${JSON.stringify(venueType)}`)
+}
+
+/**
+ * 挂单行 → api `Order`。
+ *
+ * `dryRun: false`：这是 venue 侧真存在的单子（不是本地模拟回执）。时间戳取 venue 的
+ * `createTime`（桥已转成 ISO UTC）；认不出就抛，**不用读表时刻顶替**（顶替会让"这单什么时候挂的"
+ * 变成一句假话）。
+ */
+export function toOrder(row: FutuPendingOrder): Order {
+  const side = row.trdSide?.trim().toUpperCase()
+  if (side !== 'BUY' && side !== 'SELL') {
+    throw new TradingServiceError('TRADING_EXCHANGE_ERROR',
+      `Futu: 挂单 ${row.orderId} 的方向认不出（${JSON.stringify(row.trdSide)}）`)
+  }
+  const createdMs = row.createTime === undefined ? Number.NaN : Date.parse(row.createTime)
+  if (!Number.isFinite(createdMs)) {
+    throw new TradingServiceError('TRADING_EXCHANGE_ERROR',
+      `Futu: 挂单 ${row.orderId} 的 createTime 认不出（${JSON.stringify(row.createTime)}）`)
+  }
+  return {
+    id: row.orderId,
+    symbol: normalizeSymbol(row.code),
+    side: side === 'BUY' ? 'buy' : 'sell',
+    type: orderTypeOf(row.orderType ?? ''),
+    status: orderStatusOf(row.orderStatus),
+    ...(row.price !== undefined ? { price: row.price } : {}),
+    quantity: row.qty ?? 0,
+    ...(row.dealtQty !== undefined ? { filledQuantity: row.dealtQty } : {}),
+    dryRun: false,
+    timestamp: createdMs,
+  }
+}
+
 export class FutuTradeService extends Service implements TradeService {
   private readonly client: FutuRestClient
   private readonly config: Config
@@ -109,6 +194,10 @@ export class FutuTradeService extends Service implements TradeService {
     return {
       unlockPwd: (process.env[this.config.unlockPwdRef] ?? ''),
       gatewayUrl: this.config.gatewayUrl,
+      // 交易环境由**同一道实盘闸门**决定：闸门不放行就只在 OpenD 的 SIMULATE 环境里动
+      // （没有默认实盘；镜像配置本身不是授权，判定归 @dshtrading/authority）。
+      trdEnv: liveTradingEnabled(this.config.liveTrading) ? 'REAL' : 'SIMULATE',
+      accId: this.config.accId,
     }
   }
 
@@ -116,8 +205,17 @@ export class FutuTradeService extends Service implements TradeService {
     return []
   }
 
+  /** 挂单列表（桥的 `/api/trd/get-orders`）。`symbol` 给定时按标的过滤。 */
+  async listOpenOrders(symbol?: string): Promise<Order[]> {
+    const rows = await this.client.getPendingOrders(await this.getCredentials())
+    const orders = rows.map(toOrder)
+    if (symbol === undefined) return orders
+    const wanted = normalizeSymbol(symbol)
+    return orders.filter((order) => order.symbol === wanted)
+  }
+
   async getOrders(): Promise<Order[]> {
-    return []
+    return this.listOpenOrders()
   }
 
   async getBalance(): Promise<AccountBalance> {
@@ -177,10 +275,6 @@ export class FutuTradeService extends Service implements TradeService {
     } catch {
       return []
     }
-  }
-
-  async listOpenOrders(_symbol?: string): Promise<Order[]> {
-    return []
   }
 
   async listTradeFills(_symbol?: string, _limit?: number): Promise<TradeFill[]> {
