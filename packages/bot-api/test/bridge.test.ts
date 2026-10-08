@@ -105,8 +105,8 @@ describe('TradingBridge.symbols', () => {
     const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: service }))
     const res1 = await bridge.symbols('crypto')
     expect(res1.symbols).toEqual([
-      { symbol: 'BTCUSDT', name: 'BTC/USDT' },
-      { symbol: 'ETHUSDT' },
+      { symbol: 'BTCUSDT', name: 'BTC/USDT', form: 'spot' },
+      { symbol: 'ETHUSDT', form: 'spot' },
     ])
     expect(callCount).toBe(1)
 
@@ -126,6 +126,26 @@ describe('TradingBridge.symbols', () => {
   it('未安装市场 → 400', async () => {
     const bridge = new TradingBridge(fakeHost({}))
     await expect(bridge.symbols('cn')).rejects.toThrowError(BridgeProtocolError)
+  })
+
+  it('用户拉名册时每行带形态与资产类别（现货行按符号裁决、永续行透传元数据）', async () => {
+    // Given 名册里现货行未标注形态、TradFi 永续行带交易所元数据
+    const rows = [
+      { symbol: 'BTCUSDT', name: 'BTC/USDT' },
+      { symbol: 'TSLAUSDT-SWAP', name: 'TSLA/USDT', form: 'perp' as const, assetClass: 'equity' as const },
+    ]
+    const bridge = new TradingBridge(fakeHost({ tradingCryptoMarketData: fakeService({ listInstruments: async () => rows }) }))
+    // When 用户拉全量名册与带 query 的名册
+    const all = await bridge.symbols('crypto')
+    const filtered = await bridge.symbols('crypto', 'tsla')
+    // Then 现货行补 spot、永续行 form/assetClass 原样，两条路径形状一致
+    expect(all.symbols).toEqual([
+      { symbol: 'BTCUSDT', name: 'BTC/USDT', form: 'spot' },
+      { symbol: 'TSLAUSDT-SWAP', name: 'TSLA/USDT', form: 'perp', assetClass: 'equity' },
+    ])
+    expect(filtered.symbols).toEqual([
+      { symbol: 'TSLAUSDT-SWAP', name: 'TSLA/USDT', form: 'perp', assetClass: 'equity' },
+    ])
   })
 })
 
@@ -377,7 +397,7 @@ describe('dispatchBridgeRequest', () => {
     const search = new URLSearchParams({ market: 'crypto' })
     const { status, payload } = await dispatchBridgeRequest(bridge, 'GET', '/symbols', search)
     expect(status).toBe(200)
-    expect(payload).toEqual({ symbols: [{ symbol: 'BTCUSDT' }] })
+    expect(payload).toEqual({ symbols: [{ symbol: 'BTCUSDT', form: 'spot' }] })
   })
 
   it('未知端点 404；未支持的 HTTP 方法 405（issue #32 起支持 GET/PUT/POST/DELETE）', async () => {

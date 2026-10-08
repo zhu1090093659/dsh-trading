@@ -14,7 +14,8 @@
  * - Issue #24：提供 /knowledge/cards 端点（GET），供前端读取沉淀的知识卡片。
  * - Issue #65：提供 /holdings 七个端点 + /fx 端点（统一资产台账，契约 §3/§4）。
  */
-import type { AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, Interval, Kline, MacroCalendarEntry, MacroRateEntry, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
+import { instrumentFormOf } from '@dshtrading/api'
+import type { AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, InstrumentAssetClass, InstrumentForm, InstrumentRef, Interval, Kline, MacroCalendarEntry, MacroRateEntry, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
 import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dshtrading/kit-cn'
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dshtrading/kit-hk'
 import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dshtrading/kit-us'
@@ -257,6 +258,28 @@ export interface KlinesWire {
 export interface SymbolInfoWire {
   symbol: string
   name?: string
+  /**
+   * 形态轴（2026-10-08 加密永续落地，缺省 = 现货）：`-SWAP` 后缀即永续，判据复用
+   * `instrumentFormOf`；连接器名册未标注时由本桥按符号兜底（畸形行除外，wire 上恒有值）。
+   */
+  form?: InstrumentForm
+  /** 资产类别（交易所元数据原样透传，取不到即留空，禁止按符号猜）。 */
+  assetClass?: InstrumentAssetClass
+}
+
+/**
+ * 名册行 → wire 行：形态按 api 判据兜底（名册未标注 = 现货），资产类别只做原样透传。
+ * 防御性：畸形行（symbol 非字符串）不抛错，形状与既有 `{ symbol }` 兜底一致。
+ */
+function toSymbolInfoWire(item: InstrumentRef): SymbolInfoWire {
+  const symbol = item.symbol
+  const form = item.form ?? (typeof symbol === 'string' && symbol !== '' ? instrumentFormOf(symbol) : undefined)
+  return {
+    symbol,
+    ...(item.name ? { name: item.name } : {}),
+    ...(form !== undefined ? { form } : {}),
+    ...(item.assetClass !== undefined ? { assetClass: item.assetClass } : {}),
+  }
 }
 
 export interface SymbolsWire {
@@ -683,10 +706,8 @@ export class TradingBridge {
     const trimmed = query?.trim().toLowerCase()
     if (trimmed) {
       try {
-        const list = await (service as unknown as { listInstruments(q?: string): Promise<Array<{ symbol: string; name?: string }>> }).listInstruments(trimmed)
-        let symbols: SymbolInfoWire[] = Array.isArray(list)
-          ? list.map(item => ({ symbol: item.symbol, ...(item.name ? { name: item.name } : {}) }))
-          : []
+        const list = await (service as unknown as { listInstruments(q?: string): Promise<InstrumentRef[]> }).listInstruments(trimmed)
+        let symbols: SymbolInfoWire[] = Array.isArray(list) ? list.map(toSymbolInfoWire) : []
         // 防御性兜底：若连接器实现未做服务端过滤（忽略 query 返回全量），本地执行严格匹配
         const isServerFiltered = symbols.length === 0 || symbols.every(s =>
           s.symbol.toLowerCase().includes(trimmed) || (s.name !== undefined && s.name.toLowerCase().includes(trimmed))
@@ -707,9 +728,7 @@ export class TradingBridge {
     }
     try {
       const list = await service.listInstruments()
-      const symbols: SymbolInfoWire[] = Array.isArray(list)
-        ? list.map(item => ({ symbol: item.symbol, ...(item.name ? { name: item.name } : {}) }))
-        : []
+      const symbols: SymbolInfoWire[] = Array.isArray(list) ? list.map(toSymbolInfoWire) : []
       this.symbolsCache.set(market, { list: symbols, fetchedAt: Date.now() })
       return { symbols }
     } catch {

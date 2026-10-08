@@ -21,6 +21,9 @@ Status: implemented
 2. **静态词典扩充核心大盘指数**：
    - 在 `packages/router/src/catalog.ts` 的 `SYMBOL_CATALOG.cn` 静态种子中增补科创50、上证指数、深证成指、创业板指、沪深300、上证50、中证500、中证1000、科创50ETF、沪深300ETF；在 `SYMBOL_CATALOG.hk` 增补恒生指数、恒生科技、国企指数。
    - 升级 `searchSymbols` 与 `searchAllMarkets` 打分算法，精确匹配中文名称（`name === q`）给予最高优先级（score 0），前缀包含（`name.startsWith(q)`）给予高优先级（score 1）。
+   - **形态与资产类别（2026-10-08，P4）**：`CatalogEntry` 增可选 `form`（`spot`/`perp`）与 `assetClass`（`crypto`/`equity`/`commodity`/`index`），字段类型直接引 `@dshtrading/api` 的 `InstrumentForm`/`InstrumentAssetClass`（不在 router 重声明词汇）；`SYMBOL_CATALOG.crypto` 增补 47 个与现货成对的永续行（收录判据 = OKX `instType=SWAP` 名册里确有该 `BASE-USDT-SWAP` 且 `instCategory=1`；现货在册但无对应永续的 TON/MATIC 与 ETHBTC 不入表）与 17 个 TradFi 代表条目（`TSLAUSDT-SWAP`/`XAUUSDT-SWAP` 等，按交易所 `instCategory` 标 equity/commodity，禁按符号字面猜：`SPX` 是迷因币、标普 500 是 `US500`）。
+   - `searchSymbols` 与 `searchAllMarkets` 增可选 `form` 末位参数（供货架的现货/永续切换，缺省不过滤），形态判据走导出的 `catalogFormOf`（显式标注优先、缺省现货）；`setDynamicCatalog`/`updateDynamicCatalog` 条目形状放宽为 `CatalogSeed`，随行透传 `form`/`assetClass`。
+   - **`/symbols` wire（2026-10-08，P4）**：`SymbolInfoWire` 增可选 `form`/`assetClass`，桥的带 `query` 检索与 30min 缓存全量名册两条路径统一映射——名册未标注形态时按 `instrumentFormOf` 兜底（wire 上恒有值），`assetClass` 只原样透传、缺则留空；30min 缓存键仍按 market。
 3. **前端 UI 交互与防呆增强**：
    - 优化 `MarketSidebar.tsx` 的联想防抖触发门槛至 1 个字符（支持输入“科”即可触发联想）。
    - 重构 `onSubmit`：优先匹配名称与代码的完全匹配与前缀匹配；用户在输入中文并按回车时自动取首个有效匹配项的规范代码；若输入包含中文且完全无法匹配任何标的，予以安全拦截，杜绝将非法纯中文当作代码提交到后端。
@@ -36,4 +39,5 @@ Status: implemented
 
 - 股票与指数搜索体验对齐同花顺等主流交易软件，支持中文名、拼音缩写、代码全方位实时检索与回车选中。
 - 完美支持“科创50”、“上证指数”、“沪深300”等大盘指数的搜索、自选添加、实时行情与 K 线渲染，不再报 `TRADING_UNSUPPORTED_SYMBOL`。
+- 形态面（2026-10-08）：搜索/联想可按现货/永续过滤，TradFi 永续（交易所合成合约，闭市时段仍报价）可被检索并加入自选；静态永续条目只是冷启动加速，真实全集由连接器名册经 `/symbols` 给出。
 - 全量单元测试（1086 tests）与构建 100% 保持通过。

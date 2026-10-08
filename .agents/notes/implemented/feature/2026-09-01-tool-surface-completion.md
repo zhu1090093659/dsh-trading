@@ -10,7 +10,8 @@ Status: implemented
 
 1. **kit 双注册收口**：新增 `@dsh-trading/indicators/plugin`（patch 行 `dsh-trading-indicators`）与 `@dsh-trading/knowledge/plugin`（patch 行 `dsh-trading-knowledge`），host 平面单点注册 `indicator_author` / `indicator_delete`（新增）/ `knowledge_ingest` / `knowledge_search` / `knowledge_graph`（新增，buildGraph 只读包装）；kit 四包与 client-ui-trading 的重复注册移除，emit 接线（issue #30 通道）随迁。**单实例语义**：两插件 provide `tradingCustomIndicators` / `tradingKnowledgeCards` store 服务（file store 单实例），桥从服务取实例（老部署回退自建）——消除「双实例缓存 stale-flush 分裂」风险；base patch 行序保证 client-ui-trading 后于能力包挂载。
 2. **get_indicators 铺满 us/cn/hk**：kit-us / kit-cn / kit-hk 各注册 `<market>_get_indicators`（行情 registry-first、老部署回退市场键）；crypto 由 connector-binance/okx 维持。**纳入自定义指标**：`createGetIndicatorsTool` 新增可选 `customStore`——非预置 id 从 store 查记录 → vm 熔断校验 + 编译 → 计算（记录缺失/校验失败都有可读诊断）。
-3. **routing_get / instruments_search**（router 包，host 平面）：`routing_get` 报告各市场 provider 与激活状态（serving / selected-but-missing / none，settings 权威）；`instruments_search` 跨市场检索 = registry 动态全集（listInstruments 可选能力，失败静默）∪ **内置静态字典**（见下）——去重、market 过滤、per-market 截断。
+3. **routing_get / instruments_search**（router 包，host 平面）：`routing_get` 报告各市场 provider 与激活状态（serving / selected-but-missing / none，settings 权威）；`instruments_search` 跨市场检索 = registry 动态全集（listInstruments 可选能力，失败静默）∪ **内置静态字典**（见下）——去重、market 过滤、per-market 截断；
+   **形态面（2026-10-08，P4）**：每行带 `form`（缺省按符号裁决为现货，判据是 `@dshtrading/api` 的 `instrumentFormOf`）与 `assetClass`（交易所元数据原样，取不到留空）；新增可选 `type: 'spot'|'perp'` 过滤（schema enum 校验）；排序为 exact → crypto 资产类别 → 匹配档位 → 收集顺序，截断时做形态覆盖（两种形态都真有候选才替换末位同形态冗余行），响应另报 `matched`（截断前命中数，`total` 仍是返回条数）。工具描述写明 `-SWAP` 规范形与「TradFi 永续是交易所合成合约、非股票/大宗本身」。catalog 的形态字段、`/symbols` wire 透传与联想侧 form 过滤归 2026-09-06-symbol-search-and-index-support.md。
 4. **symbol-catalog 升位 host SSOT**：`SYMBOL_CATALOG` 从 client-ui-trading 内部常量（调研发现当前无消费方）迁至 `@dsh-trading/router/catalog`（纯数据子路径，双端安全），客户端原模块改再导出垫片；动态全集（listInstruments）与静态字典并集检索。
 5. **测试**：indicators 自定义解析 3 例 + router 工具 5 例；全量 616 通过、build 全绿。
 
@@ -26,6 +27,7 @@ Status: implemented
 - us/cn/hk preset 会话可对规范词汇标的计算 MA/RSI 等指标；custom 指标 id 一并可达（indicator_author 落盘即可算）。
 - 同名工具单一注册源（`ctx.tools.get()` 查重保持兼容）；host 平面工具面 +4（indicator_delete / knowledge_graph / routing_get / instruments_search）+ get_indicators ×3，此后冻结（能力实例走注册表）。
 - standard 会话可见 routing_get / instruments_search（D4：通用工具全会话可见；均无交易能力）。
+- 加密永续与 TradFi 永续可被检索（`BTCUSDT-SWAP`、`TSLAUSDT-SWAP`、`XAUUSDT-SWAP` 均命中并带 `form`/`assetClass`）；宽查询下 TradFi 永续不会把 crypto 结果挤出截断位，现货与永续也不会互相吞没。
 - 残余风险：kit 的 get_indicators 在「路由选中连接器未装」时静默不注册（marketData 缺席）——与连接器激活语义一致。
 - UI 实机验收同受宿主 checkout 迁移环境阻塞（见 2026-09-01-sse-invalidation-signal.md）；链路由离线测试全覆盖。
 - 验证：pnpm build 全绿；pnpm test 616 通过（新增 8）。

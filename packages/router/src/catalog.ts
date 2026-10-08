@@ -4,11 +4,15 @@
  * `instruments_search` 工具与桥共用；**静态快照**——新上市标的靠动态全集
  * （registry.active(market).listInstruments?()）与本表并集兜底。
  *
- * 词汇纪律：symbol 一律市场规范词汇（docs/symbol-vocabulary.md）。
+ * 词汇纪律：symbol 一律市场规范词汇（docs/symbol-vocabulary.md）；crypto 永续形带
+ * `-SWAP` 后缀（`form=perp`），形态一致性判据见该文档「形态一致性」一节。
  *
- * 纯数据模块（零依赖，浏览器/Node 双端安全）。
+ * 纯数据模块（运行时只依赖 `@dshtrading/api` 的形态判据纯函数，无副作用，浏览器/Node
+ * 双端安全）：形态与资产类别词汇只有类型引用 + 判据复用，本模块不重声明字符串字面量。
  * @module @dshtrading/router/catalog
  */
+
+import { instrumentFormOf, type InstrumentAssetClass, type InstrumentForm } from '@dshtrading/api'
 
 /** 市场词汇（与 api MarketId 同词汇；本地定义保持本模块零依赖）。 */
 export type CatalogMarket = 'crypto' | 'us' | 'cn' | 'hk' | 'futures' | 'global'
@@ -17,6 +21,13 @@ export interface CatalogEntry {
   symbol: string
   name: string
   pinyin?: string
+  /**
+   * 形态轴（词汇家在 `@dshtrading/api`）：缺省 = 现货；`-SWAP` 后缀即永续。
+   * 静态字典只给永续行显式标注，现货行按 api 契约缺省（读侧用 instrumentFormOf 裁决）。
+   */
+  form?: InstrumentForm
+  /** 资产类别（仅展示与检索排序）：交易所元数据原样，取不到即留空，禁止按符号猜。 */
+  assetClass?: InstrumentAssetClass
 }
 
 export const SYMBOL_CATALOG: Record<CatalogMarket, CatalogEntry[]> = {
@@ -71,6 +82,77 @@ export const SYMBOL_CATALOG: Record<CatalogMarket, CatalogEntry[]> = {
     { symbol: 'FILUSDT', name: 'Filecoin', pinyin: 'FIL' },
     { symbol: 'MATICUSDT', name: 'Polygon', pinyin: 'MATIC' },
     { symbol: 'ETHBTC', name: 'ETH/BTC', pinyin: 'ETHBTC' },
+    // 永续条目（canonical `-SWAP` 形，与上方现货成对）：冷启动加速，真实全集靠 provider 名册。
+    // 收录判据——OKX instType=SWAP 名册中确有对应 `BASE-USDT-SWAP` 且 instCategory=1（加密）：
+    // 2026-10-08 实测 301 个加密永续；现货在册但无永续的标的（TON/MATIC）与 ETHBTC 不硬造。
+    { symbol: 'BTCUSDT-SWAP', name: '比特币 永续', pinyin: 'BTC,BITCOIN,BITEBI', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'ETHUSDT-SWAP', name: '以太坊 永续', pinyin: 'ETH,ETHEREUM,YITAIFANG', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'SOLUSDT-SWAP', name: 'Solana 永续', pinyin: 'SOL', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'BNBUSDT-SWAP', name: 'BNB 永续', pinyin: 'BNB', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'XRPUSDT-SWAP', name: 'XRP 永续', pinyin: 'XRP,RIPPLE,RUIBO', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'DOGEUSDT-SWAP', name: '狗狗币 永续', pinyin: 'DOGE,GOUGOUBI', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'ADAUSDT-SWAP', name: '艾达币 永续', pinyin: 'ADA,AIDABI', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'TRXUSDT-SWAP', name: '波场 永续', pinyin: 'TRX,BOCHANG', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'AVAXUSDT-SWAP', name: '雪崩 永续', pinyin: 'AVAX,XUEBENG', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'LINKUSDT-SWAP', name: '链link 永续', pinyin: 'LINK', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'SHIBUSDT-SWAP', name: '屎币 永续', pinyin: 'SHIB,SHIBI', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'SUIUSDT-SWAP', name: 'Sui 永续', pinyin: 'SUI', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'DOTUSDT-SWAP', name: '波卡 永续', pinyin: 'DOT,BOKA', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'LTCUSDT-SWAP', name: '莱特币 永续', pinyin: 'LTC,LAITEBI', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'BCHUSDT-SWAP', name: '比特币现金 永续', pinyin: 'BCH', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'NEARUSDT-SWAP', name: 'NEAR 永续', pinyin: 'NEAR', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'APTUSDT-SWAP', name: 'Aptos 永续', pinyin: 'APT', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'ARBUSDT-SWAP', name: 'Arbitrum 永续', pinyin: 'ARB', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'OPUSDT-SWAP', name: 'Optimism 永续', pinyin: 'OP', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'ATOMUSDT-SWAP', name: 'Cosmos 永续', pinyin: 'ATOM', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'XLMUSDT-SWAP', name: '恒星币 永续', pinyin: 'XLM', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'HBARUSDT-SWAP', name: 'Hedera 永续', pinyin: 'HBAR', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'INJUSDT-SWAP', name: 'Injective 永续', pinyin: 'INJ', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'SEIUSDT-SWAP', name: 'Sei 永续', pinyin: 'SEI', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'TIAUSDT-SWAP', name: 'Celestia 永续', pinyin: 'TIA', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'PEPEUSDT-SWAP', name: 'Pepe 永续', pinyin: 'PEPE', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'WIFUSDT-SWAP', name: 'dogwifhat 永续', pinyin: 'WIF', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'BONKUSDT-SWAP', name: 'Bonk 永续', pinyin: 'BONK', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'ORDIUSDT-SWAP', name: 'ORDI 永续', pinyin: 'ORDI', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'NOTUSDT-SWAP', name: 'Notcoin 永续', pinyin: 'NOT', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'UNIUSDT-SWAP', name: 'Uniswap 永续', pinyin: 'UNI', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'AAVEUSDT-SWAP', name: 'Aave 永续', pinyin: 'AAVE', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'RENDERUSDT-SWAP', name: 'Render 永续', pinyin: 'RENDER', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'FETUSDT-SWAP', name: 'ASAI 永续', pinyin: 'FET', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'WLDUSDT-SWAP', name: '世界币 永续', pinyin: 'WLD,SHIJIEBI', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'JUPUSDT-SWAP', name: 'Jupiter 永续', pinyin: 'JUP', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'PYTHUSDT-SWAP', name: 'Pyth 永续', pinyin: 'PYTH', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'STXUSDT-SWAP', name: 'Stacks 永续', pinyin: 'STX', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'IMXUSDT-SWAP', name: 'Immutable 永续', pinyin: 'IMX', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'GALAUSDT-SWAP', name: 'Gala 永续', pinyin: 'GALA', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'SANDUSDT-SWAP', name: 'The Sandbox 永续', pinyin: 'SAND', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'MANAUSDT-SWAP', name: 'Decentraland 永续', pinyin: 'MANA', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'AXSUSDT-SWAP', name: 'Axie Infinity 永续', pinyin: 'AXS', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'CRVUSDT-SWAP', name: 'Curve 永续', pinyin: 'CRV', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'LDOUSDT-SWAP', name: 'Lido DAO 永续', pinyin: 'LDO', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'ETCUSDT-SWAP', name: '以太经典 永续', pinyin: 'ETC', form: 'perp', assetClass: 'crypto' },
+    { symbol: 'FILUSDT-SWAP', name: 'Filecoin 永续', pinyin: 'FIL', form: 'perp', assetClass: 'crypto' },
+    // TradFi 永续代表条目（交易所合成合约，非股票/大宗本身，闭市时段仍 24/7 报价）。
+    // assetClass 取自 OKX instCategory（3→equity、4→commodity），与连接器名册同源取值，
+    // 静态行与动态行不打架。判据样本：SPX-USDT-SWAP 是迷因币 SPX6900（instCategory=1，不入表），
+    // 标普 500 是 US500——归属只信交易所元数据，禁止按符号字面猜。
+    { symbol: 'TSLAUSDT-SWAP', name: '特斯拉 永续', pinyin: 'TESLA,TSILA', form: 'perp', assetClass: 'equity' },
+    { symbol: 'NVDAUSDT-SWAP', name: '英伟达 永续', pinyin: 'NVIDIA,YINGWEIDA', form: 'perp', assetClass: 'equity' },
+    { symbol: 'AAPLUSDT-SWAP', name: '苹果 永续', pinyin: 'APPLE,PINGGUO', form: 'perp', assetClass: 'equity' },
+    { symbol: 'MSFTUSDT-SWAP', name: '微软 永续', pinyin: 'MICROSOFT,WEIRUAN', form: 'perp', assetClass: 'equity' },
+    { symbol: 'GOOGLUSDT-SWAP', name: '谷歌 永续', pinyin: 'GOOGLE,GUGE', form: 'perp', assetClass: 'equity' },
+    { symbol: 'METAUSDT-SWAP', name: 'Meta 永续', pinyin: 'FACEBOOK', form: 'perp', assetClass: 'equity' },
+    { symbol: 'AMZNUSDT-SWAP', name: '亚马逊 永续', pinyin: 'AMAZON,YAMAXUN', form: 'perp', assetClass: 'equity' },
+    { symbol: 'COINUSDT-SWAP', name: 'Coinbase 永续', pinyin: 'COINBASE', form: 'perp', assetClass: 'equity' },
+    { symbol: 'MSTRUSDT-SWAP', name: '微策略 永续', pinyin: 'MICROSTRATEGY,WEICELVE', form: 'perp', assetClass: 'equity' },
+    { symbol: 'SPYUSDT-SWAP', name: '标普500ETF 永续', form: 'perp', assetClass: 'equity' },
+    { symbol: 'QQQUSDT-SWAP', name: '纳指100ETF 永续', form: 'perp', assetClass: 'equity' },
+    { symbol: 'US500USDT-SWAP', name: '标普500 永续', pinyin: 'SPX500', form: 'perp', assetClass: 'equity' },
+    { symbol: 'JP225USDT-SWAP', name: '日经225 永续', pinyin: 'NIKKEI', form: 'perp', assetClass: 'equity' },
+    { symbol: 'XAUUSDT-SWAP', name: '黄金 永续', pinyin: 'GOLD,HUANGJIN', form: 'perp', assetClass: 'commodity' },
+    { symbol: 'XAGUSDT-SWAP', name: '白银 永续', pinyin: 'SILVER,BAIYIN', form: 'perp', assetClass: 'commodity' },
+    { symbol: 'CLUSDT-SWAP', name: 'WTI原油 永续', pinyin: 'CRUDE,WTI,YUANYOU', form: 'perp', assetClass: 'commodity' },
+    { symbol: 'NGUSDT-SWAP', name: '天然气 永续', pinyin: 'NATGAS,TIANRANQI', form: 'perp', assetClass: 'commodity' },
   ],
   us: [
     { symbol: 'AAPL', name: '苹果', pinyin: 'AAPL,APPLE,PG,PINGGUO' },
@@ -241,18 +323,29 @@ export const SYMBOL_CATALOG: Record<CatalogMarket, CatalogEntry[]> = {
 
 const dynamicCatalogs = new Map<CatalogMarket, CatalogEntry[]>()
 
+/** 动态全集条目：连接器名册（`/symbols`）的最小子集，形态/资产类别随行透传。 */
+export interface CatalogSeed {
+  symbol: string
+  name?: string
+  pinyin?: string
+  form?: InstrumentForm
+  assetClass?: InstrumentAssetClass
+}
+
 /** 注入某市场的动态标的全集（由桥端点拉取并入）。 */
-export function setDynamicCatalog(market: CatalogMarket, entries: Array<{ symbol: string; name?: string; pinyin?: string }>): void {
+export function setDynamicCatalog(market: CatalogMarket, entries: CatalogSeed[]): void {
   const normalized: CatalogEntry[] = entries.map((e) => ({
     symbol: e.symbol,
     name: e.name ?? e.symbol,
-    pinyin: e.pinyin,
+    ...(e.pinyin !== undefined ? { pinyin: e.pinyin } : {}),
+    ...(e.form !== undefined ? { form: e.form } : {}),
+    ...(e.assetClass !== undefined ? { assetClass: e.assetClass } : {}),
   }))
   dynamicCatalogs.set(market, normalized)
 }
 
 /** 累加/增量更新某市场的动态标的名称（由实时行情查询或联想补齐触发）。 */
-export function updateDynamicCatalog(market: CatalogMarket, entries: Array<{ symbol: string; name?: string; pinyin?: string }>): void {
+export function updateDynamicCatalog(market: CatalogMarket, entries: CatalogSeed[]): void {
   const existing = dynamicCatalogs.get(market) ?? []
   const map = new Map<string, CatalogEntry>()
   for (const e of existing) {
@@ -264,10 +357,15 @@ export function updateDynamicCatalog(market: CatalogMarket, entries: Array<{ sym
     // 忽略占位符名字，如 "000938" 或 "000938 (A股)"
     if (e.name === e.symbol || /\(A股\)|\(港股\)/.test(e.name)) continue
     const old = map.get(sym)
+    const form = e.form ?? old?.form
+    const assetClass = e.assetClass ?? old?.assetClass
+    const pinyin = e.pinyin ?? old?.pinyin
     map.set(sym, {
       symbol: e.symbol,
       name: e.name,
-      pinyin: e.pinyin ?? old?.pinyin,
+      ...(pinyin !== undefined ? { pinyin } : {}),
+      ...(form !== undefined ? { form } : {}),
+      ...(assetClass !== undefined ? { assetClass } : {}),
     })
   }
   dynamicCatalogs.set(market, Array.from(map.values()))
@@ -294,16 +392,22 @@ export function getMergedCatalog(market: CatalogMarket): CatalogEntry[] {
   return merged
 }
 
+/** 行形态裁决：显式标注优先，否则复用 `@dshtrading/api` 的 `instrumentFormOf`（唯一判据实现）。 */
+export function catalogFormOf(entry: CatalogEntry): InstrumentForm {
+  return entry.form ?? instrumentFormOf(entry.symbol)
+}
+
 /**
  * 联想搜索：静态 ∪ 动态全集融合，symbol 前缀/包含（大小写不敏感）或中文名包含，返回前 limit 条。
- * 空查询返回空（不打扰）。
+ * `form` 为可选形态过滤（供货架的现货/永续切换），缺省不过滤；空查询返回空（不打扰）。
  */
-export function searchSymbols(market: CatalogMarket, query: string, limit = 8): CatalogEntry[] {
+export function searchSymbols(market: CatalogMarket, query: string, limit = 8, form?: InstrumentForm): CatalogEntry[] {
   const q = query.trim().toUpperCase()
   if (q === '') return []
   const catalog = getMergedCatalog(market)
   const scored: Array<{ entry: CatalogEntry; score: number }> = []
   for (const entry of catalog) {
+    if (form !== undefined && catalogFormOf(entry) !== form) continue
     const symbol = entry.symbol.toUpperCase()
     const name = entry.name ? entry.name.toUpperCase() : ''
     const pinyinList = entry.pinyin ? entry.pinyin.toUpperCase().split(',') : []
@@ -318,12 +422,12 @@ export function searchSymbols(market: CatalogMarket, query: string, limit = 8): 
   return scored.sort((a, b) => a.score - b.score).slice(0, limit).map((s) => s.entry)
 }
 
-/** 跨市场联想：全部市场字典合并搜索（自选页签的添加是跨市场的）。 */
+/** 跨市场联想：全部市场字典合并搜索（自选页签的添加是跨市场的）；`form` 为可选形态过滤。 */
 export interface Suggestion extends CatalogEntry {
   market: CatalogMarket
 }
 
-export function searchAllMarkets(query: string, limit = 8): Suggestion[] {
+export function searchAllMarkets(query: string, limit = 8, form?: InstrumentForm): Suggestion[] {
   const q = query.trim().toUpperCase()
   if (q === '') return []
   const markets: CatalogMarket[] = ['crypto', 'us', 'cn', 'hk', 'futures', 'global']
@@ -331,6 +435,7 @@ export function searchAllMarkets(query: string, limit = 8): Suggestion[] {
   for (const market of markets) {
     const catalog = getMergedCatalog(market)
     for (const entry of catalog) {
+      if (form !== undefined && catalogFormOf(entry) !== form) continue
       const symbol = entry.symbol.toUpperCase()
       const name = entry.name ? entry.name.toUpperCase() : ''
       const pinyinList = entry.pinyin ? entry.pinyin.toUpperCase().split(',') : []
