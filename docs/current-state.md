@@ -48,7 +48,7 @@
 
 - **加密永续真值待复验（出口阻断）**：Binance `api.binance.com`/`fapi.binance.com` 全量 HTTP 451、Bybit `api.bybit.com` 系全量 HTTP 403 ⇒ Binance USDT-M 名册字段与 Bybit 线性合约真值未验。代码已 fail-closed（未登记即留空、合约端点失败结构化报错、不回落现货价），补测判据见看板卡 `7c7b7e3d`，原始响应在 spikes/impl-crypto-perp-tradfi/。
 - **合约下单未落地（Tier 2，卡 P7 未开跑）**：Tier 1 是只读面；P7 落地前任何界面与工具描述都不得暗示可下合约单。
-- **KDAS 菜单用例的审计债已按 owner 裁决整文件入基线（2026-10-08）**：packages/client-ui-trading/test/kdas-menu.test.ts 的 18+18 条 bdd 债经 `test-audit --update --force` 强升入基线（该文件此后任何计数上升、或任何新文件带债仍红），算术与理由见 [测试卫生棘轮 note](.agents/notes/implemented/testing/2026-09-15-test-hygiene-ratchet-and-tiered-ci.md)。
+- **KDAS 菜单用例的审计债已清零（2026-10-08）**：packages/client-ui-trading/test/kdas-menu.test.ts 的 18 条 bdd 债先按 owner 裁决整文件入基线（`--update --force`），同日按追加要求改成结构合规——标题加角色前缀、正文补 Given/When/Then，断言一条未改（18 条 leaf 原本都有具体期望值，`weak-assert` 全程 0）——再把基线继续下调，该条目已从基线移除（`bdd-title` 1541→1523、`bdd-gwt` 1540→1522）。理由与算术见 [测试卫生棘轮 note](.agents/notes/implemented/testing/2026-09-15-test-hygiene-ratchet-and-tiered-ci.md)。
 
 ## 怎么验证（照 AGENTS.md 的资源纪律）
 

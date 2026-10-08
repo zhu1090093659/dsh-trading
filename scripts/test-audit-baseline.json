@@ -2,8 +2,8 @@
   "rules": {
     "mock": 199,
     "sleep": 0,
-    "bdd-title": 1541,
-    "bdd-gwt": 1540,
+    "bdd-title": 1523,
+    "bdd-gwt": 1522,
     "weak-assert": 0
   },
   "files": {
@@ -199,10 +199,6 @@
     "packages/client-ui-trading/test/intraday-series.test.ts": {
       "bdd-title": 14,
       "bdd-gwt": 14
-    },
-    "packages/client-ui-trading/test/kdas-menu.test.ts": {
-      "bdd-title": 18,
-      "bdd-gwt": 18
     },
     "packages/client-ui-trading/test/macro-panel.smoke.test.tsx": {
       "mock": 1,
