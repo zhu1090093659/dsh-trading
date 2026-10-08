@@ -11,7 +11,7 @@
         "qty": 1,
         "price": 330.0,
         "trdEnv": "SIMULATE",
-        "accId": 11704132,
+        "accId": "<redacted-usAccId>",
         "remark": "us-bridge-anchor-1"
       },
       "httpStatus": 200,
@@ -30,7 +30,7 @@
       "request": {
         "market": "US",
         "trdEnv": "SIMULATE",
-        "accId": 11704132
+        "accId": "<redacted-usAccId>"
       },
       "httpStatus": 200,
       "raw": {
@@ -62,7 +62,7 @@
       "request": {
         "orderId": "9769923",
         "trdEnv": "SIMULATE",
-        "accId": 11704132
+        "accId": "<redacted-usAccId>"
       },
       "httpStatus": 200,
       "raw": {
@@ -79,7 +79,7 @@
       "request": {
         "market": "US",
         "trdEnv": "SIMULATE",
-        "accId": 11704132
+        "accId": "<redacted-usAccId>"
       },
       "httpStatus": 200,
       "raw": {
@@ -96,7 +96,7 @@
       "request": {
         "market": "HK",
         "trdEnv": "SIMULATE",
-        "accId": 11704132
+        "accId": "<redacted-usAccId>"
       },
       "httpStatus": 200,
       "raw": {
@@ -111,7 +111,7 @@
       "request": {
         "market": "US",
         "trdEnv": "SIMULATE",
-        "accId": 11704133
+        "accId": "<redacted-hkAccId>"
       },
       "httpStatus": 200,
       "raw": {

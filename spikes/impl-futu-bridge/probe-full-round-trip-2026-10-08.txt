@@ -3,12 +3,12 @@
 命令（卫星仓 dsh-trading-bot；两道显式要求：`--allow-orders` **且** `FUTU_BRIDGE_ALLOW_ORDERS=1`）：
 
     FUTU_BRIDGE_ALLOW_ORDERS=1 node packages/tradectl/drill/futu-bridge-probe.ts \
-      --bridge=http://127.0.0.1:11113 --hk-account=11704133 \
+      --bridge=http://127.0.0.1:11113 --hk-account=<redacted-accId> \
       --allow-orders --symbol=00700.HK --price=408 --size=100
 
 原始输出（2026-10-08，旁路端口 11113；LaunchAgent 的 11112 未动）：
 
-    [futu-probe] 路由证据：futu 非加密：markets=hk channel=demo(trdEnv=SIMULATE) 账户=hk:11704133 目标主机=127.0.0.1:11113（桥 http://127.0.0.1:11113）
+    [futu-probe] 路由证据：futu 非加密：markets=hk channel=demo(trdEnv=SIMULATE) 账户=hk:<redacted-accId> 目标主机=127.0.0.1:11113（桥 http://127.0.0.1:11113）
     [futu-probe] 参考价（HK.00700）：last=411.4 bid=411.2 ask=411.4（行情面，仅供你选一个远离盘口的价）
     [futu-probe] 挂单快照：0 单（HK 各自的账户各问了一次）
     [futu-probe] 已下单（HK.00700 限价买 100 @ 408）：venueOrderId=9769919

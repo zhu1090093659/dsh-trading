@@ -3,13 +3,13 @@
 判断口径：退出码 0 = 通过；2 = 参数/纪律拒绝；3 = 通路不可用。
 命令（在卫星仓 dsh-trading-bot 下）：
 
-    node packages/tradectl/drill/futu-bridge-probe.ts --bridge=http://127.0.0.1:11113 --hk-account=11704133
+    node packages/tradectl/drill/futu-bridge-probe.ts --bridge=http://127.0.0.1:11113 --hk-account=<redacted-accId>
 
 ## 第一次：桥把 accId 当整数挑剔（**现场发现的契约不符**）
 
-    [futu-probe] 路由证据：futu 非加密：markets=hk channel=demo(trdEnv=SIMULATE) 账户=hk:11704133 目标主机=127.0.0.1:11113（桥 http://127.0.0.1:11113）
+    [futu-probe] 路由证据：futu 非加密：markets=hk channel=demo(trdEnv=SIMULATE) 账户=hk:<redacted-accId> 目标主机=127.0.0.1:11113（桥 http://127.0.0.1:11113）
     [futu-probe] 参考价（HK.00700）：last=411.4 bid=411.2 ask=411.4（行情面，仅供你选一个远离盘口的价）
-    [futu-probe] 对账面不可用（FUTU_BRIDGE_VENUE_REJECTED）：桥/OpenD 拒绝（retType=-1）：bridge: accId 必须是整数，收到 '11704133'
+    [futu-probe] 对账面不可用（FUTU_BRIDGE_VENUE_REJECTED）：桥/OpenD 拒绝（retType=-1）：bridge: accId 必须是整数，收到 '<redacted-accId>'
     [futu-probe] {"ok":false,"stage":"pending-orders","code":"FUTU_BRIDGE_VENUE_REJECTED"}
     probe exit: 3
 
@@ -19,7 +19,7 @@
 
 ## 第二次：修复后（真 OpenD、只读段通过）
 
-    [futu-probe] 路由证据：futu 非加密：markets=hk channel=demo(trdEnv=SIMULATE) 账户=hk:11704133 目标主机=127.0.0.1:11113（桥 http://127.0.0.1:11113）
+    [futu-probe] 路由证据：futu 非加密：markets=hk channel=demo(trdEnv=SIMULATE) 账户=hk:<redacted-accId> 目标主机=127.0.0.1:11113（桥 http://127.0.0.1:11113）
     [futu-probe] 参考价（HK.00700）：last=411.4 bid=411.2 ask=411.4（行情面，仅供你选一个远离盘口的价）
     [futu-probe] 挂单快照：0 单（HK 各自的账户各问了一次）
     [futu-probe] {"ok":true,"stage":"read-only","markets":["hk"],"pending":0}

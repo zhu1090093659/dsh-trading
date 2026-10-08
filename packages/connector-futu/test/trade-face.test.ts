@@ -47,13 +47,13 @@ describe('FutuRestClient 交易面（POST + JSON）', () => {
   it('operator 读挂单快照：POST + JSON，remark（对账锚）原样带回', async () => {
     // Given 桥对 get-orders 回一行带 remark 的真形态挂单
     const { impl, calls } = stubFetch([{ match: '/api/trd/get-orders', body: { retType: 0, data: { orders: [PENDING_ROW] } } }])
-    const client = new FutuRestClient({ fetchImpl: impl, accId: 11704133 })
+    const client = new FutuRestClient({ fetchImpl: impl, accId: 90000001 })
     // When 客户端读挂单
     const orders = await client.getPendingOrders()
     // Then 请求是 POST + JSON，账户按市场显式给出；行上的四格契约字段逐字返回
     expect(calls[0]?.method).toBe('POST')
     expect(calls[0]?.url).not.toContain('?')
-    expect(calls[0]?.body).toMatchObject({ market: 'HK', trdEnv: 'SIMULATE', accId: 11704133 })
+    expect(calls[0]?.body).toMatchObject({ market: 'HK', trdEnv: 'SIMULATE', accId: 90000001 })
     expect(orders).toHaveLength(1)
     expect(orders[0]).toMatchObject({
       orderId: '9769893',
@@ -103,12 +103,12 @@ describe('FutuRestClient 交易面（POST + JSON）', () => {
   it('operator 撤单走 POST + JSON，并带上配置的账户 id', async () => {
     // Given 配了账户的客户端
     const { impl, calls } = stubFetch([{ match: '/api/trd/cancel-order', body: { retType: 0, data: { orderId: '9769893' } } }])
-    const client = new FutuRestClient({ fetchImpl: impl, accId: 11704133 })
+    const client = new FutuRestClient({ fetchImpl: impl, accId: 90000001 })
     // When 撤单
     await client.cancelOrder(undefined, '9769893')
     // Then 请求是 POST，带 orderId / trdEnv / accId（桥没有 market 可依，必须给账户）
     expect(calls[0]?.method).toBe('POST')
-    expect(calls[0]?.body).toEqual({ orderId: '9769893', trdEnv: 'SIMULATE', accId: 11704133 })
+    expect(calls[0]?.body).toEqual({ orderId: '9769893', trdEnv: 'SIMULATE', accId: 90000001 })
   })
 
   it('operator 下单回执缺 orderId 时抛错：绝不自己编一个 venue 句柄', async () => {
