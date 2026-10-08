@@ -16,7 +16,7 @@ OKX invalid instId`。根因是架构缺口：api 契约从未定义市场级规
 立规 `docs/guides/symbol-vocabulary.md`（规范先行，用户裁决「先做规范再按规范修复」）：
 
 1. **消费方只说规范形**：crypto=`BTCUSDT`（大写无分隔，多数派词汇）、us=`AAPL`、
-   cn=`600519.SH`、hk=`00700.HK`（5 位补零）；衍生品 `-SWAP` 后缀为预留词汇。
+   cn=`600519.SH`、hk=`00700.HK`（5 位补零）；衍生品 `-SWAP` 后缀为永续规范形（2026-10-08 落地，见 Consequences）。
 2. **连接器 REST 边界互译，输入宽容、输出规范**：
    - okx：`normalizeOkxSymbol`（规范形按已知 quote 后缀表最长匹配拆 base/quote；
      横杠数消歧——`X-SWAP` 单横杠必为规范 SWAP，因无 quote 货币叫 SWAP；
@@ -40,13 +40,23 @@ OKX invalid instId`。根因是架构缺口：api 契约从未定义市场级规
   已知 quote 后缀表（USDT/USDC/USD/EUR/BTC/ETH/OKB）是行业标准做法，表为连接器
   私有实现，新 quote 上线增补即可。
 - **api 包提供共享互译工具**：落选（铁律 #4 不过早抽象）——各所互译规则不同，
-  共享的只有词汇形态（规范文档），实现各归各。
+  共享的只有词汇形态（规范文档），实现各归各。（2026-10-08 边界澄清：`-SWAP`→形态的
+  **词汇判据**进了 api（`instrumentFormOf`/`SWAP_SYMBOL_SUFFIX`），因为那是词汇本身而非互译；
+  互译实现仍各归各所。）
 
 ## Consequences
 
 - provider=okx + 自选 BTCUSDT 从全数报错变为正常取数（规范形自动互译 BTC-USDT）。
-- crypto 衍生品规范形 `BTCUSDT-SWAP` 预留；Binance 永续原生形与现货同形（BTCUSDT）
-  的歧义留待首个衍生品数据面落地时裁决（届时 Binance 期货连接器内 `X-SWAP`→永续、
-  裸形→现货 的映射规则归该连接器）。
+- **crypto 永续已落地**（2026-10-08 裁决，设计与拆分见
+  [crypto-perp-and-tradfi.md](../../../../docs/roadmap/crypto-perp-and-tradfi.md)，词汇判据见
+  [symbol-vocabulary.md](../../../../docs/guides/symbol-vocabulary.md)「形态一致性」）：形态是
+  `market=crypto` 内的正交轴 `form`（`spot`/`perp`，缺省 `spot`，不新增市场键）；api 契约
+  `InstrumentForm`/`InstrumentAssetClass`/`InstrumentContract`/`InstrumentRef` 与唯一判据实现
+  `SWAP_SYMBOL_SUFFIX`/`instrumentFormOf(symbol)` 在 `@dshtrading/api`。名册/检索/wire 带
+  `form`，行情方法**不新增 form 形参**（后缀即形态）。Binance 现货与永续交易所侧同形
+  （`BTCUSDT`）的歧义由名册 `form` 裁决端点（`/api/v3` vs `/fapi/v1`），`-SWAP`↔原生形映射归
+  Binance 连接器。`form` 与符号不一致时报 `TRADING_UNSUPPORTED_SYMBOL`，不静默纠正。
+- TradFi 永续（OKX `TSLAUSDT-SWAP` 等 USDT 本位合成合约）与 jin10 `global` 的 `XAUUSD`
+  （现货贵金属报价）是两个产品，各自独立、不合并、不互相映射。
 - 验证：okx 66+2 skipped（互译矩阵：规范/原生/小写/垃圾输入/未知 quote 后缀）、
   tencent 27（规范形输入 + 输出规范形）、stooq 21（输出剥后缀）；全仓 build/test 绿。

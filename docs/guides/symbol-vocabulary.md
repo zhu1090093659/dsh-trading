@@ -22,12 +22,23 @@
 | 市场 | 规范形 | 例 | 说明 |
 |---|---|---|---|
 | crypto（现货） | `BASEQUOTE` 大写无分隔 | `BTCUSDT`、`ETHBTC` | 加密圈多数派形（Binance/Coinbase/Kraken 同源）；选多数派降低用户认知成本 |
-| crypto（衍生品，预留） | `BASEQUOTE-SWAP` | `BTCUSDT-SWAP` | 预留词汇：连接器未实现衍生品时报 `TRADING_UNSUPPORTED_SYMBOL` |
+| crypto（永续） | `BASEQUOTE-SWAP` | `BTCUSDT-SWAP`、`TSLAUSDT-SWAP` | 2026-10-08 落地：形态轴 `form`（`spot`/`perp`，缺省 `spot`）与 `market=crypto` 正交，判据见下节「形态一致性」 |
 | us | 纯大写 ticker | `AAPL` | Yahoo/Stooq 原生形即规范形 |
 | cn | `NNNNNN.SH` / `NNNNNN.SZ` | `600519.SH`、`000001.SZ` | 大陆通行写法；裸 6 位数字为宽容输入（按首位推断：6/9→SH，0/3→SZ；北交所 4/8 暂不支持） |
 | hk | `NNNNN.HK`（5 位补零） | `00700.HK` | 裸 1-5 位数字为宽容输入（`700` → `00700.HK`） |
 | futures | `VARIANTNNNN.EXCHANGE`（品种大写 + 3-4 位年月 + 交易所后缀） | `RB2601.SHF`、`IF2612.CFE`、`IC2609.CFE` | 同花顺 thscode 形；后缀 SHF/INE=上期所/能源中心，DCE=大期所，CZC=郑商所，GFE=广期所，CFE=中金所；主力连续 `RB00.SHF` 由上游检索返回；中金所 8888 加权码（`IF8888.CFE` 等）上游目录登记但行情端点不供数，连接器列表/检索已剔除（2026-09-14） |
 | global | 上游原生大写代码 | `XAUUSD`、`USOIL`、`USDJPY`、`SPX` | 金十数据原生形即规范形（现货贵金属/原油/铜、外汇、全球与 A 股指数共 97 个品种）；代码表经 `quote://codes` 动态全集注入，检索未命中时以原始大写形透传交上游裁决 |
+
+## 形态一致性（现货 / 永续）
+
+形态是 `market=crypto` 内与市场正交的一条轴（`form` 字段），**不是新市场键**，也不靠符号串拆解：
+
+1. **后缀即形态**：带 `-SWAP` 为永续，不带为现货。行情方法（`getTicker`/`getKlines`/…）不新增 form 形参——符号本身就是形态载体；`form` 只出现在名册、检索结果与 wire 元数据里（`InstrumentRef`/`SymbolInfoWire`/`WatchlistInstrument`）。Binance 现货与永续在交易所侧同形（都叫 `BTCUSDT`），由名册的 `form` 决定打 `/api/v3` 还是 `/fapi/v1`。
+2. **form 与符号必须一致**：`form=perp` ⟺ 符号带 `-SWAP`。不一致（`form=spot` 配 `BTCUSDT-SWAP`，或反之）由连接器报 `TRADING_UNSUPPORTED_SYMBOL`，**不静默纠正**。
+3. **判据只有一份实现**：`SWAP_SYMBOL_SUFFIX` 与 `instrumentFormOf(symbol)` 由 `@dshtrading/api` 提供；连接器与检索面复用它，不各写一份后缀匹配。
+4. **不做合约的连接器显式拒绝**：剥掉 `-SWAP` 后按现货语义取数（返回现货价）是禁止行为；未实现合约的路径必须报 `TRADING_UNSUPPORTED_SYMBOL`。
+5. **TradFi 永续与 jin10 `global` 是两个产品**：`XAU-USDT-SWAP`（USDT 本位永续合约，交易所合成产品）与 `XAUUSD`（金十 `global` 市场的现货贵金属报价）各自独立，**不合并、不互相映射**。
+6. **资产归属只信交易所元数据**：`assetClass` 取自 OKX `instCategory`、Binance `underlyingType`+`underlyingSubType`；取不到即留空，禁止按符号字面猜（`SPX-USDT-SWAP` 是迷因币 SPX6900，标普 500 是 `US500-USDT-SWAP`）。
 
 ## 连接器互译现状
 

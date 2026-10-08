@@ -546,8 +546,52 @@ export interface Disposable {
 }
 
 /**
+ * 标的形态轴（2026-10-08 加密永续与 TradFi 永续落地）：与 `market` 正交，**不新增市场键**。
+ * 缺省 = `spot`——已存自选、localStorage 与 iOS 冻结契约因此零迁移。
+ *
+ * 形态由规范符号后缀承载（`-SWAP` = 永续），见 docs/guides/symbol-vocabulary.md；
+ * `form` 只出现在名册/检索/wire 元数据里，行情方法不新增 form 形参。
+ */
+export type InstrumentForm = 'spot' | 'perp'
+
+/**
+ * 标的资产类别标签（仅展示与检索排序用，不承载交易语义）。
+ * **只信交易所元数据**（OKX `instCategory`、Binance `underlyingType`+`underlyingSubType`）；
+ * 取不到时留空，禁止按符号字面猜（`SPX` 在 OKX 是迷因币 SPX6900，标普 500 是 `US500`）。
+ */
+export type InstrumentAssetClass = 'crypto' | 'equity' | 'commodity' | 'index'
+
+/** 合约专有元数据（仅 `form=perp` 有值）：交易所元数据原样透传，不本地推断。 */
+export interface InstrumentContract {
+  /** 合约乘数（OKX ctVal / Binance contractSize）。 */
+  readonly multiplier?: number
+  /** 最小价格变动。 */
+  readonly tickSize?: number
+  /** 最小下单量/张数步长。 */
+  readonly lotSize?: number
+  /** 交易所允许的最大杠杆。 */
+  readonly maxLeverage?: number
+  /** 结算币种（如 USDT）。 */
+  readonly settleCcy?: string
+}
+
+/**
+ * 标的检索结果的最小元数据（名册/搜索/wire 共用）。
+ * 元素形状对既有 `{ symbol, name? }` 实现向后兼容：`form`/`assetClass`/`contract` 全可选。
+ */
+export interface InstrumentRef {
+  /** 市场规范词汇符号（docs/guides/symbol-vocabulary.md）。 */
+  readonly symbol: string
+  readonly name?: string
+  /** 缺省 = spot（老数据零迁移）。 */
+  readonly form?: InstrumentForm
+  readonly assetClass?: InstrumentAssetClass
+  readonly contract?: InstrumentContract
+}
+
+/**
  * 行情服务契约：由市场连接器实现，注册到按市场命名空间的 ctx 键（如 ctx.tradingCrypto）。
- * 符号词汇（2026-08-31 规范，docs/symbol-vocabulary.md）：入参接受市场规范形与连接器原生形，
+ * 符号词汇（2026-08-31 规范，docs/guides/symbol-vocabulary.md）：入参接受市场规范形与连接器原生形，
  * 输出 `symbol` 一律市场规范形——消费方（GUI/Agent/工作流）与数据源方言解耦。
  */
 export interface MarketDataService {
@@ -556,10 +600,12 @@ export interface MarketDataService {
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void): Disposable
   /**
    * 查询本市场/交易所支持的全部标的名册（动态全集，Issue #15）。
-   * 输出 `symbol` 一律市场规范词汇（docs/symbol-vocabulary.md）。
+   * 输出 `symbol` 一律市场规范词汇（docs/guides/symbol-vocabulary.md），形态由符号后缀承载
+   * （`-SWAP` = 永续，`instrumentFormOf` 是唯一裁决实现）；每行可带
+   * `form`/`assetClass`/`contract` 元数据（InstrumentRef），缺省 = 现货。
    * 可选方法：无公开全集端点的数据源（如 tencent/yahoo/stooq）可缺省或由桥/前端回退。
    */
-  listInstruments?(): Promise<Array<{ symbol: string; name?: string }>>
+  listInstruments?(): Promise<InstrumentRef[]>
   /**
    * 标的基本面与估值快照（GUI「基本面」页签用，2026-09-02）。
    * 可选方法：仅当数据源在同一公共端点里携带基本面字段时实现
@@ -918,3 +964,5 @@ export interface TradingNewsRegistry {
 // 按同一份 cron 语义算下次触发；放在纯契约包里，bot 平面才不必反向依赖 GUI 包。
 export * from './tasks-protocol.ts'
 export * from './tasks-schedule.ts'
+// 形态词汇裁决（同上：契约本身，不是业务实现）。`-SWAP` 后缀 = 永续是这个包的事实。
+export * from './instrument-form.ts'
