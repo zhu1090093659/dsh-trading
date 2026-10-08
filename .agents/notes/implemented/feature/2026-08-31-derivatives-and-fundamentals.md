@@ -16,7 +16,7 @@ Status: implemented
 
 - **契约层增强（@dsh-trading/api）**：在 pure type contract 中增加 `DerivativesData`, `CryptoFundamentals`, `StockFundamentals` 类型，保持零运行时、零外部依赖与完全向后兼容。
 - **Crypto 衍生品与基本面（packages/kit-crypto）**：
-  - `crypto_get_derivatives`：直连 Binance Futures 公共 REST（`/fapi/v1/openInterest`, `/futures/data/globalLongShortAccountRatio`, `/futures/data/topLongShortPositionRatio`, `/futures/data/takerlongshortRatio`, `/fapi/v1/fundingRate`），无 key 公共统计端点，支持 `BTCUSDT` / `BTCUSDT-SWAP` 规范词汇，支持部分子查询失败的 fail-soft 容错；
+  - `crypto_get_derivatives`：**registry-first（2026-10-08 收口）**——数据源是路由选中的 crypto 行情服务的 `getDerivatives`，与 `crypto_get_derivatives_history` 同源；路由到的 provider 未实现该能力报 `TRADING_NOT_IMPLEMENTED`（不回退 Binance 冒充路由源），provider 取数失败仍按本工具的 fail-soft 契约输出报错文本。仅当注册表服务缺席（老部署 / 无 router）时回退直连 Binance Futures 公共 REST（`/fapi/v1/openInterest`, `/futures/data/globalLongShortAccountRatio`, `/futures/data/topLongShortPositionRatio`, `/futures/data/takerlongshortRatio`, `/fapi/v1/fundingRate`），无 key 公共统计端点。输入宽容 `BTCUSDT` / `BTCUSDT-SWAP` 与交易所原生形，输出回显规范形；
   - `crypto_get_fundamentals`：直连 CoinCap 公共 REST（`/assets/{id}` 获取全球排名、流通量、最大供应量、流通市值、FDV）+ Binance Spot 24hr Ticker（`/api/v3/ticker/24hr` 获取 24h 交易量、涨跌幅与成交笔数），CoinCap 异常时优雅降级并输出可用数据。
 - **US 美股基本面（packages/kit-us）**：
   - `us_get_fundamentals`：直连 Yahoo Finance 公共 quote 端点（`/v7/finance/quote?symbols={symbol}`），获取市值、P/E、P/B、EPS、股息率、Beta、52 周区间与日均交易量，无 key 可用。
@@ -41,3 +41,5 @@ Status: implemented
 - 路线图 WS4 规划的所有 3 个子工作流（新闻源扩展、衍生品数据面、四市场基本面与估值）全部交付，Issue #6 完成所有目标并结清。
 - Agent 在四个市场（Crypto/US/CN/HK）全面具备「行情报价 + K线技术指标 + 市场动态新闻 + 衍生品与资金面 + 基本面估值」的完整定性分析能力闭环。
 - 全仓单测与构建均全绿（新增 10 个测试用例，全仓测试用例数由 241 增至 251+）。
+- 衍生品快照与历史序列共用同一数据源（路由选中的 crypto 行情服务），工具面审计记的既存债「`crypto_get_derivatives` 数据源硬编码 Binance fapi（路由不符）」就此关闭；同批把工具描述改为教 `-SWAP` 规范形，并给 `crypto-risk-checklist` / `crypto-instrument-analysis` 两个随包 Skill 补 TradFi 合成合约条目。
+- 仍直连 Binance fapi 的只剩 `crypto_funding_rate`（kit 版；与 okx 的同名双源按审计裁决不合并），其符号口径已按规范词汇改为宽容输入、规范形回显。

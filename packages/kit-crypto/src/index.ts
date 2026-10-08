@@ -25,9 +25,9 @@ import {
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { DerivativesHistory, MarketDataService } from '@dshtrading/api'
+import type { DerivativesData, DerivativesHistory, MarketDataService } from '@dshtrading/api'
 import { aggregateNews, deriveSymbolTokens, type AggregateNewsOptions } from './news.js'
-import { fetchCryptoDerivatives, renderDerivativesData } from './derivatives.js'
+import { derivativesFailure, fetchCryptoDerivatives, normalizeBinanceFuturesSymbol, renderDerivativesData } from './derivatives.js'
 import { fetchCryptoFundamentals, renderCryptoFundamentals } from './fundamentals.js'
 
 export * from './fundamentals.js'
@@ -181,11 +181,11 @@ interface FundingRateRecord {
   markPrice?: string
 }
 
-async function fetchFundingRates(symbol: string, limit: number): Promise<FundingRateRecord[]> {
+async function fetchFundingRates(symbol: string, limit: number, fetchImpl: typeof globalThis.fetch): Promise<FundingRateRecord[]> {
   const url = new URL(FUNDING_RATE_URL)
   url.searchParams.set('symbol', symbol)
   url.searchParams.set('limit', String(limit))
-  const response = await fetch(url, { headers: { accept: 'application/json' } })
+  const response = await fetchImpl(url, { headers: { accept: 'application/json' } })
   if (!response.ok) {
     const body = await response.text().catch(() => '')
     throw new Error(`Binance futures API error: HTTP ${response.status}${body ? ` — ${body.slice(0, 200)}` : ''}`)
@@ -206,6 +206,49 @@ function renderFundingRates(symbol: string, records: FundingRateRecord[]): strin
     return `- ${when}  rate=${record.fundingRate} (${percent})${mark}`
   })
   return [`crypto_funding_rate ${symbol} — last ${records.length} funding event(s):`, ...lines].join('\n')
+}
+
+/**
+ * 资金费率工具工厂（只读）。调用期用注册表之外的直连 Binance fapi 公共端点；
+ * fetch 可注入（与 `createGetDerivativesTool` 同款契约化 fake 口径，测试不出网）。
+ */
+export function createFundingRateTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+  return defineTool({
+    name: 'crypto_funding_rate',
+    description:
+      'Get recent funding rate history for a Binance USDⓈ-M perpetual contract (public endpoint, no credentials). The symbol is market-canonical perpetual form, e.g. BTCUSDT-SWAP; the native spot-shaped BTCUSDT is accepted too. Returns the most recent funding events with rate and mark price.',
+    parameters: {
+      symbol: {
+        type: 'string',
+        required: true,
+        description: 'Perpetual contract symbol, market-canonical form, e.g. BTCUSDT-SWAP',
+      },
+      limit: {
+        type: 'number',
+        description: `Number of most recent funding events to return (1-${MAX_FUNDING_LIMIT}, default ${DEFAULT_FUNDING_LIMIT})`,
+        default: DEFAULT_FUNDING_LIMIT,
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as { symbol?: unknown; limit?: unknown }
+      // 输入宽容（docs/symbol-vocabulary.md）：规范形（BTCUSDT / BTCUSDT-SWAP）与交易所
+      // 原生形（BTC-USDT-SWAP）都接受，边界处互译为 Binance fapi 符号；输出回显规范形
+      // （本工具只读永续，规范形恒为 BASEQUOTE-SWAP）。
+      const requestedSymbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
+      const symbol = normalizeBinanceFuturesSymbol(requestedSymbol)
+      if (!SYMBOL_PATTERN.test(symbol)) {
+        throw new Error(`crypto_funding_rate: invalid symbol ${JSON.stringify(args.symbol)} — expected a perpetual symbol, market-canonical form e.g. BTCUSDT-SWAP (native BTCUSDT is also accepted)`)
+      }
+      const requested = typeof args.limit === 'number' && Number.isFinite(args.limit) ? Math.trunc(args.limit) : DEFAULT_FUNDING_LIMIT
+      const limit = Math.min(Math.max(requested, 1), MAX_FUNDING_LIMIT)
+      const records = await fetchFundingRates(symbol, limit, options.fetch ?? globalThis.fetch)
+      return renderFundingRates(`${symbol}-SWAP`, records)
+    },
+  })
 }
 
 // ── 插件入口 ──────────────────────────────────────────────────────────────────
@@ -229,39 +272,6 @@ export function providerForSkills(allowed?: readonly string[] | null): SkillProv
 export function apply(ctx: Context, config: Config): void {
   ctx.skills.registerProvider(() => providerForSkills(config.skills))
 
-  const fundingTool = defineTool({
-    name: 'crypto_funding_rate',
-    description:
-      'Get recent funding rate history for a Binance USDⓈ-M perpetual futures symbol (public endpoint, no credentials). Returns the most recent funding events with rate and mark price.',
-    parameters: {
-      symbol: {
-        type: 'string',
-        required: true,
-        description: 'Perpetual futures symbol, e.g. BTCUSDT',
-      },
-      limit: {
-        type: 'number',
-        description: `Number of most recent funding events to return (1-${MAX_FUNDING_LIMIT}, default ${DEFAULT_FUNDING_LIMIT})`,
-        default: DEFAULT_FUNDING_LIMIT,
-      },
-    },
-    output: {
-      schema: { type: 'string' },
-      render: (_args, value) => [{ type: 'text', text: String(value) }],
-    },
-    async execute(raw) {
-      const args = (raw ?? {}) as { symbol?: unknown; limit?: unknown }
-      const symbol = typeof args.symbol === 'string' ? args.symbol.trim().toUpperCase() : ''
-      if (!SYMBOL_PATTERN.test(symbol)) {
-        throw new Error(`crypto_funding_rate: invalid symbol ${JSON.stringify(args.symbol)} — expected an uppercase Binance futures symbol like BTCUSDT`)
-      }
-      const requested = typeof args.limit === 'number' && Number.isFinite(args.limit) ? Math.trunc(args.limit) : DEFAULT_FUNDING_LIMIT
-      const limit = Math.min(Math.max(requested, 1), MAX_FUNDING_LIMIT)
-      const records = await fetchFundingRates(symbol, limit)
-      return renderFundingRates(symbol, records)
-    },
-  })
-
   const tools = ctx.tools as unknown as {
     register(definition: { name: string }): unknown
     get(name: string): { name: string } | undefined
@@ -278,7 +288,7 @@ export function apply(ctx: Context, config: Config): void {
     tools.register(tool)
   }
 
-  registerOnce(fundingTool)
+  registerOnce(createFundingRateTool())
 
   const router = (ctx as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketRouter', false) as
     | { newsKey?: () => string | undefined }
@@ -290,7 +300,10 @@ export function apply(ctx: Context, config: Config): void {
       ?.newsSources?.('crypto')
   registerOnce(createGetNewsTool({ cryptoPanicKey: router?.newsKey?.(), getSources: readNewsSources }))
 
-  registerOnce(createGetDerivativesTool())
+  // 收口审计既存项（P6，2026-10-08）：crypto_get_derivatives 数据源改为 registry-first，
+  // 与 crypto_get_derivatives_history 同源；仅当注册表服务缺席（老部署 / 无 router）时
+  // 回退直连 Binance USDT-M 的历史行为。
+  registerOnce(createGetDerivativesTool({ getRegistry: () => resolveCryptoMarketDataRegistry(ctx) }))
   registerOnce(createGetFundamentalsTool())
 
   // issue #86 / 审计缺口卡 G8：crypto_get_derivatives_history —— 数据源是路由选中的
@@ -321,16 +334,27 @@ export function apply(ctx: Context, config: Config): void {
 
 /* ── crypto_get_derivatives：衍生品数据工具（WS4） ───────────────────────────── */
 
-export function createGetDerivativesTool(options: { fetch?: typeof globalThis.fetch } = {}) {
+/**
+ * 衍生品指标快照工具（只读）。registry-first：数据源是路由选中的 crypto 行情服务
+ * （与 crypto_get_derivatives_history 同源，settings 切换 provider 即刻生效）；注册表
+ * 服务缺席（老部署 / 无 router）时才回退直连 Binance USDT-M 公共端点。
+ * 路由到的 provider 未实现 getDerivatives → TRADING_NOT_IMPLEMENTED（不回退 Binance
+ * 冒充路由源，也不返回空读数）；provider 取数失败 → fail-soft 报错文本（与直连路径
+ * 同一输出契约）。
+ */
+export function createGetDerivativesTool(options: {
+  fetch?: typeof globalThis.fetch
+  getRegistry?: () => CryptoMarketDataRegistry | undefined
+} = {}) {
   return defineTool({
     name: 'crypto_get_derivatives',
     description:
-      'Get real-time crypto derivatives indicators (Open Interest, Long/Short Account Ratio, Top Trader Position Ratio, Taker Buy/Sell Volume Ratio, and latest Funding Rate) for a perpetual contract via Binance Futures public REST API. Accepts market-canonical (e.g. BTCUSDT, BTCUSDT-SWAP) or native symbols. No credentials required.',
+      'Read-only derivatives snapshot for a crypto perpetual, symbol in market-canonical form, e.g. BTCUSDT-SWAP: open interest, long/short account ratio, top-trader position ratio, taker buy/sell volume ratio, funding rate, mark and index price. Source: the crypto provider chosen by market routing (same as crypto_get_derivatives_history). With no router service it falls back to Binance public endpoints; a routed provider without getDerivatives fails with TRADING_NOT_IMPLEMENTED.',
     parameters: {
       symbol: {
         type: 'string',
         required: true,
-        description: 'Perpetual contract symbol, market-canonical vocabulary, e.g. BTCUSDT or BTCUSDT-SWAP',
+        description: 'Perpetual contract symbol, market-canonical form, e.g. BTCUSDT-SWAP',
       },
     },
     output: {
@@ -341,8 +365,31 @@ export function createGetDerivativesTool(options: { fetch?: typeof globalThis.fe
       const args = (raw ?? {}) as { symbol?: unknown }
       const symbol = typeof args.symbol === 'string' ? args.symbol.trim() : ''
       if (!symbol) {
-        throw new Error('crypto_get_derivatives: symbol parameter is required (e.g. BTCUSDT or BTCUSDT-SWAP)')
+        throw new Error('crypto_get_derivatives: symbol parameter is required (e.g. BTCUSDT-SWAP)')
       }
+
+      const entry = options.getRegistry?.()?.active('crypto')
+      if (entry !== undefined) {
+        const getDerivatives = entry.service.getDerivatives
+        if (typeof getDerivatives !== 'function') {
+          throw new Error(
+            `crypto_get_derivatives: TRADING_NOT_IMPLEMENTED — provider ${entry.provider} does not implement getDerivatives (this is not "no data")`,
+          )
+        }
+        let returned: unknown
+        try {
+          returned = await getDerivatives.call(entry.service, symbol)
+        } catch (error) {
+          return renderDerivativesData(derivativesFailure(entry.provider, error), symbol)
+        }
+        const data = returned as DerivativesData | null
+        if (data === null || typeof data !== 'object' || typeof data.symbol !== 'string' || data.symbol === '') {
+          throw new Error(`crypto_get_derivatives: provider ${entry.provider} returned an invalid derivatives payload`)
+        }
+        return renderDerivativesData({ data, provider: entry.provider }, symbol)
+      }
+
+      // 注册表服务缺席：老部署 / 无 router 时维持既有直连行为。
       const result = await fetchCryptoDerivatives({ symbol, fetch: options.fetch })
       return renderDerivativesData(result, symbol)
     },
@@ -383,22 +430,22 @@ function parseDerivativesHistoryLimit(raw: unknown): number | undefined {
 }
 
 /**
- * 衍生品历史序列工具（只读）。数据源恒为路由选中的 crypto 行情服务，不直连交易所：
- * 与 crypto_get_derivatives 的硬编码 Binance 数据源不一致（审计既存项）有意不复刻。
+ * 衍生品历史序列工具（只读）。数据源恒为路由选中的 crypto 行情服务，不直连交易所；
+ * crypto_get_derivatives 自 P6（2026-10-08）起同源（registry-first），两者不再分叉。
  */
 export function createGetDerivativesHistoryTool(options: { getRegistry: () => CryptoMarketDataRegistry | undefined }) {
   return defineTool({
     name: 'crypto_get_derivatives_history',
     description:
       'Read-only derivatives history for a crypto perpetual: funding-rate and open-interest series, time-ascending, from the currently '
-      + 'routed crypto provider (registry-first, never a hardcoded exchange). The returned symbol is provider-canonical; optional limit '
+      + 'routed crypto provider (registry-first, never a hardcoded exchange). The returned symbol is market-canonical; optional limit '
       + 'keeps the most recent N points per series. An unimplemented getDerivativesHistory fails with TRADING_NOT_IMPLEMENTED (never an '
       + 'empty series); no crypto provider routed fails with TRADING_NO_PROVIDER.',
     parameters: {
       symbol: {
         type: 'string',
         required: true,
-        description: 'Perpetual contract symbol, market-canonical vocabulary, e.g. BTCUSDT or BTCUSDT-SWAP',
+        description: 'Perpetual contract symbol, market-canonical form, e.g. BTCUSDT-SWAP',
       },
       limit: {
         type: 'number',

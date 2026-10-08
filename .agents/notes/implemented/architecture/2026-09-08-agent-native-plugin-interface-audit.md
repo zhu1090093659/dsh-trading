@@ -79,7 +79,7 @@ Status: implemented
 | 包 | agent 工具 | 缺口等级 | 建议动作 | 证据 |
 |---|---|---|---|---|
 | crypto / us / cn / hk（bundle） | 0（只导出 preset 行贡献） | - | 无 | crypto/src/index.ts:8 等 |
-| kit-crypto | 4：`crypto_funding_rate`、`crypto_get_derivatives`、`_get_fundamentals`、`_get_news` | A/B：衍生品历史无工具；`crypto_funding_rate` 与 okx 同名双源、数据源硬编码 Binance fapi（路由不符） | 补 `crypto_get_derivatives_history`（缺口卡 G8）；收敛同名双源 | kit-crypto/src/index.ts:226,308,338,383；derivatives.ts:32-33 |
+| kit-crypto | 4：`crypto_funding_rate`、`crypto_get_derivatives`、`_get_fundamentals`、`_get_news` | A/B：衍生品历史无工具；`crypto_funding_rate` 与 okx 同名双源、数据源硬编码 Binance fapi（路由不符） | 补 `crypto_get_derivatives_history`（缺口卡 G8）；收敛同名双源。**2026-10-08 状态**：衍生品快照已改 registry-first（与历史序列同源），硬编码 Binance fapi 的债关闭；同名双源按本审计裁决不合并，`crypto_funding_rate` 直连维持现状（其符号口径已改为宽容规范形 + 规范形回显） | kit-crypto/src/index.ts:215,350,438,523,567；derivatives.ts:40-41 |
 | kit-us | 3：`us_get_news`、`_get_fundamentals`、`_get_indicators` | A：盘口/逐笔/账户面缺（同 G1/G2）；`us_get_news` 与 finnhub 同名双源 | 见缺口卡 | kit-us/src/index.ts:228,278,195 |
 | kit-cn | 5：`cn_get_news`、`_get_fundamentals`、`_get_limit_up_pool`、`_get_auction_strength`、`_get_indicators` | 同 G1/G2 | 见缺口卡 | kit-cn/src/index.ts:238,288,322,360,204 |
 | kit-hk | 3：`hk_get_news`、`_get_fundamentals`、`_get_indicators` | 同 G1/G2 | 见缺口卡 | kit-hk/src/index.ts:232,282,197 |
