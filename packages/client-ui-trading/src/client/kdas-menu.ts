@@ -125,3 +125,33 @@ export function kdasAnchorSourceDay(
   }
   return null
 }
+
+export interface KdasRect {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
+/**
+ * 菜单钳位：inner（菜单视口矩形）越出 outer（图表容器视口矩形）时平移回
+ * padding 内边距；inner 比 outer 还宽/高时钉在左/上 padding 处（只保证左上
+ * 可见，极端窄窗下不追求完整）。返回钳位后的左上角视口坐标。
+ */
+export function clampRectInto(
+  inner: KdasRect,
+  outer: KdasRect,
+  padding = 4,
+): { x: number; y: number } {
+  let x = inner.x
+  let y = inner.y
+  if (x + inner.width > outer.x + outer.width - padding) {
+    x = outer.x + outer.width - padding - inner.width
+  }
+  if (y + inner.height > outer.y + outer.height - padding) {
+    y = outer.y + outer.height - padding - inner.height
+  }
+  if (x < outer.x + padding) x = outer.x + padding
+  if (y < outer.y + padding) y = outer.y + padding
+  return { x, y }
+}

@@ -4,7 +4,7 @@
  * 主图指标读数行（副图指标读数在 TvChart 各自 pane 内）+
  * 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   fetchKlines, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiOrder,
@@ -23,7 +23,7 @@ import { paperTradingStore } from './paper-trading-store.ts'
 import { computeRangeStats } from './range-stats.ts'
 import { readoutItems } from './indicator-readout.ts'
 import {
-  addKdasDay, formatKdasDay, isKdasDay, kdasAnchorSourceDay, kdasOutputKey, kdasSlots,
+  addKdasDay, clampRectInto, formatKdasDay, isKdasDay, kdasAnchorSourceDay, kdasOutputKey, kdasSlots,
   removeKdasDay, utcDayNum,
 } from './kdas-menu.ts'
 import { IconIndicators } from './icons.tsx'
@@ -177,8 +177,12 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
-  /** KDAS 关键日右键菜单：null = 关闭；坐标为 TvChart 容器系，命中柱逻辑下标驱动动作。 */
-  const [kdasMenu, setKdasMenu] = useState<{ index: number; x: number; y: number } | null>(null)
+  /**
+   * KDAS 关键日右键菜单：null = 关闭。x/y 为 TvChart 容器系的原始命中坐标；
+   * placed 为量测钳位后的最终落点（null = 待量测，先隐藏渲染防右缘溢出闪现）。
+   */
+  const [kdasMenu, setKdasMenu] = useState<{ index: number; x: number; y: number; placed: { x: number; y: number } | null } | null>(null)
+  const chartBoxRef = useRef<HTMLDivElement | null>(null)
   /** 行情板块页签（图表 | 基本面 | 新闻 | 公告）：跨标的保持。 */
   const [stageTab, setStageTab] = useState<'chart' | 'derivatives' | 'fundamentals' | 'news' | 'announcements'>('chart')
   // 渲染期页签归一（issue #54 评审 L3）：衍生品页签是 crypto 专属，切到非 crypto
@@ -553,9 +557,24 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   /** 右键命中柱 → 菜单动作面（存储口径 UTC 取日，显示标签走本地口径）。 */
   const openKdasMenu = useCallback((info: { index: number; x: number; y: number }): boolean => {
     if (!kdasMenuEnabled || klines === null || klines[info.index] === undefined) return false
-    setKdasMenu(info)
+    setKdasMenu({ ...info, placed: null })
     return true
   }, [kdasMenuEnabled, klines])
+
+  // 菜单钳位：挂载帧量测真实尺寸 → clampRectInto 收进图表容器（右缘/下缘越界平移）。
+  // 全程容器系：style 的 left/top 相对 chartBox，outer 只取尺寸（原点归零），坐标不做视口混算。
+  useLayoutEffect(() => {
+    if (kdasMenu === null || kdasMenu.placed !== null) return
+    const menuEl = kdasMenuRef.current
+    const boxEl = chartBoxRef.current
+    if (menuEl === null || boxEl === null) return
+    const menuRect = menuEl.getBoundingClientRect()
+    const placed = clampRectInto(
+      { x: kdasMenu.x, y: kdasMenu.y, width: menuRect.width, height: menuRect.height },
+      { x: 0, y: 0, width: boxEl.clientWidth, height: boxEl.clientHeight },
+    )
+    setKdasMenu((prev) => (prev === null || prev.placed !== null ? prev : { ...prev, placed }))
+  }, [kdasMenu])
 
   const applyKdasParams = useCallback((params: Record<string, number>): void => {
     if (market === undefined || symbol === undefined) return
@@ -983,7 +1002,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       {viewTab === 'chart' ? (
         <div className={css.chartRow}>
           <div className={css.chartColumn}>
-            <div className={css.chartBox}>
+            <div className={css.chartBox} ref={chartBoxRef}>
             {klines !== null && bars.length > 0 && (
               <TvChart
                 bars={bars}
@@ -1021,11 +1040,15 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               const colorOfDay = (kd: number): string =>
                 mainOverlays.find(group => group.id === KDAS_ID)
                   ?.outputs.find(output => output.key === kdasOutputKey(kd))?.color ?? '#8e95a3'
+              // placed=null = 量测帧：真实尺寸渲染但隐藏（visibility），不闪现原始位置。
+              const placedStyle = kdasMenu.placed !== null
+                ? { left: kdasMenu.placed.x, top: kdasMenu.placed.y }
+                : { left: kdasMenu.x, top: kdasMenu.y, visibility: 'hidden' as const }
               return (
                 <div
                   ref={kdasMenuRef}
                   className={css.kdasMenu}
-                  style={{ left: kdasMenu.x, top: kdasMenu.y }}
+                  style={placedStyle}
                   onContextMenu={(event) => { event.preventDefault() }}
                 >
                   <div className={css.kdasMenuTitle}>

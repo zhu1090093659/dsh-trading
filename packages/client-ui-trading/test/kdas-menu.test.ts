@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  addKdasDay, freeKdasSlot, formatKdasDay, isKdasDay, isKdasDayValue,
+  addKdasDay, clampRectInto, freeKdasSlot, formatKdasDay, isKdasDay, isKdasDayValue,
   kdasAnchorSourceDay, kdasOutputKey, kdasSlots, removeKdasDay, utcDayNum,
 } from '../src/client/kdas-menu.ts'
 
@@ -120,5 +120,36 @@ describe('kdasAnchorSourceDay', () => {
   it('早于全部数据的 kd 无锚点，不命中任何 bar', () => {
     const params = { ...EIGHT_KEYS, kd1: 20200101 }
     expect(kdasAnchorSourceDay(params, bars, 20240924)).toBeNull()
+  })
+})
+
+describe('clampRectInto', () => {
+  const outer = { x: 100, y: 200, width: 800, height: 600 }
+
+  it('容器内不动（含 padding 内边距裕量）', () => {
+    const inner = { x: 300, y: 400, width: 190, height: 220 }
+    expect(clampRectInto(inner, outer)).toEqual({ x: 300, y: 400 })
+  })
+
+  it('右缘越界 → 左移收回；下缘越界 → 上移收回', () => {
+    const atRightEdge = { x: 890, y: 300, width: 190, height: 220 }
+    expect(clampRectInto(atRightEdge, outer)).toEqual({ x: 800 - 4 - 190 + 100, y: 300 })
+    const atBottom = { x: 300, y: 700, width: 190, height: 220 }
+    expect(clampRectInto(atBottom, outer)).toEqual({ x: 300, y: 200 + 600 - 4 - 220 })
+  })
+
+  it('右下角同时越界 → 双向钳位', () => {
+    const corner = { x: 890, y: 700, width: 190, height: 220 }
+    expect(clampRectInto(corner, outer)).toEqual({ x: 100 + 800 - 4 - 190, y: 200 + 600 - 4 - 220 })
+  })
+
+  it('inner 比 outer 宽/高 → 钉在左/上 padding（保左上可见）', () => {
+    const huge = { x: 150, y: 250, width: 900, height: 700 }
+    expect(clampRectInto(huge, outer)).toEqual({ x: 104, y: 204 })
+  })
+
+  it('自定义 padding 生效', () => {
+    const inner = { x: 890, y: 300, width: 190, height: 220 }
+    expect(clampRectInto(inner, outer, 8).x).toBe(100 + 800 - 8 - 190)
   })
 })
