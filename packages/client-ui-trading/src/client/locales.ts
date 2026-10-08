@@ -638,6 +638,14 @@ export const zh: Record<MarketLocaleKey, string> = {
       'indicator.symbolOverride': '当前为 {symbol} 的专属参数（仅对该标的生效）',
       'indicator.removeGlobal': '全局移除',
       'indicator.removeGlobalConfirm': '确定卸载所有标的上的该指标？（复选框仅控制当前标的的显示）',
+      'kdas.menu.title': '{date} 关键日',
+      'kdas.menu.add': '设为关键日 {date}',
+      'kdas.menu.remove': '移除关键日 {date}',
+      'kdas.menu.removeShort': '移除',
+      'kdas.menu.mount': '挂载 KDAS（关键日均价线）',
+      'kdas.menu.listTitle': '关键日',
+      'kdas.menu.full': '关键日已满 8 条，先移除后再添加',
+      'kdas.menu.hint': '点击关键日行移除；线条颜色与图上一致',
 }
 
 export const en: Record<MarketLocaleKey, string> = {
@@ -1271,4 +1279,12 @@ export const en: Record<MarketLocaleKey, string> = {
       'indicator.symbolOverride': 'Editing symbol-specific params for {symbol} (applies to this instrument only)',
       'indicator.removeGlobal': 'Remove everywhere',
       'indicator.removeGlobalConfirm': 'Unmount this indicator on every symbol? (The checkbox only toggles the current symbol.)',
+      'kdas.menu.title': '{date} key day',
+      'kdas.menu.add': 'Set key day {date}',
+      'kdas.menu.remove': 'Remove key day {date}',
+      'kdas.menu.removeShort': 'Remove',
+      'kdas.menu.mount': 'Mount KDAS (anchored VWAP)',
+      'kdas.menu.listTitle': 'Key days',
+      'kdas.menu.full': 'All 8 key days are in use — remove one first',
+      'kdas.menu.hint': 'Click a key day row to remove it; dot color matches the chart line',
 }

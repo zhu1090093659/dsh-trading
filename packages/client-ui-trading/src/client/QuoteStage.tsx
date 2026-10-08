@@ -4,7 +4,7 @@
  * 主图指标读数行（副图指标读数在 TvChart 各自 pane 内）+
  * 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   fetchKlines, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiOrder,
@@ -22,6 +22,10 @@ import { OrderPanel } from './OrderPanel.tsx'
 import { paperTradingStore } from './paper-trading-store.ts'
 import { computeRangeStats } from './range-stats.ts'
 import { readoutItems } from './indicator-readout.ts'
+import {
+  addKdasDay, formatKdasDay, isKdasDay, kdasAnchorSourceDay, kdasOutputKey, kdasSlots,
+  removeKdasDay, utcDayNum,
+} from './kdas-menu.ts'
 import { IconIndicators } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import {
@@ -50,6 +54,8 @@ import type { ChartSignalMarkerInput, ChartKnowledgeMarkerInput } from './TvChar
 import css from './quote-stage.module.css'
 
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
+/** KDAS 指标 id（custom 库自定义指标；Key Day 即 kd1..kd8 参数）。 */
+const KDAS_ID = 'kdas'
 const ORDERBOOK_OPEN_KEY = 'dshtrading.orderbook.open'
 const TRADE_DESK_OPEN_KEY = 'dshtrading.tradeDesk.open'
 const TICKER_POLL_MS = 5000
@@ -171,6 +177,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
+  /** KDAS 关键日右键菜单：null = 关闭；坐标为 TvChart 容器系，命中柱逻辑下标驱动动作。 */
+  const [kdasMenu, setKdasMenu] = useState<{ index: number; x: number; y: number } | null>(null)
   /** 行情板块页签（图表 | 基本面 | 新闻 | 公告）：跨标的保持。 */
   const [stageTab, setStageTab] = useState<'chart' | 'derivatives' | 'fundamentals' | 'news' | 'announcements'>('chart')
   // 渲染期页签归一（issue #54 评审 L3）：衍生品页签是 crypto 专属，切到非 crypto
@@ -510,10 +518,62 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return () => window.removeEventListener('keydown', onKey)
   }, [rangeMode])
 
+  // KDAS 关键日菜单：Esc / 外点关闭（HomeHistory 行菜单同款三路关闭）。
+  useEffect(() => {
+    if (kdasMenu === null) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setKdasMenu(null)
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      if (event.target instanceof Node && kdasMenuRef.current?.contains(event.target)) return
+      setKdasMenu(null)
+    }
+    window.addEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [kdasMenu])
+
   const rangeStats = useMemo(
     () => (rangeSelection !== null && klines !== null ? computeRangeStats(klines, rangeSelection.start, rangeSelection.end) : null),
     [rangeSelection, klines],
   )
+
+  /* ---- KDAS 关键日右键菜单 ---- */
+
+  const kdasMenuRef = useRef<HTMLDivElement | null>(null)
+  const kdasInstance = visibleInstances.find(instance => instance.id === KDAS_ID)
+  // 菜单启用守卫：聚焦标的 + 日 K 周期 + KDAS 已激活且对当前标的可见。
+  const kdasMenuEnabled = market !== undefined && symbol !== undefined && !INTRADAY_INTERVALS.has(chartInterval) && kdasInstance !== undefined
+  const kdasScopeParams = kdasInstance !== undefined && market !== undefined && symbol !== undefined
+    ? effectiveInstanceParams(kdasInstance, market, symbol)
+    : undefined
+  /** 右键命中柱 → 菜单动作面（存储口径 UTC 取日，显示标签走本地口径）。 */
+  const openKdasMenu = useCallback((info: { index: number; x: number; y: number }): boolean => {
+    if (!kdasMenuEnabled || klines === null || klines[info.index] === undefined) return false
+    setKdasMenu(info)
+    return true
+  }, [kdasMenuEnabled, klines])
+
+  const applyKdasParams = useCallback((params: Record<string, number>): void => {
+    if (market === undefined || symbol === undefined) return
+    setIndicatorParams(KDAS_ID, params, symbolScopeKey(market, symbol))
+  }, [market, symbol, setIndicatorParams])
+
+  const kdasAddDay = useCallback((day: number): void => {
+    // 未挂载实例时 setParams(scopeKey) 的桥/本地语义即「建实例（全局 schema 默认）
+    // + 写本标的覆盖」，挂载与追加天然合一；始终写覆盖，不污染全局 params。
+    const result = addKdasDay(kdasScopeParams ?? {}, day)
+    if (result.ok) applyKdasParams(result.params)
+  }, [kdasScopeParams, applyKdasParams])
+
+  const kdasRemoveDay = useCallback((day: number): void => {
+    if (kdasScopeParams === undefined) return
+    const result = removeKdasDay(kdasScopeParams, day)
+    if (result.ok) applyKdasParams(result.params)
+  }, [kdasScopeParams, applyKdasParams])
 
   // 指标调度：可见实例 × klines → 渲染输入（symbol visibility 过滤后的实例才参与）
   const indicatorGroups = useMemo(() => {
@@ -944,8 +1004,72 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 onMarkerHover={setMarkerHover}
                 markerTexts={markerTexts}
                 numLocale={numLocale}
+                onBarContextMenu={openKdasMenu}
               />
             )}
+            {kdasMenu !== null && klines !== null && market !== undefined && symbol !== undefined && (() => {
+              const hitBar = klines[kdasMenu.index]
+              if (hitBar === undefined) return null
+              // 守卫期（实例中途被摘/切标的）参数缺席 → 空表（菜单项自然退化为挂载/新增）。
+              const params = kdasScopeParams ?? {}
+              const slots = kdasSlots(params)
+              // 命中柱交易日：取存储口径（与 compute 同源的 UTC 日）；标题显示走本地日。
+              const barDay = utcDayNum(hitBar.openTime)
+              const anchorDay = kdasAnchorSourceDay(params, klines, barDay)
+              const full = slots.length >= 8 && !isKdasDay(params, barDay)
+              const mountedHere = kdasInstance !== undefined
+              const colorOfDay = (kd: number): string =>
+                mainOverlays.find(group => group.id === KDAS_ID)
+                  ?.outputs.find(output => output.key === kdasOutputKey(kd))?.color ?? '#8e95a3'
+              return (
+                <div
+                  ref={kdasMenuRef}
+                  className={css.kdasMenu}
+                  style={{ left: kdasMenu.x, top: kdasMenu.y }}
+                  onContextMenu={(event) => { event.preventDefault() }}
+                >
+                  <div className={css.kdasMenuTitle}>
+                    {t('kdas.menu.title', { date: fmtDay(hitBar.openTime) })}
+                  </div>
+                  {!mountedHere && (
+                    <button type="button" className={css.kdasMenuItem} onClick={() => { setKdasMenu(null); kdasAddDay(barDay) }}>
+                      {t('kdas.menu.mount')}
+                    </button>
+                  )}
+                  {mountedHere && anchorDay !== null && (
+                    <button type="button" className={css.kdasMenuItem} onClick={() => { setKdasMenu(null); kdasRemoveDay(anchorDay) }}>
+                      {t('kdas.menu.remove', { date: formatKdasDay(anchorDay) })}
+                    </button>
+                  )}
+                  {mountedHere && anchorDay === null && (
+                    <button
+                      type="button"
+                      className={css.kdasMenuItem}
+                      disabled={full}
+                      title={full ? t('kdas.menu.full') : undefined}
+                      onClick={() => { setKdasMenu(null); kdasAddDay(barDay) }}
+                    >
+                      {t('kdas.menu.add', { date: formatKdasDay(barDay) })}
+                    </button>
+                  )}
+                  {mountedHere && slots.length > 0 && (
+                    <>
+                      <div className={css.kdasMenuGroup}>{t('kdas.menu.listTitle')}</div>
+                      {slots.map(({ slot, kd }) => (
+                        <button key={slot} type="button" className={css.kdasMenuItem} onClick={() => { setKdasMenu(null); kdasRemoveDay(kd) }}>
+                          <span className={css.kdasMenuDot} style={{ background: colorOfDay(kd) }} />
+                          <span className={css.kdasMenuDate}>{formatKdasDay(kd)}</span>
+                          <span className={css.kdasMenuAction}>{t('kdas.menu.removeShort')}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {mountedHere && (
+                    <div className={css.kdasMenuHint}>{slots.length}/8 · {t('kdas.menu.hint')}</div>
+                  )}
+                </div>
+              )
+            })()}
             {rangeMode && rangeStats !== null && (
               <div className={css.rangePanel} role="dialog" aria-label={t('quote.rangeStats')}>
                 <div className={css.rangePanelHead}>

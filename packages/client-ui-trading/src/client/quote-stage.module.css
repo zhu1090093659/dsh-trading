@@ -641,3 +641,79 @@
   color: var(--dsw-futu-up, #e64545);
   font-size: 12px;
 }
+
+/* KDAS 关键日右键菜单（chartBox 内绝对定位；坐标来自 TvChart 容器系） */
+.kdasMenu {
+  position: absolute;
+  z-index: 6;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: var(--dsw-futu-radius-lg, 8px);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  background: var(--dsw-futu-bg-surface, #ffffff);
+  box-shadow: var(--dsw-futu-shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.12));
+  font-size: 12px;
+}
+
+.kdasMenuTitle {
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  padding: 2px 6px 6px;
+}
+
+.kdasMenuItem {
+  appearance: none;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: var(--dsw-futu-radius-sm, 4px);
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  font-size: 12px;
+}
+
+.kdasMenuItem:hover:not(:disabled) {
+  background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
+}
+
+.kdasMenuItem:disabled {
+  cursor: not-allowed;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.kdasMenuDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.kdasMenuDate {
+  font-variant-numeric: tabular-nums;
+}
+
+.kdasMenuAction {
+  margin-left: auto;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  font-size: 11px;
+}
+
+.kdasMenuGroup {
+  font-size: 11px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  padding: 6px 6px 2px;
+}
+
+.kdasMenuHint {
+  font-size: 10.5px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  padding: 6px 6px 2px;
+  border-top: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  margin-top: 4px;
+}

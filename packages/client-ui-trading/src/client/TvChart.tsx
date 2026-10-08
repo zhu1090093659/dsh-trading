@@ -110,6 +110,13 @@ export interface TvChartProps {
   markerTexts?: { entry: string; exit: string } | undefined
   /** 数值紧凑单位 locale（zh = 亿/万，en = K/M/B；缺省 zh 现网口径）。 */
   numLocale?: 'zh' | 'en' | undefined
+  /**
+   * 右键某根 K 线（KDAS 关键日菜单入口）：index = 命中柱逻辑下标，x/y = 容器坐标。
+   * 返回 true 表示已处理（阻止浏览器默认菜单）；缺省/返回 false 保留默认菜单。
+   * 是否启用（周期/指标守卫）由父级判定；换算与区间框选同源（coordinateToLogical
+   * + 左轴宽修正）。
+   */
+  onBarContextMenu?: (info: { index: number; x: number; y: number }) => boolean
 }
 
 /** kline → 图表 bar（openTime 毫秒 → UTC 秒）。 */
@@ -747,6 +754,25 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
     setDragRect(null)
   }
 
+  // 右键 K 线命中：容器坐标 → 逻辑下标（与框选抬起换算同源：减左轴宽后走
+  // coordinateToLogical，圆整钳位到序列范围）。命中才交给父级菜单并拦截默认菜单。
+  const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>): void => {
+    const handler = propsRef.current.onBarContextMenu
+    if (handler === undefined) return
+    const chart = chartRef.current
+    if (chart === null) return
+    const box = event.currentTarget.getBoundingClientRect()
+    const paneOffset = chart.priceScale('left').width()
+    const logical = chart.timeScale().coordinateToLogical(event.clientX - box.left - paneOffset)
+    if (logical === null) return
+    const index = Math.round(Number(logical))
+    const lastIndex = propsRef.current.bars.length - 1
+    if (index < 0 || index > lastIndex) return
+    if (handler({ index, x: event.clientX - box.left, y: event.clientY - box.top })) {
+      event.preventDefault()
+    }
+  }
+
   // 高亮矩形：拖拽中用像素坐标；已提交选区由逻辑下标反查坐标（布局变化经
   // paneTops 测量 effect 的 ResizeObserver 触发重渲染重算）。logicalToCoordinate
   // 返回 pane 内坐标，绘制在容器上需加回左价格轴宽度（与 pointerup 换算互逆）。
@@ -784,6 +810,7 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
       onPointerMove={handleRangePointerMove}
       onPointerUp={handleRangePointerUp}
       onPointerCancel={handleRangePointerCancel}
+      onContextMenu={handleContextMenu}
     >
       {/* 框选高亮带（拖拽中 / 已提交选区） */}
       {selectionRect !== null && (
