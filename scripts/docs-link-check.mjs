@@ -7,14 +7,26 @@
  * 断链的后果不是报错，是**后人顺着链接找不到那份 Owning Note**，于是要么重造一份
  * （违反"一个事实只有一个家"），要么照旧做法继续错下去。
  *
- * 只查相对路径（http(s)/mailto/纯锚点跳过）；路径按**所在文件目录**解析。
+ * 只查相对路径（http(s)/mailto/纯锚点跳过）；路径按**所在文件目录**解析，
+ * 解析不到再按**仓库根**解析（本仓两种写法并存），两者都不存在才算断链。
+ *
+ * **基线与报错一律按仓库根相对路径记账**（如 `docs/a.md → missing.md`），不记绝对路径：
+ * 绝对路径把基线钉死在跑门禁那台机器的 checkout 位置上——本地全绿、CI 上 18 条存量
+ * 全部对不上（2026-10-09 实测 /tmp 形态 exit 1），门禁一上线就恒红。
+ * 覆盖扫描根用 `DOCS_LINK_ROOT`（自测夹具用；判据不变）。
  */
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url))
+/** 扫描根：默认仓库根，`DOCS_LINK_ROOT` 可覆盖；resolve 顺带去掉尾部分隔符。 */
+const ROOT = resolve(process.env.DOCS_LINK_ROOT || fileURLToPath(new URL('..', import.meta.url)))
 const NL = String.fromCharCode(10)
+
+/** 基线/报错里的路径一律换算成**仓库根相对**的 POSIX 写法：换机器、换工作树、换 OS 都对得上。 */
+function rootRelative(path) {
+  return relative(ROOT, path).split(sep).join('/')
+}
 
 /** 收集要检查的 markdown 文件。 */
 function collect(dir, acc = []) {
@@ -61,12 +73,12 @@ for (const file of files) {
     if (withoutAnchor === '') continue
     checked += 1
     // 本仓两种写法并存：**相对所在文件** 与 **相对仓库根**（如 `](.agents/notes/…)`）。
-    // 第一版只按文件目录解析，于是把根相对写法的链接全判成断链（23 条里大半是误报）。
     // 判据：先按文件解析、失败再按仓库根解析，**两者都不存在**才算断链。
     const fileRelative = withoutAnchor.startsWith('/') ? join(ROOT, withoutAnchor) : resolve(dirname(file), withoutAnchor)
-    const rootRelative = join(ROOT, withoutAnchor)
-    if (!existsSync(fileRelative) && !existsSync(rootRelative)) {
-      problems.push(file.replace(ROOT + '/', '') + ' → ' + target)
+    const rootRelativeTarget = join(ROOT, withoutAnchor)
+    if (!existsSync(fileRelative) && !existsSync(rootRelativeTarget)) {
+      // target 保留**原样写法**（读者要照着它在文档里搜），文件名用仓库根相对路径。
+      problems.push(rootRelative(file) + ' → ' + target)
     }
   }
 }
@@ -79,7 +91,7 @@ if (process.argv.includes('--update')) {
 }
 
 // 存量债入基线（与 typecheck / test-audit 同一惯例）：**只拦新增**，
-// 否则 22 条历史断链会让门禁一上线就红，红久了的门禁等于没有门禁。
+// 否则 18 条历史断链会让门禁一上线就红，红久了的门禁等于没有门禁。
 const baseline = existsSync(BASELINE_PATH)
   ? (JSON.parse(readFileSync(BASELINE_PATH, 'utf8')).broken ?? [])
   : []
@@ -99,7 +111,7 @@ if (fixed.length > 0) {
 // 读者看到的是噪音（2026-10-01 一次清理就在 10 份笔记里发现 158 对）。现为 0，所以直接拦新出现的。
 const placeholderHits = []
 for (const file of files) {
-  if (readFileSync(file, 'utf8').includes('%%')) placeholderHits.push(file.replace(ROOT + '/', ''))
+  if (readFileSync(file, 'utf8').includes('%%')) placeholderHits.push(rootRelative(file))
 }
 if (placeholderHits.length > 0) {
   for (const hit of placeholderHits) process.stderr.write('[docs-link] ✗ 文档里有未替换的 %% 占位符：' + hit + NL)

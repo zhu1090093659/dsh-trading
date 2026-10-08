@@ -190,6 +190,10 @@ scripts/gates-all.mjs 顺序跑 14 条门禁，**显式收集每条退出码**�
 
 **存量 18 条入基线**（archived 笔记里的历史断链 + bug-fix 笔记里 `../../desktop/…` 少写两级的路径），与 `typecheck-baseline.json` / `test-audit-baseline.json` 同一惯例：只拦新增。
 
+**基线记账改为仓库根相对路径（2026-10-09 修）**：原先基线里存的是**绝对路径**（`/Users/<人>/code/dsh-trading/.agents/…`）。成因：`fileURLToPath(new URL('..', import.meta.url))` 带尾分隔符，`file.replace(ROOT + '/', '')` 里的 `ROOT + '/'` 成了 `…/dsh-trading//` 永不匹配，前缀剥不掉。后果在主 checkout 上看不见：本地全绿，一旦 checkout 落在别的绝对路径（CI 的 `/home/runner/…`、任何 worktree、临时副本），**18 条存量全部对不上**（2026-10-09 用 `/tmp` 干净副本实测：基线只有 0/18 条匹配该根，门禁 exit 1 并把存量当新增报出）⇒ 门禁在 CI 上恒红。现在基线条目与报错**统一写仓库根相对路径**，与 checkout 位置无关；扫描根可用 `DOCS_LINK_ROOT` 覆盖（自测夹具用）。
+
+**解析判据不动**（本次只归一记账，不放宽）：仍是「先按所在文件目录、再按仓库根，两者都不存在才算断链」。实测本仓 297 条相对链接中 256 条**只**按文件目录能解析（`docs/README.md → ./guides/…`、笔记间 `../feature/…`），放宽成只按仓库根会把它们整体误报——所以保留双解析、只把记账口径从绝对路径改成仓库根相对。自测 `scripts/docs-link-check.test.mjs`（4 例）：真的拦新增、存量入基线后不重复报、同一条基线换个绝对路径仍对得上、文件相对链接不被放宽掉。
+
 ## 门禁可信度三修（2026-10-02）
 
 验收（`.local/acceptance/v5-hygiene.md` §3.1/§3.3、`.local/acceptance/v4-p4-p5.md` F4）实测到几处

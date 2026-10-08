@@ -76,7 +76,8 @@ jobs:
       # 不进 CI 的门禁必须写明原因（如 ui:check 需 headless Chrome 真起实例）。
       - run: pnpm ci-wiring:check
       # 文档相对链接门禁：断链不报错、只让后人找不到那份 Owning Note。存量 18 条入基线
-      # （scripts/docs-link-baseline.json），**只拦新增** —— 一上线就红的门禁等于没有门禁。
+      # （scripts/docs-link-baseline.json，按**仓库根相对**路径记账，与 checkout 位置无关），
+      # **只拦新增** —— 一上线就红的门禁等于没有门禁。
       - run: pnpm docs-link:check
 
   # 测试矩阵（Tier 1 主体）：与发版管线同源（install+build+test）。
