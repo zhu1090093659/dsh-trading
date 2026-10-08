@@ -8,8 +8,18 @@
  * @module @dshtrading/api
  */
 
-// cordis Context augmentation 的解析锚点：无此 type-only import，TS2664 下 augmentation 整体失效。
-import type {} from '@deepseek-ai/cordis'
+// cordis Context augmentation 的解析锚点（2026-10-08）：无此 type-only import，TS2664 下
+// augmentation 整体失效；且它必须是**有绑定且被引用**的 type import——无绑定的 `import type {}`
+// 会被 dts 生成器消除，只把 declare module 留在 lib/index.d.ts 里，消费方程序中它退化为新的
+// ambient 模块、Context 身份分裂（router 实测 7 条 TS2379/TS2339）。
+// 配套 tsdown.config.ts 的 `external: ['@deepseek-ai/cordis']`：否则 dts 生成器把该外部类型解析成
+// ./node_modules/.pnpm/... 相对路径，锚点同样失效。改这里请一并跑消费方 tsc（router 是判据样本）。
+import type { Context as CordisContext } from '@deepseek-ai/cordis'
+/**
+ * 宿主 cordis `Context` 的别名（本包 "declare module" 已在其上追加各市场服务键）。
+ * 再导出一次是锚点留在 dts 产物里的机制，见上方注释。
+ */
+export type { CordisContext }
 
 /** K线周期（Binance 现货/合约 interval 词汇）。 */
 export type Interval =
