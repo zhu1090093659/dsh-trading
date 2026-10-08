@@ -31,16 +31,48 @@ export class TradingServiceError extends Error {
 /** 本连接器服务的市场（行情面双市场；交易面仅 hk）。 */
 export type FutuMarket = 'hk' | 'us'
 
+/** OpenD 的交易环境。**没有"默认实盘"**：缺省一律 SIMULATE。 */
+export type FutuTrdEnv = 'SIMULATE' | 'REAL'
+
 export interface FutuRestOptions {
   gatewayUrl?: string
   fetchImpl?: typeof fetch
   timeoutMs?: number
   /** 实例市场（决定 listInstruments 的标的来源；缺省 hk）。 */
   market?: FutuMarket
+  /** 交易面环境（缺省 `SIMULATE`）。 */
+  trdEnv?: FutuTrdEnv
+  /** OpenD 账户 id（accId）。0 / 缺省 = 不发这一格，由 OpenD 用它的默认账户。 */
+  accId?: number
 }
 
 export interface FutuCredentials {
   readonly unlockPwd?: string
+  /** 本次调用的交易环境（缺省用构造时的值，再缺省 SIMULATE）。 */
+  readonly trdEnv?: FutuTrdEnv
+  /** 本次调用用的账户 id（缺省用构造时的值）。 */
+  readonly accId?: number
+}
+
+/**
+ * 挂单快照里的一行（`POST /api/trd/get-orders`）。
+ *
+ * 前四个字段是**执行核的启动对账**要的：它按 `remark`（= `clientOrderId`）严格匹配本地意图，
+ * 认不出锚就抛错（存活挂单因此撤不掉）；`orderStatus` 是 OpenD 的状态串**原文**，
+ * 映射归消费方的 `stateOf`。其余是同一行上的附加列（GUI 挂单列表用）。
+ */
+export interface FutuPendingOrder {
+  readonly orderId: string
+  readonly code: string
+  readonly orderStatus: string
+  readonly remark: string
+  readonly stockName?: string
+  readonly trdSide?: string
+  readonly orderType?: string
+  readonly qty?: number
+  readonly price?: number
+  readonly dealtQty?: number
+  readonly createTime?: string
 }
 
 /** 富途 K 线周期映射枚举 */
@@ -123,14 +155,21 @@ export class FutuRestClient {
   private readonly timeoutMs: number
   /** 实例市场（2026-09-08 审查 M3：行情面按市场各建实例，标的来源不跨市场串味）。 */
   readonly market: FutuMarket
+  /** 交易面环境（缺省 SIMULATE）。 */
+  readonly trdEnv: FutuTrdEnv
+  /** OpenD 账户 id；0 / 缺省 = 由 OpenD 用默认账户。 */
+  readonly accId: number | undefined
 
   constructor(options: FutuRestOptions = {}) {
     this.gatewayUrl = (options.gatewayUrl ?? 'http://127.0.0.1:11111').replace(/\/+$/, '')
     this.fetchImpl = options.fetchImpl ?? fetch
     this.timeoutMs = options.timeoutMs ?? 10_000
     this.market = options.market ?? 'hk'
+    this.trdEnv = options.trdEnv ?? 'SIMULATE'
+    this.accId = options.accId
   }
 
+  /** 出站：GET + query（行情面）。 */
   private async request<T>(path: string, query?: Record<string, string | number>): Promise<T> {
     const url = new URL(path.startsWith('/') ? path : '/' + path, this.gatewayUrl)
     if (query) {
@@ -138,11 +177,40 @@ export class FutuRestClient {
         if (v !== undefined) url.searchParams.set(k, String(v))
       }
     }
+    return this.send<T>(url, { headers: { accept: 'application/json' } })
+  }
+
+  /**
+   * 出站：POST + JSON（交易面）。三条 `/api/trd/*` **只有这一种传输**——owner 2026-10-08 裁决，
+   * 桥侧同批按 POST 实现（此前客户端发的是 GET + query）。
+   */
+  private async post<T>(path: string, body: Record<string, unknown>): Promise<T> {
+    const url = new URL(path.startsWith('/') ? path : '/' + path, this.gatewayUrl)
+    return this.send<T>(url, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  /** 交易环境：本次调用 > 构造时；两处都缺省 `SIMULATE`（**没有默认实盘**）。 */
+  private trdEnvOf(credentials?: FutuCredentials): FutuTrdEnv {
+    return credentials?.trdEnv ?? this.trdEnv
+  }
+
+  /** 账户 id：0 / 缺省都不发这一格（= 让 OpenD 用默认账户，不猜账户）。 */
+  private accIdOf(credentials?: FutuCredentials): number | undefined {
+    const value = credentials?.accId ?? this.accId
+    return value === undefined || value <= 0 ? undefined : value
+  }
+
+  /** 发一次请求，把 `{retType, retMsg, data}` 信封折成契约语义（GET / POST 共用）。 */
+  private async send<T>(url: URL, init: { method?: string; headers: Record<string, string>; body?: string }): Promise<T> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.timeoutMs)
     try {
       const res = await this.fetchImpl(url.toString(), {
-        headers: { accept: 'application/json' },
+        ...init,
         signal: controller.signal,
       })
       if (!res.ok) {
@@ -267,19 +335,29 @@ export class FutuRestClient {
     }
   }
 
-  async placeOrder(_credentials: FutuCredentials | undefined, req: { symbol: string; side: 'BUY' | 'SELL'; type: 'MARKET' | 'LIMIT'; quantity: number; price?: number }): Promise<Order> {
+  async placeOrder(credentials: FutuCredentials | undefined, req: { symbol: string; side: 'BUY' | 'SELL'; type: 'MARKET' | 'LIMIT'; quantity: number; price?: number }): Promise<Order> {
     // 交易面仅港股（US 订单需美国账户 trd 上下文，未接）：非港股符号在此显式拒绝
     const canonical = normalizeHkSymbol(req.symbol)
     const security = toFutuSecurity(canonical)
-    const data = await this.request<{ orderId?: string; orderID?: string }>('/api/trd/place-order', {
+    const accId = this.accIdOf(credentials)
+    const data = await this.post<{ orderId?: string; orderID?: string }>('/api/trd/place-order', {
       security,
       trdSide: req.side === 'BUY' ? 1 : 2,
       orderType: req.type === 'MARKET' ? 2 : 1,
       qty: req.quantity,
       price: req.price ?? 0,
+      // 桥要求显式环境（没有"默认实盘"，也不替你挑环境）
+      trdEnv: this.trdEnvOf(credentials),
+      ...(accId !== undefined ? { accId } : {}),
     })
 
-    const id = data.orderId ?? data.orderID ?? `futu-${Date.now()}`
+    // 回执缺 id 时**抛错**，绝不自己编一个：执行核拿这个 id 当 venue 句柄写进 intent 账本，
+    // 编出来的 id 会让"这单在不在 venue 上"变成一句假话（与执行核适配器同口径）。
+    const id = data.orderId ?? data.orderID
+    if (typeof id !== 'string' || id.trim() === '') {
+      throw new TradingServiceError('TRADING_UPSTREAM_ERROR',
+        `FutuOpenD 下单回执缺少 orderId/orderID（${JSON.stringify(data)}）：拿不到 venue 侧句柄就不算已提交`)
+    }
     // 真实回执：side/type 落 OrderSide/OrderType 契约词汇，dryRun 显式回带 false
     // （回执必须显式回带，防 dry-run 语义丢失；issue #58）。
     return {
@@ -295,9 +373,52 @@ export class FutuRestClient {
     }
   }
 
-  async cancelOrder(_credentials: FutuCredentials | undefined, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
-    await this.request('/api/trd/cancel-order', { orderId })
+  async cancelOrder(credentials: FutuCredentials | undefined, orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+    const accId = this.accIdOf(credentials)
+    // 桥要求这条请求带 accId：请求里没有 market，而 HK / US 是两套 trd 上下文（桥不猜是哪个市场）。
+    await this.post('/api/trd/cancel-order', {
+      orderId,
+      trdEnv: this.trdEnvOf(credentials),
+      ...(accId !== undefined ? { accId } : {}),
+    })
     return { orderId, status: 'canceled' }
+  }
+
+  /**
+   * 挂单快照（`POST /api/trd/get-orders`，只读）。
+   *
+   * 这是**执行核启动对账**的权威来源（§13 #7：对账权威是 venue，不是本地日志）：
+   * 每一行都带 `remark`（核心的对账锚），缺锚的行在消费方一律抛错——桥不替它补。
+   */
+  async getPendingOrders(credentials?: FutuCredentials): Promise<FutuPendingOrder[]> {
+    const accId = this.accIdOf(credentials)
+    const data = await this.post<{ orders?: unknown }>('/api/trd/get-orders', {
+      market: this.market.toUpperCase(),
+      trdEnv: this.trdEnvOf(credentials),
+      ...(accId !== undefined ? { accId } : {}),
+    })
+    const rows = Array.isArray(data.orders) ? data.orders : []
+    return rows.map((raw) => {
+      const row = (raw ?? {}) as Record<string, unknown>
+      const text = (key: string): string => (typeof row[key] === 'string' ? row[key] as string : '')
+      const num = (key: string): number | undefined => {
+        const value = row[key]
+        return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+      }
+      return {
+        orderId: text('orderId'),
+        code: text('code'),
+        orderStatus: text('orderStatus'),
+        remark: text('remark'),
+        ...(text('stockName') !== '' ? { stockName: text('stockName') } : {}),
+        ...(text('trdSide') !== '' ? { trdSide: text('trdSide') } : {}),
+        ...(text('orderType') !== '' ? { orderType: text('orderType') } : {}),
+        ...(num('qty') !== undefined ? { qty: num('qty') as number } : {}),
+        ...(num('price') !== undefined ? { price: num('price') as number } : {}),
+        ...(num('dealtQty') !== undefined ? { dealtQty: num('dealtQty') as number } : {}),
+        ...(text('createTime') !== '' ? { createTime: text('createTime') } : {}),
+      }
+    })
   }
 }
 

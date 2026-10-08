@@ -1,0 +1,31 @@
+{
+  "bridge": "http://127.0.0.1:11113/api/trd/get-orders",
+  "request": {
+    "market": "HK",
+    "trdEnv": "SIMULATE",
+    "accId": "<redacted-accId>"
+  },
+  "httpStatus": 200,
+  "raw": {
+    "retType": 0,
+    "retMsg": "",
+    "data": {
+      "orders": [
+        {
+          "orderId": "9769893",
+          "code": "HK.00700",
+          "orderStatus": "SUBMITTED",
+          "remark": "e2e-bridge-anchor-1",
+          "stockName": "腾讯控股",
+          "trdSide": "BUY",
+          "orderType": "ABSOLUTE_LIMIT",
+          "qty": 100.0,
+          "price": 406.8,
+          "dealtQty": 0.0,
+          "dealtAvgPrice": 0.0,
+          "createTime": "2026-10-08T13:02:31Z"
+        }
+      ]
+    }
+  }
+}

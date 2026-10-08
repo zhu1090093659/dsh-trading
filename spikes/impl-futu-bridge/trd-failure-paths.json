@@ -1,0 +1,130 @@
+[
+  {
+    "case": "GET 落到 trd 路径",
+    "method": "GET",
+    "path": "/api/trd/place-order",
+    "httpStatus": 200,
+    "raw": {
+      "retType": -1,
+      "retMsg": "bridge: trd paths are POST-only (JSON body)",
+      "data": null
+    }
+  },
+  {
+    "case": "trdEnv 非法",
+    "method": "POST",
+    "path": "/api/trd/place-order",
+    "request": {
+      "security": "HK.00700",
+      "trdSide": 1,
+      "orderType": 1,
+      "qty": 100,
+      "price": 406.8,
+      "trdEnv": "LIVE",
+      "accId": "<redacted-accId>"
+    },
+    "httpStatus": 200,
+    "raw": {
+      "retType": -1,
+      "retMsg": "place-order: trdEnv 必须是 'SIMULATE' 或 'REAL'（不默认实盘），收到 'LIVE'",
+      "data": null
+    }
+  },
+  {
+    "case": "security 认不出",
+    "method": "POST",
+    "path": "/api/trd/place-order",
+    "request": {
+      "security": "AAPL",
+      "trdSide": 1,
+      "orderType": 1,
+      "qty": 1,
+      "price": 1,
+      "trdEnv": "SIMULATE"
+    },
+    "httpStatus": 200,
+    "raw": {
+      "retType": -1,
+      "retMsg": "place-order: 认不出的 security 'AAPL'（只服务 HK.* / US.*）",
+      "data": null
+    }
+  },
+  {
+    "case": "限价缺 price",
+    "method": "POST",
+    "path": "/api/trd/place-order",
+    "request": {
+      "security": "HK.00700",
+      "trdSide": 1,
+      "orderType": 1,
+      "qty": 100,
+      "trdEnv": "SIMULATE",
+      "accId": "<redacted-accId>"
+    },
+    "httpStatus": 200,
+    "raw": {
+      "retType": -1,
+      "retMsg": "place-order: 限价单（orderType=1）必须带正数 price",
+      "data": null
+    }
+  },
+  {
+    "case": "HK 账户拿去交易 US",
+    "method": "POST",
+    "path": "/api/trd/get-orders",
+    "request": {
+      "market": "US",
+      "trdEnv": "SIMULATE",
+      "accId": "<redacted-accId>"
+    },
+    "httpStatus": 200,
+    "raw": {
+      "retType": -1,
+      "retMsg": "bridge: accId <redacted-accId> 属于 HK，不能拿去交易 US",
+      "data": null
+    }
+  },
+  {
+    "case": "accId 不在账户表",
+    "method": "POST",
+    "path": "/api/trd/get-orders",
+    "request": {
+      "market": "HK",
+      "trdEnv": "SIMULATE",
+      "accId": 99999999
+    },
+    "httpStatus": 200,
+    "raw": {
+      "retType": -1,
+      "retMsg": "bridge: accId 99999999 不在 OpenD 的账户表里（不猜账户）",
+      "data": null
+    }
+  },
+  {
+    "case": "cancel 缺 accId",
+    "method": "POST",
+    "path": "/api/trd/cancel-order",
+    "request": {
+      "orderId": "1",
+      "trdEnv": "SIMULATE"
+    },
+    "httpStatus": 200,
+    "raw": {
+      "retType": -1,
+      "retMsg": "cancel-order: 必须给 accId —— 这条请求里没有 market，而 HK / US 是两套 trd 上下文（不猜是哪个市场）",
+      "data": null
+    }
+  },
+  {
+    "case": "未知路径",
+    "method": "POST",
+    "path": "/api/trd/nope",
+    "request": {},
+    "httpStatus": 200,
+    "raw": {
+      "retType": -1,
+      "retMsg": "bridge: unsupported path /api/trd/nope",
+      "data": null
+    }
+  }
+]

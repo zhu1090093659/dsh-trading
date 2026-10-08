@@ -16,6 +16,7 @@ const CONFIG: Config = {
   dryRun: true,
   liveTrading: false,
   unlockPwdRef: 'FUTU_UNLOCK_PWD',
+  accId: 0,
 }
 
 interface Registered { market: string; provider: string; service: unknown }

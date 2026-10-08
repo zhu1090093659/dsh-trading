@@ -1,0 +1,22 @@
+{
+  "bridge": "http://127.0.0.1:11113/api/trd/place-order",
+  "request": {
+    "security": "HK.00700",
+    "trdSide": 1,
+    "orderType": 1,
+    "qty": 100,
+    "price": 406.8,
+    "trdEnv": "SIMULATE",
+    "accId": "<redacted-accId>",
+    "remark": "e2e-bridge-anchor-1"
+  },
+  "httpStatus": 200,
+  "raw": {
+    "retType": 0,
+    "retMsg": "",
+    "data": {
+      "orderId": "9769893",
+      "code": "HK.00700"
+    }
+  }
+}

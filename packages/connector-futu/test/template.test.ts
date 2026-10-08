@@ -27,14 +27,16 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function stubFetch(routes: Array<{ match: string; body: unknown; status?: number }>) {
   const urls: string[] = []
-  const impl = (async (input: unknown) => {
+  const calls: Array<{ url: string; method: string; body: unknown }> = []
+  const impl = (async (input: unknown, init?: { method?: string; body?: string }) => {
     const url = String(input)
     urls.push(url)
+    calls.push({ url, method: init?.method ?? 'GET', body: init?.body === undefined ? undefined : JSON.parse(init.body) })
     const route = routes.find((r) => url.includes(r.match))
     if (!route) throw new Error(`unexpected request: ${url}`)
     return jsonResponse(route.body, route.status)
   }) as typeof fetch
-  return { impl, urls }
+  return { impl, urls, calls }
 }
 
 describe('FutuRestClient 符号与周期映射', () => {
@@ -285,7 +287,7 @@ describe('FutuRestClient.getBalance / placeOrder', () => {
   })
 
   it('港股下单并返回 Order（小写 side/type + dryRun:false 回带，issue #58）', async () => {
-    const { impl, urls } = stubFetch([
+    const { impl, urls, calls } = stubFetch([
       { match: '/api/trd/place-order', body: { retType: 0, data: { orderId: 'futu-ord-999' } } },
     ])
     const client = new FutuRestClient({ fetchImpl: impl })
@@ -296,8 +298,17 @@ describe('FutuRestClient.getBalance / placeOrder', () => {
       quantity: 100,
       price: 380,
     })
-    expect(urls[0]).toContain('security=HK.00700')
-    expect(urls[0]).toContain('qty=100')
+    // 交易面只有 POST + JSON 一种传输（owner 2026-10-08 裁决）：字段在请求体里，URL 不带 query。
+    expect(urls[0]).not.toContain('?')
+    expect(calls[0]?.method).toBe('POST')
+    expect(calls[0]?.body).toMatchObject({
+      security: 'HK.00700',
+      trdSide: 1,
+      orderType: 1,
+      qty: 100,
+      price: 380,
+      trdEnv: 'SIMULATE',
+    })
     expect(order).toMatchObject({
       id: 'futu-ord-999',
       symbol: '00700.HK',
@@ -317,6 +328,7 @@ describe('hk_place_order 工具 live 路径（issue #58）', () => {
     dryRun: false,
     liveTrading: true,
     unlockPwdRef: 'FUTU_UNLOCK_PWD',
+    accId: 0,
   } as Config
 
   it('过 live 闸门后以 OrderRequest 契约调服务：小写 side/type + dryRun:false', async () => {

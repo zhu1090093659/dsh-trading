@@ -1,0 +1,31 @@
+# futu-bridge-probe 只读段：对**部署侧真桥**（本机 11113，旁路端口）的两次原始输出
+
+判断口径：退出码 0 = 通过；2 = 参数/纪律拒绝；3 = 通路不可用。
+命令（在卫星仓 dsh-trading-bot 下）：
+
+    node packages/tradectl/drill/futu-bridge-probe.ts --bridge=http://127.0.0.1:11113 --hk-account=11704133
+
+## 第一次：桥把 accId 当整数挑剔（**现场发现的契约不符**）
+
+    [futu-probe] 路由证据：futu 非加密：markets=hk channel=demo(trdEnv=SIMULATE) 账户=hk:11704133 目标主机=127.0.0.1:11113（桥 http://127.0.0.1:11113）
+    [futu-probe] 参考价（HK.00700）：last=411.4 bid=411.2 ask=411.4（行情面，仅供你选一个远离盘口的价）
+    [futu-probe] 对账面不可用（FUTU_BRIDGE_VENUE_REJECTED）：桥/OpenD 拒绝（retType=-1）：bridge: accId 必须是整数，收到 '11704133'
+    [futu-probe] {"ok":false,"stage":"pending-orders","code":"FUTU_BRIDGE_VENUE_REJECTED"}
+    probe exit: 3
+
+执行核适配器的 `accounts` 类型是 **string**（账户 id 从 CLI/环境变量一路下来就是字符串），
+桥按 JSON 类型挑剔会把**正确部署形态**误判成失败 ⇒ 桥改为接受"整数或十进制数字字符串"，
+非数字仍拒（不猜账户）。
+
+## 第二次：修复后（真 OpenD、只读段通过）
+
+    [futu-probe] 路由证据：futu 非加密：markets=hk channel=demo(trdEnv=SIMULATE) 账户=hk:11704133 目标主机=127.0.0.1:11113（桥 http://127.0.0.1:11113）
+    [futu-probe] 参考价（HK.00700）：last=411.4 bid=411.2 ask=411.4（行情面，仅供你选一个远离盘口的价）
+    [futu-probe] 挂单快照：0 单（HK 各自的账户各问了一次）
+    [futu-probe] {"ok":true,"stage":"read-only","markets":["hk"],"pending":0}
+    probe exit: 0
+
+即：**执行核的端口确实读到了港股 venue 的权威挂单快照**（此刻 0 单，因为本次证据里的
+下单都已撤掉）。注意这条只证明"快照读得到、锚通道通"；挂单**状态词汇**归谁映射仍是
+未覆盖的架构分歧（见看板卡 `ee22d5c0`）——真出现挂单时核的 `defaultStateOf` 认不出
+OpenD 的 `SUBMITTED`，对账会 fail-closed 抛错、门不开。

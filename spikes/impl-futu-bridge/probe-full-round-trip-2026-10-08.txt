@@ -1,0 +1,27 @@
+# futu-bridge-probe **下单段**（执行核适配器 → 本桥 → 真 OpenD，全 demo）
+
+命令（卫星仓 dsh-trading-bot；两道显式要求：`--allow-orders` **且** `FUTU_BRIDGE_ALLOW_ORDERS=1`）：
+
+    FUTU_BRIDGE_ALLOW_ORDERS=1 node packages/tradectl/drill/futu-bridge-probe.ts \
+      --bridge=http://127.0.0.1:11113 --hk-account=11704133 \
+      --allow-orders --symbol=00700.HK --price=408 --size=100
+
+原始输出（2026-10-08，旁路端口 11113；LaunchAgent 的 11112 未动）：
+
+    [futu-probe] 路由证据：futu 非加密：markets=hk channel=demo(trdEnv=SIMULATE) 账户=hk:11704133 目标主机=127.0.0.1:11113（桥 http://127.0.0.1:11113）
+    [futu-probe] 参考价（HK.00700）：last=411.4 bid=411.2 ask=411.4（行情面，仅供你选一个远离盘口的价）
+    [futu-probe] 挂单快照：0 单（HK 各自的账户各问了一次）
+    [futu-probe] 已下单（HK.00700 限价买 100 @ 408）：venueOrderId=9769919
+    [futu-probe] 读回：挂单里看得见这一单
+    [futu-probe] 收尾：三面都用过一遍（下单 → 读回 → 撤单 → 确认不在挂单里）
+    [futu-probe] {"ok":true,"stage":"full-round-trip","markets":["hk"],"visibleInPending":true,"venueOrderId":"9769919"}
+    probe exit: 0
+
+读法：
+- **执行核那一段（适配器 + 端口）真的走完了三条路由**：下单拿到 venue 的真 id、挂单快照里读得回这一单、
+  撤单后确认消失 ⇒ 判据 ② 的**派发/读回**一半在真 venue 上是通的。
+- 对账锚（`clientOrderId`）由适配器随下单交给桥、桥落到 OpenD 的 `remark`、挂单列表原样回带——
+  现场 `visibleInPending=true` 就是这条链的证据。
+- **仍未覆盖**：真正出现存活挂单时的**状态词汇**映射（OpenD 的 `SUBMITTED` 不在核的
+  `defaultStateOf` 里，会 fail-closed 抛错）——见看板卡 `ee22d5c0`。
+- 全程 demo（SIMULATE），无真钱动作；下单后已撤，现场挂单为 0。
