@@ -4,7 +4,7 @@
  * carries the auth cookie by default).
  */
 import type { AccountBalance, DerivativesData, DerivativesHistory, Kline, MarketId, MarketInfo, Order, Orderbook, Position, TickerOutcome, TradeFill, TradeTick } from './types.ts'
-import type { FundamentalsPackage } from '@dshtrading/api'
+import type { FundamentalsPackage, InstrumentAssetClass, InstrumentForm } from '@dshtrading/api'
 import type { CustomIndicatorRecord, IndicatorInstance } from '@dshtrading/indicators'
 import type { KnowledgeCard } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord, CustomScreenerRecord } from '@dshtrading/strategies'
@@ -234,10 +234,16 @@ export async function cancelGuiOrder(market: MarketId, orderId: string, symbol?:
   }
 }
 
-/** 动态全集标的名册（Issue #15）：可传 q 进行上游在线检索。未支持或失败时回退空数组。 */
-export async function fetchSymbols(market: MarketId, q?: string): Promise<Array<{ symbol: string; name?: string }>> {
+/**
+ * 动态全集标的名册（Issue #15）：可传 q 进行上游在线检索。未支持或失败时回退空数组。
+ * 形态/资产类别随 wire 透传（2026-10-08 加密永续；P4 已在 `SymbolInfoWire` 落地），
+ * 客户端据此渲染形态徽标与 TradFi 归属——**不按符号猜资产类别**。
+ */
+export type SymbolInfo = { symbol: string; name?: string; form?: InstrumentForm; assetClass?: InstrumentAssetClass }
+
+export async function fetchSymbols(market: MarketId, q?: string): Promise<SymbolInfo[]> {
   const query = new URLSearchParams({ market, ...(q ? { query: q } : {}) })
-  const wire = await getJson<{ symbols: Array<{ symbol: string; name?: string }> }>(`/dshtrading/api/symbols?${query.toString()}`)
+  const wire = await getJson<{ symbols: SymbolInfo[] }>(`/dshtrading/api/symbols?${query.toString()}`)
   return Array.isArray(wire.symbols) ? wire.symbols : []
 }
 
@@ -554,7 +560,15 @@ export async function resetScreener(id: string): Promise<{ ok: boolean; changed:
 /* ------------------------------------------------------------------ */
 
 /** host 侧自选行（WatchlistsMap：market → 行数组；不含客户端种子回退；groups = 分组 id 多归属）。 */
-export type HostWatchlists = Record<string, Array<{ market: string; symbol: string; name?: string; groups?: string[] }>>
+export type HostWatchlistRow = {
+  market: string
+  symbol: string
+  name?: string
+  form?: InstrumentForm
+  assetClass?: InstrumentAssetClass
+  groups?: string[]
+}
+export type HostWatchlists = Record<string, HostWatchlistRow[]>
 
 /** host 侧自定义分组（issue #82 wire 形状）。 */
 export interface HostWatchlistGroup {
@@ -575,7 +589,7 @@ export async function fetchHostWatchlists(): Promise<HostWatchlists> {
 }
 
 /** 追加一行（POST /watchlists；groups 供分组视图下添加直落归属）。 */
-export async function addHostWatchlistRow(instrument: { market: string; symbol: string; name?: string; groups?: string[] }): Promise<boolean> {
+export async function addHostWatchlistRow(instrument: { market: string; symbol: string; name?: string; form?: InstrumentForm; assetClass?: InstrumentAssetClass; groups?: string[] }): Promise<boolean> {
   try {
     const response = await fetch('/dshtrading/api/watchlists', {
       method: 'POST',
@@ -623,9 +637,9 @@ export async function importHostWatchlists(rows: HostWatchlists): Promise<boolea
 }
 
 /** 读取 host 选中标的（GET /selection）。 */
-export async function fetchHostSelection(): Promise<{ market: string; symbol: string; name?: string } | null> {
+export async function fetchHostSelection(): Promise<HostWatchlistRow | null> {
   try {
-    const wire = await getJson<{ ok: boolean; instrument: { market: string; symbol: string; name?: string } | null }>('/dshtrading/api/selection')
+    const wire = await getJson<{ ok: boolean; instrument: HostWatchlistRow | null }>('/dshtrading/api/selection')
     return wire.instrument ?? null
   } catch {
     return null
@@ -633,7 +647,7 @@ export async function fetchHostSelection(): Promise<{ market: string; symbol: st
 }
 
 /** 设置 host 选中标的（PUT /selection；watchlist_select 工具与左栏点击同源）。 */
-export async function putHostSelection(instrument: { market: string; symbol: string; name?: string } | null): Promise<boolean> {
+export async function putHostSelection(instrument: { market: string; symbol: string; name?: string; form?: InstrumentForm; assetClass?: InstrumentAssetClass } | null): Promise<boolean> {
   try {
     const response = await fetch('/dshtrading/api/selection', {
       method: 'PUT',

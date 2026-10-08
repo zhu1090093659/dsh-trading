@@ -102,6 +102,8 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
           market: base.market,
           symbol: base.symbol,
           ...(base.name !== undefined ? { name: base.name } : {}),
+          ...(base.form !== undefined ? { form: base.form } : {}),
+          ...(base.assetClass !== undefined ? { assetClass: base.assetClass } : {}),
           ...(nextGroups.length > 0 ? { groups: nextGroups } : {}),
         })
         const next = { ...map, [market]: nextRows }
@@ -128,6 +130,8 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
               market: row.market,
               symbol: row.symbol,
               ...(row.name !== undefined ? { name: row.name } : {}),
+              ...(row.form !== undefined ? { form: row.form } : {}),
+              ...(row.assetClass !== undefined ? { assetClass: row.assetClass } : {}),
               ...(rest.length > 0 ? { groups: rest } : {}),
             })
           })

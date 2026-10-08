@@ -65,7 +65,14 @@ afterEach(() => {
 
 function renderManager(setup?: {
   groups?: Array<{ id: string; name: string; createdAt: number }>
-  rows?: Record<string, Array<{ market: string; symbol: string; name?: string; groups?: string[] }>>
+  rows?: Record<string, Array<{
+    market: string
+    symbol: string
+    name?: string
+    form?: 'spot' | 'perp'
+    assetClass?: 'crypto' | 'equity' | 'commodity' | 'index'
+    groups?: string[]
+  }>>
 }) {
   const watchlists = createWatchlistStore()
   for (const [market, rows] of Object.entries(setup?.rows ?? {})) {
@@ -73,7 +80,7 @@ function renderManager(setup?: {
   }
   const groups = createWatchlistGroupsStore()
   for (const group of setup?.groups ?? []) groups.upsertGroup(group)
-  const added: Array<{ market: string; symbol: string; groups?: string[] }> = []
+  const added: Array<{ market: string; symbol: string; form?: string; groups?: string[] }> = []
   const props = {
     t,
     // 订阅语义与 slot 运行时合成的 use* 一致（useSyncExternalStore）：store 变更要能
@@ -82,8 +89,14 @@ function renderManager(setup?: {
       sel(useSyncExternalStore(watchlists.subscribe, watchlists.getSnapshot, watchlists.getSnapshot)),
     useWatchlistGroups: <T,>(sel: (value: ReturnType<typeof groups.getSnapshot>) => T): T =>
       sel(useSyncExternalStore(groups.subscribe, groups.getSnapshot, groups.getSnapshot)),
-    addInstrument: (market: MarketId, instrument: { symbol: string; groups?: string[] }) => {
-      added.push({ market, symbol: instrument.symbol, ...(instrument.groups !== undefined ? { groups: instrument.groups } : {}) })
+    addInstrument: (market: MarketId, instrument: { symbol: string; form?: string; groups?: string[] }) => {
+      added.push({
+        market,
+        symbol: instrument.symbol,
+        // 现货不落 form（缺省即现货）——既有断言的形状因此不变，永续能单独断言形态。
+        ...(instrument.form !== undefined ? { form: instrument.form } : {}),
+        ...(instrument.groups !== undefined ? { groups: instrument.groups } : {}),
+      })
     },
     removeInstrument: () => {},
     createGroup: async () => ({ ok: false as const, reason: 'unavailable' as const }),
@@ -150,6 +163,23 @@ describe('WatchlistManager 渲染冒烟', () => {
         { market: 'crypto', symbol: 'BTCUSDT' },
       ])
     })
+  })
+
+  it('用户查看自选管理里的永续行时，代码列带形态徽标（现货行不挂标）', () => {
+    // Given: 自选里一行 TradFi 永续与一行加密现货
+    const { getAllByText, getByText, queryAllByText } = renderManager({
+      rows: {
+        crypto: [
+          { market: 'crypto', symbol: 'TSLAUSDT-SWAP', name: '特斯拉 永续', form: 'perp', assetClass: 'equity' },
+          { market: 'crypto', symbol: 'BTCUSDT', name: '比特币' },
+        ],
+      },
+    })
+    // When: 打开自选管理（默认全部范围）
+    // Then: 永续行挂「股票合约」徽标且只有一处；现货行不挂标
+    expect(getByText('form.perpEquity')).toBeTruthy()
+    expect(getAllByText('form.perpEquity')).toHaveLength(1)
+    expect(queryAllByText('form.perp')).toHaveLength(0)
   })
 
   it('活动分组被别处删除 → 范围归位全部（组外行不再被悬挂 id 过滤误藏）', async () => {

@@ -453,6 +453,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
 }
 
 .marketTag {
@@ -463,6 +464,20 @@
   border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
   color: var(--dsw-futu-text-secondary, #5f6672);
   flex: none;
+}
+
+/* 形态徽标（2026-10-08 加密永续 P5）：只给永续/TradFi 合约挂标；现货不渲染（默认形态），
+   因此现货行的渲染与从前逐像素一致。 */
+.formBadge {
+  font-size: 9.5px;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: var(--dsw-futu-radius-xs, 3px);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  background: var(--dsw-futu-bg-surface, #f7f8fa);
+  flex: none;
+  white-space: nowrap;
 }
 
 .spark {

@@ -1888,6 +1888,9 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: 0.2.0-rc.2
         version: 0.2.0-rc.2(52b5a8ab481be2b3d891c22a71641755)
+      '@dshtrading/api':
+        specifier: workspace:^
+        version: link:../api
       '@dshtrading/dsh-home':
         specifier: workspace:^
         version: link:../dsh-home

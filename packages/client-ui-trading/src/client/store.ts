@@ -101,6 +101,8 @@ function sanitizeInstrument(instrument: Instrument): Instrument {
     market: instrument.market && ['crypto', 'us', 'cn', 'hk', 'futures', 'global'].includes(instrument.market) ? instrument.market : inferMarket(instrument.symbol),
     symbol: instrument.symbol,
     ...(instrument.name ? { name: instrument.name } : {}),
+    ...(instrument.form !== undefined ? { form: instrument.form } : {}),
+    ...(instrument.assetClass !== undefined ? { assetClass: instrument.assetClass } : {}),
   }
 }
 
@@ -164,6 +166,9 @@ function sanitizeWatchlists(raw: Watchlists): Watchlists {
         market: row.market && ['crypto', 'us', 'cn', 'hk', 'futures', 'global'].includes(row.market) ? row.market : market,
         symbol: row.symbol,
         ...(row.name ? { name: row.name } : {}),
+        // 形态/资产类别（2026-10-08 加密永续）：可选元数据原样保真
+        ...(row.form !== undefined ? { form: row.form } : {}),
+        ...(row.assetClass !== undefined ? { assetClass: row.assetClass } : {}),
         // 分组归属（issue #82）：只收非空字符串 id，去重；空集不落键
         ...sanitizeGroupsField(row.groups),
       }))
@@ -205,6 +210,8 @@ export function createWatchlistStore(): WatchlistStore {
         market: targetMarket,
         symbol: instrument.symbol,
         ...(instrument.name ? { name: instrument.name } : {}),
+        ...(instrument.form !== undefined ? { form: instrument.form } : {}),
+        ...(instrument.assetClass !== undefined ? { assetClass: instrument.assetClass } : {}),
         // 分组视图下添加标的直落归属（issue #82；host 侧 parseInstrumentBody 同步放行）
         ...sanitizeGroupsField(instrument.groups),
       }
@@ -381,6 +388,8 @@ export function applyLocalMembership(
       market: row.market,
       symbol: row.symbol,
       ...(row.name !== undefined ? { name: row.name } : {}),
+      ...(row.form !== undefined ? { form: row.form } : {}),
+      ...(row.assetClass !== undefined ? { assetClass: row.assetClass } : {}),
       ...(next.length > 0 ? { groups: next } : {}),
     }
   })

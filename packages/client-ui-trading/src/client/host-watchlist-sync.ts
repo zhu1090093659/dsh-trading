@@ -54,6 +54,8 @@ function toLocalWatchlists(host: HostWatchlists): Partial<Record<MarketId, Instr
       market: row.market as MarketId,
       symbol: row.symbol,
       ...(row.name !== undefined ? { name: row.name } : {}),
+      ...(row.form !== undefined ? { form: row.form } : {}),
+      ...(row.assetClass !== undefined ? { assetClass: row.assetClass } : {}),
       ...(Array.isArray(row.groups) && row.groups.length > 0 ? { groups: [...row.groups] } : {}),
     }))
   }
@@ -225,6 +227,8 @@ function stripLocalGroup(watchlists: WatchlistStore, groupId: string): void {
         market: row.market,
         symbol: row.symbol,
         ...(row.name !== undefined ? { name: row.name } : {}),
+        ...(row.form !== undefined ? { form: row.form } : {}),
+        ...(row.assetClass !== undefined ? { assetClass: row.assetClass } : {}),
         ...(rest.length > 0 ? { groups: rest } : {}),
       }
     })

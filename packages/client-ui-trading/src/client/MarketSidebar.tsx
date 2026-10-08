@@ -16,11 +16,13 @@ import { rowsFor } from './store.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { intradayCandidates, intradayRequest, selectIntradaySeries } from './intraday-series.ts'
 import { colorModeStore } from './color-mode.ts'
+import { entryForm, entryMeta, formBadgeKey, resolveAssetClass, type InstrumentMeta } from './instrument-meta.ts'
 import { MARKET_TAB_KEY, normalizeSymbolInput } from './market-vocab.ts'
 import { Sparkline } from './Sparkline.tsx'
 import { IconChevronDown, IconFolder, IconFoldPanel, IconSettings, IconUpdate } from './icons.tsx'
 import { GroupMenu, GroupMembershipPopover, type GroupCreateOutcome } from './WatchlistGroups.tsx'
 import { WatchlistManager } from './WatchlistManager.tsx'
+import type { InstrumentForm } from '@dshtrading/api'
 import type { Instrument, MarketId, MarketInfo, ReferenceSeries, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
 import css from './market-sidebar.module.css'
@@ -110,6 +112,8 @@ export function MarketSidebar({
   const [series, setSeries] = useState<Record<string, ReferenceSeries>>({})
   const [draft, setDraft] = useState('')
   const [addMarket, setAddMarket] = useState<MarketId>('crypto')
+  /** 形态过滤（2026-10-08 加密永续 P5）：仅 crypto 目标市场生效，缺省「全部」= 不过滤。 */
+  const [formFilter, setFormFilter] = useState<'all' | InstrumentForm>('all')
   const [catalogVersion, setCatalogVersion] = useState(0)
   const [groupMenuOpen, setGroupMenuOpen] = useState(false)
   const [managerOpen, setManagerOpen] = useState(false)
@@ -191,10 +195,18 @@ export function MarketSidebar({
 
   const rowsKey = rows.map(row => rowKey(row.market, row.symbol)).join('|')
 
+  // 添加表单的目标市场：自选页签由市场切换按钮决定，市场页签即本市场。
+  const addTarget: MarketId | null = tab === 'watch' ? addMarket : tab
+  // 形态过滤只在 crypto 目标市场生效（其它市场没有永续，过滤只会得到空结果）。
+  const activeForm: InstrumentForm | undefined = addTarget === 'crypto' && formFilter !== 'all' ? formFilter : undefined
+
   // 联想候选：自选页签跨市场全局搜索（候选自带市场）；市场页签只搜本市场字典（显式注入当前市场）。
+  // 形态过滤按 crypto 生效（2026-10-08 P5）：catalog 的 searchSymbols/searchAllMarkets 同参。
   const suggestions = useMemo(
-    () => (tab === 'watch' ? searchAllMarkets(draft) : searchSymbols(tab, draft).map(entry => ({ ...entry, market: tab }))),
-    [tab, draft, catalogVersion],
+    () => (tab === 'watch'
+      ? searchAllMarkets(draft, 8, activeForm)
+      : searchSymbols(tab, draft, 8, activeForm).map(entry => ({ ...entry, market: tab }))),
+    [tab, draft, catalogVersion, activeForm],
   )
 
   // 真实在线联想：当用户输入关键词时，防抖向上游真实检索标的
@@ -210,8 +222,11 @@ export function MarketSidebar({
         fetchSymbols(m, raw)
           .then((items) => {
             if (cancelled || items.length === 0) return
-            const valid = items.filter(it => it.symbol && it.name && !/\(A股\)|\(港股\)/.test(it.name)) // i18n-allow: 数据源占位名匹配谓词，非 UI 文案
+            const valid = items.filter(it =>
+              it.symbol && it.name && !/\(A股\)|\(港股\)/.test(it.name) // i18n-allow: 数据源占位名匹配谓词，非 UI 文案
+              && (activeForm === undefined || entryForm(it) === activeForm))
             if (valid.length > 0) {
+              // 形态/资产类别随行注入动态字典（TradFi 归属只信交易所元数据，不按符号猜）。
               updateDynamicCatalog(m, valid)
               setCatalogVersion(v => v + 1)
             }
@@ -224,7 +239,7 @@ export function MarketSidebar({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [draft, tab])
+  }, [draft, tab, activeForm])
 
   // 参考序列（迷你走势 + 昨收兜底）：日内分钟线 60s 轮询；分钟线不可用（如腾讯
   // 公开端港股）降级日 K，TTL 内复用后再重试分钟线。prevClose 仅为快照缺官方锚点
@@ -448,92 +463,118 @@ export function MarketSidebar({
       )}
 
       {/* 添加标的表单（分组视图下添加直落入组，issue #82） */}
-      {(() => {
-        const target: MarketId | null = tab === 'watch' ? addMarket : tab
-        if (target === null) return null
-        const submitAdd = (market: MarketId, symbol: string, name: string | undefined): void => {
-          const item: Instrument = {
-            market,
-            symbol,
-            ...(name !== undefined ? { name } : {}),
-            ...(activeGroupId !== null ? { groups: [activeGroupId] } : {}),
-          }
-          addInstrument(market, item)
-          // 标的已在自选时 addInstrument 去重不落 groups——幂等补挂保证入组。
-          if (activeGroupId !== null) {
-            void assignGroupMember(activeGroupId, market, symbol, true, name)
-          }
-          selectInstrument(item)
-          if (activeGroupId === null && tab !== 'watch' && tab !== market) {
-            setTab(market)
-          }
-          setDraft('')
-        }
-        return (
-          <form className={css.addRow} onSubmit={(event) => {
-            event.preventDefault()
-            const rawDraft = draft.trim()
-            if (rawDraft === '') return
-            const raw = rawDraft.toUpperCase()
-            const match = suggestions.find(s =>
-              s.symbol.toUpperCase() === raw ||
-              (s.name && s.name.toUpperCase() === raw)
-            ) ?? suggestions.find(s =>
-              s.symbol.toUpperCase().startsWith(raw) ||
-              (s.name && s.name.toUpperCase().startsWith(raw))
-            ) ?? (suggestions.length > 0 ? suggestions[0] : undefined)
-
-            if (match) {
-              submitAdd(match.market ?? target, match.symbol, match.name)
-              return
+      {addTarget === null
+        ? null
+        : (() => {
+          const target: MarketId = addTarget
+          /** 形态/资产类别随行直落（取自字典/名册条目；手输行只知形态，资产类别未知即留空）。 */
+          const submitAdd = (
+            market: MarketId,
+            symbol: string,
+            name: string | undefined,
+            meta: InstrumentMeta = {},
+          ): void => {
+            const item: Instrument = {
+              market,
+              symbol,
+              ...(name !== undefined ? { name } : {}),
+              ...(meta.form !== undefined ? { form: meta.form } : {}),
+              ...(meta.assetClass !== undefined ? { assetClass: meta.assetClass } : {}),
+              ...(activeGroupId !== null ? { groups: [activeGroupId] } : {}),
             }
-            // 防呆：若输入包含中文但未在任何市场字典或在线检索中找到标的，杜绝将纯中文当作 symbol 提交导致后端报错
-            if (/[\u4e00-\u9fa5]/.test(rawDraft)) return
-            submitAdd(target, normalizeSymbolInput(target, rawDraft), undefined)
-          }}>
-            {tab === 'watch' && (
-              <button
-                type="button"
-                className={css.addMarketToggle}
-                title={t('sidebar.addMarketHint')}
-                onClick={() => {
-                  const order: MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures', 'global']
-                  const index = order.indexOf(addMarket)
-                  setAddMarket(order[(index + 1) % order.length] ?? 'crypto')
-                }}
-              >
-                {t(MARKET_TAB_KEY[addMarket])}
-              </button>
-            )}
-            <input
-              className={css.addInput}
-              value={draft}
-              placeholder={t('sidebar.addPlaceholder')}
-              onChange={event => { setDraft(event.target.value) }}
-            />
-            <button className={css.addButton} type="submit" disabled={draft.trim() === ''}>{t('sidebar.add')}</button>
-            {suggestions.length > 0 && (
-              <div className={css.suggestions} role="listbox" aria-label={t('sidebar.addPlaceholder')}>
-                {suggestions.map(entry => (
-                  <button
-                    key={entry.market + ':' + entry.symbol}
-                    type="button"
-                    role="option"
-                    aria-selected={false}
-                    className={css.suggestion}
-                    onMouseDown={(e) => { e.preventDefault() }}
-                    onClick={() => { submitAdd(entry.market, entry.symbol, entry.name) }}
-                  >
-                    <span className={css.suggestionSymbol}>{entry.symbol}</span>
-                    <span className={css.suggestionName}>{entry.name}</span>
-                    <span className={css.suggestionMarket}>{t(MARKET_TAB_KEY[entry.market])}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </form>
-        )
-      })()}
+            addInstrument(market, item)
+            // 标的已在自选时 addInstrument 去重不落 groups——幂等补挂保证入组。
+            if (activeGroupId !== null) {
+              void assignGroupMember(activeGroupId, market, symbol, true, name)
+            }
+            selectInstrument(item)
+            if (activeGroupId === null && tab !== 'watch' && tab !== market) {
+              setTab(market)
+            }
+            setDraft('')
+          }
+          return (
+            <form className={css.addRow} onSubmit={(event) => {
+              event.preventDefault()
+              const rawDraft = draft.trim()
+              if (rawDraft === '') return
+              const raw = rawDraft.toUpperCase()
+              const match = suggestions.find(s =>
+                s.symbol.toUpperCase() === raw ||
+                (s.name && s.name.toUpperCase() === raw)
+              ) ?? suggestions.find(s =>
+                s.symbol.toUpperCase().startsWith(raw) ||
+                (s.name && s.name.toUpperCase().startsWith(raw))
+              ) ?? (suggestions.length > 0 ? suggestions[0] : undefined)
+
+              if (match) {
+                submitAdd(match.market ?? target, match.symbol, match.name, entryMeta(match.market ?? target, match))
+                return
+              }
+              // 防呆：若输入包含中文但未在任何市场字典或在线检索中找到标的，杜绝将纯中文当作 symbol 提交导致后端报错
+              if (/[\u4e00-\u9fa5]/.test(rawDraft)) return
+              const symbol = normalizeSymbolInput(target, rawDraft)
+              submitAdd(target, symbol, undefined, entryMeta(target, { symbol }))
+            }}>
+              {tab === 'watch' && (
+                <button
+                  type="button"
+                  className={css.addMarketToggle}
+                  title={t('sidebar.addMarketHint')}
+                  onClick={() => {
+                    const order: MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures', 'global']
+                    const index = order.indexOf(addMarket)
+                    setAddMarket(order[(index + 1) % order.length] ?? 'crypto')
+                  }}
+                >
+                  {t(MARKET_TAB_KEY[addMarket])}
+                </button>
+              )}
+              {target === 'crypto' && (
+                <button
+                  type="button"
+                  className={css.addMarketToggle}
+                  data-form-filter={formFilter}
+                  aria-label={t('form.filter.aria')}
+                  title={t('form.filter.hint')}
+                  onClick={() => { setFormFilter(current => (current === 'all' ? 'spot' : current === 'spot' ? 'perp' : 'all')) }}
+                >
+                  {t(formFilter === 'all' ? 'form.filter.all' : formFilter === 'spot' ? 'form.filter.spot' : 'form.filter.perp')}
+                </button>
+              )}
+              <input
+                className={css.addInput}
+                value={draft}
+                placeholder={t('sidebar.addPlaceholder')}
+                onChange={event => { setDraft(event.target.value) }}
+              />
+              <button className={css.addButton} type="submit" disabled={draft.trim() === ''}>{t('sidebar.add')}</button>
+              {suggestions.length > 0 && (
+                <div className={css.suggestions} role="listbox" aria-label={t('sidebar.addPlaceholder')}>
+                  {suggestions.map((entry) => {
+                    const badge = formBadgeKey(entry, resolveAssetClass(entry.market, entry))
+                    return (
+                      <button
+                        key={entry.market + ':' + entry.symbol}
+                        type="button"
+                        role="option"
+                        aria-selected={false}
+                        className={css.suggestion}
+                        onMouseDown={(e) => { e.preventDefault() }}
+                        onClick={() => { submitAdd(entry.market, entry.symbol, entry.name, entryMeta(entry.market, entry)) }}
+                      >
+                        <span className={css.suggestionSymbol}>{entry.symbol}</span>
+                        {badge !== null && <span className={css.formBadge}>{t(badge)}</span>}
+                        <span className={css.suggestionName}>{entry.name}</span>
+                        <span className={css.suggestionMarket}>{t(MARKET_TAB_KEY[entry.market])}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </form>
+          )
+        })()}
 
       {/* 列表表头 */}
       <div className={css.listHeader}>
@@ -562,6 +603,8 @@ export function MarketSidebar({
                 const up = (pct ?? 0) >= 0
                 const selected = selection !== null && selection.market === row.market && selection.symbol === row.symbol
                 const memberOf = row.groups ?? []
+                // 形态徽标（2026-10-08 P5）：现货不挂徽标（默认形态），永续按资产类别细分。
+                const formBadge = formBadgeKey(row, resolveAssetClass(row.market, row))
                 return (
                   <button
                     key={key}
@@ -585,6 +628,7 @@ export function MarketSidebar({
                       </span>
                       <span className={css.codeRow}>
                         <span className={css.code}>{row.symbol}</span>
+                        {formBadge !== null && <span className={css.formBadge}>{t(formBadge)}</span>}
                         {(tab === 'watch' || activeGroupId !== null) && <span className={css.marketTag}>{t(MARKET_TAB_KEY[row.market])}</span>}
                       </span>
                     </span>

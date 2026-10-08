@@ -25,6 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@dshtrading/api": "workspace:^",
     "@dshtrading/dsh-home": "workspace:^"
   },
   "peerDependencies": {

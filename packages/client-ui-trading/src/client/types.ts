@@ -3,7 +3,7 @@
  * (src/bridge.ts) and @dshtrading/api's data contracts — type-only imports,
  * erased at bundle time (the client half must not require non-seed modules).
  */
-import type { AccountBalance, DerivativesData, DerivativesHistory, DerivativesPoint, Kline, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeTick } from '@dshtrading/api'
+import type { AccountBalance, DerivativesData, DerivativesHistory, DerivativesPoint, InstrumentAssetClass, InstrumentForm, Kline, Order, Orderbook, Position, StockFundamentals, Ticker, TradeFill, TradeTick } from '@dshtrading/api'
 
 /** Markets served by the bridge (subset = installed connector set). */
 export type MarketId = 'crypto' | 'us' | 'cn' | 'hk' | 'futures' | 'global'
@@ -14,6 +14,13 @@ export interface Instrument {
   symbol: string
   /** Display label (seed names, or the raw symbol for user-added rows). */
   name?: string
+  /**
+   * 形态轴（2026-10-08 加密永续落地，词汇家在 `@dshtrading/api`）：缺省 = 现货；
+   * 读侧判据与 catalog 同款——显式值优先，缺省回落 `instrumentFormOf(symbol)`。
+   */
+  form?: InstrumentForm
+  /** 资产类别（交易所元数据原样；取不到即留空，禁止按符号猜）。 */
+  assetClass?: InstrumentAssetClass
   /** 所属自定义分组 id（issue #82；多归属，缺省/空 = 未分组；注册表见 groups store）。 */
   groups?: string[]
 }

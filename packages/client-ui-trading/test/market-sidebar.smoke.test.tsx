@@ -12,7 +12,7 @@
  *
  * @vitest-environment jsdom
  */
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MarketLocaleKey } from '../src/client/contract.ts'
 import type { SelectionState, Watchlists } from '../src/client/store.ts'
@@ -54,6 +54,7 @@ vi.mock('../src/client/api.ts', async (importOriginal) => {
 })
 
 import { MarketSidebar } from '../src/client/MarketSidebar.tsx'
+import { setDynamicCatalog } from '../src/client/symbol-catalog.ts'
 
 /** key 直出翻译（断言用 key 而非文案，与词典解耦）。 */
 const t = (key: MarketLocaleKey): string => key
@@ -96,6 +97,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  // 动态字典是模块级单例：清空注入的永续行，避免跨用例串味。
+  setDynamicCatalog('crypto', [])
 })
 
 function renderSidebar(rows: Array<{ market: MarketId; symbol: string; name?: string }>) {
@@ -173,6 +176,42 @@ describe('MarketSidebar 迷你走势编排冒烟', () => {
     const points = sparkPoints(view.getByText, '微软')
     expect(points).toHaveLength(DAILY.length)
     expect(points.map(([x]) => x)).toEqual([0, 28, 56])
+  })
+
+  it('用户按永续形态筛选搜索时，结果只剩永续行并带 TradFi 形态徽标', async () => {
+    // Given: 交易所名册里有一行股票永续与一行同名的股票现货（动态字典注入，不走网络）
+    net.markets = [{ id: 'crypto' }]
+    setDynamicCatalog('crypto', [
+      { symbol: 'TSLAUSDT-SWAP', name: '特斯拉 永续', form: 'perp', assetClass: 'equity' },
+      { symbol: 'TSLASPOT', name: '特斯拉现货占位' },
+    ])
+    const view = renderSidebar([{ market: 'crypto', symbol: 'BTCUSDT', name: '比特币' }])
+    // When: 输入查询（全部形态）后把形态过滤切到「永续」（点击循环：全部→现货→永续）
+    const input = view.container.querySelector('input')
+    fireEvent.change(input as HTMLInputElement, { target: { value: 'TSLA' } })
+    // Then: 过滤前两行都在（现货也可见）
+    await waitFor(() => { expect(view.getByText('TSLASPOT')).toBeTruthy() })
+    expect(view.getByText('TSLAUSDT-SWAP')).toBeTruthy()
+    const filter = view.container.querySelector('button[data-form-filter]')
+    expect(filter?.getAttribute('data-form-filter')).toBe('all')
+    fireEvent.click(filter as HTMLElement)
+    fireEvent.click(filter as HTMLElement)
+    // Then: 切到永续后现货行消失、永续行带「股票合约」徽标
+    await waitFor(() => { expect(view.queryByText('TSLASPOT')).toBeNull() })
+    expect(view.getByText('TSLAUSDT-SWAP')).toBeTruthy()
+    expect(view.getByText('form.perpEquity')).toBeTruthy()
+  })
+
+  it('用户查看自选里的永续行时，行上带形态徽标（现货行不挂标）', async () => {
+    // Given: crypto 自选里一行加密永续与一行现货
+    net.markets = [{ id: 'crypto' }]
+    const view = renderSidebar([
+      { market: 'crypto', symbol: 'BTCUSDT-SWAP', name: '比特币 永续' },
+      { market: 'crypto', symbol: 'BTCUSDT', name: '比特币' },
+    ])
+    // When: 左栏自选列表渲染完成（市场列表经桥桩到达后才有行）
+    // Then: 只有永续行挂「永续」徽标
+    await waitFor(() => { expect(view.getAllByText('form.perp')).toHaveLength(1) })
   })
 
   it('crypto 取数归一为 5m×288（滚动 24h，不出现 1m 请求），走势等距铺满', async () => {

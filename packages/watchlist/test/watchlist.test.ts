@@ -6,8 +6,10 @@ import { mkdtemp, readdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { instrumentFormOf } from '@dshtrading/api'
 import { createMemorySelectionStore, createMemoryWatchlistStore } from '../src/index.ts'
 import { createFileSelectionStore, createFileWatchlistStore } from '../src/file-store.ts'
+import { WATCHLIST_SEEDS } from '../src/seeds.ts'
 import {
   createWatchlistAddTool,
   createWatchlistListTool,
@@ -180,6 +182,54 @@ describe('watchlist_* tools', () => {
     expect(unknown.selected).toEqual({ market: 'hk', symbol: '09999' })
     expect((await selection.get()).instrument).toEqual({ market: 'hk', symbol: '09999' })
     expect(onSelectionChanged).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('形态元数据（2026-10-08 加密永续 P5）', () => {
+  it('用户查看默认自选种子时，种子行按唯一判据全是现货（默认首屏不因永续支持而变）', () => {
+    // Given: 种子表（seeds.ts）是默认首屏的单一事实源
+    const seeds = WATCHLIST_SEEDS
+    // When: 逐市场逐行按 is-symbol-form 判据复核
+    const mismatched = Object.entries(seeds).flatMap(([market, list]) =>
+      list.filter(row => row.market !== market || instrumentFormOf(row.symbol) !== 'spot'))
+    // Then: 没有一行是永续（-SWAP），且桶键与行 market 一致
+    expect(mismatched).toEqual([])
+    expect(Object.values(seeds).flat()).toHaveLength(14)
+  })
+
+  it('用户添加带形态元数据的行时，内存 store 保真；不带元数据的现货行形状不变', async () => {
+    // Given: 空内存自选
+    const store = createMemoryWatchlistStore()
+    // When: 添加一行 TradFi 永续（带交易所元数据）与一行纯现货
+    await store.add('crypto', { market: 'crypto', symbol: 'TSLAUSDT-SWAP', name: '特斯拉 永续', form: 'perp', assetClass: 'equity' })
+    await store.add('crypto', { market: 'crypto', symbol: 'BTCUSDT', name: 'Bitcoin' })
+    // Then: 永续行保真 form/assetClass；现货行不落这两键（缺省即现货）
+    const rows = (await store.list()).crypto ?? []
+    expect(rows[0]).toEqual({ market: 'crypto', symbol: 'TSLAUSDT-SWAP', name: '特斯拉 永续', form: 'perp', assetClass: 'equity' })
+    expect(rows[1]).toEqual({ market: 'crypto', symbol: 'BTCUSDT', name: 'Bitcoin' })
+  })
+
+  it('用户添加永续行后刷新（新实例读盘），形态与资产类别仍在（文件 store 保真）', async () => {
+    // Given: 文件自选 store
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-watchlist-'))
+    const filePath = join(dir, 'watchlists.json')
+    // When: 添加一行大宗永续并新建实例重读
+    await createFileWatchlistStore(filePath).add('crypto', { market: 'crypto', symbol: 'XAUUSDT-SWAP', form: 'perp', assetClass: 'commodity' })
+    const reread = await createFileWatchlistStore(filePath).list()
+    // Then: 盘上行保真（元数据不因往返丢失）
+    expect(reread.crypto).toEqual([{ market: 'crypto', symbol: 'XAUUSDT-SWAP', form: 'perp', assetClass: 'commodity' }])
+  })
+
+  it('用户用 watchlist_select 选中永续自选行时，选中记录带形态（agent 面与 GUI 同源）', async () => {
+    // Given: 自选里有一行 TradFi 永续
+    const { deps, watchlists, selection } = makeDeps()
+    await watchlists.add('crypto', { market: 'crypto', symbol: 'TSLAUSDT-SWAP', name: '特斯拉 永续', form: 'perp', assetClass: 'equity' })
+    // When: watchlist_select 选中它
+    const wire = JSON.parse(String(await createWatchlistSelectTool(deps).execute({ market: 'crypto', symbol: 'TSLAUSDT-SWAP' }))) as { selected: { form?: string; assetClass?: string } }
+    // Then: 选中记录（中栏切图的输入）保留形态与资产类别
+    expect(wire.selected.form).toBe('perp')
+    expect(wire.selected.assetClass).toBe('equity')
+    expect((await selection.get()).instrument?.assetClass).toBe('equity')
   })
 })
 

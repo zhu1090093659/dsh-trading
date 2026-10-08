@@ -23,12 +23,22 @@
  * @module @dshtrading/watchlist
  */
 
+import type { InstrumentAssetClass, InstrumentForm } from '@dshtrading/api'
+
 /** 跨市场标的行（market 为市场词汇 slug：crypto | us | cn | hk，开放新市场）。 */
 export interface WatchlistInstrument {
   market: string
   symbol: string
   /** 展示名（可选；工具添加可缺省，客户端以 symbol 兜底展示）。 */
   name?: string
+  /**
+   * 形态轴（2026-10-08 加密永续落地，词汇家在 `@dshtrading/api`）：缺省 = 现货。
+   * 读侧判据与 catalog 同款——显式值优先，缺省回落 `instrumentFormOf(symbol)`
+   * （符号后缀即形态载体，见 docs/guides/symbol-vocabulary.md）。
+   */
+  form?: InstrumentForm
+  /** 资产类别（交易所元数据原样透传；取不到即留空，禁止按符号猜——SPX/US500 反例）。 */
+  assetClass?: InstrumentAssetClass
   /**
    * 所属自定义分组 id 数组（issue #82；多归属，一行可入多组；缺省/空 = 未分组）。
    * 分组注册表（名称等元数据）在 ./file-store.ts 的 groups store，行上只存 id。
@@ -88,13 +98,15 @@ export interface SelectionStore {
 
 import { WATCHLIST_SEEDS } from './seeds.ts'
 
-/** 行规范化副本：groups 空数组不落键，保持落盘/输出形状干净。 */
+/** 行规范化副本：groups 空数组不落键，保持落盘/输出形状干净；形态/资产类别可选项原样保真。 */
 export function normalizeWatchlistRow(row: WatchlistInstrument): WatchlistInstrument {
   const groups = Array.isArray(row.groups) ? [...new Set(row.groups.filter(item => typeof item === 'string' && item))] : []
   return {
     market: row.market,
     symbol: row.symbol,
     ...(row.name !== undefined ? { name: row.name } : {}),
+    ...(row.form !== undefined ? { form: row.form } : {}),
+    ...(row.assetClass !== undefined ? { assetClass: row.assetClass } : {}),
     ...(groups.length > 0 ? { groups } : {}),
   }
 }
@@ -144,6 +156,8 @@ export function createMemoryWatchlistStore(initial: WatchlistsMap = {}): Watchli
         market: base.market,
         symbol: base.symbol,
         ...(base.name !== undefined ? { name: base.name } : {}),
+        ...(base.form !== undefined ? { form: base.form } : {}),
+        ...(base.assetClass !== undefined ? { assetClass: base.assetClass } : {}),
         ...(nextGroups.length > 0 ? { groups: nextGroups } : {}),
       })
       map = { ...map, [market]: nextRows }
@@ -165,6 +179,8 @@ export function createMemoryWatchlistStore(initial: WatchlistsMap = {}): Watchli
             market: row.market,
             symbol: row.symbol,
             ...(row.name !== undefined ? { name: row.name } : {}),
+            ...(row.form !== undefined ? { form: row.form } : {}),
+            ...(row.assetClass !== undefined ? { assetClass: row.assetClass } : {}),
             ...(rest.length > 0 ? { groups: rest } : {}),
           })
         })

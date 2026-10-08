@@ -33,6 +33,7 @@ import {
   fmtChange, fmtClock, fmtCompact, fmtPercent, fmtPrice, scaleLocaleOf,
 } from './format.ts'
 import { indicators, isCustomIndicator } from './indicator-registry.ts'
+import { isTradFiPerp, resolveAssetClass, rowForm } from './instrument-meta.ts'
 import type { IndicatorDefinition, IndicatorInstance } from '@dshtrading/indicators'
 import { effectiveInstanceParams, isInstanceVisibleOn, symbolScopeKey } from '@dshtrading/indicators'
 import { MARKET_INTERVALS } from './store.ts'
@@ -738,6 +739,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const intervals = MARKET_INTERVALS[market] ?? ['1d']
   const color = directionColor(stats.pct ?? 0, colorMode)
 
+  /**
+   * TradFi 永续明示（2026-10-08 P5）：交易所合成合约 ≠ 股票本身，且合约 24/7 报价而
+   * 标的股票有闭市时段。资产类别只信行上元数据或合并字典里的交易所元数据（不按符号猜）；
+   * 取不到资产类别就不声称 TradFi（未知按未知渲染）。
+   */
+  const tradFiPerp = symbol !== undefined && market !== undefined
+    && isTradFiPerp(rowForm({ symbol }), resolveAssetClass(market, {
+      symbol,
+      ...(instrument?.assetClass !== undefined ? { assetClass: instrument.assetClass } : {}),
+    }))
+
   const rawName = instrument?.name
   const isPlaceholderName = !rawName || rawName === symbol || /\(A股\)|\(港股\)/.test(rawName) // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
   const tickerName = (ticker as { name?: string })?.name
@@ -820,6 +832,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         </span>
 
       </div>
+
+      {/* TradFi 合约明示位（图表页签）：合成合约、非股票本身；24/7 报价 vs 股票闭市时段 */}
+      {viewTab === 'chart' && tradFiPerp && (
+        <div className={css.tradfiNotice} role="note" data-dshtrading-tradfi-notice="">
+          <span className={css.tradfiNoticeTitle}>{t('tradfi.notice.title')}</span>
+          <span className={css.tradfiNoticeDetail}>{t('tradfi.notice.detail')}</span>
+        </div>
+      )}
 
       {/* 统计行情概览（图表页签专属：基本面页签有自己的信息网格） */}
       {viewTab === 'chart' && (

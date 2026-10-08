@@ -51,6 +51,38 @@ describe('watchlist group endpoints（issue #82）', () => {
       .rejects.toThrowError(/id is required/)
   })
 
+  it('用户把 TradFi 永续加入自选时，形态与资产类别经 wire 保真（POST/GET 与 PUT/GET 同款）', async () => {
+    // Given: 一个空的 host 自选与选中记录（内存 store）
+    const { bridge } = makeBridge()
+    // When: POST /watchlists 带交易所元数据，并 PUT /selection 设置同一标的
+    await dispatchBridgeRequest(bridge, 'POST', '/watchlists', new URLSearchParams(), {
+      market: 'crypto', symbol: 'TSLAUSDT-SWAP', name: '特斯拉 永续', form: 'perp', assetClass: 'equity',
+    })
+    await dispatchBridgeRequest(bridge, 'PUT', '/selection', new URLSearchParams(), {
+      instrument: { market: 'crypto', symbol: 'TSLAUSDT-SWAP', form: 'perp', assetClass: 'equity' },
+    })
+    // Then: 回读自选行与选中标的都带 form/assetClass（缺省即现货，不落多余键）
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
+    const rows = (list.payload as { watchlists: { crypto: Array<{ symbol: string }> } }).watchlists.crypto
+    expect(rows).toContainEqual({ market: 'crypto', symbol: 'TSLAUSDT-SWAP', name: '特斯拉 永续', form: 'perp', assetClass: 'equity' })
+    const selection = await dispatchBridgeRequest(bridge, 'GET', '/selection', new URLSearchParams())
+    expect((selection.payload as { instrument: unknown }).instrument)
+      .toEqual({ market: 'crypto', symbol: 'TSLAUSDT-SWAP', form: 'perp', assetClass: 'equity' })
+  })
+
+  it('用户提交未知形态字面量时，非法元数据被丢弃而不落盘（不猜、不报错）', async () => {
+    // Given: 一个空 host 自选
+    const { bridge } = makeBridge()
+    // When: POST /watchlists 带不在契约词汇内的 form/assetClass
+    await dispatchBridgeRequest(bridge, 'POST', '/watchlists', new URLSearchParams(), {
+      market: 'crypto', symbol: 'BTCUSDT', form: 'futures', assetClass: 'stock',
+    })
+    // Then: 未知字面量整键丢弃（行仍落盘），不产生非法词汇
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/watchlists', new URLSearchParams())
+    const rows = (list.payload as { watchlists: { crypto: Array<{ symbol: string }> } }).watchlists.crypto
+    expect(rows).toEqual([{ market: 'crypto', symbol: 'BTCUSDT' }])
+  })
+
   it('名字校验：空名/超长 400', async () => {
     const { bridge } = makeBridge()
     await expect(dispatchBridgeRequest(bridge, 'POST', '/watchlist-groups', new URLSearchParams(), { name: '  ' }))

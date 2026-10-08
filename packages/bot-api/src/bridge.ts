@@ -1481,6 +1481,8 @@ export class TradingBridge {
           market: row.market,
           symbol: row.symbol,
           ...(row.name !== undefined ? { name: row.name } : {}),
+          ...(row.form !== undefined ? { form: row.form } : {}),
+          ...(row.assetClass !== undefined ? { assetClass: row.assetClass } : {}),
           ...(groups !== undefined ? { groups } : {}),
         }
       }))
@@ -1497,6 +1499,8 @@ export class TradingBridge {
       market: parsed.market,
       symbol: parsed.symbol,
       ...(parsed.name !== undefined ? { name: parsed.name } : {}),
+      ...(parsed.form !== undefined ? { form: parsed.form } : {}),
+      ...(parsed.assetClass !== undefined ? { assetClass: parsed.assetClass } : {}),
       ...(groups !== undefined ? { groups } : {}),
     }
     if (store === undefined) return { ok: true, added: false, instrument }
@@ -1778,13 +1782,17 @@ export class TradingBridge {
   /** 设置选中标的（PUT /selection；watchlist_select 工具与左栏点击同源）。 */
   async putSelection(body: unknown): Promise<{ ok: boolean; instrument: WatchlistInstrument | null }> {
     const store = this.host.selectionStore
-    const parsed = body as { instrument?: WatchlistInstrument | null } | undefined
+    const parsed = body as { instrument?: (WatchlistInstrument & { form?: unknown; assetClass?: unknown }) | null } | undefined
+    const form = parsed?.instrument == null ? undefined : parseFormField(parsed.instrument.form)
+    const assetClass = parsed?.instrument == null ? undefined : parseAssetClassField(parsed.instrument.assetClass)
     const instrument = parsed?.instrument === undefined || parsed.instrument === null
       ? null
       : {
         market: String(parsed.instrument.market ?? ''),
         symbol: String(parsed.instrument.symbol ?? ''),
         ...(parsed.instrument.name !== undefined ? { name: String(parsed.instrument.name) } : {}),
+        ...(form !== undefined ? { form } : {}),
+        ...(assetClass !== undefined ? { assetClass } : {}),
       }
     if (store === undefined) return { ok: true, instrument }
     await store.set({ instrument })
@@ -1805,15 +1813,19 @@ function parseWatchlistsMap(body: unknown): WatchlistsMap {
   for (const [market, rows] of Object.entries(raw as Record<string, unknown>)) {
     if (!Array.isArray(rows)) continue
     out[market] = rows.map((row) => {
-      const r = row as { market?: unknown; symbol?: unknown; name?: unknown; groups?: unknown }
+      const r = row as { market?: unknown; symbol?: unknown; name?: unknown; groups?: unknown; form?: unknown; assetClass?: unknown }
       if (typeof r?.symbol !== 'string' || !r.symbol) {
         throw new BridgeProtocolError(400, `watchlists[${market}] rows must have string symbol`)
       }
       const groups = parseGroupsField(r.groups)
+      const form = parseFormField(r.form)
+      const assetClass = parseAssetClassField(r.assetClass)
       return {
         market: typeof r.market === 'string' ? r.market : market,
         symbol: r.symbol,
         ...(typeof r.name === 'string' && r.name ? { name: r.name } : {}),
+        ...(form !== undefined ? { form } : {}),
+        ...(assetClass !== undefined ? { assetClass } : {}),
         ...(groups !== undefined ? { groups } : {}),
       }
     })
@@ -1823,19 +1835,50 @@ function parseWatchlistsMap(body: unknown): WatchlistsMap {
 
 /** 单行 instrument 的形状校验（groups 放行——GUI 分组视图下添加标的直落归属）。 */
 function parseInstrumentBody(body: unknown): WatchlistInstrument {
-  const raw = (body ?? {}) as { market?: unknown; symbol?: unknown; name?: unknown; groups?: unknown }
+  const raw = (body ?? {}) as { market?: unknown; symbol?: unknown; name?: unknown; groups?: unknown; form?: unknown; assetClass?: unknown }
   const market = typeof raw.market === 'string' ? raw.market.trim() : ''
   const symbol = typeof raw.symbol === 'string' ? raw.symbol.trim() : ''
   if (!market || !symbol) {
     throw new BridgeProtocolError(400, 'instrument body requires string market and symbol')
   }
   const groups = parseGroupsField(raw.groups)
+  const form = parseFormField(raw.form)
+  const assetClass = parseAssetClassField(raw.assetClass)
   return {
     market,
     symbol,
     ...(typeof raw.name === 'string' && raw.name ? { name: raw.name } : {}),
+    ...(form !== undefined ? { form } : {}),
+    ...(assetClass !== undefined ? { assetClass } : {}),
     ...(groups !== undefined ? { groups } : {}),
   }
+}
+
+/**
+ * 形态/资产类别词汇的穷举表（2026-10-08 加密永续与 TradFi 永续落地）：词汇家在
+ * `@dshtrading/api`，这里用 `Record<联合, true>` 承接——联合增删字面量时本文件编译不过，
+ * 因此不会悄悄落后于契约（不是第二份手写清单）。
+ */
+const INSTRUMENT_FORM_MEMBERS: Record<InstrumentForm, true> = { spot: true, perp: true }
+const INSTRUMENT_ASSET_CLASS_MEMBERS: Record<InstrumentAssetClass, true> = {
+  crypto: true,
+  equity: true,
+  commodity: true,
+  index: true,
+}
+
+/** 形态字段放行（未知字面量丢弃：展示元数据，不猜、不报错）。 */
+function parseFormField(raw: unknown): InstrumentForm | undefined {
+  return typeof raw === 'string' && Object.prototype.hasOwnProperty.call(INSTRUMENT_FORM_MEMBERS, raw)
+    ? raw as InstrumentForm
+    : undefined
+}
+
+/** 资产类别字段放行（同上；交易所元数据取不到即留空，禁止按符号猜）。 */
+function parseAssetClassField(raw: unknown): InstrumentAssetClass | undefined {
+  return typeof raw === 'string' && Object.prototype.hasOwnProperty.call(INSTRUMENT_ASSET_CLASS_MEMBERS, raw)
+    ? raw as InstrumentAssetClass
+    : undefined
 }
 
 /** 行上 groups 字段清洗（issue #82）：只收非空字符串 id，去重截断封顶 32。 */

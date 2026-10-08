@@ -243,6 +243,31 @@
   color: var(--dsw-futu-text-primary, #1a1e24);
 }
 
+/* TradFi 合约明示条（2026-10-08 P5）：只在 TradFi 永续上渲染，提示合成合约与 24/7 报价语义 */
+.tradfiNotice {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: none;
+  padding: 4px 8px;
+  border: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  border-left: 2px solid var(--dsw-futu-border-active, #3b82f6);
+  border-radius: var(--dsw-futu-radius-md, 6px);
+  background: var(--dsw-futu-bg-surface, #f7f8fa);
+  font-size: 11px;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+}
+
+.tradfiNoticeTitle {
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  white-space: nowrap;
+}
+
+.tradfiNoticeDetail {
+  min-width: 0;
+}
+
 /* 统计数据横栏 */
 .stats {
   display: flex;

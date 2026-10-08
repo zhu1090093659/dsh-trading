@@ -22,6 +22,15 @@ describe('normalizeWatchlistRow', () => {
     expect(normalizeWatchlistRow({ market: 'us', symbol: 'AAPL', groups: ['g1', '', 3 as unknown as string, 'g1'] }))
       .toEqual({ market: 'us', symbol: 'AAPL', groups: ['g1'] })
   })
+
+  it('用户把永续标的加入自选时，形态/资产类别元数据随行保真（现货行形状不变）', () => {
+    // Given: 一行带交易所元数据的 TradFi 永续、一行不带元数据的现货
+    // When: 行归一化（add/assignGroup/stripGroup 共用的唯一实现）
+    // Then: 永续行保真、空 groups 仍不落键；现货行形状与从前逐字段一致
+    expect(normalizeWatchlistRow({ market: 'crypto', symbol: 'TSLAUSDT-SWAP', form: 'perp', assetClass: 'equity', groups: [] }))
+      .toEqual({ market: 'crypto', symbol: 'TSLAUSDT-SWAP', form: 'perp', assetClass: 'equity' })
+    expect(normalizeWatchlistRow({ market: 'crypto', symbol: 'BTCUSDT' })).toEqual({ market: 'crypto', symbol: 'BTCUSDT' })
+  })
 })
 
 describe('memory stores（分组）', () => {

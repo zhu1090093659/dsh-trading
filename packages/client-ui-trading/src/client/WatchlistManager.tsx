@@ -12,6 +12,7 @@ import { searchAllMarkets, updateDynamicCatalog } from './symbol-catalog.ts'
 import type { Observable, WatchlistGroupOpResult, WatchlistGroupsState, Watchlists } from './store.ts'
 import { rowsFor } from './store.ts'
 import type { Instrument, MarketId } from './types.ts'
+import { entryMeta, formBadgeKey, resolveAssetClass, type InstrumentMeta } from './instrument-meta.ts'
 import { inferInputMarket, MARKET_TAB_KEY, normalizeSymbolInput } from './market-vocab.ts'
 import { IconClose, IconPlus, IconRename, IconTrash } from './icons.tsx'
 import { GroupMembershipPopover } from './WatchlistGroups.tsx'
@@ -155,8 +156,20 @@ export function WatchlistManager({
     if (ok && selected === id) setSelected('all')
   }
 
-  const addToScope = (market: MarketId, symbol: string, name?: string): void => {
-    const item: Instrument = { market, symbol, ...(name ? { name } : {}) }
+  /** 添加标的到当前范围；形态/资产类别取自字典条目（手输行只知形态，资产类别未知即留空）。 */
+  const addToScope = (
+    market: MarketId,
+    symbol: string,
+    name?: string,
+    meta: InstrumentMeta = {},
+  ): void => {
+    const item: Instrument = {
+      market,
+      symbol,
+      ...(name ? { name } : {}),
+      ...(meta.form !== undefined ? { form: meta.form } : {}),
+      ...(meta.assetClass !== undefined ? { assetClass: meta.assetClass } : {}),
+    }
     if (scope !== 'all') {
       const gid = scope
       addInstrument(market, { ...item, groups: [gid] })
@@ -179,7 +192,7 @@ export function WatchlistManager({
       (s.name && s.name.toUpperCase().startsWith(raw))
     ) ?? (suggestions.length > 0 ? suggestions[0] : undefined)
     if (match) {
-      addToScope(match.market, match.symbol, match.name)
+      addToScope(match.market, match.symbol, match.name, entryMeta(match.market, match))
       setDraft('')
       return
     }
@@ -187,7 +200,8 @@ export function WatchlistManager({
     if (/[\u4e00-\u9fa5]/.test(rawDraft)) return
     // 无市场上下文的手输：按代码形态推断（此前恒落 crypto，把美股 ticker 归错市场）。
     const target = inferInputMarket(rawDraft)
-    addToScope(target, normalizeSymbolInput(target, rawDraft))
+    const symbol = normalizeSymbolInput(target, rawDraft)
+    addToScope(target, symbol, undefined, entryMeta(target, { symbol }))
     setDraft('')
   }
 
@@ -381,21 +395,28 @@ export function WatchlistManager({
                 </button>
                 {suggestions.length > 0 && (
                   <div className={css.suggestions} role="listbox" aria-label={t('manager.addPlaceholder')}>
-                    {suggestions.map(entry => (
-                      <button
-                        key={entry.market + ':' + entry.symbol}
-                        type="button"
-                        role="option"
-                        aria-selected="true"
-                        className={css.suggestion}
-                        onMouseDown={event => { event.preventDefault() }}
-                        onClick={() => { addToScope(entry.market, entry.symbol, entry.name); setDraft('') }}
-                      >
-                        <span className={css.suggestionSymbol}>{entry.symbol}</span>
-                        <span className={css.suggestionName}>{entry.name}</span>
-                        <span className={css.suggestionMarket}>{t(MARKET_TAB_KEY[entry.market])}</span>
-                      </button>
-                    ))}
+                    {suggestions.map((entry) => {
+                      const badge = formBadgeKey(entry, resolveAssetClass(entry.market, entry))
+                      return (
+                        <button
+                          key={entry.market + ':' + entry.symbol}
+                          type="button"
+                          role="option"
+                          aria-selected="true"
+                          className={css.suggestion}
+                          onMouseDown={event => { event.preventDefault() }}
+                          onClick={() => {
+                            addToScope(entry.market, entry.symbol, entry.name, entryMeta(entry.market, entry))
+                            setDraft('')
+                          }}
+                        >
+                          <span className={css.suggestionSymbol}>{entry.symbol}</span>
+                          {badge !== null && <span className={css.formBadge}>{t(badge)}</span>}
+                          <span className={css.suggestionName}>{entry.name}</span>
+                          <span className={css.suggestionMarket}>{t(MARKET_TAB_KEY[entry.market])}</span>
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </form>
@@ -413,9 +434,14 @@ export function WatchlistManager({
                 : visibleRows.map((row) => {
                   const key = rowKey(row)
                   const memberOf = row.groups ?? []
+                  // 形态徽标（2026-10-08 P5）：现货不挂标（默认形态），永续按资产类别细分。
+                  const formBadge = formBadgeKey(row, resolveAssetClass(row.market, row))
                   return (
                     <div key={key} className={css.tableRow}>
-                      <span className={css.cellCode}>{row.symbol}</span>
+                      <span className={css.cellCode}>
+                        <span className={css.cellCodeSymbol}>{row.symbol}</span>
+                        {formBadge !== null && <span className={css.formBadge}>{t(formBadge)}</span>}
+                      </span>
                       <span className={css.cellName}>{row.name && row.name !== row.symbol ? row.name : row.symbol}</span>
                       <span className={css.cellMarket}>{t(MARKET_TAB_KEY[row.market])}</span>
                       <span className={css.cellGroups}>

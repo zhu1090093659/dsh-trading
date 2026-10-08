@@ -452,11 +452,33 @@
   background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.035));
 }
 
+/* 代码格 = 符号（可省略）+ 形态徽标（flex-none）；现货行无徽标，渲染与从前一致。 */
 .cellCode {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+}
+
+.cellCodeSymbol {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 形态徽标（2026-10-08 加密永续 P5）：只给永续/TradFi 合约挂标。 */
+.formBadge {
+  font-size: 9.5px;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: var(--dsw-futu-radius-xs, 3px);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  background: var(--dsw-futu-bg-surface, #f7f8fa);
+  flex: none;
   white-space: nowrap;
 }
 

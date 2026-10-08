@@ -45,8 +45,17 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function quoteStageProps(market: 'crypto' | 'us') {
-  const selection: SelectionState = { instrument: { market, symbol: market === 'crypto' ? 'HYPEUSDT' : 'AAPL' } }
+function quoteStageProps(
+  market: 'crypto' | 'us',
+  instrument?: { symbol: string; assetClass?: 'crypto' | 'equity' | 'commodity' | 'index' },
+) {
+  const selection: SelectionState = {
+    instrument: {
+      market,
+      symbol: instrument?.symbol ?? (market === 'crypto' ? 'HYPEUSDT' : 'AAPL'),
+      ...(instrument?.assetClass !== undefined ? { assetClass: instrument.assetClass } : {}),
+    },
+  }
   const chart: ChartState = { instances: [] }
   return {
     t,
@@ -119,6 +128,25 @@ describe('QuoteStage 渲染冒烟（TDZ 网）', () => {
     await waitFor(() => {
       expect(container.querySelector('[data-dshtrading-fundamentals]')).toBeTruthy()
     })
+  })
+
+  it('用户查看 TradFi 永续合约图表时，看到「交易所合成合约、非股票本身」的明示位', () => {
+    // Given: 选中一行带交易所元数据的股票永续（TradFi，非加密资产类别）
+    // When: 渲染报价页（默认图表页签）
+    const view = render(<QuoteStage {...quoteStageProps('crypto', { symbol: 'TSLAUSDT-SWAP', assetClass: 'equity' })} />)
+    const notice = view.container.querySelector('[data-dshtrading-tradfi-notice]')
+    // Then: 明示位出现，且合成合约与 24/7 报价两条文案位都在
+    expect(notice).toBeTruthy()
+    expect(notice?.textContent).toContain('tradfi.notice.title')
+    expect(notice?.textContent).toContain('tradfi.notice.detail')
+  })
+
+  it('用户查看加密永续合约图表时，不出现 TradFi 明示位（加密永续不是合成股票合约）', () => {
+    // Given: 选中一行加密永续（同形态、不同资产类别）
+    // When: 渲染报价页（默认图表页签）
+    const view = render(<QuoteStage {...quoteStageProps('crypto', { symbol: 'BTCUSDT-SWAP', assetClass: 'crypto' })} />)
+    // Then: 明示位不出现
+    expect(view.container.querySelector('[data-dshtrading-tradfi-notice]')).toBeNull()
   })
 
 })
