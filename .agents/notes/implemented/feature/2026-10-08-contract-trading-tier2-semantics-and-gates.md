@@ -50,4 +50,4 @@ Tier 1（只读面：`form`/`assetClass`/`contract` 元数据、名册与行情�
 - 闸门集合扩容是**加动作必须改模式**的纪律入口；漏加一个实盘动作就等于漏一条审批路径。
 - 剩余风险（接受）：`isolated` 与双向持仓模式的 `posSide` 由调用方提供，连接器不查询账户持仓模式；交易所参数错误会以 `TRADING_EXCHANGE_ERROR` 原样返回。
 - 跨仓缺口（如实记录）：额度/mandate 判定仍在卫星仓，合约口径落地前，本仓的「能下单」不等于自动交易平面会放行。
-- 验证：`packages/connector-okx/test/contract-trading.test.ts`（18 例：换算向量、`setLeverage` 三态矩阵、超限拒绝、`tdMode` 分流、持仓字段）、`packages/base/test/live-action-gate.test.ts`（6 例）、`packages/connector-binance/test/place-order.test.ts`（`-SWAP` 拒绝 1 例）、`packages/connector-okx/test/activation.test.ts`（工具名册 10 个）。`pnpm test:audit` 无新增测试债；仓库门禁 `pnpm gates:all` 结果见 docs/current-state.md 的现场记录。
+- 验证：`packages/connector-okx/test/contract-trading.test.ts`（18 例：换算向量、`setLeverage` 三态矩阵、超限拒绝、`tdMode` 分流、持仓字段）、`packages/base/test/live-action-gate.test.ts`（6 例）、`packages/connector-binance/test/place-order.test.ts`（`-SWAP` 拒绝 1 例）、`packages/connector-okx/test/activation.test.ts`（工具名册 10 个）。`pnpm test:audit` 无新增测试债；仓库门禁 `pnpm gates:all` 在提交 `551901d9` 的干净工作区现场复跑 ⇒ **14 通过 / 0 失败**（含 build、`-r test`、覆盖率棘轮、typecheck 棘轮、docs-link）。
