@@ -67,17 +67,22 @@ pnpm ui:check     # UI 功能验收
 
 Node 版本跟随根 `package.json` 的 `engines`（`^22.19.0 || >=24.0.0`），包管理器为 `pnpm@11`。
 
-### 刷新 trading-web 的包副本
+### 刷新 profile 的包副本
 
 profile 里的 `@dshtrading/*` 是 `file:` 安装快照，改完源码必须重建副本：
 
 ```sh
 pnpm build
-./scripts/refresh-trading-web-profile.sh                      # 全部 @dshtrading 包
-./scripts/refresh-trading-web-profile.sh client-ui-trading    # 只刷新指定包
+./scripts/refresh-profile.sh                                  # 缺省 trading-web，全部 @dshtrading 包
+./scripts/refresh-profile.sh trading-all                      # 指定 profile（可多个）
+./scripts/refresh-profile.sh --package client-ui-trading      # 只刷新指定包
 ```
 
-脚本会先停掉运行中的 `trading-web` 实例、跑 profile 预检，重装后再恢复宿主核心包的单一实例 symlink。不要把裸 `dsh plugin install` 当刷新完成：影子拷贝会让工具调用在模块级 Symbol 上崩（`reading 'prepare'`）。
+脚本按 profile 依次：同步 overrides（幂等追加，修闭包缺口）→ 跑 profile 预检（死路径/身份漂移/闭包缺口，失败即中止）→ 停运行中实例 → 删包副本 → `dsh plugin install` → **重挂宿主核心包 symlink**。install 后的 symlink 重挂是不可省的收尾，脚本无条件执行，不需要人记这一步。不要把裸 `dsh plugin install` 当刷新完成：影子拷贝会让工具调用在模块级 Symbol 上崩（`reading 'prepare'`）。
+
+预检对**版本漂移**只告警（`--allow-version-drift`）——紧随其后的删副本重装正是消除它的手段；其余三类漂移仍旧中止。直接跑 `profile-config-preflight.sh` 时版本漂移是硬失败，所以启动失败排查仍按 `exit 1` 读。
+
+旧入口 `scripts/refresh-trading-web-profile.sh` 保留为转发 shim：位置参数仍是包名（`refresh-trading-web-profile.sh client-ui-trading`），目标固定 trading-web。
 
 ## 新建或安装 profile
 

@@ -152,7 +152,7 @@ Open the printed URL: watchlist left, chart center, your agent right. New conver
 
 ```sh
 pnpm install && pnpm build && pnpm test   # Node per engines (^22.19.0 || >=24.0.0), pnpm 11
-./scripts/refresh-trading-web-profile.sh  # rebuild the profile's file: package copies
+./scripts/refresh-profile.sh              # rebuild the profile's file: package copies (default trading-web; pass profile names for others)
 ```
 
 See [docs/ops/running.md](docs/ops/running.md) for the full run, profile and refresh contract.

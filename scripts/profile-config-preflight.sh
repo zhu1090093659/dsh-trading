@@ -17,8 +17,11 @@
 #      client-ui-trading 找不到 watchlist 新导出 + hk 的 eastmoney 行
 #      market 配置在旧拷贝里不存在 → 重复注册 cn/eastmoney，启动即崩。
 #
-# 用法：scripts/profile-config-preflight.sh <profile> [profile ...]
+# 用法：scripts/profile-config-preflight.sh [--allow-version-drift] <profile> [profile ...]
 #   退出码：0 = 全部通过；1 = 存在漂移（先修再 install）。
+#   --allow-version-drift：把检查 4（版本漂移）降级为警告。仅供刷新流程使用——刷新
+#    紧接着就 rm -rf @dshtrading/* 重装，漂移在那一步必然消除，不应让预检先中止。
+#    其余三类（死路径/身份漂移/闭包缺口）仍旧中止。
 # 约定：只读检查，不改任何文件。数据解析在 node 内完成（行含冒号/引号，勿用 bash 切）；
 #       JS 字符串一律双引号，外层 bash 单引号包裹，勿引入单引号。
 
@@ -39,10 +42,25 @@ case "$DSH_HOME" in
     ;;
 esac
 
-if [ $# -eq 0 ]; then
-  echo "用法: $0 <profile> [profile ...]" >&2
+ALLOW_VERSION_DRIFT=0
+POSITIONAL=()
+for arg in "$@"; do
+  case "$arg" in
+    --allow-version-drift) ALLOW_VERSION_DRIFT=1 ;;
+    -h|--help)
+      echo "用法: $0 [--allow-version-drift] <profile> [profile ...]" >&2
+      exit 0
+      ;;
+    -*) echo "未知选项：$arg" >&2; exit 1 ;;
+    *) POSITIONAL+=("$arg") ;;
+  esac
+done
+if [ "${#POSITIONAL[@]}" -eq 0 ]; then
+  echo "用法: $0 [--allow-version-drift] <profile> [profile ...]" >&2
   exit 1
 fi
+export PREFLIGHT_ALLOW_VERSION_DRIFT="$ALLOW_VERSION_DRIFT"
+set -- "${POSITIONAL[@]}"
 
 node -e '
 const fs = require("fs");
@@ -153,13 +171,16 @@ for (const profile of profiles) {
     }
   };
   collectCopies(path.join(P, "node_modules"), "node_modules");
-  if (installed.size > 1) {
+  const allowDrift = process.env.PREFLIGHT_ALLOW_VERSION_DRIFT === "1";
+  if (installed.size > 1 && !allowDrift) {
     const detail = [...installed.entries()]
       .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
       .map(([v, paths]) => v + " x" + paths.length + "（" + paths.slice(0, 3).join(", ") + (paths.length > 3 ? ", …" : "") + "）")
       .join(" / ");
     problems.push("版本漂移: node_modules/@dshtrading/* 混世代 " + detail
       + "——局部刷新残留，重装：rm -rf <profile>/node_modules/@dshtrading/* && dsh plugin --profile " + profile + " install");
+  } else if (installed.size > 1 && allowDrift) {
+    console.log("   WARN 版本漂移（--allow-version-drift，随后的重装会消除）");
   }
 
   // 检查 2b：cordis.patch.yml 的 name: 行不许指向历史 scope

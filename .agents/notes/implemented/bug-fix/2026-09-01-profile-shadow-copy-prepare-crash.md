@@ -31,9 +31,12 @@ Status: implemented
    `dsh-web-app / dsh-tools / cosmokit / schemastery / dsh-agent-presets /
    dsh-brand / dsh-util-values`（含 knowledge 包下的嵌套 dsh-tools）。
    Node ESM realpath 后与宿主同模块 URL → Symbol/模块状态归一。
-2. 固化为 `scripts/refresh-trading-web-profile.sh`：停实例 → 刷
-   @dsh-trading 副本 → `dsh plugin install` → **重挂宿主 dedupe symlink**
-   （pnpm install 会重新物化影子拷贝，此步不可省）→ 提示重启。
+2. 固化为刷新入口：停实例 → 刷 @dsh-trading 副本 → `dsh plugin install`
+   → **重挂宿主 dedupe symlink**（pnpm install 会重新物化影子拷贝，此步不可省）
+   → 提示重启。2026-10-09 起入口泛化为 `scripts/refresh-profile.sh <profile...>`，
+   对每个目标 profile 都**无条件**执行这套收尾（旧名
+   `scripts/refresh-trading-web-profile.sh` 是转发 shim）；symlink 重挂从
+   「人必须记得的第二步」变成脚本的一部分，不再有漏做的路径。
 3. **否决的备选**：package.json 里加 `link:` 依赖做原生 symlink——会让
    loader 对同一包组合出两条 entry（如 `subagent-model-selection-settings`
    duplicate）直接 boot 失败；overrides 里用 `link:` 则触发 pnpm 11

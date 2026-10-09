@@ -42,8 +42,14 @@ checkout，yaml 带 @dsh/* 死 overrides）。即 4 个 WARN 背后是 4 个无�
    @dshtrading/* 则 overrides 必须覆盖全部仓库包）④ **版本漂移**（2026-09-09
    追加：已安装的 node_modules/@dshtrading/* 拷贝必须全体同版本——同族 fixed
    版本下混世代只可能是局部刷新残留；递归扫描但不下钻软链目录，漂移即 exit 1）。
-   接入 `refresh-trading-web-profile.sh` 预检位，失败即中止（set -e），杜绝带病
-   install。数据解析在 node 内完成（行含冒号/引号，bash 切字段会炸）。
+   接入刷新入口的预检位，失败即中止（set -e），杜绝带病 install。数据解析在
+   node 内完成（行含冒号/引号，bash 切字段会炸）。
+   **刷新与手工复刻的统一（2026-10-09）**：入口泛化为
+   `scripts/refresh-profile.sh <profile...>`，把此前 trading-all/trading-dev
+   只能照本 note 手工复刻的四步（同步 overrides → 删副本 → install → 重挂
+   symlink）收成一条命令，symlink 重挂无条件执行。预检新增
+   `--allow-version-drift`：刷新位对检查 ④ 只告警（紧随其后的删副本重装正是
+   消除手段），默认模式仍是硬失败；其余三类漂移在两种模式下都中止。
 
 ## Alternatives considered
 
@@ -60,8 +66,8 @@ checkout，yaml 带 @dsh/* 死 overrides）。即 4 个 WARN 背后是 4 个无�
 - **规则**：改包名/scope 或移动/删除本仓包路径时，必须 sweep
   `~/.dsh/profiles/*/` 的三处配置（package.json deps、pnpm-workspace.yaml
   overrides、cordis.patch.yml name: 行）——现在由 preflight 门禁兜底。
-- 变更面：`scripts/profile-config-preflight.sh`（新增）、
-  `scripts/refresh-trading-web-profile.sh`（预检接线）、本 note。
+- 变更面：`scripts/profile-config-preflight.sh`（新增）、刷新入口（预检接线；
+  2026-10-09 泛化为 `scripts/refresh-profile.sh`，旧名保留 shim）、本 note。
   profile 侧变更在 `~/.dsh`（机器状态，不进仓库）。
 - **检查 ④ 的实证来源（2026-09-09）**：`trading-all` 启动崩在两个「同根症状」
   ——`@dshtrading/watchlist` 缺 `createMemoryWatchlistGroupsStore`（client-ui-trading

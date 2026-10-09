@@ -1,77 +1,17 @@
 #!/usr/bin/env bash
-# 刷新 trading-web profile 的 dsh-trading 包副本，并恢复宿主核心包单一实例 dedupe。
+# 兼容 shim：本入口原名 scripts/refresh-trading-web-profile.sh，只刷新 trading-web。
+# 2026-10-09 泛化为 scripts/refresh-profile.sh <profile...>（trading-all / trading-dev
+# 等 profile 用同一条命令刷新，install 后必定重挂核心包 symlink）。本文件保留转发，
+# 外部技能与既有习惯（含 ~/.agents/skills/dsh-sdk-upgrade 的引用）继续可用。
 #
-# 背景（2026-09-01「本轮运行失败 reading 'prepare'」）：
-#   profile 自带的 @deepseek-ai/* 影子拷贝（dsh-tools 等）与宿主 dsh CLI 内的同一
-#   包是两个模块实例——dsh-tools 的 TOOL_RUNTIME_SCHEDULER 是模块级 Symbol，跨拷贝
-#   互不相认。宿主 α3 agent-loop 用 Symbol 读调度器，profile 影子拷贝（α2）提供的
-#   实例上读不到 → 每次工具调用（PTC run_code 尤甚）崩
-#   "Cannot read properties of undefined (reading 'prepare')"。
-#   纯文本回复不走工具调度，因此「能聊天、一干活就崩」。
-#
+# 语义不变：位置参数仍是「只刷这些 @dshtrading 包」（缺省 = 全部），目标固定 trading-web。
 # 用法：scripts/refresh-trading-web-profile.sh [pkg ...]
-#   无参数 = 刷新全部 @dshtrading 包副本；带参数 = 只刷新指定包（如 client-ui-trading）。
-# 前置：先在仓库跑 pnpm build。脚本会停掉运行中的 trading-web 实例。
-
 set -euo pipefail
-
-# dsh-trading 独立 home（2026-09-08 DSH_HOME 分离）；可用环境变量 DSH_HOME 覆盖。
-export DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
-
-# 守卫（2026-10-01 实测踩中）：agent 会话会继承**宿主实例**的 DSH_HOME
-# （~/.dsh + DSH_PROFILE=desktop）。那种情况下这里的缺省回落拿到的是宿主 home，
-# 本脚本就会在另一个 home 里刷新同名 profile：preflight 报一堆 vendor 死路径，
-# 人却在修对的仓库。破坏性脚本不该在这种歧义下继续——显式拒绝并给出正解。
-if [ "$DSH_HOME" = "$HOME/.dsh" ]; then
-  echo "拒绝执行：DSH_HOME 指向宿主 dsh home（${DSH_HOME}），不是 trading home。" >&2
-  echo "本项目一律用 ~/.dsh-trading；请显式设置 DSH_HOME=$HOME/.dsh-trading 后重试。" >&2
-  exit 2
-fi
-PROFILE="$DSH_HOME/profiles/trading-web"
-HOST_ROOT="/opt/homebrew/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
-# 与宿主 CLI 树重叠、必须保持单一模块实例的核心包（模块级状态/Symbol 载体）。
-# 2026-09-02 扩充：profile-cohort-check 查出 router 构建产物内嵌 0.1.2-alpha.2 残留
-# 拷贝（dsh-llm/dsh-scope/dsh-timeout/dsh-typert-protocol/dsh-util-crypto，仓库
-# lockfile 混代遗留）及三份同版实体拷贝（dsh-settings/dsh-skill/dsh-tool-cordis），
-# 全部并入 symlink 归一，消除模块实例割裂类 FAIL/WARN。
-# 2026-09-29 0.2.0-rc.2 cohort：dsh-agent-presets 官方改名 dsh-agent-preset-registry
-# （两个名字都留，兼容旧 profile）；并按同代 profile-cohort-check 的 WARN 清单补入
-# dsh-app-boot / dsh-atomic-write / dsh-config-editor / dsh-package-manifest——
-# 它们在 0.2.0-rc.2 profile 里是实体拷贝（同版本），归一后消除跨拷贝隐患。
-CORE_PKGS=(dsh-web-app dsh-tools cosmokit schemastery dsh-agent-presets dsh-agent-preset-registry \
-  dsh-brand dsh-util-values dsh-settings dsh-skill dsh-tool-cordis dsh-llm dsh-scope dsh-timeout \
-  dsh-typert-protocol dsh-util-crypto dsh-app-boot dsh-atomic-write dsh-config-editor \
-  dsh-package-manifest)
-
-echo "== 停止运行中的 trading-web 实例 =="
-pgrep -f "profile trading-web" | xargs kill 2>/dev/null || true
-sleep 1
-
-echo "== Profile 配置预检（死路径/身份漂移/闭包缺口，失败即中止）=="
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-"$SCRIPT_DIR/profile-config-preflight.sh" trading-web
 
-echo "== 刷新 @dshtrading 包副本 =="
-if [ "$#" -gt 0 ]; then
-  for pkg in "$@"; do rm -rf "$PROFILE/node_modules/@dshtrading/$pkg"; done
-else
-  rm -rf "$PROFILE"/node_modules/@dshtrading/*
-fi
-dsh plugin --profile trading-web install
-
-echo "== 恢复宿主核心包单一实例 symlink（pnpm install 会重新物化影子拷贝，必须重挂）=="
-# 递归处理：包括嵌套 node_modules 里的残留拷贝（如 @dshtrading/knowledge 下的 dsh-tools）。
-# -type d -o -type l：桌面壳 normalizeProfileCohort 把核心包归一为指向自带 runtime 的
-# symlink，只匹配目录会漏掉这些链接，CLI 启动时仍带着 app-runtime 的模块实例（双实例
-# 静默失效）。两类都要重挂到全局宿主。
-for pkg in "${CORE_PKGS[@]}"; do
-  while IFS= read -r shadow; do
-    rm -rf "$shadow"
-    ln -s "$HOST_ROOT/$pkg" "$shadow"
-    echo "  linked: ${shadow#"$PROFILE"/node_modules/} -> host/$pkg"
-  done < <(find "$PROFILE/node_modules" \( -type d -o -type l \) -path "*/@deepseek-ai/$pkg" \
-             -not -path "$HOST_ROOT/*" 2>/dev/null)
+ARGS=(trading-web)
+for pkg in "$@"; do
+  ARGS+=(--package "$pkg")
 done
 
-echo "== 完成。启动实例：cd <你的工作目录> && dsh-trading --profile trading-web --no-open（缺省 8888）=="
-echo "   （token 每次重启轮换，从启动日志取新值）"
+exec "$SCRIPT_DIR/refresh-profile.sh" "${ARGS[@]}"
