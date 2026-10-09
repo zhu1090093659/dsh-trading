@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { isMap, isSeq, parseDocument } from 'yaml'
 
@@ -46,7 +47,10 @@ function evaluate(expression: string, env: Record<string, string | undefined>): 
   return new Function('process', 'return (' + expression + ')')(processShim)
 }
 
-const withPayload = { DSH_PRIMARY_RUNTIME: '/opt/dsh-primary-runtime', DSH_BUNDLED_PRIMARY_RUNTIME: undefined }
+/** 载荷根：POSIX 形态给绝对路径。Windows 上 `path.resolve('/opt/…')` 会按当前盘符补成
+ * `D:\\opt\\…`，所以要按本平台算期望值，不能把 POSIX 结果写死成跨平台事实。 */
+const PAYLOAD = '/opt/dsh-primary-runtime'
+const withPayload = { DSH_PRIMARY_RUNTIME: PAYLOAD, DSH_BUNDLED_PRIMARY_RUNTIME: undefined }
 const bare = { DSH_PRIMARY_RUNTIME: undefined, DSH_BUNDLED_PRIMARY_RUNTIME: undefined }
 
 describe('official Office and workspace-dependency wiring', () => {
@@ -92,6 +96,7 @@ describe('official Office and workspace-dependency wiring', () => {
     // When the dependency row's source expression is evaluated
     const config = rows.get('workspace-dependencies')!.get('config') as Row
     // Then it resolves to that absolute directory (the official tool validates the payload layout).
-    expect(evaluate(expressionOf(config.get('source', true)), withPayload)).toBe('/opt/dsh-primary-runtime')
+    // 期望值按本平台的目标算：Windows 无盘符的 POSIX 路径会被补成 `<盘>:\\…`。
+    expect(evaluate(expressionOf(config.get('source', true)), withPayload)).toBe(resolve(PAYLOAD))
   })
 })
