@@ -5,7 +5,7 @@
  */
 import type { AccountBalance, DerivativesData, DerivativesHistory, Kline, MarketId, MarketInfo, Order, Orderbook, Position, TickerOutcome, TradeFill, TradeTick } from './types.ts'
 import type { FundamentalsPackage, InstrumentAssetClass, InstrumentForm } from '@dshtrading/api'
-import type { CustomIndicatorRecord, IndicatorInstance } from '@dshtrading/indicators'
+import type { CustomIndicatorRecord, IndicatorApplyScope, IndicatorInstance } from '@dshtrading/indicators'
 import type { KnowledgeCard } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord, CustomScreenerRecord } from '@dshtrading/strategies'
 import type { FxSnapshot, HoldingsBaseCurrency, HoldingsBookSnapshot, NewHolding, NewHoldingInput } from './holdings-types.ts'
@@ -782,11 +782,13 @@ export async function fetchChartActivations(): Promise<IndicatorInstance[]> {
  * issue #72：带 scope（market+symbol）时写该标的的参数覆盖，不动全局 params。
  * symbol visibility：scope 带 visible 时为可见性写（market 必带，symbol 可选——
  * 缺省即整市场），params 缺省。
+ * applyScope：传该实例的完整适用范围表（整表替换；空表清空该字段，落回全部应用）。
  */
 export async function putChartActivation(
   id: string,
   params?: Record<string, number>,
   scope?: { market: string; symbol?: string; visible?: boolean },
+  applyScope?: IndicatorApplyScope,
 ): Promise<boolean> {
   try {
     const response = await fetch('/dshtrading/api/chart/indicators', {
@@ -795,6 +797,7 @@ export async function putChartActivation(
       body: JSON.stringify({
         id,
         ...(params !== undefined ? { params } : {}),
+        ...(applyScope !== undefined ? { applyScope } : {}),
         ...(scope !== undefined ? {
           market: scope.market,
           ...(scope.symbol !== undefined ? { symbol: scope.symbol } : {}),

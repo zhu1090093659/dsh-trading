@@ -25,6 +25,8 @@ vi.mock('../src/client/TvChart.tsx', () => ({
   toVolume: (k: unknown) => k,
 }))
 
+import { presetDefinitions } from '@dshtrading/indicators'
+import { indicators } from '../src/client/indicator-registry.ts'
 import { QuoteStage } from '../src/client/QuoteStage.tsx'
 import { DerivativesStage } from '../src/client/DerivativesStage.tsx'
 import { DerivativesPane } from '../src/client/DerivativesPane.tsx'
@@ -48,6 +50,9 @@ afterEach(() => {
 function quoteStageProps(
   market: 'crypto' | 'us',
   instrument?: { symbol: string; assetClass?: 'crypto' | 'equity' | 'commodity' | 'index' },
+  instances: ChartState['instances'] = [],
+  /** 适用范围写入记录器（手动收集，测试棘轮禁用 vi.* 通用 mock）。 */
+  scopeWrites: Array<{ id: string; market: string; scope: unknown }> = [],
 ) {
   const selection: SelectionState = {
     instrument: {
@@ -56,7 +61,7 @@ function quoteStageProps(
       ...(instrument?.assetClass !== undefined ? { assetClass: instrument.assetClass } : {}),
     },
   }
-  const chart: ChartState = { instances: [] }
+  const chart: ChartState = { instances }
   return {
     t,
     useSelection: <T,>(sel: (state: SelectionState) => T): T => sel(selection),
@@ -64,6 +69,7 @@ function quoteStageProps(
     toggleIndicator: () => {},
     setIndicatorParams: () => {},
     setIndicatorVisible: () => {},
+    setIndicatorScope: (id: string, market: string, scope: unknown) => { scopeWrites.push({ id, market, scope }) },
     removeIndicator: () => {},
     deleteIndicator: async () => true,
   }
@@ -147,6 +153,85 @@ describe('QuoteStage 渲染冒烟（TDZ 网）', () => {
     const view = render(<QuoteStage {...quoteStageProps('crypto', { symbol: 'BTCUSDT-SWAP', assetClass: 'crypto' })} />)
     // Then: 明示位不出现
     expect(view.container.querySelector('[data-dshtrading-tradfi-notice]')).toBeNull()
+  })
+
+  it('用户关闭某市场后仍能看到保留的级别数（关闭不等于清空选择）', () => {
+    // Given: EMA 在美股勾了 1/7、在港股关闭但保留 15m 一条选择
+    for (const definition of presetDefinitions()) indicators.register(definition)
+    const instances = [{
+      id: 'ema',
+      params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 },
+      applyScope: {
+        us: { enabled: true, intervals: ['1d'] },
+        hk: { enabled: false, intervals: ['15m'] },
+      },
+    }]
+    const view = render(<QuoteStage {...quoteStageProps('us', undefined, instances, [])} />)
+
+    // When: 打开适用范围面板
+    fireEvent.click(view.getByText('indicator.picker'))
+    const panel = view.container.querySelector('[aria-label="indicator.picker"]')
+    const emaRow = Array.from(panel?.querySelectorAll('label') ?? [])
+      .find(label => label.textContent?.trim() === 'EMA')?.parentElement
+    const scopeButton = Array.from(emaRow?.querySelectorAll('button') ?? [])
+      .find(button => button.textContent?.trim() === 'indicator.scope')
+    fireEvent.click(scopeButton as HTMLElement)
+
+    // Then: 港股行显示保留的 1/7，而不是误报「未选择级别」
+    const hk = view.container.querySelector('[data-dshtrading-scope-market="hk"]')
+    expect(hk?.textContent).toContain('indicator.scope.count')
+    // 未选择级别的市场（未出现在 applyScope 的其它市场）不出现「未选择级别」
+    const us = view.container.querySelector('[data-dshtrading-scope-market="us"]')
+    expect(us?.textContent).not.toContain('indicator.scope.none')
+  })
+
+  it('用户在当前标的隐藏了某指标时，仍能打开其「适用范围」（跨标的全局设置，不是死按钮）', () => {
+    // Given: MACD 已挂载但在当前美股标的 AAPL 上被隐藏（hiddenScopes 命中 us:AAPL）
+    for (const definition of presetDefinitions()) indicators.register(definition)
+    const instances = [{ id: 'macd', params: { fast: 12, slow: 26, signal: 9 }, hiddenScopes: ['us:AAPL'] }]
+    const view = render(<QuoteStage {...quoteStageProps('us', undefined, instances, [])} />)
+
+    // When: 打开指标选择器 → 点 MACD 的「适用范围」
+    fireEvent.click(view.getByText('indicator.picker'))
+    const panel = view.container.querySelector('[aria-label="indicator.picker"]')
+    const row = panel === null
+      ? null
+      : Array.from(panel.querySelectorAll('label'))
+        .find(label => label.textContent?.trim() === 'MACD')?.parentElement ?? null
+    const scopeButton = row === null
+      ? undefined
+      : Array.from(row.querySelectorAll('button')).find(button => button.textContent?.trim() === 'indicator.scope')
+    expect(scopeButton).toBeTruthy()
+    fireEvent.click(scopeButton as HTMLElement)
+
+    // Then: 适用范围面板照常展开（隐藏 ≠ 取消激活，设置必须仍然可改）
+    expect(view.container.querySelector('[data-dshtrading-scope]')).toBeTruthy()
+    expect(view.container.querySelectorAll('[data-dshtrading-scope-market]').length).toBe(6)
+  })
+
+  it('用户在指标设置里展开「适用范围」，按市场勾选级别并写入该市场配置', async () => {
+    // Given: 指标插件就位（选择器有 definition）且挂载了 MACD 副图（无适用范围 = 全部应用）
+    for (const definition of presetDefinitions()) indicators.register(definition)
+    const writes: Array<{ id: string; market: string; scope: unknown }> = []
+    const view = render(<QuoteStage {...quoteStageProps('us', undefined, [{ id: 'macd', params: { fast: 12, slow: 26, signal: 9 } }], writes)} />)
+
+    // When: 打开指标选择器 → 点「适用范围」→ 展开美股 → 取消勾选 1d
+    fireEvent.click(view.getByText('indicator.picker'))
+    fireEvent.click(view.getByText('indicator.scope'))
+    // Then: 适用范围面板按市场分行渲染（系统支持的六个市场）
+    expect(view.container.querySelector('[data-dshtrading-scope]')).toBeTruthy()
+    expect(view.container.querySelectorAll('[data-dshtrading-scope-market]').length).toBe(6)
+    expect(view.getByText('indicator.scope.hint')).toBeTruthy()
+
+    fireEvent.click(view.container.querySelector('[data-dshtrading-scope-expand="us"]') as HTMLElement)
+    // 展开后该市场显示全部支持级别
+    expect(view.container.querySelectorAll('[data-dshtrading-scope-level]').length).toBeGreaterThan(0)
+    fireEvent.click(view.container.querySelector('[data-dshtrading-scope-level="1d"] input') as HTMLElement)
+
+    // Then: 写入的是美股且级别已去掉 1d（不再是全部级别）
+    const usWrite = writes.find(entry => entry.market === 'us')
+    expect(usWrite?.id).toBe('macd')
+    expect(usWrite?.scope).toEqual({ enabled: true, intervals: ['5m', '15m', '30m', '1h', '1w', '1M'] })
   })
 
 })

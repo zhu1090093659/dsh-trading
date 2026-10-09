@@ -7,7 +7,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { CustomIndicatorStore } from './custom.ts'
 import type { ChartActivationStore } from './chart-activations.ts'
-import { clampActivationParams, defaultActivationInstance, resolveIndicatorSpec, symbolScopeKey, withHiddenScopes } from './chart-activations.ts'
+import { carryInstanceExtras, clampActivationParams, defaultActivationInstance, resolveIndicatorSpec, symbolScopeKey, withHiddenScopes } from './chart-activations.ts'
 import type { IndicatorInstance } from './types.ts'
 import { presetDefinitions } from './presets.ts'
 
@@ -133,22 +133,27 @@ export function createIndicatorActivateTool(options: IndicatorActivateToolOption
       }
 
       const params = clampActivationParams(spec.params, overrides)
+      const existing = (await chartStore.list()).find(candidate => candidate.id === id)
       let instance: IndicatorInstance
       if (scope !== undefined) {
         // 按标的覆盖（issue #72）：保留全局 params 与其它标的的覆盖，只写本标的这套。
         // 新实例的全局 params 取 schema 默认值——首个标的的覆盖不得泄漏成全局值。
         // 显示语义：写覆盖同时清除该标的两级隐藏（symbol 级 + market 级）。
-        const existing = (await chartStore.list()).find(candidate => candidate.id === id)
         const base: IndicatorInstance = withHiddenScopes(
           withHiddenScopes(existing ?? { id, params: clampActivationParams(spec.params, {}) }, scope, true),
           market,
           true,
         )
-        instance = { ...base, symbolParams: { ...(base.symbolParams ?? {}), [scope]: params } }
+        // 覆盖表与隐藏表都按本次语义显式构造（base 已含清隐藏的结果，不得再继承回来）；
+        // 适用范围与两者正交，随写保留（一次覆盖写不该断掉适用范围）。
+        instance = {
+          ...base,
+          symbolParams: { ...(base.symbolParams ?? {}), [scope]: params },
+          ...(existing?.applyScope !== undefined ? { applyScope: existing.applyScope } : {}),
+        }
       } else {
-        // 全局写：保留已有按标的覆盖（旧行为直接整体覆盖实例会把 symbolParams 抹掉）。
-        const existing = (await chartStore.list()).find(candidate => candidate.id === id)
-        instance = existing?.symbolParams !== undefined ? { id, params, symbolParams: existing.symbolParams } : { id, params }
+        // 全局写：保留已有按标的覆盖与适用范围（旧行为直接整体覆盖实例会把它们抹掉）。
+        instance = carryInstanceExtras(existing, { id, params })
       }
       await chartStore.activate(instance)
       onWritten?.(id)

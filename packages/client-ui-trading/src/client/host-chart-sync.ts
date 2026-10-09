@@ -4,7 +4,7 @@
  * - 启动同步：GET /chart/indicators → host 有行则以 host 为准覆盖本地 observable；
  *   host 为空且本地 localStorage 有存量 → 一次性迁移导入（POST /chart/indicators/import，
  *   host 非空时服务端拒绝，幂等）→ 重拉 host。
- * - 变更 host-first：togglePreset / setParams / setSymbolVisibility / removeInstance
+ * - 变更 host-first：togglePreset / setParams / setSymbolVisibility / setMarketScope / removeInstance
  *   先写 host，成功后才更新本地 observable（localStorage 由原 store 持久化，降级为缓存镜像）。
  * - SSE：'chart' 失效信号 → 重拉 host 覆盖本地（indicator_activate/deactivate 工具
  *   写入、indicators/plugin emit 或其它标签页变更）。
@@ -13,6 +13,8 @@
  * 实例对 UI 天然不可见（选择器按 definition 名册渲染），注册表就位后自动生效。
  * host 写入边界的 clamp 已在桥与工具层完成，客户端照单全收。
  */
+import type { IndicatorMarketScope } from '@dshtrading/indicators'
+import { withMarketScope } from '@dshtrading/indicators'
 import type { ChartStateStore } from './chart-state.ts'
 import { indicators } from './indicator-registry.ts'
 import {
@@ -99,6 +101,20 @@ export function wireHostChartSync(options: HostChartSyncOptions): () => void {
       const ok = await putChartActivation(id, undefined, { market, symbol, visible })
       if (ok) originalSetSymbolVisibility(id, market, symbol, visible)
       else console.warn('[dsh-trading] chart visibility update failed on host — local state unchanged')
+    })()
+  }
+  const originalSetMarketScope = chart.setMarketScope.bind(chart)
+  chart.setMarketScope = (id: string, market: string, scope: IndicatorMarketScope | undefined): void => {
+    void (async () => {
+      // 适用范围：host 侧是整表写（PUT applyScope），故先按本次变更算出候选整表
+      // 再送 host；成功后落地本地（失败保持本地现状，与其它 host-first 写同语义，
+      // 下一次 SSE 'chart' 重拉会回 host 权威值）。
+      const existing = chart.instanceFor(id)
+      if (existing === undefined) return
+      const applyScope = withMarketScope(existing, market, scope).applyScope ?? {}
+      const ok = await putChartActivation(id, undefined, undefined, applyScope)
+      if (ok) originalSetMarketScope(id, market, scope)
+      else console.warn('[dsh-trading] chart apply-scope update failed on host — local state unchanged')
     })()
   }
   const originalRemove = chart.removeInstance.bind(chart)

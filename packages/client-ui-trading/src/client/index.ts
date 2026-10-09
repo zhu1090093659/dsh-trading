@@ -22,7 +22,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { ISessions, SessionTarget } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { IndicatorRegistry } from '@dshtrading/indicators'
+import type { IndicatorMarketScope, IndicatorRegistry } from '@dshtrading/indicators'
 import type { Instrument, MarketId } from './types.ts'
 import { validateCustomIndicatorAsync } from '@dshtrading/indicators'
 import { createSelectionStore, createWatchlistGroupsStore, createWatchlistStore } from './store.ts'
@@ -332,6 +332,10 @@ export function apply(ctx: ClientContext): void {
         const split = scopeKey !== undefined ? scopeKey.indexOf(':') : -1
         if (scopeKey === undefined || split <= 0) return
         chart.setSymbolVisibility(id, scopeKey.slice(0, split), scopeKey.slice(split + 1), visible)
+      },
+      // 适用范围（按市场独立配置适用的 K 线级别）：scope === undefined 删除该市场条目。
+      setIndicatorScope: (id: string, market: MarketId, scope: IndicatorMarketScope | undefined) => {
+        chart.setMarketScope(id, market, scope)
       },
       removeIndicator: (id: string) => { if (chart.isActive(id)) chart.togglePreset(id) },
       deleteIndicator: async (id: string) => {

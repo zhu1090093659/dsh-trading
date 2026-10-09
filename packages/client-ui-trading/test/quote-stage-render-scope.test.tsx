@@ -41,6 +41,7 @@ function props(symbol = 'HYPEUSDT') {
     toggleIndicator: () => {},
     setIndicatorParams: () => {},
     setIndicatorVisible: () => {},
+    setIndicatorScope: () => {},
     removeIndicator: () => {},
     deleteIndicator: async () => true,
   }

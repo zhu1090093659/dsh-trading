@@ -9,8 +9,8 @@
  * 收敛在 toggle/setParams 写入边界（定义未知时原样落盘：桥接前选择器没有
  * 该 id 的可点行，此分支 UI 不可达，防御手改 localStorage）。
  */
-import type { IndicatorInstance, IndicatorRegistry } from '@dshtrading/indicators'
-import { symbolScopeKey, withHiddenScopes } from '@dshtrading/indicators'
+import type { IndicatorInstance, IndicatorMarketScope, IndicatorRegistry } from '@dshtrading/indicators'
+import { symbolScopeKey, withHiddenScopes, withMarketScope } from '@dshtrading/indicators'
 import { createObservable, readJson, writeJson } from './store.ts'
 import type { WritableObservable } from './store.ts'
 
@@ -34,6 +34,12 @@ export interface ChartStateStore extends WritableObservable<ChartState> {
    * 实例缺席静默（挂载走 togglePreset）。隐藏 ≠ 取消激活，其它标的不受影响。
    */
   setSymbolVisibility(id: string, market: string, symbol: string, visible: boolean): void
+  /**
+   * 设置某市场的适用范围（GUI 适用范围面板）：`scope === undefined` 删除该市场
+   * 条目（落回「全部级别应用」）。实例缺席静默（挂载走 togglePreset）。不适用
+   * ≠ 取消激活：实例、参数与其它市场选择全部保留。
+   */
+  setMarketScope(id: string, market: string, scope: IndicatorMarketScope | undefined): void
   /** 移除某 preset 的激活实例（自定义指标删除用；无实例时静默）。 */
   removeInstance(id: string): void
   /**
@@ -102,6 +108,16 @@ export function createChartStateStore(registry: IndicatorRegistry): ChartStateSt
         const existing = current.instances.find(instance => instance.id === id)
         if (existing === undefined) return current
         const next = withHiddenScopes(existing, symbolScopeKey(market, symbol), visible)
+        if (next === existing) return current
+        return { instances: current.instances.map(instance => instance.id === id ? next : instance) }
+      })
+      persist()
+    },
+    setMarketScope(id, market, scope) {
+      store.update((current) => {
+        const existing = current.instances.find(instance => instance.id === id)
+        if (existing === undefined) return current
+        const next = withMarketScope(existing, market, scope)
         if (next === existing) return current
         return { instances: current.instances.map(instance => instance.id === id ? next : instance) }
       })

@@ -188,6 +188,93 @@ describe('图表激活名册桥端点（issue #63）', () => {
     })
   })
 
+  it('用户把同一 EMA 配成美股仅日 K、港股关闭保留 15m，PUT applyScope 后 GET 原样回读', async () => {
+    // Given 一个已挂载的 td9 实例
+    const bridge = new TradingBridge(fakeHost())
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(), { id: 'td9' })
+
+    // When 写入按市场独立的适用范围（含一条脏条目）
+    const wire = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(), {
+      id: 'td9',
+      applyScope: {
+        us: { enabled: true, intervals: ['1d'] },
+        hk: { enabled: false, intervals: ['15m'] },
+        cn: { enabled: 'yes', intervals: ['1d'] },
+      },
+    }) as { payload: { ok: boolean; instances: Array<{ params: Record<string, number>; applyScope?: unknown }> } }
+
+    // Then 好条目原样落盘、坏条目被丢弃，全局 params 保持 schema 默认值
+    expect(wire.payload.ok).toBe(true)
+    expect(wire.payload.instances[0]?.applyScope).toEqual({
+      us: { enabled: true, intervals: ['1d'] },
+      hk: { enabled: false, intervals: ['15m'] },
+    })
+    expect(wire.payload.instances[0]?.params).toEqual({ count: 9 })
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams())
+    expect(list).toMatchObject({ status: 200, payload: { ok: true } })
+  })
+
+  it('用户改适用范围时已挂载实例的参数与隐藏表不受影响，空表清空该字段', async () => {
+    // Given 一个带隐藏表与自定义参数的实例
+    const bridge = new TradingBridge(fakeHost())
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', params: { count: 12 } })
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'hk', symbol: '00700.HK', visible: false })
+
+    // When 写入适用范围
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', applyScope: { us: { enabled: true, intervals: [] } } })
+    let list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams()) as { payload: { instances: Array<Record<string, unknown>> } }
+
+    // Then 参数与隐藏表原样保留（适用范围与它们正交）
+    expect(list.payload.instances[0]).toMatchObject({ id: 'td9', params: { count: 12 }, hiddenScopes: ['hk:00700.HK'] })
+    expect(list.payload.instances[0]?.applyScope).toEqual({ us: { enabled: true, intervals: [] } })
+
+    // When 用空表清空适用范围
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(), { id: 'td9', applyScope: {} })
+    list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams()) as { payload: { instances: Array<Record<string, unknown>> } }
+
+    // Then 字段整体消失（落回全部市场全部级别应用），其余字段仍在
+    expect('applyScope' in (list.payload.instances[0] ?? {})).toBe(false)
+    expect(list.payload.instances[0]).toMatchObject({ id: 'td9', params: { count: 12 } })
+  })
+
+  it('用户给未挂载的指标写适用范围是幂等无操作，不反向创建实例', async () => {
+    // Given 空白的激活名册
+    const bridge = new TradingBridge(fakeHost())
+
+    // When 对未挂载 id 写适用范围
+    const wire = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', applyScope: { us: { enabled: true, intervals: ['1d'] } } })
+
+    // Then 名册保持为空
+    expect(wire).toEqual({ status: 200, payload: { ok: true, instances: [] } })
+  })
+
+  it('用户迁移导入时适用范围配置不丢（POST import 保真 applyScope）', async () => {
+    // Given 一个带适用范围的存量名册行
+    const bridge = new TradingBridge(fakeHost())
+    await dispatchBridgeRequest(bridge, 'POST', '/chart/indicators/import', new URLSearchParams(), {
+      instances: [{
+        id: 'td9', params: { count: 9 },
+        applyScope: { us: { enabled: true, intervals: ['1d'] }, hk: { enabled: false, intervals: ['15m'] } },
+      }],
+    })
+    // Then 读回的适用范围打开市场开关与已选级别一字不差
+    const list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams())
+    expect(list).toEqual({
+      status: 200,
+      payload: {
+        ok: true,
+        instances: [{
+          id: 'td9', params: { count: 9 },
+          applyScope: { us: { enabled: true, intervals: ['1d'] }, hk: { enabled: false, intervals: ['15m'] } },
+        }],
+      },
+    })
+  })
+
   it('POST import 保真 symbolParams（issue #72 迁移不丢覆盖）', async () => {
     const bridge = new TradingBridge(fakeHost())
     await dispatchBridgeRequest(bridge, 'POST', '/chart/indicators/import', new URLSearchParams(), {
