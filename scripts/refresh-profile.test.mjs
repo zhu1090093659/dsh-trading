@@ -40,13 +40,44 @@ function tempTradingHome(prefix) {
   return home
 }
 
-/** PATH 上的假 dsh：记录调用即退出，绝不对真实 home 装插件。 */
+/** 仓库各包 peer 声明的 @deepseek-ai/* 名（含 dsh-tools 的 brand/values 传递依赖）。 */
+function sdkPeerNames() {
+  const names = new Set(['@deepseek-ai/dsh-brand', '@deepseek-ai/dsh-util-values'])
+  for (const name of repoPackageNames()) {
+    try {
+      const manifest = JSON.parse(readFileSync(join(ROOT, 'packages', name.replace('@dshtrading/', ''), 'package.json'), 'utf8'))
+      for (const dep of Object.keys(manifest.peerDependencies ?? {})) {
+        if (dep.startsWith('@deepseek-ai/')) names.add(dep)
+      }
+    } catch {
+      // 无 manifest 的目录：跳过。
+    }
+  }
+  return [...names]
+}
+
+/**
+ * PATH 上的假 dsh：记录调用即退出，绝不对真实 home 装插件。
+ *
+ * 放在 <root>/bin/dsh 是刻意的：sync-profile-overrides.mjs 从 dsh 可执行文件的
+ * realpath 推导 SDK 根（<root>/node_modules），并把 @deepseek-ai/* override 行写到
+ * 那里。假 dsh 若不落在 bin/ 下，推导会回落到硬编码的 Homebrew 路径——本机存在、
+ * CI 不存在，于是夹具里写下死路径、预检判红（2026-08-30 note 的 CI 约束）。
+ * 一并造出该 SDK 根下的包目录，让夹具与宿主安装彻底解耦。
+ */
 function stubDsh() {
-  const bin = mkdtempSync(join(tmpdir(), 'stub-dsh-'))
-  dirs.push(bin)
+  const root = mkdtempSync(join(tmpdir(), 'stub-dsh-'))
+  dirs.push(root)
+  const bin = join(root, 'bin')
+  mkdirSync(bin, { recursive: true })
   const file = join(bin, 'dsh')
   writeFileSync(file, '#!/bin/sh' + NL + 'exit 0' + NL)
   chmodSync(file, 0o755)
+  for (const name of sdkPeerNames()) {
+    const dir = join(root, 'node_modules', ...name.split('/'))
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '0.0.0-test' }, null, 2))
+  }
   return bin
 }
 

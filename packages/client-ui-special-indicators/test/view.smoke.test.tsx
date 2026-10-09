@@ -139,12 +139,18 @@ function installMemoryStorage(kind: 'localStorage' | 'sessionStorage') {
 }
 
 beforeEach(() => {
-  // jsdom 下 sessionStorage 在本环境可用（localStorage 才是空壳）：跨用例
-  // 清空面板持久化，保证每个用例从零缓存起步；空壳环境下降级为无害调用。
-  try {
-    window.sessionStorage.clear()
-  } catch {
-    // 空壳 Storage 面：无持久化可清。
+  // 跨用例清空面板与页签持久化，保证每个用例从零缓存起步。两种 Storage 都要清：
+  // 页签选择写的是 localStorage（readSubTab），面板缓存写的是 sessionStorage——只清
+  // sessionStorage 时，前一个用例点过的页签会在本环境真的存活的 localStorage 里残留，
+  // 后续用例带着上个用例的页签启动（CI 的 Node 22/24 上 jsdom localStorage 可用，
+  // 2026-10-09 因此判红：默认页签用例期望恐慌页而实际落在板块页）。空壳环境
+  // （本机 Node 25 的 localStorage 即此形态）下降级为无害调用。
+  for (const storage of [() => window.sessionStorage, () => window.localStorage]) {
+    try {
+      storage().clear()
+    } catch {
+      // 空壳 Storage 面：无持久化可清。
+    }
   }
 })
 

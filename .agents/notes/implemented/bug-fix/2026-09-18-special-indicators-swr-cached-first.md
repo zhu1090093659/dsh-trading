@@ -83,8 +83,11 @@ Status: implemented
 - 测试面：finance-client 17 例（+6 落盘：命中不触网/周末 60h 仍在保鲜期/过
   TTL 服役/超 7 天判废/写盘一次/端口抛错不影响请求）、cache-file 6 例（首次
   冷启/跨进程读回/baseUrl 判废/损坏静默/旧 schema 判废/串行落笔）、
-  route-handler 11 例、view.smoke 14 例。jsdom 下 sessionStorage 可用而
-  localStorage 是空壳——新增 beforeEach 清 sessionStorage 防跨用例污染。
+  route-handler 11 例、view.smoke 14 例。beforeEach 必须两种 Storage 都清：
+  页签选择写的是 localStorage（readSubTab）、面板缓存写的是 sessionStorage，
+  而 jsdom 里 localStorage 是否可用随 Node 版本变化（本机 Node 25 是空壳、
+  CI Node 22/24 可用）——只清 sessionStorage 时，前一个用例点过的页签会在
+  可用环境里残留，后续用例带错页签启动（2026-10-09 CI 实测判红）。
 - 实测（trading-web profile 刷新后，headless Chrome CDP 实机验证）：冷首拉
   12.95s（上游重算）后二连 0.01s（缓存命中）；切走「行情」再切回「特殊
   指标」，采样即时含 38.9 分数与分项、无「加载中」；恐慌指数卡片、数据

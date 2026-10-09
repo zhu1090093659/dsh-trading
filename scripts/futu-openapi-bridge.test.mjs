@@ -30,7 +30,20 @@ function pythonCommand() {
   return undefined
 }
 
+/**
+ * 解释器是否带 futu SDK：桥在模块加载期 import futu，缺这个包时桥起不来。
+ * CI 三个镜像都装了 Python 但都没有 futu（2026-10-09 实测：只判 Python 存在会让
+ * 本文件在 CI 上红——ModuleNotFoundError: No module named 'futu'）。被验的几条判据
+ * 都在碰 OpenD 之前就拒绝，因此只要求 SDK 可导入，不要求 OpenD 在跑。
+ */
+function hasFutuModule(command) {
+  if (command === undefined) return false
+  const probe = spawnSync(command, ['-c', 'import futu'], { encoding: 'utf8' })
+  return probe.status === 0
+}
+
 const PYTHON = pythonCommand()
+const HAS_FUTU = hasFutuModule(PYTHON)
 
 /** 起一个真桥进程，等它报出实际绑定的端口。 */
 function startBridge() {
@@ -56,7 +69,7 @@ function startBridge() {
   })
 }
 
-describe.skipIf(PYTHON === undefined)('futu-openapi-bridge 输入判据（真进程，回环随机端口）', () => {
+describe.skipIf(!HAS_FUTU)('futu-openapi-bridge 输入判据（真进程，回环随机端口）', () => {
   let bridge
 
   beforeAll(async () => {

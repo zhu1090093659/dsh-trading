@@ -44,12 +44,13 @@ describe('缺省 home 告警', () => {
   })
 
   it('管理员：显式 DSH_HOME 指向别的目录时不告警（那是用户的选择，不是误用）', () => {
-    // Given 显式指向临时目录
+    // Given 显式指向临时目录（期望值走 resolve，Windows 上驱动器前缀是正常结果）
+    const configured = '/tmp/some-other-home'
     const messages: string[] = []
     // When 解析
-    const resolved = dshHomeDir({ DSH_HOME: '/tmp/some-other-home' }, { warn: (message) => messages.push(message) })
+    const resolved = dshHomeDir({ DSH_HOME: configured }, { warn: (message) => messages.push(message) })
     // Then 尊重该值且不告警
-    expect(resolved).toBe('/tmp/some-other-home')
+    expect(resolved).toBe(resolve(configured))
     expect(messages).toHaveLength(0)
   })
 

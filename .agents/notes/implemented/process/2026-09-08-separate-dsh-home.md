@@ -176,6 +176,6 @@ Status: implemented
 
 **去重的位置很关键**：去重只在**默认出口**（stderr 写一次）；注入的 `warn` **每次都调**，否则测试无法确定地断言（第一版把去重放在调用点，测试就会随执行顺序漂移）。
 
-**测试 4 例**：未设 DSH_HOME 且本机有 trading home ⇒ 告警且返回值仍是缺省 home；显式指向 trading home ⇒ 安静；显式指向别的目录 ⇒ 安静（那是用户的选择，不是误用）；空白 `DSH_HOME` 视为未设（与既有语义一致）。
+**测试 4 例**：未设 DSH_HOME 且本机有 trading home ⇒ 告警且返回值仍是缺省 home；显式指向 trading home ⇒ 安静；显式指向别的目录 ⇒ 安静（那是用户的选择，不是误用）；空白 `DSH_HOME` 视为未设（与既有语义一致）。第三例的期望值走 `resolve()`：`dshHomeDir` 对显式值也做 `resolve`，Windows 上 POSIX 绝对路径会带上驱动器前缀（`D:\tmp\...`）——硬编码 `/tmp/...` 只在 POSIX 成立，2026-10-09 的 windows-latest 矩阵据此判红。
 
 **踩坑记录**：加 import 时没先看文件头，重复声明了 `existsSync` ⇒ 构建失败（rolldown PARSE_ERROR）⇒ 该包 `lib/` 未产出 ⇒ 测试连锁失败成"找不到入口"。**症状在测试、根因在构建** —— 先看构建日志而不是测试堆栈。

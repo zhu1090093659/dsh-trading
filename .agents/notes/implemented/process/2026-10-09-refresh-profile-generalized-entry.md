@@ -27,7 +27,9 @@ profile 的 `@dshtrading/*` 是 `file:` 安装快照，改完源码必须重建�
    **无条件重挂宿主核心包 symlink**。重挂从「人必须记得的第二步」变成脚本的一部分。
    - 用法：`refresh-profile.sh [--profile <p>]... [--package <pkg>]... [--dsh-home <dir>] [--host-root <dir>]`；
      位置参数是 profile 名，缺省 `trading-web`；`--package` 只刷指定 `@dshtrading` 包。
-   - 逐个核对目标 profile 存在后才动手；`DSH_HOME` 指向宿主 home 时拒绝执行（沿用既有守卫）。
+   - 参数校验先于环境前提：逐个核对目标 profile 存在后才动手（2026-10-09 CI 实测，
+    此前 `command -v dsh` 在前，无 dsh 的 CI 上「profile 不存在」被报成「找不到 dsh」，
+    掩盖真正的调用方错误）；`DSH_HOME` 指向宿主 home 时拒绝执行（沿用既有守卫）。
    - 停实例时排除刷新器自身进程：泛化后脚本命令行里就可能含 `--profile <p>`，
      裸 `pgrep -f "profile <p>"` 会匹配到自己并自杀。
 2. **旧入口保留为转发 shim**：`scripts/refresh-trading-web-profile.sh [pkg ...]`
@@ -40,7 +42,10 @@ profile 的 `@dshtrading/*` 是 `file:` 安装快照，改完源码必须重建�
    判红、带 flag 降级放行、闭包缺口在两种模式下都中止、`--help`/`--bogus`/未知
    profile/宿主 home 守卫，以及泛化入口与 shim 各自真的刷新到目标 profile。
    测试全部只碰 `mkdtemp` 夹具 home（名字含 `-trading` 才过守卫）并把 `dsh`
-   换成 PATH 上的假实现——测试绝不对 `~/.dsh-trading` 做插件安装。
+   换成 PATH 上的假实现——测试绝不对 `~/.dsh-trading` 做插件安装。假 dsh 放在
+   `<root>/bin/dsh` 并在 `<root>/node_modules` 造出各包 peer 的 SDK 目录：同步器
+   从 dsh realpath 推导 SDK 根，假 dsh 不落 `bin/` 下时会回落到硬编码的 Homebrew
+   路径（本机存在、CI 不存在 → 夹具写下死路径、预检判红，2026-10-09 CI 实测）。
 
 ## Verification
 

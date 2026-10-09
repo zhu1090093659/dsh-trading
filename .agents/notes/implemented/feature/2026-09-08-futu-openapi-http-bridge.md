@@ -105,7 +105,11 @@ PR #103 合并后，其独立审查的三条非阻断发现逐条修掉；每条
 
 **判据（自动化，不依赖 OpenD、无网络）**：新增 `scripts/futu-openapi-bridge.test.mjs`（起真桥进程、
 `FUTU_BRIDGE_PORT=0` 由内核选端口、只监听回环，打 ② 的两条布尔 + `accId` 布尔 + 缺 `accId` 撤单 +
-GET 落 trd 路径 + 日志不落请求体；已接线进 `pnpm test:scripts`，CI 的 static-gates 会跑）；
+GET 落 trd 路径 + 日志不落请求体；已接线进 `pnpm test:scripts`，CI 的 static-gates 会跑）。
+用例的跳过判据是**解释器能 import futu**，不是"python 命令存在"：桥在模块加载期
+`from futu import (...)`，而 CI 三个镜像都装了 Python 却没有 futu——只判 Python 会让本文件
+在 CI 上以 `ModuleNotFoundError` 整文件红（2026-10-09 实测）。被验判据都在碰 OpenD 之前
+拒绝，因此只要求 SDK 可导入；
 `packages/connector-futu/test/trade-face.test.ts` 补 ①（缺账户 / `accId=0` 都结构化拒绝且**零出站**）
 与 ③（缺 `qty` 即抛）。
 

@@ -94,10 +94,13 @@ if [ "$DSH_HOME" = "$HOME/.dsh" ]; then
   exit 2
 fi
 
-command -v dsh >/dev/null 2>&1 || { echo "找不到 dsh 可执行文件（刷新依赖 dsh plugin install）" >&2; exit 1; }
+# 参数校验先于环境前提：目标 profile 不存在属于调用方错误，必须在「本机有没有 dsh」
+# 之前给出结论。此前 dsh 检查在前，CI（无 dsh）上不存在的 profile 会报「找不到 dsh」，
+# 掩盖真正的错误；2026-10-09 的 refresh-profile.test.mjs 在 CI 上据此判红。
 for p in "${PROFILES[@]}"; do
   [ -f "$DSH_HOME/profiles/$p/package.json" ] || { echo "profile 不存在：$DSH_HOME/profiles/$p" >&2; exit 1; }
 done
+command -v dsh >/dev/null 2>&1 || { echo "找不到 dsh 可执行文件（刷新依赖 dsh plugin install）" >&2; exit 1; }
 
 echo "== 同步 profile overrides（幂等追加，修闭包缺口；只增行不删活包）=="
 for p in "${PROFILES[@]}"; do
