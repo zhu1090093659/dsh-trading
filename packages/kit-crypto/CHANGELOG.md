@@ -1,5 +1,12 @@
 # @dshtrading/kit-crypto
 
+## 0.6.0
+
+### Patch Changes
+
+- @dshtrading/indicators@0.6.0
+- @dshtrading/knowledge@0.6.0
+
 ## 0.5.0
 
 ### Patch Changes

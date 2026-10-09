@@ -1,5 +1,18 @@
 # @dshtrading/cn
 
+## 0.6.0
+
+### Patch Changes
+
+- @dshtrading/connector-akshare@0.6.0
+- @dshtrading/connector-eastmoney@0.6.0
+- @dshtrading/connector-hithink@0.6.0
+- @dshtrading/connector-qmt@0.6.0
+- @dshtrading/connector-tencent@0.6.0
+- @dshtrading/connector-tushare@0.6.0
+- @dshtrading/connector-xysz@0.6.0
+- @dshtrading/kit-cn@0.6.0
+
 ## 0.5.0
 
 ### Patch Changes

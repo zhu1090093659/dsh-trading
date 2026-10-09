@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-xysz",
   "description": "中国银河证券星耀数智（AmazingData / tgw）A 股数据源连接器（数据面-only）：经本机/局域网的 FastAPI 封装服务 xysz-api 提供 tradingCnMarketData 与 cn_* 行情工具，无交易通道",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

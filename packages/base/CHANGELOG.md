@@ -1,5 +1,37 @@
 # @dshtrading/base
 
+## 0.6.0
+
+### Minor Changes
+
+- 0.6.0：宿主 cohort 前移后的工具面收口、官方 Office 技能接线、加密永续/合约交易语义、Futu 桥交易面与桌面壳刷新。
+
+  - `@dshtrading/base`：接线官方 Office provider 与 workspace-dependencies 行（`DSH_PRIMARY_RUNTIME` 门控，无载荷显式缺席）；多进程整表 store 增加跨进程写保护（锁文件 + 陈旧回收 + 锁内读-改-原子写）。
+  - 工具注入面：全量描述体例统一、host 读工具声明 value-schema 输出、只读现状扫描器 `tool-surface-inventory`（33 个注入点 / 149 个工具基线）。
+  - `@dshtrading/api`+`@dshtrading/router`+`connector-binance`/`connector-okx`/`connector-bybit`/`connector-ccxt`+`@dshtrading/kit-crypto`：标的形态契约（`form` = spot/perp）与 TradFi 永续元数据落地，名册/行情按形态分流，检索面与 `/symbols` wire 透传 `form`/`assetClass`。
+  - OKX 合约交易 Tier 2：合约下单（张 ↔ 币按 ctVal 向下取整）、`crypto_set_leverage` 杠杆/保证金模式（与下单同门槛）、持仓强平/保证金字段；Binance `-SWAP` 下单显式 `TRADING_UNSUPPORTED_SYMBOL`，绝不回落现货端点。dry-run 仍是缺省，实盘仍需人工签署授权 + 审批。
+  - `@dshtrading/connector-futu`：桥交易面按 owner 授权开启（三条 `/api/trd/*` POST 路由 + 挂单列表契约，布尔/缺 accId/GET 均结构化拒绝）。
+  - `@dshtrading/indicators`+`@dshtrading/client-ui-trading`：指标适用范围（按市场独立开关与 K 线级别）、KDAS 关键日图表右键菜单（设/删 Key Day）。
+  - `@dshtrading/client-ui-special-indicators`：桥缓存落盘（宿主重启后首个请求直接命中）；滞后徽标改按「上游数据日 vs 预期数据日」判定；板块双栏/单栏断点改按中栏实际宽（`@container`）。
+  - `@dshtrading/client-ui-bot-gui`（新，private）：交易终端内嵌机器人控制台插件（header run-mode badge + 决策 feed 分页）。
+  - `@dshtrading/bot-api`（新）：公开 GUI 的服务端半（回迁主仓）。
+  - `@dshtrading/dsh-home`：缺省 home 告警（解析到 `~/.dsh` 且存在 `~/.dsh-trading` 时提示，返回值与优先级不变）。
+  - 桌面壳：宿主存在自带 primary runtime 时交接给宿主；移除附着模式分支。
+  - 仓库治理：仓库边界门禁（主仓不再长出自动交易实现，该平面迁往私有卫星仓）；CI 接线双向门禁；`scripts/refresh-profile.sh` 泛化刷新任意 profile 并强制重挂核心包 symlink。
+
+### Patch Changes
+
+- @dshtrading/api@0.6.0
+- @dshtrading/connector-jin10@0.6.0
+- @dshtrading/dsh-home@0.6.0
+- @dshtrading/eventbus@0.6.0
+- @dshtrading/holdings@0.6.0
+- @dshtrading/indicators@0.6.0
+- @dshtrading/knowledge@0.6.0
+- @dshtrading/router@0.6.0
+- @dshtrading/strategies@0.6.0
+- @dshtrading/watchlist@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes

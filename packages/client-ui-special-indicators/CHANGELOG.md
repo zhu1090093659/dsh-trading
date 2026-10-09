@@ -1,5 +1,22 @@
 # @dshtrading/client-ui-special-indicators
 
+## 0.6.0
+
+### Patch Changes
+
+- 8901682: 桥缓存落盘：宿主重启后首个请求直接命中，不再每次冷拉上游。
+
+  成因：内存 TTL 缓存随宿主进程退出清零，而浏览器侧缓存按 origin 隔离——桌面壳每次启动挑随机空闲端口，origin 一变上个会话的 sessionStorage/localStorage 整片成孤儿，于是「重启一次 = 冷拉一次」。
+
+  - FinanceClient 新增 persistence 注入端口（load 同步补水 / save 异步原子写），落盘到 $DSH_HOME/special-indicators/cache.json：v1 信封 + baseUrl 指纹（换过上游地址即判废）、条目保留写入时刻（跨进程继续按同一 TTL 判定陈旧）、7 天保鲜期（覆盖周末与长假）、256 条上限（板块明细按代码分键防无界增长）；读写失败一律静默降级为慢。
+  - 新增 Config.cacheFile（空 = 默认路径）；新增依赖 @dshtrading/dsh-home。
+
+- 189f5e9: 特殊指标：修正「数据滞后」徽标语义与容器边缘自适应。
+
+  - 滞后判据改为「上游数据日 vs 预期数据日」：T+1 指标在交易日显示上一交易日数据不再误标滞后；桥 SWR 缓存标记不再驱动徽标（基差撤掉徽标，恒科只认上游自身 stale）。
+  - 板块双栏/单栏断点由视口宽（@media）改为中栏实际宽（@container）：会话侧栏展开/关闭时布局跟随；卡片补 box-sizing: border-box，消除 26px 右缘越界与横向滚动条。
+  - @dshtrading/dsh-home@0.6.0
+
 ## 0.5.0
 
 ### Minor Changes
