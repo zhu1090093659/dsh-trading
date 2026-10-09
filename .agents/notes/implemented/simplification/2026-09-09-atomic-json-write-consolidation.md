@@ -14,6 +14,11 @@ tmp+rename 原子写块在 7 个包有 9+ 处同体副本（只读审计 F1）�
 - holdings/fs-atomic.ts 删除，store-fs.ts 与 fx.ts 直引 dsh-home。
 - **刻意排除** client-ui-trading/tasks/ledger.ts：sync + fsync + chmod 600 的台账持久化变体是刻意的耐久语义（崩溃窗口 + 文件权限），与异步 tmp+rename 不同构，不收敛。
 - watchlist 保留 safeAtomicWrite 薄封装（3 个调用点签名不动），内部委托共享实现。
+- 本入口**只管「一次写入不产生半截文件」**：跨进程「两进程整表回写互相覆盖」是另一条缺口，
+  由同包兄弟入口 `withHomeFileLock`/`transactStore` 在 store 粒度按 id 合并解决（2026-10-09，
+  见 [跨进程写保护记录](../bug-fix/2026-10-09-cross-process-store-merge-write.md)）。不把合并
+  逻辑塞进 `writeJsonAtomic`：它拿不到条目身份，按 id 盲并会复活墓碑；且读-改-写必须整体入锁
+  才有意义，只给写加锁仍是用陈旧快照覆盖。
 
 ## Alternatives considered
 

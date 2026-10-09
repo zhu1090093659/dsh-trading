@@ -19,3 +19,7 @@ Status: implemented
 - 工具写入与桥读取共享同一缓存与失效语义，跨实例 stale 窗口消除。
 - 桥装配行不硬依赖新插件版本：Service 缺席时回退路径与 issue #33 各域一致，老部署零迁移。
 - 教训固化：**新增持久化域时，file store 实例从第一天就 Service 化**——「先双实例跑起来、后收口」会留出难以复现的陈旧读窗口。
+- 本记录只覆盖**进程内**单实例：即使 Service 收口到唯一实例，两个宿主进程（桌面端 + CLI）仍各
+  持一份缓存、各自整表回写，后写者覆盖先写者。跨进程缺口由 `@dshtrading/dsh-home` 的
+  `transactStore`（锁内新读-改-写）解决（2026-10-09，见
+  [跨进程写保护记录](2026-10-09-cross-process-store-merge-write.md)）。
