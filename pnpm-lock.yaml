@@ -466,6 +466,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: 3.18.4
         version: 3.18.4
+      '@dshtrading/dsh-home':
+        specifier: workspace:^
+        version: link:../dsh-home
       lightweight-charts:
         specifier: ^5.2.1
         version: 5.2.1

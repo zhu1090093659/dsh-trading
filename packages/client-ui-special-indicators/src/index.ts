@@ -19,6 +19,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { createFileCachePersistence, defaultCacheFilePath } from './cache-file.ts'
 import { FinanceClient, FinanceError } from './finance-client.ts'
 
 /** Cordis 插件名 = patch 行 id（TEMPLATES §8）。 */
@@ -36,6 +37,7 @@ export interface Config {
   timeoutMs: number
   snapshotCacheMs: number
   historyCacheMs: number
+  cacheFile: string
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -47,6 +49,7 @@ export const Config: Schema<Config> = Schema.object({
   timeoutMs: Schema.number().default(60_000).description('单次上游请求超时（ms）；冷缓存上游重算可能十几秒'),
   snapshotCacheMs: Schema.number().default(60_000).description('快照类路由内存缓存（ms）'),
   historyCacheMs: Schema.number().default(300_000).description('历史/明细类路由内存缓存（ms）'),
+  cacheFile: Schema.string().default('').description('桥缓存落盘文件路径（空 = $DSH_HOME/special-indicators/cache.json）；跨宿主重启保留，避免每次启动冷拉上游'),
 })
 
 interface WebServerLike {
@@ -189,11 +192,15 @@ export function createRouteHandler(client: FinanceClient, config: Config, connec
  */
 export function apply(ctx: Context, config: Config): void {
   const credentials = createCredentialProviders(ctx, config)
+  // 缓存落盘：宿主进程退出后内存缓存清零，而浏览器侧缓存按 origin 隔离
+  // （桌面壳每次启动换随机端口）——没有文件镜像时「重启一次 = 冷拉一次」。
+  const cacheFilePath = config.cacheFile === '' ? defaultCacheFilePath() : config.cacheFile
   const client = new FinanceClient({
     baseUrl: config.baseUrl,
     username: credentials.username,
     password: credentials.password,
     timeoutMs: config.timeoutMs,
+    persistence: createFileCachePersistence({ baseUrl: config.baseUrl, filePath: cacheFilePath }),
   })
 
   ctx.inject(['webServer', 'connection'], (webCtx) => {
@@ -207,3 +214,5 @@ export function apply(ctx: Context, config: Config): void {
 
 /** Re-exports for tests and tooling. */
 export { FinanceClient, FinanceError } from './finance-client.ts'
+export type { CachePersistence, PersistedCacheEntry } from './finance-client.ts'
+export { createFileCachePersistence, defaultCacheFilePath } from './cache-file.ts'

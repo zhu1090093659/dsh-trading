@@ -17,6 +17,7 @@ const BASE_CONFIG: Config = {
   timeoutMs: 5_000,
   snapshotCacheMs: 60_000,
   historyCacheMs: 300_000,
+  cacheFile: '',
 }
 
 /** 最小契约 fake res：捕获状态行与 JSON 负载。 */

@@ -23,6 +23,8 @@ export interface FinanceClientOptions {
   fetchImpl?: typeof globalThis.fetch
   /** 注入缝：缓存时钟（测试注入单调假时钟，不用 fake timers）。 */
   now?: () => number
+  /** 落盘缓存端口；缺省不落盘（纯内存，测试与无 home 环境的行为）。 */
+  persistence?: CachePersistence
 }
 
 export class FinanceError extends Error {
@@ -41,6 +43,26 @@ interface CacheEntry {
   payload: unknown
 }
 
+/**
+ * 落盘缓存的保鲜上限（7 天）。超期即丢弃、退回冷拉。
+ *
+ * 为什么是 7 天而不是 1 天：本数据面是日频指标，而 A 股有周末、长假（春节/国庆
+ * 可连休 8 天）。按 24h 计，周一早上打开（距上次使用约 60h）缓存必被判废，
+ * 又回到冷拉转圈——正是本次要修的缺陷。7 天覆盖任何常规休市间隔；再往上留，
+ * 则可能把明显过期的数据当首屏。
+ *
+ * 注意超期丢失只发生在**长时间没打开**时；条目在窗口内但已过 TTL（快照 60s /
+ * 历史 300s）时走 SWR：立即服役陈旧值 + 后台再验证，首屏依旧不等上游。
+ */
+const MAX_PERSIST_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * 落盘条目上限。板块明细（/sectors/detail?code=…）按代码分键，用户点过的每个
+ * 板块各占一条——不设上限时文件会随浏览行为无界增长。超限时按写入时刻保留最新的
+ * MAX_PERSIST_ENTRIES 条、淘汰其余，保住最近浏览路径上的数据。
+ */
+const MAX_PERSIST_ENTRIES = 256
+
 /** getWithMeta 的缓存面：stale=true = 命中已过 TTL 窗口的陈旧条目。 */
 export interface CacheMeta {
   /** 陈旧值立即服役（后台再验证并发起）；调用方据此向下游如实标记。 */
@@ -49,11 +71,35 @@ export interface CacheMeta {
   revalidated: Promise<void> | null
 }
 
+/** 落盘缓存条目：`at` 为写入时刻（毫秒），用于跨进程继续按 TTL 判定陈旧。 */
+export interface PersistedCacheEntry {
+  at: number
+  payload: unknown
+}
+
+/**
+ * 落盘缓存端口（注入缝）：把内存 TTL 缓存镜像到宿主 home 下的文件。
+ *
+ * 为什么需要它：桥的内存缓存在宿主进程退出的瞬间清零，而浏览器侧缓存
+ * （sessionStorage/localStorage）按 **origin** 隔离——桌面壳每次启动都用一个随机
+ * 空闲端口（desktop/src/main.cjs findFreePort），origin 随之改变，上个会话的
+ * 浏览器缓存整片成为孤儿。于是「重启一次 = 冷缓存」，每次打开都要阻塞等上游
+ * 全量重算。文件缓存不依赖 origin，也不随进程退出丢失。
+ *
+ * load 同步读（构造后首次取数前一次性补水）；save 失败必须静默——缓存不可用
+ * 只能退化成「慢」，不能让路由报错。
+ */
+export interface CachePersistence {
+  load(): Record<string, PersistedCacheEntry>
+  save(entries: Record<string, PersistedCacheEntry>): void
+}
+
 export class FinanceClient {
   private readonly baseUrl: string
   private readonly timeoutMs: number
   private readonly fetchImpl: typeof globalThis.fetch
   private readonly now: () => number
+  private readonly persistence: CachePersistence | undefined
   private readonly cache = new Map<string, CacheEntry>()
   private readonly inflight = new Map<string, Promise<unknown>>()
 
@@ -62,6 +108,47 @@ export class FinanceClient {
     this.timeoutMs = options.timeoutMs ?? 60_000
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
     this.now = options.now ?? Date.now
+    this.persistence = options.persistence
+    this.hydrate()
+  }
+
+  /**
+   * 从落盘缓存补水（构造时一次）。保留写入时刻，因此「陈旧」判定跨进程继续
+   * 按同一 TTL 口径成立：过期条目在首个请求里立即服役并触发后台再验证，
+   * 不过期条目直接命中——两种情形都不阻塞等上游。
+   */
+  private hydrate(): void {
+    if (this.persistence === undefined) return
+    let entries: Record<string, PersistedCacheEntry>
+    try {
+      entries = this.persistence.load()
+    } catch {
+      return
+    }
+    const now = this.now()
+    for (const [key, entry] of Object.entries(entries)) {
+      if (entry === null || typeof entry !== 'object') continue
+      if (typeof entry.at !== 'number' || !Number.isFinite(entry.at)) continue
+      // 超过保鲜期的条目直接丢弃：宁可冷一次，也不把过期几天的数据当缓存上屏。
+      if (now - entry.at > MAX_PERSIST_AGE_MS) continue
+      this.cache.set(key, { at: entry.at, payload: entry.payload })
+    }
+  }
+
+  /** 把内存缓存镜像落盘（失败静默：缓存不可用只能退化成「慢」，不能报错）。 */
+  private persist(): void {
+    if (this.persistence === undefined) return
+    try {
+      const all = [...this.cache.entries()]
+      const kept = all.length <= MAX_PERSIST_ENTRIES
+        ? all
+        : all.sort((a, b) => b[1].at - a[1].at).slice(0, MAX_PERSIST_ENTRIES)
+      const entries: Record<string, PersistedCacheEntry> = {}
+      for (const [key, entry] of kept) entries[key] = { at: entry.at, payload: entry.payload }
+      this.persistence.save(entries)
+    } catch {
+      // 落盘失败不影响本次请求结果。
+    }
   }
 
   /** 凭据是否齐备（username 有 schema 兜底，决定性的是 password）。 */
@@ -76,7 +163,10 @@ export class FinanceClient {
     if (pending !== undefined) return pending
     const promise = this.fetchUpstream(path)
       .then((payload) => {
-        if (ttlMs > 0) this.cache.set(key, { at: this.now(), payload })
+        if (ttlMs > 0) {
+          this.cache.set(key, { at: this.now(), payload })
+          this.persist()
+        }
         return payload
       })
       .finally(() => {

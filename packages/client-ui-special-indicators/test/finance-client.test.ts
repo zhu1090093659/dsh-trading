@@ -218,3 +218,152 @@ describe('FinanceClient 陈旧回源（stale-while-revalidate）', () => {
     expect(upstream.count()).toBe(3)
   })
 })
+
+describe('FinanceClient 落盘缓存（跨宿主进程重启）', () => {
+  /** 契约化落盘端口：内存 Map 冒充文件，记录 save 次数，可注入损坏数据。 */
+  function memoryPersistence(seed?: Record<string, unknown>) {
+    const file = new Map<string, unknown>(Object.entries(seed ?? {}))
+    let saves = 0
+    return {
+      file,
+      saves: () => saves,
+      port: {
+        load: () => Object.fromEntries(file) as Record<string, { at: number; payload: unknown }>,
+        save: (entries: Record<string, { at: number; payload: unknown }>) => {
+          saves += 1
+          file.clear()
+          for (const [k, v] of Object.entries(entries)) file.set(k, v)
+        },
+      },
+    }
+  }
+
+  it('用户重启宿主后首个请求直接命中落盘缓存，不再冷拉上游', async () => {
+    // Given: 上一个宿主进程写下的落盘缓存（30s 前，仍在 60s 窗口内）
+    let clock = 1_000_000
+    const store = memoryPersistence({ '/api/snapshot': { at: clock - 30_000, payload: { v: 'disk' } } })
+    const upstream = fakeFetch([{ body: { v: 'net' } }])
+    // When: 新进程的 client 构造（补水）后用户请求同路径
+    const client = new FinanceClient({
+      baseUrl: 'https://finance.example.test',
+      username: () => 'api',
+      password: () => 'secret',
+      fetchImpl: upstream.impl,
+      now: () => clock,
+      persistence: store.port,
+    })
+    const payload = await client.get('/api/snapshot', 60_000)
+    // Then: 回的是落盘值，且零网络调用（这正是「重开就转圈」的正面）
+    expect(payload).toEqual({ v: 'disk' })
+    expect(upstream.count()).toBe(0)
+  })
+
+  it('用户周一打开时周末（约 60h）前写入的落盘缓存仍在保鲜期内，首屏不等上游', async () => {
+    // Given: 落盘缓存约 60h 前写入（周五收盘 → 周一开盘的典型间隔）
+    const clock = 1_000_000_000
+    const store = memoryPersistence({ '/api/snapshot': { at: clock - 60 * 60 * 60 * 1000, payload: { v: 'friday' } } })
+    const upstream = fakeFetch([{ body: { v: 'monday' } }])
+    const client = new FinanceClient({
+      baseUrl: 'https://finance.example.test',
+      username: () => 'api',
+      password: () => 'secret',
+      fetchImpl: upstream.impl,
+      now: () => clock,
+      persistence: store.port,
+    })
+    // When: 用户请求
+    const first = await client.getWithMeta('/api/snapshot', 60_000)
+    // Then: 周五数据立即上屏并标记 stale（后台再验证已发起），不被保鲜期判废
+    expect(first.payload).toEqual({ v: 'friday' })
+    expect(first.meta.stale).toBe(true)
+    await first.meta.revalidated
+    expect((await client.getWithMeta('/api/snapshot', 60_000)).payload).toEqual({ v: 'monday' })
+  })
+
+  it('用户重启时落盘条目已过 TTL 则立即服役陈旧值并后台换新，仍不阻塞', async () => {
+    // Given: 落盘缓存 61s 前写入（超 60s 窗口，但未超 7 天保鲜期）
+    let clock = 1_000_000
+    const store = memoryPersistence({ '/api/snapshot': { at: clock - 61_000, payload: { v: 'disk' } } })
+    const upstream = fakeFetch([{ body: { v: 'net' } }])
+    const client = new FinanceClient({
+      baseUrl: 'https://finance.example.test',
+      username: () => 'api',
+      password: () => 'secret',
+      fetchImpl: upstream.impl,
+      now: () => clock,
+      persistence: store.port,
+    })
+    // When: 用户请求
+    const first = await client.getWithMeta('/api/snapshot', 60_000)
+    // Then: 陈旧落盘值立即上屏并如实标记 stale（后台再验证已发起）
+    expect(first.payload).toEqual({ v: 'disk' })
+    expect(first.meta.stale).toBe(true)
+    await first.meta.revalidated
+    // When: 再验证落定后重新请求
+    const fresh = await client.getWithMeta('/api/snapshot', 60_000)
+    // Then: 换新为上游值
+    expect(fresh.payload).toEqual({ v: 'net' })
+    expect(fresh.meta.stale).toBe(false)
+  })
+
+  it('用户重启时落盘条目超过 7 天保鲜期则丢弃，回退为冷拉', async () => {
+    // Given: 落盘缓存 8 天前写入（超保鲜期）
+    let clock = 1_000_000_000
+    const store = memoryPersistence({ '/api/snapshot': { at: clock - 8 * 24 * 60 * 60 * 1000, payload: { v: 'ancient' } } })
+    const upstream = fakeFetch([{ body: { v: 'net' } }])
+    const client = new FinanceClient({
+      baseUrl: 'https://finance.example.test',
+      username: () => 'api',
+      password: () => 'secret',
+      fetchImpl: upstream.impl,
+      now: () => clock,
+      persistence: store.port,
+    })
+    // When: 用户请求
+    const payload = await client.get('/api/snapshot', 60_000)
+    // Then: 不吃过期缓存，真实触网一次
+    expect(payload).toEqual({ v: 'net' })
+    expect(upstream.count()).toBe(1)
+  })
+
+  it('用户首次成功拉取后缓存落盘一次，后续窗口内命中不再重复写盘', async () => {
+    // Given: 全新 client（空落盘）
+    let clock = 1_000_000
+    const store = memoryPersistence()
+    const upstream = fakeFetch([{ body: { v: 1 } }])
+    const client = new FinanceClient({
+      baseUrl: 'https://finance.example.test',
+      username: () => 'api',
+      password: () => 'secret',
+      fetchImpl: upstream.impl,
+      now: () => clock,
+      persistence: store.port,
+    })
+    // When: 用户首拉落定，再在窗口内取一次
+    await client.get('/api/snapshot', 60_000)
+    await client.get('/api/snapshot', 60_000)
+    // Then: 只写盘一次（命中缓存不重复落盘），文件内容为已落地负载
+    expect(store.saves()).toBe(1)
+    expect(store.file.get('/api/snapshot')).toEqual({ at: clock, payload: { v: 1 } })
+  })
+
+  it('用户落盘读写抛错时请求照常完成（缓存不可用只退化成慢）', async () => {
+    // Given: 落盘端口 load/save 都抛错
+    const upstream = fakeFetch([{ body: { v: 1 } }])
+    const client = new FinanceClient({
+      baseUrl: 'https://finance.example.test',
+      username: () => 'api',
+      password: () => 'secret',
+      fetchImpl: upstream.impl,
+      persistence: {
+        load: () => { throw new Error('disk unreadable') },
+        save: () => { throw new Error('disk full') },
+      },
+    })
+    // When: 用户请求
+    const payload = await client.get('/api/snapshot', 60_000)
+    // Then: 结果正常返回，不被缓存故障污染
+    expect(payload).toEqual({ v: 1 })
+  })
+})
+
