@@ -35,6 +35,7 @@
 - 预置与自定义指标都可用；`indicator_list` 的 active 名册自动带出 applyScope（agent 可读当前适用范围）。
 - 图表侧靠渲染集收缩实现：`selectApplicableInstances` 变小时 TvChart 结构 diff 走 `_internal_removeSeries`，空副图 pane 由 lightweight-charts 自动摘除；切回适用市场/级别即重新加回，不残留绘制、不留空副图。
 - 读数行、参数编辑、选择器勾选态仍消费「按标的可见集」（visibleInstances）——适用范围管「是否应用」，不改变「是否激活」；被范围排除时其设置仍可编辑。
+- 底部快捷词条带的启用态消费「适用集」（applicableInstances）：词条的「已启用」表示「此刻在这张图上真正生效」，与图表/读数行同源。若只按可见性判定，仅港A生效的指标（KDAS）在美股图会误显已启用而其副图并未出现（2026-10-09 owner 报告后修正）。
 - 修复一处存量写入缺陷：只重建 `{id, params, symbolParams}` 的写路径会静默丢 hiddenScopes（本次改动前已存在），现全部写入边界共用 `carryInstanceExtras`。
 - 已知边界：supertrend 是社区 spike 包（非 `presetDefinitions()` 成员），host `resolveIndicatorSpec` 不认该 id，`indicator_activate`/桥 PUT 一律 `TRADING_UNKNOWN_INDICATOR`，故它只有浏览器半侧注册、无法挂载——与本适用范围机制无关（改动前后一致）。
 - 测试：indicators 包 applyScope 清洗/适用性/withMarketScope/有效值/持久化/全局写保留；bot-api 桥 applyScope 写入与 import 保真；client-ui-trading chart-state setMarketScope 持久化、写入侧归一与渲染集（含六市场矩阵与主/副图切换）、UI 面板渲染与两处回归（隐藏指标仍可开面板、关闭市场仍显示保留级别数）。门禁 build / -r test / test:audit / i18n:check / coverage:check / typecheck 全绿。
