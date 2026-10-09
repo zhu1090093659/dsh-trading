@@ -72,3 +72,13 @@ Status: implemented
   win32 下 spawn 带 shell:true（args 均为固定常量或 CI 上的无空格绝对路径，
   不引入注入面）；mac job 首跑即绿，验证了 mac 链路端到端可用。
 - 后续若引入代码签名/公证，是独立决策，须新增 Agent Note 并同步 skill。
+- **「删 tag 重推安全」有前提（2026-10-09 补，v0.6.0 → v0.6.1 实证）**：那条幂等性
+  只在**代码本来就对**时成立。0.6.0 是相反形态：`npm-publish` 与 mac 桌面都成功、
+  58 个 npm 包已公开，Windows 桌面因 `@dshtrading/authority` / `base` 的真实代码缺陷
+  判红，`github-release` 因 all-or-nothing 跳过 ⇒ npm 已部分外化，而 Release 无法创建。
+  这种形态**不能靠重推 tag 或重跑失败 job 救回**：tag 指向的 SHA 代码本身就是坏的，
+  重跑只会复现同一失败；npm 同版本换代码被 §仓库契约禁止。唯一出路是**新版本号**
+  （0.6.1 带上修复 + 已发布的 0.6.0 内容）+ 新 tag，重走整条管线。
+  操作含义：`pnpm -r test` 遇首个失败包即中止，**发版前必须确认该次门禁是跑完全部包
+  还是中止在首个失败包**——v0.6.0 的 Windows 桌面 job 只跑到 10/53 个包就因第一个失败
+  包退出，其后包的 Windows 信号全部未观测（见 windows-compat note 的边界补充）。

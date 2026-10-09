@@ -60,6 +60,14 @@ CI 实证全绿，但存在四类遗留债：
 
 - Windows 专属故障的暴露点从「发版窗口」前移到「每个 push/PR」，
   删 tag 重推的发版救火模式不再为 CI 盲区买单。
+- **该前移有一个实测边界（2026-10-09 补）**：`pnpm -r test` 遇首个失败包即
+  中止（`ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL`），所以只要矩阵里排在前面任意一包
+  长期判红，其后所有包的 Windows 信号就**全部不被观测**——「前移到每个 push」
+  只对「排在首个失败包之前」的包成立。v0.6.0 正是这样：`@dshtrading/dsh-home`
+  一直先红，把排在其后的 `@dshtrading/authority` 整段遮住，后者从上线起
+  从未在 Windows 上执行过，直到 dsh-home 修好才第一次暴露；修好 authority 又
+  露出 `@dshtrading/base`。判读这条信号时必须同时确认该 run 是「跑完全部包」
+  还是「中止在首个失败包」——只看 job 结论会把「未观测」误读成「通过」。
 - 新增代码若再依赖「Windows 检出为 CRLF」的前提会直接失效——这正是目的，
   仓库从契约上锁死 LF。
 - `desktop/dist` 本地产物由本次交叉构建刷新为 0.1.4-win-x64（含新
