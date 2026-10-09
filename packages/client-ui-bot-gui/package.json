@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/client-ui-bot-gui",
   "description": "Trading bot GUI stage view plugin for dsh-trading (LOCAL ONLY, never published): registers the 中栏「机器人」tab via tradingStageViews. Node half proxies /v1/cards and /v1/commands to multiple bot edges with credential authentication and x-dsht-caps action support.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "type": "module",
   "main": "lib/index.js",

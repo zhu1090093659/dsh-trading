@@ -1,5 +1,13 @@
 # @dshtrading/connector-stooq
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @dshtrading/authority@0.6.1
+  - @dshtrading/api@0.6.1
+
 ## 0.6.0
 
 ### Patch Changes

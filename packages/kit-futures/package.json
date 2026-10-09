@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/kit-futures",
   "description": "China futures toolkit plugin for dsh-trading: futures risk checklist skill provider (margin/leverage/forced-liquidation/delivery/night-session); runs as a futures-trader preset row (session-scoped)",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

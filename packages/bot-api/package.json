@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/bot-api",
   "description": "Bot API-plane bundle for dsh-trading: the /dshtrading/api HTTP surface and SSE stream, with the scheduled-tasks ledger/runner/service and their agent tools. Node half of the former client-ui-trading package, moved out on 2026-10-01 so the bot install closure carries no @dshtrading/client-ui-* dependency (design doc §10 three-plane split).",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

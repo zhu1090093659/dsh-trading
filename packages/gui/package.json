@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/gui",
   "description": "GUI-plane bundle for dsh-trading: the browser-half rows (settings shell, stage views, language packs, updater dialog) and the web-host-only dual-half rows (IM, plugin manager, model capabilities). Split out of @dshtrading/base on 2026-10-01 so the bot install closure carries no @dshtrading/client-ui-* dependency. Row ids and names moved verbatim (they are a cross-version public contract).",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

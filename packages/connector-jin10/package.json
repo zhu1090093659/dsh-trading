@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-jin10",
   "description": "金十数据 MCP 连接器：把 mcp.jin10.com 的行情/快讯/资讯/财经日历封装成本仓的连接器（市场无关，host 面工具行）",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

@@ -1,5 +1,12 @@
 # @dshtrading/kit-us
 
+## 0.6.1
+
+### Patch Changes
+
+- @dshtrading/indicators@0.6.1
+- @dshtrading/knowledge@0.6.1
+
 ## 0.6.0
 
 ### Patch Changes
