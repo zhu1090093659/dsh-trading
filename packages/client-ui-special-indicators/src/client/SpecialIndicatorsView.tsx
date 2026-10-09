@@ -37,6 +37,8 @@ import {
   formatNum,
   formatPct,
   formatSigned,
+  sectorsDataStale,
+  sentimentDataStale,
   sentimentZone,
   toChartSeries,
   type BasisHistory,
@@ -441,7 +443,7 @@ function SentimentCard({ t, snap, hist, loading }: {
       title={t('si.sentiment.title')}
       subtitle={t('si.sentiment.subtitle')}
       date={s?.date}
-      stale={s?.stale === true || snap?.stale === true || hist?.stale === true}
+      stale={sentimentDataStale(s)}
       error={snap?.error ?? hist?.error}
       loading={loading}
       refreshing={loading && s !== undefined}
@@ -502,7 +504,6 @@ function BasisCard({ t, snap, hist, loading }: {
       title={t('si.basis.title')}
       subtitle={t('si.basis.subtitle')}
       date={hist?.data?.data_date}
-      stale={snap?.stale === true || hist?.stale === true}
       error={snap?.error ?? hist?.error}
       loading={loading}
       refreshing={loading && s !== undefined}
@@ -564,7 +565,7 @@ function HkShortCard({ t, snap, chart, loading }: {
       title={t('si.hkshort.title')}
       subtitle={t('si.hkshort.subtitle')}
       date={s?.data_date}
-      stale={c?.stale === true || snap?.stale === true || chart?.stale === true}
+      stale={c?.stale === true}
       error={snap?.error ?? chart?.error}
       loading={loading}
       refreshing={loading && s !== undefined}
@@ -655,7 +656,7 @@ function SectorsCard({ t, snap, ranking, loading }: {
       title={t('si.sectors.title')}
       subtitle={t('si.sectors.subtitle', { window: SECTOR_WINDOW })}
       date={s?.data_date}
-      stale={snap?.stale === true || ranking?.stale === true}
+      stale={sectorsDataStale(s)}
       error={snap?.error ?? ranking?.error}
       loading={loading}
       refreshing={loading && s !== undefined && rows !== undefined}

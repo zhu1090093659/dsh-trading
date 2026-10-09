@@ -10,6 +10,10 @@
   color: var(--dsh-text, #1f2329);
   /* 文字/进度条/表格类内容的可读宽度上限：图表区铺满中栏，文本块不跟着拉长。 */
   --si-read-width: 960px;
+  /* 本视图是宽度容器：下面的 @container 按「中栏实际可用宽」分支，而不是
+     按窗口宽。中栏宽随会话侧栏展开/收起变化——同一个窗口宽下中栏可能从
+     1283px 缩到 503px，只看视口会把双栏布局留在装不下的中栏里。 */
+  container-type: inline-size;
 }
 
 .toolbar {
@@ -119,6 +123,9 @@
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  /* 卡片是「铺满面板内容宽」的块：100% + padding/border 若按 content-box 计算，
+     边框盒会比面板内容宽多出 12*2+1*2=26px，右缘越界并让面板出现横向滚动条。 */
+  box-sizing: border-box;
   /* 挂载淡入 + 再验证降透明度共用 opacity 过渡：换缓存数据基础上增量
      更新，新数据落地平滑换新，不再整屏清空。 */
   animation: si-card-in 0.24s ease;
@@ -366,7 +373,14 @@
   background: rgba(91, 141, 239, 0.12);
 }
 
-@media (max-width: 1100px) {
+/* 容器宽（中栏可用宽）不够并排放下「440px 排行表 + 可用双轴图」时改单栏堆叠。
+   阈值 900px 由两侧内容反推：双轴图宽 = 中栏 - 24(面板 padding) - 26(卡片
+   padding+边框) - 440(排行表) - 14(栏间距)，即中栏 900px 时图区约 396px——
+   再加宽只是让图更宽，再窄就该堆叠。实测会话侧栏展开时中栏只有 503px，两栏
+   硬并排会把双轴图压到 25px。用 @container 而非 @media：中栏宽随侧栏开合变化，
+   视口宽并不反映它——按视口判断（旧写法 max-width: 1100px）在 1600px 视口下
+   侧栏展开时仍留在双栏，正是本回归。 */
+@container (max-width: 900px) {
   .sectorLayout {
     flex-direction: column;
   }

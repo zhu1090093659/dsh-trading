@@ -44,7 +44,7 @@ function fixtureFor(url: string): { status?: number; body: unknown } {
   if (url.includes('/sentiment/snapshot')) {
     return {
       body: {
-        score: 42.65, label: 'fear', label_text: '恐惧', date: '2026-09-16', stale: false,
+        score: 42.65, label: 'fear', label_text: '恐惧', date: '2026-09-16', expected_data_date: '2026-09-16', stale: false,
         average_5d: 29.24, vs_5d: 13.41,
         components: [{ key: 'cn_momentum', name: '全指动量', raw: -5.35, score: 7.8, direction: 'higher_fear' }],
         coverage: { valid: 1, total: 7, partial: false },
@@ -66,7 +66,7 @@ function fixtureFor(url: string): { status?: number; body: unknown } {
     return {
       body: {
         sectors: [{ code: '801951', name: '煤炭', type: 'sw' }],
-        data_date: '2026-09-16', n_ready: 18, n_total: 18,
+        data_date: '2026-09-16', expected_data_date: '2026-09-16', n_ready: 18, n_total: 18,
         five_day: { current_change: 12.3, average_change: 47.2, difference: -34.9, total_flow: -34.9, unit: '亿元' },
       },
     }
@@ -335,16 +335,42 @@ describe('特殊指标缓存优先与平滑过渡', () => {
     expect(screen.queryByText('42.6')).toBeNull()
   })
 
-  it('用户拿到桥陈旧回源响应时卡片如实挂数据滞后徽标', async () => {
-    // Given: 桥对恐慌指数快照回 stale 信封（node 半 SWR 立即服役过期窗口缓存）
+  it('用户拿到桥陈旧回源响应时卡片不误标数据滞后（缓存标记不等于数据落后）', async () => {
+    // Given: 桥对恐慌指数快照回 stale 信封（node 半 SWR 立即服役过期窗口缓存），
+    // 但上游数据日已到预期数据日——T+1 口径下这不是滞后
     const fake = installFakeFetch({
       '/sentiment/snapshot': { body: { ok: true, data: fixtureFor(MOUNT + '/sentiment/snapshot').body, stale: true } },
     })
     restoreFetch = fake.restore
     render(<SpecialIndicatorsView t={t} view="special-indicators" />)
-    // Then: 数据照常渲染，且卡片头部出现「数据滞后」徽标（桥标记，非上游 stale 字段）
+    // Then: 数据照常渲染，且不挂「数据滞后」徽标
+    expect(await screen.findByText('42.6')).toBeTruthy()
+    expect(screen.queryByText('数据滞后')).toBeNull()
+  })
+
+  it('用户数据日早于预期数据日时卡片才挂数据滞后徽标', async () => {
+    // Given: 恐慌指数上游数据日（10-08）落后于预期数据日（10-09）
+    const behind = { ...fixtureFor(MOUNT + '/sentiment/snapshot').body as Record<string, unknown>, date: '2026-10-08', expected_data_date: '2026-10-09' }
+    const fake = installFakeFetch({ '/sentiment/snapshot': { body: behind } })
+    restoreFetch = fake.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    // Then: 落后一天即如实标滞后
     expect(await screen.findByText('42.6')).toBeTruthy()
     expect(screen.getByText('数据滞后')).toBeTruthy()
+  })
+
+  it('用户看到 T+1 数据落在上一交易日时不标滞后（融资余额与恐慌指数同口径）', async () => {
+    // Given: 板块融资上游数据日 10-08、预期数据日 10-08（节后首日 T-1 口径）
+    const snap = { ...fixtureFor(MOUNT + '/sectors/snapshot').body as Record<string, unknown>, data_date: '2026-10-08', expected_data_date: '2026-10-08' }
+    const fake = installFakeFetch({ '/sectors/snapshot': { body: snap } })
+    restoreFetch = fake.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    await screen.findByText('42.6')
+    // When: 切到板块融资页签
+    fireEvent.click(screen.getByRole('tab', { name: '板块融资余额' }))
+    await screen.findByText('板块就绪 18/18')
+    // Then: 数据日等于预期数据日，不挂滞后徽标
+    expect(screen.queryByText('数据滞后')).toBeNull()
   })
 
   it('用户刷新失败时已落地数据不被错误面板清空', async () => {

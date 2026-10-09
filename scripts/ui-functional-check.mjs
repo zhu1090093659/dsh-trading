@@ -249,6 +249,25 @@ if (!btn) {
 // --- G. 特殊指标视图铺满中栏（左右与上下都无空白） ------------------------
 
 /** 布局探针：面板/卡片取内容盒（扣 padding），图区取实测矩形。 */
+// 侧栏开合是本次回归的触发条件：会话侧栏展开时中栏只剩几百像素，旧写法用
+// 视口宽度断点（@media max-width:1100px）判断双栏/单栏——1600px 视口下侧栏
+// 展开也不堆叠，双轴图被压到 25px。这里在侧栏展开态再断言一次双栏可用性。
+const RAIL_PROBE = `(() => {
+  const stage = document.querySelector('[data-dshtrading-middle-stage]');
+  if (!stage) return { state: 'no-stage' };
+  const layout = stage.querySelector('[class*="sectorLayout"]');
+  if (!layout) return { state: 'no-layout' };
+  const chart = stage.querySelector('[class*="sectorChart"]');
+  const w = (el) => (el === null ? null : Math.round(el.getBoundingClientRect().width));
+  return {
+    state: 'ready',
+    stageW: w(stage),
+    dir: getComputedStyle(layout).flexDirection,
+    chartW: w(chart),
+    stageScrollW: stage.scrollWidth,
+    stageClientW: stage.clientWidth,
+  };
+})()`;
 const LAYOUT_PROBE = `(() => {
   const stage = document.querySelector('[data-dshtrading-middle-stage]');
   if (!stage) return { state: 'no-stage' };
@@ -270,10 +289,17 @@ const LAYOUT_PROBE = `(() => {
   };
   const read = stage.querySelector('[class*="basisGrid"]') ?? stage.querySelector('[class*="statRow"]');
   const cr = chart.getBoundingClientRect();
+  const panel = card.parentElement;
   return {
     state: 'ready',
-    panel: inner(card.parentElement),
+    panel: inner(panel),
+    // 面板横向溢出：卡片越出面板内容宽的实测量（>0 即右缘越界并出横向滚动条）。
+    panelOverflowX: panel.scrollWidth - panel.clientWidth,
     card: inner(card),
+    // 卡片外框（含 padding/border）= 视觉宽；"铺满面板"的判据必须用它，
+    // 不能用 content-box——content-box 相等在 content-box 布局下恰好等价于
+    // 外框比面板宽出 26px（2026-10-09 事故：旧断言因此把溢出判成全绿）。
+    cardBox: { w: Math.round(card.offsetWidth), h: Math.round(card.offsetHeight) },
     chart: { w: Math.round(cr.width), h: Math.round(cr.height) },
     read: read === null ? null : inner(read),
     viewport: [innerWidth, innerHeight],
@@ -292,8 +318,12 @@ for (let i = 0; i < 45; i++) {
   if (layout?.state === 'ready' || layout?.state === 'unavailable') break;
 }
 if (layout?.state === 'ready') {
-  check('G1. 特殊指标卡片铺满中栏宽度', layout.card.w >= layout.panel.w - 1,
-    `卡片 ${layout.card.w}px / 面板内容 ${layout.panel.w}px（视口 ${layout.viewport[0]}px）`);
+  // 卡片外框 == 面板内容宽：既铺满、又不越界（内容盒相等不构成铺满证明，见探针注释）。
+  check('G1. 特殊指标卡片铺满中栏宽度且不越界',
+    layout.cardBox.w >= layout.panel.w - 1 && layout.cardBox.w <= layout.panel.w + 1,
+    `卡片外框 ${layout.cardBox.w}px / 面板内容 ${layout.panel.w}px（视口 ${layout.viewport[0]}px）`);
+  check('G5. 特殊指标不产生横向溢出', layout.panelOverflowX <= 0,
+    `面板横向溢出 ${layout.panelOverflowX}px（>0 即卡片右缘越界）`);
   check('G2. 特殊指标图区铺满卡片宽度', layout.chart.w >= layout.card.w - 1,
     `图区 ${layout.chart.w}px / 卡片内容 ${layout.card.w}px`);
   check('G3. 特殊指标图区吃掉中栏剩余高度', layout.chart.h >= 300,
@@ -310,6 +340,44 @@ if (layout?.state === 'ready') {
   skip('G. 特殊指标视图铺满中栏', `环境缺数据（${layout.text}），本机跳过`);
 } else {
   check('G. 特殊指标视图铺满中栏', false, `探测结果 ${JSON.stringify(layout)}`);
+}
+
+// --- G6. 侧栏展开时按「中栏实际宽」自适应，而不是视口宽 ------------------
+// 回归现场：视口 1400px（宽于旧 @media 阈值 1100px），但会话侧栏展开把中栏
+// 压到 700px 上下。旧写法按视口判断 → 仍是双栏 → 双轴图被压到几十像素。
+// 容器查询写法按中栏判断 → 装不下就堆叠，图区保持可用。
+if (layout?.state === 'ready') {
+  const foldKey = 'dshtrading.chat.folded.v1';
+  const foldedBefore = await evalJs(`localStorage.getItem(${JSON.stringify(foldKey)})`);
+  const tabBefore = await evalJs(`localStorage.getItem('dshtrading.special-indicators.tab.v1')`);
+  // fold-store 语义：true = 会话列折叠。这里展开侧栏，并切到板块融资页签。
+  await evalJs(`localStorage.setItem(${JSON.stringify(foldKey)}, JSON.stringify(false)); localStorage.setItem('dshtrading.special-indicators.tab.v1', JSON.stringify('sectors')); true`);
+  // 1400 > 1100（旧 @media 阈值）：若实现退回按视口分支，中栏窄也不会堆叠。
+  await send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false });
+  await send('Page.reload', { ignoreCache: true });
+  let rail = null;
+  for (let i = 0; i < 45; i++) {
+    await sleep(1000);
+    rail = await evalJs(RAIL_PROBE);
+    if (rail?.state === 'ready') break;
+  }
+  if (rail?.state === 'ready') {
+    // 中栏已被侧栏压到阈值以下时，必须堆叠且双轴图仍有可用宽度。
+    const narrow = rail.stageW < 900;
+    const stacked = rail.dir === 'column';
+    const chartUsable = rail.chartW !== null && rail.chartW >= 200;
+    check('G6. 侧栏展开后中栏按容器宽自适应（装不下即堆叠且图区可用）',
+      (!narrow || stacked) && chartUsable,
+      `中栏 ${rail.stageW}px / 方向 ${rail.dir} / 图区 ${rail.chartW}px（视口 1400px；按视口判断会误留双栏）`);
+  } else {
+    check('G6. 侧栏展开后中栏按容器宽自适应（装不下即堆叠且图区可用）', false,
+      `探测结果 ${JSON.stringify(rail)}`);
+  }
+  // 还原侧栏与页签状态。
+  if (foldedBefore === null) await evalJs(`localStorage.removeItem(${JSON.stringify(foldKey)}); true`);
+  else await evalJs(`localStorage.setItem(${JSON.stringify(foldKey)}, ${JSON.stringify(foldedBefore)}); true`);
+  if (tabBefore === null) await evalJs(`localStorage.removeItem('dshtrading.special-indicators.tab.v1'); true`);
+  else await evalJs(`localStorage.setItem('dshtrading.special-indicators.tab.v1', ${JSON.stringify(tabBefore)}); true`);
 }
 
 // 还原现场：后续截图仍是行情视图的原始视口。

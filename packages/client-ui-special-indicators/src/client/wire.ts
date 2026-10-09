@@ -88,6 +88,30 @@ export function sentimentZone(score: number): SentimentZone {
   return 'extreme_greed'
 }
 
+/**
+ * 「数据滞后」判据：上游数据日早于该指标的预期数据日才算滞后。
+ *
+ * T+1 口径下，交易日内显示上一交易日（T-1）数据是常态——融资余额、恐慌指数
+ * 本身就要等次日才发布，10-09 显示 10-08 不是滞后。只有数据日真正落在预期
+ * 交易日之前（如长假后迟迟未补、上游断更）才标记。日期为 ISO YYYY-MM-DD，
+ * 字典序即时间序。任一日期缺失都不判滞后（宁可不标，不误标）。
+ */
+export function isDataBehind(dataDate: string | null | undefined, expectedDate: string | null | undefined): boolean {
+  if (typeof dataDate !== 'string' || typeof expectedDate !== 'string') return false
+  if (dataDate === '' || expectedDate === '') return false
+  return dataDate < expectedDate
+}
+
+/** 恐慌指数快照的数据滞后（上游 date vs expected_data_date）。 */
+export function sentimentDataStale(snapshot: SentimentSnapshot | undefined): boolean {
+  return snapshot !== undefined && isDataBehind(snapshot.date, snapshot.expected_data_date)
+}
+
+/** 板块融资快照的数据滞后（上游 data_date vs expected_data_date）。 */
+export function sectorsDataStale(snapshot: SectorsSnapshot | undefined): boolean {
+  return snapshot !== undefined && isDataBehind(snapshot.data_date, snapshot.expected_data_date)
+}
+
 /* --------------------------------- 恒科卖空 --------------------------------- */
 
 export interface HkShortSnapshot {

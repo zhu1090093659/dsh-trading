@@ -3,7 +3,16 @@
  * 不补成数值零）、sentimentZone 五档边界、format 空值口径。
  */
 import { describe, expect, it } from 'vitest'
-import { formatNum, formatPct, formatSigned, sentimentZone, toChartSeries } from '../src/client/wire.ts'
+import {
+  formatNum,
+  formatPct,
+  formatSigned,
+  isDataBehind,
+  sectorsDataStale,
+  sentimentDataStale,
+  sentimentZone,
+  toChartSeries,
+} from '../src/client/wire.ts'
 
 describe('toChartSeries 图表序列派生', () => {
   it('用户序列含 null 时该点被丢弃而非补零', () => {
@@ -51,6 +60,39 @@ describe('sentimentZone 五档分区', () => {
     expect(sentimentZone(60)).toBe('greed')
     expect(sentimentZone(80)).toBe('extreme_greed')
     expect(sentimentZone(100)).toBe('extreme_greed')
+  })
+})
+
+describe('isDataBehind 数据滞后判据', () => {
+  it('用户看到 T+1 数据落在上一交易日时不判滞后', () => {
+    // Given: 10-09 交易日，融资余额/恐慌指数显示 10-08（预期数据日也是 10-08）
+    // When: 比较数据日与预期数据日
+    // Then: 相等即新鲜，不是滞后——这是 T+1 口径的常态
+    expect(isDataBehind('2026-10-08', '2026-10-08')).toBe(false)
+  })
+
+  it('用户数据日早于预期数据日时判滞后', () => {
+    // Given: 上游仍停在 09-30（长假前），预期已到 10-08
+    // When: 比较
+    // Then: 数据日更早即滞后
+    expect(isDataBehind('2026-09-30', '2026-10-08')).toBe(true)
+  })
+
+  it('用户日期缺失时一律不判滞后', () => {
+    // Given: 上游字段缺失/为空（无口径可比）
+    // When: 比较
+    // Then: 宁可不标，不误标
+    expect(isDataBehind(null, '2026-10-08')).toBe(false)
+    expect(isDataBehind('2026-10-08', undefined)).toBe(false)
+    expect(isDataBehind('', '2026-10-08')).toBe(false)
+  })
+
+  it('用户快照缺数据时快照级判据不标滞后', () => {
+    // Given: 尚未落地任何快照
+    // When: 走两个快照级判据
+    // Then: 都返回 false（加载态不挂滞后徽标）
+    expect(sentimentDataStale(undefined)).toBe(false)
+    expect(sectorsDataStale(undefined)).toBe(false)
   })
 })
 
