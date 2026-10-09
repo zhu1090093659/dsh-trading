@@ -32,6 +32,13 @@ const tempDirs: string[] = []
 const REAL_UID = processEuid() ?? 0
 /** 声明的 agent uid：与运行本进程的 uid 不同，等价于「平面归人、agent 在另一个 uid」。 */
 const AGENT_UID = REAL_UID + 4_242
+/**
+ * 本平台是否有 uid 语义（process.geteuid 可用）。无 uid 语义的平台（Windows）上，
+ * 「声明的 agent uid ≠ 运行 uid」这句话没有可比对的属主证据，写入侧的平面隔离守卫一律
+ * 抛 plane-not-isolated —— 这些用例表达的是 POSIX 部署形态，故按平台跳过；fail-closed
+ * 路径由 authority-plane-isolation.test.ts 的「无 uid 语义的平台」一组覆盖。
+ */
+const HAS_UID_SEMANTICS = processEuid() !== undefined
 
 function tempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-authority-operator-'))
@@ -123,7 +130,7 @@ describe('sign 侧的守卫', () => {
     expect(code).toBe('plane-dir-missing')
   })
 
-  it('管理员：平面里没有信任锚时 sign 拒绝', () => {
+  it.skipIf(!HAS_UID_SEMANTICS)('管理员：平面里没有信任锚时 sign 拒绝', () => {
     // Given 一个空平面目录
     const dir = tempDir()
     // When 尝试签授权
@@ -135,7 +142,7 @@ describe('sign 侧的守卫', () => {
     expect(existsSync(join(dir, GRANT_FILENAME))).toBe(false)
   })
 
-  it('管理员：私钥与信任锚里登记的公钥不是同一把时 sign 拒绝', () => {
+  it.skipIf(!HAS_UID_SEMANTICS)('管理员：私钥与信任锚里登记的公钥不是同一把时 sign 拒绝', () => {
     // Given 一个信任锚登记了 A，而手上有另一把 B 的私钥
     const dir = tempDir()
     const pairA = generateOperatorKeyPair('operator-1')
@@ -155,7 +162,7 @@ describe('sign 侧的守卫', () => {
 })
 
 describe('合法路径：人在另一个 uid 下签署', () => {
-  it('管理员：声明 agent uid 且运行 uid 不同时，init + sign 成功且读取端放行', () => {
+  it.skipIf(!HAS_UID_SEMANTICS)('管理员：声明 agent uid 且运行 uid 不同时，init + sign 成功且读取端放行', () => {
     // Given 一个「人（当前 uid）为 agent uid 建平面」的合法上下文
     const dir = tempDir()
     const keyFile = join(dir, 'operator.pem')
@@ -201,7 +208,7 @@ describe('合法路径：人在另一个 uid 下签署', () => {
     expect(dev.devMode).toBe(true)
   })
 
-  it('管理员：显式配置的平面目录被读取端按其来源标记', () => {
+  it.skipIf(!HAS_UID_SEMANTICS)('管理员：显式配置的平面目录被读取端按其来源标记', () => {
     // Given 一个通过环境变量显式配置的隔离平面
     const dir = tempDir()
     const keyFile = join(dir, 'operator.pem')

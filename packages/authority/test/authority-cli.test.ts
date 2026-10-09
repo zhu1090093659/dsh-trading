@@ -17,6 +17,12 @@ const CLI = fileURLToPath(new URL('../bin/sign-live-trading.mjs', import.meta.ur
 const REAL_UID = processEuid() ?? 0
 /** 声明成另一个 uid：等价于「平面归人、agent 在别的 uid」，本机唯一能表达的合法形态。 */
 const AGENT_UID = REAL_UID + 4_242
+/**
+ * 本平台是否有 uid 语义（process.geteuid 可用）。无 uid 语义的平台（Windows）证明不了
+ * 「平面归另一个 uid」，读取端一律 plane-not-isolated —— 「合法路径」这一例按平台跳过；
+ * 自铸序列两例与平台无关（它们断言的是拒绝与 dev 留痕），照常在所有平台跑。
+ */
+const HAS_UID_SEMANTICS = processEuid() !== undefined
 const tempDirs: string[] = []
 
 function tempDir(): string {
@@ -91,7 +97,7 @@ describe('复现序列：agent 用自己 uid 自铸信任锚', () => {
     expect(devStatus.stderr).toContain('[DEV]')
   })
 
-  it('管理员：CLI 的合法路径（声明 agent uid）签出的授权在读取端放行', () => {
+  it.skipIf(!HAS_UID_SEMANTICS)('管理员：CLI 的合法路径（声明 agent uid）签出的授权在读取端放行', () => {
     // Given 一个声明了另一个 agent uid 的运营环境（人 ≠ agent）
     const dir = join(tempDir(), 'plane')
     const keyFile = join(tempDir(), 'operator.pem')

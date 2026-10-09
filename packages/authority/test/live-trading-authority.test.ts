@@ -27,6 +27,13 @@ import { buildTrustedKeysDocument, expiryFromDays, generateOperatorKeyPair, sign
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url))
 const tempDirs: string[] = []
+/**
+ * 本平台是否有 uid 语义（process.geteuid 可用）。authorityFixture 的 decisionOptions 表达的
+ * 是「POSIX 上平面归另一个 uid」这种**部署形态**，无 uid 语义的平台（Windows）造不出来 ——
+ * 那里的 fail-closed 路径由 authority-plane-isolation.test.ts 的「无 uid 语义的平台」一组覆盖。
+ */
+const HAS_UID_SEMANTICS = processEuid() !== undefined
+const describePosix = HAS_UID_SEMANTICS ? describe : describe.skip
 
 function tempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-authority-test-'))
@@ -215,7 +222,7 @@ describe('verifyGrantDocument（纯验签）', () => {
   })
 })
 
-describe('liveTradingDecision（镜像与授权平面取合取）', () => {
+describePosix('liveTradingDecision（镜像与授权平面取合取，需要 uid 语义）', () => {
   it('管理员：镜像为 true 但平面没授权时拒绝，并留下可见告警', () => {
     // Given 一个人为把 liveTrading 写成 true 的镜像，而平面只有信任锚（生产形态：平面归另一个 uid）
     const { decisionOptions } = authorityFixture()
@@ -268,7 +275,9 @@ describe('liveTradingDecision（镜像与授权平面取合取）', () => {
     // Then 立刻拒绝——没有 TTL、没有重启
     expect(liveTradingEnabled(true, decisionOptions)).toBe(false)
   })
+})
 
+describe('平面位置：没有默认位置（与平台无关）', () => {
   it('管理员：未显式配置平面目录时没有默认位置，判定直接拒绝', () => {
     // Given 一个只有 DSH_HOME、没有 DSH_TRADING_AUTHORITY_DIR 的环境
     const home = tempDir()
@@ -288,7 +297,7 @@ describe('liveTradingDecision（镜像与授权平面取合取）', () => {
 describe('preset 资产篡改（RT-04 回归）', () => {
   const ASSET = join(ROOT, 'packages/crypto/assets/preset/crypto-trader/agent.cordis.yml')
 
-  it('管理员：把 preset 资产的 liveTrading 改成 true 也拿不到实盘权限', () => {
+  it.skipIf(!HAS_UID_SEMANTICS)('管理员：把 preset 资产的 liveTrading 改成 true 也拿不到实盘权限', () => {
     // Given 仓库里真实的 crypto preset 资产（镜像是 false）
     const text = readFileSync(ASSET, 'utf8')
     expect(text).toContain('liveTrading: false')

@@ -41,6 +41,12 @@ CLI 端到端（临时目录）：无授权 → `拒绝（no-grant-document）`�
 - 门禁现状：`[live-trading-gate] ✓ 7 个镜像文件全部只写 false；330 个运行期源文件无裸判定、无签署侧引用；授权平面必须显式配置、自铸平面被拒（LG4 实跑探针）。`
 - 依赖方回归：三个连接器用例套件（tiger 6 / binance 10 / okx 34）在夹具换成显式 dev 形态后仍全绿。
 
+**平台能力前提（2026-10-09，Windows CI 判红后补齐）**：属主/权限这一层的前提是 POSIX 语义。Windows 上 `process.geteuid` 不存在，`fs.Stats.uid` 恒为 0、`mode` 是按只读属性合成的——「平面归另一个 uid」在那里**没有可比对的证据**。判定改按平台能力走（`hasUidSemantics()`，测试可用 `uidSemantics` 选项精确表达），能力不成立即 `no-uid-semantics`，与是否注入 `euid` 无关。
+
+- 修正前的行为（实测旧 `lib/`）：**不注入** `euid` 时读取端已经 fail-closed（`no-uid-semantics`），写入侧也在同码上先抛——生产路径本就没注入，所以生产并未放行；真正的缺陷是**注入 `euid` 时**把合成 stat 当成真属主，得出 `group-or-other-writable` 这类**假阳性结论**（把「不知道」说成某个具体判定）。`euid` 是公开选项，夹具正是注入方，只要调用方注入就会走到这条错误结论上；旧码的失败方式与新码的诚实区别就在这里。
+- 用例：`packages/authority` 46 例（POSIX 46 全绿；无 uid 语义的模拟下 29 通过 / 17 平台跳过）。需真实属主差异的 POSIX 部署形态用例按 `process.geteuid` 可用性 `skipIf`/`describe.skip`；Windows 真实走的那条路径由「无 uid 语义的平台」4 例在**任何平台**覆盖（签名有效仍拒、注入 `euid` 仍拒、目录在不在都拒、dev opt-in 才放行且留痕）。
+- 本层此前从未在 Windows 上跑过：`pnpm -r test` 在首个失败包即中止（`ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL`），而排在 authority 之前的 `dsh-home` 一直先红，把它整段遮住；dsh-home 修好后 authority 才第一次上 Windows 并判红。`TMPDIR` 指向 0777 目录并以 `--import` 删掉 `process.geteuid` 可复现同一条路径；修正后 `pnpm -r test` 在该模拟下全绿（exit 0）。
+
 篡改 preset 资产不改变实盘权限（`.packages/authority/test/live-trading-authority.test.ts`）：读真实资产 → 把 `liveTrading: false` 全替换成 true → 解析出镜像确实是 true → 判定仍 `allowed: false`（`no-trusted-keys` / `no-grant-document`），且 `mismatch: true`、告警真的发出。连接器层同样有一例回归：`.packages/connector-binance/test/place-order.test.ts` 里「preset 资产被改成 liveTrading=true 但平面未授予 → 仍结构化拒绝」。
 
 ## Alternatives considered
@@ -60,6 +66,7 @@ CLI 端到端（临时目录）：无授权 → `拒绝（no-grant-document）`�
 
 - 今天起，任何实盘执行都需要**人在本机**签署一份带到期的授权；未签署时所有连接器的实盘路径结构化拒绝（错误码 `TRADING_LIVE_TRADING_DISABLED` 不变，文案改为指向授权平面）。
 - 签署私钥必须由人在**另一个 uid** 下持有（0600）；同 uid 下本模块挡得住「改资产」与「用自己 uid 自铸平面」，挡不住「拿到私钥或拿到 root」——这条诚实边界写进 `.packages/authority/src/index.ts` 的头注。
+- **平台边界**：属主隔离只在有 uid 语义的平台（POSIX）成立。Windows 上判定一律 `no-uid-semantics` 拒绝（fail-closed），开发形态仍需显式 `$DSH_TRADING_AUTHORITY_DEV_SAME_UID=1`；即 Windows 上实盘授权只能走显式 dev 形态。这是诚实的能力边界，不是可绕过的加固。
 - 未验证项一（更新）：**本机同 uid 下，「uid 保护」由读取端的属主检查执行**——同 uid 自铸的平面一律 `plane-not-isolated`，开发形态必须显式 opt-in 且带 dev 标记。**仍未验证的是部署属性**：真实的两个 uid 分离（人 / agent 各一个 principal）需要 P2/P5 的部署验收，本机单用户环境无法证明隔离强度，也不能替生产签字。
 - 未验证项二：真实的「人签署 → 实盘放行」全链路要等 P2 的执行核与 P5 的小额 live 验收；今天连接器侧的 live 分支多数仍抛 `TRADING_NOT_IMPLEMENTED`。
 - 相关取代关系：[实盘安全闸门双轨制](2026-08-29-dual-track-trading-gate.md) 与 [服务缝闸门](../feature/2026-09-01-service-seam-order-gate.md) 的三态语义与枚举不变，本记录只改**第一段闸门的权威来源**（配置项 → 人工签署平面）；那两篇已在原地补充指针。

@@ -20,6 +20,7 @@ import {
   processEuid,
   resetAuthorityCache,
   setAuthorityMismatchSink,
+  verifyGrantDocument,
 } from '../src/index.ts'
 import { buildTrustedKeysDocument, expiryFromDays, generateOperatorKeyPair, signLiveTradingGrant } from '../src/sign.ts'
 
@@ -29,6 +30,14 @@ const REAL_UID = processEuid() ?? 0
 const OPERATOR_UID = REAL_UID + 4_242
 /** 模拟「agent 的 uid」：判定进程的 uid。 */
 const AGENT_UID = REAL_UID + 7_777
+/**
+ * 本平台是否有 uid 语义（process.geteuid 可用）。Windows 上没有：fs.Stats.uid 恒为 0、
+ * mode 是按只读属性合成的 —— 既造不出「平面归另一个 uid」，也没有可比对的证据。
+ * 这些用例模拟的是 **POSIX 部署形态**，无 uid 语义的平台上只能用 uidSemantics:false
+ * 断言 fail-closed（见文件末「无 uid 语义的平台」一组）。
+ */
+const HAS_UID_SEMANTICS = processEuid() !== undefined
+const describePosix = HAS_UID_SEMANTICS ? describe : describe.skip
 
 function tempDir(mode?: number): string {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-authority-isolation-'))
@@ -91,7 +100,7 @@ describe('平面位置：没有默认，必须显式配置', () => {
     expect(decision.detail).toContain(AUTHORITY_DIR_ENV)
   })
 
-  it('管理员：只给出平面目录但目录不存在时，拒绝原因是「没有信任锚」而不是放行', () => {
+  it.skipIf(!HAS_UID_SEMANTICS)('管理员：只给出平面目录但目录不存在时，拒绝原因是「没有信任锚」而不是放行', () => {
     // Given 一个显式配置但目录不存在的平面
     const dir = join(tempDir(), 'not-created')
     // When 生产形态判定（euid 注入成 agent uid）
@@ -103,7 +112,7 @@ describe('平面位置：没有默认，必须显式配置', () => {
   })
 })
 
-describe('自铸信任锚：写得进文件，改不了属主', () => {
+describePosix('自铸信任锚：写得进文件，改不了属主（需要 uid 语义）', () => {
   it('管理员：同 uid 自铸信任锚并自签授权，判定仍然拒绝（plane-not-isolated）', () => {
     // Given 一份真实密钥 + 真实信任锚 + 真实签名，但全部由当前 uid 自己写进临时目录
     const dir = tempDir()
@@ -201,7 +210,9 @@ describe('开发形态：显式 opt-in、留痕、不冒充生产', () => {
     expect(decision.reason).toBe('plane-not-isolated')
     expect(decision.devMode).toBe(false)
   })
+})
 
+describePosix('生产形态：dev 授权不被接受（需要 uid 语义）', () => {
   it('管理员：dev 形态签出的授权在没有 opt-in 的生产读取端被拒，且 dev 标记抹不掉', () => {
     // Given 一份带 payload.dev=true 的授权，放在隔离形态的平面里
     const dir = tempDir()
@@ -219,5 +230,72 @@ describe('开发形态：显式 opt-in、留痕、不冒充生产', () => {
     const washed = liveTradingDecision(true, { dir, env: {}, euid: AGENT_UID })
     // Then 签名覆盖 payload —— 抹标记就是改内容，验签失败
     expect(washed.reason).toBe('bad-signature')
+  })
+})
+
+/**
+ * 无 uid 语义的平台（Windows）：属主检查的能力前提不成立 ⇒ fail-closed。
+ *
+ * 这一组用 uidSemantics:false 精确表达「没有 uid 语义」，所以它在**任何平台上**都跑，
+ * 覆盖的正是 Windows 真实走的那条路径；也让「平台能力优先于注入 euid」这条不被回归掉。
+ */
+describe('无 uid 语义的平台：属主无从证明 ⇒ 一律拒绝', () => {
+  it('管理员：签名有效且平面齐备，无 uid 语义时仍拒（平台能力，不是签名问题）', () => {
+    // Given 一份验签会通过的平面（真实 Ed25519 + 真实 trusted-keys.json + 真实授权文档）
+    const dir = tempDir()
+    selfMintedPlane(dir)
+    const keys = readFileSync(join(dir, TRUSTED_KEYS_FILENAME), 'utf8')
+    const grant = readFileSync(join(dir, GRANT_FILENAME), 'utf8')
+    expect(verifyGrantDocument(grant, keys).reason).toBe('granted')
+    // When 在没有 uid 语义的平台上判定（Windows：fs.Stats.uid 恒 0、mode 合成）
+    const decision = liveTradingDecision(true, { dir, env: {}, uidSemantics: false })
+    // Then 拒绝，且原因指向平台能力而不是某个伪造出来的属主结论
+    expect(decision.granted).toBe(false)
+    expect(decision.allowed).toBe(false)
+    expect(decision.reason).toBe('plane-not-isolated')
+    expect(decision.isolation?.code).toBe('no-uid-semantics')
+    expect(decision.isolation?.detail).toContain('fs.Stats.uid')
+  })
+
+  it('管理员：无 uid 语义时注入 euid 也换不来放行（能力优先于注入）', () => {
+    // Given 同一份平面 + 一个「看起来是另一个 uid」的注入值
+    const dir = tempDir()
+    selfMintedPlane(dir)
+    // When 同时给出 euid 与 uidSemantics:false（修正前这个注入值会让判定改口说 group-or-other-writable）
+    const decision = liveTradingDecision(true, { dir, env: {}, euid: AGENT_UID, uidSemantics: false })
+    // Then 仍然拒绝：Windows 的属主字段是合成的，注入值没有可比对的证据
+    expect(decision.isolation?.code).toBe('no-uid-semantics')
+    expect(decision.granted).toBe(false)
+  })
+
+  it('管理员：无 uid 语义时目录在不在都拒（能力不成立，与目录状态无关）', () => {
+    // Given 一个还没建的平面目录
+    const dir = join(tempDir(), 'not-created')
+    // When 在没有 uid 语义的平台上判定
+    const missing = liveTradingDecision(true, { dir, env: {}, uidSemantics: false })
+    // And 同一个路径建好目录、放上验签会通过的平面后，再无 uid 语义判定
+    const built = tempDir()
+    selfMintedPlane(built)
+    const present = liveTradingDecision(true, { dir: built, env: {}, uidSemantics: false })
+    // Then 两种状态结论一致：能力不成立就是 plane-not-isolated，不会因为目录建好了就放行
+    expect(missing.isolation?.code).toBe('no-uid-semantics')
+    expect(present.isolation?.code).toBe('no-uid-semantics')
+    expect(missing.granted).toBe(false)
+    expect(present.granted).toBe(false)
+  })
+
+  it('管理员：无 uid 语义时只有显式 dev opt-in 能放行并留痕', () => {
+    // Given 一份真实签名、带 payload.dev=true 的平面，以及一个记录告警的出口
+    const dir = tempDir()
+    selfMintedPlane(dir, { dev: true })
+    const traces: string[] = []
+    setAuthorityMismatchSink((message) => traces.push(message))
+    // When 显式 opt-in 开发形态
+    const decision = liveTradingDecision(true, { dir, env: { [AUTHORITY_DEV_ENV]: '1' } })
+    // Then 放行，且分类码是 dev-opt-in、告警带 [DEV] 标记
+    expect(decision.granted).toBe(true)
+    expect(decision.isolation?.code).toBe('dev-opt-in')
+    expect(traces).toHaveLength(1)
+    expect(traces[0]).toContain('[DEV]')
   })
 })

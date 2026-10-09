@@ -21,6 +21,9 @@
  *      文件、以及从根到平面目录的整条祖先链都不得归该 uid 所有（祖先归 agent ⇒ 它可以
  *      unlink 后替换整个平面），目录与文件还不得带 group/other 写位。任何一条不满足 ⇒
  *      plane-not-isolated。**这条是 agent 伪造不了的**：它写得进文件，改不了文件的属主。
+ *      平台前提是 POSIX 属主/权限语义：**没有 uid 语义的平台（Windows 上 process.geteuid
+ *      不可用，fs.Stats.uid 恒为 0、mode 按只读属性合成）无法证明隔离** ⇒ 一律
+ *      no-uid-semantics 拒绝（fail-closed）；此时注入 euid 也不构成证据（见 hasUidSemantics）。
  *   3. 可选加固：$DSH_TRADING_AUTHORITY_OWNER_UID 把「允许的属主」钉成某个具体 uid
  *      （而不是「只要不是 agent 就行」）；把它配成运行 uid 自身按配置错误拒绝。
  *   4. 开发形态必须**显式 opt-in**：$DSH_TRADING_AUTHORITY_DEV_SAME_UID=1（名字带 dev），
@@ -173,8 +176,18 @@ export interface AuthorityOptions {
   /**
    * 判定进程的 euid，缺省 process.geteuid()。测试用来**模拟生产形态**（平面归另一个
    * uid、进程跑在 agent uid 下）——本机同 uid 时无法真实制造这种文件属主。
+   *
+   * 只在有 uid 语义的平台上有效：见 uidSemantics。
    */
   euid?: number
+  /**
+   * 本平台是否有 uid 语义（`process.geteuid` 可用）；缺省 hasUidSemantics()。
+   *
+   * 测试用 false 表达「没有 uid 语义的平台（Windows）」。此时注入 euid 也不构成隔离证据
+   * —— Windows 的 `fs.Stats.uid` 恒为 0、`mode` 是按只读属性合成的，拿它们比对只会把
+   * 「无从证明」说成某个具体结论。
+   */
+  uidSemantics?: boolean
 }
 
 /** 显式 opt-in 的开发形态（名字里带 dev，且值必须是精确的 '1'）。 */
@@ -186,6 +199,18 @@ export function devOptIn(env: Record<string, string | undefined> = process.env):
 export function processEuid(): number | undefined {
   const geteuid = (process as { geteuid?: () => number }).geteuid
   return typeof geteuid === 'function' ? geteuid() : undefined
+}
+
+/**
+ * 本平台是否有 uid 语义（`process.geteuid` 可用）——属主检查的**能力前提**。
+ *
+ * Windows 上没有：`fs.Stats.uid` 恒为 0、`mode` 是按只读属性合成的，两者都不是属主证据。
+ * 「平面归另一个 uid 所有」在 Windows 上无从证明，所以判定按能力而非按注入值走 —— 否则拿
+ * 合成的 stat 去比对只会得到 `ancestor-agent-writable` 这类假阳性结论（把「不知道」说成
+ * 「agent 可写」）。没有这条语义就一定 fail-closed。
+ */
+export function hasUidSemantics(): boolean {
+  return processEuid() !== undefined
 }
 
 function parseUid(value: string | undefined): { uid?: number; error?: string } {
@@ -259,13 +284,17 @@ export function inspectPlaneIsolation(dir: string, options: AuthorityOptions = {
       detail: '开发形态：显式设置了 ' + AUTHORITY_DEV_ENV + '=1，跳过属主/权限检查 —— 这条判定不构成生产授权（每次判定都留痕）',
     }
   }
-  const euid = options.euid ?? processEuid()
+  // 平台能力先于注入：没有 uid 语义时可注入的 euid 也无从与 stat 比对（uid 恒 0、mode 合成）。
+  // 这一门放在原 euid 检查的位置 —— POSIX 上 hasUidSemantics() 恒真，行为与本改动前逐字相同；
+  // Windows 上无论目录在不在，结论都是「证明不了隔离」（建好目录也一样，故不先报 dir-missing）。
+  const semantics = options.uidSemantics ?? hasUidSemantics()
+  const euid = semantics ? (options.euid ?? processEuid()) : undefined
   if (euid === undefined) {
     return {
       isolated: false,
       code: 'no-uid-semantics',
       devMode: false,
-      detail: '本平台没有 uid 语义（process.geteuid 不可用），无法证明平面不归 agent 所有 ⇒ 按未隔离拒绝（开发形态请显式设置 '
+      detail: '本平台没有 uid 语义（process.geteuid 不可用：fs.Stats.uid 恒为 0、mode 按只读属性合成），无法证明平面不归 agent 所有 ⇒ 按未隔离拒绝（开发形态请显式设置 '
         + AUTHORITY_DEV_ENV + '=1）',
     }
   }
@@ -524,13 +553,18 @@ export interface PlaneInspection {
   verification: GrantVerification
 }
 
-function planeKeyOf(euid: number | undefined, env: Record<string, string | undefined>): string {
-  return String(euid) + '|' + String(env[AUTHORITY_OWNER_UID_ENV] ?? '') + '|' + String(devOptIn(env))
+function planeKeyOf(
+  euid: number | undefined,
+  env: Record<string, string | undefined>,
+  semantics: boolean = true,
+): string {
+  return String(semantics) + '|' + String(euid) + '|' + String(env[AUTHORITY_OWNER_UID_ENV] ?? '') + '|' + String(devOptIn(env))
 }
 
 /**
  * 判定一个平面目录：先做隔离检查，再验签（两者都按 stat 指纹缓存，文件/属主一变立刻重算）。
- * 目录不存在时隔离检查返回 dir-missing，验签照旧走到「没有信任锚」。
+ * 目录不存在时隔离检查返回 dir-missing，验签照旧走到「没有信任锚」——该结论在有 uid 语义的
+ * 平台上成立；无 uid 语义的平台（Windows）在能力门就先返回 no-uid-semantics。
  */
 export function inspectPlane(dir: string, options: AuthorityOptions = {}): PlaneInspection {
   const env = options.env ?? process.env
@@ -540,7 +574,8 @@ export function inspectPlane(dir: string, options: AuthorityOptions = {}): Plane
   const grantStamp = stampOf(grantFile)
   const keysStamp = stampOf(keysFile)
   const dirStamp = stampOf(dir)
-  const planeKey = planeKeyOf(options.euid ?? processEuid(), env)
+  const semantics = options.uidSemantics ?? hasUidSemantics()
+  const planeKey = planeKeyOf(options.euid ?? processEuid(), env, semantics)
   const cached = cache.get(dir)
   if (cached !== undefined && cached.grantStamp === grantStamp && cached.keysStamp === keysStamp
     && cached.dirStamp === dirStamp && cached.planeKey === planeKey) {
