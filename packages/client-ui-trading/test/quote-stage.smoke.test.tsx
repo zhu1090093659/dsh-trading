@@ -155,6 +155,38 @@ describe('QuoteStage 渲染冒烟（TDZ 网）', () => {
     expect(view.container.querySelector('[data-dshtrading-tradfi-notice]')).toBeNull()
   })
 
+  it('用户在美股看图时，仅港A生效的指标不在底部词条带显示为已启用', () => {
+    // Given: KDJ 只对港股/A股生效（美股关闭），当前聚焦美股（内置指标与 KDAS 类
+    //        自定义指标走同一条判定，故用内置指标覆盖同一代码路径）
+    for (const definition of presetDefinitions()) indicators.register(definition)
+    const instances = [{
+      id: 'kdj',
+      params: {},
+      applyScope: {
+        us: { enabled: false, intervals: ['1d'] },
+        cn: { enabled: true, intervals: ['1d'] },
+        hk: { enabled: true, intervals: ['1d'] },
+      },
+    }]
+    const view = render(<QuoteStage {...quoteStageProps('us', undefined, instances, [])} />)
+
+    // When: 渲染图表页签（底部为快捷指标词条带）
+    // Then: 词条存在但未标记为已启用（它在这张美股图上确实不生效）
+    const bar = view.container.querySelector('[role="toolbar"][aria-label="Quick indicators"]')
+    const tag = Array.from(bar?.querySelectorAll('button') ?? [])
+      .find(button => button.textContent?.trim() === 'KDJ')
+    expect(tag).toBeTruthy()
+    expect(tag?.getAttribute('data-active')).toBeNull()
+
+    // 对照：该指标在启用市场（A股）的图上必须标记为已启用，证明差异来自适用范围
+    const cnView = render(<QuoteStage {...quoteStageProps('crypto', undefined, instances, [])} />)
+    const cnBar = cnView.container.querySelector('[role="toolbar"][aria-label="Quick indicators"]')
+    const cnTag = Array.from(cnBar?.querySelectorAll('button') ?? [])
+      .find(button => button.textContent?.trim() === 'KDJ')
+    // 加密货币市场在该实例里没有条目（缺席 = 全部应用），故此处同样标记为已启用
+    expect(cnTag?.getAttribute('data-active')).toBe('true')
+  })
+
   it('用户关闭某市场后仍能看到保留的级别数（关闭不等于清空选择）', () => {
     // Given: EMA 在美股勾了 1/7、在港股关闭但保留 15m 一条选择
     for (const definition of presetDefinitions()) indicators.register(definition)

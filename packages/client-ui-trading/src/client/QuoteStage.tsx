@@ -1290,7 +1290,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       {stageTab === 'chart' && (
         <div className={css.quickIndicatorBar} role="toolbar" aria-label="Quick indicators">
           {allDefinitions.map(def => {
-            const active = visibleInstances.some(inst => inst.id === def.id)
+            // 词条带显示「此刻在这张图上真正生效的指标」：与图表/读数行同源
+            // （symbol visibility + 适用范围双重过滤）。只按可见性判定会让被适用范围
+            // 排除的指标（如仅港A生效的 KDAS 在美股）误显为已启用。
+            // 词条带显示「此刻在这张图上真正生效的指标」：与图表/读数行同源
+            // （symbol visibility + 适用范围双重过滤）。只按可见性判定会让被适用范围
+            // 排除的指标（如仅港A生效的 KDAS 在美股）误显为已启用。
+            const active = applicableInstances.some(inst => inst.id === def.id)
             return (
               <button
                 key={def.id}

@@ -122,6 +122,50 @@ describe('图表激活名册桥端点（issue #63）', () => {
     expect(list).toEqual({ status: 200, payload: { ok: true, instances: [{ id: 'td9', params: { count: 12 } }] } })
   })
 
+  it('用户在各写入形态下累积的按标的覆盖与隐藏表都不被抹掉（挂载/可见性/适用范围/改参）', async () => {
+    // Given 一个累积型实例（多标的覆盖 + 隐藏表 + 适用范围）
+    const chartStore = createMemoryChartActivationStore([{
+      id: 'td9',
+      params: { count: 9 },
+      symbolParams: { 'cn:002714.SZ': { count: 11 }, 'cn:001201.SZ': { count: 12 } },
+      hiddenScopes: ['us:AAPL'],
+      applyScope: { cn: { enabled: true, intervals: ['1d'] } },
+    }])
+    const bridge = new TradingBridge(fakeHost({ chartActivationsStore: chartStore }))
+    const read = async (): Promise<Record<string, unknown>> => {
+      const wire = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams()) as { payload: { instances: Array<Record<string, unknown>> } }
+      return wire.payload.instances.find(instance => instance.id === 'td9') ?? {}
+    }
+
+    // When 按客户端实际会发的每种写入形态依次写
+    // 1) 挂载路径：只发 id（无 params）
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(), { id: 'td9' })
+    expect((await read()).symbolParams).toEqual({ 'cn:002714.SZ': { count: 11 }, 'cn:001201.SZ': { count: 12 } })
+
+    // 2) 可见性写：market+symbol+visible
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'us', symbol: 'AAPL', visible: false })
+    expect((await read()).hiddenScopes).toEqual(['us:AAPL'])
+
+    // 3) 适用范围写：applyScope 整表
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', applyScope: { cn: { enabled: true, intervals: ['1d', '1w'] } } })
+    const afterScope = await read()
+    expect(afterScope.symbolParams).toEqual({ 'cn:002714.SZ': { count: 11 }, 'cn:001201.SZ': { count: 12 } })
+    expect(afterScope.hiddenScopes).toEqual(['us:AAPL'])
+
+    // 4) 改参写：market+symbol+params（写某标覆盖）
+    await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
+      { id: 'td9', market: 'cn', symbol: '517520.SH', params: { count: 13 } })
+    const afterParams = await read()
+    // Then 其它标的覆盖原样保留、新增一个，隐藏表与适用范围均未丢
+    expect(afterParams.symbolParams).toEqual({
+      'cn:002714.SZ': { count: 11 }, 'cn:001201.SZ': { count: 12 }, 'cn:517520.SH': { count: 13 },
+    })
+    expect(afterParams.hiddenScopes).toEqual(['us:AAPL'])
+    expect(afterParams.applyScope).toEqual({ cn: { enabled: true, intervals: ['1d', '1w'] } })
+  })
+
   it('PUT 半参 scope（只给 market）→ 业务拒绝 TRADING_INVALID_SCOPE，不落盘（issue #72 复审）', async () => {
     const bridge = new TradingBridge(fakeHost())
     const wire = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
@@ -238,6 +282,25 @@ describe('图表激活名册桥端点（issue #63）', () => {
     // Then 字段整体消失（落回全部市场全部级别应用），其余字段仍在
     expect('applyScope' in (list.payload.instances[0] ?? {})).toBe(false)
     expect(list.payload.instances[0]).toMatchObject({ id: 'td9', params: { count: 12 } })
+  })
+
+  it('用户对已挂载指标重复挂载（无 params/scope）时，累积的按标的覆盖与隐藏表不被抹掉', async () => {
+    // Given 一个已累积多个标的覆盖与隐藏表的实例（active_buy_real 类累积型指标）
+    const chartStore = createMemoryChartActivationStore([{
+      id: 'td9',
+      params: { count: 9 },
+      symbolParams: { 'cn:002714.SZ': { count: 11 }, 'cn:001201.SZ': { count: 12 } },
+      hiddenScopes: ['us:AAPL'],
+    }])
+    const bridge = new TradingBridge(fakeHost({ chartActivationsStore: chartStore }))
+
+    // When 再次挂载同一 id（客户端挂载路径：只发 id，不带 params）
+    const put = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(), { id: 'td9' }) as { payload: { instances: Array<Record<string, unknown>> } }
+
+    // Then 累积数据原样保留，不被默认参数重建覆盖
+    const row = put.payload.instances.find(instance => instance.id === 'td9')
+    expect(row?.symbolParams).toEqual({ 'cn:002714.SZ': { count: 11 }, 'cn:001201.SZ': { count: 12 } })
+    expect(row?.hiddenScopes).toEqual(['us:AAPL'])
   })
 
   it('用户给未挂载的指标写适用范围是幂等无操作，不反向创建实例', async () => {
