@@ -20,8 +20,8 @@ import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@d
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dshtrading/kit-hk'
 import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dshtrading/kit-us'
 import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dshtrading/kit-crypto'
-import type { ChartActivationStore, CustomIndicatorRecord, CustomIndicatorStore, IndicatorInstance } from '@dshtrading/indicators'
-import { clampActivationParams, createMemoryChartActivationStore, createMemoryCustomIndicatorStore, resolveIndicatorSpec, sanitizeInstance, symbolScopeKey, withHiddenScopes } from '@dshtrading/indicators'
+import type { ChartActivationStore, CustomIndicatorRecord, CustomIndicatorStore, IndicatorApplyScope, IndicatorInstance } from '@dshtrading/indicators'
+import { carryInstanceExtras, clampActivationParams, createMemoryChartActivationStore, createMemoryCustomIndicatorStore, resolveIndicatorSpec, sanitizeApplyScope, sanitizeInstance, symbolScopeKey, withHiddenScopes } from '@dshtrading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore } from '@dshtrading/knowledge'
 import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord, CustomStrategyStore } from '@dshtrading/strategies'
@@ -1671,10 +1671,14 @@ export class TradingBridge {
    * symbol visibility：body 带 visible:boolean 时为可见性写——仅 market 即整市场
    * 隐藏/显示，market+symbol 为单标的；实例缺席为幂等 no-op 不反向创建；visible
    * 优先于 params/clearSymbol（同请求带 params 时被忽略）。
+   * 适用范围：body 带 applyScope:object 时为适用范围写——整表替换该实例的
+   * applyScope（空表清空该字段，落回「全部市场、全部级别应用」），不触碰 params/
+   * symbolParams/hiddenScopes；实例缺席为幂等 no-op 不反向创建；applyScope 优先于
+   * params/clearSymbol。
    */
   async putChartActivation(body: unknown): Promise<ChartActivationsWire | ChartActivationRejectedWire> {
     const store = this.host.chartActivationsStore
-    const raw = (body ?? {}) as { id?: unknown; params?: unknown; market?: unknown; symbol?: unknown; clearSymbol?: unknown; visible?: unknown }
+    const raw = (body ?? {}) as { id?: unknown; params?: unknown; market?: unknown; symbol?: unknown; clearSymbol?: unknown; visible?: unknown; applyScope?: unknown }
     const id = typeof raw.id === 'string' ? raw.id.trim() : ''
     if (!id) throw new BridgeProtocolError(400, 'chart activation body requires string id')
     const spec = await resolveIndicatorSpec(id, this.host.customIndicatorsStore)
@@ -1724,6 +1728,19 @@ export class TradingBridge {
       return { ok: true, instances: store !== undefined ? await store.list() : [next] }
     }
 
+    // 适用范围写（先于 params/覆盖写）：整表替换，实例缺席幂等 no-op。
+    if (raw.applyScope !== undefined) {
+      if (existing === undefined) {
+        return { ok: true, instances: store !== undefined ? await store.list() : [] }
+      }
+      const applyScope = parseApplyScope(raw.applyScope)
+      const next = Object.keys(applyScope).length > 0
+        ? { ...existing, applyScope }
+        : (() => { const rest = { ...existing }; delete rest.applyScope; return rest })()
+      if (store !== undefined && next !== existing) await store.activate(next)
+      return { ok: true, instances: store !== undefined ? await store.list() : [next] }
+    }
+
     let instance: IndicatorInstance
     if (scope !== undefined) {
       // 清除不存在的覆盖是无操作：不反向创建激活实例。
@@ -1735,13 +1752,19 @@ export class TradingBridge {
       const symbolParams: Record<string, Record<string, number>> = { ...(base.symbolParams ?? {}) }
       if (raw.clearSymbol === true) delete symbolParams[scope]
       else symbolParams[scope] = params
-      instance = Object.keys(symbolParams).length > 0
-        ? { id, params: base.params, symbolParams }
-        : { id, params: base.params }
+      // 覆盖表按本次计算结果落地（clearSymbol 清空后字段整体消失，不得从 base 继承
+      // 回来）；hiddenScopes 与 applyScope 与覆盖表正交，必须随写保留。
+      instance = {
+        id,
+        params: base.params,
+        ...(Object.keys(symbolParams).length > 0 ? { symbolParams } : {}),
+        ...(base.hiddenScopes !== undefined ? { hiddenScopes: base.hiddenScopes } : {}),
+        ...(base.applyScope !== undefined ? { applyScope: base.applyScope } : {}),
+      }
     } else {
-      instance = existing?.symbolParams !== undefined
-        ? { id, params, symbolParams: existing.symbolParams }
-        : { id, params }
+      // 全局 params 写：保留已有按标的覆盖、隐藏表与适用范围（旧行为整体覆盖会抹掉它们）。
+      const base: IndicatorInstance = existing ?? { id, params }
+      instance = carryInstanceExtras(base, { id, params })
     }
     if (store !== undefined) await store.activate(instance)
     return { ok: true, instances: store !== undefined ? await store.list() : [instance] }
@@ -1918,6 +1941,16 @@ function parseGroupMemberBody(body: unknown): { id: string; market: string; symb
 }
 
 /**
+ * 适用范围写入的形状清洗（PUT applyScope）：形状不合格的市场条目**整条丢弃**
+ * （落到「该市场缺席 = 全部级别应用」），绝不把坏值读成「未选级别」而静默停用。
+ * 全部条目被丢弃即返回空表，调用方按「清空该字段」处理。清洗规则与读侧
+ * sanitizeInstance 共用 @dshtrading/indicators 的 sanitizeApplyScope 单一实现。
+ */
+function parseApplyScope(raw: unknown): IndicatorApplyScope {
+  return sanitizeApplyScope(raw) ?? {}
+}
+
+/**
  * 激活名册迁移导入的形状校验（{ instances: [...] } 或裸数组）：坏形行丢弃、
  * params 只收有限数字（host 侧参数 clamp 在 put 语义里，迁移保真原样搬运）。
  */
@@ -1938,12 +1971,14 @@ function parseChartInstances(body: unknown): IndicatorInstance[] {
     for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
       if (typeof value === 'number' && Number.isFinite(value)) clean[key] = value
     }
-    // 行保留语义不变（脏值清洗成空 params），symbolParams/hiddenScopes 经 sanitizeInstance 保真（issue #72 / symbol visibility）。
+    // 行保留语义不变（脏值清洗成空 params），symbolParams/hiddenScopes/applyScope
+    // 经 sanitizeInstance 保真（issue #72 / symbol visibility / 适用范围）。
     const normalized = sanitizeInstance({
       id,
       params: clean,
       symbolParams: (item as { symbolParams?: unknown }).symbolParams,
       hiddenScopes: (item as { hiddenScopes?: unknown }).hiddenScopes,
+      applyScope: (item as { applyScope?: unknown }).applyScope,
     })
     if (normalized !== undefined) out.push(normalized)
   }

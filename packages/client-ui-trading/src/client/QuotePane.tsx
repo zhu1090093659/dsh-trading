@@ -16,8 +16,11 @@
 import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { MiddleStage } from './MiddleStage.tsx'
+import type { MiddleStageProps } from './MiddleStage.tsx'
 import type { Observable, SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
+import type { IndicatorMarketScope } from '@dshtrading/indicators'
+import type { MarketId } from './types.ts'
 import css from './quote-pane.module.css'
 
 export interface QuotePaneInjected {
@@ -29,6 +32,8 @@ export interface QuotePaneInjected {
   setIndicatorParams: (id: string, params: Record<string, number>, scopeKey?: string) => void
   /** 按标的可见性（symbol visibility；scopeKey = `${market}:${symbol}`，缺省忽略）。 */
   setIndicatorVisible: (id: string, visible: boolean, scopeKey?: string) => void
+  /** 适用范围（scope === undefined 删除该市场条目，落回全部级别应用）。 */
+  setIndicatorScope: (id: string, market: MarketId, scope: IndicatorMarketScope | undefined) => void
   /** 全局移除：卸载所有标的上的该指标实例。 */
   removeIndicator: (id: string) => void
   /** 删除自定义指标（issue #30）：桥 DELETE → 注销注册表 + 移除激活实例。 */
@@ -47,7 +52,7 @@ interface Rect {
   height: number
 }
 
-export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator }: QuotePaneProps) {
+export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, setIndicatorScope, removeIndicator, deleteIndicator }: QuotePaneProps) {
   const [rect, setRect] = useState<Rect | null>(null)
 
   useEffect(() => {
@@ -141,7 +146,7 @@ export function QuotePane({ t, useSelection, useChart, toggleIndicator, setIndic
     >
       {/* MiddleStage 的 slot 运行时面（viewRequest 等）在面板场景不需要，
           只取 t/两个 store hook 与指标动作。 */}
-      <MiddleStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator } as never)} />
+      <MiddleStage {...({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, setIndicatorScope, removeIndicator, deleteIndicator } as MiddleStageProps)} />
     </div>
   )
 }

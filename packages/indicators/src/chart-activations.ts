@@ -7,7 +7,9 @@
  * 降级为镜像。写入边界（工具 / 桥）负责按 definition clamp 参数，store 本身保持
  * 「哑存储」：只校验形状，不理解指标语义。
  */
-import type { IndicatorInstance, IndicatorPane, IndicatorParamSpec } from './types.ts'
+import type {
+  IndicatorApplyScope, IndicatorInstance, IndicatorMarketScope, IndicatorPane, IndicatorParamSpec,
+} from './types.ts'
 import type { CustomIndicatorStore } from './custom.ts'
 import { presetDefinitions } from './presets.ts'
 
@@ -70,14 +72,43 @@ function sanitizeHiddenScopes(raw: unknown): string[] | undefined {
   return out.length > 0 ? out : undefined
 }
 
-/** 深拷贝规范化一个实例（params/symbolParams/hiddenScopes 均脱引用）；坏形返回 undefined。 */
+/**
+ * 适用范围防御性清洗：市场键须非空字符串，值须为 { enabled: boolean, intervals: string[] }
+ * 形状；级别去空白、去重、丢非字符串。**形状不合格的整个市场条目丢弃**（而不是补默认
+ * 值）——否则一条手写/损坏的条目会被读成「该市场未选级别」而静默停用；丢弃后该市场
+ * 落回「缺席 = 全部级别应用」，与存量配置同语义。全部条目被丢弃时字段整体消失。
+ */
+export function sanitizeApplyScope(raw: unknown): IndicatorApplyScope | undefined {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
+  const out: IndicatorApplyScope = {}
+  for (const [market, value] of Object.entries(raw as Record<string, unknown>)) {
+    const key = market.trim()
+    if (key === '' || typeof value !== 'object' || value === null || Array.isArray(value)) continue
+    const scene = value as { enabled?: unknown; intervals?: unknown }
+    if (typeof scene.enabled !== 'boolean' || !Array.isArray(scene.intervals)) continue
+    const intervals: string[] = []
+    for (const item of scene.intervals) {
+      if (typeof item !== 'string') continue
+      const level = item.trim()
+      if (level !== '' && !intervals.includes(level)) intervals.push(level)
+    }
+    out[key] = { enabled: scene.enabled, intervals }
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+/** 深拷贝规范化一个实例（params/symbolParams/hiddenScopes/applyScope 均脱引用）；坏形返回 undefined。 */
 export function sanitizeInstance(raw: unknown): IndicatorInstance | undefined {
   if (!isValidInstance(raw)) return undefined
   const params = { ...(raw.params as Record<string, number>) }
   const symbolParams = sanitizeSymbolParams((raw as { symbolParams?: unknown }).symbolParams)
   const hiddenScopes = sanitizeHiddenScopes((raw as { hiddenScopes?: unknown }).hiddenScopes)
-  const clean: IndicatorInstance = symbolParams !== undefined ? { id: raw.id, params, symbolParams } : { id: raw.id, params }
-  return hiddenScopes !== undefined ? { ...clean, hiddenScopes } : clean
+  const applyScope = sanitizeApplyScope((raw as { applyScope?: unknown }).applyScope)
+  let clean: IndicatorInstance = { id: raw.id, params }
+  if (symbolParams !== undefined) clean = { ...clean, symbolParams }
+  if (hiddenScopes !== undefined) clean = { ...clean, hiddenScopes }
+  if (applyScope !== undefined) clean = { ...clean, applyScope }
+  return clean
 }
 
 /** 按标的覆盖的 scope 键：`${market}:${symbol}`（与 client QuoteStage 的 market/symbol 同源）。 */
@@ -132,6 +163,97 @@ export function withHiddenScopes(instance: IndicatorInstance, scope: string, vis
     return rest
   }
   return { ...instance, hiddenScopes: next }
+}
+
+/**
+ * 实例对「某市场 + 某 K 线级别」的适用性（适用范围设置的唯一读侧判据）。
+ *
+ * - 实例没有该市场条目（含 applyScope 字段整体缺失）→ 适用：新建指标与存量
+ *   配置都是「全部市场、全部级别应用」，零迁移。
+ * - 条目存在但 `enabled: false` → 不适用（市场关闭；已选级别保留不动）。
+ * - 条目存在且启用、`intervals` 为空 → 不适用（「未选择级别」；空选择绝不解释
+ *   为全部级别）。
+ * - 条目存在且启用、选中级别不含当前级别 → 不适用。
+ *
+ * market 缺失（GUI 无聚焦标的）按适用处理——调用方此时无市场上下文可判。
+ */
+export function isInstanceApplicableOn(
+  instance: IndicatorInstance,
+  market?: string,
+  interval?: string,
+): boolean {
+  if (market === undefined) return true
+  const scene = instance.applyScope?.[market]
+  if (scene === undefined) return true
+  if (!scene.enabled) return false
+  if (scene.intervals.length === 0) return false
+  if (interval === undefined) return true
+  return scene.intervals.includes(interval)
+}
+
+/**
+ * 纯函数设置某市场的适用范围条目：`scene === undefined` 表示删除该市场条目
+ * （落回「缺席 = 全部级别应用」）。条目删空后字段整体消失；市场键保持既有插入序，
+ * 新键追加。与既有条目完全一致时返回原引用（不触发无意义持久化）。不触碰
+ * params/symbolParams/hiddenScopes。
+ */
+export function withMarketScope(
+  instance: IndicatorInstance,
+  market: string,
+  scene: IndicatorMarketScope | undefined,
+): IndicatorInstance {
+  const current = instance.applyScope
+  if (scene === undefined) {
+    if (current === undefined || current[market] === undefined) return instance
+    const rest: IndicatorApplyScope = {}
+    for (const [key, value] of Object.entries(current)) if (key !== market) rest[key] = value
+    if (Object.keys(rest).length === 0) {
+      const next = { ...instance }
+      delete next.applyScope
+      return next
+    }
+    return { ...instance, applyScope: rest }
+  }
+  if (current?.[market] !== undefined
+    && current[market]?.enabled === scene.enabled
+    && current[market]?.intervals.length === scene.intervals.length
+    && scene.intervals.every((level, index) => current[market]?.intervals[index] === level)) {
+    return instance
+  }
+  return { ...instance, applyScope: { ...(current ?? {}), [market]: { enabled: scene.enabled, intervals: [...scene.intervals] } } }
+}
+
+/**
+ * 全局 params 写的共用保留规则：按标的覆盖表（symbolParams）、隐藏表
+ * （hiddenScopes）与适用范围（applyScope）三者都与 params 正交，全局调参一次
+ * 不得静默清掉它们。桥、indicator_activate 与 indicator_author 的全局写共用本函数
+ *（一个事实只有一个家）。
+ *
+ * 语义边界：只用于「写全局 params，其它三者保持不动」的写入。按标的覆盖写
+ *（clearSymbol 要真的删除覆盖、activate 要真的清该标的隐藏）语义不同，由各写入口
+ * 显式构造，不走本函数——否则「清空覆盖」会被继承规则反向补回。
+ */
+export function carryInstanceExtras(base: IndicatorInstance | undefined, next: IndicatorInstance): IndicatorInstance {
+  const merged: IndicatorInstance = { ...next }
+  if (merged.symbolParams === undefined && base?.symbolParams !== undefined) merged.symbolParams = base.symbolParams
+  if (merged.hiddenScopes === undefined && base?.hiddenScopes !== undefined) merged.hiddenScopes = base.hiddenScopes
+  if (merged.applyScope === undefined && base?.applyScope !== undefined) merged.applyScope = base.applyScope
+  return merged
+}
+
+/**
+ * 某市场在适用范围里的「有效选择」（GUI 呈现实值）：条目缺席即「全部级别应用」，
+ * 返回 enabled=true + 传入的该市场全部支持级别。条目存在则原样返回其选择
+ *（选择为空即空——「未选择级别」）。
+ */
+export function effectiveMarketScope(
+  instance: IndicatorInstance,
+  market: string,
+  supportedIntervals: readonly string[],
+): IndicatorMarketScope {
+  const scene = instance.applyScope?.[market]
+  if (scene === undefined) return { enabled: true, intervals: [...supportedIntervals] }
+  return { enabled: scene.enabled, intervals: [...scene.intervals] }
 }
 
 /** 内存版激活名册存储（纯浏览器与单测用）。 */

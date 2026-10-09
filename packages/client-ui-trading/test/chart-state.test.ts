@@ -95,6 +95,73 @@ describe('chart-state store', () => {
     expect(store.instanceFor('ma')?.params.n1).toBe(250)
   })
 
+  it('用户设置某市场适用范围后重载仍保持同一配置（适用范围持久化）', () => {
+    withStorage(() => {
+      // Given 一个已挂载的 EMA 实例
+      const store = makeStore()
+      store.togglePreset('ema')
+
+      // When 把美股限为日 K、港股关闭但保留 15m
+      store.setMarketScope('ema', 'us', { enabled: true, intervals: ['1d'] })
+      store.setMarketScope('ema', 'hk', { enabled: false, intervals: ['15m'] })
+
+      // Then 快照与重载镜像都保留同一适用范围
+      expect(store.instanceFor('ema')?.applyScope).toEqual({
+        us: { enabled: true, intervals: ['1d'] },
+        hk: { enabled: false, intervals: ['15m'] },
+      })
+      expect(makeStore().instanceFor('ema')?.applyScope).toEqual({
+        us: { enabled: true, intervals: ['1d'] },
+        hk: { enabled: false, intervals: ['15m'] },
+      })
+    })
+  })
+
+  it('用户关闭市场只停用不清空级别，重新开启恢复原选择', () => {
+    // Given 港股只选了 15m 的实例
+    const store = makeStore()
+    store.togglePreset('ema')
+    store.setMarketScope('ema', 'hk', { enabled: true, intervals: ['15m'] })
+
+    // When 关闭港股（enabled=false，级别原样提交）
+    store.setMarketScope('ema', 'hk', { enabled: false, intervals: ['15m'] })
+
+    // Then 级别选择仍在；重新开启即恢复
+    expect(store.instanceFor('ema')?.applyScope?.hk).toEqual({ enabled: false, intervals: ['15m'] })
+    store.setMarketScope('ema', 'hk', { enabled: true, intervals: ['15m'] })
+    expect(store.instanceFor('ema')?.applyScope?.hk).toEqual({ enabled: true, intervals: ['15m'] })
+  })
+
+  it('用户删除某市场适用范围条目后该键消失，未挂载 id 静默', () => {
+    // Given 美股与港股两条适用范围
+    const store = makeStore()
+    store.togglePreset('ema')
+    store.setMarketScope('ema', 'us', { enabled: true, intervals: ['1d'] })
+    store.setMarketScope('ema', 'hk', { enabled: true, intervals: ['15m'] })
+
+    // When 删除美股条目
+    store.setMarketScope('ema', 'us', undefined)
+
+    // Then 只剩港股；对未挂载 id 写适用范围无操作
+    expect(store.instanceFor('ema')?.applyScope).toEqual({ hk: { enabled: true, intervals: ['15m'] } })
+    store.setMarketScope('rsi', 'us', { enabled: true, intervals: ['1d'] })
+    expect(store.isActive('rsi')).toBe(false)
+  })
+
+  it('用户调整参数不会被适用范围设置干扰（两者正交）', () => {
+    // Given 带适用范围的实例
+    const store = makeStore()
+    store.togglePreset('ema')
+    store.setMarketScope('ema', 'us', { enabled: true, intervals: ['1d'] })
+
+    // When 改全局参数
+    store.setParams('ema', { n1: 9, n2: 21, n3: 20, n4: 30, n5: 60, n6: 120 })
+
+    // Then 参数更新且适用范围原样保留
+    expect(store.instanceFor('ema')?.params.n1).toBe(9)
+    expect(store.instanceFor('ema')?.applyScope).toEqual({ us: { enabled: true, intervals: ['1d'] } })
+  })
+
   it('空注册表（插件未装）：持久化/默认实例原样保留不清洗，插件就位后自动生效', () => {
     const store = createChartStateStore(createIndicatorRegistry())
     expect(store.getSnapshot().instances).toEqual([{ id: 'ma', params: { n1: 5, n2: 10, n3: 20, n4: 30, n5: 60, n6: 120 } }])

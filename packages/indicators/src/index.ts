@@ -10,8 +10,8 @@
  * 请经由子路径 `@dshtrading/indicators/tool` 引用。
  */
 export type {
-  IndicatorDefinition, IndicatorInstance, IndicatorOutput,
-  IndicatorPane, IndicatorParamSpec, Kline,
+  IndicatorApplyScope, IndicatorDefinition, IndicatorInstance, IndicatorMarketScope,
+  IndicatorOutput, IndicatorPane, IndicatorParamSpec, Kline,
 } from './types.ts'
 export { createIndicatorRegistry, type IndicatorRegistry } from './registry.ts'
 export { presetDefinitions, MA_COLORS, EMA_COLORS } from './presets.ts'
@@ -35,15 +35,20 @@ export {
   type CustomIndicatorStore,
 } from './custom.ts'
 export {
+  carryInstanceExtras,
   clampActivationParams,
   createMemoryChartActivationStore,
   defaultActivationInstance,
   effectiveInstanceParams,
+  effectiveMarketScope,
+  isInstanceApplicableOn,
   isInstanceVisibleOn,
   resolveIndicatorSpec,
+  sanitizeApplyScope,
   sanitizeInstance,
   symbolScopeKey,
   withHiddenScopes,
+  withMarketScope,
   type ChartActivationStore,
   type IndicatorSpecLike,
 } from './chart-activations.ts'

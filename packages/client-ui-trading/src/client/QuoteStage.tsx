@@ -34,9 +34,13 @@ import {
 } from './format.ts'
 import { indicators, isCustomIndicator } from './indicator-registry.ts'
 import { isTradFiPerp, resolveAssetClass, rowForm } from './instrument-meta.ts'
-import type { IndicatorDefinition, IndicatorInstance } from '@dshtrading/indicators'
-import { effectiveInstanceParams, isInstanceVisibleOn, symbolScopeKey } from '@dshtrading/indicators'
+import type { IndicatorDefinition, IndicatorInstance, IndicatorMarketScope } from '@dshtrading/indicators'
+import {
+  effectiveInstanceParams, effectiveMarketScope, isInstanceVisibleOn, symbolScopeKey,
+} from '@dshtrading/indicators'
 import { MARKET_INTERVALS } from './store.ts'
+import { MARKET_TAB_KEY } from './market-vocab.ts'
+import { SCOPE_MARKETS, normalizeMarketScope, selectApplicableInstances } from './indicator-scope.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
 import type { AccountBalance, DerivativesData, DerivativesHistory, Order, Orderbook, Position, TradeFill, TradeTick } from './types.ts'
@@ -111,6 +115,11 @@ export interface QuoteStageProps {
    * 在该情形应退回 toggleIndicator 全局语义。
    */
   setIndicatorVisible: (id: string, visible: boolean, scopeKey?: string) => void
+  /**
+   * 适用范围（按市场独立配置适用的 K 线级别）：scope === undefined 删除该市场
+   * 条目（落回「全部市场、全部级别应用」）。不适用 ≠ 取消激活。
+   */
+  setIndicatorScope: (id: string, market: MarketId, scope: IndicatorMarketScope | undefined) => void
   /** 全局移除：卸载所有标的上的该指标实例（原 togglePreset 全局关语义）。 */
   removeIndicator: (id: string) => void
   /** 删除自定义指标（issue #30 删除入口；仅自定义行渲染按钮）。 */
@@ -130,7 +139,7 @@ function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
 /** 信号 reason 的币种符号（按市场；crypto 以 USD 计价近似）。 */
 const CURRENCY_SYMBOL: Record<MarketId, string> = { cn: '¥', hk: 'HK$', us: '$', crypto: '$', futures: '¥', global: '$' }
 
-export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, removeIndicator, deleteIndicator }: QuoteStageProps) {
+export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, setIndicatorScope, removeIndicator, deleteIndicator }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
   const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk', 'futures', 'global'].includes(instrument.market))
     ? (instrument.market as MarketId)
@@ -143,9 +152,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const numLocale = scaleLocaleOf(t)
 
   const instances = useChart(state => state.instances)
-  // symbol visibility：按标的可见实例——唯一过滤点。图表调度、读数行、发 Agent
-  // 快照（标题/读数）、快捷词条、选择器勾选态全部消费它（隐藏 ≠ 取消激活，
-  // 实例仍在名册，raw `instances` 仅供「全局移除」按钮判定存在性）。
+  // symbol visibility：按标的可见实例——选择器勾选态/参数编辑/快捷词条的过滤点
+  // （隐藏 ≠ 取消激活，实例仍在名册，raw `instances` 仅供「全局移除」按钮判定存在性）。
   const visibleInstances = useMemo(
     () => instances.filter(instance => isInstanceVisibleOn(instance, market, symbol)),
     [instances, market, symbol],
@@ -178,6 +186,17 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editingIndicator, setEditingIndicator] = useState<string | null>(null)
+  /**
+   * 适用范围过滤（唯一读侧判据）：指标自身已启用（在名册）+ 当前市场已开启 +
+   * 当前 K 线级别已选中，三者同时满足才进图表计算与绘制。选择器勾选态/参数编辑
+   * 仍消费 visibleInstances（适用范围是「当前市场/级别是否应用」，不是取消激活）；
+   * 主图与副图同源——TvChart 的 mainRefs/subRefs 结构 diff 会随本集合收缩而
+   * removeSeries（空副图 pane 由 lightweight-charts 自动摘除），故切回即恢复。
+   */
+  const applicableInstances = useMemo(
+    () => selectApplicableInstances(visibleInstances, market, chartInterval),
+    [visibleInstances, market, chartInterval],
+  )
   /**
    * KDAS 关键日右键菜单：null = 关闭。x/y 为 TvChart 容器系的原始命中坐标；
    * placed 为量测钳位后的最终落点（null = 待量测，先隐藏渲染防右缘溢出闪现）。
@@ -549,8 +568,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   /* ---- KDAS 关键日右键菜单 ---- */
 
   const kdasMenuRef = useRef<HTMLDivElement | null>(null)
-  const kdasInstance = visibleInstances.find(instance => instance.id === KDAS_ID)
-  // 菜单启用守卫：聚焦标的 + 日 K 周期 + KDAS 已激活且对当前标的可见。
+  const kdasInstance = applicableInstances.find(instance => instance.id === KDAS_ID)
+  // 菜单启用守卫：聚焦标的 + 日 K 周期 + KDAS 已激活、对当前标的可见且在当前市场/级别适用。
   const kdasMenuEnabled = market !== undefined && symbol !== undefined && !INTRADAY_INTERVALS.has(chartInterval) && kdasInstance !== undefined
   const kdasScopeParams = kdasInstance !== undefined && market !== undefined && symbol !== undefined
     ? effectiveInstanceParams(kdasInstance, market, symbol)
@@ -595,11 +614,12 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     if (result.ok) applyKdasParams(result.params)
   }, [kdasScopeParams, applyKdasParams])
 
-  // 指标调度：可见实例 × klines → 渲染输入（symbol visibility 过滤后的实例才参与）
+  // 指标调度：适用实例 × klines → 渲染输入（symbol visibility + 适用范围双重过滤后的
+  // 实例才参与计算与绘制；主图与副图同规则）
   const indicatorGroups = useMemo(() => {
     if (klines === null) return []
     const groups: Array<TvIndicatorGroup & { id: string; pane: 'main' | 'sub'; title: string }> = []
-    for (const instance of visibleInstances) {
+    for (const instance of applicableInstances) {
       const definition = indicators.get(instance.id)
       if (definition === undefined) continue
       groups.push({
@@ -613,7 +633,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       })
     }
     return groups
-  }, [klines, visibleInstances, rosterVersion, market, symbol])
+  }, [klines, applicableInstances, rosterVersion, market, symbol])
 
   const mainOverlays = useMemo(() => indicatorGroups.filter(group => group.pane === 'main'), [indicatorGroups])
   const subIndicators = useMemo(() => indicatorGroups.filter(group => group.pane === 'sub'), [indicatorGroups])
@@ -975,6 +995,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                     setEditingIndicator(null)
                   }}
                   onEdit={(id) => { setEditingIndicator(current => current === id ? null : id) }}
+                  onSetScope={(id, target, scope) => { setIndicatorScope(id, target, scope) }}
                   onApply={(id, params) => {
                     // issue #72：当前标的已有参数覆盖 → 写覆盖；否则写全局 params。
                     const scopeKey = market !== undefined && symbol !== undefined ? symbolScopeKey(market, symbol) : undefined
@@ -1269,7 +1290,13 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       {stageTab === 'chart' && (
         <div className={css.quickIndicatorBar} role="toolbar" aria-label="Quick indicators">
           {allDefinitions.map(def => {
-            const active = visibleInstances.some(inst => inst.id === def.id)
+            // 词条带显示「此刻在这张图上真正生效的指标」：与图表/读数行同源
+            // （symbol visibility + 适用范围双重过滤）。只按可见性判定会让被适用范围
+            // 排除的指标（如仅港A生效的 KDAS 在美股）误显为已启用。
+            // 词条带显示「此刻在这张图上真正生效的指标」：与图表/读数行同源
+            // （symbol visibility + 适用范围双重过滤）。只按可见性判定会让被适用范围
+            // 排除的指标（如仅港A生效的 KDAS 在美股）误显为已启用。
+            const active = applicableInstances.some(inst => inst.id === def.id)
             return (
               <button
                 key={def.id}
@@ -1363,12 +1390,14 @@ function IndicatorPicker(props: {
   symbolLabel?: string | undefined
   onToggle: (id: string) => void
   onEdit: (id: string) => void
+  /** 适用范围写入：scope === undefined 删除该市场条目（落回全部级别应用）。 */
+  onSetScope: (id: string, market: MarketId, scope: IndicatorMarketScope | undefined) => void
   onApply: (id: string, params: Record<string, number>) => void
   onRemoveGlobal: (id: string) => void
   onDelete: (id: string) => void
   onClose: () => void
 }): React.JSX.Element {
-  const { t, instances, activeInstances, editingIndicator, scopeKey, symbolLabel, onToggle, onEdit, onApply, onRemoveGlobal, onDelete, onClose } = props
+  const { t, instances, activeInstances, editingIndicator, scopeKey, symbolLabel, onToggle, onEdit, onSetScope, onApply, onRemoveGlobal, onDelete, onClose } = props
   const definitions = indicators.list()
   const empty = definitions.length === 0
   return (
@@ -1391,6 +1420,7 @@ function IndicatorPicker(props: {
               t={t}
               onToggle={onToggle}
               onEdit={onEdit}
+              onSetScope={onSetScope}
               onApply={onApply}
               onRemoveGlobal={onRemoveGlobal}
               onDelete={onDelete}
@@ -1406,6 +1436,7 @@ function IndicatorPicker(props: {
               t={t}
               onToggle={onToggle}
               onEdit={onEdit}
+              onSetScope={onSetScope}
               onApply={onApply}
               onRemoveGlobal={onRemoveGlobal}
               onDelete={onDelete}
@@ -1430,18 +1461,25 @@ function PickerGroup(props: {
   t: Translate
   onToggle: (id: string) => void
   onEdit: (id: string) => void
+  onSetScope: (id: string, market: MarketId, scope: IndicatorMarketScope | undefined) => void
   onApply: (id: string, params: Record<string, number>) => void
   onRemoveGlobal: (id: string) => void
   onDelete: (id: string) => void
 }): React.JSX.Element {
-  const { title, definitions, instances, activeInstances, editingIndicator, scopeKey, symbolLabel, t, onToggle, onEdit, onApply, onRemoveGlobal, onDelete } = props
+  const { title, definitions, instances, activeInstances, editingIndicator, scopeKey, symbolLabel, t, onToggle, onEdit, onSetScope, onApply, onRemoveGlobal, onDelete } = props
+  // 适用范围面板单开（每行一个，避让参数编辑器）。
+  const [scopeId, setScopeId] = useState<string | null>(null)
   return (
     <div className={css.pickerGroup}>
       <div className={css.pickerGroupTitle}>{title}</div>
       {definitions.map(definition => {
         const visible = instances.find(candidate => candidate.id === definition.id) ?? null
-        const active = activeInstances.some(candidate => candidate.id === definition.id)
+        // 适用范围是跨标的的全局设置（不随当前标的显隐变化），编辑器取原始名册行——
+        // 否则指标在当前标的被隐藏时按钮可点却不出面板（死按钮）。
+        const scoped = activeInstances.find(candidate => candidate.id === definition.id) ?? null
+        const active = scoped !== null
         const editing = editingIndicator === definition.id
+        const scopeOpen = scopeId === definition.id
         // issue #72：编辑器初值 = 当前标的生效参数（覆盖优先），有覆盖时展示提示。
         const scopedParams = visible !== null && scopeKey !== undefined ? visible.symbolParams?.[scopeKey] : undefined
         return (
@@ -1462,6 +1500,17 @@ function PickerGroup(props: {
                 onClick={() => onEdit(definition.id)}
               >
                 {t('indicator.params')}
+              </button>
+            )}
+            {active && (
+              <button
+                type="button"
+                className={css.pickerParams}
+                data-open={scopeOpen ? 'true' : undefined}
+                aria-expanded={scopeOpen}
+                onClick={() => setScopeId(current => current === definition.id ? null : definition.id)}
+              >
+                {t('indicator.scope')}
               </button>
             )}
             {active && (
@@ -1501,6 +1550,101 @@ function PickerGroup(props: {
                 onCancel={() => onEdit(definition.id)}
                 onApply={(params) => onApply(definition.id, params)}
               />
+            )}
+            {scopeOpen && scoped !== null && (
+              <IndicatorScopeEditor
+                instance={scoped}
+                t={t}
+                onChange={(target, scope) => onSetScope(definition.id, target, scope)}
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * 适用范围编辑器：按市场分行，每行一个启用开关；展开后勾选该市场的 K 线级别。
+ * 每市场另有「全部级别」「清空」批量动作。级别集取 MARKET_INTERVALS（系统支持的
+ * 市场与级别，不新增支持）。未选任何级别时明确显示「未选择级别」——空选择绝不
+ * 解释为全部。勾选态与开关都来自实例的 applyScope 有效值（条目缺席 = 全部应用）。
+ */
+function IndicatorScopeEditor(props: {
+  instance: IndicatorInstance
+  t: Translate
+  onChange: (market: MarketId, scope: IndicatorMarketScope | undefined) => void
+}): React.JSX.Element {
+  const { instance, t, onChange } = props
+  const [expanded, setExpanded] = useState<MarketId | null>(null)
+  return (
+    <div className={css.scopeEditor} data-dshtrading-scope="">
+      <div className={css.scopeHint}>{t('indicator.scope.hint')}</div>
+      {SCOPE_MARKETS.map(target => {
+        const supported = MARKET_INTERVALS[target] ?? []
+        const scene = effectiveMarketScope(instance, target, supported)
+        const open = expanded === target
+        const commit = (next: IndicatorMarketScope): void => {
+          onChange(target, normalizeMarketScope(next, supported))
+        }
+        return (
+          <div key={target} className={css.scopeMarket} data-dshtrading-scope-market={target}>
+            <div className={css.scopeRow}>
+              <label className={css.scopeLabel}>
+                <input
+                  type="checkbox"
+                  checked={scene.enabled}
+                  aria-label={t('indicator.scope.enabled', { market: t(MARKET_TAB_KEY[target]) })}
+                  onChange={(event) => commit({ enabled: event.target.checked, intervals: scene.intervals })}
+                />
+                <span>{t(MARKET_TAB_KEY[target])}</span>
+              </label>
+              <span className={css.scopeSummary}>
+                {scene.intervals.length === 0
+                  ? t('indicator.scope.none')
+                  : open ? '' : t('indicator.scope.count', { count: scene.intervals.length, total: supported.length })}
+              </span>
+              <button
+                type="button"
+                className={css.pickerParams}
+                data-open={open ? 'true' : undefined}
+                data-dshtrading-scope-expand={target}
+                aria-expanded={open}
+                aria-label={t('indicator.scope.expand', { market: t(MARKET_TAB_KEY[target]) })}
+                onClick={() => setExpanded(current => current === target ? null : target)}
+              >
+                {open ? '−' : '+'}
+              </button>
+            </div>
+            {open && (
+              <>
+                <div className={css.scopeIntervals}>
+                  {supported.map(level => (
+                    <label key={level} className={css.scopeInterval} data-dshtrading-scope-level={level}>
+                      <input
+                        type="checkbox"
+                        checked={scene.intervals.includes(level)}
+                        onChange={(event) => {
+                          const intervals = event.target.checked
+                            ? [...scene.intervals, level]
+                            : scene.intervals.filter(entry => entry !== level)
+                          commit({ enabled: scene.enabled, intervals })
+                        }}
+                      />
+                      <span>{t(INTERVAL_KEY[level] ?? 'interval.1d')}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className={css.scopeActions}>
+                  <button type="button" className={css.paramButton} onClick={() => commit({ enabled: scene.enabled, intervals: [...supported] })}>
+                    {t('indicator.scope.all')}
+                  </button>
+                  <button type="button" className={css.paramButton} onClick={() => commit({ enabled: scene.enabled, intervals: [] })}>
+                    {t('indicator.scope.clear')}
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )

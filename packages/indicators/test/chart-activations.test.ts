@@ -12,11 +12,14 @@ import {
   createMemoryChartActivationStore,
   createMemoryCustomIndicatorStore,
   effectiveInstanceParams,
+  effectiveMarketScope,
+  isInstanceApplicableOn,
   isInstanceVisibleOn,
   resolveIndicatorSpec,
   sanitizeInstance,
   symbolScopeKey,
   withHiddenScopes,
+  withMarketScope,
 } from '../src/index.js'
 import { createFileChartActivationStore } from '../src/chart-activations-fs.js'
 import { createChartActivationTools } from '../src/chart-tools.js'
@@ -175,6 +178,122 @@ describe('hiddenScopes 按标的隐藏（symbol visibility）', () => {
     await store.activate(hidden)
     const reopened = createFileChartActivationStore(file)
     expect(await reopened.list()).toEqual([hidden])
+  })
+})
+
+describe('applyScope 适用范围（按市场独立配置适用的 K 线级别）', () => {
+  const scoped = {
+    id: 'ema', params: { n: 20 },
+    applyScope: { us: { enabled: true, intervals: ['1d'] }, hk: { enabled: false, intervals: ['15m'] } },
+  }
+
+  it('用户保存适用范围后重开文件 store 仍读到同一配置（持久化保真）', async () => {
+    // Given 一个只对美股日 K、对港股关闭（但保留 15m 选择）的 EMA 实例
+    const dir = await mkdtemp(path.join(tmpdir(), 'dsh-chart-scope-'))
+    tmpDirs.push(dir)
+    const file = path.join(dir, 'chart.json')
+    await createFileChartActivationStore(file).activate(scoped)
+
+    // When 用新的 store 从磁盘读回
+    const reopened = createFileChartActivationStore(file)
+
+    // Then 适用范围连同市场开关与已选级别一字不差
+    expect(await reopened.list()).toEqual([scoped])
+  })
+
+  it('用户手改坏形状的适用范围条目被整条丢弃，落回该市场全部级别应用', async () => {
+    // Given 一条 enabled 非布尔、另一条 intervals 非数组的脏数据
+    // When sanitizeInstance 清洗
+    const clean = sanitizeInstance({
+      id: 'k', params: {},
+      applyScope: {
+        us: { enabled: 'yes', intervals: ['1d'] },
+        hk: { enabled: true, intervals: '1d' },
+        cn: { enabled: true, intervals: ['1d', '1d', ' 1w ', 42, ''] },
+      },
+    })
+
+    // Then 坏条目整体消失（不读成「未选级别」），好条目保留且去重去空白
+    expect(clean).toEqual({ id: 'k', params: {}, applyScope: { cn: { enabled: true, intervals: ['1d', '1w'] } } })
+    expect(sanitizeInstance({ id: 'k', params: {}, applyScope: {} })).toEqual({ id: 'k', params: {} })
+    expect(sanitizeInstance({ id: 'k', params: {}, applyScope: [] })).toEqual({ id: 'k', params: {} })
+  })
+
+  it('用户指标的适用性由市场开关与级别选择共同决定，空选择不等于全部', () => {
+    // Given 美股只选日 K、港股关闭但保留 15m、A 股启用但未选级别
+    const instance = {
+      id: 'ema', params: {},
+      applyScope: {
+        us: { enabled: true, intervals: ['1d'] },
+        hk: { enabled: false, intervals: ['15m'] },
+        cn: { enabled: true, intervals: [] },
+      },
+    }
+
+    // Then 仅「启用且级别命中」的市场/级别适用
+    expect(isInstanceApplicableOn(instance, 'us', '1d')).toBe(true)
+    expect(isInstanceApplicableOn(instance, 'us', '15m')).toBe(false)
+    expect(isInstanceApplicableOn(instance, 'hk', '15m')).toBe(false)   // 市场关闭
+    expect(isInstanceApplicableOn(instance, 'cn', '1d')).toBe(false)    // 空选择 ≠ 全部
+    expect(isInstanceApplicableOn(instance, 'crypto', '1d')).toBe(true) // 缺席市场 = 全部应用
+    expect(isInstanceApplicableOn({ id: 'ema', params: {} }, 'us', '1m')).toBe(true)
+    expect(isInstanceApplicableOn(instance)).toBe(true)                 // 无市场上下文
+  })
+
+  it('用户清空某市场级别后又选回，条目先消失再重建且不误伤其它市场', () => {
+    // Given 美股日 K + 港股 15m 的实例
+    const base = { id: 'ema', params: {}, applyScope: { us: { enabled: true, intervals: ['1d'] }, hk: { enabled: true, intervals: ['15m'] } } }
+
+    // When 清空美股级别选择（enabled 保持）
+    const cleared = withMarketScope(base, 'us', { enabled: true, intervals: [] })
+
+    // Then 美股条目保留「空选择」，港股不受影响
+    expect(cleared.applyScope).toEqual({ us: { enabled: true, intervals: [] }, hk: { enabled: true, intervals: ['15m'] } })
+
+    // When 删除美股条目（落回全部级别应用）
+    const removed = withMarketScope(cleared, 'us', undefined)
+
+    // Then 仅剩港股条目
+    expect(removed.applyScope).toEqual({ hk: { enabled: true, intervals: ['15m'] } })
+    // 同值重写返回原引用（无意义写入不触发持久化）
+    expect(withMarketScope(removed, 'hk', { enabled: true, intervals: ['15m'] })).toBe(removed)
+  })
+
+  it('用户删除最后一个市场条目后 applyScope 字段整体消失，不残留空表', () => {
+    // Given 只有一个市场条目的实例
+    const base = { id: 'ema', params: {}, applyScope: { us: { enabled: true, intervals: ['1d'] } } }
+
+    // When 删除该市场条目
+    const next = withMarketScope(base, 'us', undefined)
+
+    // Then 字段整体消失（回到与存量配置同一形态）
+    expect(next).toEqual({ id: 'ema', params: {} })
+    expect('applyScope' in next).toBe(false)
+  })
+
+  it('用户查看某市场有效选择时，缺席市场显示该市场全部支持级别', () => {
+    // Given 只配置了美股的实例
+    const instance = { id: 'ema', params: {}, applyScope: { us: { enabled: true, intervals: ['1d'] } } }
+
+    // When 分别读取缺席市场与已配置市场的有效选择
+    // Then 缺席 = 启用 + 全部支持级别；已配置 = 原样返回其选择
+    expect(effectiveMarketScope(instance, 'hk', ['5m', '15m', '1d'])).toEqual({ enabled: true, intervals: ['5m', '15m', '1d'] })
+    expect(effectiveMarketScope(instance, 'us', ['5m', '1d'])).toEqual({ enabled: true, intervals: ['1d'] })
+  })
+
+  it('用户调整指标参数时适用范围不被清掉（全局写保留 applyScope）', async () => {
+    // Given 一个带适用范围的已挂载 EMA 实例
+    const chartStore = createMemoryChartActivationStore([scoped])
+    const { activate } = createChartActivationTools({ chartStore })
+
+    // When 全局改参（EMA 的周期键是 n1..n6）
+    await activate.execute({ id: 'ema', paramsJson: '{"n1":9}' })
+
+    // Then n1 已更新（其余键取 schema 默认），适用范围原样保留
+    const [stored] = await chartStore.list()
+    expect(stored?.applyScope).toEqual({ us: { enabled: true, intervals: ['1d'] }, hk: { enabled: false, intervals: ['15m'] } })
+    expect(stored?.params.n1).toBe(9)
+    expect(stored?.params.n2).toBe(10)
   })
 })
 

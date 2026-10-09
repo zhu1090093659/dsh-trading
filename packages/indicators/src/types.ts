@@ -64,6 +64,30 @@ export interface IndicatorDefinition {
   compute(bars: readonly Kline[], params: Readonly<Record<string, number>>): IndicatorOutput[]
 }
 
+/**
+ * 一个市场在适用范围里的配置（按市场独立启用开关 + 级别选择）。
+ *
+ * - `enabled: false`：该市场不应用（已选 `intervals` 原样保留，重新开启即恢复）。
+ * - `enabled: true` 且 `intervals: []`：该市场不应用（「未选择级别」——空选择
+ *   绝不解释为全部级别）。
+ * - `enabled: true` 且有值：仅选中级别应用。
+ */
+export interface IndicatorMarketScope {
+  /** 该市场是否启用应用（关闭只停用，不清空已选级别）。 */
+  enabled: boolean
+  /** 该市场适用的 K 线级别（市场级别词汇，如 "1d" / "15m"）。 */
+  intervals: string[]
+}
+
+/**
+ * 指标适用范围：市场 slug（"crypto" | "us" | "cn" | "hk" | "futures" | "global"）
+ * → 该市场配置。
+ *
+ * 缺席市场 = 该市场默认全开且全部支持级别选中（新建指标与存量配置均如此，
+ * 因此字段整体缺失即「全部市场全部级别应用」，零迁移）。市场键存在即按配置生效。
+ */
+export type IndicatorApplyScope = Record<string, IndicatorMarketScope>
+
 /** 一个已激活的指标实例（每个 preset id 至多一个实例）。 */
 export interface IndicatorInstance {
   id: string
@@ -80,4 +104,11 @@ export interface IndicatorInstance {
    * （默认可见，存量名册零迁移）。隐藏 ≠ 取消激活：实例仍在名册，只是对该标的不可见。
    */
   hiddenScopes?: string[]
+  /**
+   * 适用范围（按市场独立配置适用的 K 线级别）：字段缺失 = 全部市场、全部级别应用
+   * （存量名册零迁移，表现与升级前一致）。不适用 ≠ 取消激活：实例、参数与适用范围
+   * 都保留，切回适用的市场/级别即自动恢复。与 hiddenScopes 正交：hiddenScopes 管
+   * 标的级显隐，applyScope 管市场 + 级别级适用性。
+   */
+  applyScope?: IndicatorApplyScope
 }
