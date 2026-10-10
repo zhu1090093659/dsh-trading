@@ -9,7 +9,6 @@ import { Service } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import type {
-  AccountBalance,
   DerivativesData,
   DerivativesHistory,
   Disposable,
@@ -22,7 +21,6 @@ import type {
   Orderbook,
   Position,
   Ticker,
-  TradeFill,
   TradeService,
   TradeTick,
 } from '@dshtrading/api'
@@ -206,19 +204,6 @@ export class BybitTradeService extends Service implements TradeService {
     this.config = options.config
   }
 
-  async getBalance(): Promise<AccountBalance> {
-    return this.client.getBalance()
-  }
-
-  async getBalances(): Promise<AccountBalance[]> {
-    try {
-      const b = await this.client.getBalance()
-      return [b]
-    } catch {
-      return []
-    }
-  }
-
   async placeOrder(order: OrderRequest): Promise<Order> {
     // 服务缝闸门（P0 · 铁律 #3 修订版 [S4]）：三态检查下推到服务实现内第一步——
     // 绕过工具层直调本服务（动态包宿主半等）同样 fail-closed；工具层闸门保留（双保险）。
@@ -258,29 +243,27 @@ export class BybitTradeService extends Service implements TradeService {
     return this.client.cancelOrder(undefined, orderId) as unknown as void
   }
 
-  async getOrder(symbol: string, id: string): Promise<Order> {
-    return {
-      id,
-      symbol,
-      side: 'buy',
-      type: 'limit',
-      status: 'new',
-      quantity: 0,
-      dryRun: false,
-      timestamp: Date.now(),
-    }
+  /**
+   * 私有账户读面未实现（连接器没有签名读路径）：必须显式拒绝。base 的账户工具
+   * 与 GUI 桥把同一注册面当「交易所账户真值」消费——返回编造订单或空数组会被
+   * 读成「订单存在」「没有持仓」，而契约语义是 TRADING_NOT_IMPLEMENTED（不可用）。
+   * 可选方法 getBalances/listOpenOrders/listTradeFills 直接缺席，由消费方按
+   * 「可选方法缺席」处理（见 packages/api/src/index.ts 的 TradeService 注释）。
+   */
+  async getOrder(_symbol: string, _id: string): Promise<Order> {
+    throw new TradingServiceError(
+      'TRADING_NOT_IMPLEMENTED',
+      'Bybit TradeService.getOrder is not implemented: this connector has no signed private-account read path. '
+        + 'That means "not available", NOT "order not found".',
+    )
   }
 
   async getPositions(): Promise<Position[]> {
-    return []
-  }
-
-  async listOpenOrders(_symbol?: string): Promise<Order[]> {
-    return []
-  }
-
-  async listTradeFills(_symbol?: string, _limit?: number): Promise<TradeFill[]> {
-    return []
+    throw new TradingServiceError(
+      'TRADING_NOT_IMPLEMENTED',
+      'Bybit TradeService.getPositions is not implemented: this connector has no signed private-account read path. '
+        + 'That means "not available", NOT "no positions".',
+    )
   }
 }
 

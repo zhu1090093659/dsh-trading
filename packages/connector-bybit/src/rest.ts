@@ -543,10 +543,6 @@ export class BybitRestClient {
       .reverse()
   }
 
-  async getBalance(): Promise<AccountBalance> {
-    return { currency: 'USDT', available: 100000, total: 100000 }
-  }
-
   async placeOrder(_creds: unknown, req: OrderRequest): Promise<Order> {
     const sym = normalizeCryptoSymbol(req.symbol)
     return {

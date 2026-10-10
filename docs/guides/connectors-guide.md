@@ -55,7 +55,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | **Binance (`binance`)** | 全球主流所 | 行情免密 / 交易 `BINANCE_API_KEY` | [binance.com/en/binance-api](https://www.binance.com/en/binance-api) | 行情开箱即用，交易支持 API Key 认证 |
 | **OKX (`okx`)** | 全球衍生品所 | 行情免密 / 交易 `OKX_API_KEY` 等 | [okx.com/docs-v5/zh/](https://www.okx.com/docs-v5/zh/) | 支持 Demo 模拟盘与实盘下单 |
-| **Bybit (`bybit`)** | 衍生品三大所 | 行情免密 / 交易 `BYBIT_API_KEY` 等 | [bybit.com/en/api-overview](https://www.bybit.com/en/api-overview) | Bybit v5 统一账户，免密行情 + 签名交易 |
+| **Bybit (`bybit`)** | 衍生品三大所 | 行情免密（账户/交易面未实现） | [bybit.com/en/api-overview](https://www.bybit.com/en/api-overview) | Bybit v5 统一账户，免密行情；**账户与交易面未实现**——读方法缺席或抛 `TRADING_NOT_IMPLEMENTED`，不冒充余额/持仓（凭据 ref 保留给将来的签名实现） |
 | **CCXT (`ccxt`)** | 开源百所聚合 | 通用免密 / 各所凭证 | [ccxt.com](https://ccxt.com) | 支持 100+ 加密交易所的通用行情聚合 |
 
 ---
