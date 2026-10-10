@@ -28,10 +28,14 @@ function rootRelative(path) {
   return relative(ROOT, path).split(sep).join('/')
 }
 
-/** 收集要检查的 markdown 文件。 */
+/**
+ * 收集要检查的 markdown 文件。
+ * `archived` 目录永久冻结（.agents/notes/README.md 第 6 节）：归档记录的出站链接
+ * 不再核验，也不作为活门禁对象——不为过门禁去改冻结文件。
+ */
 function collect(dir, acc = []) {
   for (const entry of readdirSync(dir)) {
-    if (entry === 'node_modules' || entry === '.git') continue
+    if (entry === 'node_modules' || entry === '.git' || entry === 'archived') continue
     const path = join(dir, entry)
     if (statSync(path).isDirectory()) collect(path, acc)
     else if (entry.endsWith('.md')) acc.push(path)

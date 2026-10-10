@@ -110,4 +110,18 @@ describe('文档相对链接检查', () => {
     expect(result.stderr).toContain('docs/README.md → nowhere.md')
     expect(result.stderr).not.toContain('sibling.md')
   })
+
+  it('管理员：冻结的 archived 归档记录不参与活门禁，活树的断链照拦', () => {
+    // Given 归档记录与活树记录各有一条同样的断链
+    const dir = fixture({
+      '.agents/notes/archived/old.md': '[断](nowhere.md)' + NL,
+      '.agents/notes/implemented/live.md': '[断](nowhere.md)' + NL,
+    })
+    // When 跑门禁
+    const result = check(dir)
+    // Then 只报活树那条；归档记录不出现在结果里
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('.agents/notes/implemented/live.md')
+    expect(result.stderr).not.toContain('archived/old.md')
+  })
 })

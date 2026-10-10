@@ -100,7 +100,7 @@ const MUST_BE_WIRED = [
  */
 const INTENTIONALLY_UNWIRED = {
   'ui:check': '需要 headless Chrome 并真起一个宿主实例（会拉起 trading-web）⇒ 不进 CI；本地跑法：pnpm ui:check（2026-10-01 实测 12 项断言全绿）',
-  'bot-closure:check': '需要已构建的 bot profile ⇒ 不进 CI；已进 gates:all 的安装态档：pnpm gates:all --with-installed（该档会给它显式交易 home；脚本自身也拒绝在宿主 home 上猜测）',
+  'bot-closure:check': '判据对象是 bot 安装闭包 ⇒ 已随自动交易平面迁往私有卫星仓 dsh-trading-bot（2026-10-03 拆分）',
   'plane:check': '判据对象是 bot/GUI 平面的包集合 ⇒ 已随自动交易平面迁往私有卫星仓 dsh-trading-bot（2026-10-03 拆分）',
   'test:ios-evidence': 'iOS 证据跑批门禁 ⇒ 已随 apps/ios-native 迁往私有卫星仓 dsh-trading-bot（2026-10-03 拆分）',
   'contract-id:check': 'id 冻结面判据读 packages/contract/src ⇒ 已随 packages/contract 迁往私有卫星仓（2026-10-03 拆分）',

@@ -10,23 +10,19 @@
  *   - 末尾打印一张表，红绿一目了然。
  *
  * 用法：
- *   node scripts/gates-all.mjs                  # 全部门禁（含 e2e:smoke 默认模式）
- *   node scripts/gates-all.mjs --with-network   # 额外跑需要网络的门禁
+ *   node scripts/gates-all.mjs                  # 全部门禁（14 条，见下方 GATES）
  *   node scripts/gates-all.mjs --only build,test:audit
  *   node scripts/gates-all.mjs --self-test      # 自测：用一个必然失败的命令验证退出码传播
+ * 未知参数一律 exit 2：不静默忽略，避免「以为跑过某档」。
  */
 import { spawnSync } from 'node:child_process'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const NL = String.fromCharCode(10)
 const args = process.argv.slice(2)
-const withNetwork = args.includes('--with-network')
-// **安装态门禁**（需要已构建的 profile，故默认不跑）：P1 的验收判据就是 bot 安装闭包，
-// 它必须显式给交易 home —— 脚本自带守卫，在宿主 `~/.dsh` 上会 exit 2 并拒绝猜测。
-const withInstalled = args.includes('--with-installed')
+/** 已知参数（未知一律拒绝，避免静默忽略）：--only[=]<名字,...> 与 --self-test。 */
+const KNOWN_FLAGS = new Set(['--only', '--self-test'])
 
 /** 门禁清单：命令 + 参数 + 说明（顺序即执行顺序，快的前面）。 */
 const GATES = [
@@ -51,15 +47,6 @@ const GATES = [
   // e2e:smoke 已随自动交易平面迁往私有卫星仓 dsh-trading-bot（drill 全在 tradectl）。
 ]
 
-/** 安装态门禁：只在 --with-installed 时加入（需要 ~/.dsh-trading 下已构建的 bot profile）。 */
-const INSTALLED_GATES = [
-  {
-    name: 'bot-closure:check（安装态，P1 验收）',
-    command: 'pnpm',
-    args: ['bot-closure:check'],
-    env: { DSH_HOME: join(homedir(), '.dsh-trading') },
-  },
-]
 
 /** 自测用：一个必然失败的门禁，验证退出码确实被传播（不许出"红字但 exit 0"）。 */
 const SELF_TEST_GATE = { name: 'self-test（必然失败）', command: 'node', args: ['-e', 'process.exit(3)'] }
@@ -81,6 +68,11 @@ function runGate(gate) {
 }
 
 function main() {
+  const unknownFlags = args.filter((arg) => arg.startsWith('--') && !KNOWN_FLAGS.has(arg.split('=')[0]))
+  if (unknownFlags.length > 0) {
+    process.stderr.write('[gates-all] ✗ 未知参数：' + unknownFlags.join('、') + '（已知：--only=<名字,...> 或 --only <名字,...>、--self-test）' + NL)
+    return 2
+  }
   if (args.includes('--self-test')) {
     process.stdout.write('[gates-all] 自测：用一个必然失败的命令验证退出码传播' + NL)
     const result = runGate(SELF_TEST_GATE)
@@ -95,7 +87,7 @@ function main() {
   const only = args.find((arg) => arg.startsWith('--only'))
   const selected =
     only === undefined
-      ? [...GATES, ...(withInstalled ? INSTALLED_GATES : [])]
+      ? [...GATES]
       : GATES.filter((gate) => (only.includes('=') ? only.split('=')[1] ?? '' : args[args.indexOf(only) + 1] ?? '').split(',').includes(gate.name))
 
   // **空洞成功守卫**：选不中任何门禁时必须报错 —— 否则 `--only 拼错的名字` 会输出"全部通过"、
@@ -105,7 +97,7 @@ function main() {
     return 2
   }
 
-  process.stdout.write('[gates-all] 跑 ' + String(selected.length) + ' 条门禁' + (withNetwork ? '（含网络项）' : '') + NL)
+  process.stdout.write('[gates-all] 跑 ' + String(selected.length) + ' 条门禁' + NL)
   const results = []
   for (const gate of selected) results.push(runGate(gate))
 

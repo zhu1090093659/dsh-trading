@@ -1,10 +1,5 @@
 {
   "broken": [
-    ".agents/notes/archived/process/2026-09-06-headline-arena-issue66-decline.md → ../feature/2026-09-06-dsh-im-npm-embed.md",
-    ".agents/notes/archived/process/2026-09-06-headline-arena-issue66-decline.md → ../feature/2026-09-06-hypothesis-scarcity-doctrine.md",
-    ".agents/notes/archived/process/2026-09-06-pr67-68-maintenance-run.md → ../../../../../spikes/impl-symbol-search-EVIDENCE.json",
-    ".agents/notes/archived/process/2026-09-10-sdk-upgrade-npm-0.1.5-rc.1.md → ../architecture/2026-09-06-unified-trading-role-presets.md",
-    ".agents/notes/archived/process/2026-09-10-sdk-upgrade-npm-0.1.5-rc.1.md → ../feature/2026-09-13-trading-settings-ux-grouping.md",
     ".agents/notes/implemented/bug-fix/2026-09-04-desktop-windows-installer-vcredist.md → ../../desktop/electron-builder.yml",
     ".agents/notes/implemented/bug-fix/2026-09-04-desktop-windows-installer-vcredist.md → ../../desktop/resources/installer.nsh",
     ".agents/notes/implemented/bug-fix/2026-09-04-desktop-windows-installer-vcredist.md → ../../desktop/scripts/fetch-redist.mjs",

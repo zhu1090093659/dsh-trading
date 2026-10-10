@@ -57,4 +57,14 @@ describe('gates-all', () => {
     expect(result.stdout).toContain('跑 1 条门禁')
     expect(result.stdout).toContain('✓ home-guard:check')
   }, GATE_RUN_TIMEOUT_MS)
+
+  it('管理员：未知参数显式失败，不静默忽略（避免以为跑过某档）', () => {
+    // Given 一个已经不存在的档位参数（2026-10-03 随自动交易平面迁走）
+    // When 跑门禁
+    const result = run(['--with-installed'])
+    // Then 退出码 2，且点明未知参数
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('未知参数')
+    expect(result.stderr).toContain('--with-installed')
+  })
 })

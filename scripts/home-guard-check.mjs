@@ -33,11 +33,6 @@ const GUARD_MARKER = '-trading'
  * 与 contract-id 的 `id-gate-allow` 同一风格：豁免必须显式且附理由，不能靠约定。 */
 const ALLOW_MARKER = 'home-guard-allow'
 
-/** 允许的例外（附理由）；键是仓库相对路径。 */
-const ALLOWED = {
-  // 只在文档注释里提到 DSH_HOME（profile 层的写法说明），没有代码级读取
-  'scripts/patch-id-gate.mjs': '注释里的用法说明，不是代码级读取',
-}
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
@@ -51,9 +46,7 @@ function walk(dir, out = []) {
 }
 
 /** 纯函数：给定文件内容与路径，返回违规原因（空数组 = 合规）。 */
-export function violationsIn(text, filePath) {
-  const normalized = filePath.split(String.fromCharCode(92)).join('/')
-  if (ALLOWED[normalized] !== undefined) return []
+export function violationsIn(text, _filePath) {
   if (text.includes(ALLOW_MARKER)) return []
   const lines = text.split(String.fromCharCode(10))
   const reads = []
