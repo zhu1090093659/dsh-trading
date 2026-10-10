@@ -31,21 +31,13 @@
   },
   "dependencies": {
     "@dshtrading/api": "workspace:^",
-    "@dshtrading/eventbus": "workspace:^",
     "@dshtrading/holdings": "workspace:^",
     "@dshtrading/indicators": "workspace:^",
     "@dshtrading/knowledge": "workspace:^",
     "@dshtrading/strategies": "workspace:^",
     "@dshtrading/router": "workspace:^",
     "@dshtrading/watchlist": "workspace:^",
-    "@dshtrading/kit-cn": "workspace:^",
-    "@dshtrading/kit-hk": "workspace:^",
-    "@dshtrading/kit-us": "workspace:^",
-    "@dshtrading/kit-crypto": "workspace:^",
-    "lightweight-charts": "^5.2.1",
-    "@dshtrading/client-ui-strategies": "workspace:^",
-    "@dshtrading/client-ui-knowledge": "workspace:^",
-    "@dshtrading/dsh-home": "workspace:^"
+    "lightweight-charts": "^5.2.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",

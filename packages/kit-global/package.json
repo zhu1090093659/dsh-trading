@@ -21,9 +21,6 @@
     "build": "tsdown",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@dshtrading/api": "workspace:*"
-  },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
     "@deepseek-ai/dsh-skill": ">=0.2.0-rc.2",

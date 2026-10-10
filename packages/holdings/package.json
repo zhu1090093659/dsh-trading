@@ -34,7 +34,6 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
-    "@deepseek-ai/schemastery": "^3.18.4",
     "@dshtrading/dsh-home": "workspace:^"
   },
   "peerDependencies": {
