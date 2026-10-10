@@ -1,7 +1,4 @@
 /** External client-bundle tsdown config（client-ui-settings 同款三段 banner/intro/footer 契约）。 */
-import { readFile } from 'node:fs/promises'
-import { basename, dirname, resolve } from 'node:path'
-import { transform } from 'lightningcss'
 
 const ID = '@dshtrading/dsh-i18n'
 
@@ -23,34 +20,6 @@ const purityGate = () => ({
   },
 })
 
-const cssModulesInline = () => ({
-  name: 'dsh-i18n-css-modules-inline',
-  resolveId(source, importer) {
-    if (!source.endsWith('.module.css')) return null
-    const abs = importer !== undefined ? resolve(dirname(importer), source) : resolve(source)
-    return '\0dsh-css:' + abs + '.mjs'
-  },
-  async load(virtualId) {
-    if (!virtualId.startsWith('\0dsh-css:')) return null
-    const fileId = virtualId.slice(9, -4)
-    this.addWatchFile(fileId)
-    const source = await readFile(fileId, 'utf8')
-    // lightningcss 的 code 需要 Buffer（传 string 会炸 NAPI TypedArray）。
-    const { code, exports: cssExports } = transform({ filename: fileId, code: Buffer.from(source, 'utf8'), cssModules: { pattern: '[hash]_[local]' }, minify: true })
-    const classMap = {}
-    for (const [local, exp] of Object.entries(cssExports ?? {})) classMap[local] = exp.name
-    const tagId = `${ID}/${basename(fileId)}`
-    const css = JSON.stringify(code.toString())
-    const injected = [
-      `const css = ${css};`,
-      `const tagId = ${JSON.stringify(tagId)};`,
-      `if (typeof document !== 'undefined' && document.querySelector('style[data-plugin-css=' + JSON.stringify(tagId) + ']') === null) {`,
-      `  const tag = document.createElement('style'); tag.dataset.plugin = ${JSON.stringify(ID)}; tag.dataset.pluginCss = tagId; tag.textContent = css; document.head.appendChild(tag);`,
-      '}',
-    ].join('\n')
-    return `${injected}\nexport default ${JSON.stringify(classMap)};`
-  },
-})
 
 export default {
   entry: { client: 'src/client/index.ts' },
@@ -90,5 +59,5 @@ export default {
     footer: 'return module.exports; } });',
     intro: 'var module = { exports: {} }; var exports = module.exports;',
   },
-  plugins: [purityGate(), cssModulesInline()],
+  plugins: [purityGate()],
 }

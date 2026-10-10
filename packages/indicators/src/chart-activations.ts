@@ -310,19 +310,11 @@ export async function resolveIndicatorSpec(id: string, customStore?: CustomIndic
 }
 
 /**
- * 参数按 schema clamp（与 registry.clampParams 同规则，独立实现供 host 写入
- * 边界使用——host 平面没有注册表实例）：有限数字 → min/max 收敛 + 取整；缺失/
- * 非法 → schema 默认值；schema 外的键丢弃。definition 未知时原样透传有限数字
- * 键（预置/自定义尚未就位的实例仍可落盘，UI 对未知 id 天然不可见）。
+ * 参数按 schema clamp 的**单一实现**（registry.clampParams 与 clampActivationParams 共用）：
+ * 有限数字 → min/max 收敛 + 取整；缺失/非法 → schema 默认值；schema 外的键丢弃。
  */
-export function clampActivationParams(specs: readonly IndicatorParamSpec[] | undefined, params: Record<string, number>): Record<string, number> {
+export function clampParamsBySpecs(specs: readonly IndicatorParamSpec[], params: Record<string, number>): Record<string, number> {
   const out: Record<string, number> = {}
-  if (specs === undefined) {
-    for (const [key, value] of Object.entries(params)) {
-      if (typeof value === 'number' && Number.isFinite(value)) out[key] = value
-    }
-    return out
-  }
   for (const spec of specs) {
     const raw = params[spec.key]
     out[spec.key] = typeof raw === 'number' && Number.isFinite(raw)
@@ -330,6 +322,22 @@ export function clampActivationParams(specs: readonly IndicatorParamSpec[] | und
       : spec.default
   }
   return out
+}
+
+/**
+ * 写入边界用的 clamp（host 平面没有注册表实例，故不依赖 registry）：规则同上，
+ * 多一条 definition 未知（specs 为 undefined）时原样透传有限数字键的分支 —— 预置/
+ * 自定义尚未就位的实例仍可落盘，UI 对未知 id 天然不可见。
+ */
+export function clampActivationParams(specs: readonly IndicatorParamSpec[] | undefined, params: Record<string, number>): Record<string, number> {
+  if (specs === undefined) {
+    const out: Record<string, number> = {}
+    for (const [key, value] of Object.entries(params)) {
+      if (typeof value === 'number' && Number.isFinite(value)) out[key] = value
+    }
+    return out
+  }
+  return clampParamsBySpecs(specs, params)
 }
 
 /** 按 schema 生成默认参数实例（definition 缺席 → 空 params，UI 不可见兜底）。 */

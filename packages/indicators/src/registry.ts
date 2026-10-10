@@ -9,6 +9,7 @@
 import type {
   IndicatorDefinition, IndicatorInstance, IndicatorParamSpec,
 } from './types.ts'
+import { clampParamsBySpecs } from './chart-activations.ts'
 
 export interface IndicatorRegistry {
   /** 注册指标；同名覆盖（开发热替换友好），并通知订阅者。 */
@@ -71,14 +72,7 @@ export function createIndicatorRegistry(): IndicatorRegistry {
       return `${instance.id}:${values.join(',')}`
     },
     clampParams(definition, params) {
-      const out: Record<string, number> = {}
-      for (const spec of definition.params) {
-        const raw = params[spec.key]
-        out[spec.key] = typeof raw === 'number' && Number.isFinite(raw)
-          ? Math.min(spec.max, Math.max(spec.min, Math.round(raw)))
-          : spec.default
-      }
-      return out
+      return clampParamsBySpecs(definition.params, params)
     },
     sanitizeInstances(instances) {
       if (!Array.isArray(instances)) return []
