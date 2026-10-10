@@ -173,15 +173,11 @@ Six invariants lock the ecosystem down: insert-only bundle patches · knowledge 
 
 ### What is already shipped (and off by default)
 
-The roadmap pieces below exist in this repository today. **None of them changes the defaults above**: orders stay dry-run, live routing still needs an explicit `liveTrading: true` plus human approval, and nothing runs unless you configure it.
+The piece below exists in this repository today. **It does not change the defaults above**: orders stay dry-run, live routing still needs an explicit `liveTrading: true` plus human approval, and nothing runs unless you configure it.
 
-- **`trading-bot` profile** — a three-process layout (bot surface / trading core / edge gateway) installed into the trading home (`~/.dsh-trading`), separate from the DSH web host. The core owns the mandate, the risk gate and the journal; its **order port has no venue implementation yet**, so no order can leave the machine.
-- **Out-of-band channel (A0)** — the edge gateway serves six endpoints (`ping` / `status` / `kill` / `pause` / `resume` / `ack`) registered *before* the business surface, so they answer even when the market and agent layers are down (covered by an end-to-end drill). Device tokens are paired with a one-time code and scoped `read` / `command` / `control`; **pairing never grants `control`**.
-- **Live-trading authority plane** — live switches are not on the agent-writable path: a human-signed grant (Ed25519) is the only thing that can enable live routing, and the agent side never reads the signing material.
-- **Web cockpit** — a standalone SPA served by the bot edge, rendering server-driven cards from a self-hosted `/v1` surface (versioned, scope-gated), plus an unknown-card fallback so an older client never silently drops a newer card.
-- **Desktop attach mode** — a machine configured with a bot URL stops starting a local host and attaches instead; the decision is **configuration-driven and never probes ports** (a probe once handed off to an unrelated instance).
+- **Live-trading authority plane** — live switches are not on the agent-writable path: a human-signed grant (Ed25519) is the only thing that can enable live routing, and the agent side never reads the signing material. It ships here (`packages/authority`), together with the public GUI market-data bridge (`packages/bot-api`).
 
-Not shipped yet: the mobile client (the iOS-native observation app lives in `apps/ios-native` with the contract surface and device-pairing flow; device verification and distribution are outstanding — the earlier Expo/RN app was retired and removed on 2026-10-02) and any venue-side protective orders. Until the latter exists, `halt` degrades to `reduce_only` by design.
+The auto-trading plane itself — the bot surface, the trading core with its mandate and risk gate, the web cockpit, the iOS observation app and the deploy units — is **not part of this public repository**: it lives in the private satellite repository [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot), and this repository keeps only the seams it needs to stay independently buildable. Any venue-side protective orders remain undelivered; until they exist, `halt` degrades to `reduce_only` by design.
 
 > Wording note: the FAQ answer below ("not an unattended live-trading bot") still stands. The public narrative changes only together with the shadow → paper → small-live acceptance, which is gated on a human in the loop.
 ## Data sources & terms

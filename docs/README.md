@@ -6,41 +6,6 @@
 
 ---
 
-## 目录导航
-
-```
-docs/
-├── README.md                      # 本文档：文档体系全景索引
-├── current-state.md               # ★ 新会话先读：已验收事实、fail-closed 不变量、未完成、文档地图
-├── design/                        # 核心功能模块架构设计与系统契约
-│   ├── agentic-native-architecture.md  # Agent 原生插件化蓝图（对话驱动一切）
-│   ├── bot-and-auto-trading.md    # Trading Bot 与 GUI 分离目标架构（26 条不变量）
-│   ├── alignment-calibration.md   # 行情对齐三上界实测标定
-│   ├── dsh-seam-inventory.md      # 官方缝清单（三问逐条作答）
-│   ├── strategy-tab.md            # 中栏「策略」板块设计与纯函数本地回测引擎
-│   ├── knowledge-graph.md         # 个人交易知识库与 Obsidian 式力导图谱
-│   └── holdings-ledger.md         # 统一资产台账（Unified Holdings Ledger）设计契约
-├── guides/                        # 主题手册（连接器、市场、词汇、技能）
-│   ├── symbol-vocabulary.md       # 市场规范符号词汇（Market-Canonical Symbol Vocabulary）
-│   ├── exchange-routing.md        # 设置驱动的市场路由与数据平面热插拔
-│   ├── connector-playbook.md      # 交易所连接器接入手册（市场内加源）
-│   ├── connectors-guide.md        # 全市场连接器申请、鉴权与配置全景指引
-│   ├── replication.md             # 市场复制手册（从零新建市场）
-│   ├── skills-guide.md            # Agent 技能架构、SSOT 分发与编写指南
-│   └── okx-integration.md         # OKX API v5 初始调研规格（连接器参照红宝书）
-├── ops/                           # 运行、发版与上游升级
-│   ├── running.md                 # 运行指引、Profile 管理与独立 Home 契约
-│   ├── ops-runbook.md             # 运维手册：kill switch、dead-man、演练记录、接线台账
-│   ├── release-checklist.md       # 版本发布与分发前门禁检查清单
-│   └── upstream-upgrade-checklist.md  # DSH 上游 SDK 升级与对照清单
-├── roadmap/                       # 路线图与档位验收
-│   ├── p5-acceptance-checklist.md # P5 三档准入与判据、对照基线
-│   └── analysis-roadmap.md        # Agent 标的定性分析能力路线图（已结清历史母文档）
-├── client/                        # 客户端产物
-│   └── mobile-app-plan.md         # 移动端（P4 ④）落仓方案与 Expo/RN 退役裁决
-└── archive/                       # 早期研发切片草案归档
-    └── crypto-slice-plan.md       # crypto 垂直切片早期草案
-```
 
 ---
 

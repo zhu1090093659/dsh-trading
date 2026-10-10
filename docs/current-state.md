@@ -5,27 +5,17 @@
 
 ## 一句话
 
-交易 bot 与 GUI 分离的路线已走到 **P5**：第 1 档 shadow 与**第 2 档 paper（OKX 模拟盘）已通过**；驱动的网页驾驶舱与移动端为**独立产物**；第 3 档小额 live 与带外退出演练**未做**（需人签署 + 在环）。
+交易 bot 与 GUI 分离的路线已走到 **P5**：第 1 档 shadow 与**第 2 档 paper（OKX 模拟盘）已通过**；自动交易实现（bot/tradectl/cockpit/contract、iOS 观测端、deploy 单元）已于 2026-10-03 迁往私有卫星仓 dsh-trading-bot，主仓只保留接缝（packages/authority 实盘闸门 + packages/bot-api 公开 GUI 行情桥）；第 3 档小额 live 与带外退出演练**未做**（需人签署 + 在环）。
 
 ## 已完成并已验收（可复现）
 
 | 项 | 证据 / 复现 |
 |---|---|
 | 仓库门禁 | pnpm gates:all ⇒ **14 通过 / 0 失败**（2026-10-08 现场复跑，14 条：build、-r test、覆盖率、typecheck、docs-link…）；test:audit 此前在 HEAD 即红（kdas-menu.test.ts 未入基线，非本轮引入），已按 owner 裁决整文件入基线后转绿 |
-| P5 第 1 档 shadow | 10 分钟真实行情验收入册（消息 4864 / 坏帧 0 / 全程 aligned / 从未 halt / 退出码 0）；复现 node scripts/e2e-smoke.mjs --with-network |
-| **P5 第 2 档 paper（OKX）** | 带真实 demo 凭据：Test Files 8 passed / **Tests 94 passed / 0 skipped**；GET balance 1145ms、GET positions 328ms（均带 x-simulated-trading）。记录见 docs/ops/ops-runbook.md「第 2 档执行记录」|
-| 进程装配 | packages/tradectl/src/desk-process.ts：环路 + 事件泵 + **dry-run 派发**（无下单路径）+ 积压告警入审计；演练 drill/desk-process-shadow.ts 退出码即断言 |
-| 额度上限 | mandate 侧已成**可执行判据**：缺声明 / Infinity / NaN ⇒ 拒绝开新仓（code=no-declared-limit）；0 是合法声明；只约束新增风险 |
+| 自动交易平面（shadow/paper 验收、进程装配、mandate 额度判据、驾驶舱、iOS 观测端、systemd 单元与部署缺口） | **已迁往私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)**（2026-10-03 拆分）：实现、演练、runbook、部署清单与验收记录都在那边；主仓只保留接缝——packages/authority（实盘闸门）与 packages/bot-api（公开 GUI 行情桥）。切分裁决与边界见 [卫星仓切分 note](.agents/notes/implemented/architecture/2026-10-03-auto-trading-plane-private-satellite-split.md) |
 | 凭据语义 | connector-okx：**存在 credentials seam 即 fail-closed**（不再回落 ambient 环境变量）；仅完全无 seam 时回落 process.env |
-| 驾驶舱 | packages/cockpit：**独立 SPA**（零依赖、不复用 client-ui-*），由 bot 的 edge 行托管；只调 /v1/cards 与 /v1/commands |
-| 移动端（观测端，iOS 原生） | **apps/ios-native**（XcodeGen 生成的独立 Xcode 工程，不进 pnpm workspace）：契约等价实现 + 行为向量 + **XCTest 机检**（向量/用例数随契约扩展，不写死；改错必红）；六个分层 scheme 全绿、冷构建 BUILD SUCCEEDED；CI 跑两条纯 Node 门禁（防漂移 + 分层白名单）。见 apps/ios-native/README.md |
-| 移动端（Expo/RN 旧工程） | **已退役并删除**（owner 2026-10-02 决定，以 iOS 原生为准）：apps/mobile/** 用 `git rm -r` 移除、ci.yml 的 mobile job 一并删除，历史只留提交记录。裁决与理由见 [移动端落仓方案]（自动交易平面已迁往私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)） 的「去留裁决」节 |
-| systemd 台架 | scripts/systemd-units-check.mjs（六类静态判据，退出码即结论）+ 人执行安装清单（deploy/README.md）。**本机无 systemd，安装未做** |
 | 官方 Office 技能与依赖加载 | base 层两条官方行（id `skill-office` / `workspace-dependencies`，`DSH_PRIMARY_RUNTIME` 门控，无载荷显式缺席）。真实会话实测 catalog/provider/resourceBase、加载期注入的 LibreOffice Kit 段、`load_workspace_dependencies` 可见；DOCX/PPTX/XLSX 创建 + `check_office.py` 结构检查 + PDF 转换 + 渲染 + 公式重算（缓存值 5）全过。见 [官方 Office 接线 note](.agents/notes/implemented/architecture/2026-10-03-official-office-and-workspace-dependencies-wiring.md)；**桌面壳启动前自动检测载荷并设 env（目录含 runtime.json 才算），本仓载荷未带 primary-runtime，故开箱桌面显式缺席** |
-| 假刹车修复 | edge kill 状态写 0o640（组可读）+ 读取端仅 ENOENT 视为未 kill（EACCES/坏 JSON ⇒ 已 kill 且已暂停）；复现 `pnpm --filter @dshtrading/tradectl exec vitest run test/edge.test.ts test/degradation.test.ts`（38 例，含 chmod 000 端到端）|
-| 部署缺口修复 | bot 单元独立 home（StateDirectory=dsh-trading-bot）+ 核心单元显式 `DSH_TRADING_AUTHORITY_DIR`；复现 `node scripts/systemd-units-check.mjs`（全绿）|
-| 驾驶舱补完 | 12 封闭卡片类型全渲染（补 mandate/journal/system 三类）、字段排版、卡片动作接线、设备配对 + Bearer 令牌；截图 `.local/acceptance/cockpit-2026-10-02/`（不入库，本机）；复现 `cd packages/cockpit && npx vitest run`（23 例）|
-| 两形态对照 | 配了 bot ⇒ 纯客户端：`node desktop/scripts/attach-electron-drill.mjs`（窗口加载远端 bot、本地 host 零命中，2/2）；没配 bot ⇒ 本地 host 保持现状：`node desktop/scripts/attach-drill.mjs`（6/6 含回滚与坏配置）；不混显判据：contract 55 例（source-guard 跨源拒绝）|
+| 桌面壳附着模式（已退役） | 2026-10-07 owner 裁决移除：机器人观测与控制收拢到交易终端内的 @dshtrading/client-ui-bot-gui 插件，桌面壳回归单一本地终端形态；attach-mode/设备凭据模块与两条演练脚本（attach-drill / attach-electron-drill）已删。裁决与替代方案见 [electron desktop note](.agents/notes/implemented/architecture/2026-09-03-electron-desktop-app.md) |
 | 加密永续与 TradFi 永续（Tier 1，只读） | 形态轴 `form`（spot/perp）契约在 `@dshtrading/api`（唯一判据 `instrumentFormOf` / `SWAP_SYMBOL_SUFFIX`）；Binance/OKX/Bybit 名册汇入永续与 TradFi 元数据、行情按 `-SWAP` 分流（CCXT 显式拒绝）；检索面 `instruments_search type=` 与 `/symbols` wire 透传 form/assetClass。OKX 名册 1644（1144 spot + 500 perp）真实网络复核、`SPX`(迷因币 SPX6900) vs `US500` 反例零错标；**Binance/Bybit 的真值已在可达出口补测转正**（2026-10-08）：Binance 名册 2160（1375 spot + 785 perp）、Bybit 1381（528 + 853），20 条判据全过（见下）。**GUI 形态面（P5）**：左栏/自选管理按形态挂徽标（现货不挂标，现货路径零回归）与 crypto 目标市场的形态过滤（本地字典与上游在线联想都过滤）、添加行随形态与资产类别落库、TradFi 合成合约在图表页有明示位（合成合约 ≠ 股票本身、24/7 报价 vs 股票闭市时段）、种子默认首屏保持 14 行全现货。设计与卡拆分见 docs/roadmap/crypto-perp-and-tradfi.md；GUI 落地判据与边界见 [GUI note](.agents/notes/implemented/feature/2026-10-08-crypto-perp-gui-instrument-form.md)（验收证据 `.local/acceptance/crypto-perp-gui-2026-10-08/`，本机不入库）|
 | 合约交易语义与闸门（Tier 2，P7） | OKX：合约下单（张↔币按 ctVal **向下**取整）、杠杆/保证金模式 `crypto_set_leverage`（与下单同门槛）、持仓强平/保证金字段；Binance：`-SWAP` 下单显式 `TRADING_UNSUPPORTED_SYMBOL`。判据：`pnpm --filter @dshtrading/connector-okx test`（test/contract-trading.test.ts：换算向量/闸门矩阵/tdMode 分流/持仓字段）、`pnpm --filter @dshtrading/base test`（test/live-action-gate.test.ts）、`pnpm --filter @dshtrading/connector-binance test`。机制见 [OKX 集成 §9](docs/guides/okx-integration.md) 与 [服务缝闸门 note](.agents/notes/implemented/feature/2026-09-01-service-seam-order-gate.md)；门禁现场复跑 `pnpm gates:all` ⇒ **14 通过 / 0 失败**（HEAD `551901d9`，2026-10-08） |
 
@@ -45,7 +35,7 @@
 - **第 3 档小额 live**：主网凭证 + **人本人** pnpm authority:sign + 金额上限 + 在环。
 - **带外退出演练**：卡片硬要求人在环。
 - **推送 main**：需明确授权（本机 main 领先 origin 且从未推送）。
-- 已知缺口（见看板卡 cf869789）：~~edge kill 的 fail-open~~（**已修 2026-10-02**）、~~三 uid 下宿主 home 冲突~~（**已修**）、~~三个单元未带 DSH_TRADING_AUTHORITY_DIR~~（**核心单元已带**；人建平面后生效）、~~驾驶舱功能/视觉未打磨~~（**功能补完**：12 类型全渲染 + 配对鉴权；视觉仍骨架级）、~~两形态对照验收未做~~（**已做**，见上表）、L0 下单路径未接线（**结构上尚不存在**：openRiskWithinMandate 与 createRiskGate 的无调用点是当前正确状态，接线点 = 将来的 L0 派发器与 safe boot 生产装配；理由与复现见 docs/ops/ops-runbook.md「接线台账」）、移动端设备项（真机/推送/生物识别，需设备与人）。
+- 已知缺口（见看板卡 cf869789）：~~edge kill 的 fail-open~~（**已修 2026-10-02**，代码在卫星仓）、~~三 uid 下宿主 home 冲突~~（**已修**）、~~三个单元未带 DSH_TRADING_AUTHORITY_DIR~~（**核心单元已带**；人建平面后生效）、~~驾驶舱功能/视觉未打磨~~（**功能补完**：12 类型全渲染 + 配对鉴权；视觉仍骨架级）、~~两形态对照验收未做~~（**已做**：附着形态本身于 2026-10-07 退役）、L0 下单路径未接线（**结构上尚不存在**：openRiskWithinMandate 与 createRiskGate 已随平面迁往卫星仓，主仓没有可接线对象）、移动端设备项（真机/推送/生物识别，需设备与人；工程在卫星仓）。
 
 - **加密永续真值已复验（可达出口补测，2026-10-08，commit `25d18c7b`）**：本机默认出口（美国节点）仍是 Binance `api.binance.com`/`fapi.binance.com` 全量 451、Bybit `api.bybit.com` 系全量 403（地域拦截）——但同机的 clash 多地域节点（SG/JP/HK/TW/DE/KR/GB）全部可达，换出口后已完成补测：**20 条判据全过、探针退出码 0**（含 `crypto_get_ticker` 底层服务路径的真价）。补测暴露并修好两处真值不符：Binance 原白名单漏掉 **217 行 `TRADIFI_PERPETUAL`**（TradFi 永续整批进不了名册）、Bybit 原把交易所自带的 `symbolType` 分类字段整个丢弃。FX/forex（Binance `USDBRLUSDT-SWAP`、Bybit `EURUSDUSDT-SWAP` 等）无枚举成员故留空——要不要加 `fx` 属 P1 契约决定。原始响应、复现命令与逐条对照见 spikes/impl-crypto-perp-tradfi/EVIDENCE-reverify-2026-10-08.md（卡 `7c7b7e3d`）。
 - **合约交易已接线（Tier 2，卡 P7，2026-10-08）**：OKX 路由下合约可下单——`quantity` 恒为 base 币数、连接器按 ctVal 折算张数并按 lotSz 向下取整；杠杆/保证金模式走 `crypto_set_leverage`（与下单共用同一套三态闸门 + base 的 `LIVE_ACTION_GATE_PATTERN` 审批，headless ask=deny）；持仓回带强平价/维持保证金率/保证金模式/名义价值（交易所口径，缺席不本地补算）。**dry-run 仍是缺省**，实盘仍需人工签署授权 + 审批（`env=demo` 打模拟盘，`env=live` 才是真钱）。Binance 路由下合约**只有行情**：`-SWAP` 下单显式报 `TRADING_UNSUPPORTED_SYMBOL`，绝不回落现货端点。**未接线（在卫星仓）**：额度/mandate 的合约口径判定（现货口径 `leverage=1` 永不命中）属私有卫星仓 `dsh-trading-bot` 的 tradectl。
@@ -55,12 +45,8 @@
 
     export npm_config_store_dir=~/Library/pnpm/store/v11     # 本机需要
     pnpm gates:all                                            # 重活：串行跑，期间不要并发跑其它测试
-    node scripts/e2e-smoke.mjs [--with-network|--with-electron]
-    pnpm wiring:ledger                                        # 工厂接线台账
-    node scripts/systemd-units-check.mjs                      # 单元静态校验（退出码即结论）
-    cd apps/ios-native && ./scripts/test-contract.sh          # 移动端（原生）：契约防漂移机检
-    node scripts/ios-native/check-contract-drift.mjs           # 同上判据的纯 Node 版（CI 用）
-    node scripts/ios-native/check-swift-layering.mjs           # Swift 分层白名单（含 Domain 的 Observation 宏）
+
+自动交易平面（bot/tradectl/cockpit/contract、iOS 观测端、deploy 单元）的演练、单元静态校验与移动端机检随实现迁往私有卫星仓 dsh-trading-bot，入口见该仓 README；主仓不再有 e2e-smoke / wiring:ledger / systemd-units-check 与 apps/ios-native 脚本。
 
 跑完必查孤儿：ps -eo pid,ppid,command | awk '$2==1' | grep -E "vitest|electron"；验收结论必须绑 HEAD sha 现场复跑。
 
@@ -71,11 +57,11 @@
 | 项目契约、纪律、硬停 | AGENTS.md |
 | 验收状态、未完成项、不变量（本页） | docs/current-state.md |
 | 目标架构与 26 条不变量 | docs/design/bot-and-auto-trading.md |
-| 运维、kill switch、dead-man、演练记录、接线台账 | docs/ops/ops-runbook.md |
+| 运维、kill switch、dead-man、演练记录、接线台账（随平面迁走） | 卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot) 的 docs/ops/ops-runbook.md |
 | P5 三档准入与判据、对照基线 | docs/roadmap/p5-acceptance-checklist.md |
 | OKX 机制（demo 开关、凭证 ref、权限纪律） | docs/guides/okx-integration.md |
-| 移动端（原生观测端）工程形态、构建、冻结契约面与防漂移机检 | apps/ios-native/README.md |
-| 移动端落仓方案（含 Expo/RN 退役裁决）与分发决策 | docs/client/mobile-app-plan.md |
-| systemd 安装清单 | deploy/README.md |
+| 移动端（原生观测端）工程形态、构建、冻结契约面与防漂移机检 | 卫星仓 dsh-trading-bot 的 apps/ios-native |
+| 移动端落仓方案（含 Expo/RN 退役裁决）与分发决策 | 卫星仓 dsh-trading-bot 的 docs/client/mobile-app-plan.md |
+| systemd 安装清单 | 卫星仓 dsh-trading-bot 的 deploy/README.md |
 | 加密永续与 TradFi 永续（形态轴、名册/行情分流、检索面、GUI 形态面） | docs/roadmap/crypto-perp-and-tradfi.md（设计与卡拆分）、docs/guides/symbol-vocabulary.md（词汇权威）、.agents/notes/implemented/feature/2026-10-08-crypto-perp-gui-instrument-form.md（GUI 落地与判据） |
 | 历史决策（Owning Note） | .agents/notes/implemented/ |

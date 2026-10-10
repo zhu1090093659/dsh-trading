@@ -173,15 +173,11 @@ pnpm install && pnpm build && pnpm test   # Node 见 engines（^22.19.0 || >=24.
 
 ### 已交付但默认不启用
 
-下面这些是**仓库里今天就有**的东西。**它们都不改变上面的默认值**：下单仍然 dry-run，实盘仍然要显式 `liveTrading: true` 加人工审批，不配置就不跑。
+下面这条是**仓库里今天就有**的东西。**它不改变上面的默认值**：下单仍然 dry-run，实盘仍然要显式 `liveTrading: true` 加人工审批，不配置就不跑。
 
-- **`trading-bot` profile** —— 三进程布局（bot surface / 交易核心 / edge 网关），装在独立交易 home（`~/.dsh-trading`），与 DSH web 宿主分开。核心持有 mandate、风控闸门与 journal；它的**下单端口还没有接真实交易所**，所以订单出不了这台机器。
-- **带外通道（A0）** —— edge 网关提供六个端点（`ping` / `status` / `kill` / `pause` / `resume` / `ack`），注册在**业务面之前**，因此行情与 agent 层全挂时它们仍然可用（有端到端演练覆盖）。设备令牌用一次性配对码签发，作用域 `read` / `command` / `control`；**配对永不签发 `control`**。
-- **实盘授权平面** —— 实盘开关不在 agent 可写路径上：只有人工签署的授权（Ed25519）能打开实盘，agent 侧永远读不到签署材料。
-- **网页驾驶舱** —— 独立 SPA，由 bot edge 托管，渲染服务端驱动的卡片（自持 `/v1` 面，带版本协商与作用域闸门），并对未知卡片有兜底块，老客户端不会静默丢弃新卡片。
-- **桌面壳附着模式** —— 配了 bot 地址的机器不再起本地 host 而是附着；判定**只认配置、永不探测端口**（探测曾把窗口交给无关实例）。
+- **实盘授权平面** —— 实盘开关不在 agent 可写路径上：只有人工签署的授权（Ed25519）能打开实盘，agent 侧永远读不到签署材料。它在本仓（`packages/authority`），与公开 GUI 的行情桥（`packages/bot-api`）同源。
 
-**尚未交付**：移动端（契约面与设备配对流程已就绪，App 本体未做）与 venue 侧保护性订单。后者落地之前，`halt` 按设计降级为 `reduce_only`。
+自动交易平面本身（bot surface、带 mandate 与风控闸门的交易核心、网页驾驶舱、iOS 观测端与 deploy 单元）**不在本公开仓**：实现在私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)，本仓只保留让它能独立构建的接缝。任何 venue 侧保护性订单都尚未交付；在那之前 `halt` 按设计降级为 `reduce_only`。
 
 > 口径说明：下面 FAQ 里"不是无人值守的实盘交易机器人"这句话**仍然成立**。对外叙事只在 shadow → paper → 小额 live 三档验收完成、且有人在环时，才与实现同批修改。
 ## 数据源与条款
