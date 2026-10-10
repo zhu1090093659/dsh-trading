@@ -267,22 +267,9 @@ export interface ScreenerListToolOptions {
   tombstones?: BuiltinTombstonesStore
 }
 
-/** 选股器记录 → 名册条目（paramsJson/columnsJson 解析在读取边界，坏数据降级为空数组）。 */
+/** 选股器记录 → 名册条目（paramsJson/columnsJson 解析复用 parseScreenerSpecs，坏数据降级为空数组）。 */
 function screenerRecordEntry(record: CustomScreenerRecord) {
-  let params: StrategyParamSpec[] = []
-  let columns: ScreenerColumnSpec[] = []
-  try {
-    const parsed = JSON.parse(record.paramsJson) as StrategyParamSpec[]
-    if (Array.isArray(parsed)) params = parsed
-  } catch {
-    params = []
-  }
-  try {
-    const parsed = JSON.parse(record.columnsJson) as ScreenerColumnSpec[]
-    if (Array.isArray(parsed)) columns = parsed
-  } catch {
-    columns = []
-  }
+  const { params, columns } = parseScreenerSpecs(record)
   return {
     id: record.id,
     title: record.title,
@@ -476,37 +463,14 @@ export function createStrategyBacktestTool(deps: StrategyBacktestToolDeps) {
 
       // 参数覆盖（issue #86 / G3）：UI 侧参数是 localStorage-only，agent 复现用户调过的
       // 参数组合此前做不到；这里按声明校验 + clamp，并回显实际生效值。
-      const requested: Record<string, number> = {}
-      const paramsOverride: Record<string, number> = {}
+      // 解析收敛到 parseParamsOverride（与 screener_run 同一份实现）。
       const paramsJson = typeof args.paramsJson === 'string' && args.paramsJson.trim() ? args.paramsJson.trim() : undefined
-      if (paramsJson !== undefined) {
-        let parsed: unknown
-        try {
-          parsed = JSON.parse(paramsJson)
-        } catch {
-          throw new Error('strategy_backtest: paramsJson must be a JSON object string like {"fast":10,"slow":30}')
-        }
-        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-          throw new Error('strategy_backtest: paramsJson must be a JSON object string like {"fast":10,"slow":30}')
-        }
-        const specs = new Map(definition.params.map(spec => [spec.key, spec]))
-        for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-          const spec = specs.get(key)
-          if (spec === undefined) {
-            throw new Error(
-              `strategy_backtest: unknown param ${JSON.stringify(key)} for strategy "${definition.id}" — valid keys: `
-              + (definition.params.length > 0 ? definition.params.map(item => item.key).join(', ') : '(this strategy declares no params)'),
-            )
-          }
-          if (typeof value !== 'number' || !Number.isFinite(value)) {
-            throw new Error(`strategy_backtest: param ${JSON.stringify(key)} must be a finite number (got ${JSON.stringify(value)})`)
-          }
-          requested[key] = value
-          paramsOverride[key] = Math.min(spec.max, Math.max(spec.min, value))
-        }
-      }
-      const effectiveParams: Record<string, number> = {}
-      for (const spec of definition.params) effectiveParams[spec.key] = paramsOverride[spec.key] ?? spec.default
+      const { requested, effective: effectiveParams, override: paramsOverride } = parseParamsOverride(
+        paramsJson,
+        definition.params,
+        'strategy_backtest',
+        definition.id,
+      )
 
       const result: BacktestResult = run(bars, definition, paramsOverride)
       return JSON.stringify({
@@ -1029,13 +993,13 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
   }
 }
 
-/** 解析 paramsJson（与 strategy_backtest 同口径：声明键校验 + clamp）。 */
+/** 解析 paramsJson（strategy_backtest / screener_run 共用：声明键校验 + clamp + 默认值补齐）。 */
 function parseParamsOverride(
   paramsJson: string | undefined,
   specs: readonly StrategyParamSpec[],
   tool: string,
   ownerId: string,
-): { requested: Record<string, number>; effective: Record<string, number> } {
+): { requested: Record<string, number>; effective: Record<string, number>; override: Record<string, number> } {
   const requested: Record<string, number> = {}
   const override: Record<string, number> = {}
   if (paramsJson !== undefined) {
@@ -1066,7 +1030,7 @@ function parseParamsOverride(
   }
   const effective: Record<string, number> = {}
   for (const spec of specs) effective[spec.key] = override[spec.key] ?? spec.default
-  return { requested, effective }
+  return { requested, effective, override }
 }
 
 export interface ScreenerRunToolDeps {
