@@ -11,7 +11,7 @@
 
 | 项 | 证据 / 复现 |
 |---|---|
-| 仓库门禁 | pnpm gates:all ⇒ **14 通过 / 0 失败**（2026-10-10 现场复跑，HEAD `506c47d6`；14 条：build、-r test、test:audit、test:scripts、test:desktop、覆盖率、patch-id、live-trading、i18n、home-guard、typecheck、repo-boundary、ci-wiring、docs-link）|
+| 仓库门禁 | pnpm gates:all ⇒ **14 通过 / 0 失败**（2026-10-10 现场复跑，HEAD `506c47d6`，其后仅 docs 提交；14 条：build、-r test、test:audit、test:scripts、test:desktop、覆盖率、patch-id、live-trading、i18n、home-guard、typecheck、repo-boundary、ci-wiring、docs-link）|
 | 自动交易平面（shadow/paper 验收、进程装配、mandate 额度判据、驾驶舱、iOS 观测端、systemd 单元与部署缺口） | **已迁往私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)**（2026-10-03 拆分）：实现、演练、runbook、部署清单与验收记录都在那边；主仓只保留接缝——packages/authority（实盘闸门）与 packages/bot-api（公开 GUI 行情桥）。切分裁决与边界见 [卫星仓切分 note](.agents/notes/implemented/architecture/2026-10-03-auto-trading-plane-private-satellite-split.md) |
 | 凭据语义 | connector-okx：**存在 credentials seam 即 fail-closed**（不再回落 ambient 环境变量）；仅完全无 seam 时回落 process.env |
 | 官方 Office 技能与依赖加载 | base 层两条官方行（id `skill-office` / `workspace-dependencies`，`DSH_PRIMARY_RUNTIME` 门控，无载荷显式缺席）。真实会话实测 catalog/provider/resourceBase、加载期注入的 LibreOffice Kit 段、`load_workspace_dependencies` 可见；DOCX/PPTX/XLSX 创建 + `check_office.py` 结构检查 + PDF 转换 + 渲染 + 公式重算（缓存值 5）全过。见 [官方 Office 接线 note](.agents/notes/implemented/architecture/2026-10-03-official-office-and-workspace-dependencies-wiring.md)；**桌面壳启动前自动检测载荷并设 env（目录含 runtime.json 才算），本仓载荷未带 primary-runtime，故开箱桌面显式缺席** |
