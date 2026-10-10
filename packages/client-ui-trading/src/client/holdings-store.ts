@@ -31,6 +31,15 @@ import type { MarketId } from './types.ts'
 /** 桥单次批量报价 symbols 封顶（镜像 node 半 bridge.ts MAX_SYMBOLS）。 */
 const TICKERS_CHUNK = 32
 
+/**
+ * 同一市场内并行发出的块数上限。
+ *
+ * 块之间没有依赖（每块各自独立成功/失败），原实现却在同一市场内逐块串行 await：
+ * 32 个标的一拍变成 ceil(N/32) 次串行往返，面板一次盯市要为「本地没有的开销」
+ * 多等 (ceil(N/32) - 1) 个 RTT。这里按上限并行发出，块级失败语义不变。
+ */
+const TICKERS_MARKET_CONCURRENCY = 4
+
 export interface HoldingsDataSnapshot {
   /** 宿主台账快照；null = 桥缺席（老部署）或未加载——imported 源降级为空。 */
   book: HoldingsBookSnapshot | null
@@ -169,17 +178,24 @@ export async function refreshM2mPrices(targetsKey: string): Promise<void> {
   }
   const next: Record<string, number> = {}
   await Promise.all([...byMarket.entries()].map(async ([m, symbols]) => {
+    const chunks: string[][] = []
     for (let offset = 0; offset < symbols.length; offset += TICKERS_CHUNK) {
-      const chunk = symbols.slice(offset, offset + TICKERS_CHUNK)
-      try {
-        const outcome = await fetchTickers(m, chunk)
-        for (const sym of chunk) {
-          const result = outcome[sym]
-          if (result?.ok === true && result.ticker.price > 0) next[holdingsPriceKey(m, sym)] = result.ticker.price
+      chunks.push(symbols.slice(offset, offset + TICKERS_CHUNK))
+    }
+    // 同一市场内按上限并行取块（块间无依赖）；每块各自 try/catch，失败语义不变。
+    for (let start = 0; start < chunks.length; start += TICKERS_MARKET_CONCURRENCY) {
+      const wave = chunks.slice(start, start + TICKERS_MARKET_CONCURRENCY)
+      await Promise.all(wave.map(async (chunk): Promise<void> => {
+        try {
+          const outcome = await fetchTickers(m, chunk)
+          for (const sym of chunk) {
+            const result = outcome[sym]
+            if (result?.ok === true && result.ticker.price > 0) next[holdingsPriceKey(m, sym)] = result.ticker.price
+          }
+        } catch {
+          /* 单块失败不拖垮整批；下轮重试 */
         }
-      } catch {
-        /* 单块失败不拖垮整批；下轮重试 */
-      }
+      }))
     }
   }))
   patchData({ prices: next })

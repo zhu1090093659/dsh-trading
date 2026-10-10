@@ -92,6 +92,14 @@ export function createFileKnowledgeCardStore(filePath: string): KnowledgeCardSto
         return onDisk
       })
     },
+    async saveMany(cards: readonly KnowledgeCard[]): Promise<void> {
+      if (cards.length === 0) return
+      // 与逐张 save 的最终状态等价，但只锁一次、只序列化落盘一次。
+      await commit((onDisk) => {
+        for (const card of cards) onDisk.set(card.id, canonicalizeCardAuthor({ ...card }))
+        return onDisk
+      })
+    },
     async delete(id: string): Promise<boolean> {
       let existed = false
       await commit((onDisk) => {

@@ -445,17 +445,24 @@ export function createKnowledgeDeleteTool(store: KnowledgeCardStore, options: Kn
       if (!target) return `[knowledge_delete] 未找到卡片 [${id}]，请先用 knowledge_search 确认卡片 id`
 
       // 先清理引用方（防 related 悬空），引用变化视为一次修改并刷新 updatedAt。
+      // 用 saveMany（存在时）一次落盘：文件版 store 每张 save 都是一次整表事务
+      // （锁 + 读盘 + 序列化 + 原子写），引用方多时逐张写会把一次删除放大成 F+1 次。
       const referencing: string[] = []
+      const cleaned: KnowledgeCard[] = []
       for (const card of await store.list()) {
         if (card.related && card.related.includes(id)) {
           const remaining = card.related.filter((r) => r !== id)
           referencing.push(card.id)
-          await store.save({
+          cleaned.push({
             ...card,
             related: remaining.length > 0 ? remaining : undefined,
             updatedAt: new Date().toISOString(),
           })
         }
+      }
+      if (cleaned.length > 0) {
+        if (typeof store.saveMany === 'function') await store.saveMany(cleaned)
+        else for (const card of cleaned) await store.save(card)
       }
 
       const removed = await store.delete(id)

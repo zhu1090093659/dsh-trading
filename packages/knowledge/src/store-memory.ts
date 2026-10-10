@@ -29,6 +29,9 @@ export function createMemoryKnowledgeCardStore(initialCards: readonly KnowledgeC
     async save(card: KnowledgeCard): Promise<void> {
       map.set(card.id, canonicalizeCardAuthor({ ...card }))
     },
+    async saveMany(cards: readonly KnowledgeCard[]): Promise<void> {
+      for (const card of cards) map.set(card.id, canonicalizeCardAuthor({ ...card }))
+    },
     async delete(id: string): Promise<boolean> {
       return map.delete(id)
     },

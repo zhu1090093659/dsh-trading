@@ -82,5 +82,13 @@ export interface KnowledgeCardStore {
   get(id: string): Promise<KnowledgeCard | undefined>
   getByUrl(url: string): Promise<KnowledgeCard | undefined>
   save(card: KnowledgeCard): Promise<void>
+  /**
+   * 批量写入（可选能力）：最终状态等同于按序逐张 save，但实现可为一次事务。
+   *
+   * 存在的理由：文件版 store 的 save 是整表事务（跨进程排他锁 + 锁内读盘 + 序列化 +
+   * 原子写），knowledge_delete 清理 F 张引用方就是 F+1 次整表落盘。调用方在能力存在时
+   * 必须走本方法，缺席（轻量/第三方实现）则逐张 save 降级——正确性两版一致，只差落盘次数。
+   */
+  saveMany?(cards: readonly KnowledgeCard[]): Promise<void>
   delete(id: string): Promise<boolean>
 }

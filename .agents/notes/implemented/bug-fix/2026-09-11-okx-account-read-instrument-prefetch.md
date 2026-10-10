@@ -29,4 +29,4 @@ Status: implemented
 - 实测（`spikes/bench-user-paths.mts`，固定 25ms 模拟 RTT，5 轮取中位）：5 标的 159.9 → 52.8ms（3.0×）；20 标的 556.1 → 107.1ms（5.2×）；`listOpenOrders`/`listTradeFills` 同幅。上游调用总数不变（每个不同 instId 一次），串行批次由 N 降为 ceil(N/8)；收益仅在冷缓存首触，持久缓存命中后两版都无网络。
 - 测试：`trade-desk.test.ts` 新增 2 例——3 个不同 SWAP 标的含重复行 → 规格请求恰 3 次（去重）；某标的规格查不到 → 该标的保留张数原值、同批其他照常换算、失败态只尝试 1 次不逐行重试。包级 90 用例全绿；typecheck 棘轮 481=481；`tsdown` 构建通过。
 - 限制：基准以固定 per-call 延迟模拟 RTT，未做真实网络往返对照；收益口径是「串行往返次数」，与具体 RTT 近似线性，真实时延受出口与上游限速影响。
-- 剩余项（本轮不做）：`client-ui-trading/src/client/holdings-store.ts` 的盯市分块在同一市场内仍逐块串行（`TICKERS_CHUNK = 32`），属另一路径、需独立实测与限速评估。
+- 剩余项（曾记，已闭环）：`client-ui-trading/src/client/holdings-store.ts` 的盯市分块在同一市场内逐块串行（`TICKERS_CHUNK = 32`）属另一路径；2026-10-10 已独立实测并修（同一市场内按 `TICKERS_MARKET_CONCURRENCY = 4` 并行，4 市场 × 100 标的 105.1 → 26.9ms），见 [台账批量盯市的分块并发](2026-10-10-holdings-m2m-chunk-concurrency.md)。
