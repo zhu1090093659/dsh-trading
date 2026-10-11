@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildGraph, type KnowledgeCard, type KnowledgeGraphData } from '@dshtrading/knowledge'
 import { readJson, writeJson } from './shell-faces.ts'
+import { CREDIBILITY_OPTIONS, SOURCE_TYPE_OPTIONS, staleFilterFields } from './filter-state.ts'
 import { IconKnowledge, IconSearch } from './icons.tsx'
 import { KnowledgeGraph, type KnowledgeGraphHandle } from './KnowledgeGraph.tsx'
 import type { KnowledgeLocaleKey } from './contract.ts'
@@ -119,6 +120,26 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
       allAuthors: Array.from(authorsSet).sort(),
     }
   }, [cards])
+
+  // 3b. 失效筛选自愈：持久化的标签 / 作者一旦不在候选集里（例：某作者的卡片被
+  // 全部移出知识库），下拉会回落显示「全部」而过滤条件仍在执行，视图显示 0 张
+  // 卡片却看不出原因——此处按候选集清空失效值，让 UI 与过滤条件保持一致。
+  // 卡片集为空时跳过：无法区分「库为空」与「拉取失败」，此时清空筛选是意外副作用。
+  useEffect(() => {
+    if (cards.length === 0) {
+      return
+    }
+    const stale = staleFilterFields(
+      { selectedTag, selectedAuthor, selectedCredibility, selectedSourceType },
+      { tags: allTags, authors: allAuthors },
+    )
+    for (const field of stale) {
+      if (field === 'selectedTag') setSelectedTag('')
+      else if (field === 'selectedAuthor') setSelectedAuthor('')
+      else if (field === 'selectedCredibility') setSelectedCredibility('')
+      else setSelectedSourceType('')
+    }
+  }, [cards, allTags, allAuthors, selectedTag, selectedAuthor, selectedCredibility, selectedSourceType])
 
   // 4. 过滤卡片集合
   const filteredCards = useMemo(() => {
@@ -251,9 +272,11 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
             onChange={(e) => setSelectedCredibility(e.target.value)}
           >
             <option value="">{t('kv.filter.allCredibility')}</option>
-            <option value="high">{t('kv.credibility.high')}</option>
-            <option value="medium">{t('kv.credibility.medium')}</option>
-            <option value="low">{t('kv.credibility.low')}</option>
+            {CREDIBILITY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {t(option.labelKey)}
+              </option>
+            ))}
           </select>
 
           {/* 平台过滤 */}
@@ -263,9 +286,11 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
             onChange={(e) => setSelectedSourceType(e.target.value)}
           >
             <option value="">{t('kv.filter.allSourceTypes')}</option>
-            <option value="bilibili">{t('kv.sourceType.bilibili')}</option>
-            <option value="wechat">{t('kv.sourceType.wechat')}</option>
-            <option value="manual">{t('kv.sourceType.manual')}</option>
+            {SOURCE_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {t(option.labelKey)}
+              </option>
+            ))}
           </select>
 
           {hasActiveFilters && (
