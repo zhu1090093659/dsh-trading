@@ -28,7 +28,6 @@ import type {
   HiThinkLimitUpPoolData,
   HiThinkMetaTickerData,
   HiThinkPriceSnapshotData,
-  HiThinkTickerSearchData,
   HiThinkValuationData,
 } from './types.js'
 
@@ -261,18 +260,6 @@ export class HiThinkRestClient {
       ...(stage !== undefined ? { stage } : {}),
       timestamp: data?.timestamp ?? Date.now(),
     }
-  }
-
-  /** 模糊搜索股票代码与全称（消歧）。 */
-  async searchTickers(keyword: string): Promise<Array<{ symbol: string; name: string }>> {
-    const data = await this.request<HiThinkTickerSearchData>('/api/a-share/instruments/search', {
-      keyword: keyword.trim(),
-    })
-    const list = data?.item ?? []
-    return list.map((item) => ({
-      symbol: item.thscode,
-      name: item.name,
-    }))
   }
 
   /* ── K 线与元信息域 ──────────────────────────────────────────────── */

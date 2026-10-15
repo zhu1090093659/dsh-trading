@@ -120,19 +120,6 @@ export interface HiThinkAuctionData {
   item: HiThinkAuctionItem[]
 }
 
-export interface HiThinkTickerSearchItem {
-  thscode: string
-  ticker: string
-  name: string
-  asset_type?: string
-  exchange?: string
-}
-
-export interface HiThinkTickerSearchData {
-  total: number
-  item: HiThinkTickerSearchItem[]
-}
-
 /* ── K 线与元信息域（历史日K / 期货 / 代码表） ─────────────────────────── */
 
 /** A 股历史日K条目（/api/a-share/prices/historical，date_ms 为东八区交易日零点）。 */

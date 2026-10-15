@@ -88,7 +88,7 @@ export type Provider = (typeof PROVIDER_VOCABULARY)[number]
 export interface MarketProviderEntry {
   /** 该市场当前激活的数据/交易所提供方（连接器 consult 这个值决定激活与否）。开放词汇。 */
   provider: string
-  /** 预留：数据面与交易面分离时的交易提供方（不实现，仅类型面占位，见 §2.4）。 */
+  /** 数据面与交易面分离时的交易提供方；缺席时回落 provider（`activeTradeProvider`，见 §2.4）。 */
   tradeProvider?: string
 }
 

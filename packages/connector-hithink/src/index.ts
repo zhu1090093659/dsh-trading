@@ -100,10 +100,6 @@ export class HiThinkMarketDataService extends Service implements MarketDataServi
     return this.client.getLimitUpLadder()
   }
 
-  async searchTickers(query: string) {
-    return this.client.searchTickers(query)
-  }
-
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void, options?: { intervalMs?: number }): Disposable {
     const ms = Math.max(options?.intervalMs ?? 5_000, 1_000)
     const tick = (): void => {

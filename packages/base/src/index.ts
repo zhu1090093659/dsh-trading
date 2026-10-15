@@ -145,12 +145,6 @@ export function apply(ctx: Context, config: Config): void {
   if (config.toolCallLog !== false) ctx.on('tools/post-execute', createToolCallLogListener())
 }
 
-/** 工具调用记录开关（部署/测试可关；缺省开）。 */
-const CALL_LOG_ENABLED_DEFAULT = true
-export function toolCallLogEnabled(config: { toolCallLog?: boolean }): boolean {
-  return config.toolCallLog ?? CALL_LOG_ENABLED_DEFAULT
-}
-
 /**
  * 官方 \`tools/post-execute\` 观测器：记录一次调用后原样 \`next()\`，
  * 绝不改动结果（观测是旁路，不是策略层）。
