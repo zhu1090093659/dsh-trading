@@ -171,9 +171,9 @@ required=true 参数总数: before=188  after=202
 回归用例：`scripts/tool-surface-inventory.test.mjs` 新增「required 的 as const 写法与裸字面量
 读出同一形状」；`node scripts/tool-contract-gate.mjs` 在修复后 freeze 上判 ✓ 无漂移。
 
-（完整门禁 `pnpm gates:all` 已在最终 HEAD `98c03ba6f47532db73d84beef13a075b7f2ded0f`（含 main 的
-桌面启动页 CSP 修复合并）现场复跑：**17 通过 / 0 失败**，GATES_EXIT=0；同 HEAD 上 `pnpm -r build` 亦为
-exit 0。上表为本次变更受影响门禁的单独复跑结果。）
+（完整门禁 `pnpm gates:all` 已在最终 HEAD `b2f463e2c23edf1d605bd40bc9ac46e9ecf4932b`（含 main 的桌面
+启动页 CSP 修复合并与门禁准确度缺陷修复）现场复跑：**17 通过 / 0 失败**，GATES_EXIT=0；同 HEAD 上
+`pnpm -r build` 亦为 exit 0。上表为本次变更受影响门禁的单独复跑结果。）
 
 ## 5. 未做与诚实标注
 
