@@ -24,7 +24,6 @@
  *   node packages/authority/bin/sign-live-trading.mjs sign --key <private.pem> --dir <平面目录> [--key-id operator-1] [--days 30] [--operator 名字] [--note "..."] [--agent-uid <uid>] [--force-dev]
  *   node packages/authority/bin/sign-live-trading.mjs status [--dir <平面目录>]
  */
-import { statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 const argv = process.argv.slice(2)
@@ -137,6 +136,7 @@ async function cmdSign() {
 }
 
 async function cmdStatus() {
+  const { describePlaneFiles } = await loadSignModule()
   const runtime = await loadRuntime()
   const dir = resolveDir(runtime, false)
   if (dir === undefined) {
@@ -146,14 +146,9 @@ async function cmdStatus() {
     return
   }
   console.log('[authority] 授权平面目录：' + dir)
-  for (const file of [runtime.TRUSTED_KEYS_FILENAME, runtime.GRANT_FILENAME]) {
-    let present = false
-    try {
-      present = statSync(join(dir, file)).isFile()
-    } catch {
-      present = false
-    }
-    console.log('  · ' + file + '：' + (present ? '存在' : '缺失'))
+  // 平面两份文件的现状由签署侧导出（顺序即 trust anchor → grant），这里只负责排版。
+  for (const file of describePlaneFiles(dir)) {
+    console.log('  · ' + file.name + '：' + (file.present ? '存在' : '缺失'))
   }
   const agentUid = declaredAgentUid(runtime)
   const decision = runtime.liveTradingDecision(true, agentUid === undefined ? { dir } : { dir, euid: agentUid })

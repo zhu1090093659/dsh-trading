@@ -41,7 +41,7 @@ import { createGuiApprovalSeat, type GuiAgentRegistryLike, type GuiApprovalEvent
 import { attachEventStream } from './sse.ts'
 import { TaskActionError } from './tasks/ledger.ts'
 import { registerTasksTools } from './tasks/tools.ts'
-import { TASKS_ACTION_BYTES_LIMIT, parseTasksEnvelope } from '@dshtrading/api'
+import { TASKS_ACTION_BYTES_LIMIT, TASKS_API_SUBPATH, parseTasksEnvelope } from '@dshtrading/api'
 import { TradingTasksService } from './tasks/service.ts'
 import type { SessionCommandDispatcher, SessionGateway } from './tasks/runner.ts'
 
@@ -315,7 +315,7 @@ export function apply(ctx: Context): void {
             body = await readJsonBody(req)
           }
           // 定时任务子面（右侧栏）：独立账本与调度，行情桥不感知。
-          if (sub === '/tasks' || sub.startsWith('/tasks/')) {
+          if (sub === TASKS_API_SUBPATH || sub.startsWith(TASKS_API_SUBPATH + '/')) {
             await handleTasksRoute(tasks, req, res, sub, body)
             return
           }
@@ -392,15 +392,15 @@ async function handleTasksRoute(
     sendJson(res, 503, { ok: false, code: 'TASKS_UNAVAILABLE', message: 'task ledger is unavailable (locked by another live host?)' })
     return
   }
-  if (req.method === 'GET' && sub === '/tasks') {
+  if (req.method === 'GET' && sub === TASKS_API_SUBPATH) {
     sendJson(res, 200, service.snapshot())
     return
   }
-  if (req.method === 'GET' && sub === '/tasks/meta') {
+  if (req.method === 'GET' && sub === TASKS_API_SUBPATH + '/meta') {
     sendJson(res, 200, await service.meta())
     return
   }
-  if (req.method === 'POST' && sub === '/tasks/action') {
+  if (req.method === 'POST' && sub === TASKS_API_SUBPATH + '/action') {
     if (Buffer.byteLength(JSON.stringify(body ?? {}), 'utf8') > TASKS_ACTION_BYTES_LIMIT) {
       sendJson(res, 413, { ok: false, code: 'TASKS_ACTION_TOO_LARGE', message: 'action payload exceeds 64KiB' })
       return

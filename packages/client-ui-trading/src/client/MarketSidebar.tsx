@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers } from './api.ts'
+import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers, subscribeTradingEvents } from './api.ts'
 import { searchAllMarkets, searchSymbols, setDynamicCatalog, updateDynamicCatalog } from './symbol-catalog.ts'
 import type { Observable, SelectionState, WatchlistGroupOpResult, WatchlistGroupsState, Watchlists } from './store.ts'
 import { rowsFor } from './store.ts'
@@ -136,6 +136,11 @@ export function MarketSidebar({
       .catch(() => { setLoadError(true) })
   }
   useEffect(() => { reloadMarkets.current() }, [])
+
+  // 路由失效信号（router 在 volatile 提交真换了 provider 时 emit 'routing'）：
+  // 另一标签页/会话改了数据源也要让本页的页签与激活源跟上，故重拉 /markets。
+  // EventSource 不可用或桥 503 时订阅退化为无信号，页面维持改动前的首拉 + 手动刷新。
+  useEffect(() => subscribeTradingEvents({ routing: () => { reloadMarkets.current() } }), [])
 
   // 动态标的全集预取（Issue #15）：切页签或挂载时触发，成功后注入 catalog 并刷新联想
   useEffect(() => {

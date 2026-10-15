@@ -2,7 +2,7 @@
  * MCP 传输层（Streamable HTTP / JSON-RPC 2.0）。
  *
  * 标准流程（用户 2026-09-13 给定契约，本出口实测复核）：
- *   initialize → notifications/initialized → tools/list / resources/list / resources/read → tools/call
+ *   initialize → notifications/initialized → tools/list / resources/read → tools/call
  * 响应形态两种都要吃：`application/json` 直出 JSON，或 `text/event-stream` 里
  * `event: message` + 单行 `data: {…}`（金十本出口实测为后者）。若上游回
  * `mcp-session-id` 头则后续请求原样回带（本出口当前无会话头，属可选能力）。
@@ -38,7 +38,6 @@ export const PROTOCOL_VERSION_HEADER = 'MCP-Protocol-Version'
 const METHOD_CAPABILITY: Readonly<Partial<Record<string, 'tools' | 'resources'>>> = Object.freeze({
   'tools/list': 'tools',
   'tools/call': 'tools',
-  'resources/list': 'resources',
   'resources/read': 'resources',
   'resources/templates/list': 'resources',
 })
@@ -48,13 +47,6 @@ export interface McpToolDescriptor {
   description?: string
   inputSchema?: unknown
   outputSchema?: unknown
-}
-
-export interface McpResourceDescriptor {
-  uri: string
-  name?: string
-  mimeType?: string
-  description?: string
 }
 
 /** 可读文本段（structuredContent 缺席时的兜底来源）。 */
@@ -178,18 +170,6 @@ export class Jin10McpClient {
       ...(typeof tool.description === 'string' ? { description: tool.description } : {}),
       ...(tool.inputSchema !== undefined ? { inputSchema: tool.inputSchema } : {}),
       ...(tool.outputSchema !== undefined ? { outputSchema: tool.outputSchema } : {}),
-    }))
-  }
-
-  async listResources(): Promise<McpResourceDescriptor[]> {
-    const result = await this.rpc('resources/list', {})
-    const resources = isRecord(result) ? result.resources : undefined
-    if (!Array.isArray(resources)) throw new Jin10Error('TRADING_EXCHANGE_ERROR', 'jin10 mcp resources/list: unexpected payload (expected result.resources[])')
-    return resources.filter(isRecord).map((resource) => ({
-      uri: String(resource.uri ?? ''),
-      ...(typeof resource.name === 'string' ? { name: resource.name } : {}),
-      ...(typeof resource.mimeType === 'string' ? { mimeType: resource.mimeType } : {}),
-      ...(typeof resource.description === 'string' ? { description: resource.description } : {}),
     }))
   }
 

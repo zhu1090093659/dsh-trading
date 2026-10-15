@@ -73,37 +73,6 @@ export interface HiThinkLimitUpPoolData {
   item: HiThinkLimitUpItem[]
 }
 
-export interface HiThinkLadderBoardItem {
-  thscode: string
-  ticker: string
-  name: string
-  board_num: number
-  sign_level?: string
-  seal_nextday?: string | null
-}
-
-export interface HiThinkLadderDayItem {
-  date: string
-  boards: {
-    two_board?: HiThinkLadderBoardItem[]
-    three_board?: HiThinkLadderBoardItem[]
-    four_board?: HiThinkLadderBoardItem[]
-    five_board?: HiThinkLadderBoardItem[]
-    six_board?: HiThinkLadderBoardItem[]
-    seven_over?: HiThinkLadderBoardItem[]
-  }
-}
-
-export interface HiThinkLadderData {
-  timestamp: number
-  window?: {
-    length: number
-    date_list: string[]
-    board_caps: Record<string, number>
-  }
-  item: HiThinkLadderDayItem[]
-}
-
 export interface HiThinkAuctionItem {
   thscode: string
   ticker: string

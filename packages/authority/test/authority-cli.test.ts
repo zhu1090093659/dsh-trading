@@ -6,7 +6,7 @@
  * 就经 @dshtrading/authority/testing 读 lib，构建是测试的前置条件。
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -45,6 +45,11 @@ function operatorEnv(dir: string, extra: Record<string, string> = {}): NodeJS.Pr
 function runCli(args: string[], env: NodeJS.ProcessEnv): { status: number; stdout: string; stderr: string } {
   const result = spawnSync(process.execPath, [CLI, ...args], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   return { status: result.status ?? -1, stdout: String(result.stdout ?? ''), stderr: String(result.stderr ?? '') }
+}
+
+/** status stdout 里的平面文件清单行（其余行含临时路径与判定细节，不参与逐字比较）。 */
+function fileLines(stdout: string): string[] {
+  return stdout.split('\n').filter(line => line.startsWith('  · '))
 }
 
 afterEach(() => {
@@ -119,4 +124,31 @@ describe('复现序列：agent 用自己 uid 自铸信任锚', () => {
     expect(decision.isolation?.code).toBe('isolated')
     expect(existsSync(join(dir, GRANT_FILENAME))).toBe(true)
   })
+
+  it('管理员：status 的平面文件清单逐字打印两份文件的现状，信任锚在前', () => {
+    // Given 一个平面目录，先只写入信任锚
+    const dir = join(tempDir(), 'plane')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, TRUSTED_KEYS_FILENAME), '{}\n')
+    const env = operatorEnv(dir)
+    // When 跑 status
+    const withKeys = runCli(['status', '--dir', dir], env)
+    // Then 清单两行逐字为「信任锚存在、授权缺失」，顺序即 describePlaneFiles 的声明顺序
+    expect(withKeys.status).toBe(0)
+    expect(fileLines(withKeys.stdout)).toEqual([
+      '  · ' + TRUSTED_KEYS_FILENAME + '：存在',
+      '  · ' + GRANT_FILENAME + '：缺失',
+    ])
+    // When 换成只留授权文件，再跑一次
+    rmSync(join(dir, TRUSTED_KEYS_FILENAME))
+    writeFileSync(join(dir, GRANT_FILENAME), '{}\n')
+    const withGrant = runCli(['status', '--dir', dir], env)
+    // Then 同两行换位为「缺失 / 存在」——行文本与顺序都逐字固定
+    expect(withGrant.status).toBe(0)
+    expect(fileLines(withGrant.stdout)).toEqual([
+      '  · ' + TRUSTED_KEYS_FILENAME + '：缺失',
+      '  · ' + GRANT_FILENAME + '：存在',
+    ])
+    // 两次真实 CLI 冷启动在负载机上超过 vitest 的 5s 缺省，显式给上界不改变断言强度
+  }, 20_000)
 })

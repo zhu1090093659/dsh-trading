@@ -6,10 +6,19 @@
  * client tsconfig 的 rootDir 限制，见 2026-09-04 CI 棘轮修复 note）。
  */
 import {
+  TASKS_API_SUBPATH,
   type TasksAction,
   type TasksSnapshot,
 } from '@dshtrading/api'
 import { BridgeError } from './api.ts'
+
+/** 交易桥前缀（与 bot-api 注册的路由前缀一致）。 */
+const TASKS_BRIDGE_PREFIX = '/dshtrading/api'
+
+/** 定时任务子面路径：桥前缀 + 协议层子路径（常量改值两端同时跟随）。 */
+function tasksPath(suffix = ''): string {
+  return TASKS_BRIDGE_PREFIX + TASKS_API_SUBPATH + suffix
+}
 
 /** 元数据面（工作区/预设名册 + 确认门基准）。 */
 export interface TasksMeta {
@@ -36,17 +45,17 @@ async function tasksJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** 当前 revision 快照（Host 权威 UI 状态）。 */
 export async function fetchTasksSnapshot(): Promise<TasksSnapshot> {
-  return tasksJson<TasksSnapshot>('/dshtrading/api/tasks', { headers: { accept: 'application/json' } })
+  return tasksJson<TasksSnapshot>(tasksPath(), { headers: { accept: 'application/json' } })
 }
 
 /** 元数据面：确认门基准 + 工作区名册 + agent 预设名册。 */
 export async function fetchTasksMeta(): Promise<TasksMeta> {
-  return tasksJson<TasksMeta>('/dshtrading/api/tasks/meta', { headers: { accept: 'application/json' } })
+  return tasksJson<TasksMeta>(tasksPath('/meta'), { headers: { accept: 'application/json' } })
 }
 
 /** 提交一个动作（自动生成 requestId），返回确认后的新快照。 */
 export async function postTaskAction(action: TasksAction): Promise<TasksSnapshot> {
-  return tasksJson<TasksSnapshot>('/dshtrading/api/tasks/action', {
+  return tasksJson<TasksSnapshot>(tasksPath('/action'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ requestId: crypto.randomUUID(), action }),

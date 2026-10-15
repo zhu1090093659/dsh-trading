@@ -251,18 +251,25 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
     return () => { this.watchers.delete(cb) }
   }
 
-  /** 内用：volatile-update 后 diff 并通知 watchers（通知在 watch 后注册的同步回调）。 */
-  notify(): void {
+  /**
+   * 内用：volatile-update 后 diff 并通知 watchers（通知在 watch 后注册的同步回调）。
+   * 返回本次是否真有 provider 变化：生产端据它决定要不要广播 'routing' 失效信号
+   * —— 与 watchers 同一份 diff 结果，不另立一套判据，也不在无变化时打扰客户端。
+   */
+  notify(): boolean {
     const source = this.snapshot()
     const next: Record<string, string | undefined> = {}
     for (const [market, entry] of Object.entries(source.markets)) next[market] = entry.provider
+    let changed = false
     for (const [market, provider] of Object.entries(next)) {
       const prev = this.last[market]
       if (prev !== provider) {
+        changed = true
         for (const cb of this.watchers) void cb(provider, prev)
       }
     }
     this.last = next
+    return changed
   }
 }
 
@@ -501,6 +508,11 @@ export function warnUnknownProviders(config: RouterConfigView, log: LogLike): st
   return unknown
 }
 
+/** tradingEvents 的最小发布面（鸭式；总线缺席时静默降级，见 holdings/plugin.ts 同款取用）。 */
+interface TradingEventsPublisher {
+  emit(store: 'routing'): void
+}
+
 export function apply(ctx: Context, config: Config): void {
   // 0.1.7：Config 标 volatile 后，loader 传进 apply 的 config 是 cosmokit
   // VolatileRef（引用，见 Config 头注）。这里直接把引用交给
@@ -517,6 +529,10 @@ export function apply(ctx: Context, config: Config): void {
   new TradingNewsRegistryService(ctx)
   const log = logger(ctx)
   warnUnknownProviders(service.snapshot(), log)
+  /** tradingEvents 服务（base patch 行挂载 eventbus 时可用；缺席 → undefined）。 */
+  const eventsOf = (): TradingEventsPublisher | undefined =>
+    (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown })
+      .get?.('tradingEvents', false) as TradingEventsPublisher | undefined
 
   // routing_get / instruments_search（issue #33 / P4，host 平面，全会话可见 D4）。
   ctx.inject(['tools'] as never, (toolCtx) => {
@@ -536,9 +552,14 @@ export function apply(ctx: Context, config: Config): void {
   // （取代 0.1.5 世代 installSection 的 setSource/onChange 接线——两个钩子已随
   // 该代 settings 面删除）。settings 缺失（老部署未挂）时本事件不会到，
   // 服务仍按组合配置常驻，路由不失效。
+  //
+  // 路由真的变了才广播 'routing'（客户端重拉 /markets 的失效信号）：判据就是
+  // notify() 的 diff 结果——volatile-update 是 loader 级事件，别的行/别的字段
+  // 保存时也会来，无变化时广播等于让每个客户端白跑一次重拉。总线缺席（老部署/
+  // headless/事件总线未挂）时 eventsOf() 为 undefined，静默降级。
   ctx.on('loader/volatile-update' as never, (() => {
     warnUnknownProviders(service.snapshot(), log)
-    service.notify()
+    if (service.notify()) eventsOf()?.emit('routing')
   }) as never)
 }
 

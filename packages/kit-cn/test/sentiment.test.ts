@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   fetchCnAuctionStrength,
-  fetchCnLimitUpLadder,
   fetchCnLimitUpPool,
 } from '../src/sentiment.ts'
 import {

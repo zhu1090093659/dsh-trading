@@ -341,6 +341,30 @@ describe('MarketRouterService（tradingMarketRouter）', () => {
     // Then: watcher 收到 crypto 的 okx 变化（fresh 进程下 prev 为 undefined）
     expect(events).toContainEqual(['okx', undefined])
   })
+
+  it('用户：设置页换了 provider 后挂载的 tradingEvents 收到一条 routing 失效信号，无变化时不广播', () => {
+    // Given: apply 完成、宿主事件回调被捕获，随后 eventbus 行挂上 tradingEvents
+    const emitted: string[] = []
+    const ctx = new CordisContext()
+    const box = mutableRef({ markets: { ...DEFAULT_MARKETS } })
+    let volatileUpdate: (() => void) | undefined
+    ;(ctx as unknown as { on: (event: string, cb: () => void) => void }).on = (event, cb) => {
+      if (event === 'loader/volatile-update') volatileUpdate = cb
+    }
+    apply(ctx as never, box.ref as never)
+    const realGet = ctx.get.bind(ctx) as (name: string, strict?: boolean) => unknown
+    ;(ctx as unknown as { get: (name: string, strict?: boolean) => unknown }).get = (name, strict) =>
+      name === 'tradingEvents' ? { emit: (store: string) => { emitted.push(store) } } : realGet(name, strict)
+    // When: 设置保存提交新 provider 后宿主 emit loader/volatile-update
+    box.set({ markets: { ...DEFAULT_MARKETS, crypto: { provider: 'okx' } } })
+    volatileUpdate!()
+    // Then: 广播恰好一条 'routing'（客户端据此重拉 /markets）
+    expect(emitted).toEqual(['routing'])
+    // When: 再次 volatile-update，但路由没变（别的行/别的字段保存也会发这个事件）
+    volatileUpdate!()
+    // Then: 不再广播——判据与 watchers 是同一份 diff 结果，无变化不打扰客户端
+    expect(emitted).toEqual(['routing'])
+  })
 })
 
 describe('TradingNewsRegistryService（tradingNewsRegistry，Issue #37）', () => {

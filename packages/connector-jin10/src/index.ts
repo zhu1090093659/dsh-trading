@@ -7,7 +7,7 @@
  * 模块划分：
  *   errors.ts  —— 错误词汇载体（TradingErrorCode 复用 @dshtrading/api）
  *   mcp.ts     —— MCP 传输层：initialize → notifications/initialized → tools/list /
- *                 resources/list / resources/read / tools/call，structuredContent 优先
+ *                 resources/read / tools/call，structuredContent 优先
  *   parse.ts   —— 上游 payload → 本仓契约形状的纯解析（严格校验，坏形状不静默吞）
  *   service.ts —— 按业务读法封装的取数层（快讯/资讯/财经日历/利率/品种报价/K线）
  *   tools.ts   —— agent 工具面（市场无关命名，provider 可替换）

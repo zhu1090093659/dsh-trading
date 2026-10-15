@@ -22,7 +22,6 @@
     - id: dsh-trading-hk-dataplane-tencent
       name: '@dshtrading/connector-tencent/dataplane'
       config:
-        enabled: true
         market: hk
     - id: dsh-trading-hk-dataplane-futu
       name: '@dshtrading/connector-futu/dataplane'

@@ -21,8 +21,6 @@
     # host 面数据行（2026-08-30 GUI 行情桥配套）：只 provide tradingUsMarketData。
     - id: dsh-trading-us-dataplane-yahoo
       name: '@dshtrading/connector-yahoo/dataplane'
-      config:
-        enabled: true
     - id: dsh-trading-us-dataplane-alpaca
       name: '@dshtrading/connector-alpaca/dataplane'
       config:

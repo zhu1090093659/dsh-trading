@@ -8,7 +8,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { TASKS_API_SUBPATH } from '@dshtrading/api'
 import { apply } from '../src/index.ts'
+
+/** 桥前缀 + 协议子路径：请求 URL 与路由判定同源，改常量两边一起动。 */
+const BRIDGE_PREFIX = '/dshtrading/api'
+const TASKS_PATH = BRIDGE_PREFIX + TASKS_API_SUBPATH
 
 interface Route {
   kind: string
@@ -47,7 +52,7 @@ async function request(route: Route, options: { method?: string; url?: string; b
   const chunks = options.body === undefined ? [] : [Buffer.from(JSON.stringify(options.body))]
   await route.handler({
     method: options.method ?? 'GET',
-    url: options.url ?? '/dshtrading/api/tasks',
+    url: options.url ?? TASKS_PATH,
     headers: { origin: 'http://127.0.0.1:3080', host: '127.0.0.1:3080' },
     [Symbol.asyncIterator]() {
       let index = 0
@@ -77,7 +82,7 @@ describe('/dshtrading/api/tasks 子面', () => {
     expect(registered[0]?.path).toBe('/dshtrading/api')
     const rejected = makeCtx({ rejection: 401 })
     apply(rejected.ctx)
-    const out = await request(rejected.registered[0], { url: '/dshtrading/api/tasks' })
+    const out = await request(rejected.registered[0], { url: TASKS_PATH })
     expect(out.status).toBe(401)
   })
 
@@ -85,10 +90,10 @@ describe('/dshtrading/api/tasks 子面', () => {
     const { ctx, registered: routes } = makeCtx()
     apply(ctx)
     const route = routes[0]
-    const snapshot = await request(route, { url: '/dshtrading/api/tasks' })
+    const snapshot = await request(route, { url: TASKS_PATH })
     expect(snapshot.status).toBe(200)
     expect(JSON.parse(snapshot.body)).toMatchObject({ schemaVersion: 1, tasks: [] })
-    const meta = await request(route, { url: '/dshtrading/api/tasks/meta' })
+    const meta = await request(route, { url: TASKS_PATH + '/meta' })
     expect(meta.status).toBe(200)
     expect(JSON.parse(meta.body)).toMatchObject({ sessionDefaultPermission: 'workspace-write', workspaces: [], agentPresets: [] })
   })
@@ -99,18 +104,38 @@ describe('/dshtrading/api/tasks 子面', () => {
     const route = routes[0]
     const bad = await request(route, {
       method: 'POST',
-      url: '/dshtrading/api/tasks/action',
+      url: TASKS_PATH + '/action',
       body: { requestId: 'r1', action: { kind: 'nope' } },
     })
     expect(bad.status).toBe(400)
     const good = await request(route, {
       method: 'POST',
-      url: '/dshtrading/api/tasks/action',
+      url: TASKS_PATH + '/action',
       body: { requestId: 'r2', action: { kind: 'create', id: 'task-1', input: { title: '日报', prompt: '跑', schedule: { enabled: true, cron: '0 9 * * *' } } } },
     })
     expect(good.status).toBe(200)
     const wire = JSON.parse(good.body) as { tasks: Array<{ id: string; schedule?: { enabled: boolean } }> }
     expect(wire.tasks[0]?.id).toBe('task-1')
     expect(wire.tasks[0]?.schedule?.enabled).toBe(true)
+  })
+
+  it('管理员：以协议常量拼出的子路径命中定时任务路由，只多一个字符的邻居路径不落进来', async () => {
+    // Given 一个 apply 后的桥路由（独立账本）
+    const { ctx, registered: routes } = makeCtx()
+    apply(ctx)
+    const route = routes[0]
+    // When 用 TASKS_API_SUBPATH 拼出快照与名册两个子路径
+    const snapshot = await request(route, { url: TASKS_PATH })
+    const meta = await request(route, { url: TASKS_PATH + '/meta' })
+    // Then 两条都命中任务路由，回协议快照与名册而不是 404
+    expect(snapshot.status).toBe(200)
+    expect(JSON.parse(snapshot.body)).toMatchObject({ schemaVersion: 1, tasks: [] })
+    expect(meta.status).toBe(200)
+    expect(JSON.parse(meta.body)).toMatchObject({ sessionDefaultPermission: 'workspace-write' })
+    // When 请求常量后面多一个字符的邻居路径
+    const neighbour = await request(route, { url: TASKS_PATH + 'X' })
+    // Then 前缀守卫不吞它：交给行情桥按未知端点 404
+    expect(neighbour.status).toBe(404)
+    expect(JSON.parse(neighbour.body)).toMatchObject({ code: 'TRADING_PROTOCOL' })
   })
 })

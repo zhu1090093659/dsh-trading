@@ -24,7 +24,6 @@ import type {
   HiThinkFuturesDailyData,
   HiThinkFuturesIntradayData,
   HiThinkHistoricalData,
-  HiThinkLadderData,
   HiThinkLimitUpPoolData,
   HiThinkMetaTickerData,
   HiThinkPriceSnapshotData,
@@ -227,11 +226,6 @@ export class HiThinkRestClient {
       ...(item.continue_day_cnt !== undefined ? { consecutiveBoards: item.continue_day_cnt } : {}),
       ...(item.limit_up_reason !== undefined ? { sectorConcept: item.limit_up_reason } : {}),
     }))
-  }
-
-  /** 获取连板天梯数据。 */
-  async getLimitUpLadder(): Promise<HiThinkLadderData> {
-    return this.request<HiThinkLadderData>('/api/a-share/special-data/limit-up-ladder')
   }
 
   /** 获取集合竞价快照与强弱基准。 */

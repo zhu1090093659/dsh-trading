@@ -51,7 +51,6 @@ function defaultRespond(message: Record<string, unknown>): Response {
   }
   if (message.method === 'notifications/initialized') return new Response(null, { status: 202 })
   if (message.method === 'tools/list') return sse({ jsonrpc: '2.0', id: message.id, result: { tools: [{ name: 'list_flash', description: 'flash', inputSchema: { type: 'object' } }] } })
-  if (message.method === 'resources/list') return sse({ jsonrpc: '2.0', id: message.id, result: { resources: [{ uri: 'quote://codes', name: 'quote_codes', mimeType: 'application/json' }] } })
   if (message.method === 'resources/read') return sse({ jsonrpc: '2.0', id: message.id, result: { contents: [{ uri: 'quote://codes', mimeType: 'application/json', text: '{"data":[{"code":"XAUUSD","name":"现货黄金"}]}' }] } })
   if (message.method === 'tools/call') return sse({ jsonrpc: '2.0', id: message.id, result: { structuredContent: { status: 200, message: '', data: { ok: true } }, content: [{ type: 'text', text: '{"status":200,"message":"","data":{"ok":true}}' }] } })
   return json({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: `method not found: ${String(message.method)}` } })

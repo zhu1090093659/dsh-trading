@@ -2,7 +2,7 @@
  * A 股市场特色短线情绪与资金面数据取数层（同花顺 HiThink 数据赋能）。
  *
  * 覆盖：
- *   - 涨跌停池与连板天梯（连板高度、首板题材、封单金额、炸板池）
+ *   - 涨跌停池（首板题材、封单金额、炸板池）
  *   - 集合竞价快照与竞价强弱指标
  *   - 龙虎榜契约类型预留（取数实现规划中）
  *
@@ -42,19 +42,6 @@ export async function fetchCnLimitUpPool(
     ...(queryOptions.page !== undefined ? { page: queryOptions.page } : {}),
     ...(queryOptions.size !== undefined ? { size: queryOptions.size } : {}),
   })
-}
-
-/** 获取近 30 个交易日连板天梯矩阵。 */
-export async function fetchCnLimitUpLadder(sentimentOptions: SentimentOptions = {}) {
-  const apiKey = resolveApiKey(sentimentOptions)
-  if (!apiKey) {
-    throw new Error('HITHINK_FINANCE_API_KEY is not configured. Please set HITHINK_FINANCE_API_KEY to access limit-up ladder data.')
-  }
-  const client = new HiThinkRestClient({
-    apiKey,
-    ...(sentimentOptions.fetchImpl !== undefined ? { fetchImpl: sentimentOptions.fetchImpl } : {}),
-  })
-  return client.getLimitUpLadder()
 }
 
 /** 获取个股集合竞价快照与强弱基准。 */

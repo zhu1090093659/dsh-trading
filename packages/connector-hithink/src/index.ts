@@ -96,10 +96,6 @@ export class HiThinkMarketDataService extends Service implements MarketDataServi
     return this.client.getLimitUpPool(options)
   }
 
-  async getLimitUpLadder() {
-    return this.client.getLimitUpLadder()
-  }
-
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void, options?: { intervalMs?: number }): Disposable {
     const ms = Math.max(options?.intervalMs ?? 5_000, 1_000)
     const tick = (): void => {
