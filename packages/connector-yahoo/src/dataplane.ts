@@ -6,7 +6,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dshtrading/api'
-import { Config, TRADING_US_MARKET_DATA_KEY, YahooMarketDataService } from './index.ts'
+import { Config, ROUTER_PROVIDER, TRADING_US_MARKET_DATA_KEY, YahooMarketDataService } from './index.ts'
 export const inject: string[] = []
 
 // 本行 patch 行只写 `enabled: true`：loader 只认**本模块**导出的 Config 补默认值
@@ -25,8 +25,6 @@ function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undef
   const candidate = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketDataRegistry', false)
   return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
 }
-/** 本连接器的路由 provider slug（路由层词汇，docs/exchange-routing.md §2.2）。 */
-const ROUTER_PROVIDER = 'yahoo'
 
 export function apply(ctx: Context): void {
   const registry = resolveMarketDataRegistry(ctx)

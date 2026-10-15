@@ -448,6 +448,10 @@ export function createPlaceOrderTool(deps: { marketData: Pick<MarketDataService,
   })
 }
 
+/**
+ * 本连接器在路由层的 provider slug（路由层词汇 = 交易所 slug；
+ * docs/guides/exchange-routing.md §2.2）。
+ */
 export const ROUTER_PROVIDER = 'futu'
 
 export function routeAllows(ctx: Context, config: Config, market: string): boolean {

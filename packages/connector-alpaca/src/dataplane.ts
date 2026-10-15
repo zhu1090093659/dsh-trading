@@ -20,6 +20,7 @@ import {
   Config,
   credentialRefsFor,
   resolveCredentials,
+  ROUTER_PROVIDER,
   TRADING_US_MARKET_DATA_KEY,
   TRADING_US_TRADE_KEY,
 } from './index.js'
@@ -53,8 +54,6 @@ function resolveTradeRegistry(ctx: Context): TradeRegistry | undefined {
   return candidate !== undefined ? (candidate as TradeRegistry) : undefined
 }
 
-/** 本连接器的路由 provider slug（路由层词汇 = 交易所 slug，docs/exchange-routing.md §2.2）。 */
-const ROUTER_PROVIDER = 'alpaca'
 /** 市场短前缀。 */
 const MARKET = 'us'
 

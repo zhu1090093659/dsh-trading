@@ -3,6 +3,7 @@ import type { MarketDataService, TradeRegistry } from '@dshtrading/api'
 import {
   BybitMarketDataService,
   BybitTradeService,
+  ROUTER_PROVIDER,
   TRADING_CRYPTO_MARKET_DATA_KEY,
   TRADING_CRYPTO_TRADE_KEY,
   Config,
@@ -32,7 +33,6 @@ function resolveTradeRegistry(ctx: Context): TradeRegistry | undefined {
   return candidate !== undefined ? (candidate as TradeRegistry) : undefined
 }
 
-const ROUTER_PROVIDER = 'bybit'
 const MARKET = 'crypto'
 
 export function apply(ctx: Context, config: Config = withDefaults(undefined)): void {

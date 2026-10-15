@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dshtrading/api'
-import { FinnhubMarketDataService, TRADING_US_MARKET_DATA_KEY, Config, createApiKeyProvider } from './index.js'
+import { FinnhubMarketDataService, ROUTER_PROVIDER, TRADING_US_MARKET_DATA_KEY, Config, createApiKeyProvider } from './index.js'
 
 export const inject: string[] = []
 
@@ -21,7 +21,6 @@ function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undef
   return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
 }
 
-const ROUTER_PROVIDER = 'finnhub'
 const MARKET = 'us'
 
 export function apply(ctx: Context, config: Config = withDefaults(undefined)): void {

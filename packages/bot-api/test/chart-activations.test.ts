@@ -39,7 +39,7 @@ describe('图表激活名册桥端点（issue #63）', () => {
     const put = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(), { id: 'macd' })
     const spec = await resolveIndicatorSpec('macd')
     const defaults = Object.fromEntries((spec?.params ?? []).map(p => [p.key, p.default]))
-    expect(put).toEqual({ status: 200, payload: { ok: true, instances: [{ id: 'macd', params: defaults }] } })
+    expect(put).toEqual({ status: 200, payload: { ok: true, instances: [{ id: 'macd', params: defaults }] }, invalidates: ['chart'] })
 
     const clamped = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(), { id: 'td9', params: { count: 999 } }) as { payload: { instances: Array<{ id: string; params: Record<string, number> }> } }
     expect(clamped.payload.instances).toContainEqual({ id: 'td9', params: { count: 13 } })
@@ -101,6 +101,7 @@ describe('图表激活名册桥端点（issue #63）', () => {
           symbolParams: { 'hk:00700.HK': { count: 11 }, 'us:GOOGL': { count: 10 } },
         }],
       },
+      invalidates: ['chart'],
     })
     // 全局写更新 params 且保留覆盖
     await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(), { id: 'td9', params: { count: 12 } })
@@ -181,7 +182,7 @@ describe('图表激活名册桥端点（issue #63）', () => {
     const bridge = new TradingBridge(fakeHost())
     const wire = await dispatchBridgeRequest(bridge, 'PUT', '/chart/indicators', new URLSearchParams(),
       { id: 'td9', market: 'hk', symbol: '00700.HK', clearSymbol: true })
-    expect(wire).toEqual({ status: 200, payload: { ok: true, instances: [] } })
+    expect(wire).toEqual({ status: 200, payload: { ok: true, instances: [] }, invalidates: ['chart'] })
     const list = await dispatchBridgeRequest(bridge, 'GET', '/chart/indicators', new URLSearchParams())
     expect(list).toEqual({ status: 200, payload: { ok: true, instances: [] } })
   })
@@ -196,6 +197,7 @@ describe('图表激活名册桥端点（issue #63）', () => {
     expect(wire).toEqual({
       status: 200,
       payload: { ok: true, instances: [{ id: 'td9', params: { count: 9 }, hiddenScopes: ['us:GOOGL'] }] },
+      invalidates: ['chart'],
     })
 
     // 整市场隐藏追加 → 再显示单标的只清 symbol 级
@@ -214,6 +216,7 @@ describe('图表激活名册桥端点（issue #63）', () => {
     expect(ghost).toEqual({
       status: 200,
       payload: { ok: true, instances: [{ id: 'td9', params: { count: 9 }, hiddenScopes: ['hk'] }] },
+      invalidates: ['chart'],
     })
 
     // visible 缺 market → 业务拒绝
@@ -314,7 +317,7 @@ describe('图表激活名册桥端点（issue #63）', () => {
       { id: 'td9', applyScope: { us: { enabled: true, intervals: ['1d'] } } })
 
     // Then 名册保持为空
-    expect(wire).toEqual({ status: 200, payload: { ok: true, instances: [] } })
+    expect(wire).toEqual({ status: 200, payload: { ok: true, instances: [] }, invalidates: ['chart'] })
   })
 
   it('用户迁移导入时适用范围配置不丢（POST import 保真 applyScope）', async () => {
@@ -379,6 +382,7 @@ describe('预置指标的默认适用范围（决策 7：定义侧声明，桥�
     expect(put).toEqual({
       status: 200,
       payload: { ok: true, instances: [{ id: HOLDING_ID, params: {}, applyScope: HOLDING_SCOPE }] },
+      invalidates: ['chart'],
     })
     const stored = (await chartStore.list())[0] as IndicatorInstance
     expect(isInstanceApplicableOn(stored, 'hk', '1d')).toBe(true)

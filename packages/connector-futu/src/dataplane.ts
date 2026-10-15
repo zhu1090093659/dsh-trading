@@ -16,6 +16,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService, TradeRegistry } from '@dshtrading/api'
 import {
+  ROUTER_PROVIDER,
   FutuMarketDataService,
   FutuRestClient,
   FutuTradeService,
@@ -50,8 +51,6 @@ function resolveTradeRegistry(ctx: Context): TradeRegistry | undefined {
   return candidate !== undefined ? (candidate as TradeRegistry) : undefined
 }
 
-/** 本连接器的路由 provider slug（路由层词汇 = 交易所 slug，docs/exchange-routing.md §2.2）。 */
-const ROUTER_PROVIDER = 'futu'
 /** 交易面市场短前缀（交易服务仅注册 hk；US 订单需美国账户 trd 上下文，未接）。 */
 const MARKET = 'hk'
 /** 行情面额外注册的市场（normalizeSymbol/toFutuSecurity 已支持 US.* 形态）。 */

@@ -10,7 +10,11 @@ Status: implemented
 
 新建 `src/ttl-cache.ts` 的 `TtlCache<V>`：TTL 判新鲜（过期读 miss 并顺带清除）+ LRU 上限（命中提尾、写前清过期、超上限逐出最久未用，上限 64 条）+ 时钟注入。bridge 的 `fundamentalsCache` 换用该类，其余语义不变（in-flight 去重保持原样）。
 
-`symbolsCache` 不换：它按市场键（封顶 4 条）天然有界，无泄漏。
+`symbolsCache` 当时不换，理由是它按市场键（键空间 = `MARKET_IDS`，6 个）天然有界、不是泄漏；
+2026-10-15 它换用同一个 `TtlCache`，理由不是内存而是**消灭第三种 TTL 语义**（裸 `Map` + 内联
+新鲜度判断）：上限取 `SYMBOLS_CACHE_MAX = MARKET_IDS.length`，驱逐循环永不触发，与「永不驱逐」
+等价。三个读面的时长/上限仍各自独立：`symbols` 30min、`fundamentals` 5min + 64、
+`southbound` 5min + 64。
 
 ## Alternatives considered
 

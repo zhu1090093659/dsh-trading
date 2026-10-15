@@ -7,7 +7,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dshtrading/api'
-import { TencentMarketDataService, marketDataKey, Config } from './index.ts'
+import { ROUTER_PROVIDER, TencentMarketDataService, marketDataKey, Config } from './index.ts'
 export const inject: string[] = []
 
 // 本行 patch 行只写 `enabled: true` 等少量键：loader 只认**本模块**导出的 Config 补默认值
@@ -28,9 +28,6 @@ function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undef
   const candidate = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketDataRegistry', false)
   return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
 }
-/** 本连接器的路由 provider slug（路由层词汇，docs/exchange-routing.md §2.2）。 */
-const ROUTER_PROVIDER = 'tencent'
-
 export function apply(ctx: Context, config: Config = withDefaults(undefined)): void {
   const market = config.market
   const key = marketDataKey(market)

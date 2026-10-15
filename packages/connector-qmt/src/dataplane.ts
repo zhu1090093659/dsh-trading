@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService, TradeRegistry } from '@dshtrading/api'
 import {
+  ROUTER_PROVIDER,
   Config,
   QmtMarketDataService,
   QmtTradeService,
@@ -34,7 +35,6 @@ function resolveTradeRegistry(ctx: Context): TradeRegistry | undefined {
   return candidate !== undefined ? (candidate as TradeRegistry) : undefined
 }
 
-const ROUTER_PROVIDER = 'qmt'
 const MARKET = 'cn'
 
 export function apply(ctx: Context, config: Config = withDefaults(undefined)): void {

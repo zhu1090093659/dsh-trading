@@ -1,6 +1,6 @@
 ﻿import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dshtrading/api'
-import { TushareMarketDataService, TRADING_CN_MARKET_DATA_KEY, Config, createTokenProvider } from './index.js'
+import { ROUTER_PROVIDER, TushareMarketDataService, TRADING_CN_MARKET_DATA_KEY, Config, createTokenProvider } from './index.js'
 
 export const inject: string[] = []
 
@@ -21,7 +21,6 @@ function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undef
   return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
 }
 
-const ROUTER_PROVIDER = 'tushare'
 const MARKET = 'cn'
 
 export function apply(ctx: Context, config: Config = withDefaults(undefined)): void {

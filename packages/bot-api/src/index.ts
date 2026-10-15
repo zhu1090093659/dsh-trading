@@ -18,7 +18,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dshtrading/api'
-import type { TradingEventsService, TradingEventStore } from '@dshtrading/eventbus'
+import type { TradingEventsService } from '@dshtrading/eventbus'
 import { createFileChartActivationStore, createFileCustomIndicatorStore, seedDefaultChartActivations } from '@dshtrading/indicators/plugin'
 import { createFileKnowledgeCardStore } from '@dshtrading/knowledge/plugin'
 import { createFileCustomStrategyStore, createFileBuiltinTombstonesStore, createFileCustomScreenerStore } from '@dshtrading/strategies/plugin'
@@ -33,6 +33,7 @@ import {
   createBridgeHost,
   dispatchBridgeRequest,
   errorPayload,
+  type BridgeInvalidateStore,
   type MarketDataRegistryLike,
   type TradeRegistryLike,
 } from './bridge.ts'
@@ -57,14 +58,6 @@ interface ConnectionLike {
 
 /** 本插件不硬依赖任何服务（headless 宿主零要求）；web 面依赖在 apply 内声明。 */
 export const inject: readonly string[] = []
-
-/**
- * holdings 失效信号 store 名（issue #65 契约 §3）。@dshtrading/eventbus 的
- * TradingEventStore 封闭 union 由 node 半流补 'holdings' 成员；补上前这里
- * 以常量固化词汇（运行时总线只透传字符串，SSE 帧形状不变）。
- */
-// 'holdings' 在 issue #65 由 @dshtrading/eventbus 联合类型正式收录（并行流已落）。
-const HOLDINGS_EVENT_STORE: TradingEventStore = 'holdings'
 
 /** 发送 JSON 响应（禁缓存：行情是易变数据，代理层也不许中间层缓存）。 */
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
@@ -338,34 +331,24 @@ export function apply(ctx: Context): void {
           if (hasSocketEvents) res.on('close', onClientGone)
           let status: number
           let payload: unknown
+          let invalidates: readonly BridgeInvalidateStore[] = []
           try {
-            ({ status, payload } = await dispatchBridgeRequest(bridge, req.method ?? 'GET', sub, url.searchParams, body, disconnect.signal))
+            const result = await dispatchBridgeRequest(bridge, req.method ?? 'GET', sub, url.searchParams, body, disconnect.signal)
+            status = result.status
+            payload = result.payload
+            // 读路由（GET）不带 invalidates：读面不失效任何 store。
+            if ('invalidates' in result) invalidates = result.invalidates
           } finally {
             if (hasSocketEvents) res.off('close', onClientGone)
           }
-          // 发布点接线（issue #30/#31/#32）：写成功 → 对应 store 失效信号。
+          // 发布点接线（issue #30/#31/#32）：写成功 → 该路由声明的 store 失效信号。
+          // 失效规则的单一真值是桥的写路由表（BRIDGE_WRITE_ROUTES，第 2 项）：本处不再
+          // 持有第二份 (method, path) 知识，新增写端点漏声明失效即编译/守卫失败。
           if (status === 200 && (payload as { ok?: unknown } | undefined)?.ok === true) {
-            if (req.method === 'DELETE' && sub === '/indicators/custom') eventsOf()?.emit('indicators')
-            // issue #63：GUI 写激活名册成功 → 'chart' 失效信号（工具写入侧在
-            // indicators/plugin emit，本处只接 GUI 桥写入，避免双 emit）。
-            if ((req.method === 'PUT' || req.method === 'DELETE') && sub === '/chart/indicators') eventsOf()?.emit('chart')
-            if (req.method === 'POST' && sub === '/chart/indicators/import') eventsOf()?.emit('chart')
-            if (req.method === 'DELETE' && sub === '/strategies/custom') eventsOf()?.emit('strategies')
-            // 策略管理（2026-09-07）：GUI 写策略（保存/覆盖）与恢复出厂 → 'strategies' 失效信号。
-            if (req.method === 'PUT' && sub === '/strategies/custom') eventsOf()?.emit('strategies')
-            if (req.method === 'POST' && sub === '/strategies/reset') eventsOf()?.emit('strategies')
-            // 选股器管理（选股器管理，2026-09-07）：同通道复用（GUI 按 payload 分流）。
-            if ((req.method === 'PUT' || req.method === 'DELETE') && sub === '/strategies/screeners') eventsOf()?.emit('strategies')
-            if (req.method === 'POST' && sub === '/strategies/screeners/reset') eventsOf()?.emit('strategies')
-            // 分组写（issue #82）复用 'watchlists' 失效信号：客户端重拉 watchlists + groups。
-            if ((req.method === 'PUT' || req.method === 'POST' || req.method === 'DELETE')
-              && (sub === '/watchlists' || sub === '/watchlists/import'
-                || sub === '/watchlist-groups' || sub === '/watchlist-group-members')) eventsOf()?.emit('watchlists')
-            if (req.method === 'PUT' && sub === '/selection') eventsOf()?.emit('selection')
-            // issue #65：holdings 写成功（stage/confirm/discard/add/update/remove）
-            // → 'holdings' 失效信号（契约 §3 SSE store 名；GET 读面不发）。
-            if ((req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE')
-              && (sub === '/holdings' || sub.startsWith('/holdings/'))) eventsOf()?.emit(HOLDINGS_EVENT_STORE)
+            if (invalidates.length > 0) {
+              const events = eventsOf()
+              for (const store of invalidates) events?.emit(store)
+            }
           }
           sendJson(res, status, payload)
         } catch (error) {

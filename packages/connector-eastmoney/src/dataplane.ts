@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketDataService } from '@dshtrading/api'
-import { EastmoneyMarketDataService, marketDataKey, Config } from './index.js'
+import { ROUTER_PROVIDER, EastmoneyMarketDataService, marketDataKey, Config } from './index.js'
 
 export const inject: string[] = []
 
@@ -20,8 +20,6 @@ function resolveMarketDataRegistry(ctx: Context): MarketDataRegistryLike | undef
   const candidate = (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown }).get?.('tradingMarketDataRegistry', false)
   return candidate !== undefined ? (candidate as MarketDataRegistryLike) : undefined
 }
-
-const ROUTER_PROVIDER = 'eastmoney'
 
 export function apply(ctx: Context, config: Config = withDefaults(undefined)): void {
   if (!config.enabled) return

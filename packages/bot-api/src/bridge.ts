@@ -770,6 +770,12 @@ function isHoldingMarket(value: string): value is HoldingMarket {
 export const SYMBOLS_CACHE_TTL_MS = 30 * 60 * 1000
 
 /**
+ * 动态标的全集缓存条目上限：键 = market，键空间 = 市场全集（当前 6），取全集长度
+ * 即与改动前的裸 Map「永不驱逐」等价——上限只是 TtlCache 的必要参数，不是驱逐策略。
+ */
+export const SYMBOLS_CACHE_MAX = MARKET_IDS.length
+
+/**
  * 基本面数据包缓存 TTL（5分钟）：财报级/日级数据，非 tick；同键 in-flight 去重
  * 让 tab 翻转与快速切标的只打一轮上游（issue #36 整改，2026-09-02）。
  */
@@ -804,7 +810,7 @@ export function errorPayload(error: unknown): { code: string; message: string } 
 }
 
 export class TradingBridge {
-  private readonly symbolsCache = new Map<string, { list: SymbolInfoWire[]; fetchedAt: number }>()
+  private readonly symbolsCache = new TtlCache<SymbolInfoWire[]>(SYMBOLS_CACHE_TTL_MS, SYMBOLS_CACHE_MAX)
   private readonly fundamentalsCache = new TtlCache<StockFundamentals>(FUNDAMENTALS_CACHE_TTL_MS, FUNDAMENTALS_CACHE_MAX)
   private readonly fundamentalsInflight = new Map<string, Promise<StockFundamentals>>()
   /** 港股通持股历史缓存（2026-10-13；键 = `${market}:${symbol}`，同 fundamentals 模式）。 */
@@ -857,15 +863,39 @@ export class TradingBridge {
    * 解析与批量语义（MAX_SYMBOLS 闸门、逐符号信封都不变）。
    */
   async tickers(market: string, symbols: string[], provider?: string): Promise<TickersWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const id = this.#requireMarketId(market)
     const unique = [...new Set(symbols.map(symbol => symbol.trim()).filter(Boolean))]
     if (unique.length === 0) throw new BridgeProtocolError(400, 'tickers: symbols is required')
     if (unique.length > MAX_SYMBOLS) {
       throw new BridgeProtocolError(400, `tickers: too many symbols (${unique.length} > ${MAX_SYMBOLS})`)
     }
-    const service = provider === undefined ? this.host.getMarketService(market) : this.#requireRegisteredService(market, provider)
-    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    const service = provider === undefined ? this.#requireMarketService(id) : this.#requireMarketServiceFor(id, provider)
     return { tickers: await this.fetchTickerOutcomes(service, unique) }
+  }
+
+  /** 市场 id 守卫（行情侧共用前奏第一步）：非法 → 400 `unknown market "X"`，并窄化出 MarketId。 */
+  #requireMarketId(market: string): MarketId {
+    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    return market
+  }
+
+  /**
+   * 行情服务解析（行情侧共用前奏）：active 解析；市场未安装 → 400 `market X is not installed`。
+   * 调用点已过 #requireMarketId 时内部重复校验是幂等的（helper 自身保持完备，可独立调用）。
+   */
+  #requireMarketService(market: string): MarketDataService {
+    const id = this.#requireMarketId(market)
+    const service = this.host.getMarketService(id)
+    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    return service
+  }
+
+  /**
+   * 显式 provider 的行情服务解析：必须命中该市场**已注册项**，否则 400（绝不静默降级到
+   * active——用户显式指定的源是权威）。文案沿用 #requireRegisteredService。
+   */
+  #requireMarketServiceFor(market: string, provider: string): MarketDataService {
+    return this.#requireRegisteredService(this.#requireMarketId(market), provider)
   }
 
   /** 按 provider slug 解析同市场已注册行情服务；未注册/注册表缺席 → 400（绝不静默换源）。 */
@@ -934,14 +964,14 @@ export class TradingBridge {
    *   - 候选耗尽 → 原样抛最后一个错误（绝不返回空序列冒充「无数据」）。
    */
   async klines(market: string, symbol: string, interval: string, rawLimit: string | null): Promise<KlinesWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const id = this.#requireMarketId(market)
     const trimmed = symbol.trim()
     if (trimmed === '') throw new BridgeProtocolError(400, 'klines: symbol is required')
     const limit = rawLimit === null || rawLimit === undefined ? undefined : Number(rawLimit)
     if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0 || limit > MAX_KLINE_LIMIT)) {
       throw new BridgeProtocolError(400, `klines: limit must be an integer in 1..${MAX_KLINE_LIMIT}`)
     }
-    const candidates = this.#resolveKlinesSources(market, interval as Interval, limit)
+    const candidates = this.#resolveKlinesSources(id, interval as Interval, limit)
     if (candidates.length === 0) throw new BridgeProtocolError(400, `market ${market} is not installed`)
     let lastError: unknown = undefined
     for (const candidate of candidates) {
@@ -1002,9 +1032,7 @@ export class TradingBridge {
 
   /** 动态标的全集（带 30min 进程内缓存；未实现或异常静默回落空列表）。 */
   async symbols(market: string, query?: string): Promise<SymbolsWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
-    const service = this.host.getMarketService(market)
-    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    const service = this.#requireMarketService(market)
     if (typeof service.listInstruments !== 'function') {
       return { symbols: [] }
     }
@@ -1027,14 +1055,14 @@ export class TradingBridge {
         return { symbols: [] }
       }
     }
-    const cached = this.symbolsCache.get(market)
-    if (cached !== undefined && Date.now() - cached.fetchedAt < SYMBOLS_CACHE_TTL_MS) {
-      return { symbols: cached.list }
+    const cached = this.symbolsCache.getFresh(market, Date.now())
+    if (cached !== undefined) {
+      return { symbols: cached }
     }
     try {
       const list = await service.listInstruments()
       const symbols: SymbolInfoWire[] = Array.isArray(list) ? list.map(toSymbolInfoWire) : []
-      this.symbolsCache.set(market, { list: symbols, fetchedAt: Date.now() })
+      this.symbolsCache.set(market, symbols, Date.now())
       return { symbols }
     } catch {
       return { symbols: [] }
@@ -1047,11 +1075,10 @@ export class TradingBridge {
    * TRADING_NOT_IMPLEMENTED（HTTP 200 + ok:false），前端直接隐藏面板（不降级）。
    */
   async derivatives(market: string, symbol: string): Promise<DerivativesWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const id = this.#requireMarketId(market)
     const trimmed = symbol.trim()
     if (trimmed === '') throw new BridgeProtocolError(400, 'derivatives: symbol is required')
-    const service = this.host.getMarketService(market)
-    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    const service = this.#requireMarketService(id)
     if (typeof service.getDerivatives !== 'function') {
       throw Object.assign(
         new Error(`market ${market} provider does not implement derivatives — spot market`),
@@ -1067,11 +1094,10 @@ export class TradingBridge {
    * （HTTP 200 + ok:false），前端隐藏趋势卡、保留快照读数（与快照同纪律）。
    */
   async derivativesHistory(market: string, symbol: string): Promise<DerivativesHistoryWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const id = this.#requireMarketId(market)
     const trimmed = symbol.trim()
     if (trimmed === '') throw new BridgeProtocolError(400, 'derivatives history: symbol is required')
-    const service = this.host.getMarketService(market)
-    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    const service = this.#requireMarketService(id)
     if (typeof service.getDerivativesHistory !== 'function') {
       throw Object.assign(
         new Error(`market ${market} provider does not implement derivatives history`),
@@ -1087,11 +1113,10 @@ export class TradingBridge {
    * 前端竖栏显示「该市场未提供盘口」。
    */
   async orderbook(market: string, symbol: string): Promise<OrderbookWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const id = this.#requireMarketId(market)
     const trimmed = symbol.trim()
     if (trimmed === '') throw new BridgeProtocolError(400, 'orderbook: symbol is required')
-    const service = this.host.getMarketService(market)
-    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    const service = this.#requireMarketService(id)
     if (typeof service.getOrderbook !== 'function') {
       throw Object.assign(
         new Error(`market ${market} provider does not implement orderbook`),
@@ -1106,15 +1131,14 @@ export class TradingBridge {
    * 未实现可选 getRecentTrades（腾讯沪深行情行无逐笔端点）→ TRADING_NOT_IMPLEMENTED。
    */
   async trades(market: string, symbol: string, rawLimit: string | null): Promise<TradesWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const id = this.#requireMarketId(market)
     const trimmed = symbol.trim()
     if (trimmed === '') throw new BridgeProtocolError(400, 'trades: symbol is required')
     const limit = rawLimit === null || rawLimit === undefined ? undefined : Number(rawLimit)
     if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0 || limit > MAX_TRADES_LIMIT)) {
       throw new BridgeProtocolError(400, `trades: limit must be an integer in 1..${MAX_TRADES_LIMIT}`)
     }
-    const service = this.host.getMarketService(market)
-    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    const service = this.#requireMarketService(id)
     if (typeof service.getRecentTrades !== 'function') {
       throw Object.assign(
         new Error(`market ${market} provider does not implement recent trades`),
@@ -1443,12 +1467,12 @@ export class TradingBridge {
    * 不再回退展示大盘要闻——此前的智能回退会把已抓到的公告挤出 limit 截尾窗。
    */
   async news(market: string, symbol: string | null, rawLimit: string | null): Promise<NewsWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
-    const aggregator = this.host.newsRegistry?.get(market)
-      ?? (market === 'cn' ? aggregateCnNews
-        : market === 'hk' ? aggregateHkNews
-        : market === 'us' ? aggregateUsNews
-        : market === 'crypto' ? aggregateCryptoNews
+    const id = this.#requireMarketId(market)
+    const aggregator = this.host.newsRegistry?.get(id)
+      ?? (id === 'cn' ? aggregateCnNews
+        : id === 'hk' ? aggregateHkNews
+        : id === 'us' ? aggregateUsNews
+        : id === 'crypto' ? aggregateCryptoNews
         : undefined)
 
     if (aggregator === undefined) {
@@ -1466,7 +1490,7 @@ export class TradingBridge {
       limit: limit ?? 20,
       windowHours: 24,
       cryptoPanicKey: this.host.newsKey?.(),
-      sources: this.host.newsSources?.(market),
+      sources: this.host.newsSources?.(id),
     })
 
     return { ok: true, items: result.items, unavailable: result.unavailable }
@@ -1728,6 +1752,34 @@ export class TradingBridge {
   }
 
   /**
+   * 「TTL 命中 → 同键在途去重 → 取数 → 写缓存 → 清在途」协议（fundamentals 与
+   * southbound 共用一处；此前两份各自把这段重写过一遍）：成功 → 写缓存并返回；
+   * 失败 → 清在途、不写缓存、原样抛出（错误不进缓存，下一次请求重试上游）。
+   */
+  async #cachedFetch<V>(
+    cache: TtlCache<V>,
+    inflight: Map<string, Promise<V>>,
+    key: string,
+    load: () => Promise<V>,
+  ): Promise<V> {
+    const cached = cache.getFresh(key, Date.now())
+    if (cached !== undefined) return cached
+    const pending = inflight.get(key)
+    if (pending !== undefined) return await pending
+    const job = (async (): Promise<V> => {
+      const value = await load()
+      cache.set(key, value, Date.now())
+      return value
+    })()
+    inflight.set(key, job)
+    try {
+      return await job
+    } finally {
+      inflight.delete(key)
+    }
+  }
+
+  /**
    * 标的基本面快照与多期财务矩阵（GUI「基本面」页签，2026-09-02 / Issue #36）。
    *
    * 语义（重构自协作者初版，2026-09-02 审查整改）：
@@ -1740,53 +1792,41 @@ export class TradingBridge {
    *   对齐本桥 symbols() 的缓存先例；一次 tab 翻转只打一轮上游。
    */
   async fundamentals(market: string, symbol: string): Promise<FundamentalsWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const id = this.#requireMarketId(market)
     const trimmed = symbol.trim()
     if (trimmed === '') throw new BridgeProtocolError(400, 'fundamentals: symbol is required')
-    const service = this.host.getMarketService(market)
-    if (service === undefined) throw new BridgeProtocolError(400, `market ${market} is not installed`)
+    const service = this.#requireMarketService(id)
 
     const cacheKey = `${market}:${trimmed}`
-    const cached = this.fundamentalsCache.getFresh(cacheKey, Date.now())
-    if (cached !== undefined) {
-      return { ok: true, fundamentals: cached }
-    }
-    const inflight = this.fundamentalsInflight.get(cacheKey)
-    if (inflight !== undefined) return { ok: true, fundamentals: await inflight }
-
-    const job = (async (): Promise<StockFundamentals> => {
-      const [snapshot, pkg] = await Promise.all([
-        typeof service.getFundamentals === 'function'
-          ? service.getFundamentals(trimmed).catch(() => undefined)
-          : Promise.resolve(undefined),
-        this.#fetchPkg(market, trimmed),
-      ])
-      if (snapshot === undefined && pkg === undefined) {
-        throw Object.assign(
-          new Error(`no fundamentals data for ${market}/${trimmed} — provider and drill-down both unavailable`),
-          { code: 'TRADING_NOT_IMPLEMENTED' },
-        )
-      }
-      // 合并语义：pkg 是骨架（含 market/symbol），snapshot 只增强 stock 字段；
-      // 只有快照没有 pkg 时，快照自身就是返回值（含 timestamp，满足契约必填）。
-      const result: StockFundamentals = pkg !== undefined
-        ? ({
-            ...pkg,
-            stock: { ...(pkg.stock ?? {}), ...(snapshot ?? {}) },
-            timestamp: snapshot?.timestamp ?? Date.now(),
-          } as unknown as StockFundamentals)
-        : snapshot as StockFundamentals
-      this.fundamentalsCache.set(cacheKey, result, Date.now())
-      return result
-    })()
-
-    this.fundamentalsInflight.set(cacheKey, job)
-    try {
-      const result = await job
-      return { ok: true, fundamentals: result }
-    } finally {
-      this.fundamentalsInflight.delete(cacheKey)
-    }
+    const result = await this.#cachedFetch(
+      this.fundamentalsCache,
+      this.fundamentalsInflight,
+      cacheKey,
+      async (): Promise<StockFundamentals> => {
+        const [snapshot, pkg] = await Promise.all([
+          typeof service.getFundamentals === 'function'
+            ? service.getFundamentals(trimmed).catch(() => undefined)
+            : Promise.resolve(undefined),
+          this.#fetchPkg(id, trimmed),
+        ])
+        if (snapshot === undefined && pkg === undefined) {
+          throw Object.assign(
+            new Error(`no fundamentals data for ${market}/${trimmed} — provider and drill-down both unavailable`),
+            { code: 'TRADING_NOT_IMPLEMENTED' },
+          )
+        }
+        // 合并语义：pkg 是骨架（含 market/symbol），snapshot 只增强 stock 字段；
+        // 只有快照没有 pkg 时，快照自身就是返回值（含 timestamp，满足契约必填）。
+        return pkg !== undefined
+          ? ({
+              ...pkg,
+              stock: { ...(pkg.stock ?? {}), ...(snapshot ?? {}) },
+              timestamp: snapshot?.timestamp ?? Date.now(),
+            } as unknown as StockFundamentals)
+          : snapshot as StockFundamentals
+      },
+    )
+    return { ok: true, fundamentals: result }
   }
 
   /**
@@ -1805,10 +1845,10 @@ export class TradingBridge {
    * 原样抛错，交给 HTTP 层下发生成业务错误。
    */
   async southboundHoldings(market: string, symbol: string): Promise<SouthboundHoldingsWire> {
-    if (!isMarketId(market)) throw new BridgeProtocolError(400, `unknown market ${JSON.stringify(market)}`)
+    const id = this.#requireMarketId(market)
     const trimmed = symbol.trim()
     if (trimmed === '') throw new BridgeProtocolError(400, 'southboundHoldings: symbol is required')
-    const service = this.#resolveSouthboundService(market)
+    const service = this.#resolveSouthboundService(id)
     if (service === undefined) {
       throw Object.assign(
         new Error(`no southbound holdings source for ${market} — no provider implements getSouthboundHoldings`),
@@ -1817,25 +1857,13 @@ export class TradingBridge {
     }
 
     const cacheKey = `${market}:${trimmed}`
-    const cached = this.southboundCache.getFresh(cacheKey, Date.now())
-    if (cached !== undefined) {
-      return { ok: true, southboundHoldings: cached }
-    }
-    const inflight = this.southboundInflight.get(cacheKey)
-    if (inflight !== undefined) return { ok: true, southboundHoldings: await inflight }
-
-    const job = (async (): Promise<SouthboundHoldingHistory> => {
-      const history = await service.getSouthboundHoldings(trimmed)
-      this.southboundCache.set(cacheKey, history, Date.now())
-      return history
-    })()
-
-    this.southboundInflight.set(cacheKey, job)
-    try {
-      return { ok: true, southboundHoldings: await job }
-    } finally {
-      this.southboundInflight.delete(cacheKey)
-    }
+    const history = await this.#cachedFetch(
+      this.southboundCache,
+      this.southboundInflight,
+      cacheKey,
+      () => service.getSouthboundHoldings(trimmed),
+    )
+    return { ok: true, southboundHoldings: history }
   }
 
   /**
@@ -2471,166 +2499,93 @@ function parseChartInstances(body: unknown): IndicatorInstance[] {
   return out
 }
 
-/**
- * 请求分发：把 (method, pathname, searchParams) 路由到桥方法，返回 (status, payload)。
- * @param signal - HTTP 连接信号（GUI 实盘动作：客户端断连/超时 → 取消审批且不再报单）。
- */
-export async function dispatchBridgeRequest(
-  bridge: TradingBridge,
-  method: string,
-  pathname: string,
-  search: URLSearchParams,
-  body?: unknown,
-  signal?: AbortSignal,
-): Promise<{ status: number; payload: unknown }> {
-  if (method === 'GET') {
-    switch (pathname) {
-      case '/markets':
-        return { status: 200, payload: bridge.markets() }
-      case '/tickers': {
-        const market = search.get('market') ?? ''
-        const symbols = (search.get('symbols') ?? '').split(',')
-        // provider 可选：空值/缺省 = 没指定源（维持 active 解析），非空值必须命中已注册项。
-        const provider = search.get('provider')
-        return { status: 200, payload: await bridge.tickers(market, symbols, provider === null || provider === '' ? undefined : provider) }
-      }
-      case '/klines': {
-        const market = search.get('market') ?? ''
-        const symbol = search.get('symbol') ?? ''
-        const interval = search.get('interval') ?? '1d'
-        const limit = search.get('limit')
-        return { status: 200, payload: await bridge.klines(market, symbol, interval, limit) }
-      }
-      case '/symbols': {
-        const market = search.get('market') ?? ''
-        const query = search.get('query') ?? undefined
-        return { status: 200, payload: await bridge.symbols(market, query) }
-      }
-      case '/fundamentals': {
-        const market = search.get('market') ?? ''
-        const symbol = search.get('symbol') ?? ''
-        return { status: 200, payload: await bridge.fundamentals(market, symbol) }
-      }
-      case '/active-buy': {
-        const market = search.get('market') ?? ''
-        const symbol = search.get('symbol') ?? ''
-        return { status: 200, payload: await bridge.activeBuy(market, symbol) }
-      }
-      case '/southbound-holdings': {
-        const market = search.get('market') ?? ''
-        const symbol = search.get('symbol') ?? ''
-        return { status: 200, payload: await bridge.southboundHoldings(market, symbol) }
-      }
-      case '/derivatives': {
-        const market = search.get('market') ?? ''
-        const symbol = search.get('symbol') ?? ''
-        return { status: 200, payload: await bridge.derivatives(market, symbol) }
-      }
-      case '/derivatives/history': {
-        const market = search.get('market') ?? ''
-        const symbol = search.get('symbol') ?? ''
-        return { status: 200, payload: await bridge.derivativesHistory(market, symbol) }
-      }
-      case '/orderbook': {
-        const market = search.get('market') ?? ''
-        const symbol = search.get('symbol') ?? ''
-        return { status: 200, payload: await bridge.orderbook(market, symbol) }
-      }
-      case '/trades': {
-        const market = search.get('market') ?? ''
-        const symbol = search.get('symbol') ?? ''
-        return { status: 200, payload: await bridge.trades(market, symbol, search.get('limit')) }
-      }
-      case '/trade/positions': {
-        return { status: 200, payload: await bridge.positions(search.get('market') ?? '') }
-      }
-      case '/trade/balances': {
-        return { status: 200, payload: await bridge.balances(search.get('market') ?? '') }
-      }
-      case '/trade/orders': {
-        return { status: 200, payload: await bridge.openOrders(search.get('market') ?? '') }
-      }
-      case '/trade/fills': {
-        return { status: 200, payload: await bridge.tradeFills(search.get('market') ?? '') }
-      }
-      case '/indicators/custom': {
-        return { status: 200, payload: await bridge.customIndicators() }
-      }
-      case '/chart/indicators': {
-        return { status: 200, payload: await bridge.chartActivations() }
-      }
-      case '/knowledge/cards': {
-        return { status: 200, payload: await bridge.knowledgeCards() }
-      }
-      case '/holdings': {
-        return { status: 200, payload: await bridge.holdings() }
-      }
-      case '/fx': {
-        // base 缺省 USD；非法 base → 400 协议错误（契约 §4）。
-        return { status: 200, payload: await bridge.fx(search.get('base') ?? 'USD') }
-      }
-      case '/flash': {
-        return { status: 200, payload: await bridge.flash(search.get('cursor'), search.get('limit'), search.get('keyword'), search.get('hot')) }
-      }
-      case '/macro/calendar': {
-        return { status: 200, payload: await bridge.macroCalendar(search.get('limit')) }
-      }
-      case '/macro/rates': {
-        return { status: 200, payload: await bridge.macroRates() }
-      }
-      case '/prediction/fomc': {
-        return { status: 200, payload: await bridge.predictionFomc() }
-      }
-      case '/news': {
-        const market = search.get('market') ?? ''
-        if (!market) throw new BridgeProtocolError(400, 'news: market is required')
-        return { status: 200, payload: await bridge.news(market, search.get('symbol'), search.get('limit')) }
-      }
-      case '/strategies/custom': {
-        return { status: 200, payload: await bridge.customStrategies() }
-      }
-      case '/strategies/tombstones': {
-        return { status: 200, payload: await bridge.builtinTombstones() }
-      }
-      case '/strategies/screeners': {
-        return { status: 200, payload: await bridge.customScreeners() }
-      }
-      case '/watchlists': {
-        return { status: 200, payload: await bridge.watchlistRows() }
-      }
-      case '/watchlist-groups': {
-        return { status: 200, payload: await bridge.watchlistGroups() }
-      }
-      case '/selection': {
-        return { status: 200, payload: await bridge.selection() }
-      }
-      default:
-        throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
-    }
-  }
+/* ---------------------------------------------------------------- */
+/* 写路由声明表（第 2 项单一真值）：失效 store 与路由写在同一处            */
+/* ---------------------------------------------------------------- */
 
-  if (method === 'DELETE') {
-    if (pathname === '/indicators/custom') {
+/**
+ * 写成功时需要客户端失效重拉的 store 名。值域 ⊆ @dshtrading/eventbus 的
+ * TradingEventStore（客户端按 store 名重拉对应读面）。
+ */
+export type BridgeInvalidateStore = 'indicators' | 'chart' | 'strategies' | 'watchlists' | 'selection' | 'holdings'
+
+/**
+ * 路由结果：写路由必带 `invalidates`（来自声明表；「不失效任何 store」显式写成空表）；
+ * 读路由（GET）不带该字段——GET 不失效任何 store 是类型事实，不是省略。
+ * 调用方只在「写成功」（status 200 且 payload.ok === true）时消费 invalidates。
+ */
+export type BridgeRouteResult =
+  | { status: number; payload: unknown }
+  | { status: number; payload: unknown; invalidates: readonly BridgeInvalidateStore[] }
+
+/** 写路由 handler 的入参（与 dispatchBridgeRequest 同形）。 */
+interface WriteRouteContext {
+  bridge: TradingBridge
+  search: URLSearchParams
+  body: unknown
+  signal: AbortSignal | undefined
+}
+
+/**
+ * 一条写路由声明：method + pathname + handler + **必填的 invalidates**。
+ * 新增写端点却忘了声明失效 store 在这里是编译错误——本表是「写成功但客户端静默
+ * 不刷新」的结构性防线（类型挡编译期，{@link resolveWriteRoute} 挡运行时）。
+ * 交易台两个写端点显式声明空表：报单/撤单不改变任何客户端读面缓存（交易台自拉）。
+ */
+export interface BridgeWriteRoute {
+  readonly method: 'PUT' | 'POST' | 'DELETE'
+  readonly pathname: string
+  readonly invalidates: readonly BridgeInvalidateStore[]
+  handle(context: WriteRouteContext): Promise<{ status: number; payload: unknown }>
+}
+
+/** 全部非 GET 路由（同 (method, pathname) 只允许一条；顺序无关）。 */
+export const BRIDGE_WRITE_ROUTES: readonly BridgeWriteRoute[] = [
+  {
+    method: 'DELETE',
+    pathname: '/indicators/custom',
+    invalidates: ['indicators'],
+    handle: async ({ bridge, search }) => {
       const id = search.get('id') ?? ''
       if (!id) throw new BridgeProtocolError(400, 'delete custom indicator: id is required')
       return { status: 200, payload: await bridge.deleteCustomIndicator(id) }
-    }
-    if (pathname === '/chart/indicators') {
+    },
+  },
+  {
+    method: 'DELETE',
+    pathname: '/chart/indicators',
+    invalidates: ['chart'],
+    handle: async ({ bridge, search }) => {
       const id = search.get('id') ?? ''
       if (!id) throw new BridgeProtocolError(400, 'delete chart activation: id is required')
       return { status: 200, payload: await bridge.removeChartActivation(id) }
-    }
-    if (pathname === '/strategies/custom') {
+    },
+  },
+  {
+    method: 'DELETE',
+    pathname: '/strategies/custom',
+    invalidates: ['strategies'],
+    handle: async ({ bridge, search }) => {
       const id = search.get('id') ?? ''
       if (!id) throw new BridgeProtocolError(400, 'delete custom strategy: id is required')
       return { status: 200, payload: await bridge.deleteCustomStrategy(id) }
-    }
-    if (pathname === '/strategies/screeners') {
+    },
+  },
+  {
+    method: 'DELETE',
+    pathname: '/strategies/screeners',
+    invalidates: ['strategies'],
+    handle: async ({ bridge, search }) => {
       const id = search.get('id') ?? ''
       if (!id) throw new BridgeProtocolError(400, 'delete screener: id is required')
       return { status: 200, payload: await bridge.deleteCustomScreener(id) }
-    }
-    if (pathname === '/trade/order') {
+    },
+  },
+  {
+    method: 'DELETE',
+    pathname: '/trade/order',
+    invalidates: [],
+    handle: async ({ bridge, search, signal }) => {
       const market = search.get('market') ?? ''
       const orderId = search.get('id') ?? search.get('orderId') ?? ''
       const symbol = search.get('symbol') ?? undefined
@@ -2644,101 +2599,340 @@ export async function dispatchBridgeRequest(
           signal,
         }),
       }
-    }
-    if (pathname === '/watchlists') {
+    },
+  },
+  {
+    method: 'DELETE',
+    pathname: '/watchlists',
+    invalidates: ['watchlists'],
+    handle: async ({ bridge, search }) => {
       const market = search.get('market') ?? ''
       const symbol = search.get('symbol') ?? ''
       if (!market || !symbol) throw new BridgeProtocolError(400, 'delete watchlist row: market and symbol are required')
       return { status: 200, payload: await bridge.removeWatchlistRow(market, symbol) }
-    }
-    if (pathname === '/watchlist-groups') {
+    },
+  },
+  {
+    method: 'DELETE',
+    pathname: '/watchlist-groups',
+    invalidates: ['watchlists'],
+    handle: async ({ bridge, search }) => {
       const id = search.get('id') ?? ''
       if (!id) throw new BridgeProtocolError(400, 'delete watchlist group: id is required')
       return { status: 200, payload: await bridge.removeWatchlistGroup(id) }
-    }
-    if (pathname === '/watchlist-group-members') {
+    },
+  },
+  {
+    method: 'DELETE',
+    pathname: '/watchlist-group-members',
+    invalidates: ['watchlists'],
+    handle: async ({ bridge, search }) => {
       const id = search.get('id') ?? ''
       const market = search.get('market') ?? ''
       const symbol = search.get('symbol') ?? ''
       if (!id || !market || !symbol) throw new BridgeProtocolError(400, 'remove group member: id, market and symbol are required')
       return { status: 200, payload: await bridge.removeWatchlistGroupMember(id, market, symbol) }
-    }
-    if (pathname === '/holdings') {
-      return { status: 200, payload: await bridge.removeHolding(search.get('id') ?? '') }
-    }
-    throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
-  }
-
-  if (method === 'PUT') {
-    if (pathname === '/watchlists') {
-      return { status: 200, payload: await bridge.replaceWatchlists(body) }
-    }
-    if (pathname === '/watchlist-groups') {
-      return { status: 200, payload: await bridge.renameWatchlistGroup(body) }
-    }
-    if (pathname === '/selection') {
-      return { status: 200, payload: await bridge.putSelection(body) }
-    }
-    if (pathname === '/chart/indicators') {
-      return { status: 200, payload: await bridge.putChartActivation(body) }
-    }
-    if (pathname === '/holdings') {
-      return { status: 200, payload: await bridge.updateHolding(body) }
-    }
-    if (pathname === '/strategies/custom') {
-      return { status: 200, payload: await bridge.saveCustomStrategy(body) }
-    }
-    if (pathname === '/strategies/screeners') {
-      return { status: 200, payload: await bridge.saveCustomScreener(body) }
-    }
-    throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
-  }
-
-  if (method === 'POST') {
-    if (pathname === '/trade/order') {
-      return { status: 200, payload: await bridge.placeOrderFromGui(search.get('market') ?? '', body as GuiOrderBody, signal) }
-    }
-    if (pathname === '/strategies/reset') {
+    },
+  },
+  {
+    method: 'DELETE',
+    pathname: '/holdings',
+    invalidates: ['holdings'],
+    handle: async ({ bridge, search }) => ({ status: 200, payload: await bridge.removeHolding(search.get('id') ?? '') }),
+  },
+  {
+    method: 'PUT',
+    pathname: '/watchlists',
+    invalidates: ['watchlists'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.replaceWatchlists(body) }),
+  },
+  {
+    method: 'PUT',
+    pathname: '/watchlist-groups',
+    invalidates: ['watchlists'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.renameWatchlistGroup(body) }),
+  },
+  {
+    method: 'PUT',
+    pathname: '/selection',
+    invalidates: ['selection'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.putSelection(body) }),
+  },
+  {
+    method: 'PUT',
+    pathname: '/chart/indicators',
+    invalidates: ['chart'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.putChartActivation(body) }),
+  },
+  {
+    method: 'PUT',
+    pathname: '/holdings',
+    invalidates: ['holdings'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.updateHolding(body) }),
+  },
+  {
+    method: 'PUT',
+    pathname: '/strategies/custom',
+    invalidates: ['strategies'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.saveCustomStrategy(body) }),
+  },
+  {
+    method: 'PUT',
+    pathname: '/strategies/screeners',
+    invalidates: ['strategies'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.saveCustomScreener(body) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/trade/order',
+    invalidates: [],
+    handle: async ({ bridge, search, body, signal }) =>
+      ({ status: 200, payload: await bridge.placeOrderFromGui(search.get('market') ?? '', body as GuiOrderBody, signal) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/strategies/reset',
+    invalidates: ['strategies'],
+    handle: async ({ bridge, body }) => {
       const input = (typeof body === 'object' && body !== null ? body : {}) as { id?: unknown }
       const id = typeof input.id === 'string' ? input.id.trim() : ''
       if (!id) throw new BridgeProtocolError(400, 'reset strategy: id is required')
       return { status: 200, payload: await bridge.resetStrategy(id) }
-    }
-    if (pathname === '/strategies/screeners/reset') {
+    },
+  },
+  {
+    method: 'POST',
+    pathname: '/strategies/screeners/reset',
+    invalidates: ['strategies'],
+    handle: async ({ bridge, body }) => {
       const input = (typeof body === 'object' && body !== null ? body : {}) as { id?: unknown }
       const id = typeof input.id === 'string' ? input.id.trim() : ''
       if (!id) throw new BridgeProtocolError(400, 'reset screener: id is required')
       return { status: 200, payload: await bridge.resetScreener(id) }
+    },
+  },
+  {
+    method: 'POST',
+    pathname: '/watchlists',
+    invalidates: ['watchlists'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.addWatchlistRow(body) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/watchlists/import',
+    invalidates: ['watchlists'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.importWatchlists(body) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/watchlist-groups',
+    invalidates: ['watchlists'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.createWatchlistGroup(body) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/watchlist-group-members',
+    invalidates: ['watchlists'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.addWatchlistGroupMember(body) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/chart/indicators/import',
+    invalidates: ['chart'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.importChartActivations(body) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/holdings',
+    invalidates: ['holdings'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.addHolding(body) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/holdings/stage',
+    invalidates: ['holdings'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.stageHoldings(body) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/holdings/confirm',
+    invalidates: ['holdings'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.confirmHoldings(body) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/holdings/discard',
+    invalidates: ['holdings'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.discardHoldings(body) }),
+  },
+]
+
+/**
+ * 写路由查表 + 失效声明守卫：未登记 → undefined（调用方回 404）；登记了却没有
+ * invalidates → 抛错。运行时兜底挡住绕过类型声明的调用方——「新增写端点忘了声明
+ * 失效 store」必须硬失败，不得退化成「写成功但客户端静默不刷新」。
+ * routes 可注入，负向用例用一条未声明失效的路由验证守卫真的会拒绝。
+ */
+export function resolveWriteRoute(
+  routes: readonly BridgeWriteRoute[],
+  method: string,
+  pathname: string,
+): BridgeWriteRoute | undefined {
+  const route = routes.find(item => item.method === method && item.pathname === pathname)
+  if (route === undefined) return undefined
+  if (!Array.isArray(route.invalidates)) {
+    throw new Error(`write route ${method} ${pathname} is not declared with an invalidates list`)
+  }
+  return route
+}
+
+/**
+ * 请求分发：把 (method, pathname, searchParams) 路由到桥方法，返回
+ * (status, payload, invalidates)。非 GET 路由一律经 {@link BRIDGE_WRITE_ROUTES}
+ * 声明表——失效 store 与路由写在同一处，index.ts 不再持有第二份 (method, path) 知识。
+ * @param signal - HTTP 连接信号（GUI 实盘动作：客户端断连/超时 → 取消审批且不再报单）。
+ */
+export async function dispatchBridgeRequest(
+  bridge: TradingBridge,
+  method: string,
+  pathname: string,
+  search: URLSearchParams,
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<BridgeRouteResult> {
+  /** 读路由（GET）结果：不带 invalidates——读面不失效任何 store。 */
+  const readResult = (payload: unknown): BridgeRouteResult => ({ status: 200, payload })
+  if (method === 'GET') {
+    switch (pathname) {
+      case '/markets':
+        return readResult(bridge.markets())
+      case '/tickers': {
+        const market = search.get('market') ?? ''
+        const symbols = (search.get('symbols') ?? '').split(',')
+        // provider 可选：空值/缺省 = 没指定源（维持 active 解析），非空值必须命中已注册项。
+        const provider = search.get('provider')
+        return readResult(await bridge.tickers(market, symbols, provider === null || provider === '' ? undefined : provider))
+      }
+      case '/klines': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        const interval = search.get('interval') ?? '1d'
+        const limit = search.get('limit')
+        return readResult(await bridge.klines(market, symbol, interval, limit))
+      }
+      case '/symbols': {
+        const market = search.get('market') ?? ''
+        const query = search.get('query') ?? undefined
+        return readResult(await bridge.symbols(market, query))
+      }
+      case '/fundamentals': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return readResult(await bridge.fundamentals(market, symbol))
+      }
+      case '/active-buy': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return readResult(await bridge.activeBuy(market, symbol))
+      }
+      case '/southbound-holdings': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return readResult(await bridge.southboundHoldings(market, symbol))
+      }
+      case '/derivatives': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return readResult(await bridge.derivatives(market, symbol))
+      }
+      case '/derivatives/history': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return readResult(await bridge.derivativesHistory(market, symbol))
+      }
+      case '/orderbook': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return readResult(await bridge.orderbook(market, symbol))
+      }
+      case '/trades': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return readResult(await bridge.trades(market, symbol, search.get('limit')))
+      }
+      case '/trade/positions': {
+        return readResult(await bridge.positions(search.get('market') ?? ''))
+      }
+      case '/trade/balances': {
+        return readResult(await bridge.balances(search.get('market') ?? ''))
+      }
+      case '/trade/orders': {
+        return readResult(await bridge.openOrders(search.get('market') ?? ''))
+      }
+      case '/trade/fills': {
+        return readResult(await bridge.tradeFills(search.get('market') ?? ''))
+      }
+      case '/indicators/custom': {
+        return readResult(await bridge.customIndicators())
+      }
+      case '/chart/indicators': {
+        return readResult(await bridge.chartActivations())
+      }
+      case '/knowledge/cards': {
+        return readResult(await bridge.knowledgeCards())
+      }
+      case '/holdings': {
+        return readResult(await bridge.holdings())
+      }
+      case '/fx': {
+        // base 缺省 USD；非法 base → 400 协议错误（契约 §4）。
+        return readResult(await bridge.fx(search.get('base') ?? 'USD'))
+      }
+      case '/flash': {
+        return readResult(await bridge.flash(search.get('cursor'), search.get('limit'), search.get('keyword'), search.get('hot')))
+      }
+      case '/macro/calendar': {
+        return readResult(await bridge.macroCalendar(search.get('limit')))
+      }
+      case '/macro/rates': {
+        return readResult(await bridge.macroRates())
+      }
+      case '/prediction/fomc': {
+        return readResult(await bridge.predictionFomc())
+      }
+      case '/news': {
+        const market = search.get('market') ?? ''
+        if (!market) throw new BridgeProtocolError(400, 'news: market is required')
+        return readResult(await bridge.news(market, search.get('symbol'), search.get('limit')))
+      }
+      case '/strategies/custom': {
+        return readResult(await bridge.customStrategies())
+      }
+      case '/strategies/tombstones': {
+        return readResult(await bridge.builtinTombstones())
+      }
+      case '/strategies/screeners': {
+        return readResult(await bridge.customScreeners())
+      }
+      case '/watchlists': {
+        return readResult(await bridge.watchlistRows())
+      }
+      case '/watchlist-groups': {
+        return readResult(await bridge.watchlistGroups())
+      }
+      case '/selection': {
+        return readResult(await bridge.selection())
+      }
+      default:
+        throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
     }
-    if (pathname === '/watchlists') {
-      return { status: 200, payload: await bridge.addWatchlistRow(body) }
-    }
-    if (pathname === '/watchlists/import') {
-      return { status: 200, payload: await bridge.importWatchlists(body) }
-    }
-    if (pathname === '/watchlist-groups') {
-      return { status: 200, payload: await bridge.createWatchlistGroup(body) }
-    }
-    if (pathname === '/watchlist-group-members') {
-      return { status: 200, payload: await bridge.addWatchlistGroupMember(body) }
-    }
-    if (pathname === '/chart/indicators/import') {
-      return { status: 200, payload: await bridge.importChartActivations(body) }
-    }
-    if (pathname === '/holdings') {
-      return { status: 200, payload: await bridge.addHolding(body) }
-    }
-    if (pathname === '/holdings/stage') {
-      return { status: 200, payload: await bridge.stageHoldings(body) }
-    }
-    if (pathname === '/holdings/confirm') {
-      return { status: 200, payload: await bridge.confirmHoldings(body) }
-    }
-    if (pathname === '/holdings/discard') {
-      return { status: 200, payload: await bridge.discardHoldings(body) }
-    }
-    throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
   }
 
-  throw new BridgeProtocolError(405, 'only GET/PUT/POST/DELETE are supported')
+  if (method !== 'PUT' && method !== 'POST' && method !== 'DELETE') {
+    throw new BridgeProtocolError(405, 'only GET/PUT/POST/DELETE are supported')
+  }
+  const route = resolveWriteRoute(BRIDGE_WRITE_ROUTES, method, pathname)
+  if (route === undefined) throw new BridgeProtocolError(404, `no such endpoint: ${pathname}`)
+  const result = await route.handle({ bridge, search, body, signal })
+  return { status: result.status, payload: result.payload, invalidates: route.invalidates }
 }

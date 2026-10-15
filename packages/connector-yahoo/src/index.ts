@@ -107,6 +107,12 @@ export class YahooMarketDataService extends Service implements MarketDataService
   }
 }
 
+/**
+ * 本连接器在路由层的 provider slug（路由层词汇 = 交易所 slug；
+ * docs/guides/exchange-routing.md §2.2）。
+ */
+export const ROUTER_PROVIDER = 'yahoo'
+
 /* ------------------------------------------------------------------ */
 /* us_place_order（交易安全闸门：铁律 #3 修订版 [S4]，三路径语义照抄 crypto）  */
 /* ------------------------------------------------------------------ */
