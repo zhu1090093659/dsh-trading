@@ -65,10 +65,12 @@ description: 制定每周交易计划：把本周复盘、统一台账持仓与�
   python3 <skill 目录>/scripts/kdas.py \
     --market cn --symbol 002714.SZ --keys <现场关键日,逗号分隔>
   ```
-  脚本与指标同算法、同锚定口径（含「openTime 的 UTC 日」判定），锚点被截断或关键日未生效时同样 **fail-closed 不出数**；
-  `--klines-file <JSON>` 可传任意日 K 源（工具与图表均走 profile 路由的 provider，实测 cn/hk 都是 tencent；
-  不传时脚本走腾讯公开 qfq 端点，**港股标签口径与仓内 provider 差一个交易日**——对照读数时以 `anchored_at` 而非日期标签为准）；
-  日 K 未收盘时加 `--drop-last`。
+  脚本与指标同算法、同锚定口径（含「openTime 的 UTC 日」判定），锚点被截断或关键日未生效时同样 **fail-closed 不出数**。
+  `--klines-file <JSON>` 可传任意日 K 源；不给时脚本走腾讯公开 `fqkline` 端点，而工具与 GUI 图表走 profile 路由的
+  provider（实测 cn/hk 都是 tencent，走腾讯 `hkfqkline` 端点）。2026-10-15 实测：**cn 两边逐条相等；hk 两边都不等**——
+  `fqkline` 的港股日 K 是「后复权」口径（2024-09-19 收 388.8），`hkfqkline` 是「前复权」（同日收 379.0），且日期标签也差一天
+  （脚本把港股标签减一天以配合图表锚定）。故**港股以图表/工具的读数为准**，脚本那条路径只用于交叉核对算法而非数值；
+  要比数值就用 `--klines-file` 把工具读到的日 K 传进去。日 K 未收盘时加 `--drop-last`。
 - **买点分层（G3 判定，`trading_system_v1.md` §3 G3）**：
   1. **最佳买点**：自然寻底末端，低位首次突破并站稳关键日 KDAS（强弱分界线 / 最后一两根线）。
   2. **次优买点**：突破后回踩近端 KDAS 不破，旧压力转新支撑，收盘确认。
