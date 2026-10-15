@@ -7,11 +7,8 @@ export type KnowledgeLocaleKey =
   | 'kv.search.placeholder'
   | 'kv.filter.tag'
   | 'kv.filter.allTags'
-  | 'kv.filter.author'
   | 'kv.filter.allAuthors'
-  | 'kv.filter.credibility'
   | 'kv.filter.allCredibility'
-  | 'kv.filter.sourceType'
   | 'kv.filter.allSourceTypes'
   | 'kv.filter.reset'
   | 'kv.credibility.high'
@@ -24,7 +21,6 @@ export type KnowledgeLocaleKey =
   | 'kv.empty.filtered'
   | 'kv.stats.cards'
   | 'kv.stats.clusters'
-  | 'kv.drawer.title'
   | 'kv.drawer.coreClaims'
   | 'kv.drawer.factCheck'
   | 'kv.drawer.verified'
@@ -35,8 +31,6 @@ export type KnowledgeLocaleKey =
   | 'kv.drawer.tickers'
   | 'kv.drawer.related'
   | 'kv.drawer.openSource'
-  | 'kv.drawer.publishedAt'
-  | 'kv.drawer.author'
 
 declare module '@deepseek-ai/dsh-client-locale/client' {
   interface LocaleNamespaceMap {

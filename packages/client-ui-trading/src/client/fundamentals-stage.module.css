@@ -514,21 +514,6 @@
   color: var(--futu-text-secondary);
 }
 
-.rangeTrack {
-  position: relative;
-  height: 8px;
-  background: var(--futu-border);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.rangeProgress {
-  height: 100%;
-  background: linear-gradient(90deg, var(--futu-accent), var(--futu-orange));
-  border-radius: 4px;
-  transition: width 0.3s ease;
-}
-
 .rangePointerInfo {
   display: flex;
   justify-content: space-between;
@@ -539,32 +524,6 @@
 }
 
 /* 十大股东表格 */
-.shareholdersWrap {
-  overflow-x: auto;
-}
-
-.shareholdersTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12.5px;
-}
-
-.shareholdersTable th {
-  text-align: left;
-  padding: 8px 10px;
-  background: var(--futu-bg-hover);
-  color: var(--futu-text-muted);
-  font-weight: 600;
-  border-bottom: 1px solid var(--futu-border);
-}
-
-.shareholdersTable td {
-  padding: 10px 10px;
-  border-bottom: 1px solid var(--futu-border);
-  color: var(--futu-text-primary);
-  font-feature-settings: 'tnum';
-}
-
 .holderRank {
   display: inline-block;
   width: 18px;

@@ -83,32 +83,11 @@ export function IconQuotes({ size = 16 }: { size?: number }): ReactElement {
   )
 }
 
-/** 放大镜搜索图标。 */
-export function IconSearch({ size = 14 }: { size?: number }): ReactElement {
-  return (
-    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="6.5" cy="6.5" r="4.5" />
-      <path d="M10 10l3.5 3.5" />
-    </svg>
-  )
-}
-
 /** 下拉小箭头图标。 */
 export function IconChevronDown({ size = 12 }: { size?: number }): ReactElement {
   return (
     <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 6l4 4 4-4" />
-    </svg>
-  )
-}
-
-/** 策略回测图表/仪表盘图标。 */
-export function IconStrategy({ size = 32 }: { size?: number }): ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="3" />
-      <path d="M7 16l3.5-4.5 3 3L17 9" />
-      <circle cx="17" cy="9" r="1.2" fill="currentColor" />
     </svg>
   )
 }
@@ -166,18 +145,6 @@ export function IconTrash({ size = 14 }: { size?: number }): ReactElement {
       <path d="M6.25 4.25V3.1c0-.35.29-.6.63-.6h2.24c.34 0 .63.25.63.6v1.15" />
       <path d="M4.4 4.25l.55 8.1c.03.5.44.9.94.9h4.22c.5 0 .91-.4.94-.9l.55-8.1" />
       <path d="M6.7 7v3.5M9.3 7v3.5" />
-    </svg>
-  )
-}
-
-/** 知识图谱网络图标。 */
-export function IconKnowledge({ size = 16 }: { size?: number }): ReactElement {
-  return (
-    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="4" cy="5" r="2" />
-      <circle cx="12" cy="5" r="2" />
-      <circle cx="8" cy="12" r="2" />
-      <path d="M5.5 6l4.5 4.5M10.5 6l-4.5 4.5M6 5h4" />
     </svg>
   )
 }

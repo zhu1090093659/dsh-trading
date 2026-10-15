@@ -36,8 +36,6 @@ export type SettingsLocaleKey =
   | 'flashSourceSaved'
   | 'flashSourceCleared'
   | 'flashSourceFailed'
-  | 'flashSourceConfigured'
-  | 'flashSourceMissing'
   | 'flashSourceChipOn'
   | 'flashSourceChipOff'
   | 'groupGeneral'
@@ -163,8 +161,6 @@ export const zh: Record<SettingsLocaleKey, string> = {
       'flashSourceSaved': '已保存',
       'flashSourceCleared': '已清除',
       'flashSourceFailed': '保存失败',
-      'flashSourceConfigured': '已配置',
-      'flashSourceMissing': '未配置（快讯工具不可用）',
       'flashSourceChipOn': '已启用',
       'flashSourceChipOff': '未启用',
       'groupGeneral': '通用',
@@ -291,8 +287,6 @@ export const en: Record<SettingsLocaleKey, string> = {
       'flashSourceSaved': 'Saved',
       'flashSourceCleared': 'Cleared',
       'flashSourceFailed': 'Save failed',
-      'flashSourceConfigured': 'Configured',
-      'flashSourceMissing': 'Not configured (flash tools unavailable)',
       'flashSourceChipOn': 'Enabled',
       'flashSourceChipOff': 'Disabled',
       'groupGeneral': 'General',

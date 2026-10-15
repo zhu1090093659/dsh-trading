@@ -87,11 +87,6 @@
   color: var(--upd-ok);
 }
 
-.statusTextAvailable {
-  color: var(--upd-primary);
-  font-weight: 600;
-}
-
 .statusTextError {
   color: var(--upd-danger);
 }
