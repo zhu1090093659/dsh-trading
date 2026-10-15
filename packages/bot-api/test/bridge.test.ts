@@ -24,10 +24,12 @@ vi.stubGlobal('fetch', vi.fn(async () => {
   throw new Error('bridge.test must not hit network')
 }))
 
+/** 本点自有的 1 根 bar 夹具（共享默认是空 K 线）。 */
+const oneBar = () => [{ openTime: 1, open: 1, high: 2, low: 0.5, close: 1.5, volume: 10, closeTime: 2 }]
+
 const fakeService = (overrides: Partial<MarketDataService> = {}): MarketDataService => fakeMarketService({
   getTicker: async (symbol) => ({ symbol, price: 100, timestamp: 1234 }),
-  getKlines: async () => [{ openTime: 1, open: 1, high: 2, low: 0.5, close: 1.5, volume: 10, closeTime: 2 }],
-  ...overrides,
+  getKlines: async () => oneBar(), ...overrides,
 })
 
 function fakeHost(services: Partial<Record<string, MarketDataService>>, providers: Record<string, string> = {}): BridgeHost {

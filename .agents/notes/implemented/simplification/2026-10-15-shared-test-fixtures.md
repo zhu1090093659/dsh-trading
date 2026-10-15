@@ -45,9 +45,11 @@ Status: implemented
 **假服务**：`fakeMarketService(overrides)` 的默认体取自 `bot-api/test/bridge-cache.test.ts`
 （与 `bridge-strategy-management`、`bridge-screener-management` 两处逐字相同），是契约默认值。
 14 处 `MarketDataService` 假件里，3 处本地签名与默认体同共享默认、直接 import 别名；其余 11 处
-（含 `bridge-active-buy` 与 `screener-run` 这两处带 options 的）保留 2–7 行薄包装，用 `overrides`
+（含 `bridge-active-buy` 与 `screener-run` 这两处带 options 的）保留 ≤4 行薄包装，用 `overrides`
 在调用点之外一次性表达差异（`timestamp` 1234/DAY/0/1、1 根/60 根/120 根 bar、`listInstruments`、
-`getActiveBuySnapshot`）。100 个调用点一行未动。
+`getActiveBuySnapshot`）。100 个调用点一行未动。每个薄包装都不超过 4 行：该点自有的 K 线字面量
+提成文件内命名的局部工厂（`oneBar` / `sixtyBars` / `sinBars`），每次调用仍返回新数组，
+与改前逐次新建的语义一致。
 
 **HTTP 响应桩**：`fakeHttpRes(shape)` 用显式形状名 + 重载区分三种形态，不做 `Partial` + 默认值合并：
 `'json-response'`（记录 status/headers/body 并附 `json()`）、`'sse-writer'`（`EventEmitter` + `vi.fn`

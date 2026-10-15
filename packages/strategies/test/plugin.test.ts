@@ -13,13 +13,14 @@ import {
   resolveStrategyDefinition,
 } from '../src/plugin.ts'
 
-const fakeService = (): MarketDataService => fakeMarketService({
-  getKlines: async () => Array.from({ length: 60 }, (_, i) => ({
-    openTime: 1700000000000 + i * 86_400_000,
-    open: 100 + i, high: 101 + i, low: 99 + i, close: 100.5 + i, volume: 1000,
-    closeTime: 1700000000000 + (i + 1) * 86_400_000 - 1,
-  })),
-})
+/** 本点自有的 60 根 bar 夹具（共享默认是空 K 线）。 */
+const sixtyBars = () => Array.from({ length: 60 }, (_, i) => ({
+  openTime: 1700000000000 + i * 86_400_000,
+  open: 100 + i, high: 101 + i, low: 99 + i, close: 100.5 + i, volume: 1000,
+  closeTime: 1700000000000 + (i + 1) * 86_400_000 - 1,
+}))
+
+const fakeService = (): MarketDataService => fakeMarketService({ getKlines: async () => sixtyBars() })
 async function makeDeps() {
   const store = createMemoryCustomStrategyStore()
   const author = createStrategyAuthorTool({ store })

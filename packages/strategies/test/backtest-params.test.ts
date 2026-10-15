@@ -8,17 +8,18 @@ import { fakeMarketService } from '@dshtrading/test-support'
 import { createMemoryCustomStrategyStore } from '../src/custom.ts'
 import { createStrategyBacktestTool } from '../src/plugin.ts'
 
-const fakeService = (): MarketDataService => fakeMarketService({
-  getKlines: async () => Array.from({ length: 120 }, (_, i) => ({
-    openTime: 1700000000000 + i * 86_400_000,
-    open: 100 + Math.sin(i / 3) * 5,
-    high: 105 + Math.sin(i / 3) * 5,
-    low: 95 + Math.sin(i / 3) * 5,
-    close: 100 + Math.sin(i / 3) * 5,
-    volume: 1000,
-    closeTime: 1700000000000 + (i + 1) * 86_400_000 - 1,
-  })),
-})
+/** 本点自有的 120 根正弦 bar 夹具（共享默认是空 K 线）。 */
+const sinBars = () => Array.from({ length: 120 }, (_, i) => ({
+  openTime: 1700000000000 + i * 86_400_000,
+  open: 100 + Math.sin(i / 3) * 5,
+  high: 105 + Math.sin(i / 3) * 5,
+  low: 95 + Math.sin(i / 3) * 5,
+  close: 100 + Math.sin(i / 3) * 5,
+  volume: 1000,
+  closeTime: 1700000000000 + (i + 1) * 86_400_000 - 1,
+}))
+
+const fakeService = (): MarketDataService => fakeMarketService({ getKlines: async () => sinBars() })
 function makeTool() {
   return createStrategyBacktestTool({
     store: createMemoryCustomStrategyStore(),
