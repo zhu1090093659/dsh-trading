@@ -114,6 +114,12 @@ bot-api `/events` SSE 帧 → 浏览器），中间那层由既有 sse 用例覆
 
 适用剩余项（A/C 两组的验证证据见「执行结果」）。
 
+本卡交付验收：在只 checkout `aa9d67fa` 的隔离工作树里跑 `pnpm gates:all`，17 条门禁全通过（`build`、`-r test`、
+`coverage:check`、`typecheck-gate`、`patch-id:check`、`connector-dataplane:check`、`tool-contract:check` 等），
+覆盖率四项指标均高于基线（lines 73.22% / branches 77.97% / functions 78.3% / statements 73.22%）。主检出当时
+正被并发会话迁移（HEAD 在验收期间移动 5 次），且 `.coverage/` 是仓库级共享产物目录——两个会话同时跑 coverage
+会互相清掉临时文件；隔离工作树是取得「单次全绿且绑 commit」结论的前提，跑完即回收。
+
 - B 组每项：先出裁决，再按裁决写实现记录。
 - 第 9 项：`pnpm install` 后 `pnpm-lock.yaml` 的 importer 段应把这些包从 `dependencies:` 移到
   `peerDependencies:`；`pnpm gates:all` 与桌面壳启动（`desktop-release.yml` 的构建链）不得回归。
