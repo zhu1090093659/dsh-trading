@@ -22,6 +22,7 @@ import { unzipSync } from 'fflate'
 import type { UpdaterEnvironment } from './environment.ts'
 import {
   fetchLatestRelease,
+  GithubRateLimitError,
   manifestAssetName,
   parseUpdateManifest,
   payloadAssetName,
@@ -102,6 +103,12 @@ export interface UpdaterSnapshot {
 interface PersistedState {
   version: 1
   lastCheck: UpdaterCheckState
+  /**
+   * Epoch ms before which a non-forced check must not ask GitHub again. The
+   * request budget belongs to the address, not the process, so the quiet period
+   * has to survive a relaunch — otherwise every app start probes once more.
+   */
+  rateLimitedUntil?: number
 }
 
 export interface UpdaterServiceOptions {
@@ -126,6 +133,13 @@ export interface UpdaterServiceOptions {
 const AUTO_CHECK_MS_DEFAULT = 6 * 60 * 60 * 1000
 const INITIAL_DELAY_MS_DEFAULT = 15_000
 const CHECK_TTL_MS_DEFAULT = 30 * 60 * 1000
+/**
+ * Quiet period after GitHub answers "over budget" without a reset hint. The
+ * unauthenticated budget is per address and refills hourly, and every launch of
+ * the app runs one check — retrying immediately turns one exhausted budget into
+ * a failed-looking log line per launch (measured 2026-10-15).
+ */
+const RATE_LIMIT_COOLDOWN_MS_DEFAULT = 15 * 60 * 1000
 /** Windows rename retries for files/dirs briefly held open (AV scans etc.). */
 const SWAP_RETRY_ATTEMPTS = 4
 const SWAP_RETRY_DELAY_MS = 300
@@ -198,6 +212,8 @@ export class UpdaterService {
   private readonly log: (line: string) => void
 
   private checkState: UpdaterCheckState
+  /** Epoch ms before which a non-forced check must not ask GitHub again. */
+  private rateLimitedUntil = 0
   private applyState: UpdaterApplyState = applyIdle()
   private progress: UpdaterProgress | undefined = undefined
   private timers: Array<ReturnType<typeof setTimeout>> = []
@@ -257,6 +273,9 @@ export class UpdaterService {
       })
       const latest = release === undefined ? undefined : this.latestOf(release)
       const available = latest?.version !== undefined && isNewerVersion(latest.version, this.env.familyVersion)
+      // A 2xx means the budget is back: drop any cooldown so a later limit is
+      // measured from its own reset, not from a stale one.
+      this.rateLimitedUntil = 0
       this.checkState = {
         at: new Date(this.now()).toISOString(),
         status: 'ok',
@@ -266,24 +285,43 @@ export class UpdaterService {
       }
       this.persistCheck()
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      // Over budget is a budget outcome, not a broken channel: record when GitHub
+      // says the next attempt may succeed and report it as such. A forced check
+      // (the UI button) still goes out — the user asked for it explicitly.
+      if (error instanceof GithubRateLimitError) {
+        const until = error.resetAt ?? this.now() + RATE_LIMIT_COOLDOWN_MS_DEFAULT
+        this.rateLimitedUntil = Math.max(this.rateLimitedUntil, until)
+      }
       // Transient failure: keep the last good latest visible (badge stability),
       // surface the error alongside.
       this.checkState = {
         at: new Date(this.now()).toISOString(),
         status: 'error',
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
         available: this.checkState.available,
         latest: this.checkState.latest,
       }
       this.persistCheck()
-      this.log('check failed: ' + (error instanceof Error ? error.message : String(error)))
+      if (error instanceof GithubRateLimitError) {
+        this.log('check rate limited: ' + message
+          + ', next attempt after ' + new Date(this.rateLimitedUntil).toISOString())
+      } else {
+        this.log('check failed: ' + message)
+      }
     } finally {
       this.checkInFlight = false
     }
     return this.snapshot()
   }
 
+  /**
+   * Whether a non-forced check can reuse current state: a fresh `ok` result, or
+   * an active rate-limit cooldown (a known-refused budget must not be re-probed
+   * on every launch).
+   */
   private checkFresh(): boolean {
+    if (this.now() < this.rateLimitedUntil) return true
     if (this.checkState.status !== 'ok' || this.checkState.at === undefined) return false
     const at = Date.parse(this.checkState.at)
     if (!Number.isFinite(at)) return false
@@ -617,7 +655,13 @@ export class UpdaterService {
 
   private loadPersistedCheck(): UpdaterCheckState {
     try {
-      const raw = JSON.parse(fs.readFileSync(this.stateFile().file, 'utf8')) as { lastCheck?: UpdaterCheckState }
+      const raw = JSON.parse(fs.readFileSync(this.stateFile().file, 'utf8')) as {
+        lastCheck?: UpdaterCheckState
+        rateLimitedUntil?: unknown
+      }
+      if (typeof raw.rateLimitedUntil === 'number' && Number.isFinite(raw.rateLimitedUntil) && raw.rateLimitedUntil > 0) {
+        this.rateLimitedUntil = raw.rateLimitedUntil
+      }
       const lastCheck = raw.lastCheck
       if (lastCheck !== undefined && typeof lastCheck === 'object' && 'status' in lastCheck) {
         return {
@@ -638,7 +682,11 @@ export class UpdaterService {
     const { dir, file } = this.stateFile()
     try {
       fs.mkdirSync(dir, { recursive: true })
-      const state: PersistedState = { version: 1, lastCheck: this.checkState }
+      const state: PersistedState = {
+        version: 1,
+        lastCheck: this.checkState,
+        ...(this.rateLimitedUntil > 0 ? { rateLimitedUntil: this.rateLimitedUntil } : {}),
+      }
       // Atomic-ish write: temp file + rename (partial writes never win).
       const tmp = file + '.tmp'
       fs.writeFileSync(tmp, JSON.stringify(state, null, 2) + '\n')

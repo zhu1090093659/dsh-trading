@@ -65,6 +65,12 @@ const DIRECT_TRADING_PACKAGES = [
   '@dshtrading/dsh-i18n',
   '@dshtrading/client-ui-updater',
   '@dshtrading/client-ui-special-indicators',
+  // 中栏「机器人」页签的 client 半。它在 runtime/profile-trading/cordis.patch.yml
+  // 里有 insert 行、也在 PRIVATE_VENDOR_PACKAGES 里（所以 tarball 一直在 vendor 里），
+  // 但早先漏在这份依赖清单里：pnpm 只按依赖边安装，overrides 只影响已存在的边，
+  // 于是全新 home 里该行解析不到，宿主每轮启动报 "failed to import"、「机器人」页签
+  // 整块消失（2026-10-15 实证）。下面的 assertSeedPatchRowsResolve 就是这条约束的门禁。
+  '@dshtrading/client-ui-bot-gui',
 ];
 /**
  * Local-only private packages still carried in the desktop vendor closure:
@@ -317,6 +323,30 @@ function stage(sourceDir, destDir, names, nodeModules = true) {
   console.log('[build-runtime] staged ' + path.basename(destDir) + ' -> ' + path.relative(desktopDir, destDir));
 }
 
+/**
+ * Every plugin row the seed's user patch layer inserts must resolve inside the
+ * staged seed. pnpm installs by dependency edge, so a patch row whose package is
+ * absent from node_modules loads nowhere: the host logs "failed to import" on
+ * every fresh home and that plugin's UI silently disappears (2026-10-15 —
+ * @dshtrading/client-ui-bot-gui was vendored and patched in, but missing from
+ * DIRECT_TRADING_PACKAGES, which dropped the whole「机器人」tab).
+ * @returns {number} how many patched plugin rows the seed declares.
+ */
+function assertSeedPatchRowsResolve() {
+  const patch = path.join(stagingRoot, 'profile-trading', 'cordis.patch.yml');
+  if (!fs.existsSync(patch)) throw new Error('staged profile is missing its cordis.patch.yml');
+  const names = [...fs.readFileSync(patch, 'utf8').matchAll(/^\s*-?\s*name:\s*['"]?([^'"\s]+)['"]?\s*$/gm)]
+    .map((match) => match[1]);
+  for (const name of names) {
+    const dir = path.join(stagingRoot, 'profile-trading', 'node_modules', ...name.split('/'));
+    if (!fs.existsSync(dir)) {
+      throw new Error('staged profile cannot resolve the patched plugin ' + name
+        + ': the profile patch layer may only insert profile dependencies, and this one is missing from node_modules');
+    }
+  }
+  return names.length;
+}
+
 function assertRuntimeEntrypoints() {
   const hostBin = path.join(stagingRoot, 'host', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
   if (!fs.existsSync(hostBin)) throw new Error('staged host is missing ' + path.relative(desktopDir, hostBin));
@@ -332,6 +362,8 @@ function assertRuntimeEntrypoints() {
   // 带着构建机的 pnpm 绝对路径都会让插件安装失败，缺失即构不出载荷。
   const vendored = assertProfileSeedSelfContained(path.join(stagingRoot, 'profile-trading'));
   console.log('[build-runtime] profile seed self-contained: ' + vendored + ' vendored tarball(s), no build-host pnpm state');
+  const patchedRows = assertSeedPatchRowsResolve();
+  console.log('[build-runtime] seed patch layer resolves: ' + patchedRows + ' inserted plugin row(s) present in node_modules');
 }
 
 /**

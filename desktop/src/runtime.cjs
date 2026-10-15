@@ -646,6 +646,15 @@ const RENDERER_LOG_LEVELS = new Set(['warning', 'error']);
 /** 单行上限：渲染进程一条超长 message 就能把宿主日志撑爆。 */
 const RENDERER_LOG_LINE_MAX = 500;
 
+/**
+ * 来源字段上限。客户端插件批的 combo URL 是一行 2.8 KiB 的
+ * `/plugins/??<每个客户端入口>&rev=…`，来源若不受限就吃掉整行预算，日得下的
+ * 只剩 URL、真正说明原因的那句 message 反被截掉（2026-10-15 实证：一次
+ * `[renderer] error` 行 100% 是 URL）。来源收短到能指认入口即可，余下预算全给
+ * message。
+ */
+const RENDERER_LOG_SOURCE_MAX = 120;
+
 /** 截断标记：留下「这条被截过」的证据，而不是静默丢尾。 */
 const RENDERER_LOG_TRUNCATION = ' ...[truncated]';
 
@@ -685,16 +694,31 @@ function consoleMessageArgsToEntry(details, legacyLevel, legacyMessage, legacyLi
 }
 
 /**
+ * 来源字段收短到 {@link RENDERER_LOG_SOURCE_MAX}，超出部分记成省略字数（保留长度
+ * 线索，不静默丢尾）。短来源原样返回，既有行形不变。
+ * @param {unknown} value
+ * @returns {string}
+ */
+function shortenRendererSource(value) {
+  if (value === undefined || value === '') return '';
+  const text = String(value);
+  if (text.length <= RENDERER_LOG_SOURCE_MAX) return text;
+  const head = text.slice(0, RENDERER_LOG_SOURCE_MAX - 20);
+  return head + '…(+' + String(text.length - head.length) + 'ch)';
+}
+
+/**
  * 渲染进程 console 消息 → 一条 dsh-host.log 行；该丢弃的级别返回 undefined。
  * 行形如 `[renderer] <level> <sourceId>:<行号> <message>`，来源放在正文前面，
- * 这样超长消息被截断后仍能指认是谁在哪一行打的。
+ * 这样超长消息被截断后仍能指认是谁在哪一行打的；来源自身先按上限收短，免得
+ * 一条 combo URL 把 message 挤出预算。
  * @param {{ level: unknown, message: unknown, source?: unknown, line?: unknown }} entry
  * @returns {string | undefined}
  */
 function rendererLogLine(entry) {
   const level = normalizeRendererLevel(entry.level);
   if (level === undefined) return undefined;
-  const source = entry.source === undefined || entry.source === '' ? '' : String(entry.source);
+  const source = shortenRendererSource(entry.source);
   const lineNumber = entry.line === undefined || entry.line === null ? '' : ':' + String(entry.line);
   const head = '[renderer] ' + level + (source === '' ? '' : ' ' + source + lineNumber);
   // 一条 message 里的换行必须收成一个空格：宿主日志一行一条记录。
@@ -719,6 +743,8 @@ module.exports = {
   selectDshHome,
   RENDERER_LOG_LEVELS,
   RENDERER_LOG_LINE_MAX,
+  RENDERER_LOG_SOURCE_MAX,
+  shortenRendererSource,
   normalizeRendererLevel,
   consoleMessageArgsToEntry,
   rendererLogLine,

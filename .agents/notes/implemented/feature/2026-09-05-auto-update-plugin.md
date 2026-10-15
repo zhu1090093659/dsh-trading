@@ -26,8 +26,16 @@ arm64+x64、win nsis/zip x64）→ GitHub Release 附全部安装包 + SHA256SUM
 
 ### D2：检测通道——GitHub /releases/latest，无 token
 
-- 公共仓 + 启动后 15s 首查 + 6h 周期（unauthenticated 60 req/h 绰绰有余）；
+- 公共仓 + 启动后 15s 首查 + 6h 周期（unauthenticated 60 req/h）；
   /releases/latest 天然排除 draft/prerelease（稳定通道语义）。
+- **配额用尽是预期状态，不是故障**：该额度按地址计，且每次启动都会查一次，所以
+  「连开几次 / 同网其它 GitHub 调用」就能把它打光（2026-10-15 本机实测：403 +
+  `x-ratelimit-remaining: 0`、`x-ratelimit-limit: 60`、`x-ratelimit-reset` 给出
+  复位时刻）。`fetchLatestRelease` 把 403(remaining=0)/429 归类为
+  `GithubRateLimitError` 并带上复位时刻，`UpdaterService` 据此冷却到那一刻
+  （无复位线索时 15 分钟兜底），冷却写进 state.json 因而**跨启动存活**——否则每次
+  开应用都会再打一次、每轮日志一条 "check failed"。日志相应写成
+  `check rate limited: … next attempt after <ISO>`；显式 force（UI 按钮）不冷却。
 - 版本比较 = tag vX.Y.Z vs 家族版本（changesets fixed 组，本包自身 package.json
   版本即家族版本；从 import.meta.url 上溯读自己的 manifest）。不可解析的 tag
   fail-closed 视为「不是新版本」。
@@ -107,9 +115,18 @@ arm64+x64、win nsis/zip x64）→ GitHub Release 附全部安装包 + SHA256SUM
 
 ## 验证
 
-- pnpm --filter @dshtrading/client-ui-updater test：15 用例全绿（semver、GitHub
+- pnpm --filter @dshtrading/client-ui-updater test：20 用例全绿（semver、GitHub
   manifest 解析、check TTL/错误保留、apply 全管线——假 profile + 真实 zip + stub
-  fetch：换包/装新包/跳过同版/备份清理、锁定目录失败回滚、stale-target 守卫）。
+  fetch：换包/装新包/跳过同版/备份清理、锁定目录失败回滚、stale-target 守卫；
+  2026-10-15 增 4 例覆盖配额面：403+remaining=0 归类并带复位时刻、无配额线索的
+  403 仍是普通失败、进程内冷却（含 force 绕过）、冷却跨重启存活与无复位线索时的
+  兜底冷却）。
+- 配额面真机实测（2026-10-15，无头宿主 + 隔离 home）：宿主 stdout 打出
+  `[dshtrading-updater] check rate limited: GitHub API 403 rate limit for
+  zhu1090093659/dsh-trading releases/latest, next attempt after
+  2026-10-15T13:22:37.000Z`，该时刻与同一分钟用 curl 实测的 `x-ratelimit-reset`
+  （1792070557）逐秒一致；再用本地 403 stub（`DSH_TRADING_UPDATE_API_BASE`）连起
+  两次宿主：第一轮一条 rate-limited 行，第二轮零探测、零日志。
 - scripts/pack-update-payload.mjs 本地实跑（v0.1.1 + base 包）：manifest sha256/
   包清单正确，zip 布局 packages/@dshtrading/base/…。
 - pnpm -r build 全绿；pnpm -r test 全绿；pnpm i18n:check 全绿；typecheck-gate 不升。

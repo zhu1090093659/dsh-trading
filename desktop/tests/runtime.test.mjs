@@ -141,6 +141,25 @@ test('operator truncates an overlong renderer log line at the 500 character cap'
   assert.ok(line.endsWith('...[truncated]'));
 });
 
+test('管理员从超长 combo URL 的渲染进程报错行里读到原因', () => {
+  // Given a renderer error whose source is a 2.8 KiB client-plugin batch URL
+  const source = 'http://127.0.0.1:59547/plugins/??' + 'x'.repeat(2800);
+
+  // When the message is rendered
+  const line = rendererLogLine({
+    level: 'error',
+    message: 'Failed to load resource: the server responded with a status of 431 (Request Header Fields Too Large)',
+    source,
+    line: 0,
+  });
+
+  // Then the reason survives the line cap, and the shortened source says what it dropped
+  assert.ok(line.includes('status of 431'));
+  assert.ok(line.includes('…(+'));
+  assert.ok(line.length <= RENDERER_LOG_LINE_MAX);
+  assert.ok(line.startsWith('[renderer] error http://127.0.0.1:59547/plugins/??'));
+});
+
 test('operator reads both the Electron details object and its legacy positional arguments', () => {
   // Given Electron 44's console-message details object and the older positional form
   // When each is normalized for the log formatter
