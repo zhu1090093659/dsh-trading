@@ -36,6 +36,7 @@ Status: implemented
 - **门禁**：`pnpm test:audit` 通过（无新增测试债，标题按角色前缀、正文 Given/When/Then）、`pnpm docs-link:check`、`pnpm repo-boundary:check` 见本 Note 同批提交结论。
 - **诊断读法（下次直接照此判定）**：`grep '\[host-lifecycle\]' ~/Library/Logs/dsh-trading-desktop/dsh-host.log`；`initiatedBy=shell` = 壳在退出（正常）；`initiatedBy=host` + `exit(N) requested` 且栈含 profile-boot = 被信号要求停止；只有 `event loop drained` = 插件请求退出或树被 dispose。
 - **清理**：A/B 探针脚本、日志、探针宿主与两个诊断期孤儿宿主（62194、64947）已全部回收，机器上只余用户实例自己的宿主。
+- **安装位已按该路径换档（2026-10-15 晚，用户当场授权）**：`/Applications/DSH Trading.app/Contents/Resources/app.asar` 由 `b567bd15…` 换为 `c6b3652d…`（`desktop/node_modules/.bin/asar` extract → 覆盖 `src/main.cjs`/`runtime.cjs` → pack；读回两文件与工作区逐字节一致，未触碰的 `src/error.js`/`src/splash.js` 保持原 md5），两个新钩子同时落到 `app.asar.unpacked/src/`（与工作区 md5 一致）。换上前的旧档备于 `/tmp/dsh-appasar-backup-b567bd15.asar` 供回滚。装后实测：日志出现 `injecting host hooks` 三条与 `[host-lifecycle] tracer attached`，GUI 完整渲染；正常退出为 `host exited: code=0 signal=null initiatedBy=shell after=37927ms`；`kill -9` 应用主进程后宿主自行退出、无孤儿残留——该场景下宿主的 stdout/stderr 管道随应用一起关闭，宿主自身的行写不进 `dsh-host.log`，所以最后这条的判定依据是上面的文件后端 A/B（对照组在同样断管下仍存活，排除「断管把它写死」这一替代解释）。
 
 ## Alternatives considered
 
