@@ -1,5 +1,9 @@
 # @dshtrading/connector-jin10
 
+## Unreleased
+
+- agent 工具面补齐：`flash_list` 增可选 `hot`（火/热/沸/爆，逗号分隔多值，非法值显式报错；走网页版热度过滤，不给 `hot` 时行为不变），新增 `macro_rates`（央行最新利率，单位百分比、上游原样字符串，出参带 `as_of` 与「上游未声明快照时间」的如实标注；上游失败抛错而不是回空列表）。
+
 ## 0.6.1
 
 ### Patch Changes
