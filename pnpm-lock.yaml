@@ -325,6 +325,9 @@ importers:
         specifier: 3.18.4
         version: 3.18.4
     devDependencies:
+      '@dshtrading/test-support':
+        specifier: workspace:*
+        version: link:../test-support
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.2
@@ -542,6 +545,9 @@ importers:
         specifier: ^5.2.1
         version: 5.2.1
     devDependencies:
+      '@dshtrading/test-support':
+        specifier: workspace:*
+        version: link:../test-support
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.2
@@ -597,6 +603,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-tool':
         specifier: 0.2.0-rc.2
         version: 0.2.0-rc.2(@deepseek-ai/cordis@4.0.4)
+      '@dshtrading/test-support':
+        specifier: workspace:*
+        version: link:../test-support
       '@testing-library/dom':
         specifier: ^10.4.1
         version: 10.4.2
@@ -1909,6 +1918,18 @@ importers:
       '@dshtrading/api':
         specifier: workspace:*
         version: link:../api
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.15)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.19.0)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
+
+  packages/test-support:
+    devDependencies:
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.15)(typescript@5.9.3)

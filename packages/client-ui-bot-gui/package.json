@@ -50,7 +50,8 @@
     "react-dom": "^18.3.1",
     "tsdown": "^0.22.0",
     "typescript": "^5.5.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "@dshtrading/test-support": "workspace:*"
   },
   "dsh": {
     "client": {

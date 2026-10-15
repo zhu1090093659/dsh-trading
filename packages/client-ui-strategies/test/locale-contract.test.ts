@@ -5,10 +5,15 @@
  * 静默回退 zh 单语（en 下 agent/用户看到中文），无任何报错。
  *
  * 附：StrategyView 查表 miss 回退 helper 与 momentum {cause} 枚举预翻译单测。
+ *
+ * 新增：词典键/占位符对齐契约（zh/en 键集合双向对齐 + {placeholder} 对齐），
+ * 由 @dshtrading/test-support 的 expectLocaleKeyParity 承载，与 bot-gui /
+ * special-indicators 两个私有包同口径。
  */
 import { describe, expect, it } from 'vitest'
 import { run, strategyParadigms, screenerParadigms } from '@dshtrading/strategies'
 import type { Kline } from '@dshtrading/strategies'
+import { expectLocaleKeyParity } from '@dshtrading/test-support'
 import { zh, en } from '../src/client/locales.ts'
 import type { StrategyLocaleKey } from '../src/client/contract.ts'
 import { strategyName, exitReasonText } from '../src/client/StrategyView.tsx'
@@ -106,5 +111,15 @@ describe('StrategyView 查表 helper', () => {
 
     const custom = { exitReason: '我的自定义策略退出' }
     expect(exitReasonText(custom, t)).toBe('我的自定义策略退出')
+  })
+})
+
+/** 词典键位契约：zh/en 键集合与 {placeholder} 双向对齐（口径同 scripts/i18n-audit.mjs）。 */
+describe('策略词典 zh/en 契约', () => {
+  it('运营维护词典时 zh/en 键集合与 {placeholder} 双向对齐', () => {
+    // Given: zh/en 两份词典
+    // When: 逐键比对键集合与占位符集合
+    // Then: 双向无缺失且插值面零漂移
+    expectLocaleKeyParity(zh, en)
   })
 })
