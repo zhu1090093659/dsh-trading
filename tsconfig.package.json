@@ -1,0 +1,11 @@
+{
+  // 包内统一编译口径（server 半）。extends 的相对路径按“声明它的文件”解析，所以
+  // rootDir/outDir/include 必须用 ${configDir}（TS 5.5+）锚到引用方包目录；直接写
+  // "src"/"lib" 会落到仓库根（实测 TS18003）。逐包 tsconfig.json 只留 extends。
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "${configDir}/src",
+    "outDir": "${configDir}/lib"
+  },
+  "include": ["${configDir}/src"]
+}
