@@ -20,7 +20,7 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 
 **`~/.dsh-trading` 是内置缺省，标记制归属。** 应用缺省管理 trading home（`$DSH_HOME` 显式设置时优先，否则 `~/.dsh-trading`；宿主 dsh CLI 自身的缺省仍是 `~/.dsh`，两者语义不同是刻意的——2026-09-08 分离，见 [独立 home note](../process/2026-09-08-separate-dsh-home.md)）。trading-web profile 仅在缺失时播种；本应用播种的 profile 带 `.dsh-desktop-seed.json` 标记，内置运行时戳变化时重新播种并保留用户的 `cordis.patch.yml` 层；无标记的 profile 视为用户自管，永不触碰——CLI 经 `file:` 链接维护的那份 profile 正是无标记的自管 profile，桌面壳只加载它、不重播种（本机 2026-10-10 实测：`dsh home: /Users/zcl/.dsh-trading`、无 profile action 行）。宿主自身的启动期修复（`$DSH_HOME/profiles/node_modules` 回退链接）让 profile 内插件代码复用宿主的 `@deepseek-ai/*` 模块实例，不存在 cohort 重复。
 
-**移交而非双宿主。** 默认 URL 已有 GUI 应答时，应用把该 URL 交给系统浏览器打开（其 cookie 已持有会话）并退出，绝不在同一 `$DSH_HOME` 上再起第二个 web 宿主；内嵌已运行实例也不可行——token 无法事后获取，Electron 窗口独立 cookie jar 附着只会永久 401。应用自启宿主时拥有该子进程，退出时停止（POSIX 进程组 SIGTERM，5 秒 SIGKILL 兜底；Windows `taskkill /T`）。
+**移交而非双宿主。** 默认 URL 已有 GUI 应答时，应用把该 URL 交给系统浏览器打开（其 cookie 已持有会话）并退出，绝不在同一 `$DSH_HOME` 上再起第二个 web 宿主；内嵌已运行实例也不可行——token 无法事后获取，Electron 窗口独立 cookie jar 附着只会永久 401。应用自启宿主时拥有该子进程，退出时停止（POSIX 进程组 SIGTERM，5 秒 SIGKILL 兜底；Windows `taskkill /T`）；这条 teardown 走不到壳被 SIGTERM/SIGKILL 直接杀掉的情形，宿主自己还有一层父进程存活守卫，见 [宿主退出归因与孤儿守卫 note](../bug-fix/2026-10-15-desktop-host-exit-attribution-and-orphan-guard.md)。
 
 **交易安全语义原样交付。** 桌面版不改任何下单路径：dry-run 默认、`liveTrading` 显式开关、base 审批闸门全部由 bundle 自带配置保证，桌面壳无任何绕行。
 

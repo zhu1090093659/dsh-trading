@@ -25,6 +25,8 @@ const {
   waitForTokenUrl,
   parseTokenUrlLine,
   formatHostExitDiagnostic,
+  formatHostExitLine,
+  asarUnpackedPath,
   toNodeImportSpecifier,
   normalizeProfileCohort,
   SEED_MARKER,
@@ -398,6 +400,65 @@ test('formatHostExitDiagnostic detects missing VC++ redistributable on Windows',
   const signalExit = formatHostExitDiagnostic(null, 'SIGTERM', 'darwin');
   assert.equal(signalExit.isMissingVCRedist, false);
   assert.ok(signalExit.message.includes('SIGTERM'));
+});
+
+test('operator can tell a shell-initiated host stop from a host one in the exit line', () => {
+  // Given the same exit shape the shell reports for its own teardown and for a
+  // host that stopped on its own (2026-10-15: both read code=0 signal=null)
+  const teardown = formatHostExitLine({
+    code: 0,
+    signal: null,
+    quitInitiated: true,
+    elapsedMs: 8123.4,
+    message: '后台服务进程意外停止。',
+  });
+  const selfStop = formatHostExitLine({
+    code: 0,
+    signal: null,
+    quitInitiated: false,
+    elapsedMs: 900,
+    message: '后台服务进程意外停止。',
+  });
+
+  // When both lines are read side by side
+  // Then the initiating side and the host's age tell them apart
+  assert.ok(teardown.includes('code=0 signal=null initiatedBy=shell after=8123ms'), teardown);
+  assert.ok(selfStop.includes('code=0 signal=null initiatedBy=host after=900ms'), selfStop);
+  assert.ok(selfStop.includes('(后台服务进程意外停止。)'), 'the user-facing message stays on the line');
+});
+
+test('operator gets no host age in the exit line when it is not measurable', () => {
+  // Given an exit whose elapsed time is absent and one whose elapsed time is not a number
+  // When the lines are formatted
+  // Then neither invents an age for the operator to read
+  const line = formatHostExitLine({ code: 1, signal: null, quitInitiated: false, message: '退出码: 1' });
+  assert.equal(line, '[desktop] host exited: code=1 signal=null initiatedBy=host (退出码: 1)');
+  const signalled = formatHostExitLine({
+    code: null,
+    signal: 'SIGKILL',
+    quitInitiated: false,
+    elapsedMs: Number.NaN,
+    message: '被系统信号终止: SIGKILL',
+  });
+  assert.equal(signalled, '[desktop] host exited: code=null signal=SIGKILL initiatedBy=host (被系统信号终止: SIGKILL)');
+});
+
+test('operator gets host hook paths that point outside the archive', () => {
+  // Given an archived source path on either platform
+  // When it is mapped for the external Node runtime
+  // Then the unpacked sibling is returned, while unpacked and development paths stay put
+  assert.equal(
+    asarUnpackedPath('/Applications/DSH Trading.app/Contents/Resources/app.asar/src/host-exit-tracer.mjs'),
+    '/Applications/DSH Trading.app/Contents/Resources/app.asar.unpacked/src/host-exit-tracer.mjs',
+  );
+  assert.equal(
+    asarUnpackedPath('C:\\app\\resources\\app.asar\\src\\host-orphan-guard.mjs'),
+    'C:\\app\\resources\\app.asar.unpacked\\src\\host-orphan-guard.mjs',
+  );
+
+  const unpacked = '/res/app.asar.unpacked/src/host-exit-tracer.mjs';
+  assert.equal(asarUnpackedPath(unpacked), unpacked);
+  assert.equal(asarUnpackedPath('/repo/desktop/src/host-exit-tracer.mjs'), '/repo/desktop/src/host-exit-tracer.mjs');
 });
 
 test('writeHostCliShims drops a runnable dsh shim into the staged host', () => {

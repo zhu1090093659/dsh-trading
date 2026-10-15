@@ -31,6 +31,8 @@ const {
   waitForTokenUrl,
   parseTokenUrlLine,
   formatHostExitDiagnostic,
+  formatHostExitLine,
+  asarUnpackedPath,
   toNodeImportSpecifier,
   consoleMessageArgsToEntry,
   rendererLogLine,
@@ -90,6 +92,10 @@ function setStatus(text) {
 function childEnv(home, nodeHome, primaryRuntime) {
   const env = { ...process.env, DSH_HOME: home };
   if (primaryRuntime !== undefined) env.DSH_PRIMARY_RUNTIME = primaryRuntime;
+  // The host hooks watch this shell so a shell that dies without `before-quit`
+  // (SIGTERM/SIGKILL to the app) does not leave the detached host orphaned;
+  // see src/host-orphan-guard.mjs.
+  env.DSH_DESKTOP_SHELL_PID = String(process.pid);
   // The bundled Node distribution comes first so anything the host shells out
   // to (npm, corepack) resolves against the bundled runtime, never the system.
   const nodeBinDir = process.platform === 'win32' ? nodeHome : path.join(nodeHome, 'bin');
@@ -102,35 +108,52 @@ function childEnv(home, nodeHome, primaryRuntime) {
   return env;
 }
 
-/** Load hook shared with the host: see src/host-symbol-normalizer.mjs. */
-const HOST_SYMBOL_NORMALIZER = 'host-symbol-normalizer.mjs';
+/**
+ * Load hooks injected into the host with `--import`, in order.
+ *
+ * `host-symbol-normalizer.mjs` shares the dsh core's per-instance symbols across
+ * package copies; `host-exit-tracer.mjs` records why the host left;
+ * `host-orphan-guard.mjs` ends a host whose shell is gone. Each owns its own
+ * module doc.
+ */
+const HOST_HOOKS = [
+  'host-symbol-normalizer.mjs',
+  'host-exit-tracer.mjs',
+  'host-orphan-guard.mjs',
+];
 
 /**
- * On-disk path of the symbol-normalizing load hook, or undefined when the
- * packaging layout does not provide it. electron-builder packs src/ into
- * app.asar, but this hook is imported by the external bundled Node runtime,
- * which cannot read inside the archive — asarUnpack places it next to the
- * archive as app.asar.unpacked/, and development runs resolve unchanged.
+ * On-disk path of one host load hook, or undefined when the packaging layout
+ * does not provide it. electron-builder packs src/ into app.asar, but these
+ * hooks are imported by the external bundled Node runtime, which cannot read
+ * inside the archive — asarUnpack places them next to it as app.asar.unpacked/,
+ * and development runs resolve unchanged.
+ * @param {string} fileName
+ * @returns {string | undefined}
  */
-function hostSymbolNormalizerPath() {
-  const localPath = path.join(__dirname, HOST_SYMBOL_NORMALIZER);
-  const unpackedPath = localPath.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+function hostHookPath(fileName) {
+  const unpackedPath = asarUnpackedPath(path.join(__dirname, fileName));
   return fs.existsSync(unpackedPath) ? unpackedPath : undefined;
 }
 
 function startHost(runtime, home, port) {
   const primaryRuntime = resolvePrimaryRuntime(runtime.runtimeRoot, home);
   pushLogLine('[desktop] primary runtime: ' + (primaryRuntime ?? 'absent (Office skills and load_workspace_dependencies stay disabled)'));
-  const symbolNormalizer = hostSymbolNormalizerPath();
-  const normalizerImport = toNodeImportSpecifier(symbolNormalizer);
-  if (normalizerImport === undefined) {
-    pushLogLine('[desktop] symbol normalizer missing, spawning host without it');
-  } else {
-    pushLogLine('[desktop] injecting dsh scope symbol normalizer: ' + normalizerImport);
+  const hookImports = [];
+  for (const hook of HOST_HOOKS) {
+    const specifier = toNodeImportSpecifier(hostHookPath(hook));
+    if (specifier === undefined) {
+      pushLogLine('[desktop] host hook missing from the payload, spawning host without it: ' + hook);
+      continue;
+    }
+    hookImports.push(specifier);
+  }
+  if (hookImports.length > 0) {
+    pushLogLine('[desktop] injecting host hooks: ' + hookImports.join(' '));
   }
   const args = [
     '--max-http-header-size=' + String(MAX_HTTP_HEADER_BYTES),
-    ...(normalizerImport === undefined ? [] : ['--import', normalizerImport]),
+    ...hookImports.flatMap((specifier) => ['--import', specifier]),
     runtime.hostBin, '--profile', 'trading-web', '--no-open', '--host', '127.0.0.1', '--port', String(port),
   ];
   const child = spawn(runtime.nodeBin, args, {
@@ -317,11 +340,18 @@ async function boot() {
   pushLogLine('[desktop] spawning host on 127.0.0.1:' + port);
   hostChild = startHost(runtime, home, port);
   const child = hostChild;
+  const spawnedAt = Date.now();
   let exited = false;
   child.once('exit', (code, signal) => {
     exited = true;
     const diag = formatHostExitDiagnostic(code, signal, process.platform);
-    pushLogLine('[desktop] host exited: code=' + String(code) + ' signal=' + String(signal) + ' (' + diag.message + ')');
+    pushLogLine(formatHostExitLine({
+      code,
+      signal,
+      quitInitiated: quitting,
+      elapsedMs: Date.now() - spawnedAt,
+      message: diag.message,
+    }));
     if (!quitting) {
       void showError(diag.message, { isMissingVCRedist: diag.isMissingVCRedist });
     }

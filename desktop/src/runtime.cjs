@@ -419,6 +419,44 @@ function formatHostExitDiagnostic(code, signal, platform = process.platform) {
 }
 
 /**
+ * One `host exited` log line.
+ *
+ * The code/signal pair alone cannot say who ended the host: profile-boot turns
+ * SIGTERM into a graceful shutdown, and that shutdown reports the same
+ * `code=0 signal=null` the shell's own teardown reports (2026-10-15, a
+ * user-facing failure report whose log tail is byte-for-byte what an ordinary
+ * quit writes). The initiating side and the host's age separate them, so both
+ * ride the same line that the error page shows.
+ * @param {{ code: number | null, signal: string | null, quitInitiated: boolean, elapsedMs?: number, message: string }} options
+ * @returns {string}
+ */
+function formatHostExitLine(options) {
+  const parts = [
+    '[desktop] host exited: code=' + String(options.code),
+    'signal=' + String(options.signal),
+    'initiatedBy=' + (options.quitInitiated === true ? 'shell' : 'host'),
+  ];
+  if (Number.isFinite(options.elapsedMs) && options.elapsedMs >= 0) {
+    parts.push('after=' + String(Math.round(options.elapsedMs)) + 'ms');
+  }
+  return parts.join(' ') + ' (' + options.message + ')';
+}
+
+/**
+ * Map a source path to the copy an external process can read.
+ *
+ * electron-builder packs src/ into app.asar, and the bundled Node runtime that
+ * runs the host cannot import from inside the archive: `asarUnpack` places the
+ * host hooks next to it as app.asar.unpacked/. Development runs and paths
+ * outside an archive resolve unchanged; an already-unpacked path stays put.
+ * @param {string} localPath
+ * @returns {string}
+ */
+function asarUnpackedPath(localPath) {
+  return localPath.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+}
+
+/**
  * Convert a filesystem path to a specifier safe for Node's `--import` flag.
  * On Windows, passing raw absolute paths (e.g. C:\...) throws
  * ERR_UNSUPPORTED_ESM_URL_SCHEME because Node treats the drive letter as a
@@ -765,5 +803,7 @@ module.exports = {
   parseTokenUrlLine,
   parseShasums,
   formatHostExitDiagnostic,
+  formatHostExitLine,
+  asarUnpackedPath,
   toNodeImportSpecifier,
 };

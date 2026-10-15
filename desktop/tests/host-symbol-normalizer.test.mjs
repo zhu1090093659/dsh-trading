@@ -38,14 +38,15 @@ test('normalizeHostSymbols leaves the per-call execution token untouched', () =>
   assert.equal(normalizeHostSymbols(untouched), untouched);
 });
 
-test('the loader ships next to main.cjs and is unpacked by electron-builder', () => {
-  const loaderPath = path.join(import.meta.dirname, '..', 'src', 'host-symbol-normalizer.mjs');
-  assert.ok(fs.existsSync(loaderPath), 'loader file must exist in src/');
+test('every host hook ships in src/ and is unpacked by electron-builder', () => {
   const builderConfig = fs.readFileSync(path.join(import.meta.dirname, '..', 'electron-builder.yml'), 'utf8');
-  assert.ok(
-    builderConfig.includes('src/host-symbol-normalizer.mjs'),
-    'asarUnpack must list the loader so the external Node runtime can import it',
-  );
+  for (const hook of ['host-symbol-normalizer.mjs', 'host-exit-tracer.mjs', 'host-orphan-guard.mjs']) {
+    assert.ok(fs.existsSync(path.join(import.meta.dirname, '..', 'src', hook)), hook + ' must exist in src/');
+    assert.ok(
+      builderConfig.includes('src/' + hook),
+      'asarUnpack must list ' + hook + ' so the external Node runtime can import it',
+    );
+  }
 });
 
 test('the loader can be loaded by Node via --import using a file:// specifier', async () => {
