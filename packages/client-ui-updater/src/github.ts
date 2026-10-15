@@ -6,6 +6,24 @@
  * the unauthenticated rate limit.
  */
 
+/**
+ * GitHub refused the request because this address is over its request budget.
+ * The unauthenticated core limit answers 403 with `x-ratelimit-remaining: 0`
+ * (measured 2026-10-15 on this deployment: 60/60 used, reset header present),
+ * and the secondary limit answers 429 with `retry-after`. Carries the reset
+ * instant so the caller can back off instead of retrying into the same wall.
+ */
+export class GithubRateLimitError extends Error {
+  /** Epoch ms when the budget resets; undefined when GitHub reported no hint. */
+  readonly resetAt: number | undefined
+
+  constructor(repo: string, status: number, resetAt: number | undefined) {
+    super(`GitHub API ${status} rate limit for ${repo} releases/latest`)
+    this.name = 'GithubRateLimitError'
+    this.resetAt = resetAt
+  }
+}
+
 /** Parsed GitHub release shape the updater consumes. */
 export interface ReleaseInfo {
   /** e.g. "v0.2.0" */
@@ -65,6 +83,25 @@ function parseAsset(raw: unknown): ReleaseAsset | undefined {
 }
 
 /**
+ * When the next request may succeed again, from the headers GitHub sends with a
+ * refused-for-budget response: `retry-after` (seconds, secondary limit) wins
+ * over the absolute `x-ratelimit-reset` (epoch seconds, primary limit).
+ */
+function rateLimitResetAt(response: Response): number | undefined {
+  const retryAfter = response.headers.get('retry-after')
+  if (retryAfter !== null) {
+    const seconds = Number(retryAfter)
+    if (Number.isFinite(seconds) && seconds >= 0) return Date.now() + seconds * 1000
+  }
+  const reset = response.headers.get('x-ratelimit-reset')
+  if (reset !== null) {
+    const seconds = Number(reset)
+    if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000
+  }
+  return undefined
+}
+
+/**
  * Fetch the latest published release. Returns undefined when the repo has no
  * full releases yet (GitHub answers 404 for /releases/latest then).
  */
@@ -85,6 +122,11 @@ export async function fetchLatestRelease(options: FetchReleaseOptions): Promise<
     })
     if (response.status === 404) return undefined
     if (!response.ok) {
+      // Over budget is expected on a busy install and sayable: it must not read
+      // as a broken channel, and it must not retry on the next launch either.
+      const overBudget = response.status === 429
+        || (response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0')
+      if (overBudget) throw new GithubRateLimitError(options.repo, response.status, rateLimitResetAt(response))
       throw new Error(`GitHub API ${response.status} for ${options.repo} releases/latest`)
     }
     const body = await response.json() as Record<string, unknown>
