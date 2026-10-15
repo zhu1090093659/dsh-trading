@@ -797,6 +797,11 @@
         "name": "limit",
         "type": "number",
         "required": false
+      },
+      {
+        "name": "hot",
+        "type": "string",
+        "required": false
       }
     ],
     "outputForm": "object"
@@ -854,6 +859,17 @@
     "params": [
       {
         "name": "code",
+        "type": "string",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/connector-jin10#macro_rates": {
+    "file": "packages/connector-jin10/src/tools.ts",
+    "params": [
+      {
+        "name": "region",
         "type": "string",
         "required": false
       }
@@ -2029,6 +2045,38 @@
         "name": "id",
         "type": "string",
         "required": true
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/indicators#indicator_get_values": {
+    "file": "packages/indicators/src/values-tool.ts",
+    "params": [
+      {
+        "name": "market",
+        "type": "string",
+        "required": true,
+        "enum": true
+      },
+      {
+        "name": "symbol",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "interval",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "id",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "keys",
+        "type": "string",
+        "required": false
       }
     ],
     "outputForm": "object"

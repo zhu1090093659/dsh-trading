@@ -63,7 +63,7 @@ describe('金十工具面', () => {
     const { tools } = toolsOf()
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'econ_calendar', 'flash_list', 'flash_search', 'global_instruments', 'global_klines',
-      'global_quote', 'news_get', 'news_list', 'news_search',
+      'global_quote', 'macro_rates', 'news_get', 'news_list', 'news_search',
     ])
     for (const tool of tools) expect(tool.name).not.toMatch(/jin10/)
   })
