@@ -24,13 +24,10 @@
 </style>
 </head>
 <body>
-  <img class="logo" src="./assets/icon.png" alt="" onerror="this.style.display='none'">
+  <img class="logo" src="./assets/icon.png" alt="">
   <h1>DSH Trading</h1>
   <div class="status" id="status">Starting…</div>
   <div class="spinner"></div>
-  <script>
-    const status = document.getElementById('status');
-    if (window.desktop) window.desktop.onStatus((text) => { status.textContent = text; });
-  </script>
+  <script src="./splash.js"></script>
 </body>
 </html>
