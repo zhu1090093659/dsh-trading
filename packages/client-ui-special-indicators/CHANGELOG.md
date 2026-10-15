@@ -1,5 +1,27 @@
 # @dshtrading/client-ui-special-indicators
 
+## Unreleased
+
+### Minor Changes
+
+- agent 工具面：四组特殊指标（IF/IM 期现基差、A 股恐慌指数、恒科前十大权重股卖空、板块融资余额）进模型上下文，
+  新增五只只读工具——`special_indicators_get_snapshot`（group 可选 basis|sentiment|hk_short|sectors）、
+  `special_indicators_get_sentiment_history`（days 30..800）、`special_indicators_get_sector_ranking`（window 1..120 / limit ≤60）、
+  `special_indicators_get_sector_series`（code 白名单 + days 10..500）、`special_indicators_get_hk_short_top10`（limit ≤10）。
+
+  - **同一取数实例**：工具与 `/dshtrading/api/special-indicators` 桥共用 apply() 里那个 FinanceClient——同一 TTL/落盘缓存、
+    in-flight 去重、SWR 陈旧回源、同一凭据链（逐请求惰性解析）。白名单子路由、参数夹取与缓存档抽到 src/routes.ts，
+    桥与工具面同源，不新增第二份取数逻辑、不读 cache.json 当数据源。注册形态照 connector-jin10：
+    `defineTool` + `createSpecialIndicatorTools(client, config)` + apply 内 `ctx.inject(['tools'])`（同名先到先得）。
+  - **只读**：仅 GET 白名单子路由，无下单/撤单/改参/改台账能力，不动原桥 auth 栅栏。
+  - **出参信封**：`as_of`（本次读数 ISO）、`expected_data_date`（上游有则原样透传；无则用 payload 日期派生并标
+    `expected_data_date_source`；派生不出就省略并留 note）、`stale`（上游声明优先，否则按「数据日 < 应有数据日」派生）、
+    `cache_stale`（桥缓存档返回过期条目，与数据面滞后分开）、`stale_source`（写明依据）、`source`（自有 finance 服务 + 上游路径）。
+  - **不可用 ≠ 空数据**：上游失败/凭据缺失/路由拒绝一律抛错，文案带 FinanceError 的 code 并写明「没拿到数据」，
+    绝不返回空列表；数组类出参超限带 `truncated: true`。
+  - 新增 peerDependency `@deepseek-ai/dsh-tools`（与其它 30 个插件包同款；不声明会让 tsdown 把 host SDK 相对化内联进 lib）。
+  - 测试：test/indicator-tools.test.ts（28 例，BDD 命名、零 mock/零 sleep，含 apply 组装面「工具面与桥共用同一缓存」实证）。
+
 ## 0.6.1
 
 ### Patch Changes

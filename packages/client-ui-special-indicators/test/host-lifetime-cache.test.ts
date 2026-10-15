@@ -60,7 +60,8 @@ function config(overrides: Partial<Config> = {}): Config {
 const fakeRes = () => fakeHttpRes('json-response')
 /**
  * 组装一次「宿主生命周期」：真实调用 apply()，从注册进 webServer 的 handler 取路由。
- * ctx 为契约化最小面（inject 立即回调 + connection 放行）；fetch 走真实全局实现。
+ * ctx 为契约化最小面；fetch 走真实全局实现。inject 按服务可用性回调（与 cordis 同义：
+ * 本 fake 宿主只提供 webServer/connection，故申请 ['tools'] 的工具面子插件不落地）。
  */
 function bootHost(cfg: Config) {
   let handler: ((req: IncomingMessage, res: ServerResponse) => Promise<void>) | undefined
@@ -70,10 +71,12 @@ function bootHost(cfg: Config) {
       return () => undefined
     },
   }
+  const scope: Record<string, unknown> = { webServer, connection: { requestRejection: () => undefined } }
   const ctx = {
     get: () => undefined,
-    inject: (_deps: string[], cb: (scope: unknown) => void) => {
-      cb({ get: (k: string) => (k === 'webServer' ? webServer : { requestRejection: () => undefined }) })
+    inject: (deps: string[], cb: (scope: unknown) => void) => {
+      if (!deps.every((dep) => dep in scope)) return
+      cb({ get: (k: string) => scope[k] })
     },
     effect: (fn: () => unknown) => { fn() },
   }
