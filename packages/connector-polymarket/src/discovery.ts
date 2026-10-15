@@ -22,6 +22,7 @@
  *   ——结算后 `active` 仍为 true。
  */
 import type { PredictionMeeting, PredictionOutcomeBucket } from '@dshtrading/api'
+import { isRecord, num, parseStringArray, text } from './json.js'
 
 /** 判据来源系列：FOMC 决议（证据 Q1.2，39/39 命中、噪声 0）。 */
 export const FOMC_SERIES_ID = '35'
@@ -67,25 +68,6 @@ export const PROBABILITY_SUM_MAX = 1.03
 /** 会议日程解析（上游 description 原文：`its meeting scheduled for October 27-28, 2026`）。 */
 const MEETING_WINDOW_RE = /meeting scheduled for ([A-Z][a-z]+ \d+(?:-\d+)?, \d{4})/
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function num(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value)
-    if (Number.isFinite(parsed)) return parsed
-  }
-  return undefined
-}
-
-function text(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : undefined
-}
-
 /** 档位标签 → 稳定键与利率变动（证据 Q1.7：标签在大小写与 `+` 上会漂移）。 */
 export function canonicalBucket(label: string): { key: string; changeBps: number | undefined } {
   const value = label.trim()
@@ -114,14 +96,8 @@ function hasSeries(event: Record<string, unknown>): boolean {
 
 /** `outcomePrices` 是**字符串化的 JSON 数组**（如 `"[\"0.0035\",\"0.9965\"]"`）。 */
 function parseOutcomePrices(value: unknown): number | undefined {
-  if (typeof value !== 'string') return undefined
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(value)
-  } catch {
-    return undefined
-  }
-  if (!Array.isArray(parsed) || parsed.length === 0) return undefined
+  const parsed = parseStringArray(value)
+  if (parsed === undefined || parsed.length === 0) return undefined
   return num(parsed[0])
 }
 

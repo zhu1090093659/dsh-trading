@@ -1,5 +1,5 @@
 /**
- * 插件入口（host 平面数据行；市场无关的跨市场信息源 → 归 base 所有，README 铁律 #1）。
+ * 插件入口（host 平面数据行 + agent 工具行；市场无关的跨市场信息源 → 归 base 所有，README 铁律 #1）。
  *
  * 为什么在 host 平面而不是某个市场的 preset 平面：FOMC 决议概率是**跨市场**信息
  * （美联储路径影响 crypto / us / cn / hk / global 全部会话），任何单一市场都不该
@@ -16,12 +16,13 @@ import Schema from '@deepseek-ai/schemastery'
 import { GammaClient, DEFAULT_TIMEOUT_MS } from './gamma.js'
 import { TRADING_PREDICTION_FEED_KEY, PolymarketService, createPolymarketPredictionFeed } from './service.js'
 import { SnapshotStore } from './snapshot.js'
+import { createPolymarketTools } from './tools.js'
 
 /** Cordis 插件名 = patch 行 id（TEMPLATES §8）。 */
 export const name = 'dsh-trading-connector-polymarket'
 
-/** 本插件不注册工具、不依赖任何宿主服务（纯 provide）。 */
-export const inject: string[] = []
+/** 注册 agent 工具面需要宿主 tools 服务（与 connector-jin10 同款；缺 inject 会让整棵树加载失败）。 */
+export const inject = ['tools']
 
 export interface Config {
   enabled: boolean
@@ -69,10 +70,20 @@ export function createPolymarketService(config: Config, overrides: ApplyOverride
 /**
  * 插件钩子（宿主签名 `apply(ctx, config)`）。
  *
+ * **一个 service 实例供两处消费**：桥/面板面（`tradingPredictionFeed`）与 agent 工具面
+ * 共用下面这个 `service`——两份取数逻辑漂移是这类数据面最容易犯的错（同一场会议在面板
+ * 与工具里给出不同概率）。工具用同名先到先得注册，不覆盖别人的工具。
+ *
  * 不接收注入参数：测试用的 fetch/时钟替身走 {@link createPolymarketService}，不往
  * 生产钩子的签名里加测试专用面（connector-jin10 同款纪律）。
  */
 export function apply(ctx: Context, config: Config): void {
   if (!config.enabled) return
-  ctx.reflect.provide(TRADING_PREDICTION_FEED_KEY, createPolymarketPredictionFeed(createPolymarketService(config)))
+  const service = createPolymarketService(config)
+  ctx.reflect.provide(TRADING_PREDICTION_FEED_KEY, createPolymarketPredictionFeed(service))
+  const tools = ctx.tools as unknown as { register(definition: unknown): void; get(name: string): unknown }
+  for (const tool of createPolymarketTools(service)) {
+    // 同名先到先得，绝不重复注册（dsh-tools 对同名重复注册直接抛错）。
+    if (tools.get(tool.name) === undefined) tools.register(tool)
+  }
 }

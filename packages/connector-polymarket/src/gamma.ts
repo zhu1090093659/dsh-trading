@@ -40,11 +40,27 @@ export interface GammaTransportOptions {
   readonly userAgent?: string
 }
 
-/** 一次 GET 的结果：状态码 + 解析后的 JSON 体 + 原始文本（证据用）。 */
+/** 一次 GET 的结果：状态码 + 解析后的 JSON 体 + 原始文本 + 响应头（证据/新鲜度用）。 */
 export interface GammaResponse {
   readonly status: number
   readonly body: unknown
   readonly text: string
+  readonly headers: Headers
+}
+
+/**
+ * 本次响应是否由 Cloudflare **共享缓存直接命中**（`cf-cache-status: HIT`）。
+ *
+ * 用途：工具面 `stale` 字段的**唯一判据**。`/events` 回
+ * `cache-control: public, max-age=300`，HIT 意味着拿到的是副本（实测 `age: 224`
+ * 的副本，见 spikes/impl-polymarket/agent-tools-ACCEPTANCE.md），最多可能比源站旧
+ * 5 分钟；MISS/DYNAMIC = 源站当次现算。
+ *
+ * 头缺失（本地夹具、非 Cloudflare 部署）返回 false——false 的语义是「没有观察到
+ * 共享缓存命中」，不是「已证明为源站实时值」，两者不可混为一谈（不猜）。
+ */
+export function isCdnCached(response: GammaResponse): boolean {
+  return response.headers.get('cf-cache-status')?.trim().toUpperCase() === 'HIT'
 }
 
 export class GammaClient {
@@ -102,7 +118,7 @@ export class GammaClient {
         `polymarket gamma ${url.pathname}: HTTP ${response.status} but the body is not JSON — ${bodySnippet(text)}`,
       )
     }
-    return { status: response.status, body, text }
+    return { status: response.status, body, text, headers: response.headers }
   }
 }
 
