@@ -126,11 +126,11 @@ auth 栅栏与 headless 静默语义都不动）；金十在同包 `tools.ts` �
 - **手写 `CHANGELOG.md` 的 `## Unreleased` 段**：本仓 CHANGELOG 由 `changeset version`
   生成，手写段会在下次 bump 被覆盖（`git log -S"未发布"` 无历史命中）。改为
   `.changeset/data-plane-agent-tools.md`。
-- **`tool-contract-gate.mjs` 的 `required: true as const` 一并修掉**：扫描器只给 `type` 剥
-  `as const`，`required: true as const` 被记成 `required: false`（影响 jin10 的
-  `flash_search.keyword`/`news_get.id`/`news_search.keyword`/`global_quote.code`/`global_klines.code`
-  与 base 的若干参数）。这是**门禁准确度缺陷**而非本次工具面缺陷，修它会把 10 个工具的冻结条目
-  从 false 改成 true，属独立变更。本次不动，另记（见 Consequences）。
+- **把 `tool-contract-gate.mjs` 的 `required: true as const` 漏判与工具面变更混在一次提交里**：
+  两者边界确实不同（一个是门禁准确度、一个是新增工具面），但修复本身只有一行归一化，且
+  「哪些工具的必填面此前被误记成 false」正是靠本次工具面变更才暴露出来的。故同一变更内分两个
+  commit 修掉（见 Consequences 的「门禁准确度缺陷已修」），既保留可回溯的边界，也不把已知的
+  静默失效留在门禁里。
 
 ## Consequences
 
@@ -147,8 +147,18 @@ auth 栅栏与 headless 静默语义都不动）；金十在同包 `tools.ts` �
   读数为准，脚本那条路径只用于交叉核对算法」。
 - `tool-contract-freeze.json` 新增 8 个工具（特殊指标 5 + Polymarket 3；indicators/jin10 两只
   由各自作者已登记），`--update` 后 `added=8 / removed=0 / changed=0`。
-- `scripts/tool-contract-gate.mjs` 的 `required: true as const` 漏判仍在（独立缺陷，见
-  Alternatives）；本次未动，避免把无关的冻结条目变更混进工具面变更。
+- **门禁准确度缺陷已修（独立 commit）**：`scripts/tool-surface-inventory.mjs` 只给 `type` 剥
+  `as const`，`required: true as const` 因此被记成 `required: false` —— required 判定静默反向，
+  T2（必填面漂移：参数改名、由必填改可选、必填被删）对该参数**永不触发**，正是本门禁要防的
+  「改了必填却全绿」。全仓 14 处参数用这种写法。修法是把剥离收敛成共享的 `literalText()`，
+  `type` 与 `required` 两处同口径（原先 `type` 侧已剥、只有 `required` 漏了）。
+  `--update` 后的实测差异**精确等于这 14 条 `required: false → true`**：added=0 / removed=0 /
+  非 required 字段差异=0，`required=true` 参数总数 188 → 202。受影响工具 13 个：
+  `base` 的 `${market}_get_ticker/_get_klines/_get_orderbook/_get_trades/_get_order`（含 orderId）、
+  `connector-jin10` 的 `flash_search`/`news_search`/`news_get`/`global_quote`/`global_klines`、
+  `connector-polymarket` 的 `prediction_search_events`/`prediction_event_detail`、
+  `client-ui-special-indicators` 的 `special_indicators_get_sector_series`。
+  回归用例 `scripts/tool-surface-inventory.test.mjs`（`required: true as const` 与裸写法读出同一形状）。
 - `@dshtrading/connector-polymarket` 补 `@deepseek-ai/dsh-tools` peerDependency：不声明时
   tsdown 会把 host SDK 相对化内联进 `lib/node_modules`，产物 630 kB 且带一份宿主外的私有副本
   （实测 `Cannot find module '../package.json'`，直接 import 产物即崩）。

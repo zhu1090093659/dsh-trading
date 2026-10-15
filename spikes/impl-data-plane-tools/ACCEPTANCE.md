@@ -136,9 +136,40 @@ pnpm --filter @dshtrading/connector-jin10 test    → 11 files / 102 tests passe
 pnpm --filter @dshtrading/connector-polymarket test → 6 files / 71 tests passed
 pnpm --filter @dshtrading/client-ui-special-indicators test → 10 files / 96 tests passed
 node scripts/tool-contract-gate.mjs               → ✓（冻结 166，本次 --update added=8 / removed=0 / changed=0）
+pnpm test:scripts                                 → 19 files / 143 tests passed（含本次新增的 required 归一化回归用例）
 pnpm test:audit                                   → 通过（无新增测试债）
 node scripts/typecheck-gate.mjs                   → 371 / 基线 387，未超基线
 ```
+
+### 4.1 门禁准确度缺陷修复的冻结面差异（独立 commit）
+
+`scripts/tool-surface-inventory.mjs` 此前只给 `type` 剥 `as const`，`required: true as const`
+被记成 `required: false`（required 判定静默反向，T2 必填面漂移对该参数永不触发）。修法是把剥离
+收敛成共享 `literalText()`，`type` 与 `required` 同口径。`--update` 后的实测差异：
+
+```
+tools before/after: 166 166      added: []   removed: []
+非 required 差异计数: 0
+required=true 参数总数: before=188  after=202
+--- 逐条（全部 required false -> true）---
+  @dshtrading/base#${market}_get_ticker#symbol
+  @dshtrading/base#${market}_get_klines#symbol
+  @dshtrading/base#${market}_get_orderbook#symbol
+  @dshtrading/base#${market}_get_trades#symbol
+  @dshtrading/base#${market}_get_order#symbol
+  @dshtrading/base#${market}_get_order#orderId
+  @dshtrading/connector-jin10#flash_search#keyword
+  @dshtrading/connector-jin10#news_search#keyword
+  @dshtrading/connector-jin10#news_get#id
+  @dshtrading/connector-jin10#global_quote#code
+  @dshtrading/connector-jin10#global_klines#code
+  @dshtrading/connector-polymarket#prediction_search_events#keyword
+  @dshtrading/connector-polymarket#prediction_event_detail#eventId
+  @dshtrading/client-ui-special-indicators#special_indicators_get_sector_series#code
+```
+
+回归用例：`scripts/tool-surface-inventory.test.mjs` 新增「required 的 as const 写法与裸字面量
+读出同一形状」；`node scripts/tool-contract-gate.mjs` 在修复后 freeze 上判 ✓ 无漂移。
 
 （完整门禁 `pnpm gates:all` 已在最终 HEAD `98c03ba6f47532db73d84beef13a075b7f2ded0f`（含 main 的
 桌面启动页 CSP 修复合并）现场复跑：**17 通过 / 0 失败**，GATES_EXIT=0；同 HEAD 上 `pnpm -r build` 亦为

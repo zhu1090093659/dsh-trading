@@ -26,7 +26,7 @@
       {
         "name": "symbol",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "interval",
@@ -48,12 +48,12 @@
       {
         "name": "symbol",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "orderId",
         "type": "string",
-        "required": false
+        "required": true
       }
     ],
     "outputForm": "none"
@@ -64,7 +64,7 @@
       {
         "name": "symbol",
         "type": "string",
-        "required": false
+        "required": true
       }
     ],
     "outputForm": "none"
@@ -91,7 +91,7 @@
       {
         "name": "symbol",
         "type": "string",
-        "required": false
+        "required": true
       }
     ],
     "outputForm": "none"
@@ -102,7 +102,7 @@
       {
         "name": "symbol",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "limit",
@@ -255,7 +255,7 @@
       {
         "name": "code",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "days",
@@ -878,7 +878,7 @@
       {
         "name": "keyword",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "limit",
@@ -905,7 +905,7 @@
       {
         "name": "code",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "time",
@@ -926,7 +926,7 @@
       {
         "name": "code",
         "type": "string",
-        "required": false
+        "required": true
       }
     ],
     "outputForm": "object"
@@ -948,7 +948,7 @@
       {
         "name": "id",
         "type": "string",
-        "required": false
+        "required": true
       }
     ],
     "outputForm": "object"
@@ -975,7 +975,7 @@
       {
         "name": "keyword",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "cursor",
@@ -1305,7 +1305,7 @@
       {
         "name": "eventId",
         "type": "string",
-        "required": false
+        "required": true
       }
     ],
     "outputForm": "none"
@@ -1327,7 +1327,7 @@
       {
         "name": "keyword",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "limit",

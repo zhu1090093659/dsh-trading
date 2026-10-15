@@ -196,6 +196,19 @@ function propRaw(original, obj, key) {
   return { ...range, text: original.slice(range.start, range.end).replace(/,\s*$/, '').trim() }
 }
 
+/**
+ * 字面量属性值的归一化文本：剥掉 `as const` 与包裹引号。
+ *
+ * 为什么需要：工具参数 schema 允许 `required: true as const` 与 `required: true`
+ * 两种写法（前者为 TS 字面量推断所需），两者语义完全相同；但扫描器若直接比较原始
+ * 文本，`true as const` 会被读成 `false` —— required 判定静默反向，T2（必填面漂移）
+ * 对该参数永不触发，正是本门禁要防的「改了必填却全绿」。type 侧原本就做了同样的
+ * 剥离（只有 required 漏了），这里收敛成一个共享归一化，两处同口径。
+ */
+function literalText(raw) {
+  return raw.replace(/\s+as\s+const$/, '').replace(/^['"]|['"]$/g, '').trim()
+}
+
 function constObject(original, masked, name) {
   if (!/^[A-Za-z_$][\w$]*$/.test(name)) return undefined
   const re = new RegExp('(?:const|let|var)\\s+' + name + '\\s*=\\s*')
@@ -340,9 +353,9 @@ export function extractDefineTools(original, masked) {
         const shape = { name: p.key, type: undefined, required: false, enum: false, default: false, hasDescription: false }
         if (inner) {
           const t = propRaw(original, inner, 'type')
-          if (t) shape.type = t.text.replace(/\s+as\s+const$/, '').replace(/^['"]|['"]$/g, '')
+          if (t) shape.type = literalText(t.text)
           const r = propRaw(original, inner, 'required')
-          shape.required = r !== undefined && r.text === 'true'
+          shape.required = r !== undefined && literalText(r.text) === 'true'
           shape.enum = propRaw(original, inner, 'enum') !== undefined
           shape.default = propRaw(original, inner, 'default') !== undefined
           shape.hasDescription = propRaw(original, inner, 'description') !== undefined
