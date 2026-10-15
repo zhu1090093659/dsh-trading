@@ -45,7 +45,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-agent-preset-registry": ">=0.2.0-rc.2",
     "@dshtrading/api": "workspace:^",
     "@dshtrading/connector-jin10": "workspace:^",
     "@dshtrading/connector-polymarket": "workspace:^",
@@ -61,6 +60,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-agent-preset-registry": ">=0.2.0-rc.2",
     "@deepseek-ai/dsh-tools": ">=0.2.0-rc.2",
     "@deepseek-ai/dsh-skill": ">=0.2.0-rc.2",
     "@deepseek-ai/schemastery": ">=3.18.0"

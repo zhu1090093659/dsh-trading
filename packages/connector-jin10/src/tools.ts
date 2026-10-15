@@ -11,6 +11,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Jin10Service } from './service.js'
 import { FLASH_PAGE_SIZE, SEARCH_FLASH_MAX } from './service.js'
+import { MACRO_CALENDAR_MAX } from './macro-service.js'
 import type { Jin10CalendarEntry, Jin10Instrument, Jin10NewsItem, Jin10NewsPage } from './parse.js'
 
 const textOutput = {
@@ -169,12 +170,12 @@ export function createJin10Tools(service: Jin10Service): Array<ReturnType<typeof
         + 'Values are the publisher snapshot as of the call — the same release may be revised; treat actual=null as "not published yet". '
         + 'Upstream rate limit: 1500 calls per tool per Beijing calendar day.',
       parameters: {
-        limit: { type: 'number', description: 'Max entries to return (integer 1..250; default 40, earliest first)' },
+        limit: { type: 'number', description: `Max entries to return (integer 1..${MACRO_CALENDAR_MAX}; default 40, earliest first)` },
       },
       output: textOutput,
       async execute(raw) {
         const args = (raw ?? {}) as Record<string, unknown>
-        const limit = readLimit(args.limit, 40, 250)
+        const limit = readLimit(args.limit, 40, MACRO_CALENDAR_MAX)
         const entries = await service.listCalendar(limit)
         if (entries.length === 0) return 'econ_calendar: the upstream calendar is empty for the current week.'
         return [

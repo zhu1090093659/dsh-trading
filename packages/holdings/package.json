@@ -33,11 +33,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
     "@dshtrading/dsh-home": "workspace:^"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.0"
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-tools": ">=0.2.0-rc.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

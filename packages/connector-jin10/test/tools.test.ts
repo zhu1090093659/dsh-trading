@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Jin10McpClient } from '../src/mcp.js'
 import { Jin10Service } from '../src/service.js'
 import { createJin10Tools } from '../src/tools.js'
+import { MACRO_CALENDAR_MAX } from '../src/macro-service.js'
 
 const FLASH = {
   content: '【英国海事机构：一船只在霍尔木兹海峡遭袭】金十数据9月13日讯，船员状况不明。',
@@ -117,6 +118,25 @@ describe('金十工具面', () => {
     expect(text).toContain('★2')
     expect(text).toContain('前值=12871 预期=- 公布=12075')
     expect(text).toContain('影响=利空')
+  })
+
+  it('用户取整周日历：工具上限与 MACRO_CALENDAR_MAX 同源，400 放行、越界截到 400', async () => {
+    // Given 上游一次回整周 450 条（超过旧上界 250，也超过 400）与工具声明的参数表
+    const week = Array.from({ length: 450 }, (_unused, index) => ({ pub_time: '2026-09-07 07:50', star: 2, title: `条目${index}` }))
+    const { byName } = toolsOf({ list_calendar: week })
+    const tool = byName.get('econ_calendar')!
+    const limitDescription = (tool as unknown as { parameters: { properties: { limit: { description: string } } } }).parameters.properties.limit.description
+
+    // When 按声明的上界请求 400 条，以及请求一个越界值
+    const atMax = String(await tool.execute({ limit: MACRO_CALENDAR_MAX }))
+    const overMax = String(await tool.execute({ limit: 500 }))
+
+    // Then 上界常量是 400；描述里的上界由它拼出（不再硬编码 250）；400 条全部返回、越界被截到 400
+    expect(MACRO_CALENDAR_MAX).toBe(400)
+    expect(limitDescription).toContain(`1..${MACRO_CALENDAR_MAX}`)
+    expect(limitDescription).not.toContain('250')
+    expect(atMax).toContain(`econ_calendar — ${MACRO_CALENDAR_MAX} entr(ies)`)
+    expect(overMax).toContain(`econ_calendar — ${MACRO_CALENDAR_MAX} entr(ies)`)
   })
 
   it('global_instruments 支持关键词过滤，global_quote 回 JSON 报价', async () => {

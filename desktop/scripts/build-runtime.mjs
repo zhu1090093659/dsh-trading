@@ -123,9 +123,20 @@ function adoptSatelliteTarballs(vendorDir, tarballs) {
   }
 }
 
-/** Registry package carried alongside the trading bundles. */
+/**
+ * Registry packages carried as real profile dependencies. The trading workspace
+ * declares every @deepseek-ai SDK package as a peerDependency (the host provides
+ * it at run time), but the profile workspace installs with autoInstallPeers:
+ * false, so a peer nothing else pulls in is never materialized into the seed.
+ * The profile tree is the resolution root for the plugins it loads, so the SDK
+ * packages those plugins value-import must be declared here; the app's
+ * normalizeProfileCohort then relinks the installed copies onto the bundled
+ * host runtime so both halves share one module instance.
+ */
 const REGISTRY_DEPENDENCIES = {
   '@deepseek-ai/dsh-web-search-exa': '0.2.0-rc.2',
+  '@deepseek-ai/dsh-tools': '0.2.0-rc.2',
+  '@deepseek-ai/dsh-agent-preset-registry': '0.2.0-rc.2',
 };
 /** Profile bundles: the official web surface plus the trading market bundles. */
 const PROFILE_BUNDLES = [

@@ -35,6 +35,7 @@
     "@dshtrading/client-ui-masters-quotes": "workspace:^",
     "@dshtrading/client-ui-updater": "workspace:^",
     "@dshtrading/dsh-i18n": "workspace:^",
+    "@dshtrading/indicator-supertrend": "workspace:^",
     "@xmanrui/dsh-im": "^4.20.2",
     "@linxin666/dsh-client-ui-plugin-manager": "^0.3.21",
     "@linxin666/dsh-client-ui-model-capabilities": "^0.3.21"

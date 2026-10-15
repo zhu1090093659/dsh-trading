@@ -167,6 +167,10 @@
       "owner": "bundle:gui",
       "name": "@xmanrui/dsh-im"
     },
+    "dsh-trading-indicator-supertrend": {
+      "owner": "bundle:gui",
+      "name": "@dshtrading/indicator-supertrend"
+    },
     "dsh-trading-indicators": {
       "owner": "bundle:base",
       "name": "@dshtrading/indicators/plugin"

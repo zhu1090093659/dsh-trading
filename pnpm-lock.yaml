@@ -1559,6 +1559,9 @@ importers:
       '@dshtrading/dsh-i18n':
         specifier: workspace:^
         version: link:../dsh-i18n
+      '@dshtrading/indicator-supertrend':
+        specifier: workspace:^
+        version: link:../indicator-supertrend
       '@linxin666/dsh-client-ui-model-capabilities':
         specifier: ^0.3.21
         version: 0.3.24(react@18.3.1)

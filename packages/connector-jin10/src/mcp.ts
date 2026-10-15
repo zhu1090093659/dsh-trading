@@ -39,7 +39,6 @@ const METHOD_CAPABILITY: Readonly<Partial<Record<string, 'tools' | 'resources'>>
   'tools/list': 'tools',
   'tools/call': 'tools',
   'resources/read': 'resources',
-  'resources/templates/list': 'resources',
 })
 
 export interface McpToolDescriptor {
