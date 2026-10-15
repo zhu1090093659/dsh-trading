@@ -28,6 +28,7 @@ const {
   normalizeProfileCohort,
   findFreePort,
   waitForGui,
+  waitForTokenUrl,
   parseTokenUrlLine,
   formatHostExitDiagnostic,
   toNodeImportSpecifier,
@@ -326,14 +327,22 @@ async function boot() {
     }
   });
   await waitForGui(port, { deadlineMs: READY_TIMEOUT_MS, isAlive: () => !exited });
-  // The token URL line can land a moment after the port answers; give it a
-  // short grace period before falling back to the bare (401) URL.
-  for (let waited = 0; tokenUrl === null && waited < 5000; waited += 250) {
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
-  }
-  const target = tokenUrl ?? ('http://127.0.0.1:' + port + '/');
+  // The port answering is not the handoff: the host binds its web server, then
+  // loads the profile's plugins and audits the startup entries, and only then
+  // prints the tokenized GUI URL. A fixed grace period here used to give up and
+  // load the bare URL, which is always a 401 page (the token is per-process and
+  // this launch's cookie does not exist yet) — measured on the trading profile
+  // 2026-10-15, the line landed after the old 5s window. Wait for the line
+  // itself, for as long as the whole boot is allowed to take, and never load a
+  // URL that cannot authenticate. The window stays on the splash until then.
+  const target = await waitForTokenUrl({
+    readUrl: () => (tokenUrl === null ? undefined : tokenUrl),
+    isAlive: () => !exited,
+    deadlineMs: READY_TIMEOUT_MS,
+    pollMs: 100,
+  });
   await pruneStaleAuthCookies(mainWindow.webContents.session, 'http://127.0.0.1:' + port + '/');
-  pushLogLine('[desktop] GUI ready, loading ' + (tokenUrl === null ? 'the bare URL (no token line seen)' : 'the tokenized URL'));
+  pushLogLine('[desktop] GUI ready, loading the tokenized URL');
   await mainWindow.loadURL(target);
 }
 

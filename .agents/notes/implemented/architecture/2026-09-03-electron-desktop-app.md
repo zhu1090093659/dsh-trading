@@ -10,7 +10,7 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 
 仓库新增顶层 `desktop/` 目录（不在 pnpm workspace glob 内），承载一个用 electron-builder 构建的 Electron 应用，目标平台为 macOS（dmg/zip，arm64+x64）与 Windows（nsis/zip，x64），内部分发不签名。机制骨架从 dsh-web 仓库的同名工程迁移而来（先落地、后改造），按本仓载荷改造。
 
-**运行时一律内置，绝不假设。** 安装包携带：每个目标平台的官方 Node.js 发行版（构建时按 SHASUMS256.txt 校验 sha256，`resources/runtime/node-<os>-<cpu>/`）、锁定版本的 `@deepseek-ai/dsh` 宿主及其依赖闭包（`runtime/host/`，`autoInstallPeers: true` 以对齐 npm 全局安装的闭包语义），以及预装好的 trading-web profile——bundle 为 `dsh-base` + `dsh-web-app` + `@dsh-trading/base` + `crypto/us/cn/hk`。启动时 Electron 主进程以子进程方式拉起 `<内置 node> <内置宿主>/lib/bin.js --profile trading-web --no-open --host 127.0.0.1 --port <空闲端口>`，待 GUI 就绪后加载宿主在 stdout 打印的带 token URL（认证门每次进程启动签发一次性 token，在应用窗口内换取签名会话 cookie）。
+**运行时一律内置，绝不假设。** 安装包携带：每个目标平台的官方 Node.js 发行版（构建时按 SHASUMS256.txt 校验 sha256，`resources/runtime/node-<os>-<cpu>/`）、锁定版本的 `@deepseek-ai/dsh` 宿主及其依赖闭包（`runtime/host/`，`autoInstallPeers: true` 以对齐 npm 全局安装的闭包语义），以及预装好的 trading-web profile——bundle 为 `dsh-base` + `dsh-web-app` + `@dsh-trading/base` + `crypto/us/cn/hk`。启动时 Electron 主进程以子进程方式拉起 `<内置 node> <内置宿主>/lib/bin.js --profile trading-web --no-open --host 127.0.0.1 --port <空闲端口>`，然后加载宿主在 stdout 打印的带 token URL（认证门每次进程启动签发一次性 token，在应用窗口内换取签名会话 cookie）。"就绪"的判据是**那一行本身**而不是端口应答：端口先答 401，宿主加载插件并跑启动审计之后才打印该行（见 [桌面壳等 token URL 行](../bug-fix/2026-10-15-desktop-shell-waits-for-token-url.md)）。
 
 **不发布 npm 的载荷用本地打包 tgz 解决。** `build-runtime.mjs` 先 `pnpm -r build` 全仓，再对每个 workspace 包 `pnpm pack` 进 `runtime/profile-trading/vendor/`，生成 profile 清单：直接依赖与 overrides 全部指向 `file:./vendor/<pkg>.tgz`。生成的清单与 lockfile 不入库，可重现性由本仓库版本承担；拉取更新后重跑构建即可把连接器/策略更新带进安装包。
 
@@ -38,6 +38,7 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 - 未签名构建触发 Gatekeeper / SmartScreen 提示；签名、公证与自动更新是明确后续，不在本期。（2026-09-05 跟进：自动更新已落地为 @dshtrading/client-ui-updater 插件 + 发布资产增量通道，见 [2026-09-05-auto-update-plugin](../feature/2026-09-05-auto-update-plugin.md)；签名/公证仍属后续。）
 - 应用内插件安装由内置 pnpm 承担（2026-09-05 内置完整工具链落地，见 [内置 pnpm 工具链 note](../process/2026-09-05-desktop-bundled-pnpm-toolchain.md)）：它在 profile 目录里按 `file:./vendor/*.tgz` 解析插件，所以 seed 必须自洽（见上文 tgz 决策）。资产式安装不受影响。
 - 载荷由 workspace 检出状态构建：仓库更新后需重跑 `npm run build-runtime` 才会进入安装包。
+- 启动路径的两条硬事实：安装位窗口加载的 URL 必须带本进程 token（裸 URL 恒 401，桌面壳不再有裸 URL 兜底，宿主不打印该行时给错误页 + 日志尾部），见 [桌面壳等 token URL 行](../bug-fix/2026-10-15-desktop-shell-waits-for-token-url.md)。
 - dsh-web 仓库保留了同构骨架（其 dev 分支）作为 Web GUI 全家桶桌面版的地基；两侧的 profile 播种与打包脚本各自维护。
 
 ## Testing

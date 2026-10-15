@@ -22,6 +22,7 @@ const {
   profileAction,
   applyProfileSeed,
   parseShasums,
+  waitForTokenUrl,
   parseTokenUrlLine,
   formatHostExitDiagnostic,
   toNodeImportSpecifier,
@@ -313,6 +314,50 @@ test('parseTokenUrlLine extracts the host token URL', () => {
     parseTokenUrlLine('dsh web: http://127.0.0.1:34981/?token=abc-DEF_123'),
     'http://127.0.0.1:34981/?token=abc-DEF_123');
   assert.equal(parseTokenUrlLine('[desktop] boot failed'), undefined);
+});
+
+test('管理员从带 LAN 后缀的宿主行里取到回环 token URL', () => {
+  // Given the host printed its token line for a non-loopback bind, with the LAN URL appended
+  const line = 'dsh web: http://127.0.0.1:34981/?token=abc-DEF_123 (LAN: http://192.168.1.5:34981/?token=abc-DEF_123)';
+
+  // When the line is parsed
+  const url = parseTokenUrlLine(line);
+
+  // Then the loopback token URL comes back, and the browser-handoff line yields nothing.
+  assert.equal(url, 'http://127.0.0.1:34981/?token=abc-DEF_123');
+  assert.equal(parseTokenUrlLine('dsh web: opening the default browser; pass --no-open to disable'), undefined);
+});
+
+test('用户等到宿主稍后打印的 token URL 才加载，不再落到裸 URL', async () => {
+  // Given a host that answers its port before it prints the token line
+  const line = 'http://127.0.0.1:51235/?token=late';
+  let reads = 0;
+
+  // When the shell waits for the tokenized URL
+  const url = await waitForTokenUrl({
+    readUrl: () => {
+      reads += 1;
+      return reads < 3 ? undefined : line;
+    },
+    isAlive: () => true,
+    deadlineMs: 5000,
+    pollMs: 1,
+  });
+
+  // Then the late tokenized URL is returned, never the bare one.
+  assert.equal(url, line);
+  assert.ok(reads >= 3);
+});
+
+test('用户拿到宿主退出与超时的明确报错，而不是 401 页面', async () => {
+  // Given a host that exits before printing its token line, and one that never prints it
+  // When the shell waits for the tokenized URL
+  const exited = waitForTokenUrl({ readUrl: () => undefined, isAlive: () => false, deadlineMs: 5000, pollMs: 1 });
+  const stalled = waitForTokenUrl({ readUrl: () => undefined, isAlive: () => true, deadlineMs: 20, pollMs: 1 });
+
+  // Then both waits fail with a diagnostic instead of returning an unauthenticated URL.
+  await assert.rejects(exited, /exited before it printed its tokenized GUI URL/);
+  await assert.rejects(stalled, /timed out after .* waiting for the host to print its tokenized GUI URL/);
 });
 
 test('formatHostExitDiagnostic detects missing VC++ redistributable on Windows', () => {

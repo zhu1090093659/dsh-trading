@@ -13,7 +13,7 @@ Status: implemented
 ## Decision
 
 - 本地重建后重启桌面壳用干净环境启动：`env -u ELECTRON_RUN_AS_NODE open "/Applications/DSH Trading.app"`，或让用户从 Dock 点开（Dock 走 launchd 环境，不带会话变量）；`ELECTRON_RUN_AS_NODE` 是必剥的那个。继承来的 `DSH_HOME` 自 2026-10-14 起由壳内判据忽略（非 `-trading` 一律丢弃并告警，见 [2026-09-08-desktop-default-trading-home](2026-09-08-desktop-default-trading-home.md)），`-u DSH_HOME` 只剩稳妥作用。`open --env DSH_HOME=…` 只覆盖 home，其余变量照旧继承，所以发布抽查命令也要 `env -u ELECTRON_RUN_AS_NODE` 包一层（操作入口见 [dsh-trading-release skill](../../../skills/dsh-trading-release/SKILL.md) 第 5 节）。
-- 重建验证路径固化为：`cd desktop && npm run prepare-runtime && npm run dist:mac`，随后核对 `dist/mac-arm64/DSH Trading.app/Contents/Resources/runtime/VERSION.json` 的 `builtAt`，再替换 `/Applications`。
+- 重建验证路径固化为：`cd desktop && npm run prepare-runtime && npm run dist:mac`，随后核对 `dist/mac-arm64/DSH Trading.app/Contents/Resources/runtime/VERSION.json` 的 `builtAt`，再替换 `/Applications`。改动只落在 `app.asar` 内的壳源码（`desktop/src/*`）时，本机安装位可只换这一个归档：`asar extract` 到临时目录 → 覆盖改动文件 → `asar pack` 回原路径，再用 `asar extract-file` 读回核对 md5；载荷与 profile 不变的场景用这条，涉及它们仍走完整重建。
 - profile 新鲜度不靠 mtime 猜：用 `shasum` 对比工作区 `packages/<pkg>/lib` 产物、`~/.dsh-trading/profiles/trading-web/node_modules`、staged 载荷、已安装 app 载荷四方内容。实证发现 profile 安装与工作区构建产物是 pnpm 硬链接耦合（同 inode），工作区 `pnpm -r build` 后 profile 直接共享新产物——这是本机 pnpm 行为的实证，不是契约，每次仍以哈希对比为准。
 - `~/.dsh-trading/profiles/trading-web` 归属不变，继续 CLI 维护：加包/刷新走 `scripts/sync-profile-overrides.mjs` + `dsh plugin --profile trading-web` + `scripts/refresh-trading-web-profile.sh`，app/runtime 与全新 home 走完整安装包。不为启用应用内「立即更新」增量而让桌面壳接管这个 profile（见 Alternatives considered）。
 

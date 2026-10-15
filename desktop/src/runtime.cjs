@@ -313,8 +313,16 @@ async function waitForGui(port, options) {
   }
 }
 
-/** The host prints its tokenized GUI URL on this stdout line. */
-const TOKEN_URL_PATTERN = /^dsh web: (\S+)$/;
+/**
+ * The host prints its tokenized GUI URL on this stdout line. Only the URL
+ * token is required, not the whole rest of the line: a non-loopback bind
+ * appends " (LAN: <url>)" (dsh-web-app prints one line with both), and an
+ * anchored end-of-line pattern turns that into "no token line seen" — which
+ * used to mean loading the unauthenticated URL (2026-10-15). Matching the
+ * scheme also rejects the host's other "dsh web: opening the default
+ * browser…" line.
+ */
+const TOKEN_URL_PATTERN = /^dsh web: (https?:\/\/\S+)/;
 
 /**
  * Extract the tokenized GUI URL from one host stdout line, if any.
@@ -324,6 +332,37 @@ const TOKEN_URL_PATTERN = /^dsh web: (\S+)$/;
 function parseTokenUrlLine(line) {
   const match = TOKEN_URL_PATTERN.exec(line);
   return match === null ? undefined : match[1];
+}
+
+/**
+ * Wait for the host's tokenized GUI URL line.
+ *
+ * The port answering is not readiness: the web server binds and answers 401
+ * before the host has loaded its plugins and printed this line (observed on
+ * the trading profile 2026-10-15). Without the line there is no way in — the
+ * launch token is per-process and no cookie exists for a port the shell has
+ * never authenticated on — so the shell waits here while the host is alive
+ * instead of loading the bare URL and parking the window on the 401 page.
+ * @param {object} options
+ * @param {() => (string | undefined)} options.readUrl - Current parsed URL, if the line has arrived.
+ * @param {() => boolean} options.isAlive - Whether the host process is still running.
+ * @param {number} options.deadlineMs - Budget for the line to arrive.
+ * @param {number} options.pollMs - Poll interval.
+ * @returns {Promise<string>} The tokenized URL the window must load.
+ */
+async function waitForTokenUrl(options) {
+  const deadline = Date.now() + options.deadlineMs;
+  for (;;) {
+    const url = options.readUrl();
+    if (url !== undefined) return url;
+    if (!options.isAlive()) throw new Error('the dsh host process exited before it printed its tokenized GUI URL');
+    if (Date.now() >= deadline) {
+      throw new Error(`timed out after ${Math.round(options.deadlineMs / 1000)}s waiting for the host to print its tokenized GUI URL`);
+    }
+    await new Promise((resolvePromise) => {
+      setTimeout(resolvePromise, options.pollMs);
+    });
+  }
 }
 
 /**
@@ -696,6 +735,7 @@ module.exports = {
   probeGui,
   findFreePort,
   waitForGui,
+  waitForTokenUrl,
   parseTokenUrlLine,
   parseShasums,
   formatHostExitDiagnostic,
