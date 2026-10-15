@@ -21,6 +21,9 @@ export type { HomeFileLockOptions, HomeFileLock, HomeFileLockOwner } from './fil
 // 整表「锁内读-改-原子写」与跨实例读新鲜度缓存（各 store 唯一入口）。
 export { transactStore, SKIP_WRITE, createStoreCache } from './store-transaction.ts'
 export type { SkipWrite, TransactStoreOptions, StoreCache } from './store-transaction.ts'
+// 「记录 store 适配器」：缓存 + 事务 + 成功才发布三件事的唯一装配点；领域解码由各 store 的回调注入。
+export { createRecordStoreAdapter, readStoreText } from './record-store.ts'
+export type { RecordStoreAdapter, RecordStoreAdapterOptions, RecordStoreMutate } from './record-store.ts'
 
 const DEFAULT_HOME_DIR_NAME = '.dsh'
 /** 交易 home 的目录名（与 CLI wrapper / 各脚本的约定一致）。 */

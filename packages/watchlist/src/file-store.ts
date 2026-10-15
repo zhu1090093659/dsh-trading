@@ -1,13 +1,15 @@
 /**
  * 文件持久化版自选/选中 store（Node.js 宿主侧使用，issue #32 规格）。
  *
- * 写路径经 `@dshtrading/dsh-home` 的 {@link transactStore}——跨进程排他锁 + 锁内
- * 新鲜读盘 + 原子写（2026-10-09 多进程互相覆盖事故修复）：桌面端与 CLI 各写一行时
- * 双方都留在盘上，不再互相抹掉（此前是内存缓存 + 整表回写）。进程内的 enqueue 串行化
- * 保留（它保证同一进程内的读改写顺序），跨进程部分由锁承担。
+ * 读写骨架经 `@dshtrading/dsh-home` 的 {@link createRecordStoreAdapter}——跨进程排他锁 +
+ * 锁内新鲜读盘 + 原子写 + 落盘成功后才发布缓存（2026-10-09 多进程互相覆盖事故修复）：
+ * 桌面端与 CLI 各写一行时双方都留在盘上，不再互相抹掉（此前是内存缓存 + 整表回写）。
+ * 进程内的 enqueue 串行化保留（它保证同一进程内的读改写顺序），跨进程部分由锁承担。
+ *
+ * 本文件是「多文件形态」的自选域：成员关系（本文件）、分组注册表（容器包裹）与选中
+ * 记录（非整表对象）各建一个适配器，读写形态互不共享。
  */
-import { readFile } from 'node:fs/promises'
-import { createStoreCache, transactStore } from '@dshtrading/dsh-home'
+import { createRecordStoreAdapter, readStoreText } from '@dshtrading/dsh-home'
 import type { SelectionRecord, SelectionStore, WatchlistGroup, WatchlistGroupsStore, WatchlistGroupWriteResult, WatchlistStore, WatchlistsMap } from './index.ts'
 import { newWatchlistGroupId, normalizeWatchlistRow } from './index.ts'
 import { WATCHLIST_SEEDS } from './seeds.ts'
@@ -23,29 +25,37 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
     return next
   }
 
-  /** 新鲜读盘（坏 JSON/非对象按空表）；供 load 与锁内重读共用。 */
-  async function readFromDisk(): Promise<WatchlistsMap> {
+  /** 读盘/解析失败的日志前缀（坏 JSON 与非 ENOENT 读失败同一条，与既有 load 口径逐字一致）。 */
+  const READ_FAILED = `[dsh-trading/watchlist] failed to read watchlists from ${filePath}:`
+
+  /** 文本 → 市场表：坏 JSON / 非对象降级空表，其余（含数组）静默丢弃（不外包）。 */
+  function decode(text: string | undefined): WatchlistsMap {
+    if (text === undefined) return {}
     try {
-      const content = await readFile(filePath, 'utf8')
-      const parsed = JSON.parse(content) as WatchlistsMap
+      const parsed = JSON.parse(text) as WatchlistsMap
       return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
-    } catch (err: any) {
-      if (err?.code !== 'ENOENT') {
-        console.error(`[dsh-trading/watchlist] failed to read watchlists from ${filePath}:`, err)
-      }
+    } catch (err) {
+      console.error(READ_FAILED, err)
       return {}
     }
   }
 
-  const cache = createStoreCache(filePath, readFromDisk)
+  const store = createRecordStoreAdapter<WatchlistsMap>({
+    filePath,
+    logPrefix: LOG_PREFIX,
+    // 新鲜读盘（坏 JSON/非对象按空表）；供 load 与锁内重读共用。
+    readFromDisk: () => readStoreText(filePath, READ_FAILED),
+    decode,
+    encode: map => map,
+  })
 
   return {
     async list() {
-      return { ...(await cache.load()) }
+      return { ...(await store.load()) }
     },
     async save(next) {
       await enqueue(async () => {
-        cache.replace(await transactStore(filePath, readFromDisk, () => ({ ...next }), (map) => map, LOG_PREFIX))
+        await store.commit(() => ({ ...next }))
       })
     },
     // 读改写全程入队串行化（issue #58）并落在跨进程锁内：此前只有写盘排队，两个并发
@@ -53,27 +63,27 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
     async add(market, instrument) {
       let added = false
       await enqueue(async () => {
-        cache.replace(await transactStore(filePath, readFromDisk, (onDisk) => {
+        await store.commit((onDisk) => {
           const rows = onDisk[market] ?? []
           if (rows.some(row => row.symbol === instrument.symbol)) return onDisk
           // 与内存版同款归一（审查 L6）：groups 空数组不落键、去重，落盘形状一致。
           added = true
           return { ...onDisk, [market]: [...rows, normalizeWatchlistRow(instrument)] }
-        }, (map) => map, LOG_PREFIX))
+        })
       })
       return added
     },
     async remove(market, symbol) {
       let removed = false
       await enqueue(async () => {
-        cache.replace(await transactStore(filePath, readFromDisk, (onDisk) => {
+        await store.commit((onDisk) => {
           const existing = onDisk[market]
           const rows = Array.isArray(existing) ? existing : (WATCHLIST_SEEDS[market] ?? [])
           const nextRows = rows.filter(row => row.symbol !== symbol)
           if (nextRows.length === rows.length) return onDisk
           removed = true
           return { ...onDisk, [market]: nextRows }
-        }, (map) => map, LOG_PREFIX))
+        })
       })
       return removed
     },
@@ -81,7 +91,7 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
     async assignGroup(market, symbol, groupId, member) {
       let assigned = false
       await enqueue(async () => {
-        cache.replace(await transactStore(filePath, readFromDisk, (onDisk) => {
+        await store.commit((onDisk) => {
           const rows = onDisk[market]
           if (!Array.isArray(rows)) return onDisk
           const index = rows.findIndex(row => row.symbol === symbol)
@@ -103,14 +113,14 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
           })
           assigned = true
           return { ...onDisk, [market]: nextRows }
-        }, (map) => map, LOG_PREFIX))
+        })
       })
       return assigned
     },
     async stripGroup(groupId) {
       let cleaned = 0
       await enqueue(async () => {
-        cache.replace(await transactStore(filePath, readFromDisk, (onDisk) => {
+        await store.commit((onDisk) => {
           const next: WatchlistsMap = {}
           for (const [market, rows] of Object.entries(onDisk)) {
             if (!Array.isArray(rows)) continue
@@ -133,7 +143,7 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
             next[market] = changed ? nextRows : rows
           }
           return cleaned > 0 ? next : onDisk
-        }, (map) => map, LOG_PREFIX))
+        })
       })
       return cleaned
     },
@@ -154,40 +164,48 @@ export function createFileWatchlistGroupsStore(filePath: string): WatchlistGroup
     return next
   }
 
-  /** 新鲜读盘（容器包裹；坏形过滤）；供 load 与锁内重读共用。 */
-  async function readFromDisk(): Promise<WatchlistGroup[]> {
+  /** 读盘/解析失败的日志前缀（坏 JSON 与非 ENOENT 读失败同一条，与既有 load 口径逐字一致）。 */
+  const READ_FAILED = `[dsh-trading/watchlist] failed to read watchlist groups from ${filePath}:`
+
+  /** 文本 → 分组表：容器包裹（`{ groups: [] }`）逐条过滤形状；坏 JSON 降级空表并打日志。 */
+  function decode(text: string | undefined): WatchlistGroup[] {
+    if (text === undefined) return []
     try {
-      const content = await readFile(filePath, 'utf8')
-      const parsed = JSON.parse(content) as Partial<WatchlistGroupsFile>
+      const parsed = JSON.parse(text) as Partial<WatchlistGroupsFile>
       return Array.isArray(parsed.groups)
         ? parsed.groups.filter(group =>
             typeof group === 'object' && group !== null
             && typeof (group as WatchlistGroup).id === 'string' && (group as WatchlistGroup).id !== ''
             && typeof (group as WatchlistGroup).name === 'string')
         : []
-    } catch (err: any) {
-      if (err?.code !== 'ENOENT') {
-        console.error(`[dsh-trading/watchlist] failed to read watchlist groups from ${filePath}:`, err)
-      }
+    } catch (err) {
+      console.error(READ_FAILED, err)
       return []
     }
   }
 
-  const cache = createStoreCache(filePath, readFromDisk)
-  const serialize = (groups: WatchlistGroup[]): WatchlistGroupsFile => ({ groups })
+  const store = createRecordStoreAdapter<WatchlistGroup[]>({
+    filePath,
+    logPrefix: LOG_PREFIX,
+    // 新鲜读盘（容器包裹；坏形过滤）；供 load 与锁内重读共用。
+    readFromDisk: () => readStoreText(filePath, READ_FAILED),
+    decode,
+    encode: groups => ({ groups }),
+  })
 
-  /** 跨进程读改写；返回 null 表示无变化（不落盘），缓存仍取锁内新鲜值。 */
+  /**
+   * 跨进程读改写；mutate 返回 null 表示无变化（不落盘），缓存仍取锁内新鲜值。
+   * 返回 null 是分组工具的既有写法，逐字保留。
+   */
   async function commit(
     mutate: (onDisk: WatchlistGroup[]) => WatchlistGroup[] | null,
   ): Promise<WatchlistGroup[]> {
-    const next = await transactStore(filePath, readFromDisk, (onDisk) => mutate(onDisk) ?? onDisk, serialize, LOG_PREFIX)
-    cache.replace(next)
-    return next
+    return store.commit((onDisk) => mutate(onDisk) ?? onDisk)
   }
 
   return {
     async list() {
-      return [...(await cache.load())]
+      return [...(await store.load())]
     },
     async create(name) {
       let result: WatchlistGroupWriteResult | undefined
@@ -247,38 +265,40 @@ export function createFileSelectionStore(filePath: string): SelectionStore {
     return next
   }
 
-  /** 新鲜读盘（坏形按空选中）；供 load 与锁内重读共用。 */
-  async function readFromDisk(): Promise<SelectionRecord> {
+  /** 读盘/解析失败的日志前缀（坏 JSON 与非 ENOENT 读失败同一条，与既有 load 口径逐字一致）。 */
+  const READ_FAILED = `[dsh-trading/watchlist] failed to read selection from ${filePath}:`
+
+  /** 文本 → 选中记录：坏形按空选中；只取 instrument 一个键（其它键不落回）。 */
+  function decode(text: string | undefined): SelectionRecord {
+    if (text === undefined) return { instrument: null }
     try {
-      const content = await readFile(filePath, 'utf8')
-      const parsed = JSON.parse(content) as SelectionRecord
+      const parsed = JSON.parse(text) as SelectionRecord
       return parsed !== null && typeof parsed === 'object'
         ? { instrument: (parsed.instrument ?? null) as SelectionRecord['instrument'] }
         : { instrument: null }
-    } catch (err: any) {
-      if (err?.code !== 'ENOENT') {
-        console.error(`[dsh-trading/watchlist] failed to read selection from ${filePath}:`, err)
-      }
+    } catch (err) {
+      console.error(READ_FAILED, err)
       return { instrument: null }
     }
   }
 
-  const cache = createStoreCache(filePath, readFromDisk)
+  const store = createRecordStoreAdapter<SelectionRecord>({
+    filePath,
+    logPrefix: LOG_PREFIX,
+    // 新鲜读盘（坏形按空选中）；供 load 与锁内重读共用。
+    readFromDisk: () => readStoreText(filePath, READ_FAILED),
+    decode,
+    encode: value => value,
+  })
 
   return {
     async get() {
-      const record = await cache.load()
+      const record = await store.load()
       return { instrument: record.instrument === null ? null : { ...record.instrument } }
     },
     async set(record) {
       await enqueue(async () => {
-        cache.replace(await transactStore(
-          filePath,
-          readFromDisk,
-          () => ({ instrument: record.instrument === null ? null : { ...record.instrument } }),
-          (value) => value,
-          LOG_PREFIX,
-        ))
+        await store.commit(() => ({ instrument: record.instrument === null ? null : { ...record.instrument } }))
       })
     },
   }

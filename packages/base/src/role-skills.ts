@@ -65,25 +65,100 @@ export const provider: SkillProvider = {
       provider: name, source: 'bundled', resourceBase: candidate.resourceBase, content: await readFile(candidate.locator, 'utf8') }
   },
 }
-export interface Config { skills?: string[] | null }
-export const Config: Schema<Config> = Schema.object({
-  // Missing must stay undefined: Schema.array() normalizes an absent field to [],
-  // which providerForSkills() reads as an explicit empty whitelist.
-  skills: Schema.union([Schema.array(Schema.string()), Schema.const(null)]).default(null),
-})
-/** Whitelist view for role presets; unknown names fail fast instead of silently shrinking the surface. */
-export function providerForSkills(allowed?: readonly string[] | null): SkillProvider {
-  if (!allowed) return provider
-  const unknown = allowed.filter(skill => !CANDIDATES.some(c => c.name === skill))
-  if (unknown.length) throw new Error(`Unknown role skills: ${unknown.join(', ')}`)
-  const active = CANDIDATES.filter(c => allowed.includes(c.name))
+// ── 市场 kit 共用的 Config 段 ───────────────────────────────────────────────────
+
+/** 白名单字段的配置形态：字段缺席 = 全量，显式 `[]` = 空面。 */
+export interface SkillWhitelistConfig {
+  /** 角色预设按需收窄技能面；字段缺席保持全量捆绑目录，显式空数组才表示不下发任何技能。 */
+  skills?: string[] | null
+}
+
+/** 市场 kit 的 Config 段（交易安全默认值 + 白名单字段），六个 kit 逐字节相同。 */
+export interface KitConfig extends SkillWhitelistConfig {
+  dryRun: boolean
+  liveTrading: boolean
+}
+
+/**
+ * 白名单字段：缺席必须保持 undefined —— `Schema.array()` 会把缺席字段归一成 `[]`，
+ * 而 `[]` 是「显式空面」，两者语义不同（曾因此让 master preset 注册出零技能）。
+ */
+export function skillWhitelistField() {
+  return Schema.union([Schema.array(Schema.string()), Schema.const(null)]).default(null)
+}
+
+/** kit 的 Config schema：dryRun 默认 true、liveTrading 默认 false（交易安全默认值）。 */
+export function kitConfigSchema(): Schema<KitConfig> {
+  return Schema.object({
+    dryRun: Schema.boolean().default(true),
+    liveTrading: Schema.boolean().default(false),
+    skills: skillWhitelistField(),
+  })
+}
+
+// ── 白名单视图（三态语义）与注册骨架 ────────────────────────────────────────────
+
+/** 未知名 fail-fast 的措辞：基座 role-skills 与市场 kit 各有一套既有对外文案。 */
+export interface SkillWhitelistMessages {
+  unknownNames(names: readonly string[]): string
+  notInWhitelist(name: string): string
+}
+
+export const roleSkillMessages: SkillWhitelistMessages = {
+  unknownNames: names => `Unknown role skills: ${names.join(', ')}`,
+  notInWhitelist: name => `Unknown role skill: ${name}`,
+}
+
+export function kitSkillMessages(tag: string): SkillWhitelistMessages {
   return {
-    name,
-    list: () => Promise.resolve(active),
-    async get(requested, options) {
-      if (!active.some(c => c.name === requested.name)) throw new Error(`Unknown role skill: ${requested.name}`)
-      return provider.get(requested, options)
-    },
+    unknownNames: names => `[${tag}] unknown skills in whitelist: ${names.join(', ')}`,
+    notInWhitelist: name => `[${tag}] skill not in whitelist: ${name}`,
   }
 }
-export function apply(ctx: Context, config: Config): void { ctx.skills.registerProvider(() => providerForSkills(config.skills)) }
+
+/**
+ * 白名单视图的三态语义：缺席 = 全量（原样返回 provider，保持身份相等）、显式 `[]` = 空面、
+ * 未知名 fail-fast 不静默缩面；白名单外的 get 拒绝分发。
+ */
+export function skillWhitelistView<C extends SkillCandidate>(
+  provider: SkillProvider,
+  candidates: readonly C[],
+  messages: SkillWhitelistMessages,
+): (allowed?: readonly string[] | null) => SkillProvider {
+  const known = new Set(candidates.map(candidate => candidate.name))
+  return allowed => {
+    if (!allowed) return provider
+    const unknown = allowed.filter(name => !known.has(name))
+    if (unknown.length > 0) throw new Error(messages.unknownNames(unknown))
+    const active = candidates.filter(candidate => allowed.includes(candidate.name))
+    return {
+      name: provider.name,
+      list: () => Promise.resolve(active),
+      async get(requested, options) {
+        if (!active.some(candidate => candidate.name === requested.name)) throw new Error(messages.notInWhitelist(requested.name))
+        return provider.get(requested, options)
+      },
+    }
+  }
+}
+
+/**
+ * 注册骨架：`registerProvider` 收的是 thunk，白名单在**取用时**才解析，所以这里必须现读
+ * config —— 提前求值会让后续下发的 config 失效。
+ */
+export function registerSkillProvider(
+  ctx: Pick<Context, 'skills'>,
+  config: SkillWhitelistConfig,
+  view: (allowed?: readonly string[] | null) => SkillProvider,
+): void {
+  ctx.skills.registerProvider(() => view(config.skills))
+}
+
+/** 基座 role-skills 行自身的 Config：只有白名单一个字段。 */
+export interface Config extends SkillWhitelistConfig {}
+export const Config: Schema<Config> = Schema.object({ skills: skillWhitelistField() })
+export const providerForSkills = skillWhitelistView(provider, CANDIDATES, roleSkillMessages)
+
+export function apply(ctx: Context, config: Config): void {
+  registerSkillProvider(ctx, config, providerForSkills)
+}

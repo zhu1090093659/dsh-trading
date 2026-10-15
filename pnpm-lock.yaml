@@ -1672,6 +1672,9 @@ importers:
       '@dshtrading/api':
         specifier: workspace:*
         version: link:../api
+      '@dshtrading/base':
+        specifier: workspace:*
+        version: link:../base
       '@dshtrading/connector-hithink':
         specifier: workspace:*
         version: link:../connector-hithink
@@ -1734,6 +1737,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: 3.18.4
         version: 3.18.4
+      '@dshtrading/base':
+        specifier: workspace:*
+        version: link:../base
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -1756,6 +1762,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: 3.18.4
         version: 3.18.4
+      '@dshtrading/base':
+        specifier: workspace:*
+        version: link:../base
     devDependencies:
       tsdown:
         specifier: ^0.22.0
@@ -1778,6 +1787,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: 3.18.4
         version: 3.18.4
+      '@dshtrading/base':
+        specifier: workspace:*
+        version: link:../base
       '@dshtrading/indicators':
         specifier: workspace:*
         version: link:../indicators
@@ -1809,6 +1821,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: 3.18.4
         version: 3.18.4
+      '@dshtrading/base':
+        specifier: workspace:*
+        version: link:../base
       '@dshtrading/indicators':
         specifier: workspace:*
         version: link:../indicators

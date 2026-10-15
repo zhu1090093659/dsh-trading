@@ -22,6 +22,13 @@ import {
   type SkillDefinition,
   type SkillProvider,
 } from '@deepseek-ai/dsh-skill'
+import {
+  kitConfigSchema,
+  kitSkillMessages,
+  registerSkillProvider,
+  skillWhitelistView,
+  type KitConfig,
+} from '@dshtrading/base/role-skills'
 
 const PROVIDER_NAME = 'dsh-trading-global'
 
@@ -119,41 +126,16 @@ export const provider: SkillProvider = {
   },
 }
 
-export interface Config {
-  dryRun: boolean
-  liveTrading: boolean
-  /** 角色预设按需收窄技能面；字段缺席保持全量捆绑目录，显式空数组才表示不下发任何技能。 */
-  skills?: string[] | null
-}
-
-export const Config: Schema<Config> = Schema.object({
-  dryRun: Schema.boolean().default(true),
-  liveTrading: Schema.boolean().default(false),
-  // Missing must stay undefined: Schema.array() normalizes an absent field to [],
-  // which providerForSkills() would read as an explicit empty whitelist.
-  skills: Schema.union([Schema.array(Schema.string()), Schema.const(null)]).default(null),
-})
+export type Config = KitConfig
+export const Config: Schema<Config> = kitConfigSchema()
 
 export const inject = ['skills']
 
 export const name = 'dsh-trading-global-kit'
 
-/** 白名单视图：未知名 fail-fast 不静默缩面；白名单外的 get 拒绝分发。 */
-export function providerForSkills(allowed?: readonly string[] | null): SkillProvider {
-  if (!allowed) return provider
-  const unknown = allowed.filter((name) => !SKILL_CANDIDATES.some((c) => c.name === name))
-  if (unknown.length > 0) throw new Error(`[${PROVIDER_NAME}] unknown skills in whitelist: ${unknown.join(', ')}`)
-  const active = SKILL_CANDIDATES.filter((c) => allowed.includes(c.name))
-  return {
-    name: provider.name,
-    list: () => Promise.resolve(active),
-    async get(candidate, options) {
-      if (!active.some((c) => c.name === candidate.name)) throw new Error(`[${PROVIDER_NAME}] skill not in whitelist: ${candidate.name}`)
-      return provider.get(candidate, options)
-    },
-  }
-}
+/** 白名单视图（三态语义与注册骨架见 @dshtrading/base/role-skills）。 */
+export const providerForSkills = skillWhitelistView(provider, SKILL_CANDIDATES, kitSkillMessages(PROVIDER_NAME))
 
 export function apply(ctx: Context, config: Config): void {
-  ctx.skills.registerProvider(() => providerForSkills(config.skills))
+  registerSkillProvider(ctx, config, providerForSkills)
 }

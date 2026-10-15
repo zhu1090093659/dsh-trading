@@ -22,6 +22,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@dshtrading/base": "workspace:*",
     "@dshtrading/indicators": "workspace:*",
     "@dshtrading/knowledge": "workspace:*"
   },

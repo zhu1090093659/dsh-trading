@@ -53,4 +53,15 @@ describe('dsh-trading-role-skills provider', () => {
     expect(empty.skills).toEqual([])
     expect(await providerForSkills(empty.skills).list()).toEqual([])
   })
+
+  it('user gets a fail-fast rejection for an unknown whitelist name instead of a silently shrunk surface', () => {
+    // Given: a whitelist mixing a known skill with a name no candidate provides
+    let scoped: ReturnType<typeof providerForSkills> | undefined
+    // When: the whitelist view is built for that list
+    // Then: it fails fast — never an empty surface, never a quiet "known names only" subset
+    expect(() => {
+      scoped = providerForSkills(['company-analysis', 'no-such-skill'])
+    }).toThrow('Unknown role skills: no-such-skill')
+    expect(scoped).toBeUndefined()
+  })
 })

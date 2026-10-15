@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@dshtrading/api": "workspace:*",
+    "@dshtrading/base": "workspace:*",
     "@dshtrading/connector-hithink": "workspace:*",
     "@dshtrading/indicators": "workspace:*",
     "@dshtrading/knowledge": "workspace:*"
