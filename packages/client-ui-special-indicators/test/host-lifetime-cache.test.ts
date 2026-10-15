@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { fakeHttpRes } from '@dshtrading/test-support'
 import { MOUNT, apply, type Config } from '../src/index.ts'
 
 let dir = ''
@@ -56,15 +57,7 @@ function config(overrides: Partial<Config> = {}): Config {
 }
 
 /** 契约化 fake res：捕获状态行与负载。 */
-function fakeRes() {
-  const state = { status: 0, body: '' }
-  const res = {
-    writeHead(status: number) { state.status = status; return res },
-    end(chunk?: string) { state.body = chunk ?? ''; return res },
-  } as unknown as ServerResponse
-  return { res, json: () => JSON.parse(state.body) as Record<string, unknown> }
-}
-
+const fakeRes = () => fakeHttpRes('json-response')
 /**
  * 组装一次「宿主生命周期」：真实调用 apply()，从注册进 webServer 的 handler 取路由。
  * ctx 为契约化最小面（inject 立即回调 + connection 放行）；fetch 走真实全局实现。

@@ -1896,6 +1896,9 @@ importers:
         specifier: workspace:^
         version: link:../api
     devDependencies:
+      '@dshtrading/test-support':
+        specifier: workspace:*
+        version: link:../test-support
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.15)(typescript@5.9.3)
@@ -1936,6 +1939,9 @@ importers:
 
   packages/test-support:
     devDependencies:
+      '@dshtrading/api':
+        specifier: workspace:*
+        version: link:../api
       tsdown:
         specifier: ^0.22.0
         version: 0.22.14(tsx@4.23.15)(typescript@5.9.3)

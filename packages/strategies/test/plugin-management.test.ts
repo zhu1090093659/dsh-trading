@@ -5,7 +5,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import type { MarketDataService } from '@dshtrading/api'
-import { VALID_STRATEGY_SOURCE as VALID_SOURCE } from '@dshtrading/test-support'
+import { VALID_STRATEGY_SOURCE as VALID_SOURCE, fakeMarketService } from '@dshtrading/test-support'
 import { createMemoryCustomStrategyStore } from '../src/custom.ts'
 import { createMemoryBuiltinTombstonesStore } from '../src/builtin-tombstones.ts'
 import {
@@ -16,18 +16,13 @@ import {
   resolveStrategyDefinition,
 } from '../src/plugin.ts'
 
-function fakeService(): MarketDataService {
-  return {
-    getTicker: async (symbol) => ({ symbol, price: 100, timestamp: 1 }),
-    getKlines: async () => Array.from({ length: 60 }, (_, i) => ({
-      openTime: 1700000000000 + i * 86_400_000,
-      open: 100 + i, high: 101 + i, low: 99 + i, close: 100.5 + i, volume: 1000,
-      closeTime: 1700000000000 + (i + 1) * 86_400_000 - 1,
-    })),
-    subscribeTicker: () => ({ dispose() {} }),
-  }
-}
-
+const fakeService = (): MarketDataService => fakeMarketService({
+  getKlines: async () => Array.from({ length: 60 }, (_, i) => ({
+    openTime: 1700000000000 + i * 86_400_000,
+    open: 100 + i, high: 101 + i, low: 99 + i, close: 100.5 + i, volume: 1000,
+    closeTime: 1700000000000 + (i + 1) * 86_400_000 - 1,
+  })),
+})
 async function authorBuiltinOverride(store: ReturnType<typeof createMemoryCustomStrategyStore>): Promise<void> {
   const author = createStrategyAuthorTool({ store })
   const result = await author.execute({

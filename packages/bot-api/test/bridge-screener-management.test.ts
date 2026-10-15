@@ -3,25 +3,17 @@
  * （覆盖确认闸门 + vm 落盘前校验 + 墓碑语义）、POST /strategies/screeners/reset。
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { MarketDataService } from '@dshtrading/api'
 import {
   createMemoryBuiltinTombstonesStore,
   createMemoryCustomScreenerStore,
   createMemoryCustomStrategyStore,
 } from '@dshtrading/strategies'
+import { fakeMarketService as fakeService } from '@dshtrading/test-support'
 import { TradingBridge, createBridgeHost, dispatchBridgeRequest } from '../src/bridge.ts'
 
 vi.stubGlobal('fetch', vi.fn(async () => {
   throw new Error('bridge test must not hit network')
 }))
-
-function fakeService(): MarketDataService {
-  return {
-    getTicker: async (symbol) => ({ symbol, price: 100, timestamp: 1 }),
-    getKlines: async () => [],
-    subscribeTicker: () => ({ dispose() {} }),
-  }
-}
 
 function makeBridge() {
   const host = createBridgeHost({

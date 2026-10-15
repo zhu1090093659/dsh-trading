@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { MarketDataService } from '@dshtrading/api'
+import { fakeMarketService } from '@dshtrading/test-support'
 import { createMemoryBuiltinTombstonesStore } from '../src/builtin-tombstones.ts'
 import { createMemoryCustomScreenerStore } from '../src/custom-screener.ts'
 import { createScreenerRunTool } from '../src/plugin.ts'
@@ -39,21 +40,11 @@ type RunWire = {
   results?: Array<{ symbol: string; name?: string; price: number | null; metrics: Record<string, number>; reason: string }>
 }
 
-function service(options: {
-  symbols: Array<{ symbol: string; name?: string }>
-  bars?: (symbol: string) => Promise<unknown>
-  listInstruments?: boolean
-}): MarketDataService {
-  const base = {
-    getTicker: async (symbol: string) => ({ symbol, price: 100, timestamp: 1 }),
-    getKlines: async (symbol: string) => (options.bars !== undefined
-      ? await options.bars(symbol)
-      : risingBars(300)) as never,
-    subscribeTicker: () => ({ dispose() {} }),
-  }
-  if (options.listInstruments === false) return base as unknown as MarketDataService
-  return { ...base, listInstruments: async () => options.symbols } as unknown as MarketDataService
-}
+type ServiceOptions = { symbols: Array<{ symbol: string; name?: string }>; bars?: (symbol: string) => Promise<unknown>; listInstruments?: boolean }
+const service = (options: ServiceOptions): MarketDataService => fakeMarketService({
+  getKlines: async (symbol: string) => (options.bars !== undefined ? await options.bars(symbol) : risingBars(300)) as never,
+  ...(options.listInstruments === false ? {} : { listInstruments: async () => options.symbols }),
+})
 
 function makeTool(overrides: Partial<Parameters<typeof createScreenerRunTool>[0]> = {}) {
   return createScreenerRunTool({

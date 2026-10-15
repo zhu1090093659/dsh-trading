@@ -4,25 +4,21 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { MarketDataService } from '@dshtrading/api'
+import { fakeMarketService } from '@dshtrading/test-support'
 import { createMemoryCustomStrategyStore } from '../src/custom.ts'
 import { createStrategyBacktestTool } from '../src/plugin.ts'
 
-function fakeService(): MarketDataService {
-  return {
-    getTicker: async (symbol) => ({ symbol, price: 100, timestamp: 1 }),
-    getKlines: async () => Array.from({ length: 120 }, (_, i) => ({
-      openTime: 1700000000000 + i * 86_400_000,
-      open: 100 + Math.sin(i / 3) * 5,
-      high: 105 + Math.sin(i / 3) * 5,
-      low: 95 + Math.sin(i / 3) * 5,
-      close: 100 + Math.sin(i / 3) * 5,
-      volume: 1000,
-      closeTime: 1700000000000 + (i + 1) * 86_400_000 - 1,
-    })),
-    subscribeTicker: () => ({ dispose() {} }),
-  } satisfies MarketDataService
-}
-
+const fakeService = (): MarketDataService => fakeMarketService({
+  getKlines: async () => Array.from({ length: 120 }, (_, i) => ({
+    openTime: 1700000000000 + i * 86_400_000,
+    open: 100 + Math.sin(i / 3) * 5,
+    high: 105 + Math.sin(i / 3) * 5,
+    low: 95 + Math.sin(i / 3) * 5,
+    close: 100 + Math.sin(i / 3) * 5,
+    volume: 1000,
+    closeTime: 1700000000000 + (i + 1) * 86_400_000 - 1,
+  })),
+})
 function makeTool() {
   return createStrategyBacktestTool({
     store: createMemoryCustomStrategyStore(),

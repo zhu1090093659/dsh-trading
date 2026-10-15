@@ -2,6 +2,7 @@
  * 行情桥单测：市场清单、批量报价（逐 symbol 独立成败 + 封顶）、K线透传与
  * 参数校验、请求分发路由与协议错误。宿主面全部用假件（不触网）。
  */
+import { fakeMarketService } from '@dshtrading/test-support'
 import type { GuiApprovalSeat } from '../src/gui-approval.ts'
 import { describe, expect, it, vi } from 'vitest'
 import type { MarketDataService, NewsAggregator, Ticker } from '@dshtrading/api'
@@ -23,18 +24,11 @@ vi.stubGlobal('fetch', vi.fn(async () => {
   throw new Error('bridge.test must not hit network')
 }))
 
-function fakeService(overrides: Partial<MarketDataService> = {}): MarketDataService {
-  return {
-    getTicker: async (symbol) => ({
-      symbol, price: 100, timestamp: 1234,
-    }),
-    getKlines: async () => [{
-      openTime: 1, open: 1, high: 2, low: 0.5, close: 1.5, volume: 10, closeTime: 2,
-    }],
-    subscribeTicker: () => ({ dispose() {} }),
-    ...overrides,
-  }
-}
+const fakeService = (overrides: Partial<MarketDataService> = {}): MarketDataService => fakeMarketService({
+  getTicker: async (symbol) => ({ symbol, price: 100, timestamp: 1234 }),
+  getKlines: async () => [{ openTime: 1, open: 1, high: 2, low: 0.5, close: 1.5, volume: 10, closeTime: 2 }],
+  ...overrides,
+})
 
 function fakeHost(services: Partial<Record<string, MarketDataService>>, providers: Record<string, string> = {}): BridgeHost {
   return {

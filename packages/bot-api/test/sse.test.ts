@@ -2,17 +2,10 @@
  * SSE 流 writer 单测（离线）：响应头、连接帧、事件帧、心跳、close 清理。
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { EventEmitter } from 'node:events'
+import { fakeHttpRes } from '@dshtrading/test-support'
 import { SSE_HEARTBEAT_MS, attachEventStream, type TradingEventStreamSource } from '../src/sse.ts'
 
-function fakeRes(): { res: EventEmitter & { writeHead: ReturnType<typeof vi.fn>; write: ReturnType<typeof vi.fn> }; headers: Record<string, unknown>; writes: string[] } {
-  const headers: Record<string, unknown> = {}
-  const writes: string[] = []
-  const res = new EventEmitter() as EventEmitter & { writeHead: ReturnType<typeof vi.fn>; write: ReturnType<typeof vi.fn> }
-  res.writeHead = vi.fn((status: number, head: Record<string, unknown>) => { Object.assign(headers, { status }, head) })
-  res.write = vi.fn((chunk: string) => { writes.push(chunk) })
-  return { res, headers, writes }
-}
+const fakeRes = () => fakeHttpRes('sse-writer')
 
 function fakeBus() {
   const listeners = new Set<(event: unknown) => void>()

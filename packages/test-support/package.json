@@ -22,6 +22,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@dshtrading/api": "workspace:*",
     "tsdown": "^0.22.0",
     "vitest": "^3.0.0",
     "typescript": "^5.5.0"

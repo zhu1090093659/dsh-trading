@@ -3,10 +3,10 @@
  * 验证——认证栅栏先于流式响应、tradingEvents 缺席 503 降级、事件帧形状
  * （event: store.changed + data JSON）、帧内容随 emit 实时到达。
  */
-import { describe, expect, it, vi } from 'vitest'
-import { EventEmitter } from 'node:events'
+import { describe, expect, it } from 'vitest'
 import { Context as CordisContext } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { fakeHttpRes } from '@dshtrading/test-support'
 import { apply } from '../src/index.ts'
 import { TradingEventsService } from '@dshtrading/eventbus'
 
@@ -16,24 +16,8 @@ interface Route {
   handler: (req: Partial<IncomingMessage>, res: Partial<ServerResponse>) => Promise<void>
 }
 
-interface FakeRes extends EventEmitter {
-  writeHead: ReturnType<typeof vi.fn>
-  write: ReturnType<typeof vi.fn>
-  end: ReturnType<typeof vi.fn>
-  headers: Record<string, unknown>
-  writes: string[]
-}
 
-function fakeRes(): FakeRes {
-  const res = new EventEmitter() as FakeRes
-  res.headers = {}
-  res.writes = []
-  res.writeHead = vi.fn((_status: number, head: Record<string, unknown>) => { Object.assign(res.headers, head) })
-  res.write = vi.fn((chunk: string) => { res.writes.push(chunk) })
-  res.end = vi.fn((body?: string) => { if (body !== undefined) res.writes.push(body) })
-  return res
-}
-
+const fakeRes = () => fakeHttpRes('sse-endpoint')
 function makeCtx(options: { rejection?: number; events?: TradingEventsService } = {}): { ctx: never; registered: Route[] } {
   const registered: Route[] = []
   const webCtx = {

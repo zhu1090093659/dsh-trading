@@ -5,20 +5,17 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import type { MarketDataService } from '@dshtrading/api'
+import { fakeMarketService } from '@dshtrading/test-support'
 import { MARKET_SERVICE_KEYS, TradingBridge, createBridgeHost, dispatchBridgeRequest } from '../src/bridge.ts'
 
 vi.stubGlobal('fetch', vi.fn(async () => {
   throw new Error('bridge-watchlist-groups.test must not hit network')
 }))
 
-function fakeService(): MarketDataService {
-  return {
-    getTicker: async symbol => ({ symbol, price: 100, timestamp: 1234 }),
-    getKlines: async () => [{ openTime: 1, open: 1, high: 2, low: 0.5, close: 1.5, volume: 10, closeTime: 2 }],
-    subscribeTicker: () => ({ dispose() {} }),
-  }
-}
-
+const fakeService = (): MarketDataService => fakeMarketService({
+  getTicker: async symbol => ({ symbol, price: 100, timestamp: 1234 }),
+  getKlines: async () => [{ openTime: 1, open: 1, high: 2, low: 0.5, close: 1.5, volume: 10, closeTime: 2 }],
+})
 function makeBridge() {
   const host = createBridgeHost({
     legacy: market => (market === 'us' ? fakeService() : undefined),

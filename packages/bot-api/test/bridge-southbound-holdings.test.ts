@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { MarketDataService, SouthboundHoldingHistory } from '@dshtrading/api'
+import { fakeMarketService } from '@dshtrading/test-support'
 import {
   BridgeProtocolError,
   TradingBridge,
@@ -23,14 +24,10 @@ import {
 const DAY = Date.UTC(2026, 9, 9)
 
 /** 真服务形状的假件（无 mock 库）：只覆盖被测路径，其余方法给最小可用实现。 */
-function fakeService(overrides: Partial<MarketDataService> = {}): MarketDataService {
-  return {
-    getTicker: async symbol => ({ symbol, price: 100, timestamp: DAY }),
-    getKlines: async () => [],
-    subscribeTicker: () => ({ dispose() {} }),
-    ...overrides,
-  }
-}
+const fakeService = (overrides: Partial<MarketDataService> = {}): MarketDataService => fakeMarketService({
+  getTicker: async symbol => ({ symbol, price: 100, timestamp: DAY }),
+  ...overrides,
+})
 
 /** 港股通持股历史假数据（口径见契约 A：date/holdRatio/holdShares/holdMarketCap）。 */
 function history(symbol: string, holdRatio: number): SouthboundHoldingHistory {

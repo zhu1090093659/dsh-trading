@@ -11,17 +11,9 @@
  * 形状，不 mock 业务行为）；fundamentals 取 market=futures，其下钻分支不触上游。
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { MarketDataService } from '@dshtrading/api'
+import { fakeMarketService as fakeService } from '@dshtrading/test-support'
 import { TradingBridge, createBridgeHost, type MarketDataRegistryLike } from '../src/bridge.ts'
 
-function fakeService(overrides: Partial<MarketDataService> = {}): MarketDataService {
-  return {
-    getTicker: async symbol => ({ symbol, price: 100, timestamp: 1 }),
-    getKlines: async () => [],
-    subscribeTicker: () => ({ dispose() {} }),
-    ...overrides,
-  }
-}
 
 describe('桥层三个读面的缓存协议（提案第 3 项）', () => {
   it('用户拉 symbols 名册时 30 分钟 TTL 内不打上游，过期后才重新取数', async () => {

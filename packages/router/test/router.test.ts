@@ -21,6 +21,7 @@ import {
   type Provider,
 } from '../src/index.js'
 import type { MarketDataService, NewsAggregator, TradeService } from '@dshtrading/api'
+import { fakeMarketService } from '@dshtrading/test-support'
 
 const ENTRY: ConfigType = { markets: { ...DEFAULT_MARKETS } }
 
@@ -131,10 +132,8 @@ describe('dshtrading schema（用户设置一级）', () => {
 })
 
 describe('MarketDataRegistryService（tradingMarketDataRegistry，2026-08-30 注册表模式）', () => {
-  const fakeService = (tag: string): MarketDataService => ({
+  const fakeService = (tag: string): MarketDataService => fakeMarketService({
     getTicker: async () => ({ symbol: tag, price: 1, timestamp: 0 }),
-    getKlines: async () => [],
-    subscribeTicker: () => ({ dispose: () => {} }),
   })
   const setup = () => {
     const box = mutableRef({ markets: { ...DEFAULT_MARKETS } })

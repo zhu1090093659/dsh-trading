@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "tsdown": "^0.22.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "@dshtrading/test-support": "workspace:*"
   }
 }

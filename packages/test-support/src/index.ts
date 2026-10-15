@@ -12,7 +12,10 @@
  * locale-contract 用例调用本 helper 钉住，口径与 scripts/i18n-audit.mjs 相同：
  * 键集合双向对齐 + {placeholder} 对齐。
  */
-import { expect } from 'vitest'
+import { EventEmitter } from 'node:events'
+import type { ServerResponse } from 'node:http'
+import { expect, vi } from 'vitest'
+import type { MarketDataService } from '@dshtrading/api'
 
 /** 占位符提取（与 SDK 插值器 /\{(\w+)\}/g 同口径）。 */
 function placeholdersOf(template: string): string[] {
@@ -73,3 +76,89 @@ export const VALID_SCREENER_SOURCE = `(bars) => {
     if (mom <= 0) return null
     return { metrics: { mom }, reason: '动量为正' }
   }`
+
+/**
+ * 契约化行情假件：三个必填方法（getTicker / getKlines / subscribeTicker）用仓库里最常用的
+ * 默认取值（price 100 / timestamp 1 / 空 K 线），`overrides` 只表达「同一形态的不同取值」
+ * ——时间戳、K 线形状、可选能力（listInstruments / getActiveBuySnapshot 等）。
+ * 假件只有这一种形状；默认体或签名不同的调用点各自保留 2–5 行薄包装，不把差异塞进 here。
+ * 默认体逐字取自 packages/bot-api/test/bridge-cache.test.ts（与 bridge-strategy-management /
+ * bridge-screener-management 两处逐字相同）：这是契约默认值，不是随手写的数。
+ */
+export function fakeMarketService(overrides: Partial<MarketDataService> = {}): MarketDataService {
+  return {
+    getTicker: async (symbol) => ({ symbol, price: 100, timestamp: 1 }),
+    getKlines: async () => [],
+    subscribeTicker: () => ({ dispose() {} }),
+    ...overrides,
+  }
+}
+
+/**
+ * HTTP 响应桩的显式形状。三种形状的字段与行为不同（有无 end、是否记录 status、
+ * 侧信道挂在返回包还是 res 上），因此用形状名区分，不做 Partial + 默认值合并。
+ */
+export type HttpResShape = 'json-response' | 'sse-writer' | 'sse-endpoint'
+
+/** 路由 handler 用的 ServerResponse 桩：记录 status / headers / body，附带 json() 解析。 */
+export interface JsonResponseStub {
+  res: ServerResponse
+  state: { status: number; headers: Record<string, string>; body: string }
+  json: () => Record<string, unknown>
+}
+
+/** attachEventStream 的 writer 桩：EventEmitter + vi.fn writeHead/write，无 end。 */
+export interface SseWriterStub {
+  res: EventEmitter & { writeHead: ReturnType<typeof vi.fn>; write: ReturnType<typeof vi.fn> }
+  headers: Record<string, unknown>
+  writes: string[]
+}
+
+/** SSE 路由响应桩：res 自身挂 headers/writes，且有 end（把 body 追加进 writes）。 */
+export interface SseEndpointStub extends EventEmitter {
+  writeHead: ReturnType<typeof vi.fn>
+  write: ReturnType<typeof vi.fn>
+  end: ReturnType<typeof vi.fn>
+  headers: Record<string, unknown>
+  writes: string[]
+}
+
+export function fakeHttpRes(shape: 'json-response'): JsonResponseStub
+export function fakeHttpRes(shape: 'sse-writer'): SseWriterStub
+export function fakeHttpRes(shape: 'sse-endpoint'): SseEndpointStub
+export function fakeHttpRes(shape: HttpResShape): JsonResponseStub | SseWriterStub | SseEndpointStub {
+  switch (shape) {
+    case 'json-response': {
+      const state = { status: 0, headers: {} as Record<string, string>, body: '' }
+      const res = {
+        writeHead(status: number, headers?: Record<string, string>) {
+          state.status = status
+          if (headers) Object.assign(state.headers, headers)
+          return res
+        },
+        end(chunk?: string) {
+          state.body = chunk ?? ''
+          return res
+        },
+      } as unknown as ServerResponse
+      return { res, state, json: () => JSON.parse(state.body) as Record<string, unknown> }
+    }
+    case 'sse-writer': {
+      const headers: Record<string, unknown> = {}
+      const writes: string[] = []
+      const res = new EventEmitter() as SseWriterStub['res']
+      res.writeHead = vi.fn((status: number, head: Record<string, unknown>) => { Object.assign(headers, { status }, head) })
+      res.write = vi.fn((chunk: string) => { writes.push(chunk) })
+      return { res, headers, writes }
+    }
+    case 'sse-endpoint': {
+      const res = new EventEmitter() as SseEndpointStub
+      res.headers = {}
+      res.writes = []
+      res.writeHead = vi.fn((_status: number, head: Record<string, unknown>) => { Object.assign(res.headers, head) })
+      res.write = vi.fn((chunk: string) => { res.writes.push(chunk) })
+      res.end = vi.fn((body?: string) => { if (body !== undefined) res.writes.push(body) })
+      return res
+    }
+  }
+}

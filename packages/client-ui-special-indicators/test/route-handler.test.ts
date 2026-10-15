@@ -4,7 +4,8 @@
  * FinanceClient 以注入 fetch 的 fake 上游落地。
  */
 import { describe, expect, it } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { IncomingMessage } from 'node:http'
+import { fakeHttpRes } from '@dshtrading/test-support'
 import { FinanceClient } from '../src/finance-client.ts'
 import { MOUNT, ROUTES, createRouteHandler, type Config } from '../src/index.ts'
 
@@ -22,15 +23,7 @@ const BASE_CONFIG: Config = {
 }
 
 /** 最小契约 fake res：捕获状态行与 JSON 负载。 */
-function fakeRes() {
-  const state = { status: 0, body: '' }
-  const res = {
-    writeHead(status: number) { state.status = status; return res },
-    end(chunk?: string) { state.body = chunk ?? ''; return res },
-  } as unknown as ServerResponse
-  return { res, state, json: () => JSON.parse(state.body) as Record<string, unknown> }
-}
-
+const fakeRes = () => fakeHttpRes('json-response')
 function fakeReq(method: string, sub: string): IncomingMessage {
   return { method, url: MOUNT + sub, headers: { host: '127.0.0.1' } } as unknown as IncomingMessage
 }

@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { Interval, Kline, KlineCapability, MarketDataService } from '@dshtrading/api'
+import { fakeMarketService } from '@dshtrading/test-support'
 import {
   BridgeProtocolError,
   TradingBridge,
@@ -38,14 +39,10 @@ interface FakeSource {
 }
 
 /** 真服务形状的假件（无 mock 库）：只覆盖被测路径，其余方法给最小可用实现。 */
-function fakeService(overrides: Partial<MarketDataService> = {}): MarketDataService {
-  return {
-    getTicker: async symbol => ({ symbol, price: 100, timestamp: DAY }),
-    getKlines: async () => [],
-    subscribeTicker: () => ({ dispose() {} }),
-    ...overrides,
-  }
-}
+const fakeService = (overrides: Partial<MarketDataService> = {}): MarketDataService => fakeMarketService({
+  getTicker: async symbol => ({ symbol, price: 100, timestamp: DAY }),
+  ...overrides,
+})
 
 /** 连接器错误载体（真形状：Error + code，无需依赖连接器包）。 */
 function tradingError(code: string, message: string): Error {

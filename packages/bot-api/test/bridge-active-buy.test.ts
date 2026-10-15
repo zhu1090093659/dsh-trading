@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ActiveBuySnapshot, MarketDataService } from '@dshtrading/api'
+import { fakeMarketService } from '@dshtrading/test-support'
 import { TradingBridge, createBridgeHost, dispatchBridgeRequest, type MarketDataRegistryLike } from '../src/bridge.ts'
 import { mergeActiveBuyPoints, readActiveBuySnapshots, shanghaiDate } from '../src/active-buy.ts'
 
@@ -13,9 +14,10 @@ const point = (date: string, phase: 'close' | 'manual' | 'live' = 'manual', time
 const snapshot = (date = today()): ActiveBuySnapshot => ({ symbol, date, time: '09:53:03', totalLots: 100, outerLots: 53.37, innerLots: 46.63, buySharePct: 53.37, netSharePct: 6.73, source: 'tencent', fetchedAt: `${date}T09:53:03+08:00` })
 
 /** 契约化行情假件：按 API 的可选能力注入，不替换桥或文件读取。 */
-function service(getActiveBuySnapshot?: (symbol: string) => Promise<ActiveBuySnapshot>): MarketDataService {
-  return { getTicker: async symbol => ({ symbol, price: 100, timestamp: 0 }), getKlines: async () => [], subscribeTicker: () => ({ dispose() {} }), ...(getActiveBuySnapshot ? { getActiveBuySnapshot } : {}) }
-}
+const service = (getActiveBuySnapshot?: (symbol: string) => Promise<ActiveBuySnapshot>): MarketDataService => fakeMarketService({
+  getTicker: async symbol => ({ symbol, price: 100, timestamp: 0 }),
+  ...(getActiveBuySnapshot ? { getActiveBuySnapshot } : {}),
+})
 function request(marketService?: MarketDataService, market = 'cn') {
   const bridge = new TradingBridge(createBridgeHost({ legacy: () => marketService }))
   return dispatchBridgeRequest(bridge, 'GET', '/active-buy', new URLSearchParams({ market, symbol }))

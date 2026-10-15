@@ -4,22 +4,13 @@
  * 宿主面全部用假件（不触网）。
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { MarketDataService } from '@dshtrading/api'
-import { VALID_STRATEGY_SOURCE as VALID_SOURCE } from '@dshtrading/test-support'
+import { VALID_STRATEGY_SOURCE as VALID_SOURCE, fakeMarketService as fakeService } from '@dshtrading/test-support'
 import { createMemoryBuiltinTombstonesStore, createMemoryCustomStrategyStore } from '@dshtrading/strategies'
 import { TradingBridge, createBridgeHost, dispatchBridgeRequest } from '../src/bridge.ts'
 
 vi.stubGlobal('fetch', vi.fn(async () => {
   throw new Error('bridge test must not hit network')
 }))
-
-function fakeService(): MarketDataService {
-  return {
-    getTicker: async (symbol) => ({ symbol, price: 100, timestamp: 1 }),
-    getKlines: async () => [],
-    subscribeTicker: () => ({ dispose() {} }),
-  }
-}
 
 function makeBridge() {
   const host = createBridgeHost({

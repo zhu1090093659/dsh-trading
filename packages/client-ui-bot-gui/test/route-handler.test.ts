@@ -3,8 +3,9 @@
  * x-dsht-caps 动作头注入、POST commands 转发。
  */
 import { describe, expect, it } from 'vitest'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { IncomingMessage } from 'node:http'
 import { EventEmitter } from 'node:events'
+import { fakeHttpRes } from '@dshtrading/test-support'
 import { MOUNT, ALL_ACTION_CAPS, createRouteHandler, type Config } from '../src/index.ts'
 
 const TEST_CONFIG: Config = {
@@ -15,22 +16,7 @@ const TEST_CONFIG: Config = {
   timeoutMs: 5_000,
 }
 
-function fakeRes() {
-  const state = { status: 0, headers: {} as Record<string, string>, body: '' }
-  const res = {
-    writeHead(status: number, headers?: Record<string, string>) {
-      state.status = status
-      if (headers) Object.assign(state.headers, headers)
-      return res
-    },
-    end(chunk?: string) {
-      state.body = chunk ?? ''
-      return res
-    },
-  } as unknown as ServerResponse
-  return { res, state, json: () => JSON.parse(state.body) as Record<string, unknown> }
-}
-
+const fakeRes = () => fakeHttpRes('json-response')
 function fakeReq(method: string, sub: string, body?: string): IncomingMessage {
   const req = new EventEmitter() as unknown as IncomingMessage
   Object.assign(req, {

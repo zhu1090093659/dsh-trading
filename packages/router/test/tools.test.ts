@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { InstrumentAssetClass, InstrumentForm, MarketDataService } from '@dshtrading/api'
+import { fakeMarketService } from '@dshtrading/test-support'
 import { SYMBOL_CATALOG } from '../src/catalog.ts'
 import { createInstrumentsSearchTool, createRoutingGetTool, type RouterToolServices } from '../src/tools.ts'
 
@@ -14,15 +15,10 @@ interface FakeRow {
   assetClass?: InstrumentAssetClass
 }
 
-function fakeService(symbols: FakeRow[]): MarketDataService {
-  return {
-    getTicker: async (symbol) => ({ symbol, price: 1, timestamp: 1 }),
-    getKlines: async () => [],
-    subscribeTicker: () => ({ dispose() {} }),
-    listInstruments: async () => symbols,
-  }
-}
-
+const fakeService = (symbols: FakeRow[]): MarketDataService => fakeMarketService({
+  getTicker: async (symbol) => ({ symbol, price: 1, timestamp: 1 }),
+  listInstruments: async () => symbols,
+})
 function makeServices(overrides: Partial<RouterToolServices> = {}): RouterToolServices {
   return {
     activeProvider: (market) => ({ crypto: 'binance', us: 'alpaca', cn: 'tencent', hk: 'longbridge' }[market]),
