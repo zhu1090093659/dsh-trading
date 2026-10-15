@@ -75,6 +75,11 @@ Status: implemented
 
 ## Consequences
 
+- 两批交付都按 commit 绑定了验收：A/C 组六项在 `aa9d67fa`、B 组与依赖纪律五项在 `414c9cb6`，
+  各自在只 checkout 该 commit 的隔离工作树里跑 `pnpm gates:all`，**17 条门禁全通过**，
+  覆盖率四项均高于基线（`414c9cb6` 实测 lines 73.26% / branches 78.03% / functions 78.34% / statements 73.26%）。
+  主检出当时正被并发会话迁移（HEAD 在验收期间移动多次），且 `.coverage/` 是仓库级共享产物目录——
+  两个会话同时跑 coverage 会互相清掉临时文件，隔离工作树是取得「单次全绿且绑 commit」结论的前提，跑完即回收。
 - 唯一的行为变化是第 1 项新增的 SSE `'routing'` 失效通道：真换了 provider 时客户端多一次 `/markets` 重拉。
   新进程里第一次 `volatile-update` 也会发一条——`last` 初值为空是既有 watcher 语义
   （`router.test.ts` 断言过 fresh 进程 prev=undefined），要消除得同时改 watcher 语义。
