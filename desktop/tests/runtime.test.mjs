@@ -26,6 +26,11 @@ const {
   parseTokenUrlLine,
   formatHostExitDiagnostic,
   formatHostExitLine,
+  planHostRecovery,
+  createTokenUrlCollector,
+  isNavigationFailureFor,
+  HOST_RECOVERY_MAX,
+  HOST_RECOVERY_WINDOW_MS,
   asarUnpackedPath,
   toNodeImportSpecifier,
   normalizeProfileCohort,
@@ -441,6 +446,96 @@ test('operator gets no host age in the exit line when it is not measurable', () 
     message: '被系统信号终止: SIGKILL',
   });
   assert.equal(signalled, '[desktop] host exited: code=null signal=SIGKILL initiatedBy=host (被系统信号终止: SIGKILL)');
+});
+
+test('operator gets the host restarted while the restart budget lasts', () => {
+  // Given a host that keeps stopping without the shell asking
+  const now = 1_000_000;
+  let exitTimes = [];
+
+  // When three unexpected exits land back to back
+  const plans = [];
+  for (let i = 0; i < 3; i += 1) {
+    const plan = planHostRecovery({ exitTimes, now: now + i * 1000 });
+    plans.push(plan);
+    exitTimes = plan.exitTimes;
+  }
+
+  // Then each one restarts the host and the attempt counter counts up
+  assert.deepEqual(plans.map((plan) => plan.recover), [true, true, true]);
+  assert.deepEqual(plans.map((plan) => plan.attempt), [1, 2, 3]);
+  assert.equal(exitTimes.length, 3);
+});
+
+test('operator gets the startup-problem page once the restart budget is spent', () => {
+  // Given three restarts already spent inside the window
+  const now = 1_000_000;
+  const windowMs = HOST_RECOVERY_WINDOW_MS;
+  const exitTimes = [now - 3000, now - 2000, now - 1000];
+
+  // When a fourth unexpected exit lands
+  const plan = planHostRecovery({ exitTimes, now });
+
+  // Then recovery stops, so a crash loop ends on the page with the log
+  assert.equal(plan.recover, false);
+  assert.equal(plan.attempt, 4);
+  assert.equal(plan.exitTimes.length, 4);
+});
+
+test('operator gets a fresh restart budget after a quiet window', () => {
+  // Given three restarts spent longer ago than the window
+  const now = 1_000_000;
+  const windowMs = HOST_RECOVERY_WINDOW_MS;
+  const exitTimes = [now - windowMs - 3000, now - windowMs - 2000, now - windowMs - 1000];
+
+  // When an unexpected exit lands now
+  const plan = planHostRecovery({ exitTimes, now });
+
+  // Then the old exits are forgotten and this one is restartable again
+  assert.equal(plan.recover, true);
+  assert.equal(plan.attempt, 1);
+  assert.deepEqual(plan.exitTimes, [now]);
+});
+
+test('operator gets the documented restart budget from the shipped constants', () => {
+  // Given the constants the shell hands to planHostRecovery
+  // When they are read
+  // Then the page-facing copy (three attempts, a ten minute window) matches them
+  assert.equal(HOST_RECOVERY_MAX, 3);
+  assert.equal(HOST_RECOVERY_WINDOW_MS, 600000);
+});
+
+test('operator never boots onto the previous host\u2019s URL', () => {
+  // Given a collector that saw the first host's tokenized URL
+  const urls = createTokenUrlCollector();
+  const first = 'http://127.0.0.1:50833/?token=first';
+  const second = 'http://127.0.0.1:51089/?token=second';
+  urls.observe('dsh web: ' + first);
+
+  // When the next boot clears it and the restarted host prints its own line
+  // Then the dead host's URL is gone while it waits, and the new one is read
+  assert.equal(urls.read(), first);
+  urls.reset();
+  assert.equal(urls.read(), undefined);
+  urls.observe('dsh web: ' + second);
+  assert.equal(urls.read(), second);
+
+  // And host output that carries no tokenized URL leaves it alone
+  urls.observe('dsh web: opening the default browser; pass --no-open to disable');
+  urls.observe('[renderer] warning: connection lost');
+  assert.equal(urls.read(), second);
+});
+
+test('operator does not blame the new host for a previous page\u2019s failed reload', () => {
+  // Given a dead page's retry failing against the previous port while the new
+  // boot asked for its own
+  const dead = "ERR_CONNECTION_REFUSED (-102) loading 'http://127.0.0.1:50399/?token=old'";
+  const target = 'http://127.0.0.1:50656/?token=new';
+
+  // When the failure is attributed
+  // Then only the target's own failure counts as a broken boot
+  assert.equal(isNavigationFailureFor(dead, target), false);
+  assert.equal(isNavigationFailureFor("ERR_CONNECTION_REFUSED (-102) loading '" + target + "'", target), true);
 });
 
 test('operator gets host hook paths that point outside the archive', () => {

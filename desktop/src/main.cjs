@@ -29,9 +29,13 @@ const {
   findFreePort,
   waitForGui,
   waitForTokenUrl,
-  parseTokenUrlLine,
+  createTokenUrlCollector,
   formatHostExitDiagnostic,
   formatHostExitLine,
+  planHostRecovery,
+  isNavigationFailureFor,
+  HOST_RECOVERY_MAX,
+  HOST_RECOVERY_WINDOW_MS,
   asarUnpackedPath,
   toNodeImportSpecifier,
   consoleMessageArgsToEntry,
@@ -55,8 +59,12 @@ let mainWindow = null;
 let hostChild = null;
 let quitting = false;
 let logStream = null;
-/** URL printed by the host (with the per-process token), set once seen. */
-let tokenUrl = null;
+/** Tokenized GUI URL of the current host; see createTokenUrlCollector. */
+const bootUrls = createTokenUrlCollector();
+/** True while one boot is in flight; see boot(). */
+let booting = false;
+/** Timestamps of host exits the shell did not ask for; see planHostRecovery. */
+let unexpectedExitTimes = [];
 /** Ring buffer of recent host output for the error page. */
 const logTail = [];
 
@@ -72,8 +80,7 @@ function pushLogLine(line) {
   logTail.push(line);
   if (logTail.length > LOG_TAIL_LINES) logTail.shift();
   if (logStream !== null) logStream.write(line + '\n');
-  const url = parseTokenUrlLine(line);
-  if (url !== undefined) tokenUrl = url;
+  bootUrls.observe(line);
 }
 
 function setStatus(text) {
@@ -302,7 +309,44 @@ async function pruneStaleAuthCookies(targetSession, origin) {
   }
 }
 
+/**
+ * Boot once, ignoring a call that arrives while a boot is in flight: the retry
+ * button and the automatic host recovery can both ask for a host, and two hosts
+ * on one home is the one outcome the shell must never produce.
+ */
 async function boot() {
+  if (booting) {
+    pushLogLine('[desktop] a boot is already in progress; ignoring this request');
+    return;
+  }
+  booting = true;
+  try {
+    await bootOnce();
+  } finally {
+    booting = false;
+  }
+}
+
+/**
+ * Restart the host after an exit the shell did not ask for and say so on the
+ * page the user is looking at; a failed restart falls back to that page.
+ * @param {{ attempt: number }} plan
+ */
+async function recoverHost(plan) {
+  await showError('后台服务进程意外停止，正在自动重启（第 ' + String(plan.attempt) + ' 次，最多 ' + String(HOST_RECOVERY_MAX) + ' 次）…');
+  try {
+    await boot();
+  } catch (error) {
+    const message = String(error && error.message ? error.message : error);
+    pushLogLine('[desktop] host restart failed: ' + message);
+    await showError(message);
+  }
+}
+
+async function bootOnce() {
+  // A recovery or a Retry must not read the host that just died: clear the URL
+  // this boot is about to wait for.
+  bootUrls.reset();
   const runtime = resolveRuntimePaths(resourcesRoot(), process.platform, process.arch, app.isPackaged);
   const { home, ignored } = selectDshHome(process.env, os.homedir());
   // 继承来的显式 DSH_HOME 若是宿主 home，落回它就会把交易数据、自定义指标与
@@ -352,9 +396,20 @@ async function boot() {
       elapsedMs: Date.now() - spawnedAt,
       message: diag.message,
     }));
-    if (!quitting) {
-      void showError(diag.message, { isMissingVCRedist: diag.isMissingVCRedist });
+    if (quitting) return;
+    const plan = planHostRecovery({ exitTimes: unexpectedExitTimes, now: Date.now() });
+    unexpectedExitTimes = plan.exitTimes;
+    if (plan.recover) {
+      pushLogLine(
+        '[desktop] the shell did not ask for this exit; restarting the host (attempt '
+        + String(plan.attempt) + '/' + String(HOST_RECOVERY_MAX) + ' within '
+        + String(Math.round(HOST_RECOVERY_WINDOW_MS / 60000)) + 'min)',
+      );
+      void recoverHost(plan);
+      return;
     }
+    pushLogLine('[desktop] host restart budget spent; leaving the startup-problem page up (Retry resets it)');
+    void showError(diag.message, { isMissingVCRedist: diag.isMissingVCRedist });
   });
   await waitForGui(port, { deadlineMs: READY_TIMEOUT_MS, isAlive: () => !exited });
   // The port answering is not the handoff: the host binds its web server, then
@@ -366,14 +421,23 @@ async function boot() {
   // itself, for as long as the whole boot is allowed to take, and never load a
   // URL that cannot authenticate. The window stays on the splash until then.
   const target = await waitForTokenUrl({
-    readUrl: () => (tokenUrl === null ? undefined : tokenUrl),
+    readUrl: () => bootUrls.read(),
     isAlive: () => !exited,
     deadlineMs: READY_TIMEOUT_MS,
     pollMs: 100,
   });
   await pruneStaleAuthCookies(mainWindow.webContents.session, 'http://127.0.0.1:' + port + '/');
   pushLogLine('[desktop] GUI ready, loading the tokenized URL');
-  await mainWindow.loadURL(target);
+  try {
+    await mainWindow.loadURL(target);
+  } catch (error) {
+    const message = String(error && error.message ? error.message : error);
+    // A page from a previous host keeps retrying its dead port, and that failure
+    // is reported against this webContents: only the target's own failure means
+    // this boot is broken (see isNavigationFailureFor).
+    if (isNavigationFailureFor(message, target)) throw error;
+    pushLogLine('[desktop] ignored a navigation failure from a previous host: ' + message);
+  }
 }
 
 async function run() {
@@ -420,6 +484,9 @@ app.on('before-quit', (event) => {
 
 ipcMain.on('desktop:retry', () => {
   if (quitting) return;
+  // An explicit retry is a human decision: it also hands back the automatic
+  // restart budget the host burned.
+  unexpectedExitTimes = [];
   void run();
 });
 

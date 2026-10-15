@@ -419,6 +419,77 @@ function formatHostExitDiagnostic(code, signal, platform = process.platform) {
 }
 
 /**
+ * How many unexpected host exits the shell restarts through before it parks on
+ * the startup-problem page, and the window those restarts are counted in.
+ */
+const HOST_RECOVERY_MAX = 3;
+const HOST_RECOVERY_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Decide what an unexpected host exit does next.
+ *
+ * A host can stop without the shell asking — an external signal, a plugin
+ * request, whatever the host trace names — and the shell used to answer every
+ * such exit with the startup-problem page, leaving the app unusable until a
+ * human clicked Retry (2026-10-15: the reported failure). Restarting the host is
+ * the recovery; it is bounded so a crash loop still ends on the page with the
+ * log rather than in an endless spawn cycle.
+ * @param {{ exitTimes: number[], now: number, maxRecoveries?: number, windowMs?: number }} options
+ * @returns {{ recover: boolean, attempt: number, exitTimes: number[] }} the decision and the retained window.
+ */
+function planHostRecovery(options) {
+  const maxRecoveries = options.maxRecoveries ?? HOST_RECOVERY_MAX;
+  const windowMs = options.windowMs ?? HOST_RECOVERY_WINDOW_MS;
+  const exitTimes = [...options.exitTimes.filter((time) => options.now - time < windowMs), options.now];
+  return { recover: exitTimes.length <= maxRecoveries, attempt: exitTimes.length, exitTimes };
+}
+
+/**
+ * Collector for the tokenized GUI URL of the *current* host.
+ *
+ * That URL is per-process: the token belongs to the host that printed it, so a
+ * boot must only ever read what its own host printed. The previous boot's line
+ * survives in memory after a recovery or a Retry, and reusing it loads a port
+ * nobody serves — measured 2026-10-15 on the recovered app:
+ * `ERR_CONNECTION_REFUSED (-102) loading 'http://127.0.0.1:50833/?token=…'` where
+ * 50833 was the dead host and the restarted one was serving 51089, because the
+ * retry read the stale URL before the new host had printed its own.
+ * @returns {{ reset: () => void, observe: (line: string) => void, read: () => string | undefined }}
+ */
+function createTokenUrlCollector() {
+  let url;
+  return {
+    reset() {
+      url = undefined;
+    },
+    observe(line) {
+      const parsed = parseTokenUrlLine(line);
+      if (parsed !== undefined) url = parsed;
+    },
+    read() {
+      return url;
+    },
+  };
+}
+
+/**
+ * Whether a `loadURL` failure belongs to the navigation this boot asked for.
+ *
+ * A page served by a host that has since stopped keeps retrying its dead port,
+ * and Electron reports a navigation failure against the webContents, so it can
+ * land on the promise of the *next* `loadURL`. Blaming that on the new boot
+ * parked a healthy recovery on the startup-problem page — measured 2026-10-15:
+ * the restarted host was serving and its GUI had loaded, while the window showed
+ * `ERR_CONNECTION_REFUSED` for the previous port.
+ * @param {string} failureMessage
+ * @param {string} targetUrl
+ * @returns {boolean}
+ */
+function isNavigationFailureFor(failureMessage, targetUrl) {
+  return failureMessage.includes(targetUrl);
+}
+
+/**
  * One `host exited` log line.
  *
  * The code/signal pair alone cannot say who ended the host: profile-boot turns
@@ -804,6 +875,11 @@ module.exports = {
   parseShasums,
   formatHostExitDiagnostic,
   formatHostExitLine,
+  planHostRecovery,
+  createTokenUrlCollector,
+  isNavigationFailureFor,
+  HOST_RECOVERY_MAX,
+  HOST_RECOVERY_WINDOW_MS,
   asarUnpackedPath,
   toNodeImportSpecifier,
 };
