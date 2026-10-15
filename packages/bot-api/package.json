@@ -60,6 +60,7 @@
     "@types/node": "^24.0.0",
     "tsdown": "^0.22.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "@dshtrading/test-support": "workspace:*"
   }
 }

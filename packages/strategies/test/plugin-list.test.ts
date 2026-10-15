@@ -9,6 +9,7 @@ import { createMemoryCustomScreenerStore } from '../src/custom-screener.ts'
 import { createScreenerListTool, createStrategyListTool } from '../src/plugin.ts'
 import { screenerParadigms, strategyParadigms } from '../src/index.ts'
 
+// 此处 reason 文案（'demo'/'demo'）与共享样本 VALID_STRATEGY_SOURCE 刻意不同：本用例断言列表渲染原样透传 reason 文案，不得合并。
 const VALID_SOURCE = `(bars) => {
   const out = []
   let long = false

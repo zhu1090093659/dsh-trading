@@ -4,6 +4,7 @@
  * node vm 熔断 runner。
  */
 import { describe, expect, it } from 'vitest'
+import { VALID_STRATEGY_SOURCE as VALID_SOURCE } from '@dshtrading/test-support'
 import type { Kline, StrategySignal } from '../src/index.ts'
 import { validateCustomStrategy, validateSignalSequence, compileStrategySource } from '../src/validate.ts'
 import { nodeStrategyComputeRunner } from '../src/validate-node.ts'
@@ -80,16 +81,6 @@ describe('validateSignalSequence（引擎语义对齐）', () => {
     ], SAMPLE_BARS)).toContain('整数')
   })
 })
-
-const VALID_SOURCE = `(bars, params) => {
-  const out = []
-  let long = false
-  for (let i = 1; i < bars.length; i++) {
-    if (!long && i % 2 === 1) { out.push({ index: i, time: bars[i].openTime, action: 'entry', direction: 'long', price: bars[i].close, reason: 'demo entry' }); long = true }
-    else if (long && i % 2 === 0) { out.push({ index: i, time: bars[i].openTime, action: 'exit', direction: 'flat', price: bars[i].close, reason: 'demo exit' }); long = false }
-  }
-  return out
-}`
 
 const VALID_RECORD = {
   id: 'demo-alternating',

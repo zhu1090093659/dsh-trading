@@ -38,3 +38,38 @@ export function expectLocaleKeyParity(zh: Record<string, string>, en: Record<str
     expect(placeholdersOf(en[key]!), 'key ' + key).toEqual(placeholdersOf(zh[key]!))
   }
 }
+
+/**
+ * 合法策略源码样本（compute 返回 StrategySignal[] 信号列表）。
+ * 三处消费方原文逐字节相同，故收一份共享：packages/strategies/test/plugin.test.ts、
+ * packages/strategies/test/plugin-management.test.ts、
+ * packages/bot-api/test/bridge-strategy-management.test.ts。
+ *
+ * 刻意分叉，不得合并：packages/strategies/test/plugin-list.test.ts 的本地样本
+ * reason 文案是 'demo'/'demo'（它断言列表渲染原样透传 reason 文案），本样本是
+ * 'demo entry'/'demo exit'；合并两者会删掉那条断言。
+ *
+ * 与 VALID_SCREENER_SOURCE 的差异同样是刻意的：策略 compute 返回信号**列表**，
+ * 选股器 evaluate 返回**单次命中**对象或 null，两者形状不可互换。
+ */
+export const VALID_STRATEGY_SOURCE = `(bars) => {
+  const out = []
+  let long = false
+  for (let i = 1; i < bars.length; i++) {
+    if (!long && i % 2 === 1) { out.push({ index: i, time: bars[i].openTime, action: 'entry', direction: 'long', price: bars[i].close, reason: 'demo entry' }); long = true }
+    else if (long && i % 2 === 0) { out.push({ index: i, time: bars[i].openTime, action: 'exit', direction: 'flat', price: bars[i].close, reason: 'demo exit' }); long = false }
+  }
+  return out
+}`
+
+/**
+ * 合法选股器源码样本（evaluate 返回 { metrics, reason } 单次命中，未命中返回 null）。
+ * 与 VALID_STRATEGY_SOURCE 形状不同是刻意的（策略返回信号列表），不得互换。
+ * 原字面量写在 describe 内部，正文缩进（4 空格、结尾两空格）沿用原文以保持逐字节不变。
+ */
+export const VALID_SCREENER_SOURCE = `(bars) => {
+    if (bars.length < 2) return null
+    const mom = (bars[bars.length - 1].close - bars[0].close) / bars[0].close * 100
+    if (mom <= 0) return null
+    return { metrics: { mom }, reason: '动量为正' }
+  }`

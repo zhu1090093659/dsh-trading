@@ -5,6 +5,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import type { MarketDataService } from '@dshtrading/api'
+import { VALID_STRATEGY_SOURCE as VALID_SOURCE } from '@dshtrading/test-support'
 import { createMemoryCustomStrategyStore } from '../src/custom.ts'
 import { createMemoryBuiltinTombstonesStore } from '../src/builtin-tombstones.ts'
 import {
@@ -14,16 +15,6 @@ import {
   createStrategyResetTool,
   resolveStrategyDefinition,
 } from '../src/plugin.ts'
-
-const VALID_SOURCE = `(bars) => {
-  const out = []
-  let long = false
-  for (let i = 1; i < bars.length; i++) {
-    if (!long && i % 2 === 1) { out.push({ index: i, time: bars[i].openTime, action: 'entry', direction: 'long', price: bars[i].close, reason: 'demo entry' }); long = true }
-    else if (long && i % 2 === 0) { out.push({ index: i, time: bars[i].openTime, action: 'exit', direction: 'flat', price: bars[i].close, reason: 'demo exit' }); long = false }
-  }
-  return out
-}`
 
 function fakeService(): MarketDataService {
   return {

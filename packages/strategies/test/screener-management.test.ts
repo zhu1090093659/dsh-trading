@@ -7,6 +7,7 @@
  * - screener_author / screener_delete / screener_reset 工具 + 墓碑联动。
  */
 import { describe, expect, it, vi } from 'vitest'
+import { VALID_SCREENER_SOURCE as VALID_SOURCE } from '@dshtrading/test-support'
 import {
   applyScreenerManagement,
   builtinScreenerRecord,
@@ -165,12 +166,6 @@ describe('applyScreenerManagement 名册合成', () => {
 })
 
 describe('screener_author / screener_delete / screener_reset（选股器管理）', () => {
-  const VALID_SOURCE = `(bars) => {
-    if (bars.length < 2) return null
-    const mom = (bars[bars.length - 1].close - bars[0].close) / bars[0].close * 100
-    if (mom <= 0) return null
-    return { metrics: { mom }, reason: '动量为正' }
-  }`
   const COLUMNS = JSON.stringify([{ key: 'mom', label: '动量' }])
 
   it('自定义选股器 author → 落盘；内置 id author → 覆盖 + 清墓碑', async () => {

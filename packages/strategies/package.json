@@ -36,6 +36,7 @@
     "tsdown": "^0.22.0",
     "vitest": "^3.0.0",
     "typescript": "^5.5.0",
-    "@dshtrading/api": "workspace:*"
+    "@dshtrading/api": "workspace:*",
+    "@dshtrading/test-support": "workspace:*"
   }
 }
