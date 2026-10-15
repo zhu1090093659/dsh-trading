@@ -140,8 +140,9 @@ pnpm test:audit                                   → 通过（无新增测试�
 node scripts/typecheck-gate.mjs                   → 371 / 基线 387，未超基线
 ```
 
-（完整门禁 `pnpm gates:all` 的现场复跑结论与 HEAD sha 见会话交付说明；上表为本次四项变更的
-受影响门禁。）
+（完整门禁 `pnpm gates:all` 已在最终 HEAD `98c03ba6f47532db73d84beef13a075b7f2ded0f`（含 main 的
+桌面启动页 CSP 修复合并）现场复跑：**17 通过 / 0 失败**，GATES_EXIT=0；同 HEAD 上 `pnpm -r build` 亦为
+exit 0。上表为本次变更受影响门禁的单独复跑结果。）
 
 ## 5. 未做与诚实标注
 
