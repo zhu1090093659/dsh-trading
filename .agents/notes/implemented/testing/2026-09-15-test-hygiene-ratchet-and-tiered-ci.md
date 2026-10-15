@@ -68,8 +68,11 @@ desktop 是独立 npm 工程（`pnpm-workspace.yaml` 只收 `packages/*`），`p
 逐包跑 `vitest run --coverage`（`--coverage.all` + `include=src/**`，未测文件按
 0% 计入，才是真实覆盖面），按 metric 的 total/covered 求和聚合，与
 `scripts/coverage-baseline.json` 比较，任何指标下降即红。**任何一个包产出不了覆盖率报告同样即红**
-（2026-10-02 修，见下「门禁可信度三修」）。基线：
-**branches 73.85% / lines 61.96% / functions 71.47% / statements 61.96%**。
+（2026-10-02 修，见下「门禁可信度三修」）。基线的唯一事实源是该 JSON 文件本身
+（不在此处复述数值）；2026-10-15 按实测收紧一次：lines/statements 60.89%→73.05%、
+branches 74.25%→77.49%、functions 70.22%→77.74%，此前自 2026-10-03 卫星仓拆分起
+陈旧 12 天。**读法**：聚合值来自逐包 vitest 的 total/covered 求和，任何包因用例
+超时少跑测试都会把它拉低——判红先分清"测试挂了"与"覆盖真退"。
 
 为什么逐包而不是 root 单进程：`pnpm -r test` 与 root `vitest run` 语义不同——
 root 进程读不到 `packages/client-ui-trading/vitest.config.ts` 的 `setupFiles`，
