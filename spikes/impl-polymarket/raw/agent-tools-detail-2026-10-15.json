@@ -1,0 +1,117 @@
+{
+ "observedAt": "2026-10-15T13:06:58.856Z",
+ "source": "gamma-api.polymarket.com /events (public read-only upstream)",
+ "stale": true,
+ "event": {
+  "id": "606422",
+  "slug": "fed-decision-in-october-20260617190323537",
+  "title": "Fed Decision in October?",
+  "closed": false,
+  "endDate": "2026-10-29T03:59:00Z",
+  "negRisk": true,
+  "volume": 41443822.30955299,
+  "liquidity": 3871470.33272,
+  "markets": [
+   {
+    "key": "dec_50plus",
+    "label": "50+ bps decrease",
+    "question": "Will the Fed decrease interest rates by 50+ bps after the October 2026 meeting?",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "outcomePrices": [
+     0.0015,
+     0.9985
+    ],
+    "bestBid": 0.001,
+    "bestAsk": 0.002,
+    "spread": 0.001,
+    "liquidity": 1627649.97478,
+    "volume": 6459086.367547005,
+    "closed": false,
+    "acceptingOrders": true
+   },
+   {
+    "key": "dec_25",
+    "label": "25 bps decrease",
+    "question": "Will the Fed decrease interest rates by 25 bps after the October 2026 meeting?",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "outcomePrices": [
+     0.0035,
+     0.9965
+    ],
+    "bestBid": 0.003,
+    "bestAsk": 0.004,
+    "spread": 0.001,
+    "liquidity": 899710.55464,
+    "volume": 7000781.916287999,
+    "closed": false,
+    "acceptingOrders": true
+   },
+   {
+    "key": "no_change",
+    "label": "No change",
+    "question": "Will there be no change in Fed interest rates after the October 2026 meeting?",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "outcomePrices": [
+     0.735,
+     0.265
+    ],
+    "bestBid": 0.73,
+    "bestAsk": 0.74,
+    "spread": 0.01,
+    "liquidity": 185933.9541,
+    "volume": 12641001.576693002,
+    "closed": false,
+    "acceptingOrders": true
+   },
+   {
+    "key": "inc_25",
+    "label": "25 bps increase",
+    "question": "Will the Fed increase interest rates by 25 bps after the October 2026 meeting?",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "outcomePrices": [
+     0.255,
+     0.745
+    ],
+    "bestBid": 0.25,
+    "bestAsk": 0.26,
+    "spread": 0.01,
+    "liquidity": 182747.7526,
+    "volume": 9660875.758305985,
+    "closed": false,
+    "acceptingOrders": true
+   },
+   {
+    "key": "inc_50plus",
+    "label": "50+ bps increase",
+    "question": "Will the Fed increase interest rates by 50+ bps after the October 2026 meeting?",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "outcomePrices": [
+     0.0035,
+     0.9965
+    ],
+    "bestBid": 0.003,
+    "bestAsk": 0.004,
+    "spread": 0.001,
+    "liquidity": 987543.54772,
+    "volume": 5682076.690719,
+    "closed": false,
+    "acceptingOrders": true
+   }
+  ]
+ }
+}

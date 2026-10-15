@@ -15,10 +15,10 @@ describe('包入口（loader 解析面）', () => {
     // When 读取入口元信息
     // Then 四项插件元信息齐备，且与 plugin.ts 同源
     expect(rootEntry.name).toBe('dsh-trading-connector-polymarket')
-    expect(rootEntry.inject).toEqual([])
+    expect(rootEntry.inject).toEqual(['tools'])
     expect(rootEntry.Config).toBeDefined()
     expect(typeof rootEntry.apply).toBe('function')
-    expect(inject).toEqual([])
+    expect(inject).toEqual(['tools'])
   })
 
   it('运营看到入口同时导出取数层的公共面（服务键、取数函数与快照工具）', () => {
@@ -30,6 +30,7 @@ describe('包入口（loader 解析面）', () => {
     expect(typeof rootEntry.createPolymarketPredictionFeed).toBe('function')
     expect(typeof rootEntry.discoverFomcMeetings).toBe('function')
     expect(typeof rootEntry.applySnapshot).toBe('function')
+    expect(typeof rootEntry.createPolymarketTools).toBe('function')
     expect(rootEntry.FOMC_SERIES_ID).toBe('35')
   })
 

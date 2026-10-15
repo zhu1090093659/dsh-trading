@@ -1,0 +1,11 @@
+fomc: GET /events?series_id=35&limit=100&closed=false | ua=dsh-trading-connector-polymarket/0.6.1
+fomc: GET /events?series_id=35&limit=100&closed=false | ua=dsh-trading-connector-polymarket/0.6.1
+search: GET /events?closed=false&order=volume24hr&ascending=false&limit=100 | ua=dsh-trading-connector-polymarket/0.6.1
+search: GET /events?closed=false&order=volume24hr&ascending=false&limit=100 | ua=dsh-trading-connector-polymarket/0.6.1
+search: GET /events?closed=false&order=volume24hr&ascending=false&limit=100 | ua=dsh-trading-connector-polymarket/0.6.1
+detail: GET /events?id=606422 | ua=dsh-trading-connector-polymarket/0.6.1
+detail: GET /events?slug=fed-decision-in-october-20260617190323537 | ua=dsh-trading-connector-polymarket/0.6.1
+detail: GET /events?id=999999999 | ua=dsh-trading-connector-polymarket/0.6.1
+403: GET /events?series_id=35&limit=100&closed=false | ua=Python-urllib/3.11
+403: GET /events?closed=false&order=volume24hr&ascending=false&limit=100 | ua=Python-urllib/3.11
+403: GET /events?id=606422 | ua=Python-urllib/3.11
