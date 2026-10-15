@@ -7,7 +7,7 @@ description: 制定每周交易计划：把本周复盘、统一台账持仓与�
 
 把「消息面 + 台账持仓 + 知识库 + 本周复盘」合成一份**下周可执行的双向预案**，而不是行情预测。计划的价值在纪律：每条意向都写清为什么做、期待看到什么、什么事实出现就认错、错了第一步做什么。
 
-> 副本约定：本技能同时存在于工作区项目根 `.agents/skills/weekly-trading-plan/`（live 副本，随会话即时生效）与本仓库 `.agents/skills/weekly-trading-plan/`（打包副本，经 `scripts/sync-skills.mjs` 同步进 `packages/base/assets/skills/`）。**改动必须两处一致**；打包副本的脚本资源随目录整体分发。
+> 副本约定：本技能同时存在于三处——工作区项目根 `<workspace>/.agents/skills/weekly-trading-plan/`（live 副本，随会话即时生效）、本仓库 `.agents/skills/weekly-trading-plan/`（SSOT，经 `scripts/sync-skills.mjs` 同步进 `packages/base/assets/skills/`，由 `pnpm build` 触发）与 `packages/base/assets/skills/weekly-trading-plan/`（打包副本）。**改动必须三处一致**（仓库内两处跑 `pnpm sync:skills` 即可；工作区副本在仓库外，需手工同步）；打包副本的脚本资源随目录整体分发。
 
 ## 1. 何时用 / 何时不用
 
@@ -48,14 +48,27 @@ description: 制定每周交易计划：把本周复盘、统一台账持仓与�
 ### 2.3 执行层：KDAS 关键日期均价线
 
 - **是什么**：自定义指标 `kdas`——自关键日起算的 Anchored VWAP（`TP=(H+L+C)/3`，按成交量加权），最多 8 条，读数 3 位小数；只用已完成日 K。
-- **关键日现场值**：`indicator_list` → `custom[kdas].symbolParams["<market>:<symbol>"]` 是唯一权威；**不要引用文档或记忆里的旧关键日**（关键日随行情更新，当前已配 6 个标的：00700.HK / 02714.HK / 002714.SZ / 513050.SH / 159869.SZ / 001201.SZ）。
-- **复算**（把 G3 变成可核对的数字，别凭感觉）：
-  ```bash
-  # 脚本位于本技能目录 scripts/kdas.py（按 skill_resources 的 Base directory 拼绝对路径）
-  python3 <skill 目录>/scripts/kdas.py \
-    --market cn --symbol 002714.SZ --keys 20250821,20240924,20260905,20260825,20260317,20260625,20260512
+- **关键日现场值**：`indicator_list` → `custom[kdas].symbolParams["<market>:<symbol>"]` 是唯一权威；**不要引用文档或记忆里的旧关键日**（关键日随行情更新；现场以 `indicator_list` 读到的为准，本文件不列清单——列了就会过期）。
+- **取读数：首选工具 `indicator_get_values`（2026-10-15 起）**：
   ```
-  港股加 `--klines-file <futu 日 K JSON>`（图表走 futu；腾讯公开源复算实测同值，但复权口径可能不同）；日 K 未收盘时加 `--drop-last`。脚本与指标同算法、同锚定口径（含「openTime 的 UTC 日」判定——港股日 K 会因此比名义关键日晚一个交易日锚定），锚点被截断或关键日未生效时 **fail-closed 不出数**。
+  indicator_get_values(market="cn", symbol="002714.SZ")        # interval 固定 1d、id 默认 kdas
+  ```
+  它把整条链路收在一次调用里：关键日取图表名册的**现场权威值**（`symbolParams["market:symbol"]` 命中即整体替代全局参数），
+  算法跑该指标自己的 `computeSource`，行情按与 GUI 图表**同一注册表候选序**取数（出参回带 `provider` 与 `parity`）。
+  出参含每线的 `key_day`/`anchored_at`/`value`（3 位小数）/`distance_pct`、`latest_close`、`nearest_support`/`nearest_resistance`，
+  以及 `bars`/`as_of`/`stale`/`keys_source`/`params_scope`。**fail-closed**：锚点被窗口截断、关键日晚于最新一根、无可用关键日、
+  K 线为空时不给数，只回 `blocked_reason` 或该线的 `truncated`/`ineffective` 说明。
+  只想试算一组关键日时传 `keys=YYYYMMDD,...`（会标注 `keys_source=override`，**不是**名册权威值，别拿它当纪律依据）。
+- **降级路径：`scripts/kdas.py` 复算**（工具不可用、或要把读数和脚本口径逐条对照时用）：
+  ```bash
+  # 关键日从 indicator_get_values 返回的 keys 或 indicator_list 现场值取，不要抄本文件的例子
+  python3 <skill 目录>/scripts/kdas.py \
+    --market cn --symbol 002714.SZ --keys <现场关键日,逗号分隔>
+  ```
+  脚本与指标同算法、同锚定口径（含「openTime 的 UTC 日」判定），锚点被截断或关键日未生效时同样 **fail-closed 不出数**；
+  `--klines-file <JSON>` 可传任意日 K 源（工具与图表均走 profile 路由的 provider，实测 cn/hk 都是 tencent；
+  不传时脚本走腾讯公开 qfq 端点，**港股标签口径与仓内 provider 差一个交易日**——对照读数时以 `anchored_at` 而非日期标签为准）；
+  日 K 未收盘时加 `--drop-last`。
 - **买点分层（G3 判定，`trading_system_v1.md` §3 G3）**：
   1. **最佳买点**：自然寻底末端，低位首次突破并站稳关键日 KDAS（强弱分界线 / 最后一两根线）。
   2. **次优买点**：突破后回踩近端 KDAS 不破，旧压力转新支撑，收盘确认。
@@ -81,7 +94,7 @@ description: 制定每周交易计划：把本周复盘、统一台账持仓与�
 ## 4. 标准流程（S1–S7）
 
 - **S1 台账与资金分层**：读台账 → 按 §2.1 给每个标的与每条候选意向归入模式 A（全市场基本面中长线）/ 模式 B（A股短线题材），未归类的不得进入后续步骤；算各标的占总资产比重、单账户集中度、现金与融资敞口；**列出越线项**（越线标的禁止同向加仓）。
-- **S2 本周复盘取证**：按 §3 第 3 行取；逐标的给出本周涨跌幅、周线状态、量能对比、本周事件、相对关键位的距离（关键日 KDAS 用 §2.3 脚本复算、MA、前高前低）。**深度个股结论不在此处展开**（委派深研），此处只做组合层快照。
+- **S2 本周复盘取证**：按 §3 第 3 行取；逐标的给出本周涨跌幅、周线状态、量能对比、本周事件、相对关键位的距离（关键日 KDAS 读 §2.3 的 `indicator_get_values`（工具不可用时才退回脚本复算）、MA、前高前低）。**深度个股结论不在此处展开**（委派深研），此处只做组合层快照。
 - **S3 假设面板**：逐条对照假设档案的失效条件与验证信号，判定**验证中 / 承压 / 已证伪**，写出「下一验证点 + 预计日期」。
   - 到期检查点（如假设档案里的 T+1 周表格）→ 按 append-only 回填/追加检验记录，**不改历史行**。
   - 判定「已证伪」→ 计划第一动作是**停旧策略、降风险**，不摊平、不换叙事。
@@ -119,7 +132,7 @@ reports/weekly_plans/YYYY-Www.md        # 计划周 = 周一至周五（ISO 周�
    | 编号 | 一句话假设 | 本周判定（验证中/承压/证伪） | 下一验证点 | 预计日期 |
 ## 4. 分市场计划
    ### 模式 A 主仓（crypto / us / cn / hk 分列）
-      每条：模式 A/B｜策略口径（§2.2）｜G1 假设｜G2 预期差定位｜G3 KDAS 买点分层（关键日 + 复算读数）｜G4 环境信号｜G5 预算与集中度｜G6 执行路径（冷静期/dry-run）｜锚点（工具+参数+数值+数据时间 / 公告 / facts 条目 / 卡片 id）｜判定（supported/contradicted/mixed/insufficient）
+      每条：模式 A/B｜策略口径（§2.2）｜G1 假设｜G2 预期差定位｜G3 KDAS 买点分层（关键日 + `indicator_get_values` 读数）｜G4 环境信号｜G5 预算与集中度｜G6 执行路径（冷静期/dry-run）｜锚点（工具+参数+数值+数据时间 / 公告 / facts 条目 / 卡片 id）｜判定（supported/contradicted/mixed/insufficient）
       双向预案：假设成立 → …｜被证伪 → 先停旧策略并降风险 → …｜再入场条件：…
    ### 模式 B 辅线（A股短线题材）
       当前情绪周期位置判定；是否具备开仓前置条件（含用户未定的单笔风险预算）

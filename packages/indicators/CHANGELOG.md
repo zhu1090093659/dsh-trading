@@ -1,9 +1,5 @@
 # @dshtrading/indicators
 
-## Unreleased
-
-- 新增 host 平面工具 `indicator_get_values`：按现场图表名册的关键日（`symbolParams["market:symbol"]` 优先，命中即整体替代全局 params）在日线上读指标数值；算法复用该指标自己的 `computeSource`（vm 沙箱执行），行情经 `tradingMarketDataRegistry` 按与桥 `/klines` 相同的候选序取数并如实回带 provider/parity；锚点被窗口截断、关键日晚于最新一根、K 线根数不足一律 fail-closed 不给数。
-
 ## 0.6.1
 
 ### Patch Changes

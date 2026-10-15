@@ -222,6 +222,72 @@
     ],
     "outputForm": "object"
   },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_hk_short_top10": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "limit",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_sector_ranking": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "window",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "name": "limit",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_sector_series": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "code",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "days",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_sentiment_history": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "days",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_snapshot": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "group",
+        "type": "string",
+        "required": false,
+        "enum": true
+      }
+    ],
+    "outputForm": "object"
+  },
   "@dshtrading/connector-akshare#cn_get_klines": {
     "file": "packages/connector-akshare/src/index.ts",
     "params": [
@@ -1232,6 +1298,44 @@
       }
     ],
     "outputForm": "object"
+  },
+  "@dshtrading/connector-polymarket#prediction_event_detail": {
+    "file": "packages/connector-polymarket/src/tools.ts",
+    "params": [
+      {
+        "name": "eventId",
+        "type": "string",
+        "required": false
+      }
+    ],
+    "outputForm": "none"
+  },
+  "@dshtrading/connector-polymarket#prediction_fomc_meetings": {
+    "file": "packages/connector-polymarket/src/tools.ts",
+    "params": [
+      {
+        "name": "meetingId",
+        "type": "string",
+        "required": false
+      }
+    ],
+    "outputForm": "none"
+  },
+  "@dshtrading/connector-polymarket#prediction_search_events": {
+    "file": "packages/connector-polymarket/src/tools.ts",
+    "params": [
+      {
+        "name": "keyword",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ],
+    "outputForm": "none"
   },
   "@dshtrading/connector-qmt#cn_cancel_order": {
     "file": "packages/connector-qmt/src/index.ts",

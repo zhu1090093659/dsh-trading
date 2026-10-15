@@ -9,7 +9,7 @@ Status: implemented
 ## Decision
 
 1. connector-jin10 新增 `web-flash.ts`：`fetchJin10HotFlash` 复刻网页版请求（endpoint + x-app-id/x-version + channel[1,5,9] + hot + max_time），把条目映射为本仓 NewsItem（标题取 data.title，空则从 content 的【…】提取；url = https://flash.jin10.com/detail/<id>；publishedAt 解析东八区），并带 hot 标签；正文 content 不下发。常量 `JIN10_HEAT_LEVELS = [火,热,沸,爆]`。
-2. `Jin10Service` 新增 `listFlashByHeat`（web fetch 可注入便于单测，超时 15s）。既有 MCP `listFlash` 不动，agent 工具面（flash_list/flash_search）语义不变。
+2. `Jin10Service` 新增 `listFlashByHeat`（web fetch 可注入便于单测，超时 15s）。既有 MCP `listFlash` 不动。**2026-10-15 更新**：agent 工具面同步扩到这条路——`flash_list` 增加可选 `hot` 参数（多值逗号分隔），给了 `hot` 就走 `listFlashByHeat`、不给仍走 MCP `listFlash`（行为与改动前逐字一致）；此时出参 `source` 如实标注为网页版热度入口而非 MCP feed（原先把热度页标成 MCP feed 是错的）。网页版热度页上游无条数参数，`limit` 由本仓本地截断并在页头回带上游页大小。
 3. `flash-service.ts`（GUI 桥的 tradingFlashFeed）：listFlash 的 hot 含有效等级 → 走 listFlashByHeat（服务端过滤）；否则走 MCP 全量流。`FlashFeedService.listFlash` 增加 hot 选项，共享 `NewsItem` 增加可选 `hot`。
 4. 桥 `GET /dshtrading/api/flash` 增加 `hot` 查询参数（逗号分隔；未知等级 → 协议 400，不静默降级）；client `fetchFlash` 透传。
 5. GUI `FlashPanel` 增加热度筛选（四段连选、可多选 + 全选 + 恢复默认；默认 `[沸,爆]`），热度过期即重载；`NewsFeedPane` 渲染 hot 徽标（分档配色）。

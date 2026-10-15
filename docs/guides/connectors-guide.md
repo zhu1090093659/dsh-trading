@@ -78,7 +78,7 @@
 
 | 数据源 | 类型 | 认证方式与环境变量 | 官网与申请地址 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
-| **金十数据 (`jin10`)** | MCP 开放数据服务（免费） | `JIN10_MCP_TOKEN`（或设置中心 `dshtrading.credentials.jin10.token`） | [mcp.jin10.com/app](https://mcp.jin10.com/app/) | 标准 MCP 服务（Streamable HTTP，协议 2025-11-25）：实时快讯、财经资讯、本周财经日历、全球品种报价与分钟 K 线（现货贵金属/原油/铜、外汇、全球与 A 股指数）。工具：`flash_list` / `flash_search` / `news_list` / `news_search` / `news_get` / `econ_calendar` / `global_instruments` / `global_quote` / `global_klines`；每用户每工具每北京时间自然日限 1500 次调用；快讯/资讯只下发标题、时间与链接（数据零再分发） |
+| **金十数据 (`jin10`)** | MCP 开放数据服务（免费） | `JIN10_MCP_TOKEN`（或设置中心 `dshtrading.credentials.jin10.token`） | [mcp.jin10.com/app](https://mcp.jin10.com/app/) | 标准 MCP 服务（Streamable HTTP，协议 2025-11-25）：实时快讯、财经资讯、本周财经日历、全球品种报价与分钟 K 线（现货贵金属/原油/铜、外汇、全球与 A 股指数）。工具：`flash_list`（可选 `hot` = 火/热/沸/爆，走网页版热度过滤；不给时走官方 MCP 全量流）/ `flash_search` / `news_list` / `news_search` / `news_get` / `econ_calendar` / `macro_rates`（央行最新利率，约 30 家，可选 `region` 过滤）/ `global_instruments` / `global_quote` / `global_klines`；每用户每工具每北京时间自然日限 1500 次调用（热度路径走网页版公开接口，不受该配额约束）；快讯/资讯只下发标题、时间与链接（数据零再分发） |
 
 配置方式二选一（BYOK，插件不内置密钥）。推荐路径是设置中心：**设置 → 交易 → 市场快讯数据源**（保存即生效）。手改文档时 0.1.7 起写当前 profile 的 `cordis.patch.yml`：
 
