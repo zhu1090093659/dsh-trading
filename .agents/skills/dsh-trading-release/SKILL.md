@@ -20,7 +20,7 @@ whenToUse: 用户明确请求 dsh-trading 发版、桌面发布、指定发布 r
 - `@dshtrading/*` 全家族版本由 `.changeset/config.json` 的 fixed 组管理；`scripts/verify-release-version.mjs` 校验家族版本等于 vX.Y.Z tag。不手抄包数量。
 - private 的 `desktop/package.json` 不参与 changesets；管线用 `scripts/set-desktop-version.mjs` 按 tag 重写。可在获授权的版本变更中对齐，不作强制手工步骤。
 - npm 由 `scripts/publish-npm.mjs` 按 workspace 拓扑序发布，已存在的 name@version 跳过；**跳过不证明内容一致，也不允许换代码复用已发布版本**。任何发布包内容变化需新版本。
-- 桌面产物经 GitHub Actions 构建，遵循 `desktop/electron-builder.yml` 未签名约定；签名/公证是独立决策。token 仅放受控 secret，不进文件或日志。
+- 桌面产物经 GitHub Actions 构建，**CI 产物仍不签名**（`desktop/electron-builder.yml` 的 keychain 自动发现找不到身份时回落到未签名包并由闸门打横幅，构建不失败）；本机 macOS 构建自 2026-10-16 起默认带 Apple Development 开发签名 + hardened runtime，Developer ID 证书与公证未落地。机制、边界与恢复路径见 [桌面壳 macOS 代码签名与 TCC 身份](../../notes/implemented/process/2026-10-16-desktop-mac-code-signing.md)。token 仅放受控 secret，不进文件或日志。
 - 本技能位于 `.agents/skills/` 但被 `scripts/sync-skills.mjs` 排除，不进包分发资产；非平凡流程变化同步 Agent Note。
 
 ## 0. 门禁与基线

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!--
+      electron-builder 在 buildResources（desktop/resources）里发现本文件就自动套用，
+      不必在 electron-builder.yml 里再写 mac.entitlements（MacTargetHelper.getOptionsForFile
+      按文件名 entitlements.mac.plist 命中）。嵌套二进制仍用 app-builder-lib 自带模板
+      （同三项），所以这里不另建 entitlements.mac.inherit.plist——多一份就多一处漂移。
+
+      三项基线取自 app-builder-lib/templates/entitlements.mac.plist：
+      allow-jit（V8/Electron 必需，arm64 上缺了直接起不来）、
+      allow-unsigned-executable-memory、disable-library-validation。
+
+      不追加 com.apple.security.automation.apple-events：desktop/src 壳不驱动别的 App
+      （无 osascript/AppleScript/NSAppleEventDescriptor 用法，只有 spawn 自带 Node 运行时
+      和 Windows 下的 taskkill）。要加就得同时补 Info.plist 的 NSAppleEventsUsageDescription，
+      否则会被系统直接拒绝；desktop/tests/mac-signing.test.mjs 里有成对出现的断言守卫。
+    -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+  </dict>
+</plist>

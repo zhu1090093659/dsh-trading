@@ -1,6 +1,9 @@
 # electron-builder configuration for the DeepSeek Harness desktop app.
-# Unsigned on purpose: internal/local distribution only (see desktop/README.md
-# Known limitations). Code signing and notarization are a separate follow-up.
+# macOS 产物默认按本机钥匙串里自动发现的签名身份签名（本机落到 Apple Development
+# 1090093659@qq.com，团队 3H4FK5CBYJ），带 hardened runtime 与 resources/
+# entitlements.mac.plist；钥匙串里没有可用身份时保持未签名产物，并由
+# scripts/mac-signing-guard.cjs 打显式横幅——不允许出现「看着像签名其实是未签名」的包。
+# 身份可用 CSC_NAME 覆盖（证书全名或 SHA-1 指纹）。
 appId: com.dsh-trading.desktop
 productName: DSH Trading
 copyright: Copyright (c) DeepSeek Harness Contributors
@@ -34,15 +37,38 @@ files:
 # extraResources applies gitignore filtering and silently drops every
 # node_modules tree.
 afterPack: scripts/after-pack.cjs
+# 签名形态与公证票据的收尾闸门（同一模块导出两个 hook）：
+# afterSign 只在真的签成功时被调用，afterAllArtifactBuild 无论签没签都会跑，
+# 未签名时由后者打显式横幅（配了 mac.sign 之后 electron-builder 自己的
+# 「找不到签名身份」告警会被吞掉，见 MacTargetHelper.findSigningIdentity）。
+afterSign: scripts/mac-signing-guard.cjs
+afterAllArtifactBuild: scripts/mac-signing-guard.cjs
 
 mac:
   category: public.app-category.developer-tools
   target:
     - dmg
     - zip
-  identity: null
+  # 不写 identity：解析顺序是 mac.identity -> CSC_NAME -> 钥匙串自动发现。
+  # identity: null 会整条关掉签名（MacTargetHelper.handleNullIdentity 直接返回 false），
+  # 所以这里保持不设置。钥匙串里本机有两张同名 Apple Development 证书，自动发现会
+  # 取命令行顺序里的第一张（两次实测分别落到 AF607EA2… 与 A7767D3F…，顺序不稳），
+  # 要固定身份就用环境变量显式给指纹：
+  #   CSC_NAME=AF607EA2CBEEF0924FA737BB037CA45545B3E5DA npx electron-builder --mac
+  # 重名证书必须走指纹：scripts/sign-mac.cjs 只把指纹交给 codesign，而 electron-builder
+  # 内置路径交出去的是证书通用名（macPackager.doSign 用 identity.name 覆盖 hash），
+  # 本机两张同名证书会让它直接撞 ambiguous。该脚本还默认给非公证构建加
+  # --timestamp=none（本仓载荷有上千个待二进制文件，逐个 --timestamp 会被 TSA 限流），
+  # 需要时间戳时设 DSH_MAC_TIMESTAMP=default。
   gatekeeperAssess: false
-  hardenedRuntime: false
+  # hardened runtime 只在真的解析出签名身份时才生效；没有身份时整段签名被跳过，
+  # 产物与今天的未签名形态一致，不会因为默认值变成启动不了的包。
+  hardenedRuntime: true
+  sign: scripts/sign-mac.cjs
+  # 公证只在 APPLE_* 齐备时才真正执行（MacTargetHelper.getNotarizeOptions），
+  # 且只在 Developer ID 分发签名下才有意义：scripts/sign-mac.cjs 会在凭据齐备却选了
+  # 非 Developer ID 身份时提前报错，scripts/mac-signing-guard.cjs 在 .dmg 上也补公证+staple。
+  notarize: true
   artifactName: dsh-trading-desktop-${version}-mac-${arch}.${ext}
 
 win:

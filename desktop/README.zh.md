@@ -68,7 +68,7 @@ npm run dist:win       # dist/*.exe（nsis）+ *.zip（可从 macOS 交叉构建
 
 ## 已知限制
 
-- **未签名构建**：macOS 首次打开会被 Gatekeeper 拦截，且 macOS 15+ 已移除"右键 → 打开"绕过。放行方式：**系统设置 → 隐私与安全性 → "仍要打开"**（首次被拦后出现），或清除隔离属性：`xattr -cr "/Applications/DSH Trading.app"`。Windows 有 SmartScreen 提示（更多信息 → 仍要运行）。签名与公证是后续计划。
+- **签名**：本机 macOS 构建按钥匙串里自动发现的 Apple Development 身份签名（`Identifier=com.dsh-trading.desktop`，团队 `3H4FK5CBYJ`）并启用 hardened runtime，因此 macOS 的隐私授权可以跨重建保留。授权本身仍是人工步骤——在**系统设置 → 隐私与安全性 → 辅助功能 / 屏幕录制**里加入 `/Applications/DSH Trading.app`；embedded 模式下驱动不会主动弹窗。开发签名仍会被 Gatekeeper 拒绝，所以**发布产物保持未签名**，直到 Developer ID 证书 + 公证落地；因此下载安装仍需要**系统设置 → 隐私与安全性 → "仍要打开"**（首次被拦后出现）或 `xattr -cr "/Applications/DSH Trading.app"`。Windows 有 SmartScreen 提示（更多信息 → 仍要运行）。用 `CSC_NAME=<证书 SHA-1>` 可固定签名身份；在没有任何可用身份的机器上构建时产物与从前一致，并在日志里打出显式横幅。
 - **Windows arm64 与 Linux** 暂不构建；运行时布局已支持后续加入。
 - 全新机器首次启动会花几秒钟把预装 profile 拷贝进 `~/.dsh`（一次性）。
 - 内置载荷由 workspace 检出状态构建；拉取更新后需重新构建，才能把连接器或策略更新带进安装包。

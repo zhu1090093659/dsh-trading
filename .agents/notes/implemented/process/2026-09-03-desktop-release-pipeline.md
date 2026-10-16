@@ -71,7 +71,7 @@ Status: implemented
   spawnSync('pnpm') 在 Windows 上无法解析 pnpm.cmd shim（ENOENT），修复为
   win32 下 spawn 带 shell:true（args 均为固定常量或 CI 上的无空格绝对路径，
   不引入注入面）；mac job 首跑即绿，验证了 mac 链路端到端可用。
-- 后续若引入代码签名/公证，是独立决策，须新增 Agent Note 并同步 skill。
+- 后续若引入代码签名/公证，是独立决策，须新增 Agent Note 并同步 skill。**2026-10-16 落地了其中一半**：桌面壳的本地 macOS 构建默认带 Apple Development 开发签名 + hardened runtime（TCC 授权可跨重建保留），而 CI 发布产物仍不签名；Developer ID + 公证需重放归档在 `.local/desktop-signing-ci/` 的接线。机制与边界见 [桌面壳 macOS 代码签名与 TCC 身份](2026-10-16-desktop-mac-code-signing.md)。
 - **「删 tag 重推安全」有前提（2026-10-09 补，v0.6.0 → v0.6.1 实证）**：那条幂等性
   只在**代码本来就对**时成立。0.6.0 是相反形态：`npm-publish` 与 mac 桌面都成功、
   58 个 npm 包已公开，Windows 桌面因 `@dshtrading/authority` / `base` 的真实代码缺陷
