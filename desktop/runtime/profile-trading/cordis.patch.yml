@@ -11,3 +11,25 @@
       name: '@dshtrading/client-ui-special-indicators'
     - id: dsh-trading-client-ui-bot-gui
       name: '@dshtrading/client-ui-bot-gui'
+
+# DSH 自带 Computer Use（2026-10-16）：单槽服务 + 原生 Cua Driver provider，
+# 工具以 cua_driver_native__<upstream 名> 出现在会话工具面，截图走持久化附件，
+# 所以被选中的模型路由必须声明 image 输入。
+#
+# 为什么落 profile 种子层而不是 base：base 是市场无关共享行的家，但它同时被
+# trading-dev / trading-all 等 headless profile 挂载，那些 profile 的清单里没有
+# 原生驱动依赖（@trycua/cua-driver 等），行插进 base 就会在那边解析不到、宿主每轮
+# 启动报 failed to import。依赖只在桌面 seed 的生成清单里补齐
+# （build-runtime.mjs 的 REGISTRY_DEPENDENCIES）。
+#
+# 一个部署只允许注册一个 computer-use provider：服务行持有唯一注册槽，这里由原生
+# provider 占位。不要再挂 @deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp
+# ——第二个 provider 注册失败并报槽位已被占用。
+#
+# 挂载行本身不授予任何 macOS 权限：Screen Recording 与 Accessibility 属于启动这个
+# 宿主的应用（DSH Trading.app），缺授权时工具照常注册、调用被系统拒绝。
+- insert:
+    - id: computer-use
+      name: '@deepseek-ai/dsh-computer-use'
+    - id: computer-use-cua-driver-native
+      name: '@deepseek-ai/dsh-experimental-computer-use-cua-driver-native'
