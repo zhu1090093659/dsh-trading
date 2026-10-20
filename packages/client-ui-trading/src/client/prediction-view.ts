@@ -11,6 +11,10 @@
  *   Yes 价；December No change 档 mid 0.225 vs 网页 0.23）。`bestAsk` 缺失（结算后
  *   上游为 null）时回落到 `probability`（mid），由 {@link probabilityBasisOf} 如实
  *   标注基准，不静默换口径。
+ * - **事件对照一律取 mid**（连接器 `probability` 原值 = 上游 prices-history 的 `p`，
+ *   与 gamma outcomePrices 等价）：「历史段」（按事件开窗回填）与会话段都只有这一个
+ *   同源口径，混用 bestAsk 会拿两种口径相减。显示值与对照口径在面板上各自标注，
+ *   不隐式换算。
  * - **Δ 沿用宿主快照的 `changeSincePrevious`**（mid 基准），与显示口径差半个 tick
  *   以内；缺省 = 不知道 → 不显示变动，绝不填 0 冒充「确知没变」。
  * - **深度/价差阈值是判断口径**，上游证据（spikes/impl-polymarket/）只给了实测分布
@@ -201,6 +205,109 @@ const US_REGION = '美国' // i18n-allow: 上游数据词汇
 const INFLATION_TITLE_RE = /CPI|PPI/
 
 /* ------------------------------------------------------------------ */
+/* 上游历史回填（事件前后各 24h、5 分钟口径）                               */
+/* ------------------------------------------------------------------ */
+
+/** 事件前后各 24h 的回填窗口。 */
+export const HISTORY_WINDOW_MS = 24 * 3600_000
+
+/** 上游最小间隔（分钟）：5 分钟是 prices-history 能给到的最细档。 */
+export const HISTORY_FIDELITY_MINUTES = 5
+
+/** 上游历史只保留约 30 天：更早的事件回填必定为空，不进候选。 */
+export const HISTORY_MAX_AGE_MS = 30 * 86400_000
+
+/**
+ * 事件回填窗口 `[eventAt - 24h, min(eventAt + 24h, now)]`。
+ *
+ * 右端夹到 now（未来那段上游没有数据）；`toMs <= fromMs` 也照常返回——是否真的
+ * 发请求由调用方决定，这里只保证两个端点都是有限数、不产生 NaN。
+ */
+export function historyWindowOf(eventAt: number, now: number): { readonly fromMs: number; readonly toMs: number } {
+  return { fromMs: eventAt - HISTORY_WINDOW_MS, toMs: Math.min(eventAt + HISTORY_WINDOW_MS, now) }
+}
+
+/**
+ * 可回填的候选事件：已公布（`at <= now`）且在上游历史保留期内（30 天），
+ * 按 `at` 降序（最近公布在前）。未来事件与超期事件都不进候选——回填它们必定为空。
+ */
+export function candidateEventsOf(events: readonly InflationEvent[], now: number): readonly InflationEvent[] {
+  return events
+    .filter((event) => event.at <= now && event.at >= now - HISTORY_MAX_AGE_MS)
+    .sort((a, b) => b.at - a.at)
+}
+
+/**
+ * 上游历史 → 采样时间轴：键 `${meetingId}:${bucketKey}`、`at = t * 1000`（上游
+ * `t` 是 unix 秒）、值 `p`（mid）。
+ *
+ * 同一时刻的多个档位合成**一条**采样：与会话采样的粒度一致，合并时才能整条快照覆盖，
+ * 而不是逐档位互相顶掉。空 series → 空数组（不抛；调用方据此判「上游历史不覆盖」）。
+ *
+ * 各档的 `t` 不保证落在同一网格（上游按各 token 的成交时刻出点）：不在同一时刻的档位
+ * 落在不同采样里，每条 values 只带自己那个键。**对照仍然成立**——{@link movementAround}
+ * 对每个 key 独立取「`at` 之前最近一条带该键的采样」与「之后最近一条带该键的采样」，
+ * 从不跨键插值，也不要求两档同时刻；唯一前提是采样序列按 `at` 升序，本函数与
+ * {@link mergeSamples} 都排序，面板只把合并结果交给对照判据。
+ */
+export function samplesFromHistory(history: {
+  readonly meetingId: string
+  readonly series: readonly {
+    readonly bucketKey: string
+    readonly points: readonly { readonly t: number; readonly p: number }[]
+  }[]
+}): readonly ProbabilitySample[] {
+  const byAt = new Map<number, Record<string, number>>()
+  for (const series of history.series) {
+    const key = `${history.meetingId}:${series.bucketKey}`
+    for (const point of series.points) {
+      const at = point.t * 1000
+      const values = byAt.get(at) ?? {}
+      values[key] = point.p
+      byAt.set(at, values)
+    }
+  }
+  return [...byAt.entries()].sort((a, b) => a[0] - b[0]).map(([at, values]) => ({ at, values }))
+}
+
+/**
+ * 合并两条采样时间轴：按 `at` 升序，同一 `at` 后者覆盖前者（调用方传参顺序即优先级：
+ * 会话段在后，同一时刻以会话读数为准）；按 `max` 裁尾保留最新。
+ */
+export function mergeSamples(
+  a: readonly ProbabilitySample[],
+  b: readonly ProbabilitySample[],
+  max: number = MAX_SAMPLES,
+): readonly ProbabilitySample[] {
+  const byAt = new Map<number, ProbabilitySample>()
+  for (const sample of a) byAt.set(sample.at, sample)
+  for (const sample of b) byAt.set(sample.at, sample)
+  const merged = [...byAt.values()].sort((x, y) => x.at - y.at)
+  return merged.length > max ? merged.slice(merged.length - max) : merged
+}
+
+/** 事件对照判据：两侧都有读数才 `comparable`，否则 `insufficient`。 */
+export type EventComparison =
+  | { readonly state: 'comparable'; readonly key: string; readonly movement: Movement }
+  | { readonly state: 'insufficient' }
+
+/**
+ * 跨 `at` 位移最大的档位（复用 {@link largestMovementAround}）。单侧缺失即
+ * `insufficient`——**绝不拿单侧硬算或填 0**。
+ *
+ * 三态里的第三态（`uncovered` = 上游历史不覆盖该时点）不进纯函数：它判的是「回填
+ * 是否为空」这个取数事实，由面板结合回填结果决定。
+ */
+export function eventComparisonOf(
+  samples: readonly ProbabilitySample[],
+  at: number,
+  keys: readonly string[],
+): EventComparison {
+  const hit = largestMovementAround(samples, at, keys)
+  return hit === undefined ? { state: 'insufficient' } : { state: 'comparable', key: hit.key, movement: hit.movement }
+}
+
+/* ------------------------------------------------------------------ */
 /* 面板视图模型                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -212,6 +319,11 @@ export interface BucketView {
   /** 利率变动（bps；未识别形态 = undefined，不猜）。 */
   readonly changeBps: number | undefined
   readonly probability: number
+  /**
+   * 上游 `probability` 原值（= mid，与 prices-history 的 `p` 同源）。
+   * 事件对照与会话采样用它；主表显示仍用 {@link BucketView.probability}（bestAsk）。
+   */
+  readonly midProbability: number
   readonly basis: ProbabilityBasis
   readonly marks: readonly QualityMark[]
   /** 变动（百分点单位由渲染层格式化）；缺省 = 快照不足。 */
@@ -251,6 +363,7 @@ export function meetingViewOf(meeting: ClientPredictionMeeting): MeetingView {
       label: bucket.label,
       changeBps: bucket.changeBps,
       probability: displayProbabilityOf(bucket),
+      midProbability: bucket.probability,
       basis: probabilityBasisOf(bucket),
       marks: qualityMarksOf(bucket),
       delta: bucket.changeSincePrevious,

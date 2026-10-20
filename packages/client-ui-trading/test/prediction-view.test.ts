@@ -10,22 +10,31 @@
 import { describe, expect, it } from 'vitest'
 import type { ClientPredictionBucket, ClientPredictionMeeting } from '../src/client/api.ts'
 import {
+  candidateEventsOf,
+  eventComparisonOf,
+  historyWindowOf,
   MAX_SAMPLES,
   MIN_LIQUIDITY_USD,
   appendSample,
   displayProbabilityOf,
   formatDeltaPp,
   formatProbability,
+  HISTORY_FIDELITY_MINUTES,
+  HISTORY_MAX_AGE_MS,
+  HISTORY_WINDOW_MS,
   inflationEventsOf,
   largestMovementAround,
   meetingViewOf,
+  mergeSamples,
   movementAround,
   nextMeetingOf,
   probabilityBasisOf,
   qualityMarksOf,
+  samplesFromHistory,
   sumHealthOf,
   visibleMeetingsOf,
   VISIBLE_MEETINGS,
+  type InflationEvent,
   type ProbabilitySample,
 } from '../src/client/prediction-view.ts'
 
@@ -344,5 +353,174 @@ describe('会话内采样与事件对照', () => {
     // When 读事件时点
     // Then 丢弃该行（不猜时间）
     expect(events).toEqual([])
+  })
+})
+
+describe('上游历史回填（事件前后 24h、5 分钟口径）', () => {
+  /** 固定「现在」：2026-10-11 02:00 UTC。 */
+  const now = Date.parse('2026-10-11T02:00:00Z')
+
+  it('用户看到的回填窗口是事件前后各 24 小时，右端夹到当前时刻', () => {
+    // Given 事件发生在 2 小时前（事件后 24h 已越过 now）
+    const eventAt = now - 2 * 3600_000
+    // When 算回填窗口
+    const window = historyWindowOf(eventAt, now)
+    // Then 左端取事件 - 24h，右端夹到 now（未来那段上游没有数据）
+    expect(window.fromMs).toBe(eventAt - HISTORY_WINDOW_MS)
+    expect(window.toMs).toBe(now)
+    expect(window.fromMs).toBe(eventAt - 86_400_000)
+  })
+
+  it('用户看到的回填窗口在事件距今超过一天时两端都取事件前后 24 小时', () => {
+    // Given 事件发生在 27 天前（事件 + 24h 仍早于 now）
+    const eventAt = now - 27 * 86400_000
+    // When 算回填窗口
+    const window = historyWindowOf(eventAt, now)
+    // Then 右端不夹（未越过 now），两端都是有限数
+    expect(window.fromMs).toBe(eventAt - HISTORY_WINDOW_MS)
+    expect(window.toMs).toBe(eventAt + HISTORY_WINDOW_MS)
+    expect(Number.isFinite(window.fromMs) && Number.isFinite(window.toMs)).toBe(true)
+  })
+
+  it('用户看到的回填窗口在右端早于左端时仍返回两个有限端点而不是 NaN', () => {
+    // Given 异常时钟：now 早于事件的 24 小时前
+    const eventAt = 10 * HISTORY_WINDOW_MS
+    // When 算回填窗口
+    const window = historyWindowOf(eventAt, 0)
+    // Then 照常返回（是否请求由调用方决定），且都不产生 NaN
+    expect(window.fromMs).toBe(eventAt - HISTORY_WINDOW_MS)
+    expect(window.toMs).toBe(0)
+    expect(window.toMs).toBeLessThanOrEqual(window.fromMs)
+    expect(Number.isNaN(window.fromMs) || Number.isNaN(window.toMs)).toBe(false)
+  })
+
+  it('用户看到的回填口径是 5 分钟间隔与约 30 天保留期', () => {
+    // Given 两个口径常量
+    // When 读常量
+    // Then 5 分钟（上游最细档）与 30 天（上游历史保留期）
+    expect(HISTORY_FIDELITY_MINUTES).toBe(5)
+    expect(HISTORY_MAX_AGE_MS).toBe(30 * 86400_000)
+  })
+
+  it('用户看到的候选事件只含已公布且在 30 天保留期内的那些，并按时点降序', () => {
+    // Given 一批事件：未来、刚刚公布、27 天前、31 天前
+    const events: readonly InflationEvent[] = [
+      { at: now + 3600_000, title: 'future' },
+      { at: now - 1000, title: 'just-now' },
+      { at: now - 27 * 86400_000, title: 'recent' },
+      { at: now - 31 * 86400_000, title: 'stale' },
+    ]
+    // When 取候选
+    const candidates = candidateEventsOf(events, now)
+    // Then 未来与超期都被剔除，剩下按时间降序（最近公布在前）
+    expect(candidates.map((event) => event.title)).toEqual(['just-now', 'recent'])
+  })
+
+  it('用户看到 30 天保留期边界上的事件仍进候选，越过 1 毫秒即剔除', () => {
+    // Given 恰好在保留期边界与其外 1ms 的两个事件
+    const edge: InflationEvent = { at: now - HISTORY_MAX_AGE_MS, title: 'edge' }
+    const out: InflationEvent = { at: now - HISTORY_MAX_AGE_MS - 1, title: 'out' }
+    // When 分别取候选
+    // Then 边界值保留、越过即剔除、公布时刻恰为 now 的也保留
+    expect(candidateEventsOf([edge], now).map((event) => event.title)).toEqual(['edge'])
+    expect(candidateEventsOf([out], now)).toEqual([])
+    expect(candidateEventsOf([{ at: now, title: 'now' }], now)).toHaveLength(1)
+  })
+
+  it('用户看到上游历史的秒级时间戳被映射成毫秒采样并带上会议前缀', () => {
+    // Given 上游历史（t 是 unix 秒、p 是 mid）
+    const history = {
+      meetingId: '770450',
+      series: [{ bucketKey: 'no_change', points: [{ t: 1_791_000_000, p: 0.2 }, { t: 1_791_003_600, p: 0.3 }] }],
+    }
+    // When 映射成采样
+    const samples = samplesFromHistory(history)
+    // Then at = t * 1000、键带会议前缀、值取 p
+    expect(samples).toEqual([
+      { at: 1_791_000_000_000, values: { '770450:no_change': 0.2 } },
+      { at: 1_791_003_600_000, values: { '770450:no_change': 0.3 } },
+    ])
+  })
+
+  it('用户看到同一时刻的多个档位合成一条采样', () => {
+    // Given 两个档位在同一时刻各有读数
+    const history = {
+      meetingId: 'm',
+      series: [{ bucketKey: 'a', points: [{ t: 100, p: 0.4 }] }, { bucketKey: 'b', points: [{ t: 100, p: 0.6 }] }],
+    }
+    // When 映射成采样
+    // Then 只有一条采样，两个档位在同一条里（与会话采样同粒度）
+    expect(samplesFromHistory(history)).toEqual([{ at: 100_000, values: { 'm:a': 0.4, 'm:b': 0.6 } }])
+  })
+
+  it('用户看到上游历史为空时得到空采样而不是异常', () => {
+    // Given 空 series（上游历史不覆盖该窗口）
+    // When 映射成采样
+    // Then 空数组、不抛
+    expect(samplesFromHistory({ meetingId: 'm', series: [] })).toEqual([])
+    expect(samplesFromHistory({ meetingId: 'm', series: [{ bucketKey: 'a', points: [] }] })).toEqual([])
+  })
+
+  it('用户看到的合并时间轴按时刻升序，同一时刻会话段覆盖历史段', () => {
+    // Given 历史段与一段与它时刻重叠的会话采样
+    const history = samplesFromHistory({ meetingId: 'm', series: [{ bucketKey: 'a', points: [{ t: 100, p: 0.2 }, { t: 300, p: 0.4 }] }] })
+    const session = [sample(200_000, { 'm:a': 0.3 }), sample(300_000, { 'm:a': 0.5 })]
+    // When 合并
+    const merged = mergeSamples(history, session)
+    // Then 时刻升序且 300s 处取会话读数 0.5（后者覆盖前者）
+    expect(merged.map((item) => item.at)).toEqual([100_000, 200_000, 300_000])
+    expect(merged[2]?.values['m:a']).toBe(0.5)
+  })
+
+  it('用户看到的合并时间轴超过上限时裁掉最旧的、保留最新的', () => {
+    // Given 两条时间轴共 5 条采样
+    const a = [sample(1, { k: 1 }), sample(2, { k: 2 }), sample(3, { k: 3 })]
+    const b = [sample(4, { k: 4 }), sample(5, { k: 5 })]
+    // When 以 3 条为上限合并
+    const merged = mergeSamples(a, b, 3)
+    // Then 只剩最新三条
+    expect(merged.map((item) => item.at)).toEqual([3, 4, 5])
+  })
+
+  it('用户看到事件两侧都有读数时得到可对照结论与位移最大的档位', () => {
+    // Given CPI 前后各有一次采样，其中 a 档位移更大
+    const samples = [sample(1000, { 'm:a': 0.2, 'm:b': 0.5 }), sample(3000, { 'm:a': 0.4, 'm:b': 0.45 })]
+    // When 取跨 2000 的对照结论
+    const result = eventComparisonOf(samples, 2000, ['m:a', 'm:b'])
+    // Then comparable + 位移最大的档位与其前后读数
+    expect(result.state).toBe('comparable')
+    if (result.state !== 'comparable') throw new Error('expected comparable')
+    expect(result.key).toBe('m:a')
+    expect(result.movement).toEqual({ before: 0.2, beforeAt: 1000, after: 0.4, afterAt: 3000, delta: 0.4 - 0.2 })
+  })
+
+  it('用户看到事件只有单侧读数时得到采样不足而不是 0 变动', () => {
+    // Given 事件之后才有读数（前一段缺失），以及一条全空的时间轴
+    const samples = [sample(3000, { 'm:a': 0.4 })]
+    // When 取对照结论
+    // Then insufficient（面板据此显示「采样不足，不显示变动」）
+    expect(eventComparisonOf(samples, 2000, ['m:a'])).toEqual({ state: 'insufficient' })
+    expect(eventComparisonOf([], 2000, ['m:a'])).toEqual({ state: 'insufficient' })
+  })
+
+  it('用户看到各档时间戳不在同一网格时仍按各自最近点对照', () => {
+    // Given a 档在 900s/1100s、b 档在 800s/1200s（上游按各 token 成交时刻出点，不共网格）
+    const history = samplesFromHistory({
+      meetingId: 'm',
+      series: [
+        { bucketKey: 'a', points: [{ t: 900, p: 0.3 }, { t: 1100, p: 0.32 }] },
+        { bucketKey: 'b', points: [{ t: 800, p: 0.5 }, { t: 1200, p: 0.6 }] },
+      ],
+    })
+    // When 跨 1000s 取对照结论
+    const result = eventComparisonOf(history, 1000_000, ['m:a', 'm:b'])
+    // Then 每个档位各取自己那一侧最近点（不跨键插值、不要求同时刻），最大位移命中 b
+    expect(result.state).toBe('comparable')
+    if (result.state !== 'comparable') throw new Error('expected comparable')
+    expect(result.key).toBe('m:b')
+    expect(result.movement).toEqual({ before: 0.5, beforeAt: 800_000, after: 0.6, afterAt: 1_200_000, delta: 0.6 - 0.5 })
+    // 两条不同时刻的采样各自独立存在、序列按 at 升序（movementAround 的最近点判据依赖升序）
+    expect(history.map((item) => item.at)).toEqual([800_000, 900_000, 1_100_000, 1_200_000])
+    expect(history.map((item) => Object.keys(item.values))).toEqual([['m:b'], ['m:a'], ['m:a'], ['m:b']])
   })
 })

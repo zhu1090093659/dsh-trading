@@ -311,3 +311,51 @@ describe('FOMC 决议发现规则（L0..L5 + 真实响应夹具）', () => {
     expect(meeting?.buckets.find((bucket) => bucket.key === 'inc_25')?.probability).toBe(1)
   })
 })
+
+describe('回填定位键（clobTokenIds）解析', () => {
+  it('运营看到档位 market 带 clobTokenIds 时拿到第 0 个 token（与 outcomePrices[0] 同档）', () => {
+    // Given 实测响应里 clobTokenIds 是字符串化 JSON 数组（raw/06-events-series_id35.json）
+    const events = liveEvents()
+    const markets = events[0]?.markets as Record<string, unknown>[]
+    markets[0]!.clobTokenIds = JSON.stringify(['tok-yes-2026-10', 'tok-no-2026-10'])
+
+    // When 解析会议
+    const meeting = discoverFomcMeetings(events).meetings[0]
+
+    // Then 第 0 个元素落位到该档，第 1 个（No 侧）不落位
+    const bucket = meeting?.buckets.find((entry) => entry.label === markets[0]?.groupItemTitle)
+    expect(bucket?.clobTokenId).toBe('tok-yes-2026-10')
+    expect(bucket?.clobTokenId).not.toBe('tok-no-2026-10')
+  })
+
+  it('运营看到 clobTokenIds 缺省或解析失败时不填该字段（绝不猜 token）', () => {
+    // Given 三种坏形态：非 JSON、空数组、非数组 + 两个完全不带的 market
+    const events = liveEvents()
+    const markets = events[0]?.markets as Record<string, unknown>[]
+    markets[1]!.clobTokenIds = 'not-json'
+    markets[2]!.clobTokenIds = '[]'
+    markets[3]!.clobTokenIds = '{"a":1}'
+
+    // When 解析会议
+    const buckets = discoverFomcMeetings(events).meetings[0]?.buckets ?? []
+
+    // Then 五个档位都没有 clobTokenId 这个键（缺省 = 不知道，不填假值）
+    expect(buckets).toHaveLength(5)
+    expect(buckets.every((bucket) => !('clobTokenId' in bucket))).toBe(true)
+  })
+
+  it('运营看到 clobTokenIds 首元素为空串时同样不填（空 token 不是可用定位键）', () => {
+    // Given 首元素是空串、次元素有效的坏形态
+    const events = liveEvents()
+    const markets = events[0]?.markets as Record<string, unknown>[]
+    markets[0]!.clobTokenIds = JSON.stringify(['', 'tok-no-2026-10'])
+
+    // When 解析会议
+    const bucket = discoverFomcMeetings(events).meetings[0]?.buckets
+      .find((entry) => entry.label === markets[0]?.groupItemTitle)
+
+    // Then 不填（不拿次元素顶替——那是 No 侧的 token）
+    expect(bucket?.clobTokenId).toBeUndefined()
+    expect(bucket !== undefined && 'clobTokenId' in bucket).toBe(false)
+  })
+})

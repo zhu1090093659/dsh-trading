@@ -1,0 +1,45 @@
+# probe-price-history  started=2026-10-20T05:44:35.021Z  now=1792475075021
+
+## gamma /events  fetchedAt=2026-10-20T05:44:35.021Z  openMeetings=3
+  606422  Fed Decision in October?  endDate=2026-10-29T03:59:00Z  buckets=5  withToken=5
+  770450  Fed Decision in December?  endDate=2026-12-10T04:59:00Z  buckets=5  withToken=5
+  770451  Fed Decision in January?  endDate=2027-01-28T04:59:00Z  buckets=5  withToken=5
+
+## target meeting 606422 "Fed Decision in October?"  meetingWindow=October 27-28, 2026
+  dec_50plus  token=170103779946…  p(now)=0.0005
+  dec_25      token=332685103505…  p(now)=0.0035
+  no_change   token=111061902544…  p(now)=0.855
+  inc_25      token=551597227614…  p(now)=0.145
+  inc_50plus  token=182462960228…  p(now)=0.0035
+
+## listPriceHistory  fetchedAt=2026-10-20T05:44:35.021Z  fromMs=1792388675021  toMs=1792475075021  fidelityMinutes=5
+   window = 24.00h  series=5
+  dec_50plus  HTTP 200  bytes=8106  raw/09-prices-history-backfill-dec_50plus.json
+   URL https://clob.polymarket.com/prices-history?market=17010377994663817312158123655937348199252960045746746128731746451645055725586&startTs=1792388675&endTs=1792475075&fidelity=5
+   points=289  span=23.98h  first=2026-10-19T05:45:21.000Z p=0.0005  last=2026-10-20T05:44:21.000Z p=0.0005
+   distinct=1  min=0.0005  max=0.0005
+  dec_25      HTTP 200  bytes=8106  raw/09-prices-history-backfill-dec_25.json
+   URL https://clob.polymarket.com/prices-history?market=33268510350568915228897273528353467773422190590579607471427765079749830445947&startTs=1792388675&endTs=1792475075&fidelity=5
+   points=289  span=23.98h  first=2026-10-19T05:45:18.000Z p=0.0035  last=2026-10-20T05:44:19.000Z p=0.0035
+   distinct=1  min=0.0035  max=0.0035
+  no_change   HTTP 200  bytes=7817  raw/09-prices-history-backfill-no_change.json
+   URL https://clob.polymarket.com/prices-history?market=111061902544814266207267295505639408607400625795891618462682726460921782993748&startTs=1792388675&endTs=1792475075&fidelity=5
+   points=289  span=23.98h  first=2026-10-19T05:45:19.000Z p=0.875  last=2026-10-20T05:44:20.000Z p=0.855
+   distinct=4  min=0.845  max=0.885
+  inc_25      HTTP 200  bytes=7817  raw/09-prices-history-backfill-inc_25.json
+   URL https://clob.polymarket.com/prices-history?market=55159722761418013044126414276680602270318000841690689684819994448621694923050&startTs=1792388675&endTs=1792475075&fidelity=5
+   points=289  span=23.98h  first=2026-10-19T05:45:18.000Z p=0.125  last=2026-10-20T05:44:19.000Z p=0.145
+   distinct=5  min=0.105  max=0.145
+  inc_50plus  HTTP 200  bytes=8106  raw/09-prices-history-backfill-inc_50plus.json
+   URL https://clob.polymarket.com/prices-history?market=18246296022868501258060085368606280205967114341141276439803424448463050819498&startTs=1792388675&endTs=1792475075&fidelity=5
+   points=289  span=23.98h  first=2026-10-19T05:45:21.000Z p=0.0035  last=2026-10-20T05:44:22.000Z p=0.0035
+   distinct=1  min=0.0035  max=0.0035
+
+## 336h boundary re-check
+  336h connector: ACCEPTED  window=336h  points=3969  span=335.98h  first=2026-10-06T05:45:20.000Z  last=2026-10-20T05:44:21.000Z
+  720h connector: REJECTED LOCALLY  code=TRADING_UNSUPPORTED_INTERVAL  upstreamRequests=0
+   message: polymarket clob /prices-history: window 2592000000ms exceeds the upstream limit of 1209600000ms (336h) — not sent
+  720h raw CLOB: HTTP 400  body="{\"error\":\"invalid filters: 'startTs' and 'endTs' interval is too long\"}\n"  bytes=323
+   raw/09-prices-history-720h-over-window.txt
+
+# finished=2026-10-20T05:44:37.930Z

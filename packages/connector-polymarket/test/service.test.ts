@@ -13,7 +13,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { Config, apply, createPolymarketService } from '../src/plugin.ts'
-import { TRADING_PREDICTION_FEED_KEY, createPolymarketPredictionFeed } from '../src/service.ts'
+import { MEETING_LOOKUP_TTL_MS, TRADING_PREDICTION_FEED_KEY, createPolymarketPredictionFeed } from '../src/service.ts'
+import { PRICE_HISTORY_MAX_WINDOW_MS } from '../src/clob.ts'
 import { SNAPSHOT_VERSION, SnapshotStore } from '../src/snapshot.ts'
 import { discoverFomcMeetings } from '../src/discovery.ts'
 
@@ -46,6 +47,9 @@ afterEach(async () => {
   if (server !== undefined) {
     const closing = server
     server = undefined
+    // closeAllConnections：历史回填的失败用例会让其余档位的 keep-alive 连接留在池里，
+    // 只 close() 要等 keepAliveTimeout 自然过期（实测多花 3s）。销毁空闲连接不动任何断言。
+    closing.closeAllConnections()
     await new Promise<void>((resolve) => closing.close(() => resolve()))
   }
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
@@ -326,7 +330,7 @@ describe('插件行（provide tradingPredictionFeed）', () => {
     expect(provided).toEqual([])
   })
 
-  it('运营看到服务面只暴露 listFomcMeetings（不含任何交易/下单面）', async () => {
+  it('运营看到服务面只暴露会议面与历史面两个只读方法（不含任何交易/下单面）', async () => {
     // Given 上游按实测响应回包
     const baseUrl = await serve((_url, res) => {
       res.writeHead(200, { 'content-type': 'application/json' })
@@ -336,8 +340,8 @@ describe('插件行（provide tradingPredictionFeed）', () => {
     // When 构造服务面
     const feed = createPolymarketPredictionFeed(createPolymarketService({ ...NO_SNAPSHOT }, { baseUrl }))
 
-    // Then 只有一个只读方法，返回契约形状
-    expect(Object.keys(feed)).toEqual(['listFomcMeetings'])
+    // Then 只有两个只读方法（PredictionFeedService 的两个必填面），返回契约形状
+    expect(Object.keys(feed)).toEqual(['listFomcMeetings', 'listPriceHistory'])
     const snapshot = await feed.listFomcMeetings()
     expect(snapshot.meetings[0]?.buckets[0]).toMatchObject({ key: 'dec_50plus', probability: 0.0015 })
   })
@@ -358,3 +362,244 @@ describe('插件行（provide tradingPredictionFeed）', () => {
     expect(viaService.meetings).toEqual(viaPure)
   })
 })
+
+/* ------------------------------------------------------------------ */
+/* 历史回填面（gamma /events + CLOB /prices-history 同一个本地上游）   */
+/* ------------------------------------------------------------------ */
+
+/** 一个上游回包（状态码 + content-type + 体）。 */
+interface UpstreamReply {
+  readonly status: number
+  readonly contentType: string
+  readonly body: string
+}
+
+function jsonReply(body: string): UpstreamReply {
+  return { status: 200, contentType: 'application/json', body }
+}
+
+/**
+ * 同时服务两个读取面的本地上游：`/events` 回给定会议体，`/prices-history` 按 `market`
+ * 逐档回读数（`history` 覆写可让某一档失败或为空）。
+ */
+async function serveBoth(options: {
+  readonly events: UpstreamReply
+  readonly history?: (token: string) => UpstreamReply
+}): Promise<string> {
+  return serve((url, res) => {
+    if (url.startsWith('/prices-history')) {
+      const token = new URL(url, 'http://local').searchParams.get('market') ?? ''
+      const reply = options.history?.(token) ?? jsonReply(historyBody(token))
+      res.writeHead(reply.status, { 'content-type': reply.contentType })
+      res.end(reply.body)
+      return
+    }
+    res.writeHead(options.events.status, { 'content-type': options.events.contentType })
+    res.end(options.events.body)
+  })
+}
+
+/** 实测夹具 + 按上游顺序给 market 注入 clobTokenIds（undefined = 这个 market 不带该字段）。 */
+function eventsWithTokens(tokens: readonly (string | undefined)[]): string {
+  const events = JSON.parse(FIXTURE_BODY) as { markets: Record<string, unknown>[] }[]
+  const markets = events[0]?.markets ?? []
+  markets.forEach((market, index) => {
+    const token = tokens[index]
+    if (token !== undefined) market.clobTokenIds = JSON.stringify([token, `${token}-complement`])
+  })
+  return JSON.stringify(events)
+}
+
+const OPEN_MEETING_ID = '606422'
+/** 与上游顺序（= 排序后的档位顺序）一一对应的 5 个 token。 */
+const TOKENS: readonly string[] = ['tok-0', 'tok-1', 'tok-2', 'tok-3', 'tok-4']
+const BUCKET_ORDER = ['dec_50plus', 'dec_25', 'no_change', 'inc_25', 'inc_50plus'] as const
+
+/** 每个 token 一组可定位的读数（0.10 / 0.20 …）。 */
+function historyBody(token: string): string {
+  const index = TOKENS.indexOf(token)
+  const p = Number((0.1 * (index + 1)).toFixed(2))
+  return JSON.stringify({ history: [{ t: 1791000000, p }, { t: 1791000300, p }] })
+}
+
+const HISTORY_FROM_MS = Date.parse('2026-10-19T05:00:00Z')
+const HISTORY_TO_MS = Date.parse('2026-10-20T05:00:00Z')
+
+describe('历史回填面（PolymarketService.listPriceHistory）', () => {
+  it('运营取一场开放会议的一天历史时拿到逐档序列（一档一次请求、顺序与档位一致）', async () => {
+    // Given 上游同时服务会议面与历史面，且每个档位都带 clobTokenIds
+    const baseUrl = await serveBoth({ events: jsonReply(eventsWithTokens(TOKENS)) })
+    const service = createPolymarketService(
+      { ...NO_SNAPSHOT },
+      { baseUrl, clobBaseUrl: baseUrl, now: () => Date.parse('2026-10-20T05:00:00Z') },
+    )
+
+    // When 取这一天（不带 fidelity，走缺省）
+    const history = await service.listPriceHistory({ meetingId: OPEN_MEETING_ID, fromMs: HISTORY_FROM_MS, toMs: HISTORY_TO_MS })
+
+    // Then 契约形状回述窗口、缺省粒度 5 分钟、序列按档位顺序
+    expect(history.fetchedAt).toBe('2026-10-20T05:00:00.000Z')
+    expect(history.meetingId).toBe(OPEN_MEETING_ID)
+    expect(history.fromMs).toBe(HISTORY_FROM_MS)
+    expect(history.toMs).toBe(HISTORY_TO_MS)
+    expect(history.fidelityMinutes).toBe(5)
+    expect(history.series.map((series) => series.bucketKey)).toEqual([...BUCKET_ORDER])
+    expect(history.series[0]?.points).toEqual([{ t: 1791000000, p: 0.1 }, { t: 1791000300, p: 0.1 }])
+    expect(history.series[4]?.points).toEqual([{ t: 1791000000, p: 0.5 }, { t: 1791000300, p: 0.5 }])
+
+    // Then 会议面只打一次，历史面一档一次，且 URL 参数逐项正确
+    expect(requests.filter((url) => url.startsWith('/events'))).toHaveLength(1)
+    const historyRequests = requests.filter((url) => url.startsWith('/prices-history'))
+    expect(historyRequests).toHaveLength(5)
+    expect(historyRequests.map((url) => new URL(url, 'http://local').searchParams.get('market'))).toEqual([...TOKENS])
+    const firstQuery = new URL(historyRequests[0] ?? '', 'http://local').searchParams
+    expect(firstQuery.get('startTs')).toBe(String(Math.floor(HISTORY_FROM_MS / 1000)))
+    expect(firstQuery.get('endTs')).toBe(String(Math.floor(HISTORY_TO_MS / 1000)))
+    expect(firstQuery.get('fidelity')).toBe('5')
+  })
+
+  it('运营请求历史时只对拿到 token 的档位扇出（缺定位键的档位不发请求、也不造空序列）', async () => {
+    // Given 五个档位里只有三个带 clobTokenIds
+    const baseUrl = await serveBoth({ events: jsonReply(eventsWithTokens(['tok-0', undefined, 'tok-2', undefined, 'tok-4'])) })
+    const service = createPolymarketService({ ...NO_SNAPSHOT }, { baseUrl, clobBaseUrl: baseUrl })
+
+    // When 取历史
+    const history = await service.listPriceHistory({ meetingId: OPEN_MEETING_ID, fromMs: HISTORY_FROM_MS, toMs: HISTORY_TO_MS })
+
+    // Then 只有三档出现在序列里，且正好三次请求（没有 market= 的空请求）
+    expect(history.series.map((series) => series.bucketKey)).toEqual(['dec_50plus', 'no_change', 'inc_50plus'])
+    const historyRequests = requests.filter((url) => url.startsWith('/prices-history'))
+    expect(historyRequests).toHaveLength(3)
+    expect(historyRequests.map((url) => new URL(url, 'http://local').searchParams.get('market'))).toEqual(['tok-0', 'tok-2', 'tok-4'])
+  })
+
+  it('运营看到上游 200 空 history 时该档是空序列、整体仍然成功（空不是失败）', async () => {
+    // Given No change 档的 token 回了 Q5.2 的静默空体
+    const baseUrl = await serveBoth({
+      events: jsonReply(eventsWithTokens(TOKENS)),
+      history: (token) => token === 'tok-2' ? jsonReply('{"history":[]}') : jsonReply(historyBody(token)),
+    })
+    const service = createPolymarketService({ ...NO_SNAPSHOT }, { baseUrl, clobBaseUrl: baseUrl })
+
+    // When 取历史
+    const history = await service.listPriceHistory({ meetingId: OPEN_MEETING_ID, fromMs: HISTORY_FROM_MS, toMs: HISTORY_TO_MS })
+
+    // Then 该档 points 为空但整体成功，其余四档读数照常（空不等于失败，也不补假点）
+    expect(history.series.find((series) => series.bucketKey === 'no_change')?.points).toEqual([])
+    expect(history.series.filter((series) => series.points.length > 0)).toHaveLength(4)
+    expect(requests.filter((url) => url.startsWith('/prices-history'))).toHaveLength(5)
+  })
+
+  it('运营看到任一档取数失败时整体响亮失败（绝不返回少一档的图）', async () => {
+    // Given inc_25 档的 token 上游 500
+    const baseUrl = await serveBoth({
+      events: jsonReply(eventsWithTokens(TOKENS)),
+      history: (token) => token === 'tok-3'
+        ? { status: 500, contentType: 'text/plain', body: 'internal error' }
+        : jsonReply(historyBody(token)),
+    })
+    const service = createPolymarketService({ ...NO_SNAPSHOT }, { baseUrl, clobBaseUrl: baseUrl })
+
+    // When / Then 整块拒绝，错误里指名是哪一档失败（不悄悄少一档）
+    await expect(service.listPriceHistory({ meetingId: OPEN_MEETING_ID, fromMs: HISTORY_FROM_MS, toMs: HISTORY_TO_MS })).rejects.toMatchObject({
+      code: 'TRADING_UPSTREAM_ERROR',
+      message: 'polymarket prediction price history: bucket inc_25 failed — polymarket clob /prices-history: HTTP 500 — internal error',
+    })
+  })
+
+  it('运营请求超过 336h 的窗口时连接器本地拒发（上游零请求）', async () => {
+    // Given 一个会记录请求的上游 + 超出上游硬边界的窗口（336h + 1h）
+    const baseUrl = await serveBoth({ events: jsonReply(eventsWithTokens(TOKENS)) })
+    const service = createPolymarketService({ ...NO_SNAPSHOT }, { baseUrl, clobBaseUrl: baseUrl })
+
+    // When / Then 抛 TRADING_UNSUPPORTED_INTERVAL，且 gamma 与 CLOB 一个请求都没发
+    await expect(service.listPriceHistory({
+      meetingId: OPEN_MEETING_ID,
+      fromMs: HISTORY_FROM_MS,
+      toMs: HISTORY_FROM_MS + PRICE_HISTORY_MAX_WINDOW_MS + 3600_000,
+    })).rejects.toMatchObject({
+      code: 'TRADING_UNSUPPORTED_INTERVAL',
+      message: `polymarket clob /prices-history: window ${PRICE_HISTORY_MAX_WINDOW_MS + 3600_000}ms exceeds the upstream limit of ${PRICE_HISTORY_MAX_WINDOW_MS}ms (336h) — not sent`,
+    })
+    expect(requests).toEqual([])
+  })
+
+  it('运营请求非法粒度时连接器本地拒发（上游零请求）', async () => {
+    // Given 一个会记录请求的上游
+    const baseUrl = await serveBoth({ events: jsonReply(eventsWithTokens(TOKENS)) })
+    const service = createPolymarketService({ ...NO_SNAPSHOT }, { baseUrl, clobBaseUrl: baseUrl })
+
+    // When / Then fidelity 0 拒发（CLOB 没有「零分钟粒度」这种东西）
+    await expect(service.listPriceHistory({
+      meetingId: OPEN_MEETING_ID,
+      fromMs: HISTORY_FROM_MS,
+      toMs: HISTORY_TO_MS,
+      fidelityMinutes: 0,
+    })).rejects.toMatchObject({ code: 'TRADING_UNSUPPORTED_INTERVAL' })
+    expect(requests).toEqual([])
+  })
+
+  it('运营请求不在开放会议集合里的 meetingId 时看到结构性查不到错误（不拿空序列冒充）', async () => {
+    // Given 上游回三场开放会议
+    const baseUrl = await serveBoth({ events: jsonReply(FIXTURE_BODY) })
+    const service = createPolymarketService({ ...NO_SNAPSHOT }, { baseUrl, clobBaseUrl: baseUrl })
+
+    // When / Then 查不到 = TRADING_SYMBOL_NOT_FOUND，只打过一次 gamma、零历史请求
+    await expect(service.listPriceHistory({ meetingId: '999999', fromMs: HISTORY_FROM_MS, toMs: HISTORY_TO_MS })).rejects.toMatchObject({
+      code: 'TRADING_SYMBOL_NOT_FOUND',
+      message: 'polymarket prediction price history: meeting 999999 is not an FOMC decision meeting (looked up 3 open meetings)',
+    })
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.startsWith('/events')).toBe(true)
+  })
+
+  it('运营连续两次要历史时第二次复用短 TTL 内的会议发现（面板换事件不重复打 gamma）', async () => {
+    // Given 一个可控时钟与同时服务两个面的上游
+    const baseUrl = await serveBoth({ events: jsonReply(eventsWithTokens(TOKENS)) })
+    let clock = Date.parse('2026-10-20T05:00:00Z')
+    const service = createPolymarketService({ ...NO_SNAPSHOT }, { baseUrl, clobBaseUrl: baseUrl, now: () => clock })
+
+    // When 同一时刻连取两次，再推进过 TTL 取第三次
+    const first = await service.listPriceHistory({ meetingId: OPEN_MEETING_ID, fromMs: HISTORY_FROM_MS, toMs: HISTORY_TO_MS })
+    const second = await service.listPriceHistory({ meetingId: OPEN_MEETING_ID, fromMs: HISTORY_FROM_MS, toMs: HISTORY_TO_MS })
+    const gammaAfterTwo = requests.filter((url) => url.startsWith('/events')).length
+    clock += MEETING_LOOKUP_TTL_MS
+    const third = await service.listPriceHistory({ meetingId: OPEN_MEETING_ID, fromMs: HISTORY_FROM_MS, toMs: HISTORY_TO_MS })
+
+    // Then TTL 内只打一次 gamma，过期后重打一次；序列内容不受缓存影响
+    expect(gammaAfterTwo).toBe(1)
+    expect(requests.filter((url) => url.startsWith('/events'))).toHaveLength(2)
+    expect(second.series).toEqual(first.series)
+    expect(third.series).toEqual(first.series)
+  })
+
+  it('运营看到会议面取数失败时历史面也失败（不降级成空序列）', async () => {
+    // Given 会议面被 Cloudflare 拦成 403
+    const baseUrl = await serveBoth({
+      events: { status: 403, contentType: 'text/plain; charset=UTF-8', body: 'error code: 1010\n' },
+    })
+    const service = createPolymarketService({ ...NO_SNAPSHOT }, { baseUrl, clobBaseUrl: baseUrl })
+
+    // When / Then 失败向上抛（TRADING_UPSTREAM_ERROR），没有历史请求发出去
+    await expect(service.listPriceHistory({ meetingId: OPEN_MEETING_ID, fromMs: HISTORY_FROM_MS, toMs: HISTORY_TO_MS })).rejects.toMatchObject({
+      code: 'TRADING_UPSTREAM_ERROR',
+      message: 'polymarket gamma /events: HTTP 403 — error code: 1010',
+    })
+    expect(requests.filter((url) => url.startsWith('/prices-history'))).toEqual([])
+  })
+
+  it('运营通过服务面要历史时拿到同一份逐档序列（桥只依赖 PredictionFeedService）', async () => {
+    // Given 同时服务两个面的上游 + 服务面对象
+    const baseUrl = await serveBoth({ events: jsonReply(eventsWithTokens(TOKENS)) })
+    const feed = createPolymarketPredictionFeed(createPolymarketService({ ...NO_SNAPSHOT }, { baseUrl, clobBaseUrl: baseUrl }))
+
+    // When 经服务面取历史
+    const history = await feed.listPriceHistory({ meetingId: OPEN_MEETING_ID, fromMs: HISTORY_FROM_MS, toMs: HISTORY_TO_MS })
+
+    // Then 五档序列与 fetchedAt 齐备（PredictionFeedService 的必填方法真的接上了）
+    expect(history.series).toHaveLength(5)
+    expect(history.series.map((series) => series.bucketKey)).toEqual([...BUCKET_ORDER])
+    expect(history.fetchedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+})
+

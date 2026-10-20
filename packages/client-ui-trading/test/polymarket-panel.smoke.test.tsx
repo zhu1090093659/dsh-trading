@@ -8,9 +8,19 @@
  */
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { ClientMacroCalendarEntry, ClientPredictionBucket, ClientPredictionMeeting, ClientPredictionResult } from '../src/client/api.ts'
+import type {
+  ClientMacroCalendarEntry,
+  ClientPredictionBucket,
+  ClientPredictionHistory,
+  ClientPredictionHistoryRequest,
+  ClientPredictionHistoryResult,
+  ClientPredictionHistorySeries,
+  ClientPredictionMeeting,
+  ClientPredictionResult,
+} from '../src/client/api.ts'
 import type { MarketLocaleKey } from '../src/client/contract.ts'
 import { PolymarketPanel } from '../src/client/PolymarketPanel.tsx'
+import { HISTORY_FIDELITY_MINUTES, HISTORY_WINDOW_MS } from '../src/client/prediction-view.ts'
 
 /** key 直出翻译（断言用 key 而非文案，与词典解耦）。 */
 const t = (key: MarketLocaleKey): string => key
@@ -49,6 +59,14 @@ function meeting(over: Partial<ClientPredictionMeeting> = {}): ClientPredictionM
 
 const okResult = (meetings: ClientPredictionMeeting[]): ClientPredictionResult =>
   ({ status: 'ok', fetchedAt: '2026-10-11T01:55:19Z', meetings })
+
+/** 历史回填成功信封（默认 meetingId 与注入的观察会议一致）。 */
+function historyOk(series: ClientPredictionHistorySeries[], over: Partial<ClientPredictionHistory> = {}): ClientPredictionHistoryResult {
+  return {
+    status: 'ok',
+    history: { meetingId: '770450', fromMs: 0, toMs: 0, fidelityMinutes: HISTORY_FIDELITY_MINUTES, series, ...over },
+  }
+}
 
 const cal = (over: Partial<ClientMacroCalendarEntry> = {}): ClientMacroCalendarEntry => ({
   publishedAt: '2026-09-14T12:30:00.000Z',
@@ -288,18 +306,24 @@ describe('PolymarketPanel 双源各自记账', () => {
     expect(screen.queryByText('prediction.calendarError')).not.toBeNull()
   })
 
-  it('用户看到事件时点在采样窗口外时不对照而不是显示 0 变动', async () => {
-    // Given 日历里有一条美国 CPI（2026-09-14），而采样时刻是 2026-10-11（窗外）
+  it('用户看到近 30 天没有已公布事件时事件块出空态而不是伪造事件行', async () => {
+    // Given 日历里只有一条 2026-08-01 的美国 CPI（超出上游 30 天历史保留期）
+    const requests: ClientPredictionHistoryRequest[] = []
     const deps = {
       fetchPrediction: async () => okResult([meeting()]),
-      fetchCalendar: async () => [cal()],
+      fetchCalendar: async () => [cal({ publishedAt: '2026-08-01T12:30:00.000Z' })],
+      fetchHistory: async (request: ClientPredictionHistoryRequest): Promise<ClientPredictionHistoryResult> => {
+        requests.push(request)
+        return historyOk([])
+      },
       now: fixedNow,
     }
     // When 渲染面板
     const view = render(<PolymarketPanel t={t} onClose={() => {}} deps={deps} />)
-    // Then 事件对照块说明采样未覆盖，且没有伪造的变动行
+    // Then 空态文案在屏上、没有事件行、也没有发出任何回填请求
     await waitFor(() => { expect(screen.queryByText('prediction.noComparable')).not.toBeNull() })
-    expect(view.container.querySelector('[data-dshtrading-event-delta]')).toBeNull()
+    expect(view.container.querySelector('[data-dshtrading-event]')).toBeNull()
+    expect(requests).toEqual([])
   })
 
   it('用户看到面板不提供任何下单或交易入口', async () => {
@@ -316,5 +340,195 @@ describe('PolymarketPanel 双源各自记账', () => {
     expect(screen.getAllByRole('button').length).toBe(1)
     expect(view.container.querySelector('form')).toBeNull()
     expect(view.container.querySelector('input')).toBeNull()
+  })
+})
+
+describe('PolymarketPanel 事件对照回填（mid 口径与会话段合并）', () => {
+  afterEach(() => cleanup())
+
+  /** 27 天前的美国 CPI 时点（在上游 30 天保留期内）。 */
+  const eventAt = Date.parse('2026-09-14T12:30:00Z')
+
+  it('用户看到回填成功后事件行给出跨事件的 mid 位移并标为可对照', async () => {
+    // Given 回填覆盖事件前后各一小时（mid 0.20 → 0.30），主表显示值仍是 bestAsk 0.23
+    const deps = {
+      fetchPrediction: async () => okResult([meeting()]),
+      fetchCalendar: async () => [cal()],
+      fetchHistory: async (): Promise<ClientPredictionHistoryResult> => historyOk([{
+        bucketKey: 'no_change',
+        points: [{ t: eventAt / 1000 - 3600, p: 0.2 }, { t: eventAt / 1000 + 3600, p: 0.3 }],
+      }]),
+      now: fixedNow,
+    }
+    // When 渲染面板
+    const view = render(<PolymarketPanel t={t} onClose={() => {}} deps={deps} />)
+    // Then 事件行标为 comparable，读数取 mid 的前后值与差值
+    await waitFor(() => { expect(view.container.querySelector('[data-dshtrading-event-state="comparable"]')).not.toBeNull() })
+    const delta = view.container.querySelector('[data-dshtrading-event-delta]')!
+    expect(delta.getAttribute('data-dshtrading-event-delta')).toBe('770450:no_change')
+    expect(delta.textContent).toContain('20.0%')
+    expect(delta.textContent).toContain('30.0%')
+    expect(delta.textContent).toContain('+10.0pp')
+    // 口径标注在事件块标题下、主表显示值仍取 bestAsk
+    expect(view.container.querySelector('[data-dshtrading-event-basis]')?.textContent).toBe('prediction.basisComparison')
+    expect(screen.queryByText('23.0%')).not.toBeNull()
+  })
+
+  it('用户看到会话采样取 mid：同一档位 bestAsk 0.23 时对照读数用 22.5%', async () => {
+    // Given 事件在 2 小时前（右端夹到 now），回填只覆盖事件前那一段 0.20，
+    // 事件后那一段只能来自会话采样（no_change 的 probability/mid = 0.225、bestAsk = 0.23）
+    const past = fixedNow() - 2 * 3600_000
+    const deps = {
+      fetchPrediction: async () => okResult([meeting()]),
+      fetchCalendar: async () => [cal({ publishedAt: new Date(past).toISOString() })],
+      fetchHistory: async (): Promise<ClientPredictionHistoryResult> => historyOk([{
+        bucketKey: 'no_change',
+        points: [{ t: (past - 3600_000) / 1000, p: 0.2 }],
+      }]),
+      now: fixedNow,
+    }
+    // When 渲染面板
+    const view = render(<PolymarketPanel t={t} onClose={() => {}} deps={deps} />)
+    // Then 对照的后一段取 mid 22.5%（若误用 bestAsk 会是 23.0% / +3.0pp）
+    await waitFor(() => { expect(view.container.querySelector('[data-dshtrading-event-state="comparable"]')).not.toBeNull() })
+    const delta = view.container.querySelector('[data-dshtrading-event-delta]')!
+    expect(delta.textContent).toContain('20.0%')
+    expect(delta.textContent).toContain('22.5%')
+    expect(delta.textContent).toContain('+2.5pp')
+    expect(delta.textContent).not.toContain('23.0%')
+    // 主表显示仍是 bestAsk 23.0%（两个口径各自出口）
+    expect(screen.queryByText('23.0%')).not.toBeNull()
+  })
+
+  it('用户看到回填返回空 series 时明说上游历史不覆盖该时点', async () => {
+    // Given 回填成功但没有任何序列（上游历史不覆盖该窗口）
+    const deps = {
+      fetchPrediction: async () => okResult([meeting()]),
+      fetchCalendar: async () => [cal()],
+      fetchHistory: async (): Promise<ClientPredictionHistoryResult> => historyOk([]),
+      now: fixedNow,
+    }
+    // When 渲染面板
+    const view = render(<PolymarketPanel t={t} onClose={() => {}} deps={deps} />)
+    // Then 该事件标为 uncovered，文案是「上游历史不覆盖该时点」，没有伪造的变动
+    await waitFor(() => { expect(view.container.querySelector('[data-dshtrading-event-state="uncovered"]')).not.toBeNull() })
+    expect(view.container.querySelector('[data-dshtrading-event]')?.textContent).toContain('prediction.eventUncovered')
+    expect(view.container.querySelector('[data-dshtrading-event-delta]')).toBeNull()
+  })
+
+  it('用户看到回填只覆盖事件之后那一段时判采样不足而不是显示 0 变动', async () => {
+    // Given 回填有序列但只有事件之后的一个点（事件前那一段缺失）
+    const deps = {
+      fetchPrediction: async () => okResult([meeting()]),
+      fetchCalendar: async () => [cal()],
+      fetchHistory: async (): Promise<ClientPredictionHistoryResult> => historyOk([{
+        bucketKey: 'no_change',
+        points: [{ t: eventAt / 1000 + 3600, p: 0.3 }],
+      }]),
+      now: fixedNow,
+    }
+    // When 渲染面板
+    const view = render(<PolymarketPanel t={t} onClose={() => {}} deps={deps} />)
+    // Then 标为 insufficient（有覆盖但单侧缺失），且不显示任何变动读数
+    await waitFor(() => { expect(view.container.querySelector('[data-dshtrading-event-state="insufficient"]')).not.toBeNull() })
+    expect(view.container.querySelector('[data-dshtrading-event-insufficient]')?.textContent).toBe('prediction.eventInsufficient')
+    expect(view.container.querySelector('[data-dshtrading-event-delta]')).toBeNull()
+  })
+
+  it('用户看到回填失败时出可操作提示，档位表与会话采样照常', async () => {
+    // Given 桥面把回填报成上游错误（显式错误状态，不是空序列）
+    const deps = {
+      fetchPrediction: async () => okResult([meeting()]),
+      fetchCalendar: async () => [cal()],
+      fetchHistory: async (): Promise<ClientPredictionHistoryResult> => ({ status: 'error', code: 'TRADING_UPSTREAM_ERROR', message: 'HTTP 403' }),
+      now: fixedNow,
+    }
+    // When 渲染面板
+    const view = render(<PolymarketPanel t={t} onClose={() => {}} deps={deps} />)
+    // Then 该事件标为 history-error 并带 code；档位表、事件行与日历块都不受影响
+    await waitFor(() => { expect(view.container.querySelector('[data-dshtrading-event-state="history-error"]')).not.toBeNull() })
+    expect(view.container.querySelector('[data-dshtrading-event-error]')?.getAttribute('data-dshtrading-event-error')).toBe('TRADING_UPSTREAM_ERROR')
+    expect(view.container.querySelector('[data-dshtrading-event]')?.textContent).toContain('prediction.eventHistoryError')
+    expect(screen.queryByText('23.0%')).not.toBeNull()
+    expect(view.container.textContent).toContain(cal().title)
+    expect(screen.queryByText('prediction.calendarError')).toBeNull()
+  })
+
+  it('用户看到每个事件只回填一次：重渲染不重拉，窗口与间隔按约定', async () => {
+    // Given 一次注入的回填器记录每次请求
+    const requests: ClientPredictionHistoryRequest[] = []
+    const deps = {
+      fetchPrediction: async () => okResult([meeting()]),
+      fetchCalendar: async () => [cal()],
+      fetchHistory: async (request: ClientPredictionHistoryRequest): Promise<ClientPredictionHistoryResult> => {
+        requests.push(request)
+        return historyOk([{
+          bucketKey: 'no_change',
+          points: [{ t: eventAt / 1000 - 3600, p: 0.2 }, { t: eventAt / 1000 + 3600, p: 0.3 }],
+        }])
+      },
+      now: fixedNow,
+    }
+    // When 渲染面板，随后换一个 now 函数身份再渲染一轮（取数效应重跑）
+    const view = render(<PolymarketPanel t={t} onClose={() => {}} deps={deps} />)
+    await waitFor(() => { expect(view.container.querySelector('[data-dshtrading-event-state="comparable"]')).not.toBeNull() })
+    // Then 请求恰好一次，且 meetingId / 窗口 / 间隔按约定
+    expect(requests).toEqual([{ meetingId: '770450', fromMs: eventAt - HISTORY_WINDOW_MS, toMs: eventAt + HISTORY_WINDOW_MS, fidelityMinutes: 5 }])
+    view.rerender(<PolymarketPanel t={t} onClose={() => {}} deps={{ ...deps, now: () => fixedNow() }} />)
+    await waitFor(() => { expect(view.container.querySelector('[data-dshtrading-event-state="comparable"]')).not.toBeNull() })
+    expect(requests.length).toBe(1)
+  })
+})
+
+describe('PolymarketPanel 对照轴细节（跨档网格 / 裁剪上限 / 失败不重试）', () => {
+  afterEach(() => cleanup())
+
+  it('用户看到密集历史（48h/5min ≈ 577 点）时事件前的最近读数不会被裁掉', async () => {
+    // Given 事件在 26h 前，回填覆盖事件前后各 24h 的 5 分钟密点（577 点，远超 MAX_SAMPLES=240），
+    // 其中事件时刻及之前的最近点为 0.20（`at <= 事件时刻` 算「之前」）、事件后 5 分钟为 0.25
+    const past = fixedNow() - 26 * 3600_000
+    const points: { t: number; p: number }[] = []
+    for (let ms = past - HISTORY_WINDOW_MS; ms <= past + HISTORY_WINDOW_MS; ms += 300_000) {
+      const p = ms <= past ? 0.2 : ms === past + 300_000 ? 0.25 : 0.22
+      points.push({ t: ms / 1000, p })
+    }
+    const deps = {
+      fetchPrediction: async () => okResult([meeting()]),
+      fetchCalendar: async () => [cal({ publishedAt: new Date(past).toISOString() })],
+      fetchHistory: async (): Promise<ClientPredictionHistoryResult> => historyOk([{ bucketKey: 'no_change', points }]),
+      now: fixedNow,
+    }
+    // When 渲染面板
+    const view = render(<PolymarketPanel t={t} onClose={() => {}} deps={deps} />)
+    // Then 仍是 comparable 且读数取事件两侧最近的 0.20 → 0.25（按 240 点裁尾会只剩后 20h → 退化）
+    await waitFor(() => { expect(view.container.querySelector('[data-dshtrading-event-state="comparable"]')).not.toBeNull() })
+    expect(points.length).toBe(577)
+    const delta = view.container.querySelector('[data-dshtrading-event-delta]')!
+    expect(delta.textContent).toContain('20.0%')
+    expect(delta.textContent).toContain('25.0%')
+    expect(delta.textContent).toContain('+5.0pp')
+  })
+
+  it('用户看到回填失败后不会每轮 60s 反复重拉同一个事件', async () => {
+    // Given 回填器每次调用都把它记录下来了（桥面报上游错误）
+    const requests: ClientPredictionHistoryRequest[] = []
+    const deps = {
+      fetchPrediction: async () => okResult([meeting()]),
+      fetchCalendar: async () => [cal()],
+      fetchHistory: async (request: ClientPredictionHistoryRequest): Promise<ClientPredictionHistoryResult> => {
+        requests.push(request)
+        return { status: 'error', code: 'TRADING_UPSTREAM_ERROR', message: 'HTTP 403' }
+      },
+      now: fixedNow,
+    }
+    // When 渲染面板 → 等失败态 → 换 now 函数身份再渲染一轮（取数效应重跑，等同下一轮轮询）
+    const view = render(<PolymarketPanel t={t} onClose={() => {}} deps={deps} />)
+    await waitFor(() => { expect(view.container.querySelector('[data-dshtrading-event-state="history-error"]')).not.toBeNull() })
+    // Then 失败也记进账本：请求只有一次，重跑后仍是 history-error 而不是退回 pending/重试
+    expect(requests.length).toBe(1)
+    view.rerender(<PolymarketPanel t={t} onClose={() => {}} deps={{ ...deps, now: () => fixedNow() }} />)
+    await waitFor(() => { expect(view.container.querySelector('[data-dshtrading-event-state="history-error"]')).not.toBeNull() })
+    expect(requests.length).toBe(1)
+    expect(view.container.querySelector('[data-dshtrading-event-error]')?.getAttribute('data-dshtrading-event-error')).toBe('TRADING_UPSTREAM_ERROR')
   })
 })

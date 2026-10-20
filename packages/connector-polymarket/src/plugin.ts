@@ -6,13 +6,14 @@
  * 独家拥有它；host 行注册一次全会话可见（与 @dshtrading/connector-jin10 同款形态，
  * 2026-09-13 先例）。
  *
- * 凭证：**无**。Polymarket gamma 是公开只读 API，本连接器不引入任何密钥，
- * 也不触达下单/交易端点（只用 `/events`）。
+ * 凭证：**无**。Polymarket gamma 与 CLOB 都是公开只读 API，本连接器不引入任何密钥，
+ * 也不触达下单/交易端点（只用 gamma `/events` 与 CLOB `/prices-history`）。
  *
  * 快照落盘：trading home 下（`@dshtrading/dsh-home` 解析），不写包内、不写仓库数据。
  */
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
+import { ClobClient } from './clob.js'
 import { GammaClient, DEFAULT_TIMEOUT_MS } from './gamma.js'
 import { TRADING_PREDICTION_FEED_KEY, PolymarketService, createPolymarketPredictionFeed } from './service.js'
 import { SnapshotStore } from './snapshot.js'
@@ -43,9 +44,11 @@ export const Config: Schema<Config> = Schema.object({
 export interface ApplyOverrides {
   /** 注入的 fetch（单测用契约化替身）。 */
   readonly fetchImpl?: typeof globalThis.fetch
-  /** 基址覆盖（单测指向本地夹具服务）。 */
+  /** gamma 基址覆盖（单测指向本地夹具服务）。 */
   readonly baseUrl?: string
-  /** 时钟注入（单测固定 fetchedAt）。 */
+  /** CLOB 基址覆盖（同上；历史面与会议面可指向同一个夹具服务）。 */
+  readonly clobBaseUrl?: string
+  /** 时钟注入（单测固定 fetchedAt / 推进缓存 TTL）。 */
   readonly now?: (() => number) | undefined
 }
 
@@ -56,11 +59,17 @@ export function createPolymarketService(config: Config, overrides: ApplyOverride
     ...(overrides.fetchImpl !== undefined ? { fetchImpl: overrides.fetchImpl } : {}),
     ...(overrides.baseUrl !== undefined ? { baseUrl: overrides.baseUrl } : {}),
   })
+  const clob = new ClobClient({
+    timeoutMs: config.timeoutMs,
+    ...(overrides.fetchImpl !== undefined ? { fetchImpl: overrides.fetchImpl } : {}),
+    ...(overrides.clobBaseUrl !== undefined ? { baseUrl: overrides.clobBaseUrl } : {}),
+  })
   const snapshots = config.snapshots
     ? new SnapshotStore(config.snapshotPath === '' ? {} : { filePath: config.snapshotPath })
     : undefined
   return new PolymarketService({
     gamma,
+    clob,
     ...(snapshots !== undefined ? { snapshots } : {}),
     ...(overrides.now !== undefined ? { now: overrides.now } : {}),
   })

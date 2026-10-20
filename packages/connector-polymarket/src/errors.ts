@@ -28,3 +28,22 @@ export function bodySnippet(text: string): string {
   const collapsed = text.replace(/\s+/g, ' ').trim()
   return collapsed.length > 200 ? `${collapsed.slice(0, 200)}…` : collapsed
 }
+
+/**
+ * 传输层失败（DNS/TLS/连接/超时）→ `TRADING_NETWORK`。
+ *
+ * 只在**请求没拿到响应**时调用；拿到响应但状态非 2xx 或体破损一律是
+ * `TRADING_UPSTREAM_ERROR`（由调用方构造，消息带状态码与响应片段）——这条分界是
+ * 「上游说不行」与「我们连不上」的区别，重试策略完全不同。
+ *
+ * 两个传输层（gamma / CLOB）共用这一处措辞，避免同一语义出现两种说法。
+ */
+export function networkError(scope: string, cause: unknown): PolymarketError {
+  const reason = cause instanceof Error ? cause.message : String(cause)
+  const timedOut = cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError')
+  return new PolymarketError(
+    'TRADING_NETWORK',
+    `${scope}: ${timedOut ? 'request timed out' : 'network failure'} — ${reason}`,
+    cause,
+  )
+}

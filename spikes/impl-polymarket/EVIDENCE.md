@@ -651,3 +651,74 @@ for i in $(seq 1 40); do curl -A "Mozilla/5.0" -o /dev/null \
 
 注：Q2/Q3 的数值快照（价格、tick、历史点）随时间变化，论文中的具体数值对应
 2026-10-11T01:2xZ 的实测；结构性结论（口径等价、字段语义、失败形态、发现规则）稳定可复现。
+
+
+---
+
+## Q3.6 回填实现实测（2026-10-20）
+
+本节的目的是给**连接器实现**（`packages/connector-polymarket` 的 `listPriceHistory` 与
+CLOB 传输层）留一份真网络原始响应：上面 Q3.1/Q3.2 是 curl 探测出的接口事实，这里是把
+同一接口接进连接器之后、按连接器自己的代码路径跑出来的实测。既有小节一字未改。
+
+### 命令与代码路径
+
+```
+$ cd spikes/impl-polymarket && node probe-price-history.mjs
+# probe-price-history  started=2026-10-20T05:44:35.021Z  now=1792475075021
+```
+
+探针 **不重写任何解析**：它 import 的是构建产物 `packages/connector-polymarket/lib/index.js`，
+调用 `createPolymarketService()` → `listFomcMeetings()`（gamma `/events` 发现）→
+`listPriceHistory()`（按档位 `clobTokenId` 扇出 CLOB）。原始响应由注入的 fetch 记录
+**响应体原文**后落盘，不经过连接器的任何字段加工。
+
+### 目标会议与窗口
+
+| 项 | 实测值 |
+| --- | --- |
+| 会议 | `606422` "Fed Decision in October?"（`meetingWindow=October 27-28, 2026`，`endDate=2026-10-29T03:59:00Z`） |
+| 档位 | 5 档，5/5 带 `clobTokenId`（`clobTokenIds[0]`） |
+| 窗口 | `fromMs=1792388675021` → `toMs=1792475075021` = **24.00h**（相对探针起跑时刻的最近 24h） |
+| 粒度 | `fidelity=5`（连接器缺省值） |
+| 实际 URL | `GET https://clob.polymarket.com/prices-history?market=<token>&startTs=1792388675&endTs=1792475075&fidelity=5`（逐档一条） |
+
+### 逐档实测（原始响应见 `raw/09-…`）
+
+| 档位 | 点数 | 跨度 | 首读数（t → p） | 末读数（t → p） | 不同取值 | min..max | HTTP | 原始响应 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| dec_50plus | 289 | 23.98h | 2026-10-19T05:45:21Z → 0.0005 | 2026-10-20T05:44:21Z → 0.0005 | 1 | 0.0005..0.0005 | 200 | raw/09-prices-history-backfill-dec_50plus.json（8106 B） |
+| dec_25 | 289 | 23.98h | 2026-10-19T05:45:18Z → 0.0035 | 2026-10-20T05:44:19Z → 0.0035 | 1 | 0.0035..0.0035 | 200 | raw/09-prices-history-backfill-dec_25.json（8106 B） |
+| no_change | 289 | 23.98h | 2026-10-19T05:45:19Z → 0.875 | 2026-10-20T05:44:20Z → 0.855 | 4 | 0.845..0.885 | 200 | raw/09-prices-history-backfill-no_change.json（7817 B） |
+| inc_25 | 289 | 23.98h | 2026-10-19T05:45:18Z → 0.125 | 2026-10-20T05:44:19Z → 0.145 | 5 | 0.105..0.145 | 200 | raw/09-prices-history-backfill-inc_25.json（7817 B） |
+| inc_50plus | 289 | 23.98h | 2026-10-19T05:45:21Z → 0.0035 | 2026-10-20T05:44:22Z → 0.0035 | 1 | 0.0035..0.0035 | 200 | raw/09-prices-history-backfill-inc_50plus.json（8106 B） |
+
+289 点 / 23.98h ≈ **5 分钟一格**，与 Q3.1 的 fidelity 语义一致；5 档并发取数共 5 条
+`/prices-history` 请求 + 1 条 gamma `/events` 请求（探针日志 raw/09-prices-history-backfill-probe.txt，3521 B）。
+
+**这一批读数为「空/平线」的区分提供了直接对照**：24h 内 3/5 档完全不动（`distinct=1`），
+另两档各走了 4/5 个取值。也就是说「平线」是真实存在的形态——正因如此，取数失败绝不能被
+画成平线（少一档 / 报错必须可见），否则两种语义在图上无法区分。
+
+### 336h（约 30 天）窗口边界复验
+
+| 场景 | 结果 |
+| --- | --- |
+| 336h 走连接器 | **接受**：`points=3969`、跨度 335.98h、首 2026-10-06T05:45:20Z、末 2026-10-20T05:44:21Z |
+| 720h 走连接器 | **本地拒发**：`code=TRADING_UNSUPPORTED_INTERVAL`、`upstreamRequests=0`、消息 `polymarket clob /prices-history: window 2592000000ms exceeds the upstream limit of 1209600000ms (336h) — not sent` |
+| 720h 直连 CLOB（绕过连接器） | **HTTP 400**，体 `{"error":"invalid filters: 'startTs' and 'endTs' interval is too long"}`（raw/09-prices-history-720h-over-window.txt，323 B） |
+
+结论：Q3.2 的边界在 2026-10-20 仍然成立（720h 上游 400，原文一致）；连接器把同一个
+数字（336h）挡在发请求之前，越界窗口一次上游请求都不会产生。
+
+### 本节新增文件
+
+| 文件 | 内容 |
+| --- | --- |
+| [probe-price-history.mjs](probe-price-history.mjs) | 回填实测探针（走连接器构建产物；可复跑） |
+| raw/09-prices-history-backfill-{dec_50plus,dec_25,no_change,inc_25,inc_50plus}.json | 5 档 24h/5min 的 **CLOB 原始响应原文** |
+| raw/09-prices-history-backfill-probe.txt | 探针完整输出（时间戳 + URL + 每档点数/跨度/首末读数） |
+| raw/09-prices-history-720h-over-window.txt | 720h 直连 CLOB 的上游 400 原文（边界复验） |
+
+注：`market=` 是公开的 CLOB token id（来自 gamma market `clobTokenIds`），非凭据；
+本节全部请求零鉴权头、零下单端点。

@@ -20,6 +20,10 @@
  *   `bestBid` 变 null 而 `bestAsk` 残留 0.001，自算会得到 0.0005 这种无意义值；
  * - 判断「是否还在交易」用 market 级 `closed`/`acceptingOrders`，**不用 `active`**
  *   ——结算后 `active` 仍为 true。
+ *
+ * 回填定位键（2026-10-15 事件窗口回填）：`clobTokenIds` 是**字符串化 JSON 数组**，
+ * 第 0 个元素与 `outcomePrices[0]` 同档（已核实 raw/06-events-series_id35.json）。
+ * 解析不出就**不填**——绝不猜 token，猜错等于把一档的价格线画到另一档上。
  */
 import type { PredictionMeeting, PredictionOutcomeBucket } from '@dshtrading/api'
 
@@ -125,6 +129,24 @@ function parseOutcomePrices(value: unknown): number | undefined {
   return num(parsed[0])
 }
 
+/**
+ * `clobTokenIds` → 第 0 个 token（Yes 档，与 `outcomePrices[0]` 同档）。
+ *
+ * 上游把数组装成字符串（`"[\"706…\",\"528…\"]"`），与 `outcomePrices` 同一种包装；
+ * 缺省/非字符串/不是数组/首元素不是非空字符串一律返回 undefined（不填，不猜）。
+ */
+function parseClobTokenId(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return undefined
+  return text(parsed[0])
+}
+
 function parseBucket(market: Record<string, unknown>): PredictionOutcomeBucket | undefined {
   const label = text(market.groupItemTitle)
   const probability = parseOutcomePrices(market.outcomePrices)
@@ -137,6 +159,7 @@ function parseBucket(market: Record<string, unknown>): PredictionOutcomeBucket |
   const volume = num(market.volumeNum)
   const volume24h = num(market.volume24hr)
   const tickSize = num(market.orderPriceMinTickSize)
+  const clobTokenId = parseClobTokenId(market.clobTokenIds)
   return {
     key,
     label,
@@ -149,6 +172,7 @@ function parseBucket(market: Record<string, unknown>): PredictionOutcomeBucket |
     ...(volume !== undefined ? { volume } : {}),
     ...(volume24h !== undefined ? { volume24h } : {}),
     ...(tickSize !== undefined ? { tickSize } : {}),
+    ...(clobTokenId !== undefined ? { clobTokenId } : {}),
     acceptingOrders: market.acceptingOrders === true,
     closed: market.closed === true,
   }

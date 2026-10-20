@@ -31,6 +31,11 @@ describe('包入口（loader 解析面）', () => {
     expect(typeof rootEntry.discoverFomcMeetings).toBe('function')
     expect(typeof rootEntry.applySnapshot).toBe('function')
     expect(rootEntry.FOMC_SERIES_ID).toBe('35')
+    // 历史回填面（2026-10-20）：传输层与它的两个口径常量同样必须从入口可达
+    expect(typeof rootEntry.ClobClient).toBe('function')
+    expect(rootEntry.CLOB_BASE_URL).toBe('https://clob.polymarket.com')
+    expect(rootEntry.DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES).toBe(5)
+    expect(rootEntry.PRICE_HISTORY_MAX_WINDOW_MS).toBe(336 * 3600_000)
   })
 
   it('运营看到插件名与 patch 行 id 逐字一致（改名会让行解析失败）', () => {

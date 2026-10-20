@@ -526,6 +526,83 @@ export async function fetchPredictionFomc(signal?: AbortSignal): Promise<ClientP
   }
 }
 
+/** 上游历史序列的一个点：`t` 是 unix **秒**，`p` 是 0..1 的 mid。 */
+export interface ClientPredictionHistoryPoint {
+  t: number
+  p: number
+}
+
+/** 单个档位的历史序列（bucketKey 与 {@link ClientPredictionBucket.key} 同形）。 */
+export interface ClientPredictionHistorySeries {
+  bucketKey: string
+  points: ClientPredictionHistoryPoint[]
+}
+
+/** 一次按事件开窗的历史回填（桥 /prediction/history）。 */
+export interface ClientPredictionHistory {
+  /** 桥标注的取数时刻（原样透传，不解析）。 */
+  fetchedAt?: string
+  meetingId: string
+  fromMs: number
+  toMs: number
+  fidelityMinutes: number
+  series: ClientPredictionHistorySeries[]
+}
+
+/** 历史回填请求参数（与桥路由的三个查询参数同形）。 */
+export interface ClientPredictionHistoryRequest {
+  meetingId: string
+  fromMs: number
+  toMs: number
+  fidelityMinutes: number
+}
+
+/**
+ * 历史回填结果：与 {@link fetchPredictionFomc} 同口径——失败是显式错误状态
+ * （带 code），**绝不回落成空 series**。空 series 只表示「上游历史不覆盖该窗口」，
+ * 与「桥不可达」是两种不同的事实，面板要分别提示。
+ */
+export type ClientPredictionHistoryResult =
+  | { status: 'ok'; history: ClientPredictionHistory }
+  | { status: 'error'; code: string; message: string }
+
+/**
+ * 上游历史 mid 序列（桥 /prediction/history，按事件开窗回填）。
+ *
+ * `p` 与 gamma outcomePrices 等价、是「历史段」与「会话段」都拿得到的唯一同源口径，
+ * 所以对照一律取 mid；面板主表的显示概率仍是 bestAsk，两者各自标注、不隐式换算。
+ */
+export async function fetchPredictionHistory(request: ClientPredictionHistoryRequest, signal?: AbortSignal): Promise<ClientPredictionHistoryResult> {
+  try {
+    const query = new URLSearchParams({
+      meetingId: request.meetingId,
+      fromMs: String(request.fromMs),
+      toMs: String(request.toMs),
+      fidelityMinutes: String(request.fidelityMinutes),
+    })
+    const wire = await getJson<ClientPredictionHistory & { ok: boolean }>(`/dshtrading/api/prediction/history?${query.toString()}`, signal)
+    if (!Array.isArray(wire.series)) {
+      return { status: 'error', code: 'TRADING_PROTOCOL', message: 'bridge returned no series array' }
+    }
+    return {
+      status: 'ok',
+      history: {
+        meetingId: wire.meetingId,
+        fromMs: wire.fromMs,
+        toMs: wire.toMs,
+        fidelityMinutes: wire.fidelityMinutes,
+        series: wire.series,
+        ...(wire.fetchedAt === undefined ? {} : { fetchedAt: wire.fetchedAt }),
+      },
+    }
+  } catch (error) {
+    if (error instanceof BridgeError) {
+      return { status: 'error', code: error.code ?? 'TRADING_PROTOCOL', message: error.message }
+    }
+    return { status: 'error', code: 'TRADING_NETWORK', message: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* SSE 失效信号订阅（issue #30 / P1）                                        */
 /* ------------------------------------------------------------------ */

@@ -20,7 +20,7 @@
  *   /markets 上报同市场能力并集；/tickers 支持显式 provider（未注册即 400）。
  */
 import { instrumentFormOf } from '@dshtrading/api'
-import type { ActiveBuySnapshot, AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, InstrumentAssetClass, InstrumentForm, InstrumentRef, Interval, Kline, KlineCapability, MacroCalendarEntry, MacroRateEntry, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, OrderRequest, Position, PredictionFeed, PredictionMeeting, SouthboundHoldingHistory, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
+import type { ActiveBuySnapshot, AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, InstrumentAssetClass, InstrumentForm, InstrumentRef, Interval, Kline, KlineCapability, MacroCalendarEntry, MacroRateEntry, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, OrderRequest, Position, PredictionFeed, PredictionMeeting, PredictionPriceHistory, PredictionPriceHistoryRequest, SouthboundHoldingHistory, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
 import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dshtrading/kit-cn'
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dshtrading/kit-hk'
 import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dshtrading/kit-us'
@@ -111,6 +111,12 @@ export interface MacroFeedLike {
  */
 export interface PredictionFeedLike {
   listFomcMeetings(): Promise<PredictionFeed>
+  /**
+   * 事件窗口内的逐档概率历史（可选：2026-10-15 新增的历史面）。老版本连接器没有这一面
+   * 时桥报 TRADING_NOT_IMPLEMENTED，而不是回一段空 series 冒充「没有变动」——与既有
+   * 交易服务 getBalances / listOpenOrders 的「可选方法缺席 ≠ 无数据」同款。
+   */
+  listPriceHistory?(request: PredictionPriceHistoryRequest): Promise<PredictionPriceHistory>
 }
 
 /** 快讯端点条目上限（保护上游公共配额；超出直接 400）。 */
@@ -129,6 +135,69 @@ function parseFlashHeat(raw: string | null): string[] {
     }
   }
   return levels
+}
+
+/** 历史请求的原始 query（HTTP 侧原样字符串；null = 该参数缺省）。 */
+export interface PredictionHistoryQuery {
+  readonly meetingId: string | null
+  readonly fromMs: string | null
+  readonly toMs: string | null
+  readonly fidelityMinutes?: string | null
+}
+
+/**
+ * query → 契约请求：非法参数一律在桥侧 400，**绝不透传给上游**，也不静默降级成空窗口。
+ *
+ * 错误码沿用本文件既有做法（/fx 的坏 base、/news 的缺 market、/flash 的坏热度等级
+ * 都是裸 BridgeProtocolError(400)）：HTTP 层按 index.ts 的兜底下发 TRADING_PROTOCOL。
+ * 桥的错误词表里没有更贴切的既有码——TRADING_INVALID_SCOPE 已被图表激活的
+ * market/symbol 作用域占住，TRADING_UNSUPPORTED_INTERVAL 被 K 线粒度占住，
+ * 借过来会让客户端误读成「作用域/粒度不支持」。
+ */
+function parsePredictionHistoryQuery(query: PredictionHistoryQuery): PredictionPriceHistoryRequest {
+  const meetingId = (query.meetingId ?? '').trim()
+  if (meetingId === '') {
+    throw new BridgeProtocolError(400, 'prediction history: meetingId is required (upstream event id)')
+  }
+  const fromMs = readRequiredNumber('fromMs', query.fromMs)
+  const toMs = readRequiredNumber('toMs', query.toMs)
+  if (fromMs >= toMs) {
+    throw new BridgeProtocolError(400, 'prediction history: fromMs must be before toMs (fromMs=' + fromMs + ', toMs=' + toMs + ')')
+  }
+  const rawFidelity = query.fidelityMinutes
+  const fidelityMinutes = rawFidelity === undefined || rawFidelity === null || rawFidelity.trim() === ''
+    ? undefined
+    : readRequiredNumber('fidelityMinutes', rawFidelity)
+  if (fidelityMinutes !== undefined && fidelityMinutes <= 0) {
+    throw new BridgeProtocolError(400, 'prediction history: fidelityMinutes must be a positive number of minutes (got ' + JSON.stringify(rawFidelity) + ')')
+  }
+  const windowMs = toMs - fromMs
+  if (windowMs > PREDICTION_HISTORY_MAX_WINDOW_MS) {
+    throw new BridgeProtocolError(
+      400,
+      'prediction history: window ' + formatHours(windowMs) + 'h exceeds the ' + formatHours(PREDICTION_HISTORY_MAX_WINDOW_MS)
+        + 'h upstream limit (CLOB prices-history rejects longer startTs/endTs intervals)',
+    )
+  }
+  return { meetingId, fromMs, toMs, fidelityMinutes }
+}
+
+/** 必填数值 query：缺省/空白/非有限数一律 400（Number('') 是 0，必须显式拦掉）。 */
+function readRequiredNumber(name: string, raw: string | null | undefined): number {
+  if (raw === undefined || raw === null || raw.trim() === '') {
+    throw new BridgeProtocolError(400, 'prediction history: ' + name + ' is required (epoch ms number)')
+  }
+  const value = Number(raw)
+  if (!Number.isFinite(value)) {
+    throw new BridgeProtocolError(400, 'prediction history: ' + name + ' must be a finite number (got ' + JSON.stringify(raw) + ')')
+  }
+  return value
+}
+
+/** 小时数展示（整数不带小数点；错误消息里的窗口大小要能直接读）。 */
+function formatHours(ms: number): string {
+  const hours = ms / 3600_000
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1)
 }
 
 export interface TradingNewsRegistryLike {
@@ -743,11 +812,31 @@ export interface PredictionWire {
   meetings: readonly PredictionMeeting[]
 }
 
+/**
+ * 价格历史响应信封（桥 /prediction/history；2026-10-15 事件窗口回填）。
+ *
+ * 直接继承契约本身：窗口与粒度原样回述（客户端据此复算横轴），桥不重算任何读数、
+ * 不重采样、不截尾。
+ */
+export interface PredictionHistoryWire extends PredictionPriceHistory {
+  ok: true
+}
+
 /** 新闻端点条目上限（保护公共数据源；超出部分由 Kit 层截流）。 */
 export const MAX_NEWS_LIMIT = 50
 
 /** 宏观日历条目上限（上游一页即整周；与 connector MACRO_CALENDAR_MAX 对齐。整周实测已到 254 条，250 会裁掉周尾）。 */
 export const MAX_MACRO_CALENDAR_LIMIT = 400
+
+/**
+ * 预测价格历史窗口上限 = 336 小时（2026-10-15 事件窗口回填）。
+ *
+ * 依据 spikes/impl-polymarket/EVIDENCE.md Q3.2 实测：显式 startTs/endTs 窗口 336h
+ * 可用（n=338），720h（30 天）上游直接回
+ * "invalid filters: 'startTs' and 'endTs' interval is too long"。这是**参数闸门**，
+ * 不是返回截断：超限在桥侧 400，绝不把必然失败的长窗口透传给上游。
+ */
+export const PREDICTION_HISTORY_MAX_WINDOW_MS = 336 * 3600_000
 
 export class BridgeProtocolError extends Error {
   readonly status: number
@@ -1582,6 +1671,37 @@ export class TradingBridge {
     }
     const feedSnapshot = await feed.listFomcMeetings()
     return { ok: true, fetchedAt: feedSnapshot.fetchedAt, meetings: feedSnapshot.meetings }
+  }
+
+  /**
+   * 事件窗口内的逐档概率历史（2026-10-15 回填；客户端按公布时刻回看历史档位）。
+   *
+   * 参数闸门全在桥侧（400 + 可读消息，坏参数一个请求都不发给上游）：meetingId 非空、
+   * fromMs/toMs 为有限数且 fromMs < toMs、fidelityMinutes 给出即须为正数、窗口不超过
+   * PREDICTION_HISTORY_MAX_WINDOW_MS（336h，上游硬边界）。先校验后解析服务：客户端
+   * 参数错误与「连接器没装」是两件事，前者不该被后者掩盖。
+   *
+   * 服务缺席 = 未安装/未启用连接器，或该版本连接器没有历史面 → TRADING_NOT_IMPLEMENTED
+   * （与 predictionFomc 同语义：不是「上游没有变动」）。
+   *
+   * 只读透传：桥不缓存、不重采样、不发明 fidelity 默认值（缺省交给连接器定，响应原样回述）。
+   */
+  async predictionHistory(query: PredictionHistoryQuery): Promise<PredictionHistoryWire> {
+    const request = parsePredictionHistoryQuery(query)
+    const feed = this.host.predictionFeed
+    if (feed === undefined) {
+      throw Object.assign(
+        new Error('prediction feed is not mounted (install/enable the polymarket connector)'),
+        { code: 'TRADING_NOT_IMPLEMENTED' },
+      )
+    }
+    if (typeof feed.listPriceHistory !== 'function') {
+      throw Object.assign(
+        new Error('prediction feed does not implement listPriceHistory (connector predates the backfill contract)'),
+        { code: 'TRADING_NOT_IMPLEMENTED' },
+      )
+    }
+    return { ok: true, ...(await feed.listPriceHistory(request)) }
   }
 
 
@@ -2899,6 +3019,14 @@ export async function dispatchBridgeRequest(
       }
       case '/prediction/fomc': {
         return readResult(await bridge.predictionFomc())
+      }
+      case '/prediction/history': {
+        return readResult(await bridge.predictionHistory({
+          meetingId: search.get('meetingId'),
+          fromMs: search.get('fromMs'),
+          toMs: search.get('toMs'),
+          fidelityMinutes: search.get('fidelityMinutes'),
+        }))
       }
       case '/news': {
         const market = search.get('market') ?? ''
