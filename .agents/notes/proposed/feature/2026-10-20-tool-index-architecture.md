@@ -69,3 +69,11 @@ Status: proposed
 - 单测：`preset-surface-wiring.test.ts` 校验「researcher 的 phase1 是交易版最小集」「bootstrap 只给 researcher」「行序 bootstrap 在 shell 之前」「未追加激进裁剪」。
 - vendored 插件：`node --input-type=module` 直接 import，得到 `name=anchored-tool-bootstrap` / `inject=[systemPrompt,tools]` / `apply=function`。
 - 提交：`df7b78a3`（索引层）、`9727558f`（按预设裁族）、`b55568d2`（静态 PTC）、及本次提交（两阶段移植），均在 `feat/tool-index-architecture`（基于 main `423cfd03`）。
+
+## 集成与锁（2026-10-20 更新）
+
+首次集成时本机没有 `flock`（macOS 默认不带 util-linux），临时用原子 `mkdir` 做等价互斥。**当日晚间经 `brew install flock`（0.4.0，`/opt/homebrew/bin/flock`）补齐**，集成流程改回 dsh-customize 要求的 `flock -x <staging>/.agents/merge.lock`，并实测了获取／并发阻塞／释放后接管三种情形。
+
+锁文件与仓库内任务工作树 `.worktrees/` 均已进 `.gitignore`（提交 `57746baa`），不会污染主检出状态。
+
+未决：本检出是 main clone、直接在 `main` 上集成，没有独立的 staging 分支。若将来要「staging 与发布分离」，需要单独搭一条 staging 分支与发布流程——这不在本次改动范围内。
