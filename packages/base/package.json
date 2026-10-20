@@ -36,7 +36,11 @@
       "types": "./lib/tool-surface.d.ts",
       "default": "./lib/tool-surface.js"
     },
-    "./tool-bootstrap": "./assets/tool-bootstrap.mjs"
+    "./tool-bootstrap": "./assets/tool-bootstrap.mjs",
+    "./tool-batch": {
+      "types": "./lib/tool-batch.d.ts",
+      "default": "./lib/tool-batch.js"
+    }
   },
   "files": [
     "lib",
