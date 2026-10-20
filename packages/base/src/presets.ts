@@ -161,6 +161,69 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
     // text OCR only. Every role carries it: all four presets read images.
     // Double-mounting stays rejected (see 2026-08-29-preset-plane-tool-rows): the host-plane
     // row keeps `disabled: true` in the Web bundle and no profile re-enables it.
+    // Tool surface per preset (2026-10-20, index-style 第二级): 四个预设是
+    // dsh-trading 唯一的消费方，因此工具面差异在这里精确表达，而不是靠全局开关。
+    // 只裁「明确属于编排职责」的族——deny 语义只表达「不要什么」，read / bash /
+    // skill / job_output / 子代理等基础设施一律不动（见 tool-surface.ts 头注）。
+    // 回退方式：把 denyFamilies 改回 [] 即恢复全量，无需改代码。
+    const SURFACE: Record<string, { denyFamilies: string[] }> = {
+      trader: { denyFamilies: ['tasks'] },
+      'instrument-researcher': { denyFamilies: ['tasks'] },
+      'risk-reviewer': { denyFamilies: ['tasks', 'screener', 'indicator'] },
+      master: { denyFamilies: [] },
+    }
+    const surfaceRow: PresetRow[] = [
+      { id: 'dsh-trading-tool-surface', name: '@dshtrading/base/tool-surface', config: SURFACE[id] ?? { denyFamilies: [] } },
+    ]
+    // Tool-index row (2026-10-20, index-style surface): 参照 ~/.agents 的索引式
+    // 架构，把「场景 → 该用哪一族工具」的路由表做成一个常驻可见的入口工具，
+    // 其余 97 个工具的 schema 保持原样、按需调用。纯增量：不隐藏、不改名、
+    // 不动任何既有工具，因此对现有会话与 skill 引用零回归风险。
+    // 批量调用入口（2026-10-20）：一个工具里编排多个子工具调用，省掉 N 次
+    // 往返。与 PTC 呈现模式正交——工具面照旧，子调用走同一执行管线（含审批
+    // 闸门与工具日志）。给全部角色：只读角色的收益（批量取数）最大。
+    const batchRow: PresetRow[] = [
+      { id: 'dsh-trading-tool-batch', name: '@dshtrading/base/tool-batch' },
+    ]
+    const indexRow: PresetRow[] = [
+      { id: 'dsh-trading-tool-index', name: '@dshtrading/base/tool-index' },
+    ]
+    // 两阶段工具面（2026-10-20，移植「梁神模式」的首轮收窄）：首轮只暴露交易版
+    // 最小集（台账 + 路由），稳定后晋升回全量。
+    // 注意：**不切 PTC**（promotedPresentation 保持 'native'）——用户明确表示
+    // 不是要把自定义预设改成 PTC 呈现模式，而是要一个能批量调子工具的工具
+    // （见 tool-batch.ts）。两阶段这里只负责「首轮别让模型先读 97 份 schema」。
+    // 与梁神的差异：梁神 phase 1 是 bash + editor（编码场景 bash 可兜底一切）；
+    // 交易场景第一轮常见「我有什么仓 / 连了哪些市场」，所以最小集换成
+    // holdings_list + routing_get —— 两个都极轻，且不涉及任何下单面。
+    // researcher 没有 bash（shellRow 只给 master），故 shellTools 留空。
+    const BOOTSTRAP: Record<string, Record<string, unknown> | null> = {
+      'instrument-researcher': {
+        shellTools: [],
+        commonTools: ['holdings_list', 'routing_get'],
+        messageSources: ['user', 'goal'],
+        anchorGate: true,
+        maxBootstrapSteps: 4,
+        promoteAfterFirstResponse: true,
+        bootstrapMaxTokens: 1024,
+        compactionTools: ['holdings_list', 'routing_get', 'knowledge_search', 'instruments_search'],
+        deferredSources: ['agent-instructions', 'skill-catalog'],
+        deferredGraceSteps: 1,
+        promotedPresentation: 'native',
+        instructionHint: true,
+      },
+      trader: null,
+      'risk-reviewer': null,
+      master: null,
+    }
+    const bootstrap = BOOTSTRAP[id]
+    const bootstrapRow: PresetRow[] = bootstrap === null || bootstrap === undefined
+      ? []
+      : [{ id: `dsh-trading-${id}-bootstrap`, name: '@dshtrading/base/tool-bootstrap', config: bootstrap }]
+    // Media tool surface (owner 2026-10-13「图片需要你亲自过一遍」→「都要用 read_image」):
+    // the Web bundle disables the host-plane `tool-fs` row, so the session tool surface is
+    // assembled here — without this row NO trading session has `read_image` (nor read / write
+    // / edit). Every role carries it.
     const toolRows: PresetRow[] = [
       { id: 'dsh-trading-tool-fs', name: '@deepseek-ai/dsh-tool-fs' },
     ]
@@ -198,6 +261,10 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
         ...delegation,
         ...skillRows,
         ...toolRows,
+        ...batchRow,
+        ...indexRow,
+        ...surfaceRow,
+        ...bootstrapRow,
         ...shellRow,
       ],
     }

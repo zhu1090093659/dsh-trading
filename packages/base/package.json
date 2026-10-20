@@ -27,7 +27,20 @@
       "default": "./lib/market-tools.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./tool-index": {
+      "types": "./lib/tool-index.d.ts",
+      "default": "./lib/tool-index.js"
+    },
+    "./tool-surface": {
+      "types": "./lib/tool-surface.d.ts",
+      "default": "./lib/tool-surface.js"
+    },
+    "./tool-bootstrap": "./assets/tool-bootstrap.mjs",
+    "./tool-batch": {
+      "types": "./lib/tool-batch.d.ts",
+      "default": "./lib/tool-batch.js"
+    }
   },
   "files": [
     "lib",
