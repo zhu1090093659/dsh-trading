@@ -161,6 +161,20 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
     // text OCR only. Every role carries it: all four presets read images.
     // Double-mounting stays rejected (see 2026-08-29-preset-plane-tool-rows): the host-plane
     // row keeps `disabled: true` in the Web bundle and no profile re-enables it.
+    // Tool surface per preset (2026-10-20, index-style 第二级): 四个预设是
+    // dsh-trading 唯一的消费方，因此工具面差异在这里精确表达，而不是靠全局开关。
+    // 只裁「明确属于编排职责」的族——deny 语义只表达「不要什么」，read / bash /
+    // skill / job_output / 子代理等基础设施一律不动（见 tool-surface.ts 头注）。
+    // 回退方式：把 denyFamilies 改回 [] 即恢复全量，无需改代码。
+    const SURFACE: Record<string, { denyFamilies: string[] }> = {
+      trader: { denyFamilies: ['tasks'] },
+      'instrument-researcher': { denyFamilies: ['tasks'] },
+      'risk-reviewer': { denyFamilies: ['tasks', 'screener', 'indicator'] },
+      master: { denyFamilies: [] },
+    }
+    const surfaceRow: PresetRow[] = [
+      { id: 'dsh-trading-tool-surface', name: '@dshtrading/base/tool-surface', config: SURFACE[id] ?? { denyFamilies: [] } },
+    ]
     // Tool-index row (2026-10-20, index-style surface): 参照 ~/.agents 的索引式
     // 架构，把「场景 → 该用哪一族工具」的路由表做成一个常驻可见的入口工具，
     // 其余 97 个工具的 schema 保持原样、按需调用。纯增量：不隐藏、不改名、
@@ -206,6 +220,7 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
         ...skillRows,
         ...toolRows,
         ...indexRow,
+        ...surfaceRow,
         ...shellRow,
       ],
     }

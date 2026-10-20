@@ -31,6 +31,10 @@
     "./tool-index": {
       "types": "./lib/tool-index.d.ts",
       "default": "./lib/tool-index.js"
+    },
+    "./tool-surface": {
+      "types": "./lib/tool-surface.d.ts",
+      "default": "./lib/tool-surface.js"
     }
   },
   "files": [
