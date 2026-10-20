@@ -1,0 +1,19 @@
+{
+  "id": "selfhosted",
+  "name": "自托管模型(Ollama / vLLM / LM Studio 等)",
+  "base_url": "http://localhost:11434/v1",
+  "env_key": "SELFHOSTED_API_KEY",
+  "default_model": null,
+  "context_limit_tokens": null,
+  "verified_at": null,
+  "known_incompatibilities": [
+    "研究的每个阶段都要调工具:所选模型必须支持 Chat Completions 的 function calling(tools 参数),不支持的模型会在第一个阶段就失败。",
+    "地址边界:远程和局域网端点必须 HTTPS;明文 HTTP 只允许 localhost、127.0.0.1、[::1]。这里的「本机」指运行后端的那台机器,不是打开页面的手机。"
+  ],
+  "notes": [
+    "模板地址是 Ollama 的默认地址;vLLM 默认 http://localhost:8000/v1,LM Studio 默认 http://localhost:1234/v1。换地址:在「接入 AI」里填 Base URL,或把本模板复制到 <数据根>/providers/selfhosted.json 修改。",
+    "default_model 故意留空:你本地装了哪个模型只有你知道。没填模型名时产品会提示补上,不会乱猜。",
+    "本地服务大多不校验 key,但产品要求环境变量 SELFHOSTED_API_KEY 非空:随便填一个值即可;经过需要鉴权的网关时填真实 key。",
+    "未实测。"
+  ]
+}

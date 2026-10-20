@@ -1,0 +1,20 @@
+{
+  "id": "mimo",
+  "name": "小米 MiMo(官方 API)",
+  "base_url": "https://api.xiaomimimo.com/v1",
+  "env_key": "MIMO_API_KEY",
+  "default_model": "mimo-v2.6-flash",
+  "context_limit_tokens": null,
+  "verified_at": "2026-10-07",
+  "known_incompatibilities": [
+    "🔴 官方定于 2026-10-21 10:00(北京时间)下线 mimo-v2.5 与 mimo-v2.5-pro。本模板已换成 v2.6;自己的覆盖模板或配置里还写着 v2.5 的要改。",
+    "深度思考默认开启;带工具调用的多轮对话里,之前回复的思考内容(reasoning_content)必须原样传回,否则接口报 400。产品的工具循环整条回传。",
+    "官方文档的结构化输出只写了 json_object 模式 ⇒ 本模板把结构要求写进提示词,产物照常由产品自己校验。"
+  ],
+  "notes": [
+    "2026-10-07 按官方文档(mimo.mi.com/docs)核实:按量付费地址 https://api.xiaomimimo.com/v1(key 形如 sk-…)。Token Plan 订阅用户改用 https://token-plan-cn.xiaomimimo.com/v1 和订阅给的 key(tp-… / ttp-…):把本模板复制到 <数据根>/providers/mimo.json 改 base_url。",
+    "模型:mimo-v2.6-flash(快,适合高频、大批量,本模板默认)/ mimo-v2.6-pro(官方推荐给复杂、长任务和研究类工作,更准但更慢)/ mimo-v2.6-pro-ultraspeed。上下文 1M、最长输出 128K。",
+    "实测历史:2026-09-04 用 mimo-v2.5 在 Token Plan 地址上实测 Chat Completions 五项全过(普通对话 / 工具调用 / 多轮 / 服务端 json_schema / 坏 key 报 401 且不回显)。v2.5 即将下线、v2.6 还没实测 ⇒ 本模板暂按「未实测」处理(没有 direct 段),重测通过后再补回。",
+    "⚠️ 对每分钟请求数敏感:多个批量任务挤在同一分钟会 429。v2.5 时期实测 profile 阶段单轮约 4.7 分钟。"
+  ]
+}

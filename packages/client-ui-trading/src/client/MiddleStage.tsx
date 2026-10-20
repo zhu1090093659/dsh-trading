@@ -7,11 +7,12 @@
  * 中栏 tab。同一时刻仅挂载活动视图（切换即卸载，图表态由 store/localStorage
  * 承接，后台视图零渲染开销）。
  */
-import { useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { ComponentType } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { readJson, writeJson } from './store.ts'
 import { stageViews } from './stage-views.ts'
+import { STAGE_VIEW_NAVIGATE_EVENT } from './stage-views.ts'
 import { QuoteStage } from './QuoteStage.tsx'
 import type { MarketLocaleKey } from './contract.ts'
 import type { ChartState } from './chart-state.ts'
@@ -75,16 +76,59 @@ export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setInd
   // （readStageView 净化 localStorage 脏值）。
   useSyncExternalStore(stageViews.subscribe, stageViews.getVersion)
   const [view, setView] = useState<string>(readStageView)
+  useEffect(() => {
+    document.body.dataset.dshtradingStageView = view
+    return () => { delete document.body.dataset.dshtradingStageView }
+  }, [view])
 
   const switchView = (next: string): void => {
     setView(next)
     writeStageView(next)
   }
 
+  /**
+   * 外部导航通道（2026-10-19）：左侧一级导航条与其它插件要求切视图时不点 DOM
+   * 文案，而是派发 `dshtrading:stage-view`（detail.view）；同时听 storage 事件，
+   * 让另一个标签页/窗口写 `dshtrading.stage.v1` 后当前页也跟着走。
+   *
+   * 两道护栏：只接受已注册 id（未知 id 静默忽略，中栏不会被切黑）；保留 id
+   * 之外的装载失败由 registry 判定，本组件不记忆非法值。
+   */
+  useEffect(() => {
+    const go = (raw: unknown): void => {
+      if (!isRegisteredView(raw)) return
+      const next = raw as string
+      setView(next)
+      writeStageView(next)
+    }
+    const onNavigate = (event: Event): void => {
+      const detail = (event as CustomEvent<{ view?: unknown }>).detail
+      go(detail?.view)
+    }
+    const onStorage = (event: StorageEvent): void => {
+      if (event.key !== STAGE_KEY) return
+      if (event.newValue === null) {
+        go('quote')
+        return
+      }
+      try {
+        go(JSON.parse(event.newValue))
+      } catch {
+        go('quote')
+      }
+    }
+    window.addEventListener(STAGE_VIEW_NAVIGATE_EVENT, onNavigate)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener(STAGE_VIEW_NAVIGATE_EVENT, onNavigate)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [])
+
   return (
     <div className={css.root} data-dshtrading-middle-stage="">
-      <div className={css.tabs} role="tablist" aria-label="stage">
-        {stageViews.list().map(definition => (
+      {view !== 'research' && <div className={css.tabs} role="tablist" aria-label="stage">
+        {stageViews.list().filter(definition => definition.id !== 'research').map(definition => (
           <button
             key={definition.id}
             type="button"
@@ -97,7 +141,7 @@ export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setInd
             {t(definition.titleKey)}
           </button>
         ))}
-      </div>
+      </div>}
       {/* 视图互斥挂载：切走即卸载（图表重建成本 < 双图常驻的内存/重绘成本）。
           prop 面沿用 QuotePane→QuoteStage 的 inject 传递约定（cast 收敛在边界）。
           quote 视图 = shell 内建（QuoteStage 直引——需要中栏全部指标动作面）；

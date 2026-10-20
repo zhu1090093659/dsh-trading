@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext", "moduleResolution": "bundler", "jsx": "react-jsx",
+    "types": ["vite/client", "node"], "strict": true,
+    "noFallthroughCasesInSwitch": true, "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true, "isolatedModules": true, "resolveJsonModule": true,
+    "skipLibCheck": true, "noEmit": true, "allowImportingTsExtensions": true,
+    "baseUrl": ".", "paths": { "@/*": ["./src/verticals/finance/*"] }
+  },
+  "include": ["src", "mount.tsx"]
+}

@@ -1,0 +1,10 @@
+// Original Phoenix Tree AI header mark, verified at https://phoenixtree.ai/ on 2026-09-06.
+// Inline geometry keeps the brand available offline. The enclosing home link supplies its name.
+export function PhoenixTreeLogo({ className }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 674.547814 1040.507203"
+    aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+    <g transform="translate(-24.273153,1064.507203) scale(0.1,-0.1)" fill="currentColor" stroke="none">
+      <path d="M3655 10625c-1709-174-2954-1330-3309-3075-93-461-138-1274-71-1300 47-18 63-2 114 104 359 761 879 1181 2401 1937 937 466 1210 623 1501 865 148 123 196 95 138-79-108-324-375-658-769-961-237-183-440-313-1088-700-1195-714-1634-1187-1886-2034-276-925-244-2639 89-4829 25-161 45-297 45-303 0-7 121-10 358-10 359 0 359 0 392 163 161 796 515 1690 893 2257 506 759 964 1124 2032 1622 1526 712 2269 1628 2460 3038 276 2031-1208 3517-3300 3305zm1373-3797c48-48-75-351-247-610-254-381-594-689-1206-1091-410-270-656-437-779-530-511-384-838-757-1119-1271-131-242-167-247-167-25 0 667 271 1326 733 1781 338 334 682 557 1587 1033 478 251 760 422 977 591 160 126 197 146 221 122z" />
+    </g>
+  </svg>;
+}

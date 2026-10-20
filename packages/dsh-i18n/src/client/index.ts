@@ -21,6 +21,7 @@ import { zh as marketZh } from '@dshtrading/client-ui-trading/locales'
 import { zh as settingsZh } from '@dshtrading/client-ui-settings/locales'
 import { zh as strategiesZh } from '@dshtrading/client-ui-strategies/locales'
 import { zh as knowledgeZh } from '@dshtrading/client-ui-knowledge/locales'
+import { zh as researchZh } from '@dshtrading/client-ui-research/locales'
 import { zh as updaterZh } from '@dshtrading/client-ui-updater/locales'
 
 /** Required services：宿主 locale 服务（语言目录 + 词典注册表）。 */
@@ -32,6 +33,7 @@ export const PACKAGES: ReadonlyArray<readonly [ns: string, dict: Record<string, 
   ['dshtrading.settings', settingsZh],
   ['dshtrading.strategies', strategiesZh],
   ['dshtrading.knowledge', knowledgeZh],
+  ['dshtrading.research', researchZh],
   ['dshtrading.updater', updaterZh],
 ]
 

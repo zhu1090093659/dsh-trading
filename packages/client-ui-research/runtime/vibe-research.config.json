@@ -1,0 +1,6 @@
+{
+  "python": null,
+  "provider": { "profile": null },
+  "paths": { "skills": ".agents/skills", "calc_cli": "calc/cli.py", "data_root": ".local" },
+  "defaults": { "model": null, "max_retries": 2, "gate_retries": 2, "turn_timeout_min": 30, "fetch_timeout_sec": 180 }
+}

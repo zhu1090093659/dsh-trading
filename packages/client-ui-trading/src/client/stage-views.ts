@@ -56,6 +56,19 @@ export interface StageViewRegistry {
 /** shell 保留 id：行情视图是 registry 的内建种子条目，第三方不得占用。 */
 export const RESERVED_STAGE_VIEW_ID = 'quote'
 
+/**
+ * 跨包导航事件名（window CustomEvent，`detail = { view: string }`）。
+ *
+ * 为什么需要它：注册面只回答「有哪些视图」，不回答「切到哪个视图」。左侧一级
+ * 导航条（多股同列插件的 自选 / ETF / 行情 条带）与其它外部入口要导航时，不该
+ * 去点 DOM 里的 tab 文案（改文案即失效）。shell 在 MiddleStage 监听本事件，
+ * 只接受已注册且非保留的 id——未知 id 静默忽略，不把中栏切黑。
+ *
+ * 配套的持久化键 `dshtrading.stage.v1` 与本事件同源：调用方先写
+ * localStorage（跨刷新保留），再派发事件（当前页立即生效）。
+ */
+export const STAGE_VIEW_NAVIGATE_EVENT = 'dshtrading:stage-view'
+
 export function createStageViewRegistry(): StageViewRegistry {
   /** 注册序号 = 次级排序键（order 相同时先到先得）。 */
   const entries = new Map<string, { definition: StageViewDefinition; seq: number }>()

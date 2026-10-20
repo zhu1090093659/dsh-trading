@@ -1,0 +1,45 @@
+{
+  "_comment": "板块·环节骨架（开源版单一来源）。零具体标的：nodes 只有产业链环节名。verified=true 者环节已核实（来自做透的板块）；false 者为占位，待实时核实补全（禁止靠模型记忆编）。用户可在本地 my-watchlist.json 挂自己的标的，不进仓库。每个板块都配分步研究提示词（lib/sectorPrompts.ts），板块内容由用户自己的 AI 查资料产出。",
+  "indices": {
+    "aShare": ["上证指数", "深证成指", "创业板指", "沪深300"],
+    "us": ["道琼斯", "纳斯达克", "标普500"]
+  },
+  "sectors": [
+    {
+      "key": "humanoid",
+      "label": "人形机器人",
+      "icon": "Bot",
+      "tagline": "从减速器到灵巧手，AI 具身智能的物理载体",
+      "hot": true,
+      "verified": true,
+      "nodes": ["谐波减速器", "行星滚柱丝杠", "无框力矩电机", "灵巧手", "六维力传感器", "具身大模型"]
+    },
+    {
+      "key": "ai-computing",
+      "label": "AI 算力",
+      "icon": "Cpu",
+      "tagline": "算力基建的产业链——芯片、光互连、封装、散热",
+      "hot": true,
+      "verified": true,
+      "nodes": ["AI芯片", "光模块", "CPO光互连", "HBM存储", "先进封装", "PCB", "液冷散热"]
+    },
+    { "key": "hbm", "label": "HBM", "icon": "MemoryStick", "tagline": "高带宽存储——AI 芯片的内存瓶颈", "hot": true, "verified": false, "nodes": [] },
+    { "key": "cpo", "label": "光互联", "icon": "Cable", "tagline": "光电共封装（CPO）——突破铜互连的带宽墙", "hot": true, "verified": false, "nodes": [] },
+    { "key": "pcb", "label": "PCB", "icon": "CircuitBoard", "tagline": "AI 服务器的骨架公路——高速板材、铜箔与高多层板", "hot": true, "verified": false, "nodes": [] },
+    { "key": "semiconductor", "label": "半导体国产替代", "icon": "Microchip", "tagline": "设备、材料、EDA、制造的自主链条", "hot": true, "verified": false, "nodes": [] },
+    { "key": "solid-state-battery", "label": "固态电池", "icon": "BatteryFull", "tagline": "下一代电池的材料与工艺路线", "hot": true, "verified": false, "nodes": [] },
+    { "key": "low-altitude", "label": "低空经济", "icon": "Plane", "tagline": "eVTOL、空管、基建与运营", "hot": true, "verified": false, "nodes": [] },
+    { "key": "smart-driving", "label": "智能驾驶", "icon": "Car", "tagline": "感知、算力、线控与整车", "hot": true, "verified": false, "nodes": [] },
+    { "key": "innovative-drug", "label": "创新药", "icon": "Pill", "tagline": "靶点、临床、CXO 与出海", "hot": true, "verified": false, "nodes": [] },
+    { "key": "power-grid", "label": "电网与特高压", "icon": "UtilityPole", "tagline": "输配电设备与新型电力系统", "hot": false, "verified": false, "nodes": [] },
+    { "key": "defense", "label": "军工", "icon": "Shield", "tagline": "航空、航天、船舶与信息化", "hot": false, "verified": false, "nodes": [] },
+    { "key": "fusion", "label": "可控核聚变", "icon": "Atom", "tagline": "磁约束、超导与第一壁材料", "hot": true, "verified": false, "nodes": [] },
+    { "key": "business-space", "label": "商业航天", "icon": "Rocket", "tagline": "火箭、卫星制造与卫星互联网", "hot": true, "verified": false, "nodes": [] },
+    { "key": "ai-pharma", "label": "生物医药", "icon": "Dna", "tagline": "创新药、AI 制药与生物技术", "hot": true, "verified": false, "nodes": [] },
+    { "key": "resources", "label": "资源卡口", "icon": "Pickaxe", "tagline": "稀土、锗、铟等被卡的关键资源", "hot": false, "verified": false, "nodes": [] },
+    { "key": "ai-application", "label": "AI 应用", "icon": "BrainCircuit", "tagline": "大模型落地的应用与 Agent", "hot": true, "verified": false, "nodes": [] },
+    { "key": "ai-hardware", "label": "AI 硬件", "icon": "Glasses", "tagline": "端侧、AI 眼镜与消费终端", "hot": true, "verified": false, "nodes": [] },
+    { "key": "energy-storage", "label": "储能", "icon": "BatteryCharging", "tagline": "电化学储能与电网侧调峰", "hot": false, "verified": false, "nodes": [] },
+    { "key": "data-element", "label": "数据要素", "icon": "Database", "tagline": "数据确权、交易与流通基建", "hot": false, "verified": false, "nodes": [] }
+  ]
+}

@@ -51,6 +51,12 @@
     # headless 宿主解析为空 apply host 行，无害。
     - id: dsh-trading-client-ui-knowledge
       name: '@dshtrading/client-ui-knowledge'
+    # Research 原生工作台：最左侧一级导航进入，中栏替换行情/策略/知识库区域。
+    # 前端以 ShadowRoot + MemoryRouter 挂载；宿主内执行迁入的研究、取数、计算与
+    # 资料库接口。统一 /dshtrading/api/research/ 前缀及 browser-auth 鉴权，
+    # 不依赖 Vibe-Research UI/API 服务。headless 宿主无 web 服务时挂起无害。
+    - id: dsh-trading-client-ui-research
+      name: '@dshtrading/client-ui-research'
     # 大师金句活动词语言包（2026-09-05）：client 半注册「中文 · 大师金句」
     # （zh-masters，fallback zh）语言目录项 + 覆盖宿主 chat.deepDiving 单键
     # （输入框上方轮次状态行「深度求索中...」）为利弗莫尔/巴菲特/索罗斯等

@@ -1,4 +1,33 @@
 /* MarketDock —— 左侧自选停靠面板容器（支持富途式展开与折叠竖条）。 */
+.primaryNav { display: flex; flex: none; height: 34px; border-bottom: 1px solid var(--dsw-futu-border-default, #e3e6ea); }
+.primaryNav button { flex: 1; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--dsw-futu-text-secondary, #5f6672); font-size: 12px; cursor: pointer; }
+.primaryNav button[aria-current='page'] { color: var(--dsw-futu-accent, #2563eb); border-bottom-color: currentColor; background: var(--dsw-futu-accent-subtle, #eff6ff); }
+.primaryNav button:focus-visible { outline: 2px solid var(--dsw-futu-accent, #2563eb); outline-offset: -3px; }
+
+.researchSidebar { display: flex; flex: 1; min-height: 0; flex-direction: column; padding: 14px 10px 10px; color: var(--dsw-futu-text-primary, #1a1e24); }
+.researchHeading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 16px; }
+.researchEyebrow { margin: 0 0 4px; color: var(--dsw-futu-text-tertiary, #858c96); font-size: 10px; font-weight: 650; letter-spacing: .14em; }
+.researchHeading h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.researchFold, .researchItem, .researchUtility { appearance: none; border: 0; cursor: pointer; font: inherit; }
+.researchFold { display: inline-flex; width: 30px; height: 30px; flex: none; align-items: center; justify-content: center; border-radius: 6px; background: transparent; color: var(--dsw-futu-text-secondary, #5f6672); }
+.researchFold:hover, .researchUtility:hover { background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, .05)); color: var(--dsw-futu-text-primary, #1a1e24); }
+.researchNav { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 3px; overflow-y: auto; }
+.researchGroup { flex: none; }
+.researchRow { display: flex; align-items: center; }
+.researchItem { display: flex; min-width: 0; min-height: 38px; flex: 1; align-items: center; gap: 11px; padding: 0 9px; border-radius: 7px; background: transparent; color: var(--dsw-futu-text-secondary, #5f6672); text-align: left; font-size: 13px; }
+.researchItem:hover, .researchItem[aria-current='page'] { background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, .05)); color: var(--dsw-futu-text-primary, #1a1e24); }
+.researchItem[aria-current='page'] { font-weight: 650; }
+.researchExpand { display: inline-flex; width: 26px; height: 30px; flex: none; align-items: center; justify-content: center; border: 0; border-radius: 5px; background: transparent; color: var(--dsw-futu-text-tertiary, #858c96); cursor: pointer; font-size: 18px; }
+.researchExpand:hover { background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, .05)); color: var(--dsw-futu-text-primary, #1a1e24); }
+.researchChildren { display: flex; flex-direction: column; margin: 1px 0 4px 18px; padding-left: 9px; border-left: 1px solid var(--dsw-futu-border-default, #e3e6ea); }
+.researchChild { display: flex; min-height: 34px; align-items: center; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--dsw-futu-text-secondary, #5f6672); cursor: pointer; text-align: left; font: inherit; font-size: 12px; }
+.researchChild:hover, .researchChild[aria-current='page'] { background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, .05)); color: var(--dsw-futu-text-primary, #1a1e24); }
+.researchChild[aria-current='page'] { box-shadow: inset 2px 0 var(--dsw-futu-accent, #f05a28); font-weight: 650; }
+.researchAi { width: 100%; margin-bottom: 8px; }
+.researchMark { display: inline-flex; width: 22px; height: 22px; flex: none; align-items: center; justify-content: center; border-radius: 6px; background: var(--dsw-futu-bg-surface, #f2f3f5); color: var(--dsw-futu-text-secondary, #5f6672); font-size: 11px; font-weight: 650; }
+.researchFooter { display: flex; flex-direction: column; gap: 2px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--dsw-futu-border-default, #e3e6ea); }
+.researchUtility { position: relative; display: flex; height: 34px; align-items: center; gap: 10px; padding: 0 9px; border-radius: 7px; background: transparent; color: var(--dsw-futu-text-secondary, #5f6672); text-align: left; font-size: 12px; }
+.researchBadge { position: absolute; top: 7px; left: 21px; width: 7px; height: 7px; border: 2px solid var(--dsw-futu-bg-base, white); border-radius: 50%; background: #ef4444; }
 
 .dock {
   position: fixed;

@@ -32,6 +32,7 @@
     "@dshtrading/client-ui-indicators": "workspace:^",
     "@dshtrading/client-ui-strategies": "workspace:^",
     "@dshtrading/client-ui-knowledge": "workspace:^",
+    "@dshtrading/client-ui-research": "workspace:^",
     "@dshtrading/client-ui-masters-quotes": "workspace:^",
     "@dshtrading/client-ui-updater": "workspace:^",
     "@dshtrading/dsh-i18n": "workspace:^",

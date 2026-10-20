@@ -1,0 +1,19 @@
+{
+  "id": "openai-api",
+  "name": "OpenAI(官方 API)",
+  "base_url": "https://api.openai.com/v1",
+  "env_key": "OPENAI_API_KEY",
+  "default_model": "gpt-5.4",
+  "context_limit_tokens": null,
+  "verified_at": "2026-10-07",
+  "known_incompatibilities": [
+    "🔴 OpenAI 官方:从 GPT-5.4 起,Chat Completions 只在推理强度为 none 时支持工具调用;GPT-6 Astra 与 GPT-6.1 Sol 在 Chat Completions 上完全不能调工具。研究的每个阶段和页面里的 AI 助手都要调工具 ⇒ 这条线路只能用默认推理强度就是 none 的模型。",
+    "本模板默认 gpt-5.4:官方写明它默认推理强度 none,能调工具,代价是不做推理。gpt-5.5 与 gpt-5.6 系列默认推理强度 medium,产品不传 reasoning_effort ⇒ 换上去调工具会被接口拒绝;GPT-6 系列同理。",
+    "想用 GPT-6 或带推理的 GPT-5.x 做研究:改选「Codex 订阅」(cli-codex),用你自己在本机用 ChatGPT 账号登录的 Codex CLI(codex login;产品的 Codex 卡片只认 ChatGPT 登录,不认 Codex 里配的 API key),它走 OpenAI 自家的 Responses 协议。"
+  ],
+  "notes": [
+    "2026-10-07 按 OpenAI 官方文档(developers.openai.com)核实:Migrate to Responses 指南原话「Starting with GPT-5.4, Chat Completions does not support tool calling with reasoning_effort values other than none」;GPT-6 指南写明 Astra 与 6.1 Sol 调工具需要 Responses;GPT-5.4 模型页写明 reasoning.effort 默认 none。",
+    "这条线路只认 API key,不支持 ChatGPT 订阅登录(订阅请用「Codex 订阅」)。",
+    "产品还没用真实 key 实测(没有 direct 段 = 未实测)。"
+  ]
+}

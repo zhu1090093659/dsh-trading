@@ -26,10 +26,12 @@
       "types": "./lib/market-tools.d.ts",
       "default": "./lib/market-tools.js"
     },
+    "./opencode-session": "./opencode-session.mjs",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
+    "opencode-session.mjs",
     "lib",
     "assets",
     "cordis.patch.yml"

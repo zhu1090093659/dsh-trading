@@ -517,6 +517,8 @@ export type MarketLocaleKey =
   | 'stage.bot'
   | 'stage.flash'
   | 'stage.macro'
+  | 'stage.research'
+  | 'nav.primary'
   | 'files.open'
   | 'flash.searchPlaceholder'
   | 'flash.search'

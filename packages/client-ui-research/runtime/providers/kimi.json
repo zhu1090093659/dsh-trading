@@ -1,0 +1,18 @@
+{
+  "id": "kimi",
+  "name": "Kimi(月之暗面官方 API)",
+  "base_url": "https://api.moonshot.cn/v1",
+  "env_key": "MOONSHOT_API_KEY",
+  "default_model": "kimi-k3",
+  "context_limit_tokens": null,
+  "verified_at": "2026-10-07",
+  "known_incompatibilities": [
+    "kimi-k3 的推理强度由请求顶层的 reasoning_effort 控制(low / high / max,默认 max)。产品不传这个参数 ⇒ 按 max 跑:更准,但更慢、更费 token。想快一点就把模型换成 kimi-k2.6。"
+  ],
+  "notes": [
+    "2026-10-07 按官方文档(platform.moonshot.cn)核实:地址 https://api.moonshot.cn/v1、环境变量名 MOONSHOT_API_KEY、模型名。国际站地址没有核实,海外账号以控制台给的地址为准。",
+    "模型:kimi-k3(最新,1M 上下文,本模板默认)/ kimi-k2.7-code、kimi-k2.7-code-highspeed(编程向)/ kimi-k2.6(256K,思考与非思考两种模式)。",
+    "v1 模板走阿里云百炼托管;v2 只用 Chat Completions,直接走官方。",
+    "产品还没用真实 key 实测(没有 direct 段 = 未实测)。"
+  ]
+}

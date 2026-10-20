@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/simonlin1212/Vibe-Research",
+  "commit": "94f61bf517393f80e88e974c224ac20b774ff990",
+  "license": "MIT",
+  "integration": "Sources owned and executed inside dsh-trading; no external Vibe-Research service."
+}

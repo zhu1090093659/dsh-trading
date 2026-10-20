@@ -29,6 +29,7 @@
     "@dshtrading/client-ui-settings": "workspace:^",
     "@dshtrading/client-ui-strategies": "workspace:^",
     "@dshtrading/client-ui-knowledge": "workspace:^",
+    "@dshtrading/client-ui-research": "workspace:^",
     "@dshtrading/client-ui-updater": "workspace:^"
   },
   "peerDependencies": {

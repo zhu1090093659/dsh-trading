@@ -1,0 +1,15 @@
+{
+  "id": "glm",
+  "name": "智谱 GLM(官方开放平台)",
+  "base_url": "https://open.bigmodel.cn/api/paas/v4",
+  "env_key": "ZAI_API_KEY",
+  "default_model": "glm-5.3",
+  "context_limit_tokens": null,
+  "verified_at": "2026-10-07",
+  "notes": [
+    "2026-10-07 按智谱官方文档(docs.bigmodel.cn)核实:OpenAI 兼容地址 https://open.bigmodel.cn/api/paas/v4,官方示例的环境变量名是 ZAI_API_KEY。",
+    "模型:glm-5.3(旗舰,本模板默认)/ glm-5.3-flash、glm-5.3-flashx(更快更便宜)/ glm-5.2。",
+    "v1 模板走阿里云百炼托管的 GLM,因为旧引擎只认 Responses 协议而智谱官方没有;v2 只用 Chat Completions,直接走官方。仍想用百炼的 key:选 qwen 模板,把模型名换成百炼控制台里的 GLM 模型名。",
+    "产品还没用真实 key 实测(没有 direct 段 = 未实测)。"
+  ]
+}

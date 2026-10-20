@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "description": "标的 → 档案索引。key = market:symbol,market ∈ SH | SZ | BJ(如 SH:600000 / SZ:000001);value = {dir: 相对 knowledge/companies/ 的目录名, as_of: 档案最近更新日(Asia/Shanghai), status: fresh | stale | refuted}。状态枚举与档案模板 frontmatter 一致;正式 JSON Schema 随编排器一起定义。",
+  "companies": {}
+}

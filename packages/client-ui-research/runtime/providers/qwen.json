@@ -1,0 +1,18 @@
+{
+  "id": "qwen",
+  "name": "通义千问(阿里云百炼)",
+  "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "env_key": "DASHSCOPE_API_KEY",
+  "default_model": "qwen3.8-max",
+  "context_limit_tokens": null,
+  "verified_at": "2026-10-07",
+  "known_incompatibilities": [
+    "API key 分地域:北京的 key 只能配北京的地址。换地域要同时换 base_url 和 key。"
+  ],
+  "notes": [
+    "2026-10-07 按阿里云官方文档核实:本模板用北京地域的通用域名 dashscope.aliyuncs.com,官方写明「仍可正常使用」,填好 key 就能跑。官方更推荐业务空间专属域名 https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1(更快更稳);想换就把本模板复制到 <数据根>/providers/qwen.json,把 base_url 改成带你自己业务空间 ID 的地址。",
+    "其他地域:新加坡 https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1(旧域名 dashscope-intl.aliyuncs.com 仍可用)· 弗吉尼亚 https://dashscope-us.aliyuncs.com/compatible-mode/v1 · 东京 https://{WorkspaceId}.ap-northeast-1.maas.aliyuncs.com/compatible-mode/v1。",
+    "模型:qwen3.8-max(旗舰,本模板默认)/ qwen3.7-plus / qwen3.8-flash(快)。百炼也托管 DeepSeek、Kimi、GLM、MiMo 等模型,用同一个百炼 key 改模型名即可(以控制台里的模型名为准)。",
+    "产品还没用真实 key 实测(没有 direct 段 = 未实测)。"
+  ]
+}

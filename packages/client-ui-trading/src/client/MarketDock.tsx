@@ -11,6 +11,9 @@
 import { useEffect, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { MarketSidebar } from './MarketSidebar.tsx'
+import { ResearchSidebar, RESEARCH_NAV_ITEMS, useResearchRoute } from './ResearchSidebar.tsx'
+import { PrimaryNavigation } from './PrimaryNavigation.tsx'
+import { STAGE_VIEW_NAVIGATE_EVENT } from './stage-views.ts'
 import type { FoldStore } from './fold-store.ts'
 import { IconFoldPanel, IconQuotes, IconSettings, IconUpdate, IconWatchlist } from './icons.tsx'
 import { fetchUpdateBadge } from './api.ts'
@@ -48,6 +51,8 @@ export type MarketDockProps =
 export function MarketDock(props: MarketDockProps) {
   const { t, useMarketFolded, toggleFold, openSettings } = props
   const folded = useMarketFolded(value => value)
+  const [research, setResearch] = useState(document.body.dataset.dshtradingStageView === 'research')
+  const activeResearchRoute = useResearchRoute()
   const [left, setLeft] = useState(0)
   // 软件更新入口（自动更新插件）：窗口自定义事件与 updater 插件的对话框对接
   // （client 插件间不 import 彼此模块，更新可用性同款走 DOM 事件）。
@@ -64,6 +69,21 @@ export function MarketDock(props: MarketDockProps) {
     document.body.dataset.dshtradingMarketFolded = folded ? 'on' : 'off'
     return () => { delete document.body.dataset.dshtradingMarketFolded }
   }, [folded])
+
+  useEffect(() => {
+    const sync = (): void => setResearch(document.body.dataset.dshtradingStageView === 'research')
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-dshtrading-stage-view'] })
+    return () => observer.disconnect()
+  }, [])
+
+  // Research's section names need room to remain discoverable. Expand the dock
+  // when entering the workbench; if the user folds it again, keep all section
+  // shortcuts available in the icon rail.
+  useEffect(() => {
+    if (research && folded) toggleFold()
+  }, [research, folded, toggleFold])
 
   useEffect(() => {
     let disposed = false
@@ -142,7 +162,7 @@ export function MarketDock(props: MarketDockProps) {
           >
             <IconFoldPanel size={16} />
           </button>
-          <button
+          {!research && <button
             type="button"
             className={css.railButton}
             aria-label={t('tab.watch')}
@@ -151,8 +171,16 @@ export function MarketDock(props: MarketDockProps) {
             onClick={toggleFold}
           >
             <IconWatchlist size={16} />
-          </button>
+          </button>}
           <div className={css.railDivider} aria-hidden="true" />
+          {research ? RESEARCH_NAV_ITEMS.map(item => <button key={item.id} type="button" className={css.railButton}
+            aria-label={item.label} title={item.label} data-research-section={item.id}
+            aria-current={activeResearchRoute === item.path ? 'page' : undefined}
+            onClick={() => ResearchSidebar.navigate(item.id, item.path)}><span aria-hidden="true">{item.mark}</span></button>) :
+            <button type="button" className={css.railButton} aria-label={t('stage.research')} title={t('stage.research')}
+              onClick={() => window.dispatchEvent(new CustomEvent(STAGE_VIEW_NAVIGATE_EVENT, { detail: { view: 'research' } }))}>
+              <span aria-hidden="true">R</span>
+            </button>}
           <button
             type="button"
             className={css.railButton}
@@ -185,12 +213,15 @@ export function MarketDock(props: MarketDockProps) {
           </button>
         </div>
       ) : (
-        <MarketSidebar
+        <>
+        <PrimaryNavigation t={t} />
+        {research ? <ResearchSidebar onFold={toggleFold} onOpenSettings={openSettings} onOpenUpdater={openUpdater} updateAvailable={updateAvailable} /> : <MarketSidebar
           {...(props as unknown as import('./MarketSidebar.tsx').MarketSidebarProps)}
           onFold={toggleFold}
           updateAvailable={updateAvailable}
           onOpenUpdater={openUpdater}
-        />
+        />}
+        </>
       )}
     </div>
   )

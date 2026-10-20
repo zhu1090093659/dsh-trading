@@ -1,0 +1,19 @@
+{
+  "id": "deepseek",
+  "name": "DeepSeek(官方 API)",
+  "base_url": "https://api.deepseek.com",
+  "env_key": "DEEPSEEK_API_KEY",
+  "default_model": "deepseek-flash",
+  "context_limit_tokens": null,
+  "verified_at": "2026-10-07",
+  "known_incompatibilities": [
+    "思考模式默认开启;带工具调用时,之前每一轮回复里的思考内容(reasoning_content)必须原样传回,漏了接口直接报 400。产品的工具循环整条回传,自己改代码时别按字段重新拼消息。",
+    "官方 JSON 输出只有 json_object 模式,不支持按 JSON Schema 强制 ⇒ 结构要求写进提示词,产物照常由产品自己校验。"
+  ],
+  "notes": [
+    "2026-10-07 按官方文档(api-docs.deepseek.com)核实地址与模型名。",
+    "模型:deepseek-flash(DeepSeek-V4.1-Flash,官方推荐的名字,本模板默认)/ deepseek-v4-pro(更强、更慢)。旧名 deepseek-v4-flash 已退役但仍被接受,实际由 V4.1-Flash 应答。",
+    "官方数字:上下文 1M、最长输出 384K。",
+    "产品还没用真实 key 跑过这家的研究全流程(没有 direct 段 = 未实测)。"
+  ]
+}

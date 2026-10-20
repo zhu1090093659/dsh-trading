@@ -1,0 +1,196 @@
+{
+  "_doc": "产业标签表(第 13 层产业温度计的挂载依据)。编排器在 risk 阶段取数前,用 profile 阶段已拉到的行业 / 概念归属(fetch_profile.industry_em / industry_csrc、sw_industry 代码、em_concept_blocks.board_membership)判定:命中任一 **strong_keywords**,或(命中 weak_keywords 且申万代码命中 sw_prefixes)→ 挂载该 tag 的 thermometers。纯 ASCII 关键词(GPU / CPO / PCB…)按词边界匹配,中文按子串。没命中任何 tag 的公司不拉任何温度计(不是故障,是不相关)。每个 tag 的 guard 会原样进 risk 提示词。 headline_keywords = 第 16 层海外头条的相关性关键词(纯 ASCII 按词边界、中文按子串);headline_context_keywords 是泛词(OpenAI / capex / networking…)**必须与 headline_anchor_keywords 共现**才算相关(单独命中会把普通科技新闻误判成算力线索);缺该字段的标签不贡献关键词,一个都没有时头条不做相关性标注(unscored),绝不退回\"全都相关\"。 hiring_anchors = 第 17 层招聘信号的锚点公司(ats+slug+name+role);只收零鉴权的 Greenhouse / Ashby,Workday 系需三段配置不收,缺就如实写未接入(≠ 零岗位)。",
+  "tags": {
+    "ai_compute": {
+      "title": "AI 算力硬件链(光模块 / PCB / CCL / 服务器 / 算力芯片 / 液冷 / 交换机)",
+      "strong_keywords": [
+        "光模块",
+        "光通信",
+        "光通讯",
+        "光器件",
+        "光芯片",
+        "CPO",
+        "LPO",
+        "硅光",
+        "PCB",
+        "印制电路",
+        "覆铜板",
+        "CCL",
+        "算力",
+        "AI芯片",
+        "AI 芯片",
+        "GPU",
+        "液冷",
+        "HBM",
+        "英伟达",
+        "AI服务器",
+        "AI 服务器",
+        "高速连接器",
+        "光纤连接"
+      ],
+      "weak_keywords": [
+        "通信设备",
+        "通信网络设备",
+        "服务器",
+        "交换机",
+        "数据中心",
+        "IDC",
+        "存储芯片",
+        "电子元件"
+      ],
+      "sw_prefixes": [
+        "7302",
+        "2706"
+      ],
+      "thermometers": [
+        "tw_monthly_revenue",
+        "gpu_rent_thermometer",
+        "cn_commodity_futures"
+      ],
+      "guard": "台系月营收是英伟达链 + AWS Trainium 链的合成读数,必须与金像电差分后归因;GPU 租金 $3/卡时是设备折旧参考线不是保本线,前沿紧与商品松可同时为真;这些是产业链上下游的硬数据,用来印证或反证本公司的事实与估值,不是本公司的数据;大宗期货价是全市场定价不是本公司采购价,传导到毛利有季度级滞后并被长约与套保平滑,看 30 日方向别看单日",
+      "headline_keywords": [
+        "Nvidia",
+        "AI chip",
+        "AI chips",
+        "HBM",
+        "data center",
+        "datacenter",
+        "optical transceiver",
+        "transceiver",
+        "CPO",
+        "silicon photonics",
+        "PCB",
+        "hyperscaler",
+        "TSMC",
+        "Broadcom",
+        "liquid cooling",
+        "InfiniBand",
+        "GPU cluster",
+        "AI accelerator",
+        "cloud capex",
+        "AI capex"
+      ],
+      "headline_context_keywords": [
+        "OpenAI",
+        "Anthropic",
+        "AMD",
+        "GPU",
+        "capex",
+        "accelerator",
+        "inference",
+        "training",
+        "networking",
+        "switch",
+        "server"
+      ],
+      "headline_anchor_keywords": [
+        "chip",
+        "chips",
+        "semiconductor",
+        "data center",
+        "datacenter",
+        "cluster",
+        "compute",
+        "GPU",
+        "server",
+        "servers",
+        "capex",
+        "spending",
+        "fab",
+        "foundry",
+        "AI model",
+        "supply"
+      ],
+      "hiring_anchors": [
+        {
+          "name": "Lightmatter",
+          "ats": "greenhouse",
+          "slug": "lightmatter",
+          "role": "硅光 / 光互连"
+        },
+        {
+          "name": "Astera Labs",
+          "ats": "greenhouse",
+          "slug": "asteralabs",
+          "role": "互连芯片(PCIe / CXL)"
+        },
+        {
+          "name": "Cerebras",
+          "ats": "ashby",
+          "slug": "cerebras",
+          "role": "算力芯片"
+        },
+        {
+          "name": "OpenAI",
+          "ats": "ashby",
+          "slug": "openai",
+          "role": "需求侧(模型厂)"
+        },
+        {
+          "name": "xAI",
+          "ats": "greenhouse",
+          "slug": "xai",
+          "role": "需求侧(模型厂)"
+        },
+        {
+          "name": "Anthropic",
+          "ats": "greenhouse",
+          "slug": "anthropic",
+          "role": "需求侧(模型厂)"
+        }
+      ]
+    },
+    "storage_memory": {
+      "title": "存储 / 内存链(DRAM / NAND / HBM / 存储芯片模组)",
+      "strong_keywords": [
+        "DRAM",
+        "NAND",
+        "HBM",
+        "存储芯片",
+        "存储器",
+        "内存",
+        "闪存",
+        "固态硬盘",
+        "SSD",
+        "存储模组",
+        "半导体存储",
+        "NOR Flash",
+        "利基存储"
+      ],
+      "thermometers": [
+        "dram_spot_thermo"
+      ],
+      "guard": "DRAM / NAND 现货来自社区转录的 DRAMeXchange 存档不是官方一手;DRAM 现货是 HBM 的影子指标(产能排挤联动)不是 HBM 价格——HBM 走年度长约无公开现货价;只作方向性温度计,不得单独推出本公司业绩结论",
+      "_note": "刻意不给 weak_keywords / sw_prefixes(Codex commodity-r1):'半导体 / 集成电路' + 申万大类前缀 2706 会把纯设备、纯材料、模拟芯片公司也挂上 DRAM 温度计。必须出现存储专属信号才挂。",
+      "headline_keywords": [
+        "DRAM",
+        "NAND",
+        "HBM",
+        "memory chip",
+        "memory prices",
+        "SK Hynix",
+        "Micron",
+        "flash memory",
+        "storage chip",
+        "memory maker"
+      ],
+      "headline_context_keywords": [
+        "Samsung",
+        "memory",
+        "SSD",
+        "wafer"
+      ],
+      "headline_anchor_keywords": [
+        "chip",
+        "chips",
+        "semiconductor",
+        "price",
+        "prices",
+        "supply",
+        "shortage",
+        "fab",
+        "capacity"
+      ]
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "vibe-research-orchestrator",
+  "version": "2.2.2",
+  "private": true,
+  "description": "研究编排器:六阶段研究状态机 + 收工检查 + validator + 合规 gate;大脑可选本机订阅 Agent(Claude Code / Codex CLI / WorkBuddy)或任意 Chat Completions 模型 API",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "prerun": "node ../scripts/check-node.mjs",
+    "run": "node src/run.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "pretest": "node ../scripts/check-node.mjs",
+    "test": "node --test --experimental-test-coverage \"test/*.test.ts\""
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "ajv": "^8.17.1",
+    "mammoth": "^1.12.1",
+    "pdfjs-dist": "^6.2.108",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.0"
+  }
+}

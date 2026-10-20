@@ -1,0 +1,14 @@
+{
+  "_doc": "卡口事件分类表(确定性关键词筛子,移植自 Vibe-Trading-Simon 资讯中心「事件雷达」的 CHOKE_KW,按对单标的研究有用的类别拆细)。编排器在 risk / report 阶段取数后扫描公司自己的公告 / 新闻信封(scan_fields),命中任一关键词即打类别,写 fetch/_chokepoints.json;每条命中引用原证据 id,不产生新证据。规则:① 标题先按 ;；,，。 拆子句,keywords / negatives 在**同一子句**内判定(并列事项不互相否决);② 关键词以 `re:` 开头的是正则(中文需要上下文约束时用,如「签订」必须跟销售 / 供货 / 采购 / 框架 / 重大合同);③ 英文关键词按词边界;④ negatives 命中则该子句的该类别不算。",
+  "scan_fields": ["announcement_title", "news_title", "sec_fulltext_hit", "yahoo_news_title"],
+  "categories": {
+    "涨价": { "keywords": ["涨价", "提价", "调价函", "价格上调", "上调价格", "price increase", "price hike"], "negatives": ["不涨价", "未涨价", "不提价", "降价"], "decision_hint": "涨价函 = 供给紧的直接证据;看涨幅是否传导到毛利率(下季财报裁决)" },
+    "扩产": { "keywords": ["扩产", "扩建", "新建产能", "产能扩张", "re:(项目|产线|工厂|基地).{0,6}投产", "re:投产.{0,4}(公告|仪式|运行)", "达产", "产能释放", "re:募投项目.{0,8}(投产|达产|扩产|建设)", "新厂", "capacity expansion", "new plant", "new fab"], "negatives": ["终止", "取消", "暂缓", "延期", "中止"], "decision_hint": "扩产 = 管理层对需求的判断;扳机 = 投产时点与爬坡良率" },
+    "减产停产": { "keywords": ["停产", "减产", "断供", "停工", "停摆", "产线关停", "shutdown", "production halt", "suspend production"], "negatives": ["恢复生产", "复产", "复工"], "decision_hint": "上游减产 = 供给刚性变量;本公司停产 = 直接业绩风险" },
+    "订单合同": { "keywords": ["中标", "重大合同", "长协", "长期协议", "re:签订.{0,8}(销售|供货|采购|框架|重大|订单|供应|战略合作)", "re:(销售|供货|采购|供应).{0,4}(合同|协议|订单)", "re:(获得|取得|新增|收到).{0,6}订单", "supply agreement", "long-term agreement", "purchase order"], "negatives": ["终止合同", "解除合同", "取消订单", "募集资金", "监管协议", "三方协议", "租赁", "培训", "股权激励", "订单式"], "decision_hint": "订单 = 兑现路径;看金额占营收比与交付期" },
+    "认证导入": { "keywords": ["re:(通过|完成|获得|取得).{0,6}(认证|验证|审核)", "re:(客户|供应商|体系|产品).{0,2}认证", "送样", "批量供货", "进入供应链", "合格供应商", "客户导入", "量产交付", "qualification", "qualified supplier"], "negatives": ["未通过", "认证失败", "会计师", "资格认证考试"], "decision_hint": "送样 ≠ 订单;认证通过才是扳机(判定从严)" },
+    "收购合资": { "keywords": ["收购", "并购", "合资", "re:增资.{0,4}(扩股|入股|参股|控股|设立)", "re:(股权|资产)(转让|收购|出售)", "战略投资", "acquisition", "joint venture"], "negatives": ["终止收购", "终止合资", "回购", "募集资金"], "decision_hint": "看标的资产与本公司卡口的关系,不看溢价故事" },
+    "供需": { "keywords": ["供不应求", "缺货", "紧缺", "排产饱满", "产销两旺", "满产", "订单饱满", "sold out", "shortage", "lead time"], "negatives": ["供过于求", "过剩", "去库存"], "decision_hint": "供给侧信号:'sold out / lead time 拉长' 是预期差识别信号" },
+    "管制制裁": { "keywords": ["出口管制", "实体清单", "制裁", "反制", "关税", "禁令", "entity list", "export control", "sanction", "tariff"], "negatives": [], "decision_hint": "只当打折项:没被点名 ≠ 不受影响;'被建议列入' ≠ '已列入'(第 14 层管制与准入专管)" }
+  }
+}
