@@ -27,7 +27,11 @@
       "default": "./lib/market-tools.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./tool-index": {
+      "types": "./lib/tool-index.d.ts",
+      "default": "./lib/tool-index.js"
+    }
   },
   "files": [
     "lib",

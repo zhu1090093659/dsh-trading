@@ -161,6 +161,13 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
     // text OCR only. Every role carries it: all four presets read images.
     // Double-mounting stays rejected (see 2026-08-29-preset-plane-tool-rows): the host-plane
     // row keeps `disabled: true` in the Web bundle and no profile re-enables it.
+    // Tool-index row (2026-10-20, index-style surface): 参照 ~/.agents 的索引式
+    // 架构，把「场景 → 该用哪一族工具」的路由表做成一个常驻可见的入口工具，
+    // 其余 97 个工具的 schema 保持原样、按需调用。纯增量：不隐藏、不改名、
+    // 不动任何既有工具，因此对现有会话与 skill 引用零回归风险。
+    const indexRow: PresetRow[] = [
+      { id: 'dsh-trading-tool-index', name: '@dshtrading/base/tool-index' },
+    ]
     const toolRows: PresetRow[] = [
       { id: 'dsh-trading-tool-fs', name: '@deepseek-ai/dsh-tool-fs' },
     ]
@@ -198,6 +205,7 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
         ...delegation,
         ...skillRows,
         ...toolRows,
+        ...indexRow,
         ...shellRow,
       ],
     }
