@@ -35,7 +35,8 @@
     "./tool-surface": {
       "types": "./lib/tool-surface.d.ts",
       "default": "./lib/tool-surface.js"
-    }
+    },
+    "./tool-bootstrap": "./assets/tool-bootstrap.mjs"
   },
   "files": [
     "lib",

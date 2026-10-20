@@ -170,12 +170,43 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
     // SDK 子调用派发，因此对 trader/master 的审批闸门语义无影响，只是 wire 变小。
     // 先给两个只读、调用链简单的 specialist 开；trader/master 保持 native，
     // 便于逐笔审批在对话里可见。改一个词即可切换。
+    // researcher 由 tool-bootstrap 的两阶段接管（promotedPresentation: 'code'），
+    // 这里不再给它静态 ptc——同一呈现位两套机制会互相覆盖。
     const PRESENTATION: Record<string, 'native' | 'ptc'> = {
       trader: 'native',
-      'instrument-researcher': 'ptc',
+      'instrument-researcher': 'native',
       'risk-reviewer': 'ptc',
       master: 'native',
     }
+    // 两阶段工具面（2026-10-20，完整移植「梁神模式」）：首轮只暴露交易版
+    // 最小集（台账 + 路由），稳定后晋升并切 PTC（promotedPresentation: 'code'）。
+    // 与梁神的差异：梁神 phase 1 是 bash + editor（编码场景 bash 可兜底一切）；
+    // 交易场景第一轮常见「我有什么仓 / 连了哪些市场」，所以最小集换成
+    // holdings_list + routing_get —— 两个都极轻，且不涉及任何下单面。
+    // researcher 没有 bash（shellRow 只给 master），故 shellTools 留空。
+    const BOOTSTRAP: Record<string, Record<string, unknown> | null> = {
+      'instrument-researcher': {
+        shellTools: [],
+        commonTools: ['holdings_list', 'routing_get'],
+        messageSources: ['user', 'goal'],
+        anchorGate: true,
+        maxBootstrapSteps: 4,
+        promoteAfterFirstResponse: true,
+        bootstrapMaxTokens: 1024,
+        compactionTools: ['holdings_list', 'routing_get', 'knowledge_search', 'instruments_search'],
+        deferredSources: ['agent-instructions', 'skill-catalog'],
+        deferredGraceSteps: 1,
+        promotedPresentation: 'code',
+        instructionHint: true,
+      },
+      trader: null,
+      'risk-reviewer': null,
+      master: null,
+    }
+    const bootstrap = BOOTSTRAP[id]
+    const bootstrapRow: PresetRow[] = bootstrap === null || bootstrap === undefined
+      ? []
+      : [{ id: `dsh-trading-${id}-bootstrap`, name: '@dshtrading/base/tool-bootstrap', config: bootstrap }]
     const presentationRow: PresetRow[] = [
       {
         id: `dsh-trading-${id}-presentation`,
@@ -244,6 +275,7 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
         ...indexRow,
         ...surfaceRow,
         ...presentationRow,
+        ...bootstrapRow,
         ...shellRow,
       ],
     }

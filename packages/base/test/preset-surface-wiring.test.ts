@@ -20,12 +20,28 @@ describe('preset tool surface & presentation wiring', () => {
     expect(source).toContain('dsh-trading-tool-index')
   })
 
-  it('presentation mode 表与预期一致（只读 specialist 开 ptc）', () => {
+  it('presentation 表：researcher 交棒 bootstrap,risk-reviewer 静态 ptc', () => {
     const block = /const PRESENTATION[^{]*\{([^}]*)\}/.exec(source)?.[1] ?? ''
     expect(block).toContain("trader: 'native'")
-    expect(block).toContain("'instrument-researcher': 'ptc'")
+    // researcher 由 tool-bootstrap 的 promotedPresentation 接管,不再静态 ptc
+    expect(block).toContain("'instrument-researcher': 'native'")
     expect(block).toContain("'risk-reviewer': 'ptc'")
     expect(block).toContain("master: 'native'")
+  })
+
+  it('两阶段 bootstrap 只给 researcher,且 phase1 是交易版最小集', () => {
+    expect(source).toContain("'instrument-researcher': {")
+    expect(source).toContain("commonTools: ['holdings_list', 'routing_get']")
+    expect(source).toContain("promotedPresentation: 'code'")
+    expect(source).toContain("shellTools: []")
+    const boot = /const BOOTSTRAP[\s\S]*?\n    \}/.exec(source)?.[0] ?? ''
+    expect(boot).toContain('trader: null')
+    expect(boot).toContain('master: null')
+  })
+
+  it('bootstrap 行顺序在 shell 之前', () => {
+    const plugins = /plugins:\s*\[(.*?)\]\s*,\s*\}\s*\}\)/s.exec(source)?.[1] ?? ''
+    expect(plugins.indexOf('...bootstrapRow')).toBeLessThan(plugins.indexOf('...shellRow'))
   })
 
   it('行顺序：index -> surface -> presentation -> shell', () => {

@@ -24,7 +24,7 @@ Status: proposed
 - 19 个族级场景说明；未登记的新族回落为原前缀，不报错。
 - 纯增量：不隐藏、不改名、不动任何既有工具。现有会话、skill 引用、用户肌肉记忆全部不受影响。
 
-**第二级（未实施，待批准）——折叠注入面**
+**第二级（已实施 2026-10-20）——折叠注入面**
 
 宿主已内置两条可用通路，二者都不需要改 dsh-trading 的 97 个工具：
 
@@ -33,7 +33,17 @@ Status: proposed
 | `@deepseek-ai/dsh-agent-tool-presentation` | 每预设一行 `mode: native \| ptc \| both`；`ptc` 只发 `run_code` ＋生成的 TypeScript SDK，其余按 SDK 子调用派发 | 模型改用代码式调用，全部既有 prompt/skill 的调用习惯要改 |
 | `ToolRestriction { allow, deny }` | 每作用域过滤全局工具可见性；"allow 里的保留，其余移除" | 需要把族选择变成会话内动作（切换 allowlist），行为更接近 `~/.agents` 的「命中才读」 |
 
-第一级落地后，第二级可以按族灰度：先折叠使用频率最低、族内工具最多的几个市场族，观察是否出现「模型不知道有这族」的漏调，再扩大。
+第一级落地后，第二级已按用户决定落地，但**不采用全局开关**，而是两条互补的预设级机制：
+
+| 预设 | 机制 | 参数 |
+|---|---|---|
+| instrument-researcher | **两阶段**（vendored `assets/tool-bootstrap.mjs`） | phase 1 只给 `holdings_list` + `routing_get`；晋升后 `promotedPresentation: 'code'`（PTC）；延迟 `agent-instructions` / `skill-catalog` 一阶 |
+| risk-reviewer | 静态 `tool-presentation` | `mode: 'ptc'` |
+| trader / master | 保持 `native` | 逐笔审批需在对话里可见 |
+
+**为什么给 researcher 用两阶段而不直接静态 ptc**：静态 ptc 从第一轮就折叠，模型在没有任何台账/路由上下文时先写代码才发现工具名，容易空转；两阶段先给两个极轻工具把「我有什么仓、连了哪些市场」立住，再晋升折叠。
+
+**为什么交易版 phase 1 不是梁神的 bash + editor**：编码场景 bash 可兜底一切，交易场景第一轮常见是看持仓/报价，只给 bash 会把台账与行情藏掉。故最小集换成 `holdings_list` + `routing_get`，两者都极轻且不涉及任何下单面。researcher 本身没有 bash（`shellRow` 只给 master），`shellTools` 留空。
 
 ## Alternatives considered
 
@@ -48,8 +58,14 @@ Status: proposed
 - 第二级折叠是可选增强，不落地也不影响第一级的正确性。
 - 回归风险：零（纯增量新增一个工具 ＋ 每个预设一行）。已在任务分支 `feat/tool-index-architecture` 通过 7/7 单测与运行时模块加载验证。
 
+## 授权与升级
+
+`assets/tool-bootstrap.mjs` 来自 <https://github.com/xiaobright/dsh-anchored-standard>（MIT），含 dsh-liangshen 两阶段扩展，署名与边界见 `packages/base/assets/NOTICE-tool-bootstrap.md`。本仓库只改挂载配置、不改插件源码；上游更新时重新复制并重跑测试。
+
 ## 验证证据
 
 - 单测：`packages/base/test/tool-index.test.ts` 7/7 通过（覆盖契约、分族、query 路由、family 单选、未登记族回落、brief 截断）。
 - 运行时：`tsx` 直接加载模块，`total/matched = 8/8`、`query 持仓 -> holdings`（首位）、`family holdings -> ["holdings_list","holdings_stage"]`。
-- 提交：`df7b78a3` on `feat/tool-index-architecture`（基于 main `423cfd03`）。
+- 单测：`preset-surface-wiring.test.ts` 校验「researcher 的 phase1 是交易版最小集」「bootstrap 只给 researcher」「行序 bootstrap 在 shell 之前」「未追加激进裁剪」。
+- vendored 插件：`node --input-type=module` 直接 import，得到 `name=anchored-tool-bootstrap` / `inject=[systemPrompt,tools]` / `apply=function`。
+- 提交：`df7b78a3`（索引层）、`9727558f`（按预设裁族）、`b55568d2`（静态 PTC）、及本次提交（两阶段移植），均在 `feat/tool-index-architecture`（基于 main `423cfd03`）。
