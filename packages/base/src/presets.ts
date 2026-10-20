@@ -161,6 +161,28 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
     // text OCR only. Every role carries it: all four presets read images.
     // Double-mounting stays rejected (see 2026-08-29-preset-plane-tool-rows): the host-plane
     // row keeps `disabled: true` in the Web bundle and no profile re-enables it.
+    // Tool presentation per preset (2026-10-20, 借鉴「梁神模式」的 PTC 折叠):
+    // 梁神的做法是两阶段——phase 1 只给 bash + editor 锚定轨迹，稳定后切 PTC
+    // （promotedPresentation: code），由它自带的 tool-bootstrap.mjs 实现。
+    // 交易侧只借「折叠」这一点，不借 phase 1：交易会话第一轮常见是看持仓/报价，
+    // phase-1 只给 bash 会把台账与行情工具藏掉，风险大于收益。而 PTC 本身不隐藏
+    // 任何能力——网上只出现一个 `run_code` + 生成的 TypeScript SDK，其余工具经
+    // SDK 子调用派发，因此对 trader/master 的审批闸门语义无影响，只是 wire 变小。
+    // 先给两个只读、调用链简单的 specialist 开；trader/master 保持 native，
+    // 便于逐笔审批在对话里可见。改一个词即可切换。
+    const PRESENTATION: Record<string, 'native' | 'ptc'> = {
+      trader: 'native',
+      'instrument-researcher': 'ptc',
+      'risk-reviewer': 'ptc',
+      master: 'native',
+    }
+    const presentationRow: PresetRow[] = [
+      {
+        id: `dsh-trading-${id}-presentation`,
+        name: '@deepseek-ai/dsh-agent-tool-presentation',
+        config: { mode: PRESENTATION[id] ?? 'native' },
+      },
+    ]
     // Tool surface per preset (2026-10-20, index-style 第二级): 四个预设是
     // dsh-trading 唯一的消费方，因此工具面差异在这里精确表达，而不是靠全局开关。
     // 只裁「明确属于编排职责」的族——deny 语义只表达「不要什么」，read / bash /
@@ -221,6 +243,7 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
         ...toolRows,
         ...indexRow,
         ...surfaceRow,
+        ...presentationRow,
         ...shellRow,
       ],
     }
