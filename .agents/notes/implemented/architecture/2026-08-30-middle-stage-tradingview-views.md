@@ -37,8 +37,10 @@ Status: implemented
   图表下方指标读数行（悬停跟随、色同序列）。
 - **实时口径**：K 线取数统一进 `usePoll`（挂载/换标的/换周期立即触发 +
   30s resync——唯五日级别例外，见下条，取 60s；后台标签页冻结的既有语义保留）；
-  ticker 5s 轮询把价格尾随合并进最后一根 K 线（`withTickerBar`，无变化返回原数组避免无效重算；
-  五日级别跨源时改由同源的 ticker 合并，见下条），蜡烛/成交量
+  ticker 5s 轮询按市场本地日分流（`withTickerBar`，无变化返回原数组避免无效重算）：与末根同一本地日
+  只把价并进最后一根；末根不是快照日时只在日线级别（`'1d'`）补一根当日未完成日 K，且该 bar 在 30s
+  全量重取落地前由最近快照复原（见 [日 K 当日未完成 bar](../feature/2026-10-21-kdas-forming-daily-bar.md)），
+  五日级别跨源时改由同源的 ticker 合并，见下条；蜡烛/成交量
   走 `series.update()` 尾部增量（保留用户视窗），30s resync 兜底校正开高低/量。
   蜡烛/成交量只在 `dataKey`（market:symbol:interval）变化或头部时间位移时才
   `setData` + `fitContent`；指标序列主图按组 diff、副图按激活顺序整组重建

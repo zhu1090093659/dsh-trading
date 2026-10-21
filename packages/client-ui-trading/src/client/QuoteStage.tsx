@@ -61,6 +61,7 @@ import type { ChartState } from './chart-state.ts'
 import type { AccountBalance, DerivativesData, DerivativesHistory, Order, Orderbook, Position, TradeFill, TradeTick } from './types.ts'
 import { colorModeStore, type ColorMode } from './color-mode.ts'
 import { MARKET_INDICES, getMarketSessionStatus, type MarketIndexDef } from './market-status.ts'
+import { restoreFormingBar, withTickerBar, type TickerSnapshot } from './ticker-bar.ts'
 import type { Kline, MarketId, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
 import { residentPollMs } from './quote-budget.ts'
@@ -400,6 +401,19 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     writeInterval(activeMarket, '1d')
   }, [chartInterval, fiveDayCap, activeMarket])
 
+  /**
+   * 取数通路的三个 ref，声明必须在两处 poll 之前（30s resync 落地时要判源、判级别，并按
+   * 最近快照复原当日 bar）：
+   * - barSourceRef：当前 bar 序列的供数源（五日级别用取数响应标明的源，普通级别按该市场
+   *   的 active 路由）。合流判定发生在 ticker 响应回来时，必须用**那一瞬**的序列来源——
+   *   请求在途期间用户可能切了级别或换了路由，请求发出时的闭包已经不是图上那条序列的源。
+   * - barIntervalRef：图上这条序列的级别（日线族才补「当日未完成」日 K，见 ticker-bar.ts）。
+   * - lastTickerRef：最近一次 ticker 快照与它本次的取数源，供 resync 落地时复原当日 bar。
+   */
+  const barSourceRef = useRef<string | undefined>(undefined)
+  const barIntervalRef = useRef<string | null>(null)
+  const lastTickerRef = useRef<TickerSnapshot | null>(null)
+
   // K线取数 = poll：挂载/换标的/换周期立即触发；允许常驻的市场 30s resync，
   // global（金十 global_klines 同列 0 常驻预算）只在换标的/换周期时取一次。
   // 五日级别（客户端视图级别）走 60s：一次约 1200-1950 根，30s 全量重取等于
@@ -422,7 +436,11 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         ? toFiveDayBars(market, page.klines).map(bar => bar.kline)
         : await fetchKlines(market, symbol, chartInterval, chartInterval === '1d' ? DAILY_LIMIT : klineLimit(market))
       if (requestRef.current !== request) return
-      setKlines(rows)
+      // 全量替换前的当日 bar 复原：上游缺当日那根时，每拍 resync 都会把 ticker 补出来的当日
+      // bar 抹掉、5s 后再补回来，图上蜡烛与指标末点会周期性闪断。prev 一并传进去，让新造的
+      // 当日 bar 继承上一拍的包络——否则 high/low 每拍塌回当拍价，影线抽搐、指标读数往回跳。
+      // 源一致才复原，非日线级别与源不一致时原样落地（门控在 restoreFormingBar 内部）。
+      setKlines(prev => restoreFormingBar(rows, prev ?? [], lastTickerRef.current, barSourceRef.current, { market, interval: chartInterval }))
       setKlinesInterval(chartInterval)
       setKlinesProvider(page?.provider)
       setKError(null)
@@ -590,6 +608,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setKlines(null)
     setKlinesInterval(null)
     setKlinesProvider(undefined)
+    // 上一只标的的快照不得被新标的的重取落地复原——换标的后等新标的自己的 ticker。
+    lastTickerRef.current = null
     setDaily(null)
     setTicker(null)
     setHoverIndex(null)
@@ -604,14 +624,11 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     setMarkerHover(null)
   }, [market, symbol])
 
-  /**
-   * 当前 bar 序列的供数源（五日级别用取数响应标明的源，普通级别按该市场的 active
-   * 路由）。合流判定发生在 ticker 响应回来时，必须用**那一瞬**的序列来源——请求在途
-   * 期间用户可能切了级别或换了路由，请求发出时的闭包已经不是图上那条序列的源。
-   */
+  // 三处取数共用的 ref，赋值点紧邻 activeProvider（下面的推导要有 providers 与状态）：
+  // barSourceRef / barIntervalRef 供 ticker 合并判源与判级别，lastTickerRef 供 resync 复原当日 bar。
   const activeProvider = market === undefined ? undefined : providers[market]
-  const barSourceRef = useRef<string | undefined>(undefined)
   barSourceRef.current = klinesInterval === FIVE_DAY_INTERVAL ? (klinesProvider ?? activeProvider) : activeProvider
+  barIntervalRef.current = klinesInterval
 
   // ticker 轮询：头部价格 + 尾随合并最后一根 K 线。global 按需（见 quote-budget.ts）。
   // 五日级别的 bar 来自非 active 的源（按能力跨源兜底）时，该级别的价格也向同一源取，
@@ -626,12 +643,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       const outcome = await fetchTickers(market, [symbol], requestProvider)
       const result = outcome[symbol]
       if (result?.ok) {
-        setTicker(result.ticker)
         // 合并判据：图上这条序列解析出的源与 ticker 本次取数的源一致才合并；任一端未知
         // 时维持现行 5s 合并行为——「还没问到」不等于「不同源」。
         const tickerSource = requestProvider ?? active
+        // 记下这一拍的快照与源：resync 全量重取落地时用它复原当日未完成 bar。
+        lastTickerRef.current = { ticker: result.ticker, source: tickerSource }
+        setTicker(result.ticker)
         if (!tickerBarMergeable(barSourceRef.current, tickerSource)) return
-        setKlines(prev => prev === null ? prev : withTickerBar(prev, result.ticker))
+        setKlines(prev => prev === null ? prev : withTickerBar(prev, result.ticker, { market, interval: barIntervalRef.current }))
       }
     } catch { /* 下轮再试 */ }
   }, residentPollMs(market, TICKER_POLL_MS), [market, symbol])
@@ -1956,21 +1975,6 @@ function IndicatorParamEditor(props: {
       </div>
     </div>
   )
-}
-
-function withTickerBar(prev: Kline[], ticker: Ticker): Kline[] {
-  const last = prev[prev.length - 1]
-  if (last === undefined) return prev
-  const price = ticker.price
-  if (!Number.isFinite(price) || price <= 0) return prev
-  if (last.close === price && last.high >= price && last.low <= price) return prev
-  const merged: Kline = {
-    ...last,
-    close: price,
-    high: Math.max(last.high, price),
-    low: Math.min(last.low, price),
-  }
-  return [...prev.slice(0, -1), merged]
 }
 
 function formatStatusBarClock(ms: number): string {
