@@ -94,5 +94,5 @@ Status: implemented
 - 既存疑点（本次未改，超出裁决范围）：桌面 seed 全树没有 `cordis`，而 holdings/knowledge 与全部连接器都值导入它；
   今日可跑依赖 CLI refresh（`autoInstallPeers: true`）物化后再被 app relink。全新安装路径是否够用没有证据，
   与 `dsh-skill` 同判据。
-- 本仓 `pnpm store path` 落在仓库根 `.pnpm-store/`（未被 gitignore，故长期以未跟踪项出现在 `git status`），
-  由任何一次 `pnpm install` 重建。
+- 本仓 `pnpm store path` 落在仓库根 `.pnpm-store/`，由任何一次 `pnpm install` 重建；该目录与覆盖率 html
+  输出目录 `coverage/` 已进 `.gitignore`（2026-10-21 收尾时补），`git status` 不再因它们变脏。

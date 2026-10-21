@@ -2,6 +2,12 @@ node_modules/
 lib/
 dist/
 .coverage/
+# 覆盖率 html 报告：.coverage/ 是门禁聚合目录，coverage/ 是 vitest 默认 html 输出
+# （2026-10-21 在覆盖率窗口里出现在 packages/client-ui-trading/coverage/，未跟踪且未忽略）。
+coverage/
+# 仓库根 pnpm store：未带 npm_config_store_dir 时 pnpm 会把 store 建在这里
+# （本机约定见 .local/roadmap/CHECKPOINT.md；纯缓存，绝不入库）。
+.pnpm-store/
 *.log
 .DS_Store
 .zcode/
