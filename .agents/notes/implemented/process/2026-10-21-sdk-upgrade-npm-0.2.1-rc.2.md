@@ -155,9 +155,23 @@ longer supported; … (spawn only)`。新世代 `apply()` 对 `config.persona` /
 preset 承担；`presets.test.ts` 的断言同步改为「provider 为 spawn、persona/toolFilter 缺席、三个委派各指一个
 不同 preset」。
 
-代价（已记录、非意外）：spawn 不继承父上下文，fork 的「父工具面 + 已完成轮次」继承不再存在；
-`DELEGATE_RULE` 这段一次性委派纪律文本失去工具级落点（工具无附加指令字段），原文保留在源码注释里，
-恢复它需要为委派定义专用 preset（见看板卡）。硬闸门不受影响：下单仍要过 base 的审批闸门。
+代价（已记录、非意外）：spawn 不继承父上下文，fork 的「父工具面 + 已完成轮次」继承不再存在。
+硬闸门不受影响：下单仍要过 base 的审批闸门。
+
+### 同日续三：`DELEGATE_RULE` 恢复为三个专用委派 preset
+
+上一段留下的缺口已补上：`DELEGATE_RULE` 不再是源码注释里的孤儿，而是 `packages/base/src/presets.ts`
+的常量，注入三个新增的委派 preset。每个委派 preset 复用对应角色的整套行（工具面/技能/市场 kit 与
+角色逐条相同，测试用「除 persona 外 plugins 深度相等」冻结这一点），只在 persona 尾部追加该纪律；
+master 的三个委派行 `agentPreset` 由角色 preset 改指 `dsh-trading-delegate-instrument-researcher` /
+`dsh-trading-delegate-trader` / `dsh-trading-delegate-risk-reviewer`（行 id 仍是
+`dsh-trading-master-delegate-*`）。角色 preset 的 persona 不含该纪律，普通会话不会被当成一次性子代理。
+
+名册影响如实记录：`PresetDefinition` 只有 id/name/description/order/plugins，registry 没有可见性
+字段，`dsh-client-ui-agent-preset` 的选择器也只按 `broken` 过滤，因此三个委派 preset 无法对用户
+隐藏，名册从 4 条变 7 条；用途靠「（委派）」名称后缀与排在四角色之后的 order（190/200/210）表达。
+代价是这三个角色的插件树在宿主里各多挂一份（trader 的 connector 面也在内），换来的是委派纪律有工具级
+之外的正式落点。运行态生效需重建并按 profile 刷新契约刷新 file: 副本，本机未执行（实例运行中禁止刷新）。
 
 验证：重建后的 App runtime 下 CDP 冒烟 **17 项断言全绿**，含「选择工作区后 composer 可用」与
 「真实新建会话无预设错误」（B1b / B2b / B3）。

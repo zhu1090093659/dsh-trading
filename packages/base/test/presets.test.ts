@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
 import { entryListProblem } from '@deepseek-ai/dsh-agent-preset-registry'
 import type { PresetDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
-import { composePresets, installFromLoader, marketRowsOf, MARKETS, Config } from '../src/presets.js'
+import { composePresets, DELEGATE_PRESETS, installFromLoader, marketRowsOf, MARKETS, Config } from '../src/presets.js'
 import type { MarketContribution } from '../src/presets.js'
 import { providerForSkills } from '../src/role-skills.js'
 import { getPresetContribution as crypto } from '../../crypto/src/index.js'
@@ -14,6 +14,11 @@ import { getPresetContribution as cn } from '../../cn/src/index.js'
 import { getPresetContribution as hk } from '../../hk/src/index.js'
 
 const contributions = () => Promise.all([crypto(), us(), cn(), hk()])
+const ROLE_IDS = ['trader', 'instrument-researcher', 'risk-reviewer', 'master']
+const DELEGATE_IDS = DELEGATE_PRESETS.map(preset => preset.id)
+const ALL_PRESET_IDS = [...ROLE_IDS, ...DELEGATE_IDS]
+/** 委派 preset 是「角色行 + 委派纪律」，所以角色断言按它继承的角色判断。 */
+const roleOf = (id: string): string => DELEGATE_PRESETS.find(preset => preset.id === id)?.role ?? id
 
 it('accepts empty config', () => {
   expect(Config({})).toEqual({})
@@ -37,9 +42,10 @@ it('composes all 16 installed-market subsets deterministically as registry defin
   for (let mask = 0; mask < 16; mask++) {
     const subset = all.filter((_, i) => mask & (1 << i))
     const result = composePresets(subset)
-    expect(result.map(p => p.id)).toEqual(['trader', 'instrument-researcher', 'risk-reviewer', 'master'])
+    expect(result.map(p => p.id)).toEqual(ALL_PRESET_IDS)
     expect(composePresets([...subset].reverse())).toEqual(result)
     for (const preset of result) {
+      const role = roleOf(preset.id)
       // Every definition must satisfy the host registry's row validation.
       expect(entryListProblem(preset.plugins, preset.id), preset.id).toBeUndefined()
       const ids = preset.plugins.map(row => row.id)
@@ -59,6 +65,14 @@ it('composes all 16 installed-market subsets deterministically as registry defin
         'Always reply in the language the user writes in',
       ]) expect(prefix).toContain(text)
       expect(prefix).toContain(`Installed markets: ${subset.map(c => c.market).join(', ') || 'none'}`)
+      // 委派纪律只长在委派 preset 上：角色预设不能出现这段文本，否则普通会话被当成子代理。
+      if (DELEGATE_IDS.includes(preset.id)) {
+        expect(prefix).toContain('You are a one-shot delegate')
+        expect(prefix).toContain('do not create or borrow dynamic plugins or scripts to bypass trading gates')
+        expect(prefix).toContain('Write your reply in the language of the task brief')
+      } else {
+        expect(prefix).not.toContain('one-shot delegate')
+      }
       // Workspace instructions: the Web surface disables the host-plane row, so the
       // preset must mount it or the role sees no AGENTS.md at all (2026-09-08).
       expect(preset.plugins).toContainEqual({
@@ -73,7 +87,7 @@ it('composes all 16 installed-market subsets deterministically as registry defin
       }
       expect(preset.plugins.some(row => row.name === '@dshtrading/knowledge/plugin')).toBe(false) // shared host registration stays single
       const connectorNames = preset.plugins.map(row => row.name).filter(name => name.startsWith('@dshtrading/connector-'))
-      if (preset.id === 'instrument-researcher' || preset.id === 'risk-reviewer') {
+      if (role === 'instrument-researcher' || role === 'risk-reviewer') {
         expect(connectorNames).toEqual([])
         const research = preset.plugins.find(row => row.id === 'dsh-trading-research-market-data')
         expect(Boolean(research)).toBe(subset.length > 0)
@@ -85,7 +99,7 @@ it('composes all 16 installed-market subsets deterministically as registry defin
           expect(contribution.traderRows).not.toContain('liveTrading: true')
           const { connectors } = marketRowsOfHelper(contribution)
           for (const row of connectors) expect(preset.plugins).toContainEqual(row)
-          if (preset.id === 'trader') {
+          if (role === 'trader') {
             // kit row is split out of the market block and rewritten with the trader whitelist (#70)
             const kit = preset.plugins.find(row => row.id === `dsh-trading-${contribution.market}-kit`)!
             expect(kit.config).toEqual({
@@ -97,7 +111,7 @@ it('composes all 16 installed-market subsets deterministically as registry defin
         }
         expect(preset.plugins.find(row => row.id === 'dsh-trading-research-market-data')).toBeUndefined() // connector tools already registered
       }
-      if (preset.id === 'master') {
+      if (role === 'master') {
         for (const tool of ['researcher_subagent', 'trader_subagent', 'risk_reviewer_subagent']) {
           const delegate = preset.plugins.find(row => row.config && (row.config as Record<string, unknown>).toolName === tool)
           expect(delegate, tool).toBeTruthy()
@@ -108,14 +122,15 @@ it('composes all 16 installed-market subsets deterministically as registry defin
           // 新世代 tool-subagent 删除了 persona/toolFilter（配置里出现即抛错），角色内容改由 Agent Preset 承担
           expect(config.persona).toBeUndefined()
           expect(config.toolFilter).toBeUndefined()
-          expect(['instrument-researcher', 'trader', 'risk-reviewer']).toContain(config.agentPreset)
+          expect(DELEGATE_IDS).toContain(config.agentPreset) // 委派行指向专用委派 preset，不再是角色 preset
         }
         expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-jobs')).toBeTruthy() // background one-shot delegates need a job controller
-        const delegatePresets = preset.plugins
+        const delegateTargets = preset.plugins
           .filter(row => row.name === '@deepseek-ai/dsh-tool-subagent')
           .map(row => (row.config as Record<string, unknown>).agentPreset)
-        expect(delegatePresets).toHaveLength(3)
-        expect(new Set(delegatePresets).size).toBe(3) // 三个委派各指一个不同角色 preset，不允许坍缩成同一个
+        expect(delegateTargets).toHaveLength(3)
+        expect(new Set(delegateTargets).size).toBe(3) // 三个委派各指一个专用 preset，不允许坍缩成同一个
+        expect([...delegateTargets].sort()).toEqual([...DELEGATE_IDS].sort())
         expect(preset.plugins.map(row => row.name).filter(name => name === '@deepseek-ai/dsh-tool-subagent')).toHaveLength(3)
         // Master orchestration: capital ledger first, then knowledge, skills and delegation.
         expect(prefix).toContain('holdings_list')
@@ -141,30 +156,30 @@ it('composes all 16 installed-market subsets deterministically as registry defin
       expect(preset.plugins).toContainEqual({ id: 'dsh-trading-tool-fs', name: '@deepseek-ai/dsh-tool-fs' })
       // Role skill distribution (#70): the mounted base-skill row follows the persona discipline.
       const roleSkills = preset.plugins.find(row => row.id === 'dsh-trading-role-skills')
-      if (preset.id === 'master') {
+      if (role === 'master') {
         expect(roleSkills).toEqual({ id: 'dsh-trading-role-skills', name: '@dshtrading/base/role-skills' }) // full catalog, no whitelist
-      } else if (preset.id === 'trader') {
+      } else if (role === 'trader') {
         expect(roleSkills).toBeUndefined() // no base skills for the execution role
-      } else if (preset.id === 'instrument-researcher') {
+      } else if (role === 'instrument-researcher') {
         expect(roleSkills!.config).toEqual({ skills: ['company-analysis'] })
       }
       // The row's own config decides the catalog it mounts: the no-whitelist master row
       // exposes every bundled candidate including content-insight, while the researcher
       // whitelist keeps content-insight out (its pipeline is master-side work).
-      if (preset.id === 'master' || preset.id === 'instrument-researcher') {
+      if (role === 'master' || role === 'instrument-researcher') {
         const whitelist = (roleSkills!.config as { skills?: string[] } | undefined)?.skills
         const mounted = (await providerForSkills(whitelist).list()).map(c => c.name)
-        expect(mounted.includes('content-insight'), preset.id).toBe(preset.id === 'master')
+        expect(mounted.includes('content-insight'), preset.id).toBe(role === 'master')
       }
       for (const kit of kitIds) {
         const market = kit.id.replace('dsh-trading-', '').replace('-kit', '')
-        if (preset.id === 'instrument-researcher') {
+        if (role === 'instrument-researcher') {
           expect(kit.config!.skills).toEqual(market === 'crypto'
             ? ['crypto-instrument-analysis', 'knowledge-curation', 'trading-notes-setup']
             : ['knowledge-curation', 'trading-notes-setup'])
-        } else if (preset.id === 'risk-reviewer') {
+        } else if (role === 'risk-reviewer') {
           expect(kit.config!.skills).toEqual([`${market}-risk-checklist`, 'trading-notes-setup'])
-        } else if (preset.id === 'master') {
+        } else if (role === 'master') {
           expect(kit.config!.skills).toBeUndefined() // master keeps the full kit catalog
         }
       }
@@ -190,7 +205,43 @@ it('the trader rebuilds every market kit row with its whitelist; specialists mou
   }
 })
 
-it('installs through the enabled loader rows and registers one definition per role', async () => {
+it('admin：每个委派 preset 复用角色装配并携带委派纪律', async () => {
+  // Given 四市场贡献装配出的整套 preset
+  const presets = composePresets(await contributions())
+  const byId = new Map(presets.map(preset => [preset.id, preset]))
+  const personaOf = (preset: PresetDefinition) => String(preset.plugins.find(row => row.id === 'persona')!.config!.prefix)
+  // When 把三个委派 preset 与各自角色 preset 配对
+  const pairs = DELEGATE_PRESETS.map(delegate => ({
+    delegate, preset: byId.get(delegate.id)!, role: byId.get(delegate.role)!,
+  }))
+  // Then 行集合逐条相同、persona 只多出委派纪律，名册文案与顺序自证用途
+  for (const { preset, role } of pairs) {
+    // 委派只加纪律、不改能力：除 persona 外整套行与角色逐条相同。
+    expect(preset.plugins.filter(row => row.id !== 'persona')).toEqual(role.plugins.filter(row => row.id !== 'persona'))
+    expect(personaOf(preset).startsWith(personaOf(role))).toBe(true)
+    const extra = personaOf(preset).slice(personaOf(role).length).trim()
+    // 原文逐句都在：委派只交文字、不下单、不改账户、不绕闸门，并按任务书语言回答。
+    for (const clause of [
+      'You are a one-shot delegate:',
+      'do not place or cancel orders',
+      'do not modify accounts',
+      'do not create or borrow dynamic plugins or scripts to bypass trading gates',
+      'execution happens in the "Master" session through the approval gate',
+      'Write your reply in the language of the task brief',
+    ]) expect(extra).toContain(clause)
+    // 角色预设里没有这段纪律，否则普通会话会把自己当成一次性子代理。
+    expect(personaOf(role)).not.toContain('one-shot delegate')
+    // registry 没有可见性开关，名册靠文案与顺序表达用途。
+    expect(preset.name).toBe(`${role.name}（委派）`)
+    expect(preset.description).toContain('仅供 Master 委派启动')
+    expect(preset.order!).toBeGreaterThan(role.order!)
+    // 委派不再委派：自身不挂子代理与后台作业行。
+    expect(preset.plugins.some(row => row.name === '@deepseek-ai/dsh-tool-subagent')).toBe(false)
+    expect(preset.plugins.some(row => row.name === '@deepseek-ai/dsh-tool-jobs')).toBe(false)
+  }
+})
+
+it('installs through the enabled loader rows and registers one definition per role and per delegate', async () => {
   const all = await contributions()
   const loader = {
     entries: () => [
@@ -209,16 +260,16 @@ it('installs through the enabled loader rows and registers one definition per ro
   }
   const { registry, definitions, disposed } = fakeRegistry()
   const disposers = await installFromLoader(loader, registry)
-  expect(definitions.map(d => d.id)).toEqual(['trader', 'instrument-researcher', 'risk-reviewer', 'master'])
+  expect(definitions.map(d => d.id)).toEqual(ALL_PRESET_IDS)
   // Disabled market rows must not leak their contribution into any persona.
   for (const definition of definitions) {
     const persona = definition.plugins.find(row => row.id === 'persona')!
     expect(persona.config!.prefix).toContain('Installed markets: crypto, cn, hk')
     expect(persona.config!.prefix).not.toMatch(/Installed markets: [^\n]*\bus\b/)
   }
-  expect(disposers).toHaveLength(4)
+  expect(disposers).toHaveLength(ALL_PRESET_IDS.length)
   await Promise.all(disposers.map(dispose => dispose()))
-  expect(disposed.sort()).toEqual(['instrument-researcher', 'master', 'risk-reviewer', 'trader'])
+  expect(disposed.sort()).toEqual([...ALL_PRESET_IDS].sort())
 })
 
 it('boots through the real loader with asynchronous preset registration', async () => {
@@ -280,7 +331,7 @@ it('boots through the real loader with asynchronous preset registration', async 
   expect(child.error, child.stderr).toBeUndefined()
   expect(child.status, child.stderr).toBe(0)
   expect(JSON.parse(child.stdout.trim())).toEqual({
-    registered: ['trader', 'instrument-researcher', 'risk-reviewer', 'master'],
+    registered: [...ALL_PRESET_IDS],
     applies: 1,
   })
 }, 10000)

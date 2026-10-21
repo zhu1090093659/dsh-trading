@@ -79,3 +79,8 @@ master 委派边界如实声明：fork 子代理继承会话工具面（含下�
   [dynamic-capabilities](../../../skills/dynamic-capabilities/SKILL.md) 第 1 节）；禁用后
   trading-web 不再有该通路，需要时删掉对应条目即可恢复。桌面壳重播种保留
   `cordis.patch.yml*`，升级 / 重装后该节仍在。
+- （2026-10-21）名册条目数补充：本仓另声明三个委派专用 preset（`dsh-trading-delegate-*`，角色行 +
+  委派纪律，供 master 的三个委派工具用），它们与本仓四角色一样会进名册，所以名册实际是
+  master / trader / instrument-researcher / risk-reviewer + 三个「（委派）」条目。registry 契约没有
+  可见性字段、GUI 只按 `broken` 过滤，对用户隐藏委派 preset 这条路不存在；用途靠名称后缀与靠后的
+  order 表达。细节见 2026-10-21 SDK 升级 note 的「同日续三」。
