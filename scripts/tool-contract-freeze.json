@@ -112,6 +112,38 @@
     ],
     "outputForm": "none"
   },
+  "@dshtrading/base#trading_batch": {
+    "file": "packages/base/src/tool-batch.ts",
+    "params": [
+      {
+        "name": "program",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "timeoutMs",
+        "type": "number",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/base#trading_tools_index": {
+    "file": "packages/base/src/tool-index.ts",
+    "params": [
+      {
+        "name": "query",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "family",
+        "type": "string",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
   "@dshtrading/bot-api#tasks_create": {
     "file": "packages/bot-api/src/tasks/tools.ts",
     "params": [
