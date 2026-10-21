@@ -20,7 +20,7 @@
  * 折叠模式下只有带 parent 的调用才允许执行原生工具名。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 
 /** Cordis 插件名 = patch 行 id（TEMPLATES §8）。 */
 export const name = 'dsh-trading-tool-batch'
@@ -89,6 +89,7 @@ export function apply(ctx: Context, _config: unknown): void {
   const tools = ctx.tools as unknown as {
     schemas(scope?: unknown): ToolSchemaLike[]
     execute(exec: unknown): Promise<DispatchResultLike>
+    register(definition: ToolDefinition): () => void
   }
   const ptc = (ctx as unknown as { ptcRuntime?: unknown }).ptcRuntime as {
     language: string

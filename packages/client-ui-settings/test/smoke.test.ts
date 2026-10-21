@@ -27,7 +27,6 @@ describe('projectSnapshot（状态投射：value 优先、user presence、dict �
     user: { markets: { crypto: { provider: 'okx' } } },
     revision: 3,
     writable: true,
-    mode: 'host' as const,
   }
 
   it('resolved：value 优先，undefined 时回落 base', () => {
@@ -61,12 +60,11 @@ describe('projectSnapshot（状态投射：value 优先、user presence、dict �
     expect(state.resolved.crypto).toBe('binance')
   })
 
-  it('writable：mode=host 且 writable 才可写', () => {
+  it('writable：直接映射快照 writable（Host 文档是否接受写入）', () => {
+    const state = projectSnapshot(SNAP as never)
+    expect(state.writable).toBe(true)
     const readOnly = { ...SNAP, writable: false }
-    const state = projectSnapshot(readOnly as never)
-    expect(state.writable).toBe(false)
-    const local = { ...SNAP, mode: 'local' as const }
-    const state2 = projectSnapshot(local as never)
+    const state2 = projectSnapshot(readOnly as never)
     expect(state2.writable).toBe(false)
   })
 

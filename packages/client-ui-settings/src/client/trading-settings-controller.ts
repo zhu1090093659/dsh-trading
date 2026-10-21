@@ -207,7 +207,7 @@ export interface TradingSettingsState {
   newsSourcesOverridden: Record<string, boolean>
   /** 涨跌配色模式。 */
   colorMode: 'red-up' | 'green-up'
-  /** 表单可写（mode=host 且 writable）。 */
+  /** 表单可写：直接取快照的 writable（Host 文档是否接受写入）。 */
   writable: boolean
 }
 
@@ -278,7 +278,7 @@ export function projectSnapshot(snap: ConfigFormSnapshot<TradingSettings>): Trad
     newsSources,
     newsSourcesOverridden,
     colorMode: value?.colorMode === 'green-up' ? 'green-up' : 'red-up',
-    writable: snap.writable && snap.mode === 'host',
+    writable: snap.writable,
   }
 }
 
