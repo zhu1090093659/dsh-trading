@@ -107,4 +107,11 @@ CI 实证全绿，但存在四类遗留债：
   桌面壳 `prepare-runtime` 把 workspace 包打成 tarball 再解包，同一批名字在 Windows 上
   解包同样失败，而 `desktop-release` 是 all-or-nothing（windows 打包失败即 Release
   不创建，npm 却可能已经发出去）。
+- **下一层（同日）**：checkout 修好后 windows 矩阵才第一次跑到 `pnpm -r test`，立刻露出
+  `packages/connector-polymarket/test/snapshot.test.ts:63` 把期望值写死为
+  `/tmp/dsh-trading-home/polymarket/snapshots.json`（Windows 上是
+  `D:\tmp\dsh-trading-home\…`，`ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL` 中止整轮）。
+  修法沿用本页既有口径——期望值按本平台算：`join(resolve('/tmp/…'), 'polymarket', 'snapshots.json')`。
+  读这条时同时记住上节的遮断边界：checkout 一红十年，`-r test` 里排在它后面的包在
+  Windows 上根本没被执行过。
 

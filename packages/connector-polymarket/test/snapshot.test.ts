@@ -6,7 +6,7 @@
  */
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { PredictionMeeting } from '@dshtrading/api'
 import { SNAPSHOT_VERSION, SnapshotStore, applySnapshot, defaultSnapshotPath, parseSnapshotTable } from '../src/snapshot.ts'
@@ -59,8 +59,9 @@ describe('快照表解析与降级', () => {
     // When 解析默认路径
     const path = defaultSnapshotPath({ DSH_HOME: '/tmp/dsh-trading-home' })
 
-    // Then 路径在 trading home 的 polymarket/ 下
-    expect(path).toBe('/tmp/dsh-trading-home/polymarket/snapshots.json')
+    // Then 路径在 trading home 的 polymarket/ 下（期望值按本平台算：Windows 上
+    // resolve('/tmp/…') 会按当前盘符补成 D:\tmp\…）
+    expect(path).toBe(join(resolve('/tmp/dsh-trading-home'), 'polymarket', 'snapshots.json'))
   })
 })
 
