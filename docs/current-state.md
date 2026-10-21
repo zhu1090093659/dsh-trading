@@ -37,7 +37,14 @@
 
 - **第 3 档小额 live**：主网凭证 + **人本人** pnpm authority:sign + 金额上限 + 在环。
 - **带外退出演练**：卡片硬要求人在环。
-- **推送 main**：需明确授权（本机 main 领先 origin 且从未推送）。
+- **推送 main**：main 已推送到 origin（2026-10-21 最近一次 `372bc539`）；后续每次推送仍需当前请求里的明确授权。
+- **桌面壳安装包发布（新 SDK cohort）**：**未做**。本机 `/Applications/DSH Trading.app` 是按新钉版重建的
+  dir 构建（开发签名），不是 Release 资产；发布要 bump 版本 + 推 tag（连带 npm 与 GitHub Release），
+  需单独授权。发版前的 Windows 阻塞已清（见下条）。
+- **Windows 门禁（2026-10-21 修完）**：`aux.ts` 是 Windows 保留设备名，自 10-12 起让 windows-latest 的
+  checkout 每个 run 都失败；改名 `aux-series.ts` 后又露出两处用例债（polymarket 期望值写死 POSIX 路径、
+  bot-api 账本 lease 未关导致 rmSync EBUSY）。三处已修，ci 三 OS 全绿（`372bc539`，四个 job 全 success）；
+  机制与边界见 [Windows 兼容 Note](.agents/notes/implemented/process/2026-09-06-windows-compat-debts-remediation.md)。
 - 已知缺口（见看板卡 cf869789）：~~edge kill 的 fail-open~~（**已修 2026-10-02**，代码在卫星仓）、~~三 uid 下宿主 home 冲突~~（**已修**）、~~三个单元未带 DSH_TRADING_AUTHORITY_DIR~~（**核心单元已带**；人建平面后生效）、~~驾驶舱功能/视觉未打磨~~（**功能补完**：12 类型全渲染 + 配对鉴权；视觉仍骨架级）、~~两形态对照验收未做~~（**已做**：附着形态本身于 2026-10-07 退役）、L0 下单路径未接线（**结构上尚不存在**：openRiskWithinMandate 与 createRiskGate 已随平面迁往卫星仓，主仓没有可接线对象）、移动端设备项（真机/推送/生物识别，需设备与人；工程在卫星仓）。
 
 - **加密永续真值已复验（可达出口补测，2026-10-08，commit `25d18c7b`）**：本机默认出口（美国节点）仍是 Binance `api.binance.com`/`fapi.binance.com` 全量 451、Bybit `api.bybit.com` 系全量 403（地域拦截）——但同机的 clash 多地域节点（SG/JP/HK/TW/DE/KR/GB）全部可达，换出口后已完成补测：**20 条判据全过、探针退出码 0**（含 `crypto_get_ticker` 底层服务路径的真价）。补测暴露并修好两处真值不符：Binance 原白名单漏掉 **217 行 `TRADIFI_PERPETUAL`**（TradFi 永续整批进不了名册）、Bybit 原把交易所自带的 `symbolType` 分类字段整个丢弃。FX/forex（Binance `USDBRLUSDT-SWAP`、Bybit `EURUSDUSDT-SWAP` 等）无枚举成员故留空——要不要加 `fx` 属 P1 契约决定。原始响应、复现命令与逐条对照见 spikes/impl-crypto-perp-tradfi/EVIDENCE-reverify-2026-10-08.md（卡 `7c7b7e3d`）。
