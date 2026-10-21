@@ -124,8 +124,17 @@ const chrome = execFile(chromeBin, [
   '--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   `--remote-debugging-port=${cdpPort}`, `--user-data-dir=${userDir}`,
   '--window-size=1600,1000', baseUrl,
-]);
-const killChrome = () => { try { chrome.kill(); } catch {} };
+], { detached: true });
+// headless Chrome 不吃 SIGTERM（2026-10-21 实测：退出钩子跑完仍留进程 + crashpad helper）。
+// 因此起独立进程组、整组 SIGKILL，再清临时 profile——与 desktop/scripts/attach-electron-drill.mjs
+// 的「按进程组回收，不依赖子进程自己退出」同一口径。
+const killChrome = () => {
+  const pid = chrome.pid;
+  if (pid !== undefined) {
+    try { process.kill(-pid, 'SIGKILL'); } catch { try { chrome.kill('SIGKILL'); } catch {} }
+  }
+  try { rmSync(userDir, { recursive: true, force: true }); } catch {}
+};
 process.on('exit', killChrome);
 
 let page = null;
