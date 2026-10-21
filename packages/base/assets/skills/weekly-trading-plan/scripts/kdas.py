@@ -4,12 +4,13 @@
 指标口径（源：~/.dsh-trading/indicators/custom.json，2026-09-13 读取）：
   每条关键日 kd（YYYYMMDD）= 自「第一根交易日 >= kd 的 K 线」起算的成交量加权均价线：
       TP = (high + low + close) / 3 ;  AVWAP = Σ(TP × volume) / Σ(volume)
-  最多 8 条；锚点之前不渲染；读数保留 3 位小数。只用已完成日 K。
+  最多 8 条；锚点之前不渲染；读数保留 3 位小数。默认含当日未完成日 K（该根量能仍在累积，
+  读数随盘中变动）；只算已完成日 K 时加 --drop-last。
 
 用法：
   python3 kdas.py --market cn --symbol 002714.SZ --keys 20250821,20240924,20260905,20260825,20260317,20260625,20260512
   python3 kdas.py --market hk --symbol 00700.HK --keys 20251001,20250407,20240923,20260422,20260805,20260830 --klines-file /tmp/hk00700.json
-可选：--bars N（默认 900）、--drop-last（日 K 未收盘时剔除最后一根）、--json
+可选：--bars N（默认 900）、--drop-last（只算已完成日 K 时剔除最后一根）、--json
 
 关键日必须取自 indicator_list → custom[kdas].symbolParams["<market>:<symbol>"]（权威现场值），
 不要引用任何文档里的旧关键日。本脚本只读复算，不写指标参数。
@@ -135,7 +136,8 @@ def main() -> int:
     ap.add_argument("--keys", required=True, help="逗号分隔的 YYYYMMDD（取自 indicator_list 现场值）")
     ap.add_argument("--klines-file", help="日 K JSON（工具输出或腾讯行）；给出则不联网")
     ap.add_argument("--bars", type=int, default=900, help="联网取数根数上限（默认 900）")
-    ap.add_argument("--drop-last", action="store_true", help="剔除最后一根（日 K 未收盘时用）")
+    ap.add_argument("--drop-last", action="store_true",
+                    help="保守开关：只算已完成日 K 时用，剔除最后一根")
     ap.add_argument("--json", action="store_true", help="输出 JSON")
     args = ap.parse_args()
 
@@ -186,7 +188,7 @@ def main() -> int:
         "last_close": close, "keys": keys, "lines": lines,
         "nearest_support": above[0] if above else None,
         "nearest_resistance": below[0] if below else None,
-        "discipline": "只用已完成日 K；KDAS 是执行层（买点分层），破位只触发复核假设，不自动清仓。",
+        "discipline": "默认含当日未完成日 K（该根量能累积中，读数随盘中变动）；--drop-last 只算已完成日 K。KDAS 是执行层（买点分层），破位只触发复核假设，不自动清仓。",
         "parity_note": "cn 与图表同源（routed=tencent）；hk 用腾讯公开源属异源复算（图表走 futu），差异可能来自复权口径——决策卡在线上时以图表读数为准，或改用 --klines-file 传 futu 日 K。",
     }
     if args.json:

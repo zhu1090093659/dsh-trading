@@ -8,7 +8,7 @@ Status: implemented
 
 ## Decision
 
-- 新增 `.agents/skills/weekly-trading-plan/`（SKILL.md + `scripts/kdas.py`）。脚本与 `~/.dsh-trading/indicators/custom.json` 的 `kdas` 指标**同算法、同锚定口径**（TP=(H+L+C)/3 按量加权；锚点 = 首根 `openTime` UTC 日 ≥ 关键日的 K 线）；锚点被截断或关键日未生效时 fail-closed 不出数。
+- 新增 `.agents/skills/weekly-trading-plan/`（SKILL.md + `scripts/kdas.py`）。脚本与 `~/.dsh-trading/indicators/custom.json` 的 `kdas` 指标**同算法、同锚定口径**（TP=(H+L+C)/3 按量加权；锚点 = 首根 `openTime` UTC 日 ≥ 关键日的 K 线）；锚点被截断或关键日未生效时 fail-closed 不出数。指标口径**默认含当日未完成日 K**（该根量能仍在累积，读数随盘中变动），与图表读数同口径；只算已完成日 K 的保守口径由 `--drop-last` 显式选择，脚本 docstring、`--help`、`result.discipline` 与 SKILL.md 一律照此表述。
 - `scripts/sync-skills.mjs`：把 company-analysis 的目录分发特例提升为 **`PORTABLE_SKILLS` 集合**（本次为 `company-analysis`、`weekly-trading-plan`；2026-10-12 起含 `content-insight`）。命中的技能同时产出扁平兼容资产与完整目录；未命中的技能行为不变。
 - `packages/base/src/role-skills.ts`：注册 `weekly-trading-plan` 候选，使用独立 `resourceBase` 指向目录（不是扁平文件）。master 因无白名单自动可见；其它角色若需要，须在其白名单里显式放行（白名单语义见 [角色技能分配](../architecture/2026-09-06-role-skill-distribution.md)）。
 - `packages/base/test/role-skills.test.ts`：名册期望更新，并新增打包断言——正文必须含 `KDAS` 与 `六道闸门`，防止「注册在、正文丢」的半状态。
