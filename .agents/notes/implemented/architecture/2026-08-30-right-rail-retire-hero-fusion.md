@@ -35,8 +35,8 @@ Status: implemented
   回落 frame 右缘。
 - **窗口角标（2.8 用户拍板）**：右上 = 折叠/展开（折叠会话列轨道归零 + 整列隐藏，
   localStorage 持久化，fold-store 单一可观察源）+ 新会话（宿主 startSession 无参
-  取当前/最近工作区）；左下 = 设置（程序化 click 退役列内的官方触发器，该触发器
-  是侧栏唯一的 `[aria-haspopup=dialog]`）。首页/折叠态右上走 WindowChrome 浮动
+  取当前/最近工作区）；左下 = 设置（`openSettings` 三档解析，见下条「设置入口」）。
+  首页/折叠态右上走 WindowChrome 浮动
   簇（shell.overlay order 60）；会话进行中走官方 conversation.session.header.
   utilities 槽内联（HeaderCornerActions，order 90 排在 Session 日志后＝窗口右上
   角，不遮日志）。
@@ -68,8 +68,17 @@ Status: implemented
 - 桌面 trading 壳最终布局：[工具详情 | 行情 | 会话列（含融合容器）]，无侧栏；
   全部入口收敛到四处——hero composer（新对话）、融合面板（切会话）、右上角标
   （折叠/新会话）、左下设置。
+- **设置入口（3.0 起在 MarketDock 底部）**：`openSettings` 按「离 DOM 结构越远
+  越优先」三档打开官方设置弹层——① `sidebar.settings` 槽上的设置壳 store
+  （`entries(...)[0].store.create().actions.open()`，单例由注册方钉死；当前宿主
+  走这条）；② 退役列内官方触发器 `[aria-haspopup=dialog]`（老宿主）；③ 账号菜单
+  两级（launcher → 菜单项「设置/Settings」）。命中档位写
+  `body[data-dshtrading-settings-path]`，`pnpm ui:check` 的 H1/H2 断言据此判定
+  弹层真的打开且含「交易」分区。2026-10-21 事故：只剩②时宿主把触发器换成账号
+  菜单入口，选择器命中 0 个、`?.click()` 静默吞掉，点设置完全无反应。
 - 宿主升级风险点：composer 卡启发式找卡（结构大改时面板退化为不拼接，需重校）、
-  `[aria-haspopup=dialog]` 触发器选择器、session 作用域注册模式、当前会话读面
+  设置入口的三档解析（槽 store 外形 / 触发器选择器 / 账号菜单文案）、session
+  作用域注册模式、当前会话读面
   （0.1.7 起 `SessionListState.current` 已删，改按 `mainView` retain 计数解出）。
   均已在 HomeHistory/index.ts、current-session.ts 注释标注。
 - 老键 `dshtrading.browser.workspace.v1`（2.4 输入卡）、新增

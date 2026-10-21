@@ -14,7 +14,7 @@ owner 2026-09-05 实测 [2.9 竖条版定时任务](2026-09-04-sidebar-scheduled
 1. **容器切换（非并排非悬浮）**：任务面板与官方对话共用栅格第 2 轨（对话列）。激活时 shell-pad.css 新规则 11 隐去对话列全部直接子节点（hero 融合容器/对话流/composer 同列一起隐），`.tasksPanel` fixed 原位覆盖——`right = var(--dshtrading-sidebar-w)`（竖条预留 44px）、`width = var(--dshtrading-chat-user-w)`（用户拖拽宽度，回落 380px）。两个 var 都定义在宿主 frame、经 overlayLayer 继承到竖条子树（ChatResizeHandle 同款继承链），**面板几何恒等于对话列矩形**（实测 x/width 逐像素重合）。栅格轨道零改动，QuotePane 测量不受影响。
 2. **宽度用 `--dshtrading-chat-user-w` 而非轨宽 var**：折叠态轨宽被压 0，若吃轨宽会让「折叠 + 任务」组合下面板消失；user-w 让任务面板在任何折叠态都保持用户所选宽度。该组合下面板浮在市场区右缘，QuotePane 右界兜底改测 `[data-dshtrading-tasks-panel]` 左缘（`fallbackRight`），市场区不与面板重叠。
 3. **切换语义补齐**：竖条「+ 新会话」与任务执行历史「打开会话」都自动 `setTasksOpen(false)`——发起/进入会话即切回对话视图；时钟按钮再点还原。ChatResizeHandle 在任务态隐藏（`body[data-dshtrading-tasks-open]` CSS 门控，不进 React 状态）——对话列不在场，拖宽手柄无锚点。
-4. **设置入口迁左栏底部**：齿轮自右缘竖条移除，`openSettings` 注入面从 SessionRail 移交 MarketDock（程序化 click 退役列内官方触发器的实现不变）。展开态 = MarketSidebar 底部沉底栏（图标 + 文案 + 更新徽点），折叠态 = 44px 竖条 `margin-top: auto` 沉底。更新徽点轮询 effect（30 分钟轮询 + `dshtrading-update-available` 事件同步）随之从 SessionRail 移入 MarketDock——两态恒挂载，是徽点单一同步点。
+4. **设置入口迁左栏底部**：齿轮自右缘竖条移除，`openSettings` 注入面从 SessionRail 移交 MarketDock（`openSettings` 三档解析见 right-rail-retire-hero-fusion 笔记）。展开态 = MarketSidebar 底部沉底栏（图标 + 文案 + 更新徽点），折叠态 = 44px 竖条 `margin-top: auto` 沉底。更新徽点轮询 effect（30 分钟轮询 + `dshtrading-update-available` 事件同步）随之从 SessionRail 移入 MarketDock——两态恒挂载，是徽点单一同步点。
 5. **QuotePane 重测缺口顺手补**：纯轨道位移（折叠/开合）不触发 ResizeObserver、body 属性突变时 grid transition 尚未推进——MutationObserver attributeFilter 补 `data-dshtrading-tasks-open`，并监听 frame `transitionend`（propertyName = grid-template-columns）过渡结束补一次重测（同时修复折叠滑动期间中栏矩形停旧值的既有缺口）。
 
 ## Alternatives considered
@@ -27,7 +27,7 @@ owner 2026-09-05 实测 [2.9 竖条版定时任务](2026-09-04-sidebar-scheduled
 
 - 任务面板宽度跟随对话列拖拽宽度（拖拽在任务态禁用，切回对话拖完再切，宽度即生效）。
 - 「折叠 + 任务」组合：任务面板以用户宽度浮于市场区右缘、QuotePane 让位——视觉成立但栅格未让位，后续若要「任务激活时禁用折叠」在此处加门控。
-- 右缘竖条结构变为：折叠/新会话/分隔线/定时任务；设置入口唯一落在左栏底部（退役列内的官方触发器仍由 `openSettings` 程序化唤起，老部署不受影响）。
+- 右缘竖条结构变为：折叠/新会话/分隔线/定时任务；设置入口唯一落在左栏底部（退役列内的官方触发器仍由 `openSettings` 兜底唤起，老部署不受影响）。
 - 更新徽点轮询归属 MarketDock：若未来竖条再加「需要徽点」的页签，应把轮询上提到共享 store 而非复制 effect。
 
 ## Verification

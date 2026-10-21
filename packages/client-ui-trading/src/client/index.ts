@@ -68,6 +68,12 @@ interface WorkspaceNavigation {
   archiveSession(sessionId: string): Promise<void>
 }
 
+/** 官方设置壳（sidebar.settings 槽 registrant）声明在槽上的 store 外形：create()
+ *  返回它注册时钉死的同一实例，actions.open() 是面板唯一的打开动作。 */
+interface SettingsShellStoreFace {
+  create(): { actions: { open(): void } }
+}
+
 /** 注册 slot + locale 字典。 */
 export function apply(ctx: ClientContext): void {
   // bind 的 t 由 slot 的 locale: NS 声明经框架注入组件；本文件不直接消费。
@@ -90,14 +96,52 @@ export function apply(ctx: ClientContext): void {
     ;(ctx.get('uiWorkspace') as unknown as WorkspaceNavigation | undefined)?.startSession()
   }
 
+  /**
+   * 打开官方设置弹层。三条候选路径按「离 DOM 结构越远越优先」排列，命中即返回：
+   * 1. 槽台账里的设置壳状态：ui-settings-general 把 open 状态作为 sidebar.settings
+   *    槽的 store 声明（create() 注册时钉死为同一实例），actions.open() 是面板唯一
+   *    的打开动作——不读任何 DOM，宿主改版不会失效；
+   * 2. 老宿主把触发器按钮渲染在退役侧栏列内（侧栏唯一的 [aria-haspopup=dialog]）；
+   * 3. 当前宿主把入口换成账号菜单两级（launcher → 菜单项「设置」）。
+   * 命中路径写到 body[data-dshtrading-settings-path]，供 ui:check 与现场排障读取。
+   */
   const openSettings = (): void => {
-    // 官方设置触发器在退役侧栏列内（整列移出视口保持挂载）；触发器是
-    // 侧栏里唯一的 [aria-haspopup=dialog]，程序化 click 走官方打开逻辑，
-    // 弹层 position:fixed 盖满视口不受列位置影响。
-    // 3.0 起唯一入口在左侧自选面板底部（MarketDock 两态：展开底栏/折叠竖条）。
-    document
-      .querySelector<HTMLElement>("div:has(> [data-shell-overlay]) > div:nth-child(1) [aria-haspopup='dialog']")
-      ?.click()
+    const mark = (path: string): void => {
+      try { document.body.dataset.dshtradingSettingsPath = path } catch { /* SSR guard */ }
+    }
+    const ledger = ctx.slots as unknown as {
+      entries(key: string): readonly { store?: SettingsShellStoreFace }[]
+    }
+    try {
+      ledger.entries('sidebar.settings')[0]?.store?.create().actions.open()
+      mark('store')
+      return
+    } catch { /* 未挂设置壳或 store 外形变化 → 落到 DOM */ }
+    const trigger = document.querySelector<HTMLElement>(
+      "[data-slot='sidebar.settings'] [aria-haspopup='dialog'],"
+      + " div:has(> [data-shell-overlay]) > div:nth-child(1) [aria-haspopup='dialog']",
+    )
+    if (trigger !== null) {
+      trigger.click()
+      mark('trigger')
+      return
+    }
+    // 账号菜单两级：launcher 点开菜单，菜单项按文案（设置/Settings）点击。
+    const launcher = document.querySelector<HTMLElement>("[data-slot='sidebar.settings'] [aria-haspopup='menu']")
+    if (launcher === null) return
+    launcher.click()
+    let tries = 0
+    const pickMenuItem = (): void => {
+      const item = Array.from(document.querySelectorAll<HTMLElement>("[role='menuitem'], [role='menu'] button"))
+        .find((el) => /^\s*(设置|Settings)/.test(el.textContent ?? ''))
+      if (item !== undefined) {
+        item.click()
+        mark('menu')
+        return
+      }
+      if (++tries < 4) setTimeout(pickMenuItem, 50)
+    }
+    setTimeout(pickMenuItem, 0)
   }
   const chatFolded = foldStore()
   const marketFolded = marketFoldStore()

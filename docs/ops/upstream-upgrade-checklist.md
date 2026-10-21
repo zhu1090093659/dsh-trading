@@ -31,7 +31,10 @@
   接管、`nth-child` 归位）；
 - [ ] 宿主折叠态 data 属性（`data-sidebar-collapsed` / `data-details-collapsed`）与
   内联宽度变量（`--dsh-chat-user-width`）；
-- [ ] 设置触发器选择器 `[aria-haspopup='dialog']`（client/index.ts 程序化 click）；
+- [ ] 设置入口三档解析（client/index.ts `openSettings`）：`sidebar.settings` 槽
+  store 外形（`store.create().actions.open()`）→ 触发器 `[aria-haspopup='dialog']`
+  → 账号菜单菜单项文案「设置/Settings」。`body[data-dshtrading-settings-path]` 报
+  命中档位；`pnpm ui:check` 的 H1/H2 断言弹层真的打开且含「交易」分区；
 - [ ] hero 容器锚点 `[data-composer-seat]`（HomeHistory.tsx portal）；
 - [ ] slot 名与语义：`shell.overlay` / `sidebar.workspaces`（priority -1 遮蔽）/
   `settings.section` / `header.utilities`；inject 服务名（slots/locale/sessions/

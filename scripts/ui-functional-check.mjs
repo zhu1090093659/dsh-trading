@@ -407,6 +407,49 @@ await send('Emulation.clearDeviceMetricsOverride');
 await send('Page.reload', { ignoreCache: true });
 await sleep(5000);
 
+// --- H. 设置入口（底栏「设置」→ 官方设置弹层） ----------------------------
+// 2026-10-21 事故：openSettings 程序化 click 的触发器选择器在宿主改版后命中 0 个
+// 元素，`?.click()` 把这一切静默吞掉，点设置完全没反应。断言必须打在「面板真的
+// 开了、而且我们自己的交易分区在里面」——只查不报错或只看代码路径都抓不到这个形态。
+
+let shellReady = false;
+for (let i = 0; i < 20 && !shellReady; i++) {
+  await sleep(500);
+  shellReady = await evalJs("(() => !!document.querySelector('[data-shell-overlay]'))()") === true;
+}
+const settingsBtn = await evalJs(`(() => {
+  const b = [...document.querySelectorAll('button')]
+    .find((el) => (el.getAttribute('aria-label') || '') === '设置' && el.getBoundingClientRect().width > 0);
+  if (!b) return null;
+  const r = b.getBoundingClientRect();
+  return [Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)];
+})()`);
+if (!settingsBtn) {
+  check('H1. 底栏设置按钮打开官方设置弹层', false, shellReady ? '未找到可见的设置按钮' : '交易面未挂载');
+  check('H2. 设置弹层内含交易分区', false, '前置未满足');
+} else {
+  await click(settingsBtn[0], settingsBtn[1]);
+  let panel = null;
+  for (let i = 0; i < 16 && panel === null; i++) {
+    await sleep(250);
+    panel = await evalJs(`(() => {
+      const d = [...document.querySelectorAll('[role="dialog"]')]
+        .find((el) => (el.textContent || '').includes('通用设置'));
+      return d ? { text: (d.textContent || '').slice(0, 120) } : null;
+    })()`);
+  }
+  const path = await evalJs("document.body.dataset.dshtradingSettingsPath ?? ''");
+  check('H1. 底栏设置按钮打开官方设置弹层', panel !== null,
+    panel !== null ? `openSettings 命中路径=${path}` : `设置弹层未渲染（openSettings 命中路径=${path === '' ? '无' : path}）`);
+  check('H2. 设置弹层内含交易分区', panel !== null && (panel.text ?? '').includes('交易'),
+    panel !== null ? `nav 含交易=${(panel.text ?? '').includes('交易')}` : '弹层未打开');
+  if (panel !== null) {
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await sleep(500);
+  }
+}
+
 // --- F. 控制台健康 --------------------------------------------------------
 
 check('F1. 无未捕获异常', exceptions.length === 0, exceptions[0] ?? '');
