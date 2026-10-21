@@ -187,14 +187,6 @@
       "owner": "bundle:base",
       "name": "@dshtrading/base/market-tools"
     },
-    "dsh-trading-model-capabilities": {
-      "owner": "bundle:gui",
-      "name": "@linxin666/dsh-client-ui-model-capabilities"
-    },
-    "dsh-trading-plugin-manager": {
-      "owner": "bundle:gui",
-      "name": "@linxin666/dsh-client-ui-plugin-manager"
-    },
     "dsh-trading-role-presets": {
       "owner": "bundle:base",
       "name": "@dshtrading/base/presets"

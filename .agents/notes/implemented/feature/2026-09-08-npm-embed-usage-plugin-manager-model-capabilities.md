@@ -21,6 +21,8 @@ dsh-web 源码 `lib/` 逐字节一致（npm pack 后 diff 全等，供应链核�
 
 ## Decision
 
+下列是 2026-09-08 当轮落地的三插件形态，机制事实保留；三个插件现已全部移除，状态见「Consequences」的「现状」条与文末「2026-10-21 cohort」节。
+
 - base 包（`@dshtrading/base`）新增三个 npm 依赖，并追加三条 insert 行
   （id `dsh-trading-usage` / `dsh-trading-plugin-manager` / `dsh-trading-model-capabilities`，
   name 指向包本身）：市场无关共享行归 base 唯一所有（铁律 #1），市场 bundle 不复制。
@@ -28,27 +30,32 @@ dsh-web 源码 `lib/` 逐字节一致（npm pack 后 diff 全等，供应链核�
   24h 冷却期内，usage / plugin-manager 取 `^0.3.17`（lockfile 收 0.3.17）；
   model-capabilities 只有 0.3.18 一个版本（当日首发），pnpm 自动把它记入
   `minimumReleaseAgeExclude`（工具自身行为，非人工豁免），出冷却后 `pnpm update` 自然跟进。
-- **适配点 1（使用统计）**：insert 行带 `config.bubbleMode: off`——本产品不内置
+- **适配点 1（使用统计；该插件 2026-09-23 已移除）**：insert 行带 `config.bubbleMode: off`——本产品不内置
   `dsh-pet`，宠物气泡没有宿主；该键在插件自己的设置面板里可随时改回 always/change，
   属用户可见项。账本与探针快照落 `$DSH_HOME/dsh-usage/`（DSH_HOME=~/.dsh-trading），
   与宿主 `~/.dsh` 隔离，符合独立 home 纪律。
-- **适配点 2（插件管理写路径）**：该插件的 host 半在 npm 发布版 web 运行时走
-  loopback 网关、派生官方 `dsh` CLI 写 profile（唯一写者），CLI 解析顺序 =
-  宿主 PATH → 宿主入口向上 `node_modules/.bin/dsh` → darwin `/opt/homebrew|/usr/local/bin/dsh`。
-  桌面壳自带 runtime 构建期会删掉全部 pnpm `.bin` 目录（符号链接不能进安装包），
-  Dock 启动又只有最小 PATH，桌面用户没有全局 CLI 时写路径直接不可用。故
-  `desktop/scripts/build-runtime.mjs` 在 stage 之后写回
-  `runtime/host/node_modules/.bin/dsh`（POSIX 脚本）与 `dsh.cmd`（Windows），
-  两个平台共用同一份平台无关 host 树；生成器落在 `desktop/src/runtime.cjs`
-  （`hostCliShimPath` / `writeHostCliShims`，纯函数 + 单测，含真机执行断言），
-  构建期 `assertRuntimeEntrypoints` 校验垫片存在。
-- **适配点 3（模型能力）**：本仓 `llm-pi-ai` 路由（kimi-coding / zai-coding-cn / zenmux /
+- **适配点 2（插件管理的写路径机制）**：原生插件写路径要的是 **pnpm，不是 dsh CLI**——桌面壳把
+  自带 runtime 的 node bin 目录前置进 PATH（`desktop/src/main.cjs:109-110`），
+  `desktop/scripts/stage-pnpm.mjs` 把 pnpm 装进同一份 Node 发行版，「零预装工具链开箱即用」
+  由这两处共同兑现。历史成因（2026-09-08 当轮的现状，已不成立）：当时内置的
+  `@linxin666/dsh-client-ui-plugin-manager` host 半在 npm 发布版 web 运行时走 loopback 网关、
+  派生官方 `dsh` CLI 写 profile（唯一写者），CLI 解析顺序 = 宿主 PATH → 宿主入口向上
+  `node_modules/.bin/dsh` → darwin `/opt/homebrew|/usr/local/bin/dsh`；桌面壳自带 runtime 构建期
+  会删掉全部 pnpm `.bin` 目录（符号链接不能进安装包），Dock 启动又只有最小 PATH，没有全局 CLI
+  时写路径直接不可用。于是当轮由 `desktop/scripts/build-runtime.mjs` 在 stage 之后写回
+  `runtime/host/node_modules/.bin/dsh`（POSIX 脚本）与 `dsh.cmd`（Windows），生成器落在
+  `desktop/src/runtime.cjs`（`hostCliShimPath` / `writeHostCliShims`，纯函数 + 单测，含真机
+  执行断言），构建期 `assertRuntimeEntrypoints` 校验垫片存在。这套垫片 2026-10-21 随插件行整组
+  删除：`desktop/**` 里已无 `hostCliShim*` / `writeHostCliShims`，构建期断言只剩宿主入口与各
+  bundle 的 patch 存在性。
+- **适配点 3（模型能力；该插件 2026-10-21 已移除）**：本仓 `llm-pi-ai` 路由（kimi-coding / zai-coding-cn / zenmux /
   基元 / ollama pro）正是该卡片的适用面，能力声明直接生效；`llm-deepseek` 固定目录不在
   覆盖范围（官方能力面自带），无需改动。
 - **i18n 无需补位**：三个插件的词典注册为 `zh`/`en`；宿主语言目录里 zh-CN 的 fallback
   链是 zh-CN → zh → en，实测三块界面在 zh-CN 下全部渲染中文（截图证据）。
-- **隐私面披露**：plugin-manager 浏览器半每次加载向 dsh-market.com 发一次匿名安装心跳
-  （随机 localStorage id + 包名，无对话数据、无 IP、每日去重），README 隐私节已如实写明。
+- **隐私面（历史披露，随行消失）**：plugin-manager 浏览器半每次加载向 dsh-market.com 发一次匿名
+  安装心跳（随机 localStorage id + 包名，无对话数据、无 IP、每日去重），README 隐私节曾如实写明。
+  该包已不在本仓，这条外部信任面随之消失。
 
 ## Alternatives considered
 
@@ -63,16 +70,28 @@ dsh-web 源码 `lib/` 逐字节一致（npm pack 后 diff 全等，供应链核�
 
 ## Consequences
 
-- trading-web / 桌面 profile 重启后：设置面板出现「使用统计」一级菜单（order 151）、
-  「插件」区出现「插件管理」标签页、模型页各自定义 provider 卡片出现「模型能力」区。
-- 实测证据（trading-web 同构 profile，宿主 HTTP + 无头 Chrome 截图）：
+- 现状（2026-10-21）：本记录内嵌的三个 `@linxin666` 插件在本仓**一个都不剩**——
+  `@linxin666/dsh-usage` 2026-09-23 随 0.1.7 cohort 移除，`@linxin666/dsh-client-ui-plugin-manager`
+  与 `@linxin666/dsh-client-ui-model-capabilities` 2026-10-21 移除。`packages/**/package.json` 零
+  `@linxin666` 依赖、`packages/*/cordis.patch.yml` 零 `@linxin666` 行、
+  `scripts/patch-id-freeze.json` 零对应契约行，`pnpm-workspace.yaml` 的
+  `minimumReleaseAgeExclude` 两条同步删除。
+- 界面归属变更：「使用统计」一级菜单（0.1.7 起由官方「性能与用量」承担）、插件区的「插件管理」
+  标签页、模型页自定义 provider 卡片的「模型能力」区都不再由本仓提供；后两块改由 native
+  `dsh-plugin-manager` 与 `dsh-client-ui-settings-models` 承担——同一对插槽
+  （`settings.models.provider-card` / `settings.models.footer`）、同一 `llm-pi-ai` schema 字段
+  （`input` / `reasoningEfforts`）。
+- 残值损失（用户裁决：全部接受，**不留后续卡**）：model-capabilities 只剩 provider 级禁用/归档
+  与恢复列表无处可做——禁用 provider 等于删 settings.yaml 的 provider 段，回滚手抄 settings.yaml；
+  plugin-manager 的四项独有能力随行消失：第三方可更新清单与就地更新、安装冲突台账与撤销、UI
+  一键让 agent 修、安全模式与启动失败台账。cohort 级账与两个行 id 退出契约的理由见
+  [SDK cohort 升级 Note](../process/2026-10-21-sdk-upgrade-npm-0.2.1-rc.2.md)「官方能力去重」节。
+- 外部信任面归零：`@linxin666` 三包不再进 profile 安装闭包，「caret 升级 + 上游破格升版人工
+  评估 cohort 一致性」的维护负担一并消失。
+- 当轮实测证据（2026-09-08，界面现已由 native 承担，证据只作历史对照）：
   `/api/dsh-usage/overview` 返回真实余额（DeepSeek ¥983.66、kimi-coding 套餐窗口）、
-  `/api/plugin-manager/mode` 返回 `{"official":false}`（网关模式就位）、
-  模型页 5 个自定义 provider 均渲染「模型能力」入口、插件管理页列出已装插件并可检查更新。
-- 桌面版插件管理写路径依赖构建期垫片：旧安装包（无垫片）需重新打包才生效；
-  垫片不改变 profile 语义，只恢复官方 CLI 的可发现路径。
-- 新增外部信任面：`@linxin666` scope 三包随 profile 安装闭包执行（依赖仅
-  schemastery / yaml）；升级通道 = npm caret，上游破格升版需人工评估 cohort 一致性。
+  `/api/plugin-manager/mode` 返回 `{"official":false}`（网关模式就位）、模型页 5 个自定义
+  provider 均渲染「模型能力」入口、插件管理页列出已装插件并可检查更新。
 - **后续已修复（2026-09-12）**：版本升级、内置子列表与下述启动问题见
   [内置插件升级闭环](../bug-fix/2026-09-12-builtin-plugin-inventory-and-upgrade.md)。
   原始实证：`@dshtrading/base/presets` 的
@@ -84,7 +103,7 @@ dsh-web 源码 `lib/` 逐字节一致（npm pack 后 diff 全等，供应链核�
   `kill -USR1 <pid>` 开 inspector 后 `Debugger.evaluateOnCallFrame` 列出
   `fiber.inertia` 非空条目 = `@dshtrading/base/presets`。
 
-## 0.1.7 cohort 修正（2026-09-23）：usage 移除、plugin-manager / model-capabilities 保留
+## 0.1.7 cohort 修正（2026-09-23）：usage 移除、plugin-manager / model-capabilities 保留（后一轮全部移除，见下）
 
 0.1.7 把客户端设置面从 `ctx.settingsScope` 换成 `configForms`：
 
@@ -102,14 +121,23 @@ dsh-web 源码 `lib/` 逐字节一致（npm pack 后 diff 全等，供应链核�
   等价面，保留。
 - `@xmanrui/dsh-im` 仅用 deprecated 但 0.1.7 仍在的 `snapshotEvents`，保留观察。
 
-### 2026-10-21 cohort：原生面已覆盖其中两个，移除待真机确认
+### 2026-10-21 cohort：另外两条也移除，本记录的 npm 内嵌方案在本仓归零
 
-宿主升到 `0.2.1-rc.2` 后，`dsh-client-ui-settings-models` 自带每模型图片输入与推理档位
-（`vision` / `reasoningLevels` / `reasoningEfforts`），`dsh-plugin-manager` +
+0.1.7 那段「recorded exception 保留」的判据（无官方等价面）在宿主升到本世代后不再成立：
+`dsh-client-ui-settings-models` 自带每模型图片输入与推理档位（`vision` /
+`reasoningLevels` / `reasoningEfforts`），`dsh-plugin-manager` +
 `dsh-client-ui-plugin-manager` + `dsh-client-ui-plugin-market` 覆盖插件安装、启停与索引源。
-上文「recorded exception 保留」的判据（无官方等价面）不再成立。
+用户裁决两条整行移除，接受损失、不留后续卡：
 
-两个内嵌插件的移除待桌面壳真机确认后执行（provider 级归档是否仍无处可做、桌面无 pnpm 时
-原生 plugin-manager 能否工作），届时同步删除 `packages/gui/cordis.patch.yml` 两行、
-`packages/gui/package.json` 两条依赖与桌面 `writeHostCliShims` 垫片。裁决与证据见
-[SDK cohort 升级 Note](../process/2026-10-21-sdk-upgrade-npm-0.2.1-rc.2.md)。
+- `packages/gui/cordis.patch.yml` 的 `dsh-trading-plugin-manager` /
+  `dsh-trading-model-capabilities` 两条 insert 与注释块删除（层内行 12 → 10），
+  `packages/gui/package.json` 两条依赖删除，`pnpm-workspace.yaml` 的
+  `minimumReleaseAgeExclude` 两条删除，`pnpm-lock.yaml` 由 pnpm 重新生成。
+- 桌面 dsh 垫片整组删除：`hostCliShimPosix` / `hostCliShimWindows` / `hostCliShimPath` /
+  `writeHostCliShims` 与它们的导出、`build-runtime.mjs` 的调用点与
+  `assertRuntimeEntrypoints` 断言、`runtime.test.mjs` 的垫片用例；reseed 指纹夹具改用仍在
+  包内的 `@dshtrading/client-ui-updater`（0.5.9 → 0.6.1），断言链不变。理由见「适配点 2」：
+  native 写路径要 pnpm，而桌面壳自带 pnpm 并把它前置进 PATH。
+- `scripts/patch-id-freeze.json` 两条冻结条目随之删除，两个行 id 从此不再是契约行，有意删除
+  契约行的理由按门禁要求记在
+  [SDK cohort 升级 Note](../process/2026-10-21-sdk-upgrade-npm-0.2.1-rc.2.md)。

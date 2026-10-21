@@ -13,10 +13,7 @@
  * 4. pnpm-install the pinned @deepseek-ai/dsh host closure;
  * 5. stage both trees into desktop/resources/runtime/ for electron-builder's
  *    extraResources, dropping the build machine's pnpm state from the profile
- *    seed (the tarballs and the seed manifest travel with it);
- * 6. write the dsh CLI shims back into the staged host tree (the plugin-manager
- *    gateway resolves the official CLI through node_modules/.bin, which step 5
- *    strips as pnpm symlinks).
+ *    seed (the tarballs and the seed manifest travel with it).
  *
  * The profile manifest and lockfile are generated, not committed: the tarball
  * payload changes with every workspace build, and reproducibility comes from
@@ -33,8 +30,6 @@ import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const {
-  hostCliShimPath,
-  writeHostCliShims,
   profileSeedFingerprint,
   PROFILE_SEED_FILES,
   pruneProfileSeedBuildHostState,
@@ -356,10 +351,6 @@ function assertSeedPatchRowsResolve() {
 function assertRuntimeEntrypoints() {
   const hostBin = path.join(stagingRoot, 'host', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
   if (!fs.existsSync(hostBin)) throw new Error('staged host is missing ' + path.relative(desktopDir, hostBin));
-  for (const platform of ['darwin', 'win32']) {
-    const shim = hostCliShimPath(path.join(stagingRoot, 'host'), platform);
-    if (!fs.existsSync(shim)) throw new Error('staged host is missing the CLI shim ' + path.relative(desktopDir, shim));
-  }
   for (const bundle of PROFILE_BUNDLES.filter((name) => name.startsWith('@dshtrading/'))) {
     const patch = path.join(stagingRoot, 'profile-trading', 'node_modules', ...bundle.split('/'), 'cordis.patch.yml');
     if (!fs.existsSync(patch)) throw new Error('staged profile is missing the ' + bundle + ' bundle patch');
@@ -449,7 +440,6 @@ function main() {
   const pruned = pruneProfileSeedBuildHostState(profileSeed);
   console.log('[build-runtime] pruned build-host pnpm state from the profile seed: ' + (pruned.join(', ') || 'none'));
   stage(path.join(runtimeSrc, 'host'), path.join(stagingRoot, 'host'), HOST_FILES);
-  writeHostCliShims(path.join(stagingRoot, 'host'), { log: console.log });
   assertRuntimeEntrypoints();
 
   const stamp = {

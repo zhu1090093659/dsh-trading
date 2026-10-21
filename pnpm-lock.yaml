@@ -1581,12 +1581,6 @@ importers:
       '@dshtrading/indicator-supertrend':
         specifier: workspace:^
         version: link:../indicator-supertrend
-      '@linxin666/dsh-client-ui-model-capabilities':
-        specifier: ^0.3.21
-        version: 0.3.24(react@18.3.1)
-      '@linxin666/dsh-client-ui-plugin-manager':
-        specifier: ^0.3.21
-        version: 0.3.24(react@18.3.1)
       '@xmanrui/dsh-im':
         specifier: ^4.20.2
         version: 4.29.0(@types/node@24.19.0)(debug@4.4.3)
@@ -3140,16 +3134,6 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@linxin666/dsh-client-ui-model-capabilities@0.3.24':
-    resolution: {integrity: sha512-bFRa/PxhhhMC7cl3Fx2AmeXvZPQAXBBp6HLvGCragVABWhL78M7BkGZa9gVN0eeyJypzUNctu1AR3tYgf5B0PQ==}
-    peerDependencies:
-      react: ^18.2.0
-
-  '@linxin666/dsh-client-ui-plugin-manager@0.3.24':
-    resolution: {integrity: sha512-xiR3MvES1rvr1P+WDOBHQvUcQoRVLaX5mmq9dUAdDggb+HHHK122m34fvfj5nqbRKhJk770Zn6dnnSbM/WM1IA==}
-    peerDependencies:
-      react: ^18.2.0
-
   '@manypkg/find-root@1.1.0':
     resolution: {integrity: sha512-mki5uBvhHzO8kYYix/WRy2WX8S3B5wdVSc9D6KcU5lQNglP2yt58/VfLuAK49glRXChosY8ap2oJ1qgma3GUVA==}
 
@@ -3889,9 +3873,6 @@ packages:
   combined-stream@1.0.8:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
     engines: {node: '>= 0.8'}
-
-  cosmokit@1.8.1:
-    resolution: {integrity: sha512-PDBv4l90xZKrUsZ0vtoycgZpO/j4iFsqJXrAxsyBDsnQRI7ZMJXIjgDJsKNjd5L8jnVnnlrDCdhkFbTncgCVjQ==}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -4920,9 +4901,6 @@ packages:
 
   scheduler@0.23.2:
     resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
-
-  schemastery@3.18.0:
-    resolution: {integrity: sha512-Jw2uxjoyyqc/yeurmChUEc/jbi8GsrdXV/KmqRUDZXJAXAmrJiPsz8vKa17l/VckyzljHZ9oGaul443CQiXxtA==}
 
   selderee@0.12.0:
     resolution: {integrity: sha512-b1YMh3+DHZp59DLna3qVwQ5iOla/nrI6mLBNW02XxU77M3046Df6VLkoaJyFz20VsGIG5kkp+FK0kg4K4HnUFw==}
@@ -6396,16 +6374,6 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@linxin666/dsh-client-ui-model-capabilities@0.3.24(react@18.3.1)':
-    dependencies:
-      react: 18.3.1
-      schemastery: 3.18.0
-
-  '@linxin666/dsh-client-ui-plugin-manager@0.3.24(react@18.3.1)':
-    dependencies:
-      react: 18.3.1
-      yaml: 2.9.1
-
   '@manypkg/find-root@1.1.0':
     dependencies:
       '@babel/runtime': 7.29.7
@@ -6979,8 +6947,6 @@ snapshots:
   combined-stream@1.0.8:
     dependencies:
       delayed-stream: 1.0.0
-
-  cosmokit@1.8.1: {}
 
   cross-spawn@7.0.6:
     dependencies:
@@ -8001,11 +7967,6 @@ snapshots:
   scheduler@0.23.2:
     dependencies:
       loose-envify: 1.4.0
-
-  schemastery@3.18.0:
-    dependencies:
-      '@standard-schema/spec': 1.1.0
-      cosmokit: 1.8.1
 
   selderee@0.12.0:
     dependencies:

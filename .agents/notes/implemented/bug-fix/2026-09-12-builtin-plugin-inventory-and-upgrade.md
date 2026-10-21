@@ -57,8 +57,12 @@ lockfile 可保留旧版，用户维护的 profile 也不会被自动 reseed。�
 
 ## Consequences
 
-- 子插件显示在 base 下，提供独立启停；其版本升级仍由 base 的依赖与 profile
-  安装管理。内置行继续由 base 唯一拥有，交易审批行保持启用。
+- 现状（2026-10-21）：本记录依赖的那套 npm 插件管理面已不在本仓——`dsh-trading-usage`
+  （2026-09-23）、`dsh-trading-plugin-manager` 与 `dsh-trading-model-capabilities`
+  （2026-10-21）三条行全部移除，`@linxin666/*` 依赖、
+  `minimumReleaseAgeExclude` 条目与对应的 `patch-id-freeze.json` 契约行一并删除；
+  插件安装/启停面改由 native `dsh-plugin-manager`（注册 `plugin_manager` 工具）承担。
+  本记录的子列表与启停证据只作历史对照，交易审批行保持启用。
 - 修复范围包含已有自等待问题，未改宿主源码或 SDK cohort。预设内容、默认模拟
   与交易审批策略保持原有契约。
 - 验证：全包构建通过；base 6 文件 46 用例通过；桌面 runtime 13 用例与符号

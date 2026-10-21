@@ -65,20 +65,58 @@ floor 不随 cohort 走，声明即失真。
 
 ## 官方能力去重（native 为基座）
 
-官方 0.2.1 线 87 条原始条目去重后 54 条，与本仓实现真正重叠的 3 处：
+官方 0.2.1 线 87 条原始条目去重后 54 条，与本仓实现真正重叠的 3 处，现已全部落定：
 
 | native 能力 | 本仓实现 | 裁决 |
 |---|---|---|
-| 自定义模型 API 的图片输入与推理等级 UI（alpha.4 / rc.1） | `packages/gui/cordis.patch.yml` 内嵌 `@linxin666/dsh-client-ui-model-capabilities` | 待真机确认后移除（native 已自带 vision / reasoningLevels / reasoningEfforts，残值仅 provider 级归档） |
-| 插件管理面（让 Agent 创建插件、索引源、启停卸载与依赖同步、热重载） | `packages/gui/cordis.patch.yml` 内嵌 `@linxin666/dsh-client-ui-plugin-manager` + 桌面 `writeHostCliShims` 垫片 | 待真机确认后移除（native `dsh-plugin-manager` 已覆盖） |
-| 子智能体可选用独立 Agent Preset（alpha.3 / rc.1） | `packages/base/src/presets.ts` 的 DELEGATES 用 `config.persona` 内联整份角色正文，且行 provider 为 `fork` | 记 exception：原生 `agentPreset` 只能用在**不继承父上下文**的 provider 上——`dsh-subagent-fork-in-process` 的 `capabilities.agentPreset` 为 `false` 且 `inheritsParentContext` 为 `true`，`dsh-tool-subagent` 的 `assertProvider()` 在配置了 `agentPreset` 而 provider 继承父上下文时直接抛错；改用 spawn 类 provider 会丢掉 fork 的父已完成轮次与工具面继承，属能力回退，故保留内联 persona |
+| 自定义模型 API 的图片输入与推理等级 UI（alpha.4 / rc.1） | 已移除：原 `packages/gui/cordis.patch.yml` 内嵌 `@linxin666/dsh-client-ui-model-capabilities` | 已移除，native 为唯一实现——同一对插槽（`settings.models.provider-card` / `settings.models.footer`）、同一 `llm-pi-ai` schema 字段（`input` / `reasoningEfforts`）；残值只剩 provider 级禁用/归档与恢复列表，随行移除，回滚方式是删掉 settings.yaml 的 provider 段、手抄 settings.yaml 恢复 |
+| 插件管理面（让 Agent 创建插件、索引源、启停卸载与依赖同步、热重载） | 已移除：原 `packages/gui/cordis.patch.yml` 内嵌 `@linxin666/dsh-client-ui-plugin-manager` + 桌面 `writeHostCliShims` 垫片 | 已移除，行与垫片同批删除。native 写路径要的是 pnpm 而不是 dsh CLI：桌面壳把自带 runtime 的 node bin 目录前置进 PATH（`desktop/src/main.cjs:109-110`），`desktop/scripts/stage-pnpm.mjs` 把 pnpm 装进同一份 Node 发行版，全局 CLI 不再是前提 |
+| 子智能体可选用独立 Agent Preset（alpha.3 / rc.1） | `packages/base/src/presets.ts` 的三个委派行 | 已按 native 改写：`provider: 'spawn'` + `agentPreset` 指向专用委派 preset，内联 `persona` / `toolFilter` 移除（新世代 `tool-subagent` 对两者直接抛错，`agentPreset` 只在 spawn provider 支持）；fork 的父工具面与已完成轮次继承消失是已接受代价，下单仍过 base 审批闸门。经过见下方「同日续：`tool-subagent` 删除内联 persona」 |
 
 记为 exception 的：行情连接器 BYOK 凭据卡（对象是行情 provider，非官方模型 provider）、
 消息内密钥脱敏（本仓零实现，直接用 native）、Office 与 `workspace-dependencies` 两条
 官方行（只接线不复制正文）、5 个 `tool.call.toolview` 富卡片（消费官方 slot）、
 `trading_batch`（父令牌子派发走 `ctx.tools.execute` 保留审批闸门，与官方 PTC in-memory
-不同层）。清单外的自动化任务平面（native `task_board_*` 对本仓 `tasks_*` 六工具 +
-`ScheduledTasksPanel` + cron/DST 语义）不属本世代新增条目，单独立项对照后再定去留。官方闭包里与插件管理同族的还有 `dsh-plugin-market` / `dsh-plugin-market-index` / `dsh-client-ui-plugin-market` / `dsh-experimental-plugin-market-bundle`，本仓 plugin-manager 的「索引源」能力对照时要把这几项一起比。
+不同层）。清单外的自动化任务平面（本仓 `tasks_list` / `tasks_meta` / `tasks_create` /
+`tasks_update` / `tasks_delete` / `tasks_run` 六工具 + `ScheduledTasksPanel` + 5 段 cron/DST
+语义）同记 exception，保留。
+
+任务平面的对照对象不是 `task_board_*`。本 cohort 的两个闭包——Homebrew CLI 闭包
+`/opt/homebrew/lib/node_modules/@deepseek-ai/dsh` 与 `desktop/runtime/host`——对 `task_board`
+零命中；可比的官方能力是本世代的 `schedule_*`（`dsh-schedule`：「Host-wide durable reminders
+with shared management and original-Session delivery」，投递 reminder、不建会话执行任务）与
+`dsh-goal` / `dsh-jobs`，三者语义与「cron 到点建真实会话跑 prompt」都不同，没有可替换项。
+本机会话里出现的那套 `task_board_*` 来自 dsh-web 仓的 `@linxin666/dsh-task-board`，经
+`~/.dsh/profiles/desktop` 的 `link:/Users/zcl/code/dsh-web/packages/dsh-task-board-remote`
+引入，核心包在 npm 上 E404（`npm view @linxin666/dsh-task-board` 报 404）——把它当官方能力
+对照，等于把「某个 profile 装了第三方插件」误读成本世代官方新增条目。机制见
+[定时任务](../feature/2026-09-04-sidebar-scheduled-tasks.md) 与
+[工具面](../feature/2026-09-04-agent-scheduled-tasks-tools.md)。
+
+两条行与桌面垫片的移除账（本轮改动 8 个文件、+11/−230）：`packages/gui/cordis.patch.yml`
+层内行 12 → 10（两条 insert 与各自的注释块），`packages/gui/package.json` 两条依赖与
+description 里同源的「plugin manager, model capabilities」，`pnpm-workspace.yaml` 的
+`minimumReleaseAgeExclude` 两条，`pnpm-lock.yaml` 由 pnpm 重新生成（净删 39 行）；
+`desktop/src/runtime.cjs` 的 `hostCliShimPosix` / `hostCliShimWindows` / `hostCliShimPath` /
+`writeHostCliShims` 及它们的导出、`desktop/scripts/build-runtime.mjs` 的调用点与
+`assertRuntimeEntrypoints` 里的垫片断言、`desktop/tests/runtime.test.mjs` 的垫片用例一并删除，
+reseed 指纹夹具换成仍在包内的 `@dshtrading/client-ui-updater`（0.5.9 → 0.6.1），断言链不变。
+
+行 id 契约：`dsh-trading-model-capabilities` 与 `dsh-trading-plugin-manager` 已从
+`scripts/patch-id-freeze.json` 删除，**这两个 id 从此不再是契约行**。冻结清单登记的是
+「仍然存在的行」，已删行留在清单里只会让 `patch-id:check` 每次报「冻结行在仓库里已不存在」；
+门禁对有意删除的规定就是「跑 `--update` 并**在 Agent Note 记录理由**」，本段即那份记录：
+删除是整行移除的必然结果，不是改名也不是换 owner；回滚要连行、依赖、lockfile 与桌面垫片
+一起恢复，只把 id 加回清单不会让行复活。官方闭包里与插件管理同族的还有 `dsh-plugin-market` /
+`dsh-plugin-market-index` / `dsh-client-ui-plugin-market` /
+`dsh-experimental-plugin-market-bundle`，本轮以 native `dsh-plugin-manager` 为唯一基座比对，
+市场行未启用；将来要开市场面时对照对象是这四条，而不是已删的那一行。
+
+残值处置（同一轮一次收口，**不留后续卡**）：`model-capabilities` 失去 provider 级禁用/归档与
+恢复列表——禁用 provider 等于删 settings.yaml 的 provider 段，回滚手抄 settings.yaml；
+`plugin-manager` 失去四项独有能力：第三方可更新清单与就地更新、安装冲突台账与撤销、UI 一键
+让 agent 修、安全模式与启动失败台账。明细与「为什么当初要垫片」见
+[npm 内置三插件记录](../feature/2026-09-08-npm-embed-usage-plugin-manager-model-capabilities.md)。
 
 ## 验证
 
@@ -222,10 +260,11 @@ registered variables: provider, model`），整轮运行失败。全仓只有这
 ## Consequences
 
 - 仓库侧 cohort 追平宿主，插件与宿主回到同一模块世代，影子拷贝 identity 分裂的成因消除。
-- 遗留未完成项（按优先级）：① `model-capabilities` 与 `plugin-manager` 的移除需先在
-  桌面壳真机确认 native 覆盖度（含 provider 级归档、桌面无 pnpm 时 plugin-manager 能否工作）；
-  ② 自动化任务平面对照 native `task_board_*` 后再定去留；
-  ③ 桌面壳安装包需按新钉版重新构建发布，仅改钉版不会送达用户。
+- 遗留未完成项：③ 桌面壳安装包需按新钉版重新构建发布，仅改钉版不会送达用户。
+- 本轮已处置的两项：① `model-capabilities` 与 `plugin-manager` 两条行连同桌面 dsh 垫片已移除
+  （`packages/gui/cordis.patch.yml` 层内行 12 → 10，native 覆盖度按上面「官方能力去重」节的
+  裁决确认，不再等真机确认）；② 自动化任务平面保留并记 exception（对照对象是本世代
+  `schedule_*` / `dsh-goal` / `dsh-jobs`，不是 `task_board_*`）。
 - 已清掉的两项遗留：`spikes/s3-preset/spike-preset-pkg/package.json` 的依赖改钉官方 npm 版本
   `@deepseek-ai/dsh-agent-presets@0.1.6-alpha.2`（该名字最后一次官方发布，之后改名
   `dsh-agent-preset-registry`；spike 代码与 patch 行名都引用旧名，故按旧名钉官方版本而不是改名字）；

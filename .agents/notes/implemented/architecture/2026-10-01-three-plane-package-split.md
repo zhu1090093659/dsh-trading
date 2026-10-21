@@ -12,7 +12,7 @@ bot（无图形界面的 Linux 服务器形态）之前不存在，代价是**�
 
 **Plane A · host（留在 `@dshtrading/base`）**：审批闸门、preset 组装、market-router、eventbus、strategies/watchlist/indicators/knowledge/holdings 的能力行、base 的 market-tools、跨市场数据连接器 jin10，以及官方行 `@deepseek-ai/dsh-agent-preset-registry` 的整行覆盖。共 11 个 insert + 1 处覆盖。
 
-**Plane B · GUI（新建 `@dshtrading/gui`）**：从 base **原样搬来** 11 行——6 个浏览器半行（`.packages/base/cordis.patch.yml` 的 settings / client-ui-trading / -indicators / -strategies / -knowledge / -masters-quotes / -updater）+ 1 个纯浏览器半语言包（dsh-i18n）+ 3 个只有 web 宿主才有意义的双半行（im / plugin-manager / model-capabilities：host 半硬 inject webServer/connection，headless 下必然 pending，靠 `.packages/base/cordis.patch.yml` 的 `disabled: !!js` 条件禁用兜底）。依赖与版本从 base 的 `.package.json` 原样搬进 gui。
+**Plane B · GUI（新建 `@dshtrading/gui`）**：从 base **原样搬来** 11 行——6 个浏览器半行（`.packages/base/cordis.patch.yml` 的 settings / client-ui-trading / -indicators / -strategies / -knowledge / -masters-quotes / -updater）+ 1 个纯浏览器半语言包（dsh-i18n）+ 3 个只有 web 宿主才有意义的双半行（im / plugin-manager / model-capabilities：host 半硬 inject webServer/connection，headless 下必然 pending，靠 `.packages/base/cordis.patch.yml` 的 `disabled: !!js` 条件禁用兜底）。依赖与版本从 base 的 `.package.json` 原样搬进 gui。 **2026-10-21 现状更正**：本层现为 10 行——`dsh-trading-plugin-manager` 与 `dsh-trading-model-capabilities` 两条行随 SDK cohort 官方能力去重整行移除（连同只服务 plugin-manager 的桌面 dsh 垫片），下面「三处判断的边界」里的平面分类只作历史记录；移除账见 [SDK cohort 升级 Note](../process/2026-10-21-sdk-upgrade-npm-0.2.1-rc.2.md)。
 
 **Plane C · bot API（已落地）**：新建 `@dshtrading/bot-api`，把 `client-ui-trading` 的 **node 半整体搬出**——`bridge.ts`（2135 行，/dshtrading/api HTTP 面）、`sse.ts`、`tasks/{ledger,runner,service,tools}.ts`、`ttl-cache.ts` 与 18 个相关用例共 31 个文件（`git mv`，保留历史）。复核确认了搬法的前提：bridge.ts 本来就零浏览器依赖（GUI 逻辑在同包的 `src/client/`，不在同一文件里），所以是「node 半整体移出、client 半留在原包」，而不是把一个文件劈成两片——原先记的「按面劈文件」前提不成立，作为更正留在 Alternatives。
 
@@ -83,6 +83,6 @@ bot（无图形界面的 Linux 服务器形态）之前不存在，代价是**�
 ## Consequences
 
 - `@dshtrading/gui` 进入 changesets 家族（`fixed: [["@dshtrading/*"]]` 自动纳入）；桌面 profile 生成器 `.desktop/scripts/build-runtime.mjs` 的 `PROFILE_BUNDLES` 与 `DIRECT_TRADING_PACKAGES` 已同批加入 gui（桌面 seed 的 `package.json` 由该脚本重新生成，仓库内两份快照仍是上一版，下次桌面构建时刷新）。
-- **未完成（阻塞，需人工/授权）**：安装态 `~/.dsh-trading/profiles/trading-web` 尚未迁移——它需要写入会话工作区之外的目录并跑一次 `dsh plugin --profile trading-web install`，本会话的文件沙箱（workspace-write）对 `~/.dsh-trading` 返回 EPERM，两次提权请求均未获批。**在迁移完成前不要执行 `scripts/refresh-trading-web-profile.sh`**：刷新会先 `rm -rf` 掉 profile 里的 `@dshtrading/*` 副本，而新拷贝的 base 已不再携带 UI 行、profile 的 bundles 列表又没有 gui ⇒ UI 会静默消失。迁移命令见 `.local/roadmap/CHECKPOINT.md`。
+- **迁移已完成（后续会话补记）**：安装态 `~/.dsh-trading/profiles/trading-web` 的迁移随后落地——该 profile 的 bundles 已列 `@dshtrading/gui`（`~/.dsh-trading/profiles/trading-web/package.json`），刷新入口也已从 `scripts/refresh-trading-web-profile.sh` 收敛为 `scripts/refresh-profile.sh <profile...>`（旧名保留为转发 shim，见 [刷新入口 Note](../process/2026-10-09-refresh-profile-generalized-entry.md)）。原记录的阻塞原因是本会话文件沙箱（workspace-write）对 `~/.dsh-trading` 返回 EPERM；刷新仍按 profile 刷新契约执行，刷新前确认 base 不再携带 UI 行、bundles 里有 gui。
 - `trading-dev` / `trading-all` 是 headless profile（bundles 含 `@deepseek-ai/dsh-headless`，无 dsh-web-app）⇒ **有意不装 gui**：那 11 行在无 modules/webserver 的宿主里本来就是 inert 的，拆包后 headless 的安装闭包第一次真正不含 UI 依赖。
 - 行归属变更已进 `.scripts/patch-id-freeze.json`：以后谁把 GUI 行搬回 base（或市场 bundle 认领它），`pnpm patch-id:check` 会红。

@@ -57,3 +57,7 @@ Status: implemented
 > 验证：`packages/bot-api` 266 用例全绿（新增 12：名册三态 4 + 触发点补偿 8，假时钟驱动、契约网关/名册 fixture、零通用 mock/零真实等待）；`packages/api` 15 用例全绿；两包 `tsc --noEmit` 0 错；`node scripts/test-audit.mjs --check` 无新增测试债；`node scripts/i18n-audit.mjs --check` OK（1057 zh 键，含新增两种原因的面板映射与 zh/en 文案）。
 >
 > 已知边界（未做动态验证）：网关 promise 永不落定（`session/create` 悬挂）时启动在途标志不清，该触发点会一直保持未消费——与「执行记录本身长期 open」同源，轮询的失联收敛（`staleExecutionMs`）只结算账本记录，不等价于启动落定。
+
+> **2026-10-21 交叉引用（SDK cohort 官方能力去重）**：`tasks_*` 任务平面**记 exception 保留**；
+> 去留裁决与「对照对象不是 `task_board_*`」的辨析只有一处家，见
+> [SDK cohort 升级 Note](../process/2026-10-21-sdk-upgrade-npm-0.2.1-rc.2.md)「官方能力去重」节。

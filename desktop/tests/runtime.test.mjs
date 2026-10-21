@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,8 +8,6 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const {
   resolveRuntimePaths,
-  hostCliShimPath,
-  writeHostCliShims,
   isTradingHomePath,
   selectDshHome,
   consoleMessageArgsToEntry,
@@ -208,12 +205,12 @@ test('bundled plugin updates reseed managed profiles without changing the host v
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const seed = path.join(dir, 'seed');
   const profile = path.join(dir, 'profile');
-  const plugin = path.join(seed, 'node_modules', '@linxin666', 'dsh-client-ui-plugin-manager');
+  const plugin = path.join(seed, 'node_modules', '@dshtrading', 'client-ui-updater');
   fs.mkdirSync(plugin, { recursive: true });
   fs.writeFileSync(path.join(seed, 'package.json'), '{"name":"dsh-profile-trading-web"}');
   fs.writeFileSync(path.join(seed, 'cordis.patch.yml'), '[]\n');
-  fs.writeFileSync(path.join(plugin, 'package.json'), '{"version":"0.3.17"}');
-  fs.writeFileSync(path.join(plugin, 'index.js'), 'old plugin');
+  fs.writeFileSync(path.join(plugin, 'package.json'), '{"version":"0.5.9"}');
+  fs.writeFileSync(path.join(plugin, 'index.js'), 'old bundle');
   const runtime = { node: 'node@24', host: 'dsh@0.1.5-rc.1' };
   const initialHash = profileSeedFingerprint(seed);
   const initial = runtimeSeedStamp({ ...runtime, profileHash: initialHash });
@@ -227,13 +224,13 @@ test('bundled plugin updates reseed managed profiles without changing the host v
   assert.equal(runtimeSeedStamp({ ...runtime, profileHash: initialHash, builtAt: 'later' }), initial);
   assert.equal(profileAction(profile, initial), 'leave');
 
-  fs.writeFileSync(path.join(plugin, 'package.json'), '{"version":"0.3.20"}');
-  fs.writeFileSync(path.join(plugin, 'index.js'), 'bundle children supported');
+  fs.writeFileSync(path.join(plugin, 'package.json'), '{"version":"0.6.1"}');
+  fs.writeFileSync(path.join(plugin, 'index.js'), 'rebuilt bundle');
   const updated = runtimeSeedStamp({ ...runtime, profileHash: profileSeedFingerprint(seed) });
   assert.notEqual(updated, initial);
   assert.equal(profileAction(profile, updated), 'reseed');
   applyProfileSeed(seed, profile, 'reseed', updated, {});
-  assert.equal(fs.readFileSync(path.join(profile, 'node_modules', '@linxin666', 'dsh-client-ui-plugin-manager', 'package.json'), 'utf8'), '{"version":"0.3.20"}');
+  assert.equal(fs.readFileSync(path.join(profile, 'node_modules', '@dshtrading', 'client-ui-updater', 'package.json'), 'utf8'), '{"version":"0.6.1"}');
   assert.equal(fs.readFileSync(path.join(profile, 'cordis.patch.yml'), 'utf8'), '- id: user-setting\n');
   assert.equal(profileAction(profile, updated), 'leave');
 
@@ -554,33 +551,6 @@ test('operator gets host hook paths that point outside the archive', () => {
   const unpacked = '/res/app.asar.unpacked/src/host-exit-tracer.mjs';
   assert.equal(asarUnpackedPath(unpacked), unpacked);
   assert.equal(asarUnpackedPath('/repo/desktop/src/host-exit-tracer.mjs'), '/repo/desktop/src/host-exit-tracer.mjs');
-});
-
-test('writeHostCliShims drops a runnable dsh shim into the staged host', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-cli-shim-'));
-  const host = path.join(dir, 'runtime', 'host');
-  const entry = path.join(host, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js');
-  fs.mkdirSync(path.dirname(entry), { recursive: true });
-  fs.writeFileSync(entry, "process.stdout.write(JSON.stringify(process.argv.slice(2)) + '\\n');\n");
-  const nodeBin = path.join(dir, 'runtime', 'node', 'bin');
-  fs.mkdirSync(nodeBin, { recursive: true });
-  fs.symlinkSync(process.execPath, path.join(nodeBin, 'node'));
-
-  const written = writeHostCliShims(host);
-  assert.equal(written.posix, hostCliShimPath(host, 'darwin'));
-  assert.equal(written.windows, hostCliShimPath(host, 'win32'));
-  assert.ok(written.posix.endsWith(path.join('.bin', 'dsh')), 'gateway probes .bin/dsh');
-  assert.ok(written.windows.endsWith(path.join('.bin', 'dsh.cmd')), 'gateway probes .bin/dsh.cmd on Windows');
-  assert.ok(fs.existsSync(written.posix) && fs.existsSync(written.windows));
-  assert.ok(fs.readFileSync(written.posix, 'utf8').includes('@deepseek-ai/dsh/lib/bin.js'));
-  assert.ok(fs.readFileSync(written.windows, 'utf8').includes('@deepseek-ai\\dsh\\lib\\bin.js'));
-
-  if (process.platform !== 'win32') {
-    assert.ok((fs.statSync(written.posix).mode & 0o111) !== 0, 'the POSIX shim is executable');
-    const out = execFileSync(written.posix, ['plugin', '--profile', 'trading-web', 'list'], { encoding: 'utf8' });
-    assert.deepEqual(JSON.parse(out), ['plugin', '--profile', 'trading-web', 'list']);
-  }
-  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('toNodeImportSpecifier converts paths to valid file URLs safe for --import', () => {

@@ -7,8 +7,8 @@
 # 2026-10-01 P1 拆包：本层的 11 行**原样从 @dshtrading/base 搬来**——行 id 与 name
 # 一字不改（行 id 是跨版本公共契约，见 scripts/patch-id-freeze.json），只换了拥有者。
 # 为什么这些行归 GUI 平面：它们都是浏览器半（语言包/设置面/中栏视图/更新对话框）或
-# 只有 web 宿主才有意义的双半行（IM/插件管理器/模型能力声明——host 半硬 inject
-# webServer/connection，headless 下必然 pending，靠 disabled: !!js 条件禁用兜底）。
+# 只有 web 宿主才有意义的双半行（IM——host 半硬 inject connection，headless 下
+# 必然 pending，靠 disabled: !!js 条件禁用兜底）。
 # bot 安装闭包不得出现任何 @dshtrading/client-ui-*（P1 步骤 4 的判据）。
 #
 # 注意：patch 文件必须保持「顶层 YAML 数组」形状（loadProfile → parsePatchList 对非数组
@@ -101,37 +101,3 @@
     - id: dsh-trading-im
       name: '@xmanrui/dsh-im'
       disabled: !!js (![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-client-connection'))
-
-    # 插件管理（2026-09-08，npm 复用 dsh-web 项目同款插件
-    # @linxin666/dsh-client-ui-plugin-manager）：官方「插件」设置区的
-    # Plugin manager 标签页（settings.plugins.tab order 20），npm/git 安装、
-    # 启用开关、更新校验、卸载、安装冲突回滚与「让 agent 修」修复会话。
-    # 0.3.20 起管理列表展示 bundle 的子行，内置 IM/使用统计/会话管理在
-    # base 下可见；无需把这些包再次加入 profile bundles。
-    # 双通道：官方 installer 通道存在时走 /plugin-installer RPC；npm 发布版
-    # web 运行时无该通道，由本包 host 半挂 loopback 网关、派生官方 dsh CLI
-    # 写入 profile（唯一写者）。CLI 解析顺序 = 宿主 PATH → 宿主入口向上
-    # node_modules/.bin/dsh → darwin /opt/homebrew|/usr/local/bin/dsh；
-    # 桌面版自带 runtime 无全局 CLI，由 desktop 构建期投放
-    # runtime/host/node_modules/.bin/dsh 垫片补齐（本变更同批落地）。
-    # 市场无关共享行，归 base 所有（铁律 #1）。写入仅限本机 loopback
-    # （socket+Host+Origin+sec-fetch-site 四重校验，非 loopback 403）。
-    # 隐私面：浏览器半每日一次匿名安装心跳到 dsh-market.com（随机
-    # localStorage id + 包名，无对话数据/无 IP），详见 Agent Note。
-    # 行安全（issue #88）：host 半硬 inject webServer，headless 宿主缺服务即
-    # 永久 pending → 启动即崩；按提供方行条件禁用（见文件头「条件禁用行」）。
-    - id: dsh-trading-plugin-manager
-      name: '@linxin666/dsh-client-ui-plugin-manager'
-      disabled: !!js (![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-host-webserver'))
-    # 模型能力声明（2026-09-08，npm 复用 dsh-web 项目同款插件
-    # @linxin666/dsh-client-ui-model-capabilities）：在官方「模型」设置页的
-    # 自定义 provider 卡片（llm-pi-ai 家族）内就地声明每模型的图片输入与
-    # 推理档位（settings.models.provider-card keyed slot + footer 归档区），
-    # 并支持 provider 级禁用/恢复归档。写回官方 llm-pi-ai settings
-    # namespace（整数组覆盖，非本插件字段原样保留），无 DSH 源码改动。
-    # host 半只注册自身 namespace dsh-model-capabilities（禁用 provider 归档）。
-    # 适配点：本仓 llm-pi-ai 路由（kimi-coding / zai-coding-cn 等）即在该
-    # 卡片体系内，能力声明直接生效；llm-deepseek 固定目录不在覆盖范围
-    # （官方能力面自带）。市场无关共享行，归 base 所有（铁律 #1）。
-    - id: dsh-trading-model-capabilities
-      name: '@linxin666/dsh-client-ui-model-capabilities'
