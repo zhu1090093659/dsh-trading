@@ -25,7 +25,7 @@ whenToUse: 用户明确请求 dsh-trading 发版、桌面发布、指定发布 r
 
 ## 0. 门禁与基线
 
-先加载 `dsh-parallel-dev`，检查 `git status --short --branch`、main 与远端 SHA、`git remote -v`；fetch/push 目的地须为规范仓库。共享 checkout 不自动 checkout/rebase；需整合时先确认本地改动与分支安全。发布前全部内容已合入 main。
+先加载 `agent-parallel-dev`，检查 `git status --short --branch`、main 与远端 SHA、`git remote -v`；fetch/push 目的地须为规范仓库。共享 checkout 不自动 checkout/rebase；需整合时先确认本地改动与分支安全。发布前全部内容已合入 main。
 
 完整发布门禁（在项目根执行）：
 
