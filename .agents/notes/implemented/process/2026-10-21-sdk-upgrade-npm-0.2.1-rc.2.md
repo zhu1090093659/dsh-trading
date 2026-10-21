@@ -260,7 +260,9 @@ registered variables: provider, model`），整轮运行失败。全仓只有这
 ## Consequences
 
 - 仓库侧 cohort 追平宿主，插件与宿主回到同一模块世代，影子拷贝 identity 分裂的成因消除。
-- 遗留未完成项：③ 桌面壳安装包需按新钉版重新构建发布，仅改钉版不会送达用户。
+- 遗留未完成项：③ 桌面壳对外发布（Release 资产）仍未做——本机 dir 产物已重建，但发布要等 Windows 可 checkout 后重新授权（bump + tag + 三路外发）。
+- 本机侧收尾（2026-10-21 本轮）：`DSH_HOME=/Users/zcl/.dsh-trading scripts/refresh-profile.sh trading-web` 跑通，profile 内 `@dshtrading/gui` 补丁行 10 条、两条已删行零命中；刷新后自起实例跑 `pnpm ui:check` **14 项断言全绿**（认证栅栏 401、交易面 `overlay=true` + 自选 36 行、composer 空态未锁死、壳死区 0px、特殊指标 G1–G6、无未捕获异常与无 error 级控制台输出）；桌面壳按当前代码重建 dir 产物并装入 `/Applications/DSH Trading.app`（`codesign --verify --deep --strict` 退出 0、TeamIdentifier `P7595YVTRB`、打包 seed 补丁行 10 条且两条已删行零命中、打包 runtime 起宿主打印 `dsh web: http://127.0.0.1:<port>/?token=…`，退出后无孤儿进程）。
+- `flash-panel` 抖动复现结论：单文件带覆盖率连跑 8 次、整包（64 文件 / 549 用例）带覆盖率连跑 2 次，全绿未复现，不再改断言。
 - 本轮已处置的两项：① `model-capabilities` 与 `plugin-manager` 两条行连同桌面 dsh 垫片已移除
   （`packages/gui/cordis.patch.yml` 层内行 12 → 10，native 覆盖度按上面「官方能力去重」节的
   裁决确认，不再等真机确认）；② 自动化任务平面保留并记 exception（对照对象是本世代
