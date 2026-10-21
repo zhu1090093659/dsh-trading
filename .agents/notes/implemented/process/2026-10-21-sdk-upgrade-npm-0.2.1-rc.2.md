@@ -98,20 +98,28 @@ floor 不随 cohort 走，声明即失真。
   → `fc70fd1f`（门禁证据绑定）→ `a77b9f5`（构建产物裸 specifier）→ `470e8774`（合并，门禁 17/17）。
 - GUI 验证（`scripts/ui-functional-check.mjs`，headless Chrome + CDP，附加运行中实例与自起实例两种方式各跑一次）：
   认证栅栏（未认证 401）、交易面挂载（`overlay=true`、自选 36 行）、壳死区（轨道 0px）、工作区菜单（4 项）、
-  特殊指标 G1–G6、无未捕获异常与无 error 级控制台输出全过；唯一失败项 B1（composer 未进入可用态，
-  提示「选择一个工作区开始」）——该字符串只在宿主 `dsh-client-ui-conversation/lib/client.js` 内，
-  本仓 `packages/` 与 profile 插件副本零命中，判定为宿主侧空态条件，记入遗留项而非本升级回归。
+  特殊指标 G1–G6、无未捕获异常与无 error 级控制台输出全过。B1 当轮判红是**断言校准错**而非回归：宿主在
+  `sessionId === undefined` 时故意把 composer 置为 inert（`disabled` + `placeholder.workspace`「选择一个工作区开始」
+  + 自身兼作 `aria-haspopup="menu"` 的工作区触发器），按占位文案判红在新宿主上恒红。断言已按宿主语义校准为
+  「禁用且没有工作区入口」才算故障，见 [UI 验证 Note](2026-09-04-ui-verification-hosted-http-headless-chrome.md)。
 
 ## 构建产物的依赖导入（裸 specifier）
 
 `unbundle: true` 落 rolldown 的 preserveModules：只有包自己 package.json 声明过的依赖才算 external，
-未声明的 scope 会被复制进 `lib/node_modules` 并把导入改写成 `./node_modules/.pnpm/…` 相对路径。
-`packages/indicators`（值导入 `@deepseek-ai/cordis`）与 `packages/router`（类型导入 `@deepseek-ai/cosmokit`）
-都漏了声明，产物因此依赖构建机的 pnpm 虚拟 store 目录名；profile 副本换代漏同步即 `ERR_MODULE_NOT_FOUND`，
-即便解析成功加载的也是宿主之外的第二份 cordis（Service 实例割裂）。两处配置补
-`deps: { neverBundle: [/^@deepseek-ai\//, /^@dshtrading\//] }` 后产物回到裸 specifier，全仓不再生成
-`lib/node_modules`。client bundle 里的 `//#region ../../node_modules/.pnpm/…` 是 rolldown 的 provenance
-注释、不是导入，判定口径要看导入级 grep 而不是裸字符串。
+未声明的 scope 会被复制进 `lib/node_modules` 并把导入改写成 `./node_modules/.pnpm/…` 相对路径——
+产物因此依赖构建机的 pnpm 虚拟 store 目录名，profile 副本换代漏同步即 `ERR_MODULE_NOT_FOUND`；
+即便解析成功，加载的也是宿主之外的第二份 cordis（Service 实例割裂）。
+
+这条口径现只有一处：根 `tsdown.package.config.ts` 的 `packageConfig()` 默认带
+`deps: { neverBundle: [/^@deepseek-ai\//, /^@dshtrading\//] }`，各包的额外外置项经
+`deps.neverBundle` **追加**（tsdown 0.22 里 `external` 已废弃、与 `neverBundle` 同时出现直接构建失败，
+实测 `TypeError: external is deprecated`）。声明面同步补齐：`packages/indicators` 值导入
+`@deepseek-ai/cordis`、`packages/router` 类型导入 `@deepseek-ai/cosmokit`，两个 peer 都已声明。
+全仓不再生成 `lib/node_modules`，产物 0 条导入级 `…/node_modules/.pnpm/…` 相对路径。口径与验收见
+[逐包配置收敛 Note](../simplification/2026-10-15-per-package-config-copies.md)。
+
+client bundle 里的 `//#region ../../node_modules/.pnpm/…` 是 rolldown 的 provenance 注释、不是导入，
+判定要看导入级 grep 而不是裸字符串。
 
 ## 桌面壳与本 profile 的世代约束（同日现场事故与恢复）
 
@@ -155,9 +163,23 @@ longer supported; … (spawn only)`。新世代 `apply()` 对 `config.persona` /
 preset 承担；`presets.test.ts` 的断言同步改为「provider 为 spawn、persona/toolFilter 缺席、三个委派各指一个
 不同 preset」。
 
-代价（已记录、非意外）：spawn 不继承父上下文，fork 的「父工具面 + 已完成轮次」继承不再存在；
-`DELEGATE_RULE` 这段一次性委派纪律文本失去工具级落点（工具无附加指令字段），原文保留在源码注释里，
-恢复它需要为委派定义专用 preset（见看板卡）。硬闸门不受影响：下单仍要过 base 的审批闸门。
+代价（已记录、非意外）：spawn 不继承父上下文，fork 的「父工具面 + 已完成轮次」继承不再存在。
+硬闸门不受影响：下单仍要过 base 的审批闸门。
+
+### 同日续三：`DELEGATE_RULE` 恢复为三个专用委派 preset
+
+上一段留下的缺口已补上：`DELEGATE_RULE` 不再是源码注释里的孤儿，而是 `packages/base/src/presets.ts`
+的常量，注入三个新增的委派 preset。每个委派 preset 复用对应角色的整套行（工具面/技能/市场 kit 与
+角色逐条相同，测试用「除 persona 外 plugins 深度相等」冻结这一点），只在 persona 尾部追加该纪律；
+master 的三个委派行 `agentPreset` 由角色 preset 改指 `dsh-trading-delegate-instrument-researcher` /
+`dsh-trading-delegate-trader` / `dsh-trading-delegate-risk-reviewer`（行 id 仍是
+`dsh-trading-master-delegate-*`）。角色 preset 的 persona 不含该纪律，普通会话不会被当成一次性子代理。
+
+名册影响如实记录：`PresetDefinition` 只有 id/name/description/order/plugins，registry 没有可见性
+字段，`dsh-client-ui-agent-preset` 的选择器也只按 `broken` 过滤，因此三个委派 preset 无法对用户
+隐藏，名册从 4 条变 7 条；用途靠「（委派）」名称后缀与排在四角色之后的 order（190/200/210）表达。
+代价是这三个角色的插件树在宿主里各多挂一份（trader 的 connector 面也在内），换来的是委派纪律有工具级
+之外的正式落点。运行态生效需重建并按 profile 刷新契约刷新 file: 副本，本机未执行（实例运行中禁止刷新）。
 
 验证：重建后的 App runtime 下 CDP 冒烟 **17 项断言全绿**，含「选择工作区后 composer 可用」与
 「真实新建会话无预设错误」（B1b / B2b / B3）。
@@ -203,15 +225,19 @@ registered variables: provider, model`），整轮运行失败。全仓只有这
 - 遗留未完成项（按优先级）：① `model-capabilities` 与 `plugin-manager` 的移除需先在
   桌面壳真机确认 native 覆盖度（含 provider 级归档、桌面无 pnpm 时 plugin-manager 能否工作）；
   ② 自动化任务平面对照 native `task_board_*` 后再定去留；
-  ③ `spikes/s3-preset/spike-preset-pkg/package.json` 仍以 `link:` 指向 DSH 源码 checkout，
-  与「只用官方 npm scope」冲突，待清理；④ 桌面壳安装包需按新钉版重新构建发布，
-  仅改钉版不会送达用户；⑤ `packages/client-ui-trading/test/flash-panel.smoke.test.tsx:57`
-  的 `[data-hot="爆"]` 断言在 `coverage:check` 中出现过一红一绿的抖动，待单独排查。
+  ③ 桌面壳安装包需按新钉版重新构建发布，仅改钉版不会送达用户。
+- 已清掉的两项遗留：`spikes/s3-preset/spike-preset-pkg/package.json` 的依赖改钉官方 npm 版本
+  `@deepseek-ai/dsh-agent-presets@0.1.6-alpha.2`（该名字最后一次官方发布，之后改名
+  `dsh-agent-preset-registry`；spike 代码与 patch 行名都引用旧名，故按旧名钉官方版本而不是改名字）；
+  `flash-panel.smoke.test.tsx` 的 `[data-hot="爆"]` 断言改为等渲染的 `waitFor`（原式只等 fetch 调用返回，
+  渲染落后一拍就红一次）。
 - profile 侧已落地（`~/.dsh-trading/profiles/trading-web`）：三个官方插件（`dsh-computer-use` /
   `dsh-experimental-computer-use-cua-driver-native` / `dsh-web-search-exa`）钉版与
   `minimumReleaseAgeExclude`（84→87 条）一并抬到本世代；`pnpm install` 直接执行——
   `scripts/refresh-profile.sh` 里的 `dsh plugin --profile … install` 实测会挂死（pnpm 打印 `Done` 后不退出）；
-  再按脚本同一份 `CORE_PKGS` 重挂 12 条 symlink 到 Homebrew 宿主。
+  再按脚本同一份 `CORE_PKGS` 重挂 12 条 symlink 到 Homebrew 宿主。该绕过已收进
+  `scripts/refresh-profile.sh` 本身（install 环节直接 `pnpm install`，`DSH_REFRESH_VIA_CLI=1` 保留 CLI 逃生门），
+  见 [刷新入口 Note](2026-10-09-refresh-profile-generalized-entry.md)。
   口径纠错：`profile-cohort-check.sh` 缺省扫 `~/.dsh`，本项目必须带 `DSH_HOME=~/.dsh-trading`；
   本 Note 初稿曾把宿主 home 的数字误记成本 profile 基线，按正确 home 复扫后本 profile 的
   `@deepseek-ai/*` 全部 `OK → 宿主 symlink`，**0 FAIL / 1 WARN**（`dsh-mcp-client` 同版本实体拷贝）。

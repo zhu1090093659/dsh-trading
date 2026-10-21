@@ -1,13 +1,10 @@
-import { defineConfig } from 'tsdown'
+import { packageConfig } from '../../tsdown.package.config.ts'
 
-export default defineConfig({
-  entry: ['src/index.ts', 'src/tool.ts', 'src/plugin.ts'],
-  outDir: 'lib',
-  format: ['esm'],
+export default packageConfig({
+  entry: [
+    'src/index.ts',
+    'src/tool.ts',
+    'src/plugin.ts',
+  ],
   platform: 'neutral',
-  target: 'es2024',
-  dts: true,
-  clean: true,
-  unbundle: true,
-  fixedExtension: false,
 })

@@ -1,16 +1,10 @@
-import { defineConfig } from 'tsdown'
+import { packageConfig } from '../../tsdown.package.config.ts'
 
 // node 半：与 client-ui-updater 同款单步 tsdown（dts: true）。locales.ts 一并
 // 从 node 入口构建（dsh-i18n 中心语言包构建期 import 本包 ./locales 子路径）。
 // 浏览器半由 tsdown.client.config.mjs 构建（lib/client.js）。
-export default defineConfig({
+
+export default packageConfig({
   entry: ['src/index.ts', 'src/client/locales.ts'],
-  outDir: 'lib',
-  format: ['esm'],
-  platform: 'node',
-  target: 'es2024',
-  dts: true,
   clean: false,
-  unbundle: true,
-  fixedExtension: false,
 })

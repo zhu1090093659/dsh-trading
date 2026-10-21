@@ -8,7 +8,9 @@
  *      对漂移只告警；其余三类漂移（死路径/身份漂移/闭包缺口）仍中止。
  *
  * 隔离纪律：所有用例只碰 mkdtemp 出的夹具 home（名字含 -trading 才过 home 守卫），
- * 并把 dsh 换成 PATH 上的假实现——测试绝不对 ~/.dsh-trading 做插件安装。
+ * 并把 dsh 与 pnpm 换成 PATH 上的假实现——测试绝不对 ~/.dsh-trading 做真实安装。
+ * 2026-10-21：install 环节从 dsh plugin 改为 profile 目录里的 pnpm install（宿主 CLI
+ * 在本机会挂死），所以假 pnpm 同时记录它与参数，供用例断言装在哪里。
  */
 import { spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -57,28 +59,33 @@ function sdkPeerNames() {
 }
 
 /**
- * PATH 上的假 dsh：记录调用即退出，绝不对真实 home 装插件。
+ * PATH 上的假 dsh 与假 pnpm：记录调用即退出，绝不对真实 home 装任何东西。
  *
  * 放在 <root>/bin/dsh 是刻意的：sync-profile-overrides.mjs 从 dsh 可执行文件的
  * realpath 推导 SDK 根（<root>/node_modules），并把 @deepseek-ai/* override 行写到
  * 那里。假 dsh 若不落在 bin/ 下，推导会回落到硬编码的 Homebrew 路径——本机存在、
  * CI 不存在，于是夹具里写下死路径、预检判红（2026-08-30 note 的 CI 约束）。
  * 一并造出该 SDK 根下的包目录，让夹具与宿主安装彻底解耦。
+ * 假 pnpm 把 cwd 与参数追加进 pnpmLog，用例据此核对「装的是 profile 目录」。
  */
-function stubDsh() {
+function stubToolchain() {
   const root = mkdtempSync(join(tmpdir(), 'stub-dsh-'))
   dirs.push(root)
   const bin = join(root, 'bin')
   mkdirSync(bin, { recursive: true })
-  const file = join(bin, 'dsh')
-  writeFileSync(file, '#!/bin/sh' + NL + 'exit 0' + NL)
-  chmodSync(file, 0o755)
+  const dshFile = join(bin, 'dsh')
+  writeFileSync(dshFile, '#!/bin/sh' + NL + 'exit 0' + NL)
+  chmodSync(dshFile, 0o755)
+  const pnpmLog = join(root, 'pnpm.log')
+  const pnpmFile = join(bin, 'pnpm')
+  writeFileSync(pnpmFile, '#!/bin/sh' + NL + "printf '%s\t%s\n' \"$PWD\" \"$*\" >> '" + pnpmLog + "'" + NL + 'exit 0' + NL)
+  chmodSync(pnpmFile, 0o755)
   for (const name of sdkPeerNames()) {
     const dir = join(root, 'node_modules', ...name.split('/'))
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '0.0.0-test' }, null, 2))
   }
-  return bin
+  return { bin, pnpmLog }
 }
 
 /**
@@ -196,21 +203,24 @@ describe('refresh-profile 入口', () => {
   })
 
   it('运营：泛化入口刷新指定 profile 并重挂宿主核心包 symlink', () => {
-    // Given: a trading home with a real fixture profile and a stubbed dsh
+    // Given: a trading home with a real fixture profile and a stubbed toolchain
     const home = fixtureHome(['trading-all'])
-    const bin = stubDsh()
+    const { bin, pnpmLog } = stubToolchain()
     // When: the generalized entry refreshes that profile
     const result = runScript(REFRESH, ['--profile', 'trading-all'], { home, bin })
     // Then: it targets that profile and always re-mounts the core cohort
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('-- trading-all --')
     expect(result.stdout).toContain('恢复宿主核心包单一实例 symlink')
+    // And: the install ran as a bare pnpm install inside that profile, not through dsh
+    const installs = readFileSync(pnpmLog, 'utf8').trim().split(NL).map((line) => line.split('\t'))
+    expect(installs).toEqual([[join(home, 'profiles', 'trading-all'), 'install']])
   })
 
   it('运营：旧入口把位置参数当包名转发，仍刷新 trading-web', () => {
     // Given: the legacy entry invoked with a package name against an isolated home
     const home = fixtureHome(['trading-web'])
-    const bin = stubDsh()
+    const { bin } = stubToolchain()
     // When: the shim runs
     const result = runScript(SHIM, ['connector-futu'], { home, bin })
     // Then: it forwards to the generalized script, targeting trading-web

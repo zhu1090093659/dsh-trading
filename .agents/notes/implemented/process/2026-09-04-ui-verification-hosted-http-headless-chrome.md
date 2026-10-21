@@ -69,3 +69,16 @@ Status: implemented
 
 - 我**没有**（也无法）撤销那次错误运行写进宿主 `/.dsh` 的内容 —— 宿主 home 对本项目任务只读，我不会去改它。受影响的条目已在上面的证据里点名，是否要清理由你决定。
 - 这次修正只在本地与 `pnpm ui:check` 上验证过；该脚本**没进 CI**（它要起实例 + 用 headless Chrome，不是静态门禁）。这一点在"门禁 vs CI"审计里已记录。
+
+### 2026-10-21 补充：B1 断言按宿主空态语义校准
+
+B1（会话创建链路）原先按占位文案判红：抓 `[class*="placeholder"]` 的文本，含「选择一个工作区」即失败。
+新宿主 `dsh-client-ui-conversation` 在 `sessionId === undefined` 时**故意**把 composer 置为 inert——
+`disabled: true` + `placeholder.workspace`（「选择一个工作区开始」）+ `onRequestWorkspace`，且编辑器本身带
+`aria-haspopup="menu"` 兼作工作区菜单触发器。于是「出现该占位」是空态设计，旧断言在新宿主上恒红
+（本机两次实测全红），与 2026-09 的 `agent-preset/invalid` 事故不是同一形态。
+
+现断言：取 `[data-placeholder]` 的编辑器，读 `aria-disabled`、`aria-haspopup`（或 bar 上的
+`button[aria-label="选择工作区"]`）与该占位文本；**只有「禁用且没有任何工作区入口」才判红**——那正是
+事故形态（工作区选不出来，composer 锁死在禁用占位）。失败详情里同时打印 disabled 与 workspacePath，
+让下一次红能自证是空态变化还是真的锁死。

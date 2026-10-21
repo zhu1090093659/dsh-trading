@@ -16,6 +16,7 @@ export interface Config {}
 export const Config: Schema<Config> = Schema.object({})
 export const MARKETS = ['crypto', 'us', 'cn', 'hk', 'futures', 'global'] as const
 export type Market = typeof MARKETS[number]
+/** 角色 preset id（名册的四条主线）；委派专用 preset 由 DELEGATE_PRESETS 派生。 */
 export const PRESET_IDS = ['trader', 'instrument-researcher', 'risk-reviewer', 'master'] as const
 export interface MarketContribution { market: Market; traderRows: string }
 /** One child Cordis row inside a PresetDefinition (structural subset of the
@@ -48,17 +49,18 @@ const ROSTER_ORDER = { master: 90, trader: 100, 'instrument-researcher': 110, 'r
  *  inline `persona`/`toolFilter` on the tool (`tool-subagent` rejects both) and
  *  `agentPreset` is spawn-only, so fork inheritance is not available here.
  *  Research → plan drafting → risk review mirrors the preset roster order. */
-// 委派纪律原文（暂无处安放）：'You are a one-shot delegate: deliver analysis and advice text only —
-// do not place or cancel orders, do not modify accounts, do not create or borrow dynamic plugins or
-// scripts to bypass trading gates; execution happens in the "Master" session through the approval
-// gate. Write your reply in the language of the task brief.'
-// 宿主新世代删除了 tool-subagent 的 persona/toolFilter，也不给工具级附加指令字段，这段规则只能
-// 落进 Agent Preset；而三个角色 preset 同时供独立会话使用，塞进去会污染普通会话。恢复它的做法是
-// 为委派定义专用 preset（待办，见看板）。硬闸门不受影响：下单仍要过 base 的审批闸门。
-const DELEGATES = [
-  { id: 'dsh-trading-master-delegate-research', tool: 'researcher_subagent', role: 'instrument-researcher' as const },
-  { id: 'dsh-trading-master-delegate-trader', tool: 'trader_subagent', role: 'trader' as const },
-  { id: 'dsh-trading-master-delegate-risk', tool: 'risk_reviewer_subagent', role: 'risk-reviewer' as const },
+// 委派纪律（2026-10-21 恢复）：新世代 tool-subagent 既没有 persona/toolFilter，也没有工具级附加
+// 指令字段，这段规则只能落进 Agent Preset；而三个角色 preset 同时供独立会话使用，塞进去会污染
+// 普通会话。因此每个委派各配一个专用 preset（角色 persona + 本规则 + 角色工具面），委派行的
+// agentPreset 指向它。硬闸门不受影响：下单仍要过 base 的审批闸门。
+const DELEGATE_RULE = 'You are a one-shot delegate: deliver analysis and advice text only — do not place or cancel orders, do not modify accounts, do not create or borrow dynamic plugins or scripts to bypass trading gates; execution happens in the "Master" session through the approval gate. Write your reply in the language of the task brief.'
+/** 三个委派专用 preset。registry 契约没有可见性字段、GUI 选择器渲染全部健康预设
+ *  （dsh-client-ui-agent-preset 只按 broken 过滤），所以它们会出现在名册里：用
+ * 「（委派）」后缀与排在四角色之后的 order 让用途自明，而不是假装能隐藏。 */
+export const DELEGATE_PRESETS = [
+  { id: 'dsh-trading-delegate-instrument-researcher', row: 'dsh-trading-master-delegate-research', tool: 'researcher_subagent', role: 'instrument-researcher' as const, order: 190 },
+  { id: 'dsh-trading-delegate-trader', row: 'dsh-trading-master-delegate-trader', tool: 'trader_subagent', role: 'trader' as const, order: 200 },
+  { id: 'dsh-trading-delegate-risk-reviewer', row: 'dsh-trading-master-delegate-risk', tool: 'risk_reviewer_subagent', role: 'risk-reviewer' as const, order: 210 },
 ] as const
 
 /** Role skill distribution (#70): the persona text already assigns each role its discipline,
@@ -110,9 +112,9 @@ const kitRow = (market: Market, skills: string[] | null): PresetRow => ({
 export function composePresets(contributions: readonly MarketContribution[]): PresetDefinition[] {
   const ordered = MARKETS.flatMap(m => contributions.filter(c => c.market === m))
   if (new Set(ordered.map(c => c.market)).size !== contributions.length) throw new Error('Duplicate or unknown market contribution')
-  return PRESET_IDS.map(id => {
+  const composeRole = (id: RoleId, extraPersona = ''): PresetDefinition => {
     const role = ROLES[id]
-    const persona = `${role.text} ${DOCTRINE} ${EVIDENCE} ${VERDICT} ${JOURNAL} Installed markets: ${ordered.map(c => c.market).join(', ') || 'none; only shared knowledge and holdings tools are available — never claim quote capability'}. Driven by {{model}}. Always reply in the language the user writes in.` // 工作目录不进 persona：宿主新世代只注册 provider/model 两个 prompt 变量，cwd 由 dsh-working-directory 的 working-directory:current 上下文提供
+    const persona = `${role.text} ${DOCTRINE} ${EVIDENCE} ${VERDICT} ${JOURNAL} Installed markets: ${ordered.map(c => c.market).join(', ') || 'none; only shared knowledge and holdings tools are available — never claim quote capability'}. Driven by {{model}}. Always reply in the language the user writes in.${extraPersona}` // 工作目录不进 persona：宿主新世代只注册 provider/model 两个 prompt 变量，cwd 由 dsh-working-directory 的 working-directory:current 上下文提供
     const withConnectors = id === 'trader' || id === 'master'
     const marketBlock = ordered.flatMap(c => {
       if (!withConnectors) return [kitRow(c.market, KIT_SKILLS[id](c.market))]
@@ -134,14 +136,14 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
     // job_list / job_kill for collecting and stopping background delegates.
     const delegation: PresetRow[] = id !== 'master' ? [] : [
       { id: 'dsh-trading-master-jobs', name: '@deepseek-ai/dsh-tool-jobs' },
-      ...DELEGATES.map(d => ({
-        id: d.id,
+      ...DELEGATE_PRESETS.map(d => ({
+        id: d.row,
         name: '@deepseek-ai/dsh-tool-subagent',
         config: {
           provider: 'spawn',
           toolName: d.tool,
           backgroundMode: 'one-shot',
-          agentPreset: d.role,
+          agentPreset: d.id,
         },
       })),
     ]
@@ -276,7 +278,18 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
         ...shellRow,
       ],
     }
-  })
+  }
+  const roles = PRESET_IDS.map(id => composeRole(id))
+  // 委派 preset 复用角色的整套行（工具面/技能/市场 kit 与角色完全一致），只在 persona 尾部
+  // 追加委派纪律，并用带（委派）后缀的名册文案与靠后的 order 标出用途。
+  const delegates = DELEGATE_PRESETS.map(d => ({
+    ...composeRole(d.role, ` ${DELEGATE_RULE}`),
+    id: d.id,
+    name: `${ROLES[d.role].name}（委派）`,
+    description: `${ROLES[d.role].description}仅供 Master 委派启动的一次性子代理使用，附加委派纪律：只交付文字结论，不下单、不改账户、不绕过交易闸门。`,
+    order: d.order,
+  }))
+  return [...roles, ...delegates]
 }
 
 interface LoaderEntry { disabled: boolean; options: { name: string } }

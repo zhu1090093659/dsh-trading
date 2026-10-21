@@ -16,7 +16,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const source = readFileSync(join(import.meta.dirname, '../src/presets.ts'), 'utf8')
-const plugins = /plugins:\s*\[(.*?)\]\s*,\s*\}\s*\}\)/s.exec(source)?.[1] ?? ''
+// 装配体从 map 回调改成 composeRole 后，plugins 行收在 `],\n    }\n  }` 之前。
+const plugins = /plugins:\s*\[(.*?)\]\s*,\s*\}\s*\}/s.exec(source)?.[1] ?? ''
 
 describe('预设工具面接线', () => {
   it('管理员：批量入口给全部角色', () => {

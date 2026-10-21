@@ -1,14 +1,11 @@
-import { defineConfig } from 'tsdown'
+import { packageConfig } from '../../tsdown.package.config.ts'
 
 // 与 connector-eastmoney 同款：单步 tsdown（dts: true），官方两段式 tsc -b 不采纳（S5 评审结论 2）。
-export default defineConfig({
-  entry: ['src/index.ts', 'src/dataplane.ts', 'src/global-plugin.ts'],
-  outDir: 'lib',
-  format: ['esm'],
-  platform: 'node',
-  target: 'es2024',
-  dts: true,
-  clean: true,
-  unbundle: true,
-  fixedExtension: false,
+
+export default packageConfig({
+  entry: [
+    'src/index.ts',
+    'src/dataplane.ts',
+    'src/global-plugin.ts',
+  ],
 })

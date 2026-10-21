@@ -54,7 +54,7 @@ describe('FlashPanel 热度筛选（金十网页版 火/热/沸/爆）', () => {
     expect(pressed('爆')).toBe('true')
     expect(pressed('火')).toBe('false')
     expect(pressed('热')).toBe('false')
-    expect(container.querySelector('[data-hot="爆"]')).not.toBeNull()
+    await waitFor(() => { expect(container.querySelector('[data-hot="爆"]')).not.toBeNull() })
   })
 
   it('点选 热 → 重发 hot 含 热；恢复默认 → 回到 沸+爆', async () => {

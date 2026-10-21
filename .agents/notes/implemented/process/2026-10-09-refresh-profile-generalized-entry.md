@@ -76,3 +76,19 @@ profile 的 `@dshtrading/*` 是 `file:` 安装快照，改完源码必须重建�
   的事实已原地更新（那两个 note 仍是 symlink 归一与预检四类漂移的 Owning Note）。
 - 未改：本脚本仍不处理 `trading-bot` profile（其 `file:` 依赖指向已迁往卫星仓的
   `packages/bot`，刷新必须改走卫星仓，见 `docs/ops/running.md`）。
+
+### 2026-10-21 补充：install 环节改为 profile 目录里的 pnpm install
+
+`dsh plugin --profile <p> install` 在本机会挂死：pnpm 打印 `Done` 之后 CLI 进程不退出，脚本于是永远走不到
+「重挂核心包 symlink」那一步（此前是靠人工直接 `pnpm install` 绕过的）。现在脚本自己在 profile 目录跑
+`pnpm install`（`cd "$PROFILE" && pnpm install`）。
+
+这不是换实现而是换入口：宿主 `dsh` 的 `runProfilePnpm` 对 `install` 就是 `pnpm install`——`cwd` 为 profile
+目录、继承调用者环境、不加额外参数。代价是 CLI 会打印的版本兼容性警告不再出现，由紧随其后的
+`profile-config-preflight.sh`（死路径/身份漂移/闭包缺口，版本漂移在刷新位降级为告警）承担。
+`dsh` 仍被要求存在，因为 `sync-profile-overrides.mjs` 从它的 realpath 推导宿主 SDK 根；新增
+`pnpm` 存在性前置检查。逃生门 `DSH_REFRESH_VIA_CLI=1` 保留原 CLI 路径，供宿主侧行为正常时对照。
+
+自测同批更新（`scripts/refresh-profile.test.mjs`）：夹具里除假 `dsh` 外再加假 `pnpm`，把 `cwd` 与参数追加进
+日志；泛化入口用例断言安装确实发生在该 profile 目录（`[<home>/profiles/trading-all, install]`），
+测试仍不碰真实 `~/.dsh-trading`。

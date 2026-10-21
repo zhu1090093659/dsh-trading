@@ -14,7 +14,7 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/dsh-agent-presets": "link:/Users/zcl/code/deepseek-harness/packages/preset/agent-presets"
+    "@deepseek-ai/dsh-agent-presets": "0.1.6-alpha.2"
   },
   "license": "MIT"
 }

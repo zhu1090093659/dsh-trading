@@ -1,14 +1,8 @@
-import { defineConfig } from 'tsdown'
+import { packageConfig } from '../../tsdown.package.config.ts'
 
 // 纯库包（neutral 平台，零 runtime 依赖，浏览器与 node 均可打包）
-export default defineConfig({
+
+export default packageConfig({
   entry: ['src/index.ts', 'src/plugin.ts'],
-  outDir: 'lib',
-  format: ['esm'],
   platform: 'neutral',
-  target: 'es2024',
-  dts: true,
-  clean: true,
-  unbundle: true,
-  fixedExtension: false,
 })

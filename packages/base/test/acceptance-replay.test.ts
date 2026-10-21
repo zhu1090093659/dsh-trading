@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { entryListProblem } from '@deepseek-ai/dsh-agent-preset-registry'
-import { MARKETS, PRESET_IDS, composePresets } from '../src/presets.js'
+import { DELEGATE_PRESETS, MARKETS, PRESET_IDS, composePresets } from '../src/presets.js'
 import { LIVE_ACTION_GATE_PATTERN, decideLiveActionGate } from '../src/index.js'
 import { getPresetContribution as crypto } from '../../crypto/src/index.js'
 import { getPresetContribution as us } from '../../us/src/index.js'
@@ -30,7 +30,7 @@ describe('deterministic acceptance replay', () => {
     // When 装配预设
     const presets = composePresets(contributions)
     // Then 四个角色齐备、每个角色的行 id 唯一（重复 id 会被宿主 loader 静默塌缩）
-    expect(presets.map((preset) => preset.id)).toEqual([...PRESET_IDS])
+    expect(presets.map((preset) => preset.id)).toEqual([...PRESET_IDS, ...DELEGATE_PRESETS.map((preset) => preset.id)])
     for (const preset of presets) {
       const ids = preset.plugins.map((row) => row.id)
       expect(new Set(ids).size, preset.id).toBe(ids.length)
@@ -63,7 +63,7 @@ describe('deterministic acceptance replay', () => {
     // When 装配
     const presets = composePresets([])
     // Then 四个角色仍在，且 persona 明确声明「无可引用行情」（绝不假装能报价）
-    expect(presets.map((preset) => preset.id)).toEqual([...PRESET_IDS])
+    expect(presets.map((preset) => preset.id)).toEqual([...PRESET_IDS, ...DELEGATE_PRESETS.map((preset) => preset.id)])
     const persona = presets[0]!.plugins.find((row) => row.id === 'persona')!
     expect(String(persona.config?.prefix)).toContain('never claim quote capability')
   })
