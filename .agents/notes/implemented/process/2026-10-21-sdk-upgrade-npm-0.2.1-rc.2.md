@@ -143,6 +143,25 @@ peer 回到 `>=<本世代>`），在重建后的 App runtime 下实测 0 `disabl
 `never started` → 新建会话直接失败（`agent-preset/invalid: dsh-trading-tool-batch … never started`）。
 补齐 entry 后 `lib/` 恢复 19 个产物，提交 `30174e5a`，门禁 17/17。
 
+### 同日续：`tool-subagent` 删除内联 persona，委派行迁到 spawn + agentPreset
+
+新建会话报 `agent-preset/invalid: dsh-trading-master-delegate-* (@deepseek-ai/dsh-tool-subagent): persona is no
+longer supported; … (spawn only)`。新世代 `apply()` 对 `config.persona` / `config.toolFilter` **直接抛错**，
+且 `agentPreset` 只有 spawn provider 支持（`dsh-subagent-spawn-in-process`：`capabilities.agentPreset: true`、
+`inheritsParentContext: false`；fork provider 为 `false` / `true`，配 `agentPreset` 会被 `assertProvider` 拒绝）。
+
+处置：三个委派行改为 `provider: 'spawn'` + `agentPreset` 指向既有角色 preset
+（`instrument-researcher` / `trader` / `risk-reviewer`），`persona` / `toolFilter` 移除，角色纪律与工具面由
+preset 承担；`presets.test.ts` 的断言同步改为「provider 为 spawn、persona/toolFilter 缺席、三个委派各指一个
+不同 preset」。
+
+代价（已记录、非意外）：spawn 不继承父上下文，fork 的「父工具面 + 已完成轮次」继承不再存在；
+`DELEGATE_RULE` 这段一次性委派纪律文本失去工具级落点（工具无附加指令字段），原文保留在源码注释里，
+恢复它需要为委派定义专用 preset（见看板卡）。硬闸门不受影响：下单仍要过 base 的审批闸门。
+
+验证：重建后的 App runtime 下 CDP 冒烟 **17 项断言全绿**，含「选择工作区后 composer 可用」与
+「真实新建会话无预设错误」（B1b / B2b / B3）。
+
 ## Alternatives considered
 
 - **只对齐 cordis/cosmokit/schemastery，dsh 家族留在旧世代**：宿主已在新世代，影子拷贝
