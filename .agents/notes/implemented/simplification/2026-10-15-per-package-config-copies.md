@@ -92,14 +92,36 @@ Status: implemented
   不会被自动加载或重复记账。
 - 无模型可见面变化：这些文件不进工具 schema、不进提示词。
 
-### 2026-10-21 补充：unbundle 包必须把 SDK 与自有 scope 钉为 neverBundle
+### 2026-10-21 补充：neverBundle 收进共享 base，逐包配置只剩真差异
 
 `unbundle: true` 只会把包 package.json **声明过**的依赖当作 external；未声明的 scope 会被 rolldown 的
 preserveModules 复制进 `lib/node_modules`，并把导入改写成 `./node_modules/.pnpm/…` 相对路径。那条路径
 嵌着构建机 pnpm 虚拟 store 的目录名（版本 + peer 哈希），profile 副本换代漏同步即 `ERR_MODULE_NOT_FOUND`；
 即便解析成功，加载的也是宿主之外的第二份 `@deepseek-ai/*`（cordis Service 身份割裂）。
 
-因此 unbundle 包要在 tsdown 配置里固定 `deps: { neverBundle: [/^@deepseek-ai\//, /^@dshtrading\//] }`，
-或者补上真实的依赖声明。当前只有 `packages/indicators`（值导入 cordis）与 `packages/router`（类型导入
-cosmokit）出现过该形态并已修正；其余 unbundle 包是否收进共享 base 尚未做。见
-[SDK cohort 升级 Note](../process/2026-10-21-sdk-upgrade-npm-0.2.1-rc.2.md)。
+根 `tsdown.package.config.ts` 因此从「20 个 connector 的等价组」升为**全部 unbundle 包的构建口径**：
+`packageConfig(overrides?)` 给出 `outDir/format/platform/target/dts/clean/unbundle/fixedExtension` 默认值
+加 `deps: { neverBundle: [/^@deepseek-ai\//, /^@dshtrading\//] }`，并包的额外外置项按**追加**合并
+（不是替换——scope 规则不因某个包多声明一项而失效）。62 份 `packages/*/tsdown.config.ts` 现状：
+
+- 20 个 connector 仍是一行 `export { default } from '../../tsdown.package.config.ts'`；
+- 42 份原内联配置变成 `export default packageConfig({ entry, … })`，只留 entry 与真差异：
+  4 份 `platform: 'neutral'`、11 份 `clean: false`（node 半与浏览器半共用 `lib/`）、1 份追加
+  `deps.neverBundle`（test-support 的 `vitest`），其余 26 份只剩 entry；
+- `external` 已从配置面消失：tsdown 0.22 里它废弃且与 `neverBundle` 同时出现即构建失败
+  （`TypeError: external is deprecated. Cannot be used with deps.neverBundle`）。api 的 cordis 外置
+  由 scope 规则覆盖，test-support 只追加 `vitest`。
+
+声明面同批补齐：`packages/indicators` 加 `@deepseek-ai/cordis` peer（值导入 `Service`）、
+`packages/router` 加 `@deepseek-ai/cosmokit` peer（类型导入 `Volatile`），`pnpm peers check` 无问题。
+
+验收事实（本机现场复跑）：`pnpm build` 退出 0；`packages/*/lib/node_modules` 0 个；产物里导入级
+`…/node_modules/.pnpm/…` 相对路径 0 条（`lib/client.js` 的 `//#region ../../node_modules/.pnpm/…` 是
+rolldown 的 provenance 注释、不是导入）；`typecheck-gate` 371 错误 vs 基线 387。
+
+一个仍需知道的构建面事实：11 份 `clean: false` 的包在某个 entry 被删除或迁走后**不回收旧产物**。本机
+`lib/` 里曾留着 `client-ui-trading/lib/bridge.js`（2026-10-01 拆去 bot-api 的 node 半）与
+`client-ui-updater/lib/{updater-service,semver,github,environment}.js`、`client-ui-special-indicators/lib/{cache-file,finance-client}.js`
+等无 entry 的孤儿（本次只清掉这些本地残渣）。它们 gitignored、CI 从干净树构建时不存在、也不在
+`exports` 与 patch 行引用面上；把 `clean` 改成 `true` 会让单独跑 node 半时抹掉 `lib/client.js`，
+因此不作为本次改动。

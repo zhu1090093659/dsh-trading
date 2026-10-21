@@ -248,4 +248,15 @@ scripts/contract-id-gate.test.mjs` = 3 文件 / 14 例全绿；`node scripts/tes
 
 **棘轮语义不变**：那次 `--force` 只是当时不阻塞集成门禁的临时手段，债已在同一天清掉；该文件此后任何计数上升、或任何新文件带债，照旧红。
 
+### 2026-10-21 补充：等「调用发生」不等于等「界面渲染」
+
+`packages/client-ui-trading/test/flash-panel.smoke.test.tsx` 的 `[data-hot="爆"]` 断言在 `coverage:check` 里
+出现过一红一绿：它用 `waitFor` 等到 `net.calls.length > 0`（桥被调用）之后**同步**查 DOM，而条目徽标要等
+fetch 的 promise 回来、React 再提交一次才出现——调用发生与渲染提交之间那一拍就是抖动源。改成
+`await waitFor(() => { expect(container.querySelector('[data-hot="爆"]')).not.toBeNull() })` 后连跑 10 次全绿，
+断言强度不变（仍是具体选择器 + 非空断言，不是 `toBeTruthy` 泛断言）。
+
+写法口径：断言的对象在哪个阶段出现，`waitFor` 就要包住**那个对象本身**（此处是渲染产物），
+不要用「它上游的某个副作用已发生」当就绪信号；`sleep` 仍然禁止。
+
 
