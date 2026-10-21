@@ -206,10 +206,14 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
     // 与梁神的差异：梁神 phase 1 是 bash + editor（编码场景 bash 可兜底一切）；
     // 交易场景第一轮常见「我有什么仓 / 连了哪些市场」，所以最小集换成
     // holdings_list + routing_get —— 两个都极轻，且不涉及任何下单面。
-    // researcher 没有 bash（shellRow 只给 master），故 shellTools 留空。
+    // shellTools 必须是「恰好一个在本预设里真实可用的 shell 名」：vendored 插件的
+    // apply 用 stringList() 校验（空数组直接抛 "shellTools must be a non-empty array
+    // of non-empty strings"），组装期再要求正好命中一个，否则降级成全量目录。2026-10-21
+    // 事故：这里曾写 shellTools: []，两个复用同一套行的预设（研究员 + 它的委派预设）
+    // 因此在设置中心显示「加载失败」——预设行启动即抛错，registry 记为 broken。
     const BOOTSTRAP: Record<string, Record<string, unknown> | null> = {
       'instrument-researcher': {
-        shellTools: [],
+        shellTools: ['bash'],
         commonTools: ['holdings_list', 'routing_get'],
         messageSources: ['user', 'goal'],
         anchorGate: true,
@@ -237,13 +241,15 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
     const toolRows: PresetRow[] = [
       { id: 'dsh-trading-tool-fs', name: '@deepseek-ai/dsh-tool-fs' },
     ]
-    // Shell for the master only: content-insight and similar session skills drive
-    // python/uv pipelines from scripts; ordering tools already pass the base
-    // approval gate, so a shell adds no new trading surface (trader keeps its
-    // minimal execution face; specialists stay read-only on MARKET tools — the
-    // media row above is read-oriented and carries no ordering surface).
-    const shellRow: PresetRow[] = id === 'master'
-      ? [{ id: 'dsh-trading-master-bash', name: '@deepseek-ai/dsh-tool-bash' }] : []
+    // Shell for master and the instrument researcher: content-insight and similar
+    // session skills drive python/uv pipelines from scripts; ordering tools already
+    // pass the base approval gate, so a shell adds no new trading surface (trader
+    // keeps its minimal execution face; both shell roles stay read-only on MARKET
+    // tools — the media row above is read-oriented and carries no ordering surface).
+    // The researcher needs it for the bootstrap contract as much as for skills: the
+    // vendored two-phase plugin demands exactly one available shell (see BOOTSTRAP).
+    const shellRow: PresetRow[] = id === 'master' || id === 'instrument-researcher'
+      ? [{ id: `dsh-trading-${id}-bash`, name: '@deepseek-ai/dsh-tool-bash' }] : []
     // Workspace instruction injection (AGENTS.md). The Web surface disables the
     // host-plane `agent-instructions` row and leaves discovery to the preset, so a
     // role that does not mount it runs with NO workspace instructions at all

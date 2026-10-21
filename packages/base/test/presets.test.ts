@@ -139,12 +139,20 @@ it('composes all 16 installed-market subsets deterministically as registry defin
         expect(prefix).toContain('strategy_backtest')
         expect(prefix).toContain('knowledge-curation')
         // Skill surface + shell: the master drives session skills (content-insight
-        // pipelines) and therefore carries the bash row; specialists do not.
+        // pipelines) and therefore carries the bash row; the researcher carries it
+        // for the two-phase bootstrap contract (exactly one shell, see BOOTSTRAP).
         expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-bash')).toBeTruthy()
       } else {
         expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-subagent')).toBeUndefined()
         expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-jobs')).toBeUndefined() // no delegation, no background jobs
-        expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-bash')).toBeUndefined() // shell is master-only
+        const shell = preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-bash')
+        if (role === 'instrument-researcher') {
+          // 两阶段 bootstrap 的 shellTools 必须命中本预设真实挂上的 shell（2026-10-21
+          // 「加载失败」事故：声明了空 shell，插件 apply 直接抛错）。
+          expect(shell).toEqual({ id: 'dsh-trading-instrument-researcher-bash', name: '@deepseek-ai/dsh-tool-bash' })
+        } else {
+          expect(shell).toBeUndefined() // no shell for the minimal execution faces
+        }
       }
       // Every role gets the skill catalog and loader (host web rows are disabled;
       // without these the persona's skill names are dead references — 2026-09-07).

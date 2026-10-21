@@ -443,6 +443,50 @@ if (!settingsBtn) {
     panel !== null ? `openSettings 命中路径=${path}` : `设置弹层未渲染（openSettings 命中路径=${path === '' ? '无' : path}）`);
   check('H2. 设置弹层内含交易分区', panel !== null && (panel.text ?? '').includes('交易'),
     panel !== null ? `nav 含交易=${(panel.text ?? '').includes('交易')}` : '弹层未打开');
+  // H3：预设名册不得有 broken 行。2026-10-21 事故：presets.ts 给研究员的
+  // tool-bootstrap 行写了空 shellTools，vendored 插件 apply 直接抛错，研究员与它的
+  // 委派预设双双显示「加载失败」——预设行启动失败是静默的，只有设置中心这张卡会红。
+  if (panel !== null) {
+    // 设置壳的分区导航在打开后异步落地（首帧只有面板骨架），轮询等它出现。
+    let navTarget = null;
+    for (let i = 0; i < 24 && navTarget === null; i++) {
+      await sleep(500);
+      navTarget = await evalJs(`(() => {
+        const el = [...document.querySelectorAll('button, [role="tab"], a, li')]
+          .find((e) => {
+            const text = (e.textContent || '').trim();
+            return text.includes('Agent') && text.includes('预设');
+          });
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return [Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)];
+      })()`);
+    }
+    if (navTarget === null) {
+      check('H3. Agent 预设名册无加载失败项', false, '未找到「Agent 预设」导航项');
+    } else {
+      await click(navTarget[0], navTarget[1]);
+      let broken = null;
+      for (let i = 0; i < 16 && broken === null; i++) {
+        await sleep(250);
+        broken = await evalJs(`(() => {
+          const tips = Array.from(document.querySelectorAll('[class*="brokenTip"]'));
+          const badged = Array.from(document.querySelectorAll('[class*="brokenBadge"]'))
+            .filter((el) => (el.className || '').toString().includes('brokenBadge'));
+          const names = tips.map((t) => {
+            const card = t.closest('[class*="card"]') ?? t.parentElement?.parentElement;
+            return (card?.textContent ?? '').trim().slice(0, 60);
+          });
+          return { tips: tips.map((t) => (t.textContent || '').trim()), names: names, badges: badged.length };
+        })()`);
+      }
+      const bad = broken !== null && Array.isArray(broken.tips) && broken.tips.length > 0;
+      check('H3. Agent 预设名册无加载失败项', broken !== null && !bad,
+        broken === null ? '预设名册未渲染'
+          : bad ? `${broken.tips.length} 项加载失败：${broken.names[0] ?? ''} — ${broken.tips[0]}`
+            : `名册无 failed 行（badge=${broken.badges}）`);
+    }
+  }
   if (panel !== null) {
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });

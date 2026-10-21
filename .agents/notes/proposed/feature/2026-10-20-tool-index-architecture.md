@@ -37,13 +37,15 @@ Status: proposed
 
 | 预设 | 机制 | 参数 |
 |---|---|---|
-| instrument-researcher | **两阶段**（vendored `assets/tool-bootstrap.mjs`） | phase 1 只给 `holdings_list` + `routing_get`；晋升后 `promotedPresentation: 'code'`（PTC）；延迟 `agent-instructions` / `skill-catalog` 一阶 |
+| instrument-researcher | **两阶段**（vendored `assets/tool-bootstrap.mjs`） | phase 1 = `bash` + `holdings_list` + `routing_get`；`promotedPresentation: 'native'`（用户明确不切 PTC）；延迟 `agent-instructions` / `skill-catalog` 一阶 |
 | risk-reviewer | 静态 `tool-presentation` | `mode: 'ptc'` |
 | trader / master | 保持 `native` | 逐笔审批需在对话里可见 |
 
 **为什么给 researcher 用两阶段而不直接静态 ptc**：静态 ptc 从第一轮就折叠，模型在没有任何台账/路由上下文时先写代码才发现工具名，容易空转；两阶段先给两个极轻工具把「我有什么仓、连了哪些市场」立住，再晋升折叠。
 
-**为什么交易版 phase 1 不是梁神的 bash + editor**：编码场景 bash 可兜底一切，交易场景第一轮常见是看持仓/报价，只给 bash 会把台账与行情藏掉。故最小集换成 `holdings_list` + `routing_get`，两者都极轻且不涉及任何下单面。researcher 本身没有 bash（`shellRow` 只给 master），`shellTools` 留空。
+**为什么交易版 phase 1 不是梁神的 bash + editor**：编码场景 bash 可兜底一切，交易场景第一轮常见是看持仓/报价，只给 bash 会把台账与行情藏掉。故最小集换成 `holdings_list` + `routing_get`，两者都极轻且不涉及任何下单面。researcher 也挂 bash（`shellRow` 给 master 与 researcher）：vendored 插件的 `apply` 用 `stringList()` 校验 `shellTools`，组装期再要求「恰好命中一个可用 shell」，因此没有 shell 的预设根本无法挂这条行。
+
+**2026-10-21 校准（预设「加载失败」事故）**：这里曾写 `shellTools: []` 并注明「researcher 没有 bash，故留空」——空数组在插件 `apply` 阶段直接抛 `shellTools must be a non-empty array of non-empty strings`，预设行启动即失败、registry 记 `broken`，于是「标的分析研究员」与复用同一套行的「标的分析研究员（委派）」在设置中心双双显示「加载失败」（诊断原文见该行 id `dsh-trading-instrument-researcher-bootstrap`）。现在研究员挂 `dsh-trading-${id}-bash`、`shellTools: ['bash']`；`pnpm ui:check` 新增 H3 断言「Agent 预设名册无加载失败项」，回退成空数组即转红。
 
 ## Alternatives considered
 

@@ -54,9 +54,22 @@ describe('预设工具面接线', () => {
     const boot = /const BOOTSTRAP[\s\S]*?\n    \}/.exec(source)?.[0] ?? ''
     expect(boot).toContain("'instrument-researcher': {")
     expect(boot).toContain("commonTools: ['holdings_list', 'routing_get']")
-    expect(boot).toContain('shellTools: []')
+    expect(boot).toContain("shellTools: ['bash']")
     expect(boot).toContain('trader: null')
     expect(boot).toContain('master: null')
+  })
+
+  it('管理员：两阶段声明的 shell 在同一预设里真实挂上', () => {
+    // Given BOOTSTRAP 的 shellTools 声明与 shellRow 的角色判定
+    // When 比对声明与挂载
+    // Then 声明的 shell 名唯一、且声明方在 shellRow 里挂了 bash
+    // 2026-10-21 事故：shellTools 曾是 []——vendored 插件 apply 阶段直接抛
+    // "must be a non-empty array"，研究员与它的委派预设双双「加载失败」。
+    const boot = /const BOOTSTRAP[\s\S]*?\n    \}/.exec(source)?.[0] ?? ''
+    const shells = Array.from(boot.matchAll(/shellTools:\s*\[([^\]]*)\]/g)).map(match => (match[1] ?? '').trim())
+    expect(shells).toEqual(["'bash'"])
+    expect(source).toContain("id === 'master' || id === 'instrument-researcher'")
+    expect(source).toContain("name: '@deepseek-ai/dsh-tool-bash'")
   })
 
   it('管理员 行顺序：batch -> index -> surface -> bootstrap -> shell', () => {
