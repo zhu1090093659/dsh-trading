@@ -5,7 +5,11 @@
 //   A. 认证栅栏：未认证 HTTP 请求必须 401/403（cohort 检查的同款语义）。
 //   B. 会话创建链路：alpha.2 dsh-persona schema 变更曾让全部新建会话
 //      失败（agent-preset/invalid），工作区无法选择、composer 停留在
-//      禁用占位——断言 composer 进入可用态且无 SessionCreateError。
+//      禁用占位——断言 composer 没有锁死在无工作区入口的空态，且无 SessionCreateError。
+//      2026-10-21 校准：新宿主在「还没建会话」时故意把 composer 置为 inert（disabled +
+//      placeholder.workspace「选择一个工作区开始」+ 自己兼作 aria-haspopup 工作区菜单
+//      触发器），出现该占位是空态设计而非故障；只有「禁用且没有工作区入口」才是 2026-09
+//      事故的形态。旧断言按占位文案判红，于是新宿主上恒红（两次实测）。
 //   C. 壳接管与死区：宿主折叠信号从 [data-details-collapsed] 换成
 //      [data-rightbar-collapsed]，镜像失配让工具详情列恒 360px 空转——
 //      断言「宿主宣告折叠时工具详情轨道必须为 0 宽」。
@@ -190,12 +194,20 @@ await sleep(4000); // 行情流/注入稳定窗口
 // --- B. 会话创建链路（composer 可用态） ----------------------------------
 
 const composer = await evalJs(`(() => {
-  const ph = document.querySelector('[class*="placeholder"]');
-  const text = ph ? ph.textContent.trim() : '';
-  return { text, blocked: text.includes('选择一个工作区') };
+  const el = document.querySelector('[data-placeholder]');
+  if (!el) return null;
+  return {
+    placeholder: el.getAttribute('data-placeholder') ?? '',
+    disabled: el.getAttribute('aria-disabled') === 'true',
+    workspacePath: el.getAttribute('aria-haspopup') === 'menu'
+      || document.querySelector('button[aria-label="选择工作区"]') !== null,
+  };
 })()`);
-check('B1. 会话创建链路：composer 进入可用态', composer && !composer.blocked,
-  composer ? `placeholder="${composer.text.slice(0, 30)}"` : 'eval failed');
+check('B1. 会话创建链路：composer 未锁死在无工作区入口的空态',
+  composer !== null && (!composer.disabled || composer.workspacePath),
+  composer
+    ? `placeholder="${composer.placeholder.slice(0, 30)}" disabled=${composer.disabled} workspacePath=${composer.workspacePath}`
+    : 'eval failed');
 check('B2. 会话创建链路：无 SessionCreateError',
   !consoleErrors.concat(exceptions).some((t) => t.includes('SessionCreateError') || t.includes('agent-preset/invalid')),
   consoleErrors.concat(exceptions).find((t) => t.includes('SessionCreate')) ?? '');
