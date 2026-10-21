@@ -42,11 +42,19 @@ const ROLES = {
 /** Roster display order; the master leads, execution and specialist roles follow. */
 const ROSTER_ORDER = { master: 90, trader: 100, 'instrument-researcher': 110, 'risk-reviewer': 120 } as const
 
-/** Subagent delegation instances for the master: one tool per specialist persona.
- *  Fork children inherit this session's tools and completed turns; the persona
- *  section pins the specialist discipline (SDK `persona` capability).
+/** Subagent delegation instances for the master: one tool per specialist role.
+ *  The child runs a fresh session under the named Agent Preset (spawn provider),
+ *  so the preset owns persona and tool composition — the SDK no longer accepts an
+ *  inline `persona`/`toolFilter` on the tool (`tool-subagent` rejects both) and
+ *  `agentPreset` is spawn-only, so fork inheritance is not available here.
  *  Research → plan drafting → risk review mirrors the preset roster order. */
-const DELEGATE_RULE = 'You are a one-shot delegate: deliver analysis and advice text only — do not place or cancel orders, do not modify accounts, do not create or borrow dynamic plugins or scripts to bypass trading gates; execution happens in the "Master" session through the approval gate. Write your reply in the language of the task brief.'
+// 委派纪律原文（暂无处安放）：'You are a one-shot delegate: deliver analysis and advice text only —
+// do not place or cancel orders, do not modify accounts, do not create or borrow dynamic plugins or
+// scripts to bypass trading gates; execution happens in the "Master" session through the approval
+// gate. Write your reply in the language of the task brief.'
+// 宿主新世代删除了 tool-subagent 的 persona/toolFilter，也不给工具级附加指令字段，这段规则只能
+// 落进 Agent Preset；而三个角色 preset 同时供独立会话使用，塞进去会污染普通会话。恢复它的做法是
+// 为委派定义专用 preset（待办，见看板）。硬闸门不受影响：下单仍要过 base 的审批闸门。
 const DELEGATES = [
   { id: 'dsh-trading-master-delegate-research', tool: 'researcher_subagent', role: 'instrument-researcher' as const },
   { id: 'dsh-trading-master-delegate-trader', tool: 'trader_subagent', role: 'trader' as const },
@@ -130,10 +138,10 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
         id: d.id,
         name: '@deepseek-ai/dsh-tool-subagent',
         config: {
-          provider: 'fork',
+          provider: 'spawn',
           toolName: d.tool,
           backgroundMode: 'one-shot',
-          persona: `${ROLES[d.role].text} ${DOCTRINE} ${EVIDENCE} ${VERDICT} ${DELEGATE_RULE}`,
+          agentPreset: d.role,
         },
       })),
     ]

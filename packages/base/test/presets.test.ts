@@ -102,16 +102,20 @@ it('composes all 16 installed-market subsets deterministically as registry defin
           const delegate = preset.plugins.find(row => row.config && (row.config as Record<string, unknown>).toolName === tool)
           expect(delegate, tool).toBeTruthy()
           expect(delegate!.name).toBe('@deepseek-ai/dsh-tool-subagent')
-          expect((delegate!.config as Record<string, unknown>).provider).toBe('fork')
-          expect((delegate!.config as Record<string, unknown>).backgroundMode).toBe('one-shot')
+          const config = delegate!.config as Record<string, unknown>
+          expect(config.provider).toBe('spawn') // agentPreset is spawn-only; fork providers reject it
+          expect(config.backgroundMode).toBe('one-shot')
+          // 新世代 tool-subagent 删除了 persona/toolFilter（配置里出现即抛错），角色内容改由 Agent Preset 承担
+          expect(config.persona).toBeUndefined()
+          expect(config.toolFilter).toBeUndefined()
+          expect(['instrument-researcher', 'trader', 'risk-reviewer']).toContain(config.agentPreset)
         }
         expect(preset.plugins.find(row => row.name === '@deepseek-ai/dsh-tool-jobs')).toBeTruthy() // background one-shot delegates need a job controller
-        const personas = preset.plugins.map(row => (row.config as Record<string, unknown> | undefined)?.persona).filter(Boolean) as string[]
-        expect(personas).toHaveLength(3)
-        for (const persona of personas) {
-          expect(persona).toContain('one-shot delegate')
-          expect(persona).toContain('Evidence contract')
-        }
+        const delegatePresets = preset.plugins
+          .filter(row => row.name === '@deepseek-ai/dsh-tool-subagent')
+          .map(row => (row.config as Record<string, unknown>).agentPreset)
+        expect(delegatePresets).toHaveLength(3)
+        expect(new Set(delegatePresets).size).toBe(3) // 三个委派各指一个不同角色 preset，不允许坍缩成同一个
         expect(preset.plugins.map(row => row.name).filter(name => name === '@deepseek-ai/dsh-tool-subagent')).toHaveLength(3)
         // Master orchestration: capital ledger first, then knowledge, skills and delegation.
         expect(prefix).toContain('holdings_list')
