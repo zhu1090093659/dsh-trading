@@ -1,0 +1,119 @@
+# Agent Note: SDK cohort 升级到 npm @deepseek-ai 0.2.1-rc.2（宿主已在该世代，插件侧追平）
+
+Status: implemented
+
+## Problem
+
+本仓以 peerDependencies 消费官方 `@deepseek-ai/*`，dev 与测试期由 `pnpm-workspace.yaml`
+的 overrides 块钉住单一世代。升级前该块停在 `0.2.0-rc.2`，而本机宿主 CLI
+（`/opt/homebrew/lib/node_modules/@deepseek-ai/dsh`）已是 `0.2.1-rc.2`。两者不同世代时，
+profile 里的 `@deepseek-ai/*` 会以实体拷贝与宿主并存两份模块实例，模块级 identity
+（导出 Symbol、注册表）随副本分裂，跨副本查表读到 `undefined`——2026-09-01 实测过该类
+崩溃（宿主 alpha.3 + 影子 alpha.2，每次工具调用崩在
+`Cannot read properties of undefined (reading 'prepare')`）。
+
+第二条同源问题在声明面：本仓的宽 floor `>=0.2.0-rc.2` 对新世代**语义为假**。
+npm 内置 semver 实测 `satisfies("0.2.1-rc.2", ">=0.2.0-rc.2") === false`——带 prerelease 的
+比较器只匹配同一 major.minor.patch 三元组，只有 `includePrerelease` 才为真。
+floor 不随 cohort 走，声明即失真。
+
+## Decision
+
+1. **cohort 整块搬移**：`pnpm-workspace.yaml` 的 overrides 钉 70 个 dsh 包与 cordis
+   家族（cordis 4.0.5 / cosmokit 1.8.6 / schemastery 3.18.5 /
+   cordis-plugin-loader 1.0.6 / cordis-plugin-include 1.0.10 /
+   cordis-plugin-timer 1.1.7 / cordis-plugin-group 1.0.5），
+   `minimumReleaseAgeExclude` 同步 80 条。版本一律取官方清单字面值：
+   `npm view @deepseek-ai/dsh@<cohort> dependencies` 的 86 条直接依赖。
+2. **floor 随 cohort 前移**：49 个 `package.json` 共 103 条声明——peer floor
+   `>=0.2.0-rc.2` → `>=0.2.1-rc.2`，编译期 devDep 精确钉同版本，cordis `^4.0.5` /
+   cosmokit `^1.8.6` / schemastery `^3.18.5`（保持原 range 形状，不改用 `^` 兜底）。
+3. **宿主 floor 面同步**：`desktop/runtime/host/package.json` 的宿主钉版、
+   `desktop/runtime/host/pnpm-lock.yaml`（`--lockfile-only` 重算，两次运行产物逐字节相同）、
+   `desktop/scripts/build-runtime.mjs` 的 `REGISTRY_DEPENDENCIES` 五包、
+   `README.md` 与 `README_zh.md` 的 DSH Baseline 徽章。本仓无 `engines.dsh`、
+   无 CI mount pin，不凭空新增声明。
+4. **dsh-invariants 停发**：该包在本世代无发布，invariant 注册面从 9 个包移除、
+   7 个包删除其 peer。本仓源码零引用，overrides 与 `peerDependencyRules.ignoreMissing`
+   的条目一并删除；新 peer `@deepseek-ai/dsh-working-directory` 进入 overrides。
+5. **cordis-plugin-group 迁移缺陷**：pnpm 对自动物化的 peer 回退到 1.0.4，而
+   `dsh-app-boot@<cohort>` 的 peer 是 `~1.0.5`，报 unmet peer。把 group 1.0.5
+   写进 overrides 后 `pnpm peers check` 全清。
+6. **源码适配两处**：`packages/client-ui-settings/src/client/trading-settings-controller.ts`
+   里 `ConfigFormSnapshot` 在新世代删掉了 `mode`，`writable: snap.mode === 'host' && snap.writable`
+   收敛为 `writable: snap.writable`（旧类型文档写明 memory 模式从不接受写入，合取冗余）；
+   `packages/base/src/tool-batch.ts` 给手工收窄的 `ctx.tools` 视图补
+   `register(definition: ToolDefinition): () => void`——这条**不属 cohort 引入**，
+   `register` 在两世代签名逐字相同（`lib/types/index.d.ts:636` 与 `:637`），
+   属升级前就存在的陈旧基线债。
+7. **清掉两处继承红**：`test:audit` 的 4 个 base 测试文件（29 个标题补角色前缀、
+   29 处 Given/When/Then、3 处 `vi.fn` 换成手写记录器，基线只降不升）与
+   `tool-contract` 的 `trading_batch` / `trading_tools_index` 两条显式登记。
+   两处红都先于本轮存在于 `71c2d323`，不是本升级引入。
+
+## 兼容性（compatibility handoff 结论）
+
+- 官方变更记录取证：`dsh-v0.2.1-alpha.1` 至 `dsh-v0.2.1-rc.2` 七个 release 的双语
+  release notes，加 `gh api compare dsh-v0.2.0-rc.2...dsh-v0.2.1-rc.2`；后者 files 数组
+  有 300 条上限且不分页，不能当完整清单，包面结论一律以 npm tarball 双版本实证为准。
+- 29 组包（27 个消费包 + loader + include）全部有双版本 tarball 实证，0 个无法取证；
+  本仓实际使用的 23 个 module specifier 对 exports map 解析 23/23 相同。
+- 被删符号（invariant 注册面、`OperatorPeer`、`PreparingToolRow`、
+  `RenderMessageImages`、`serviceForAgent`、`livePresetMounts` 等）在本仓源码零引用；
+  `dsh-client-connection` 的 `./client` 目标改为 `lib/client.browser.js` 亦零引用。
+- zod 在 6 个包内收紧为精确 `4.4.3`；本仓无直接引用。
+
+## 官方能力去重（native 为基座）
+
+官方 0.2.1 线 87 条原始条目去重后 54 条，与本仓实现真正重叠的 3 处：
+
+| native 能力 | 本仓实现 | 裁决 |
+|---|---|---|
+| 自定义模型 API 的图片输入与推理等级 UI（alpha.4 / rc.1） | `packages/gui/cordis.patch.yml` 内嵌 `@linxin666/dsh-client-ui-model-capabilities` | 待真机确认后移除（native 已自带 vision / reasoningLevels / reasoningEfforts，残值仅 provider 级归档） |
+| 插件管理面（让 Agent 创建插件、索引源、启停卸载与依赖同步、热重载） | `packages/gui/cordis.patch.yml` 内嵌 `@linxin666/dsh-client-ui-plugin-manager` + 桌面 `writeHostCliShims` 垫片 | 待真机确认后移除（native `dsh-plugin-manager` 已覆盖） |
+| 子智能体可选用独立 Agent Preset（alpha.3 / rc.1） | `packages/base/src/presets.ts` 的 DELEGATES 用 `config.persona` 内联整份角色正文 | 薄扩展：persona 正文改指既有 preset（`dsh-tool-subagent` 已支持 `agentPreset`） |
+
+记为 exception 的：行情连接器 BYOK 凭据卡（对象是行情 provider，非官方模型 provider）、
+消息内密钥脱敏（本仓零实现，直接用 native）、Office 与 `workspace-dependencies` 两条
+官方行（只接线不复制正文）、5 个 `tool.call.toolview` 富卡片（消费官方 slot）、
+`trading_batch`（父令牌子派发走 `ctx.tools.execute` 保留审批闸门，与官方 PTC in-memory
+不同层）。清单外的自动化任务平面（native `task_board_*` 对本仓 `tasks_*` 六工具 +
+`ScheduledTasksPanel` + cron/DST 语义）不属本世代新增条目，单独立项对照后再定去留。
+
+## 验证
+
+- `pnpm install --frozen-lockfile --ignore-scripts` 退出 0；lock 中 76 个
+  `@deepseek-ai` 名各只解析一版（70 个 dsh 包同世代），旧世代字面量 0 次。
+- `pnpm peers check`：无 peer 问题（`@deepseek-ai/dsh` 宿主 peer 在树内未满足属既有契约：
+  宿主全局安装、profile 侧 `autoInstallPeers: false`）。
+- `pnpm gates:all` 在最终分支提交 `d8c05d20` 上 **17 通过 / 0 失败**；
+  `typecheck-gate` 371 错误 vs 基线 387（基线文件未改）、`test:desktop` 80 pass。
+- 提交链：`888543fd`（cohort 与 lockfile）→ `749d9a4a`（源码适配）→
+  `fb23b4d2`（测试卫生清债）→ `d8c05d20`（工具契约登记）。
+
+## Alternatives considered
+
+- **只对齐 cordis/cosmokit/schemastery，dsh 家族留在旧世代**：宿主已在新世代，影子拷贝
+  identity 分裂的成因正是「插件侧落后宿主」，只动配套线等于保留主风险，放弃。
+- **等 0.2.1 正式版再升**：官方该线尚无 stable 发布，而宿主与桌面壳已在 rc.2；
+  继续停在 0.2.0 世代会让声明面持续失真，放弃。
+- **把 peer floor 写成 `^<cohort>`**：`^0.2.1-rc.2` 虽对目标版本为真，却会把未来同线版本
+  也放进来，宽 floor 的语义是「不低于该世代」，保持 `>=` 形状只换字面量，放弃改形状。
+- **把新债登记进 typecheck / test-audit 基线而不清**：棘轮规则是单文件计数只降不升，
+  登记上升项等于承认新债，放弃；改为清掉两处继承红。
+- **手改 `desktop/resources/runtime` 生成副本**：它是构建期生成物，手改会与生成脚本
+  脱钩，放弃；只改 `desktop/runtime` 源与生成脚本常量。
+
+## Consequences
+
+- 仓库侧 cohort 追平宿主，插件与宿主回到同一模块世代，影子拷贝 identity 分裂的成因消除。
+- 遗留未完成项（按优先级）：① `model-capabilities` 与 `plugin-manager` 的移除需先在
+  桌面壳真机确认 native 覆盖度（含 provider 级归档、桌面无 pnpm 时 plugin-manager 能否工作）；
+  ② 自动化任务平面对照 native `task_board_*` 后再定去留；
+  ③ `spikes/s3-preset/spike-preset-pkg/package.json` 仍以 `link:` 指向 DSH 源码 checkout，
+  与「只用官方 npm scope」冲突，待清理；④ 桌面壳安装包需按新钉版重新构建发布，
+  仅改钉版不会送达用户；⑤ `packages/client-ui-trading/test/flash-panel.smoke.test.tsx:57`
+  的 `[data-hot="爆"]` 断言在 `coverage:check` 中出现过一红一绿的抖动，待单独排查。
+- profile 侧尚未刷新：升级前基线为 `desktop` 3 FAIL、`trading-web` 2 FAIL（嵌套
+  `cosmokit@1.8.5` 实体拷贝）与 8 条 symlink 指向打包 app 旧 cohort 树的 WARN，
+  刷新与 GUI 验收在合并后进行。

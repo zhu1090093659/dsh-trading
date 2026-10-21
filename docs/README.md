@@ -76,7 +76,7 @@
    - 移动端落仓形态、分发决策与 CI 策略；Expo/RN 旧工程（apps/mobile）已按 owner 2026-10-02 决定退役删除，
      原生观测端工程操作与实测证据在该仓的 apps/ios-native/README.md。
  (`docs/ops/upstream-upgrade-checklist.md`)
-   - 紧密跟踪官方 `@deepseek-ai/*` SDK 发版（当前基线 0.2.0-rc.2）的抽核、升级与验收指南。
+   - 紧密跟踪官方 `@deepseek-ai/*` SDK 发版（当前基线 0.2.1-rc.2）的抽核、升级与验收指南。
 
 ---
 

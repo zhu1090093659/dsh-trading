@@ -10,7 +10,7 @@
 
 第 3 问是唯一的验收门槛：**答不出一个可执行检测点就是「未满足」**，不允许写「已评估」。判定列只有三种取值：`满足`（有可执行检测点且在 CI 里跑）、`部分满足`（有检测点但不覆盖该缝的失效形态）、`未满足`（没有检测点，已登记进 §C 缺口清单）。
 
-官方版本锚：DSH cohort **0.2.0-rc.2**（`pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 钉定），patch 引擎 `@deepseek-ai/cordis-plugin-loader@1.0.5`（实际解析版本见 `pnpm-lock.yaml`）。换 cohort 时本文件与 §C 一起重审。
+官方版本锚：DSH cohort **0.2.1-rc.2**（`pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 钉定），patch 引擎 `@deepseek-ai/cordis-plugin-loader@1.0.6`（实际解析版本见 `pnpm-lock.yaml`）。换 cohort 时本文件与 §C 一起重审。
 
 ---
 

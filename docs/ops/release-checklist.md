@@ -6,7 +6,7 @@
 
 ## 1. SDK 与依赖解析前提（最硬的闸门）
 
-> **版本基线（2026-09-29）**：DSH 0.2.0-rc.2 世代（配套 cordis 4.0.4 / cosmokit 1.8.5 / schemastery 3.18.4）。
+> **版本基线（2026-10-21）**：DSH 0.2.1-rc.2 世代（配套 cordis 4.0.5 / cosmokit 1.8.6 / schemastery 3.18.5 / cordis-plugin-loader 1.0.6）。
 > 本仓 SDK（`@deepseek-ai/*`）一律以 peerDependencies 声明，运行时由宿主 `dsh` 提供；开发/测试期从 npm 官方源解析该世代，
 > 并由 `pnpm-workspace.yaml` 的 overrides 与 minimumReleaseAgeExclude 精确钉住，保证单一模块实例——该文件是这一事实的唯一家。
 
