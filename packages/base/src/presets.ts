@@ -112,7 +112,7 @@ export function composePresets(contributions: readonly MarketContribution[]): Pr
   if (new Set(ordered.map(c => c.market)).size !== contributions.length) throw new Error('Duplicate or unknown market contribution')
   return PRESET_IDS.map(id => {
     const role = ROLES[id]
-    const persona = `${role.text} ${DOCTRINE} ${EVIDENCE} ${VERDICT} ${JOURNAL} Installed markets: ${ordered.map(c => c.market).join(', ') || 'none; only shared knowledge and holdings tools are available — never claim quote capability'}. Driven by {{model}}, working directory {{cwd}}. Always reply in the language the user writes in.`
+    const persona = `${role.text} ${DOCTRINE} ${EVIDENCE} ${VERDICT} ${JOURNAL} Installed markets: ${ordered.map(c => c.market).join(', ') || 'none; only shared knowledge and holdings tools are available — never claim quote capability'}. Driven by {{model}}. Always reply in the language the user writes in.` // 工作目录不进 persona：宿主新世代只注册 provider/model 两个 prompt 变量，cwd 由 dsh-working-directory 的 working-directory:current 上下文提供
     const withConnectors = id === 'trader' || id === 'master'
     const marketBlock = ordered.flatMap(c => {
       if (!withConnectors) return [kitRow(c.market, KIT_SKILLS[id](c.market))]
