@@ -114,4 +114,12 @@ CI 实证全绿，但存在四类遗留债：
   修法沿用本页既有口径——期望值按本平台算：`join(resolve('/tmp/…'), 'polymarket', 'snapshots.json')`。
   读这条时同时记住上节的遮断边界：checkout 一红十年，`-r test` 里排在它后面的包在
   Windows 上根本没被执行过。
+- **再下一层（同日）**：`pnpm -r test` 走到 `packages/bot-api` 时，`tasks-tools` 与
+  `tasks-bridge` 两个用例文件在 afterEach 里 `rmSync` 临时目录报
+  `EBUSY: resource busy or locked`——账本的 `*.writer-lease.sqlite` 还开着。
+  POSIX 允许删除被打开的文件，所以本机与 ubuntu 从不暴露，只有 Windows 会。
+  修法是把 dispose 放回用例：`tasks-tools` 收集 service 并在 afterEach 先 dispose；
+  `tasks-bridge` 的假 ctx 原本把 effect 返回的清理函数丢掉（`effect: (fn) => { fn() }`），
+  现在收集后由 afterEach 执行。写新用例时先问一句「这个资源谁在 Windows 上关」——
+  文件锁、SQLite 句柄、临时目录三件事在 POSIX 上都会自己消失，在 Windows 上不会。
 

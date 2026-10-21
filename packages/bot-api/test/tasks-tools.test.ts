@@ -41,22 +41,28 @@ async function callTool(tool: Tool, args: Record<string, unknown> = {}): Promise
 
 describe('tasks agent tools', () => {
   let dir: string
+  /** 每个用例创建的 service：不 dispose 会留着 SQLite writer lease，
+   *  于是 Windows 的 rmSync 报 EBUSY（POSIX 删得掉，本机不暴露）。 */
+  const services: TradingTasksService[] = []
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'dshtrading-tasks-tools-'))
   })
 
   afterEach(() => {
+    for (const service of services.splice(0)) service.dispose()
     rmSync(dir, { recursive: true, force: true })
   })
 
   function makeService(gateway?: ReturnType<typeof makeGateway>['gateway']): TradingTasksService {
-    return new TradingTasksService({
+    const service = new TradingTasksService({
       ledgerPath: join(dir, 'ledger-v1.json'),
       gateway: () => gateway,
       commands: () => makeCommands(),
       workspaces: () => ({ list: () => [{ id: 'ws-main', name: 'Main' }] }),
     })
+    services.push(service)
+    return service
   }
 
   function toolMap(service: TradingTasksService): Map<string, Tool> {

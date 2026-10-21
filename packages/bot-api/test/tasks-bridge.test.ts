@@ -21,6 +21,13 @@ interface Route {
   handler: (req: Partial<IncomingMessage>, res: Partial<ServerResponse>) => Promise<void>
 }
 
+/**
+ * 假 ctx 收集到的 effect 清理函数：真 cordis 会在 ctx 销毁时跑它们，
+ * 这里必须由 afterEach 手动跑——账本的 SQLite writer lease 不关，
+ * Windows 上 rmSync 会报 EBUSY（POSIX 允许删除被打开的文件，故本机不暴露）。
+ */
+const pendingDisposals: (() => void)[] = []
+
 function makeCtx(options: { rejection?: number } = {}): { ctx: never; registered: Route[] } {
   const registered: Route[] = []
   const webServer = { register: (route: Route) => { registered.push(route) } }
@@ -31,13 +38,13 @@ function makeCtx(options: { rejection?: number } = {}): { ctx: never; registered
       if (name === 'connection') return connection
       return undefined
     },
-    effect: () => (() => {}),
+    effect: (fn: () => (() => void) | undefined) => { const dispose = fn(); if (typeof dispose === 'function') pendingDisposals.push(dispose) },
   }
   const ctx = {
     inject: (deps: readonly string[], cb: (scoped: typeof webCtx) => void) => {
       if (deps.includes('webServer')) cb(webCtx)
     },
-    effect: (fn: () => () => void) => { fn() },
+    effect: (fn: () => (() => void) | undefined) => { const dispose = fn(); if (typeof dispose === 'function') pendingDisposals.push(dispose) },
   }
   return { ctx: ctx as never, registered }
 }
@@ -72,6 +79,7 @@ describe('/dshtrading/api/tasks 子面', () => {
 
   afterEach(() => {
     delete process.env.DSH_TRADING_TASKS_LEDGER
+    for (const dispose of pendingDisposals.splice(0)) dispose()
     rmSync(dir, { recursive: true, force: true })
   })
 
