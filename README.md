@@ -17,7 +17,7 @@ Combining TradingView Lightweight Charts v5, role-based multi-agent teams (Maste
 
 <div align="center">
 
-[![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.2.0--rc.2-blue.svg)](https://github.com/deepseek-ai)
+[![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.2.1--rc.2-blue.svg)](https://github.com/deepseek-ai)
 [![Markets](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK%20%7C%20Futures-green.svg)](#supported-markets--broker-connectors)
 [![Connectors](https://img.shields.io/badge/Connectors-19%2B%20Exchanges%20%26%20Brokers-orange.svg)](docs/guides/connectors-guide.md)
 [![Architecture](https://img.shields.io/badge/Architecture-Cordis%20Microkernel-purple.svg)](https://github.com/cordisjs)

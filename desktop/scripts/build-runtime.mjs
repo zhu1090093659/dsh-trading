@@ -140,15 +140,15 @@ function adoptSatelliteTarballs(vendorDir, tarballs) {
  * host runtime so both halves share one module instance.
  */
 const REGISTRY_DEPENDENCIES = {
-  '@deepseek-ai/dsh-web-search-exa': '0.2.0-rc.2',
-  '@deepseek-ai/dsh-tools': '0.2.0-rc.2',
-  '@deepseek-ai/dsh-agent-preset-registry': '0.2.0-rc.2',
+  '@deepseek-ai/dsh-web-search-exa': '0.2.1-rc.2',
+  '@deepseek-ai/dsh-tools': '0.2.1-rc.2',
+  '@deepseek-ai/dsh-agent-preset-registry': '0.2.1-rc.2',
   // DSH 自带 Computer Use：profile 种子 patch 层 insert 了 computer-use 与
   // computer-use-cua-driver-native 两行，它们只在这一层解析——base 同时被
   // headless profile 挂载，那边的清单没有原生驱动依赖。行进了 patch 层就必须在
   // 这里补依赖边，否则 assertSeedPatchRowsResolve() 在构建期点名该包。
-  '@deepseek-ai/dsh-computer-use': '0.2.0-rc.2',
-  '@deepseek-ai/dsh-experimental-computer-use-cua-driver-native': '0.2.0-rc.2',
+  '@deepseek-ai/dsh-computer-use': '0.2.1-rc.2',
+  '@deepseek-ai/dsh-experimental-computer-use-cua-driver-native': '0.2.1-rc.2',
 };
 /** Profile bundles: the official web surface plus the trading market bundles. */
 const PROFILE_BUNDLES = [

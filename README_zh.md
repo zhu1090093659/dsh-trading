@@ -17,7 +17,7 @@
 
 <div align="center">
 
-[![DSH 基线](https://img.shields.io/badge/DSH%20Baseline-0.2.0--rc.2-blue.svg)](https://github.com/deepseek-ai)
+[![DSH 基线](https://img.shields.io/badge/DSH%20Baseline-0.2.1--rc.2-blue.svg)](https://github.com/deepseek-ai)
 [![覆盖市场](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK%20%7C%20Futures-green.svg)](#一个终端全市场覆盖)
 [![连接器](https://img.shields.io/badge/Connectors-19%2B%20Exchanges%20%26%20Brokers-orange.svg)](docs/guides/connectors-guide.md)
 [![架构](https://img.shields.io/badge/Architecture-Cordis%20Microkernel-purple.svg)](https://github.com/cordisjs)
