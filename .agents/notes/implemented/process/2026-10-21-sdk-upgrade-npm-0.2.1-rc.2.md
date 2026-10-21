@@ -128,6 +128,21 @@ peer `>=<本世代>` 不满足运行中的旧宿主），App 因此退回原生 
 否则副本会被换成新世代构建，App 会再次退回原生外观。CLI 侧需要新世代时用独立 profile（如 `trading-dev`），
 或等桌面壳重建（见看板卡）。
 
+### 同日后续：桌面壳按新钉版重建，profile 回到新世代
+
+桌面壳已用 `desktop/` 管线重建并安装：`prepare-runtime`（宿主闭包全量到本世代，构建日志自证
+`every dsh-* package is @deepseek-ai/dsh@<本世代>`）+ `electron-builder --dir`，产物
+`codesign --verify --deep --strict` 退出 0，开发签名 `Apple Development: Haowei Hua` / TeamIdentifier `P7595YVTRB`，
+hardened runtime 启用；安装到 `/Applications` 后 `trading-web` profile 刷新回本世代（`@dshtrading/base`
+peer 回到 `>=<本世代>`），在重建后的 App runtime 下实测 0 `disabling` / 0 `skipping` / 0 `failed to import` /
+0 `did not activate`，GUI 功能门禁的交易面挂载（`overlay=true`、自选 36 行）通过。
+
+同时修掉一处真正的构建缺陷（与 cohort 无关、在两条世代上都存在）：
+`packages/base/package.json` 的 `exports` 与 `src/presets.ts` 的行引用都用到 `./tool-batch`、`./tool-index`、
+`./tool-surface`，但 `packages/base/tsdown.config.ts` 的 `entry` 没有这三个源文件，产物缺文件 → 宿主里行
+`never started` → 新建会话直接失败（`agent-preset/invalid: dsh-trading-tool-batch … never started`）。
+补齐 entry 后 `lib/` 恢复 19 个产物，提交 `30174e5a`，门禁 17/17。
+
 ## Alternatives considered
 
 - **只对齐 cordis/cosmokit/schemastery，dsh 家族留在旧世代**：宿主已在新世代，影子拷贝
