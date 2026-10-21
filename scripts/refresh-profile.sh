@@ -16,6 +16,14 @@
 #   容易被漏掉的手工步骤。旧入口 scripts/refresh-trading-web-profile.sh 保留为转发
 #   shim（外部技能与既有习惯继续可用）。
 #
+# 2026-10-21 去 CLI 依赖：dsh plugin --profile … install 在本机会挂死（pnpm 打印 Done
+#   后 CLI 进程不退出），刷新因此永远走不到重挂那一步。install 这一环改为在 profile
+#   目录直接跑 pnpm install——宿主 dsh 的 runProfilePnpm 对 install 也只做
+#   `pnpm install`（cwd=profile、继承调用者环境、不加额外参数），语义等价；版本兼容
+#   性警告改由紧随其后的 profile-config-preflight 承担。dsh 仍要求存在，因为
+#   sync-profile-overrides 从它的 realpath 推导宿主 SDK 根。逃生门：DSH_REFRESH_VIA_CLI=1
+#   仍走 dsh plugin install（宿主侧行为正常时用于对照）。
+#
 # 用法：scripts/refresh-profile.sh [选项] [profile ...]
 #   --profile <p>      要刷新的 profile（可重复；与位置参数等价；缺省 trading-web）
 #   --package <pkg>    只刷新指定 @dshtrading 包（可重复；缺省 = 全部）
@@ -100,7 +108,10 @@ fi
 for p in "${PROFILES[@]}"; do
   [ -f "$DSH_HOME/profiles/$p/package.json" ] || { echo "profile 不存在：$DSH_HOME/profiles/$p" >&2; exit 1; }
 done
-command -v dsh >/dev/null 2>&1 || { echo "找不到 dsh 可执行文件（刷新依赖 dsh plugin install）" >&2; exit 1; }
+command -v pnpm >/dev/null 2>&1 || { echo "找不到 pnpm 可执行文件（刷新依赖 pnpm install）" >&2; exit 1; }
+# dsh 只用于推导宿主 SDK 根（sync-profile-overrides 从它的 realpath 取 <dsh>/node_modules），
+# 不再是安装这一环的执行者——见文件头 2026-10-21 段。
+command -v dsh >/dev/null 2>&1 || { echo "找不到 dsh 可执行文件（宿主 SDK 根从它的 realpath 推导）" >&2; exit 1; }
 
 echo "== 同步 profile overrides（幂等追加，修闭包缺口；只增行不删活包）=="
 for p in "${PROFILES[@]}"; do
@@ -132,7 +143,11 @@ for p in "${PROFILES[@]}"; do
   else
     rm -rf "$PROFILE"/node_modules/@dshtrading/*
   fi
-  dsh plugin --profile "$p" install
+  if [ "${DSH_REFRESH_VIA_CLI:-0}" = "1" ]; then
+    dsh plugin --profile "$p" install
+  else
+    ( cd "$PROFILE" && pnpm install ) || { echo "pnpm install 失败：$PROFILE" >&2; exit 1; }
+  fi
 done
 
 echo "== 恢复宿主核心包单一实例 symlink（pnpm install 会重新物化影子拷贝，必须重挂）=="
