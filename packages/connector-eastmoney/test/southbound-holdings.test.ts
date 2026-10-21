@@ -123,8 +123,13 @@ function makeCtx(): Context {
 /* 真实网络：端到端取数                                                  */
 /* ------------------------------------------------------------------ */
 
+// 真实网络的边界不受用例控制：东财数据中心一次 1000 行响应在 CI runner 上
+// 常常超过 vitest 默认的 5s（2026-10-21 在 ubuntu / windows 各红过一次），
+// 超时被读成「取数逻辑坏了」是假红。这里给显式上限，仍是有界等待。
+const LIVE_TIMEOUT_MS = 30_000
+
 liveDescribe('港股通持股历史（真实网络，东财数据中心）', () => {
-  it('用户查询腾讯控股的港股通持股历史时应拿到升序去重的多日序列', async () => {
+  it('用户查询腾讯控股的港股通持股历史时应拿到升序去重的多日序列', { timeout: LIVE_TIMEOUT_MS }, async () => {
     // Given: 东财数据中心可达（模块级探针已确认），00700.HK 是港股通标的
     const client = new EastmoneyRestClient({ market: 'hk' })
 
@@ -142,7 +147,7 @@ liveDescribe('港股通持股历史（真实网络，东财数据中心）', () 
     expect(history.points.at(-1)?.date).toBeGreaterThanOrEqual(Date.UTC(2026, 0, 1))
   })
 
-  it('用户以连接器原生形查询港股通持股时应归一为市场规范形', async () => {
+  it('用户以连接器原生形查询港股通持股时应归一为市场规范形', { timeout: LIVE_TIMEOUT_MS }, async () => {
     // Given: 港股实例，用户传的是东财原生 5 位码（不带后缀）
     const client = new EastmoneyRestClient({ market: 'hk' })
 
@@ -154,7 +159,7 @@ liveDescribe('港股通持股历史（真实网络，东财数据中心）', () 
     expect(history.points.length).toBeGreaterThan(400)
   })
 
-  it('用户查询非港股通标的的持股时应拿到空序列而不是报错', async () => {
+  it('用户查询非港股通标的的持股时应拿到空序列而不是报错', { timeout: LIVE_TIMEOUT_MS }, async () => {
     // Given: 08083.HK 实测不在港股通范围（上游返回 result: null）
     const client = new EastmoneyRestClient({ market: 'hk' })
 
