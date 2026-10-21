@@ -162,6 +162,16 @@ preset 承担；`presets.test.ts` 的断言同步改为「provider 为 spawn、p
 验证：重建后的 App runtime 下 CDP 冒烟 **17 项断言全绿**，含「选择工作区后 composer 可用」与
 「真实新建会话无预设错误」（B1b / B2b / B3）。
 
+### 同日续二：提示词变量表收缩到 provider / model
+
+角色 persona 前缀原本写 `Driven by {{model}}, working directory {{cwd}}.`。新世代的 `dsh-system-prompt`
+对未注册变量直接抛错（`unknown prompt variable "{{cwd}}" in section "deployment:persona-prefix";
+registered variables: provider, model`），整轮运行失败。全仓只有这一处用到 `{{cwd}}`（`{{model}}` 由
+`dsh-agent-loop` 注册，保留），已删除；工作目录改由宿主的 `dsh-working-directory` 提供
+（它注册 `working-directory:current` 动态上下文），persona 里重复声明本就多余。
+
+验证：CDP 冒烟 16 项全绿，含「真实新建会话并跑完一轮无失败」与「无会话/提示词类控制台错误」。
+
 ## Alternatives considered
 
 - **只对齐 cordis/cosmokit/schemastery，dsh 家族留在旧世代**：宿主已在新世代，影子拷贝
