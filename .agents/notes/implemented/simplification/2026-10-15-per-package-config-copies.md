@@ -91,3 +91,15 @@ Status: implemented
   这些名字都不匹配 tsdown 的 `tsdown.config.*` 发现模式和 typecheck 的 `packages/*` 枚举，
   不会被自动加载或重复记账。
 - 无模型可见面变化：这些文件不进工具 schema、不进提示词。
+
+### 2026-10-21 补充：unbundle 包必须把 SDK 与自有 scope 钉为 neverBundle
+
+`unbundle: true` 只会把包 package.json **声明过**的依赖当作 external；未声明的 scope 会被 rolldown 的
+preserveModules 复制进 `lib/node_modules`，并把导入改写成 `./node_modules/.pnpm/…` 相对路径。那条路径
+嵌着构建机 pnpm 虚拟 store 的目录名（版本 + peer 哈希），profile 副本换代漏同步即 `ERR_MODULE_NOT_FOUND`；
+即便解析成功，加载的也是宿主之外的第二份 `@deepseek-ai/*`（cordis Service 身份割裂）。
+
+因此 unbundle 包要在 tsdown 配置里固定 `deps: { neverBundle: [/^@deepseek-ai\//, /^@dshtrading\//] }`，
+或者补上真实的依赖声明。当前只有 `packages/indicators`（值导入 cordis）与 `packages/router`（类型导入
+cosmokit）出现过该形态并已修正；其余 unbundle 包是否收进共享 base 尚未做。见
+[SDK cohort 升级 Note](../process/2026-10-21-sdk-upgrade-npm-0.2.1-rc.2.md)。

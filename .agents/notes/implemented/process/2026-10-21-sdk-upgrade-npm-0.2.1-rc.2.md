@@ -93,9 +93,25 @@ floor 不随 cohort 走，声明即失真。
 - `pnpm gates:all` **17 通过 / 0 失败**：先在 `d8c05d20` 上跑通，独立对抗验收与本条
   事实修正后又在分支末提交上复跑（`typecheck-gate` 371 错误 vs 基线 387、基线文件未改，
   `test:desktop` 80 pass）。
-- 提交链：`888543fd`（cohort 与 lockfile）→ `749d9a4a`（源码适配与测试夹具）→
-  `fb23b4d2`（测试卫生清债）→ `d8c05d20`（工具契约登记）→ `ce70f5c2`（本 Note 与活事实）
-  → 本条事实修正提交。
+- 提交链：`888543fd`（cohort 与 lockfile）→ `749d9a4a`（源码适配与测试夹具）→ `fb23b4d2`（测试卫生清债）
+  → `d8c05d20`（工具契约登记）→ `ce70f5c2`（本 Note 与活事实）→ `59ecec96`（验收 findings 修正）
+  → `fc70fd1f`（门禁证据绑定）→ `a77b9f5`（构建产物裸 specifier）→ `470e8774`（合并，门禁 17/17）。
+- GUI 验证（`scripts/ui-functional-check.mjs`，headless Chrome + CDP，附加运行中实例与自起实例两种方式各跑一次）：
+  认证栅栏（未认证 401）、交易面挂载（`overlay=true`、自选 36 行）、壳死区（轨道 0px）、工作区菜单（4 项）、
+  特殊指标 G1–G6、无未捕获异常与无 error 级控制台输出全过；唯一失败项 B1（composer 未进入可用态，
+  提示「选择一个工作区开始」）——该字符串只在宿主 `dsh-client-ui-conversation/lib/client.js` 内，
+  本仓 `packages/` 与 profile 插件副本零命中，判定为宿主侧空态条件，记入遗留项而非本升级回归。
+
+## 构建产物的依赖导入（裸 specifier）
+
+`unbundle: true` 落 rolldown 的 preserveModules：只有包自己 package.json 声明过的依赖才算 external，
+未声明的 scope 会被复制进 `lib/node_modules` 并把导入改写成 `./node_modules/.pnpm/…` 相对路径。
+`packages/indicators`（值导入 `@deepseek-ai/cordis`）与 `packages/router`（类型导入 `@deepseek-ai/cosmokit`）
+都漏了声明，产物因此依赖构建机的 pnpm 虚拟 store 目录名；profile 副本换代漏同步即 `ERR_MODULE_NOT_FOUND`，
+即便解析成功加载的也是宿主之外的第二份 cordis（Service 实例割裂）。两处配置补
+`deps: { neverBundle: [/^@deepseek-ai\//, /^@dshtrading\//] }` 后产物回到裸 specifier，全仓不再生成
+`lib/node_modules`。client bundle 里的 `//#region ../../node_modules/.pnpm/…` 是 rolldown 的 provenance
+注释、不是导入，判定口径要看导入级 grep 而不是裸字符串。
 
 ## Alternatives considered
 
@@ -120,6 +136,12 @@ floor 不随 cohort 走，声明即失真。
   与「只用官方 npm scope」冲突，待清理；④ 桌面壳安装包需按新钉版重新构建发布，
   仅改钉版不会送达用户；⑤ `packages/client-ui-trading/test/flash-panel.smoke.test.tsx:57`
   的 `[data-hot="爆"]` 断言在 `coverage:check` 中出现过一红一绿的抖动，待单独排查。
-- profile 侧尚未刷新：升级前基线为 `desktop` 3 FAIL、`trading-web` 2 FAIL（嵌套
-  `cosmokit@1.8.5` 实体拷贝）与 8 条 symlink 指向打包 app 旧 cohort 树的 WARN，
-  刷新与 GUI 验收在合并后进行。
+- profile 侧已落地（`~/.dsh-trading/profiles/trading-web`）：三个官方插件（`dsh-computer-use` /
+  `dsh-experimental-computer-use-cua-driver-native` / `dsh-web-search-exa`）钉版与
+  `minimumReleaseAgeExclude`（84→87 条）一并抬到本世代；`pnpm install` 直接执行——
+  `scripts/refresh-profile.sh` 里的 `dsh plugin --profile … install` 实测会挂死（pnpm 打印 `Done` 后不退出）；
+  再按脚本同一份 `CORE_PKGS` 重挂 12 条 symlink 到 Homebrew 宿主。
+  口径纠错：`profile-cohort-check.sh` 缺省扫 `~/.dsh`，本项目必须带 `DSH_HOME=~/.dsh-trading`；
+  本 Note 初稿曾把宿主 home 的数字误记成本 profile 基线，按正确 home 复扫后本 profile 的
+  `@deepseek-ai/*` 全部 `OK → 宿主 symlink`，**0 FAIL / 1 WARN**（`dsh-mcp-client` 同版本实体拷贝）。
+  同 home 下 `trading-bot` 等其它 profile 仍有 16 项 FAIL，属本轮未触碰的既有状态。
