@@ -113,6 +113,21 @@ floor 不随 cohort 走，声明即失真。
 `lib/node_modules`。client bundle 里的 `//#region ../../node_modules/.pnpm/…` 是 rolldown 的 provenance
 注释、不是导入，判定口径要看导入级 grep 而不是裸字符串。
 
+## 桌面壳与本 profile 的世代约束（同日现场事故与恢复）
+
+把 `trading-web` 的 `@deepseek-ai/*` 指到 Homebrew CLI 宿主（本世代）后，桌面壳内置 runtime（旧世代）在启动时
+**逐行禁用全部 `@dshtrading/*`**（`skipping profile bundle` / `disabling profile plugin row`：插件声明的
+peer `>=<本世代>` 不满足运行中的旧宿主），App 因此退回原生 DSH 外观、`master` 预设缺失导致会话创建失败。
+
+恢复做法：把 profile 里 58 个 `@dshtrading/*` 副本换回升级前提交 `71c2d323` 的构建产物（含旧世代构建自带的
+`lib/node_modules` 虚拟 store），三个官方插件钉回旧世代版本，核心包 symlink 指回 App 内置 runtime；
+随后用 App 自带 runtime 复跑同一 profile，得到 0 `disabling` / 0 `skipping` / 0 `failed to import`，
+交易面照常挂载（`overlay=true`、自选 36 行）。
+
+硬约束：**桌面壳按新钉版重建前，不要在该 profile 里执行 `pnpm install` 或 `scripts/refresh-profile.sh`**，
+否则副本会被换成新世代构建，App 会再次退回原生外观。CLI 侧需要新世代时用独立 profile（如 `trading-dev`），
+或等桌面壳重建（见看板卡）。
+
 ## Alternatives considered
 
 - **只对齐 cordis/cosmokit/schemastery，dsh 家族留在旧世代**：宿主已在新世代，影子拷贝
