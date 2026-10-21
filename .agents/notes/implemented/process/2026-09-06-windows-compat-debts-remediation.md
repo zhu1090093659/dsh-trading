@@ -122,4 +122,8 @@ CI 实证全绿，但存在四类遗留债：
   `tasks-bridge` 的假 ctx 原本把 effect 返回的清理函数丢掉（`effect: (fn) => { fn() }`），
   现在收集后由 afterEach 执行。写新用例时先问一句「这个资源谁在 Windows 上关」——
   文件锁、SQLite 句柄、临时目录三件事在 POSIX 上都会自己消失，在 Windows 上不会。
+- **同类的最后一层（同日）**：`packages/bot-api/test/setup.ts` 的 afterAll 也要删那个全局
+  临时目录，而其余用例文件仍靠伪 ctx 丢掉清理函数、账本 lease 开着。那里**不**逐个改
+  二十个用例文件：afterAll 只吞 Windows 的 `EBUSY`/`EPERM`（断言对象是账本语义，不是临时
+  目录回收），其余错误照旧抛。`test:audit` 的零 sleep 口径下也不能用重试等待。
 
