@@ -7,7 +7,7 @@
  * 缝接上：`ctx.approval.request({ agent, toolName, reason, signal })`，只认
  * `allowed-once`。本模块不自制 approve 布尔量、不自制 token、不缓存授权。
  *
- * 契约来源（0.2.0-rc.2 只读核对，本包不运行期 import 该实现，用结构化最小面）：
+ * 契约来源（0.2.1-rc.2 只读核对，本包不运行期 import 该实现，用结构化最小面）：
  *   - `@deepseek-ai/dsh-user-approval` `lib/types/types.d.ts` 的封闭词表 =
  *     `'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'`，其中
  *     `allowed-once` 是**唯一**授权；其余一律 fail-closed。
@@ -106,7 +106,7 @@ export const GUI_APPROVAL_IDLE_TIMEOUT_MS = 30_000
 const GUI_APPROVAL_SOURCE_KIND = 'trading-gui-approval'
 
 /**
- * 官方审批结果封闭词表（`@deepseek-ai/dsh-user-approval` 0.2.0-rc.2）。
+ * 官方审批结果封闭词表（`@deepseek-ai/dsh-user-approval` 0.2.1-rc.2）。
  * `allowed-once` 是唯一授权值。
  */
 export type GuiApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'

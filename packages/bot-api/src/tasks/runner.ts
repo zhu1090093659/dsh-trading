@@ -107,7 +107,7 @@ export function executionPrompt(task: RunnerTask): string {
 }
 
 /**
- * 按当前 SDK 的 TurnEndReasonMap（dsh-session 0.2.0-rc.2，只读查 schema 得到）
+ * 按当前 SDK 的 TurnEndReasonMap（dsh-session 0.2.1-rc.2，只读查 schema 得到）
  * 判定一次 turn 的结局：
  * - `completed` 才是正常结束；
  * - `aborted` 是取消（用户/父级/hook/disposed/legacy 的 cancel cause）；

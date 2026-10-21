@@ -101,3 +101,15 @@ dsh-web 源码 `lib/` 逐字节一致（npm pack 后 diff 全等，供应链核�
   recorded exception 保留；model-capabilities 的按模型图片/推理档位声明无官方
   等价面，保留。
 - `@xmanrui/dsh-im` 仅用 deprecated 但 0.1.7 仍在的 `snapshotEvents`，保留观察。
+
+### 2026-10-21 cohort：原生面已覆盖其中两个，移除待真机确认
+
+宿主升到 `0.2.1-rc.2` 后，`dsh-client-ui-settings-models` 自带每模型图片输入与推理档位
+（`vision` / `reasoningLevels` / `reasoningEfforts`），`dsh-plugin-manager` +
+`dsh-client-ui-plugin-manager` + `dsh-client-ui-plugin-market` 覆盖插件安装、启停与索引源。
+上文「recorded exception 保留」的判据（无官方等价面）不再成立。
+
+两个内嵌插件的移除待桌面壳真机确认后执行（provider 级归档是否仍无处可做、桌面无 pnpm 时
+原生 plugin-manager 能否工作），届时同步删除 `packages/gui/cordis.patch.yml` 两行、
+`packages/gui/package.json` 两条依赖与桌面 `writeHostCliShims` 垫片。裁决与证据见
+[SDK cohort 升级 Note](../process/2026-10-21-sdk-upgrade-npm-0.2.1-rc.2.md)。

@@ -8,7 +8,7 @@
  *     SessionStore + AgentRegistry + LlmRuntime + ToolRuntime + ApprovalService + AgentLoop；
  *   - 真 `AgentLoop.create` 造出的 ReactLoopAgent：turn/start..turn/end 由官方 loop
  *     独占生产，审批审计对必须落在它打开的那一轮里（`ApprovalService.request` 的硬前置）；
- *   - 真 `ApprovalService`（`@deepseek-ai/dsh-user-approval` 0.2.0-rc.2）：应答者是同一缝
+ *   - 真 `ApprovalService`（`@deepseek-ai/dsh-user-approval` 0.2.1-rc.2）：应答者是同一缝
  *     上的 `approval/request` 监听者，不是 mock；
  *   - 会话日志（`session.snapshotEvents()`）就是审计证据本体：断言读事件 seq 与夹逼关系。
  *

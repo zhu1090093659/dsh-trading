@@ -1,7 +1,7 @@
 /**
  * 定时任务测试 fixture：可契约核对的 typert 网关假实现（不是通用 mock）。
  *
- * 形状按已安装的 0.2.0-rc.2 宿主 SDK 核过（只读查 schema，不猜 API）：
+ * 形状按已安装的 0.2.1-rc.2 宿主 SDK 核过（只读查 schema，不猜 API）：
  * - `session/create` 的显式 `sessionId` 走 `ensureSession` 采纳语义
  *   （dsh-api-session-controller `create` → `ensureSession(id, cwd, true, preset)`：
  *   同 id 复用已有/持久化会话，preset 不一致报 `session/preset-conflict`）；

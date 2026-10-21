@@ -41,15 +41,15 @@ floor 不随 cohort 走，声明即失真。
    写进 overrides 后 `pnpm peers check` 全清。
 6. **源码适配两处**：`packages/client-ui-settings/src/client/trading-settings-controller.ts`
    里 `ConfigFormSnapshot` 在新世代删掉了 `mode`，`writable: snap.mode === 'host' && snap.writable`
-   收敛为 `writable: snap.writable`（旧类型文档写明 memory 模式从不接受写入，合取冗余）；
+   收敛为 `writable: snap.writable`（旧类型文档写明 memory 模式从不接受写入：memory 下 `SettingsDescribeMirror` 的 `view` 恒为 `undefined`、`load()/ensure()` 首行早退、`derive()` 随之早退，快照保留初始 `writable: false`，故合取冗余）；
    `packages/base/src/tool-batch.ts` 给手工收窄的 `ctx.tools` 视图补
    `register(definition: ToolDefinition): () => void`——这条**不属 cohort 引入**，
    `register` 在两世代签名逐字相同（`lib/types/index.d.ts:636` 与 `:637`），
-   属升级前就存在的陈旧基线债。
+   属升级前就存在的陈旧基线债。同一提交还改了 `packages/client-ui-settings/test/smoke.test.ts` 的夹具与一条用例（删掉已不存在的 `mode: host` 夹具，`writable` 用例改为正反双向断言，`expect` 计数 2→2 未削弱）。
 7. **清掉两处继承红**：`test:audit` 的 4 个 base 测试文件（29 个标题补角色前缀、
    29 处 Given/When/Then、3 处 `vi.fn` 换成手写记录器，基线只降不升）与
    `tool-contract` 的 `trading_batch` / `trading_tools_index` 两条显式登记。
-   两处红都先于本轮存在于 `71c2d323`，不是本升级引入。
+   两处红都先于本轮存在于 `71c2d323`，不是本升级引入。`test-audit-baseline.json` 的 `--update` 同时把 7 个本轮未触碰文件的既有滞后一并记入（`packages/bot-api` 两个 sse 文件 mock 6→0、`connector-akshare` 4→2、`connector-eastmoney` 11→10、`connector-jin10` 11→10、`desktop/tests/runtime.test.mjs` 13→12，全部为下降项），并把 `tests` 字段从 1868 校正到 3050（扫描到的叶子用例总数，不参与棘轮判定）。
 
 ## 兼容性（compatibility handoff 结论）
 
@@ -71,25 +71,31 @@ floor 不随 cohort 走，声明即失真。
 |---|---|---|
 | 自定义模型 API 的图片输入与推理等级 UI（alpha.4 / rc.1） | `packages/gui/cordis.patch.yml` 内嵌 `@linxin666/dsh-client-ui-model-capabilities` | 待真机确认后移除（native 已自带 vision / reasoningLevels / reasoningEfforts，残值仅 provider 级归档） |
 | 插件管理面（让 Agent 创建插件、索引源、启停卸载与依赖同步、热重载） | `packages/gui/cordis.patch.yml` 内嵌 `@linxin666/dsh-client-ui-plugin-manager` + 桌面 `writeHostCliShims` 垫片 | 待真机确认后移除（native `dsh-plugin-manager` 已覆盖） |
-| 子智能体可选用独立 Agent Preset（alpha.3 / rc.1） | `packages/base/src/presets.ts` 的 DELEGATES 用 `config.persona` 内联整份角色正文 | 薄扩展：persona 正文改指既有 preset（`dsh-tool-subagent` 已支持 `agentPreset`） |
+| 子智能体可选用独立 Agent Preset（alpha.3 / rc.1） | `packages/base/src/presets.ts` 的 DELEGATES 用 `config.persona` 内联整份角色正文，且行 provider 为 `fork` | 记 exception：原生 `agentPreset` 只能用在**不继承父上下文**的 provider 上——`dsh-subagent-fork-in-process` 的 `capabilities.agentPreset` 为 `false` 且 `inheritsParentContext` 为 `true`，`dsh-tool-subagent` 的 `assertProvider()` 在配置了 `agentPreset` 而 provider 继承父上下文时直接抛错；改用 spawn 类 provider 会丢掉 fork 的父已完成轮次与工具面继承，属能力回退，故保留内联 persona |
 
 记为 exception 的：行情连接器 BYOK 凭据卡（对象是行情 provider，非官方模型 provider）、
 消息内密钥脱敏（本仓零实现，直接用 native）、Office 与 `workspace-dependencies` 两条
 官方行（只接线不复制正文）、5 个 `tool.call.toolview` 富卡片（消费官方 slot）、
 `trading_batch`（父令牌子派发走 `ctx.tools.execute` 保留审批闸门，与官方 PTC in-memory
 不同层）。清单外的自动化任务平面（native `task_board_*` 对本仓 `tasks_*` 六工具 +
-`ScheduledTasksPanel` + cron/DST 语义）不属本世代新增条目，单独立项对照后再定去留。
+`ScheduledTasksPanel` + cron/DST 语义）不属本世代新增条目，单独立项对照后再定去留。官方闭包里与插件管理同族的还有 `dsh-plugin-market` / `dsh-plugin-market-index` / `dsh-client-ui-plugin-market` / `dsh-experimental-plugin-market-bundle`，本仓 plugin-manager 的「索引源」能力对照时要把这几项一起比。
 
 ## 验证
 
 - `pnpm install --frozen-lockfile --ignore-scripts` 退出 0；lock 中 76 个
-  `@deepseek-ai` 名各只解析一版（70 个 dsh 包同世代），旧世代字面量 0 次。
-- `pnpm peers check`：无 peer 问题（`@deepseek-ai/dsh` 宿主 peer 在树内未满足属既有契约：
-  宿主全局安装、profile 侧 `autoInstallPeers: false`）。
-- `pnpm gates:all` 在最终分支提交 `d8c05d20` 上 **17 通过 / 0 失败**；
-  `typecheck-gate` 371 错误 vs 基线 387（基线文件未改）、`test:desktop` 80 pass。
-- 提交链：`888543fd`（cohort 与 lockfile）→ `749d9a4a`（源码适配）→
-  `fb23b4d2`（测试卫生清债）→ `d8c05d20`（工具契约登记）。
+  `@deepseek-ai` 名各只解析一版（70 个 dsh 包同世代）。旧世代字面量在声明面
+  （49 个 `package.json`）、`pnpm-workspace.yaml`、两个 lockfile 里均为 0 处；
+  `packages/bot-api` 的 5 处契约出处注释已随本世代重新核对后更新（`dsh-session` 的
+  `TurnEndReasonMap` 与 `dsh-user-approval` 的 `types.d.ts` 在两世代逐字节相同），
+  `scripts/refresh-profile.sh` 的日期注释属历史叙述不改。
+- `pnpm peers check`：无 peer 问题。本仓没有包把 `@deepseek-ai/dsh` 声明为 peer，
+  唯一引用是 `desktop/runtime/host/package.json` 的宿主钉版，宿主由全局安装提供。
+- `pnpm gates:all` **17 通过 / 0 失败**：先在 `d8c05d20` 上跑通，独立对抗验收与本条
+  事实修正后又在分支末提交上复跑（`typecheck-gate` 371 错误 vs 基线 387、基线文件未改，
+  `test:desktop` 80 pass）。
+- 提交链：`888543fd`（cohort 与 lockfile）→ `749d9a4a`（源码适配与测试夹具）→
+  `fb23b4d2`（测试卫生清债）→ `d8c05d20`（工具契约登记）→ `ce70f5c2`（本 Note 与活事实）
+  → 本条事实修正提交。
 
 ## Alternatives considered
 
