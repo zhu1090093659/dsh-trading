@@ -5,7 +5,7 @@
  * 渲染逻辑；由指标插件（client-ui-indicators）注册进 tradingIndicators 服务。
  */
 import type { IndicatorDefinition, IndicatorThemeColor, Kline } from './types.ts'
-import { alignAuxToBars, FIVE_DAY_VOLUME_TIER_AUX_KEY, type AuxPoint } from './aux.ts'
+import { alignAuxToBars, FIVE_DAY_VOLUME_TIER_AUX_KEY, type AuxPoint } from './aux-series.ts'
 import { bollinger, ema, kdj, macd, rsi, sma } from './math.ts'
 
 /** MA 线配色（富途系配色 + 扩展周期轮换调色板）。 */

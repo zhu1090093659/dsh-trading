@@ -86,3 +86,25 @@ CI 实证全绿，但存在四类遗留债：
 ## Alternatives considered
 
 <!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->
+
+## Windows 保留设备名（2026-10-21 补）
+
+- **故障**：`packages/indicators` 在 2026-10-12（`66c612cd`）引入 `src/aux.ts` 与
+  `test/aux.test.ts`。`AUX` 是 Windows 保留设备名，windows-latest 的
+  `actions/checkout` 直接失败 `error: invalid path 'packages/indicators/src/aux.ts'`
+  （git 退出 128），`pnpm install` 与测试步骤全部 skipped —— 失败发生在读任何代码之前。
+  最近五个已完成的 ci run（`39562570170` / `39589273130` / `39590403812` /
+  `39591597082` / `39592536042`）windows job 的失败步骤都是 `Run actions/checkout@v4`。
+  ubuntu 侧静态门禁与单测全绿，这类故障只有 windows-latest 能暴露。
+- **处置**：模块改名 `aux.ts` → `aux-series.ts`（测试同步 `aux-series.test.ts`），
+  包内三处 `./aux.ts` 导入与文档注释一并改；`@dshtrading/indicators` 的 exports 只有
+  `.` / `./tool` / `./plugin` / `./package.json`，`aux` 从不是公开子路径，
+  消费方按文件路径引用零命中，改名对外零影响。否决的方案：`.gitattributes` 与
+  `core.protectNTFS` 只影响 NTFS 检查、不会重命名文件；sparse-checkout 排除该路径等于
+  把模块从 Windows 构建里删掉。
+- **规则**：受跟踪文件与包产物不得使用 Windows 保留设备名（`CON` `PRN` `AUX` `NUL`
+  `COM1..9` `LPT1..9`，含带扩展名形式），也不得以空格或点结尾。这条不只约束 checkout：
+  桌面壳 `prepare-runtime` 把 workspace 包打成 tarball 再解包，同一批名字在 Windows 上
+  解包同样失败，而 `desktop-release` 是 all-or-nothing（windows 打包失败即 Release
+  不创建，npm 却可能已经发出去）。
+

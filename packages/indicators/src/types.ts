@@ -9,15 +9,15 @@
  * （MA/MACD 等）本身语言中立。
  *
  * 外部序列注入缝（2026-10-13 港股通持股比例）：指标可用 aux 声明需要宿主预取的
- * 外部日频序列键，宿主按需 prefetch 后走 computeAux 入口（见 aux.ts）。未声明
+ * 外部日频序列键，宿主按需 prefetch 后走 computeAux 入口（见 aux-series.ts）。未声明
  * aux 的存量 definition 完全不受影响。
  *
  * 逐根序列注入缝（2026-10-14 五日同分钟档位色）：指标可用 barAux 声明需要宿主
- * 逐根注入的序列键，宿主把整条序列算好后走 computeBarAux 入口（见 aux.ts）。与
+ * 逐根注入的序列键，宿主把整条序列算好后走 computeBarAux 入口（见 aux-series.ts）。与
  * aux 的差别是**缺失语义**：aux 取不到就整体隐藏实例，barAux 缺失则回落 compute，
  * 实例照常显示。未声明 barAux 的存量 definition 完全不受影响。
  */
-import type { AuxBarSeriesKey, AuxBarSeriesMap, AuxSeriesKey, AuxSeriesMap } from './aux.ts'
+import type { AuxBarSeriesKey, AuxBarSeriesMap, AuxSeriesKey, AuxSeriesMap } from './aux-series.ts'
 import type { Series } from './math.ts'
 
 /** K 线（与宿主行情数据结构对齐的最小面）。 */

@@ -21,7 +21,7 @@ Status: implemented
 - 纵轴格式：`vol` 的七条输出（`compute` 两条 + `computeBarAux` 五条）都声明 `priceFormat: 'volume'`——柱高是成交量，纵轴要走成交量的紧凑格式（亿/万、K/M/B），否则通用价格格式会把它渲染成 `12000000.00`。`IndicatorOutput.priceFormat?: 'price' | 'volume'` 缺省 `'price'`（消费方兜底），其它预置不带该字段，存量零迁移。
 - `defaultActive: true` 让宿主启动时补种一次（见 [volume-tier-indicator-generalization](2026-10-14-volume-tier-indicator-generalization.md) 的补种机制）；`vol` 的 definition 排在 `vol-tier` **之前**，因此新工作区的补种顺序是 `['vol', 'vol-tier']`，成交量副图落在量比分档量能上方。
 
-**逐根序列通道（`packages/indicators/src/aux.ts` + `types.ts`，冻结词汇）**：
+**逐根序列通道（`packages/indicators/src/aux-series.ts` + `types.ts`，冻结词汇）**：
 
 - `AuxBarSeriesKey`（开放词汇）/ `AuxBarSeriesMap`（键 = `definition.barAux` 声明的键，值数组长度严格等于 `bars.length`，`undefined` = 该根无值，元素只可能是有限数或 `undefined`）。
 - `IndicatorDefinition.barAux?: readonly AuxBarSeriesKey[]` + `computeBarAux?(bars, params, barAux)`，均为可选，存量 definition 零迁移。

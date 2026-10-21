@@ -172,6 +172,18 @@ registered variables: provider, model`），整轮运行失败。全仓只有这
 
 验证：CDP 冒烟 16 项全绿，含「真实新建会话并跑完一轮无失败」与「无会话/提示词类控制台错误」。
 
+### 同日续三：发版遗留的 Windows 阻塞与发版裁决（2026-10-21）
+
+- 用户裁决：本轮不推 tag、不发 npm、不创建 Release，先把阻塞修到 CI 可绿；发版等下一次明确授权。
+- 现场：`packages/indicators` 自 `66c612cd`（2026-10-12）起带 `src/aux.ts` 与 `test/aux.test.ts`，
+  `AUX` 是 Windows 保留设备名，windows-latest 的 checkout 直接 `error: invalid path`，
+  ci 的 windows job 自此每个 run 都红（最近五个 run 的失败步骤均为 `actions/checkout`）。
+  desktop-release 的 windows 打包同样会被挡住，而该管线是 all-or-nothing：Release 建不出来时
+  npm 可能已经发出去。模块已改名 `aux-series.ts`（测试同步），对外零影响。
+- 因此遗留项 ④「桌面壳安装包需按新钉版重新构建发布」**仍未完成**：本机 `/Applications` 的 dir
+  构建是开发签名的本地产物，不是 Release 资产；发布要等 Windows 可 checkout 之后重新授权
+  （bump + tag + 三路外发）。
+
 ## Alternatives considered
 
 - **只对齐 cordis/cosmokit/schemastery，dsh 家族留在旧世代**：宿主已在新世代，影子拷贝
