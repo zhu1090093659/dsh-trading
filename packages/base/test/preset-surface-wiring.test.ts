@@ -19,25 +19,37 @@ const source = readFileSync(join(import.meta.dirname, '../src/presets.ts'), 'utf
 const plugins = /plugins:\s*\[(.*?)\]\s*,\s*\}\s*\}\)/s.exec(source)?.[1] ?? ''
 
 describe('预设工具面接线', () => {
-  it('批量入口给全部角色', () => {
+  it('管理员：批量入口给全部角色', () => {
+    // Given presets.ts 源文件与它的 plugins 行
+    // When 检查批量入口插件 id 与批量行展开
+    // Then 批量入口行存在且被展开给全部角色
     expect(source).toContain('dsh-trading-tool-batch')
     expect(plugins).toContain('...batchRow')
   })
 
-  it('没有把预设改成 PTC 呈现模式', () => {
+  it('管理员：没有把预设改成 PTC 呈现模式', () => {
+    // Given presets.ts 源文件
+    // When 检查呈现模式相关声明
+    // Then 没有 PTC 呈现插件、没有 code 呈现，promotedPresentation 是 native
     expect(source).not.toContain('dsh-agent-tool-presentation')
     expect(source).not.toContain("promotedPresentation: 'code'")
     expect(source).toContain("promotedPresentation: 'native'")
   })
 
-  it('索引层与裁剪层都在', () => {
+  it('管理员：索引层与裁剪层都在', () => {
+    // Given presets.ts 的 plugins 行
+    // When 检查索引层与裁剪层的插件 id 与展开行
+    // Then 索引层与裁剪层都挂上
     expect(source).toContain('dsh-trading-tool-index')
     expect(source).toContain('dsh-trading-tool-surface')
     expect(plugins).toContain('...indexRow')
     expect(plugins).toContain('...surfaceRow')
   })
 
-  it('两阶段只给 researcher,phase1 是交易版最小集', () => {
+  it('管理员：两阶段只给 researcher,phase1 是交易版最小集', () => {
+    // Given presets.ts 的 BOOTSTRAP 常量块
+    // When 读取该块的正文
+    // Then 只有 researcher 拿到工具面，其余角色为 null、shell 为空
     const boot = /const BOOTSTRAP[\s\S]*?\n    \}/.exec(source)?.[0] ?? ''
     expect(boot).toContain("'instrument-researcher': {")
     expect(boot).toContain("commonTools: ['holdings_list', 'routing_get']")
@@ -46,13 +58,19 @@ describe('预设工具面接线', () => {
     expect(boot).toContain('master: null')
   })
 
-  it('行顺序：batch -> index -> surface -> bootstrap -> shell', () => {
+  it('管理员 行顺序：batch -> index -> surface -> bootstrap -> shell', () => {
+    // Given plugins 行里的五个展开行
+    // When 按源码出现顺序过滤出仍在的行
+    // Then 顺序与声明的装配顺序一致
     const order = ['...batchRow', '...indexRow', '...surfaceRow', '...bootstrapRow', '...shellRow']
       .filter(row => plugins.includes(row))
     expect(order).toEqual(['...batchRow', '...indexRow', '...surfaceRow', '...bootstrapRow', '...shellRow'])
   })
 
-  it('裁剪保持最小争议（用户明确「不用更激进」）', () => {
+  it('管理员：裁剪保持最小争议（用户明确「不用更激进」）', () => {
+    // Given presets.ts 的 SURFACE 常量块
+    // When 读取该块正文并检查裁剪口径
+    // Then trader 只拒 tasks 族、master 不拒任何族，且没有具体工具级裁剪
     const block = /const SURFACE[^{]*\{([\s\S]*?)\n    \}/.exec(source)?.[1] ?? ''
     expect(block).toContain("trader: { denyFamilies: ['tasks'] }")
     expect(block).toContain("master: { denyFamilies: [] }")
