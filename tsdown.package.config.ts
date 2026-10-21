@@ -21,7 +21,16 @@ export function packageConfig(overrides: UserConfig = {}) {
     platform: 'node',
     target: 'es2024',
     dts: true,
-    clean: true,
+    // clean 恒为 true：node 半开跑先清空 lib/，否则被删除/迁走的源模块会把产物留在 lib 里。
+    // 实例：client-ui-trading/lib/{bridge,sse,ttl-cache}.js 在 2026-10-01 的 bot API 拆分
+    // （05b02791）后仍留着旧产物，且还在 import 已迁走的 @dshtrading/kit-*。注意
+    // preserveModules 是「一个源模块一个文件」，所以「不是 entry 的文件」本身不是孤儿——
+    // 判据是 lib 里的模块在 src 下有没有同名源（本仓 252 个产物模块，改动后 0 孤儿）。
+    // 11 个同时有浏览器半的包（client-ui-* / dsh-i18n / indicator-supertrend）由包的 build
+    // 脚本固定顺序：`tsdown && tsdown --config tsdown.client.config.mjs`——浏览器半的
+    // outDir 同为 lib、clean: false、entryFileNames 为 client.js，因此在 node 半之后重新
+    // 写出 lib/client.js。**不要单独跑 node 半**（那会让 `./client` 导出指向不存在的文件，
+    // 直到下一次完整 build）。
     unbundle: true,
     fixedExtension: false,
     ...overrides,

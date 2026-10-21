@@ -119,9 +119,24 @@ preserveModules 复制进 `lib/node_modules`，并把导入改写成 `./node_mod
 `…/node_modules/.pnpm/…` 相对路径 0 条（`lib/client.js` 的 `//#region ../../node_modules/.pnpm/…` 是
 rolldown 的 provenance 注释、不是导入）；`typecheck-gate` 371 错误 vs 基线 387。
 
-一个仍需知道的构建面事实：11 份 `clean: false` 的包在某个 entry 被删除或迁走后**不回收旧产物**。本机
-`lib/` 里曾留着 `client-ui-trading/lib/bridge.js`（2026-10-01 拆去 bot-api 的 node 半）与
-`client-ui-updater/lib/{updater-service,semver,github,environment}.js`、`client-ui-special-indicators/lib/{cache-file,finance-client}.js`
-等无 entry 的孤儿（本次只清掉这些本地残渣）。它们 gitignored、CI 从干净树构建时不存在、也不在
-`exports` 与 patch 行引用面上；把 `clean` 改成 `true` 会让单独跑 node 半时抹掉 `lib/client.js`，
-因此不作为本次改动。
+### 同批：11 份 `clean: false` 归零，产物孤儿从机制上消除
+
+node 半与浏览器半共用 `lib/`（浏览器半 `outDir: 'lib'`、`entryFileNames: 'client.js'`），所以那 11 份
+node 半配置此前写 `clean: false`，代价是**被删除/迁走的源模块，产物会一直留在 `lib/` 里**。实证：
+`client-ui-trading/lib/{bridge,sse,ttl-cache}.js` 在 2026-10-01 的 bot API 拆分（`05b02791`）后仍是旧产物，
+且还在 import 已迁走的 `@dshtrading/kit-*`。
+
+现在 11 份全部回到共享 base 的 `clean: true`，顺序由包 `build` 脚本固定：
+`tsdown && tsdown --config tsdown.client.config.mjs`——node 半先清空 `lib/`，浏览器半（自身
+`clean: false`）随后重新写出 `lib/client.js`。代价是**不能单独跑 node 半**（会让 `./client` 导出指向
+不存在的文件直到下一次完整 build），这条已写进根 `tsdown.package.config.ts` 的注释。
+
+判据不要用「不是 entry 的产物」：`unbundle` 的 preserveModules 是「一个源模块一个文件」，
+`client-ui-updater/lib/{updater-service,semver,github,environment}.js` 与
+`client-ui-special-indicators/lib/{cache-file,finance-client}.js` 都是**正常产物**（src 下有同名源）。
+正确判据是「lib 里的模块在 src 下有没有同名源」：改动后全仓 252 个产物模块、**0 孤儿**；
+同一判据在改动前能抓到 `client-ui-trading/lib/bridge.js`（`src/bridge.ts` 已随拆分删除）。
+
+验证：`pnpm build` 退出 0；探测文件 `lib/STALE-PROBE.js` 在 dsh-i18n 与 client-ui-trading 重建后被清掉，
+且两包的 `lib/{index,client}.js`、`lib/client/locales.js` 都在；`pnpm ui:check` 14 项全绿不受影响
+（它跑 profile 副本，不读仓库 `lib/`）。
