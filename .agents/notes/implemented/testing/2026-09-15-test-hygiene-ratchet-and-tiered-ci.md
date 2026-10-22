@@ -260,3 +260,22 @@ fetch 的 promise 回来、React 再提交一次才出现——调用发生与�
 不要用「它上游的某个副作用已发生」当就绪信号；`sleep` 仍然禁止。
 
 
+## 客户端测试的 storage 隔离（2026-10-22）
+
+`@dshtrading/client-ui-trading` 的 store 把状态持久化到 `localStorage`（`dshtrading.watchlist.v1`、`dshtrading.watchlist-groups.v1`、`dshtrading.watchlist.active-group.v1`、`dshtrading.tradeDesk.open`、`dshtrading:trade:mode`）。jsdom 环境下的 localStorage 是**真存储**、按文件作用域跨用例存活；vitest 只在 node 全局没有该 key 时才把 jsdom 实现挂到 global（`node_modules/vitest` 的 KEYS 里没有 localStorage），于是同一份测试在 node 22/24（无全局 storage）里跨用例继承，在 node 25（有全局 storage 但方法缺失）里 store 静默降级、互不干扰。
+
+2026-10-22 的 v0.6.2 发布 run 正是这样红的：`market-sidebar-tickers-chunk`、`market-sidebar-prevclose-seed`、`quote-stage-trade-desk-poll-guard` 三个文件 6 条用例在 ubuntu/mac/win 三平台一致失败，而本机 node 25 连跑两轮 2991 条全绿。node 24 下逐字复现「33 行要 `[32,1]` 得 `[32,8]`」——上一条 40 行用例的行集被下一条水合，`add()` 全被按 symbol 去重吃掉。
+
+修法：`packages/client-ui-trading/vitest.config.ts` 挂 `setupFiles: ['./test/setup.ts']`，该 setup 在每个用例前清空 `localStorage` / `sessionStorage`，并对「没有 storage / storage 是空壳 / storage 正常」三种形态都做能力探测后静默跳过。生产侧不动：持久化是产品要求，跨用例继承在真实进程里不可达。
+
+**归因口径**：node 22/24 红、node 25 绿属于**运行时相关**而非抖动相关，重跑同一 SHA 的 job 不会变绿；判断「能不能重跑等绿」必须先用与 CI 同语义的 node 在本机复现，不能拿本机绿当依据。
+
+### Alternatives considered
+
+- **逐文件在既有 `beforeEach` 里补 `localStorage.clear()`**：只护住当前三个文件，新增用例再踩一遍；`setupFiles` 一次覆盖全包且经 595 条用例验证无回归，否决。
+- **让生产 store 在测试环境短路、不持久化**：把隔离缺陷藏进生产代码，真实进程内只存在一个 store 实例、跨用例继承不可达，改动面更大，否决。
+- **放宽断言、加 shuffle 或重试**：掩盖泄漏本身，与测试卫生棘轮的零 mock、断言完整方向相反，否决。
+
+### Consequences
+
+`test/setup.ts` 是该包的全局前置钩子，后续任何依赖 storage 初值的用例都必须在该用例体内自备写入（当前 7 处碰 storage 的用例都在 `it` 体内写入，不受影响）。本机 node 25 的 `localStorage` 属「存在但方法缺失」的空壳，新测试若直接调用其方法会抛错，必须走能力探测。

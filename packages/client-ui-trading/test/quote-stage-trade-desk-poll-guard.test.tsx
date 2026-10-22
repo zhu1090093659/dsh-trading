@@ -65,7 +65,9 @@ afterEach(() => {
   cleanup()
   globalThis.fetch = realFetch
   vi.useRealTimers()
-  // 交易模式是模块级 store：每个用例复位，避免 case 之间串味（开关记忆写不进去，故无持久化泄漏）。
+  // 交易模式是模块级 store：每个用例复位，避免 case 之间串味。开关记忆确实落盘
+  // （本文件写 dshtrading:trade:mode，QuoteStage.tsx:2039 写 dshtrading.tradeDesk.open），
+  // 跨用例的存储泄漏由 test/setup.ts 的 beforeEach 清空兜底。
   writeTradeMode('paper')
 })
 
