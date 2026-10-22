@@ -149,8 +149,10 @@ describe('MarketSidebar 迷你走势编排冒烟', () => {
     net.plan = { AAPL: { '1m': 'unsupported', '5m': 'ok', '1d': 'ok' } }
     const view = renderSidebar([{ market: 'us', symbol: 'AAPL', name: '苹果' }])
 
-    // 取数编排：先 1m（被桥拒）→ 再 5m（成功）→ 末尾补拉 prevClose 的 1d×2
-    await waitFor(() => { expect(callsOf('AAPL')).toEqual(['1m:500', '5m:200', '1d:2']) })
+    // 取数编排：先 1m（被桥拒）→ 再 5m（成功）。报价拍还没落地，prevClose 的 1d×2
+    // 不抢在它前面发（ticker 缺省时的兜底留到下一拍，见 market-sidebar-prevclose-seed）。
+    await waitFor(() => { expect(callsOf('AAPL')).toEqual(['1m:500', '5m:200']) })
+    expect(net.calls.filter(call => call.interval === '1d' && call.limit === 2)).toHaveLength(0)
     // 5m 成功后不再走日 K 降级（limit 32 缺席）
     expect(net.calls.filter(call => call.interval === '1d' && call.limit === 32)).toHaveLength(0)
 
@@ -169,8 +171,9 @@ describe('MarketSidebar 迷你走势编排冒烟', () => {
     net.plan = { MSFT: { '1m': 'unsupported', '5m': 'unsupported', '1d': 'ok' } }
     const view = renderSidebar([{ market: 'us', symbol: 'MSFT', name: '微软' }])
 
-    // 两档分钟线都试过才降日 K；日 K 之后仍会补拉 prevClose 的 1d×2
-    await waitFor(() => { expect(callsOf('MSFT')).toEqual(['1m:500', '5m:200', '1d:32', '1d:2']) })
+    // 两档分钟线都试过才降日 K；日 K 的倒数第二根自带走 prevClose，不再额外补 1d×2
+    await waitFor(() => { expect(callsOf('MSFT')).toEqual(['1m:500', '5m:200', '1d:32']) })
+    expect(net.calls.filter(call => call.interval === '1d' && call.limit === 2)).toHaveLength(0)
 
     // 日 K 序列三根 → 等距铺满（日 K 无 xFractions）
     const points = sparkPoints(view.getByText, '微软')
@@ -222,8 +225,9 @@ describe('MarketSidebar 迷你走势编排冒烟', () => {
 
     // crypto 候选只有 5m，且 intradayRequest 把 crypto 的任意候选归一为 5m×288：
     // API 层既不出现 1m 请求，也不按股票口径 200 根取数。
-    await waitFor(() => { expect(callsOf('BTCUSDT')).toEqual(['5m:288', '1d:2']) })
+    await waitFor(() => { expect(callsOf('BTCUSDT')).toEqual(['5m:288']) })
     expect(net.calls.some(call => call.interval === '1m')).toBe(false)
+    expect(net.calls.filter(call => call.interval === '1d' && call.limit === 2)).toHaveLength(0)
 
     const points = sparkPoints(view.getByText, '比特币')
     expect(points).toHaveLength(CRYPTO_5M.length)

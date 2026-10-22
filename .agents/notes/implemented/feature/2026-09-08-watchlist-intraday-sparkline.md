@@ -14,7 +14,7 @@ Status: implemented
 - **股票（us/cn/hk）**：分钟线粒度**按连接器能力自适应**——候选 1m→5m 按序尝试，首个成功粒度记入缓存条目（ReferenceSeries.interval）后续直用，避免每拍重打必失败的粒度。实证驱动：腾讯 A 股无 1m（支持 5m/30m/1d/1w/1M），港股腾讯公开端分钟线全不支持（TRADING_UNSUPPORTED_INTERVAL）；Yahoo 美股 1m 可用（窗口 7 天）。取数上限 1m×500（覆盖美股常规时段 390 根 + 余量）/ 5m×200。按**最后一根 bar 的市场本地日期**筛当日 bar（us=America/New_York、cn=Asia/Shanghai、hk=Asia/Hong_Kong，DST 由 Intl.DateTimeFormat 处理）。**不维护节假日历**：非交易日时上游最后一根 bar 自然落在最近交易日，筛选语义自动满足「显示最近交易日」。
 - **降级链**：分钟线抛错或返回空（如腾讯公开端明确不支持港股分钟线，connector-tencent/src/rest.ts:595）→ 回落 1d×32 日 K 走势（原行为），mode:'daily' 条目 10min TTL 内复用、过后重试分钟线。
 - **刷新**：走势序列独立 usePoll 60s 一拍（分钟 bar 粒度下足够「活」又对公共端温和），页面隐藏暂停；不再挂在 rowsKey effect 上（旧实现 TTL 永不触发的问题随之消失）。
-- **prevClose 兜底不变**：涨跌幅锚点仍 ticker.prevClose 优先；仅当缓存缺 prevClose 时补拉一次 1d×2（日 K 缺最新收盘 bar 的错位风险仍在，故永远让位于快照官方锚点）。
+- **prevClose 兜底**：涨跌幅锚点仍 ticker.prevClose 优先；兜底的 1d×2 只在「ticker 已落地、确实没有 prevClose、本条目也没有」时补一次（日 K 缺最新收盘 bar 的错位风险仍在，故永远让位于快照官方锚点）。ticker 带官方锚点时不发；报价拍还没回来（首拍 prices 必为空）时也不抢发——渲染侧本来就是 ticker 优先，等下一拍按 ticker 实际缺省与否再决定。实测（真实组件 + 桥契约桩）：首拍 klines 43→25（真实规模 18 行，-42%）、208→124（尾部 84 行，-40%）。
 - **固定交易时段 x 轴（同日后续修正）**：盘中未走完的交易日不得把已有数据拉伸铺满全宽（否则上午 11 点的分时看起来像已收盘）。股票每点带 xFractions——bar 开盘时刻映射到固定时段窗口的 0..1 位置（us 9:30–16:00 ET=390min；cn 9:30–11:30+13:00–15:00=240min，午休压缩；hk 9:30–12:00+13:00–16:00=330min），时段外钳制到最近边界；Sparkline 按 xFractions 定位、面积填充只覆盖已绘线段（右侧留白）。crypto 滚动 24h 与日 K 降级窗口天然固定，等距铺满不变。
 - 纯函数选材逻辑抽为 src/client/intraday-series.ts（intradayCandidates / intradayRequest / selectIntradaySeries / sessionXFraction），ReferenceSeries 增 mode / interval / xFractions 字段。
 
@@ -29,7 +29,7 @@ Status: implemented
 
 - 自选走势对盘中用户「活」了：60s 粒度跟随当日分时；非交易日静态展示最近交易日全天。
 - 港股走哪个源决定走势形态：腾讯源分钟线全不支持 → 日 K 降级（10min 重试）；**eastmoney 源已打通港股分钟线**（trends2，见 [2026-09-08-eastmoney-hk-market](2026-09-08-eastmoney-hk-market.md)）→ hk.provider=eastmoney 时港股同样走日内分时；A 股（腾讯源）自动落到 5m 日内分时。
-- 轮询成本：每标的每分钟 1 次分钟线请求（N 标的 = N 请求/分），公共端可承受；首屏 prevClose 补拉一次性。
+- 轮询成本：每标的每分钟 1 次分钟线请求（N 标的 = N 请求/分），公共端可承受；首屏不再有逐行 prevClose 补拉（见上条 gating），只有 ticker 确实缺锚点的行才在下一拍补一次。
 - Yahoo 公共端 1m 有约 15min 延迟（美股迷你图相应滞后），属数据源固有限制。
 - 测试：test/intraday-series.test.ts 覆盖候选粒度与取数上限、crypto 滚动不分组、us/cn/hk 本地日筛选、节假日回落最近交易日（2026-09-07 美国劳动节实证）、三市场固定时段 x 映射（含午休压缩与时段外钳制）。真机实证：11:07 CST A 股盘中走势只占左 ~40% 宽度。门禁 pnpm build / pnpm test 全绿；真机验证走 trading-web profile（3081 实例）+ CDP 延迟截图——注意 headless Chrome --timeout 是上限不是等待，load 事件一到就截图，行情面板须用 CDP 主动等 ~20s 再 Page.captureScreenshot。
 - 视觉结构记录见 [2026-08-31-futu-ui-visual-upgrade](2026-08-31-futu-ui-visual-upgrade.md)（本记录取代其数据语义面）。

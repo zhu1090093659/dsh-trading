@@ -29,8 +29,11 @@ import type {
 } from './holdings-types.ts'
 import type { MarketId } from './types.ts'
 
-/** 桥单次批量报价 symbols 封顶（镜像 node 半 bridge.ts MAX_SYMBOLS）。 */
-const TICKERS_CHUNK = 32
+/**
+ * 桥单次批量报价 symbols 封顶（镜像 node 半 `bridge.ts:215` 的 `MAX_SYMBOLS=32`）：超限时桥整批 400，
+ * 不分块就等于「单市场超过 32 行永远拿不到报价」。左栏自选报价与台账盯市共用这一处。
+ */
+export const TICKERS_CHUNK = 32
 
 /**
  * 同一市场内并行发出的块数上限。

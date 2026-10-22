@@ -14,6 +14,7 @@ import { searchAllMarkets, searchSymbols, setDynamicCatalog, updateDynamicCatalo
 import type { Observable, SelectionState, WatchlistGroupOpResult, WatchlistGroupsState, Watchlists } from './store.ts'
 import { rowsFor } from './store.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
+import { TICKERS_CHUNK } from './holdings-store.ts'
 import { intradayCandidates, intradayRequest, selectIntradaySeries } from './intraday-series.ts'
 import { publishMarketProviders } from './market-providers.ts'
 import { colorModeStore } from './color-mode.ts'
@@ -257,8 +258,8 @@ export function MarketSidebar({
 
   // 参考序列（迷你走势 + 昨收兜底）：日内分钟线 60s 轮询；分钟线不可用（如腾讯
   // 公开端港股）降级日 K，TTL 内复用后再重试分钟线。prevClose 仅为快照缺官方锚点
-  // 时的兜底，首次缺省时补拉一次日 K（日 K 序列可能缺最新收盘 bar，倒数第二根
-  // 会错位一个交易日，故永远让位于 ticker.prevClose）。
+  // 时的兜底（日 K 序列可能缺最新收盘 bar，倒数第二根会错位一个交易日，故永远让位于
+  // ticker.prevClose）：ticker 已带官方锚点就不再补拉，首拍报价拍未落地时也先不补。
   usePoll(async () => {
     const onDemand = seriesOnDemandKeyRef.current !== rowsKey
     seriesOnDemandKeyRef.current = rowsKey
@@ -310,24 +311,28 @@ export function MarketSidebar({
           }))
         } catch { /* 序列失败不影响报价行 */ }
       }
-      // prevClose 兜底补拉（仅在缺省时；独立于走势成败）
-      if (series[key]?.prevClose === undefined) {
-        try {
-          const pair = await fetchKlines(row.market, row.symbol, '1d', 2)
-          const prevClose = pair.length >= 2 ? pair[pair.length - 2]?.close : undefined
-          if (prevClose !== undefined) {
-            setSeries((current) => current[key] === undefined ? current : ({
-              ...current,
-              [key]: { ...(current[key] as ReferenceSeries), prevClose },
-            }))
-          }
-        } catch { /* 下轮再试 */ }
-      }
+      // prevClose 兜底补拉：只在「ticker 快照确实没有官方昨收」且「本序列也还没有」时补一次。
+      // 报价拍尚未落地（首拍 prices 必为空）就先不抢发这次日 K——渲染侧本来就
+      // ticker.prevClose 优先，等下一拍按 ticker 实际缺省与否再决定，首拍因此少 N 次必废请求。
+      const ticker = prices[key]
+      if (ticker === undefined || ticker.prevClose !== undefined) return
+      if (series[key]?.prevClose !== undefined) return
+      try {
+        const pair = await fetchKlines(row.market, row.symbol, '1d', 2)
+        const prevClose = pair.length >= 2 ? pair[pair.length - 2]?.close : undefined
+        if (prevClose !== undefined) {
+          setSeries((current) => current[key] === undefined ? current : ({
+            ...current,
+            [key]: { ...(current[key] as ReferenceSeries), prevClose },
+          }))
+        }
+      } catch { /* 下轮再试 */ }
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, SERIES_POLL_MS, [rowsKey])
 
-  // 最新价批量轮询：按市场分组，每市场每拍一次请求，并自动回填标的真实中文名称。
+  // 最新价批量轮询：按市场分组、每市场按 TICKERS_CHUNK 分块，每拍每块一次请求，
+  // 并自动回填标的真实中文名称。块之间互相独立：一块失败不影响其它块落地。
   // 静止行情（休市/无成交）下不 setState、不重建动态字典：整表保持不重渲染。
   usePoll(async () => {
     const onDemand = pricesOnDemandKeyRef.current !== rowsKey
@@ -345,7 +350,16 @@ export function MarketSidebar({
     const next: Record<string, Ticker> = {}
     const dynamicUpdates: Map<MarketId, Array<{ symbol: string; name: string }>> = new Map()
 
-    await Promise.all([...byMarket.entries()].map(async ([market, symbols]) => {
+    // 按块展开成扁平的并行批次（市场数 × 块数），每块各自 try/catch：块级失败隔离，
+    // 语义仍是「失败静默、下轮再试」。
+    const batches: Array<{ market: MarketId; symbols: string[] }> = []
+    for (const [market, symbols] of byMarket.entries()) {
+      for (let offset = 0; offset < symbols.length; offset += TICKERS_CHUNK) {
+        batches.push({ market, symbols: symbols.slice(offset, offset + TICKERS_CHUNK) })
+      }
+    }
+
+    await Promise.all(batches.map(async ({ market, symbols }) => {
       try {
         const outcome = await fetchTickers(market, symbols)
         for (const [symbol, result] of Object.entries(outcome)) {
