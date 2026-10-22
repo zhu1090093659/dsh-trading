@@ -1,5 +1,17 @@
 # @dshtrading/crypto
 
+## 0.6.2
+
+### Patch Changes
+
+- Updated dependencies [a838864]
+- Updated dependencies [86bb962]
+  - @dshtrading/connector-ccxt@0.6.2
+  - @dshtrading/kit-crypto@0.6.2
+  - @dshtrading/connector-binance@0.6.2
+  - @dshtrading/connector-bybit@0.6.2
+  - @dshtrading/connector-okx@0.6.2
+
 ## 0.6.1
 
 ### Patch Changes

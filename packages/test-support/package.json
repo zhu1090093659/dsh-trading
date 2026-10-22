@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/test-support",
   "description": "dsh-trading 私有测试支持包（LOCAL ONLY，不进发布闭包）：承载跨包共享的测试断言，目前提供词典 zh/en 键集合与 {placeholder} 双向对齐断言 expectLocaleKeyParity。",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "type": "module",
   "main": "lib/index.js",

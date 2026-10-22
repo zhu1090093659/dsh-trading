@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-ibkr",
   "description": "美股（us）行情与交易连接器：经用户本机 Interactive Brokers Client Portal Gateway（/iserver、/portfolio、/hmds）实现 MarketDataService/TradeService 双契约，服务键 tradingUsMarketData/tradingUsTrade，三态闸门 + dry-run 缺省。",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

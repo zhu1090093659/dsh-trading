@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-eastmoney",
   "description": "东方财富公开行情连接器（cn + hk 单包双市场）：经 push2 / push2his 公共 REST 提供 tradingCnMarketData / tradingHkMarketData 与 <market>_get_ticker / <market>_get_klines 工具，免密、无官方授权，纯行情无交易通道。",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

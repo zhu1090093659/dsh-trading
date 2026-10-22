@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-futu",
   "description": "富途（Futu）连接器：行情面 hk+us、交易面仅 hk，经本机 Futu OpenD 网关（HTTP 契约由 scripts/futu-openapi-bridge.py 承担）实现 MarketDataService/TradeService 与 3 个 hk_* 工具；dry-run 缺省、liveTrading 只是非权威镜像（放行归 @dshtrading/authority 人工签署）、凭证只进 ref。",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

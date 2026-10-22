@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-polymarket",
   "description": "Polymarket 预测市场连接器（只读公开 API，无密钥）：FOMC 决议档位与隐含概率，host 面 provide tradingPredictionFeed（跨市场信息源，归 base bundle）",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

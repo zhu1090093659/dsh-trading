@@ -1,5 +1,14 @@
 # @dshtrading/connector-polygon
 
+## 0.6.2
+
+### Patch Changes
+
+- Updated dependencies [a838864]
+- Updated dependencies [add0db1]
+  - @dshtrading/api@0.6.2
+  - @dshtrading/authority@0.6.2
+
 ## 0.6.1
 
 ### Patch Changes

@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-tiger",
   "description": "老虎证券（Tiger Trade）港股连接器：直连券商 OpenAPI 网关（openapi.itiger.com/gateway，RSA2 签名 + BYOK 私钥 ref），行情面 fail-closed（上游失败即抛结构化错误，零跨源回落）；实现 MarketDataService/TradeService 与 5 个 hk_* 工具；dry-run 缺省、liveTrading 只是非权威镜像（放行归 @dshtrading/authority 人工签署）。",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

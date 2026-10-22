@@ -1,5 +1,15 @@
 # @dshtrading/all
 
+## 0.6.2
+
+### Patch Changes
+
+- @dshtrading/cn@0.6.2
+- @dshtrading/crypto@0.6.2
+- @dshtrading/us@0.6.2
+- @dshtrading/hk@0.6.2
+- @dshtrading/base@0.6.2
+
 ## 0.6.1
 
 ### Patch Changes

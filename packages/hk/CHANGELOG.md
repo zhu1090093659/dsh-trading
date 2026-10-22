@@ -1,5 +1,18 @@
 # @dshtrading/hk
 
+## 0.6.2
+
+### Patch Changes
+
+- Updated dependencies [3af11a1]
+- Updated dependencies [add0db1]
+  - @dshtrading/connector-tiger@0.6.2
+  - @dshtrading/connector-eastmoney@0.6.2
+  - @dshtrading/connector-tencent@0.6.2
+  - @dshtrading/kit-hk@0.6.2
+  - @dshtrading/connector-futu@0.6.2
+  - @dshtrading/connector-longbridge@0.6.2
+
 ## 0.6.1
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # @dshtrading/us
 
+## 0.6.2
+
+### Patch Changes
+
+- Updated dependencies [3af11a1]
+- Updated dependencies [add0db1]
+  - @dshtrading/connector-ibkr@0.6.2
+  - @dshtrading/connector-yahoo@0.6.2
+  - @dshtrading/kit-us@0.6.2
+  - @dshtrading/connector-alpaca@0.6.2
+  - @dshtrading/connector-finnhub@0.6.2
+  - @dshtrading/connector-fmp@0.6.2
+  - @dshtrading/connector-polygon@0.6.2
+
 ## 0.6.1
 
 ### Patch Changes
