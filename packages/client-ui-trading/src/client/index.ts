@@ -133,7 +133,7 @@ export function apply(ctx: ClientContext): void {
     let tries = 0
     const pickMenuItem = (): void => {
       const item = Array.from(document.querySelectorAll<HTMLElement>("[role='menuitem'], [role='menu'] button"))
-        .find((el) => /^\s*(设置|Settings)/.test(el.textContent ?? ''))
+        .find((el) => /^\s*(设置|Settings)/.test(el.textContent ?? '')) // i18n-allow: 只匹配宿主已按当前语言渲染的菜单文案，不渲染插件自有 UI 文案
       if (item !== undefined) {
         item.click()
         mark('menu')
