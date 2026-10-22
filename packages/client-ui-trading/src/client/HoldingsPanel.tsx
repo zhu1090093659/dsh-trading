@@ -452,13 +452,22 @@ export function HoldingsPanel({ t, onClose }: HoldingsPanelProps): React.JSX.Ele
     return [...keys].sort().join(',')
   }, [taggedPositions])
 
-  // 30s：live 持仓刷新 + 批量盯市（挂载即轮，卸载即停）。无常驻轮询预算的市场
+  // live 持仓刷新（30s，挂载即轮、卸载即停，与盯市目标无关）。依赖恒空是语义要求：
+  // 盯市目标键由首拉写入的持仓派生，若拿它当依赖，首拉成功即改键 → effect 整段重跑 →
+  // 每次首开把 4 次 /trade/positions 再打一遍（A3）。
+  useEffect(() => {
+    void refreshLiveTagged()
+    const timer = setInterval(() => { void refreshLiveTagged() }, 30000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // 批量盯市（30s，挂载即轮、卸载即停，盯市目标变化即重跑）。无常驻轮询预算的市场
   // （global/金十，见 quote-budget.ts）只在盯市目标变化时按需取一次，之后不进
-  // 常驻轮询——金十 global_quote 的常驻预算为 0。
+  // 常驻轮询——金十 global_quote 的常驻预算为 0。判据是 m2mOnDemandKeyRef：
+  // 与上一次 tick 见过的键不同 = 目标刚变，这一拍放开全部目标。
   const m2mOnDemandKeyRef = useRef('')
   useEffect(() => {
     const tick = (): void => {
-      void refreshLiveTagged()
       const onDemand = m2mOnDemandKeyRef.current !== m2mTargetsKey
       m2mOnDemandKeyRef.current = m2mTargetsKey
       void refreshM2mPrices(onDemand ? m2mTargetsKey : residentTargetKeys(m2mTargetsKey))

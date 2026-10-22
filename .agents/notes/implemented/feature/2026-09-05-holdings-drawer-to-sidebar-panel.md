@@ -25,7 +25,11 @@ Status: implemented
 - **数据管道出 QuoteStage**：面板与 QuoteStage 不再同树，台账快照/盯市价格/
   FX/基准币/写动作抽成无 React 依赖的 `holdings-store.ts` 单例（observable
   快照 + fetch 动作，SSE 'holdings' 失效信号重拉）；轮询由面板组件驱动——
-  挂载即拉、卸载即停（30s 盯市 + live 刷新节奏不变）。交易模式同步抽
+  挂载即拉、卸载即停（30s 盯市 + live 刷新节奏不变），且是**两条独立 effect**：
+  live 持仓刷新依赖恒空、批量盯市随盯市目标键变化重跑。两件事挤在同一条 effect 时
+  目标键由首拉写入的持仓派生，首拉成功即改键、effect 整段重跑，每次首开把 4 次
+  `/trade/positions` 再打一遍（普查 A3，2026-10-22 修：首开 15 → 11 次请求、
+  positions 8 → 4）。交易模式同步抽
   `trade-mode-store.ts`（OrderPanel 切换与面板 paper 徽章/数据源跨树共享）。
 - **委托/成交/余额改跨市场聚合**：原抽屉按激活市场取数；侧栏面板是全局面，
   live 模式改四市场逐个拉取（失败静默跳过、行打市场标签、30s 且仅对应 tab
