@@ -10,8 +10,8 @@
  * | 进入路径 | 生产模块直入：holdings-store.refresh系列/reload系列、api.fetch系列、tasks-api.fetch系列、market-providers.ensure系列、intraday-series 三函数、holdings-aggregate.aggregateHoldings、position-rounds.derivePositionRounds、prediction-view 三函数。本基准**只桩 globalThis.fetch**（api.ts:21 getJson 与 tasks-api.ts:32 tasksJson 的唯一出网口），以及 Intl.DateTimeFormat.prototype.format/formatToParts 的调用计数 |
  * | 时钟 | **本表无权威时钟**。CPU 仅约 12% idle、compressor 5.6GB，墙钟不具可比性；脚本末尾附带的 elapsed 一律标注「非权威、待安静窗口复测」。权威量 = 请求次数、块数、串行波数、条目数、Intl 调用次数、store 通知次数 |
  * | 内存 | 本基准不做内存断言（不给 process.memoryUsage 结论） |
- * | 判据 | 确定性计数（同一输入两次运行完全相等）+ 负对照：尾部规模下 cn 行的 tickers 请求必须被 400 拒绝（镜像 bridge.ts:215,869 的 MAX_SYMBOLS 闸门），证明「跨市场统一计数」不是噪声 |
- * | 行为 | 不改生产代码；每面板的取数函数与调度顺序原样调用，组件 effect 的循环形态转写在本文件（逐处标注 file:line） |
+ * | 判据 | 确定性计数（同一输入两次运行完全相等）+ §0 的三条源码漂移守卫（批量报价按 TICKERS_CHUNK 分块 / prevClose 兜底带 ticker 与 prices 门控 / refreshLiveTagged 与 refreshM2mPrices 分处两条 effect）+ 正反两路对照：未分块的 40 行 /tickers 必被桥 400 拒绝、ticker 缺 prevClose 时兜底按行补拉 |
+ * | 行为 | 不改生产代码；每面板的取数函数与调度顺序原样调用，组件 effect 的循环形态转写在本文件（逐处标注 file:line，并由 §0 的守卫钉在源码上） |
  *
  * 被排除的层与理由：
  *  - transport（HTTP 栈、桥 node 半的 JSON 解析、上游连接器的重试/限流）——两侧相同，
@@ -23,8 +23,12 @@
  * 运行：pnpm exec tsx spikes/bench-ui-panel-mount.mts
  */
 
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import {
-  holdingsDataStore, reloadHoldingsBook, refreshLiveTagged, refreshM2mPrices, refreshFx,
+  TICKERS_CHUNK, holdingsDataStore, reloadHoldingsBook, refreshLiveTagged, refreshM2mPrices, refreshFx,
   subscribeTradingEventsHoldings,
 } from '../packages/client-ui-trading/src/client/holdings-store.ts'
 import { aggregateHoldings } from '../packages/client-ui-trading/src/client/holdings-aggregate.ts'
@@ -38,7 +42,99 @@ import {
 } from '../packages/client-ui-trading/src/client/api.ts'
 import { fetchTasksSnapshot, fetchTasksMeta } from '../packages/client-ui-trading/src/client/tasks-api.ts'
 import { inflationEventsOf, meetingViewOf, visibleMeetingsOf, VISIBLE_MEETINGS } from '../packages/client-ui-trading/src/client/prediction-view.ts'
-import type { MarketId } from '../packages/client-ui-trading/src/client/types.ts'
+import type { MarketId, Ticker } from '../packages/client-ui-trading/src/client/types.ts'
+
+/* ── 断言与小节标题（本文件此前只打印不断言，本轮补上红/绿）──────── */
+
+let failures = 0
+function check(ok: boolean, what: string): void {
+  if (ok) { console.log('  [OK]   ' + what); return }
+  failures += 1
+  console.log('  [FAIL] ' + what)
+}
+
+function section(title: string): void {
+  console.log('\n════ ' + title + ' ════')
+}
+
+/* ── 源码现读（漂移即抛错 = 红，不静默）────────────────────────── */
+
+const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
+const SRC = {
+  holdings: 'packages/client-ui-trading/src/client/HoldingsPanel.tsx',
+  holdingsStore: 'packages/client-ui-trading/src/client/holdings-store.ts',
+  sidebar: 'packages/client-ui-trading/src/client/MarketSidebar.tsx',
+  api: 'packages/client-ui-trading/src/client/api.ts',
+  marketProviders: 'packages/client-ui-trading/src/client/market-providers.ts',
+  tasksApi: 'packages/client-ui-trading/src/client/tasks-api.ts',
+  aggregate: 'packages/client-ui-trading/src/client/holdings-aggregate.ts',
+  positionRounds: 'packages/client-ui-trading/src/client/position-rounds.ts',
+  quoteStage: 'packages/client-ui-trading/src/client/QuoteStage.tsx',
+  bridge: 'packages/bot-api/src/bridge.ts',
+} as const
+
+const textCache = new Map<string, string>()
+const textOf = (file: string): string => {
+  const hit = textCache.get(file)
+  if (hit !== undefined) return hit
+  const rawText = readFileSync(path.join(ROOT, file), 'utf8')
+  textCache.set(file, rawText)
+  return rawText
+}
+const linesOf = (file: string): string[] => textOf(file).split('\n')
+/** 1-based：文件内首个匹配行号；找不到抛错（源码漂移即红）。 */
+const lineOf = (file: string, re: RegExp, from = 1): number => {
+  const lines = linesOf(file)
+  for (let index = from - 1; index < lines.length; index += 1) {
+    if (re.test(lines[index]!)) return index + 1
+  }
+  throw new Error('源码漂移：' + file + ' 第 ' + from + ' 行之后找不到 ' + re)
+}
+const numOf = (file: string, re: RegExp, label: string): number => {
+  const found = re.exec(textOf(file))
+  if (found === null) throw new Error('源码漂移：' + file + ' 解析不到 ' + label + '（' + re + '）')
+  return Number(found[1])
+}
+
+/* ── 转写锚点：本文件每处转写都钉在源码上（漂移即红）────────────── */
+
+/** 桥的批量 symbols 上限（bridge.ts：node 半的闸门，超限整批 400）。 */
+const MAX_SYMBOLS = numOf(SRC.bridge, /export const MAX_SYMBOLS = (\d+)/, 'bridge MAX_SYMBOLS')
+/** 左栏参考序列降级日 K 的取数上限（MarketSidebar.tsx:70）。 */
+const DAILY_FALLBACK_LIMIT = numOf(SRC.sidebar, /const DAILY_FALLBACK_LIMIT = (\d+)/, 'MarketSidebar DAILY_FALLBACK_LIMIT')
+
+const SIDEBAR_CHUNK_IMPORT_LINE = lineOf(SRC.sidebar, /^import \{ TICKERS_CHUNK \} from '\.\/holdings-store\.ts'/)
+const SIDEBAR_CHUNK_LOOP_LINE = lineOf(SRC.sidebar, /for \(let offset = 0; offset < symbols\.length; offset \+= TICKERS_CHUNK\)/)
+const SIDEBAR_CHUNK_SLICE_LINE = lineOf(SRC.sidebar, /symbols: symbols\.slice\(offset, offset \+ TICKERS_CHUNK\)/)
+const SIDEBAR_BATCH_LINE = lineOf(SRC.sidebar, /await Promise\.all\(batches\.map\(/)
+const SIDEBAR_QUOTE_POLL_LINE = lineOf(SRC.sidebar, /const batches: Array<\{ market: MarketId; symbols: string\[\] \}> = \[\]/)
+const PREVCLOSE_PRICES_LINE = lineOf(SRC.sidebar, /const ticker = prices\[key\]/)
+const PREVCLOSE_TICKER_GATE_LINE = lineOf(SRC.sidebar, /if \(ticker === undefined \|\| ticker\.prevClose !== undefined\) return/)
+const PREVCLOSE_SERIES_GATE_LINE = lineOf(SRC.sidebar, /if \(series\[key\]\?\.prevClose !== undefined\) return/)
+const PREVCLOSE_FETCH_LINE = lineOf(SRC.sidebar, /fetchKlines\(row\.market, row\.symbol, '1d', 2\)/)
+const ROWKEY_LINE = lineOf(SRC.sidebar, /^export function rowKey/)
+const ORDERBOOK_POLL_LINE = lineOf(SRC.quoteStage, /if \(!orderbookOpen \|\| stageTab !== 'chart'/)
+const NEWS_POLL_LINE = lineOf(SRC.quoteStage, /stageTab !== 'news' && stageTab !== 'announcements'/)
+
+const LIVE_EFFECT_CALL_LINE = lineOf(SRC.holdings, /void refreshLiveTagged\(\)/)
+const LIVE_EFFECT_DEPS_LINE = lineOf(SRC.holdings, /^\s*\}, \[\]\)/, LIVE_EFFECT_CALL_LINE)
+const M2M_EFFECT_CALL_LINE = lineOf(SRC.holdings, /void refreshM2mPrices\(/)
+const M2M_EFFECT_DEPS_LINE = lineOf(SRC.holdings, /^\s*\}, \[m2mTargetsKey\]\)/, M2M_EFFECT_CALL_LINE)
+const HOLDINGS_LIVE_CALLS = (textOf(SRC.holdings).match(/void refreshLiveTagged\(\)/g) ?? []).length
+const HOLDINGS_SNAPSHOT_READS = (textOf(SRC.holdings).match(/useSyncExternalStore\(/g) ?? []).length
+const SIDEBAR_SNAPSHOT_READS = (textOf(SRC.sidebar).match(/useSyncExternalStore\(/g) ?? []).length
+
+/** 与 MarketSidebar.tsx 的 rowKey 同口径（:73-75，守卫见 §0）。 */
+const rowKey = (market: string, symbol: string): string => market + ':' + symbol
+
+/** m2mTargetsKey 的同一口径（HoldingsPanel.tsx:447-453：market:symbol 去重后排序成逗号串）。 */
+function m2mTargetsKeyOf(snapshot: { liveTagged: ReadonlyArray<{ market?: string; symbol: string }> }): string {
+  const keys = new Set<string>()
+  for (const position of snapshot.liveTagged) {
+    if (position.market !== undefined) keys.add(rowKey(position.market, position.symbol))
+  }
+  return [...keys].sort().join(',')
+}
 
 /* ── 计量器 ─────────────────────────────────────────────────── */
 
@@ -147,7 +243,12 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 }
 
-function installTransport(w: Workload): void {
+interface TransportOptions {
+  /** 正对照用：让 ticker 不带官方昨收，逼出 prevClose 兜底那一路。 */
+  readonly omitPrevClose?: boolean
+}
+
+function installTransport(w: Workload, options: TransportOptions = {}): void {
   globalThis.fetch = (async (input: unknown): Promise<Response> => {
     inflight += 1
     if (inflight > work.peak) work.peak = inflight
@@ -160,10 +261,10 @@ function installTransport(w: Workload): void {
     const q = url.searchParams
     const market = q.get('market') ?? ''
 
-    // 镜像 node 半 bridge.ts:215 MAX_SYMBOLS=32 / :869 超限 400。
+    // 镜像 node 半 bridge.ts:215 MAX_SYMBOLS / :869 超限 400（常量从源码现读）。
     if (path === '/dshtrading/api/tickers') {
       const symbols = (q.get('symbols') ?? '').split(',').filter(Boolean)
-      if (symbols.length > 32) {
+      if (symbols.length > MAX_SYMBOLS) {
         http.push({ path, query: q.toString(), status: 400 })
         return json({ code: 'TRADING_PROTOCOL', message: 'tickers: too many symbols' }, 400)
       }
@@ -188,7 +289,15 @@ function installTransport(w: Workload): void {
       case '/dshtrading/api/tickers': {
         const symbols = (q.get('symbols') ?? '').split(',').filter(Boolean)
         const tickers: Record<string, unknown> = {}
-        for (const s of symbols) tickers[s] = { ok: true, ticker: { symbol: s, price: 12.5, name: s + ' name', prevClose: 12 } }
+        for (const s of symbols) {
+          tickers[s] = {
+            ok: true,
+            ticker: {
+              symbol: s, price: 12.5, name: s + ' name',
+              ...(options.omitPrevClose === true ? {} : { prevClose: 12 }),
+            },
+          }
+        }
         return json({ tickers })
       }
       case '/dshtrading/api/holdings': {
@@ -270,6 +379,8 @@ interface Report {
   peak: number
   endpoints: Array<[string, number]>
   notes: string[]
+  /** 该面板的关键分项计数（供下游汇总按模型引用，不再写字面量）。 */
+  detail: Record<string, number>
 }
 
 function endpointHistogram(): Array<[string, number]> {
@@ -281,7 +392,10 @@ function endpointHistogram(): Array<[string, number]> {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])
 }
 
-function report(panel: string, entry: string, waves: number, rows: number, storeReads: number, notes: string[] = []): Report {
+function report(
+  panel: string, entry: string, waves: number, rows: number, storeReads: number,
+  notes: string[] = [], detail: Record<string, number> = {},
+): Report {
   return {
     panel, entry, waves,
     http: http.length,
@@ -294,28 +408,33 @@ function report(panel: string, entry: string, waves: number, rows: number, store
     peak: work.peak,
     endpoints: endpointHistogram(),
     notes,
+    detail,
   }
 }
 
 /* ── 面板场景（转写的只是「调用哪些生产函数、几次」，逐处标注 file:line）── */
 
-/** 资产面板：HoldingsPanel.tsx:413-474（首拉 + 盯市一拍 + FX）。 */
+/** 资产面板：HoldingsPanel.tsx:413-483（四条独立 effect：台账首拉 / live 刷新 / 批量盯市 / FX）。 */
 async function holdingsPanel(w: Workload, coldProviders: boolean): Promise<Report> {
   resetMeters()
   const unsubscribeStore = holdingsDataStore.subscribe(() => { store.notify += 1 })
   // :413-416 台账首拉 + SSE 失效订阅（Node 无 window → 不建连）
   const unsubSse = subscribeTradingEventsHoldings()
-  await reloadHoldingsBook()
-
-  // :459-469 tick#1：m2mTargetsKey 首拍为空（book/liveTagged 都还没到）
-  await Promise.all([refreshLiveTagged(), refreshM2mPrices('')])
-  // :472-474 FX
-  await refreshFx('USD')
-
-  // 依赖变化后 React 重跑整个 effect（dep = [m2mTargetsKey]，:469）：第二拍
-  const live = holdingsDataStore.getSnapshot().liveTagged
-  const key = [...new Set(live.filter(p => p.market !== undefined).map(p => p.market + ':' + p.symbol))].sort().join(',')
-  await Promise.all([refreshLiveTagged(), refreshM2mPrices(key)])
+  // 挂载瞬间四条 effect 各自起跑。store 是模块级的：同一规模的第二次打开会带着上一拍的
+  // liveTagged（键不变 → 盯市 effect 不重跑）；换到另一个规模时那份残留不是真实用户态，
+  // 按「本规模首开」处理（空键 → 首拍 0 请求，liveTagged 落地后再打一拍）。
+  const snapshotAtMount = holdingsDataStore.getSnapshot()
+  const keyAtMount = snapshotAtMount.liveTagged.length === positionRows(w) ? m2mTargetsKeyOf(snapshotAtMount) : ''
+  await Promise.all([
+    reloadHoldingsBook(),             // :413-416
+    refreshLiveTagged(),              // :458-462（dep 恒空 → 只跑一次）
+    refreshM2mPrices(keyAtMount),     // :469-478 首拍
+    refreshFx('USD'),                 // :481-483
+  ])
+  // liveTagged 落地 → m2mTargetsKey 变化 → 盯市 effect 整段重跑（dep=[m2mTargetsKey]）；键不变就不重跑
+  const keyAfterMount = m2mTargetsKeyOf(holdingsDataStore.getSnapshot())
+  const m2mRefired = keyAfterMount !== keyAtMount
+  if (m2mRefired) await refreshM2mPrices(keyAfterMount)
 
   unsubSse()
   const snap = holdingsDataStore.getSnapshot()
@@ -330,90 +449,202 @@ async function holdingsPanel(w: Workload, coldProviders: boolean): Promise<Repor
   derivePositionRounds(paperTradingStore.getFills())
   work.items = aggregation.rows.length + aggregation.summaries.length
   unsubscribeStore()
+
+  const positions = http.filter(call => call.path === '/dshtrading/api/trade/positions').length
+  const m2mTickers = http.filter(call => call.path === '/dshtrading/api/tickers').length
   return report(
     coldProviders ? 'HoldingsPanel 首开（providers 冷缓存）' : 'HoldingsPanel 再开（providers 已缓存）',
     'SessionRail 竖条钱包按钮 → setHoldingsPanelOpen(true)',
     3, aggregation.rows.length,
-    6,
+    HOLDINGS_SNAPSHOT_READS + 1,
     [
-      'store 读取 6 次（4 x useSyncExternalStore 快照 + paperTick 驱动重读，HoldingsPanel.tsx:405-410）',
-      'store 通知 = ' + String(store.notify) + ' 次 patchData（首拉/盯市空拍/FX/liveTagged x2/盯市实拍）',
-      'effect dep=[m2mTargetsKey] 使 live 持仓被打两遍（第二拍 /trade/positions 重复 4 次）',
+      'store 读取 ' + String(HOLDINGS_SNAPSHOT_READS + 1) + ' 次（' + String(HOLDINGS_SNAPSHOT_READS)
+        + ' 个 useSyncExternalStore 快照 + paperTick 驱动重读，HoldingsPanel.tsx:405-410）',
+      'store 通知 = ' + String(store.notify) + ' 次 patchData（首拉 / liveTagged / 盯市拍 / FX' + (m2mRefired ? ' / 键变化后的第二拍' : '') + '）',
+      'refreshLiveTagged 在 dep 恒空的 effect 里（HoldingsPanel.tsx:' + String(LIVE_EFFECT_DEPS_LINE) + '）只跑一次 → /trade/positions '
+        + String(positions) + ' 次（= HOLDINGS_MARKETS 的 ' + String(HOLDINGS_MARKETS.length) + ' 个市场），不再被盯市 effect 连带重打',
+      'refreshM2mPrices 在 dep=[m2mTargetsKey] 的 effect 里（HoldingsPanel.tsx:' + String(M2M_EFFECT_DEPS_LINE) + '）：挂载拍到 '
+        + (keyAtMount === '' ? '空键（0 请求）' : '本规模的已有键（' + String(keyAtMount.split(',').length) + ' 个目标）')
+        + (m2mRefired ? '，键变化后再打一拍' : '，liveTagged 落地后键不变 → 不重跑')
+        + ' → 本拍共 ' + String(m2mTickers) + ' 次 /tickers（每市场 ≤ ' + String(TICKERS_CHUNK) + ' 个/块）',
       coldProviders ? 'ensureMarketProviders 冷启动多 1 次 /markets（market-providers.ts:84）' : 'providers 已缓存 → 0 次 /markets',
       'aggregateHoldings 输入 ' + String(aggregation.rows.length) + ' 行 → ' + String(aggregation.summaries.length)
         + ' 汇总行（holdings-aggregate.ts:196），derivePositionRounds 输入 ' + String(paperTradingStore.getFills().length) + ' 笔 paper 成交',
     ],
+    { positions, m2mTickers, markets: coldProviders ? 1 : 0 },
   )
 }
 
-/** 左栏自选：MarketSidebar.tsx:134-159（markets + 6 x symbols）+ :262-328（参考序列）+ :332-392（批量报价）。 */
-async function marketSidebar(w: Workload): Promise<Report> {
-  resetMeters()
-  const rows: Array<{ market: MarketId; symbol: string }> = []
-  for (const [market, n] of Object.entries(w.watch) as Array<[MarketId, number]>) {
-    for (let i = 0; i < n; i++) rows.push({ market, symbol: symOf(market, i) })
+/**
+ * prevClose 兜底补拉（MarketSidebar.tsx:314-329）：只有「ticker 已落地且确实没有官方昨收」
+ * 且「本序列也还没有」才补一次。两条守卫与源码逐字同构，§0 钉在 :317-321 上。
+ */
+async function prevCloseFallback(
+  row: { market: MarketId; symbol: string },
+  prices: ReadonlyMap<string, Ticker>,
+  series: Map<string, { prevClose?: number }>,
+): Promise<number> {
+  const key = rowKey(row.market, row.symbol)
+  const ticker = prices.get(key)
+  if (ticker === undefined || ticker.prevClose !== undefined) return 0
+  if (series.get(key)?.prevClose !== undefined) return 0
+  try {
+    const pair = await fetchKlines(row.market, row.symbol, '1d', 2)
+    work.bars += pair.length
+    const prevClose = pair.length >= 2 ? pair[pair.length - 2]?.close : undefined
+    if (prevClose !== undefined) {
+      const entry = series.get(key)
+      if (entry !== undefined) entry.prevClose = prevClose
+    }
+    return 1
+  } catch {
+    return 0 // 下轮再试
   }
+}
 
-  // :134 reloadMarkets → fetchMarkets（不读 providers 缓存，每次都发）
-  await fetchMarkets()
-  // :147-157 watch 页签 = 6 个市场各一次 fetchSymbols
-  await Promise.all((['crypto', 'us', 'cn', 'hk', 'futures', 'global'] as const).map(m => fetchSymbols(m)))
-
-  // 参考序列拍：:262-328。首拍 onDemand=true → 目标是全部 rows。
-  let bars = 0
+/** 参考序列拍：MarketSidebar.tsx:263-332（日内候选粒度 → 降级日 K → prevClose 兜底）。 */
+async function seriesPass(
+  rows: ReadonlyArray<{ market: MarketId; symbol: string }>,
+  prices: ReadonlyMap<string, Ticker>,
+  series: Map<string, { prevClose?: number }>,
+): Promise<void> {
   await Promise.all(rows.map(async (row) => {
-    let stored = false
+    const key = rowKey(row.market, row.symbol)
+    let storedIntraday = false
     for (const interval of intradayCandidates(row.market)) {
-      // :277-297 逐候选粒度尝试，首个成功粒度记住
+      // :278-298 逐候选粒度尝试，首个成功粒度被记住（cn 的 1m 会被桥 400）
       try {
-        const req = intradayRequest(row.market, interval)
-        const klines = await fetchKlines(row.market, row.symbol, req.interval, req.limit)
+        const request = intradayRequest(row.market, interval)
+        const klines = await fetchKlines(row.market, row.symbol, request.interval, request.limit)
         const picked = selectIntradaySeries(row.market, klines)
-        bars += klines.length
+        work.bars += klines.length
         if (picked.closes.length === 0) throw new Error('empty intraday series')
-        stored = true
+        series.set(key, {})
+        storedIntraday = true
         break
       } catch { /* 试下一档粒度 */ }
     }
-    if (!stored) {
-      // :298-312 降级日 K
-      const daily = await fetchKlines(row.market, row.symbol, '1d', 32)
-      bars += daily.length
+    if (!storedIntraday) {
+      // :299-313 降级日 K（本桩下不触发：日内候选都能成）
+      try {
+        const daily = await fetchKlines(row.market, row.symbol, '1d', DAILY_FALLBACK_LIMIT)
+        work.bars += daily.length
+        if (daily.length === 0) return
+        series.set(key, daily.length >= 2 ? { prevClose: daily[daily.length - 2]?.close } : {})
+      } catch { /* 序列失败不影响报价行 */ }
     }
-    // :313-325 prevClose 兜底：首拍 series[key] 未定义 → 每行都补一次 1d/2
-    const pair = await fetchKlines(row.market, row.symbol, '1d', 2)
-    bars += pair.length
+    await prevCloseFallback(row, prices, series)
   }))
+}
 
-  // 批量报价拍：:332-392，按市场分组、每市场一次，**不分块**
+/** 批量报价拍：MarketSidebar.tsx:337-...，按市场分组、每市场按 TICKERS_CHUNK 分块（:355-360）。 */
+async function quotePass(
+  rows: ReadonlyArray<{ market: MarketId; symbol: string }>,
+  prices: Map<string, Ticker>,
+): Promise<{ chunks: number; perMarket: string }> {
   const byMarket = new Map<MarketId, string[]>()
   for (const row of rows) {
     const list = byMarket.get(row.market) ?? []
     list.push(row.symbol)
     byMarket.set(row.market, list)
   }
-  await Promise.all([...byMarket.entries()].map(([market, symbols]) => fetchTickers(market, symbols).catch(() => ({}))))
+  // :355-360 按块展开成扁平的并行批次（市场数 × 块数），每块各自 try/catch
+  const batches: Array<{ market: MarketId; symbols: string[] }> = []
+  for (const [market, symbols] of byMarket.entries()) {
+    for (let offset = 0; offset < symbols.length; offset += TICKERS_CHUNK) {
+      batches.push({ market, symbols: symbols.slice(offset, offset + TICKERS_CHUNK) })
+    }
+  }
+  await Promise.all(batches.map(async ({ market, symbols }) => {
+    try {
+      const outcome = await fetchTickers(market, symbols)
+      for (const [symbol, result] of Object.entries(outcome)) {
+        if (result.ok) prices.set(rowKey(market, symbol), result.ticker)
+      }
+    } catch { /* 块级失败隔离，下轮再试（:384） */ }
+  }))
+  const perMarket = [...byMarket.entries()]
+    .map(([market, symbols]) => market + ' ' + String(symbols.length) + ' 行 → ' + String(Math.ceil(symbols.length / TICKERS_CHUNK)) + ' 块')
+    .join('，')
+  return { chunks: batches.length, perMarket }
+}
 
-  work.bars = bars
+/** 左栏自选：MarketSidebar.tsx:134-160（markets + 6 x symbols）+ :263-332（参考序列）+ :337-...（批量报价）。 */
+async function marketSidebar(w: Workload): Promise<Report> {
+  resetMeters()
+  const rows: Array<{ market: MarketId; symbol: string }> = []
+  for (const [market, n] of Object.entries(w.watch) as Array<[MarketId, number]>) {
+    for (let i = 0; i < n; i++) rows.push({ market, symbol: symOf(market, i) })
+  }
+  const prices = new Map<string, Ticker>()
+  const series = new Map<string, { prevClose?: number }>()
+
+  // :134-139 reloadMarkets → fetchMarkets（不读 providers 缓存，每次都发）
+  await fetchMarkets()
+  // :147-160 watch 页签 = 6 个市场各一次 fetchSymbols
+  await Promise.all((['crypto', 'us', 'cn', 'hk', 'futures', 'global'] as const).map(m => fetchSymbols(m)))
+
+  // 参考序列拍（:263-332）：首拍 onDemand=true → 目标是全部 rows；此刻 prices 还空着
+  await seriesPass(rows, prices, series)
+  // 批量报价拍（:337-...）：按 TICKERS_CHUNK 分块并行
+  const quote = await quotePass(rows, prices)
+  // 第二拍参考序列只跑 prevClose 兜底：报价已落地、ticker 带官方昨收 → 同一条守卫仍挡下
+  const secondWave = await Promise.all(rows.map(row => prevCloseFallback(row, prices, series)))
+
+  const perMarketRows = new Map<MarketId, number>()
+  for (const row of rows) perMarketRows.set(row.market, (perMarketRows.get(row.market) ?? 0) + 1)
+
   work.items = rows.length
-  const rejected = http.filter(c => c.status === 400 && c.path === '/dshtrading/api/tickers').length
-  const oneMinute = http.filter(c => c.path === '/dshtrading/api/klines' && c.query.includes('interval=1m')).length
+  const tickerCalls = http.filter(call => call.path === '/dshtrading/api/tickers')
+  const rejected = tickerCalls.filter(call => call.status === 400).length
+  const oneMinute = http.filter(call => call.path === '/dshtrading/api/klines' && call.query.includes('interval=1m')).length
+  const kline400 = http.filter(call => call.path === '/dshtrading/api/klines' && call.status === 400).length
+  const prevCloseCalls = http.filter(call => call.path === '/dshtrading/api/klines' && /(?:^|&)limit=2$/.test(call.query)).length
   return report(
     'MarketSidebar 左栏自选',
     'MarketDock 挂载 → MarketSidebar（shell.overlay 常驻）',
-    3, rows.length, 3,
+    3, rows.length, SIDEBAR_SNAPSHOT_READS,
     [
-      '1m 尝试 ' + String(oneMinute) + ' 次（cn 行被 400 拒绝后降 5m）',
-      'prevClose 兜底 ' + String(rows.length) + ' 次 1d/limit=2（首拍 series[key].prevClose 必缺，:314）',
-      '批量报价发起 ' + String(http.filter(c => c.path === '/dshtrading/api/tickers').length)
-        + ' 次、每市场 1 次（**无 32 封顶分块**，:348-350；成功 '
-        + String(http.filter(c => c.path === '/dshtrading/api/tickers' && c.status === 200).length) + ' 次）',
+      '1m 尝试 ' + String(oneMinute) + ' 次，其中 ' + String(kline400) + ' 次被 400 拒绝后降 5m（cn：intraday-series.ts:21-23）',
+      'prevClose 兜底 ' + String(prevCloseCalls) + ' 次 1d/limit=2（首拍 prices 必空；第二拍补跑 ' + String(secondWave.reduce((a, b) => a + b, 0))
+        + ' 次，ticker 带 prevClose 时被 MarketSidebar.tsx:' + String(PREVCLOSE_TICKER_GATE_LINE) + ' 挡下）',
+      '批量报价 ' + String(tickerCalls.length) + ' 次 = Σ ceil(n_m/' + String(TICKERS_CHUNK) + ')（' + quote.perMarket + '），每块 ≤ '
+        + String(MAX_SYMBOLS) + ' → 0 个 400（MarketSidebar.tsx:' + String(SIDEBAR_CHUNK_LOOP_LINE) + '-' + String(SIDEBAR_CHUNK_SLICE_LINE) + '）',
       rejected > 0
-        ? '负对照命中：' + String(rejected) + ' 个市场因 symbols>32 被桥 400 拒绝 → 该市场报价整拍丢失且被 catch 吞（:370）'
-        : '负对照未触发（真实规模 cn 7 行 < 32）',
+        ? '负对照命中：' + String(rejected) + ' 次 /tickers 因 symbols>' + String(MAX_SYMBOLS) + ' 被桥 400 拒绝'
+        : '负对照未触发：0 次 /tickers 400（单市场最多 ' + String(Math.max(0, ...perMarketRows.values())) + ' 行，分块后每块 ≤ ' + String(TICKERS_CHUNK) + '）',
       'Intl 调用 ' + String(intl.format + intl.formatToParts) + ' 次（marketLocalDay/Minute 逐 bar，market-time.ts:48,54）',
+      'store 读 = 组件里 useSyncExternalStore 快照数（MarketSidebar.tsx:' + String(lineOf(SRC.sidebar, /useSyncExternalStore\(/)) + '；selection/watchlists 走注入的 hooks 面，不在本口径内）',
     ],
+    { chunks: tickerCalls.length, prevClose: prevCloseCalls, oneMinute, rejected, klines: http.filter(call => call.path === '/dshtrading/api/klines').length },
   )
+}
+
+/** 正对照：ticker 不带 prevClose 时兜底会按行补拉（证明上面的 0 是守卫生效，不是死分支）。 */
+async function prevClosePositiveControl(w: Workload): Promise<{ tickers: number; fallback: number; rows: number }> {
+  resetMeters()
+  installTransport(w, { omitPrevClose: true })
+  const rows: Array<{ market: MarketId; symbol: string }> = []
+  for (const [market, n] of Object.entries(w.watch) as Array<[MarketId, number]>) {
+    for (let i = 0; i < n; i++) rows.push({ market, symbol: symOf(market, i) })
+  }
+  const prices = new Map<string, Ticker>()
+  const series = new Map<string, { prevClose?: number }>()
+  const quote = await quotePass(rows, prices)
+  const fired = (await Promise.all(rows.map(row => prevCloseFallback(row, prices, series)))).reduce((a, b) => a + b, 0)
+  return { tickers: quote.chunks, fallback: fired, rows: rows.length }
+}
+
+/** 负对照：不分块把整市场 40 行塞进一次 /tickers，桥必须 400（证明「0 个 400」有意义）。 */
+async function unchunkedNegativeControl(w: Workload): Promise<{ symbols: number; status: number | null }> {
+  resetMeters()
+  installTransport(w)
+  const symbols = Array.from({ length: w.watch.cn }, (_, i) => symOf('cn', i))
+  try {
+    await fetchTickers('cn', symbols)
+  } catch { /* 400 经 getJson 转成 rejection */ }
+  const hit = http.find(call => call.path === '/dshtrading/api/tickers')
+  return { symbols: symbols.length, status: hit?.status ?? null }
 }
 
 /** 快讯面板：FlashPanel.tsx:50-71。 */
@@ -478,7 +709,7 @@ async function orderbookPane(): Promise<Report> {
   const bids = (book?.bids ?? []).slice(0, 10)
   const tradeRows = (trades ?? []).slice().reverse().slice(0, 50)
   work.items = asks.length + bids.length + tradeRows.length
-  return report('OrderbookPane 订单簿', 'QuoteStage 右侧竖栏展开（宿主轮询 QuoteStage.tsx:494-507）', 1,
+  return report('OrderbookPane 订单簿', 'QuoteStage 右侧竖栏展开（宿主轮询 QuoteStage.tsx:' + String(ORDERBOOK_POLL_LINE) + ' 起）', 1,
     asks.length + bids.length + tradeRows.length, 0,
     ['面板自身 0 取数（OrderbookPane.tsx:11「纯展示组件，轮询在 QuoteStage」）',
       '宿主 ORDERBOOK_POLL_MS 节拍内 2 次请求；派生 10 买 + 10 卖 + 50 笔（:55-58）'])
@@ -492,7 +723,7 @@ async function newsFeedPane(): Promise<Report> {
   // NewsFeedPane.tsx:98-104 过滤 + :127-142 逐条 map
   const filtered = items.filter(it => !it.source.includes('exchange'))
   work.items = items.length
-  return report('NewsFeedPane 新闻流', 'QuoteStage news/announcements 页签（宿主轮询 QuoteStage.tsx:661-674）', 1,
+  return report('NewsFeedPane 新闻流', 'QuoteStage news/announcements 页签（宿主轮询 QuoteStage.tsx:' + String(NEWS_POLL_LINE) + ' 起）', 1,
     filtered.length, 0,
     ['面板自身 0 取数；只有 1 个 60s 相对时间定时器（NewsFeedPane.tsx:93-96）'])
 }
@@ -529,34 +760,80 @@ function printNotes(reports: Report[]): void {
   }
 }
 
-/** 生产调用点清单（供报告直接引用；与场景函数逐条对应）。 */
+/* ── §0 转写守卫（三个转写点从源码现读；漂移即红）─────────────── */
+
+function driftGuards(): void {
+  section('§0 转写守卫：三个转写点从源码现读（生产代码一改，这里就红）')
+  check(TICKERS_CHUNK === MAX_SYMBOLS,
+    'TICKERS_CHUNK=' + String(TICKERS_CHUNK) + '（holdings-store.ts）镜像 bridge.ts 的 MAX_SYMBOLS=' + String(MAX_SYMBOLS)
+    + '（左栏分块上限 = 桥的批量上限）')
+  check(/from '\.\/holdings-store\.ts'/.test(linesOf(SRC.sidebar)[SIDEBAR_CHUNK_IMPORT_LINE - 1] ?? ''),
+    'MarketSidebar.tsx:' + String(SIDEBAR_CHUNK_IMPORT_LINE) + ' 直接 import holdings-store 的 TICKERS_CHUNK（不是本地另立一份常量）')
+  check(/for \(let offset = 0; offset < symbols\.length; offset \+= TICKERS_CHUNK\)/.test(linesOf(SRC.sidebar)[SIDEBAR_CHUNK_LOOP_LINE - 1] ?? '')
+    && /symbols\.slice\(offset, offset \+ TICKERS_CHUNK\)/.test(linesOf(SRC.sidebar)[SIDEBAR_CHUNK_SLICE_LINE - 1] ?? ''),
+    'MarketSidebar.tsx:' + String(SIDEBAR_CHUNK_LOOP_LINE) + '-' + String(SIDEBAR_CHUNK_SLICE_LINE)
+    + ' 批量报价确实按 TICKERS_CHUNK 分块（本基准的 quotePass 与它同构，不是手写的「不分块」）')
+  check(/await Promise\.all\(batches\.map\(/.test(linesOf(SRC.sidebar)[SIDEBAR_BATCH_LINE - 1] ?? ''),
+    'MarketSidebar.tsx:' + String(SIDEBAR_BATCH_LINE) + ' 块之间并行发出（块级 try/catch 隔离失败）')
+  check(/const ticker = prices\[key\]/.test(linesOf(SRC.sidebar)[PREVCLOSE_PRICES_LINE - 1] ?? '')
+    && /ticker\.prevClose !== undefined/.test(linesOf(SRC.sidebar)[PREVCLOSE_TICKER_GATE_LINE - 1] ?? '')
+    && /series\[key\]\?\.prevClose !== undefined/.test(linesOf(SRC.sidebar)[PREVCLOSE_SERIES_GATE_LINE - 1] ?? ''),
+    'prevClose 兜底仍带 prices[key] 与 ticker.prevClose !== undefined 门控（MarketSidebar.tsx:'
+    + String(PREVCLOSE_PRICES_LINE) + '/' + String(PREVCLOSE_TICKER_GATE_LINE) + '/' + String(PREVCLOSE_SERIES_GATE_LINE) + '）')
+  check((linesOf(SRC.sidebar)[ROWKEY_LINE] ?? String()).includes('${market}:${symbol}'),
+    'rowKey 口径 market:symbol（MarketSidebar.tsx:' + String(ROWKEY_LINE + 1) + '），本基准的 rowKey 与它同构')
+  check(LIVE_EFFECT_DEPS_LINE > LIVE_EFFECT_CALL_LINE && M2M_EFFECT_DEPS_LINE > M2M_EFFECT_CALL_LINE
+    && LIVE_EFFECT_DEPS_LINE < M2M_EFFECT_CALL_LINE,
+    'refreshLiveTagged（HoldingsPanel.tsx:' + String(LIVE_EFFECT_CALL_LINE) + '，dep 恒空 → :' + String(LIVE_EFFECT_DEPS_LINE)
+    + '）与 refreshM2mPrices（:' + String(M2M_EFFECT_CALL_LINE) + '，dep=[m2mTargetsKey] → :' + String(M2M_EFFECT_DEPS_LINE)
+    + '）分处两条 effect')
+  check(HOLDINGS_LIVE_CALLS === 2,
+    'refreshLiveTagged 在 HoldingsPanel 里只有「effect 首跑 + setInterval 回调」两处调用（实测 ' + String(HOLDINGS_LIVE_CALLS) + ' 处）')
+}
+
+/* ── 生产调用点清单（定义行号从源码现读，漂移即红）─────────────── */
+
+const at = (file: string, re: RegExp): string => file.slice(file.lastIndexOf('/') + 1) + ':' + String(lineOf(file, re))
+
 const CALL_SITES: ReadonlyArray<readonly [string, string, string]> = [
-  ['holdings-store.reloadHoldingsBook', 'holdings-store.ts:118', 'HoldingsPanel.tsx:414 挂载首拉；SSE holdings 信号（:238）'],
-  ['holdings-store.refreshLiveTagged', 'holdings-store.ts:127', 'HoldingsPanel.tsx:461 / :466 30s 拍 + m2mTargetsKey 变化重跑'],
-  ['holdings-store.refreshM2mPrices', 'holdings-store.ts:146', 'HoldingsPanel.tsx:464 同上（32/块，4 块并行）'],
-  ['holdings-store.refreshFx', 'holdings-store.ts:187', 'HoldingsPanel.tsx:473 挂载 + baseCurrency 变化'],
-  ['holdings-store.subscribeTradingEventsHoldings', 'holdings-store.ts:238', 'HoldingsPanel.tsx:415 挂载订阅'],
-  ['market-providers.ensureMarketProviders', 'market-providers.ts:84', 'holdings-store.ts:129（refreshLiveTagged 内）'],
-  ['api.fetchMarkets', 'api.ts:42', 'MarketSidebar.tsx:134 reloadMarkets（挂载 + routing 信号:143）'],
-  ['api.fetchSymbols', 'api.ts:298', 'MarketSidebar.tsx:150 挂载/切页签；:236 输入防抖 200ms'],
-  ['api.fetchKlines', 'api.ts:56', 'MarketSidebar.tsx:280（参考序列）/ :300 / :316（prevClose）'],
-  ['api.fetchTickers', 'api.ts:48', 'holdings-store.ts:172 盯市；MarketSidebar.tsx:350 批量报价'],
-  ['api.fetchFlash', 'api.ts:380', 'FlashPanel.tsx:54 挂载 + :76 翻页'],
-  ['api.fetchMacroCalendar', 'api.ts:436', 'MacroPanel.tsx:97；PolymarketPanel.tsx:115'],
-  ['api.fetchMacroRates', 'api.ts:446', 'MacroPanel.tsx:97'],
-  ['api.fetchPredictionFomc', 'api.ts:514', 'PolymarketPanel.tsx:114'],
-  ['tasks-api.fetchTasksSnapshot / fetchTasksMeta', 'tasks-api.ts:47 / :52', 'ScheduledTasksPanel.tsx:67 挂载 + :78 SSE + :79 15s'],
-  ['api.fetchOrderbook / fetchRecentTrades', 'api.ts:106 / :120', 'QuoteStage.tsx:499-500 竖栏展开且 chart 页签'],
-  ['api.fetchNews', 'api.ts:363', 'QuoteStage.tsx:666 news/announcements 页签或事件图钉'],
-  ['holdings-aggregate.aggregateHoldings', 'holdings-aggregate.ts:196', 'HoldingsPanel.tsx:540 挂载 useMemo'],
-  ['position-rounds.derivePositionRounds', 'position-rounds.ts:90', 'HoldingsPanel.tsx:550 paper 成交 FIFO'],
+  ['holdings-store.reloadHoldingsBook', at(SRC.holdingsStore, /export async function reloadHoldingsBook/),
+    'HoldingsPanel.tsx 挂载 effect 首拉；SSE holdings 信号由 subscribeTradingEventsHoldings 触发'],
+  ['holdings-store.refreshLiveTagged', at(SRC.holdingsStore, /export async function refreshLiveTagged/),
+    'HoldingsPanel.tsx:' + String(LIVE_EFFECT_CALL_LINE) + ' 独立 effect（dep 恒空，30s 拍）'],
+  ['holdings-store.refreshM2mPrices', at(SRC.holdingsStore, /export async function refreshM2mPrices/),
+    'HoldingsPanel.tsx:' + String(M2M_EFFECT_CALL_LINE) + ' 盯市 effect（dep=[m2mTargetsKey]；每市场 ' + String(TICKERS_CHUNK) + ' 个/块）'],
+  ['holdings-store.refreshFx', at(SRC.holdingsStore, /export async function refreshFx/),
+    'HoldingsPanel.tsx 挂载 + baseCurrency 变化'],
+  ['holdings-store.subscribeTradingEventsHoldings', at(SRC.holdingsStore, /export function subscribeTradingEventsHoldings/),
+    'HoldingsPanel.tsx 挂载订阅（Node 侧无 window → 不建连）'],
+  ['market-providers.ensureMarketProviders', at(SRC.marketProviders, /export async function ensureMarketProviders/),
+    'holdings-store.ts refreshLiveTagged 内（模块级缓存，会话内只首次付 1 次 /markets）'],
+  ['api.fetchMarkets', at(SRC.api, /export async function fetchMarkets/),
+    'MarketSidebar.tsx reloadMarkets（挂载 + routing 信号）'],
+  ['api.fetchSymbols', at(SRC.api, /export async function fetchSymbols/),
+    'MarketSidebar.tsx 挂载/切页签；搜索输入防抖 200ms'],
+  ['api.fetchKlines', at(SRC.api, /export async function fetchKlines/),
+    'MarketSidebar.tsx 参考序列 / 降级日 K / prevClose 兜底（:' + String(PREVCLOSE_FETCH_LINE) + '）'],
+  ['api.fetchTickers', at(SRC.api, /export async function fetchTickers/),
+    'holdings-store.ts 盯市；MarketSidebar.tsx 批量报价（分块 :' + String(SIDEBAR_CHUNK_LOOP_LINE) + '）'],
+  ['api.fetchFlash', at(SRC.api, /export async function fetchFlash/), 'FlashPanel.tsx 挂载 + 翻页'],
+  ['api.fetchMacroCalendar', at(SRC.api, /export async function fetchMacroCalendar/), 'MacroPanel.tsx；PolymarketPanel.tsx'],
+  ['api.fetchMacroRates', at(SRC.api, /export async function fetchMacroRates/), 'MacroPanel.tsx'],
+  ['api.fetchPredictionFomc', at(SRC.api, /export async function fetchPredictionFomc/), 'PolymarketPanel.tsx'],
+  ['tasks-api.fetchTasksSnapshot / fetchTasksMeta', at(SRC.tasksApi, /export async function fetchTasksSnapshot/) + ' / :' + String(lineOf(SRC.tasksApi, /export async function fetchTasksMeta/)),
+    'ScheduledTasksPanel.tsx 挂载 + SSE 信号 + 15s 兜底轮询'],
+  ['api.fetchOrderbook / fetchRecentTrades', at(SRC.api, /export async function fetchOrderbook/) + ' / :' + String(lineOf(SRC.api, /export async function fetchRecentTrades/)),
+    'QuoteStage.tsx 竖栏展开且 chart 页签'],
+  ['api.fetchNews', at(SRC.api, /export async function fetchNews/), 'QuoteStage.tsx news/announcements 页签或事件图钉'],
+  ['holdings-aggregate.aggregateHoldings', at(SRC.aggregate, /export function aggregateHoldings/), 'HoldingsPanel.tsx 挂载 useMemo'],
+  ['position-rounds.derivePositionRounds', at(SRC.positionRounds, /export function derivePositionRounds/), 'HoldingsPanel.tsx paper 成交 FIFO'],
 ]
 
 function printCallSites(): void {
   console.log('\n### 生产调用点清单')
-  console.log('| 被调函数 | 定义 | 谁在什么时机调 |')
+  console.log('| 被调函数 | 定义（源码现读） | 谁在什么时机调 |')
   console.log('|---|---|---|')
-  for (const [name, at, who] of CALL_SITES) console.log('| ' + name + ' | ' + at + ' | ' + who + ' |')
+  for (const [name, at_, who] of CALL_SITES) console.log('| ' + name + ' | ' + at_ + ' | ' + who + ' |')
 }
 
 function printUnmeasured(): void {
@@ -568,6 +845,7 @@ function printUnmeasured(): void {
     'Intl 格式化在浏览器里的真实开销（本表只数调用次数，不主张耗时）',
     'CSS module 加载、字体、图表画布（QtChart/TvChart）初始化',
     'SSE 首连握手与重连（每会话 1 条共享连接，Node 侧不建连）',
+    '两次 usePoll 在真实浏览器里的发射顺序（本转写按源码顺序串行，故 prevClose 兜底的首拍门控是「prices 还没到」这一侧）',
   ]) console.log('- ' + line)
 }
 
@@ -576,8 +854,12 @@ function printWaveStructure(reports: Report[]): void {
   console.log('\n### 串行波结构（深度 = 用户等到可用内容前的最少 RTT 次数；计数确定，RTT 未测）')
   // 每行 = 一次用户点击；「再开」变体不计入合计（同一面板的第二次打开）。
   const waves: ReadonlyArray<readonly [string, string, readonly string[], number]> = [
-    ['MarketSidebar 左栏自选', 'W1 markets(1)+symbols(6) → W2 日内 klines(18 成功 + cn 的 7 次 400 重试) → W3 prevClose(18)；报价拍与序列拍并行（本转写把两拍顺序执行，故并发峰值是真实值的下界）', ['MarketSidebar 左栏自选'], 3],
-    ['HoldingsPanel（一次点击）', 'W1 holdings(1)+fx(1)+markets(1) → W2 trade/positions(4) → W3 第二拍 positions(4)+tickers(4)：effect 依赖变化整段重跑', ['HoldingsPanel 首开（providers 冷缓存）'], 3],
+    ['MarketSidebar 左栏自选', 'W1 markets(1)+symbols(6) → W2 日内 klines（每行 1 次；cn 的 1m 先 400 再 5m）→ W3 报价分块（Σ ceil(n_m/'
+      + String(TICKERS_CHUNK) + ')）；prevClose 兜底首拍被 prices 门控挡下 → 不占波。报价拍与序列拍并行（本转写顺序执行，故并发峰值是真实值的下界）',
+      ['MarketSidebar 左栏自选'], 3],
+    ['HoldingsPanel（一次点击）', 'W1 holdings(1)+fx(1)+markets(1) → W2 trade/positions(' + String(HOLDINGS_MARKETS.length)
+      + ' 个市场) → W3 盯市 tickers：dep=[m2mTargetsKey] 让盯市 effect 重跑，但 live 刷新在另一条 effect 里不再重打',
+      ['HoldingsPanel 首开（providers 冷缓存）'], 3],
     ['MacroPanel', '两次取数同波并行 → 1 波', ['MacroPanel 宏观/利率'], 1],
     ['PolymarketPanel', '两次取数同波并行 → 1 波', ['PolymarketPanel 预测市场'], 1],
     ['ScheduledTasksPanel', '两次取数同波并行 → 1 波', ['ScheduledTasksPanel 定时任务'], 1],
@@ -616,34 +898,50 @@ function printHeaviest(reports: Report[]): void {
     + ' 次 Intl 与 ' + String(top.bars) + ' 根 bar 的逐根处理是不可并发的纯本地量；'
     + '往返部分靠并发已压到 ' + String(top.waves) + ' 波')
   console.log('- 次重 = ' + second.panel + '：' + String(second.http) + ' 次请求 / 深度 ' + String(second.waves)
-    + ' 波；其中 4 次 /trade/positions 是重复发出（effect 重跑），属纯浪费')
+    + ' 波 / ' + String(second.intl) + ' 次 Intl；分项 = /trade/positions ' + String(second.detail.positions ?? 0)
+    + ' 次（每个持仓市场一次，无重复拍）+ 盯市 /tickers ' + String(second.detail.m2mTickers ?? 0) + ' 次（按市场分块）')
   console.log('- 其余面板全部 ≤2 次请求、1 波，不是这条路径的成本来源；OrderPanel 为 0')
 }
 
-/** 可证伪的修复假设（本轮只写不实现）。 */
-function printHypotheses(): void {
-  console.log('\n### 可证伪的修复假设（本轮不实现）')
+/** 本轮已落地的三处修复：数值全部取自本次运行的 Report（不是预期值）。 */
+function printImplemented(reports: Report[]): void {
+  console.log('\n### 本轮已落地的修复（实测，不是预期）')
+  const sidebars = reports.filter(r => r.panel === 'MarketSidebar 左栏自选').sort((a, b) => a.rows - b.rows)
+  const sidebarReal = sidebars[0] as Report
+  const sidebarTail = sidebars[sidebars.length - 1] as Report
+  const holding = reports.find(r => r.panel.startsWith('HoldingsPanel 首开')) as Report
+  console.log('- H1 prevClose 兜底门控（MarketSidebar.tsx:' + String(PREVCLOSE_TICKER_GATE_LINE) + '）：真实规模兜底 '
+    + String(sidebarReal.detail.prevClose) + ' 次、尾部 ' + String(sidebarTail.detail.prevClose) + ' 次'
+    + '（旧行为 = 每行 1 次 → ' + String(sidebarReal.rows) + ' / ' + String(sidebarTail.rows) + ' 次）')
+  console.log('- H2 批量报价分块（MarketSidebar.tsx:' + String(SIDEBAR_CHUNK_LOOP_LINE) + '）：真实 '
+    + String(sidebarReal.detail.chunks) + ' 次、尾部 ' + String(sidebarTail.detail.chunks) + ' 次块；'
+    + '400 次数 真实 ' + String(sidebarReal.detail.rejected) + ' / 尾部 ' + String(sidebarTail.detail.rejected))
+  console.log('- H3 资产面板两条 effect（HoldingsPanel.tsx:' + String(LIVE_EFFECT_DEPS_LINE) + ' / :' + String(M2M_EFFECT_DEPS_LINE)
+    + '）：首开 ' + String(holding.http) + ' 次请求，其中 /trade/positions ' + String(holding.detail.positions)
+    + ' 次（旧行为 2 拍 → ' + String(holding.detail.positions * 2) + ' 次）')
+}
+
+/** 仍未做的假设（H4-H6；只给假设，本轮不实现）。 */
+function printOpenHypotheses(reports: Report[]): void {
+  console.log('\n### 仍未做的假设（H4-H6，本轮不实现）')
+  const sidebars = reports.filter(r => r.panel === 'MarketSidebar 左栏自选').sort((a, b) => a.rows - b.rows)
+  const sidebarReal = sidebars[0] as Report
   const items: ReadonlyArray<readonly [string, string, string, string]> = [
-    ['H1 左栏首拍 prevClose 兜底', 'MarketSidebar.tsx:313-325 —— 用 syncedNames 同款按行记账，ticker 已有 prevClose 时不再补 1d/2 请求',
-      '真实规模 klines 从 43 降到 25（-42%）；尾部 208 降到 124', '若桥 /tickers 的 ticker 在高比例情况下不带 prevClose（需桥真实响应证据），这 18 次不是浪费'],
-    ['H2 左栏批量报价分块', 'MarketSidebar.tsx:348-350 —— 复用 holdings-store.ts:33 的 TICKERS_CHUNK=32',
-      '≤32 行时总请求数不变；改变的是失败面：单市场 33+ 行从「整拍永久失败」变为 ceil(n/32) 次成功（尾部 cn 40 行：1 次 400 → 2 次成功）',
-      '若真实自选单市场永远 <32 行（需宿主真实存储证据），本项零收益'],
-    ['H3 资产面板 effect 重跑', 'HoldingsPanel.tsx:459-469 —— 把 refreshLiveTagged 拆到独立 effect（dep 恒空），m2m 单独一拍',
-      '真实规模 /trade/positions 从 8 次降到 4 次，总请求 15 → 11（-27%）；尾部 15 → 11', '若第二拍的 positions 是拿到首帧的必要条件（第一拍必然失败）——不成立，两拍打同一批端点'],
-    ['H4 左栏参考序列改批量', 'MarketSidebar.tsx:262-328 —— 桥侧加 klines 批量端点，或只在选中标的拉序列',
-      '真实规模 klines 43 → 3（选中标的 1~2 次序列 + 1 次 prevClose，-93%），Intl 11038 → 约 700（500 根 bar x 约 1.4）；'
-        + '尾部 208 → 3。若改成桥侧批量端点则降到 6（每市场 1 次），Intl 不变——真正的杠杆是「不逐行拉序列」而不是「合并请求」',
+    ['H4 左栏参考序列改批量', 'MarketSidebar.tsx:263-332 —— 桥侧加 klines 批量端点，或只在选中标的拉序列',
+      '当前真实规模 klines 请求 ' + String(sidebarReal.detail.klines) + ' 次（每行 1 次 + cn 的 1m 400 重试）；'
+        + '改成桥侧批量端点可降到每市场 1 次，Intl 不变——真正的杠杆是「不逐行拉序列」而不是「合并请求」',
       '若迷你走势是自选行的核心信息且上游无批量端点（需连接器能力证据），只能靠并发掩盖'],
-    ['H5 宏观日历双面板共享缓存', 'MacroPanel.tsx:97 与 PolymarketPanel.tsx:115 共拉 /macro/calendar?limit=400 —— 抽出 ensureMarketProviders 同款模块级缓存',
-      '单次点击 0 收益（五面板互斥挂载，见 SessionRail.tsx:116-136）；只在来回切换时省 1 次 254 条响应与 2 次过滤', '若两处 limit/字段需求分叉，或面板从互斥改为同屏，本项才有收益'],
-    ['H6 定时任务双请求合并', 'ScheduledTasksPanel.tsx:67 —— /tasks 与 /tasks/meta 合并为一个信封',
-      '请求数 2 → 1，但两请求同波并行，**首屏深度不变**，用户不可感', '若 meta 与 snapshot 分属不同服务端子系统，合并会放大 snapshot 体积 —— 本项预期收益接近 0，不建议做'],
+    ['H5 宏观日历双面板共享缓存', 'MacroPanel.tsx 与 PolymarketPanel.tsx 共拉 /macro/calendar?limit=400 —— 抽出 ensureMarketProviders 同款模块级缓存',
+      '单次点击 0 收益（五面板互斥挂载，见 SessionRail.tsx）；只在来回切换时省 1 次 254 条响应与 2 次过滤',
+      '若两处 limit/字段需求分叉，或面板从互斥改为同屏，本项才有收益'],
+    ['H6 定时任务双请求合并', 'ScheduledTasksPanel.tsx —— /tasks 与 /tasks/meta 合并为一个信封',
+      '请求数 2 → 1，但两请求同波并行，**首屏深度不变**，用户不可感',
+      '若 meta 与 snapshot 分属不同服务端子系统，合并会放大 snapshot 体积 —— 本项预期收益接近 0，不建议做'],
   ]
   for (const [name, change, gain, refute] of items) {
     console.log('- ' + name)
     console.log('  改动点：' + change)
-    console.log('  预期减少：' + gain)
+    console.log('  当前 / 预期：' + gain)
     console.log('  推翻条件：' + refute)
   }
 }
@@ -656,7 +954,10 @@ async function main(): Promise<void> {
     + String(positionRows(REAL)) + ' 条 / 分组 ' + String(REAL.groups) + ' / 知识卡 '
     + String(REAL.knowledgeCards) + ' / storage ' + String(REAL.storageFiles) + ' 文件')
   console.log('Intl 计数仪表：' + (intlOk ? '已装（Intl.DateTimeFormat.prototype.format/formatToParts）' : '未装（仅 bar 数）'))
-  console.log('HOLDINGS_MARKETS = ' + HOLDINGS_MARKETS.join(','))
+  console.log('HOLDINGS_MARKETS = ' + HOLDINGS_MARKETS.join(',') + '；TICKERS_CHUNK = ' + String(TICKERS_CHUNK)
+    + '；MAX_SYMBOLS = ' + String(MAX_SYMBOLS))
+
+  driftGuards()
 
   installTransport(REAL)
 
@@ -674,7 +975,7 @@ async function main(): Promise<void> {
 
   const realReports = [realHoldingCold, realHoldingWarm, realSidebar, realFlash, realMacro,
     realPrediction, realTasks, realOrderbook, realNews, realOrder]
-  printReportTable('## 真实规模（自选 18 / 持仓 15 / storage 401）', realReports)
+  printReportTable('## 真实规模（自选 ' + String(watchRows(REAL)) + ' / 持仓 ' + String(positionRows(REAL)) + ' / storage ' + String(REAL.storageFiles) + '）', realReports)
 
   installTransport(TAIL)
   const tailHolding = await holdingsPanel(TAIL, false)
@@ -684,7 +985,32 @@ async function main(): Promise<void> {
   const tailPrediction = await polymarketPanel()
   const tailTasks = await scheduledTasksPanel()
   const tailAll = [tailHolding, tailSidebar, tailFlash, tailMacro, tailPrediction, tailTasks]
-  printReportTable('## 尾部规模（自选 84 / 持仓 96，cn 越过桥 32 上限）', tailAll)
+  printReportTable('## 尾部规模（自选 ' + String(watchRows(TAIL)) + ' / 持仓 ' + String(positionRows(TAIL)) + '，cn 越过桥 ' + String(MAX_SYMBOLS) + ' 上限）', tailAll)
+
+  /* ── 正反两路对照（证明「0 个 400 / 0 次兜底」是守卫生效，不是死分支）── */
+
+  section('正反两路对照')
+
+  const negative = await unchunkedNegativeControl(TAIL)
+  check(negative.symbols > MAX_SYMBOLS && negative.status === 400,
+    '负对照：不分块把尾部的 ' + String(negative.symbols) + ' 行 cn 塞进一次 /tickers → 桥 ' + String(negative.status)
+    + '（分块后的「0 个 400」因此有意义）')
+
+  const positive = await prevClosePositiveControl(REAL)
+  check(positive.fallback === positive.rows && positive.tickers > 0,
+    '正对照：ticker 不带 prevClose 时兜底按行补拉 ' + String(positive.fallback) + '/' + String(positive.rows)
+    + ' 次（行情拍 ' + String(positive.tickers) + ' 块）→ 守卫是门控，不是死分支')
+
+  const tailRejected = tailSidebar.detail.rejected ?? 0
+  const realRejected = realSidebar.detail.rejected ?? 0
+  check(realRejected === 0 && tailRejected === 0,
+    '分块后真实/尾部两档的 /tickers 400 均为 0（' + String(realRejected) + ' / ' + String(tailRejected) + '）')
+  check((tailSidebar.detail.chunks ?? 0) === Math.ceil(TAIL.watch.cn / TICKERS_CHUNK) + 1 + 1 + 1 + 1,
+    '尾部左栏报价块数 = Σ ceil(n_m/' + String(TICKERS_CHUNK) + ') = ' + String(tailSidebar.detail.chunks)
+    + '（含 cn ' + String(TAIL.watch.cn) + ' 行 → ' + String(Math.ceil(TAIL.watch.cn / TICKERS_CHUNK)) + ' 块）')
+  check(realHoldingCold.detail.positions === HOLDINGS_MARKETS.length,
+    'HoldingsPanel 首开 /trade/positions = ' + String(realHoldingCold.detail.positions)
+    + ' 次 = HOLDINGS_MARKETS 的市场数（旧行为 2 拍 = ' + String(HOLDINGS_MARKETS.length * 2) + '）')
 
   // 确定性自检：同一场景在同一输入下两次运行的计数必须逐项相等（否则「确定性工作量」不成立）。
   installTransport(REAL)
@@ -700,18 +1026,21 @@ async function main(): Promise<void> {
   printNotes([...realReports, ...tailAll])
 
   console.log('\n### 规模阈值（与机器负载无关的结构事实）')
-  console.log('- 持仓盯市分块：每市场 ceil(n/32) 块、每波 4 块并行（holdings-store.ts:33,42,168）→ '
-    + '真实 cn 6 条/1 块；尾部 cn 40 条/2 块。请求数 = Σ ceil(n_m/32)，波数 = max ceil(ceil(n_m/32)/4)')
-  console.log('- 左栏批量报价**无分块**（MarketSidebar.tsx:348-350）→ 单市场自选 >32 行即被桥 400（bridge.ts:215,869），'
-    + '整拍报价丢失且被 catch 吞（:370）→ 该市场报价永久停在上一帧。真实规模 cn 7 行，硬阈值在 33 行')
-  console.log('- 左栏参考序列：每行 1~2 次 klines + 首拍每行再 1 次 prevClose（:314），线性于行数；'
-    + 'Intl 调用约等于 bar 总数 x(1 + 1[股票市场])（market-time.ts:48,54）')
-  console.log('- 资产面板首开固定 2 拍 liveTagged（effect dep=[m2mTargetsKey]，HoldingsPanel.tsx:469）→ '
-    + '4 次 /trade/positions 被重复发出')
+  console.log('- 持仓盯市分块：每市场 ceil(n/' + String(TICKERS_CHUNK) + ') 块、每波 4 块并行（holdings-store.ts 的 TICKERS_CHUNK / TICKERS_MARKET_CONCURRENCY）'
+    + ' → 真实 cn 6 条/1 块；尾部 cn 40 条/2 块。请求数 = Σ ceil(n_m/' + String(TICKERS_CHUNK) + ')')
+  console.log('- 左栏批量报价同样按 TICKERS_CHUNK=' + String(TICKERS_CHUNK) + ' 分块（MarketSidebar.tsx:'
+    + String(SIDEBAR_CHUNK_LOOP_LINE) + '-' + String(SIDEBAR_CHUNK_SLICE_LINE) + '）→ 单市场 >' + String(MAX_SYMBOLS)
+    + ' 行拆成 ceil(n/' + String(TICKERS_CHUNK) + ') 块各自成功；尾部 cn ' + String(TAIL.watch.cn) + ' 行 = '
+    + String(Math.ceil(TAIL.watch.cn / TICKERS_CHUNK)) + ' 块，0 个 400')
+  console.log('- 左栏参考序列：每行 1 次 klines（cn 先 1m 400 再 5m）；prevClose 兜底只在 ticker 已落地且缺省时补'
+    + '（MarketSidebar.tsx:' + String(PREVCLOSE_TICKER_GATE_LINE) + '）→ 首拍 prices 必空，实测 0 次')
+  console.log('- 资产面板：live 刷新与批量盯市分处两条 effect（HoldingsPanel.tsx:' + String(LIVE_EFFECT_DEPS_LINE)
+    + ' / :' + String(M2M_EFFECT_DEPS_LINE) + '）→ 首开 /trade/positions 只 ' + String(HOLDINGS_MARKETS.length) + ' 次')
 
   printWaveStructure(realReports)
   printHeaviest(realReports)
-  printHypotheses()
+  printImplemented([...realReports, ...tailAll])
+  printOpenHypotheses([...realReports, ...tailAll])
   printCallSites()
   printUnmeasured()
 
@@ -720,6 +1049,13 @@ async function main(): Promise<void> {
   installTransport(REAL)
   await marketSidebar(REAL)
   console.log('marketSidebar(real) elapsed = ' + (performance.now() - t0).toFixed(1) + ' ms —— 非权威、待安静窗口复测')
+
+  if (failures > 0) {
+    console.log('\n  有 ' + String(failures) + ' 条判据未通过（见上方 [FAIL]）。')
+    process.exitCode = 1
+  } else {
+    console.log('\n  全部判据通过。')
+  }
 }
 
 await main()

@@ -13,7 +13,7 @@
  * | 进入路径 | MiddleStage.tsx:105-114（三目互斥挂载 → 切走即卸载）→ 回到行情 = QuoteStage 全量重挂 → 11 个挂载期取数调用点（§3）+ TvChart 重建（TvChart.tsx:389-474、710-717） |
  * | 时钟 | 全部结论 = 调用/对象/元素计数；ms 仅附注且非权威（机器饱和，待安静窗口复测） |
  * | 内存 | 权威侧只报「数组个数 / 元素个数」这类确定性量；浏览器堆占用不可由 Node 代表，记未测（§10） |
- * | 判据 | 每次挂载 9 次桥调用（crypto）/ 8 次（cn·hk·us）/ 7 次（futures，无指数轮询）：K 线全量重取 2 次（750 根 ×2，URL 相同）、账户面 4 次、ticker 1 次、指数 1 次、衍生品 1 次；图表 1 个 + 序列对象 11 个（4 基础 + 6 ma + 1 标记插件）、数据点 5011 个 |
+ * | 判据 | 每次挂载的桥调用数由 §3 的调用点模型对 ctx（市场 / 周期 / 开关）现算，§5 表为准：1d 下 K 线只取 1 次（日 K 参考复用图表序列，:446 落地时顺带 setDaily）、交易台 0 次（关着不拉；面板开着或实盘才拉 4 次）、ticker 1 次、指数 1 次（futures 无）、衍生品 1 次（crypto）；图表 1 个 + 序列对象 11 个（4 基础 + 6 ma + 1 标记插件）、数据点 5011 个 |
  * | 行为 | 卸载即丢内存态（缩放平移、悬浮下标、框选、行情页签、盘口快照）；localStorage 态存活（周期记忆、自选、指标实例、中栏视图 id） |
  *
  * 卡片 2 — 行情页签 chart ↔ fundamentals / news / derivatives（同一视图内切页签）
@@ -21,10 +21,10 @@
  * |---|---|
  * | 用户操作 | 在行情视图内点「图表 / 基本面 / 新闻 / 衍生品」页签来回切 |
  * | 工作负载 | 同上：聚焦 1 标的、出厂默认指标组 |
- * | 进入路径 | QuoteStage.tsx:1281-1540（三目互斥挂载）→ 离开 chart 卸载 TvChart（:1285）；QuoteStage 不卸载，但页签是 usePoll 的依赖 → 回图表页签时交易台轮询 effect 重跑（:526-529 的 deps 含 stageTab） |
+ * | 进入路径 | QuoteStage.tsx:1281-1540（三目互斥挂载）→ 离开 chart 卸载 TvChart（:1285）；QuoteStage 不卸载，但页签是 usePoll 的依赖 → 回图表页签时交易台轮询 effect 重跑（:530-533 的 deps 含 stageTab；守卫还要求 tradeDeskOpen 或实盘） |
  * | 时钟 | 同上：只报计数 |
  * | 内存 | 常驻：klines 750 + daily 750 + 指标输出 6×750 = 6000 个元素（共 8 个数组：klines / daily / 6 条 ma 输出），切换期间不重取 |
- * | 判据 | chart→fundamentals→chart = **4 次桥调用**（去程 0、回程交易台 4）、1 次 createChart、11 个序列对象重建、5011 个数据点重新灌入；chart→news→chart 与 chart→derivatives→chart 各 5 次 |
+ * | 判据 | chart→fundamentals→chart = **0 次桥调用**（去程 0、回程交易台被 tradeDeskOpen / tradeMode 守卫挡掉 0——§5 表现算）、1 次 createChart、11 个序列对象重建、5011 个数据点重新灌入；chart→news→chart / chart→derivatives→chart 各只剩去程那 1 条 |
  * | 行为 | 页签记忆不跨卸载存活（stageTab 初值 chart，QuoteStage.tsx:264） |
  *
  * 卡片 3 — 标的 A → B（同市场换标的）
@@ -35,7 +35,7 @@
  * | 进入路径 | QuoteStage.tsx:606-625 清场 → deps 含 symbol 的轮询重发（klines / daily / ticker / derivatives = 4 次）；dataKey 变化 → 蜡烛 setData 全量替换，**图表对象不重建** |
  * | 时钟 | 同上 |
  * | 内存 | 旧数组被替换（不是追加）：klines 750 → 750 |
- * | 判据 | 每换一次 = 4 次桥调用（crypto，盘口关）、0 次 createChart、0 个新序列、5011 个数据点全量重灌 |
+ * | 判据 | 每换一次 = §3 模型现算的换标的增量（crypto / 1d / 盘口关：K 线轮询 + 衍生品 + ticker 各 1，日 K 参考在 1d 下为 0）、0 次 createChart、0 个新序列、5011 个数据点全量重灌 |
  * | 行为 | 换标的 = 「重取数但不重建图表」；跨视图切 = 「重建图表且重取数」 |
  *
  * 卡片 4 — 真实规模 vs 尾部规模
@@ -46,7 +46,7 @@
  * | 进入路径 | 同卡片 1；规模只改变每个批量端点里的标的数、指标组数、面板数，不改变调用点数 |
  * | 时钟 | 同上 |
  * | 内存 | 尾部规模下序列元素数 = 750 ×（4 + Σ 输出数） |
- * | 判据 | 切换路径的调用点数是常数（9 / 8 / 7），随规模变的只有每拍携带的行数（15 持仓）与序列/元素数（指标组数：6 → 29 条） |
+ * | 判据 | 切换路径的调用点数由 §5 表现算且与 18 标的无关（只随市场 / 周期 / 盘口与交易台开关变），随规模变的只有每拍携带的行数（15 持仓）与序列/元素数（指标组数：6 → 29 条） |
  * | 行为 | 自选表尺寸不影响切换成本：左缘 dock 与右缘资产面板是常驻 overlay 条目，切换中栏不重挂它们 |
  *
  * 运行：cd /Users/zcl/code/dsh-trading && pnpm exec tsx spikes/bench-ui-tab-switch.mts
@@ -80,6 +80,7 @@ import { residentPollMs } from '../packages/client-ui-trading/src/client/quote-b
 import { ensureMarketProviders } from '../packages/client-ui-trading/src/client/market-providers.ts'
 import { MARKET_INDICES } from '../packages/client-ui-trading/src/client/market-status.ts'
 import * as bridge from '../packages/client-ui-trading/src/client/api.ts'
+import { tradeModeStore } from '../packages/client-ui-trading/src/client/trade-mode-store.ts'
 import { createIndicatorRegistry, presetDefinitions } from '../packages/indicators/lib/index.js'
 
 const t0 = performance.now()
@@ -291,12 +292,20 @@ const req = (name: string): number => unit.get(name)!.urls.length
 
 const klineUrlPoll = urlOf('fetchKlines(crypto, 1d, 750)')
 const klineUrlDaily = urlOf('fetchKlines(crypto, 1d, 750)')
-console.log('  缺省周期 1d 下两处取数的 URL 完全相同（QuoteStage.tsx:437 的 K 线轮询 vs :457 的日 K 参考）：')
+const klinePollFetchLine = lineOf(SRC.quoteStage, /await fetchKlines\(market, symbol, chartInterval,/)
+const dailyRefEffectLine = lineOf(SRC.quoteStage, /if \(!market \|\| !symbol \|\| chartInterval === '1d'\) return/)
+const dailyFeedLine = lineOf(SRC.quoteStage, /if \(chartInterval === '1d'\) setDaily\(rows\)/)
+const statsPrevCloseLine = lineOf(SRC.quoteStage, /const prevClose = ticker\?\.prevClose \?\? klinePrevClose/)
+console.log('  缺省周期 1d 下两处取数指向同一 URL（' + SRC.quoteStage + ':' + klinePollFetchLine + ' 的 K 线轮询 vs :' + dailyRefEffectLine + ' 的日 K 参考 effect）：')
 console.log('    ' + klineUrlPoll)
 console.log('    ' + klineUrlDaily)
-console.log('  → 每次挂载 / 每次 resync 各发一次 750 根的同一请求；后者只喂 stats 的昨收与涨跌两个数（' + SRC.quoteStage + ':676-687）。')
+console.log('  → 但 1d 下只发这一条：K 线轮询落地时顺带 setDaily(rows)（:' + dailyFeedLine + '），')
+console.log('    日 K 参考 effect 在 1d 直接短路（:' + dailyRefEffectLine + '）；只有非 1d 周期才另发一条 750 根，')
+console.log('    只喂 stats 的昨收与涨跌两个数（:' + statsPrevCloseLine + '）。')
 console.log('')
-check(klineUrlPoll === klineUrlDaily, '缺省周期下 K 线轮询与日 K 参考是同一 URL（2 次请求取同一份数据）')
+check(klineUrlPoll === klineUrlDaily, '缺省周期下 K 线轮询与日 K 参考指向同一 URL（同一个生产函数 + 同一组参数）')
+check(/chartInterval === '1d'\) return/.test(linesOf(SRC.quoteStage)[dailyRefEffectLine - 1]!), '日 K 参考在 1d 下短路（不另发第 2 条 750 根请求）')
+check(/if \(chartInterval === '1d'\) setDaily\(rows\)/.test(linesOf(SRC.quoteStage)[dailyFeedLine - 1]!), 'K 线轮询在 1d 落地时顺带喂 daily（日 K 参考复用图表序列）')
 
 let watchlistRequests = 0
 for (const [market, count] of Object.entries(WORKLOAD.watchlist)) {
@@ -308,7 +317,9 @@ for (const [market, count] of Object.entries(WORKLOAD.watchlist)) {
 const watchlistTail = await withFetchStub(() => bridge.fetchTickers('us' as never, Array.from({ length: 18 }, (_, index) => 'T' + index)))
 console.log('  自选 18 标的（crypto 2 / cn 7 / hk 2 / us 6 / futures 1）按市场分组 → ' + watchlistRequests + ' 次批量请求/拍；')
 console.log('  尾部规模（18 只全在 us）→ ' + watchlistTail.urls.length + ' 次批量请求/拍（同一批端点，只是组数变少）。')
-console.log('  这两条属于左缘 dock（MarketDock 是 shell.overlay 常驻条目）——中栏切视图不重挂它们，切换的边际成本为 0（' + SRC.marketSidebar + ':332-350）。')
+const sidebarQuotePollLine = lineOf(SRC.marketSidebar, /const batches: Array<\{ market: MarketId; symbols: string\[\] \}> = \[\]/)
+console.log('  这两条属于左缘 dock（MarketDock 是 shell.overlay 常驻条目）——中栏切视图不重挂它们，切换的边际成本为 0（'
+  + SRC.marketSidebar + ':' + sidebarQuotePollLine + ' 起的分块报价拍）。')
 console.log('')
 
 /* ──────────────────────────── §3 挂载期取数调用点表 ──────────────────────────── */
@@ -317,14 +328,26 @@ section('§3 取数调用点表（行号 + deps 数组均从源码现读；deps 
 
 interface Ctx {
   market: string
+  /** 图表周期（QuoteStage 的 chartInterval）：1d 下日 K 参考复用图表序列，见 §2。 */
+  interval: string
   stageTab: string
   orderbookOpen: boolean
+  /** 交易台面板开关（localStorage 记忆，缺省 false：QuoteStage.tsx:2030-2035 readTradeDeskOpen）。 */
+  tradeDeskOpen: boolean
+  /** 交易模式（tradeModeStore 快照，缺省 paper）：实盘时交易台轮询不看开关。 */
+  tradeMode: string
   knowledgeOn: boolean
   auxKeys: readonly string[]
   marketProvidersWarm: boolean
 }
 
+type SiteKey =
+  | 'index' | 'kline' | 'dailyRef' | 'derivatives' | 'derivativesHistory'
+  | 'orderbook' | 'tradeDesk' | 'ticker' | 'news' | 'aux' | 'providers'
+
 interface PollSite {
+  /** 模型内的稳定标识（§5/§8 按它取数，不按行号）。 */
+  key: SiteKey
   file: string
   line: number
   label: string
@@ -340,17 +363,25 @@ const pollLines = linesOf(SRC.quoteStage)
   .filter(entry => /^\s*usePoll\(/.test(entry.line))
   .map(entry => entry.no)
 
+/** refreshTradeDesk 一拍里 Promise.all 的 fetch 个数（源码现读，不写字面量 4）。 */
+const tradeDeskBodyStart = lineOf(SRC.quoteStage, /const refreshTradeDesk = async/)
+const tradeDeskBodyEnd = lineOf(SRC.quoteStage, /^\s*\}\s*$/, tradeDeskBodyStart + 1)
+const TRADE_DESK_REQUESTS = linesOf(SRC.quoteStage)
+  .slice(tradeDeskBodyStart - 1, tradeDeskBodyEnd)
+  .filter(line => /^\s*fetchTrade(Positions|Balances|OpenOrders|Fills)\(/.test(line)).length
+
 const SITES: PollSite[] = [
-  { file: SRC.quoteStage, line: 374, label: '底部大盘指数', requests: ctx => ((MARKET_INDICES[ctx.market as never]?.length ?? 0) === 0 ? 0 : req('fetchTickers(crypto, 1 标的)')), note: '1 次批量 ticker（该市场 3 个指数代码）；futures 无指数 → 0' },
-  { file: SRC.quoteStage, line: 422, label: 'K 线轮询（挂载即 tick）', requests: () => req('fetchKlines(crypto, 1d, 750)'), note: '1d 取 750 根；分钟级 crypto 300 / 其它 500' },
-  { file: SRC.quoteStage, line: 454, label: '日 K 参考（昨收/涨跌）', requests: () => req('fetchKlines(crypto, 1d, 750)'), note: '750 根，只消费最后两根收盘价' },
-  { file: SRC.quoteStage, line: 470, label: '衍生品快照轮询', requests: ctx => (ctx.market === 'crypto' ? req('fetchDerivatives(crypto)') : 0), note: 'crypto 专属' },
-  { file: SRC.quoteStage, line: 482, label: '衍生品历史轮询', requests: ctx => (ctx.stageTab === 'derivatives' && ctx.market === 'crypto' ? req('fetchDerivativesHistory(crypto)') : 0), note: '页签激活才拉' },
-  { file: SRC.quoteStage, line: 494, label: '盘口 + 分笔轮询', requests: ctx => (ctx.orderbookOpen && ctx.stageTab === 'chart' ? req('fetchOrderbook(crypto)') + req('fetchRecentTrades(crypto, 50)') : 0), note: 'Promise.all 两请求；开关记忆在 localStorage' },
-  { file: SRC.quoteStage, line: 526, label: '交易台只读轮询 refreshTradeDesk', requests: ctx => (ctx.stageTab === 'chart' ? 4 : 0), note: 'Promise.all 四请求；守卫不含 tradeDeskOpen / tradeMode' },
-  { file: SRC.quoteStage, line: 637, label: 'ticker 轮询（价 + 尾随合并）', requests: () => req('fetchTickers(crypto, 1 标的)'), note: '1 次批量 ticker（1 标的）' },
-  { file: SRC.quoteStage, line: 661, label: '新闻情报流轮询', requests: ctx => (ctx.stageTab === 'news' || ctx.stageTab === 'announcements' || ctx.knowledgeOn ? req('fetchNews(crypto, 50)') : 0), note: '只在页签/知识图钉激活时拉' },
+  { key: 'index', file: SRC.quoteStage, line: 374, label: '底部大盘指数', requests: ctx => ((MARKET_INDICES[ctx.market as never]?.length ?? 0) === 0 ? 0 : req('fetchTickers(crypto, 1 标的)')), note: '1 次批量 ticker（该市场 3 个指数代码）；futures 无指数 → 0' },
+  { key: 'kline', file: SRC.quoteStage, line: 422, label: 'K 线轮询（挂载即 tick）', requests: ctx => req('fetchKlines(crypto, 1d, 750)'), note: '1d 取 ' + DAILY_LIMIT + ' 根；分钟级 crypto ' + KLINE_LIMIT_CRYPTO + ' / 其它 ' + KLINE_LIMIT_DEFAULT + '；1d 落地顺带 setDaily' },
+  { key: 'dailyRef', file: SRC.quoteStage, line: 456, label: '日 K 参考（昨收/涨跌）', requests: ctx => (ctx.interval === '1d' ? 0 : req('fetchKlines(crypto, 1d, 750)')), note: 'useEffect（不是 usePoll）：1d 复用图表序列 → 0；其它周期另发 1 条 ' + DAILY_LIMIT + ' 根' },
+  { key: 'derivatives', file: SRC.quoteStage, line: 474, label: '衍生品快照轮询', requests: ctx => (ctx.market === 'crypto' ? req('fetchDerivatives(crypto)') : 0), note: 'crypto 专属' },
+  { key: 'derivativesHistory', file: SRC.quoteStage, line: 486, label: '衍生品历史轮询', requests: ctx => (ctx.stageTab === 'derivatives' && ctx.market === 'crypto' ? req('fetchDerivativesHistory(crypto)') : 0), note: '页签激活才拉' },
+  { key: 'orderbook', file: SRC.quoteStage, line: 498, label: '盘口 + 分笔轮询', requests: ctx => (ctx.orderbookOpen && ctx.stageTab === 'chart' ? req('fetchOrderbook(crypto)') + req('fetchRecentTrades(crypto, 50)') : 0), note: 'Promise.all 两请求；开关记忆在 localStorage' },
+  { key: 'tradeDesk', file: SRC.quoteStage, line: 530, label: '交易台只读轮询 refreshTradeDesk', requests: ctx => (ctx.stageTab === 'chart' && (ctx.tradeDeskOpen || ctx.tradeMode === 'live') ? TRADE_DESK_REQUESTS : 0), note: 'Promise.all ' + TRADE_DESK_REQUESTS + ' 请求；守卫 = 页签 chart 且（面板开 或 实盘）——关着时这四个响应没有渲染消费者' },
+  { key: 'ticker', file: SRC.quoteStage, line: 641, label: 'ticker 轮询（价 + 尾随合并）', requests: () => req('fetchTickers(crypto, 1 标的)'), note: '1 次批量 ticker（1 标的）' },
+  { key: 'news', file: SRC.quoteStage, line: 665, label: '新闻情报流轮询', requests: ctx => (ctx.stageTab === 'news' || ctx.stageTab === 'announcements' || ctx.knowledgeOn ? req('fetchNews(crypto, 50)') : 0), note: '只在页签/知识图钉激活时拉' },
   {
+    key: 'aux',
     file: SRC.useAuxSeries,
     line: 65,
     label: '外部序列预取（QuoteStage.tsx:464 调用）',
@@ -361,6 +392,7 @@ const SITES: PollSite[] = [
     symbolRefire: true,
   },
   {
+    key: 'providers',
     file: SRC.quoteStage,
     line: 191,
     label: 'ensureMarketProviders（市场路由/能力缓存）',
@@ -411,7 +443,22 @@ globalThis.fetch = realFetch
 const providersSecondCall = await withFetchStub(() => ensureMarketProviders())
 check(providersSecondCall.urls.length === 0, 'ensureMarketProviders 第二次调用 0 请求（模块级缓存生效）')
 
-const ctxCrypto: Ctx = { market: 'crypto', stageTab: 'chart', orderbookOpen: false, knowledgeOn: false, auxKeys: [], marketProvidersWarm: true }
+/** tradeMode 的真实缺省（trade-mode-store.ts readInitial：无 localStorage → paper）。 */
+const DEFAULT_TRADE_MODE = tradeModeStore.getSnapshot()
+/** readTradeDeskOpen 的缺省：无 localStorage 记忆时 false（QuoteStage.tsx:2030-2035）。 */
+const DEFAULT_TRADE_DESK_OPEN = false
+
+const ctxCrypto: Ctx = {
+  market: 'crypto',
+  interval: '1d',
+  stageTab: 'chart',
+  orderbookOpen: false,
+  tradeDeskOpen: DEFAULT_TRADE_DESK_OPEN,
+  tradeMode: DEFAULT_TRADE_MODE,
+  knowledgeOn: false,
+  auxKeys: [],
+  marketProvidersWarm: true,
+}
 
 table(
   ['调用点', '标签', '守卫（源码）', 'deps（源码）', '含 stageTab', '含 symbol', '缺省请求数'],
@@ -427,6 +474,13 @@ table(
 )
 check(SITES.filter(site => refiresOnStageTab(site)).length === 4, 'deps 含 stageTab 的调用点恰好 4 个（衍生品历史 / 盘口 / 交易台 / 新闻）')
 check(SITES.filter(site => refiresOnSymbol(site)).length === 8, 'deps 含 symbol 的调用点恰好 8 个（K 线 / 日 K / 衍生品 / 衍生品历史 / 盘口 / ticker / 新闻 / aux）')
+check(/^\s*useEffect\(\(\) => \{/.test(linesOf(SRC.quoteStage)[dailyRefEffectLine - 2] ?? ''), '日 K 参考是 effect（' + SRC.quoteStage + ':' + (dailyRefEffectLine - 1) + '），不是 usePoll')
+check(TRADE_DESK_REQUESTS > 0, 'refreshTradeDesk 一拍解析到 ' + TRADE_DESK_REQUESTS + ' 个 fetch（' + SRC.quoteStage + ':' + tradeDeskBodyStart + '-' + tradeDeskBodyEnd + ' 的 Promise.all，源码现读）')
+const tradeDeskSite = SITES.find(site => site.key === 'tradeDesk')!
+const tradeDeskGuard = guardOf(tradeDeskSite)
+check(/tradeDeskOpen/.test(tradeDeskGuard) && /tradeMode/.test(tradeDeskGuard), '交易台守卫含 tradeDeskOpen / tradeMode：' + tradeDeskGuard.replace(/\s+/g, ' '))
+check(DEFAULT_TRADE_MODE !== 'live', 'tradeMode 缺省 = ' + DEFAULT_TRADE_MODE + '（trade-mode-store.ts readInitial）→ 交易台关着时这 ' + TRADE_DESK_REQUESTS + ' 个请求真的不发')
+check(/return localStorage\.getItem\(TRADE_DESK_OPEN_KEY\) === '1'/.test(textOf(SRC.quoteStage)), 'tradeDeskOpen 缺省 = false（未写记忆时，QuoteStage.tsx:2030-2035）')
 
 table(
   ['市场', 'K 线 resync（residentPollMs）', 'ticker（residentPollMs）'],
@@ -661,10 +715,25 @@ check(warmProbe.warm.addSeries === 0 && warmProbe.remount.addSeries === warmProb
 section('§5 三种「切」的一次成本（计数，不是时间）')
 
 const ctxCn: Ctx = { ...ctxCrypto, market: 'cn' }
+const ctxFutures: Ctx = { ...ctxCrypto, market: 'futures' }
 const ctxOrderbook: Ctx = { ...ctxCrypto, orderbookOpen: true }
+/** 交易台开着的同一 ctx：与 ctxCrypto 只差 tradeDeskOpen，用来量守卫那一项。 */
+const ctxTradeDeskOpen: Ctx = { ...ctxCrypto, tradeDeskOpen: true }
+/** 非 1d 周期的同一 ctx：与 ctxCrypto 只差 interval，用来量日 K 参考那一项。 */
+const ctxNonDaily: Ctx = { ...ctxCrypto, interval: '1m' }
+/** 旧守卫 + 旧取数口径（面板开着 + 非 1d）：一次挂载的对照成本。 */
+const ctxLegacy: Ctx = { ...ctxCrypto, tradeDeskOpen: true, interval: '1m' }
+
+const requestsOf = (key: SiteKey, ctx: Ctx): number => SITES.find(site => site.key === key)!.requests(ctx)
+/** 一次挂载/一次重跑实际发出的 K 线请求数（1d 下日 K 参考复用图表序列 → 只剩 1 条）。 */
+const klineRequests = (ctx: Ctx): number => requestsOf('kline', ctx) + requestsOf('dailyRef', ctx)
+
 const cryptoMount = totalRequests(ctxCrypto)
 const cnMount = totalRequests(ctxCn)
+const futuresMount = totalRequests(ctxFutures)
 const cryptoMountOrderbook = totalRequests(ctxOrderbook)
+const legacyMount = totalRequests(ctxLegacy)
+const accountPerSwitch = requestsOf('tradeDesk', ctxTradeDeskOpen)
 
 const cryptoBuild = buildSeries(CONFIGS[0]!, 'crypto', '1d', DAILY_LIMIT, true)
 const perMountSeries = baseSeries + cryptoBuild.addSeries + 1
@@ -674,24 +743,37 @@ const symbolSwitch = symbolDelta(ctxCrypto)
 const tabToFundamentals = stageTabDelta(ctxCrypto, 'fundamentals') + stageTabDelta(ctxCrypto, 'chart')
 const tabToNews = stageTabDelta(ctxCrypto, 'news') + stageTabDelta(ctxCrypto, 'chart')
 const tabToDerivatives = stageTabDelta(ctxCrypto, 'derivatives') + stageTabDelta(ctxCrypto, 'chart')
+const tabLegacyReturn = stageTabDelta(ctxTradeDeskOpen, 'fundamentals') + stageTabDelta(ctxTradeDeskOpen, 'chart')
 
-table(['切换类型', '桥调用', '其中 K 线全量重取', 'createChart', '序列对象新建', 'setData 点数', '保留的序列数组/元素'], [
-  ['中栏视图 A→B→A（crypto，盘口关）', cryptoMount, '2 × 750 根（URL 相同）', 1, baseSeries + ' + ' + cryptoBuild.addSeries + ' 指标 + 1 插件 = ' + perMountSeries, chartPointsPerBuild, '0（卸载即丢）'],
-  ['中栏视图 A→B→A（cn）', cnMount, '2 × 750 根（URL 相同）', 1, String(perMountSeries), chartPointsPerBuild, '0（卸载即丢）'],
-  ['中栏视图 A→B→A（crypto，盘口竖栏开）', cryptoMountOrderbook, '2 × 750 根', 1, String(perMountSeries), chartPointsPerBuild, '0'],
-  ['行情页签 chart→fundamentals→chart', tabToFundamentals, '0', 1, String(perMountSeries), chartPointsPerBuild, 2 + cryptoBuild.outputs + ' 个数组 / ' + retainedElements + ' 元素'],
-  ['行情页签 chart→news→chart', tabToNews, '0', 1, String(perMountSeries), chartPointsPerBuild, '同上 + 新闻 1 份'],
-  ['行情页签 chart→derivatives→chart（crypto）', tabToDerivatives, '0', 1, String(perMountSeries), chartPointsPerBuild, '同上 + 衍生品历史 1 份'],
-  ['标的 A→B（同市场 crypto，盘口关）', symbolSwitch, '2 × 750 根（换标的必重取）', 0, '0（dataKey 变化只 setData）', chartPointsPerBuild, 1 + cryptoBuild.outputs + ' 个数组（旧数组被替换）'],
+const klineCell = (ctx: Ctx): string => String(klineRequests(ctx)) + ' 条' + (ctx.interval === '1d' ? '（日 K 参考复用图表序列）' : '（轮询 + 日 K 参考各 1）')
+/** 换页签引发的 K 线请求：K 线两处 poll 的 deps 都不含 stageTab → 恒 0（模型现算，不是字面量）。 */
+const klineRefireOnStageTab = (ctx: Ctx): number => [...SITES]
+  .filter(site => (site.key === 'kline' || site.key === 'dailyRef') && refiresOnStageTab(site))
+  .reduce((sum, site) => sum + site.requests(ctx), 0)
+
+table(['切换类型', '桥调用', '其中 K 线请求', 'createChart', '序列对象新建', 'setData 点数', '保留的序列数组/元素'], [
+  ['中栏视图 A→B→A（crypto，1d，盘口关，交易台关）', cryptoMount, klineCell(ctxCrypto), 1, baseSeries + ' + ' + cryptoBuild.addSeries + ' 指标 + 1 插件 = ' + perMountSeries, chartPointsPerBuild, '0（卸载即丢）'],
+  ['中栏视图 A→B→A（cn）', cnMount, klineCell(ctxCn), 1, String(perMountSeries), chartPointsPerBuild, '0（卸载即丢）'],
+  ['中栏视图 A→B→A（crypto，盘口竖栏开）', cryptoMountOrderbook, klineCell(ctxOrderbook), 1, String(perMountSeries), chartPointsPerBuild, '0'],
+  ['行情页签 chart→fundamentals→chart', tabToFundamentals, String(klineRefireOnStageTab(ctxCrypto)) + '（页签不在 K 线 deps 里）', 1, String(perMountSeries), chartPointsPerBuild, 2 + cryptoBuild.outputs + ' 个数组 / ' + retainedElements + ' 元素'],
+  ['行情页签 chart→news→chart', tabToNews, String(klineRefireOnStageTab(ctxCrypto)) + '（同上）', 1, String(perMountSeries), chartPointsPerBuild, '同上 + 新闻 1 份'],
+  ['行情页签 chart→derivatives→chart（crypto）', tabToDerivatives, String(klineRefireOnStageTab(ctxCrypto)) + '（同上）', 1, String(perMountSeries), chartPointsPerBuild, '同上 + 衍生品历史 1 份'],
+  ['标的 A→B（同市场 crypto，1d，盘口关）', symbolSwitch, klineCell(ctxCrypto), 0, '0（dataKey 变化只 setData）', chartPointsPerBuild, 1 + cryptoBuild.outputs + ' 个数组（旧数组被替换）'],
 ])
 
-console.log('  一次跨视图中栏切换（crypto、缺省周期、盘口关、出厂指标）合计：' + cryptoMount + ' 次桥调用；')
-console.log('  其中 K 线序列全量重取 2 次（K 线轮询 + 日 K 参考，URL 完全相同）、交易台只读面 4 次（面板关着也拉）、')
-console.log('  ticker 1 次、指数 1 次、衍生品 1 次；图表对象 1 个、序列对象 ' + perMountSeries + ' 个、数据点 ' + chartPointsPerBuild + ' 个。')
+console.log('  一次跨视图中栏切换（crypto、1d、盘口关、交易台关、出厂指标）合计 ' + cryptoMount + ' 次桥调用：')
+console.log('    指数 ' + requestsOf('index', ctxCrypto) + ' + K 线 ' + requestsOf('kline', ctxCrypto)
+  + ' + 日K参考 ' + requestsOf('dailyRef', ctxCrypto) + ' + 衍生品 ' + requestsOf('derivatives', ctxCrypto)
+  + ' + 衍生品历史 ' + requestsOf('derivativesHistory', ctxCrypto) + ' + 盘口 ' + requestsOf('orderbook', ctxCrypto)
+  + ' + 交易台 ' + requestsOf('tradeDesk', ctxCrypto) + ' + ticker ' + requestsOf('ticker', ctxCrypto)
+  + ' + 新闻 ' + requestsOf('news', ctxCrypto) + '；图表对象 1 个、序列对象 ' + perMountSeries + ' 个、数据点 ' + chartPointsPerBuild + ' 个。')
+console.log('  同一 ctx 换成「面板开着 / 实盘」多 ' + (totalRequests(ctxTradeDeskOpen) - cryptoMount) + ' 次（交易台 ' + accountPerSwitch + '）；换成非 1d 周期多 '
+  + (totalRequests(ctxNonDaily) - cryptoMount) + ' 次（日 K 参考另发 1 条）；两者同时成立（= 旧守卫口径）' + legacyMount + ' 次。')
 console.log('')
-console.log('  页签切换不是免费的：chart→fundamentals→chart = ' + tabToFundamentals + ' 次桥调用（全部发生在**回程**——交易台轮询 deps 含 stageTab，'
-  + SRC.quoteStage + ':529，回到 chart 时 effect 重跑立刻 tick 一发 4 个账户请求）。')
-console.log('  chart→news→chart = ' + tabToNews + ' 次（去程新闻 1、回程交易台 4）；chart→derivatives→chart = ' + tabToDerivatives + ' 次（去程历史序列 1、回程交易台 4）。')
+console.log('  页签切换不再免费打账户端点：chart→fundamentals→chart = ' + tabToFundamentals + ' 次桥调用（交易台 deps 含 stageTab，但守卫还要 tradeDeskOpen 或实盘；'
+  + SRC.quoteStage + ':530-533）。')
+console.log('  chart→news→chart = ' + tabToNews + ' 次、chart→derivatives→chart = ' + tabToDerivatives + ' 次（各只剩去程那 1 条）；'
+  + '同样两次往返在旧守卫下 = ' + tabLegacyReturn + ' 次。')
 console.log('')
 
 /* ──────────────────────────── §6 连续 20 次 A↔B 累计 ──────────────────────────── */
@@ -700,13 +782,14 @@ section('§6 连续 20 次 A↔B 的累计计数')
 
 const SWITCHES = 20
 const returns = SWITCHES / 2
-table(['路径', '切换次数', '重挂/重建次数', '累计桥调用', '累计 K 线重取', '累计序列对象', '累计 setData 点数'], [
+const klinePerMount = klineRequests(ctxCrypto)
+table(['路径', '切换次数', '重挂/重建次数', '累计桥调用', '累计 K 线请求', '累计序列对象', '累计 setData 点数'], [
   [
-    '中栏视图 A(行情)↔B(其它视图)，从 A 起步',
+    '中栏视图 A(行情)↔B(其它视图)，从 A 起步（1d / 盘口关 / 交易台关）',
     SWITCHES,
     returns + '（每次切回 A）+ 1 首次建图 = ' + (returns + 1),
     returns + ' × ' + cryptoMount + ' = ' + returns * cryptoMount,
-    returns + ' × 2 = ' + returns * 2 + ' 次（各 750 根）',
+    returns + ' × ' + klinePerMount + ' = ' + returns * klinePerMount + ' 次（各 ' + DAILY_LIMIT + ' 根）',
     returns + ' × ' + perMountSeries + ' = ' + returns * perMountSeries,
     returns + ' × ' + chartPointsPerBuild + ' = ' + returns * chartPointsPerBuild,
   ],
@@ -724,12 +807,22 @@ table(['路径', '切换次数', '重挂/重建次数', '累计桥调用', '累�
     SWITCHES,
     '0（图表不重建）',
     SWITCHES + ' × ' + symbolSwitch + ' = ' + SWITCHES * symbolSwitch,
-    SWITCHES + ' × 2 = ' + SWITCHES * 2 + ' 次（各 750 根）',
+    SWITCHES + ' × ' + klinePerMount + ' = ' + SWITCHES * klinePerMount + ' 次（各 ' + DAILY_LIMIT + ' 根）',
     '0',
     SWITCHES + ' × ' + chartPointsPerBuild + ' = ' + SWITCHES * chartPointsPerBuild,
   ],
+  [
+    '对照：同上第一行，但用旧守卫 / 旧取数口径（面板开着 + 非 1d）',
+    SWITCHES,
+    returns + ' + 1（建图次数与守卫无关）',
+    returns + ' × ' + legacyMount + ' = ' + returns * legacyMount,
+    returns + ' × ' + klineRequests(ctxNonDaily) + ' = ' + returns * klineRequests(ctxNonDaily) + ' 次',
+    returns + ' × ' + perMountSeries + ' = ' + returns * perMountSeries,
+    returns + ' × ' + chartPointsPerBuild + ' = ' + returns * chartPointsPerBuild,
+  ],
 ])
 console.log('  口径：20 次切换 = 10 次「回到 A」；首次显示 A 的那次建图单独计入「重挂/重建次数」。')
+console.log('  最后一行不是当前行为，是把 ctx 换成「交易台开 + 非 1d」后同一模型算出来的对照值（= 修复前的口径）。')
 console.log('')
 
 /* ──────────────────────────── §7 真实规模 vs 尾部规模 ──────────────────────────── */
@@ -745,7 +838,7 @@ table(['场景', '指标配置', 'bar 根数', '序列对象', 'setData 点数',
   ['尾部规模（全预置 us 分钟级）', CONFIGS[1]!.name, klineLimit('us'), baseSeries + ' + ' + allPreset1m.addSeries + ' + 1 = ' + (baseSeries + allPreset1m.addSeries + 1), allPreset1m.setDataPoints + DAILY_LIMIT, allPreset1m.indicatorElements],
   ['真实规模（crypto 分钟级）', CONFIGS[0]!.name, klineLimit('crypto'), baseSeries + ' + ' + crypto1m.addSeries + ' + 1 = ' + (baseSeries + crypto1m.addSeries + 1), crypto1m.setDataPoints + DAILY_LIMIT, crypto1m.indicatorElements],
 ])
-console.log('  切换路径的调用点数是常数（crypto ' + cryptoMount + ' / cn·hk·us ' + cnMount + ' / futures ' + totalRequests({ ...ctxCrypto, market: 'futures' }) + '——futures 无指数轮询），与 18 标的、15 持仓、401 文件都无关；')
+console.log('  切换路径的调用点数与规模无关（crypto ' + cryptoMount + ' / cn·hk·us ' + cnMount + ' / futures ' + futuresMount + '——futures 无指数轮询、无衍生品轮询），与 18 标的、15 持仓、401 文件都无关；')
 console.log('  随规模变的是「每拍携带多少行」与「序列/元素个数」：持仓 ' + WORKLOAD.positions + ' 条进 fetchTradePositions 的响应体（1 请求，行数只影响载荷），')
 console.log('  指标组数把序列对象与 setData 点数线性放大（' + cryptoBuild.addSeries + ' → ' + allPreset1d.addSeries + ' 条指标序列）。')
 console.log('  知识卡 ' + WORKLOAD.knowledgeCards + ' 张与 storage ' + WORKLOAD.storageFiles + ' 个文件不在切换路径上：知识图钉由 newsItems 派生（' + SRC.quoteStage + ':934-979，无独立取数），storage 文件不参与中栏渲染。')
@@ -755,55 +848,57 @@ console.log('')
 
 section('§8 确定性推演：切换节奏把哪条预算放大几倍')
 
-const tradeDeskSteadyPerMin = 4 / (POLL_MS.tradeDesk / 60_000)
-const klineBarsPerMount = 2 * DAILY_LIMIT
+const tradeDeskSteadyPerMin = accountPerSwitch / (POLL_MS.tradeDesk / 60_000)
+const klineBarsPerMount = klineRequests(ctxCrypto) * DAILY_LIMIT
 const klineSteadyBarsPerMin = DAILY_LIMIT / (POLL_MS.klineResync / 60_000)
+const accountPerMountClosed = requestsOf('tradeDesk', ctxCrypto)
+const accountPerMountOpen = accountPerSwitch
 const rhythmRows: Array<Array<string | number>> = []
 for (const periodSec of [60, 30, 10, 5, 2]) {
   const mountsPerMin = 60 / periodSec
-  const accountPerMin = mountsPerMin * 4
   const barsPerMin = mountsPerMin * klineBarsPerMount
   rhythmRows.push([
     '每 ' + periodSec + 's 切一次',
     mountsPerMin.toFixed(1),
     (mountsPerMin * cryptoMount).toFixed(0),
-    accountPerMin.toFixed(0),
-    (accountPerMin / tradeDeskSteadyPerMin).toFixed(2) + '×',
+    (mountsPerMin * accountPerMountClosed).toFixed(0),
+    (mountsPerMin * accountPerMountOpen).toFixed(0),
+    (mountsPerMin * accountPerMountOpen / tradeDeskSteadyPerMin).toFixed(2) + '×',
     barsPerMin.toFixed(0),
     (barsPerMin / klineSteadyBarsPerMin).toFixed(2) + '×',
     (mountsPerMin * perMountSeries).toFixed(0),
   ])
 }
-table(['切换节奏', '挂载/分', '桥调用/分', '账户面调用/分', 'vs 账户面稳态 4 次/' + POLL_MS.tradeDesk / 1000 + 's', 'K 线点数/分', 'vs K 线稳态 750 根/' + POLL_MS.klineResync / 1000 + 's', '序列对象新建/分'], rhythmRows)
-console.log('  一次跨视图切换 = ' + (klineBarsPerMount / klineSteadyBarsPerMin * 60).toFixed(0) + ' 秒的 K 线稳态摄入量、' + (4 / tradeDeskSteadyPerMin * 60).toFixed(0) + ' 秒的账户面稳态额度。')
-console.log('  即：每 10s 切一次 → K 线摄入量 ×' + (6 * klineBarsPerMount / klineSteadyBarsPerMin).toFixed(1) + '、账户面调用 ×' + (6 * 4 / tradeDeskSteadyPerMin).toFixed(1) + '。')
-console.log('  页签来回切同样打账户端点：每 10s 切一次页签 → 账户面 ×' + (6 * tabToFundamentals / tradeDeskSteadyPerMin).toFixed(1) + '（4 次/回程）。')
-console.log('  用户能感知的临界点不是毫秒，而是端点额度：签名账户端点在切换节奏下被按稳态 ' + (4 / tradeDeskSteadyPerMin).toFixed(2) + ' 次/秒的量级反复打，触发限频时表现为面板整体失败（不是变慢）。')
+table(['切换节奏', '挂载/分', '桥调用/分', '账户面/分（交易台关）', '账户面/分（交易台开/实盘）', 'vs 账户面稳态 ' + accountPerSwitch + ' 次/' + POLL_MS.tradeDesk / 1000 + 's', 'K 线点数/分', 'vs K 线稳态 ' + DAILY_LIMIT + ' 根/' + POLL_MS.klineResync / 1000 + 's', '序列对象新建/分'], rhythmRows)
+console.log('  一次跨视图切换 = ' + (klineBarsPerMount / klineSteadyBarsPerMin * 60).toFixed(0) + ' 秒的 K 线稳态摄入量；账户面额度 = ' + (accountPerMountOpen / tradeDeskSteadyPerMin * 60).toFixed(0) + ' 秒（面板开着时），关着时 0 秒。')
+console.log('  即：每 10s 切一次 → K 线摄入量 ×' + (6 * klineBarsPerMount / klineSteadyBarsPerMin).toFixed(1)
+  + '；账户面面板开着 ×' + (6 * accountPerMountOpen / tradeDeskSteadyPerMin).toFixed(1) + '、关着 ×0。')
+console.log('  页签来回切：每 10s 切一次页签 → 账户面 ×' + (6 * tabToFundamentals / tradeDeskSteadyPerMin).toFixed(1)
+  + '（当前守卫 ' + tabToFundamentals + ' 次/往返）；旧守卫 ×' + (6 * tabLegacyReturn / tradeDeskSteadyPerMin).toFixed(1) + '（' + tabLegacyReturn + ' 次/往返）。')
+console.log('  用户能感知的临界点不是毫秒，而是端点额度：交易台开着（或实盘）时，签名账户端点在切换节奏下被按稳态 ' + (accountPerMountOpen / tradeDeskSteadyPerMin).toFixed(2) + ' 次/秒的量级反复打，触发限频时表现为面板整体失败（不是变慢）；关着时这条路径不再打。')
 console.log('')
 
-/* ──────────────────────────── §9 可证伪的修复假设（不实现） ──────────────────────────── */
+/* ──────────────────────────── §9 已落地的两处收紧（实测，不是预期） ──────────────────────────── */
 
-section('§9 可证伪的修复假设（只给假设，本轮不实现）')
+section('§9 已落地的两处收紧：换一个 ctx 量出来的前后差值（不是预期值）')
 
-console.log('  改动点 A（去重）：' + SRC.quoteStage + ':437 的 K 线轮询与 :457 的日 K 参考在缺省周期 1d 下是同一个请求（§2 实测同 URL）。')
-console.log('    最小写法：chartInterval === 1d 时让 stats 直接消费 klines 尾部两根，不再发第二条 750 根请求。')
-console.log('  改动点 B（收紧守卫）：' + SRC.quoteStage + ':526-529 的 refreshTradeDesk 只判 stageTab === chart，不判 tradeDeskOpen / tradeMode；')
-console.log('    而 tradePositions / Balances / Orders / Fills 的唯一渲染消费方是 OrderPanel（' + SRC.quoteStage + ':1487-1508）与它用的')
-console.log('    currentPositionSize / availableCash（' + SRC.quoteStage + ':335-353）——面板关着时这 4 次请求没有任何消费者。')
-console.log('    最小写法：守卫改为 stageTab === chart && (tradeDeskOpen || tradeMode === live)。')
+const tradeDeskConsumerLine = lineOf(SRC.quoteStage, /\{tradeDeskOpen && \(/)
+console.log('  改动点 A（去重）：' + SRC.quoteStage + ':' + klinePollFetchLine + ' 的 K 线轮询在 1d 落地时顺带 setDaily(rows)（:' + dailyFeedLine + '），')
+console.log('    :' + dailyRefEffectLine + ' 的日 K 参考 effect 在 1d 直接短路 → 同一 URL 只发 1 条，不再发第二条 ' + DAILY_LIMIT + ' 根。')
+console.log('    实测：1d 下 K 线请求 ' + klineRequests(ctxCrypto) + ' 条；同一个 ctx 换成非 1d = ' + klineRequests(ctxNonDaily) + ' 条。')
+console.log('  改动点 B（收紧守卫）：' + SRC.quoteStage + ':' + tradeDeskBodyStart + '-' + tradeDeskBodyEnd + ' 的 refreshTradeDesk 只在 stageTab === chart 且（tradeDeskOpen 或 tradeMode === live）时轮询。')
+console.log('    实测：一次挂载面板关着 ' + cryptoMount + ' 次、开着 ' + totalRequests(ctxTradeDeskOpen) + ' 次（差 ' + accountPerSwitch + '）；页签往返 chart 关着 ' + tabToFundamentals + ' 次、开着 ' + tabLegacyReturn + ' 次。')
+console.log('    渲染消费方仍是 OrderPanel（' + SRC.quoteStage + ':' + tradeDeskConsumerLine + ' 起）与 currentPositionSize / availableCash——面板关着时这 ' + accountPerSwitch + ' 次请求没有消费者。')
 console.log('')
-console.log('  预期减少（确定性、可复核）：一次挂载 ' + cryptoMount + ' → ' + (cryptoMount - 5) + ' 次桥调用（crypto，-' + Math.round(5 / cryptoMount * 100) + '%）；')
-console.log('  非 crypto ' + cnMount + ' → ' + (cnMount - 5) + '；K 线全量重取 2 → 1 次；')
-console.log('  20 次跨视图 A↔B 累计 ' + (returns * cryptoMount) + ' → ' + (returns * (cryptoMount - 5)) + ' 次桥调用、K 线重取 ' + (returns * 2) + ' → ' + returns + ' 次；')
-console.log('  20 次页签 A↔B 累计 ' + (returns * tabToFundamentals) + ' → 0 次桥调用（回程交易台那 4 次一并消失）。')
-console.log('  不减少的部分：图表/序列对象重建数不变（' + perMountSeries + ' 个/次），那属渲染成本，Node 侧不能定量（§10）。')
+console.log('  合计（同一路径，20 次跨视图 A↔B）：' + (returns * cryptoMount) + ' 次桥调用、' + (returns * klinePerMount) + ' 条 K 线请求；')
+console.log('  旧口径（面板开着 + 非 1d）同一路径 ' + (returns * legacyMount) + ' 次桥调用、' + (returns * klineRequests(ctxNonDaily)) + ' 条 K 线请求。')
+console.log('  不减少的部分：图表/序列对象重建数 ' + perMountSeries + ' 个/次，属渲染成本，Node 侧不能定量（§10）。')
 console.log('')
-console.log('  什么会推翻它：')
-console.log('  1) 若 owner 要求「打开交易面板不得出现加载态」（预热是特性不是浪费），改动点 B 被否，只剩 A 的 -1；')
+console.log('  什么会推翻它（保留的推翻条件）：')
+console.log('  1) 若 owner 要求「打开交易面板不得出现加载态」（预热是特性不是浪费），改动点 B 被否，一次挂载回到 +' + accountPerSwitch + '；')
 console.log('  2) 若将来出现面板关闭时仍读 tradePositions / balances 的消费者（例如右缘资产面板改用这套数据），收紧守卫会变成数据陈旧 bug；')
-console.log('  3) 若桥的跨源路由允许同一 (market, symbol, interval, limit) 的两次调用落到不同 provider，那么「日 K 参考」与「图表序列」现在就可能来自不同源；')
-console.log('     此时合并 A 会改变语义（方向上是修掉不一致，但不再是纯去重）；')
-console.log('  4) 若 ' + POLL_MS.klineResync / 1000 + 's resync 将来改成增量游标（不再是 750 根全量），A 的「第二次请求只喂两个数」前提消失。')
+console.log('  3) 若桥允许同一 (market, symbol, interval, limit) 落到不同 provider，那么 1d 下「图表序列 = 参考序列」是新的语义前提（方向上是修掉不一致，但不再是纯去重）；')
+console.log('  4) 若 ' + POLL_MS.klineResync / 1000 + 's resync 改成增量游标（不再是 ' + DAILY_LIMIT + ' 根全量），改动点 A 的前提消失。')
 
 /* ──────────────────────────── §10 未测（必须真浏览器） ──────────────────────────── */
 
@@ -822,9 +917,9 @@ table(['量', '为什么 Node 侧不可测', '要测就得'], [
 section('结论')
 
 console.log('  1) 中栏视图切走 = 卸载（' + SRC.middleStage + ':105-114 三目互斥，无隐藏保活）：切回要重取全部数据、重建整张图，内存态全丢（缩放平移、悬浮下标、框选、行情页签回落到 chart）。')
-console.log('  2) 行情页签切走 = 只卸图表（' + SRC.quoteStage + ':1281 起）：不重取 K 线，但回程会重发 ' + tabToFundamentals + ' 个账户请求；图表与 ' + perMountSeries + ' 个序列对象全部重建、' + chartPointsPerBuild + ' 个数据点重新灌入。')
+console.log('  2) 行情页签切走 = 只卸图表（' + SRC.quoteStage + ':1281 起）：不重取 K 线，回程交易台轮询被 tradeDeskOpen / tradeMode 挡住 → 本次往返 ' + tabToFundamentals + ' 次桥调用（旧守卫 ' + tabLegacyReturn + ' 次）；图表与 ' + perMountSeries + ' 个序列对象仍全部重建、' + chartPointsPerBuild + ' 个数据点重新灌入。')
 console.log('  3) 换标的 = 重取数不重建图（' + SRC.quoteStage + ':606-625 + dataKey）：' + symbolSwitch + ' 次桥调用、0 个新序列对象、全量 setData。')
-console.log('  4) 一次跨视图切换的真实规模成本：' + cryptoMount + ' 次桥调用（crypto）/ ' + cnMount + '（其它市场），其中 K 线双取 2 次、账户面 4 次、盘口 0 或 2 次；20 次 A↔B 累计 ' + (returns * cryptoMount) + ' 次桥调用、' + (returns * perMountSeries) + ' 个序列对象。')
+console.log('  4) 一次跨视图切换的真实规模成本（1d / 盘口关 / 交易台关）：' + cryptoMount + ' 次桥调用（crypto）/ ' + cnMount + '（其它市场）/ ' + futuresMount + '（futures），其中 K 线 ' + klinePerMount + ' 条、账户面 0 次（面板开着才 ' + accountPerSwitch + ' 次）、盘口 0 或 ' + (requestsOf('orderbook', ctxOrderbook)) + ' 次；20 次 A↔B 累计 ' + (returns * cryptoMount) + ' 次桥调用、' + (returns * perMountSeries) + ' 个序列对象。')
 console.log('')
 console.log('  · 全脚本墙钟 ' + (performance.now() - t0).toFixed(0) + ' ms —— 非权威，机器饱和（CPU ~12% idle / compressor 5.6GB），待安静窗口复测；本节所有结论只依赖上面的计数。')
 
