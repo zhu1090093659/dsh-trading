@@ -441,6 +441,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
       // 当日 bar 继承上一拍的包络——否则 high/low 每拍塌回当拍价，影线抽搐、指标读数往回跳。
       // 源一致才复原，非日线级别与源不一致时原样落地（门控在 restoreFormingBar 内部）。
       setKlines(prev => restoreFormingBar(rows, prev ?? [], lastTickerRef.current, barSourceRef.current, { market, interval: chartInterval }))
+      // 1d 下「日 K 参考」与这一拍是同一个 URL、同一份数据：落地时顺带喂头部昨收/涨跌的
+      // 参考序列（见下面的日K参考 effect），不再另发第二条 750 根请求。
+      if (chartInterval === '1d') setDaily(rows)
       setKlinesInterval(chartInterval)
       setKlinesProvider(page?.provider)
       setKError(null)
@@ -450,15 +453,16 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     }
   }, residentPollMs(market, chartInterval === FIVE_DAY_INTERVAL ? FIVE_DAY_RESYNC_MS : KLINE_RESYNC_MS), [market, symbol, chartInterval, fiveDayCap])
 
-  // 日K参考（头部涨跌/昨收）：每标的只拉一次。
+  // 日K参考（头部涨跌/昨收）：1d 视图下参考序列就是图表序列（上面那拍已经喂过 setDaily），
+  // 不再重复取数；其它周期另取一次，每标的只拉一次。
   useEffect(() => {
-    if (!market || !symbol) return
+    if (!market || !symbol || chartInterval === '1d') return
     let cancelled = false
     fetchKlines(market, symbol, '1d', DAILY_LIMIT)
       .then((rows) => { if (!cancelled) setDaily(rows) })
       .catch(() => { /* 头部统计缺省 */ })
     return () => { cancelled = true }
-  }, [market, symbol])
+  }, [market, symbol, chartInterval])
 
   const auxKeys = requiredAuxKeys(applicableInstances, market, id => indicators.get(id))
   const auxState = useAuxSeries(market, symbol, auxKeys, fetchSouthboundHoldings, fetchActiveBuy)
@@ -506,8 +510,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     }
   }, ORDERBOOK_POLL_MS, [orderbookOpen, stageTab, market, symbol])
 
-  // 交易台只读轮询（issue #40，面板打开时）：positions 为主探针——
-  // 服务未注册（400）或凭证缺失（ok:false）都置 null，分区按语义降级。
+  // 交易台只读轮询（issue #40）：面板开着才拉——关着时这四个响应没有渲染消费者；
+  // 实盘例外（风险可见性优先）。positions 为主探针，服务未注册/凭证缺失都置 null。
   const refreshTradeDesk = async (m: MarketId = activeMarket) => {
     const [positionRows, balanceRows, orderRows, fillRows] = await Promise.all([
       fetchTradePositions(m),
@@ -524,9 +528,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   }
 
   usePoll(async () => {
-    if (stageTab !== 'chart') return
+    if (stageTab !== 'chart' || (!tradeDeskOpen && tradeMode !== 'live')) return
     await refreshTradeDesk(activeMarket)
-  }, TRADE_DESK_POLL_MS, [stageTab, activeMarket])
+  }, TRADE_DESK_POLL_MS, [stageTab, activeMarket, tradeDeskOpen, tradeMode])
 
   /**
    * 提交意图追踪器（一次挂载各一个）：实盘动作的身份 = 官方当前会话 id +

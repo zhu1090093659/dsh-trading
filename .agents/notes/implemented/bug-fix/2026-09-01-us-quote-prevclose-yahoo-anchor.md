@@ -39,7 +39,11 @@ Status: implemented
    契约追认，base 拥有市场无关行）。
 3. **UI 消费方**：`QuoteStage` 头部统计与 `MarketSidebar` 自选行改为
    **官方快照锚点优先**（`ticker.prevClose`/`ticker.changePercent`），日 K
-   推算仅作数据源未提供 prevClose 时的兜底。
+   推算仅作数据源未提供 prevClose 时的兜底。该兜底序列在默认 `1d` 周期下就是图表
+   序列本身（K 线轮询与日 K 参考在 1d 下是同一个 URL、同一份数据：桥的 K 线候选序
+   对同参数确定，只有 `TRADING_UNSUPPORTED_INTERVAL` 才换源），因此 1d 视图只发一次
+   `interval=1d&limit=750` 请求，K 线那一拍落地时顺带写参考序列；非日线周期仍另取
+   一次 1d 参考（每标的只拉一次）。
 4. **`us_get_ticker` 工具描述**同步新语义（官方昨收 + 官方量，不再声明
    volume 滞后局限）。
 

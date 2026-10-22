@@ -28,6 +28,12 @@ Status: implemented
 4. **连接器 fail-closed**：`createJin10GlobalMarketDataService` 的 `subscribeTicker` 显式抛
    `Jin10Error('TRADING_NOT_IMPLEMENTED')`，与「可选能力缺席 = 显式报错」的既有语义同款；
    `TICKER_POLL_MS` 与工厂的 `pollMs` 选项随之删除（本市场不存在「常驻 ticker 订阅」这件事）。
+5. **交易台只读轮询按面板开关收紧**：`QuoteStage` 的 `refreshTradeDesk`（一次 Promise.all 打
+   `/trade/positions`、`/trade/balances`、`/trade/orders`、`/trade/fills` 四个签名端点）只在
+   **图表页签 且（交易台打开 或 实盘模式）** 时取数——面板关着时这四个响应没有渲染消费者
+   （消费方只有 `OrderPanel` 与面板比例填单的 `currentPositionSize`/`availableCash`）；实盘例外是
+   风险可见性优先于省请求。`tradeDeskOpen`/`tradeMode` 都在 `usePoll` 的 deps 里，打开面板那一刻
+   即 tick（不等 15s 定时器），关掉即停。
 
 ## Alternatives considered
 
