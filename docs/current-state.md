@@ -43,6 +43,9 @@
   `updates-manifest-v0.6.3.json`；npm 全家族 `0.6.3` 同步发布，`latest` 指向 `0.6.3`。CI 产物仍未签名（Developer ID
   与公证未落地），mac 首次打开需按 Release 说明 `xattr -cr`。本机 `/Applications/DSH Trading.app` 仍是开发签名的
   dir 构建，不是这次发布的资产。
+- **npm 上的 `0.6.2` 没有对应 Release**：它的包内容与 `0.6.3` 只差版本号（桌面测试夹具修复不进发布产物），
+  但当轮桌面构建在 windows-latest 判红，GitHub Release 因此从未产出。`latest` 已指向 `0.6.3`，不标注 deprecated——
+  安装包不从 npm 分发，把功能正常的包标成弃用会误导；这条记录用于避免把这个版本当成可用发布，也避免换代码复用它。
 - **Windows 门禁（2026-10-21 修完）**：`aux.ts` 是 Windows 保留设备名，自 10-12 起让 windows-latest 的
   checkout 每个 run 都失败；改名 `aux-series.ts` 后又露出两处用例债（polymarket 期望值写死 POSIX 路径、
   bot-api 账本 lease 未关导致 rmSync EBUSY）。三处已修，ci 三 OS 全绿（`372bc539`，四个 job 全 success）；
