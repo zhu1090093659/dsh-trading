@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-longbridge",
   "description": "长桥（Longbridge）港股连接器：直连券商 OpenAPI（openapi.longportapp.com，HMAC-SHA256 签名 + BYOK 三凭证 ref），实现 MarketDataService/TradeService 与 5 个 hk_* 工具；dry-run 缺省、liveTrading 只是非权威镜像（放行归 @dshtrading/authority 人工签署）、凭证只进 ref。",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

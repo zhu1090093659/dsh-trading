@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-polygon",
   "description": "Polygon.io（Massive）商业数据源美股连接器（BYOK）：tradingUsMarketData / tradingUsTrade 双服务 + us_get_ticker / us_get_klines / us_get_ticker_details 三个工具，服务缝三态下单闸门；凭证只存 ref 名 POLYGON_API_KEY，不内置密钥。",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

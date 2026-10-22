@@ -1,5 +1,22 @@
 # @dshtrading/bot-api
 
+## 0.6.3
+
+### Patch Changes
+
+- @dshtrading/kit-cn@0.6.3
+- @dshtrading/kit-hk@0.6.3
+- @dshtrading/kit-us@0.6.3
+- @dshtrading/api@0.6.3
+- @dshtrading/dsh-home@0.6.3
+- @dshtrading/eventbus@0.6.3
+- @dshtrading/holdings@0.6.3
+- @dshtrading/indicators@0.6.3
+- @dshtrading/kit-crypto@0.6.3
+- @dshtrading/knowledge@0.6.3
+- @dshtrading/strategies@0.6.3
+- @dshtrading/watchlist@0.6.3
+
 ## 0.6.2
 
 ### Patch Changes

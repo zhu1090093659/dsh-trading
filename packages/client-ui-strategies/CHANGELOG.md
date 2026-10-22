@@ -1,5 +1,11 @@
 # @dshtrading/client-ui-strategies
 
+## 0.6.3
+
+### Patch Changes
+
+- @dshtrading/strategies@0.6.3
+
 ## 0.6.2
 
 ### Patch Changes

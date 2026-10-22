@@ -1,5 +1,17 @@
 # @dshtrading/client-ui-trading
 
+## 0.6.3
+
+### Patch Changes
+
+- @dshtrading/api@0.6.3
+- @dshtrading/holdings@0.6.3
+- @dshtrading/indicators@0.6.3
+- @dshtrading/knowledge@0.6.3
+- @dshtrading/router@0.6.3
+- @dshtrading/strategies@0.6.3
+- @dshtrading/watchlist@0.6.3
+
 ## 0.6.2
 
 ### Patch Changes

@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-bybit",
   "description": "Bybit v5 加密货币连接器：现货 ∪ 线性永续公共行情（ticker/K线/盘口/逐笔/名册/衍生品快照与历史）+ 保留三态闸门的交易占位服务（私有账户读面与真实下单未实现）。凭证走 BYOK 环境变量 ref。",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

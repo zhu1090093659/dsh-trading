@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-tushare",
   "description": "Tushare Pro A 股连接器：提供 tradingCnMarketData 行情服务与 cn_get_ticker / cn_get_klines / cn_get_valuation 三个工具，Token 走 BYOK（tokenRef 指向环境变量）；无交易通道。",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

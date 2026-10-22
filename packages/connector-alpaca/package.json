@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-alpaca",
   "description": "美股（us）行情与交易连接器：直连 Alpaca Market Data v2（IEX feed）与 Trading API v2（Paper/Live），实现 MarketDataService/TradeService 双契约，服务键 tradingUsMarketData/tradingUsTrade，三态闸门 + dry-run 缺省 + BYOK 凭证 ref。",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

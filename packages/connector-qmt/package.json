@@ -1,7 +1,7 @@
 {
   "name": "@dshtrading/connector-qmt",
   "description": "迅投 MiniQMT A 股券商实盘交易与行情连接器：提供 tradingCnMarketData 与 tradingCnTrade 两个服务，注册 cn_get_ticker / cn_get_klines / cn_place_order / cn_cancel_order / cn_get_balance 五个工具，实盘受 @dshtrading/authority 签署平面与服务缝三态闸门约束。",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",

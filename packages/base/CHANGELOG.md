@@ -1,5 +1,22 @@
 # @dshtrading/base
 
+## 0.6.3
+
+### Patch Changes
+
+- 0.6.3 不改动任何发布包的内容：唯一差异是 `desktop/tests/profile-seed.test.mjs` 的跨平台夹具修复——写进 `.modules.yaml` 的路径改用 YAML 双引号标量的合法转义、`stagedCopy` 让副本给自己的 pnpm 记账署名、no-vendor 用例丢掉继承来的 `.modules.yaml`。桌面壳是私有包、不参与 changesets，这条记录只用于把家族版本推进到与 tag 一致的 `0.6.3`。
+  - @dshtrading/api@0.6.3
+  - @dshtrading/connector-jin10@0.6.3
+  - @dshtrading/connector-polymarket@0.6.3
+  - @dshtrading/dsh-home@0.6.3
+  - @dshtrading/eventbus@0.6.3
+  - @dshtrading/holdings@0.6.3
+  - @dshtrading/indicators@0.6.3
+  - @dshtrading/knowledge@0.6.3
+  - @dshtrading/router@0.6.3
+  - @dshtrading/strategies@0.6.3
+  - @dshtrading/watchlist@0.6.3
+
 ## 0.6.2
 
 ### Patch Changes
