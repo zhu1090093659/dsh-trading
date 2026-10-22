@@ -100,15 +100,30 @@ function stagedCopy(name) {
   const dir = path.join(workDir, name);
   fs.rmSync(dir, { recursive: true, force: true });
   fs.cpSync(pristine, dir, { recursive: true, dereference: true });
+  // The seed records the project it installed; a copy has to name itself, or
+  // pnpm reads the pristine project's state in place of its own.
+  const stateFile = path.join(dir, 'node_modules', '.pnpm-workspace-state-v1.json');
+  const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  state.projects = { [dir]: Object.values(state.projects)[0] };
+  fs.writeFileSync(stateFile, JSON.stringify(state));
   return dir;
+}
+
+/**
+ * An absolute path as a YAML double-quoted scalar. JSON's string escapes are a
+ * subset of YAML's, so a Windows path's backslashes survive the round trip
+ * instead of being read back as \U and rejected as an illegal escape.
+ */
+function yamlDoubleQuoted(value) {
+  return JSON.stringify(value);
 }
 
 /** Rewrite the seed's pnpm state the way a build machine leaves it behind. */
 function poisonBuildHostState(dir, buildMachineDir) {
   const modulesYaml = path.join(dir, 'node_modules', '.modules.yaml');
   fs.writeFileSync(modulesYaml, fs.readFileSync(modulesYaml, 'utf8')
-    .replace(/"storeDir": "[^"]*"/, '"storeDir": "' + path.join(buildMachineDir, 'store', 'v11') + '"')
-    .replace(/"virtualStoreDir": "[^"]*"/, '"virtualStoreDir": "' + path.join(buildMachineDir, 'seeded', 'node_modules', '.pnpm') + '"'));
+    .replace(/"storeDir": "[^"]*"/, '"storeDir": ' + yamlDoubleQuoted(path.join(buildMachineDir, 'store', 'v11')))
+    .replace(/"virtualStoreDir": "[^"]*"/, '"virtualStoreDir": ' + yamlDoubleQuoted(path.join(buildMachineDir, 'seeded', 'node_modules', '.pnpm'))));
   const stateFile = path.join(dir, 'node_modules', '.pnpm-workspace-state-v1.json');
   const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
   // pnpm records the project path in its own spelling (separators differ on
@@ -192,7 +207,7 @@ test('operator still hits the build machine store after deleting only the store 
   // And When the store matches this machine but the virtual store does not,
   // Then pnpm reports the virtual store instead
   fs.writeFileSync(modulesYaml, pristineState
-    .replace(/"virtualStoreDir": "[^"]*"/, '"virtualStoreDir": "' + path.join(buildMachine, 'seeded', 'node_modules', '.pnpm') + '"'));
+    .replace(/"virtualStoreDir": "[^"]*"/, '"virtualStoreDir": ' + yamlDoubleQuoted(path.join(buildMachine, 'seeded', 'node_modules', '.pnpm'))));
   const viaVirtualStore = pnpm(['add', 'file:./vendor/' + betaTarball], dir);
   assert.notEqual(viaVirtualStore.status, 0);
   assert.match(viaVirtualStore.output, /ERR_PNPM_UNEXPECTED_VIRTUAL_STORE/);
@@ -276,6 +291,11 @@ test('operator fails to add a plugin when the seed shipped without its vendor ta
   // that never made it into the installer, and the plugin manager installs a
   // plugin from outside the profile
   const dir = stagedCopy('no-vendor');
+  // A copy can never be linked from the pristine seed's own pnpm state, and pnpm
+  // validates the recorded store before it resolves anything: an older pnpm that
+  // records the virtual store as an absolute path dies there instead of on the
+  // missing tarball this case is about.
+  fs.rmSync(path.join(dir, 'node_modules', '.modules.yaml'));
   const outside = path.join(workDir, 'plugins');
   fs.mkdirSync(outside, { recursive: true });
   fs.copyFileSync(path.join(dir, 'vendor', betaTarball), path.join(outside, betaTarball));
