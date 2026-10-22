@@ -38,9 +38,11 @@
 - **第 3 档小额 live**：主网凭证 + **人本人** pnpm authority:sign + 金额上限 + 在环。
 - **带外退出演练**：卡片硬要求人在环。
 - **推送 main**：main 已推送到 origin（2026-10-21 最近一次 `372bc539`）；后续每次推送仍需当前请求里的明确授权。
-- **桌面壳安装包发布（新 SDK cohort）**：**未做**。本机 `/Applications/DSH Trading.app` 是按新钉版重建的
-  dir 构建（开发签名），不是 Release 资产；发布要 bump 版本 + 推 tag（连带 npm 与 GitHub Release），
-  需单独授权。发版前的 Windows 阻塞已清（见下条）。
+- **桌面壳安装包发布（新 SDK cohort）**：**已发**。`v0.6.3`（tag/主分支同在 `6a18affd`，run 39770813279）产出
+  GitHub Release 九份资产：mac arm64/x64 各 dmg+zip、win x64 exe+zip、`SHA256SUMS.txt`、`trading-update-v0.6.3.zip`、
+  `updates-manifest-v0.6.3.json`；npm 全家族 `0.6.3` 同步发布，`latest` 指向 `0.6.3`。CI 产物仍未签名（Developer ID
+  与公证未落地），mac 首次打开需按 Release 说明 `xattr -cr`。本机 `/Applications/DSH Trading.app` 仍是开发签名的
+  dir 构建，不是这次发布的资产。
 - **Windows 门禁（2026-10-21 修完）**：`aux.ts` 是 Windows 保留设备名，自 10-12 起让 windows-latest 的
   checkout 每个 run 都失败；改名 `aux-series.ts` 后又露出两处用例债（polymarket 期望值写死 POSIX 路径、
   bot-api 账本 lease 未关导致 rmSync EBUSY）。三处已修，ci 三 OS 全绿（`372bc539`，四个 job 全 success）；

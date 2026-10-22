@@ -279,3 +279,20 @@ fetch 的 promise 回来、React 再提交一次才出现——调用发生与�
 ### Consequences
 
 `test/setup.ts` 是该包的全局前置钩子，后续任何依赖 storage 初值的用例都必须在该用例体内自备写入（当前 7 处碰 storage 的用例都在 `it` 体内写入，不受影响）。本机 node 25 的 `localStorage` 属「存在但方法缺失」的空壳，新测试若直接调用其方法会抛错，必须走能力探测。
+## 桌面发布 job 在 windows-latest 的超时抖动（2026-10-22）
+
+发 `v0.6.2`/`v0.6.3` 时，`desktop-release.yml` 的 `build-desktop` 在 windows-latest 反复红掉，而 ubuntu 的 `npm-publish` job 跑同一条 `pnpm -r test` 是绿的。失败跨包漂移、都是默认 5000ms 超时与随后清理的 `EBUSY`：`packages/knowledge` 的 delete-batch 用例、`packages/connector-eastmoney` 的真实网络用例、`desktop/tests/profile-seed.test.mjs` 的 `after()` `rmSync`。同一 SHA 重跑会换一个包红，说明是 Windows runner 的调度与文件句柄释放，不是某一条用例的确定性缺陷。
+
+同一批里另有两条**确定性**的 Windows 缺陷，已修并随 `0.6.3` 发布：`profile-seed` 夹具把构建机绝对路径裸拼进 `.modules.yaml` 的双引号标量（`\U` 非法转义，pnpm 报 `expected hexadecimal character`），以及 `stagedCopy` 让副本继承 pristine 的 pnpm 记账（旧 pnpm 记绝对 `virtualStoreDir` 时先抛 `ERR_PNPM_UNEXPECTED_VIRTUAL_STORE`，用例量不到缺 tarball 的 `ENOENT`）。修法分别是 `JSON.stringify` 作 YAML 双引号标量、副本给自己署名、no-vendor 用例丢掉继承的 `.modules.yaml`。
+
+**发版口径**：Windows leg 红时，先用同一 SHA 重跑失败 job（`gh run rerun <id> --failed`），mac 已绿则只重跑 Windows；重跑是抽奖，不作为确定性修复的替代。若某条用例在同一位置稳定复现，按缺陷修，不走重跑。
+
+### Alternatives considered
+
+- **把桌面 job 的 `pnpm -r test` 换成带 `--testTimeout` 的调用**：55 个包的 test 脚本不全是 vitest，统一追加参数会打断其它 runner；且当时没有证据表明超时阈值是根因（`EBUSY` 来自句柄未释放），否决。
+- **在 windows-latest 上跳过测试直接打包**：把闸门从"产物可信"降级为"能出包"，否决。
+- **给 `desktop-release.yml` 加 `workflow_dispatch` 绕开 tag**：不解决抖动本身，且让发布入口分叉，否决。
+
+### Consequences
+
+Windows leg 的成功率取决于 runner 当时的负载，发版需要预留重跑次数。任何一次重跑都必须绑定同一 tag 与 SHA，且 npm 已发布的版本不得因为重跑而改内容。
