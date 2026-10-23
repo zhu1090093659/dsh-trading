@@ -1,7 +1,8 @@
 # @dshtrading/connector-tencent
 
-> **状态：已实证（本出口可用）**。报价（`qt.gtimg.cn`）、日/周/月 K（`web.ifzq.gtimg.cn`
-> `fqkline`/`hkfqkline`）、分钟 K（`ifzq.gtimg.cn` `mkline`）与批量报价均从本开发出口返回真实数据。
+> **状态：已实证（本出口可用）**。报价（`qt.gtimg.cn`）、日/周/月 K（`ifzq.gtimg.cn`
+> `fqkline`/`hkfqkline`；`web.ifzq` 同族域名已被上游 WAF 封死，只作回退垫底）、分钟 K
+> （`ifzq.gtimg.cn` `mkline`）与批量报价均从本开发出口返回真实数据。
 > 证据 `spikes/impl-cn-hk/REPORT.md`、`spikes/impl-tencent-minute/EVIDENCE.md`、
 > `spikes/impl-tencent-quote-batch/EVIDENCE.md`、`spikes/impl-cn-datasource-bench/EVIDENCE.md`。
 
@@ -31,7 +32,7 @@ dsh-trading **cn+hk 双市场切片**市场连接器：经腾讯公共行情端�
 | 用途 | 端点 |
 |---|---|
 | 报价（单只与批量同端点） | `qt.gtimg.cn/q=<wire[,wire…]>`（`q=` 原生支持逗号列表） |
-| 日/周/月 K（前复权） | `web.ifzq.gtimg.cn/appstock/app/{fqkline,hkfqkline}/get` |
+| 日/周/月 K（前复权） | `ifzq.gtimg.cn/appstock/app/{fqkline,hkfqkline}/get`（回退链 `ifzq` → `web.ifzq`；后者自 2026-10-23 起被上游 WAF 封死，见 Agent Note `2026-10-23-tencent-kline-host-fallback-and-eastmoney-network-retry`） |
 | 分钟 K（**仅 cn**） | `ifzq.gtimg.cn/appstock/app/kline/mkline`（host **无 `www.`**，带则 301） |
 | 名册检索 | `smartbox.gtimg.cn/s3/?t=all&q=` |
 
