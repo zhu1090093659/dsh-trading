@@ -28,6 +28,22 @@ function stubFetch(routes: Array<{ match: string; body?: unknown; status?: numbe
   return { impl, urls }
 }
 
+/**
+ * 前 failures 枪网络级失败（TCP 通、服务端收到即断 —— node fetch 抛 TypeError
+ * `fetch failed` / UND_ERR_SOCKET，curl 报 (52) Empty reply），之后正常回 JSON。
+ */
+function flakyFetch(failures: number, body: unknown) {
+  const urls: string[] = []
+  let attempts = 0
+  const impl = (async (input: unknown) => {
+    urls.push(String(input))
+    attempts += 1
+    if (attempts <= failures) throw new TypeError('fetch failed')
+    return jsonResponse(body)
+  }) as typeof fetch
+  return { impl, urls }
+}
+
 describe('EastmoneyRestClient 符号与周期映射', () => {
   it('A股标准代码转东财 secid 与规范形', () => {
     expect(toEastmoneySecid('600519.SH')).toEqual({ secid: '1.600519', canonical: '600519.SH', market: 'cn' })
@@ -529,11 +545,12 @@ describe('EastmoneyRestClient 报价路径不可用时的降级派生（2026-10-
     // When 用户取这只 A 股的报价
     const ticker = await client.getTicker('002714.SZ')
 
-    // Then 先打首选取价路径，失败后落到同源的当日分钟序列（ndays=1）
+    // Then 先打首选取价路径（空回后立即重试一次，两枪同一 URL），再落到同源的当日分钟序列（ndays=1）
     expect(urls[0]).toContain('/api/qt/ulist.np/get')
-    expect(urls[1]).toContain('/api/qt/stock/trends2/get')
-    expect(urls[1]).toContain('secid=0.002714')
-    expect(urls[1]).toContain('ndays=1')
+    expect(urls[1]).toBe(urls[0])
+    expect(urls[2]).toContain('/api/qt/stock/trends2/get')
+    expect(urls[2]).toContain('secid=0.002714')
+    expect(urls[2]).toContain('ndays=1')
     // Then price 取末根第 3 列——该序列的价格已是十进制值，不再除 10^decimal
     expect(ticker.price).toBe(40.89)
     // Then 名称与昨收取自同一条响应，时间按 UTC+8 墙钟锚定（15:00 UTC+8 = 07:00 UTC）
@@ -545,7 +562,8 @@ describe('EastmoneyRestClient 报价路径不可用时的降级派生（2026-10-
     expect(ticker.changePercent).toBeCloseTo(((40.89 - 40.9) / 40.9) * 100, 10)
     // Then 不给 volume：窗口合计在 hk 低于当日累计，拿不到的量宁可缺省
     expect('volume' in ticker).toBe(false)
-    expect(urls).toHaveLength(2)
+    // Then 请求量 = 首选取价的两枪（首次 + 一次立即重试）+ 一枪分钟序列，有界
+    expect(urls).toHaveLength(3)
   })
 
   it('用户查询未收录代码时降级不掩盖 not found', async () => {
@@ -576,9 +594,10 @@ describe('EastmoneyRestClient 报价路径不可用时的降级派生（2026-10-
     expect(second.price).toBe(first.price)
     expect(second.timestamp).toBe(first.timestamp)
     expect(second.symbol).toBe('002714.SZ')
-    // Then trends2 只发了 1 次（另两次是首选取价路径的尝试），降级态自身的请求量有界
+    // Then trends2 只发了 1 次（另四次是首选取价路径的两轮尝试，每轮 = 首次 + 一次立即重试），
+    // 降级态自身的请求量有界
     expect(urls.filter((u) => u.includes('/api/qt/stock/trends2/get'))).toHaveLength(1)
-    expect(urls.filter((u) => u.includes('/api/qt/ulist.np/get'))).toHaveLength(2)
+    expect(urls.filter((u) => u.includes('/api/qt/ulist.np/get'))).toHaveLength(4)
   })
 
   it('运营遇到取价路径与分钟序列同时不可用时拿到原始错误码', async () => {
@@ -633,9 +652,10 @@ describe('EastmoneyRestClient 报价路径不可用时的降级派生（2026-10-
     // When 用户取这只港股的报价
     const ticker = await client.getTicker('00700.HK')
 
-    // Then 派生请求用港股 secid，价格取末根第 3 列（hk 序列同样已是十进制值，423.4 港元），
-    // 时间按 UTC+8 墙钟锚定（16:00 UTC+8 = 08:00 UTC）
-    expect(urls[1]).toContain('secid=116.00700')
+    // Then 报价路径两枪（首次 + 一次立即重试）都空回后，派生请求用港股 secid；
+    // 价格取末根第 3 列（hk 序列同样已是十进制值，423.4 港元），时间按 UTC+8 墙钟锚定（16:00 UTC+8 = 08:00 UTC）
+    expect(urls).toHaveLength(3)
+    expect(urls[2]).toContain('secid=116.00700')
     expect(ticker).toMatchObject({
       symbol: '00700.HK',
       name: '腾讯控股',
@@ -745,5 +765,87 @@ describe('EastmoneyRestClient 港股面（2026-09-08，实证 spikes/impl-eastmo
     expect(klines[0]).toMatchObject({ open: 437.8, close: 437.6, volume: 15400 })
     // 审查 M1：kline/get 也按 UTC+8 墙钟锚定（11:25 UTC+8 = 03:25 UTC），与 1m 同口径。
     expect(klines[0].openTime).toBe(Date.UTC(2026, 8, 8, 3, 25))
+  })
+})
+
+// 2026-10-23 实测：push2his 属边缘抖动——同一 URL 连打里夹着 curl (52) Empty reply /
+// undici UND_ERR_SOCKET（空回），紧接下一枪又 200。故网络级失败重试一次，其余不重试。
+describe('EastmoneyRestClient 网络级抖动的重试边界（2026-10-23 实测空回）', () => {
+  it('用户拉日 K 时上游首枪网络级失败，立即重试一次后拿到数据', async () => {
+    // Given kline/get 第一枪抛 TypeError('fetch failed')（undici UND_ERR_SOCKET），第二枪正常
+    const { impl, urls } = flakyFetch(1, {
+      data: { klines: ['2026-10-22 00:00,15.970,15.460,16.850,15.350,218498,338000000.00,0.00'] },
+    })
+
+    // When 用户拉东瑞股份日 K
+    const klines = await new EastmoneyRestClient({ fetchImpl: impl }).getKlines('001201', '1d', 1)
+
+    // Then 两枪打的是同一 URL（同 secid、同 klt），用第二枪的响应解析
+    expect(urls).toHaveLength(2)
+    expect(urls[1]).toBe(urls[0])
+    expect(urls[0]).toContain('/api/qt/stock/kline/get')
+    expect(urls[0]).toContain('secid=0.001201')
+    expect(urls[0]).toContain('klt=101')
+    // Then 解析口径不变：UTC+8 墙钟锚定，行字段序 时间,开,收,高,低,量
+    expect(klines).toHaveLength(1)
+    expect(klines[0]).toMatchObject({ open: 15.97, close: 15.46, high: 16.85, low: 15.35, volume: 218498 })
+    expect(klines[0].openTime).toBe(Date.UTC(2026, 9, 21, 16, 0))
+  })
+
+  it('用户拉 1m 分时序列时 trends2 首枪空回，立即重试一次后拿到分钟序列', async () => {
+    // Given trends2 第一枪网络级失败，第二枪回一条分钟序列
+    const { impl, urls } = flakyFetch(1, {
+      data: { trends: ['2026-10-22 14:59,15.450,15.460,15.470,15.440,1200,1855200.00,15.456'] },
+    })
+
+    // When 用户拉东瑞股份 1m 分时
+    const klines = await new EastmoneyRestClient({ fetchImpl: impl }).getKlines('001201', '1m', 1)
+
+    // Then 两枪同一 URL，第二枪的序列被解析成单根分钟 K
+    expect(urls).toHaveLength(2)
+    expect(urls[1]).toBe(urls[0])
+    expect(urls[0]).toContain('/api/qt/stock/trends2/get')
+    expect(klines).toHaveLength(1)
+    expect(klines[0]).toMatchObject({ open: 15.45, close: 15.46, high: 15.47, low: 15.44, volume: 1200 })
+  })
+
+  it('运营遇到上游 HTTP 500 时直接抛，不重试（非 2xx 不是抖动）', async () => {
+    // Given kline/get 回 HTTP 500
+    const { impl, urls } = stubFetch([{ match: '/api/qt/stock/kline/get', body: { rc: 1 }, status: 500 }])
+
+    // When 用户拉日 K
+    // Then 保留上游错误语义，且只打一枪
+    await expect(new EastmoneyRestClient({ fetchImpl: impl }).getKlines('001201', '1d', 1))
+      .rejects.toMatchObject({ code: 'TRADING_UPSTREAM_ERROR' })
+    expect(urls).toHaveLength(1)
+  })
+
+  it('运营遇到非 JSON 响应（HTML 错误页）时不重试', async () => {
+    // Given 上游 200 但 body 是 HTML（解析失败，不是网络抖动）
+    const urls: string[] = []
+    const impl = (async (input: unknown) => {
+      urls.push(String(input))
+      return new Response('<html><body>502 Bad Gateway</body></html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      })
+    }) as typeof fetch
+
+    // When 用户拉日 K
+    // Then 只打一枪，解析失败按既有口径以 TRADING_NETWORK 上抛
+    await expect(new EastmoneyRestClient({ fetchImpl: impl }).getKlines('001201', '1d', 1))
+      .rejects.toMatchObject({ code: 'TRADING_NETWORK' })
+    expect(urls).toHaveLength(1)
+  })
+
+  it('管理员遇到连续网络级失败时按 TRADING_NETWORK 上报，且请求量有界（两枪）', async () => {
+    // Given 每一枪都网络级失败（抖动持续存在）
+    const { impl, urls } = flakyFetch(9, { data: { klines: [] } })
+
+    // When 用户拉日 K
+    // Then 抛原始错误码，且只重试一次（共两枪），不无限重试、不引退避
+    await expect(new EastmoneyRestClient({ fetchImpl: impl }).getKlines('001201', '1d', 1))
+      .rejects.toMatchObject({ code: 'TRADING_NETWORK' })
+    expect(urls).toHaveLength(2)
   })
 })

@@ -368,29 +368,74 @@ export class EastmoneyRestClient {
     this.market = options.market ?? 'cn'
   }
 
-  private async requestJson<T>(url: string, referer: string = 'https://quote.eastmoney.com/'): Promise<T> {
+  /**
+   * 单次 GET + JSON。网络级异常（undici `fetch failed` / 服务端收到即断的空回）抛
+   * TRADING_NETWORK 并标为可重试；HTTP 非 2xx 抛 TRADING_UPSTREAM_ERROR、解析失败抛
+   * TRADING_NETWORK（后者不可重试——空回与 WAF/HTML 错误页不是抖动）。
+   */
+  private async requestOnce<T>(
+    url: string,
+    referer: string,
+  ): Promise<
+    | { readonly ok: true; readonly body: T }
+    | { readonly ok: false; readonly retryable: boolean; readonly error: TradingServiceError }
+  > {
+    let res: Response
     try {
-      const res = await this.fetchImpl(url, {
+      res = await this.fetchImpl(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
           'Referer': referer,
         },
       })
-      if (!res.ok) {
-        throw new TradingServiceError(
+    } catch (err) {
+      return {
+        ok: false,
+        retryable: true,
+        error: new TradingServiceError(
+          'TRADING_NETWORK',
+          `Eastmoney network error: ${err instanceof Error ? err.message : String(err)}`,
+          err,
+        ),
+      }
+    }
+    if (!res.ok) {
+      return {
+        ok: false,
+        retryable: false,
+        error: new TradingServiceError(
           'TRADING_UPSTREAM_ERROR',
           `Eastmoney HTTP request failed: status ${res.status} ${res.statusText}`,
-        )
+        ),
       }
-      return await res.json() as T
-    } catch (err) {
-      if (err instanceof TradingServiceError) throw err
-      throw new TradingServiceError(
-        'TRADING_NETWORK',
-        `Eastmoney network error: ${err instanceof Error ? err.message : String(err)}`,
-        err,
-      )
     }
+    try {
+      return { ok: true, body: await res.json() as T }
+    } catch (err) {
+      return {
+        ok: false,
+        retryable: false,
+        error: new TradingServiceError(
+          'TRADING_NETWORK',
+          `Eastmoney network error: ${err instanceof Error ? err.message : String(err)}`,
+          err,
+        ),
+      }
+    }
+  }
+
+  /**
+   * 取 JSON：push2his 属边缘抖动（2026-10-23 实测 kline/get 连打中夹着 curl (52) Empty
+   * reply / undici UND_ERR_SOCKET），首次网络级失败**立即重试一次**，仍失败才抛。无 sleep、
+   * 无退避、不重试 HTTP 4xx/5xx 与解析错误——这两类不是抖动。
+   */
+  private async requestJson<T>(url: string, referer: string = 'https://quote.eastmoney.com/'): Promise<T> {
+    const first = await this.requestOnce<T>(url, referer)
+    if (first.ok) return first.body
+    if (!first.retryable) throw first.error
+    const second = await this.requestOnce<T>(url, referer)
+    if (second.ok) return second.body
+    throw second.error
   }
 
   async getTicker(symbol: string): Promise<Ticker> {

@@ -435,7 +435,7 @@ describe('TencentRestClient.getKlines', () => {
   it('parses cn day klines with the open-close-high-low-volume field order', async () => {
     const { impl, urls } = stubFetch([{ match: 'fqkline/get', body: CN_KLINE_JSON }])
     const klines = await client('cn', { fetchImpl: impl }).getKlines('600519', '1d', 2)
-    expect(urls[0]).toBe('https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh600519,day,,,2,qfq')
+    expect(urls[0]).toBe('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh600519,day,,,2,qfq')
     expect(klines).toHaveLength(2)
     // 字段序陷阱直证：第 2 列是开、第 3 列是收（若按 OHLC 误读，open/high 会整体错位）。
     expect(klines[1]).toEqual({
@@ -518,7 +518,7 @@ describe('TencentRestClient.getKlines', () => {
   it('routes hk to hkfqkline with the hk prefix and drops extra row fields', async () => {
     const { impl, urls } = stubFetch([{ match: 'hkfqkline/get', body: HK_KLINE_JSON }])
     const klines = await client('hk', { fetchImpl: impl }).getKlines('00700', '1d', 2)
-    expect(urls[0]).toBe('https://web.ifzq.gtimg.cn/appstock/app/hkfqkline/get?param=hk00700,day,,,2,qfq')
+    expect(urls[0]).toBe('https://ifzq.gtimg.cn/appstock/app/hkfqkline/get?param=hk00700,day,,,2,qfq')
     expect(klines[1]).toMatchObject({ open: 444, close: 455.2, high: 462.2, low: 443.4, volume: 27_742_475 })
   })
 
@@ -555,6 +555,104 @@ describe('TencentRestClient.getKlines', () => {
   it('maps upstream error payloads to TRADING_EXCHANGE_ERROR', async () => {
     const { impl } = stubFetch([{ match: 'fqkline/get', body: JSON.stringify({ code: 0, msg: 'param error', data: [] }) }])
     await expect(client('cn', { fetchImpl: impl }).getKlines('600519', '1d')).rejects.toMatchObject({ code: 'TRADING_UNSUPPORTED_SYMBOL' })
+  })
+
+  // 2026-10-23 实测原文开头：链尾域名对任何 K 线请求都回这页（HTTP 501，326 B，
+  // server: stgw），绕开本机代理直连 183.47.126.125 仍是同一页。
+  const WAF_501_PAGE =
+    '<!DOCTYPE html><html><head><script>var i=location.href;var v=window.btoa?window.btoa(window.encodeURIComponent(i)):"";'
+    + 'window.location.href="https://waf.tencent.com/501page.html?u="+location.origin+"&id=28ac14bb37a816267c4a41fcb82ef0a5";'
+    + '</script></head></html>'
+
+  it('用户拉日 K 时链首回 501 WAF 挑战页，回落到链尾域名并解析成功', async () => {
+    // Given 链首 ifzq 回 WAF 挑战页（501 HTML），链尾 web.ifzq 回同一份正常 payload
+    const { impl, urls } = stubFetch([
+      { match: 'web.ifzq.gtimg.cn', body: CN_KLINE_JSON },
+      { match: 'ifzq.gtimg.cn', body: WAF_501_PAGE, status: 501 },
+    ])
+
+    // When 用户拉茅台日 K
+    const klines = await client('cn', { fetchImpl: impl }).getKlines('600519', '1d', 2)
+
+    // Then 先打链首、再打链尾，两枪的 param 与 count 完全一致
+    expect(urls).toHaveLength(2)
+    expect(urls[0]).toBe('https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh600519,day,,,2,qfq')
+    expect(urls[1]).toBe('https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh600519,day,,,2,qfq')
+    // Then 用链尾响应正常解析（字段序仍是开收高低量）
+    expect(klines).toHaveLength(2)
+    expect(klines[1]).toMatchObject({ open: 1289, close: 1297.4, high: 1297.89, low: 1288, volume: 16126 })
+  })
+
+  it('用户拉周 K 时链首 200 回 HTML 挑战页（非 JSON），同样回落到链尾', async () => {
+    // Given 链首 HTTP 200 但 body 是 WAF/HTML（JSON.parse 必炸），链尾回正常周 K payload
+    const weekJson = JSON.stringify({ code: 0, msg: '', data: { sh600519: { qfqweek: [['2026-10-16', '1295.000', '1272.830', '1308.880', '1272.010', '213505.000']] } } })
+    const { impl, urls } = stubFetch([
+      { match: 'web.ifzq.gtimg.cn', body: weekJson },
+      { match: 'ifzq.gtimg.cn', body: '<!DOCTYPE html><html><body>waf challenge</body></html>' },
+    ])
+
+    // When 用户拉周 K
+    const klines = await client('cn', { fetchImpl: impl }).getKlines('600519', '1w', 1)
+
+    // Then 非 JSON 也算「换域名」的理由：两枪后拿到链尾的一根周 K
+    expect(urls).toHaveLength(2)
+    expect(klines).toHaveLength(1)
+    expect(klines[0]).toMatchObject({ open: 1295, close: 1272.83, high: 1308.88, low: 1272.01 })
+  })
+
+  it('用户遇到两个 K 线域名都回挑战页时拿到可辨的 TRADING_EXCHANGE_ERROR，且只打两枪', async () => {
+    // Given 链首与链尾都回 501 WAF 页
+    const { impl, urls } = stubFetch([{ match: 'fqkline/get', body: WAF_501_PAGE, status: 501 }])
+
+    // When 用户拉日 K
+    // Then 抛出链路事实（两个域名 + 最后一枪的 HTTP 状态），可一眼归因到上游 WAF
+    await expect(client('cn', { fetchImpl: impl }).getKlines('600519', '1d', 1)).rejects.toMatchObject({
+      code: 'TRADING_EXCHANGE_ERROR',
+      message: expect.stringContaining('all kline hosts failed (https://ifzq.gtimg.cn -> https://web.ifzq.gtimg.cn)'),
+    })
+    // Then 链上最多两枪，不无限重试
+    expect(urls).toHaveLength(2)
+  })
+
+  it('管理员注入 klineBaseUrl 时回退链只含该域名，不掺默认域名', async () => {
+    // Given 注入一个自建反代 base，它对 K 线一律回 501
+    const { impl, urls } = stubFetch([{ match: 'kline-mirror.internal', body: WAF_501_PAGE, status: 501 }])
+
+    // When 用户拉日 K
+    // Then 只打注入域名一次，错误原样上抛（链长 1，消息不带 all kline hosts failed）
+    await expect(client('cn', { fetchImpl: impl, klineBaseUrl: 'https://kline-mirror.internal' }).getKlines('600519', '1d', 1))
+      .rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR', message: expect.not.stringContaining('all kline hosts failed') })
+    expect(urls).toHaveLength(1)
+    expect(urls[0]).toBe('https://kline-mirror.internal/appstock/app/fqkline/get?param=sh600519,day,,,1,qfq')
+  })
+
+  it('用户遇到上游 code!=0 时立即 fail-closed，不拿链尾域名掩盖业务错误', async () => {
+    // Given 链首回业务错误（param error），链尾本来是好的
+    const { impl, urls } = stubFetch([
+      { match: 'web.ifzq.gtimg.cn', body: CN_KLINE_JSON },
+      { match: 'ifzq.gtimg.cn', body: JSON.stringify({ code: -1, msg: 'param error' }) },
+    ])
+
+    // When 用户拉日 K
+    // Then 一次请求就抛，业务错误不做域名回退
+    await expect(client('cn', { fetchImpl: impl }).getKlines('600519', '1d', 2)).rejects.toMatchObject({
+      code: 'TRADING_EXCHANGE_ERROR',
+      message: expect.stringContaining('upstream code=-1'),
+    })
+    expect(urls).toHaveLength(1)
+  })
+
+  it('运营遇到链首 429 限流时原样上报限流，不回退到链尾', async () => {
+    // Given 链首限流（429 = 限流，不是域名级故障），链尾本来是好的
+    const { impl, urls } = stubFetch([
+      { match: 'web.ifzq.gtimg.cn', body: CN_KLINE_JSON },
+      { match: 'ifzq.gtimg.cn', body: 'too many requests', status: 429 },
+    ])
+
+    // When 用户拉日 K
+    // Then 保留限流语义（不退化成 TRADING_EXCHANGE_ERROR），也不打链尾
+    await expect(client('cn', { fetchImpl: impl }).getKlines('600519', '1d', 2)).rejects.toMatchObject({ code: 'TRADING_RATE_LIMITED' })
+    expect(urls).toHaveLength(1)
   })
 })
 

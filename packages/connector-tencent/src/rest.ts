@@ -10,8 +10,10 @@
  *     body 形如 `v_sh600519="1~贵州茅台~600519~1297.40~..."`，`~` 分隔。
  *     cn（sh600519/sz000001）与 hk（r_hk00700）**字段布局不同**（详见 parseCnTicker /
  *     parseHkTicker 注释）。
- *   - 日/周/月 K：GET https://web.ifzq.gtimg.cn/appstock/app/{fqkline,hkfqkline}/get
+ *   - 日/周/月 K：GET https://ifzq.gtimg.cn/appstock/app/{fqkline,hkfqkline}/get
  *     ?param=<code>,<tf>,,,<count>,qfq → JSON data.<code>.qfq<day|week|month>。
+ *     同族 `web.ifzq` 前缀域名已被上游 WAF 封死（HTTP 501 挑战页，2026-10-23 实测），
+ *     故日/周/月 K 按 DEFAULT_KLINE_BASE_URLS 顺序回退（ifzq → web.ifzq），详见该常量注。
  *     行字段序是 **开收高低量**（open,close,high,low,volume）——与 OHLC 直觉相反，
  *     解析错序 K 线整体失真。hk 行第 7 个元素起是分红/回购等附加对象，须丢弃。
  *     cn 用 fqkline + sh/sz 前缀；**hk 报价用 r_hk 前缀而 K 线用 hk 前缀**——
@@ -584,15 +586,25 @@ function parseQuoteRows(text: string): Map<string, string[]> {
 /* ------------------------------------------------------------------ */
 
 const DEFAULT_QUOTE_BASE_URL = 'https://qt.gtimg.cn'
-const DEFAULT_KLINE_BASE_URL = 'https://web.ifzq.gtimg.cn'
+/**
+ * 日/周/月 K 的域名回退链（有序、最多两级）：2026-10-23 实测 `web.ifzq.gtimg.cn` 被上游
+ * WAF 封死（HTTP 501 + `waf.tencent.com/501page.html` 挑战页；绕开本机代理直连
+ * 183.47.126.125 仍 501，换 UA/Referer/标的/周期/HTTP 版本全 501），同族 `ifzq.gtimg.cn`
+ * 同参数返回 200 且 payload 结构一致（`qfqday`/`qfqweek`）——故同族域名优先、被封域名垫后，
+ * 串行各打一次，绝不无限重试。分钟线走 mkline，本就落在同族域名上，不参与回退。
+ */
+const DEFAULT_KLINE_BASE_URLS = ['https://ifzq.gtimg.cn', 'https://web.ifzq.gtimg.cn'] as const
 const DEFAULT_MKLINE_BASE_URL = 'https://ifzq.gtimg.cn'
 const DEFAULT_SEARCH_BASE_URL = 'https://smartbox.gtimg.cn'
 const DEFAULT_TIMEOUT_MS = 10_000
 
+/** 腾讯 K 线响应体（fqkline / hkfqkline / mkline 同形：code + data.<wire>.<key>）。 */
+type TencentKlinePayload = { code?: number; msg?: string; data?: Record<string, Record<string, unknown>> }
+
 export interface TencentRestOptions {
   /** 覆盖报价 base（测试/反代用），末尾不带斜杠。 */
   readonly quoteBaseUrl?: string
-  /** 覆盖 K 线 base（测试/反代用），末尾不带斜杠。 */
+  /** 覆盖 K 线 base（测试/反代用），末尾不带斜杠；注入即取代整条回退链，不掺默认域名。 */
   readonly klineBaseUrl?: string
   /** 覆盖分钟 K 线 base（测试/反代用），末尾不带斜杠。 */
   readonly mklineBaseUrl?: string
@@ -610,7 +622,7 @@ export class TencentRestClient {
   // 纯数据客户端（非 cordis Service 类），可用 # 私有字段（realm 代理风险只涉 Service 基类）。
   readonly #market: TencentMarket
   readonly #quoteBaseUrl: string
-  readonly #klineBaseUrl: string
+  readonly #klineBaseUrls: readonly string[]
   readonly #mklineBaseUrl: string
   readonly #searchBaseUrl: string
   readonly #timeoutMs: number
@@ -620,7 +632,7 @@ export class TencentRestClient {
   constructor(market: TencentMarket, options: TencentRestOptions = {}) {
     this.#market = market
     this.#quoteBaseUrl = options.quoteBaseUrl ?? DEFAULT_QUOTE_BASE_URL
-    this.#klineBaseUrl = options.klineBaseUrl ?? DEFAULT_KLINE_BASE_URL
+    this.#klineBaseUrls = options.klineBaseUrl === undefined ? DEFAULT_KLINE_BASE_URLS : [options.klineBaseUrl]
     this.#mklineBaseUrl = options.mklineBaseUrl ?? DEFAULT_MKLINE_BASE_URL
     this.#searchBaseUrl = options.searchBaseUrl ?? DEFAULT_SEARCH_BASE_URL
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
@@ -632,15 +644,15 @@ export class TencentRestClient {
     return this.#market
   }
 
-  async #requestArrayBuffer(url: string): Promise<Uint8Array> {
+  /** 单请求带超时闸门；网络级失败/超时统一抛 TRADING_NETWORK。 */
+  async #fetchWithTimeout(url: string): Promise<Response> {
     const controller = new AbortController()
     const timer = setTimeout(
       () => controller.abort(new DOMException(`request timed out after ${this.#timeoutMs}ms`, 'TimeoutError')),
       this.#timeoutMs,
     )
-    let res: Response
     try {
-      res = await this.#fetchImpl(url, { signal: controller.signal })
+      return await this.#fetchImpl(url, { signal: controller.signal })
     } catch (cause) {
       const timedOut = controller.signal.aborted
       throw new TradingServiceError(
@@ -651,6 +663,10 @@ export class TencentRestClient {
     } finally {
       clearTimeout(timer)
     }
+  }
+
+  async #requestArrayBuffer(url: string): Promise<Uint8Array> {
+    const res = await this.#fetchWithTimeout(url)
     if (!res.ok) {
       throw new TradingServiceError(
         res.status === 429 ? 'TRADING_RATE_LIMITED' : 'TRADING_EXCHANGE_ERROR',
@@ -658,6 +674,58 @@ export class TencentRestClient {
       )
     }
     return new Uint8Array(await res.arrayBuffer())
+  }
+
+  /**
+   * 单域名取一份 K 线 JSON，把「能不能换下一个域名」的判断就地做掉：
+   * 网络级失败（含超时）、HTTP 5xx、非 JSON（WAF 挑战页/HTML 错误页）可换；429/4xx 与
+   * 其余业务语义（code!=0、无行、坏行）不重试、由调用方原样 fail-closed。
+   */
+  async #requestKlinePayload(
+    url: string,
+    sym: string,
+  ): Promise<
+    | { readonly ok: true; readonly payload: TencentKlinePayload }
+    | { readonly ok: false; readonly retryable: boolean; readonly error: TradingServiceError }
+  > {
+    let res: Response
+    try {
+      res = await this.#fetchWithTimeout(url)
+    } catch (cause) {
+      const error = cause instanceof TradingServiceError
+        ? cause
+        : new TradingServiceError('TRADING_NETWORK', `Tencent ${url}: network error`, cause)
+      return { ok: false, retryable: true, error }
+    }
+    if (!res.ok) {
+      return {
+        ok: false,
+        retryable: res.status >= 500,
+        error: new TradingServiceError(
+          res.status === 429 ? 'TRADING_RATE_LIMITED' : 'TRADING_EXCHANGE_ERROR',
+          `Tencent ${url}: HTTP ${res.status} ${res.statusText}`,
+        ),
+      }
+    }
+    let bytes: Uint8Array
+    try {
+      bytes = new Uint8Array(await res.arrayBuffer())
+    } catch (cause) {
+      return {
+        ok: false,
+        retryable: true,
+        error: new TradingServiceError('TRADING_NETWORK', `Tencent ${url}: network error`, cause),
+      }
+    }
+    try {
+      return { ok: true, payload: JSON.parse(new TextDecoder('utf-8').decode(bytes)) as TencentKlinePayload }
+    } catch (cause) {
+      return {
+        ok: false,
+        retryable: true,
+        error: new TradingServiceError('TRADING_EXCHANGE_ERROR', `Tencent klines for ${sym}: non-JSON payload`, cause),
+      }
+    }
   }
 
   /**
@@ -865,16 +933,32 @@ export class TencentRestClient {
     const count = typeof limit === 'number' && Number.isInteger(limit) && limit > 0 ? Math.min(limit, TENCENT_KLINE_MAX_BARS) : 100
     const wire = this.#klineWireCode(sym)
     const isMinute = mapping.type === 'mkline'
-    const url = isMinute
-      ? `${this.#mklineBaseUrl}/appstock/app/kline/mkline?param=${wire},${mapping.tf},,${count}`
-      : `${this.#klineBaseUrl}/${this.#market === 'hk' ? 'appstock/app/hkfqkline/get' : 'appstock/app/fqkline/get'}?param=${wire},${mapping.tf},,,${count},qfq`
+    const klinePath = this.#market === 'hk' ? 'appstock/app/hkfqkline/get' : 'appstock/app/fqkline/get'
+    const urlFor = (base: string) => isMinute
+      ? `${base}/appstock/app/kline/mkline?param=${wire},${mapping.tf},,${count}`
+      : `${base}/${klinePath}?param=${wire},${mapping.tf},,,${count},qfq`
+    const bases = isMinute ? [this.#mklineBaseUrl] : this.#klineBaseUrls
 
-    const bytes = await this.#requestArrayBuffer(url)
-    let payload: { code?: number; msg?: string; data?: Record<string, Record<string, unknown>> }
-    try {
-      payload = JSON.parse(new TextDecoder('utf-8').decode(bytes))
-    } catch (cause) {
-      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Tencent klines for ${sym}: non-JSON payload`, cause)
+    let payload: TencentKlinePayload | undefined
+    let lastError: TradingServiceError | undefined
+    for (const base of bases) {
+      const attempt = await this.#requestKlinePayload(urlFor(base), sym)
+      if (attempt.ok) {
+        payload = attempt.payload
+        break
+      }
+      lastError = attempt.error
+      if (!attempt.retryable) throw attempt.error
+    }
+    if (payload === undefined) {
+      const error = lastError ?? new TradingServiceError('TRADING_NETWORK', `Tencent klines for ${sym}: no kline host configured`)
+      // 只注入了单域名时错误原样上抛（消息与单域名实现一致）；走回退链时补一句链上事实，便于归因。
+      if (bases.length === 1) throw error
+      throw new TradingServiceError(
+        error.code,
+        `Tencent klines for ${sym}: all kline hosts failed (${bases.join(' -> ')}); last: ${error.message}`,
+        error,
+      )
     }
     if (payload.code !== 0) {
       throw new TradingServiceError(
