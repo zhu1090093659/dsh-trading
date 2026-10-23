@@ -15,9 +15,11 @@
  * - Issue #65：提供 /holdings 七个端点 + /fx 端点（统一资产台账，契约 §3/§4）。
  * - 2026-10-13：提供 /active-buy 端点（cn 主动买盘日频文件序列 + 可选当日 live，只读）。
  * - 2026-10-13：提供 /southbound-holdings 端点（港股通持股副图；按能力跨 provider 解析）。
- * - 2026-10-15：/klines 按连接器声明的 K 线能力跨源解析取数源（active 结构性缺该周期/深度
- *   时才换源，只有 TRADING_UNSUPPORTED_INTERVAL 触发兜底），wire 标注实际供数 provider；
- *   /markets 上报同市场能力并集；/tickers 支持显式 provider（未注册即 400）。
+ * - 2026-10-15：/klines 按连接器声明的 K 线能力跨源解析取数源（active 声明覆盖就用 active），
+ *   wire 标注实际供数 provider；/markets 上报同市场能力并集；/tickers 支持显式 provider
+ *   （未注册即 400）。
+ * - 2026-10-23：/klines 的换源放宽为「结构性缺能力 或 运行时故障」——前者沿候选序走到底，
+ *   后者全程最多兜底 1 次；限流/坏符号/交易所业务错误仍原样抛。整段同源、provider 如实标注。
  */
 import { instrumentFormOf } from '@dshtrading/api'
 import type { ActiveBuySnapshot, AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, InstrumentAssetClass, InstrumentForm, InstrumentRef, Interval, Kline, KlineCapability, MacroCalendarEntry, MacroRateEntry, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, OrderRequest, Position, PredictionFeed, PredictionMeeting, SouthboundHoldingHistory, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
@@ -809,6 +811,27 @@ export function errorPayload(error: unknown): { code: string; message: string } 
   return { code: 'TRADING_UNKNOWN', message: String(error) }
 }
 
+/**
+ * K 线取数里「运行时故障类」的错误码集合（2026-10-23 口径）：这些码说的是「当前源此刻答不出」，
+ * 不是「这个源结构性没有这份数据」。
+ *   - `TRADING_NETWORK`：网络级失败（单枪超时、按主机熔断打开、连接已建立之后的 HTTP 空回）；
+ *   - `TRADING_UPSTREAM_ERROR`：HTTP 非 2xx。
+ * 不在集合内的一律原样抛：`TRADING_RATE_LIMITED`（429 是上游明确的「别打」信号，换源等于把
+ * 压力摊给别家）、`TRADING_EXCHANGE_ERROR`（业务错误/坏符号语义）、`TRADING_SYMBOL_NOT_FOUND`、
+ * `TRADING_UNSUPPORTED_SYMBOL`——换个源答出来的数字不是同一个事实。
+ */
+const KLINE_RUNTIME_FAILURE_CODES: ReadonlySet<string> = new Set(['TRADING_NETWORK', 'TRADING_UPSTREAM_ERROR'])
+
+/**
+ * 运行时故障换源的硬上界：一次取数最多兜底 1 次（即最多打 2 个源）。
+ *
+ * 有界是这条兜底的准入条件。东财 2026-10-23 二次实测：网络级失败是「连接已建立之后的 HTTP
+ * 空回」，最长连败 6 枪跨 22.7 秒；connector-eastmoney 自身已有 3 枪 / 固定 200ms 冷却 /
+ * 3s 整通硬截止 / 按主机 30s 熔断。桥若按候选数串联，上游压力会被放大成「N 个源 × 各自的枪数」，
+ * 延迟与语义都不可控。结构性缺能力（`TRADING_UNSUPPORTED_INTERVAL`）不吃这个上界。
+ */
+const KLINE_RUNTIME_FALLBACK_LIMIT = 1
+
 export class TradingBridge {
   private readonly symbolsCache = new TtlCache<SymbolInfoWire[]>(SYMBOLS_CACHE_TTL_MS, SYMBOLS_CACHE_MAX)
   private readonly fundamentalsCache = new TtlCache<StockFundamentals>(FUNDAMENTALS_CACHE_TTL_MS, FUNDAMENTALS_CACHE_MAX)
@@ -953,14 +976,20 @@ export class TradingBridge {
   }
 
   /**
-   * K 线：按能力跨源解析取数源（2026-10-15 冻结契约，规则见 #resolveKlinesSources）。
+   * K 线：按能力跨源解析取数源（2026-10-15 契约 + 2026-10-23 窄修不变量 #9，
+   * 规则见 #resolveKlinesSources）。
    *
    * 参数闸门不变（interval 照旧透传、limit 限 1..MAX_KLINE_LIMIT、不截断返回）；
    * 变化只在「谁来供数」与 wire 上的 provider 标注：
-   *   - 选中源抛 TRADING_UNSUPPORTED_INTERVAL（结构性不支持该周期）→ 沿候选序试下一个
-   *     未试过的候选，不论它是否声明（声明只是预判，错误码才是事实）；
-   *   - 其它任何错误码（网络/限流/坏符号/交易所错误）**一律原样抛、绝不换源**：换源必须
-   *     只由结构性缺能力触发，不能把「这个源现在答不出」掩盖成「另一个源的数据」；
+   *   - 结构性缺能力：选中源抛 TRADING_UNSUPPORTED_INTERVAL（本源没有这份数据）→ 沿候选序
+   *     试下一个未试过的候选，不论它是否声明（声明只是预判，错误码才是事实）；这条路一直走到
+   *     候选序尽头，不受下面那条上界约束；
+   *   - 运行时故障：TRADING_NETWORK / TRADING_UPSTREAM_ERROR → 也可兜底，但**全程最多 1 次**
+   *     （一次取数最多打 2 个源，见 KLINE_RUNTIME_FALLBACK_LIMIT），不做长链串联；
+   *   - 其余错误码（限流/坏符号/交易所业务错误）**一律原样抛、绝不换源**：它们说的是「这次
+   *     请求本身不成立」，换个源答出来的数字不是同一个事实；
+   *   - 整段同源：返回的序列整体来自最终成功的那一个源，不拼接前一个源的部分结果；
+   *   - provider 如实标注最终供数的 slug（问不到时省略该字段），wire 不新增字段；
    *   - 候选耗尽 → 原样抛最后一个错误（绝不返回空序列冒充「无数据」）。
    */
   async klines(market: string, symbol: string, interval: string, rawLimit: string | null): Promise<KlinesWire> {
@@ -974,13 +1003,19 @@ export class TradingBridge {
     const candidates = this.#resolveKlinesSources(id, interval as Interval, limit)
     if (candidates.length === 0) throw new BridgeProtocolError(400, `market ${market} is not installed`)
     let lastError: unknown = undefined
+    // 结构性缺能力与运行时故障各算各的：前者不设上界（既有语义），后者硬上界 1 次。
+    // 两个计数/判断分开写，不用 candidates.slice(0, 2) 那种一刀切——那会把结构路径也削短。
+    let runtimeFallbacks = 0
     for (const candidate of candidates) {
       try {
         const klines = await candidate.service.getKlines(trimmed, interval as Interval, limit)
         return candidate.provider === undefined ? { klines } : { klines, provider: candidate.provider }
       } catch (error) {
-        if (errorPayload(error).code !== 'TRADING_UNSUPPORTED_INTERVAL') throw error
         lastError = error
+        const code = errorPayload(error).code
+        if (code === 'TRADING_UNSUPPORTED_INTERVAL') continue
+        if (!KLINE_RUNTIME_FAILURE_CODES.has(code) || runtimeFallbacks >= KLINE_RUNTIME_FALLBACK_LIMIT) throw error
+        runtimeFallbacks += 1
       }
     }
     throw lastError
@@ -1008,14 +1043,16 @@ export class TradingBridge {
   }
 
   /**
-   * K 线取数解析：返回「先本次选择、后其余候选」的候选序——运行时兜底只需顺序走完它，
+   * K 线取数解析：返回「先本次选择、后其余候选」的候选序——兜底只需顺序走完它，
    * 就等价于「沿候选序继续试下一个未试过的候选」。
    *
    * 选择规则（确定性，不看质量/速度）：
    *   (a) active 的声明覆盖请求（有该 interval，且 limit 缺省或 maxBars >= limit）→ active；
    *   (b) 否则取候选序里第一个声明覆盖的候选；
    *   (c) 无任何声明覆盖 → active（未声明路径，结构性不足交给错误码兜底）。
-   * 不变量：active 有能力就永远用 active——跨源只在 active 结构性缺能力时发生。
+   * 不变量：active 有能力就**先**用 active——跨源的触发只有两种，结构性缺能力
+   * （TRADING_UNSUPPORTED_INTERVAL，走到候选序尽头）与运行时故障（TRADING_NETWORK /
+   * TRADING_UPSTREAM_ERROR，全程最多兜底 1 次），见 klines。
    */
   #resolveKlinesSources(market: MarketId, interval: Interval, limit: number | undefined): KlineSourceCandidate[] {
     const candidates = this.#klineCandidates(market)

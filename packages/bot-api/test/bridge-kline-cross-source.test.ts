@@ -1,14 +1,16 @@
 /**
- * 桥 K 线跨源解析用例（2026-10-15 契约冻结）：真 TradingBridge + 真 createBridgeHost
- * （无 mock 库），市场服务按本包既有手法用契约化假件经注册表注入——假件只提供真服务
- * 形状（含可选 klineCapabilities），并把「谁被调用、调用几次、返回了哪根 bar」留成证据。
+ * 桥 K 线跨源解析用例（2026-10-15 契约，2026-10-23 窄修不变量 #9）：真 TradingBridge +
+ * 真 createBridgeHost（无 mock 库），市场服务按本包既有手法用契约化假件经注册表注入——
+ * 假件只提供真服务形状（含可选 klineCapabilities），并把「谁被调用、调用几次、返回了哪根
+ * bar」留成证据。
  *
  * 判据（与 #resolveKlinesSources / klines 注释同源）：
  * - 候选序 = active 在最前，其后 registry.list(market) 其余项按 provider 名升序；
- * - active 声明覆盖请求 → 永远用 active（零跨源）；否则取第一个声明覆盖的候选；
- * - 无任何声明覆盖 → 用 active（未声明路径）；
- * - 只有 TRADING_UNSUPPORTED_INTERVAL 才沿候选序继续试；其余错误码原样抛、绝不换源；
- * - 候选耗尽 → 原样抛最后一个错误（绝不返回空序列冒充「无数据」）。
+ * - active 声明覆盖请求 → 先用 active；否则取第一个声明覆盖的候选；无任何声明覆盖 → 用 active；
+ * - 结构性缺能力：TRADING_UNSUPPORTED_INTERVAL 沿候选序一直试；
+ * - 运行时故障：TRADING_NETWORK / TRADING_UPSTREAM_ERROR 也可兜底，但一次取数最多 1 次；
+ * - 限流/坏符号/交易所业务错误原样抛、绝不换源；候选耗尽 → 原样抛最后一个错误；
+ * - 整段同源（不拼接多源序列），provider 如实标注最终供数的那一个源。
  */
 import { describe, expect, it } from 'vitest'
 import type { Interval, Kline, KlineCapability, MarketDataService } from '@dshtrading/api'
@@ -50,14 +52,15 @@ function tradingError(code: string, message: string): Error {
 }
 
 /**
- * 一个假源：声明给定的 (周期, 深度)，取数时把 mark 编进返回的 bar（消费方按 close 判谁供数）。
- * klineError 给出时改为抛出该错误（用于结构性/非结构性错误路径）。
+ * 一个假源：声明给定的 (周期, 深度)，取数时把 mark 编进返回的每根 bar（消费方按 close 判谁供数）。
+ * klineError 给出时改为抛出该错误（用于结构性/运行时/不可兜底三类错误路径）；
+ * barCount 给出时返回该根数（整段同源用例需要一眼看出「序列是否只有一家」）。
  */
 function source(
   provider: string,
   mark: number,
   capabilities: readonly KlineCapability[],
-  options: { klineError?: Error } = {},
+  options: { klineError?: Error; barCount?: number } = {},
 ): FakeSource {
   const klineCalls: KlineCall[] = []
   const tickerCalls: string[] = []
@@ -70,8 +73,11 @@ function source(
     getKlines: async (symbol, interval, limit) => {
       klineCalls.push({ symbol, interval, limit })
       if (options.klineError !== undefined) throw options.klineError
-      const bar: Kline = { openTime: 1, open: mark, high: mark, low: mark, close: mark, volume: mark, closeTime: 2 }
-      return [bar]
+      const bars: Kline[] = []
+      for (let index = 0; index < (options.barCount ?? 1); index += 1) {
+        bars.push({ openTime: index + 1, open: mark, high: mark, low: mark, close: mark, volume: mark, closeTime: index + 2 })
+      }
+      return bars
     },
   })
   return { provider, service, klineCalls, tickerCalls }
@@ -183,10 +189,10 @@ describe('桥 K 线跨源解析（能力声明驱动，2026-10-15）', () => {
     expect(eastmoney.klineCalls).toHaveLength(1)
   })
 
-  it('运营在非结构性错误时不换源（网络错误原样抛，同市场其它源零调用）', async () => {
-    // Given active 声明覆盖 1d/800 但抛网络错误，list 里另有有能力者
+  it('运营在限流时不换源（TRADING_RATE_LIMITED 原样抛，同市场其它源零调用）', async () => {
+    // Given active 声明覆盖 1d/800 但上游 429，list 里另有有能力者
     const active = source('tencent', 11, depth(800, ['1d']), {
-      klineError: tradingError('TRADING_NETWORK', 'tencent quote: connect ETIMEDOUT'),
+      klineError: tradingError('TRADING_RATE_LIMITED', 'tencent kline: 429 too many requests'),
     })
     const eastmoney = source('eastmoney', 22, depth(2500, ['1d']))
     const registry = registryOf({ cn: { active, listed: [active, eastmoney] } })
@@ -194,11 +200,143 @@ describe('桥 K 线跨源解析（能力声明驱动，2026-10-15）', () => {
     // When 取 cn 1d/100
     const call = bridgeWith(registry).klines('cn', '600519', '1d', '100')
 
-    // Then 原样抛出该错误（错误码与消息都不改写），eastmoney 零调用——故障不得被换成别家的数据
-    await expect(call).rejects.toThrowError(/connect ETIMEDOUT/)
-    await expect(call).rejects.toMatchObject({ code: 'TRADING_NETWORK' })
+    // Then 原样抛出（错误码与消息都不改写），eastmoney 零调用——429 是上游明确的「别打」信号，
+    // 换源等于把压力摊给别家
+    await expect(call).rejects.toThrowError(/429 too many requests/)
+    await expect(call).rejects.toMatchObject({ code: 'TRADING_RATE_LIMITED' })
     expect(active.klineCalls).toHaveLength(1)
     expect(eastmoney.klineCalls).toEqual([])
+  })
+
+  it('运营在交易所业务错误时不换源（TRADING_EXCHANGE_ERROR 原样抛，其它源零调用）', async () => {
+    // Given active 抛交易所业务错误（业务码/坏符号语义都走这条），list 里另有有能力者
+    const active = source('tencent', 11, depth(800, ['1d']), {
+      klineError: tradingError('TRADING_EXCHANGE_ERROR', 'tencent kline: msg param error'),
+    })
+    const eastmoney = source('eastmoney', 22, depth(2500, ['1d']))
+    const registry = registryOf({ cn: { active, listed: [active, eastmoney] } })
+
+    // When 取 cn 1d/100
+    const call = bridgeWith(registry).klines('cn', '600519', '1d', '100')
+
+    // Then 原样抛出该业务错误，eastmoney 零调用——业务错误说的是「这次请求本身不成立」，
+    // 换个源答出来的数字不是同一个事实
+    await expect(call).rejects.toThrowError(/msg param error/)
+    await expect(call).rejects.toMatchObject({ code: 'TRADING_EXCHANGE_ERROR' })
+    expect(active.klineCalls).toHaveLength(1)
+    expect(eastmoney.klineCalls).toEqual([])
+  })
+
+  it('运营在坏符号时不换源（TRADING_SYMBOL_NOT_FOUND 原样抛，其它源零调用）', async () => {
+    // Given active 抛坏符号，list 里另有有能力者
+    const active = source('tencent', 11, depth(800, ['1d']), {
+      klineError: tradingError('TRADING_SYMBOL_NOT_FOUND', 'tencent kline: unknown symbol 600519'),
+    })
+    const eastmoney = source('eastmoney', 22, depth(2500, ['1d']))
+    const registry = registryOf({ cn: { active, listed: [active, eastmoney] } })
+
+    // When 取 cn 1d/100
+    const call = bridgeWith(registry).klines('cn', '600519', '1d', '100')
+
+    // Then 原样抛出坏符号错误，eastmoney 零调用——坏符号不是「这个源答不出」
+    await expect(call).rejects.toThrowError(/unknown symbol 600519/)
+    await expect(call).rejects.toMatchObject({ code: 'TRADING_SYMBOL_NOT_FOUND' })
+    expect(active.klineCalls).toHaveLength(1)
+    expect(eastmoney.klineCalls).toEqual([])
+  })
+
+  it('运营在网络故障时兜底到同市场下一个已注册源（TRADING_NETWORK → eastmoney 供数并如实标注）', async () => {
+    // Given active 声明覆盖 1d/800 却抛网络错误（单枪超时/连接已建立后的 HTTP 空回），
+    // eastmoney 同市场有能力
+    const active = source('tencent', 11, depth(800, ['1d']), {
+      klineError: tradingError('TRADING_NETWORK', 'tencent kline: socket hang up'),
+    })
+    const eastmoney = source('eastmoney', 22, depth(2500, ['1d']))
+    const registry = registryOf({ cn: { active, listed: [active, eastmoney] } })
+
+    // When 取 cn 1d/100
+    const wire = await bridgeWith(registry).klines('cn', '600519', '1d', '100')
+
+    // Then 兜底源供数：数据与 provider 都指向 eastmoney（各打一次，故障源没有被重试）
+    expect(wire.provider).toBe('eastmoney')
+    expect(wire.klines[0]?.close).toBe(22)
+    expect(active.klineCalls).toHaveLength(1)
+    expect(eastmoney.klineCalls).toEqual([{ symbol: '600519', interval: '1d', limit: 100 }])
+  })
+
+  it('运营在上游 HTTP 非 2xx 时同样兜底一次（TRADING_UPSTREAM_ERROR → eastmoney 供数）', async () => {
+    // Given active 声明覆盖 1d/800 却抛 TRADING_UPSTREAM_ERROR（HTTP 502），eastmoney 同市场有能力
+    const active = source('tencent', 11, depth(800, ['1d']), {
+      klineError: tradingError('TRADING_UPSTREAM_ERROR', 'tencent kline: HTTP 502'),
+    })
+    const eastmoney = source('eastmoney', 22, depth(2500, ['1d']))
+    const registry = registryOf({ cn: { active, listed: [active, eastmoney] } })
+
+    // When 取 cn 1d/100
+    const wire = await bridgeWith(registry).klines('cn', '600519', '1d', '100')
+
+    // Then 由 eastmoney 供数并标注它，原错误不外泄（兜底成功时不抛）
+    expect(wire.provider).toBe('eastmoney')
+    expect(wire.klines[0]?.close).toBe(22)
+    expect(active.klineCalls).toHaveLength(1)
+    expect(eastmoney.klineCalls).toHaveLength(1)
+  })
+
+  it('运营在运行时故障上最多兜底一次（三候选各抛网络错误时只打 2 个源）', async () => {
+    // Given 候选序 tencent → aaa-broker → zebra-broker，三个候选全都抛网络错误
+    const active = source('tencent', 11, [], { klineError: tradingError('TRADING_NETWORK', 'tencent: ETIMEDOUT') })
+    const aaa = source('aaa-broker', 33, [], { klineError: tradingError('TRADING_NETWORK', 'aaa-broker: ETIMEDOUT') })
+    const zebra = source('zebra-broker', 44, [], { klineError: tradingError('TRADING_NETWORK', 'zebra-broker: ETIMEDOUT') })
+    const registry = registryOf({ cn: { active, listed: [zebra, aaa, active] } })
+
+    // When 取 cn 1d/100
+    const call = bridgeWith(registry).klines('cn', '600519', '1d', '100')
+
+    // Then 只打了 2 个源（运行时故障的换源硬上界 = 1 次）：第 3 个候选零调用，
+    // 抛出的是第 2 个候选的错误——不做「N 个源 × 各自枪数」的长链串联
+    await expect(call).rejects.toThrowError(/aaa-broker: ETIMEDOUT/)
+    await expect(call).rejects.toMatchObject({ code: 'TRADING_NETWORK' })
+    expect(active.klineCalls).toHaveLength(1)
+    expect(aaa.klineCalls).toHaveLength(1)
+    expect(zebra.klineCalls).toEqual([])
+  })
+
+  it('运营在结构性缺能力时穿过多个候选（运行时故障的 1 次上界不削短结构路径）', async () => {
+    // Given 候选序 tencent → aaa-broker → zebra-broker，前两个结构性抛 TRADING_UNSUPPORTED_INTERVAL，
+    // 第三个有能力（三者都未声明能力，走未声明路径）
+    const active = source('tencent', 11, [], { klineError: tradingError('TRADING_UNSUPPORTED_INTERVAL', 'tencent: unsupported 1m') })
+    const aaa = source('aaa-broker', 33, [], { klineError: tradingError('TRADING_UNSUPPORTED_INTERVAL', 'aaa-broker: unsupported 1m') })
+    const zebra = source('zebra-broker', 44, [])
+    const registry = registryOf({ cn: { active, listed: [zebra, aaa, active] } })
+
+    // When 取 cn 1m/2500
+    const wire = await bridgeWith(registry).klines('cn', '600519', '1m', '2500')
+
+    // Then 走到第 3 个候选才停：三个源各被打一次，最终由 zebra-broker 供数并标注
+    expect(wire.provider).toBe('zebra-broker')
+    expect(wire.klines[0]?.close).toBe(44)
+    expect(active.klineCalls).toHaveLength(1)
+    expect(aaa.klineCalls).toHaveLength(1)
+    expect(zebra.klineCalls).toHaveLength(1)
+  })
+
+  it('运营在兜底后拿到整段单源序列（每根 bar 都来自最终源，provider 与之一致）', async () => {
+    // Given active 抛网络错误，兜底源 eastmoney 一次给 3 根 bar（mark=22）
+    const active = source('tencent', 11, depth(800, ['1d']), {
+      klineError: tradingError('TRADING_NETWORK', 'tencent kline: empty reply'),
+    })
+    const eastmoney = source('eastmoney', 22, depth(2500, ['1d']), { barCount: 3 })
+    const registry = registryOf({ cn: { active, listed: [active, eastmoney] } })
+
+    // When 取 cn 1d/100
+    const wire = await bridgeWith(registry).klines('cn', '600519', '1d', '100')
+
+    // Then 整段来自 eastmoney：3 根 bar 的 close 全是 22（没有一根来自故障源的 11），provider 与之一致
+    expect(wire.provider).toBe('eastmoney')
+    expect(wire.klines.map(bar => bar.close)).toEqual([22, 22, 22])
+    expect(wire.klines.some(bar => bar.close === 11)).toBe(false)
+    expect(active.klineCalls).toHaveLength(1)
+    expect(eastmoney.klineCalls).toHaveLength(1)
   })
 
   it('运营在候选耗尽时原样抛最后一个错误（绝不返回空序列冒充无数据）', async () => {

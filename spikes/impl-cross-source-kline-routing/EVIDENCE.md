@@ -42,3 +42,6 @@ node spikes/impl-cross-source-kline-routing/run-probe.mjs   # 原始输出 probe
   记录桥请求；桌面壳实机 UI 验证不在本次范围内。
 - 上游失败路径（网络/限流）不换源由 `bot-api/test/bridge-kline-cross-source.test.ts`
   的契约化假件断言覆盖（真实网络无法确定性构造）。
+  **2026-10-23 口径变更**：网络级失败与上游 HTTP 非 2xx 已改为**有界兜底**（一次取数最多
+  换 1 个源），限流/坏符号/交易所业务错误仍原样抛；该文件已按新口径断言，现行为以
+  [不变量 #9](../../docs/current-state.md) 为准，本行保留为当时的观测记录。
