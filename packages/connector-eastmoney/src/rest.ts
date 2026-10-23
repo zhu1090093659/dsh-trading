@@ -12,6 +12,7 @@ import type {
   Ticker,
   TradingErrorCode,
 } from '@dshtrading/api'
+import { HostCircuitBreaker, hostOf, systemClock, type EastmoneyClock } from './resilience.js'
 
 export class TradingServiceError extends Error {
   readonly code: TradingErrorCode
@@ -255,6 +256,17 @@ export function toEastmoneySecid(symbol: string, market: EastmoneyMarket = 'cn')
   }
 }
 
+/**
+ * 请求通道的硬上界（2026-10-23 实测口径，见 .agents/notes/implemented/bug-fix/
+ * 2026-10-23-tencent-kline-host-fallback-and-eastmoney-network-retry.md）：单枪超时、枪数上界、
+ * 固定冷却、一次取数整通硬截止、熔断窗口。每个都是硬数字，不随负载或失败次数变化。
+ */
+const DEFAULT_TIMEOUT_MS = 2_000
+const MAX_ATTEMPTS = 3
+const RETRY_COOLDOWN_MS = 200
+const REQUEST_BUDGET_MS = 3_000
+const CIRCUIT_OPEN_MS = 30_000
+
 export interface EastmoneyRestOptions {
   baseUrl?: string
   historyBaseUrl?: string
@@ -264,6 +276,10 @@ export interface EastmoneyRestOptions {
   fetchImpl?: typeof fetch
   /** 本实例服务的市场（形态解析与价格倍率都按它分流；缺省 cn）。 */
   market?: EastmoneyMarket
+  /** 单枪超时（ms），缺省 2000：挂住的请求到点 abort 成 TRADING_NETWORK，不存在无上界的等待。 */
+  timeoutMs?: number
+  /** 时钟注入（固定冷却的 sleep 与整通硬截止计时都读它）；缺省真实 timer。 */
+  clock?: EastmoneyClock
 }
 
 /**
@@ -356,6 +372,12 @@ export class EastmoneyRestClient {
   /** 本实例的市场（cn/hk 单包双实例；形态解析必须与注册市场一致）。 */
   readonly market: EastmoneyMarket
   private readonly fetchImpl: typeof fetch
+  /** 单枪超时（ms）。 */
+  private readonly timeoutMs: number
+  /** 请求通道时钟（冷却与整通截止）。 */
+  private readonly clock: EastmoneyClock
+  /** 按主机的短期熔断（一次整通网络级失败后该主机静默 CIRCUIT_OPEN_MS）。 */
+  private readonly circuit = new HostCircuitBreaker()
   /** 降级派生快照的 60s TTL 缓存（键=secid；只在降级分支读写，见 DERIVED_QUOTE_TTL_MS）。 */
   private readonly derivedQuoteCache = new Map<string, { ticker: Ticker; expiresAt: number }>()
 
@@ -366,76 +388,160 @@ export class EastmoneyRestClient {
     this.dataCenterBaseUrl = options.dataCenterBaseUrl ?? 'https://datacenter-web.eastmoney.com'
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
     this.market = options.market ?? 'cn'
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    this.clock = options.clock ?? systemClock
   }
 
   /**
-   * 单次 GET + JSON。网络级异常（undici `fetch failed` / 服务端收到即断的空回）抛
-   * TRADING_NETWORK 并标为可重试；HTTP 非 2xx 抛 TRADING_UPSTREAM_ERROR、解析失败抛
-   * TRADING_NETWORK（后者不可重试——空回与 WAF/HTML 错误页不是抖动）。
+   * 单次 GET + JSON，带**单枪超时**：超时盖的是**整枪**——建连、响应头与**响应体解析**合成一个
+   * promise 与超时竞速（照 connector-tencent 的 #fetchWithTimeout 的 timeoutMs + AbortController
+   * 范式，并补上那边只盖到 fetch 返回、没盖住 body 读取的缺口）。到点以 TRADING_NETWORK +
+   * `request timed out after <n>ms` 终结这一枪且保持可重试，故「200 头已到、body 永不结束」这类
+   * 挂住同样受 3 枪上界与整通硬截止约束，不存在无上界的等待。
+   *
+   * 网络级异常（undici `fetch failed` / 服务端收到即断的空回 / 超时）抛 TRADING_NETWORK 并标为
+   * 可重试；HTTP 非 2xx 抛 TRADING_UPSTREAM_ERROR、解析失败抛 TRADING_NETWORK（后两者不可重试
+   * ——4xx/5xx 与 WAF/HTML 错误页不是主机抖动）。
    */
   private async requestOnce<T>(
     url: string,
     referer: string,
+    timeoutMs: number,
   ): Promise<
     | { readonly ok: true; readonly body: T }
     | { readonly ok: false; readonly retryable: boolean; readonly error: TradingServiceError }
   > {
-    let res: Response
-    try {
-      res = await this.fetchImpl(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-          'Referer': referer,
-        },
-      })
-    } catch (err) {
-      return {
-        ok: false,
-        retryable: true,
-        error: new TradingServiceError(
-          'TRADING_NETWORK',
-          `Eastmoney network error: ${err instanceof Error ? err.message : String(err)}`,
-          err,
-        ),
+    type Attempt =
+      | { readonly ok: true; readonly body: T }
+      | { readonly ok: false; readonly retryable: boolean; readonly error: TradingServiceError }
+
+    /** 超时口径的唯一出口：可重试，消息带毫秒数，便于把事故归因到本枪。 */
+    const timedOut = (): Attempt => ({
+      ok: false,
+      retryable: true,
+      error: new TradingServiceError(
+        'TRADING_NETWORK',
+        `Eastmoney network error: request timed out after ${timeoutMs}ms`,
+      ),
+    })
+
+    const controller = new AbortController()
+
+    // 整枪 = 建连 + 响应头 + 响应体解析。abort 照发（真实 fetch 靠它释放连接），但超时的判定
+    // 不依赖它——注入的 fetchImpl、以及已经返回的 Response，都不受我们自己造的 signal 约束。
+    const attempt = async (): Promise<Attempt> => {
+      let res: Response
+      try {
+        res = await this.fetchImpl(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+            'Referer': referer,
+          },
+          signal: controller.signal,
+        })
+      } catch (err) {
+        if (controller.signal.aborted) return timedOut()
+        return {
+          ok: false,
+          retryable: true,
+          error: new TradingServiceError(
+            'TRADING_NETWORK',
+            `Eastmoney network error: ${err instanceof Error ? err.message : String(err)}`,
+            err,
+          ),
+        }
+      }
+      if (!res.ok) {
+        return {
+          ok: false,
+          retryable: false,
+          error: new TradingServiceError(
+            'TRADING_UPSTREAM_ERROR',
+            `Eastmoney HTTP request failed: status ${res.status} ${res.statusText}`,
+          ),
+        }
+      }
+      try {
+        return { ok: true, body: await res.json() as T }
+      } catch (err) {
+        // 超时 abort 会让 body 读取直接报错：按超时口径（可重试）终结，不降级成「坏 JSON」。
+        if (controller.signal.aborted) return timedOut()
+        return {
+          ok: false,
+          retryable: false,
+          error: new TradingServiceError(
+            'TRADING_NETWORK',
+            `Eastmoney network error: ${err instanceof Error ? err.message : String(err)}`,
+            err,
+          ),
+        }
       }
     }
-    if (!res.ok) {
-      return {
-        ok: false,
-        retryable: false,
-        error: new TradingServiceError(
-          'TRADING_UPSTREAM_ERROR',
-          `Eastmoney HTTP request failed: status ${res.status} ${res.statusText}`,
-        ),
-      }
-    }
+
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<Attempt>((resolve) => {
+      timer = setTimeout(() => {
+        controller.abort(new DOMException(`request timed out after ${timeoutMs}ms`, 'TimeoutError'))
+        resolve(timedOut())
+      }, timeoutMs)
+    })
+
     try {
-      return { ok: true, body: await res.json() as T }
-    } catch (err) {
-      return {
-        ok: false,
-        retryable: false,
-        error: new TradingServiceError(
-          'TRADING_NETWORK',
-          `Eastmoney network error: ${err instanceof Error ? err.message : String(err)}`,
-          err,
-        ),
-      }
+      // 竞速而非「只给 fetch 挂定时器」：先拿到结果的一方说了算，超时到点即终结整枪。落败的
+      // attempt 其后续结果被丢弃，但它不会留下悬挂 timer——定时器在 finally 里统一撤销。
+      return await Promise.race([attempt(), timeout])
+    } finally {
+      clearTimeout(timer)
     }
   }
 
   /**
-   * 取 JSON：push2his 属边缘抖动（2026-10-23 实测 kline/get 连打中夹着 curl (52) Empty
-   * reply / undici UND_ERR_SOCKET），首次网络级失败**立即重试一次**，仍失败才抛。无 sleep、
-   * 无退避、不重试 HTTP 4xx/5xx 与解析错误——这两类不是抖动。
+   * 取 JSON：**有界重试 + 按主机短期熔断**（2026-10-23 二次实测口径）。
+   *
+   * 实测形态是「连接建立之后的 HTTP 空回」（connect 3ms 级成功、total 0.15-0.31s、curl (52)
+   * Empty reply / http=000 bytes=0），不是 connect 失败也不是超时；最长连败 6 枪跨 22.7 秒，
+   * 恢复一次后又再度失败。故：
+   *   - 只有网络级可重试失败才重试，最多 MAX_ATTEMPTS 枪（硬上界 3）；
+   *   - 重试之间是**固定**冷却 RETRY_COOLDOWN_MS（不是退避、不递增）；
+   *   - 一次取数整通有硬截止 REQUEST_BUDGET_MS（含冷却与全部枪）：剩不下「一次冷却 + 下一枪」
+   *     就直接收尾，枪不会越过截止点，也就不存在续命；
+   *   - 整通失败后把**该主机**记进熔断窗口 CIRCUIT_OPEN_MS，窗口内对该主机的调用零网络请求
+   *     立即抛 TRADING_NETWORK，到期自动恢复，任一成功即清零；
+   *   - HTTP 非 2xx 与 JSON 解析失败不可重试、也**不打开**熔断（一个 404/WAF 页不是主机故障）。
    */
   private async requestJson<T>(url: string, referer: string = 'https://quote.eastmoney.com/'): Promise<T> {
-    const first = await this.requestOnce<T>(url, referer)
-    if (first.ok) return first.body
-    if (!first.retryable) throw first.error
-    const second = await this.requestOnce<T>(url, referer)
-    if (second.ok) return second.body
-    throw second.error
+    const host = hostOf(url)
+    const openForMs = this.circuit.remaining(host, this.clock.now())
+    if (openForMs !== undefined) {
+      throw new TradingServiceError(
+        'TRADING_NETWORK',
+        `Eastmoney ${host}: circuit open, ${openForMs}ms remaining`,
+      )
+    }
+
+    const deadlineAt = this.clock.now() + REQUEST_BUDGET_MS
+    let lastError: TradingServiceError | undefined
+    for (let shot = 1; shot <= MAX_ATTEMPTS; shot += 1) {
+      // 硬截止：剩余预算不为正就不打这一枪（含首枪之外的每一枪）。
+      const remainingMs = deadlineAt - this.clock.now()
+      if (remainingMs <= 0) break
+      // 单枪超时吃掉的预算与整通截止取小值：任一枪都不可能把整通拖过截止点。
+      const result = await this.requestOnce<T>(url, referer, Math.min(this.timeoutMs, remainingMs))
+      if (result.ok) {
+        this.circuit.clear(host)
+        return result.body
+      }
+      // 非 2xx / 解析失败：就地抛，不重试、不打开熔断。
+      if (!result.retryable) throw result.error
+      lastError = result.error
+      if (shot === MAX_ATTEMPTS) break
+      // 固定冷却，且必须整段装进剩余预算；装不下就认定整通失败，不缩短冷却硬挤一枪。
+      if (deadlineAt - this.clock.now() <= RETRY_COOLDOWN_MS) break
+      await this.clock.sleep(RETRY_COOLDOWN_MS)
+    }
+
+    this.circuit.trip(host, this.clock.now(), CIRCUIT_OPEN_MS)
+    throw lastError ?? new TradingServiceError('TRADING_NETWORK', `Eastmoney ${host}: request budget exhausted`)
   }
 
   async getTicker(symbol: string): Promise<Ticker> {

@@ -20,6 +20,7 @@ import type { MarketDataService } from '@dshtrading/api'
 import { apply as applyDataplane } from '../src/dataplane.js'
 import { EastmoneyMarketDataService } from '../src/index.js'
 import { EastmoneyRestClient } from '../src/rest.js'
+import { createFakeClock } from './support/fake-clock.js'
 
 /* ------------------------------------------------------------------ */
 /* 真实网络探测（不经被测代码）                                          */
@@ -288,7 +289,11 @@ describe('港股通持股历史解析契约（真实捕获响应）', () => {
 
   it('用户遇到连接失败时应拿到网络错误而不是空序列', async () => {
     // Given: 传输层直接抛错（DNS/连接失败形态）
-    const client = new EastmoneyRestClient({ market: 'hk', fetchImpl: failingFetch('getaddrinfo ENOTFOUND datacenter-web.eastmoney.com') })
+    const client = new EastmoneyRestClient({
+      market: 'hk',
+      fetchImpl: failingFetch('getaddrinfo ENOTFOUND datacenter-web.eastmoney.com'),
+      clock: createFakeClock(),
+    })
 
     // When: 取数
     const pending = client.getSouthboundHoldings('00700.HK')
