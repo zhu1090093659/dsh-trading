@@ -43,7 +43,7 @@ import { TaskActionError } from './tasks/ledger.ts'
 import { registerTasksTools } from './tasks/tools.ts'
 import { TASKS_ACTION_BYTES_LIMIT, TASKS_API_SUBPATH, parseTasksEnvelope } from '@dshtrading/api'
 import { TradingTasksService } from './tasks/service.ts'
-import type { SessionCommandDispatcher, SessionGateway } from './tasks/runner.ts'
+import { GatewayPeerSeat, type PeerLike, type SessionCommandDispatcher, type SessionGateway } from './tasks/runner.ts'
 
 /** webServer / connection 的最小结构面（避免对本仓未安装的宿主包产生类型依赖）。 */
 interface WebServerLike {
@@ -54,6 +54,8 @@ interface WebServerLike {
 interface ConnectionLike {
   /** 返回拒绝状态码（401/403），undefined = 已认证放行（alpha.2 官方栅栏，同 /api）。 */
   requestRejection(req: IncomingMessage): number | undefined
+  /** 铸造 in-process Peer（Peer 归读取该服务的 ctx 所有）；老宿主与 botFence 没有这个面。 */
+  createPeer?(options: { principal: { kind: 'owner' } }): PeerLike
 }
 
 /** 本插件不硬依赖任何服务（headless 宿主零要求）；web 面依赖在 apply 内声明。 */
@@ -258,6 +260,13 @@ export function apply(ctx: Context): void {
     // 专属；目录锁被另一个活宿主持有时降级为 503——特性不挂、宿主照跑）。宿主
     // 服务（typertGateway/commands/workspaceRegistry）全部惰性解析：激活时序
     // 不保证，调度/执行时才取（与 uiWorkspace 惰性纪律同款）。
+    // 宿主 gateway 的 peer 契约（2026-10-22 实测）：每次 invoke/stream 都要带一个活的
+    // in-process owner Peer（prepareInvocation 首行 assertPeerLive(request.peer)），
+    // 官方铸造入口是 connection.createPeer。座位惰性铸造并缓存一次，Peer 被宿主释放
+    // 后重建，插件 teardown 时释放；老宿主 / bot 宿主没有这个面 → 恒无 peer，请求
+    // 形状与修改前逐字段一致。
+    const taskPeers = new GatewayPeerSeat(() => connection)
+    ctx.effect(() => () => { taskPeers.dispose() }, 'dsh-trading-client-ui-trading: tasks gateway peer')
     let tasksService: TradingTasksService | undefined
     try {
       tasksService = new TradingTasksService({
@@ -266,6 +275,7 @@ export function apply(ctx: Context): void {
         commands: () => resolveHostService('commands') as SessionCommandDispatcher | undefined,
         agents: () => resolveHostService('agents') as import('./tasks/runner.ts').AgentRegistryLike | undefined,
         workspaces: () => resolveHostService('workspaceRegistry') as import('./tasks/service.ts').WorkspaceDirectoryLike | undefined,
+        peer: () => taskPeers.current(),
         onEvent: () => eventsOf()?.emit('tasks'),
       })
     } catch (error) {

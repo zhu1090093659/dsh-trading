@@ -28,15 +28,17 @@ interface Route {
  */
 const pendingDisposals: (() => void)[] = []
 
-function makeCtx(options: { rejection?: number } = {}): { ctx: never; registered: Route[] } {
+function makeCtx(options: { rejection?: number; services?: Record<string, unknown> } = {}): { ctx: never; registered: Route[] } {
   const registered: Route[] = []
   const webServer = { register: (route: Route) => { registered.push(route) } }
-  const connection = { requestRejection: () => options.rejection }
+  // services 覆盖宿主服务面（connection 默认只有认证栅栏；peer 契约用例在这里补
+  // createPeer 与 typertGateway）。
+  const connection = options.services?.connection ?? { requestRejection: () => options.rejection }
   const webCtx = {
     get: (name: string) => {
       if (name === 'webServer') return webServer
       if (name === 'connection') return connection
-      return undefined
+      return options.services?.[name]
     },
     effect: (fn: () => (() => void) | undefined) => { const dispose = fn(); if (typeof dispose === 'function') pendingDisposals.push(dispose) },
   }
@@ -125,6 +127,38 @@ describe('/dshtrading/api/tasks 子面', () => {
     const wire = JSON.parse(good.body) as { tasks: Array<{ id: string; schedule?: { enabled: boolean } }> }
     expect(wire.tasks[0]?.id).toBe('task-1')
     expect(wire.tasks[0]?.schedule?.enabled).toBe(true)
+  })
+
+  it('用户 预设名册调用带上 connection.createPeer 铸的 owner Peer', async () => {
+    // Given 一个 provide typertGateway（记录线形状）与 connection.createPeer 的宿主
+    const requests: Array<{ namespace: string; peer?: unknown }> = []
+    const peer = { signal: { aborted: false }, dispose: async () => undefined }
+    let minted = 0
+    const { ctx, registered: routes } = makeCtx({
+      services: {
+        connection: {
+          requestRejection: () => undefined,
+          createPeer: () => { minted += 1; return peer },
+        },
+        typertGateway: {
+          invoke: async (request: { namespace: string; peer?: unknown }) => {
+            requests.push(request)
+            return request.namespace === 'agentPresets' ? { presets: [{ id: 'master' }] } : {}
+          },
+        },
+      },
+    })
+    apply(ctx)
+    const route = routes[0]
+    // When 连拉两次名册（UI 下拉每次刷新都走这条路）
+    const first = await request(route, { url: TASKS_PATH + '/meta' })
+    const second = await request(route, { url: TASKS_PATH + '/meta' })
+    // Then 名册非空、两次调用都带同一个 Peer，且 Peer 只铸造一次
+    expect(JSON.parse(first.body)).toMatchObject({ agentPresets: [{ id: 'master' }] })
+    expect(JSON.parse(second.body)).toMatchObject({ agentPresets: [{ id: 'master' }] })
+    expect(requests).toHaveLength(2)
+    expect(requests.every(item => item.peer === peer)).toBe(true)
+    expect(minted).toBe(1)
   })
 
   it('管理员：以协议常量拼出的子路径命中定时任务路由，只多一个字符的邻居路径不落进来', async () => {

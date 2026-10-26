@@ -7,6 +7,12 @@
  * 其他 session 方法用 request 键；多传/少传都会被网关 assertExactArguments 拒
  * 绝）。本包不依赖宿主 SDK 类型——网关/命令/工作区全部用最小结构面，运行时
  * 鸭子解析（与 node 半既有 webServer/connection 面同策略）。
+ *
+ * 宿主 gateway 的 peer 契约（2026-10-22 实测，宿主 prepareInvocation 首行
+ * assertPeerLive(request.peer) 读 peer.signal.aborted）：每次 invoke/stream 都必须
+ * 带一个活的 in-process owner Peer。Peer 的官方铸造入口是 connection.createPeer
+ * （Peer 归读取该服务的 ctx 所有），座位 GatewayPeerSeat 负责惰性铸造、缓存复用、
+ * aborted 后重建与 teardown 释放；老宿主没有这个面时请求形状退回不带 peer。
  */
 
 /** 执行会话记录（最小结构面）。 */
@@ -19,10 +25,73 @@ export interface RunnerTask {
   readonly permission?: string
 }
 
+/** 宿主 in-process Peer 的最小结构面（dsh-client-connection 的 Peer：signal 随
+ *  所有者 ctx 销毁而 abort，dispose 幂等返回 Promise）。 */
+export interface PeerLike {
+  readonly signal: { readonly aborted: boolean }
+  dispose?(): unknown
+}
+
+/** 铸造 Peer 的宿主入口面（connection 服务；老宿主与 botFence 没有 createPeer）。 */
+export interface PeerFactoryLike {
+  createPeer?(options: { principal: { kind: 'owner' } }): PeerLike
+}
+
+/** 一次网关调用的线形状：带不带 peer 决定新旧两种请求体。 */
+export interface GatewayRequest {
+  namespace: string
+  method: string
+  args: Record<string, unknown>
+  signal?: AbortSignal
+  peer?: PeerLike
+}
+
 /** typertGateway 的最小结构面。 */
 export interface SessionGateway {
-  invoke(request: { namespace: string; method: string; args: Record<string, unknown>; signal?: AbortSignal }): Promise<unknown>
-  stream?(request: { namespace: string; method: string; args: Record<string, unknown>; signal?: AbortSignal }): Promise<AsyncIterable<unknown>>
+  invoke(request: GatewayRequest): Promise<unknown>
+  stream?(request: GatewayRequest): Promise<AsyncIterable<unknown>>
+}
+
+/** 释放一个 Peer：尽力而为——宿主已收走它时 dispose 可能抛错或拒绝，不波及调度。 */
+function releasePeer(peer: PeerLike): void {
+  try {
+    void Promise.resolve(peer.dispose?.()).catch(() => undefined)
+  } catch {
+    // 同一口径：释放失败不改变调用结果。
+  }
+}
+
+/**
+ * 一个插件持有的 owner Peer 座位：首次调用铸造、之后复用；缓存的 Peer 已随宿主
+ * 释放（signal.aborted）则重建；插件 teardown 时释放。
+ * 宿主没有 createPeer（老宿主 / bot 宿主）→ 恒返回 undefined，调用方退回不带
+ * peer 的请求形状。
+ */
+export class GatewayPeerSeat {
+  private peer: PeerLike | undefined
+
+  constructor(private readonly factory: () => PeerFactoryLike | undefined) {}
+
+  current(): PeerLike | undefined {
+    const cached = this.peer
+    if (cached !== undefined && cached.signal.aborted !== true) return cached
+    if (cached !== undefined) {
+      this.peer = undefined
+      releasePeer(cached)
+    }
+    const factory = this.factory()
+    // 以方法形态调用：宿主 createPeer 用 this.ctx 铸 Peer，脱离接收者会丢所有者。
+    if (factory?.createPeer === undefined) return undefined
+    const peer = factory.createPeer({ principal: { kind: 'owner' } })
+    this.peer = peer
+    return peer
+  }
+
+  dispose(): void {
+    const cached = this.peer
+    this.peer = undefined
+    if (cached !== undefined) releasePeer(cached)
+  }
 }
 
 /** /permission 命令派发面（宿主 commands 服务）。
@@ -162,6 +231,7 @@ export class TasksRunner {
     private readonly commands: () => SessionCommandDispatcher | undefined = () => undefined,
     private readonly workspaces: () => WorkspaceRegistryLike | undefined = () => undefined,
     private readonly agents: () => AgentRegistryLike | undefined = () => undefined,
+    private readonly peer: () => PeerLike | undefined = () => undefined,
   ) {}
 
   private session(): SessionGateway {
@@ -173,7 +243,23 @@ export class TasksRunner {
   }
 
   private invoke(gateway: SessionGateway, namespace: string, method: string, request: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
-    return gateway.invoke({ namespace, method, args: invokeWireArgs(namespace, method, request), ...(signal === undefined ? {} : { signal }) })
+    const peer = this.peer()
+    return gateway.invoke({
+      namespace,
+      method,
+      args: invokeWireArgs(namespace, method, request),
+      ...(signal === undefined ? {} : { signal }),
+      ...(peer === undefined ? {} : { peer }),
+    })
+  }
+
+  /**
+   * agent 预设名册：launch 的预设校验与 meta 的 UI 下拉共用这一条调用，peer 契约
+   * 只有一处。网关缺席或调用失败原样抛出——meta 侧降级为空表并留一条告警。
+   */
+  async listAgentPresets(): Promise<readonly { id: string; broken?: string }[]> {
+    const response = await this.invoke(this.session(), 'agentPresets', 'list', {}) as { presets?: readonly { id: string; broken?: string }[] }
+    return response.presets ?? []
   }
 
   /**
@@ -239,8 +325,8 @@ export class TasksRunner {
       }
     }
     if (task.agentPreset !== undefined) {
-      const presets = await this.invoke(gateway, 'agentPresets', 'list', {}) as { presets?: readonly { id: string; broken?: string }[] }
-      const preset = presets.presets?.find(item => item.id === task.agentPreset)
+      const presets = await this.listAgentPresets()
+      const preset = presets.find(item => item.id === task.agentPreset)
       if (preset === undefined) throw new Error('agent preset not found: ' + task.agentPreset)
       if (preset.broken !== undefined) throw new Error('agent preset is unavailable: ' + preset.broken)
     }
@@ -316,8 +402,14 @@ export class TasksRunner {
       return { outcome: 'pending', diagnostic: 'session follow stream is unavailable on this host' }
     }
     let opening: { cursor: number; records: Array<{ type?: string; seq?: number; time?: number; data?: unknown }>; hasMore: boolean }
+    const streamPeer = this.peer()
     try {
-      const stream = await gateway.stream({ namespace: 'session', method: 'follow', args: { request: { address: sessionAddress(sessionId), maxMessages: 1 } } })
+      const stream = await gateway.stream({
+        namespace: 'session',
+        method: 'follow',
+        args: { request: { address: sessionAddress(sessionId), maxMessages: 1 } },
+        ...(streamPeer === undefined ? {} : { peer: streamPeer }),
+      })
       const iterator = stream[Symbol.asyncIterator]()
       const next = await iterator.next()
       if (typeof iterator.return === 'function') await iterator.return()

@@ -19,6 +19,7 @@ import {
   SessionLaunchError,
   isServiceUnavailable,
   type AgentRegistryLike,
+  type PeerLike,
   type SessionCommandDispatcher,
   type SessionGateway,
 } from './runner.ts'
@@ -46,6 +47,13 @@ export interface TradingTasksServiceOptions {
   agents?: () => AgentRegistryLike | undefined
   /** 惰性解析宿主 workspaceRegistry。 */
   workspaces?: () => WorkspaceDirectoryLike | undefined
+  /**
+   * 惰性解析插件持有的 owner Peer（宿主 gateway 契约要求每次调用都带一个活的
+   * in-process Peer）；缺省无 peer——老宿主请求形状不变。
+   */
+  peer?: () => PeerLike | undefined
+  /** 告警落点（名册读取失败的痕迹，去重后调用）；缺省 console.warn。 */
+  warn?: (message: string, detail: string) => void
   /** 账本每次提交后的失效信号回调（桥层接 SSE emit('tasks')）。 */
   onEvent?: () => void
   /** 会话默认权限（确认门基准）；缺省 workspace-write。 */
@@ -122,12 +130,16 @@ export class TradingTasksService {
   private tickInFlight = false
   private pollInFlight = false
   private disposed = false
+  private readonly warn: (message: string, detail: string) => void
+  /** 名册读取故障段的告警闸：同一段故障只留一条痕迹，恢复后重新武装。 */
+  private presetRosterWarned = false
 
   constructor(options: TradingTasksServiceOptions) {
     this.options = options
     this.tickMs = options.tickMs ?? TICK_MS
     this.pollMs = options.pollMs ?? POLL_MS
     this.staleExecutionMs = options.staleExecutionMs ?? DEFAULT_STALE_EXECUTION_MS
+    this.warn = options.warn ?? ((message, detail) => { console.warn(message, detail) })
     // LedgerLockedError 直接上抛：桥层据此把任务面降级为 503（特性不挂，宿主照跑）。
     this.ledger = new TasksLedger(options.ledgerPath, {
       ...(options.sessionDefaultPermission === undefined ? {} : { sessionDefaultPermission: options.sessionDefaultPermission }),
@@ -140,6 +152,7 @@ export class TradingTasksService {
       options.commands ?? (() => undefined),
       options.workspaces as (() => WorkspaceDirectoryLike | undefined) | undefined ?? (() => undefined),
       options.agents ?? (() => undefined),
+      options.peer ?? (() => undefined),
     )
   }
 
@@ -195,10 +208,15 @@ export class TradingTasksService {
     const agentPresets: Array<{ id: string }> = []
     if (gateway !== undefined) {
       try {
-        const response = await gateway.invoke({ namespace: 'agentPresets', method: 'list', args: {} }) as { presets?: readonly { id: string }[] }
-        for (const preset of response.presets ?? []) agentPresets.push({ id: preset.id })
-      } catch {
-        // 预设名册不可用 → 空表（UI 只显示部署默认），不阻塞元数据面。
+        for (const preset of await this.runner.listAgentPresets()) agentPresets.push({ id: preset.id })
+        this.presetRosterWarned = false
+      } catch (error) {
+        // 预设名册不可用 → 空表（UI 只显示部署默认），不阻塞元数据面；但静默会让
+        // 「下拉只剩部署默认」这种故障无从归因，所以每个故障段留一条告警。
+        if (!this.presetRosterWarned) {
+          this.presetRosterWarned = true
+          this.warn('[trading-tasks] agent preset roster unavailable; the preset dropdown falls back to the deployment default:', errorMessage(error))
+        }
       }
     }
     return { sessionDefaultPermission: snapshot.sessionDefaultPermission, workspaces, agentPresets }
