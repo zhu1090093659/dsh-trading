@@ -114,6 +114,8 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
   const [open, setOpen] = useState(() => readJson<boolean>(OPEN_KEY, true))
   const [expanded, setExpanded] = useState(false)
   const [host, setHost] = useState<HTMLElement | null>(null)
+  /** seat 晚到时代际：观察者命中即递增，重跑下面的融合 effect（不轮询）。 */
+  const [seatEpoch, setSeatEpoch] = useState(0)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [wsMenu, setWsMenu] = useState<WorkspaceMenuState | null>(null)
   const [renaming, setRenaming] = useState<RenameState | null>(null)
@@ -206,14 +208,29 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
   }, [blank])
 
   // 融合挂载：hero 态才物化 portal 容器并拼接；非 hero 态卸载并还原卡片。
+  // 挂载前后有三条宿主时序会让面板缺席，统一按「元素身份变了就递增代际重跑」处理，
+  // 拼接仍走同一套 findCard/fuse/adopt：
+  //   1) seat 晚到（新建会话时侧栏先挂、hero composer 后到）：查空一次就返回会让
+  //      面板在该视图永久缺席，改挂观察者等 seat 落地；
+  //   2) 承载容器被整列替换：blank 与依赖都不变，旧容器随旧对话列子树一起离场，
+  //      effect 不重跑——等 seat 不够，还要在挂载后按身份判出并重拼；
+  //   3) seat 在同一列内被换掉：同上，靠 seat 的元素身份判定。
   useEffect(() => {
     if (!blank) {
       setHost(null)
       return
     }
     const seat = document.querySelector<HTMLElement>('[data-composer-seat]')
-    const scrollBody = seat?.parentElement
-    if (seat === null || scrollBody === undefined) return
+    const scrollBody = seat === null ? null : seat.parentElement
+    if (seat === null || scrollBody === null) {
+      const waiter = new MutationObserver(() => {
+        if (document.querySelector('[data-composer-seat]') === null) return
+        waiter.disconnect()
+        setSeatEpoch(value => value + 1)
+      })
+      waiter.observe(document.body, { childList: true, subtree: true })
+      return () => { waiter.disconnect() }
+    }
 
     let container: HTMLDivElement | null = null
     let card: HTMLElement | null = null
@@ -321,6 +338,21 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
     if (typeof document !== 'undefined') {
       mo.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'data-theme'] })
     }
+
+    // 承载容器跟随：宿主整列替换对话列（或同列内换掉 seat）时 blank 不变、本 effect
+    // 的依赖也不变，旧容器随旧子树一起消失——按元素身份判出「容器已脱离 DOM」或
+    // 「seat 换了人 / 换了父节点」，命中即重跑整条挂载（cleanup 先拆旧容器，同一时刻
+    // 只有一份）。判定必须走身份比较：本容器的 portal 渲染同样落在被观察的 body
+    // 子树里，只用「有 mutation 就重跑」会自触发成死循环。
+    let remounting = false
+    const carrier = new MutationObserver(() => {
+      if (container === null || remounting) return
+      if (container.isConnected && seat.parentElement === container.parentElement) return
+      remounting = true
+      carrier.disconnect()
+      setSeatEpoch(value => value + 1)
+    })
+    carrier.observe(document.body, { childList: true, subtree: true })
     adopt(findCard())
 
     const onResize = (): void => {
@@ -334,6 +366,7 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
       disposed = true
       cancelAnimationFrame(raf)
       mo.disconnect()
+      carrier.disconnect()
       window.removeEventListener('resize', onResize)
       if (card !== null && saved !== null) {
         card.style.borderBottomLeftRadius = saved.radiusX
@@ -343,7 +376,7 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
       container?.remove()
       setHost(null)
     }
-  }, [blank])
+  }, [blank, seatEpoch])
 
   const workspaceRows: WorkspaceRow[] = workspaces.items.map(item => ({
     workspaceId: String(item.workspaceId),
