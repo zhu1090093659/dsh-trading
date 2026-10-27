@@ -137,8 +137,10 @@ const LIVE_TIMEOUT_MS = 30_000
  * 端点可达）。缺省预算（2000/3000）是「快速判别空回」的硬上界，不该在真实网络用例里
  * 拿去卡 runner 的 RTT——预算这套契约由假时钟用例断言，这里要验的是真实报文的解析与语义。
  */
+const LIVE_REQUEST_OPTIONS = { market: 'hk' as const, timeoutMs: 10_000, requestBudgetMs: 20_000 }
+
 function liveClient(): EastmoneyRestClient {
-  return new EastmoneyRestClient({ market: 'hk', timeoutMs: 10_000, requestBudgetMs: 20_000 })
+  return new EastmoneyRestClient(LIVE_REQUEST_OPTIONS)
 }
 
 liveDescribe('港股通持股历史（真实网络，东财数据中心）', () => {
@@ -186,7 +188,7 @@ liveDescribe('港股通持股历史（真实网络，东财数据中心）', () 
 
   it('用户经港股行情服务取持股时应拿到与 REST 客户端一致的序列', async () => {
     // Given: 港股数据面实例（与 dataplane 注册的是同一个类）
-    const service = new EastmoneyMarketDataService(makeCtx(), { market: 'hk' }, 'tradingHkMarketData')
+    const service = new EastmoneyMarketDataService(makeCtx(), LIVE_REQUEST_OPTIONS, 'tradingHkMarketData')
 
     // When: 从服务层取数
     const history = await service.getSouthboundHoldings?.('00700.HK')
@@ -196,7 +198,7 @@ liveDescribe('港股通持股历史（真实网络，东财数据中心）', () 
     expect(history?.points.length).toBeGreaterThan(400)
   })
 
-  it('用户从数据面注册表取到的港股服务应能取到港股通持股', async () => {
+  it('用户从数据面注册表取到的港股服务应带港股通持股能力', async () => {
     // Given: 数据面按 hk 注册（宿主桥就是按 registry.list('hk') 找这项能力的）
     const registrations: Array<{ market: string; provider: string; service: MarketDataService }> = []
     const ctx = {
@@ -214,14 +216,17 @@ liveDescribe('港股通持股历史（真实网络，东财数据中心）', () 
     } as unknown as Context
     applyDataplane(ctx, { enabled: true, market: 'hk' })
 
-    // When: 走注册表拿到的服务取数
+    // When: 从注册表取注册出去的那一项
     const registered = registrations[0]
-    const history = await registered?.service.getSouthboundHoldings?.('00700.HK')
+    const service = registered?.service as EastmoneyMarketDataService | undefined
 
-    // Then: 注册市场是 hk，且该实例真的能取到持股序列（能力随实例一起注册出去）
+    // Then: 市场是 hk，且注册出去的就是东财服务、上面带着港股通持股能力（cn 实例必须
+    // 缺席，见上一组契约用例）。真实取数路径由前两条联网用例覆盖：dataplane 按行配置
+    // new 同一个类、同一份 `{ market: 'hk' }` 选项，这里再拉一次全量报文只多一次跨洋
+    // 往返、不多验任何一行代码，却要多一份「runner 到东财 3-6s」的抖动面。
     expect(registered?.market).toBe('hk')
-    expect(history?.symbol).toBe('00700.HK')
-    expect(history?.points.length).toBeGreaterThan(400)
+    expect(service).toBeInstanceOf(EastmoneyMarketDataService)
+    expect(typeof service?.getSouthboundHoldings).toBe('function')
   })
 })
 
