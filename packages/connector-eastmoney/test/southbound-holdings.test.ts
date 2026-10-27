@@ -130,17 +130,11 @@ function makeCtx(): Context {
 const LIVE_TIMEOUT_MS = 30_000
 
 /**
- * 真实网络用例的客户端：单枪与整通预算按「跨洋 runner + 报表大报文」给。
- *
- * 2026-10-27 CI 实测：runner 到 data.eastmoney.com 首枪就吃满 2000ms 单枪上限，剩下
- * 772ms 的第二枪又超时，ubuntu 与 windows 同点红（同文件模块级探针用 20s 预算已确认
- * 端点可达）。缺省预算（2000/3000）是「快速判别空回」的硬上界，不该在真实网络用例里
- * 拿去卡 runner 的 RTT——预算这套契约由假时钟用例断言，这里要验的是真实报文的解析与语义。
+ * 真实网络用例的客户端：不覆盖任何网络口径——报表域（datacenter-web）的单枪 8 s / 整通
+ * 20 s 由客户端按域给（见 rest.ts 的 DATACENTER_* 常量），覆盖它等于绕开被测的那层分界。
  */
-const LIVE_REQUEST_OPTIONS = { market: 'hk' as const, timeoutMs: 10_000, requestBudgetMs: 20_000 }
-
 function liveClient(): EastmoneyRestClient {
-  return new EastmoneyRestClient(LIVE_REQUEST_OPTIONS)
+  return new EastmoneyRestClient({ market: 'hk' })
 }
 
 liveDescribe('港股通持股历史（真实网络，东财数据中心）', () => {
@@ -188,7 +182,7 @@ liveDescribe('港股通持股历史（真实网络，东财数据中心）', () 
 
   it('用户经港股行情服务取持股时应拿到与 REST 客户端一致的序列', async () => {
     // Given: 港股数据面实例（与 dataplane 注册的是同一个类）
-    const service = new EastmoneyMarketDataService(makeCtx(), LIVE_REQUEST_OPTIONS, 'tradingHkMarketData')
+    const service = new EastmoneyMarketDataService(makeCtx(), { market: 'hk' }, 'tradingHkMarketData')
 
     // When: 从服务层取数
     const history = await service.getSouthboundHoldings?.('00700.HK')

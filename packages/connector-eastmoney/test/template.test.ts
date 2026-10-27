@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   EastmoneyRestClient,
   INTERVAL_VOCABULARY,
+  eastmoneyNetworkLimits,
   mapIntervalToKlt,
   toEastmoneySecid,
 } from '../src/rest.js'
@@ -911,6 +912,44 @@ describe('EastmoneyRestClient 的整通硬截止、单枪超时与按主机熔�
     expect(clock.now()).toBeLessThanOrEqual(3_000)
     expect(urls).toHaveLength(2)
     expect(clock.sleeps).toEqual([200])
+  })
+
+  it('运营按域取网络口径时分界只有两档：报表域 8s/20s、其余主机 2s/3s', () => {
+    // Given 报表主机（datacenter-web）与行情主机（push2 / push2his / searchapi）
+    const reportHost = 'datacenter-web.eastmoney.com'
+
+    // When 按主机解析网络口径
+    // Then 报表域是分页整表的宽口径（报文几百 KB，行情那套 3s 会误判成故障）
+    expect(eastmoneyNetworkLimits(reportHost, reportHost)).toEqual({ timeoutMs: 8_000, budgetMs: 20_000 })
+    // Then 其余主机一律沿用「快速判别空回」的旧口径
+    for (const host of ['push2.eastmoney.com', 'push2his.eastmoney.com', 'searchapi.eastmoney.com']) {
+      expect(eastmoneyNetworkLimits(host, reportHost)).toEqual({ timeoutMs: 2_000, budgetMs: 3_000 })
+    }
+  })
+
+  it('运营在行情域与报表域上取数时，两条域各按自己的网络口径收尾', async () => {
+    // Given 每一枪都慢到打穿剩余预算（假时钟 + 假 fetch，无真实等待）
+    const clock = createFakeClock()
+    const urls: string[] = []
+    const impl = (async (input: unknown) => {
+      urls.push(String(input))
+      clock.advance(7_000)
+      throw new TypeError('fetch failed')
+    }) as typeof fetch
+    const client = new EastmoneyRestClient({ fetchImpl: impl, clock, market: 'hk' })
+
+    // When 用户先拉港股日 K（行情域 push2his），再取港股通持股（报表域 datacenter-web）
+    await expect(client.getKlines('00700.HK', '1d', 1)).rejects.toMatchObject({ code: 'TRADING_NETWORK' })
+    const quoteShots = urls.length
+    const sleepsAfterQuote = [...clock.sleeps]
+    await expect(client.getSouthboundHoldings('00700.HK')).rejects.toMatchObject({ code: 'TRADING_NETWORK' })
+
+    // Then 行情域仍是 2s 单枪 / 3s 整通：首枪就把预算打穿，连一次冷却都排不上
+    expect(quoteShots).toBe(1)
+    expect(sleepsAfterQuote).toEqual([])
+    // Then 报表域按 8s 单枪 / 20s 整通给满三枪，两段固定冷却照旧
+    expect(urls).toHaveLength(quoteShots + 3)
+    expect(clock.sleeps).toEqual([200, 200])
   })
 
   it('管理员遇到挂住不回的请求时由单枪超时 abort 成 TRADING_NETWORK', async () => {

@@ -267,6 +267,30 @@ const RETRY_COOLDOWN_MS = 200
 const REQUEST_BUDGET_MS = 3_000
 const CIRCUIT_OPEN_MS = 30_000
 
+/**
+ * 报表域（datacenter-web）单独一套口径，与行情域的 2s/3s 分开。
+ *
+ * 报表端点是分页整表：pageSize 上限 1000、报文几百 KB，比行情响应大两个数量级。用行情
+ * 那套「快速判别空回」的 2s/3s 会把可达端点判成故障——2026-10-27 CI 实测：GitHub runner
+ * 上首枪就吃满 2000ms 单枪上限、剩 772ms 的第二枪又超时；而 400 KB 报文在 1 Mbps 链路上
+ * 本身就要约 3.2 s，弱网终端同样过不去。行情域口径不变（空回判别靠快）。
+ */
+const DATACENTER_TIMEOUT_MS = 8_000
+const DATACENTER_BUDGET_MS = 20_000
+
+/**
+ * 按域取网络口径：报表域（datacenter-web）用 DATACENTER_*，其余主机用行情那套。
+ * 导出是为了让用例直接断言这条分界，而不必等真实 8 s 计时。
+ */
+export function eastmoneyNetworkLimits(
+  host: string,
+  dataCenterHost: string,
+): { timeoutMs: number; budgetMs: number } {
+  return host === dataCenterHost
+    ? { timeoutMs: DATACENTER_TIMEOUT_MS, budgetMs: DATACENTER_BUDGET_MS }
+    : { timeoutMs: DEFAULT_TIMEOUT_MS, budgetMs: REQUEST_BUDGET_MS }
+}
+
 export interface EastmoneyRestOptions {
   baseUrl?: string
   historyBaseUrl?: string
@@ -279,9 +303,8 @@ export interface EastmoneyRestOptions {
   /** 单枪超时（ms），缺省 2000：挂住的请求到点 abort 成 TRADING_NETWORK，不存在无上界的等待。 */
   timeoutMs?: number
   /**
-   * 一次取数整通硬截止（ms），缺省 3000。缺省口径服务「快速判别空回」；报表类端点
-   * （pageSize=1000、几百到上千行报文）在跨洋链路上单次就要 3-6s，预算不够会把可达的
-   * 端点判成故障，故留这个显式放大的缝（缺省值不变）。
+   * 显式覆盖「一次取数整通硬截止」（ms）。不传时按域取缺省：行情域 3000、报表域
+   * （datacenter-web）20000——分界理由见 DATACENTER_* 常量。
    */
   requestBudgetMs?: number
   /** 时钟注入（固定冷却的 sleep 与整通硬截止计时都读它）；缺省真实 timer。 */
@@ -378,10 +401,10 @@ export class EastmoneyRestClient {
   /** 本实例的市场（cn/hk 单包双实例；形态解析必须与注册市场一致）。 */
   readonly market: EastmoneyMarket
   private readonly fetchImpl: typeof fetch
-  /** 单枪超时（ms）。 */
-  private readonly timeoutMs: number
-  /** 一次取数整通硬截止（ms）。 */
-  private readonly requestBudgetMs: number
+  /** 单枪超时的显式覆盖（ms）；未给时按域取缺省。 */
+  private readonly timeoutMsOverride: number | undefined
+  /** 整通硬截止的显式覆盖（ms）；未给时按域取缺省。 */
+  private readonly requestBudgetMsOverride: number | undefined
   /** 请求通道时钟（冷却与整通截止）。 */
   private readonly clock: EastmoneyClock
   /** 按主机的短期熔断（一次整通网络级失败后该主机静默 CIRCUIT_OPEN_MS）。 */
@@ -396,8 +419,8 @@ export class EastmoneyRestClient {
     this.dataCenterBaseUrl = options.dataCenterBaseUrl ?? 'https://datacenter-web.eastmoney.com'
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
     this.market = options.market ?? 'cn'
-    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-    this.requestBudgetMs = options.requestBudgetMs ?? REQUEST_BUDGET_MS
+    this.timeoutMsOverride = options.timeoutMs
+    this.requestBudgetMsOverride = options.requestBudgetMs
     this.clock = options.clock ?? systemClock
   }
 
@@ -504,6 +527,15 @@ export class EastmoneyRestClient {
     }
   }
 
+  /** 该主机的网络口径：显式覆盖优先，其次按域（报表域 datacenter-web 见 DATACENTER_* 常量）。 */
+  private networkLimits(host: string): { timeoutMs: number; budgetMs: number } {
+    const byHost = eastmoneyNetworkLimits(host, hostOf(this.dataCenterBaseUrl))
+    return {
+      timeoutMs: this.timeoutMsOverride ?? byHost.timeoutMs,
+      budgetMs: this.requestBudgetMsOverride ?? byHost.budgetMs,
+    }
+  }
+
   /**
    * 取 JSON：**有界重试 + 按主机短期熔断**（2026-10-23 二次实测口径）。
    *
@@ -512,8 +544,9 @@ export class EastmoneyRestClient {
    * 恢复一次后又再度失败。故：
    *   - 只有网络级可重试失败才重试，最多 MAX_ATTEMPTS 枪（硬上界 3）；
    *   - 重试之间是**固定**冷却 RETRY_COOLDOWN_MS（不是退避、不递增）；
-   *   - 一次取数整通有硬截止 REQUEST_BUDGET_MS（含冷却与全部枪）：剩不下「一次冷却 + 下一枪」
-   *     就直接收尾，枪不会越过截止点，也就不存在续命；
+   *   - 一次取数整通有硬截止（含冷却与全部枪）：行情域 REQUEST_BUDGET_MS、报表域
+   *     DATACENTER_BUDGET_MS（2026-10-27 起按域分口径，见该常量注释）；剩不下「一次冷却 +
+   *     下一枪」就直接收尾，枪不会越过截止点，也就不存在续命；
    *   - 整通失败后把**该主机**记进熔断窗口 CIRCUIT_OPEN_MS，窗口内对该主机的调用零网络请求
    *     立即抛 TRADING_NETWORK，到期自动恢复，任一成功即清零；
    *   - HTTP 非 2xx 与 JSON 解析失败不可重试、也**不打开**熔断（一个 404/WAF 页不是主机故障）。
@@ -528,14 +561,15 @@ export class EastmoneyRestClient {
       )
     }
 
-    const deadlineAt = this.clock.now() + this.requestBudgetMs
+    const limits = this.networkLimits(host)
+    const deadlineAt = this.clock.now() + limits.budgetMs
     let lastError: TradingServiceError | undefined
     for (let shot = 1; shot <= MAX_ATTEMPTS; shot += 1) {
       // 硬截止：剩余预算不为正就不打这一枪（含首枪之外的每一枪）。
       const remainingMs = deadlineAt - this.clock.now()
       if (remainingMs <= 0) break
       // 单枪超时吃掉的预算与整通截止取小值：任一枪都不可能把整通拖过截止点。
-      const result = await this.requestOnce<T>(url, referer, Math.min(this.timeoutMs, remainingMs))
+      const result = await this.requestOnce<T>(url, referer, Math.min(limits.timeoutMs, remainingMs))
       if (result.ok) {
         this.circuit.clear(host)
         return result.body

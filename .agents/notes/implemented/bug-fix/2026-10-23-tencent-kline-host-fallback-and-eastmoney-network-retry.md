@@ -170,20 +170,24 @@ attempt 3 status 200 len 362
 （mkline 域名与 param 形态）与 [东财报价路径降级派生](../feature/2026-10-14-quote-path-degradation.md)
 （降级态的请求量闸门）。
 
-## 整通预算成为构造选项（2026-10-27）
+## 报表域单列一套网络口径（2026-10-27）
 
 3 s 整通硬截止落地次日，CI 暴露了它的边界：`test/southbound-holdings.test.ts` 的真实网络用例
 （报表端点 pageSize=1000、几百到上千行报文）在 GitHub runner 上首枪就吃满 2000 ms 单枪上限，
 剩下 772 ms 的第二枪又超时，ubuntu 与 windows 同点红；同文件的模块级探针用 20 s 预算早已确认
-端点可达——被卡住的是预算，不是可达性。
+端点可达——被卡住的是预算，不是可达性。同一形态在弱网终端上也会发生：400 KB 报文在 1 Mbps
+链路上约 3.2 s，超过整通预算。
 
-`EastmoneyRestOptions` 因此多一个 `requestBudgetMs`（缺省仍是 `REQUEST_BUDGET_MS` = 3000，生产
-口径不变），真实网络用例用它给出自己的预算（单枪 10 s / 整通 20 s）。分工：**硬预算这套契约由
-假时钟用例断言，真实网络用例只验真实报文的解析与语义**，不拿 CN 终端链路的预算去卡跨洋 runner
-的 RTT。
+根因是一套数字盖了两类端点。报表域（`datacenter-web`，分页整表）单列口径：单枪 8 s、整通
+20 s；行情域（push2 / push2his / searchapi）保持 2 s / 3 s（空回判别靠快）。分界由
+`eastmoneyNetworkLimits(host, dataCenterHost)` 一处裁决，`requestJson` 每通按目标主机取；
+`EastmoneyRestOptions.timeoutMs` / `requestBudgetMs` 降级为显式覆盖（优先于按域缺省），行配置
+schema 不动——没有用户可见的配置键。
 
-同一个文件里另外两条服务层用例一并收口：构造服务的那条传入同一份预算选项；走 `applyDataplane`
-的那条不再重复拉全量报文——dataplane 按行配置 new 同一个类、同一份 `{ market: 'hk' }`，它多验的
-只是一次跨洋往返，故改为断言「注册市场是 hk、注册出去的是东财服务、该实例带港股通持股能力」
-（cn 实例缺席由另一组契约用例管）。不动行配置 schema：一个 CI 抖动不值得往用户可见的配置面
-加键。
+分工写清：**按域口径这条分界由假时钟用例断言**（`eastmoneyNetworkLimits` 的两档、以及同一
+客户端上行情域一枪收尾 / 报表域给满三枪的对照），真实网络用例不再覆盖任何网络口径，只验真实
+报文的解析与语义——覆盖它等于绕开被测的那层分界。
+
+同文件走 `applyDataplane` 的那条联网用例一并收口：dataplane 按行配置 new 同一个类、同一份
+`{ market: 'hk' }`，它多验的只是一次跨洋往返，故改为断言「注册市场是 hk、注册出去的是东财
+服务、该实例带港股通持股能力」（cn 实例缺席由另一组契约用例管）。
