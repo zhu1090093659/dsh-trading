@@ -1,6 +1,6 @@
 # 知识库与知识图谱设计（Knowledge Base Tab）
 
-> 状态：已全部交付并在交付态演进（含 Obsidian tag-hub 拓扑、两级检索、证伪下架与作者别名归一） · 2026-08-31 定稿交付
+> 状态：已全部交付并在交付态演进（含 Obsidian tag-hub 拓扑、两级检索、证伪下架与作者别名归一、bundle 单文件导入导出） · 2026-08-31 定稿交付
 > 决策：项目所有者（Mode 2） · 起草：agent 评审
 > 关联：[docs/design/strategy-tab.md](strategy-tab.md)（第二 Tab）、[`.agents/skills/content-insight/`](../../.agents/skills/content-insight/SKILL.md)（内容摄取管线 SSOT）、[docs/guides/skills-guide.md](../guides/skills-guide.md)
 
@@ -57,7 +57,8 @@ packages/knowledge/src/
 ├── authors.ts        # 作者别名表与归一（纯函数；author 是作者维度的唯一分组键）
 ├── validate.ts       # ingest 结构校验（纯函数，落库前归一 author）
 ├── graph.ts          # buildGraph(cards, opts) → { nodes, links }
-└── tool.ts           # createKnowledgeIngestTool / createKnowledgeSearchTool（node 子路径导出）
+├── bundle.ts         # 导出文本 ↔ bundle、bundle × 本机库 → 导入计划（纯函数，浏览器与 node 同构）
+└── tool.ts           # createKnowledgeIngest/Search/Get/Delete/Graph/Export/Import 工具（node 子路径导出）
 └── knowledge-fs.ts   # createFileKnowledgeCardStore（node 专用）
 ```
 
@@ -71,6 +72,26 @@ packages/knowledge/src/
 - 节点 = 卡片：`{ id, label: title, degree, cluster: tags[0] ?? '未分类', credibility }`；
 - 边三类，带 `kind` 字段：`related`（显式）、`co-tag`（共享任一 tag）、`co-author`（同作者）；共享多条 tag 只出一条边，`weight` 记共享数；
 - 孤立卡片保留（度 0），图谱不为连通性造假边。
+
+### 导入 / 导出（`bundle.ts`）
+
+跨用户共享走单文件 bundle，不经网络：一方在知识库视图导出，另一方在同一位置导入。
+
+```json
+{
+  "meta": { "schemaVersion": 1, "exportedAt": "<ISO>", "cardCount": 12,
+            "generator": "dsh-trading", "notice": "知识卡片是第三方观点的结构化转述…" },
+  "cards": [ "KnowledgeCard…" ]
+}
+```
+
+- 格式只有一个家：`createKnowledgeBundle` / `serializeKnowledgeBundle` / `parseKnowledgeBundle` / `planKnowledgeImport`（`packages/knowledge/src/bundle.ts`，纯函数，浏览器与 node 同构）；桥、视图与 agent 工具都调它，不各自解析。
+- 上限：单文件 ≤ 2000 张卡且 ≤ 8 MiB（`KNOWLEDGE_BUNDLE_MAX_CARDS` / `KNOWLEDGE_BUNDLE_MAX_BYTES`）。导入超限点名报错；导出侧同口径判限，超限不落文件而是提示先缩小筛选范围。
+- 读宽容、写严格：`meta.cardCount` 与实际不符不拦（手改与工具截断常见）；`schemaVersion` 不是 1、卡片缺 `id`/`title`/`source.url` 一律点名拒绝。
+- 去重键 `source.url`（与 `knowledge-fs.getByUrl` 同口径）：已存在时 `skip`（默认，保持本机卡片原样）或 `overwrite`（用文件内容改写，保留本机 `id` 与 `createdAt`，刷新 `updatedAt`）。
+- 身份与关联：新建卡片保留对方 id；id 已被占用或已被映射占用时重生成并记 `remappedIds`；`related` 先按映射表改写，指向未随包导出卡片的引用丢弃并按卡片汇总进 `droppedRelated`；映射后的引用仍全部过 `validateKnowledgeCard`（悬空引用不入库）。
+- 预览与写库同源：视图用同一函数按本机卡片算预览（新增 / 更新 / 跳过 / 丢弃关联 / 非法），确认后 host 读库**重算一次**再写——不存在「预览 3 张、写进 5 张」的两套口径。
+- 入口三处：知识库视图工具栏（导出 = 当前筛选结果，空结果禁用；导入 = 选文件 → 预览清单 → 确认写库）、主机工具 `knowledge_export` / `knowledge_import`（`path` / `mode` / `dryRun`）、桥 `POST /dshtrading/api/knowledge/import`（`invalidates: ['knowledge']`）。
 
 ## 4. 摄取链路（agent-native）
 
@@ -131,7 +152,9 @@ packages/knowledge/src/
 
 ## 7. 隐私与边界
 
-- 卡片只落 `~/.dsh-trading/knowledge/` 本地文件；不上传、不同步；
+- 卡片只落 `~/.dsh-trading/knowledge/` 本地文件；不上传、不同步——跨用户共享走 §3 的 bundle 文件，由用户自己决定把文件交给谁；
+- 导出是显式用户动作：导出内容含作者名与原文链接（它们是去重键与查证锚点），`meta.notice` 随文件写明「第三方观点的结构化转述，不构成投资建议」；
+- 导入的是别人给的数据，一律过同一套解析与结构校验：不合规条目进 `invalid` 而不改写其它卡片，引用关系只保留校验通过的；
 - v1 不做：UI 编辑卡片、自动抓取订阅源、向量检索、跨设备同步；
 - 卡片内容是"别人观点的结构化转述"，图谱上不展示任何交易信号；与策略板块严格解耦（未来如做"观点→标的"联动，另立设计）。
 
@@ -143,6 +166,7 @@ packages/knowledge/src/
 - [ ] 中栏三 Tab「行情 | 策略 | 知识库」齐全；真实入库 ≥3 张卡片（含一条 related 链与共享 tag）后图谱 hover/click/过滤/搜索全部可用
 - [ ] headless 场景（无 webServer）行为对齐 #19 先例（工具注册不受影响，bridge 静默挂起）
 - [ ] Agent Note（feature）随 PR；Conventional Commits；**不得在 CHANGES_REQUESTED 状态下自行合并**
+- 导入导出（2026-10-27 交付）：bundle 纯函数与 `knowledge_export` / `knowledge_import` 工具由 `packages/knowledge` 87 例测试覆盖（往返、版本不符、缺字段点名、两项超限、skip/overwrite、id 重映射、关联丢弃、非法条目不中断）；桥 `POST /knowledge/import` 由 10 例覆盖（含 store 缺席口径与无 saveMany 降级），写路由失效声明由结构用例守住；视图导出吃当前筛选结果、导入走预览→确认→重拉，zh/en 文案齐平且过 i18n 审计。
 
 ## 9. 参考
 
