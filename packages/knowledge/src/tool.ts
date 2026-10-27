@@ -6,10 +6,23 @@
  *   - knowledge_search: 跨字段检索（相关度排序）+ 多维过滤 + detail=full 全文返回
  *   - knowledge_get:    按 id 读取单张卡片全文
  *   - knowledge_delete: 证伪下架（删除卡片并清理 related 悬空引用）
+ *   - knowledge_export: 按检索同款过滤导出单文件 JSON bundle
+ *   - knowledge_import: bundle 先算计划（预览）再写库，source.url 去重
  */
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import os from 'node:os'
+import path from 'node:path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dshHomeDir } from '@dshtrading/dsh-home'
 import { validateKnowledgeCard } from './validate.ts'
 import { createFileKnowledgeCardStore } from './knowledge-fs.ts'
+import {
+  createKnowledgeBundle,
+  parseKnowledgeBundle,
+  planKnowledgeImport,
+  serializeKnowledgeBundle,
+  type KnowledgeImportMode,
+} from './bundle.ts'
 import type {
   KnowledgeCard,
   KnowledgeCardInput,
@@ -529,3 +542,187 @@ export function createKnowledgeDeleteTool(store: KnowledgeCardStore, options: Kn
     },
   })
 }
+
+/** bundle 文件名里的时间戳（本地时区）：用户在导出目录里按时间对号，UTC 会错位。 */
+function compactTimestamp(date: Date): string {
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`
+}
+
+/** 导出/导入共用的路径解析：`~` 前缀展开 + 相对路径按 process.cwd() 解析（与 node 工具惯例一致）。 */
+function resolveUserPath(input: string): string {
+  const trimmed = input.trim()
+  if (trimmed === '~') return os.homedir()
+  if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) return path.resolve(os.homedir(), trimmed.slice(2))
+  return path.resolve(process.cwd(), trimmed)
+}
+
+export function createKnowledgeExportTool(store: KnowledgeCardStore) {
+  return defineTool({
+    name: 'knowledge_export',
+    description:
+      'Export knowledge cards into one JSON bundle file (meta + cards) for backup or transfer to another library. '
+      + 'Filters follow knowledge_search semantics exactly: tags (comma separated, matches any one), sourceType, credibility, '
+      + 'and cluster (the card first tag). Without filters the whole library is exported. Import it back with knowledge_import.',
+    parameters: {
+      path: {
+        type: 'string',
+        description: 'Target file path (absolute, or relative to the current working directory). Omit it to write $DSH_HOME/knowledge/exports/knowledge-<yyyyMMdd-HHmmss>.json.',
+      },
+      tags: {
+        type: 'string',
+        description: 'Comma-separated tag filter, e.g. "宏观,高股息"; matches any one of them.',
+      },
+      sourceType: {
+        type: 'string',
+        description: 'Source kind filter: "bilibili" | "wechat" | "manual".',
+      },
+      credibility: {
+        type: 'string',
+        description: 'Credibility filter: "high" | "medium" | "low".',
+      },
+      cluster: {
+        type: 'string',
+        description: 'Exact subject filter (subject = the card first tag), same as knowledge_search cluster.',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as Record<string, unknown>
+      const requestedPath = typeof args.path === 'string' ? args.path.trim() : ''
+      const rawTags = typeof args.tags === 'string' ? args.tags.split(',').map((tag) => tag.trim().toLowerCase()).filter(Boolean) : []
+      const targetSourceType = typeof args.sourceType === 'string' ? args.sourceType.trim() : ''
+      const targetCredibility = typeof args.credibility === 'string' ? args.credibility.trim() : ''
+      const targetCluster = typeof args.cluster === 'string' ? args.cluster.trim().toLowerCase() : ''
+
+      // 过滤口径与 knowledge_search 逐条一致：同一组参数在两个工具里选出同一批卡片。
+      const selected = (await store.list()).filter((card) => {
+        if (targetSourceType && card.source.type !== targetSourceType) return false
+        if (targetCredibility && card.credibility !== targetCredibility) return false
+        if (targetCluster && (card.tags[0] ?? '').trim().toLowerCase() !== targetCluster) return false
+        if (rawTags.length > 0) {
+          const cardTags = card.tags.map((tag) => tag.toLowerCase())
+          if (!rawTags.some((tag) => cardTags.includes(tag))) return false
+        }
+        return true
+      })
+
+      const filePath = requestedPath.length > 0
+        ? resolveUserPath(requestedPath)
+        : path.join(dshHomeDir(), 'knowledge', 'exports', `knowledge-${compactTimestamp(new Date())}.json`)
+      try {
+        await mkdir(path.dirname(filePath), { recursive: true })
+        await writeFile(filePath, serializeKnowledgeBundle(createKnowledgeBundle(selected)), 'utf8')
+      } catch (error) {
+        // 写盘失败按可读文本回报：工具面不抛异常，调用方（agent）才能转述给用户。
+        return `[knowledge_export] 导出失败: ${error instanceof Error ? error.message : String(error)}`
+      }
+
+      const filterParts: string[] = []
+      if (rawTags.length > 0) filterParts.push(`标签命中任一: ${rawTags.join(' / ')}`)
+      if (targetSourceType) filterParts.push(`来源类型: ${targetSourceType}`)
+      if (targetCredibility) filterParts.push(`可信度: ${targetCredibility}`)
+      if (targetCluster) filterParts.push(`主体(聚类): ${targetCluster}`)
+      return [
+        `[knowledge_export] 已导出 ${selected.length} 张卡片（筛选: ${filterParts.length > 0 ? filterParts.join(' | ') : '全库'}）`,
+        `  文件: ${filePath}`,
+      ].join('\n')
+    },
+  })
+}
+
+export interface KnowledgeImportToolOptions {
+  /** 可选：成功写库后的回调（与 ingest/delete 一致，emit('knowledge') 通知 UI 刷新）。 */
+  onWritten?: () => void
+}
+
+export function createKnowledgeImportTool(store: KnowledgeCardStore, options: KnowledgeImportToolOptions = {}) {
+  const { onWritten } = options
+  return defineTool({
+    name: 'knowledge_import',
+    description:
+      'Import knowledge cards from a JSON bundle file produced by knowledge_export. The dedup key is source.url: mode="skip" '
+      + '(default) keeps existing cards and reports them as skipped, mode="overwrite" refreshes their content while keeping the '
+      + 'local id and createdAt. The plan is computed first (dryRun=true only previews it, nothing is written), then written with a '
+      + 'freshly computed plan. Related ids are remapped inside the bundle; references to cards outside it are dropped and reported.',
+    parameters: {
+      path: {
+        type: 'string',
+        required: true,
+        description: 'Bundle JSON file path (absolute, "~/" prefixed, or relative to the current working directory).',
+      },
+      mode: {
+        type: 'string',
+        description: 'Duplicate source.url handling: "skip" (default, keep the local card) | "overwrite" (refresh content, keep local id/createdAt).',
+      },
+      dryRun: {
+        type: 'boolean',
+        description: 'Preview the plan without writing anything (default false).',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: String(value) }],
+    },
+    async execute(raw) {
+      const args = (raw ?? {}) as Record<string, unknown>
+      const requestedPath = typeof args.path === 'string' ? args.path.trim() : ''
+      if (requestedPath.length === 0) return '[knowledge_import] 参数 path 为必填字符串（bundle JSON 文件路径）'
+
+      const rawMode = typeof args.mode === 'string' ? args.mode.trim() : ''
+      if (rawMode !== '' && rawMode !== 'skip' && rawMode !== 'overwrite') {
+        return `[knowledge_import] 参数 mode 非法: ${rawMode}（允许值: skip, overwrite；省略即 skip）`
+      }
+      const mode: KnowledgeImportMode = rawMode === 'overwrite' ? 'overwrite' : 'skip'
+      // 只有显式 true 才预览：字符串 "false" 或省略都当真写，避免「以为在预览」。
+      const dryRun = args.dryRun === true
+      const filePath = resolveUserPath(requestedPath)
+
+      let text: string
+      try {
+        text = await readFile(filePath, 'utf8')
+      } catch (error) {
+        const code = (error as { code?: unknown } | null)?.code
+        if (code === 'ENOENT') return `[knowledge_import] 文件不存在: ${filePath}`
+        return `[knowledge_import] 读取失败: ${error instanceof Error ? error.message : String(error)}（${filePath}）`
+      }
+
+      const parsed = parseKnowledgeBundle(text)
+      if (!parsed.ok) return `[knowledge_import] ${parsed.error}`
+
+      const local = await store.list()
+      const plan = planKnowledgeImport(local, parsed.bundle.cards, mode)
+      const toWrite = [...plan.create, ...plan.update]
+      let written = 0
+      if (!dryRun && toWrite.length > 0) {
+        try {
+          // 能力存在时一次事务落盘（文件版 store 每张 save 都是一次整表事务）。
+          if (typeof store.saveMany === 'function') await store.saveMany(toWrite)
+          else for (const card of toWrite) await store.save(card)
+        } catch (error) {
+          return `[knowledge_import] 写入失败: ${error instanceof Error ? error.message : String(error)}（计划写入 ${toWrite.length} 张）`
+        }
+        written = toWrite.length
+        onWritten?.()
+      }
+
+      const lines: string[] = [
+        `[knowledge_import] ${dryRun ? 'dryRun 预览（未写库）' : `已写入 ${written} 张`}, mode=${mode}`,
+        `  新增 ${plan.create.length} / 更新 ${plan.update.length} / 跳过 ${plan.skipped.length} / 丢弃关联 ${plan.droppedRelated.length} / 非法 ${plan.invalid.length}`,
+      ]
+      for (const entry of plan.skipped) lines.push(`  跳过: [${entry.id}] "${entry.title}"（${entry.reason}）`)
+      for (const entry of plan.droppedRelated) lines.push(`  丢弃关联: [${entry.id}] 缺失 ${entry.missing.join(', ')}`)
+      for (const entry of plan.invalid) {
+        const title = entry.title === undefined ? '' : ` "${entry.title}"`
+        lines.push(`  非法: 第 ${entry.index + 1} 张卡（下标 ${entry.index}）${title}: ${entry.error}`)
+      }
+      for (const entry of plan.remappedIds) lines.push(`  id 重映射: ${entry.from} → ${entry.to}`)
+      if (toWrite.length === 0) lines.push('  （没有需要写入的卡片）')
+      return lines.join('\n')
+    },
+  })
+}
+
