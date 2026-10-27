@@ -296,3 +296,24 @@ fetch 的 promise 回来、React 再提交一次才出现——调用发生与�
 ### Consequences
 
 Windows leg 的成功率取决于 runner 当时的负载，发版需要预留重跑次数。任何一次重跑都必须绑定同一 tag 与 SHA，且 npm 已发布的版本不得因为重跑而改内容。
+
+## 夜间三连红的两条：desktop job 缺 pnpm、knowledge 用例的 Windows 成本（2026-10-27）
+
+2026-10-24 / 25 / 26 三次 `nightly` 都红在同两个 job，其余 job 全绿：
+
+- **`Desktop payload tests`：`pnpm: command not found`（exit 127）。** 该 job 跑的是根
+  `package.json` 的 `test:desktop` 脚本，但 2026-09-16 创建它就只装了 node、没装 pnpm——
+  「desktop/tests 无需 npm ci」被误读成「无需 pnpm 二进制」，于是这个 job 自出生起每夜
+  必红，与 desktop 用例本身无关。修法：补 `pnpm/action-setup@v4`（版本读根
+  `packageManager` 字段），不装依赖。
+- **`Flake probe (windows-latest)`：`packages/knowledge` 的 delete-batch 用例超时。**
+  就是上节那条 Windows 抖动，这次落在一个算得清的包上：文件 store 每次落盘 = 一次
+  sqlite writer lease + 整表原子写，Windows runner 实测 ≈110ms/次（该用例 46 次落盘
+  > 5s 默认上限；同一台 macOS 本机 ≈13ms/次），随后的 `EBUSY` 是超时后仍在飞的提交
+  占着 `*.writer-lease.sqlite` 侧文件。修法按「先减工作量、再给环境容忍度」：夹具
+  （44 张卡）改一次批量落盘，该用例 46 次落盘 → 3 次；降级路径那例本身要逐张落盘
+  41 次、是断言对象不能减，故三个用例统一 `{ timeout: 30_000 }` 兜 runner I/O 抖动
+  （判据仍是落盘次数与库内容，不是耗时）。
+
+两条都是确定性缺陷、不是重跑抽奖：一条缺一个 install 步骤，一条的成本可算术核对，
+故都不按上节的「同 SHA 重跑」处理。

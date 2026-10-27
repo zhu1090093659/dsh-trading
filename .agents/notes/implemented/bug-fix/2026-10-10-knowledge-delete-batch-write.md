@@ -40,3 +40,8 @@ measure-first 实测（`spikes/bench-knowledge-delete-fanout.mts`，真实 `node
 - 包级 `knowledge` 45 例全绿，`bot-api` 171 例全绿（bridge 用 `createMemoryKnowledgeCardStore`，已同步实现 `saveMany`）。
 - 限制：真实主库（`~/.dsh-trading/knowledge/cards.json`）未取用测量——夹具按已入库的卡结构生成固定输入，规模（11/51/131 卡）取自盘上表形状而非内容；未验证真实库的引用密度，只验证了「每引用方一次落盘」这一因果。
 - 同源但未做：`knowledge_ingest` 仍单张 `save`（本就是一张，无放大）；`custom-fs.ts` / `chart-activations-fs.ts` 等 store 无删除扇出，不受影响。
+- 用例成本（2026-10-27）：`test/delete-batch-write.test.ts` 的夹具改为一次 `saveMany`
+  铺完——原先 44 次逐张 `save` 在 Windows runner 上按 ≈110ms/次 摊成本，46 次落盘直接
+  撑爆 5s 默认用例超时（CI 红）。降级路径那例的 41 次逐张落盘是断言对象、不能减，故
+  三个用例统一加 `{ timeout: 30_000 }` 上限；判据仍是落盘次数与库内容。CI 侧归因见
+  [测试卫生与覆盖棘轮 + CI 分层](../testing/2026-09-15-test-hygiene-ratchet-and-tiered-ci.md)。

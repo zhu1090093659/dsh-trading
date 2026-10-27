@@ -16,6 +16,14 @@ import { createFileKnowledgeCardStore } from '../src/knowledge-fs.ts'
 import { createKnowledgeDeleteTool } from '../src/tool.ts'
 import type { KnowledgeCard, KnowledgeCardStore } from '../src/types.ts'
 
+/**
+ * 真实文件 store 的每次落盘 = 一次 sqlite writer lease + 整表原子写，Windows runner
+ * 实测约 110ms/次（2026-10-26 nightly：46 次落盘 > 默认 5s 用例超时）。降级路径那例
+ * 本身就要逐张落盘 41 次（约 4.5s），默认 5s 不够，故给 30s 上限兜真机 I/O 抖动；
+ * 判据始终是落盘次数与库内容，时长只是环境容忍度。
+ */
+const REAL_FILE_TIMEOUT_MS = 30_000
+
 const roots: string[] = []
 
 function tempFile(name: string): string {
@@ -61,14 +69,22 @@ function countingStore(inner: KnowledgeCardStore, opts: { exposeBatch: boolean }
   return { store: wrapped, counters }
 }
 
-/** 目标卡 + follower 张引用它的卡 + 3 张无关卡，写进真实文件 store。 */
+/**
+ * 目标卡 + follower 张引用它的卡 + 3 张无关卡，写进真实文件 store。
+ *
+ * 夹具走一次批量落盘：这些写不在任何断言范围内，逐张 save 只是把 44 次整表事务的
+ * 耗时摊给每个用例（Windows 上是撑爆 5s 默认超时的主因）。被测的落盘次数由调用方
+ * 在 seed 之后才套上的计数包装观察，与夹具怎么写无关。
+ */
 async function seed(file: string, followers: number): Promise<KnowledgeCardStore> {
   const store = createFileKnowledgeCardStore(file)
-  await store.save(card('kc_target'))
+  const cards: KnowledgeCard[] = [card('kc_target')]
   for (let i = 0; i < followers; i += 1) {
-    await store.save(card(`kc_f${String(i).padStart(3, '0')}`, { related: ['kc_target'] }))
+    cards.push(card(`kc_f${String(i).padStart(3, '0')}`, { related: ['kc_target'] }))
   }
-  for (let i = 0; i < 3; i += 1) await store.save(card(`kc_x${i}`))
+  for (let i = 0; i < 3; i += 1) cards.push(card(`kc_x${i}`))
+  if (store.saveMany === undefined) throw new Error('file knowledge store must expose saveMany for seeding')
+  await store.saveMany(cards)
   return store
 }
 
@@ -87,7 +103,7 @@ describe('管理员证伪下架一张被大量引用的知识卡片', () => {
     expect(result).toContain('已删除卡片')
     expect(result).toContain('已清理 40 张卡片的 related 引用')
     expect(counters.writes).toBe(2)
-  })
+  }, { timeout: REAL_FILE_TIMEOUT_MS })
 
   it('管理员下架的 store 没有批量通道时，降级为逐张落盘且结果一致', async () => {
     // Given：同一个被 40 张卡引用的真实文件库，但 store 不暴露 saveMany
@@ -106,7 +122,7 @@ describe('管理员证伪下架一张被大量引用的知识卡片', () => {
     // 库中原有 44 张（1 目标 + 40 引用方 + 3 无关），下架后剩 43
     expect(remaining).toHaveLength(43)
     expect(remaining.every((c) => !(c.related ?? []).includes('kc_target'))).toBe(true)
-  })
+  }, { timeout: REAL_FILE_TIMEOUT_MS })
 
   it('管理员下架后，批量通道与逐张通道留下的库内容逐值相同', async () => {
     // Given：同样的库，分别走批量通道与逐张通道
@@ -125,5 +141,5 @@ describe('管理员证伪下架一张被大量引用的知识卡片', () => {
     expect(strip(await batchInner.list())).toEqual(strip(await plainInner.list()))
     expect(batch.counters.writes).toBe(2)
     expect(plain.counters.writes).toBe(13)
-  })
+  }, { timeout: REAL_FILE_TIMEOUT_MS })
 })
