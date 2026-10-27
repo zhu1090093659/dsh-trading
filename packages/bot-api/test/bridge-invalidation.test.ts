@@ -15,7 +15,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { BRIDGE_WRITE_ROUTES, resolveWriteRoute, type BridgeWriteRoute } from '../src/bridge.ts'
 import { apply } from '../src/index.ts'
 import { createMemoryChartActivationStore, createMemoryCustomIndicatorStore } from '@dshtrading/indicators'
-import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
+import { createKnowledgeBundle, createMemoryKnowledgeCardStore, type KnowledgeCard } from '@dshtrading/knowledge'
 import { createMemoryBuiltinTombstonesStore, createMemoryCustomScreenerStore, createMemoryCustomStrategyStore } from '@dshtrading/strategies'
 import { createMemoryHoldingsStore } from '@dshtrading/holdings'
 import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore } from '@dshtrading/watchlist'
@@ -41,7 +41,7 @@ interface WriteCase {
 }
 
 /** 客户端会重拉的 store 名（与 bridge 的 BridgeInvalidateStore 同一值域）。 */
-const WRITE_STORES: readonly string[] = ['indicators', 'chart', 'strategies', 'watchlists', 'selection', 'holdings']
+const WRITE_STORES: readonly string[] = ['indicators', 'chart', 'strategies', 'watchlists', 'selection', 'holdings', 'knowledge']
 
 const watched = (emitted: readonly string[]): string[] => emitted.filter(store => WRITE_STORES.includes(store))
 
@@ -98,6 +98,22 @@ const VALID_SCREENER = {
     return { metrics: { mom }, reason: '动量为正' }
   }`,
 }
+
+/** POST /knowledge/import 的成功样本：一张过了 validate 的卡片组成的 bundle。 */
+const KNOWLEDGE_BUNDLE = createKnowledgeBundle([{
+  id: 'kc_invalidation_demo',
+  title: '导入用例卡片',
+  summary: '一句话概述',
+  source: { type: 'bilibili', url: 'https://www.bilibili.com/video/BV1invalidation', author: '行业研究员' },
+  credibility: 'high',
+  coreClaims: ['论点一'],
+  factCheck: { verified: [], discrepancies: [], unverifiable: [] },
+  takeaways: ['经验一'],
+  boundaries: ['边界一'],
+  tags: ['宏观'],
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
+} satisfies KnowledgeCard], { now: new Date('2026-03-01T08:00:00.000Z') })
 
 const CASES: readonly WriteCase[] = [
   {
@@ -446,6 +462,18 @@ const CASES: readonly WriteCase[] = [
     run: async (call) => {
       refusedWrite(await call('POST', '/holdings/discard', {}), 'TRADING_HOLDINGS_INVALID')
       okWrite(await call('POST', '/holdings/discard', { ids: ['hd-missing'] }))
+      return 1
+    },
+  },
+  {
+    name: 'POST /knowledge/import 导入知识卡 bundle',
+    method: 'POST',
+    pathname: '/knowledge/import',
+    store: 'knowledge',
+    readSub: '/knowledge/cards',
+    run: async (call) => {
+      okWrite(await call('POST', '/knowledge/import', { bundle: KNOWLEDGE_BUNDLE }), { created: 1 })
+      refusedProtocol(await call('POST', '/knowledge/import', { mode: 'skip' }), /bundle is required/)
       return 1
     },
   },
