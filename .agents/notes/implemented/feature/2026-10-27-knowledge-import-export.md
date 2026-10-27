@@ -24,7 +24,7 @@ Status: implemented
 - `packages/knowledge`：`vitest run` 10 文件 / 87 例全绿，其中 `bundle.test.ts` 23 例（往返、空库、字节与卡数上限、`schemaVersion` 不符、缺字段点名、`meta.cardCount` 不符宽容、skip/overwrite、id 重映射三源、关联改写与丢弃、非法条目不中断其它卡）、`import-tools.test.ts` 9 例（过滤导出、默认路径、不可写路径、dryRun 不写库、skip/overwrite 落库、非法 mode 与空白 path）。
 - `packages/bot-api`：`knowledge-import.test.ts` 10 例 + `bridge-invalidation.test.ts` 30 例（含 `POST /knowledge/import` 的失效声明与拒绝样本）全绿；`tsc --noEmit` exit 0。
 - `packages/client-ui-knowledge`：`import-export.test.ts` 6 例（文件名补零、导出文本可被同一解析器读回、空库可再导入、两模式计划计数、非法文件原文错误）；`i18n-audit --check` exit 0（16 个 `kv.io.*` 键 zh/en 齐平，后补 `kv.io.exportTooLarge` 共 17 个）。
-- 完整门禁与桌面壳往返证据见本变更的交付说明。
+- 合并结果上 17 条门禁全绿（`pnpm gates:all`：build / -r test / test:audit / test:scripts / test:desktop / coverage / patch-id / connector-dataplane / tool-contract / live-order / live-trading / i18n / home-guard / typecheck / repo-boundary / ci-wiring / docs-link）。
 
 ## Alternatives considered
 
@@ -42,4 +42,5 @@ Status: implemented
 - 知识库的隐私边界从"只在本机、不出门"改为"本地为唯一真源，导出是显式用户动作"；`docs/design/knowledge-graph.md` §3 增加 bundle 契约、§7 与 §8 同步改写。
 - `BridgeInvalidateStore` 值域扩到 `'knowledge'`，客户端 SSE 早就有 `knowledge` 处理器，写成功即刷新视图，无需新增信号通道。
 - 两个新工具进入工具契约冻结清单（`scripts/tool-contract-freeze.json`），改名或改必填参数会红。
+- 视图层的点击路径（工具栏按钮、浏览器下载落地、文件选择器与预览面板交互）尚无桌面壳实测证据——本轮开发会话没有挂载 Computer Use 工具，项目纪律又不允许用浏览器/CDP 手法替代；该层现有证据是构建产物、纯函数测试与 zh/en 文案审计，下一次带该工具的会话按 `ui-screenshot-verify` 补验。
 - 已知限制：导出文件名精确到秒，同秒两次导出后者覆盖前者（浏览器下载目录语义）；视图的导入面板只有进场动画、无退场；写库期间 header 的关闭按钮与 Esc 仍可关面板（写库照常完成、卡片照常重拉，只是看不到结果提示）；导出侧的字节上限只在点击时判定（渲染期只用"卡片数 > 2000"这一条便宜条件，避免每帧序列化全库）。
