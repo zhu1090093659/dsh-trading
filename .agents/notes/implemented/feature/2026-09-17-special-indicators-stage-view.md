@@ -139,6 +139,10 @@ finance 自带的看盘网页查看，交易终端（中栏）没有入口；用
   settings 均带同款），包自身类型面零债。
 - 单测构成：finance-client 8 / route-handler 9 / wire 5 / locale-contract 2 /
   view.smoke 9 / lazy-entry.smoke 1，BDD 合规零新债。
+- 懒加载用例的等待窗口（2026-10-27）：`fallback=null` 让动态 import 落地前渲染为空，
+  `findByText` 默认 1s 在满载 runner 上不够（2026-10-24 nightly 的 ubuntu 探测红成
+  「找不到『特殊指标未配置』」而 body 只有空 div）。该例等待放宽到 5s，断言不变——
+  被等的是视图本体 + lightweight-charts 的 transform 落地，不是行为。
 - **桌面壳接线**（2026-09-17 同日补齐）：desktop/scripts/build-runtime.mjs
   新增 PRIVATE_VENDOR_PACKAGES 白名单——private: true 挡的是 npm 发布，
   不挡安装器分发，本包与其他工作区包同款 pnpm pack 进

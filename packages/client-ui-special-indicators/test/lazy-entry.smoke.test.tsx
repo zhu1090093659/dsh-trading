@@ -50,7 +50,10 @@ describe('特殊指标懒加载入口', () => {
     // When: 经懒加载壳打开视图
     render(<LazySpecialIndicatorsView t={t} view="special-indicators" />)
     // Then: 动态 import 落地后真实视图接管：status 握手并渲染未配置引导占位
-    expect(await screen.findByText('特殊指标未配置')).toBeTruthy()
+    // 等待窗口按「视图本体 + lightweight-charts 的 transform 落地」定，不用默认 1s：
+    // fallback=null 让落地前渲染为空，满载 runner 上 1s 不够（2026-10-24 nightly ubuntu
+    // 红成「找不到『特殊指标未配置』」而 body 只有空 div）。
+    expect(await screen.findByText('特殊指标未配置', undefined, { timeout: 5_000 })).toBeTruthy()
     expect(fake.calls.some((u) => u.endsWith('/dshtrading/api/special-indicators/status'))).toBe(true)
   })
 })

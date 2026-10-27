@@ -99,4 +99,10 @@ Status: implemented
   1243ms、上游命中 1 次且缓存文件落地；进程二（独立进程、同一缓存文件）
   0ms 返回同一负载、上游命中数不变（证明重启后不再阻塞等上游）。桥路由
   端到端另测：`/sectors/snapshot` 冷 1729ms → 热 19ms。
+- 用例与在途落盘（2026-10-27）：`save` 是 fire-and-forget，`host-lifetime-cache` 的两条冷拉
+  用例断言完响应就进 afterEach 删临时目录，与在途写相撞——CI 实测 linux
+  `ENOTEMPTY: rmdir '/tmp/si-apply-*'`、win32 `mkdir … special-indicators: ENOENT`
+  （2026-10-24 nightly 的 ubuntu 抖动探测即红在此）。探针实测：handler 返回那一刻缓存
+  文件仍是上一版，落盘约 10ms 后才到。修法：这两例断言后按可观测状态等落盘落地
+  （`vi.waitFor` 读回 `baseUrl`，5s 有界，不睡固定时长）；缓存命中那例本就不落盘、不等。
 - 决策背景见 [特殊指标中栏视图](../feature/2026-09-17-special-indicators-stage-view.md)。

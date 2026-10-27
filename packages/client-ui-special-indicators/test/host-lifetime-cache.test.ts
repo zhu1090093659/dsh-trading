@@ -4,12 +4,12 @@
  * 缓存文件」让本次首个请求不再冷拉上游——这正是「每次打开都要转圈」的回归面。
  * 零 mock：上游是真实 node:http 服务（记录命中次数），走真实 globalThis.fetch。
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeHttpRes } from '@dshtrading/test-support'
 import { MOUNT, apply, type Config } from '../src/index.ts'
 
@@ -88,6 +88,19 @@ async function request(handler: ReturnType<typeof bootHost>, sub: string) {
   return json()
 }
 
+/**
+ * 等冷拉后的落盘真的落地：`save` 是 fire-and-forget（不能阻塞请求路径），断言完响应
+ * 就删临时目录会与在途写相撞——CI 实测 linux `ENOTEMPTY: rmdir '/tmp/si-apply-*'`、
+ * win32 `mkdir … special-indicators: ENOENT`（2026-10-24 nightly ubuntu 抖动探测即红在此）。
+ * 有界条件等待，不睡固定时长：读回文件里记录的 baseUrl 即「这次写入已落地」。
+ */
+async function waitForPersistedCache(): Promise<void> {
+  await vi.waitFor(() => {
+    const persisted = JSON.parse(readFileSync(cacheFile, 'utf8')) as { baseUrl?: string }
+    expect(persisted.baseUrl).toBe(baseUrl)
+  }, { timeout: 5_000, interval: 20 })
+}
+
 describe('宿主重启后的首屏缓存', () => {
   it('用户重启宿主后首个请求直接命中上次运行的落盘缓存，零上游调用', async () => {
     // Given: 上一次运行留下的缓存文件（同一 baseUrl，含恐慌指数快照）
@@ -117,6 +130,8 @@ describe('宿主重启后的首屏缓存', () => {
     // Then: 不吃错源缓存，真实触网一次并回上游值
     expect(hits).toBe(1)
     expect((body.data as { score: number }).score).toBe(42.5)
+    // 冷拉结果会异步落盘：等它落地再让 afterEach 删目录
+    await waitForPersistedCache()
   })
 
   it('用户缓存文件写坏时首个请求正常冷拉，不因缓存不可读而失败', async () => {
@@ -128,10 +143,13 @@ describe('宿主重启后的首屏缓存', () => {
     expect(hits).toBe(1)
     expect(body.ok).toBe(true)
     expect((body.data as { score: number }).score).toBe(42.5)
+    // 坏文件被这次冷拉覆写为合法信封：等落盘落地再让 afterEach 删目录
+    await waitForPersistedCache()
   })
 
   // 写盘→跨进程读回的往返由 cache-file.test.ts（flush 排空）与跨进程实测覆盖；
-  // 本文件专注「宿主启动时读了什么」，故不在此等待 fire-and-forget 写盘落定。
+  // 本文件专注「宿主启动时读了什么」：只有两条冷拉用例在断言后等落盘落地（为了不给
+  // afterEach 的临时目录删留 race），缓存命中那例本就不落盘、不等。
   // 缺省路径 defaultCacheFilePath() 由 cache-file.test.ts 以临时 DSH_HOME 纯函数断言，
   // 避免测试写到用户真实 home。
 })

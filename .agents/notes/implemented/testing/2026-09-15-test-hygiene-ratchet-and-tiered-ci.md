@@ -297,9 +297,12 @@ fetch 的 promise 回来、React 再提交一次才出现——调用发生与�
 
 Windows leg 的成功率取决于 runner 当时的负载，发版需要预留重跑次数。任何一次重跑都必须绑定同一 tag 与 SHA，且 npm 已发布的版本不得因为重跑而改内容。
 
-## 夜间三连红的两条：desktop job 缺 pnpm、knowledge 用例的 Windows 成本（2026-10-27）
+## 夜间三连红的三条（2026-10-27）
 
-2026-10-24 / 25 / 26 三次 `nightly` 都红在同两个 job，其余 job 全绿：
+2026-10-24 / 25 / 26 三次 `nightly` 三连红：`Desktop payload tests` 与
+`Flake probe (windows-latest)` 每次都红，`Flake probe (ubuntu-latest)` 在 10-24
+另红一次（`packages/client-ui-special-indicators` 两例）。三条都是确定性缺陷、
+不是重跑抽奖，故都不按上节的「同 SHA 重跑」处理：
 
 - **`Desktop payload tests`：`pnpm: command not found`（exit 127）。** 该 job 跑的是根
   `package.json` 的 `test:desktop` 脚本，但 2026-09-16 创建它就只装了 node、没装 pnpm——
@@ -314,6 +317,10 @@ Windows leg 的成功率取决于 runner 当时的负载，发版需要预留重
   （44 张卡）改一次批量落盘，该用例 46 次落盘 → 3 次；降级路径那例本身要逐张落盘
   41 次、是断言对象不能减，故三个用例统一 `{ timeout: 30_000 }` 兜 runner I/O 抖动
   （判据仍是落盘次数与库内容，不是耗时）。
-
-两条都是确定性缺陷、不是重跑抽奖：一条缺一个 install 步骤，一条的成本可算术核对，
-故都不按上节的「同 SHA 重跑」处理。
+- **`Flake probe (ubuntu-latest)` 那一次：`host-lifetime-cache` 与
+  `lazy-entry.smoke` 各红一例。** 前者是 afterEach 的 `rmSync` 撞上 still-in-flight
+  落盘（`save` 是 fire-and-forget；探针实测 handler 返回那一刻缓存文件仍是上一版，
+  落盘在 ~10ms 后才到）——linux `ENOTEMPTY`、win32 `mkdir ENOENT` 是同一 race 的两面；
+  后者是 `fallback=null` 的懒加载用例用 `findByText` 默认 1s 等动态 import 落地，
+  满载 runner 上不够。修法：两条冷拉用例断言后按可观测状态等落盘（`vi.waitFor` 读回
+  `baseUrl`，5s 有界），懒加载用例把等待放宽到 5s、断言不变。
