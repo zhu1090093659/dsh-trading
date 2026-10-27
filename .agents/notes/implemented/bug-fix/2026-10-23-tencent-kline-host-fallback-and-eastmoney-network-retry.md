@@ -169,3 +169,15 @@ attempt 3 status 200 len 362
 参见 [腾讯分钟线与动态符号](../feature/2026-08-31-tencent-minute-klines-and-dynamic-symbols.md)
 （mkline 域名与 param 形态）与 [东财报价路径降级派生](../feature/2026-10-14-quote-path-degradation.md)
 （降级态的请求量闸门）。
+
+## 整通预算成为构造选项（2026-10-27）
+
+3 s 整通硬截止落地次日，CI 暴露了它的边界：`test/southbound-holdings.test.ts` 的真实网络用例
+（报表端点 pageSize=1000、几百到上千行报文）在 GitHub runner 上首枪就吃满 2000 ms 单枪上限，
+剩下 772 ms 的第二枪又超时，ubuntu 与 windows 同点红；同文件的模块级探针用 20 s 预算早已确认
+端点可达——被卡住的是预算，不是可达性。
+
+`EastmoneyRestOptions` 因此多一个 `requestBudgetMs`（缺省仍是 `REQUEST_BUDGET_MS` = 3000，生产
+口径不变），真实网络用例用它给出自己的预算（单枪 10 s / 整通 20 s）。分工：**硬预算这套契约由
+假时钟用例断言，真实网络用例只验真实报文的解析与语义**，不拿 CN 终端链路的预算去卡跨洋 runner
+的 RTT。

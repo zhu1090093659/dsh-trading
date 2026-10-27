@@ -129,10 +129,22 @@ function makeCtx(): Context {
 // 超时被读成「取数逻辑坏了」是假红。这里给显式上限，仍是有界等待。
 const LIVE_TIMEOUT_MS = 30_000
 
+/**
+ * 真实网络用例的客户端：单枪与整通预算按「跨洋 runner + 报表大报文」给。
+ *
+ * 2026-10-27 CI 实测：runner 到 data.eastmoney.com 首枪就吃满 2000ms 单枪上限，剩下
+ * 772ms 的第二枪又超时，ubuntu 与 windows 同点红（同文件模块级探针用 20s 预算已确认
+ * 端点可达）。缺省预算（2000/3000）是「快速判别空回」的硬上界，不该在真实网络用例里
+ * 拿去卡 runner 的 RTT——预算这套契约由假时钟用例断言，这里要验的是真实报文的解析与语义。
+ */
+function liveClient(): EastmoneyRestClient {
+  return new EastmoneyRestClient({ market: 'hk', timeoutMs: 10_000, requestBudgetMs: 20_000 })
+}
+
 liveDescribe('港股通持股历史（真实网络，东财数据中心）', () => {
   it('用户查询腾讯控股的港股通持股历史时应拿到升序去重的多日序列', { timeout: LIVE_TIMEOUT_MS }, async () => {
     // Given: 东财数据中心可达（模块级探针已确认），00700.HK 是港股通标的
-    const client = new EastmoneyRestClient({ market: 'hk' })
+    const client = liveClient()
 
     // When: 港股实例按市场规范形取数
     const history = await client.getSouthboundHoldings('00700.HK')
@@ -150,7 +162,7 @@ liveDescribe('港股通持股历史（真实网络，东财数据中心）', () 
 
   it('用户以连接器原生形查询港股通持股时应归一为市场规范形', { timeout: LIVE_TIMEOUT_MS }, async () => {
     // Given: 港股实例，用户传的是东财原生 5 位码（不带后缀）
-    const client = new EastmoneyRestClient({ market: 'hk' })
+    const client = liveClient()
 
     // When: 按裸码取数
     const history = await client.getSouthboundHoldings('700')
@@ -162,7 +174,7 @@ liveDescribe('港股通持股历史（真实网络，东财数据中心）', () 
 
   it('用户查询非港股通标的的持股时应拿到空序列而不是报错', { timeout: LIVE_TIMEOUT_MS }, async () => {
     // Given: 08083.HK 实测不在港股通范围（上游返回 result: null）
-    const client = new EastmoneyRestClient({ market: 'hk' })
+    const client = liveClient()
 
     // When: 取该标的的持股历史
     const history = await client.getSouthboundHoldings('08083.HK')

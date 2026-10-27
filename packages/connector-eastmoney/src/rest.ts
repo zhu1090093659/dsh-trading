@@ -278,6 +278,12 @@ export interface EastmoneyRestOptions {
   market?: EastmoneyMarket
   /** 单枪超时（ms），缺省 2000：挂住的请求到点 abort 成 TRADING_NETWORK，不存在无上界的等待。 */
   timeoutMs?: number
+  /**
+   * 一次取数整通硬截止（ms），缺省 3000。缺省口径服务「快速判别空回」；报表类端点
+   * （pageSize=1000、几百到上千行报文）在跨洋链路上单次就要 3-6s，预算不够会把可达的
+   * 端点判成故障，故留这个显式放大的缝（缺省值不变）。
+   */
+  requestBudgetMs?: number
   /** 时钟注入（固定冷却的 sleep 与整通硬截止计时都读它）；缺省真实 timer。 */
   clock?: EastmoneyClock
 }
@@ -374,6 +380,8 @@ export class EastmoneyRestClient {
   private readonly fetchImpl: typeof fetch
   /** 单枪超时（ms）。 */
   private readonly timeoutMs: number
+  /** 一次取数整通硬截止（ms）。 */
+  private readonly requestBudgetMs: number
   /** 请求通道时钟（冷却与整通截止）。 */
   private readonly clock: EastmoneyClock
   /** 按主机的短期熔断（一次整通网络级失败后该主机静默 CIRCUIT_OPEN_MS）。 */
@@ -389,6 +397,7 @@ export class EastmoneyRestClient {
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch
     this.market = options.market ?? 'cn'
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    this.requestBudgetMs = options.requestBudgetMs ?? REQUEST_BUDGET_MS
     this.clock = options.clock ?? systemClock
   }
 
@@ -519,7 +528,7 @@ export class EastmoneyRestClient {
       )
     }
 
-    const deadlineAt = this.clock.now() + REQUEST_BUDGET_MS
+    const deadlineAt = this.clock.now() + this.requestBudgetMs
     let lastError: TradingServiceError | undefined
     for (let shot = 1; shot <= MAX_ATTEMPTS; shot += 1) {
       // 硬截止：剩余预算不为正就不打这一枪（含首枪之外的每一枪）。
