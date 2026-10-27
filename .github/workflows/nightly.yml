@@ -70,6 +70,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # runner 自带 node 但不带 pnpm：这一步不装依赖，只为拿到 pnpm 可执行文件——
+      # 跑的是根 package.json 的 test:desktop 脚本。本 job 自 2026-09-16 创建起缺这一步，
+      # 每夜红在 `pnpm: command not found`（exit 127），与 desktop 用例本身无关。
+      - uses: pnpm/action-setup@v4   # 版本读根 package.json 的 packageManager 字段
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
