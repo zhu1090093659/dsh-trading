@@ -1292,6 +1292,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 dataKey={`${market}:${symbol}:${chartInterval}`}
                 intraday={INTRADAY_INTERVALS.has(chartInterval)}
                 {...(fiveDayProps !== undefined ? { fiveDay: fiveDayProps } : {})}
+                {...(fiveDayProps !== undefined && stats.prevClose !== undefined ? { percentRef: stats.prevClose } : {})}
                 onFiveDayWheel={fiveDayWheel}
                 colorMode={colorMode}
                 mainOverlays={mainOverlays}

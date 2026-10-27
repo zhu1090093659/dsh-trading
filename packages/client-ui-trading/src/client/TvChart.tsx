@@ -26,7 +26,7 @@ import type {
 } from 'lightweight-charts'
 import type { BarPrice, PriceFormatCustom } from 'lightweight-charts'
 import { fmtAxis, priceDigits } from './format.ts'
-import { AXIS_FONT_FAMILY, AXIS_FONT_SIZE, AXIS_SCALE_MARGIN, axisMinimumWidth, percentLabel, percentLabelCandidates } from './axis-width.ts'
+import { AXIS_FONT_FAMILY, AXIS_FONT_SIZE, AXIS_SCALE_MARGIN, axisMinimumWidth, percentAxisRef, percentLabel, percentLabelCandidates } from './axis-width.ts'
 import { getColorPalette, type ColorMode } from './color-mode.ts'
 import { resolveHistogramBarColor, resolveOutputColor } from './indicator-color.ts'
 import { isDarkTheme, useDarkTheme } from './theme-mode.ts'
@@ -102,6 +102,11 @@ export interface TvChartProps {
   /** market:symbol:interval——变化即全量重置并 fitContent。 */
   dataKey: string
   intraday: boolean
+  /**
+   * 右轴百分比参考价（五日级别传昨收，与头部涨跌幅同锚）：给了就固定，滚动/缩放/换档位
+   * 都不再重算，右轴读数即头部那个涨跌幅的口径。缺省/非法退回「可视区最左一根收盘」。
+   */
+  percentRef?: number | undefined
   colorMode?: ColorMode
   mainOverlays: readonly TvIndicatorGroup[]
   subIndicators: readonly TvIndicatorGroup[]
@@ -350,8 +355,12 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
   const mirrorTopRef = useRef<ISeriesApi<'Line'> | null>(null)
   const mirrorBottomRef = useRef<ISeriesApi<'Line'> | null>(null)
   const mirrorCloseRef = useRef<ISeriesApi<'Line'> | null>(null)
-  /** 右轴百分比参考价（可视区最左一根K线收盘；null = 未定）。 */
+  /** 右轴百分比参考价（固定锚点或可视区最左一根K线收盘；null = 未定）。 */
   const refPriceRef = useRef<number | null>(null)
+  /** 五日级别右轴锚点（昨收）；null = 沿用「可视区最左一根收盘」口径。 */
+  const fixedPercentRef = percentAxisRef(props.percentRef)
+  /** 挂载期建好的参考价重算入口（锚点变化时复用同一份口径，不另写一份）。 */
+  const syncRefPriceRef = useRef<(() => void) | null>(null)
   const mirrorFormatRafRef = useRef(0)
   /** 右轴宽度下限（px；0 = 未锁）。锁住「轴宽 ↔ 绘图区宽」正反馈，见 axis-width.ts。 */
   const rightAxisMinWidthRef = useRef(0)
@@ -442,21 +451,26 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
       lastValueVisible: true,
     }, 0)
 
-    // 参考价 = 可视区最左一根K线收盘：滚动/缩放/换数据时经 visibleLogicalRange
-    // 事件重算，rAF 去抖后刷新镜像 formatter（新对象强制轴重绘）。
+    // 参考价：固定锚点（五日级别 = 昨收）优先，否则取可视区最左一根K线收盘。滚动/缩放/
+    // 换数据时经 visibleLogicalRange 事件重算，rAF 去抖后刷新镜像 formatter（新对象强制轴重绘）。
     const syncRefPrice = (): void => {
-      const barsNow = propsRef.current.bars
-      if (barsNow.length === 0) return
-      const range: LogicalRange | null = chart.timeScale().getVisibleLogicalRange()
-      if (range === null) return
-      const index = Math.min(barsNow.length - 1, Math.max(0, Math.ceil(range.from)))
-      const close = barsNow[index]?.close
-      if (close === undefined || !Number.isFinite(close) || close <= 0) return
-      if (close === refPriceRef.current) return
-      refPriceRef.current = close
+      let next = percentAxisRef(propsRef.current.percentRef)
+      if (next === null) {
+        const barsNow = propsRef.current.bars
+        const range: LogicalRange | null = chart.timeScale().getVisibleLogicalRange()
+        if (barsNow.length > 0 && range !== null) {
+          const index = Math.min(barsNow.length - 1, Math.max(0, Math.ceil(range.from)))
+          const close = barsNow[index]?.close
+          next = close !== undefined && Number.isFinite(close) && close > 0 ? close : null
+        }
+      }
+      if (next === null || next === refPriceRef.current) return
+      refPriceRef.current = next
       scheduleMirrorFormatRefresh()
     }
+    syncRefPriceRef.current = syncRefPrice
     chart.timeScale().subscribeVisibleLogicalRangeChange(syncRefPrice)
+    syncRefPrice()
 
     applyStretch(chart)
 
@@ -485,9 +499,16 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
       mirrorBottomRef.current = null
       mirrorCloseRef.current = null
       refPriceRef.current = null
+      syncRefPriceRef.current = null
       cancelAnimationFrame(mirrorFormatRafRef.current)
     }
   }, [])
+
+  // 右轴锚点变化（进出五日级别、换标的换昨收）：立刻按新口径重设参考价，不等下一次可视区
+  // 事件——否则退出五日级别后右轴会停在昨收口径上，锚点换了也不立刻生效。
+  useEffect(() => {
+    syncRefPriceRef.current?.()
+  }, [fixedPercentRef])
 
   // 主题热切换（浅色 ↔ 深色动态 applyOptions）：只重放随主题变化的视觉选项。时轴几何与
   // autoSize 是创建期结构键，重放会让库重排可见范围 / 重新量测容器 = 清掉缩放与平移。
@@ -691,7 +712,8 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
     // scaleMargins 把轴范围撑出数据区间的部分算进去（axis-width.ts）。
     if (Number.isFinite(minPrice) && Number.isFinite(maxPrice)) {
       const chart = chartRef.current
-      const minWidth = axisMinimumWidth(percentLabelCandidates({ minPrice, maxPrice, minClose, maxClose }))
+      // 五日级别的固定锚点（昨收）可落在可视收盘区间之外，候选按锚点直接算。
+      const minWidth = axisMinimumWidth(percentLabelCandidates({ minPrice, maxPrice, minClose, maxClose, ref: percentAxisRef(propsRef.current.percentRef) }))
       if (chart !== null && minWidth > 0 && minWidth !== rightAxisMinWidthRef.current) {
         rightAxisMinWidthRef.current = minWidth
         chart.applyOptions({ rightPriceScale: { minimumWidth: minWidth } })

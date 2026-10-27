@@ -27,9 +27,22 @@ export interface PercentAxisExtremes {
   /** 价格轴自缩放包络的下/上界（蜡烛高低 ∪ 主图指标输出）。 */
   minPrice: number
   maxPrice: number
-  /** 闭区间收盘价极值——参考价（可视区最左一根收盘）必落在此区间内。 */
+  /** 闭区间收盘价极值——可视区口径的参考价（最左一根收盘）必落在此区间内。 */
   minClose: number
   maxClose: number
+  /**
+   * 固定参考价（五日级别 = 昨收）：给了就按它直接算两端标签。固定锚点可以落在可视收盘
+   * 区间之外，此时上面的收盘包络会低估涨跌幅度，候选也就不再保宽。
+   */
+  ref?: number | null
+}
+
+/**
+ * 右轴百分比参考价的固定锚点：合法正价 → 该值；否则 null（退回「可视区最左一根收盘」）。
+ * formatter（TvChart.mirrorPercentFormat）与宽度下限共用本函数，口径只有这一份。
+ */
+export function percentAxisRef(percentRef: number | null | undefined): number | null {
+  return percentRef !== null && percentRef !== undefined && Number.isFinite(percentRef) && percentRef > 0 ? percentRef : null
 }
 
 /**
@@ -59,8 +72,10 @@ export function percentLabelCandidates(extremes: PercentAxisExtremes): string[] 
   const { minPrice, maxPrice, minClose, maxClose } = extremes
   const span = Number.isFinite(minPrice) && Number.isFinite(maxPrice) ? Math.max(0, maxPrice - minPrice) : 0
   const pad = axisPadding(span)
-  const rise = minClose > 0 ? percentLabel(maxPrice + pad, minClose) : ''
-  const fall = maxClose > 0 ? percentLabel(minPrice - pad, maxClose) : ''
+  // 固定锚点优先；否则沿用收盘包络的两端（参考价未知，但必落在区间内）。
+  const anchor = percentAxisRef(extremes.ref)
+  const rise = percentLabel(maxPrice + pad, anchor ?? minClose)
+  const fall = percentLabel(minPrice - pad, anchor ?? maxClose)
   return [rise === '' ? '0.00%' : rise, fall === '' ? '0.00%' : fall]
 }
 
