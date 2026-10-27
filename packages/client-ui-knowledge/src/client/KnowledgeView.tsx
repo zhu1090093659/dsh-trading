@@ -6,11 +6,27 @@
  *   2. 主画布区（Obsidian 式 force-graph 力导知识图谱网络）
  *   3. 右侧详情抽屉（卡片全文：核心论点 + 事实核查三桶 + 复用经验 + 边界避坑 + 来源链接）
  *   4. 空态引导与状态持久化 (dshtrading.knowledge.view.v1)
+ *   5. 导出 / 导入动作与导入预览浮动层（非模态：抽屉与图谱照常可交互）
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { buildGraph, type KnowledgeCard, type KnowledgeGraphData } from '@dshtrading/knowledge'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import {
+  KNOWLEDGE_BUNDLE_MAX_BYTES,
+  KNOWLEDGE_BUNDLE_MAX_CARDS,
+  buildGraph,
+  planKnowledgeImport,
+  type KnowledgeBundle,
+  type KnowledgeCard,
+  type KnowledgeGraphData,
+  type KnowledgeImportMode,
+} from '@dshtrading/knowledge'
 import { readJson, writeJson } from './shell-faces.ts'
 import { CREDIBILITY_OPTIONS, SOURCE_TYPE_OPTIONS, staleFilterFields } from './filter-state.ts'
+import {
+  exportKnowledgeFileName,
+  exportKnowledgeText,
+  importPlanSummary,
+  parseImportFileText,
+} from './import-export.ts'
 import { IconKnowledge, IconSearch } from './icons.tsx'
 import { KnowledgeGraph, type KnowledgeGraphHandle } from './KnowledgeGraph.tsx'
 import type { KnowledgeLocaleKey } from './contract.ts'
@@ -34,12 +50,34 @@ const DEFAULT_STORED: KnowledgeViewStored = {
   selectedSourceType: '',
 }
 
+/** 桥的导入结果面：本视图只用得到这几项，失败时 error 是可直接显示的原文。 */
+export interface KnowledgeImportOutcome {
+  ok: boolean
+  created: number
+  updated: number
+  skipped: number
+  error?: string
+}
+
+/** 导入预览草稿：draft 非 null 即面板打开，bundle 为 null 表示文件解析失败。 */
+interface ImportDraft {
+  fileName: string
+  /** 原始文件文本：预览与写库用同一份输入（确认时原样交给桥）。 */
+  text: string
+  bundle: KnowledgeBundle | null
+  mode: KnowledgeImportMode
+}
+
 export interface KnowledgeViewProps {
   t: (key: KnowledgeLocaleKey) => string
   /** 桥面（shell 的 tradingBridge 服务；未注入时保持 loading 空态）。 */
   bridge: {
     fetchKnowledgeCards: () => Promise<KnowledgeCard[]>
     subscribeTradingEvents: (handlers: { knowledge?: () => void }) => () => void
+    importKnowledgeBundle: (input: {
+      mode: KnowledgeImportMode
+      bundle: string
+    }) => Promise<KnowledgeImportOutcome>
   }
 }
 
@@ -59,6 +97,15 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
   const [cards, setCards] = useState<KnowledgeCard[]>([])
   const [selectedCard, setSelectedCard] = useState<KnowledgeCard | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // 2b. 导入 / 导出状态（draft 非 null 即预览面板打开；bundle 为 null = 解析失败）
+  const [draft, setDraft] = useState<ImportDraft | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [applied, setApplied] = useState<{ created: number; updated: number; skipped: number } | null>(null)
+  const [importing, setImporting] = useState(false)
+  /** 导出超出导入侧上限（2000 张 / 8 MiB）时的可见提示，下一次导出成功或被缩小筛选后消失。 */
+  const [exportTooLarge, setExportTooLarge] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const graphRef = useRef<KnowledgeGraphHandle | null>(null)
 
@@ -177,6 +224,17 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
     return buildGraph(filteredCards, { tagHubs: true, coTag: false, coAuthor: false })
   }, [filteredCards])
 
+  // 6. 导入预览计划：模式切换与 cards 变化都重算（同一批 bundle，不同口径）
+  const importPlan = useMemo(() => {
+    if (draft === null || draft.bundle === null) return null
+    return planKnowledgeImport(cards, draft.bundle.cards, draft.mode)
+  }, [draft, cards])
+
+  const importCounts = useMemo(
+    () => (importPlan === null ? null : importPlanSummary(importPlan)),
+    [importPlan],
+  )
+
   // 重置过滤
   const handleResetFilters = () => {
     setQuery('')
@@ -189,6 +247,103 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
   const hasActiveFilters = Boolean(
     query || selectedTag || selectedAuthor || selectedCredibility || selectedSourceType,
   )
+
+  /**
+   * 导出：当前筛选结果（无筛选即全库）直接下载为 JSON 文件，文件名带本地时间戳。
+   *
+   * 导出侧与导入侧同口径（KNOWLEDGE_BUNDLE_MAX_CARDS / KNOWLEDGE_BUNDLE_MAX_BYTES）：
+   * 超过上限就一个字节都不下载——否则我们造出的文件自己的导入侧必然拒收，
+   * 用户要到下一次导入才知道白导了一场。
+   */
+  const handleExport = () => {
+    const now = new Date()
+    const text = exportKnowledgeText(filteredCards, now)
+    const bytes = new TextEncoder().encode(text).length
+    if (filteredCards.length > KNOWLEDGE_BUNDLE_MAX_CARDS || bytes > KNOWLEDGE_BUNDLE_MAX_BYTES) {
+      setExportTooLarge(true)
+      return
+    }
+    setExportTooLarge(false)
+    const blob = new Blob([text], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = exportKnowledgeFileName(now)
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const closeImportPanel = useCallback(() => {
+    setDraft(null)
+    setImportError(null)
+    setApplied(null)
+    setImporting(false)
+    const input = fileInputRef.current
+    if (input !== null) input.value = ''
+  }, [])
+
+  // 选中文件 → 读文本 → 解析：解析失败停在面板显示原文错误，不写库
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget
+    const file = input.files?.[0] ?? null
+    // 清空 value：同一文件再次选择也要触发 change
+    input.value = ''
+    if (file === null) return
+    setApplied(null)
+    let text: string
+    try {
+      text = await file.text()
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error))
+      setDraft({ fileName: file.name, text: '', bundle: null, mode: 'skip' })
+      return
+    }
+    const parsed = parseImportFileText(text)
+    if (!parsed.ok) {
+      setImportError(parsed.error)
+      setDraft({ fileName: file.name, text, bundle: null, mode: 'skip' })
+      return
+    }
+    setImportError(null)
+    setDraft({ fileName: file.name, text, bundle: parsed.bundle, mode: 'skip' })
+  }
+
+  // 模式切换：用同一批 bundle 重算计划，计数随之刷新
+  const handleSelectImportMode = (mode: KnowledgeImportMode) => {
+    setApplied(null)
+    setImportError(null)
+    setDraft((prev) => (prev === null ? prev : { ...prev, mode }))
+  }
+
+  // 确认写库：原始文件文本原样交给桥；成功后重拉卡片（桥另会广播 'knowledge' 失效）
+  const handleConfirmImport = async () => {
+    if (draft === null || draft.bundle === null || importing || applied !== null) return
+    setImporting(true)
+    setImportError(null)
+    try {
+      const result = await stableBridge.importKnowledgeBundle({ mode: draft.mode, bundle: draft.text })
+      if (!result.ok) {
+        setImportError(result.error ?? '')
+        return
+      }
+      setApplied({ created: result.created, updated: result.updated, skipped: result.skipped })
+      await loadCards()
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  // Esc 关闭预览面板（面板不铺遮罩，图谱与抽屉照常可交互）
+  useEffect(() => {
+    if (draft === null) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeImportPanel()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [draft, closeImportPanel])
 
   // 处理关联卡片点击跳转
   const handleJumpToRelated = (relatedId: string) => {
@@ -218,6 +373,14 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
     }
     return clusters.size
   }, [filteredCards])
+
+  // 导出按钮的说明文案：空结果 > 超上限 > 正常（超限时点下去只会看到提示，不下载）
+  const exportTitle =
+    filteredCards.length === 0
+      ? t('kv.io.exportEmpty')
+      : exportTooLarge || filteredCards.length > KNOWLEDGE_BUNDLE_MAX_CARDS
+        ? t('kv.io.exportTooLarge')
+        : t('kv.io.export')
 
   return (
     <div className={css.root} data-dshtrading-knowledge-view="">
@@ -300,10 +463,39 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
           )}
         </div>
 
-        <div className={css.statsText}>
-          {filteredCards.length} {t('kv.stats.cards')} · {clusterCount} {t('kv.stats.clusters')}
+        <div className={css.ioGroup}>
+          <button
+            type="button"
+            className={css.ioBtn}
+            onClick={handleExport}
+            disabled={filteredCards.length === 0}
+            title={exportTitle}
+          >
+            {t('kv.io.export')}
+          </button>
+          <button type="button" className={css.ioBtn} onClick={() => fileInputRef.current?.click()}>
+            {t('kv.io.import')}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className={css.ioFileInput}
+            aria-label={t('kv.io.import')}
+            onChange={(event) => { void handleFileChange(event) }}
+          />
+          <div className={css.statsText}>
+            {filteredCards.length} {t('kv.stats.cards')} · {clusterCount} {t('kv.stats.clusters')}
+          </div>
         </div>
       </div>
+
+      {/* 1b. 导出超限提示（下一次导出成功即消失；与面板提示条同一套视觉） */}
+      {exportTooLarge && (
+        <div className={`${css.ioNotice} ${css.ioNoticeError} ${css.ioBanner}`} role="status">
+          {t('kv.io.exportTooLarge')}
+        </div>
+      )}
 
       {/* 2. 主画布区 */}
       <div className={css.mainArea}>
@@ -505,6 +697,138 @@ export function KnowledgeView({ t, bridge }: KnowledgeViewProps) {
                 </a>
               </div>
             )}
+          </div>
+        )}
+
+        {/* 4. 导入预览浮动层（不铺遮罩：抽屉与图谱照常可交互；Esc / 取消关闭） */}
+        {draft !== null && (
+          <div className={css.ioOverlay}>
+            <div
+              className={css.ioPanel}
+              role="dialog"
+              aria-modal="false"
+              aria-label={t('kv.io.dialogTitle')}
+            >
+              <div className={css.ioPanelHeader}>
+                <div className={css.ioPanelTitle}>{t('kv.io.dialogTitle')}</div>
+                <button
+                  type="button"
+                  className={css.closeBtn}
+                  onClick={closeImportPanel}
+                  aria-label={t('kv.io.cancel')}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className={css.ioPanelBody}>
+                <div className={css.ioFileHint}>
+                  {draft.fileName} — {t('kv.io.fileHint')}
+                </div>
+
+                {importError !== null && (
+                  <div className={`${css.ioNotice} ${css.ioNoticeError}`}>
+                    {t('kv.io.failed')}
+                    {importError === '' ? '' : `: ${importError}`}
+                  </div>
+                )}
+
+                {applied !== null && (
+                  <div className={`${css.ioNotice} ${css.ioNoticeOk}`}>
+                    {t('kv.io.applied')}: {t('kv.io.planCreate')} {applied.created} ·{' '}
+                    {t('kv.io.planUpdate')} {applied.updated} · {t('kv.io.planSkip')} {applied.skipped}
+                  </div>
+                )}
+
+                {/* 写库成功后计数会按新库重算（全都变成「跳过」），与结果提示互相矛盾：
+                    此时收起预览块，只留结果提示。 */}
+                {applied === null && draft.bundle !== null && importCounts !== null && importPlan !== null && (
+                  <>
+                    <div className={css.ioModes}>
+                      <label className={css.ioMode}>
+                        <input
+                          type="radio"
+                          name="dshtrading-knowledge-import-mode"
+                          value="skip"
+                          checked={draft.mode === 'skip'}
+                          onChange={() => handleSelectImportMode('skip')}
+                          disabled={importing}
+                        />
+                        <span>{t('kv.io.modeSkip')}</span>
+                      </label>
+                      <label className={css.ioMode}>
+                        <input
+                          type="radio"
+                          name="dshtrading-knowledge-import-mode"
+                          value="overwrite"
+                          checked={draft.mode === 'overwrite'}
+                          onChange={() => handleSelectImportMode('overwrite')}
+                          disabled={importing}
+                        />
+                        <span>{t('kv.io.modeOverwrite')}</span>
+                      </label>
+                    </div>
+
+                    <div className={css.ioCounts}>
+                      <div className={css.ioCount}>
+                        <span className={css.ioCountValue}>{importCounts.create}</span>
+                        <span className={css.ioCountLabel}>{t('kv.io.planCreate')}</span>
+                      </div>
+                      <div className={css.ioCount}>
+                        <span className={css.ioCountValue}>{importCounts.update}</span>
+                        <span className={css.ioCountLabel}>{t('kv.io.planUpdate')}</span>
+                      </div>
+                      <div className={css.ioCount}>
+                        <span className={css.ioCountValue}>{importCounts.skip}</span>
+                        <span className={css.ioCountLabel}>{t('kv.io.planSkip')}</span>
+                      </div>
+                      <div className={css.ioCount}>
+                        <span className={css.ioCountValue}>{importCounts.dropped}</span>
+                        <span className={css.ioCountLabel}>{t('kv.io.planDropped')}</span>
+                      </div>
+                      <div className={css.ioCount}>
+                        <span className={css.ioCountValue}>{importCounts.invalid}</span>
+                        <span className={css.ioCountLabel}>{t('kv.io.planInvalid')}</span>
+                      </div>
+                    </div>
+
+                    {importCounts.invalid > 0 && (
+                      <div className={css.ioInvalid}>
+                        <div className={css.ioInvalidTitle}>
+                          {t('kv.io.planInvalid')} {importCounts.invalid}
+                        </div>
+                        <ul className={css.ioInvalidList}>
+                          {importPlan.invalid.slice(0, 5).map((item) => (
+                            <li key={item.index}>
+                              #{item.index} {item.error}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className={css.ioPanelFooter}>
+                <button
+                  type="button"
+                  className={css.ioBtn}
+                  onClick={closeImportPanel}
+                  disabled={importing}
+                >
+                  {t('kv.io.cancel')}
+                </button>
+                <button
+                  type="button"
+                  className={`${css.ioBtn} ${css.ioBtnPrimary}`}
+                  onClick={() => { void handleConfirmImport() }}
+                  disabled={importing || applied !== null || draft.bundle === null}
+                >
+                  {t('kv.io.confirm')}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

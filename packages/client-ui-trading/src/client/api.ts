@@ -340,6 +340,130 @@ export async function fetchKnowledgeCards(): Promise<KnowledgeCard[]> {
   }
 }
 
+/** 知识库导入结果（桥 POST /dshtrading/api/knowledge/import 的响应镜像）。 */
+export interface KnowledgeImportResult {
+  ok: boolean
+  created: number
+  updated: number
+  skipped: number
+  dropped: number
+  invalid: number
+  remapped: number
+  skippedItems: Array<{ id: string; title: string; url: string; reason: string }>
+  invalidItems: Array<{ index: number; title?: string; error: string }>
+  error?: string
+}
+
+/** 失败态：全 0 计数 + 可直接显示的一条错误文案（导入是点击动作，需要文案不需要异常）。 */
+function importFailure(error: string): KnowledgeImportResult {
+  return {
+    ok: false,
+    created: 0,
+    updated: 0,
+    skipped: 0,
+    dropped: 0,
+    invalid: 0,
+    remapped: 0,
+    skippedItems: [],
+    invalidItems: [],
+    error,
+  }
+}
+
+const importNumber = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0
+const importText = (value: unknown, fallback: string): string =>
+  typeof value === 'string' ? value : fallback
+
+function importSkippedItems(value: unknown): KnowledgeImportResult['skippedItems'] {
+  if (!Array.isArray(value)) return []
+  const items: KnowledgeImportResult['skippedItems'] = []
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object') continue
+    const row = entry as Record<string, unknown>
+    items.push({
+      id: importText(row.id, ''),
+      title: importText(row.title, ''),
+      url: importText(row.url, ''),
+      reason: importText(row.reason, ''),
+    })
+  }
+  return items
+}
+
+/**
+ * 失败响应里挑出给用户看的那句话。三个字段各来自一种拒绝：
+ * error = 网关/业务自述的失败文本；reason = 能力未挂载（导入类先例：host 没挂 store
+ * 时是 HTTP 200 + { ok:false, reason }，见 bridge 的 importKnowledge /
+ * importChartActivations）；message = 协议拒绝（BridgeProtocolError 序列化为
+ * { ok:false, code, message }）。三样都没有才退 HTTP 状态码。
+ */
+function importFailureDetail(wire: Record<string, unknown> | undefined, status: number): string {
+  for (const field of ['error', 'reason', 'message'] as const) {
+    const text = importText(wire?.[field], '')
+    if (text !== '') return text
+  }
+  return `HTTP ${status}`
+}
+
+function importInvalidItems(value: unknown): KnowledgeImportResult['invalidItems'] {
+  if (!Array.isArray(value)) return []
+  const items: KnowledgeImportResult['invalidItems'] = []
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object') continue
+    const row = entry as Record<string, unknown>
+    const title = importText(row.title, '')
+    items.push({
+      index: importNumber(row.index),
+      error: importText(row.error, ''),
+      // exactOptionalPropertyTypes：没有标题时不带这个键，而不是给一个 undefined。
+      ...(title === '' ? {} : { title }),
+    })
+  }
+  return items
+}
+
+/**
+ * 导入知识库 bundle（写路由；成功后桥广播 'knowledge' 失效信号，视图重拉卡片）。
+ *
+ * 不走 getJson：那条路径把非 2xx 与业务错误一律转成 rejection，而导入失败要的是
+ * 「一句话 + 全 0 计数」让面板就地显示。响应体里的错误文本按桥的协议信封取
+ * （BridgeProtocolError 序列化为 { ok:false, code, message }，见 bot-api 的
+ * 路由错误分支），取不到才退化成 HTTP 状态码。
+ */
+export async function importKnowledgeBundle(input: {
+  mode: 'skip' | 'overwrite'
+  bundle: string
+}): Promise<KnowledgeImportResult> {
+  let response: Response
+  try {
+    response = await fetch('/dshtrading/api/knowledge/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ mode: input.mode, bundle: input.bundle }),
+    })
+  } catch (error) {
+    return importFailure(error instanceof Error ? error.message : String(error))
+  }
+
+  const wire = await response.json().catch(() => undefined) as Record<string, unknown> | undefined
+  if (!response.ok || wire === undefined || wire.ok !== true) {
+    return importFailure(importFailureDetail(wire, response.status))
+  }
+
+  return {
+    ok: true,
+    created: importNumber(wire.created),
+    updated: importNumber(wire.updated),
+    skipped: importNumber(wire.skipped),
+    dropped: importNumber(wire.dropped),
+    invalid: importNumber(wire.invalid),
+    remapped: importNumber(wire.remapped),
+    skippedItems: importSkippedItems(wire.skippedItems),
+    invalidItems: importInvalidItems(wire.invalidItems),
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* 新闻情报流（issue #37）                                                */
 /* ------------------------------------------------------------------ */
@@ -1266,6 +1390,7 @@ export interface TradingBridgeService {
   deleteCustomScreener: typeof deleteCustomScreener
   resetScreener: typeof resetScreener
   fetchKnowledgeCards: typeof fetchKnowledgeCards
+  importKnowledgeBundle: typeof importKnowledgeBundle
   fetchFundamentals: typeof fetchFundamentals
   fetchNews: typeof fetchNews
   fetchFlash: typeof fetchFlash
@@ -1287,6 +1412,7 @@ export function createTradingBridgeService(): TradingBridgeService {
     deleteCustomScreener,
     resetScreener,
     fetchKnowledgeCards,
+    importKnowledgeBundle,
     fetchFundamentals,
     fetchNews,
     fetchFlash,
