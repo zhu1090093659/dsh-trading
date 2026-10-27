@@ -180,7 +180,7 @@ liveDescribe('港股通持股历史（真实网络，东财数据中心）', () 
     expect(history.points).toEqual([])
   })
 
-  it('用户经港股行情服务取持股时应拿到与 REST 客户端一致的序列', async () => {
+  it('用户经港股行情服务取持股时应拿到与 REST 客户端一致的序列', { timeout: LIVE_TIMEOUT_MS }, async () => {
     // Given: 港股数据面实例（与 dataplane 注册的是同一个类）
     const service = new EastmoneyMarketDataService(makeCtx(), { market: 'hk' }, 'tradingHkMarketData')
 
