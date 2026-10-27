@@ -31,6 +31,19 @@ interface StageViewsService {
 interface BridgeService {
   fetchKnowledgeCards(): Promise<Array<Record<string, unknown>>>
   subscribeTradingEvents(handlers: Record<string, () => void>): () => void
+  /** 镜像 shell 的 KnowledgeImportResult（本包只用得到这几项，但按原样镜像）。 */
+  importKnowledgeBundle(input: { mode: 'skip' | 'overwrite'; bundle: string }): Promise<{
+    ok: boolean
+    created: number
+    updated: number
+    skipped: number
+    dropped: number
+    invalid: number
+    remapped: number
+    skippedItems: Array<{ id: string; title: string; url: string; reason: string }>
+    invalidItems: Array<{ index: number; title?: string; error: string }>
+    error?: string
+  }>
 }
 
 export function apply(ctx: ClientContext): void {
@@ -46,6 +59,8 @@ export function apply(ctx: ClientContext): void {
     const bridge = {
       fetchKnowledgeCards: () => faces.tradingBridge.fetchKnowledgeCards() as never,
       subscribeTradingEvents: (handlers) => faces.tradingBridge.subscribeTradingEvents(handlers),
+      importKnowledgeBundle: (input: { mode: 'skip' | 'overwrite'; bundle: string }) =>
+        faces.tradingBridge.importKnowledgeBundle(input),
     }
     faces.tradingStageViews.register({
       id: 'knowledge',

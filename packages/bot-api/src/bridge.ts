@@ -29,8 +29,8 @@ import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@d
 import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dshtrading/kit-crypto'
 import type { ChartActivationStore, CustomIndicatorRecord, CustomIndicatorStore, IndicatorApplyScope, IndicatorInstance } from '@dshtrading/indicators'
 import { carryInstanceExtras, clampActivationParams, createMemoryChartActivationStore, createMemoryCustomIndicatorStore, defaultActivationInstance, resolveIndicatorSpec, sanitizeApplyScope, sanitizeInstance, symbolScopeKey, withHiddenScopes } from '@dshtrading/indicators'
-import type { KnowledgeCard, KnowledgeCardStore } from '@dshtrading/knowledge'
-import { createMemoryKnowledgeCardStore } from '@dshtrading/knowledge'
+import type { KnowledgeCard, KnowledgeCardStore, KnowledgeImportEntry, KnowledgeImportMode } from '@dshtrading/knowledge'
+import { createMemoryKnowledgeCardStore, parseKnowledgeBundle, planKnowledgeImport } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord, CustomStrategyStore } from '@dshtrading/strategies'
 import {
   createMemoryCustomStrategyStore,
@@ -513,6 +513,24 @@ export interface ChartActivationRejectedWire {
 export interface KnowledgeCardsWire {
   ok: true
   cards: readonly KnowledgeCard[]
+}
+
+/**
+ * bundle 导入结果（POST /knowledge/import）。
+ * 计数与明细同形带出：口径唯一在 planKnowledgeImport，桥与客户端都不再统计一次。
+ */
+export interface KnowledgeImportWire {
+  ok: boolean
+  created: number
+  updated: number
+  skipped: number
+  dropped: number
+  invalid: number
+  remapped: number
+  skippedItems: readonly (KnowledgeImportEntry & { readonly reason: string })[]
+  invalidItems: readonly { readonly index: number; readonly title?: string; readonly error: string }[]
+  /** store 缺席时的业务拒绝理由（迁移导入先例口径：HTTP 200 + ok:false，不是 4xx）。 */
+  reason?: string
 }
 
 /* -- 统一资产台账 wire 与宿主面（issue #65，契约 §2/§3/§4）------------------ */
@@ -1356,6 +1374,62 @@ export class TradingBridge {
     if (store === undefined) return { ok: true, cards: [] }
     const cards = await store.list()
     return { ok: true, cards }
+  }
+
+  /**
+   * 导入知识卡 bundle（POST /knowledge/import，mode 缺省 'skip'）。
+   *
+   * host 权威：客户端预览算过一次计划，这里读库后按同一个 planKnowledgeImport
+   * 重算再写（去重键 source.url）——预览 3 张却写进 5 张的两套口径不存在。
+   * store 缺席沿用迁移导入先例（importChartActivations 与 importWatchlists）：HTTP 200 +
+   * ok:false + reason，而不是 4xx——缺 store 是部署形态，不是请求错了。
+   */
+  async importKnowledge(body: unknown): Promise<KnowledgeImportWire> {
+    const input = (typeof body === 'object' && body !== null ? body : {}) as { mode?: unknown; bundle?: unknown }
+    const mode = parseKnowledgeImportMode(input.mode)
+    if (input.bundle === undefined) throw new BridgeProtocolError(400, 'knowledge import: bundle is required')
+    const parsed = parseKnowledgeBundle(knowledgeBundleText(input.bundle))
+    if (!parsed.ok) throw new BridgeProtocolError(400, parsed.error)
+
+    const store = this.host.knowledgeStore
+    if (store === undefined) {
+      return {
+        ok: false,
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        dropped: 0,
+        invalid: 0,
+        remapped: 0,
+        skippedItems: [],
+        invalidItems: [],
+        reason: 'knowledge store is not mounted',
+      }
+    }
+
+    const plan = planKnowledgeImport(await store.list(), parsed.bundle.cards, mode)
+    const writes = [...plan.create, ...plan.update]
+    // 零写入不动 store：全跳过/全非法时既不开事务也不逐张空转。
+    if (writes.length > 0) {
+      // saveMany 存在时一次落盘（文件版 store 每张 save 都是一次整表事务）；缺席逐张降级。
+      if (typeof store.saveMany === 'function') {
+        await store.saveMany(writes)
+      } else {
+        for (const card of writes) await store.save(card)
+      }
+    }
+
+    return {
+      ok: true,
+      created: plan.create.length,
+      updated: plan.update.length,
+      skipped: plan.skipped.length,
+      dropped: plan.droppedRelated.length,
+      invalid: plan.invalid.length,
+      remapped: plan.remappedIds.length,
+      skippedItems: plan.skipped,
+      invalidItems: plan.invalid,
+    }
   }
 
   /* -- 统一资产台账（issue #65，契约 §3）------------------------------------ */
@@ -2374,6 +2448,22 @@ export class TradingBridge {
   }
 }
 
+/* -- 知识卡 bundle 导入（POST /knowledge/import）：请求体闸门 ------------------ */
+
+/** 导入 mode（缺省 'skip'）：两个值以外一律 400，不猜「用户大概想覆盖」。 */
+function parseKnowledgeImportMode(value: unknown): KnowledgeImportMode {
+  if (value === undefined) return 'skip'
+  if (value === 'skip' || value === 'overwrite') return value
+  throw new BridgeProtocolError(400, 'knowledge import: mode must be "skip" or "overwrite"')
+}
+
+/** bundle 字段 → 待解析文本：字符串按原文（bundle 文件内容），对象按 JSON；其它类型点名拒绝。 */
+function knowledgeBundleText(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'object' && value !== null) return JSON.stringify(value)
+  throw new BridgeProtocolError(400, `knowledge import: bundle must be an object or a JSON string (got ${value === null ? 'null' : typeof value})`)
+}
+
 /** 自选 map 的形状校验（Record<market, Instrument[]>，宽容 name 缺省；groups 多归属放行）。 */
 function parseWatchlistsMap(body: unknown): WatchlistsMap {
   if (typeof body !== 'object' || body === null) {
@@ -2544,7 +2634,7 @@ function parseChartInstances(body: unknown): IndicatorInstance[] {
  * 写成功时需要客户端失效重拉的 store 名。值域 ⊆ @dshtrading/eventbus 的
  * TradingEventStore（客户端按 store 名重拉对应读面）。
  */
-export type BridgeInvalidateStore = 'indicators' | 'chart' | 'strategies' | 'watchlists' | 'selection' | 'holdings'
+export type BridgeInvalidateStore = 'indicators' | 'chart' | 'strategies' | 'watchlists' | 'selection' | 'holdings' | 'knowledge'
 
 /**
  * 路由结果：写路由必带 `invalidates`（来自声明表；「不失效任何 store」显式写成空表）；
@@ -2801,6 +2891,12 @@ export const BRIDGE_WRITE_ROUTES: readonly BridgeWriteRoute[] = [
     pathname: '/holdings/discard',
     invalidates: ['holdings'],
     handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.discardHoldings(body) }),
+  },
+  {
+    method: 'POST',
+    pathname: '/knowledge/import',
+    invalidates: ['knowledge'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.importKnowledge(body) }),
   },
 ]
 

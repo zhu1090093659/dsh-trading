@@ -32,6 +32,21 @@ export { buildGraph } from './graph.ts'
 export { createMemoryKnowledgeCardStore } from './store-memory.ts'
 
 export {
+  KNOWLEDGE_BUNDLE_SCHEMA_VERSION,
+  KNOWLEDGE_BUNDLE_MAX_CARDS,
+  KNOWLEDGE_BUNDLE_MAX_BYTES,
+  createKnowledgeBundle,
+  serializeKnowledgeBundle,
+  parseKnowledgeBundle,
+  planKnowledgeImport,
+  type KnowledgeBundleMeta,
+  type KnowledgeBundle,
+  type KnowledgeImportMode,
+  type KnowledgeImportEntry,
+  type KnowledgeImportPlan,
+} from './bundle.ts'
+
+export {
   AUTHOR_ALIASES,
   canonicalAuthor,
   canonicalizeCardAuthor,

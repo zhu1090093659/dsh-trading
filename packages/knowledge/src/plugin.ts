@@ -7,7 +7,8 @@
  *   knowledge_ingest/search 共享同一缓存）；
  * - host 平面注册 `knowledge_ingest` / `knowledge_search` / `knowledge_get` /
  *   `knowledge_delete`（从 kit/client-ui-trading 双注册收口）+ `knowledge_graph`
- *   （countGraphSummary 的只读结构概要，与 buildGraph 默认模式同值）；
+ *   （countGraphSummary 的只读结构概要，与 buildGraph 默认模式同值）
+ *   + `knowledge_export` / `knowledge_import`（bundle 单文件导出/导入，导入先算计划再写库）；
  * - 写/删成功 emit tradingEvents('knowledge')（issue #30 通道）。
  */
 import type { Context } from '@deepseek-ai/cordis'
@@ -20,7 +21,9 @@ import type { KnowledgeCardStore } from './types.ts'
 import { createFileKnowledgeCardStore } from './knowledge-fs.ts'
 import {
   createKnowledgeDeleteTool,
+  createKnowledgeExportTool,
   createKnowledgeGetTool,
+  createKnowledgeImportTool,
   createKnowledgeIngestTool,
   createKnowledgeSearchTool,
 } from './tool.ts'
@@ -115,6 +118,10 @@ export function registerKnowledgeTools(ctx: Context, deps: KnowledgePluginDeps):
     register(createKnowledgeSearchTool(deps.store))
     register(createKnowledgeGetTool(deps.store))
     register(createKnowledgeDeleteTool(deps.store, {
+      onWritten: () => events()?.emit('knowledge'),
+    }))
+    register(createKnowledgeExportTool(deps.store))
+    register(createKnowledgeImportTool(deps.store, {
       onWritten: () => events()?.emit('knowledge'),
     }))
     register(createKnowledgeGraphTool({ store: deps.store }))

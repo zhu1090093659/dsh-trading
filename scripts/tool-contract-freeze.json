@@ -2310,6 +2310,37 @@
     ],
     "outputForm": "object"
   },
+  "@dshtrading/knowledge#knowledge_export": {
+    "file": "packages/knowledge/src/tool.ts",
+    "params": [
+      {
+        "name": "path",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "tags",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "sourceType",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "credibility",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "cluster",
+        "type": "string",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
   "@dshtrading/knowledge#knowledge_get": {
     "file": "packages/knowledge/src/tool.ts",
     "params": [
@@ -2324,6 +2355,27 @@
   "@dshtrading/knowledge#knowledge_graph": {
     "file": "packages/knowledge/src/plugin.ts",
     "params": [],
+    "outputForm": "object"
+  },
+  "@dshtrading/knowledge#knowledge_import": {
+    "file": "packages/knowledge/src/tool.ts",
+    "params": [
+      {
+        "name": "path",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "mode",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "dryRun",
+        "type": "boolean",
+        "required": false
+      }
+    ],
     "outputForm": "object"
   },
   "@dshtrading/knowledge#knowledge_ingest": {

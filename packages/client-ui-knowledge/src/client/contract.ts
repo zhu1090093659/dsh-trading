@@ -31,6 +31,23 @@ export type KnowledgeLocaleKey =
   | 'kv.drawer.tickers'
   | 'kv.drawer.related'
   | 'kv.drawer.openSource'
+  | 'kv.io.export'
+  | 'kv.io.import'
+  | 'kv.io.exportEmpty'
+  | 'kv.io.dialogTitle'
+  | 'kv.io.modeSkip'
+  | 'kv.io.modeOverwrite'
+  | 'kv.io.planCreate'
+  | 'kv.io.planUpdate'
+  | 'kv.io.planSkip'
+  | 'kv.io.planDropped'
+  | 'kv.io.planInvalid'
+  | 'kv.io.confirm'
+  | 'kv.io.cancel'
+  | 'kv.io.applied'
+  | 'kv.io.failed'
+  | 'kv.io.fileHint'
+  | 'kv.io.exportTooLarge'
 
 declare module '@deepseek-ai/dsh-client-locale/client' {
   interface LocaleNamespaceMap {

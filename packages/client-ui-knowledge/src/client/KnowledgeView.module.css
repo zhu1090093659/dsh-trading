@@ -375,3 +375,243 @@
 .openSourceBtn:hover {
   opacity: 0.9;
 }
+
+/* ------------------------------------------------------------------ */
+/* 导入 / 导出（io 族）                                                   */
+/* 按钮与 .resetBtn 同一套契约：11px 字号、4px×8px 内边距、4px 圆角、      */
+/* 1px 次边框、透明底；只多一个禁用态（.resetBtn 没有）与主按钮变体。       */
+/* ------------------------------------------------------------------ */
+
+.ioGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ioBtn {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--dsw-futu-border-subtle);
+  background-color: transparent;
+  color: var(--dsw-futu-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ioBtn:hover:not(:disabled) {
+  background-color: var(--dsw-futu-bg-surface-hover);
+  color: var(--dsw-futu-text-primary);
+}
+
+.ioBtn:focus-visible {
+  outline: none;
+  border-color: var(--dsw-futu-border-active);
+  box-shadow: 0 0 0 1px var(--dsw-futu-border-active);
+}
+
+.ioBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 主按钮：色值同既有 .openSourceBtn（border-active 实底 + 白字），不引入新色彩 */
+.ioBtnPrimary {
+  background-color: var(--dsw-futu-border-active);
+  border-color: var(--dsw-futu-border-active);
+  color: #ffffff;
+}
+
+.ioBtnPrimary:hover:not(:disabled) {
+  background-color: var(--dsw-futu-border-active);
+  color: #ffffff;
+  opacity: 0.9;
+}
+
+.ioFileInput {
+  display: none;
+}
+
+/*
+ * 预览浮动层：无全屏遮罩（.ioOverlay 本身 pointer-events: none），
+ * 左缘 12px 与工具栏内边距对齐、顶部紧贴工具栏下边框，宽窗下不压右侧抽屉。
+ */
+.ioOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  padding: 12px;
+  pointer-events: none;
+}
+
+.ioPanel {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  width: 400px;
+  max-width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  background-color: var(--dsw-futu-bg-base);
+  border: 1px solid var(--dsw-futu-border-default);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  user-select: text;
+  animation: ioPanelIn 0.16s ease-out;
+}
+
+@keyframes ioPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ioPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dsw-futu-border-subtle);
+  background-color: var(--dsw-futu-bg-surface);
+}
+
+.ioPanelTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary);
+}
+
+.ioPanelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.ioFileHint {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dsw-futu-text-muted);
+  word-break: break-all;
+}
+
+.ioModes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ioMode {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dsw-futu-text-secondary);
+  cursor: pointer;
+}
+
+.ioMode input {
+  margin: 2px 0 0;
+  accent-color: var(--dsw-futu-border-active);
+  flex-shrink: 0;
+}
+
+.ioCounts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ioCount {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border-radius: 4px;
+  background-color: var(--dsw-futu-bg-surface);
+  border: 1px solid var(--dsw-futu-border-subtle);
+}
+
+.ioCountValue {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-futu-text-primary);
+  font-family: var(--dsw-futu-font-mono);
+}
+
+.ioCountLabel {
+  font-size: 10px;
+  color: var(--dsw-futu-text-muted);
+  white-space: nowrap;
+}
+
+/* 非法条目：底色与描边取自既有 .factUnverifiable / .badgeLow 的同一组色值 */
+.ioInvalid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background-color: rgba(230, 69, 69, 0.06);
+  border-left: 3px solid var(--dsw-futu-up);
+}
+
+.ioInvalidTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dsw-futu-up);
+}
+
+.ioInvalidList {
+  margin: 0;
+  padding-left: 14px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dsw-futu-text-primary);
+  word-break: break-word;
+}
+
+.ioNotice {
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  border-radius: 4px;
+  color: var(--dsw-futu-text-primary);
+  word-break: break-word;
+}
+
+.ioNoticeError {
+  background-color: rgba(230, 69, 69, 0.08);
+  border-left: 3px solid var(--dsw-futu-up);
+}
+
+.ioNoticeOk {
+  background-color: rgba(43, 164, 113, 0.08);
+  border-left: 3px solid var(--dsw-futu-down);
+}
+
+.ioPanelFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--dsw-futu-border-subtle);
+  background-color: var(--dsw-futu-bg-surface);
+}
+
+/* 导出超限提示条：夹在工具栏与画布之间，左右 12px 与工具栏内边距对齐，
+   上 8px 取工具栏自身的 gap 节奏；占位不覆盖画布（flex 列里自己占一行）。 */
+.ioBanner {
+  margin: 8px 12px 0;
+}
