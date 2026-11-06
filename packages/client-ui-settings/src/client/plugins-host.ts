@@ -47,20 +47,40 @@ const PANEL_MIN_WIDTH = 600
 const PANEL_INSET = 24
 
 /**
- * 上溯找设置壳的面板元素。
+ * 找设置壳的弹层元素（overlay 里那块真的面板，不是 overlay、也不是蒙层）。
  *
  * 借壳矩形只是它的内容区，而官方插件页是列表 + 对话框形态，窄容器里工具栏会
- * 收缩成图标。只认"定位于视口且够宽"的祖先；找不到就当没有，分区按原矩形显示。
+ * 收缩成图标。两层判据分开，是因为改错对象会立刻露馅：改 overlay 的宽度会让
+ * 弹层在自己的容器里重新居中而整体偏左，改一个 static 中间层会让弹层宽过视口
+ * 而溢出（两种都实测过）。所以先锁铺满视口的 overlay，再取它里面最宽的、
+ * 且自身没铺满视口的子元素——蒙层的宽高都等于 overlay，按这条被排除。
+ * 找不到就当没有，分区按原矩形显示。
  */
 function findShellPanel(anchor: HTMLElement): HTMLElement | undefined {
   let node = anchor.parentElement
+  let overlay: HTMLElement | undefined
   for (let depth = 0; node !== null && depth < 8; depth += 1) {
-    const { width } = node.getBoundingClientRect()
-    const position = getComputedStyle(node).position
-    if (width >= PANEL_MIN_WIDTH && (position === 'fixed' || position === 'absolute')) return node
+    const rect = node.getBoundingClientRect()
+    if (rect.width >= window.innerWidth - 1 && rect.height >= window.innerHeight - 1) {
+      overlay = node
+      break
+    }
     node = node.parentElement
   }
-  return undefined
+  if (overlay === undefined) return undefined
+
+  const overlayRect = overlay.getBoundingClientRect()
+  let panel: HTMLElement | undefined
+  let widest = 0
+  for (const child of Array.from(overlay.children)) {
+    if (!(child instanceof HTMLElement)) continue
+    const rect = child.getBoundingClientRect()
+    if (rect.width >= overlayRect.width - 1 && rect.height >= overlayRect.height - 1) continue
+    if (rect.width < PANEL_MIN_WIDTH || rect.width <= widest) continue
+    panel = child
+    widest = rect.width
+  }
+  return panel
 }
 
 /**

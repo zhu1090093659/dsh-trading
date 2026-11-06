@@ -47,20 +47,33 @@ function makeAnchor(): HTMLElement {
   return anchor
 }
 
-/** 设置壳面板替身：定位于视口且 800px 宽，分区容器挂在它里面（jsdom 不做布局，
- *  矩形必须手工给）。 */
-function makeShellPanel(anchor: HTMLElement): HTMLElement {
-  const panel = document.createElement('div')
-  panel.style.position = 'fixed'
-  document.body.append(panel)
-  panel.append(anchor)
-  Object.defineProperty(panel, 'getBoundingClientRect', {
+/** jsdom 不做布局：矩形必须手工给（宿主真实 DOM 由浏览器算）。 */
+function stubRect(target: HTMLElement, rect: Record<string, number>): void {
+  Object.defineProperty(target, 'getBoundingClientRect', {
     value: () => ({
-      top: 0, left: 0, right: 800, bottom: 600, width: 800, height: 600, x: 0, y: 0,
+      top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0,
       toJSON: () => ({}),
+      ...rect,
     }),
   })
-  return panel
+}
+
+/**
+ * 设置壳替身：铺满视口的 overlay 里放一块全屏蒙层 + 一块 800x600 的弹层，
+ * 分区容器挂在弹层里。遮罩与弹层的几何差异正是 findShellPanel 的判据。
+ */
+function makeShellPanel(anchor: HTMLElement): { panel: HTMLElement; overlay: HTMLElement } {
+  const overlay = document.createElement('div')
+  const mask = document.createElement('div')
+  const panel = document.createElement('div')
+  document.body.append(overlay)
+  overlay.append(mask, panel)
+  panel.append(anchor)
+  const full = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight, right: window.innerWidth, bottom: window.innerHeight }
+  stubRect(overlay, full)
+  stubRect(mask, full)
+  stubRect(panel, { left: 400, top: 80, width: 800, height: 600, right: 1200, bottom: 680 })
+  return { panel, overlay }
 }
 
 /** 记录型 client ctx：只实现本包 apply 触碰到的面。 */
@@ -147,20 +160,21 @@ describe('attachPluginHost（官方插件整页借壳到分区矩形）', () => 
 
 describe('设置壳面板放宽（借壳矩形之外，官方页还需要一个够宽的容器）', () => {
   it('用户在设置里打开插件分区时宿主面板被放宽，离开后标记撤掉', () => {
-    // Given 分区块挂在一块 800px 宽的设置壳面板里
+    // Given 分区块挂在设置壳的弹层里（外层 overlay 铺满视口，里面还有一块蒙层）
     const { layout } = makeLayout()
     const anchor = makeAnchor()
-    const panel = makeShellPanel(anchor)
+    const { panel, overlay } = makeShellPanel(anchor)
 
     // When 分区挂载
     const handle = attachPluginHost(anchor, () => layout)
 
-    // Then 面板被打上放宽标记
+    // Then 放宽标记落在弹层上，而不是 overlay 或蒙层
     expect(panel.hasAttribute('data-dshtrading-plugin-host-panel')).toBe(true)
+    expect(overlay.hasAttribute('data-dshtrading-plugin-host-panel')).toBe(false)
 
-    // And 借壳矩形铺到面板右缘而不是只覆盖内容列（800 - 24 留白）
-    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-width')).toBe('776px')
-    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-height')).toBe('576px')
+    // And 借壳矩形铺到弹层右缘而不是只覆盖内容列（1200 / 680 减 24 留白）
+    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-width')).toBe('1176px')
+    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-height')).toBe('656px')
 
     // And 用户离开后标记撤掉，面板回到官方宽度
     handle.detach()
