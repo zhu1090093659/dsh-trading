@@ -19,9 +19,10 @@ Status: implemented
   - Go 侧 `internal/profile` 负责 `.dsh-desktop-seed.json` 标记与 `seed`/`reseed`/`leave` 判定；`reseed` 保留用户根 `cordis.patch.yml` 及其备份，包内 patch 层照抄。
   - `internal/cohort` 把 profile 的 `@deepseek-ai/*` 副本重链到随包运行时。
   - `internal/launch` 的载荷布局为 `runtime/{node,host,profile-trading,VERSION.json}` 与 `ProfileDir`；`DSH_PRIMARY_RUNTIME` 只在 `runtime.json` 存在时下发，缺失即显式缺席、不回落系统 Python。
-  - `desktop/scripts/stage-mygo-payload.mjs` 只做映射不生成载荷。
+  - `desktop/scripts/stage-mygo-payload.mjs` 只映射既有载荷、不生成载荷，并在暂存阶段调用 `desktop/scripts/prune-mygo-payload.mjs` 按目标平台裁剪暂存副本：用 39 条「包名 → 目标平台」白名单，在删除前读取每个包 `package.json` 核对 `os`/`cpu`（矛盾即失败），删掉 35 个非目标平台包 823M 与 4912 个 `*.map` 54M，共 877M；源载荷保持完整（多平台是 Electron 一份载荷装三平台的前提），`--keep-all-platforms` 可跳过裁剪。
 - **打包与签名**：
-  - `mygo build -platform darwin/arm64` 产出 `.app` 1.8G（`node` 217M / `host` 1.2G / `profile-trading` 365M）与 `dmg` 429M。
+  - `mygo build -platform darwin/arm64` 在载荷按目标平台裁剪与点文件补拷后产出 `.app` 955 MiB（`node` 217 MiB / `host` 542 MiB / `profile-trading` 170 MiB）与 `dmg` 196,123,648 B（187 MiB）。
+  - `mygo` v0.7.4 收集 `resources` 时跳过以 `.` 开头的条目（`cmd/mygo/resources.go`），导致载荷少 184 个文件 + 44 个目录（2.07 MiB），宿主 `llm-pi-ai` 因此报 `ERR_MODULE_NOT_FOUND`。`desktop/scripts/restore-mygo-dotfiles.mjs` 在 `build` 后按「暂存载荷 vs 包内」清单差异补拷、重签、重建 `dmg`，并以 `--check` 作为构建收尾闸门（差异必须为 0）。
   - `CFBundleIdentifier` 为 `com.dsh-trading.desktop.mygo`，`CFBundleName` 为 `DSH Trading Mygo`，版本 `0.2.1` 与 `desktop/package.json` 对齐，图标取 `desktop/resources/icon.png`。
   - 产物名为 `dsh-trading-desktop-0.2.1-arm64.dmg`（与 `electron-builder` 的 `dsh-trading-desktop-<version>-mac-<arch>` 差 `-mac-` 段，理由在 `desktop/README.md`）。
   - 默认 ad-hoc 签名通过 `codesign --verify --deep --strict`；真实身份签名与公证入口是 `build-mygo-mac.sh --sign / --notarize`，需在 GUI 会话执行（ssh 会话钥匙串锁定会报 `errSecInternalComponent`）。
@@ -48,13 +49,13 @@ Status: implemented
 - **进程组回收**：`killMs` 为 69~156ms、`hostExit=reaped`、`processGroupGone=true`、无孤儿。
 - **恢复预算**：`Max=3` / `Window=10min`；第 4 次意外退出耗尽并停在启动问题页，页面 `Retry` 重置预算。
 - **页面策略与渲染日志**：导航只放行 loopback 与 `file:`，其余取消或交系统浏览器；`window.open` 恒 deny；标题不被页面 `<title>` 覆盖；权限一律拒绝；渲染进程 warn/error 落日志，行形 `[renderer] <level> <source>:<line> <message>`。
-- **载荷 stage 与隔离 home 播种**：无参构建把 `/Applications/DSH Trading.app` 的 runtime 现取现 stage 1.8G；隔离 home 首次播种 365M，日志输出 `profile action: seed` 与 `primary runtime: absent`。
-- **打包与签名校验**：`mygo build -platform darwin/arm64` 产出 `.app` 1.8G（`node` 217M / `host` 1.2G / `profile-trading` 365M）与 `dsh-trading-desktop-0.2.1-arm64.dmg` 429M，ad-hoc 签名通过 `codesign --verify --deep --strict`。
+- **载荷 stage、按平台裁剪与隔离 home 播种**：无参构建从 `/Applications/DSH Trading.app` 现取 runtime 暂存副本，由 `desktop/scripts/prune-mygo-payload.mjs` 按 39 条「包名 → 目标平台」白名单核对各包 `package.json` 的 `os`/`cpu` 后删掉 35 个非目标平台包 823M 与 4912 个 `*.map` 54M（共 877M，源载荷保持完整，`--keep-all-platforms` 可跳过裁剪）；隔离 home 首次播种 `profile-trading` 170 MiB，日志输出 `profile action: seed` 与 `primary runtime: absent`。
+- **点文件补拷、打包与签名校验**：`desktop/scripts/restore-mygo-dotfiles.mjs` 在 `mygo build -platform darwin/arm64` 后按「暂存载荷 vs 包内」清单差异补拷被 `cmd/mygo/resources.go` 跳过的 184 个文件 + 44 个目录（2.07 MiB）、重签并重建 `dmg`，`--check` 收尾闸门差异为 0，修后宿主日志 `did not activate` 与 `Cannot find module` 均为 0；产出 `.app` 955 MiB（`node` 217 MiB / `host` 542 MiB / `profile-trading` 170 MiB）与 `dsh-trading-desktop-0.2.1-arm64.dmg` 196,123,648 B（187 MiB），ad-hoc 签名通过 `codesign --verify --deep --strict`。
 - **Agent 通道与 `cmd/agentctl`**：`mygo` 的 `automation` 插件（Unix socket + NDJSON，mode `0600`）经 `cmd/agentctl` 实测 `eval` 取到 `title=DeepSeek Harness`、`plugins=203`，`capture` 产出 560613 字节 2880x1656 PNG，`tree` 对网页窗口返回 `unsupported`（文档亦如此）。
 
 ## 当前状态
 
-payload/profile 分发、打包与签名、agent 通道接线、`desktop-release.yml` 双轨均已落地；当前仍未落地的部分只剩：Electron 壳退役、Windows 分支。
+payload/profile 分发（含暂存阶段按目标平台裁剪与 build 后点文件补拷闸门）、打包与签名、agent 通道接线、`desktop-release.yml` 双轨均已落地；当前仍未落地的部分只剩：Electron 壳退役、Windows 分支。
 
 ## Alternatives considered
 
@@ -67,7 +68,7 @@ payload/profile 分发、打包与签名、agent 通道接线、`desktop-release
 
 - **渲染引擎与调试通道变化**：渲染引擎变成系统 WebView（macOS `WKWebView` / Windows `WebView2` / Linux `WebKitGTK 4.1`），macOS 侧没有 CDP；发布构建默认带 `MYGO_INSPECTOR=1` 随包发布 `automation` 与 web inspector，通过 `MYGO_AUTOMATION`（mode `0600`）与 `cmd/agentctl` 驱动，不需要通道的场景用 `--no-agent-channel` 构建。
 - **签名与钥匙串约束**：ad-hoc 签名通过 `codesign --verify --deep --strict`；真实身份签名与公证入口为 `build-mygo-mac.sh --sign / --notarize`，在 ssh 会话会因登录钥匙串锁定报 `errSecInternalComponent`，需在 GUI 会话执行。
-- **CI 双轨打包与触发边界**：本地无参构建可直接从 `/Applications/DSH Trading.app` 现取现 stage 1.8G runtime，而 `desktop-release.yml` 的 `build-desktop-mygo` job 在 runner 内现跑 `fetch-node.mjs` → `stage-pnpm.mjs` → `build-runtime.mjs` → `verify-runtime-toolchain.mjs` → `stage-mygo-payload.mjs --platform darwin-arm64` 生成载荷并删掉 Electron 布局副本；因工作流仅由 `v*` tag push 触发（PR 与 `main` 推送不跑），首次真跑只能等 tag push，本地仅能核验语法与命令序列。
+- **CI 双轨打包与触发边界**：本地无参构建可直接从 `/Applications/DSH Trading.app` 现取 runtime 并在暂存阶段按目标平台裁剪（删掉 877M 非目标平台包与 `*.map`，源载荷保持完整）、在 build 后补拷点文件（产出 `.app` 955 MiB、`dmg` 196,123,648 B / 187 MiB），而 `desktop-release.yml` 的 `build-desktop-mygo` job 在 runner 内现跑 `fetch-node.mjs` → `stage-pnpm.mjs` → `build-runtime.mjs` → `verify-runtime-toolchain.mjs` → `stage-mygo-payload.mjs --platform darwin-arm64` 生成并裁剪载荷后删掉 Electron 布局副本；因工作流仅由 `v*` tag push 触发（PR 与 `main` 推送不跑），首次真跑只能等 tag push，本地仅能核验语法与命令序列。
 - **本地 Go 工具链要求**：本地开发必须设置 `GOTOOLCHAIN=auto`（`desktop/mygo/go.mod` 要求 `1.27.3`，本机 go 为 `1.27.1`）。
 - **并存期双份钩子维护**：并存期 `internal/shell/hooks/*.mjs` 与 `desktop/src/*.mjs` 是双份，`desktop/src` 仍是事实来源。
 - **CI 独立门禁与同提交约束**：`ci.yml` 新增 `mygo-shell` job（无 `needs`，job 级 `GOTOOLCHAIN=local`），模块与 `ci.yml` 必须同一 commit 落地（`go:embed` 依赖 hooks 与 `selfcheck.js`）。
