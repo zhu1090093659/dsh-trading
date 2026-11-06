@@ -3,10 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os/exec"
-	"strconv"
-	"strings"
-	"syscall"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -109,26 +105,25 @@ func (d *drill) runRecovery() error {
 }
 
 // killHost ends the host process the shell started, the way an outside kill
-// would: SIGKILL straight at the pid, so no shutdown handler runs and the shell
-// cannot mistake the exit for its own stop.
+// would: an outright kill straight at the pid, so no shutdown handler runs and
+// the shell cannot mistake the exit for its own stop. The host is looked up by
+// its command line through this machine's own process table (proctree.go), which
+// is the same lookup on every platform.
 func (d *drill) killHost() (int, error) {
 	metrics := d.metrics()
 	pattern := fmt.Sprintf("bin.js --profile trading-web --no-open --host 127.0.0.1 --port %d", metrics.Port)
-	out, err := exec.Command("pgrep", "-f", pattern).Output()
+	pids, err := findProcessesByCommandLine(pattern)
 	if err != nil {
-		return 0, fmt.Errorf("no host process matched %q: %w", pattern, err)
+		return 0, fmt.Errorf("reading the process table for %q: %w", pattern, err)
 	}
-	for _, field := range strings.Fields(string(out)) {
-		pid, convertErr := strconv.Atoi(field)
-		if convertErr != nil {
-			continue
-		}
-		if killErr := syscall.Kill(pid, syscall.SIGKILL); killErr != nil {
-			return 0, fmt.Errorf("killing host pid %d: %w", pid, killErr)
-		}
-		return pid, nil
+	if len(pids) == 0 {
+		return 0, fmt.Errorf("no host process matched %q", pattern)
 	}
-	return 0, fmt.Errorf("no host process matched %q", pattern)
+	pid := pids[0]
+	if err := killProcess(pid); err != nil {
+		return 0, fmt.Errorf("killing host pid %d: %w", pid, err)
+	}
+	return pid, nil
 }
 
 // waitUntil reports whether condition came true within limit.

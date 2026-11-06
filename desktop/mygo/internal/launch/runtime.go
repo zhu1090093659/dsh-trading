@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // Locations inside the app's resources directory of the payload the Electron
@@ -44,6 +45,36 @@ type RuntimePaths struct {
 	StampFile string
 }
 
+// nodeExecutableName is the file name of the bundled node runtime: the Windows
+// payload keeps it beside npm at the distribution root, the unices under bin/.
+func nodeExecutableName(goos string) string {
+	if goos == "windows" {
+		return "node.exe"
+	}
+	return "node"
+}
+
+// nodeBinDir is the directory the bundled node executable lives in, which is
+// also what goes first on the host's PATH: a node zip on Windows unpacks
+// node.exe into runtime/node itself, while a node distribution on the unices
+// keeps it in runtime/node/bin. desktop/src/runtime.cjs resolves the same two
+// shapes, and the packaging side (desktop/scripts) builds the payload to match.
+func nodeBinDir(goos, nodeHome string) string {
+	if goos == "windows" {
+		return nodeHome
+	}
+	return filepath.Join(nodeHome, "bin")
+}
+
+// pathListSeparator is the separator between PATH entries on goos; the host's
+// PATH prefix has to use the target platform's, not the build host's.
+func pathListSeparator(goos string) string {
+	if goos == "windows" {
+		return ";"
+	}
+	return ":"
+}
+
 // ResolveRuntimePaths maps the app's resources directory to the payload inside
 // it.
 func ResolveRuntimePaths(resourcesRoot string) RuntimePaths {
@@ -53,7 +84,7 @@ func ResolveRuntimePaths(resourcesRoot string) RuntimePaths {
 	return RuntimePaths{
 		Root:        root,
 		NodeHome:    nodeHome,
-		NodeBin:     filepath.Join(nodeHome, "bin", "node"),
+		NodeBin:     filepath.Join(nodeBinDir(runtime.GOOS, nodeHome), nodeExecutableName(runtime.GOOS)),
 		HostBin:     filepath.Join(hostRoot, hostModulesDir, filepath.FromSlash(hostBinRelative)),
 		HostModules: filepath.Join(hostRoot, hostModulesDir),
 		ProfileSeed: filepath.Join(root, profileSeedDir),

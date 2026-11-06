@@ -2,25 +2,23 @@ package shell
 
 import (
 	"bufio"
-	"errors"
 	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/dshtrading/desktop-mygo/internal/launch"
 )
 
-// hostProcess is one dsh host this shell started. It lives in its own process
-// group, so the shell can end the whole tree the host spawns (node workers,
-// pnpm, anything a plugin shells out to) with one signal.
-//
-// The shell targets macOS and Linux: Windows needs taskkill /T for the same
-// job, which is why the Electron shell keeps a separate branch there.
+// hostProcess is one dsh host this shell started, together with the platform
+// handle that owns the whole tree it spawns (node workers, pnpm, anything a
+// plugin shells out to): a process group on the unices, a job object on Windows.
+// Ending the shell has to end that tree, so the handle is what stop() releases.
 type hostProcess struct {
-	cmd       *exec.Cmd
+	cmd  *exec.Cmd
+	tree hostTree
+	// exited is closed once the host process itself has been reaped.
 	exited    chan struct{}
 	startedAt time.Time
 	// expected is set when the shell itself asked the host to go, so its exit
@@ -32,12 +30,38 @@ type hostProcess struct {
 	signal string
 }
 
+// hostTree is the platform's handle on a host and everything it spawns.
+type hostTree interface {
+	// bind makes the just-started host the root of the tree. A failure must not
+	// be papered over: a host outside its tree is a host that outlives the shell.
+	bind(process *os.Process) error
+	// terminate asks the tree to exit on its own.
+	terminate()
+	// kill ends the tree outright.
+	kill()
+	// gone reports whether no process of the tree is left.
+	gone() bool
+	// close releases the handle, ending whatever is still in the tree.
+	close()
+}
+
+// pollInterval is how often a wait re-reads a tree's population.
+const pollInterval = 25 * time.Millisecond
+
 // startHost spawns the host and starts reading its output. onLine sees every
 // line of it, already read but not yet masked: the caller logs it. onExit learns
 // how the host ended, and whether the shell asked for it.
 func startHost(spec launch.HostSpec, onLine func(line string), onExit func(code *int, signal string, expected bool)) (*hostProcess, error) {
 	reader, writer, err := os.Pipe()
 	if err != nil {
+		return nil, err
+	}
+	// The tree handle comes first: the host is put into it the moment it starts,
+	// and a host that cannot be bound is ended rather than run unmanaged.
+	tree, err := newHostTree()
+	if err != nil {
+		_ = reader.Close()
+		_ = writer.Close()
 		return nil, err
 	}
 	cmd := exec.Command(spec.Paths.NodeBin, spec.Args()...)
@@ -48,8 +72,17 @@ func startHost(spec launch.HostSpec, onLine func(line string), onExit func(code 
 	// reader that split them would have to interleave them anyway.
 	cmd.Stdout = writer
 	cmd.Stderr = writer
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	configureHostCommand(cmd)
 	if err := cmd.Start(); err != nil {
+		tree.close()
+		_ = reader.Close()
+		_ = writer.Close()
+		return nil, err
+	}
+	if err := tree.bind(cmd.Process); err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		tree.close()
 		_ = reader.Close()
 		_ = writer.Close()
 		return nil, err
@@ -58,7 +91,7 @@ func startHost(spec launch.HostSpec, onLine func(line string), onExit func(code 
 	// reader see EOF when the host goes.
 	_ = writer.Close()
 
-	host := &hostProcess{cmd: cmd, exited: make(chan struct{}), startedAt: time.Now()}
+	host := &hostProcess{cmd: cmd, tree: tree, exited: make(chan struct{}), startedAt: time.Now()}
 	go host.read(reader, onLine)
 	go host.wait(onExit)
 	return host, nil
@@ -81,8 +114,8 @@ func (h *hostProcess) wait(onExit func(code *int, signal string, expected bool))
 	_ = h.cmd.Wait()
 	h.mu.Lock()
 	if state := h.cmd.ProcessState; state != nil {
-		if status, ok := state.Sys().(syscall.WaitStatus); ok && status.Signaled() {
-			h.signal = status.Signal().String()
+		if name := exitedOnSignal(state); name != "" {
+			h.signal = name
 		} else {
 			code := state.ExitCode()
 			h.code = &code
@@ -97,14 +130,16 @@ func (h *hostProcess) wait(onExit func(code *int, signal string, expected bool))
 }
 
 // exitState is the code and signal the host ended with, for the log line and
-// the error page.
+// the error page. Windows leaves the signal empty: a process there always ends
+// on an exit code (see exitedOnSignal).
 func (h *hostProcess) exitState() (*int, string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.code, h.signal
 }
 
-// pid is the host's process id, which is also its process group id.
+// pid is the host's process id, which is also its process group id on the
+// unices and the root of its job on Windows.
 func (h *hostProcess) pid() int {
 	if h.cmd.Process == nil {
 		return 0
@@ -112,37 +147,75 @@ func (h *hostProcess) pid() int {
 	return h.cmd.Process.Pid
 }
 
-// stop ends the host's process group: SIGTERM first, SIGKILL once the grace is
-// spent. It reports how the host ended.
+// stop ends the host's tree: an ask first, an outright kill once the grace is
+// spent, then the wait for the tree to be gone. It reports how the host ended.
+//
+// The handle is released on every path, including the one where the host was
+// already gone: on Windows that release is what ends a plugin-spawned child that
+// outlived the host, so it must never be skipped.
 func (h *hostProcess) stop(grace, killWait time.Duration) string {
-	select {
-	case <-h.exited:
+	defer h.tree.close()
+	if h.exitedAlready() {
 		return "already exited"
-	default:
 	}
 	h.expected.Store(true)
-	pgid := h.pid()
-	_ = syscall.Kill(-pgid, syscall.SIGTERM)
-	select {
-	case <-h.exited:
+	h.tree.terminate()
+	if h.awaitExit(grace) {
 		return "reaped"
-	case <-time.After(grace):
 	}
-	_ = syscall.Kill(-pgid, syscall.SIGKILL)
+	h.tree.kill()
+	if h.awaitEnd(killWait) {
+		return "reaped"
+	}
+	return "not reaped"
+}
+
+// exitedAlready reports whether the host has already been reaped.
+func (h *hostProcess) exitedAlready() bool {
 	select {
 	case <-h.exited:
-		return "reaped"
-	case <-time.After(killWait):
-		return "not reaped"
+		return true
+	default:
+		return false
 	}
 }
 
-// groupGone reports whether the host's process group is empty, which is what
+// awaitExit waits up to limit for the host process itself to end.
+func (h *hostProcess) awaitExit(limit time.Duration) bool {
+	timer := time.NewTimer(limit)
+	defer timer.Stop()
+	select {
+	case <-h.exited:
+		return true
+	case <-timer.C:
+		return false
+	}
+}
+
+// awaitTree waits until the host is reaped and no process of its tree is left,
+// which is what says no plugin-spawned child outlived the shutdown.
+func (h *hostProcess) awaitTree(deadline time.Time) bool {
+	return awaitCondition(deadline, func() bool { return h.exitedAlready() && h.tree.gone() })
+}
+
+// awaitCondition polls condition until it holds or the deadline passes.
+func awaitCondition(deadline time.Time, condition func() bool) bool {
+	for {
+		if condition() {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		time.Sleep(pollInterval)
+	}
+}
+
+// groupGone reports whether the host's process tree is empty, which is what
 // says no plugin-spawned child outlived the shutdown.
 func (h *hostProcess) groupGone() bool {
-	pgid := h.pid()
-	if pgid == 0 {
+	if h.tree == nil {
 		return true
 	}
-	return errors.Is(syscall.Kill(-pgid, 0), syscall.ESRCH)
+	return h.tree.gone()
 }

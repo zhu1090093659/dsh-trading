@@ -109,3 +109,47 @@ func TestDirIsTheHostsHome(t *testing.T) {
 		t.Errorf("Dir = %q, want the host home", got)
 	}
 }
+
+func TestEnvForWindowsPutsTheBundledNodeFirstInBothPathSpellings(t *testing.T) {
+	host := spec(t, nil)
+	// A Windows environment block spells the variable in either case; the parent
+	// used Path, and the inherited entries must survive the prefix.
+	host.ParentEnv = []string{"Path=C:\\Windows\\system32", "HOME=C:\\Users\\zcl"}
+	env := host.envFor("windows")
+	want := nodeBinDir("windows", host.Paths.NodeHome) + ";" + "C:\\Windows\\system32"
+	for _, name := range []string{"PATH", "Path"} {
+		got, ok := lookupEnv(env, name)
+		if !ok {
+			t.Fatalf("env has no %s: %v", name, env)
+		}
+		if got != want {
+			t.Errorf("env %s = %q, want %q", name, got, want)
+		}
+	}
+	// The same decision on a unix host: node/bin, colon separated, one spelling.
+	host.ParentEnv = []string{"PATH=/usr/bin:/bin"}
+	unix := host.envFor("darwin")
+	wantUnix := nodeBinDir("darwin", host.Paths.NodeHome) + ":/usr/bin:/bin"
+	if got, ok := lookupEnv(unix, "PATH"); !ok || got != wantUnix {
+		t.Errorf("env PATH = %q (present %v), want %q", got, ok, wantUnix)
+	}
+	if _, ok := lookupEnv(unix, "Path"); ok {
+		t.Errorf("env has a Path entry on a unix host: %v", unix)
+	}
+}
+
+func TestEnvForWindowsKeepsTheHomeAndTheShellPID(t *testing.T) {
+	host := spec(t, nil)
+	env := host.envFor("windows")
+	want := map[string]string{
+		HomeEnv:     "/tmp/mygo-home-trading",
+		ShellPIDEnv: "4242",
+		"PATH":      nodeBinDir("windows", host.Paths.NodeHome) + ";" + "/usr/bin:/bin",
+		"Path":      nodeBinDir("windows", host.Paths.NodeHome) + ";" + "/usr/bin:/bin",
+	}
+	for key, value := range want {
+		if got, ok := lookupEnv(env, key); !ok || got != value {
+			t.Errorf("env %s = %q (present %v), want %q", key, got, ok, value)
+		}
+	}
+}

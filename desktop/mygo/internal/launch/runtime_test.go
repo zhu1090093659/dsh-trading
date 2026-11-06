@@ -69,3 +69,25 @@ func TestValidateReportsTheMissingPayloadFile(t *testing.T) {
 		t.Fatal("Validate err = nil, want the missing host reported")
 	}
 }
+
+func TestNodeBinFollowsThePlatformPayloadLayout(t *testing.T) {
+	home := filepath.Join("resources", "runtime", "node")
+	// Windows: node.exe sits at the root of the bundled distribution.
+	if got, want := filepath.Join(nodeBinDir("windows", home), nodeExecutableName("windows")),
+		filepath.Join(home, "node.exe"); got != want {
+		t.Errorf("windows node binary = %q, want %q", got, want)
+	}
+	// The unices: the distribution keeps it under bin/, as before.
+	for _, goos := range []string{"darwin", "linux"} {
+		if got, want := filepath.Join(nodeBinDir(goos, home), nodeExecutableName(goos)),
+			filepath.Join(home, "bin", "node"); got != want {
+			t.Errorf("%s node binary = %q, want %q", goos, got, want)
+		}
+	}
+	if got := pathListSeparator("windows"); got != ";" {
+		t.Errorf("pathListSeparator(windows) = %q, want %q", got, ";")
+	}
+	if got := pathListSeparator("darwin"); got != ":" {
+		t.Errorf("pathListSeparator(darwin) = %q, want %q", got, ":")
+	}
+}

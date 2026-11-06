@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -114,4 +115,46 @@ func repeat(s string, n int) string {
 		out += s
 	}
 	return out
+}
+
+func TestASecondLaunchLeavesTheFirstSocketAlone(t *testing.T) {
+	path := lockPath(t)
+	focused := make(chan struct{}, 1)
+	first, err := Acquire(path, func() { focused <- struct{}{} })
+	if err != nil {
+		t.Fatalf("Acquire (first) err = %v, want nil", err)
+	}
+	defer first.Release()
+
+	// The rejected launch knocks on the socket the first instance owns.
+	if _, err := Acquire(path, nil); !errors.Is(err, ErrRunning) {
+		t.Fatalf("Acquire (second) err = %v, want ErrRunning", err)
+	}
+	waitForFocus(t, focused)
+	info, err := os.Stat(socketPath(path))
+	if err != nil {
+		t.Fatalf("Stat socket after the rejected launch err = %v, want the first instance's socket", err)
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		t.Fatalf("socket mode = %v, want the first instance's socket", info.Mode())
+	}
+	// And it is still the handover channel: a third launch reaches the first.
+	if _, err := Acquire(path, nil); !errors.Is(err, ErrRunning) {
+		t.Fatalf("Acquire (third) err = %v, want ErrRunning", err)
+	}
+	waitForFocus(t, focused)
+}
+
+func TestALongLockPathFallsBackToAHashInTheTempDir(t *testing.T) {
+	long := filepath.Join(t.TempDir(), repeat("/a-very-long-directory-name-that-goes-on", 4), "instance.lock")
+	got := socketPath(long)
+	if !strings.HasPrefix(got, os.TempDir()+string(os.PathSeparator)) {
+		t.Fatalf("socketPath(long) = %q, want a path inside %q", got, os.TempDir())
+	}
+	if again := socketPath(long); again != got {
+		t.Errorf("socketPath(long) = %q then %q, want a stable name", got, again)
+	}
+	if other := socketPath(long + "-other"); other == got {
+		t.Errorf("socketPath of another lock path = %q, want a different name", other)
+	}
 }

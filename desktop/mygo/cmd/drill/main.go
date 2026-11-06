@@ -6,7 +6,7 @@
 // of the window.desktop contract (selfcheck.js) plus the seven calls the bridge
 // has to answer. The product shell (desktop/mygo/main.go) never needs it.
 //
-// Environment:
+// Environment (GUI phases):
 //
 //	DRILL_OUT   directory for the reports and phase markers (required)
 //	DRILL_MODE  cookies (default) or bridge
@@ -14,6 +14,10 @@
 // bridge runs the app twice: the first launch drives six of the seven
 // window.desktop members and ends by calling relaunch(), and the instance it
 // starts drives the seventh (quit) and writes the report carrying all seven.
+//
+// The proctree command is the exception: it starts no GUI of its own, runs the
+// shell as its own child and writes the process-tree evidence (proctree.go,
+// proctree -h for the flags).
 package main
 
 import (
@@ -112,7 +116,31 @@ const (
 // desktopMembers are the seven window.desktop members the contract names.
 var desktopMembers = []string{"onStatus", "onError", "retry", "revealLog", "openVCRedistDownload", "quit", "relaunch"}
 
+// usage is the drill's own help: the GUI phases read their environment, and the
+// proctree command is the one that needs no GUI of its own.
+const usage = `mygo-drill drives acceptance runs of the mygo shell.
+
+  mygo-drill             run one GUI drill phase (environment below)
+  mygo-drill proctree    process-tree evidence, no GUI of its own
+                         (mygo-drill proctree -h for the flags and the report)
+
+Environment of the GUI phases:
+  DRILL_OUT   directory for the reports and phase markers (required)
+  DRILL_MODE  cookies (default), bridge, recovery or policy
+`
+
 func main() {
+	// The process-tree evidence observes the shell instead of being one, so it
+	// must not create a window of its own first.
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "proctree":
+			os.Exit(runProctree(os.Args[2:], os.Stderr))
+		case "help", "-h", "-help", "--help":
+			fmt.Fprint(os.Stderr, usage)
+			return
+		}
+	}
 	out := os.Getenv("DRILL_OUT")
 	mode := os.Getenv("DRILL_MODE")
 	if out == "" {

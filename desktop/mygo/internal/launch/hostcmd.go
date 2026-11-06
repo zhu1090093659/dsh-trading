@@ -2,8 +2,8 @@ package launch
 
 import (
 	"net/url"
-	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -61,15 +61,53 @@ func (s HostSpec) Args() []string {
 // DSH_PRIMARY_RUNTIME is set only when the shell resolved a payload: without
 // one the host's two capability rows stay disabled, which is why nothing here
 // guesses at a path (see internal/launch/primary.go).
-func (s HostSpec) Env() []string {
+func (s HostSpec) Env() []string { return s.envFor(runtime.GOOS) }
+
+// envFor is Env for one target platform, which is what lets both PATH shapes be
+// tested on either build host.
+func (s HostSpec) envFor(goos string) []string {
 	env := setEnv(s.ParentEnv, HomeEnv, s.Home)
 	env = setEnv(env, ShellPIDEnv, strconv.Itoa(s.ShellPID))
 	if s.PrimaryRuntime != "" {
 		env = setEnv(env, PrimaryRuntimeEnv, s.PrimaryRuntime)
 	}
-	path, _ := lookupEnv(env, "PATH")
-	env = setEnv(env, "PATH", filepath.Join(s.Paths.NodeHome, "bin")+string(os.PathListSeparator)+path)
+	env = s.withBundledNodePath(env, goos)
 	return unsetEnv(env, "ELECTRON_RUN_AS_NODE")
+}
+
+// withBundledNodePath puts the bundled node distribution first on PATH, so
+// anything the host shells out to (npm, corepack, a plugin's tool) resolves
+// against the bundled runtime rather than the system one.
+//
+// Windows environment blocks spell the variable in either case, so the value
+// goes into both spellings there: a child that reads Path must not fall back to
+// the system node (desktop/src/main.cjs childEnv sets both for the same reason).
+func (s HostSpec) withBundledNodePath(env []string, goos string) []string {
+	key, current := lookupPath(env, goos)
+	value := nodeBinDir(goos, s.Paths.NodeHome) + pathListSeparator(goos) + current
+	env = setEnv(env, key, value)
+	if goos == "windows" {
+		for _, name := range []string{"PATH", "Path"} {
+			env = setEnv(env, name, value)
+		}
+	}
+	return env
+}
+
+// lookupPath reads PATH from an environ slice in whichever spelling it carries:
+// Windows names the same variable in either case, and taking the one the parent
+// actually used is what keeps the inherited entries.
+func lookupPath(env []string, goos string) (string, string) {
+	for i := len(env) - 1; i >= 0; i-- {
+		name, value, ok := strings.Cut(env[i], "=")
+		if !ok {
+			continue
+		}
+		if name == "PATH" || (goos == "windows" && strings.EqualFold(name, "PATH")) {
+			return name, value
+		}
+	}
+	return "PATH", ""
 }
 
 // Dir is the host's working directory: its own home, as the Electron shell

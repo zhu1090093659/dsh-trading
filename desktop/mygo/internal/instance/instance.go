@@ -1,10 +1,12 @@
 // Package instance keeps one shell per machine, the Go counterpart of
 // Electron's requestSingleInstanceLock plus second-instance window focus.
 //
-// Two Go primitives carry it: an exclusive flock on a lock file says who is
-// first (and the kernel drops it when that process dies, so no stale lock
-// survives a crash), and a unix socket lets a later launch ask the first one to
-// show its window before it exits.
+// Two Go primitives carry it: an exclusive lock on a lock file says who is
+// first (the kernel drops it when that process dies, so no stale lock survives a
+// crash), and a unix socket lets a later launch ask the first one to show its
+// window before it exits. The lock itself is per platform — flock on the unices,
+// LockFileEx on Windows — while the handover is the same AF_UNIX socket on both,
+// which Go supports on Windows (lock_unix.go, lock_windows.go).
 package instance
 
 import (
@@ -15,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -23,19 +24,21 @@ import (
 // has handed itself over to that instance and must exit.
 var ErrRunning = errors.New("instance: another instance is already running")
 
+// errLockHeld is what the platform lock reports when another process holds it.
+var errLockHeld = errors.New("instance: the lock is held by another process")
+
 // notifyTimeout bounds the handover: a first instance that stopped answering
 // must not keep this launch hanging.
 const notifyTimeout = 2 * time.Second
-
-// maxUnixSocketPath keeps the socket inside the platforms' sun_path limit (104
-// bytes on macOS, 108 on Linux); a longer path falls back to the temp dir.
-const maxUnixSocketPath = 96
 
 // Lock is the single-instance lock one running shell holds.
 type Lock struct {
 	file     *os.File
 	socket   string
 	listener net.Listener
+	// unlock is the platform's explicit release, when closing the file is not
+	// enough on its own (Windows).
+	unlock func() error
 
 	release sync.Once
 }
@@ -51,24 +54,27 @@ func Acquire(lockPath string, onSecondLaunch func()) (*Lock, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	unlock, err := lockFile(file)
+	if err != nil {
 		_ = file.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+		if errors.Is(err, errLockHeld) {
 			notify(socketPath(lockPath))
 			return nil, ErrRunning
 		}
 		return nil, err
 	}
 	socket := socketPath(lockPath)
-	// A crashed instance leaves its socket file behind; the flock is the lock,
-	// so the file itself is only garbage to clear.
+	// Only the instance that won the lock clears the file: a crashed instance
+	// leaves its socket behind as garbage, while a live one's socket is the
+	// channel this launch just knocked on and must survive the rejection.
 	_ = os.Remove(socket)
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
+		_ = unlock()
 		_ = file.Close()
 		return nil, err
 	}
-	lock := &Lock{file: file, socket: socket, listener: listener}
+	lock := &Lock{file: file, socket: socket, listener: listener, unlock: unlock}
 	go lock.accept(onSecondLaunch)
 	return lock, nil
 }
@@ -88,14 +94,17 @@ func (l *Lock) accept(onSecondLaunch func()) {
 	}
 }
 
-// Release gives up the lock: the listener goes, the socket file goes, and
-// closing the file drops the flock.
+// Release gives up the lock: the listener goes, the socket file goes, and the
+// lock is dropped (by closing the file, and on Windows by unlocking first).
 func (l *Lock) Release() {
 	l.release.Do(func() {
 		if l.listener != nil {
 			_ = l.listener.Close()
 		}
 		_ = os.Remove(l.socket)
+		if l.unlock != nil {
+			_ = l.unlock()
+		}
 		_ = l.file.Close()
 	})
 }
