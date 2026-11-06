@@ -2,7 +2,7 @@ name: desktop-release
 
 # 发版开关：推送 vX.Y.Z tag 即触发（唯一发布开关，tag 即版本事实源）。
 #
-# 管线做四件事：
+# 管线做五件事：
 # 1. 硬校验 @dshtrading/* 全家族 package.json 版本与 tag 一致——桌面安装包把
 #    workspace 包以 packed tarball 内嵌分发，版本不一致会发出"包内版本与
 #    Release 版本互相矛盾"的安装包，必须先修复版本再推 tag；
@@ -11,10 +11,17 @@ name: desktop-release
 #    安装包内嵌完整工具链（node + npm + pnpm 的官方 Node 发行版、dsh host
 #    闭包、预装 trading-web profile），零编程环境的机器开箱即用，打包前有
 #    工具链完整性闸门（verify-runtime-toolchain）；
-# 3. 发布 @dshtrading/* 全家族到 npm（NPM_TOKEN secret；NPM_PUBLISH_ENABLED
+# 3. 在 macOS runner 上打包 mygo 壳（Go + 系统 WebView，arm64）的 .app 与 .dmg，
+#    与 Electron 包同批产出：载荷必须在这个 job 里现生成（CI 上没有装好的 app
+#    可抄），签名与公证凭据全是可选 secret，缺省 ad-hoc 且不因此变红。两壳的
+#    产物靠 job / artifact 与 bundle identifier（com.dsh-trading.desktop 对
+#    com.dsh-trading.desktop.mygo）区分，不靠文件名——mygo 的 dmg 只比
+#    Electron 的少一段 -mac-；
+# 4. 发布 @dshtrading/* 全家族到 npm（NPM_TOKEN secret；NPM_PUBLISH_ENABLED
 #    可整体关闭 npm 通道，关闭时 tag 推送退回仅桌面发布）；
-# 4. npm 与桌面两路都成功后，创建 GitHub Release 并附着全部安装包与
-#    SHA256SUMS.txt（任一路失败不创建 Release，保持发版 all-or-nothing）。
+# 5. npm 与两路桌面包（Electron / mygo）都成功后，创建 GitHub Release 并附着
+#    全部安装包与 SHA256SUMS.txt（任一路失败不创建 Release，保持发版
+#    all-or-nothing）。
 #
 # npm 通道幂等：已存在于 registry 的精确版本（name@version）跳过不重发，
 # 因此删除 tag 重推修 CI 是安全的；但同版本号换代码重推被禁止——任何包内容
@@ -188,9 +195,157 @@ jobs:
             desktop/dist/updates-manifest-*.json
           if-no-files-found: error
 
+  # 双轨期第二轨：mygo 壳（Go + 系统 WebView，arm64）。Electron 轨（build-desktop）
+  # 原样并存，两轨同一个 tag、同一份载荷来源、同一个 GitHub Release。
+  #
+  # 自给自足：CI 上没有 /Applications/DSH Trading.app 可以当载荷素材，所以载荷
+  # 必须在这个 job 里现生成（fetch-node → stage-pnpm → build-runtime），再由
+  # stage-mygo-payload.mjs 映射成 mygo 读的 runtime 布局。build-mygo-mac.sh 用
+  # --no-payload 打包已经映射好的载荷，并在打完后自证 agent 通道在产物里。
+  #
+  # 不重复全量 pnpm -r test：同一 commit 上的 npm-publish 与 build-desktop 已经是
+  # 发布门禁，Release 也要三路全绿才创建；这里只跑自己的打包对象依赖的那部分。
+  #
+  # 签名全走可选 secret：MYGO_SIGN_IDENTITY / APPLE_ID / APPLE_TEAM_ID /
+  # APPLE_APP_SPECIFIC_PASSWORD。一个都没有时按 ad-hoc 打包，并把「这次是 ad-hoc」
+  # 写进日志；缺 secret 不让流水线变红，也不新增必须配置的 secret。Developer ID
+  # 身份还要求钥匙串里有对应证书，证书导入不在本 job 里。
+  build-desktop-mygo:
+    name: Build desktop app (mygo, macos-latest)
+    needs: check-version
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      # go.mod 的 go 指令（1.27.3）就是最小工具链。关掉自动下载，让 setup-go 钉的
+      # 版本与 go.mod 漂移时当场红在版本上（与 ci.yml 的 mygo-shell 同款）。
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4   # 版本读根 package.json 的 packageManager 字段
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # 版本与 desktop/mygo/go.mod 的 go 1.27.3 指令逐字对齐；action 与钉法照抄
+      # ci.yml 的 mygo-shell（同一 actions 家族，不引入新的第三方 action）。
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+          cache: true
+          cache-dependency-path: desktop/mygo/go.sum
+
+      # GOTOOLCHAIN=local 只挡「工具链太旧」；工具链比 go.mod 新时它照样绿，所以
+      # 这里显式对齐一次，两个方向都红在版本上而不是红在编译错误里。
+      - name: Verify the Go toolchain matches desktop/mygo/go.mod
+        run: |
+          want="$(awk '$1 == "go" { print $2 }' desktop/mygo/go.mod)"
+          have="$(go version | awk '{ print $3 }' | sed 's/^go//')"
+          echo "go.mod wants go $want; this runner has go $have"
+          if [ "$want" != "$have" ]; then
+            echo "::error::desktop/mygo/go.mod wants go $want but the runner has go $have"
+            exit 1
+          fi
+
+      # 载荷脚本用 desktop/src/runtime.cjs 的纯函数（SHASUMS 解析、seed 指纹）：
+      # 打包对象自己的单测先跑，成本是秒级。
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build workspace
+        run: pnpm -r build
+      - name: Test desktop payload
+        run: pnpm test:desktop
+
+      # 载荷现生成：CI 没有装好的 app 可以抄。fetch-redist 只服务 Windows 的
+      # NSIS，mygo 轨不需要，所以不走 prepare-runtime，逐步跑三个脚本，哪一步
+      # 坏了在日志里一眼可辨。
+      - name: Fetch the bundled Node distributions
+        working-directory: desktop
+        run: node scripts/fetch-node.mjs
+      - name: Stage pnpm (the packageManager pin) into each Node distribution
+        working-directory: desktop
+        run: node scripts/stage-pnpm.mjs
+      - name: Build the runtime payload
+        working-directory: desktop
+        run: node scripts/build-runtime.mjs
+
+      # 发布闸门：载荷里的 node/npm/npx/pnpm 必须真的存在且可执行
+      - name: Verify bundled toolchain (node/npm/npx/pnpm)
+        working-directory: desktop
+        run: node scripts/verify-runtime-toolchain.mjs
+
+      # node-<os>-<cpu>/ 映射成 mygo 读的 runtime/node/，缺件在打包前就红。
+      # 映射完删掉 Electron 布局的那份载荷：这一轨只打包 mygo，而 macOS runner
+      # 的磁盘要同时装下载荷副本和 1.8G 的 .app。
+      - name: Stage the payload into the mygo project
+        working-directory: desktop
+        run: |
+          node scripts/stage-mygo-payload.mjs --platform darwin-arm64
+          rm -rf resources/runtime
+
+      # 版本跟 tag 走，与 Electron 轨的 set-desktop-version.mjs 对称：mygo build
+      # 只认 mygo.json，重写发生在 runner 里，仓库内容不变。
+      - name: Set the mygo manifest version from the tag
+        working-directory: desktop
+        env:
+          DESKTOP_VERSION: ${{ github.ref_name }}
+        run: node scripts/set-mygo-version.mjs
+
+      # 发布形态（MYGO_INSPECTOR=1，带 agent 通道）由脚本自己决定；这里是唯一
+      # 决定签名形态的地方：有身份 secret 才传 --sign，三个公证 secret 齐了才传
+      # --notarize，其余一律 ad-hoc 并把模式写进日志。
+      - name: Package the mygo app and disk image
+        env:
+          MYGO_SIGN_IDENTITY: ${{ secrets.MYGO_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          args=(--platform darwin/arm64 --no-payload)
+          if [ -n "${MYGO_SIGN_IDENTITY:-}" ]; then
+            args+=(--sign "${MYGO_SIGN_IDENTITY}")
+            if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
+              args+=(--notarize)
+              echo "[mygo-release] signing: Developer ID identity from MYGO_SIGN_IDENTITY, notarizing with APPLE_ID + APPLE_TEAM_ID"
+            else
+              echo "[mygo-release] signing: identity from MYGO_SIGN_IDENTITY; notarization skipped (APPLE_ID / APPLE_TEAM_ID / APPLE_APP_SPECIFIC_PASSWORD not all set)"
+            fi
+          else
+            echo "[mygo-release] signing: ad-hoc (-); no MYGO_SIGN_IDENTITY secret here, so Gatekeeper will not accept this build"
+          fi
+          echo "[mygo-release] desktop/scripts/build-mygo-mac.sh ${args[*]}"
+          desktop/scripts/build-mygo-mac.sh "${args[@]}"
+
+      # 产物区分：dmg 进 desktop-mac-mygo（github-release 按 desktop-* 收集，
+      # 与 Electron 资产共用同一份 SHA256SUMS.txt）；.app 是目录，进 dist/ 会同时
+      # 打断 sha256sum 与 gh release create，所以单独命名成不以 desktop- 开头的
+      # artifact，永远不进 Release 资产。
+      - name: Upload the mygo disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-mac-mygo
+          path: desktop/mygo/build/darwin-arm64/*.dmg
+          if-no-files-found: error
+
+      - name: Upload the mygo app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: mygo-app-bundle
+          path: desktop/mygo/build/darwin-arm64/*.app
+          if-no-files-found: error
+          # 载荷里有隐藏文件（runtime/node/.node-version），upload-artifact v4.4 起
+          # 默认丢弃隐藏文件，这里要的是完整 bundle，不是筛过的副本
+          include-hidden-files: true
+          # 1.8G 的 bundle 里全是已压缩的二进制，再 zlib 一遍只烧 runner 的时间
+          compression-level: 0
+
   github-release:
     name: Create GitHub Release with desktop artifacts
-    needs: [npm-publish, build-desktop]
+    # 双轨期两路桌面包都要进同一个 Release：mygo 轨失败同样不创建 Release
+    # （all-or-nothing 不变，只是多了一路）。
+    needs: [npm-publish, build-desktop, build-desktop-mygo]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -200,6 +355,9 @@ jobs:
       - name: Download desktop artifacts
         uses: actions/download-artifact@v4
         with:
+          # desktop-mac / desktop-win（Electron）与 desktop-mac-mygo（mygo 的 dmg）
+          # 都进 dist/；mygo 的 .app 叫 mygo-app-bundle，故意不以 desktop- 开头，
+          # 因为目录进 dist/ 会同时打断 sha256sum 与 gh release create。
           pattern: desktop-*
           merge-multiple: true
           path: dist

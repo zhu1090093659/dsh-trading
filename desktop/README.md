@@ -31,6 +31,7 @@ An Electron shell that turns the dsh-trading Web GUI into an installable desktop
 | `mygo/` | mygo shell (migration target): Go module of the window, launcher, lifecycle, cookies, policy, recovery, profile seeding, cohort normalization and the agent channel |
 | `scripts/stage-mygo-payload.mjs` | Stages the payload into `mygo/resources/runtime` with the per-platform node directory mapped to `runtime/node` |
 | `scripts/build-mygo-mac.sh` | Packages the mygo shell for macOS: payload, `.app` + `.dmg`, signature check, notarization entry |
+| `scripts/set-mygo-version.mjs` | Rewrites the mygo manifest's version from the release tag in the runner, so the mygo disk image and bundle version follow the tag as the Electron shell's do (`scripts/set-desktop-version.mjs`) |
 
 The trading plugins are not published to npm, so `build-runtime.mjs` packs every workspace package into `runtime/profile-trading/vendor/` and wires the profile's direct dependencies and overrides to those tarballs. The generated profile manifest and lockfile are not committed; reproducibility comes from this repository's own versions.
 
@@ -120,6 +121,25 @@ Signing: the default is ad-hoc (`-sign -`), which `codesign --verify --deep --st
 Both forms are mygo's release build: `mygo build` sets `-X github.com/egoist/mygo.production=1`, so the window keeps developer tools off and the app is not a development bundle. The one switch for the inspector of native UI — and with it the automation plugin the agent channel drives — is the environment: `MYGO_INSPECTOR=1` keeps them (`github.com/egoist/mygo/cmd/mygo/build.go:448`, `:453`), anything else adds `-tags mygo_noinspector`. `-debug` keeps them too but drops the production flag, so a released app is never built with it. `--no-agent-channel` builds without them (see below); `--no-payload` builds with the payload already staged; `--skip-run-check` skips the launch that proves the channel is in — or out of — the artifact.
 
 The script ends by proving what the build asked for. It reads the executable's own markers (the plugin's protocol code, or the stand-in's "this build leaves automation out"), then opens the built app once with `MYGO_AUTOMATION` set and a throwaway `DSH_HOME` under the temp directory and asks `agentctl windows` for the window list, retrying briefly because the window opens a moment after the app is ready — a build without the channel is proved by the app's own line on stderr. Where the app cannot be launched here — no GUI session, or no Go to build `agentctl` — the script falls back to the markers alone and says which check it could not run.
+
+### Release pipeline: telling the two shells' artifacts apart
+
+`.github/workflows/desktop-release.yml` packs both shells from one tag. `build-desktop` (matrix `macos-latest` / `windows-latest`) keeps producing the Electron installers, and `build-desktop-mygo` (`macos-latest`, arm64 only) produces the mygo `.app` and `.dmg`. The mygo job generates the payload in the job — CI has no `/Applications/DSH Trading.app` to copy it from — with `fetch-node.mjs` → `stage-pnpm.mjs` → `build-runtime.mjs`, maps it with `stage-mygo-payload.mjs --platform darwin-arm64`, and packages it with `build-mygo-mac.sh --no-payload`. It repeats install, build and the desktop tests, but not the whole `pnpm -r test`: that suite is the release gate of `npm-publish` and `build-desktop` on the same commit, and no Release is created unless all three jobs pass.
+
+The file names do not separate the shells: the mygo disk image is `dsh-trading-desktop-<version>-arm64.dmg` and the Electron one `dsh-trading-desktop-<version>-mac-<arch>.dmg`, so `-mac-` is the only difference and nothing may key off the name. What separates them:
+
+| | Electron | mygo |
+| --- | --- | --- |
+| workflow job | `build-desktop` (macOS + Windows matrix) | `build-desktop-mygo` (macOS) |
+| Actions artifact | `desktop-mac` / `desktop-win` | `desktop-mac-mygo` (`.dmg`) and `mygo-app-bundle` (`.app`) |
+| `CFBundleIdentifier` | `com.dsh-trading.desktop` | `com.dsh-trading.desktop.mygo` |
+| Release assets | dmg + zip per arch, Windows NSIS exe + zip | the arm64 `.dmg` |
+
+`github-release` downloads only artifacts matching `desktop-*` into `dist/`, hashes that directory and uploads it, so the mygo `.dmg` travels with the Electron files through the same `SHA256SUMS.txt`. The mygo `.app` is deliberately named without that prefix: a bundle is a directory, `sha256sum ./*` and `gh release create dist/*` take files, and a directory in `dist/` would break both.
+
+The mygo artifact is ad-hoc signed unless the repository holds the optional secrets: `--sign` is passed only when `MYGO_SIGN_IDENTITY` exists, and `--notarize` only when `APPLE_ID`, `APPLE_TEAM_ID` and `APPLE_APP_SPECIFIC_PASSWORD` are all set; the packaging step prints which mode it used. No secret is required, and a Developer ID build additionally needs the certificate in the runner's keychain, which this workflow does not import. The mygo version follows the tag like the Electron one: `mygo.json` carries the committed version and the job rewrites it in the runner with `set-mygo-version.mjs` (the counterpart of `scripts/set-desktop-version.mjs`), so `CFBundleShortVersionString` and the disk image name match the Release.
+
+The only trigger is a `v*` tag push: a PR or a push to main does not run this workflow, so the mygo job cannot be proven locally and its first real execution is a tag push. What a local machine can check is the workflow (YAML parse, `actionlint`, `pnpm ci-wiring:check`) and the command sequence up to the macOS-only steps; the run's log then carries the payload sizes, the signature, the artifact names and the agent-channel verdict `build-mygo-mac.sh` prints.
 
 ### Agent channel
 
