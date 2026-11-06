@@ -117,13 +117,15 @@ Artifacts land in `mygo/build/darwin-arm64/`:
 
 Signing: the default is ad-hoc (`-sign -`), which `codesign --verify --deep --strict` accepts and Gatekeeper does not. Real distribution signing is the owner's step in a GUI login session: an ssh session's keychain is locked and `codesign` fails with `errSecInternalComponent`. `--sign "Developer ID Application: …"` signs with the identity mygo then also hardens and timestamps, and `--notarize` submits the `.dmg` with `notarytool --wait` and staples the app and the image (credentials from `APPLE_ID` + `APPLE_TEAM_ID` + `APPLE_APP_SPECIFIC_PASSWORD`, or `APPLE_API_KEY` + `APPLE_API_KEY_ID` + `APPLE_API_ISSUER`). mygo's own route (`macos.signingIdentity` + `macos.notarize` in `mygo/mygo.json`) stays available; the committed configuration keeps the ad-hoc default so a machine without an identity still produces a runnable app.
 
-`--release` drops the automation plugin (below); `--no-payload` builds with the payload already staged.
+Both forms are mygo's release build: `mygo build` sets `-X github.com/egoist/mygo.production=1`, so the window keeps developer tools off and the app is not a development bundle. The one switch for the inspector of native UI — and with it the automation plugin the agent channel drives — is the environment: `MYGO_INSPECTOR=1` keeps them (`github.com/egoist/mygo/cmd/mygo/build.go:448`, `:453`), anything else adds `-tags mygo_noinspector`. `-debug` keeps them too but drops the production flag, so a released app is never built with it. `--no-agent-channel` builds without them (see below); `--no-payload` builds with the payload already staged; `--skip-run-check` skips the launch that proves the channel is in — or out of — the artifact.
+
+The script ends by proving what the build asked for. It reads the executable's own markers (the plugin's protocol code, or the stand-in's "this build leaves automation out"), then opens the built app once with `MYGO_AUTOMATION` set and a throwaway `DSH_HOME` under the temp directory and asks `agentctl windows` for the window list, retrying briefly because the window opens a moment after the app is ready — a build without the channel is proved by the app's own line on stderr. Where the app cannot be launched here — no GUI session, or no Go to build `agentctl` — the script falls back to the markers alone and says which check it could not run.
 
 ### Agent channel
 
-`mygo build -debug` and `MYGO_INSPECTOR=1 mygo build` keep the inspector of native UI, and with it the automation plugin the shell imports (`mygo/automation.go`). A plain release build passes `-tags mygo_noinspector`, the plugin's `off.go` stands in, and an app started with `MYGO_AUTOMATION` says on stderr that the channel is not in this build instead of leaving a client waiting. `build-mygo-mac.sh` keeps it unless `--release` is passed.
+The released app carries the automation plugin the shell imports (`mygo/automation.go`), because the agent channel is how a build is accepted and driven: `build-mygo-mac.sh` exports `MYGO_INSPECTOR=1` unless `--no-agent-channel` is given, mygo then leaves out `-tags mygo_noinspector`, and the plugin's `init` listens on the Unix socket `MYGO_AUTOMATION` names. Without that variable the plugin does nothing at all. A build that passes the tag instead compiles the plugin's `off.go` stand-in: nothing listens, and an app started with `MYGO_AUTOMATION` says on stderr that the channel is not in this build.
 
-The app listens on the Unix socket `MYGO_AUTOMATION` names and answers newline-delimited JSON; `mygo/cmd/agentctl` is the local client (build it for the Mac with `CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o agentctl ./cmd/agentctl`):
+`mygo/cmd/agentctl` is the local client (build it for the Mac with `CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o agentctl ./cmd/agentctl`):
 
 ```sh
 MYGO_AUTOMATION=/tmp/dsh-mygo.sock \
@@ -141,3 +143,15 @@ agentctl idle 5s                      # wait until the window settles
 - `idle [timeout]` waits until the window settles.
 
 **A page window has no accessibility tree.** The shell's window shows the GUI's web page, so `tree` answers `unsupported` ("window 7 shows a web page: use eval") and `act`/`input` only apply to windows of native UI. Everything the page shows is reachable through `eval` — `document.querySelector`, `getComputedStyle`, any `window.__x` the page set — and that is what the acceptance runs assert against. Use `capture` when the question is what the window looks like, and `eval` when it is what the page says.
+
+#### What shipping the channel costs
+
+The tag that keeps the inspector also compiles in the automation plugin, so both travel to the user:
+
+- The socket exists only when the app is started with `MYGO_AUTOMATION` naming a path, and the plugin creates it mode `0600` after tightening the umask (`github.com/egoist/mygo/plugins/automation/listen_unix.go`): only the user who launched the app can open it. Nothing listens in an ordinary double-click launch.
+- Whoever can open it sees what the window shows and acts on it: window geometry, a PNG capture, and `eval` in the GUI page, which reaches everything the page can — including the `window.desktop` bridge the page already calls. There is no elevation and no path into `$DSH_HOME` beyond what the page has.
+- The inspector of native UI adds about 250 KB to the binary. This shell's window keeps web developer tools off in a production build (`PageOptions.DevTools` stays `DevToolsAuto`, which is off once `production=1`), so the panel is not a way in here; the plugin is the part that answers.
+
+That is accepted because the acceptance runs drive the installed app: `windows`/`eval`/`capture`/`idle` against the artifact under test is the only end-to-end check that the shipped build works, and a separate debug-flavoured build would verify a binary nobody runs. It is a local surface on the user's own machine, gated by the user's own environment.
+
+`--no-agent-channel` builds the release without either: mygo then passes `-tags mygo_noinspector`, the stand-in stands in, and the artifact answers nothing on the socket. Use it for an artifact that must carry no local driver at all — a copy handed to someone who is not the operator, or a distribution where the extra surface is not wanted — at the price of losing the run-based acceptance (the script still proves the absence by launching the app and reading the stand-in's line, or, without a GUI session, by the binary's markers).
