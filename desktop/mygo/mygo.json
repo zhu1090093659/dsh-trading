@@ -1,0 +1,7 @@
+{
+  "name": "DSH Trading Mygo",
+  "slug": "dsh-trading-mygo",
+  "identifier": "com.dshtrading.mygo",
+  "version": "0.0.1",
+  "out": "build"
+}

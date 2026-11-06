@@ -1,0 +1,3 @@
+# mygo build output (mygo.json "out")
+build/
+*.log

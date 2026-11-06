@@ -24,6 +24,8 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 
 **交易安全语义原样交付。** 桌面版不改任何下单路径：dry-run 默认、`liveTrading` 显式开关、base 审批闸门全部由 bundle 自带配置保证，桌面壳无任何绕行。
 
+壳层的后继实现与迁移记录见 [桌面壳从 Electron 迁到 mygo](2026-11-06-desktop-shell-mygo-migration.md)（2026-11-06）。
+
 ## Alternatives considered
 
 - **在 Electron 主进程内直接运行 dsh 宿主**（复用 Electron 内嵌 Node）：包体更小，但 dsh 的进程派生、插件加载与文件系统假设将运行在 Electron 补丁版 Node 上，故障难排；内置官方 Node 让宿主与插件测试所基于的 npm 安装拓扑字节级一致。

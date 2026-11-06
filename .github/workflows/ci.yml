@@ -123,3 +123,68 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
       - run: pnpm -r test
+
+  # mygo 桌面壳（Go 门禁）：desktop/mygo 是独立 Go 模块（不在 pnpm workspace），
+  # static-gates 与三 OS 矩阵只覆盖 node/pnpm，这个模块此前没有任何 CI 覆盖——
+  # 它的格式、vet、用例与两个交付平台的编译都只在有人手动跑过的机器上验证过。
+  # 与既有 job 之间没有 needs：Go 门禁与 node 矩阵是互为独立的结论，一方红不该
+  # 遮住另一方，既有 job 的名称、语义与触发条件都不因此改变。
+  mygo-shell:
+    name: Mygo shell (gofmt / vet / test / cross-build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # go.mod 的 go 指令（1.27.3）就是最小工具链。关掉自动下载，让 setup-go 钉的
+      # 版本与 go.mod 漂移时当场红在版本上，而不是被 go 悄悄换个工具链跑绿。
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+
+      # 版本与 desktop/mygo/go.mod 的 `go 1.27.3` 逐字对齐，不用 'stable'/'1.x'
+      # 这类浮动标签：模块抬最小工具链时必须同 PR 改这里，漂移要在 CI 上可见。
+      # 缓存走 setup-go 自带模块缓存，key 取模块自己的 go.sum（仓库根没有 go.sum）。
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+          cache: true
+          cache-dependency-path: desktop/mygo/go.sum
+
+      # gofmt 门禁：gofmt -l 对未格式化文件同样返回 0，所以判据是"零输出"而不是
+      # 退出码；有输出即红，并把文件清单打出来，不静默红。
+      - name: gofmt
+        working-directory: desktop/mygo
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo '::error::gofmt found unformatted files:'
+            echo "$unformatted"
+            exit 1
+          fi
+
+      # vet 与 test 都用 runner 自身的 GOOS/GOARCH（linux/amd64）；跨平台编译另立两步。
+      - name: go vet
+        working-directory: desktop/mygo
+        run: go vet ./...
+
+      - name: go test
+        working-directory: desktop/mygo
+        run: go test ./...
+
+      # 交叉编译门禁：两个交付平台必须编得过（只 build，不打包）。不跑 `mygo build`、
+      # 不下载 mygo CLI——产物格式、打包与签名属于 desktop-release 管线（另一张卡），
+      # 这个 job 只负责"同一份源码在两个目标平台都编得出"这一件事。
+      - name: Cross-build (darwin/arm64)
+        working-directory: desktop/mygo
+        env:
+          CGO_ENABLED: '0'
+          GOOS: darwin
+          GOARCH: arm64
+        run: go build ./...
+
+      - name: Cross-build (linux/amd64)
+        working-directory: desktop/mygo
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        run: go build ./...
