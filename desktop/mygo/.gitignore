@@ -8,3 +8,8 @@ build/
 # fetch-node.mjs / stage-pnpm.mjs / build-runtime.mjs, far too large for the
 # repository, and every machine stages them before mygo build runs.
 resources/runtime/
+
+# The Microsoft Edge WebView2 bootstrapper the installer embeds and runs when the
+# runtime is missing: a Microsoft download, not a build output, pinned by SHA-256
+# in desktop/scripts/fetch-webview2.mjs and fetched by it into this directory.
+resources/windows-amd64/MicrosoftEdgeWebview2Setup.exe

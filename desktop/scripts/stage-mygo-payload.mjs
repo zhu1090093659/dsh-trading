@@ -27,8 +27,15 @@
  * one. --keep-all-platforms stages every platform's packages instead, for a
  * payload packed for more than one target.
  *
+ * --platform takes the target the way mygo build names it (GOOS/GOARCH) or with
+ * a dash: darwin/arm64, windows/amd64, windows-amd64. The payload keeps
+ * Electron's naming, so windows/amd64 stages node-win32-x64 and trims to
+ * win32-x64 (fetch-node.mjs TARGETS, prune-mygo-payload.mjs PLATFORM_TAGS).
+ * The node distribution is read as it is shipped: bin/node on unix, node.exe at
+ * its root for Windows.
+ *
  * Usage:
- *   node scripts/stage-mygo-payload.mjs [--platform darwin-arm64]
+ *   node scripts/stage-mygo-payload.mjs [--platform darwin-arm64|windows/amd64]
  *                                       [--from <runtime>] [--to <resources/runtime>]
  *                                       [--keep-all-platforms]
  */
@@ -42,18 +49,57 @@ const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 const defaultSource = path.join(desktopDir, 'resources', 'runtime');
 const defaultTarget = path.join(desktopDir, 'mygo', 'resources', 'runtime');
 
-/** The files the payload must carry, as paths inside the staged directory. */
-const REQUIRED = [
-  ['node', 'bin', 'node'],
-  ['node', 'bin', 'npm'],
-  ['node', 'bin', 'npx'],
+/**
+ * Where a node distribution keeps what the shell runs: bin/node and its
+ * npm/npx wrappers on unix, node.exe and the .cmd wrappers at the root in the
+ * Windows archive.
+ */
+const NODE_LAYOUTS = [
+  { name: 'bin/node', executable: ['bin', 'node'], npm: ['bin', 'npm'], npx: ['bin', 'npx'] },
+  { name: 'node.exe', executable: ['node.exe'], npm: ['npm.cmd'], npx: ['npx.cmd'] },
+];
+
+/** The files the payload must carry of the host and of the profile seed. */
+const REQUIRED_PAYLOAD = [
   ['host', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'],
   ['profile-trading', 'package.json'],
   ['profile-trading', 'cordis.patch.yml'],
 ];
 
+/** The files the payload must carry once node is mapped to node/, as staged paths. */
+function requiredFiles(layout) {
+  return [
+    ['node', ...layout.executable],
+    ['node', ...layout.npm],
+    ['node', ...layout.npx],
+    ...REQUIRED_PAYLOAD,
+  ];
+}
+
 /** The directories staged into the payload root, beside VERSION.json. */
 const STAGED = ['node', 'host', 'profile-trading'];
+
+/**
+ * What a --platform value names in the payload: mygo build takes GOOS/GOARCH
+ * (windows/amd64) and the build scripts may pass it with a dash, while the
+ * payload keeps Electron's naming, where the Windows x64 node distribution is
+ * node-win32-x64 (fetch-node.mjs TARGETS) and the packages trimmed for it are
+ * tagged win32-x64 (prune-mygo-payload.mjs PLATFORM_TAGS). Every other target
+ * passes through, so darwin-arm64 stages what it always staged.
+ */
+function targetPlatform(value) {
+  const key = String(value).trim().toLowerCase().replace(/\//g, '-');
+  if (key === 'windows-amd64') return 'win32-x64';
+  return key;
+}
+
+/** The layout of the node distribution at dir, or null when it holds none. */
+function nodeLayout(dir) {
+  for (const layout of NODE_LAYOUTS) {
+    if (fs.existsSync(path.join(dir, ...layout.executable))) return layout;
+  }
+  return null;
+}
 
 /** Parse the command line. */
 function parseArgs(argv) {
@@ -81,17 +127,34 @@ function parseArgs(argv) {
 }
 
 /**
- * Locate the node distribution inside a payload: node/ in one an app already
- * mapped, node-<os>-<arch>/ in the staged one fetch-node.mjs writes.
+ * Locate the node distribution of the target inside a payload: node-<os>-<arch>/
+ * in the staged payload fetch-node.mjs writes, which holds every target, or node/
+ * in one an app already mapped, which holds the one target that app ships.
+ *
+ * The platform directory comes first, so a payload that carries several can never
+ * hand a Windows build the macOS node it also holds. The layout has to be the one
+ * the target runs—node.exe for Windows, bin/node elsewhere—because a mapped node/
+ * of another platform looks like a match until the installer ships it: a Windows
+ * app with a Mach-O node cannot start a host.
  */
 function nodeDistribution(source, platform) {
-  const mapped = path.join(source, 'node');
-  if (fs.existsSync(path.join(mapped, 'bin', 'node'))) return { dir: mapped, name: 'node' };
-  const staged = path.join(source, 'node-' + platform);
-  if (fs.existsSync(path.join(staged, 'bin', 'node'))) return { dir: staged, name: 'node-' + platform };
+  const wanted = platform.startsWith('win32') ? 'node.exe' : 'bin/node';
+  const candidates = [
+    { dir: path.join(source, 'node-' + platform), name: 'node-' + platform },
+    { dir: path.join(source, 'node'), name: 'node' },
+  ];
+  const looked = [];
+  let wrongLayout = '';
+  for (const candidate of candidates) {
+    const layout = nodeLayout(candidate.dir);
+    if (layout !== null && layout.name === wanted) return { ...candidate, layout };
+    if (layout !== null) wrongLayout = candidate.name + ' holds ' + layout.name;
+    looked.push(candidate.name + '/{' + NODE_LAYOUTS.map((l) => l.name).join(',') + '}');
+  }
   throw new Error(
-    'no node distribution in ' + source
-    + ': looked for node/bin/node and node-' + platform + '/bin/node (run scripts/fetch-node.mjs first)',
+    'no ' + wanted + ' for ' + platform + ' in ' + source + ': looked for ' + looked.join(' and ')
+    + (wrongLayout === '' ? '' : ' (' + wrongLayout + '), which belongs to another platform: an installed app carries the node of the machine it runs on, and only a staged desktop/resources/runtime carries every target (run scripts/fetch-node.mjs)')
+    + (wrongLayout === '' ? ' (run scripts/fetch-node.mjs first)' : ''),
   );
 }
 
@@ -128,8 +191,8 @@ function relative(target) {
 }
 
 /** Fail when a staged payload cannot start a host or seed the profile. */
-function assertComplete(target) {
-  for (const parts of REQUIRED) {
+function assertComplete(target, layout) {
+  for (const parts of requiredFiles(layout)) {
     const file = path.join(target, ...parts);
     let stat;
     try {
@@ -143,6 +206,11 @@ function assertComplete(target) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
+  const requested = options.platform;
+  options.platform = targetPlatform(options.platform);
+  if (options.platform !== requested) {
+    console.log('[stage-mygo-payload] ' + requested + ' is ' + options.platform + ' in the payload (node-win32-x64, prune tag win32-x64)');
+  }
   const node = nodeDistribution(options.from, options.platform);
   for (const name of ['host', 'profile-trading']) {
     const source = path.join(options.from, name);
@@ -164,9 +232,9 @@ function main() {
   } else {
     prune({ root: options.to, platform: options.platform });
   }
-  assertComplete(options.to);
+  assertComplete(options.to, node.layout);
 
-  console.log('[stage-mygo-payload] from ' + relative(options.from) + ' (' + node.name + ')');
+  console.log('[stage-mygo-payload] from ' + relative(options.from) + ' (' + node.name + ', ' + node.layout.name + ')');
   for (const name of STAGED) {
     console.log('[stage-mygo-payload]   ' + name + '  ' + human(sizeOf(path.join(options.to, name))));
   }

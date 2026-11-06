@@ -5,5 +5,9 @@
   "version": "0.2.1",
   "copyright": "Copyright (c) DeepSeek Harness Contributors",
   "icon": "../resources/icon.png",
+  "windows": {
+    "publisher": "DeepSeek Harness Contributors",
+    "installerInclude": "installer/windows.nsh"
+  },
   "out": "build"
 }
