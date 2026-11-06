@@ -21,14 +21,22 @@
  * (/Applications/DSH Trading.app/Contents/Resources/runtime), whose layout is
  * already mapped.
  *
+ * The copy is then trimmed to the platform it is staged for
+ * (scripts/prune-mygo-payload.mjs): the source keeps every platform, because the
+ * Electron payload serves mac arm64 + mac x64 + win32, while a mygo build ships
+ * one. --keep-all-platforms stages every platform's packages instead, for a
+ * payload packed for more than one target.
+ *
  * Usage:
  *   node scripts/stage-mygo-payload.mjs [--platform darwin-arm64]
  *                                       [--from <runtime>] [--to <resources/runtime>]
+ *                                       [--keep-all-platforms]
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { prune } from './prune-mygo-payload.mjs';
 
 const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const defaultSource = path.join(desktopDir, 'resources', 'runtime');
@@ -53,9 +61,14 @@ function parseArgs(argv) {
     platform: process.platform + '-' + process.arch,
     from: defaultSource,
     to: defaultTarget,
+    keepAll: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
+    if (flag === '--keep-all-platforms') {
+      options.keepAll = true;
+      continue;
+    }
     const value = argv[i + 1];
     if (value === undefined) throw new Error(flag + ' needs a value');
     if (flag === '--platform') options.platform = value;
@@ -146,13 +159,19 @@ function main() {
   }
   const stamp = path.join(options.from, 'VERSION.json');
   if (fs.existsSync(stamp)) fs.copyFileSync(stamp, path.join(options.to, 'VERSION.json'));
+  if (options.keepAll) {
+    console.log('[stage-mygo-payload] payload kept complete: every platform stays (--keep-all-platforms)');
+  } else {
+    prune({ root: options.to, platform: options.platform });
+  }
   assertComplete(options.to);
 
   console.log('[stage-mygo-payload] from ' + relative(options.from) + ' (' + node.name + ')');
   for (const name of STAGED) {
     console.log('[stage-mygo-payload]   ' + name + '  ' + human(sizeOf(path.join(options.to, name))));
   }
-  console.log('[stage-mygo-payload] staged ' + relative(options.to) + ' (gitignored; mygo build ships it as Contents/Resources/runtime)');
+  console.log('[stage-mygo-payload] staged ' + relative(options.to) + ' for ' + options.platform
+    + ' (gitignored; mygo build ships it as Contents/Resources/runtime)');
 }
 
 try {

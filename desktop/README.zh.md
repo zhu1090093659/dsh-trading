@@ -29,7 +29,9 @@
 | `scripts/build-runtime.mjs` | 全仓构建、逐包打包、安装并暂存载荷 |
 | `resources/` | 应用图标 + 生成的运行时载荷（git 忽略） |
 | `mygo/` | mygo 壳（迁移目标）：承载窗口、启动器、生命周期、cookie、页面策略、异常恢复、profile 播种、cohort 规范化与 agent 通道的 Go 模块 |
-| `scripts/stage-mygo-payload.mjs` | 把载荷暂存进 `mygo/resources/runtime`，并把按平台命名的 node 目录映射为 `runtime/node` |
+| `scripts/stage-mygo-payload.mjs` | 把载荷暂存进 `mygo/resources/runtime`，把按平台命名的 node 目录映射为 `runtime/node`，并把这份副本裁到目标平台 |
+| `scripts/prune-mygo-payload.mjs` | 裁剪本体：「精确包名 → 它服务的那个平台」映射表，逐包核对 `os`/`cpu` 后删掉其他目标的包与 `*.map` |
+| `scripts/verify-prune-mygo-payload.mjs` | 在 fixture 载荷上验证裁剪：映射表、拒绝条件、幂等性与命令行 |
 | `scripts/build-mygo-mac.sh` | 打包 macOS 版 mygo 壳：载荷、`.app` + `.dmg`、签名校验与公证入口 |
 | `scripts/set-mygo-version.mjs` | 在 runner 里按发布 tag 重写 mygo 清单的 `version`，使 mygo 磁盘映像与 bundle 版本跟 Electron 壳一样随 tag 走（对应 `scripts/set-desktop-version.mjs`） |
 
@@ -94,6 +96,16 @@ node scripts/stage-mygo-payload.mjs --platform darwin-arm64
 
 运行期壳层就地读取载荷（`mygo/internal/launch/runtime.go`）：`runtime/node/bin/node`、`runtime/host/node_modules/@deepseek-ai/dsh/lib/bin.js`、`runtime/profile-trading` 与 `runtime/VERSION.json`。
 
+### 一次构建只带一个平台
+
+载荷按桌面版覆盖的每个目标安装——`runtime/host/pnpm-workspace.yaml` 的 `supportedArchitectures` 钉住 darwin + win32 与 x64 + arm64，因为 Electron 那份要同时供 mac arm64、mac x64 与 win32——而 mygo 构建只发一个平台。因此两个暂存入口（`stage-mygo-payload.mjs`、`build-mygo-mac.sh`）都只裁自己暂存的那份副本、绝不动源载荷，裁剪逻辑在 `scripts/prune-mygo-payload.mjs`。以 2026-10-21 的载荷实测，mac arm64 构建从 1824MB 里去掉 823MB：darwin-x64、win32-x64、win32-arm64 三套 LibreOffice kit、sharp 与 libvips、sherpa-onnx、koffi、ripgrep、QQ 邮箱 CLI、computer-use 驱动、ubjs 与 N-API 绑定，外加 54MB 的 `*.map`。
+
+裁剪不按通配符匹配：`PLATFORM_PACKAGES` 逐条写明包名与它服务的那个平台，`host/` 与 `profile-trading/` 下每个包都会被读出来，让包自己的 `os`/`cpu` 声明去反驳映射表。映射表里没有的按平台包、表里写着某平台而 `package.json` 钉的是另一个平台、以及符号链接形态的包（pnpm store 布局而非 hoisted 布局），都会在删除任何东西之前让构建失败。`@deepseek-ai/dsh-win32-process` 刻意不入表：`dsh-subprocess-local/lib/index.js` 在每个平台都静态 import 它，darwin 构建里也要留。源载荷与 `node/` 整套保留——win32 构建暂存同一棵树、反向裁剪，随包分发的 node 发行版则带着 pnpm 自己的按平台绑定。
+
+`*.d.ts`、包内 `test/` 与 `docs/` 目录只量化不裁：声明 48MB、fixture 9MB，相对按平台包都很小，而且前者是插件作者对着 profile 开发时预期能找到的类型面，后者有包可能读到自己的 fixture。
+
+改传 `--keep-all-platforms` 则暂存全部平台，裁剪前后两个产物的大小就是靠它对比着量的。
+
 ### Profile、cohort 与 primary runtime
 
 - **播种**（`mygo/internal/profile`）：缺少 profile 的 home 会用载荷里的种子初始化；此前由本应用播种过的 profile，只要载荷身份（`VERSION.json`：node、host、profile 哈希）发生变化就会重新播种；不带 `.dsh-desktop-seed.json` 标记的 profile 视为用户自管，永不触碰。重新播种时替换清单与 `node_modules`，用户自己的 `cordis.patch.yml` 及其备份原样保留。
@@ -108,7 +120,7 @@ PATH=/path/to/go/bin:$PATH desktop/scripts/build-mygo-mac.sh \
   --sign "Developer ID Application: Name (TEAM)" --notarize         # 分发构建
 ```
 
-脚本先暂存载荷（默认来源：若已安装 `/Applications/DSH Trading.app` 则取其 runtime，否则取 `desktop/resources/runtime`），当 `PATH` 上没有 `mygo` 时用 Go 编译 mygo CLI，执行 `mygo build -platform darwin/arm64 -sign …`，最后打印应用包的 `Info.plist`、签名信息、包内各部分载荷体积与产物列表。构建需要 macOS（`codesign`、`hdiutil`）与 Go 工具链：`mygo/go.mod` 钉住 go 1.27.3，`mygo build` 用它编译应用，因此打包机需要该版本（设 `GOTOOLCHAIN=auto` 可自动拉取）。
+脚本先暂存载荷（默认来源：若已安装 `/Applications/DSH Trading.app` 则取其 runtime，否则取 `desktop/resources/runtime`），除非传 `--keep-all-platforms` 否则把这份副本裁到目标平台，当 `PATH` 上没有 `mygo` 时用 Go 编译 mygo CLI，执行 `mygo build -platform darwin/arm64 -sign …`，最后打印应用包的 `Info.plist`、签名信息、包内各部分载荷体积与产物列表。构建需要 macOS（`codesign`、`hdiutil`）与 Go 工具链：`mygo/go.mod` 钉住 go 1.27.3，`mygo build` 用它编译应用，因此打包机需要该版本（设 `GOTOOLCHAIN=auto` 可自动拉取）。
 
 产物落在 `mygo/build/darwin-arm64/`：
 

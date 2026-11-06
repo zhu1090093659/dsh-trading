@@ -28,7 +28,13 @@
 #                           automation plugin (mygo's mygo_noinspector tag): nothing
 #                           listens on MYGO_AUTOMATION and the app says so on stderr.
 #                           For a build that must carry no local driver at all.
-#   --no-payload            do not stage the payload, build with the one in place
+#   --no-payload            do not stage the payload, build with the one in place as
+#                           it stands: no copy is made, so nothing is trimmed here
+#                           (stage-mygo-payload.mjs trims what it stages)
+#   --keep-all-platforms    stage the payload for every platform, without the
+#                           per-platform trim: the .app then carries the native
+#                           packages of all four targets, about 820 MB more than
+#                           a mac arm64 build ships (scripts/prune-mygo-payload.mjs)
 #   --skip-run-check        do not launch the built app to verify the channel; the
 #                           binary's own markers are still checked (a machine without
 #                           a GUI session cannot answer the channel's requests)
@@ -40,6 +46,8 @@
 #                         exists, else desktop/resources/runtime (the Electron staging)
 #   MYGO_BIN              mygo CLI to use; the default builds the module's CLI with Go
 #   GO_BIN                go executable (default: go from PATH)
+#   NODE_BIN              node that trims the staged payload (default: node from PATH,
+#                         then /opt/homebrew/bin/node, then /usr/local/bin/node)
 #   AGENTCTL              agentctl binary for the run check; the default builds
 #                         desktop/mygo/cmd/agentctl with Go
 #   MYGO_INSPECTOR        forced to 1 (the default, agent channel in) and unset with
@@ -61,13 +69,14 @@ identity="-"
 notarize=0
 channel=1
 stage=1
+keepall=0
 runcheck=1
 
 say() { echo "[build-mygo-mac] $*"; }
 fail() { echo "build-mygo-mac: $*" >&2; exit 1; }
 
 usage() {
-  sed -n '2,52p' "${BASH_SOURCE[0]}" | sed 's/^#\( \|$\)//'
+  awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
 }
 
 while [ $# -gt 0 ]; do
@@ -78,6 +87,7 @@ while [ $# -gt 0 ]; do
     --notarize) notarize=1; shift ;;
     --no-agent-channel) channel=0; shift ;;
     --no-payload) stage=0; shift ;;
+    --keep-all-platforms) keepall=1; shift ;;
     --skip-run-check) runcheck=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) fail "unknown argument $1" ;;
@@ -101,6 +111,22 @@ fi
 
 go="${GO_BIN:-go}"
 command -v "$go" >/dev/null 2>&1 || go=""
+# mygo build shells out to "go" itself (go list .), so a GO_BIN outside PATH has
+# to be put on PATH, not just used for this script's own builds.
+if [ -n "$go" ]; then
+  PATH="$(cd "$(dirname "$go")" && pwd):$PATH"
+  export PATH
+fi
+
+# The trim runs on node, which a non-interactive ssh shell does not find on a
+# Homebrew Mac: look where a login shell would.
+node_bin="${NODE_BIN:-}"
+if [ -z "$node_bin" ] && command -v node >/dev/null 2>&1; then node_bin="$(command -v node)"; fi
+if [ -z "$node_bin" ]; then
+  for candidate in /opt/homebrew/bin/node /usr/local/bin/node; do
+    if [ -x "$candidate" ]; then node_bin="$candidate"; break; fi
+  done
+fi
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/mygo-build.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
@@ -126,6 +152,13 @@ if [ "$stage" = 1 ]; then
   rsync -a --delete "$source/host/" "$payload/host/"
   rsync -a --delete "$source/profile-trading/" "$payload/profile-trading/"
   if [ -f "$source/VERSION.json" ]; then cp "$source/VERSION.json" "$payload/VERSION.json"; fi
+  say "staged payload: $(du -sh "$payload" | cut -f1) (all platforms)"
+  if [ "$keepall" = 1 ]; then
+    say "payload kept complete: --keep-all-platforms stages every platform"
+  else
+    [ -n "$node_bin" ] || fail "trimming the staged payload needs node (set NODE_BIN, or pass --keep-all-platforms)"
+    "$node_bin" "$root/desktop/scripts/prune-mygo-payload.mjs" --platform "$platform" --root "$payload"
+  fi
 fi
 
 for required in \

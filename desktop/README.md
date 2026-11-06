@@ -29,7 +29,9 @@ An Electron shell that turns the dsh-trading Web GUI into an installable desktop
 | `scripts/build-runtime.mjs` | Builds the workspace, packs every package, installs and stages the payload |
 | `resources/` | App icons + generated runtime payload (git-ignored) |
 | `mygo/` | mygo shell (migration target): Go module of the window, launcher, lifecycle, cookies, policy, recovery, profile seeding, cohort normalization and the agent channel |
-| `scripts/stage-mygo-payload.mjs` | Stages the payload into `mygo/resources/runtime` with the per-platform node directory mapped to `runtime/node` |
+| `scripts/stage-mygo-payload.mjs` | Stages the payload into `mygo/resources/runtime` with the per-platform node directory mapped to `runtime/node`, then trims the copy to the target platform |
+| `scripts/prune-mygo-payload.mjs` | The trim itself: a table of exact package names and the one platform each serves, checked against every package's `os`/`cpu`, removes the other targets' packages and `*.map` from a staged payload |
+| `scripts/verify-prune-mygo-payload.mjs` | Checks that trim on a fixture payload: the table, the refusals, idempotency and the command line |
 | `scripts/build-mygo-mac.sh` | Packages the mygo shell for macOS: payload, `.app` + `.dmg`, signature check, notarization entry |
 | `scripts/set-mygo-version.mjs` | Rewrites the mygo manifest's version from the release tag in the runner, so the mygo disk image and bundle version follow the tag as the Electron shell's do (`scripts/set-desktop-version.mjs`) |
 
@@ -95,6 +97,16 @@ node scripts/stage-mygo-payload.mjs --platform darwin-arm64
 
 At runtime the shell reads the payload in place (`mygo/internal/launch/runtime.go`): `runtime/node/bin/node`, `runtime/host/node_modules/@deepseek-ai/dsh/lib/bin.js`, `runtime/profile-trading` and `runtime/VERSION.json`.
 
+### One platform per build
+
+The payload is installed for every target the desktop release covers — `runtime/host/pnpm-workspace.yaml` pins `supportedArchitectures` darwin + win32 on x64 + arm64, because the Electron payload serves a mac arm64, a mac x64 and a win32 app — while a mygo build ships one. Both staging entries (`stage-mygo-payload.mjs`, `build-mygo-mac.sh`) therefore trim the copy they stage, never the source, with `scripts/prune-mygo-payload.mjs`. On the 2026-10-21 payload a mac arm64 build drops 823MB of the 1824MB payload: the darwin-x64, win32-x64 and win32-arm64 packages of the LibreOffice kits, sharp and libvips, sherpa-onnx, koffi, ripgrep, the QQ mail CLI, the computer-use driver, the ubjs and N-API bindings, plus 54MB of `*.map`.
+
+The trim matches no wildcard: `PLATFORM_PACKAGES` names every package and the one platform it serves, and every package under `host/` and `profile-trading/` is read so the payload's own `os`/`cpu` declarations can contradict the table. A per-platform package the table does not name, a table row whose `package.json` pins another platform, and a symlinked package (a pnpm store layout rather than the hoisted one) each fail the build before anything is removed. `@deepseek-ai/dsh-win32-process` is deliberately absent: `dsh-subprocess-local/lib/index.js` imports it statically on every platform, so it stays in a darwin build too. The source payload and `node/` stay whole — a win32 build stages the same tree and trims the other way, and the shipped node distribution carries pnpm's own per-platform bindings.
+
+`*.d.ts`, package `test/` and `docs/` directories are measured and left alone: 48MB of declarations and 9MB of fixtures, small next to the per-platform packages, and both are things a package can read at runtime or a plugin author expects to find in the profile.
+
+`--keep-all-platforms` stages every platform instead, which is how the trimmed `.app` and `.dmg` are measured against an untrimmed one.
+
 ### Profile, cohort and the primary runtime
 
 - **Seeding** (`mygo/internal/profile`): a home without a profile gets the payload's seed; a profile this app seeded before is reseeded when the payload's identity (`VERSION.json`: node, host, profile hash) moved; a profile without the `.dsh-desktop-seed.json` marker is user-managed and never touched. On reseed the manifests and `node_modules` are replaced while the user's own `cordis.patch.yml` — and its backups — stay as they are.
@@ -109,7 +121,7 @@ PATH=/path/to/go/bin:$PATH desktop/scripts/build-mygo-mac.sh \
   --sign "Developer ID Application: Name (TEAM)" --notarize         # distribution
 ```
 
-The script stages the payload (default source: the installed `/Applications/DSH Trading.app` runtime when it exists, else `desktop/resources/runtime`), builds the mygo CLI with Go when none is on `PATH`, runs `mygo build -platform darwin/arm64 -sign …`, then prints the bundle's `Info.plist`, the signature, the payload sizes inside the bundle and the artifact list. It needs macOS (`codesign`, `hdiutil`) and a Go toolchain: `mygo/go.mod` pins go 1.27.3 and `mygo build` compiles the app with it, so the packaging machine needs that version (`GOTOOLCHAIN=auto` fetches it).
+The script stages the payload (default source: the installed `/Applications/DSH Trading.app` runtime when it exists, else `desktop/resources/runtime`), trims it to the target platform unless `--keep-all-platforms` is passed, builds the mygo CLI with Go when none is on `PATH`, runs `mygo build -platform darwin/arm64 -sign …`, then prints the bundle's `Info.plist`, the signature, the payload sizes inside the bundle and the artifact list. It needs macOS (`codesign`, `hdiutil`) and a Go toolchain: `mygo/go.mod` pins go 1.27.3 and `mygo build` compiles the app with it, so the packaging machine needs that version (`GOTOOLCHAIN=auto` fetches it).
 
 Artifacts land in `mygo/build/darwin-arm64/`:
 
