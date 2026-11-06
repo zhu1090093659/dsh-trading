@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dshtrading/desktop-mygo/internal/preflight"
 	"github.com/dshtrading/desktop-mygo/internal/shell"
 )
 
@@ -19,6 +20,13 @@ import (
 const appName = "DSH Trading Mygo"
 
 func main() {
+	// On Windows the window is a WebView2 page, so the runtime is asked for
+	// before the shell starts: without it no window can show, and the guidance
+	// window says where the runtime comes from instead of the shell dying on a
+	// line of stderr.
+	if preflight.Missing() {
+		os.Exit(preflight.Guide())
+	}
 	if err := shell.New(shell.Options{Name: appName}).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "dsh-trading-mygo: "+err.Error())
 		os.Exit(1)
