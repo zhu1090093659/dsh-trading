@@ -136,6 +136,9 @@ export type SettingsLocaleKey =
 
 export const zh: Record<SettingsLocaleKey, string> = {
       'nav': '交易',
+      'plugins.nav': '插件',
+      'plugins.loading': '正在打开插件管理…',
+      'plugins.unavailable': '当前宿主没有提供插件管理界面。',
       'lead': '选择每个市场使用的数据/交易所提供方。行情面板保存即生效；Agent 会话于新建会话生效（切换不中断当前会话）。',
       'tabs': '市场',
       'empty': '没有可配置的市场。',
@@ -262,6 +265,9 @@ export const zh: Record<SettingsLocaleKey, string> = {
 
 export const en: Record<SettingsLocaleKey, string> = {
       'nav': 'Trading',
+      'plugins.nav': 'Plugins',
+      'plugins.loading': 'Opening plugin management…',
+      'plugins.unavailable': 'This host does not provide a plugin management surface.',
       'lead': 'Choose the data/exchange provider for each market. Quote panels take effect immediately; agent sessions pick it up in new sessions (running sessions are not interrupted).',
       'tabs': 'Markets',
       'empty': 'No configurable markets.',

@@ -22,6 +22,8 @@ import {
 } from './trading-settings-controller.ts'
 import { TradingSettingsSection, type TradingMarketTabEntry } from './TradingSettingsSection.tsx'
 import { MarketProviderPanel } from './MarketProviderPanel.tsx'
+import { PluginsSection } from './PluginsSection.tsx'
+import type { PluginHostLayout } from './plugins-host.ts'
 
 import { en, zh } from './locales.ts'
 /** 本面板/字符串翻译的 locale namespace。 */
@@ -169,6 +171,21 @@ export function apply(ctx: ClientContext): void {
     }),
     children: { 'dshtrading.market.tab': { kind: 'list', scope: 'root' } },
   }, TradingSettingsSection))
+
+  // 插件分区（order 与官方 ui-settings-plugins 同席位）：官方插件管理整页的
+  // 唯一入口。layout 服务惰性取用——apply 时序不保证，与 uiWorkspace 同款纪律。
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'dshtrading-plugins',
+    order: 15,
+    label: () => t('plugins.nav'),
+    locale: NS,
+    inject: () => ({
+      getLayout: () => {
+        try { return ctx.get('layout') as unknown as PluginHostLayout | undefined } catch { return undefined }
+      },
+    }),
+  }, PluginsSection))
 
   // 每个市场一个 tab（list：id=market slug，only=market 时渲染对应面板，官方 settings.plugins.tab 模式）。
   ctx.slots.inject('dshtrading.market.tab', function* () {

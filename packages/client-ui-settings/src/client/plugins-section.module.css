@@ -1,0 +1,34 @@
+/* 插件分区：官方整页被钉进 .host 的矩形，说明文案只在加载中/打开失败时露出。 */
+.host {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  height: 100%;
+}
+
+.hint {
+  max-width: 340px;
+  margin: 0;
+  color: var(--dsw-alias-fg-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* 借壳定位：选中全局面板时宿主给主面板写 [data-global-panel]，这里把它钉到
+   分区矩形。z 高于设置壳面板，几何上不覆盖导航与关闭按钮。 */
+:global(body[data-dshtrading-plugin-host='on']) :global([data-global-panel]) {
+  position: fixed !important;
+  top: var(--dshtrading-plugin-host-top, 0px) !important;
+  left: var(--dshtrading-plugin-host-left, 0px) !important;
+  width: var(--dshtrading-plugin-host-width, 0px) !important;
+  height: var(--dshtrading-plugin-host-height, 0px) !important;
+  z-index: 1001 !important;
+  overflow: auto;
+  background: var(--dsw-alias-bg-base);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-l3);
+}

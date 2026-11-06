@@ -33,15 +33,15 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.1.0",
+    "@deepseek-ai/dsh-api-remotes": ">=0.2.2-rc.1",
     "@deepseek-ai/dsh-client-connection": ">=0.2.2-rc.1",
     "@deepseek-ai/dsh-client-locale": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-store": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-renderer": ">=0.2.2-rc.1",
     "@deepseek-ai/dsh-client-ui-settings": ">=0.2.2-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": ">=0.2.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-renderer": ">=0.2.2-rc.1",
-    "@deepseek-ai/dsh-api-remotes": ">=0.2.2-rc.1",
-    "@deepseek-ai/dsh-client-store": ">=0.2.2-rc.1",
-    "react": "^18.2.0",
-    "@types/react": "~18.3.1"
+    "@types/react": "~18.3.1",
+    "react": "^18.2.0"
   },
   "dsh": {
     "client": {
@@ -56,25 +56,26 @@
     }
   },
   "devDependencies": {
-    "tsdown": "^0.22.0",
-    "vitest": "^3.0.0",
+    "@dshtrading/connector-akshare": "workspace:^",
+    "@dshtrading/connector-alpaca": "workspace:^",
+    "@dshtrading/connector-finnhub": "workspace:^",
+    "@dshtrading/connector-fmp": "workspace:^",
+    "@dshtrading/connector-futu": "workspace:^",
+    "@dshtrading/connector-hithink": "workspace:^",
+    "@dshtrading/connector-ibkr": "workspace:^",
+    "@dshtrading/connector-jin10": "workspace:^",
+    "@dshtrading/connector-longbridge": "workspace:^",
+    "@dshtrading/connector-okx": "workspace:^",
+    "@dshtrading/connector-polygon": "workspace:^",
+    "@dshtrading/connector-qmt": "workspace:^",
+    "@dshtrading/connector-tiger": "workspace:^",
+    "@dshtrading/connector-tushare": "workspace:^",
+    "@dshtrading/connector-xysz": "workspace:^",
+    "@types/react": "~18.3.1",
+    "jsdom": "^30.1.1",
     "lightningcss": "^1.0.0",
     "react": "^18.2.0",
-    "@types/react": "~18.3.1",
-    "@dshtrading/connector-tiger": "workspace:^",
-    "@dshtrading/connector-akshare": "workspace:^",
-    "@dshtrading/connector-ibkr": "workspace:^",
-    "@dshtrading/connector-futu": "workspace:^",
-    "@dshtrading/connector-qmt": "workspace:^",
-    "@dshtrading/connector-xysz": "workspace:^",
-    "@dshtrading/connector-okx": "workspace:^",
-    "@dshtrading/connector-alpaca": "workspace:^",
-    "@dshtrading/connector-fmp": "workspace:^",
-    "@dshtrading/connector-finnhub": "workspace:^",
-    "@dshtrading/connector-polygon": "workspace:^",
-    "@dshtrading/connector-tushare": "workspace:^",
-    "@dshtrading/connector-longbridge": "workspace:^",
-    "@dshtrading/connector-jin10": "workspace:^",
-    "@dshtrading/connector-hithink": "workspace:^"
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0"
   }
 }

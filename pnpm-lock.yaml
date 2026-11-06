@@ -539,6 +539,9 @@ importers:
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31
+      jsdom:
+        specifier: ^30.1.1
+        version: 30.1.1
       lightningcss:
         specifier: ^1.0.0
         version: 1.33.0
@@ -6813,7 +6816,7 @@ snapshots:
     dependencies:
       nanoid: 3.3.19
       picocolors: 1.1.1
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   preact@10.29.8: {}
 
