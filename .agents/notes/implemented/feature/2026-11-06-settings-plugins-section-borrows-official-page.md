@@ -21,6 +21,11 @@ trading-web 的魔改布局里，官方插件管理整页（`@deepseek-ai/dsh-cl
   官方页的列表、安装对话框、注册表探测、启停与更新全部原样。
 - **两条退化路径都落 `body[data-dshtrading-plugin-host='unavailable']`**：layout 服务缺席、`selectPanel` 抛错
   （宿主没注册该面板）。分区显示说明文案而不是留成空白。
+- **矩形铺到面板右缘**：设置壳的内容列有固定宽度（1600 视口下仍只有 564px），只放宽面板不够。
+  借壳态给设置壳面板打 `data-dshtrading-plugin-host-panel`（CSS 放宽到 `min(1200px, 100vw - 48px)`），
+  并让矩形以分区容器左上角为起点、以面板边界减 24px 为右下界。容器标记用
+  `data-dshtrading-plugin-anchor`，**不与 body 状态标志同名**——同名属性会让
+  `querySelector('[data-dshtrading-plugin-host]')` 把 body 一起挑出来。
 - **侧栏那一行不处理**：魔改布局下 `sidebarCol` 宽 1px / 高 0，官方 `plugins` 行几何为 0，天然不可见。
   左栏底部的设置齿轮不变（[设置入口迁左栏底部](2026-09-05-tasks-panel-container-switch-and-settings-move.md) 的结论照旧），
   本记录只在设置壳内部加一节。与 [npm 内置插件管理器](2026-09-08-npm-embed-usage-plugin-manager-model-capabilities.md)
@@ -28,8 +33,8 @@ trading-web 的魔改布局里，官方插件管理整页（`@deepseek-ai/dsh-cl
 
 ## Consequences
 
-- 官方页的响应式按容器宽度生效：设置壳 panel 上限 800px，内容区约 560px，工具栏（刷新/添加插件）收缩为
-  图标按钮。功能完整，密度低于全屏形态。
+- 官方页的响应式按容器宽度生效：宽视口下内容区 764px（工具栏是完整标签），视口窄于 768px 时仍会
+  收缩成图标按钮——那是官方页自己的断点行为，不是本仓的。
 - 宿主升级要重新核两个锚点：`[data-global-panel]`（layout 在 `panelId !== null` 时写）与 `PANEL_ID = 'plugins'`。
   任一改名，分区落到 unavailable 而不是白屏。
 - 官方页自身的 `pluginChanges` / `pluginNavigation` 两套导航动作照旧注册（整页未被遮蔽），借壳只改它的显示位置。
@@ -38,6 +43,8 @@ trading-web 的魔改布局里，官方插件管理整页（`@deepseek-ai/dsh-cl
 
 - `pnpm --filter @dshtrading/client-ui-settings test`：33 例全绿，其中 `test/plugins-section.test.ts` 6 例钉住
   四个借壳分支（打开/卸载/layout 缺席/面板未注册）与注册面（分区 id、order、组件）。
-- 实机 trading-web（780x493 视口）：设置导航 5 项 → 6 项；点「插件」后 `body[data-dshtrading-plugin-host='on']`
+- 实机 trading-web：设置导航 5 项 → 6 项；点「插件」后 `body[data-dshtrading-plugin-host='on']`
   与 `[data-global-panel]` 同时就位，官方整页渲染在分区矩形内（内置插件配置 / 实验性插件 / 已安装插件）。
-  Before/After 截图在 `.local/acceptance/plugins-section-2026-11-06/`（本机不入库）。
+  - 1600x813：面板 800 → 1200，官方页 564 → 764（`添加插件` 恢复完整标签）。
+  - 780x473：矩形 496x371、右缘 708 < 面板 732，不溢出，工具栏按官方断点收成图标。
+  - Before/After 截图在 `.local/acceptance/plugins-section-2026-11-06/`（本机不入库）。

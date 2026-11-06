@@ -11,6 +11,9 @@
  */
 export type SettingsLocaleKey =
   | 'nav'
+  | 'plugins.nav'
+  | 'plugins.loading'
+  | 'plugins.unavailable'
   | 'lead'
   | 'tabs'
   | 'empty'

@@ -37,6 +37,32 @@ export interface PluginHostHandle {
   detach(): void
 }
 
+/** 设置壳面板标记：借壳态放宽它的宽度（plugins-section.module.css 消费）。 */
+const PANEL_ATTR = 'data-dshtrading-plugin-host-panel'
+
+/** 设置壳面板的最小宽度：低于它的祖先不是那块 panel（内容区与导航都更窄）。 */
+const PANEL_MIN_WIDTH = 600
+
+/** 借壳矩形与面板边缘的间距（与设置壳自身的内容留白同款）。 */
+const PANEL_INSET = 24
+
+/**
+ * 上溯找设置壳的面板元素。
+ *
+ * 借壳矩形只是它的内容区，而官方插件页是列表 + 对话框形态，窄容器里工具栏会
+ * 收缩成图标。只认"定位于视口且够宽"的祖先；找不到就当没有，分区按原矩形显示。
+ */
+function findShellPanel(anchor: HTMLElement): HTMLElement | undefined {
+  let node = anchor.parentElement
+  for (let depth = 0; node !== null && depth < 8; depth += 1) {
+    const { width } = node.getBoundingClientRect()
+    const position = getComputedStyle(node).position
+    if (width >= PANEL_MIN_WIDTH && (position === 'fixed' || position === 'absolute')) return node
+    node = node.parentElement
+  }
+  return undefined
+}
+
 /**
  * 把官方插件管理页钉进 `anchor` 的矩形。
  *
@@ -49,12 +75,18 @@ export function attachPluginHost(
   getLayout: () => PluginHostLayout | undefined,
 ): PluginHostHandle {
   const style = document.body.style
+  // 设置壳的内容列有固定宽度（实测 1600 视口下面板放到 1200、内容列仍只有 564），
+  // 官方插件页要铺到面板右缘：矩形以分区容器的左上角为起点、以面板边界为右下界。
+  const panel = findShellPanel(anchor)
   const write = (): void => {
     const rect = anchor.getBoundingClientRect()
+    const bounds = panel?.getBoundingClientRect()
+    const right = bounds === undefined ? rect.right : bounds.right - PANEL_INSET
+    const bottom = bounds === undefined ? rect.bottom : bounds.bottom - PANEL_INSET
     style.setProperty(VARS.top, `${Math.round(rect.top)}px`)
     style.setProperty(VARS.left, `${Math.round(rect.left)}px`)
-    style.setProperty(VARS.width, `${Math.round(rect.width)}px`)
-    style.setProperty(VARS.height, `${Math.round(rect.height)}px`)
+    style.setProperty(VARS.width, `${Math.round(right - rect.left)}px`)
+    style.setProperty(VARS.height, `${Math.round(bottom - rect.top)}px`)
   }
 
   let observer: ResizeObserver | undefined
@@ -62,6 +94,7 @@ export function attachPluginHost(
     observer?.disconnect()
     observer = undefined
     window.removeEventListener('resize', write)
+    document.querySelectorAll(`[${PANEL_ATTR}]`).forEach((panel) => panel.removeAttribute(PANEL_ATTR))
     delete document.body.dataset[HOST_FLAG]
     for (const name of Object.values(VARS)) style.removeProperty(name)
     try {
@@ -81,6 +114,8 @@ export function attachPluginHost(
     return { detach }
   }
 
+  // 先放宽面板再测量：宽度一变矩形跟着变，测量必须落在它之后。
+  panel?.setAttribute(PANEL_ATTR, '')
   write()
   document.body.dataset[HOST_FLAG] = 'on'
   // 无 ResizeObserver 的环境（SSR 探针、jsdom）只靠首帧与 resize 事件跟随。

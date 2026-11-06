@@ -47,6 +47,22 @@ function makeAnchor(): HTMLElement {
   return anchor
 }
 
+/** 设置壳面板替身：定位于视口且 800px 宽，分区容器挂在它里面（jsdom 不做布局，
+ *  矩形必须手工给）。 */
+function makeShellPanel(anchor: HTMLElement): HTMLElement {
+  const panel = document.createElement('div')
+  panel.style.position = 'fixed'
+  document.body.append(panel)
+  panel.append(anchor)
+  Object.defineProperty(panel, 'getBoundingClientRect', {
+    value: () => ({
+      top: 0, left: 0, right: 800, bottom: 600, width: 800, height: 600, x: 0, y: 0,
+      toJSON: () => ({}),
+    }),
+  })
+  return panel
+}
+
 /** 记录型 client ctx：只实现本包 apply 触碰到的面。 */
 function makeCtx() {
   const registrations: { name: string; options: Record<string, unknown>; component: unknown }[] = []
@@ -125,6 +141,43 @@ describe('attachPluginHost（官方插件整页借壳到分区矩形）', () => 
     // Then 身体标志为 unavailable，分区不进入借壳态
     expect(document.body.dataset[FLAG]).toBe('unavailable')
     expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-width')).toBe('')
+    handle.detach()
+  })
+})
+
+describe('设置壳面板放宽（借壳矩形之外，官方页还需要一个够宽的容器）', () => {
+  it('用户在设置里打开插件分区时宿主面板被放宽，离开后标记撤掉', () => {
+    // Given 分区块挂在一块 800px 宽的设置壳面板里
+    const { layout } = makeLayout()
+    const anchor = makeAnchor()
+    const panel = makeShellPanel(anchor)
+
+    // When 分区挂载
+    const handle = attachPluginHost(anchor, () => layout)
+
+    // Then 面板被打上放宽标记
+    expect(panel.hasAttribute('data-dshtrading-plugin-host-panel')).toBe(true)
+
+    // And 借壳矩形铺到面板右缘而不是只覆盖内容列（800 - 24 留白）
+    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-width')).toBe('776px')
+    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-height')).toBe('576px')
+
+    // And 用户离开后标记撤掉，面板回到官方宽度
+    handle.detach()
+    expect(panel.hasAttribute('data-dshtrading-plugin-host-panel')).toBe(false)
+  })
+
+  it('用户在普通容器里打开插件分区时不放宽任何祖先（找不到设置壳面板就按原矩形显示）', () => {
+    // Given 一块没有设置壳面板祖先的分区容器
+    const { layout } = makeLayout()
+    const anchor = makeAnchor()
+
+    // When 分区挂载
+    const handle = attachPluginHost(anchor, () => layout)
+
+    // Then 没有任何元素被标记为放宽，借壳照常生效
+    expect(document.querySelectorAll('[data-dshtrading-plugin-host-panel]').length).toBe(0)
+    expect(document.body.dataset[FLAG]).toBe('on')
     handle.detach()
   })
 })

@@ -18,6 +18,13 @@
   text-align: center;
 }
 
+/* 借壳态放宽设置壳面板：官方插件页是列表 + 对话框形态，内容区 560px 时工具栏
+   收缩成图标、详情页横向挤。上限与设置壳自己的视口留白同款（48px），宽度一变
+   借壳矩形由 ResizeObserver 重新跟随。 */
+:global(body[data-dshtrading-plugin-host='on']) :global([data-dshtrading-plugin-host-panel]) {
+  width: min(1200px, calc(100vw - 48px)) !important;
+}
+
 /* 借壳定位：选中全局面板时宿主给主面板写 [data-global-panel]，这里把它钉到
    分区矩形。z 高于设置壳面板，几何上不覆盖导航与关闭按钮。 */
 :global(body[data-dshtrading-plugin-host='on']) :global([data-global-panel]) {

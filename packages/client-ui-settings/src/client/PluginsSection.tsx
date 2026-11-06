@@ -4,6 +4,9 @@
  * 分区只做两件事——量出自己的矩形交给 plugins-host，并把打开状态落成一句
  * 说明文案；官方页被钉进这块矩形后盖住文案，宿主没提供插件管理面时文案
  * 换成失败提示。零重写：官方页的列表、安装、启停、更新交互全部原样。
+ *
+ * 容器用 data-dshtrading-plugin-anchor 而不是与 body 状态标志同名：同名属性会
+ * 让 document.querySelector('[data-dshtrading-plugin-host]') 把 body 一起挑出来。
  */
 import { useEffect, useRef, useState } from 'react'
 import type {} from './contract/locale-keys.ts'
@@ -35,7 +38,7 @@ export function PluginsSection({ t, getLayout }: PluginsSectionProps) {
   }, [getLayout])
 
   return (
-    <div className={css.host} ref={anchor} data-dshtrading-plugin-host="">
+    <div className={css.host} ref={anchor} data-dshtrading-plugin-anchor="">
       <p className={css.hint}>
         {available === false ? t('plugins.unavailable') : t('plugins.loading')}
       </p>
