@@ -52,7 +52,7 @@ dsh-trading 以插件包形态分发，且不发布 npm：用户要先装 Node 2
 > - **关联任务卡**：`6e0eac84-1d2d-43fc-ac15-4b7813423f87`（移除桌面壳附着模式；父卡 `1718e406-bd8c-4aa0-96e3-7e74cea2f2a0`）。
 > - **替代方案**：机器人观测与控制面全面收拢至交易终端内，由 `@dshtrading/client-ui-bot-gui` 插件承载（交易终端中台「机器人」Tab），桌面壳回归单一本地终端形态。
 > - **推翻背景与裁决**：2026-10-07 发生实测事故，桌面壳双入口模式（本地 vs 附着）因环境配置误切，导致 Electron 窗口整窗被替换为附着配对页，原交易终端完全不可用，严重破坏交易操作连续性与安全预期。Owner 裁决彻底否决桌面壳整窗附着形态。
-> - **现状事实**：桌面壳附着分支代码（`desktop/src/attach-mode.cjs`、`desktop/src/device-credential.cjs`、`desktop/scripts/attach-drill.mjs`、`desktop/scripts/attach-electron-drill.mjs`、`desktop/tests/attach-mode.test.mjs`）与 `desktop/src/main.cjs` 附着启动分支均已彻底删除，桌面壳回归单一自启本地 host 形态。下文相关附着模式讨论仅保留作为历史演进过程记录。
+> - **现状事实（2026-11-06 更新）**：`desktop/src/main.cjs` 的附着启动分支仍为删除态，桌面壳保持单一自启本地 host 形态；`desktop/src/attach-mode.cjs`、`desktop/src/device-credential.cjs`、`desktop/scripts/attach-drill.mjs`、`desktop/scripts/attach-electron-drill.mjs`、`desktop/tests/attach-mode.test.mjs` 五个模块文件已按 owner 指示重新入库（内容与删除前逐字节相同），当前无调用方、处于游离未接线状态，裁决本身未变。下文相关附着模式讨论仅保留作为历史演进过程记录。
 
 ## 附着模式决策（P4 步骤 5，2026-10-01 落地决策层，【已于 2026-10-07 推翻移除】）
 
