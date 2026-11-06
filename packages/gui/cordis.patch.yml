@@ -83,21 +83,6 @@
     # （0.1.7 改为 configForms），在 0.1.7 下永久 pending、UI 静默消失；官方 0.1.7
     # 已原生提供会话归档/置顶管理与「性能与用量」设置。详见
     # .agents/notes/implemented/feature/2026-09-08-npm-embed-usage-plugin-manager-model-capabilities.md。
-    # IM 机器人接入（2026-09-06，npm 复用社区插件 @xmanrui/dsh-im）：飞书/微信/
-    # 钉钉/企业微信/QQ/Slack/Telegram/Discord/WhatsApp 九渠道机器人接入，
-    # 单行双半：host 半（渠道连接/流式回复，凭据只进宿主受保护凭据存储）+
-    # 浏览器半（设置 → IM机器人 配置面，section order 21，与 updater 的
-    # order 20 相邻不冲突）。市场无关共享行，归 base 所有（铁律 #1）。
-    # 凭据须用户在设置面板显式配置，未配置时各渠道空闲待命，insert 不改变
-    # 交易会话数据安全面。包名解析依赖本包 dependencies 里的
-    # @xmanrui/dsh-im（进 profile 安装闭包，S3 坑 3 同款）。版本由 base 的
-    # package.json 与工作区 lockfile 统一管理，升级后需刷新用户 profile。
-    # 注意：本行即内置安装，勿再对 profile 执行 `dsh plugin add
-    # @xmanrui/dsh-im`——其自带 patch（id xmanrui-dsh-im）会与本行重复
-    # 挂载同一插件，设置面二次注册。
-    # 行安全（issue #88）：host 半硬 inject connection/credentials/typertGateway，
-    # headless 宿主缺 connection 即永久 pending → 启动即崩；按提供方行条件禁用
-    # （见文件头「条件禁用行」）。
-    - id: dsh-trading-im
-      name: '@xmanrui/dsh-im'
-      disabled: !!js (![...loader.entries()].some((entry) => entry.options.name === '@deepseek-ai/dsh-client-connection'))
+    # IM 机器人接入（@xmanrui/dsh-im）2026-11-06 按 owner 指示移除：第三方社区插件
+    # 不再随包内置，九渠道 IM 面随行退出安装闭包、设置分区与 profile 种子。
+    # 详见 .agents/notes/implemented/process/2026-11-06-remove-third-party-im-plugin.md。

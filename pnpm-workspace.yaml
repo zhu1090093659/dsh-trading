@@ -27,8 +27,8 @@ peerDependencyRules:
 
 # pnpm 11 的 minimumReleaseAge 会对「刚发布」的包设冷却期；0.2.2-rc.1 世代
 # （及配套 cordis/cosmokit/schemastery/cordis-plugin-*）为最新发布，pnpm install
-# 自动收录到该排除清单以放行解析。cohort 条目一律钉本世代版本，尾部保留非 cohort 的
-# 第三方条目（@linxin666/*、@xmanrui/*、cordis-plugin-group）。
+# 自动收录到该排除清单以放行解析。cohort 条目一律钉本世代版本；非 cohort 的第三方
+# 插件条目随内置插件一并退出，清单里不再有本仓自带的第三方包。
 # dev cohort overrides：把 dsh 家族精确钉到 0.2.2-rc.1（2026-10-21 cohort 升级；
 # dsh-invariants 随官方停发移除，新 peer 面由 dsh-working-directory 接替）。
 # 必要性：pnpm 11 默认 minimumReleaseAge=1440min，刚发布的 cohort 会被跳过，宽 floor
@@ -193,4 +193,3 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-working-directory@0.2.2-rc.1'
   - '@deepseek-ai/dsh-workspace@0.2.2-rc.1'
   - '@deepseek-ai/schemastery@3.19.0'
-  - '@xmanrui/dsh-im@4.20.2'

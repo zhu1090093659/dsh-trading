@@ -1,6 +1,6 @@
 # Agent Note: npm 内置社区 IM 机器人插件 @xmanrui/dsh-im
 
-Status: implemented
+Status: implemented（本决策已于 2026-11-06 被推翻：第三方 IM 插件不再内置，见 [移除记录](../process/2026-11-06-remove-third-party-im-plugin.md)；下文保留为当时的决策与接线经过）
 
 ## Problem
 

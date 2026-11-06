@@ -35,8 +35,7 @@
     "@dshtrading/client-ui-masters-quotes": "workspace:^",
     "@dshtrading/client-ui-updater": "workspace:^",
     "@dshtrading/dsh-i18n": "workspace:^",
-    "@dshtrading/indicator-supertrend": "workspace:^",
-    "@xmanrui/dsh-im": "^4.20.2"
+    "@dshtrading/indicator-supertrend": "workspace:^"
   },
   "devDependencies": {
     "tsdown": "^0.22.0"
