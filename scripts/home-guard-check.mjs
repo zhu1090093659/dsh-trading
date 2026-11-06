@@ -38,7 +38,10 @@ function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
     if (SKIP_DIRS.has(entry)) continue
     const full = join(dir, entry)
-    const stat = statSync(full)
+    // 未跟踪的构建产物里常有断链软链（如 desktop/resources/runtime 的 corepack 链接）：
+    // 门禁不该被这类产物打死，取不到 stat 就跳过。
+    const stat = statSync(full, { throwIfNoEntry: false })
+    if (stat === undefined) continue
     if (stat.isDirectory()) walk(full, out)
     else if (EXTENSIONS.some((ext) => entry.endsWith(ext))) out.push(full)
   }

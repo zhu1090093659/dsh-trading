@@ -1,6 +1,6 @@
 # Agent Note: SDK cohort 升级到 npm @deepseek-ai 0.2.1-rc.2（宿主已在该世代，插件侧追平）
 
-Status: implemented
+Status: implemented（世代后继：[SDK cohort 升级到 0.2.2-rc.1](2026-11-06-sdk-upgrade-npm-0.2.2-rc.1.md)；本文的版本矩阵与去重结论对 0.2.1-rc.2 世代有效，当前世代以新文为准）
 
 ## Problem
 

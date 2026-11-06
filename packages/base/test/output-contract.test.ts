@@ -9,9 +9,14 @@ async function createRuntime() {
   const require = createRequire(import.meta.url)
   const sdkRequire = createRequire(require.resolve('@deepseek-ai/dsh-tools'))
   const { SystemPrompt } = await import(sdkRequire.resolve('@deepseek-ai/dsh-system-prompt'))
+  // 0.2.2 起工具执行拆成按 Agent 作用域选择的插件：只注册工具而没有加载执行器时
+  // execute 抛 ToolExecutorUnavailableError，用官方原生执行器补齐组合。
+  const { NativeToolExecutor } = await import(sdkRequire.resolve('@deepseek-ai/dsh-tool-executor-native'))
   const ctx = new Context()
   new SystemPrompt(ctx, SystemPrompt.Config({}))
-  return new ToolRuntime(ctx)
+  const runtime = new ToolRuntime(ctx)
+  runtime.setExecutor(new NativeToolExecutor(ctx))
+  return runtime
 }
 
 const marketRegistry = (provider: string, service: unknown) => ({ active: () => ({ provider, service }) as never })
@@ -45,7 +50,9 @@ describe('base tool output contract', () => {
     ]
     // When: the user invokes each tool through the registry
     for (const [name, args] of calls) {
-      const result = await runtime.execute({ callId: name, name, arguments: args, signal: new AbortController().signal })
+      // 0.2.2 起 execute 只接受批量输入，单调用在测试里收敛成一条调用的批次。
+      const batch = await runtime.execute({ calls: [{ id: name, name, arguments: JSON.stringify(args) }], signal: new AbortController().signal })
+      const result = batch.results[0]!.result
       // Then: the structured value and the model text are the same declaration-checked value
       expect(result.isError).toBe(false)
       expect(result.content).toEqual([{ type: 'text', text: JSON.stringify(result.value) }])
@@ -61,7 +68,8 @@ describe('base tool output contract', () => {
     const patched = { ...tool, execute: async () => ({ ok: true, market: 'us', provider: 'alpaca', symbol: 'AAPL', orderbook: {}, extra: 1 }) as never }
     runtime.register(patched as never)
     // Then: the registry rejects it instead of forwarding a shape the model was never promised
-    const result = await runtime.execute({ callId: 'us_get_orderbook', name: 'us_get_orderbook', arguments: { symbol: 'AAPL' }, signal: new AbortController().signal })
+    const batch = await runtime.execute({ calls: [{ id: 'us_get_orderbook', name: 'us_get_orderbook', arguments: JSON.stringify({ symbol: 'AAPL' }) }], signal: new AbortController().signal })
+    const result = batch.results[0]!.result
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result)).toMatch(/additionalProperties|is not a declared property/)
   })

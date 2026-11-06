@@ -33,11 +33,11 @@
     "force-graph": "^1.51.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/cordis": ">=4.1.0",
     "react": "^18.2.0",
     "@types/react": "~18.3.1",
-    "@deepseek-ai/dsh-client-locale": ">=0.2.1-rc.2",
-    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.1-rc.2"
+    "@deepseek-ai/dsh-client-locale": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.2-rc.1"
   },
   "devDependencies": {
     "lightningcss": "^1.0.0",

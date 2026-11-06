@@ -26,6 +26,7 @@ import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import type { ApprovalOutcome, ApprovalRequestEvent } from '@deepseek-ai/dsh-user-approval'
 import { LlmRuntime } from '@deepseek-ai/dsh-llm'
@@ -78,9 +79,13 @@ async function bootRuntime(sessionId: string = SESSION_ID): Promise<GuiRuntime> 
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(ToolRuntime)
+  // 0.2.2 起工具执行拆成按 Agent 作用域选择的插件，组合里必须显式选一个执行器。
+  ctx.tools.setExecutor(new NativeToolExecutor(ctx))
   await ctx.plugin(ApprovalService, { policy: 'ask' })
   await ctx.plugin(AgentLoop)
-  const agent = await ctx.agentLoop.create(SessionId(sessionId))
+  // 0.2.2 起 loop 在 pre-step 之前固定本步模型，取不到 provider/model 直接抛错、根本不进
+  // waterfall；生产宿主总有模型选择，这里给测试组合钉一条占位路由。
+  const agent = await ctx.agentLoop.create(SessionId(sessionId), { provider: 'test-provider', model: 'test-model' })
   return { ctx, agent, session: agent.session }
 }
 

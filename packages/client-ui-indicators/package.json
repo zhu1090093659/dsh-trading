@@ -27,7 +27,7 @@
     "@dshtrading/indicators": "workspace:^"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.0"
+    "@deepseek-ai/cordis": ">=4.1.0"
   },
   "devDependencies": {
     "tsdown": "^0.22.0",

@@ -6,7 +6,7 @@
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": ">=24.9.0"
   },
   "scripts": {
     "authority:sign": "node packages/authority/bin/sign-live-trading.mjs",

@@ -9,9 +9,14 @@ async function createRuntime() {
   const require = createRequire(import.meta.url)
   const sdkRequire = createRequire(require.resolve('@deepseek-ai/dsh-tools'))
   const { SystemPrompt } = await import(sdkRequire.resolve('@deepseek-ai/dsh-system-prompt'))
+  // 0.2.2 起工具执行拆成按 Agent 作用域选择的插件：只注册工具而没有加载执行器时
+  // execute 抛 ToolExecutorUnavailableError，用官方原生执行器补齐组合。
+  const { NativeToolExecutor } = await import(sdkRequire.resolve('@deepseek-ai/dsh-tool-executor-native'))
   const ctx = new Context()
   new SystemPrompt(ctx, SystemPrompt.Config({}))
-  return new ToolRuntime(ctx)
+  const runtime = new ToolRuntime(ctx)
+  runtime.setExecutor(new NativeToolExecutor(ctx))
+  return runtime
 }
 
 describe('watchlist output contract', () => {
@@ -30,7 +35,9 @@ describe('watchlist output contract', () => {
     ] as const
     // When: a user maintains the same row twice
     for (const [name, value] of cases) {
-      const result = await runtime.execute({ callId: name, name, arguments: { market: 'us', symbol: 'AAPL' }, signal: new AbortController().signal })
+      // 0.2.2 起 execute 只接受批量输入，单调用在测试里收敛成一条调用的批次。
+      const batch = await runtime.execute({ calls: [{ id: name, name, arguments: JSON.stringify({ market: 'us', symbol: 'AAPL' }) }], signal: new AbortController().signal })
+      const result = batch.results[0]!.result
       // Then: structured consumption and model text share exactly one value
       expect(result.isError).toBe(false)
       expect(result.value).toEqual(value)
@@ -64,7 +71,8 @@ describe('watchlist output contract', () => {
       for (const [index, value] of values.entries()) {
         const name = `${tool.name}_invalid_${index}`
         runtime.register({ ...tool, name, execute: async () => value })
-        const result = await runtime.execute({ callId: name, name, arguments: { market: 'us', symbol: 'AAPL' }, signal: new AbortController().signal })
+        const batch = await runtime.execute({ calls: [{ id: name, name, arguments: JSON.stringify({ market: 'us', symbol: 'AAPL' }) }], signal: new AbortController().signal })
+        const result = batch.results[0]!.result
         // Then: the real registry reports ToolOutputError and carries no successful value
         expect(result.isError).toBe(true)
         expect(result.error?.info?.name).toBe('ToolOutputError')

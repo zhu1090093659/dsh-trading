@@ -37,8 +37,8 @@
     "@dshtrading/kit-us": "workspace:*"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.0",
-    "@deepseek-ai/schemastery": ">=3.18.0"
+    "@deepseek-ai/cordis": ">=4.1.0",
+    "@deepseek-ai/schemastery": ">=3.19.0"
   },
   "devDependencies": {
     "tsdown": "^0.22.0"

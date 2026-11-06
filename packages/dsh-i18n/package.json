@@ -31,12 +31,12 @@
     "@dshtrading/client-ui-updater": "workspace:^"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": ">=4.0.0",
-    "@deepseek-ai/dsh-client-locale": ">=0.2.1-rc.2"
+    "@deepseek-ai/cordis": ">=4.1.0",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.2-rc.1"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.5",
-    "@deepseek-ai/dsh-client-locale": "0.2.1-rc.2",
+    "@deepseek-ai/cordis": "^4.1.0",
+    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.1",
     "tsdown": "^0.22.0",
     "vitest": "^3.0.0"
   },
