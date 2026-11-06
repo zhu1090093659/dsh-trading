@@ -1,3 +1,10 @@
 # mygo build output (mygo.json "out")
 build/
 *.log
+
+# The bundled runtime payload desktop/scripts/stage-mygo-payload.mjs stages from
+# desktop/resources/runtime: the node distribution (as runtime/node), the dsh
+# host closure and the trading profile seed. They are build outputs of
+# fetch-node.mjs / stage-pnpm.mjs / build-runtime.mjs, far too large for the
+# repository, and every machine stages them before mygo build runs.
+resources/runtime/

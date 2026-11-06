@@ -1,7 +1,9 @@
 {
   "name": "DSH Trading Mygo",
-  "slug": "dsh-trading-mygo",
-  "identifier": "com.dshtrading.mygo",
-  "version": "0.0.1",
+  "slug": "dsh-trading-desktop",
+  "identifier": "com.dsh-trading.desktop.mygo",
+  "version": "0.2.1",
+  "copyright": "Copyright (c) DeepSeek Harness Contributors",
+  "icon": "../resources/icon.png",
   "out": "build"
 }

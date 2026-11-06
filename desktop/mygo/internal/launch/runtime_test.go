@@ -22,6 +22,24 @@ func TestResolveRuntimePathsFollowsThePackagedLayout(t *testing.T) {
 	if paths.HostBin != want {
 		t.Errorf("HostBin = %q, want %q", paths.HostBin, want)
 	}
+	// The rest of the payload the shell reads in place: the host closure the
+	// profile is normalized onto, the profile seed it is installed from, and the
+	// stamp that gives the seed its identity.
+	if want := filepath.Join(root, "host", "node_modules"); paths.HostModules != want {
+		t.Errorf("HostModules = %q, want %q", paths.HostModules, want)
+	}
+	if want := filepath.Join(root, "profile-trading"); paths.ProfileSeed != want {
+		t.Errorf("ProfileSeed = %q, want %q", paths.ProfileSeed, want)
+	}
+	if want := filepath.Join(root, "VERSION.json"); paths.StampFile != want {
+		t.Errorf("StampFile = %q, want %q", paths.StampFile, want)
+	}
+}
+
+func TestProfileDirIsTheTradingProfileOfAHome(t *testing.T) {
+	if got, want := ProfileDir("/tmp/probe-trading"), filepath.Join("/tmp/probe-trading", "profiles", "trading-web"); got != want {
+		t.Errorf("ProfileDir = %q, want %q", got, want)
+	}
 }
 
 func TestValidateReportsTheMissingPayloadFile(t *testing.T) {

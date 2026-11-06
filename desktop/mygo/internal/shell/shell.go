@@ -25,11 +25,13 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/dshtrading/desktop-mygo/internal/attach"
+	"github.com/dshtrading/desktop-mygo/internal/cohort"
 	"github.com/dshtrading/desktop-mygo/internal/cookies"
 	"github.com/dshtrading/desktop-mygo/internal/hostwait"
 	"github.com/dshtrading/desktop-mygo/internal/instance"
 	"github.com/dshtrading/desktop-mygo/internal/launch"
 	"github.com/dshtrading/desktop-mygo/internal/policy"
+	"github.com/dshtrading/desktop-mygo/internal/profile"
 	"github.com/dshtrading/desktop-mygo/internal/recovery"
 	"github.com/dshtrading/desktop-mygo/internal/renderer"
 )
@@ -103,6 +105,12 @@ type Metrics struct {
 	UnexpectedExits int `json:"unexpectedExits"`
 	// Recoveries is how many of those the shell restarted through.
 	Recoveries int `json:"recoveries"`
+	// ProfileAction is what the newest boot did with the live profile: seed,
+	// reseed or leave.
+	ProfileAction string `json:"profileAction"`
+	// PrimaryRuntime is the dependency payload the newest boot found, "" when
+	// the Office and workspace-dependency rows stay disabled.
+	PrimaryRuntime string `json:"primaryRuntime"`
 	// RestartAttempt is the newest unexpected exit's place in the restart
 	// budget, 0 when none has happened.
 	RestartAttempt int `json:"restartAttempt"`
@@ -246,8 +254,8 @@ func (s *Shell) boot() {
 	}
 }
 
-// bootOnce is one complete boot: prune, show the splash, spawn, wait for the
-// tokenized URL, load it, count the jar.
+// bootOnce is one complete boot: show the splash, put the payload's profile in
+// place, prune, spawn, wait for the tokenized URL, load it, count the jar.
 func (s *Shell) bootOnce() error {
 	resources, err := mygo.App.Path(mygo.PathResources)
 	if err != nil {
@@ -270,9 +278,22 @@ func (s *Shell) bootOnce() error {
 	}
 	s.logf("[desktop] dsh home: %s", selection.Home)
 
-	// The stale jar goes before the window exists, so the page that loads never
-	// replays a cookie header grown past the host's request-header budget. A
-	// prune that fails is logged and the boot goes on: the header budget above
+	// The window comes first, before the payload's profile is copied into the
+	// home: that copy is hundreds of megabytes on a first boot, and the splash
+	// page is what tells the user what the app is doing. A boot that fails after
+	// this point also has a page to put the failure on.
+	win, err := s.ensureWindow(origin)
+	if err != nil {
+		return err
+	}
+	primary, err := s.prepareProfile(paths, selection.Home, mygo.App.Version())
+	if err != nil {
+		return err
+	}
+
+	// The stale jar goes before the GUI's URL is loaded, so the page that loads
+	// never replays a cookie header grown past the host's request-header budget.
+	// A prune that fails is logged and the boot goes on: the header budget above
 	// still covers a grown jar.
 	result := cookies.Prune(mygoCookieStore{}, origin+"/")
 	s.setMetrics(func(m *Metrics) {
@@ -285,10 +306,6 @@ func (s *Shell) bootOnce() error {
 		s.logf("[desktop] pruned %d stale dsh auth cookie(s)", result.Pruned)
 	}
 
-	win, err := s.ensureWindow(origin)
-	if err != nil {
-		return err
-	}
 	// A retry replaces the host it is recovering from: never two on one home.
 	if previous := s.takeHost(); previous != nil {
 		s.stopHost(previous)
@@ -299,12 +316,13 @@ func (s *Shell) bootOnce() error {
 		return err
 	}
 	spec := launch.HostSpec{
-		Paths:     paths,
-		Hooks:     hooks,
-		Port:      port,
-		Home:      selection.Home,
-		ShellPID:  os.Getpid(),
-		ParentEnv: os.Environ(),
+		Paths:          paths,
+		Hooks:          hooks,
+		Port:           port,
+		Home:           selection.Home,
+		ShellPID:       os.Getpid(),
+		ParentEnv:      os.Environ(),
+		PrimaryRuntime: primary.Path,
 	}
 	// The URL of the host that is gone belongs to a port nobody serves, so a
 	// recovery starts from none at all (the Electron shell's 2026-10-15
@@ -352,6 +370,41 @@ func (s *Shell) bootOnce() error {
 		go s.opts.OnLoaded(s)
 	}
 	return nil
+}
+
+// prepareProfile puts the profile the GUI runs in place: the payload's seed,
+// its identity from VERSION.json, the user's patch layer kept on a reseed, and
+// the profile's core packages relinked onto the bundled runtime (a profile the
+// dsh CLI installed links them against a global npm tree, and two copies split
+// module-level state: the preset then keeps its tools but loses its persona and
+// its skill catalog). It reports the primary-runtime decision the host child
+// needs: the Office skills and load_workspace_dependencies are gated by
+// DSH_PRIMARY_RUNTIME, and an installation carrying no payload keeps both rows
+// explicitly disabled instead of falling back to a system Python.
+func (s *Shell) prepareProfile(paths launch.RuntimePaths, home, appVersion string) (launch.PrimaryRuntime, error) {
+	stamp := profile.ReadStamp(paths.StampFile)
+	stampText := profile.StampText(stamp)
+	profileDir := launch.ProfileDir(home)
+	action := profile.Decide(profileDir, stampText)
+	if action != profile.Leave {
+		s.SetStatus(profileStatus(action))
+		s.logf("[desktop] profile action: %s (%s)", action, stampText)
+		if err := profile.Apply(paths.ProfileSeed, profileDir, action, stampText, appVersion); err != nil {
+			return launch.PrimaryRuntime{}, err
+		}
+	}
+	s.setMetrics(func(m *Metrics) { m.ProfileAction = string(action) })
+
+	normalized := cohort.Normalize(profileDir, paths.HostModules, func(line string) { s.logf("%s", line) })
+	if len(normalized.Relinked) > 0 {
+		s.logf("[desktop] normalized %d core package link(s) to the bundled runtime", len(normalized.Relinked))
+	}
+
+	primary := launch.ResolvePrimaryRuntime(paths.Root, home).
+		WithInherited(os.Getenv(launch.PrimaryRuntimeEnv))
+	s.logf("[desktop] primary runtime: %s", primary.LogValue())
+	s.setMetrics(func(m *Metrics) { m.PrimaryRuntime = primary.Path })
+	return primary, nil
 }
 
 // waitGUILoaded waits until the window shows the GUI of the current host, not
@@ -827,6 +880,15 @@ func homeDir() string {
 		return ""
 	}
 	return home
+}
+
+// profileStatus is what the splash page says while the payload's profile is
+// installed, worded as the Electron shell words it.
+func profileStatus(action profile.Action) string {
+	if action == profile.Seed {
+		return "Installing the bundled web profile…"
+	}
+	return "Updating the bundled web profile…"
 }
 
 // platformName names the platform the way the Electron helpers do.

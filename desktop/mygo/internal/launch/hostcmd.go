@@ -35,6 +35,9 @@ type HostSpec struct {
 	ShellPID int
 	// ParentEnv is os.Environ().
 	ParentEnv []string
+	// PrimaryRuntime is the dependency payload the shell resolved, "" when the
+	// capability stays absent (see ResolvePrimaryRuntime).
+	PrimaryRuntime string
 }
 
 // Args are the host's arguments, mirroring desktop/src/main.cjs startHost: the
@@ -54,9 +57,16 @@ func (s HostSpec) Args() []string {
 // Env is the host's environment: the parent environment with the home and shell
 // pid set, the bundled node distribution first on PATH (so anything the host
 // shells out to resolves against it) and Electron's runner switch removed.
+//
+// DSH_PRIMARY_RUNTIME is set only when the shell resolved a payload: without
+// one the host's two capability rows stay disabled, which is why nothing here
+// guesses at a path (see internal/launch/primary.go).
 func (s HostSpec) Env() []string {
 	env := setEnv(s.ParentEnv, HomeEnv, s.Home)
 	env = setEnv(env, ShellPIDEnv, strconv.Itoa(s.ShellPID))
+	if s.PrimaryRuntime != "" {
+		env = setEnv(env, PrimaryRuntimeEnv, s.PrimaryRuntime)
+	}
 	path, _ := lookupEnv(env, "PATH")
 	env = setEnv(env, "PATH", filepath.Join(s.Paths.NodeHome, "bin")+string(os.PathListSeparator)+path)
 	return unsetEnv(env, "ELECTRON_RUN_AS_NODE")

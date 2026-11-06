@@ -28,6 +28,9 @@ An Electron shell that turns the dsh-trading Web GUI into an installable desktop
 | `scripts/verify-runtime-toolchain.mjs` | Release gate: node/npm/npx/pnpm must exist and run in every staged distribution for the current platform |
 | `scripts/build-runtime.mjs` | Builds the workspace, packs every package, installs and stages the payload |
 | `resources/` | App icons + generated runtime payload (git-ignored) |
+| `mygo/` | mygo shell (migration target): Go module of the window, launcher, lifecycle, cookies, policy, recovery, profile seeding, cohort normalization and the agent channel |
+| `scripts/stage-mygo-payload.mjs` | Stages the payload into `mygo/resources/runtime` with the per-platform node directory mapped to `runtime/node` |
+| `scripts/build-mygo-mac.sh` | Packages the mygo shell for macOS: payload, `.app` + `.dmg`, signature check, notarization entry |
 
 The trading plugins are not published to npm, so `build-runtime.mjs` packs every workspace package into `runtime/profile-trading/vendor/` and wires the profile's direct dependencies and overrides to those tarballs. The generated profile manifest and lockfile are not committed; reproducibility comes from this repository's own versions.
 
@@ -73,3 +76,68 @@ The host version is pinned in `runtime/host/package.json`; the trading payload v
 - First launch on a fresh machine spends a few seconds copying the preinstalled profile into `~/.dsh` (one-time).
 - **Office skills and `load_workspace_dependencies` ship disabled.** The app never downloads or copies the primary-runtime payload (about 359MB). Before spawning the host it looks for `resources/runtime/primary-runtime`, then `$DSH_HOME/dsh-runtimes/dsh-primary-runtime`, and sets `DSH_PRIMARY_RUNTIME` only when the directory holds `runtime.json`; otherwise the two official rows stay explicitly disabled rather than falling back to a system Python. Place a compatible payload in either location (or export `DSH_PRIMARY_RUNTIME` yourself) to enable them. The host `~/.dsh` instance is deliberately never used.
 - The bundled payload is built from the workspace checkout state; rebuild after pulling to carry connector or strategy updates into the installer.
+
+## mygo shell (migration target)
+
+`mygo/` is the mygo rewrite of this Electron shell: the window and its launcher, the single-instance lock, the attach handoff, the cookie prune, the page policy, the restart budget and the `window.desktop` bridge live in `mygo/internal/shell`, and the payload, packaging and agent-channel cards add profile seeding, cohort normalization, the primary-runtime gate, the macOS bundle and the automation client. Both shells ship side by side; the mygo shell keeps its own app name (`DSH Trading Mygo`), user data directory and bundle identifier, so the two never share a cookie jar or an instance lock.
+
+### Payload
+
+The payload is the one `prepare-runtime` stages for Electron, copied into the mygo project with the per-platform node directory mapped to `runtime/node`:
+
+```sh
+node scripts/stage-mygo-payload.mjs --platform darwin-arm64
+# -> mygo/resources/runtime/{node,host,profile-trading,VERSION.json}
+```
+
+`mygo/resources/runtime/` is git-ignored (`mygo/.gitignore`): the node distribution, the host closure and the profile seed are build outputs, and the repository does not carry them. The script refuses an incomplete payload before a build starts (node/npm/npx, the host entry point, the seed's manifest and patch layer), and `--from` also accepts the runtime directory of an installed app (`/Applications/DSH Trading.app/Contents/Resources/runtime`), which is already in the mapped layout: that is how a Mac without the workspace stages the same payload.
+
+At runtime the shell reads the payload in place (`mygo/internal/launch/runtime.go`): `runtime/node/bin/node`, `runtime/host/node_modules/@deepseek-ai/dsh/lib/bin.js`, `runtime/profile-trading` and `runtime/VERSION.json`.
+
+### Profile, cohort and the primary runtime
+
+- **Seeding** (`mygo/internal/profile`): a home without a profile gets the payload's seed; a profile this app seeded before is reseeded when the payload's identity (`VERSION.json`: node, host, profile hash) moved; a profile without the `.dsh-desktop-seed.json` marker is user-managed and never touched. On reseed the manifests and `node_modules` are replaced while the user's own `cordis.patch.yml` — and its backups — stay as they are.
+- **Cohort** (`mygo/internal/cohort`): every `@deepseek-ai/*` copy the profile resolves is relinked onto the bundled host's copy, because two copies split module-level state and a preset then keeps its tools while losing its persona, its workspace `AGENTS.md` and its skill catalog. Packages the runtime does not ship, and package trees that belong to another install (a repo checkout, a pnpm store), are left alone.
+- **Primary runtime** (`mygo/internal/launch/primary.go`): `DSH_PRIMARY_RUNTIME` is set only when a payload holding `runtime.json` exists at `resources/runtime/primary-runtime` or `$DSH_HOME/dsh-runtimes/dsh-primary-runtime`. Without one the shell logs `primary runtime: absent (Office skills and load_workspace_dependencies stay disabled)` and the host's two official rows stay disabled rather than falling back to a system Python. A `DSH_PRIMARY_RUNTIME` exported by the user passes through unchanged, and the host `~/.dsh` instance is deliberately never reached across.
+
+### Build and sign
+
+```sh
+PATH=/path/to/go/bin:$PATH desktop/scripts/build-mygo-mac.sh        # ad-hoc signed .app + .dmg
+PATH=/path/to/go/bin:$PATH desktop/scripts/build-mygo-mac.sh \
+  --sign "Developer ID Application: Name (TEAM)" --notarize         # distribution
+```
+
+The script stages the payload (default source: the installed `/Applications/DSH Trading.app` runtime when it exists, else `desktop/resources/runtime`), builds the mygo CLI with Go when none is on `PATH`, runs `mygo build -platform darwin/arm64 -sign …`, then prints the bundle's `Info.plist`, the signature, the payload sizes inside the bundle and the artifact list. It needs macOS (`codesign`, `hdiutil`) and a Go toolchain: `mygo/go.mod` pins go 1.27.3 and `mygo build` compiles the app with it, so the packaging machine needs that version (`GOTOOLCHAIN=auto` fetches it).
+
+Artifacts land in `mygo/build/darwin-arm64/`:
+
+- `DSH Trading Mygo.app`: `CFBundleName` and `CFBundleDisplayName` are `DSH Trading Mygo`, `CFBundleIdentifier` is `com.dsh-trading.desktop.mygo` (a distinct bundle from the Electron app's `com.dsh-trading.desktop`, so both shells install and launch as themselves), `CFBundleShortVersionString` is the same `0.2.1` as `desktop/package.json`, and the icon is `desktop/resources/icon.png` (1024×1024, rendered into `AppIcon.icns`).
+- `dsh-trading-desktop-0.2.1-arm64.dmg`: electron-builder's `dsh-trading-desktop-<version>-mac-<arch>.dmg` without the `-mac-` segment. `mygo build` names a disk image `<slug>-<version>-<arch>.dmg` with no platform word in it, so the slug carries the electron-builder prefix (`dsh-trading-desktop`) and the architecture stays; release tooling can glob `dsh-trading-desktop-*` and tell the shells apart by the `.app` and its `CFBundleIdentifier`.
+
+Signing: the default is ad-hoc (`-sign -`), which `codesign --verify --deep --strict` accepts and Gatekeeper does not. Real distribution signing is the owner's step in a GUI login session: an ssh session's keychain is locked and `codesign` fails with `errSecInternalComponent`. `--sign "Developer ID Application: …"` signs with the identity mygo then also hardens and timestamps, and `--notarize` submits the `.dmg` with `notarytool --wait` and staples the app and the image (credentials from `APPLE_ID` + `APPLE_TEAM_ID` + `APPLE_APP_SPECIFIC_PASSWORD`, or `APPLE_API_KEY` + `APPLE_API_KEY_ID` + `APPLE_API_ISSUER`). mygo's own route (`macos.signingIdentity` + `macos.notarize` in `mygo/mygo.json`) stays available; the committed configuration keeps the ad-hoc default so a machine without an identity still produces a runnable app.
+
+`--release` drops the automation plugin (below); `--no-payload` builds with the payload already staged.
+
+### Agent channel
+
+`mygo build -debug` and `MYGO_INSPECTOR=1 mygo build` keep the inspector of native UI, and with it the automation plugin the shell imports (`mygo/automation.go`). A plain release build passes `-tags mygo_noinspector`, the plugin's `off.go` stands in, and an app started with `MYGO_AUTOMATION` says on stderr that the channel is not in this build instead of leaving a client waiting. `build-mygo-mac.sh` keeps it unless `--release` is passed.
+
+The app listens on the Unix socket `MYGO_AUTOMATION` names and answers newline-delimited JSON; `mygo/cmd/agentctl` is the local client (build it for the Mac with `CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o agentctl ./cmd/agentctl`):
+
+```sh
+MYGO_AUTOMATION=/tmp/dsh-mygo.sock \
+  "mygo/build/darwin-arm64/DSH Trading Mygo.app/Contents/MacOS/DSH Trading Mygo" &
+
+agentctl windows                      # the app's windows, as JSON
+agentctl eval 'document.title'        # a script in the page, its JSON value back
+agentctl capture /tmp/window.png      # the window as a PNG
+agentctl idle 5s                      # wait until the window settles
+```
+
+- `windows` lists id, title, kind, url, bounds, focus and visibility. This shell's window is `kind: "page"`.
+- `eval <script>` evaluates the script in the page and prints the JSON value; `-window <id>` addresses a window other than the focused one.
+- `capture <file>` writes the window as a PNG without Screen Recording permission (the app renders its own window) and prints the byte and pixel size.
+- `idle [timeout]` waits until the window settles.
+
+**A page window has no accessibility tree.** The shell's window shows the GUI's web page, so `tree` answers `unsupported` ("window 7 shows a web page: use eval") and `act`/`input` only apply to windows of native UI. Everything the page shows is reachable through `eval` — `document.querySelector`, `getComputedStyle`, any `window.__x` the page set — and that is what the acceptance runs assert against. Use `capture` when the question is what the window looks like, and `eval` when it is what the page says.
