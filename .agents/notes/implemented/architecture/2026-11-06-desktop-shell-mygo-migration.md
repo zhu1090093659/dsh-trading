@@ -30,6 +30,13 @@ Status: implemented
   - owner 2026-11-06 决定发布构建带 `MYGO_INSPECTOR=1`，即 `automation` 与 web inspector 随包发布，接受理由与代价写在 `desktop/README.md`；另有 `--no-agent-channel` 走 `-tags mygo_noinspector` 产出不带通道的形态。
   - 客户端是 `cmd/agentctl`（`windows`/`eval`/`capture`/`idle`/`tree`），socket 只在 `MYGO_AUTOMATION` 存在时创建、mode `0600`。
 - **CI 门禁同步落地**：`.github/workflows/ci.yml` 新增 `mygo-shell` job（无 `needs`，job 级 `GOTOOLCHAIN=local`）；`desktop/mygo` 模块与 `ci.yml` 必须同一 commit 落地（`go:embed` 依赖 hooks 与 `selfcheck.js`）。
+- **发布流水线双轨**：
+  - `.github/workflows/desktop-release.yml` 新增 `build-desktop-mygo`（`needs: check-version`，`runs-on: macos-latest`，`timeout-minutes: 90`），与既有 `build-desktop` 并存；`github-release` 的 `needs` 扩为 `[npm-publish, build-desktop, build-desktop-mygo]`，三路全绿才创建 Release。
+  - 载荷在 job 内现生成：依次运行 `fetch-node.mjs` → `stage-pnpm.mjs` → `build-runtime.mjs` → `verify-runtime-toolchain.mjs` → `stage-mygo-payload.mjs --platform darwin-arm64`，映射完成后删掉 Electron 布局那份（`rm -rf resources/runtime`）。
+  - 版本跟 tag：`desktop/scripts/set-mygo-version.mjs` 在 runner 里重写 `mygo.json` 的 `version`，与 Electron 轨的 `scripts/set-desktop-version.mjs` 对称。
+  - 产物区分：mygo 的 `.dmg` 上传进 artifact `desktop-mac-mygo`，`.app` 上传进 `mygo-app-bundle`（故意不以 `desktop-` 开头，因为 `.app` 是目录，进入 `dist/` 会同时打断 `sha256sum` 与 `gh release create`）；两壳产物靠 job/artifact 与 `CFBundleIdentifier`（`com.dsh-trading.desktop` 对 `com.dsh-trading.desktop.mygo`）区分，文件名只差 `-mac-` 段，不能靠名字判。
+  - 签名凭据全是可选 secret：有身份 secret（`MYGO_SIGN_IDENTITY`）才传 `--sign`，三个 `APPLE_*`（`APPLE_ID` / `APPLE_TEAM_ID` / `APPLE_APP_SPECIFIC_PASSWORD`）齐了才传 `--notarize`，否则按 ad-hoc 打包并把模式写进日志，不新增必须配置的 secret。
+  - 触发条件只有 `v*` tag push，PR 与 `main` 推送不跑；因此这条流水线首次真跑只能等 tag push，本地只能核语法与命令序列。
 
 ## 实测验证
 
@@ -47,11 +54,11 @@ Status: implemented
 
 ## 当前状态
 
-payload/profile 分发、打包与签名、agent 通道接线均已落地；当前仍未落地的部分只剩：`desktop-release.yml` 双轨、Electron 壳退役、Windows 分支。CI 环境没有 `/Applications/DSH Trading.app`，双轨流水线必须先用 `fetch-node`/`stage-pnpm`/`build-runtime` 生成完整载荷才能打包。
+payload/profile 分发、打包与签名、agent 通道接线、`desktop-release.yml` 双轨均已落地；当前仍未落地的部分只剩：Electron 壳退役、Windows 分支。
 
 ## Alternatives considered
 
-- **直接移除 Electron 壳单轨切换**：`desktop-release.yml` 双轨、Electron 壳退役及 Windows 分支尚未落地，直接移除现有 Electron 壳会破坏当前桌面端交付链路，因此采用 `desktop/mygo/` 与 Electron 并存，Electron 退役条件是对齐验收通过后单独一张卡。
+- **直接移除 Electron 壳单轨切换**：Electron 壳退役及 Windows 分支尚未落地，直接移除现有 Electron 壳会破坏当前桌面端交付链路，因此采用 `desktop/mygo/` 与 Electron 并存（含 `desktop-release.yml` 双轨同批打包），Electron 退役条件是对齐验收通过后单独一张卡。
 - **沿用 `mygo` 对被信任 origin 的默认权限放行**：`mygo` 对被信任 origin 默认放行权限请求，而桌面壳必须把 GUI 所在 loopback origin 设为被信任 origin 以挂载桥接；若不显式拦截，页面会获得超出 Electron 沙箱窗口的权限，因此显式拒绝全部权限请求。
 - **发布构建默认剔除 `automation` 与 web inspector（不设 `MYGO_INSPECTOR=1`）**：不带 `MYGO_INSPECTOR=1` 时 `mygo` 默认注入 `-tags mygo_noinspector`，产出的发布包无法通过 `cmd/agentctl` 对安装态产物执行端到端验收；owner 2026-11-06 决定发布构建默认带 `MYGO_INSPECTOR=1`（socket 仅在 `MYGO_AUTOMATION` 存在时创建且权限为 `0600`），同时由 `build-mygo-mac.sh --no-agent-channel` 提供走 `-tags mygo_noinspector` 的无通道形态。
 - **把 `desktop/mygo` 模块与 `ci.yml` 拆开提交**：代码中的 `go:embed` 依赖 `internal/shell/hooks/*.mjs` 与 `cmd/drill/selfcheck.js`，且 Go 模块不在 pnpm workspace 门禁内，拆分提交会产生无 CI 门禁或缺内嵌文件的提交，因此模块与 `ci.yml` 必须同一 commit 落地。
@@ -60,7 +67,7 @@ payload/profile 分发、打包与签名、agent 通道接线均已落地；当�
 
 - **渲染引擎与调试通道变化**：渲染引擎变成系统 WebView（macOS `WKWebView` / Windows `WebView2` / Linux `WebKitGTK 4.1`），macOS 侧没有 CDP；发布构建默认带 `MYGO_INSPECTOR=1` 随包发布 `automation` 与 web inspector，通过 `MYGO_AUTOMATION`（mode `0600`）与 `cmd/agentctl` 驱动，不需要通道的场景用 `--no-agent-channel` 构建。
 - **签名与钥匙串约束**：ad-hoc 签名通过 `codesign --verify --deep --strict`；真实身份签名与公证入口为 `build-mygo-mac.sh --sign / --notarize`，在 ssh 会话会因登录钥匙串锁定报 `errSecInternalComponent`，需在 GUI 会话执行。
-- **CI 双轨打包前置载荷生成**：本地无参构建可直接从 `/Applications/DSH Trading.app` 现取现 stage 1.8G runtime，但 CI 环境没有 `/Applications/DSH Trading.app`，双轨流水线必须先用 `fetch-node`/`stage-pnpm`/`build-runtime` 生成完整载荷才能由 `stage-mygo-payload.mjs` 映射打包。
+- **CI 双轨打包与触发边界**：本地无参构建可直接从 `/Applications/DSH Trading.app` 现取现 stage 1.8G runtime，而 `desktop-release.yml` 的 `build-desktop-mygo` job 在 runner 内现跑 `fetch-node.mjs` → `stage-pnpm.mjs` → `build-runtime.mjs` → `verify-runtime-toolchain.mjs` → `stage-mygo-payload.mjs --platform darwin-arm64` 生成载荷并删掉 Electron 布局副本；因工作流仅由 `v*` tag push 触发（PR 与 `main` 推送不跑），首次真跑只能等 tag push，本地仅能核验语法与命令序列。
 - **本地 Go 工具链要求**：本地开发必须设置 `GOTOOLCHAIN=auto`（`desktop/mygo/go.mod` 要求 `1.27.3`，本机 go 为 `1.27.1`）。
 - **并存期双份钩子维护**：并存期 `internal/shell/hooks/*.mjs` 与 `desktop/src/*.mjs` 是双份，`desktop/src` 仍是事实来源。
 - **CI 独立门禁与同提交约束**：`ci.yml` 新增 `mygo-shell` job（无 `needs`，job 级 `GOTOOLCHAIN=local`），模块与 `ci.yml` 必须同一 commit 落地（`go:embed` 依赖 hooks 与 `selfcheck.js`）。
