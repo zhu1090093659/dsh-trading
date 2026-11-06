@@ -170,9 +170,9 @@ jobs:
         working-directory: desktop/mygo
         run: go test ./...
 
-      # 交叉编译门禁：两个交付平台必须编得过（只 build，不打包）。不跑 `mygo build`、
+      # 交叉编译门禁：三个交付平台必须编得过（只 build，不打包）。不跑 `mygo build`、
       # 不下载 mygo CLI——产物格式、打包与签名属于 desktop-release 管线（另一张卡），
-      # 这个 job 只负责"同一份源码在两个目标平台都编得出"这一件事。
+      # 这个 job 只负责"同一份源码在三个目标平台都编得出"这一件事。
       - name: Cross-build (darwin/arm64)
         working-directory: desktop/mygo
         env:
@@ -188,3 +188,51 @@ jobs:
           GOOS: linux
           GOARCH: amd64
         run: go build ./...
+
+      # Windows 与 darwin 一样是交付目标（desktop/mygo 的 NSIS 安装包），而平台层是
+      # 按 build tag 分的（internal/instance/lock_{unix,windows}.go、
+      # internal/shell/host_{unix,windows}.go）：只编 darwin/linux 时，windows 侧
+      # 的 syscall 名字写错、某个 unix 专用文件漏了 tag，这一路都看不见。这里只
+      # build，不打包——安装器（mygo build + makensis，含 WebView2 引导程序）由
+      # desktop/scripts/build-mygo-win.sh 产。
+      - name: Cross-build (windows/amd64)
+        working-directory: desktop/mygo
+        env:
+          CGO_ENABLED: '0'
+          GOOS: windows
+          GOARCH: amd64
+        run: go build ./...
+
+  # Windows 门禁：mygo 壳在 Windows 上是交付形态（NSIS 安装包），而它的 Windows
+  # 专属实现（build tag 下的 internal/instance/lock_windows.go、
+  # internal/shell/host_windows.go、launch 里的路径与进程语义）此前从未在真的
+  # Windows 上跑过用例——ubuntu 的 mygo-shell 只做交叉编译，编得过不等于跑得对。
+  # 与那个 job 互补、彼此没有 needs：gofmt 与三目标交叉编译留在 ubuntu 单点，
+  # 这里用 runner 自己的 GOOS 跑 vet 与 test。
+  mygo-windows:
+    name: Mygo shell on Windows (vet / test)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      # 与 mygo-shell 同样的理由：工具链由 go.mod 决定，漂移要当场红，而不是被 go
+      # 悄悄换成另一个版本跑绿。
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+
+      # 版本读 desktop/mygo/go.mod 的 go 指令（当前 1.27.3），不在这里重复写一遍：
+      # 抬最小工具链时只改 go.mod。setup-go 在 runner 上解析不到该 patch 版本时
+      # 红在 setup 这一步，这正是"runner 必须能解析到"这条要求的样子。
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/mygo/go.mod
+          cache: true
+          cache-dependency-path: desktop/mygo/go.sum
+
+      - name: go vet
+        working-directory: desktop/mygo
+        run: go vet ./...
+
+      - name: go test
+        working-directory: desktop/mygo
+        run: go test ./...
