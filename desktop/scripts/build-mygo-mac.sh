@@ -14,6 +14,13 @@
 # sets the environment instead of passing a flag. -debug keeps the inspector too,
 # but it also drops the production flag, so a release is never built with it.
 #
+# After 'mygo build' the script restores what mygo leaves out of the bundle's
+# resources — every name that starts with a dot (cmd/mygo/resources.go:551),
+# one of which the payload needs — then signs the app again with the same
+# identity and rebuilds the disk image, because the restore breaks the seal.
+# It verifies that the payload is complete in the bundle, that the image
+# verifies, and that the app inside it verifies too.
+#
 # Usage: desktop/scripts/build-mygo-mac.sh [options]
 #
 #   --platform GOOS/GOARCH  target (default darwin/arm64; darwin/universal works)
@@ -46,8 +53,9 @@
 #                         exists, else desktop/resources/runtime (the Electron staging)
 #   MYGO_BIN              mygo CLI to use; the default builds the module's CLI with Go
 #   GO_BIN                go executable (default: go from PATH)
-#   NODE_BIN              node that trims the staged payload (default: node from PATH,
-#                         then /opt/homebrew/bin/node, then /usr/local/bin/node)
+#   NODE_BIN              node that trims the staged payload and restores its dotfiles
+#                         (default: node from PATH, then /opt/homebrew/bin/node, then
+#                         /usr/local/bin/node)
 #   AGENTCTL              agentctl binary for the run check; the default builds
 #                         desktop/mygo/cmd/agentctl with Go
 #   MYGO_INSPECTOR        forced to 1 (the default, agent channel in) and unset with
@@ -77,6 +85,45 @@ fail() { echo "build-mygo-mac: $*" >&2; exit 1; }
 
 usage() {
   awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
+}
+
+# rebuild_dmg writes dmg again from app, the way mygo build does it (cmd/mygo/dmg.go):
+# a writable HFS+ image holding the app, a link to /Applications and the Finder
+# layout, converted to ULMO. The Finder layout and the volume icon come from the
+# image mygo just built, so the rebuilt image looks like the first one. The app
+# must already be signed: the image seals what it holds.
+rebuild_dmg() {
+  local app="$1" dmg="$2"
+  local src="$work/dmg-src" rw="$work/dmg-rw.dmg" mnt="$work/dmg-mnt"
+  local volume disk name attached old
+  rm -rf "$src" "$mnt" "$rw"
+  mkdir -p "$src" "$mnt"
+  # The Finder layout (.DS_Store) and the volume icon come from the image mygo
+  # just made, so the rebuilt image shows and is named what the first one was.
+  attached="$(hdiutil attach -readonly -noverify -noautoopen -nobrowse "$dmg")"
+  old="$(printf '%s\n' "$attached" | sed -n 's|^.*[[:space:]]\(/Volumes/.*\)$|\1|p' | tail -1)"
+  volume="$(basename "${old:-$(basename "$app" .app)}")"
+  for name in .DS_Store .VolumeIcon.icns; do
+    if [ -n "$old" ] && [ -f "$old/$name" ]; then cp -p "$old/$name" "$src/$name"; fi
+  done
+  if [ -n "$old" ]; then hdiutil detach "$old" >/dev/null; fi
+  ditto --noclone "$app" "$src/$(basename "$app")"
+  ln -s /Applications "$src/Applications"
+  hdiutil create -ov -volname "$volume" -srcfolder "$src" -fs HFS+ \
+    -fsargs '-c c=64,a=16,e=16' -format UDRW "$rw" >/dev/null
+  disk="$(hdiutil attach -readwrite -noverify -noautoopen -nobrowse -mountpoint "$mnt" "$rw" | head -1 | awk '{print $1}')"
+  rm -rf "$mnt/.fseventsd" "$mnt/.Trashes"
+  hdiutil detach "$disk" >/dev/null
+  rm -f "$dmg"
+  if diskutil image create from -h >/dev/null 2>&1; then
+    diskutil image create from --format ULMO "$rw" "$dmg" >/dev/null
+  else
+    hdiutil convert "$rw" -format ULMO -ov -o "$dmg" >/dev/null
+  fi
+  if [ "$identity" != "-" ]; then
+    codesign --force --timestamp --sign "$identity" "$dmg"
+  fi
+  rm -rf "$src" "$mnt" "$rw"
 }
 
 while [ $# -gt 0 ]; do
@@ -129,7 +176,10 @@ if [ -z "$node_bin" ]; then
 fi
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/mygo-build.XXXXXX")"
-trap 'rm -rf "$work"' EXIT
+# The trap detaches a disk image the verification left mounted before it removes
+# the work directory; the detach of a good run is its own step below, and a
+# failure there fails the build.
+trap 'hdiutil detach "$work/dmg-check" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
 
 if [ "$stage" = 1 ]; then
   source="${DSH_MYGO_PAYLOAD_SRC:-}"
@@ -196,6 +246,36 @@ dmg="$(find "$project/build" -maxdepth 3 -type f -name '*.dmg' -print -quit)"
 [ -n "$app" ] || fail "the build produced no .app under $project/build"
 [ -n "$dmg" ] || fail "the build produced no .dmg under $project/build"
 
+# mygo build leaves every name that starts with a dot out of Contents/Resources
+# (cmd/mygo/resources.go:551 hiddenName, used at :380 while collecting and :643
+# while copying), and the payload needs one of them:
+# @earendil-works/pi-ai/dist/providers/data/.manifest.json is imported by
+# @deepseek-ai/dsh-llm-pi-ai, and without it the host logs "1 entry did not
+# activate". The staged tree is restored into the bundle here, then the app is
+# signed again and the disk image rebuilt: a file landing in the bundle breaks
+# the seal, so nothing may run between the restore and codesign.
+say "restoring the dotfiles mygo build leaves out"
+[ -n "$node_bin" ] || fail "restoring the payload's dotfiles needs node (set NODE_BIN)"
+"$node_bin" "$root/desktop/scripts/restore-mygo-dotfiles.mjs" \
+  --source "$payload" --bundle "$app/Contents/Resources/runtime" --report "$work/dotfiles.json"
+restored="$(plutil -extract copied raw -o - "$work/dotfiles.json")"
+if [ "$restored" != 0 ]; then
+  # codesignArgs of mygo build (cmd/mygo/bundle.go:371): --force --deep, and the
+  # hardened runtime plus a secure timestamp for a real identity in production,
+  # which this is. mygo.json configures no entitlements, so none are passed.
+  say "re-signing the app after the restore (identity $identity)"
+  if [ "$identity" = "-" ]; then
+    codesign --force --deep --sign - "$app"
+  else
+    codesign --force --deep --options runtime --timestamp --sign "$identity" "$app"
+  fi
+  say "rebuilding the disk image from the re-signed app"
+  rebuild_dmg "$app" "$dmg"
+fi
+say "the bundle holds every entry of the staged payload"
+"$node_bin" "$root/desktop/scripts/restore-mygo-dotfiles.mjs" \
+  --source "$payload" --bundle "$app/Contents/Resources/runtime" --check
+
 say "bundle: ${app#$root/}"
 say "Info.plist"
 plutil -p "$app/Contents/Info.plist"
@@ -211,6 +291,16 @@ ls -l "$app/Contents/Resources/runtime/node/bin/node" \
 say "artifacts"
 du -sh "$app"
 ls -lh "$dmg"
+
+say "the disk image verifies, mounts, and its app verifies"
+hdiutil verify "$dmg" 2>&1 | sed 's/^/  /'
+check="$work/dmg-check"
+mkdir -p "$check"
+hdiutil attach -readonly -noverify -noautoopen -nobrowse -mountpoint "$check" "$dmg" >/dev/null
+codesign --verify --deep --strict --verbose=2 "$check/$(basename "$app")" 2>&1 | sed 's/^/  /'
+[ -f "$check/$(basename "$app")/Contents/Resources/runtime/host/node_modules/@earendil-works/pi-ai/dist/providers/data/.manifest.json" ] \
+  || fail "the image's app does not carry the payload's dotfiles"
+hdiutil detach "$check" >/dev/null
 
 # The automation plugin's protocol code carries the sentence a page window answers
 # a tree request with; the stand-in off.go build does not, and only that build

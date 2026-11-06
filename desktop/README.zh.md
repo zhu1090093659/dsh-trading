@@ -32,6 +32,8 @@
 | `scripts/stage-mygo-payload.mjs` | 把载荷暂存进 `mygo/resources/runtime`，把按平台命名的 node 目录映射为 `runtime/node`，并把这份副本裁到目标平台 |
 | `scripts/prune-mygo-payload.mjs` | 裁剪本体：「精确包名 → 它服务的那个平台」映射表，逐包核对 `os`/`cpu` 后删掉其他目标的包与 `*.map` |
 | `scripts/verify-prune-mygo-payload.mjs` | 在 fixture 载荷上验证裁剪：映射表、拒绝条件、幂等性与命令行 |
+| `scripts/restore-mygo-dotfiles.mjs` | 把 `mygo build` 漏在包外的资源补回包内（凡以点开头的名字），补完再重签 |
+| `scripts/verify-restore-mygo-dotfiles.mjs` | 在 fixture 包上验证这套补拷：补了什么、拒绝了什么、报告长什么样 |
 | `scripts/build-mygo-mac.sh` | 打包 macOS 版 mygo 壳：载荷、`.app` + `.dmg`、签名校验与公证入口 |
 | `scripts/set-mygo-version.mjs` | 在 runner 里按发布 tag 重写 mygo 清单的 `version`，使 mygo 磁盘映像与 bundle 版本跟 Electron 壳一样随 tag 走（对应 `scripts/set-desktop-version.mjs`） |
 
@@ -105,6 +107,12 @@ node scripts/stage-mygo-payload.mjs --platform darwin-arm64
 `*.d.ts`、包内 `test/` 与 `docs/` 目录只量化不裁：声明 48MB、fixture 9MB，相对按平台包都很小，而且前者是插件作者对着 profile 开发时预期能找到的类型面，后者有包可能读到自己的 fixture。
 
 改传 `--keep-all-platforms` 则暂存全部平台，裁剪前后两个产物的大小就是靠它对比着量的。
+
+### mygo build 漏掉的点文件
+
+`mygo build` 从暂存载荷装配包内资源时会跳过所有以点开头的名字（`cmd/mygo/resources.go:551 hiddenName`，收集在 `:380`、复制在 `:643`）。载荷恰好需要其中一个：`@earendil-works/pi-ai/dist/providers/data/.manifest.json`，它被 `@deepseek-ai/dsh-llm-pi-ai` 静态导入；缺了它，每次启动都会留下 `dsh: warning: 1 entry did not activate` 与指向该路径的 `Cannot find module`。
+
+因此 `build-mygo-mac.sh` 用 `scripts/restore-mygo-dotfiles.mjs` 把「暂存载荷」与「包内 `Contents/Resources/runtime`」的差异补回包内——清单从不手写，且差异里只要出现非点文件就拒绝——然后用与原构建相同的身份重新签名（`codesign --force --deep`，真实身份再加 `--options runtime --timestamp`，与 `mygo build` 一致），并从重签后的 app 重建磁盘映像，保留原映像的 Finder 布局与卷图标。补文件会让签名封失效，所以顺序是固定的：补拷、签名、重建映像。脚本随后校验包内与载荷逐条一致，并把映像挂载起来验证其中的 app 也验签通过。
 
 ### Profile、cohort 与 primary runtime
 

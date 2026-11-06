@@ -32,6 +32,8 @@ An Electron shell that turns the dsh-trading Web GUI into an installable desktop
 | `scripts/stage-mygo-payload.mjs` | Stages the payload into `mygo/resources/runtime` with the per-platform node directory mapped to `runtime/node`, then trims the copy to the target platform |
 | `scripts/prune-mygo-payload.mjs` | The trim itself: a table of exact package names and the one platform each serves, checked against every package's `os`/`cpu`, removes the other targets' packages and `*.map` from a staged payload |
 | `scripts/verify-prune-mygo-payload.mjs` | Checks that trim on a fixture payload: the table, the refusals, idempotency and the command line |
+| `scripts/restore-mygo-dotfiles.mjs` | Restores what `mygo build` leaves out of the bundle's resources — every name starting with a dot — from the staged payload, before the app is signed again |
+| `scripts/verify-restore-mygo-dotfiles.mjs` | Checks that restore on a fixture bundle: what it copies, what it refuses, and its report |
 | `scripts/build-mygo-mac.sh` | Packages the mygo shell for macOS: payload, `.app` + `.dmg`, signature check, notarization entry |
 | `scripts/set-mygo-version.mjs` | Rewrites the mygo manifest's version from the release tag in the runner, so the mygo disk image and bundle version follow the tag as the Electron shell's do (`scripts/set-desktop-version.mjs`) |
 
@@ -106,6 +108,12 @@ The trim matches no wildcard: `PLATFORM_PACKAGES` names every package and the on
 `*.d.ts`, package `test/` and `docs/` directories are measured and left alone: 48MB of declarations and 9MB of fixtures, small next to the per-platform packages, and both are things a package can read at runtime or a plugin author expects to find in the profile.
 
 `--keep-all-platforms` stages every platform instead, which is how the trimmed `.app` and `.dmg` are measured against an untrimmed one.
+
+### The dotfiles mygo build leaves out
+
+`mygo build` assembles the bundle's resources from the staged payload but skips every name that starts with a dot (`cmd/mygo/resources.go:551 hiddenName`, used at `:380` while collecting and `:643` while copying). The payload needs one of them: `@earendil-works/pi-ai/dist/providers/data/.manifest.json`, which `@deepseek-ai/dsh-llm-pi-ai` imports, and without it every launch logs `dsh: warning: 1 entry did not activate` and a `Cannot find module` for that path.
+
+`build-mygo-mac.sh` therefore restores the difference between the staged payload and the bundle's `Contents/Resources/runtime` with `scripts/restore-mygo-dotfiles.mjs` — the list is never written by hand, and the step refuses a gap that holds anything but dotfiles — then signs the app again with the same identity (`codesign --force --deep`, plus `--options runtime --timestamp` for a real identity, as `mygo build` does) and rebuilds the disk image from the re-signed app, keeping the image's Finder layout and volume icon. The restore breaks the seal, so the order is fixed: restore, sign, image. The script then verifies that the bundle holds every entry of the payload and that the image mounts with an app that verifies.
 
 ### Profile, cohort and the primary runtime
 
