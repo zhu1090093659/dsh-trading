@@ -126,7 +126,7 @@ export class TushareTradeService extends Service implements TradeService {
     return this.client.placeOrder(undefined, order)
   }
 
-  async cancelOrder(orderId: string): Promise<{ orderId: string; status: 'canceled' }> {
+  async cancelOrder(orderId: string, _symbol?: string): Promise<void> {
     // 服务缝闸门（P0）：撤单是会改变交易所/券商真实状态的实盘动作，与真实下单同门槛
     // （授权平面已授予且未强制模拟），防「经撤单接口绕过下单闸门」。
     if (!liveTradingEnabled(this.config.liveTrading) || this.config.dryRun) {
@@ -135,7 +135,7 @@ export class TushareTradeService extends Service implements TradeService {
         'Tushare TradeService.cancelOrder rejected at the service seam: cancel is a live action and requires a signed live-trading grant (see @dshtrading/authority) with dryRun=false.',
       )
     }
-    return this.client.cancelOrder(undefined, orderId)
+    return this.client.cancelOrder(undefined, orderId) as unknown as void
   }
 
   /**

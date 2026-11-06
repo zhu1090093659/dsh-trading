@@ -251,10 +251,26 @@ describe('LongbridgeRestClient 签名算法与交易接口', () => {
 
     expect(urls[0]).toContain('/v1/asset/account')
     expect(bal).toEqual({
-      currency: 'HKD',
-      available: 620000.5,
-      total: 1350000.0,
+      asset: 'HKD',
+      free: 620000.5,
+      locked: 729999.5,
     })
+  })
+
+  it('用户查持仓时显式拒绝：上游没有方向与持仓时间，绝不猜 side', async () => {
+    // Given 一个会记录出站请求的注入式 fetch（真发请求就会抛 unexpected request）
+    // When 查持仓
+    // Then 抛 TRADING_NOT_IMPLEMENTED，且一个请求都不发出（不拿 quantity 推方向）
+    const { impl, urls } = stubFetch([])
+    const client = new LongbridgeRestClient({
+      fetchImpl: impl,
+      appKey: 'key-123',
+      appSecret: 'secret-abc',
+      accessToken: 'token-abc',
+    })
+    await expect(client.getPositions()).rejects.toMatchObject({ code: 'TRADING_NOT_IMPLEMENTED' })
+    await expect(client.getPositions()).rejects.toThrow(/NOT "no positions"/)
+    expect(urls).toHaveLength(0)
   })
 
   it('用户提交港股委托时按 /v1/trade/order 取回订单号与字段', async () => {

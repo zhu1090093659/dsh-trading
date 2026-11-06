@@ -85,14 +85,37 @@
 |---|---|---|
 | 实时报价 | `GET /v1/quote/realtime?symbol=00700.HK` | `src/rest.ts:184` |
 | K 线 | `GET /v1/quote/candlesticks?symbol=&period=&count=` | `src/rest.ts:221` |
-| 账户资产 | `GET /v1/asset/account` | `src/rest.ts:255` |
-| 持仓 | `GET /v1/trade/stock/position` | `src/rest.ts:289` |
-| 下单 | `POST /v1/trade/order`（`symbol` / `order_type`(MO\|LO) / `side`(Buy\|Sell) / `submitted_quantity` / `submitted_price` / `time_in_force: 'Day'` / `remark?`） | `src/rest.ts:317-329` |
-| 撤单 | `DELETE /v1/trade/order?order_id=` | `src/rest.ts:352-354` |
+| 账户资产 | `GET /v1/asset/account`（上游 `currency` / `total_cash` / `net_assets` → 契约的 `asset` / `free` / `locked`） | `src/rest.ts:255` |
+| 持仓 | **不发请求**：文档化端点 `GET /v1/asset/stock` 的应答缺 api 要求的 `side` / `timestamp`，见下节 | `src/rest.ts:291-304` |
+| 下单 | `POST /v1/trade/order`（`symbol` / `order_type`(MO\|LO) / `side`(Buy\|Sell) / `submitted_quantity` / `submitted_price` / `time_in_force: 'Day'` / `remark?`） | `src/rest.ts:317-327` |
+| 撤单 | `DELETE /v1/trade/order?order_id=` | `src/rest.ts:350-352` |
 
 请求头（`src/rest.ts:136-161`）：`Accept` / `Content-Type` 恒发；`authorization: Bearer <token>`
 在有 access token 时发；`x-api-key` + `x-timestamp`（`Date.now()`）在有 app key 时发；
 `x-api-signature` **只在 appKey、accessToken 与 appSecret 三者齐备**时发（第 148-160 行）。
+
+## 持仓（getPositions）：显式不可用，不返回任何行
+
+`getPositions()` 现在**不发上游请求**，直接抛 `TRADING_NOT_IMPLEMENTED`：api 契约要求的两样真数据在上游不存在，编不出来。
+
+- `@dshtrading/api` 的 `Position` 必填 `side: 'long' | 'short'` 与 `timestamp: number`
+  （`packages/api/src/index.ts:499-520`；`size` 的注释明写「正数；方向由 side 表达」）。
+- 长桥文档化的持仓端点是 `GET /v1/asset/stock`，应答 `data.list[].stock_info[]` 只有
+  `symbol` / `symbol_name` / `currency` / `quantity` / `market` / `available_quantity` /
+  `cost_price` / `init_quantity`（open.longbridge.com「Stock Positions」）。官方 Node SDK
+  `longport@4.3.7` 的 `StockPosition`（`index.d.ts:2377-2399`）字段集完全一致：**没有方向、也没有持仓时间**。
+  源码原先读的 `GET /v1/trade/stock/position` 与 `data.channels[].positions[].unrealized_pnl` 是
+  protobuf SDK 的消息形状，不是这套 HTTP 文档的形状（24 个 trade 文档页里没有该路径，`unrealized_pnl` 也不存在）。
+- `quantity` 是持股数，不是带符号仓位：`quantity > 0 ? 'long' : 'short'` 只要上游给的是绝对值，
+  就会把所有空头标成多头——那是把「数量空白 + 恒显示空头」换成一个更难发现的方向错误。
+  `timestamp` 同理没有来源，用 `Date.now()` 冒充持仓时间也是编数据。
+
+所以这里选「显式不可用」（与 connector-futu / connector-bybit / connector-ccxt 的持仓读数同裁决），
+而不是返回空数组：空数组的语义是「没有持仓」，和「读不到」是两句不同的话。
+
+解除条件（任一）：① api 侧把 `side` / `timestamp` 降为可选；② api 侧新增「持仓快照」类型
+（`size` + 可选 `side` / `timestamp`）；③ 上游给出方向与持仓时间，届时按 `size = |quantity|` 映射
+上游字段，仍不在本地推方向。
 
 ## 周期与契约
 

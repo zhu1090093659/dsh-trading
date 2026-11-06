@@ -45,7 +45,15 @@ Status: implemented
    - 资金查询：真实请求 `GET /v1/asset/account`；
    - 订单申报：真实请求 `POST /v1/trade/order`；
    - 撤单：`DELETE /v1/trade/order?order_id=...`；
-   - 持仓：`GET /v1/trade/stock/position`；
+   - 持仓：**显式不可用**（2026-11-01 修正本行原文）——原文写的 `GET /v1/trade/stock/position`
+     在 LongPort 官方 24 个 trade 文档页里 **0 次出现**，它是 protobuf SDK 的消息形状
+     （`resp.channels[].positions[]`，官方 Close Position 示例用的就是它）被误搬到了 HTTP 路径上。
+     文档化的持仓端点是 `GET /v1/asset/stock`，应答 `data.list[].stock_info[]`（8 个字段，无 `unrealized_pnl`）。
+     更关键的阻塞：上游**既无方向字段也无持仓时间**，而 `api` 的 `Position` 必填 `side`/`timestamp`，
+     填充任一个都是造数据（`available_quantity` 的负数来自冻结，不是空头，故 `quantity > 0 ? long : short` 不可证实）。
+     故 `getPositions()` 改为抛 `TRADING_NOT_IMPLEMENTED`：不发请求、不返回空数组
+     （空数组语义是「没有持仓」，与「读不到」是两件事），与 `connector-futu`/`bybit`/`ccxt` 同裁决。
+     解除条件见 `packages/connector-longbridge/README.md`。
    - 工具补齐：在 `index.ts` 中注册 `hk_place_order`、`hk_cancel_order`、`hk_get_balance`。
 5. **纯数据源定位清理**:
    - 彻底删除 `EastmoneyRestClient` 与 `AkshareRestClient` 中残留的假 `getBalance`/`placeOrder` 及假 TradeService。

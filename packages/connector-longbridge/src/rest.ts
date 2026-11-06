@@ -254,55 +254,53 @@ export class LongbridgeRestClient {
       }
     }>('/v1/asset/account')
 
-    if (res.code !== 0 || !res.data?.list || res.data.list.length === 0) {
-      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', `Longbridge getBalance failed: ${res.message ?? `code ${res.code}`}`)
+    const first = res.data?.list?.[0]
+    if (res.code !== 0 || first === undefined) {
+      throw new TradingServiceError('TRADING_EXCHANGE_ERROR', 'Longbridge getBalance failed: ' + (res.message ?? ('code ' + res.code)))
     }
 
-    const first = res.data.list[0]
-    const available = parseFloat(first.total_cash || '0')
-    const total = parseFloat(first.net_assets || first.total_cash || '0')
-
+    const cash = parseFloat(first.total_cash || '0')
+    const netAssets = parseFloat(first.net_assets || first.total_cash || '0')
+    // api 的 AccountBalance 是 { asset, free, locked }：上游 currency / total_cash / net_assets
+    // 一一对位（asset 是结算币种，与 connector-alpaca 的 asset: data.currency 同口径），
+    // locked 取非现金资产 = 净值 - 可用现金，使面板「合计 = free + locked」恰为总资产。
     return {
-      currency: first.currency ?? 'HKD',
-      available,
-      total,
+      asset: first.currency ?? 'HKD',
+      free: cash,
+      locked: Math.max(netAssets - cash, 0),
     }
   }
 
+  /**
+   * 持仓快照。**当前显式拒绝，不产出任何行**——上游没有 api 契约要求的那两样真数据：
+   *
+   * - api 的 `Position` 必填 `side: 'long' | 'short'` 与 `timestamp: number`
+   *   （packages/api/src/index.ts:499-520，size 的注释明写「正数；方向由 side 表达」）。
+   * - 长桥文档化的持仓端点是 `GET /v1/asset/stock`，应答 `data.list[].stock_info[]`
+   *   只有 symbol / symbol_name / currency / quantity / market / available_quantity /
+   *   cost_price / init_quantity；官方 SDK 的 `StockPosition`（longport 4.3.7
+   *   index.d.ts:2377-2399）字段集完全一致，同样没有方向、也没有持仓时间。
+   * - `quantity` 是持股数，不是带符号的仓位：`quantity > 0 ? 'long' : 'short'` 这种填充
+   *   只要上游给的是绝对值，就把所有空头标成多头——那是把「数量空白 + 恒显示空头」换成一个
+   *   更难发现的方向错误。`timestamp` 同理没有来源，拿 Date.now() 冒充持仓时间也是编数据。
+   *
+   * 裁决与 connector-futu / connector-bybit / connector-ccxt 的持仓读数同款：不可用就
+   * TRADING_NOT_IMPLEMENTED，绝不返回空数组（空数组的语义是「没有持仓」，与「读不到」是两句
+   * 不同的话）。解除条件见 README「持仓（getPositions）」一节。
+   */
   async getPositions(): Promise<Position[]> {
     if (!this.appKey || !this.accessToken) {
       throw new TradingServiceError('TRADING_AUTH_FAILED', 'Longbridge: appKey and accessToken are required for getPositions')
     }
-    const res = await this.requestJson<{
-      code: number
-      message?: string
-      data?: {
-        channels?: Array<{
-          positions?: Array<{
-            symbol: string
-            quantity: string
-            cost_price: string
-            unrealized_pnl?: string
-          }>
-        }>
-      }
-    }>('/v1/trade/stock/position')
-
-    if (res.code !== 0 || !Array.isArray(res.data?.channels)) return []
-    const positions: Position[] = []
-    for (const channel of res.data.channels) {
-      if (Array.isArray(channel.positions)) {
-        for (const p of channel.positions) {
-          positions.push({
-            symbol: toLongbridgeSymbol(p.symbol).canonical,
-            quantity: parseFloat(p.quantity || '0'),
-            entryPrice: parseFloat(p.cost_price || '0'),
-            unrealizedPnl: parseFloat(p.unrealized_pnl || '0'),
-          })
-        }
-      }
-    }
-    return positions
+    throw new TradingServiceError(
+      'TRADING_NOT_IMPLEMENTED',
+      'Longbridge TradeService.getPositions is not available: @dshtrading/api Position requires side (long|short) and '
+        + 'timestamp, and the Longbridge stock-position snapshot provides neither. The documented endpoint GET '
+        + '/v1/asset/stock answers data.list[].stock_info[] with only symbol, symbol_name, currency, quantity, market, '
+        + 'available_quantity, cost_price and init_quantity (the official SDK StockPosition carries the same field set). '
+        + 'quantity is a holding count rather than a signed size, so direction cannot be derived, and there is no open '
+        + 'time to report. That means "not available", NOT "no positions".',
+    )
   }
 
   async placeOrder(_creds: unknown, req: OrderRequest, remark?: string): Promise<Order> {

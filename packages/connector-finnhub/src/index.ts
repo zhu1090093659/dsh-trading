@@ -152,6 +152,20 @@ export class FinnhubTradeService extends Service implements TradeService {
     return this.client.cancelOrder(undefined, orderId) as unknown as void
   }
 
+  /**
+   * 单笔订单状态查询（api 契约必选方法，R3 okx 切片 2026-08-29 引入）。本连接器没有单笔
+   * 订单状态端点：必须显式拒绝，绝不编造订单回执——编造回执会被读成「订单存在/不存在」，
+   * 而契约语义是 TRADING_NOT_IMPLEMENTED（不可用）。
+   * 与 connector-ccxt / connector-bybit / connector-tushare 的同名方法同形。
+   */
+  async getOrder(_symbol: string, _id: string): Promise<Order> {
+    throw new TradingServiceError(
+      'TRADING_NOT_IMPLEMENTED',
+      'Finnhub TradeService.getOrder is not implemented: this connector has no single-order status lookup. '
+        + 'That means "not available", NOT "order not found".',
+    )
+  }
+
   async getPositions(): Promise<Position[]> {
     return []
   }
