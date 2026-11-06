@@ -24,7 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { ISessions, SessionTarget } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { IndicatorMarketScope, IndicatorRegistry } from '@dshtrading/indicators'
 import type { Instrument, MarketId } from './types.ts'
-import { createSelectionStore, createWatchlistGroupsStore, createWatchlistStore } from './store.ts'
+import { createSelectionStore, createWatchlistGroupsStore, createWatchlistSortStore, createWatchlistStore } from './store.ts'
 import { createChartStateStore } from './chart-state.ts'
 import { indicators, unmarkCustomIndicator } from './indicator-registry.ts'
 import { customIndicatorLoader } from './indicator-load.ts'
@@ -83,6 +83,7 @@ export function apply(ctx: ClientContext): void {
   const selection = createSelectionStore()
   const watchlists = createWatchlistStore()
   const watchlistGroups = createWatchlistGroupsStore()
+  const watchlistSort = createWatchlistSortStore()
   const chart = createChartStateStore(indicators)
   const sessions = ctx.sessions as unknown as ISessions
 
@@ -248,7 +249,7 @@ export function apply(ctx: ClientContext): void {
     order: 10,
     locale: NS,
     inject: () => ({
-      hooks: { selection, watchlists, marketFolded, groups: watchlistGroups },
+      hooks: { selection, watchlists, marketFolded, groups: watchlistGroups, sortPrefs: watchlistSort },
       addInstrument: (market: MarketId, instrument: Instrument) => { watchlists.add(market, instrument) },
       removeInstrument: (market: MarketId, symbol: string) => { watchlists.remove(market, symbol) },
       selectInstrument: (instrument: Instrument) => { selection.select(instrument) },
@@ -261,6 +262,10 @@ export function apply(ctx: ClientContext): void {
       assignGroupMember: (id: string, market: string, symbol: string, member: boolean, name?: string) =>
         watchlistGroups.assignMember(id, market, symbol, member, name),
       setActiveGroup: (id: string | null) => { watchlistGroups.setActiveGroup(id) },
+      // 置顶写路径（2026-11-05）：host-first 由 wireHostWatchlistSync 接管。
+      setPinned: (key: string, pinned: boolean) => watchlistGroups.setPinned(key, pinned),
+      // 排序三态循环（纯本地 UI 态；rows = 列表区，pinned = 置顶区）。
+      cycleSort: (zone: 'rows' | 'pinned') => watchlistSort.cycle(zone),
     }),
   }, MarketDock))
 

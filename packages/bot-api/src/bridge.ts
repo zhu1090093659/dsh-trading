@@ -44,7 +44,7 @@ import type { BuiltinTombstonesStore, CustomScreenerRecord, CustomScreenerStore 
 // 加载，client 打包不 import 本文件（client 半只经 api.ts 走 HTTP）。
 import { validateCustomStrategyNode, validateCustomScreenerNode } from '@dshtrading/strategies/plugin'
 import type { SelectionStore, WatchlistGroup, WatchlistGroupsStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from '@dshtrading/watchlist'
-import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore, WATCHLIST_SEEDS } from '@dshtrading/watchlist'
+import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore, normalizePinnedKey, WATCHLIST_SEEDS, watchlistRowKey } from '@dshtrading/watchlist'
 // 统一资产台账（issue #65）：type-only import——@dshtrading/holdings 由并行流建设，
 // 缺席时本包 vitest 不受影响（擦除）；运行时 store 走 host 注入 + 本文件内存兜底。
 import type { Holding, HoldingCurrency, HoldingMarket, NewHolding, NewHoldingInput } from '@dshtrading/holdings'
@@ -2069,13 +2069,37 @@ export class TradingBridge {
     return { ok: true, watchlists: await store.list() }
   }
 
-  /** 全量替换自选（客户端启动同步）。 */
+  /** 全量替换自选（客户端启动同步）：被替换掉的行的置顶键一并清掉。 */
   async replaceWatchlists(body: unknown): Promise<{ ok: boolean; watchlists: WatchlistsMap }> {
     const store = this.host.watchlistStore
     if (store === undefined) return { ok: true, watchlists: {} }
+    const before = await store.list()
     const map = await this.dropUnknownGroups(parseWatchlistsMap(body))
     await store.save(map)
+    await this.stripPinsForRemovedRows(before, map)
     return { ok: true, watchlists: await store.list() }
+  }
+
+  /**
+   * 全量替换后清掉「已经不在表里」的行的置顶键（与 DELETE /watchlists 同口径）。
+   * 键按落盘分桶的 market 计算，与行写端点构造键的方式一致。
+   */
+  private async stripPinsForRemovedRows(before: WatchlistsMap, after: WatchlistsMap): Promise<void> {
+    const groups = this.host.groupsStore
+    if (groups === undefined) return
+    const live = new Set<string>()
+    for (const [market, rows] of Object.entries(after)) {
+      for (const row of rows) live.add(watchlistRowKey(market, row.symbol))
+    }
+    const stripped = new Set<string>()
+    for (const [market, rows] of Object.entries(before)) {
+      for (const row of rows) {
+        const key = watchlistRowKey(market, row.symbol)
+        if (live.has(key) || stripped.has(key)) continue
+        stripped.add(key)
+        await groups.stripPinned(key)
+      }
+    }
   }
 
   /**
@@ -2129,11 +2153,15 @@ export class TradingBridge {
     return { ok: true, added, instrument }
   }
 
-  /** 移除一行（DELETE /watchlists?market&symbol）。 */
+  /** 移除一行（DELETE /watchlists?market&symbol）：顺带清掉该行的置顶键（防僵尸置顶）。 */
   async removeWatchlistRow(market: string, symbol: string): Promise<{ ok: boolean; removed: boolean }> {
     const store = this.host.watchlistStore
     if (store === undefined || !market || !symbol) return { ok: true, removed: false }
     const removed = await store.remove(market, symbol)
+    // 置顶键与自选行生命周期同向：行都不在了，键留着会让「重新加回」莫名其妙带着置顶。
+    if (this.host.groupsStore !== undefined) {
+      await this.host.groupsStore.stripPinned(watchlistRowKey(market, symbol))
+    }
     return { ok: true, removed }
   }
 
@@ -2156,11 +2184,30 @@ export class TradingBridge {
   /* 自定义分组（issue #82）：注册表 CRUD + 行级 membership              */
   /* ---------------------------------------------------------------- */
 
-  /** 全量读取分组注册表（GET /watchlist-groups）。 */
-  async watchlistGroups(): Promise<{ ok: boolean; groups: WatchlistGroup[] }> {
+  /**
+   * 全量读取分组注册表 + 置顶键集（GET /watchlist-groups）。
+   * 两者同文件、同 store 实例，并进一个响应省一次往返与一个失效信号。
+   */
+  async watchlistGroups(): Promise<{ ok: boolean; groups: WatchlistGroup[]; pinned: string[] }> {
     const store = this.host.groupsStore
-    if (store === undefined) return { ok: true, groups: [] }
-    return { ok: true, groups: await store.list() }
+    if (store === undefined) return { ok: true, groups: [], pinned: [] }
+    return { ok: true, groups: await store.list(), pinned: await store.pinned() }
+  }
+
+  /**
+   * 置顶/取消置顶（PUT /watchlist-pins，body { key, pinned }）。
+   * key 形如 `market:symbol`（与客户端 rowKey 同源）；键已处于目标状态为幂等 no-op（changed:false）。
+   */
+  async setWatchlistPin(body: unknown): Promise<{ ok: boolean; changed: boolean; pinned: string[] }> {
+    const store = this.host.groupsStore
+    const raw = (body ?? {}) as { key?: unknown; pinned?: unknown }
+    if (typeof raw.key !== 'string' || typeof raw.pinned !== 'boolean') {
+      throw new BridgeProtocolError(400, 'watchlist pin body requires string key and boolean pinned')
+    }
+    if (normalizePinnedKey(raw.key) === null) throw new BridgeProtocolError(400, `invalid watchlist pin key: ${JSON.stringify(raw.key)}`)
+    if (store === undefined) return { ok: true, changed: false, pinned: [] }
+    const changed = await store.setPinned(raw.key, raw.pinned)
+    return { ok: true, changed, pinned: await store.pinned() }
   }
 
   /** 创建分组（POST /watchlist-groups，body { name }）；同名业务拒绝（ok:false + code）。 */
@@ -2778,6 +2825,12 @@ export const BRIDGE_WRITE_ROUTES: readonly BridgeWriteRoute[] = [
     pathname: '/watchlist-groups',
     invalidates: ['watchlists'],
     handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.renameWatchlistGroup(body) }),
+  },
+  {
+    method: 'PUT',
+    pathname: '/watchlist-pins',
+    invalidates: ['watchlists'],
+    handle: async ({ bridge, body }) => ({ status: 200, payload: await bridge.setWatchlistPin(body) }),
   },
   {
     method: 'PUT',

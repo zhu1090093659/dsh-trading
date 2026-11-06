@@ -207,7 +207,7 @@ describe('镜像持久化（host 落地与派生本地写，2026-09-16）', () =
     store.upsertGroup({ id: 'g_old', name: '旧组', createdAt: 1 })
     store.setActiveGroup('g_old')
     // When host 权威注册表落地为新组
-    store.applyHost([{ id: 'g_new', name: '核心仓', createdAt: 2 }])
+    store.applyHost([{ id: 'g_new', name: '核心仓', createdAt: 2 }], [])
     // Then 注册表随 host、活动分组是本地 UI 态，且重载后两者一致
     expect(store.getSnapshot().groups).toEqual([{ id: 'g_new', name: '核心仓', createdAt: 2 }])
     expect(store.getSnapshot().activeGroupId).toBe('g_old')

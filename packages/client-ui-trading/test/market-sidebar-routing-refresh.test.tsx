@@ -12,7 +12,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { MarketLocaleKey } from '../src/client/contract.ts'
 import { MarketSidebar } from '../src/client/MarketSidebar.tsx'
-import { createWatchlistGroupsStore, createWatchlistStore, type SelectionState, type Watchlists } from '../src/client/store.ts'
+import { createWatchlistGroupsStore, createWatchlistSortStore, createWatchlistStore, type SelectionState, type Watchlists } from '../src/client/store.ts'
 
 /** 浏览器 EventSource 的最小替身：只保留 SSE 帧派发用到的部分。 */
 class FakeEventSource {
@@ -61,6 +61,7 @@ describe('MarketSidebar 的路由失效刷新（store.changed: routing）', () =
     ;(globalThis as { EventSource?: unknown }).EventSource = FakeEventSource
     const watchlists = createWatchlistStore()
     const groups = createWatchlistGroupsStore()
+    const sort = createWatchlistSortStore()
     const selection: SelectionState = { instrument: null }
     render(
       <MarketSidebar
@@ -68,6 +69,7 @@ describe('MarketSidebar 的路由失效刷新（store.changed: routing）', () =
         useSelection={<T,>(sel: (value: SelectionState) => T): T => sel(selection)}
         useWatchlists={<T,>(sel: (value: Watchlists) => T): T => sel(watchlists.getSnapshot())}
         useGroups={<T,>(sel: (value: ReturnType<typeof groups.getSnapshot>) => T): T => sel(groups.getSnapshot())}
+        useSortPrefs={<T,>(sel: (value: ReturnType<typeof sort.getSnapshot>) => T): T => sel(sort.getSnapshot())}
         addInstrument={() => {}}
         removeInstrument={() => {}}
         selectInstrument={() => {}}
@@ -77,6 +79,8 @@ describe('MarketSidebar 的路由失效刷新（store.changed: routing）', () =
         deleteGroup={async () => false}
         assignGroupMember={async () => true}
         setActiveGroup={() => {}}
+        setPinned={async (key, pinned) => groups.setPinned(key, pinned)}
+        cycleSort={(zone) => sort.cycle(zone)}
       />,
     )
     await waitFor(() => { expect(marketsUrls).toHaveLength(1) })

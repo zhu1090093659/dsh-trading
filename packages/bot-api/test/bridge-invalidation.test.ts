@@ -252,6 +252,21 @@ const CASES: readonly WriteCase[] = [
     },
   },
   {
+    name: 'PUT /watchlist-pins 置顶标的',
+    method: 'PUT',
+    pathname: '/watchlist-pins',
+    store: 'watchlists',
+    readSub: '/watchlist-groups',
+    run: async (call) => {
+      // 缺 key/pinned、key 不成形都是协议 400（不是业务拒绝，也不发失效信号）。
+      refusedProtocol(await call('PUT', '/watchlist-pins'), /requires string key and boolean pinned/)
+      refusedProtocol(await call('PUT', '/watchlist-pins', { key: 'us:AAPL' }), /requires string key and boolean pinned/)
+      refusedProtocol(await call('PUT', '/watchlist-pins', { key: 'nocolon', pinned: true }), /invalid watchlist pin key/)
+      okWrite(await call('PUT', '/watchlist-pins', { key: 'us:AAPL', pinned: true }), { changed: true, pinned: ['us:AAPL'] })
+      return 1
+    },
+  },
+  {
     name: 'PUT /selection 设置选中标的',
     method: 'PUT',
     pathname: '/selection',

@@ -367,24 +367,71 @@
   white-space: nowrap;
 }
 
-/* 表头行（富途式灰字小表头） */
+/* 表头行（富途式灰字小表头）：垂直内边距下放到单元格自身，第三列的排序按钮
+   命中区才能覆盖「整列宽 74px × 整行高」，且文本基线与行内单元格同高。 */
 .listHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 56px 74px;
   gap: 6px;
-  padding: 4px 12px;
+  padding: 0 12px;
   font-size: 10.5px;
   color: var(--dsw-futu-text-muted, #8e95a3);
   border-bottom: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
   flex: none;
 }
 
-.listHeaderColRight {
-  text-align: right;
+.listHeader > span {
+  padding: 4px 0;
 }
 
 .listHeaderColCenter {
   text-align: center;
+}
+
+/* 表头三态排序开关（列表表头第 3 列 + 置顶分区标题行第 3 列共用同一列位）：
+   muted 字色，只有真的按了涨跌幅排序（active）才提亮；chevron 只在非默认顺序出现，
+   pct-asc 由旋转 180° 承载方向——不新增图标，也不改字号/字重（active 不引起重排）。 */
+.sortBtn {
+  grid-column: 3;
+  appearance: none;
+  border: none;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+  cursor: pointer;
+  border-radius: var(--dsw-futu-radius-xs, 3px);
+  transition: color 0.15s;
+}
+
+.sortBtn:hover {
+  color: var(--dsw-futu-text-secondary, #5f6672);
+}
+
+.sortBtn[data-sort-mode='pct-desc'],
+.sortBtn[data-sort-mode='pct-asc'] {
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.sortBtn:focus-visible {
+  outline: 2px solid var(--dsw-futu-border-active, #3b82f6);
+  outline-offset: -1px;
+}
+
+.sortBtn[data-sort-mode='pct-asc'] svg {
+  transform: rotate(180deg);
+}
+
+.sortBtnLabel {
+  flex: none;
+  white-space: nowrap;
 }
 
 /* 标的列表 */
@@ -393,6 +440,30 @@
   min-height: 0;
   overflow-y: auto;
   padding: 2px 4px 8px;
+}
+
+/* 置顶分区标题行：网格/字号全部复用 .listHeader（列宽只有一个家），只去掉表头那条
+   下边框——两区分界交给 .pinnedDivider；左右内边距必须收到 8px 才与列表行同轨
+   （.list 的 4px + 本区 8px = 12px，与行的 8px 内边距、分隔线的 8px 外边距一致；
+   沿用继承来的 12px 会到 16px，标题就比它所辖的行偏出 4px）。 */
+.pinnedHeader {
+  border-bottom: none;
+  padding-inline: 8px;
+}
+
+.pinnedTitle {
+  font-weight: 600;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 置顶区与列表区之间的分隔线（1px hairline，两组都非空时才渲染）。 */
+.pinnedDivider {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--dsw-futu-border-subtle, #edf0f3);
 }
 
 /* 三段式标的行 */
@@ -566,6 +637,47 @@
   color: var(--dsw-futu-text-primary, #1a1e24);
 }
 
+/* 行内置顶开关（✕ / 分组按钮左侧同款形制）：与行内另两个动作同一显隐契约——休息态
+   不显形，避免常显图标压在报价文本上；已置顶恒为 accent 色，悬停即看出状态。
+   宽度/位置固定，绝不改布局属性；它是行内动作里唯一可聚焦的一个，键盘置顶后由组件把
+   焦点还回同一行的开关。 */
+.pinBtn {
+  position: absolute;
+  top: 4px;
+  right: 44px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--dsw-futu-radius-xs, 3px);
+  background: transparent;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  opacity: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.row:hover .pinBtn,
+.pinBtn:hover,
+.pinBtn:focus-visible {
+  opacity: 1;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  background: var(--dsw-futu-bg-surface-active, rgba(0, 0, 0, 0.08));
+}
+
+.pinBtn:focus-visible {
+  outline: 2px solid var(--dsw-futu-border-active, #3b82f6);
+  outline-offset: 1px;
+}
+
+.pinBtn[aria-pressed='true'],
+.row:hover .pinBtn[aria-pressed='true'],
+.pinBtn[aria-pressed='true']:hover,
+.pinBtn[aria-pressed='true']:focus-visible {
+  color: var(--dsw-futu-accent, #3b82f6);
+}
+
 /* 行级分组归属弹层（多归属勾选切换） */
 .groupPop {
   position: absolute;
@@ -581,6 +693,19 @@
   border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
   border-radius: var(--dsw-futu-radius-md, 6px);
   box-shadow: var(--dsw-futu-shadow-md, 0 4px 14px rgba(0, 0, 0, 0.12));
+}
+
+/* 行内分组弹层的浮层形态（portal 到 body）：视觉全继承 .groupPop，这里只换定位方式与
+   层级——列表 .list 是 overflow-y: auto，绝对定位的弹层贴在末行时会整块被裁掉；浮到
+   body 后按视口定位（top/bottom/right 由组件按锚点矩形内联给出）就不受任何祖先裁剪。
+   z-index 38 的依据：左侧 dock 是 fixed 25、中栏 QuotePane 是 fixed 30，浮层脱离了
+   dock 的层叠上下文（原来那个 60 只在那里面排序），必须自己盖过这两位；再往上是
+   QuotePane 自带的遮罩 39 / 选择面板 40（被 30 的上下文包住）、聊天拖拽柄 42、右侧各
+   面板 45、自选管理弹窗 200。取 38 占 30 与 39 之间的空档，不与任何既有层号打平。
+   用复合选择器而非单类，.groupPop 的 position/z-index 不会因文件顺序反过来赢。 */
+.groupPop.groupPopFloating {
+  position: fixed;
+  z-index: 38;
 }
 
 .groupPopHead {

@@ -20,7 +20,7 @@ import { Service } from '@deepseek-ai/cordis'
 import { defineTool, type InferValue, type ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 import path from 'node:path'
 import { dshHomeDir } from '@dshtrading/dsh-home'
-import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore } from './index.ts'
+import { createMemorySelectionStore, createMemoryWatchlistGroupsStore, createMemoryWatchlistStore, watchlistRowKey } from './index.ts'
 import type { SelectionStore, WatchlistGroup, WatchlistGroupsStore, WatchlistInstrument, WatchlistStore, WatchlistsMap } from './index.ts'
 import { effectiveWatchlistRows, WATCHLIST_SEEDS, watchlistRowSource } from './seeds.ts'
 import { createFileSelectionStore, createFileWatchlistGroupsStore, createFileWatchlistStore } from './file-store.ts'
@@ -234,7 +234,11 @@ export function createWatchlistRemoveTool(deps: WatchlistToolDeps) {
     async execute(raw) {
       const { market, symbol } = parseInstrumentArgs((raw ?? {}) as Record<string, unknown>)
       const removed = await deps.watchlists.remove(market, symbol)
-      if (removed) deps.onWatchlistsChanged?.()
+      if (removed) {
+        // 与桥 DELETE /watchlists 同口径：行都不在了，置顶键不能留（否则重新加回会带着置顶）。
+        await deps.groups?.stripPinned(watchlistRowKey(market, symbol))
+        deps.onWatchlistsChanged?.()
+      }
       return {
         ok: true,
         removed,

@@ -51,7 +51,7 @@ beforeEach(() => {
   apiMock.handlers = {}
   apiMock.fetchHostWatchlists.mockResolvedValue({})
   apiMock.fetchHostSelection.mockResolvedValue(null)
-  apiMock.fetchHostWatchlistGroups.mockResolvedValue([])
+  apiMock.fetchHostWatchlistGroups.mockResolvedValue({ groups: [], pinned: [] })
   // 分组写路径默认成功（issue #82 用例各自按需覆盖）。
   apiMock.createHostWatchlistGroup.mockResolvedValue({ ok: false, reason: 'unavailable' })
   apiMock.renameHostWatchlistGroup.mockResolvedValue({ ok: false, reason: 'unavailable' })
@@ -205,9 +205,10 @@ describe('wireHostWatchlistSync · 分组（issue #82）', () => {
     const groups = createWatchlistGroupsStore()
     groups.upsertGroup({ id: 'g_1', name: 'host 也有', createdAt: 1 })
     groups.setActiveGroup('g_1')
-    apiMock.fetchHostWatchlistGroups.mockResolvedValue([
-      { id: 'g_1', name: '核心仓', createdAt: 42 },
-    ])
+    apiMock.fetchHostWatchlistGroups.mockResolvedValue({
+      groups: [{ id: 'g_1', name: '核心仓', createdAt: 42 }],
+      pinned: [],
+    })
 
     wireHostWatchlistSync({ watchlists, selection, groups })
     // 等待 host 值真正落到镜像（本地预置同名 id 会提前命中，必须等 host 名字翻转）。
@@ -295,7 +296,7 @@ describe('wireHostWatchlistSync · 分组（issue #82）', () => {
     const groups = createWatchlistGroupsStore()
     wireHostWatchlistSync({ watchlists, selection, groups })
 
-    apiMock.fetchHostWatchlistGroups.mockResolvedValue([{ id: 'g_9', name: '武库', createdAt: 9 }])
+    apiMock.fetchHostWatchlistGroups.mockResolvedValue({ groups: [{ id: 'g_9', name: '武库', createdAt: 9 }], pinned: [] })
     apiMock.handlers['watchlists']?.()
     await vi.waitFor(() => { expect(groups.getSnapshot().groups[0]?.id).toBe('g_9') })
   })
@@ -312,7 +313,7 @@ describe('wireHostWatchlistSync · 活动分组悬挂防护（issue #82）', () 
     wireHostWatchlistSync({ watchlists, selection, groups })
     await vi.waitFor(() => { expect(apiMock.fetchHostSelection).toHaveBeenCalled() })
 
-    apiMock.fetchHostWatchlistGroups.mockResolvedValue([]) // 组已在别处删除
+    apiMock.fetchHostWatchlistGroups.mockResolvedValue({ groups: [], pinned: [] }) // 组已在别处删除
     apiMock.handlers['watchlists']?.()
     await vi.waitFor(() => { expect(groups.getSnapshot().activeGroupId).toBeNull() })
     expect(groups.getSnapshot().groups).toEqual([])
@@ -356,7 +357,7 @@ describe('host 落地必须走 applyHost（镜像持久化守卫，2026-09-16）
 
     // When host 自选行与分组注册表变化并触发 SSE 'watchlists' 失效信号
     apiMock.fetchHostWatchlists.mockResolvedValue({ hk: [{ market: 'hk', symbol: '00700', name: '腾讯控股' }] })
-    apiMock.fetchHostWatchlistGroups.mockResolvedValue([{ id: 'g_1', name: '核心仓', createdAt: 1 }])
+    apiMock.fetchHostWatchlistGroups.mockResolvedValue({ groups: [{ id: 'g_1', name: '核心仓', createdAt: 1 }], pinned: [] })
     apiMock.handlers['watchlists']?.()
 
     // Then 两者都经 applyHost（自带 localStorage 镜像写）落地，不是绕过镜像的裸 set

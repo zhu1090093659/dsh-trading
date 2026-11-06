@@ -53,8 +53,8 @@ afterAll(() => {
 
 describe('fetchHostWatchlistGroups（GET /watchlist-groups）', () => {
   it('GET 路径 + accept 头；groups 数组原样透传', async () => {
-    const calls = stubFetchOnce(async () => jsonResponse({ ok: true, groups: [GROUP] }))
-    expect(await fetchHostWatchlistGroups()).toEqual([GROUP])
+    const calls = stubFetchOnce(async () => jsonResponse({ ok: true, groups: [GROUP], pinned: ['us:AAPL'] }))
+    expect(await fetchHostWatchlistGroups()).toEqual({ groups: [GROUP], pinned: ['us:AAPL'] })
     expect(calls).toHaveLength(1)
     expect(calls[0]?.url).toBe('/dshtrading/api/watchlist-groups')
     expect(calls[0]?.method).toBeUndefined() // 未显式 method = GET
@@ -62,11 +62,11 @@ describe('fetchHostWatchlistGroups（GET /watchlist-groups）', () => {
     expect(calls[0]?.body).toBeUndefined()
   })
 
-  it('groups 缺席或非数组 → []（桥在、注册表为空）', async () => {
+  it('groups 缺席或非数组 → 空表（桥在、注册表为空）；pinned 同理（老桥无该字段）', async () => {
     stubFetchOnce(async () => jsonResponse({ ok: true }))
-    expect(await fetchHostWatchlistGroups()).toEqual([])
-    stubFetchOnce(async () => jsonResponse({ ok: true, groups: null }))
-    expect(await fetchHostWatchlistGroups()).toEqual([])
+    expect(await fetchHostWatchlistGroups()).toEqual({ groups: [], pinned: [] })
+    stubFetchOnce(async () => jsonResponse({ ok: true, groups: null, pinned: null }))
+    expect(await fetchHostWatchlistGroups()).toEqual({ groups: [], pinned: [] })
   })
 
   it('非 2xx（桥缺席 404 / 未鉴权 401）/ 业务错误（HTTP 200 + ok:false）/ 网络失败 → null 静默降级', async () => {

@@ -11,8 +11,10 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers, subscribeTradingEvents } from './api.ts'
 import { searchAllMarkets, searchSymbols, setDynamicCatalog, updateDynamicCatalog } from './symbol-catalog.ts'
-import type { Observable, SelectionState, WatchlistGroupOpResult, WatchlistGroupsState, Watchlists } from './store.ts'
+import type { MarketLocaleKey } from './contract.ts'
+import type { Observable, SelectionState, WatchlistGroupOpResult, WatchlistGroupsState, WatchlistSortMode, WatchlistSortPrefs, WatchlistSortZone, Watchlists } from './store.ts'
 import { rowsFor } from './store.ts'
+import { orderWatchlistRows } from './watchlist-order.ts'
 import { changePercent, directionColor, fmtPercent, fmtPrice } from './format.ts'
 import { TICKERS_CHUNK } from './holdings-store.ts'
 import { intradayCandidates, intradayRequest, selectIntradaySeries } from './intraday-series.ts'
@@ -21,8 +23,8 @@ import { colorModeStore } from './color-mode.ts'
 import { entryForm, entryMeta, formBadgeKey, resolveAssetClass, type InstrumentMeta } from './instrument-meta.ts'
 import { MARKET_TAB_KEY, normalizeSymbolInput } from './market-vocab.ts'
 import { Sparkline } from './Sparkline.tsx'
-import { IconChevronDown, IconFolder, IconFoldPanel, IconSettings, IconUpdate } from './icons.tsx'
-import { GroupMenu, GroupMembershipPopover, type GroupCreateOutcome } from './WatchlistGroups.tsx'
+import { IconChevronDown, IconFolder, IconFoldPanel, IconPin, IconSettings, IconUpdate } from './icons.tsx'
+import { GroupMenu, GroupMembershipPopover, type GroupCreateOutcome, type GroupPopoverAnchor } from './WatchlistGroups.tsx'
 import { WatchlistManager } from './WatchlistManager.tsx'
 import type { InstrumentForm } from '@dshtrading/api'
 import type { Instrument, MarketId, MarketInfo, ReferenceSeries, Ticker } from './types.ts'
@@ -39,6 +41,8 @@ export interface MarketSidebarInjected {
     watchlists: Observable<Watchlists>
     /** 自定义分组（issue #82）：注册表镜像 + activeGroupId UI 态。 */
     groups: Observable<WatchlistGroupsState>
+    /** 排序偏好（列表区/置顶区各一份三态；纯本地 UI 态，不进 host）。 */
+    sortPrefs: Observable<WatchlistSortPrefs>
   }
   /** 写路径：加入某市场自选（instrument.groups 直落归属）。 */
   addInstrument(market: MarketId, instrument: Instrument): void
@@ -55,6 +59,10 @@ export interface MarketSidebarInjected {
   assignGroupMember(id: string, market: string, symbol: string, member: boolean, name?: string): Promise<boolean>
   /** 切活动分组过滤（null = 全部；本地 UI 态，localStorage 持久化）。 */
   setActiveGroup(id: string | null): void
+  /** 置顶/取消置顶（键 = `market:symbol`；host-first 由 wireHostWatchlistSync 接管）。 */
+  setPinned(key: string, pinned: boolean): Promise<boolean>
+  /** 该区三态排序循环（rows = 列表区，pinned = 置顶区），返回切换后的模式。 */
+  cycleSort(zone: WatchlistSortZone): WatchlistSortMode
 }
 
 export type MarketSidebarProps =
@@ -101,13 +109,39 @@ export function displayTickerEqual(prev: Ticker | undefined, next: Ticker): bool
     && prev.changePercent === next.changePercent
 }
 
+/** 三态排序的提示/读屏文案键（表头排序按钮的 aria-label 与 title 同源）。 */
+const SORT_LABEL_KEY: Record<WatchlistSortMode, MarketLocaleKey> = {
+  default: 'sort.default',
+  'pct-desc': 'sort.pctDesc',
+  'pct-asc': 'sort.pctAsc',
+}
+
+/**
+ * 行涨跌幅（未知 → undefined）：渲染与排序共用这一条判据。昨收优先用快照官方
+ * 锚点，日 K 推算仅作快照缺 prevClose 时的兜底（日 K 序列可能缺最新收盘 bar，
+ * 倒数第二根会错位一个交易日）。
+ */
+function pctOfRow(row: Instrument, prices: Record<string, Ticker>, series: Record<string, ReferenceSeries>): number | undefined {
+  const key = rowKey(row.market, row.symbol)
+  const ticker = prices[key]
+  const ref = series[key]
+  return changePercent(ticker?.price, ticker?.prevClose ?? ref?.prevClose)
+}
+
+/** 行内归属弹层的打开态：哪一行 + 打开那一刻快照的分组按钮视口矩形（锚点与行键同存一份，不会错位）。 */
+interface RowGroupMenu {
+  key: string
+  anchor: GroupPopoverAnchor
+}
+
 export function MarketSidebar({
-  t, useSelection, useWatchlists, useGroups, addInstrument, removeInstrument, selectInstrument, onFold, openSettings,
-  createGroup, renameGroup, deleteGroup, assignGroupMember, setActiveGroup, updateAvailable, onOpenUpdater,
+  t, useSelection, useWatchlists, useGroups, useSortPrefs, addInstrument, removeInstrument, selectInstrument, onFold, openSettings,
+  createGroup, renameGroup, deleteGroup, assignGroupMember, setActiveGroup, cycleSort, setPinned, updateAvailable, onOpenUpdater,
 }: MarketSidebarProps) {
   const selection = useSelection(value => value.instrument)
   const watchlists = useWatchlists(value => value)
   const groupState = useGroups(value => value)
+  const sortPrefs = useSortPrefs(value => value)
   const [tab, setTab] = useState<MarketTab>('watch')
   const [markets, setMarkets] = useState<MarketInfo[] | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -120,12 +154,18 @@ export function MarketSidebar({
   const [catalogVersion, setCatalogVersion] = useState(0)
   const [groupMenuOpen, setGroupMenuOpen] = useState(false)
   const [managerOpen, setManagerOpen] = useState(false)
-  const [rowGroupMenu, setRowGroupMenu] = useState<string | null>(null)
+  const [rowGroupMenu, setRowGroupMenu] = useState<RowGroupMenu | null>(null)
   const colorMode = useSyncExternalStore(colorModeStore.subscribe, colorModeStore.getSnapshot)
   /** 已回灌动态字典的名称（market:symbol → name）：名称未变就不再重建整表。 */
   const syncedNames = useRef(new Map<string, string>())
   /** 当前选中行：选中态变化时把它滚入视野（点击以外的选中来源不会自动可见）。 */
   const selectedRowRef = useRef<HTMLButtonElement | null>(null)
+  /**
+   * 本次由键盘激活的置顶开关（键 = market:symbol + 它要切到的目标态）：置顶/取消置顶
+   * 会让该行在置顶区与列表区之间搬动，React 按位置重建 DOM，被聚焦的开关随之销毁、
+   * 焦点掉回 body。鼠标点击不记（不抢鼠标用户的焦点）。
+   */
+  const keyboardPinRef = useRef<{ key: string; pinned: boolean } | null>(null)
 
   const activeGroupId = groupState.activeGroupId
   const activeGroup = activeGroupId !== null ? groupState.groups.find(group => group.id === activeGroupId) ?? null : null
@@ -176,6 +216,19 @@ export function MarketSidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows, tab, activeGroupId, watchlists])
 
+  // 置顶分区 + 列表区（2026-11-05）：分区、两区各自的排序、未知涨跌幅排末尾全部由
+  // watchlist-order.ts 判定，本组件只消费结果——市场页签与分组视图共用同一条路径。
+  const { pinned: pinnedRows, rest: restRows } = useMemo(
+    () => orderWatchlistRows({
+      rows,
+      pinned: groupState.pinned,
+      sort: sortPrefs,
+      pctOf: row => pctOfRow(row, prices, series),
+      keyOf: row => rowKey(row.market, row.symbol),
+    }),
+    [rows, groupState.pinned, sortPrefs, prices, series],
+  )
+
   // 有界化：prices/series 只保有「当前自选全集」的键，移出自选的标的即时回收。
   // 用 allRows 而非 rows——页签/分组只是视图过滤，丢弃其它市场的行情会让切回
   // 页签时重拉（series 每个键带着分钟线数组，是这两个 Map 里较大的一个）。
@@ -192,6 +245,21 @@ export function MarketSidebar({
   useEffect(() => {
     selectedRowRef.current?.scrollIntoView?.({ block: 'nearest' })
   }, [selection?.market, selection?.symbol])
+
+  // 键盘置顶后把焦点还给同一行的开关：行搬区重建，旧按钮已销毁。只在目标态真的落地
+  // 时恢复——写入失败的激活既不重建行，也不该把焦点从用户手上抢走。
+  useEffect(() => {
+    const activated = keyboardPinRef.current
+    if (activated === null) return
+    keyboardPinRef.current = null
+    if (groupState.pinned.includes(activated.key) !== activated.pinned) return
+    // 焦点真的掉回 body（= 行确实被重建过）才恢复：写入往返期间用户可能已经移走焦点。
+    if (document.activeElement !== document.body) return
+    // 先按 data-row-key 精确匹配行、再取开关：键里可能有引号/反斜杠，不拼进选择器。
+    const row = Array.from(document.querySelectorAll<HTMLElement>('[data-row-key]'))
+      .find(element => element.dataset.rowKey === activated.key)
+    row?.querySelector<HTMLElement>('[data-pin-toggle]')?.focus()
+  }, [groupState.pinned])
 
   const groupCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -427,6 +495,149 @@ export function MarketSidebar({
     return result.reason === 'duplicate' ? 'duplicate' : 'failed'
   }
 
+  /** 表头三态排序开关（列表区与置顶区同款，仅 data-sort-zone 与该区当前模式不同）。 */
+  const renderSortButton = (zone: WatchlistSortZone, mode: WatchlistSortMode) => (
+    <button
+      type="button"
+      className={css.sortBtn}
+      data-sort-zone={zone}
+      data-sort-mode={mode}
+      aria-label={t(SORT_LABEL_KEY[mode])}
+      title={t(SORT_LABEL_KEY[mode])}
+      onClick={() => { cycleSort(zone) }}
+    >
+      <span className={css.sortBtnLabel}>{t('header.priceChange')}</span>
+      {mode !== 'default' && <IconChevronDown size={10} />}
+    </button>
+  )
+
+  /** 一行自选（置顶区与列表区同款渲染；置顶行多一个 data-pinned 标记）。 */
+  const renderRow = (row: Instrument, isPinned: boolean) => {
+    const key = rowKey(row.market, row.symbol)
+    const ticker = prices[key]
+    const ref = series[key]
+    const price = ticker?.price
+    const pct = pctOfRow(row, prices, series)
+    const up = (pct ?? 0) >= 0
+    const selected = selection !== null && selection.market === row.market && selection.symbol === row.symbol
+    const memberOf = row.groups ?? []
+    // 本行的归属弹层只在本行开着时渲染（锚点与行键同存一份状态，见 RowGroupMenu）；
+    // 同一个布尔也喂给触发器的 aria-expanded——弹层浮在 body 上，已不在触发器的
+    // DOM 邻位，读屏只能靠这个属性知道展开态。
+    const rowGroupOpen = rowGroupMenu !== null && rowGroupMenu.key === key
+    const rowGroupAnchor = rowGroupOpen ? rowGroupMenu.anchor : null
+    // 形态徽标（2026-10-08 P5）：现货不挂徽标（默认形态），永续按资产类别细分。
+    const formBadge = formBadgeKey(row, resolveAssetClass(row.market, row))
+    return (
+      <button
+        key={key}
+        ref={selected ? selectedRowRef : undefined}
+        type="button"
+        role="option"
+        aria-selected={selected}
+        className={css.row}
+        data-row-key={key}
+        data-pinned={isPinned ? 'true' : undefined}
+        data-selected={selected ? 'true' : undefined}
+        title={t('row.select')}
+        onClick={() => { selectInstrument(row) }}
+      >
+        <span className={css.idents}>
+          <span className={css.name}>
+            {(() => {
+              const rowRaw = row.name
+              const isPlaceholder = !rowRaw || rowRaw === row.symbol || /\(A股\)|\(港股\)/.test(rowRaw) // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
+              const tickName = (ticker as { name?: string })?.name
+              return !isPlaceholder ? rowRaw : (tickName || rowRaw || row.symbol)
+            })()}
+          </span>
+          <span className={css.codeRow}>
+            <span className={css.code}>{row.symbol}</span>
+            {formBadge !== null && <span className={css.formBadge}>{t(formBadge)}</span>}
+            {(tab === 'watch' || activeGroupId !== null) && <span className={css.marketTag}>{t(MARKET_TAB_KEY[row.market])}</span>}
+          </span>
+        </span>
+        <span className={css.spark}>
+          <Sparkline values={ref?.closes ?? EMPTY_CLOSES} {...(ref?.xFractions !== undefined ? { xFractions: ref.xFractions } : {})} width={56} height={22} up={up} colorMode={colorMode} />
+        </span>
+        <span className={css.quote}>
+          <span className={css.price} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPrice(price)}</span>
+          <span className={css.pct} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPercent(pct)}</span>
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          data-pin-toggle="true"
+          aria-pressed={isPinned}
+          aria-label={t(isPinned ? 'row.unpin' : 'row.pin')}
+          title={t(isPinned ? 'row.unpin' : 'row.pin')}
+          className={css.pinBtn}
+          onClick={(event) => {
+            event.stopPropagation()
+            void setPinned(key, !isPinned)
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return
+            event.preventDefault()
+            event.stopPropagation()
+            // 只有键盘激活才记：行马上搬区，被聚焦的开关要重建。
+            keyboardPinRef.current = { key, pinned: !isPinned }
+            void setPinned(key, !isPinned)
+          }}
+        >
+          <IconPin size={13} pressed={isPinned} />
+        </span>
+        <span
+          role="button"
+          aria-haspopup="menu"
+          aria-expanded={rowGroupOpen}
+          aria-label={t('row.group')}
+          title={t('row.group')}
+          className={css.rowGroupBtn}
+          onClick={(event) => {
+            event.stopPropagation()
+            setGroupMenuOpen(false)
+            // 开合切换，打开时快照按钮的视口矩形当锚点：弹层据此 portal 到 body 定位
+            // （行本身是 <button>，弹层自带 <button>，内联即非法嵌套；浮到 body 后
+            // 也不再吃列表 overflow-y 的裁剪）。收起时锚点随行键一起置空。
+            const rect = event.currentTarget.getBoundingClientRect()
+            const anchor: GroupPopoverAnchor = { top: rect.top, bottom: rect.bottom, right: rect.right }
+            setRowGroupMenu(current => (current !== null && current.key === key ? null : { key, anchor }))
+          }}
+        >
+          <IconFolder size={13} />
+        </span>
+        {rowGroupAnchor !== null && (
+          <GroupMembershipPopover
+            t={t}
+            groups={groupState.groups}
+            memberOf={memberOf}
+            anchor={rowGroupAnchor}
+            onToggle={(gid, member) => { void assignGroupMember(gid, row.market, row.symbol, member, row.name) }}
+            onClose={() => setRowGroupMenu(null)}
+          />
+        )}
+        <span
+          role="button"
+          aria-label={activeGroupId !== null ? t('group.remove') : t('row.remove')}
+          title={activeGroupId !== null ? t('group.remove') : t('row.remove')}
+          className={css.remove}
+          onClick={(event) => {
+            event.stopPropagation()
+            if (activeGroupId !== null) {
+              // 分组视图：✕ 仅移出分组（标的保留在自选）。
+              void assignGroupMember(activeGroupId, row.market, row.symbol, false, row.name)
+            } else {
+              removeInstrument(row.market, row.symbol)
+            }
+          }}
+        >
+          ✕
+        </span>
+      </button>
+    )
+  }
+
   return (
     <div className={css.root} data-dshtrading-market-sidebar="">
       {/* 顶部标题区：分组下拉（issue #82）+ 折叠按钮 */}
@@ -610,14 +821,14 @@ export function MarketSidebar({
           )
         })()}
 
-      {/* 列表表头 */}
+      {/* 列表表头（第三列是排序开关：默认顺序 → 涨幅从高到低 → 涨幅从低到高） */}
       <div className={css.listHeader}>
         <span>{t('header.symbol')}</span>
         <span className={css.listHeaderColCenter}>{t('header.trend')}</span>
-        <span className={css.listHeaderColRight}>{t('header.priceChange')}</span>
+        {renderSortButton('rows', sortPrefs.rows)}
       </div>
 
-      {/* 三段式标的列表 */}
+      {/* 三段式标的列表：置顶分区（自带排序开关）+ 分隔线 + 列表区 */}
       {rows.length === 0 && !loadError
         ? (
             <div className={css.empty}>
@@ -626,95 +837,19 @@ export function MarketSidebar({
           )
         : (
             <div className={css.list} role="listbox" aria-label={t('sidebar.markets')}>
-              {rows.map((row) => {
-                const key = rowKey(row.market, row.symbol)
-                const ticker = prices[key]
-                const ref = series[key]
-                const price = ticker?.price
-                // 涨跌幅昨收优先用快照官方锚点；日 K 推算仅作快照缺 prevClose 时的兜底
-                // （日 K 序列可能缺最新收盘 bar，倒数第二根会错位一个交易日）。
-                const pct = changePercent(price, ticker?.prevClose ?? ref?.prevClose)
-                const up = (pct ?? 0) >= 0
-                const selected = selection !== null && selection.market === row.market && selection.symbol === row.symbol
-                const memberOf = row.groups ?? []
-                // 形态徽标（2026-10-08 P5）：现货不挂徽标（默认形态），永续按资产类别细分。
-                const formBadge = formBadgeKey(row, resolveAssetClass(row.market, row))
-                return (
-                  <button
-                    key={key}
-                    ref={selected ? selectedRowRef : undefined}
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                    className={css.row}
-                    data-selected={selected ? 'true' : undefined}
-                    title={t('row.select')}
-                    onClick={() => { selectInstrument(row) }}
-                  >
-                    <span className={css.idents}>
-                      <span className={css.name}>
-                        {(() => {
-                          const rowRaw = row.name
-                          const isPlaceholder = !rowRaw || rowRaw === row.symbol || /\(A股\)|\(港股\)/.test(rowRaw) // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
-                          const tickName = (ticker as { name?: string })?.name
-                          return !isPlaceholder ? rowRaw : (tickName || rowRaw || row.symbol)
-                        })()}
-                      </span>
-                      <span className={css.codeRow}>
-                        <span className={css.code}>{row.symbol}</span>
-                        {formBadge !== null && <span className={css.formBadge}>{t(formBadge)}</span>}
-                        {(tab === 'watch' || activeGroupId !== null) && <span className={css.marketTag}>{t(MARKET_TAB_KEY[row.market])}</span>}
-                      </span>
-                    </span>
-                    <span className={css.spark}>
-                      <Sparkline values={ref?.closes ?? EMPTY_CLOSES} {...(ref?.xFractions !== undefined ? { xFractions: ref.xFractions } : {})} width={56} height={22} up={up} colorMode={colorMode} />
-                    </span>
-                    <span className={css.quote}>
-                      <span className={css.price} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPrice(price)}</span>
-                      <span className={css.pct} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPercent(pct)}</span>
-                    </span>
-                    <span
-                      role="button"
-                      aria-label={t('row.group')}
-                      title={t('row.group')}
-                      className={css.rowGroupBtn}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setGroupMenuOpen(false)
-                        setRowGroupMenu(current => (current === key ? null : key))
-                      }}
-                    >
-                      <IconFolder size={13} />
-                    </span>
-                    {rowGroupMenu === key && (
-                      <GroupMembershipPopover
-                        t={t}
-                        groups={groupState.groups}
-                        memberOf={memberOf}
-                        onToggle={(gid, member) => { void assignGroupMember(gid, row.market, row.symbol, member, row.name) }}
-                        onClose={() => setRowGroupMenu(null)}
-                      />
-                    )}
-                    <span
-                      role="button"
-                      aria-label={activeGroupId !== null ? t('group.remove') : t('row.remove')}
-                      title={activeGroupId !== null ? t('group.remove') : t('row.remove')}
-                      className={css.remove}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        if (activeGroupId !== null) {
-                          // 分组视图：✕ 仅移出分组（标的保留在自选）。
-                          void assignGroupMember(activeGroupId, row.market, row.symbol, false, row.name)
-                        } else {
-                          removeInstrument(row.market, row.symbol)
-                        }
-                      }}
-                    >
-                      ✕
-                    </span>
-                  </button>
-                )
-              })}
+              {pinnedRows.length > 0 && (
+                <div role="group" aria-label={t('pinned.title')}>
+                  <div className={css.listHeader + ' ' + css.pinnedHeader} data-pinned-header="true">
+                    <span className={css.pinnedTitle}>{t('pinned.title')}</span>
+                    {renderSortButton('pinned', sortPrefs.pinned)}
+                  </div>
+                  {pinnedRows.map(row => renderRow(row, true))}
+                </div>
+              )}
+              {pinnedRows.length > 0 && restRows.length > 0 && (
+                <div className={css.pinnedDivider} data-pinned-divider="true" aria-hidden="true" />
+              )}
+              {restRows.map(row => renderRow(row, false))}
             </div>
           )}
 

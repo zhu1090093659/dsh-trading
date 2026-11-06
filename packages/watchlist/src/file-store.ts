@@ -9,9 +9,9 @@
  * 本文件是「多文件形态」的自选域：成员关系（本文件）、分组注册表（容器包裹）与选中
  * 记录（非整表对象）各建一个适配器，读写形态互不共享。
  */
-import { createRecordStoreAdapter, readStoreText } from '@dshtrading/dsh-home'
+import { createRecordStoreAdapter, readStoreText, SKIP_WRITE } from '@dshtrading/dsh-home'
 import type { SelectionRecord, SelectionStore, WatchlistGroup, WatchlistGroupsStore, WatchlistGroupWriteResult, WatchlistStore, WatchlistsMap } from './index.ts'
-import { newWatchlistGroupId, normalizeWatchlistRow } from './index.ts'
+import { newWatchlistGroupId, normalizePinnedKey, normalizeWatchlistRow } from './index.ts'
 import { WATCHLIST_SEEDS } from './seeds.ts'
 
 const LOG_PREFIX = '[dsh-trading/watchlist] failed to atomic flush watchlists to'
@@ -150,9 +150,17 @@ export function createFileWatchlistStore(filePath: string): WatchlistStore {
   }
 }
 
-/** 分组注册表落盘形状（容器包裹，后续加排序/置顶字段不动成员关系文件）。 */
+/** 分组注册表 + 面板偏好的落盘形状（容器包裹：置顶键集与注册表同文件、同一实例）。 */
 interface WatchlistGroupsFile {
   groups: WatchlistGroup[]
+  /** 置顶键集（`market:symbol`）；缺省 = 无置顶，老文件零迁移。 */
+  pinned?: string[]
+}
+
+/** 内存中的容器记录（pinned 恒为数组；落盘时空集不写键）。 */
+interface WatchlistGroupsRecord {
+  groups: WatchlistGroup[]
+  pinned: string[]
 }
 
 export function createFileWatchlistGroupsStore(filePath: string): WatchlistGroupsStore {
@@ -167,30 +175,35 @@ export function createFileWatchlistGroupsStore(filePath: string): WatchlistGroup
   /** 读盘/解析失败的日志前缀（坏 JSON 与非 ENOENT 读失败同一条，与既有 load 口径逐字一致）。 */
   const READ_FAILED = `[dsh-trading/watchlist] failed to read watchlist groups from ${filePath}:`
 
-  /** 文本 → 分组表：容器包裹（`{ groups: [] }`）逐条过滤形状；坏 JSON 降级空表并打日志。 */
-  function decode(text: string | undefined): WatchlistGroup[] {
-    if (text === undefined) return []
+  /** 文本 → 容器记录：`{ groups, pinned }` 逐条过滤形状；坏 JSON 降级空容器并打日志。 */
+  function decode(text: string | undefined): WatchlistGroupsRecord {
+    if (text === undefined) return { groups: [], pinned: [] }
     try {
       const parsed = JSON.parse(text) as Partial<WatchlistGroupsFile>
-      return Array.isArray(parsed.groups)
+      const groups = Array.isArray(parsed.groups)
         ? parsed.groups.filter(group =>
             typeof group === 'object' && group !== null
             && typeof (group as WatchlistGroup).id === 'string' && (group as WatchlistGroup).id !== ''
             && typeof (group as WatchlistGroup).name === 'string')
         : []
+      // 坏键剔除（无冒号/空段）并去重：盘上手改成垃圾也不会把置顶面板带崩。
+      const pinned = Array.isArray(parsed.pinned)
+        ? [...new Set(parsed.pinned.map(normalizePinnedKey).filter((key): key is string => key !== null))]
+        : []
+      return { groups, pinned }
     } catch (err) {
       console.error(READ_FAILED, err)
-      return []
+      return { groups: [], pinned: [] }
     }
   }
 
-  const store = createRecordStoreAdapter<WatchlistGroup[]>({
+  const store = createRecordStoreAdapter<WatchlistGroupsRecord>({
     filePath,
     logPrefix: LOG_PREFIX,
     // 新鲜读盘（容器包裹；坏形过滤）；供 load 与锁内重读共用。
     readFromDisk: () => readStoreText(filePath, READ_FAILED),
     decode,
-    encode: groups => ({ groups }),
+    encode: record => ({ groups: record.groups, ...(record.pinned.length > 0 ? { pinned: record.pinned } : {}) }),
   })
 
   /**
@@ -198,26 +211,29 @@ export function createFileWatchlistGroupsStore(filePath: string): WatchlistGroup
    * 返回 null 是分组工具的既有写法，逐字保留。
    */
   async function commit(
-    mutate: (onDisk: WatchlistGroup[]) => WatchlistGroup[] | null,
-  ): Promise<WatchlistGroup[]> {
-    return store.commit((onDisk) => mutate(onDisk) ?? onDisk)
+    mutate: (onDisk: WatchlistGroupsRecord) => WatchlistGroupsRecord | null,
+  ): Promise<WatchlistGroupsRecord> {
+    // null = 无变化：必须换成 dsh-home 的 SKIP_WRITE 哨兵，否则「返回同一个值」
+    // 仍会走整份原子重写（删一行自选就会重写分组文件；文件坏形被 decode 降级成
+    // 空表时，这次重写等于把注册表抹掉）。
+    return store.commit((onDisk) => mutate(onDisk) ?? SKIP_WRITE)
   }
 
   return {
     async list() {
-      return [...(await store.load())]
+      return [...(await store.load()).groups]
     },
     async create(name) {
       let result: WatchlistGroupWriteResult | undefined
       await enqueue(async () => {
         await commit((onDisk) => {
-          if (onDisk.some(group => group.name === name)) {
+          if (onDisk.groups.some(group => group.name === name)) {
             result = { error: 'duplicate' } satisfies WatchlistGroupWriteResult
             return null
           }
           const group: WatchlistGroup = { id: newWatchlistGroupId(), name, createdAt: Date.now() }
           result = { group } satisfies WatchlistGroupWriteResult
-          return [...onDisk, group]
+          return { ...onDisk, groups: [...onDisk.groups, group] }
         })
       })
       return result ?? { error: 'duplicate' }
@@ -226,17 +242,17 @@ export function createFileWatchlistGroupsStore(filePath: string): WatchlistGroup
       let result: WatchlistGroupWriteResult | undefined
       await enqueue(async () => {
         await commit((onDisk) => {
-          const existing = onDisk.find(group => group.id === id)
+          const existing = onDisk.groups.find(group => group.id === id)
           if (existing === undefined) {
             result = { error: 'not-found' } satisfies WatchlistGroupWriteResult
             return null
           }
-          if (onDisk.some(group => group.id !== id && group.name === name)) {
+          if (onDisk.groups.some(group => group.id !== id && group.name === name)) {
             result = { error: 'duplicate' } satisfies WatchlistGroupWriteResult
             return null
           }
           result = { group: { ...existing, name } } satisfies WatchlistGroupWriteResult
-          return onDisk.map(group => (group.id === id ? { ...group, name } : group))
+          return { ...onDisk, groups: onDisk.groups.map(group => (group.id === id ? { ...group, name } : group)) }
         })
       })
       return result ?? { error: 'not-found' }
@@ -245,13 +261,46 @@ export function createFileWatchlistGroupsStore(filePath: string): WatchlistGroup
       let removed = false
       await enqueue(async () => {
         await commit((onDisk) => {
-          const next = onDisk.filter(group => group.id !== id)
-          if (next.length === onDisk.length) return null
+          const next = onDisk.groups.filter(group => group.id !== id)
+          if (next.length === onDisk.groups.length) return null
           removed = true
-          return next
+          return { ...onDisk, groups: next }
         })
       })
       return removed
+    },
+    async pinned() {
+      return [...(await store.load()).pinned]
+    },
+    async setPinned(key, want) {
+      const normalized = normalizePinnedKey(key)
+      if (normalized === null) return false
+      let changed = false
+      await enqueue(async () => {
+        await commit((onDisk) => {
+          const has = onDisk.pinned.includes(normalized)
+          if (has === want) return null
+          changed = true
+          return {
+            ...onDisk,
+            pinned: want ? [...onDisk.pinned, normalized] : onDisk.pinned.filter(entry => entry !== normalized),
+          }
+        })
+      })
+      return changed
+    },
+    async stripPinned(key) {
+      const normalized = normalizePinnedKey(key)
+      if (normalized === null) return false
+      let changed = false
+      await enqueue(async () => {
+        await commit((onDisk) => {
+          if (!onDisk.pinned.includes(normalized)) return null
+          changed = true
+          return { ...onDisk, pinned: onDisk.pinned.filter(entry => entry !== normalized) }
+        })
+      })
+      return changed
     },
   }
 }

@@ -920,11 +920,32 @@ export async function putHostSelection(instrument: { market: string; symbol: str
 /* 自定义分组（issue #82）：注册表 CRUD + 行级 membership                   */
 /* ------------------------------------------------------------------ */
 
-/** 读取分组注册表（GET /watchlist-groups；桥缺席/失败 → null，调用方维持现状）。 */
-export async function fetchHostWatchlistGroups(): Promise<HostWatchlistGroup[] | null> {
+/** 读取分组注册表 + 置顶键集（GET /watchlist-groups；桥缺席/失败 → null，调用方维持现状）。 */
+export async function fetchHostWatchlistGroups(): Promise<{ groups: HostWatchlistGroup[]; pinned: string[] } | null> {
   try {
-    const wire = await getJson<{ ok: boolean; groups: HostWatchlistGroup[] }>('/dshtrading/api/watchlist-groups')
-    return Array.isArray(wire.groups) ? wire.groups : []
+    const wire = await getJson<{ ok: boolean; groups: HostWatchlistGroup[]; pinned?: string[] }>('/dshtrading/api/watchlist-groups')
+    return {
+      groups: Array.isArray(wire.groups) ? wire.groups : [],
+      // 老桥没有 pinned 字段：按空集处理（升级前行为不变）。
+      pinned: Array.isArray(wire.pinned) ? wire.pinned.filter((key): key is string => typeof key === 'string' && key !== '') : [],
+    }
+  } catch {
+    return null
+  }
+}
+
+/** 置顶/取消置顶（PUT /watchlist-pins）；成功返回 host 权威键集，失败 null（本地不动）。 */
+export async function putHostWatchlistPin(key: string, pinned: boolean): Promise<string[] | null> {
+  try {
+    const response = await fetch('/dshtrading/api/watchlist-pins', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key, pinned }),
+    })
+    if (!response.ok) return null
+    const wire = await response.json() as { ok?: boolean; pinned?: unknown }
+    if (wire.ok !== true) return null
+    return Array.isArray(wire.pinned) ? wire.pinned.filter((entry): entry is string => typeof entry === 'string') : null
   } catch {
     return null
   }

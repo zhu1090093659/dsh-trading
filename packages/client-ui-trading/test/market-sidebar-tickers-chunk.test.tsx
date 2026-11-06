@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Instrument, MarketId } from '../src/client/types.ts'
 import type { MarketLocaleKey } from '../src/client/contract.ts'
 import type { SelectionState, Watchlists } from '../src/client/store.ts'
-import { createWatchlistGroupsStore, createWatchlistStore } from '../src/client/store.ts'
+import { createWatchlistGroupsStore, createWatchlistSortStore, createWatchlistStore } from '../src/client/store.ts'
 import { fmtPrice } from '../src/client/format.ts'
 import { MarketSidebar } from '../src/client/MarketSidebar.tsx'
 
@@ -79,6 +79,7 @@ async function mountSidebar(count: number): Promise<ReturnType<typeof render>> {
   const watchlists = createWatchlistStore()
   for (const symbol of symbolsOf(count)) watchlists.add('cn' as MarketId, { market: 'cn' as MarketId, symbol, name: 'Stock ' + symbol })
   const groups = createWatchlistGroupsStore()
+  const sort = createWatchlistSortStore()
   const selection: SelectionState = { instrument: null }
   const element = (): React.JSX.Element => (
     <MarketSidebar
@@ -86,6 +87,7 @@ async function mountSidebar(count: number): Promise<ReturnType<typeof render>> {
       useSelection={<T,>(sel: (value: SelectionState) => T): T => sel(selection)}
       useWatchlists={<T,>(sel: (value: Watchlists) => T): T => sel(watchlists.getSnapshot())}
       useGroups={<T,>(sel: (value: ReturnType<typeof groups.getSnapshot>) => T): T => sel(groups.getSnapshot())}
+      useSortPrefs={<T,>(sel: (value: ReturnType<typeof sort.getSnapshot>) => T): T => sel(sort.getSnapshot())}
       addInstrument={() => {}}
       removeInstrument={() => {}}
       selectInstrument={() => {}}
@@ -95,6 +97,8 @@ async function mountSidebar(count: number): Promise<ReturnType<typeof render>> {
       deleteGroup={async () => false}
       assignGroupMember={async () => true}
       setActiveGroup={() => {}}
+      setPinned={async (key, pinned) => groups.setPinned(key, pinned)}
+      cycleSort={(zone) => sort.cycle(zone)}
     />
   )
   const view = render(element())

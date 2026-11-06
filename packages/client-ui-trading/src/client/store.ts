@@ -13,6 +13,7 @@
  */
 import type { Instrument, MarketId, WatchlistGroupMeta } from './types.ts'
 import { WATCHLIST_SEEDS } from '@dshtrading/watchlist'
+import { nextSortMode } from './watchlist-order.ts'
 
 /** Minimal observable face — matches the slot kit's HostObservable contract. */
 export interface Observable<T> {
@@ -257,6 +258,8 @@ export interface WatchlistGroupsState {
   groups: WatchlistGroupMeta[]
   /** 活动分组过滤（null = 全部/市场视图）。纯本地 UI 态，不进 host。 */
   activeGroupId: string | null
+  /** 置顶键集（`market:symbol`）镜像：host SSOT（与注册表同文件），localStorage 为缓存。 */
+  pinned: string[]
 }
 
 /** 分组写操作结果（桥面业务结果镜像；'unavailable' = 桥缺席/网络失败）。 */
@@ -268,8 +271,10 @@ export type WatchlistGroupOpResult =
 export interface WatchlistGroupsStoreApi extends WritableObservable<WatchlistGroupsState> {
   /** 注册表镜像直写（rename 原位替换，不挪顺序；create 追加尾部）。 */
   upsertGroup(group: WatchlistGroupMeta): void
-  /** host 权威注册表落地（启动拉取 / SSE 'watchlists' 重拉）：保留本地活动分组 UI 态并持久化镜像。 */
-  applyHost(groups: WatchlistGroupMeta[]): void
+  /** host 权威注册表 + 置顶键集落地（启动拉取 / SSE 'watchlists' 重拉）：保留本地活动分组 UI 态并持久化镜像。 */
+  applyHost(groups: WatchlistGroupMeta[], pinned: readonly string[]): void
+  /** 置顶/取消置顶（host-first 由 wireHostWatchlistSync 接管；降级时只改本地镜像）。 */
+  setPinned(key: string, pinned: boolean): Promise<boolean>
   /** 注册表镜像摘除（活动分组指向被删组时归位 null）。 */
   removeGroupLocal(id: string): void
   /** 切活动分组（本地持久化，不进 host）。 */
@@ -294,14 +299,28 @@ function sanitizeGroupsRegistry(raw: unknown): WatchlistGroupMeta[] {
   return out
 }
 
+/** 置顶键集清洗：只收非空字符串（段校验交给 host 端 normalizePinnedKey）。 */
+function sanitizePinnedKeys(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item === 'string' && item) seen.add(item)
+  }
+  return [...seen]
+}
+
 export function createWatchlistGroupsStore(): WatchlistGroupsStoreApi {
-  const persisted = readJson<{ groups?: unknown }>(GROUPS_KEY, {})
+  const persisted = readJson<{ groups?: unknown; pinned?: unknown }>(GROUPS_KEY, {})
   const persistedActive = readJson<unknown>(ACTIVE_GROUP_KEY, null)
   const store = createObservable<WatchlistGroupsState>({
     groups: sanitizeGroupsRegistry(persisted.groups),
     activeGroupId: typeof persistedActive === 'string' && persistedActive ? persistedActive : null,
+    pinned: sanitizePinnedKeys(persisted.pinned),
   })
-  const persist = (): void => { writeJson(GROUPS_KEY, { groups: store.getSnapshot().groups }) }
+  const persist = (): void => {
+    const snapshot = store.getSnapshot()
+    writeJson(GROUPS_KEY, { groups: snapshot.groups, pinned: snapshot.pinned })
+  }
 
   const newLocalId = (): string => `g_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
   const upsert = (group: WatchlistGroupMeta): void => {
@@ -318,9 +337,9 @@ export function createWatchlistGroupsStore(): WatchlistGroupsStoreApi {
   return {
     ...store,
     upsertGroup: upsert,
-    applyHost(next) {
+    applyHost(next, pinned) {
       // activeGroupId 是纯本地 UI 态，host 注册表全量覆盖时原位保留。
-      store.set({ ...store.getSnapshot(), groups: next })
+      store.set({ ...store.getSnapshot(), groups: next, pinned: sanitizePinnedKeys(pinned) })
       persist()
     },
     removeGroupLocal(id) {
@@ -360,6 +379,18 @@ export function createWatchlistGroupsStore(): WatchlistGroupsStoreApi {
     },
     async assignMember() {
       return false
+    },
+    // 桥缺席时的降级路径（wireHostWatchlistSync 启动时无条件接管为 host-first）。
+    async setPinned(key, pinned) {
+      const snapshot = store.getSnapshot()
+      const has = snapshot.pinned.includes(key)
+      if (has === pinned) return false
+      store.set({
+        ...snapshot,
+        pinned: pinned ? [...snapshot.pinned, key] : snapshot.pinned.filter(entry => entry !== key),
+      })
+      persist()
+      return true
     },
   }
 }
@@ -410,3 +441,68 @@ export const MARKET_INTERVALS: Record<MarketId, string[]> = {
   // 冒充历史。
   global: ['1m', '5m', '15m'],
 }
+
+// ---------------------------------------------------------------------------
+// 自选排序偏好（纯本地 UI 态，与 activeGroupId 同类：不进 host、切换零往返）
+// ---------------------------------------------------------------------------
+
+const SORT_KEY = 'dshtrading.watchlist.sort.v1'
+
+/** 排序三态：默认（存储顺序）/ 涨跌幅降序 / 涨跌幅升序。 */
+export type WatchlistSortMode = 'default' | 'pct-desc' | 'pct-asc'
+
+/** 两个区各一份排序（列表区与置顶区独立，2026-11-05 用户裁决）。 */
+export interface WatchlistSortPrefs {
+  rows: WatchlistSortMode
+  pinned: WatchlistSortMode
+}
+
+export type WatchlistSortZone = keyof WatchlistSortPrefs
+
+export interface WatchlistSortStoreApi extends WritableObservable<WatchlistSortPrefs> {
+  /** 该区三态循环：default → pct-desc → pct-asc → default；返回切换后的值。 */
+  cycle(zone: WatchlistSortZone): WatchlistSortMode
+  /** 直接置位（表头方向指示/测试用）。 */
+  setZone(zone: WatchlistSortZone, mode: WatchlistSortMode): void
+}
+
+/** 坏值一律回落 default：排序偏好不该因为一次坏写把列表永远按涨跌幅钉住。 */
+export function sanitizeSortMode(raw: unknown): WatchlistSortMode {
+  return raw === 'pct-desc' || raw === 'pct-asc' ? raw : 'default'
+}
+
+export function createWatchlistSortStore(): WatchlistSortStoreApi {
+  const persisted = readJson<{ rows?: unknown; pinned?: unknown }>(SORT_KEY, {})
+  const observable = createObservable<WatchlistSortPrefs>({
+    rows: sanitizeSortMode(persisted.rows),
+    pinned: sanitizeSortMode(persisted.pinned),
+  })
+  const apply = (next: WatchlistSortPrefs): void => {
+    observable.set(next)
+    writeJson(SORT_KEY, next)
+  }
+  return {
+    getSnapshot: observable.getSnapshot,
+    subscribe: observable.subscribe,
+    set(next) {
+      apply({ rows: sanitizeSortMode(next.rows), pinned: sanitizeSortMode(next.pinned) })
+    },
+    update(mutator) {
+      apply({ ...mutator(observable.getSnapshot()) })
+    },
+    setZone(zone, mode) {
+      const current = observable.getSnapshot()
+      const next = sanitizeSortMode(mode)
+      if (current[zone] === next) return
+      apply({ ...current, [zone]: next })
+    },
+    cycle(zone) {
+      const current = observable.getSnapshot()
+      // 三态顺序只有一个家（watchlist-order.ts）；这里只负责落盘。
+      const next = nextSortMode(current[zone])
+      apply({ ...current, [zone]: next })
+      return next
+    },
+  }
+}
+

@@ -225,6 +225,20 @@ export function IconFolder({ size = 14 }: { size?: number }): ReactElement {
   )
 }
 
+/**
+ * 置顶（图钉）：帽线 + 钉盘 + 钉针，与既有 outline 图标同 viewBox/线宽。
+ * `pressed` = 已置顶：钉盘实心 + 描边加粗，靠形状而非只靠颜色区分状态。
+ */
+export function IconPin({ size = 14, pressed = false }: { size?: number; pressed?: boolean }): ReactElement {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={pressed ? 1.7 : 1.3} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6.1 2.6h3.8" />
+      <path d="M6.6 2.6v3.5L4.85 8.05h6.3L9.4 6.1V2.6" fill={pressed ? 'currentColor' : 'none'} />
+      <path d="M8 8.05v5.35" />
+    </svg>
+  )
+}
+
 /** 预测市场入口（概率分布：钟形曲线 + 基线）。 */
 export function IconPrediction({ size = 16 }: { size?: number }): ReactElement {
   return (

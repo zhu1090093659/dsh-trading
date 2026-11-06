@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Instrument, Kline, MarketId, Ticker } from '../src/client/types.ts'
 import type { MarketLocaleKey } from '../src/client/contract.ts'
 import type { SelectionState, Watchlists } from '../src/client/store.ts'
-import { createWatchlistGroupsStore, createWatchlistStore } from '../src/client/store.ts'
+import { createWatchlistGroupsStore, createWatchlistSortStore, createWatchlistStore } from '../src/client/store.ts'
 
 const net = vi.hoisted(() => ({
   mode: 'static' as 'static' | 'changing' | 'flip',
@@ -77,6 +77,7 @@ function renderSidebar(rows: Array<{ market: MarketId; symbol: string; name?: st
   const watchlists = createWatchlistStore()
   for (const row of rows) watchlists.add(row.market, row)
   const groups = createWatchlistGroupsStore()
+  const sort = createWatchlistSortStore()
   const selection: SelectionState = { instrument: null }
   const element = (): React.JSX.Element => (
     <MarketSidebar
@@ -84,6 +85,7 @@ function renderSidebar(rows: Array<{ market: MarketId; symbol: string; name?: st
       useSelection={<T,>(sel: (value: SelectionState) => T): T => sel(selection)}
       useWatchlists={<T,>(sel: (value: Watchlists) => T): T => sel(watchlists.getSnapshot())}
       useGroups={<T,>(sel: (value: ReturnType<typeof groups.getSnapshot>) => T): T => sel(groups.getSnapshot())}
+      useSortPrefs={<T,>(sel: (value: ReturnType<typeof sort.getSnapshot>) => T): T => sel(sort.getSnapshot())}
       addInstrument={() => {}}
       removeInstrument={() => {}}
       selectInstrument={() => {}}
@@ -93,6 +95,8 @@ function renderSidebar(rows: Array<{ market: MarketId; symbol: string; name?: st
       deleteGroup={async () => false}
       assignGroupMember={async () => true}
       setActiveGroup={() => {}}
+      setPinned={async (key, pinned) => groups.setPinned(key, pinned)}
+      cycleSort={(zone) => sort.cycle(zone)}
     />
   )
   const view = render(element())

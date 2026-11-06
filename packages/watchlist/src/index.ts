@@ -63,12 +63,36 @@ export interface WatchlistGroupWriteResult {
   error?: 'duplicate' | 'not-found'
 }
 
-/** 自定义分组注册表 store（元数据；成员关系的读写走 WatchlistStore.assignGroup/stripGroup）。 */
+/**
+ * 自定义分组注册表 store（元数据；成员关系的读写走 WatchlistStore.assignGroup/stripGroup）。
+ * 置顶键集与注册表同一容器、同一个 file store 实例（2026-09-08 双 store 前科：
+ * 同路径两个实例各持整表缓存，互相覆盖）。
+ */
 export interface WatchlistGroupsStore {
   list(): Promise<WatchlistGroup[]>
   create(name: string): Promise<WatchlistGroupWriteResult>
   rename(id: string, name: string): Promise<WatchlistGroupWriteResult>
   remove(id: string): Promise<boolean>
+  /** 置顶键集（`market:symbol`，见 {@link watchlistRowKey}）：面板级用户偏好，各视图共用。 */
+  pinned(): Promise<string[]>
+  /** 置顶/取消置顶；键已处于目标状态返回 false 且不落盘。 */
+  setPinned(key: string, pinned: boolean): Promise<boolean>
+  /** 行被移除时清掉它的置顶键（防僵尸置顶：重新加回不会自动置顶）。 */
+  stripPinned(key: string): Promise<boolean>
+}
+
+/** 行键/置顶键（`market:symbol`）：客户端 rowKey、桥端 pin 与删行清洗同源格式。 */
+export function watchlistRowKey(market: string, symbol: string): string {
+  return `${market}:${symbol}`
+}
+
+/** 置顶键清洗：只收 `market:symbol` 形（空段/无冒号一律剔除，坏值不落盘）。 */
+export function normalizePinnedKey(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const key = raw.trim()
+  const split = key.indexOf(':')
+  if (split <= 0 || split === key.length - 1) return null
+  return key
 }
 
 /** 选中标的记录（中栏切图的 SSOT）。 */
@@ -193,8 +217,9 @@ export function createMemoryWatchlistStore(initial: WatchlistsMap = {}): Watchli
 }
 
 /** 内存版分组注册表 store（单测用）。同名拒绝（trim 后精确匹配）；调用方负责非空校验。 */
-export function createMemoryWatchlistGroupsStore(initial: WatchlistGroup[] = []): WatchlistGroupsStore {
+export function createMemoryWatchlistGroupsStore(initial: WatchlistGroup[] = [], initialPinned: string[] = []): WatchlistGroupsStore {
   let groups: WatchlistGroup[] = [...initial]
+  let pinnedKeys: string[] = [...new Set(initialPinned.map(normalizePinnedKey).filter((key): key is string => key !== null))]
   return {
     async list() {
       return [...groups]
@@ -217,6 +242,23 @@ export function createMemoryWatchlistGroupsStore(initial: WatchlistGroup[] = [])
       const next = groups.filter(group => group.id !== id)
       if (next.length === groups.length) return false
       groups = next
+      return true
+    },
+    async pinned() {
+      return [...pinnedKeys]
+    },
+    async setPinned(key, want) {
+      const normalized = normalizePinnedKey(key)
+      if (normalized === null) return false
+      const has = pinnedKeys.includes(normalized)
+      if (has === want) return false
+      pinnedKeys = want ? [...pinnedKeys, normalized] : pinnedKeys.filter(entry => entry !== normalized)
+      return true
+    },
+    async stripPinned(key) {
+      const normalized = normalizePinnedKey(key)
+      if (normalized === null || !pinnedKeys.includes(normalized)) return false
+      pinnedKeys = pinnedKeys.filter(entry => entry !== normalized)
       return true
     },
   }

@@ -34,6 +34,7 @@ import {
   fetchHostWatchlists,
   importHostWatchlists,
   putHostSelection,
+  putHostWatchlistPin,
   removeHostWatchlistGroupMember,
   removeHostWatchlistRow,
   renameHostWatchlistGroup,
@@ -84,16 +85,16 @@ export function wireHostWatchlistSync(options: HostWatchlistSyncOptions): () => 
   }
 
   const syncGroupsFromHost = async (): Promise<void> => {
-    const hostGroups = await fetchHostWatchlistGroups()
-    if (hostGroups !== null) {
-      const next = hostGroups as WatchlistGroupMeta[]
+    const hostPanel = await fetchHostWatchlistGroups()
+    if (hostPanel !== null) {
+      const next = hostPanel.groups as WatchlistGroupMeta[]
       const { activeGroupId } = groups.getSnapshot()
       // 活动分组被别处删除 → 归位「全部」（防悬挂 id 过滤出空视图）。
       if (activeGroupId !== null && !next.some(group => group.id === activeGroupId)) {
         groups.setActiveGroup(null)
       }
-      // 全量覆盖注册表镜像（applyHost 持久化；activeGroupId 是本地 UI 态，store 内原位保留）。
-      groups.applyHost(next)
+      // 全量覆盖注册表与置顶键集（applyHost 持久化；activeGroupId 是本地 UI 态，store 内原位保留）。
+      groups.applyHost(next, hostPanel.pinned)
     }
   }
 
@@ -176,6 +177,16 @@ export function wireHostWatchlistSync(options: HostWatchlistSyncOptions): () => 
     groups.removeGroupLocal(id)
     // 本地镜像同步剥离归属（SSE 重拉随后全量覆盖，这里保 UI 即时性）。
     stripLocalGroup(watchlists, id)
+    return true
+  }
+  // 置顶写路径接管（host-first）：成功才落镜像；失败 fail-closed 本地不动。
+  groups.setPinned = async (key: string, pinned: boolean): Promise<boolean> => {
+    const next = await putHostWatchlistPin(key, pinned)
+    if (next === null) {
+      console.warn('[dsh-trading] watchlist pin update failed on host — local state unchanged')
+      return false
+    }
+    groups.applyHost(groups.getSnapshot().groups, next)
     return true
   }
   groups.assignMember = async (id: string, market: string, symbol: string, member: boolean, name?: string): Promise<boolean> => {
