@@ -33,6 +33,10 @@ trading-web 的魔改布局里，官方插件管理整页（`@deepseek-ai/dsh-cl
   改一个 static 中间层会让弹层宽过视口而溢出，两种都实测过。
   容器标记用 `data-dshtrading-plugin-anchor`，**不与 body 状态标志同名**——同名属性会让
   `querySelector('[data-dshtrading-plugin-host]')` 把 body 一起挑出来。
+- **官方只读的「内置插件」分区不再出现**：官方那条 `settings.section` id 是 `plugins`（只读清单），与本仓
+  「插件」整页说的是同一份插件列表，两个入口用户分不清该点哪个。宿主没有卸载 section 的面，所以按导航项文案
+  （`内置插件` / `Built-in plugins`）在设置弹层里把它摘掉——判据用文案而不是结构或顺序，官方调顺序不会误伤
+  别的入口，最坏情况是文案改名后没摘掉（多一个入口）；设置弹层重开时 MutationObserver 继续摘。
 - **侧栏那一行不处理**：魔改布局下 `sidebarCol` 宽 1px / 高 0，官方 `plugins` 行几何为 0，天然不可见。
   左栏底部的设置齿轮不变（[设置入口迁左栏底部](2026-09-05-tasks-panel-container-switch-and-settings-move.md) 的结论照旧），
   本记录只在设置壳内部加一节。与 [npm 内置插件管理器](2026-09-08-npm-embed-usage-plugin-manager-model-capabilities.md)
