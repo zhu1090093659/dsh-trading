@@ -15,6 +15,17 @@ issue #88 登记的两处与 #86（agent 工具面）无关的既存缺陷，实
 1. **试算超时可注入，默认值不动**：`validate.ts` 导出 `DEFAULT_TRIAL_TIMEOUT_MS = 100`（并把原常量改名为该语义名，附「熔断线非性能阈值」说明）；`validateCustomIndicator` / `validateCustomIndicatorAsync` 增加 `options.trialTimeoutMs`，`validateCustomIndicatorNode` / `createAuthorIndicatorTool` / `createGetIndicatorsTool` 逐层透传。生产默认仍是 100ms 熔断，只有测试注入 5s。
 2. **四行按宿主树条件禁用**：`cordis.patch.yml` 的 `dsh-trading-session-archive` / `-im` / `-usage` / `-plugin-manager` 各加 `disabled: !!js (...)`，判定「宿主树里是否存在服务提供方行」——`@deepseek-ai/dsh-host-webserver`（webServer）、`@deepseek-ai/dsh-workspace`（workspaceRegistry）、`@deepseek-ai/dsh-client-connection`（connection）。沿用 `dsh-trading-dynamic-capabilities` 先例（issue #62）；文件头语义从「两层」扩为「三类」，新增「条件禁用行」一节，四行注释同步纠正「挂起无害」的错误表述。
 
+## 后续：WebKit 上 Worker 启动开销被算成执行时间（2026-11-07）
+
+同一条「墙钟误判」在浏览器端还有第二个来源。`workerComputeRunner` 用 blob URL 起一个 Worker 跑
+compute，超时从 `new Worker()` 起算——WebKit（Mygo 桌面壳的 WebView）新建 Worker 并编译脚本要几十到
+上百毫秒，100ms 熔断线在环境开销上就被触发：WAP 加权均价在 downtrend 样例上被判「compute 执行超时
+（超过 100ms），可能存在死循环」，指标校验未通过并停止重试（用户实机复现）。
+
+修法是把计时口径挪到 Worker 侧：脚本编译完先 `postMessage({ phase: 'start' })`，主线程收到后才起
+compute 计时；启动本身另有 10s 兜底（起不来时给可读原因，不无限挂着）。默认 100ms 与可注入的
+`trialTimeoutMs` 都不动——它仍是只熔断死循环的墙钟线。
+
 ## Alternatives considered
 
 - **把默认超时直接调大（如 1000ms）**：生产端指标创作遇死循环要卡 5 场景 × 1s，且墙钟阈值依旧，负载更高时照样误判——拒绝；把「该可注入的参数」当「该调大的参数」是治标。
