@@ -161,6 +161,20 @@ afterEach(() => {
 })
 
 describe('特殊指标二级页签', () => {
+  it('用户打开视图时刷新按钮在卡片时间行里，顶部不再单独占一行', async () => {
+    // Given: 桥全量可用
+    const fake = installFakeFetch()
+    restoreFetch = fake.restore
+
+    // When: 用户打开特殊指标视图，恐慌指数数据上屏
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    await screen.findByText('42.6')
+
+    // Then: 刷新入口只剩卡片头里那一个，顶部的「更新于 …」整行消失
+    expect(screen.getAllByRole('button', { name: '刷新' })).toHaveLength(1)
+    expect(screen.queryByText(/更新于/)).toBeNull()
+  })
+
   it('用户打开视图时默认落在恐慌指数页签且四个页签齐备', async () => {
     // Given: 桥全量可用
     const fake = installFakeFetch()

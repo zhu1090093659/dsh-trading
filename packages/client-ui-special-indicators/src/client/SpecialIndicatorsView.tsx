@@ -358,7 +358,6 @@ export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
   }
   return (
     <div className={cx('root')}>
-      {toolbar}
       <div className={cx('subtabs')} role="tablist" aria-label="special-indicators">
         {SUBTAB_IDS.map((id) => (
           <button
@@ -374,10 +373,10 @@ export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
         ))}
       </div>
       <div className={cx('panel')}>
-        {tab === 'sentiment' && <SentimentCard t={t} snap={dash.sentimentSnap} hist={dash.sentimentHist} loading={loading} />}
-        {tab === 'basis' && <BasisCard t={t} snap={dash.basisSnap} hist={dash.basisHist} loading={loading} />}
-        {tab === 'hkshort' && <HkShortCard t={t} snap={dash.hkSnap} chart={dash.hkChart} loading={loading} />}
-        {tab === 'sectors' && <SectorsCard t={t} snap={dash.sectorsSnap} ranking={dash.sectorsRanking} loading={loading} />}
+        {tab === 'sentiment' && <SentimentCard t={t} snap={dash.sentimentSnap} hist={dash.sentimentHist} loading={loading} onRefresh={refresh} />}
+        {tab === 'basis' && <BasisCard t={t} snap={dash.basisSnap} hist={dash.basisHist} loading={loading} onRefresh={refresh} />}
+        {tab === 'hkshort' && <HkShortCard t={t} snap={dash.hkSnap} chart={dash.hkChart} loading={loading} onRefresh={refresh} />}
+        {tab === 'sectors' && <SectorsCard t={t} snap={dash.sectorsSnap} ranking={dash.sectorsRanking} loading={loading} onRefresh={refresh} />}
       </div>
     </div>
   )
@@ -385,7 +384,7 @@ export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
 
 /* --------------------------------- 卡片骨架 --------------------------------- */
 
-function CardShell({ title, subtitle, date, stale, error, loading, refreshing, children, t }: {
+function CardShell({ title, subtitle, date, stale, error, loading, refreshing, onRefresh, children, t }: {
   t: TFunc
   title: string
   subtitle: string
@@ -395,6 +394,8 @@ function CardShell({ title, subtitle, date, stale, error, loading, refreshing, c
   loading: boolean
   /** 已落地数据上屏期间后台再验证中：整卡轻微降透明度，落地平滑回满。 */
   refreshing?: boolean | undefined
+  /** 刷新入口跟着卡片走：与日期同一行的行内动作（2026-11-07 从顶部工具行移下来）。 */
+  onRefresh: () => void
   children?: React.ReactNode
 }) {
   return (
@@ -407,6 +408,9 @@ function CardShell({ title, subtitle, date, stale, error, loading, refreshing, c
         <div className={cx('cardHeaderRight')}>
           {stale === true && <span className={cx('badgeStale')}>{t('si.stale')}</span>}
           {date !== undefined && date !== '' && <span className={cx('cardDate')}>{date}</span>}
+          <button type="button" className={cx('cardRefresh')} onClick={onRefresh} disabled={loading}>
+            {loading ? t('si.refreshing') : t('si.refresh')}
+          </button>
         </div>
       </header>
       {error !== undefined
@@ -418,11 +422,12 @@ function CardShell({ title, subtitle, date, stale, error, loading, refreshing, c
 
 /* --------------------------------- 恐慌指数 --------------------------------- */
 
-function SentimentCard({ t, snap, hist, loading }: {
+function SentimentCard({ t, snap, hist, loading, onRefresh }: {
   t: TFunc
   snap?: Panel<SentimentSnapshot> | undefined
   hist?: Panel<SentimentHistory> | undefined
   loading: boolean
+  onRefresh: () => void
 }) {
   const s = snap?.data
   const zone = s !== undefined ? sentimentZone(s.score) : undefined
@@ -449,6 +454,7 @@ function SentimentCard({ t, snap, hist, loading }: {
       error={snap?.error ?? hist?.error}
       loading={loading}
       refreshing={loading && s !== undefined}
+      onRefresh={onRefresh}
     >
       {s === undefined
         ? <div className={cx('loadingLine')}>{t('si.loading')}</div>
@@ -486,11 +492,12 @@ function SentimentCard({ t, snap, hist, loading }: {
 
 /* ---------------------------------- 基差 ---------------------------------- */
 
-function BasisCard({ t, snap, hist, loading }: {
+function BasisCard({ t, snap, hist, loading, onRefresh }: {
   t: TFunc
   snap?: Panel<BasisSnapshot> | undefined
   hist?: Panel<BasisHistory> | undefined
   loading: boolean
+  onRefresh: () => void
 }) {
   const s = snap?.data
   const series = useMemo<LineChartSeries[]>(() => {
@@ -509,6 +516,7 @@ function BasisCard({ t, snap, hist, loading }: {
       error={snap?.error ?? hist?.error}
       loading={loading}
       refreshing={loading && s !== undefined}
+      onRefresh={onRefresh}
     >
       {s === undefined
         ? <div className={cx('loadingLine')}>{t('si.loading')}</div>
@@ -546,11 +554,12 @@ function BasisCard({ t, snap, hist, loading }: {
 
 /* --------------------------------- 恒科卖空 --------------------------------- */
 
-function HkShortCard({ t, snap, chart, loading }: {
+function HkShortCard({ t, snap, chart, loading, onRefresh }: {
   t: TFunc
   snap?: Panel<HkShortSnapshot> | undefined
   chart?: Panel<HkShortChart> | undefined
   loading: boolean
+  onRefresh: () => void
 }) {
   const s = snap?.data
   const c = chart?.data
@@ -571,6 +580,7 @@ function HkShortCard({ t, snap, chart, loading }: {
       error={snap?.error ?? chart?.error}
       loading={loading}
       refreshing={loading && s !== undefined}
+      onRefresh={onRefresh}
     >
       {s === undefined
         ? <div className={cx('loadingLine')}>{t('si.loading')}</div>
@@ -617,11 +627,12 @@ function HkShortCard({ t, snap, chart, loading }: {
 
 /* --------------------------------- 板块融资 --------------------------------- */
 
-function SectorsCard({ t, snap, ranking, loading }: {
+function SectorsCard({ t, snap, ranking, loading, onRefresh }: {
   t: TFunc
   snap?: Panel<SectorsSnapshot> | undefined
   ranking?: Panel<SectorRankingRow[]> | undefined
   loading: boolean
+  onRefresh: () => void
 }) {
   const s = snap?.data
   const rows = ranking?.data
@@ -661,6 +672,7 @@ function SectorsCard({ t, snap, ranking, loading }: {
       stale={sectorsDataStale(s)}
       error={snap?.error ?? ranking?.error}
       loading={loading}
+      onRefresh={onRefresh}
       refreshing={loading && s !== undefined && rows !== undefined}
     >
       {s === undefined || rows === undefined

@@ -172,6 +172,29 @@
   flex: none;
 }
 
+/* 卡片头里的刷新：与日期同一行的行内动作，字号跟日期对齐（11px），
+   不再单占一条顶部工具行（2026-11-07）。 */
+.cardRefresh {
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 6px;
+  padding: 2px 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.cardRefresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cardRefresh:not(:disabled):hover {
+  background: rgba(128, 128, 128, 0.12);
+}
+
 .cardDate {
   font-size: 11px;
   color: #8e95a3;
