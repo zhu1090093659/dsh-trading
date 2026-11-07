@@ -21,25 +21,30 @@
     # host 面数据行（2026-08-30 GUI 行情桥配套）：只 provide tradingHkMarketData。
     - id: dsh-trading-hk-dataplane-tencent
       name: '@dshtrading/connector-tencent/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         market: hk
     - id: dsh-trading-hk-dataplane-futu
       name: '@dshtrading/connector-futu/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
         # OpenD 原生 11111 是 TCP protobuf；HTTP 契约走 scripts/futu-openapi-bridge.py（11112）
         gatewayUrl: 'http://127.0.0.1:11112'
     - id: dsh-trading-hk-dataplane-eastmoney
       name: '@dshtrading/connector-eastmoney/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
         market: hk
     - id: dsh-trading-hk-dataplane-longbridge
       name: '@dshtrading/connector-longbridge/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-hk-dataplane-tiger
       name: '@dshtrading/connector-tiger/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
 

@@ -22,19 +22,23 @@
     # 与 preset 行同形态，激活由 settings 路由裁决（router consult）。
     - id: dsh-trading-crypto-dataplane-binance
       name: '@dshtrading/connector-binance/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-crypto-dataplane-okx
       name: '@dshtrading/connector-okx/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
         env: demo
     - id: dsh-trading-crypto-dataplane-bybit
       name: '@dshtrading/connector-bybit/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-crypto-dataplane-ccxt
       name: '@dshtrading/connector-ccxt/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
 

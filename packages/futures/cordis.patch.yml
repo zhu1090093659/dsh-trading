@@ -16,5 +16,6 @@
     # host 面数据行（issue #97）：注册 futures 市场行情服务（同花顺期货源）。
     - id: dsh-trading-futures-dataplane
       name: '@dshtrading/connector-hithink/futures-dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true

@@ -39,6 +39,18 @@ Status: implemented
 与 tradeProvider 预留的衔接：注册表只承载 MarketDataService；数据/交易分离落地时
 TradeService 走独立注册面，铁律 #4 到时再抽象。
 
+## SDK 升级后注册表的可见性（2026-11-07）
+
+`@deepseek-ai` cohort 升到 0.2.2-rc.1 后，cordis 收紧了 `ctx.get` 的跨 fiber 可见性：兄弟行提供的服务
+不再被 `ctx.get(name, false)` 看到，必须先用 `ctx.inject([...], cb)` 声明依赖。dataplane 仍按 0.2.1 的
+习惯用 `ctx.get('tradingMarketDataRegistry', false)` 判断，于是每一条 dataplane 都判成「无注册表」、退回
+直接 provide 市场键：cn/hk/us/crypto 各自多个 provider 抢同一服务键，日志刷
+`service "tradingCnMarketData" has been registered at <Include>`，官方插件页把这些 bundle 标成「异常」。
+
+修法是纯配置的：各市场 bundle patch 的 24 条 dataplane 行加 `inject: ['tradingMarketDataRegistry']`
+（loader 在 apply 前建立依赖可见性），dataplane 代码与测试零改动。行在注册表就绪前保持 pending ——
+本仓每个 profile 都带 base，router 恒在，所以不存在「等到老路径」的部署。
+
 ## Alternatives considered
 
 - **dataplane 订阅 `router.watch()` 自行重挂载**：router 服务本有 watch 面。落选——

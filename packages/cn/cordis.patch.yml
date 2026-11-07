@@ -21,33 +21,40 @@
     # host 面数据行（2026-08-30 GUI 行情桥配套）：提供 tradingCnMarketData 注册表。
     - id: dsh-trading-cn-dataplane
       name: '@dshtrading/connector-tencent/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         market: cn
 
     - id: dsh-trading-cn-dataplane-eastmoney
       name: '@dshtrading/connector-eastmoney/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-cn-dataplane-tushare
       name: '@dshtrading/connector-tushare/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-cn-dataplane-akshare
       name: '@dshtrading/connector-akshare/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-cn-dataplane-qmt
       name: '@dshtrading/connector-qmt/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-cn-dataplane-hithink
       name: '@dshtrading/connector-hithink/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     # 银河星耀数智（AmazingData/tgw）A 股数据源：本机/局域网 FastAPI 封装服务的连接器。
     # 无交易面；apiUrl 缺省 = 127.0.0.1:8191（SSH 隧道或本机服务）。
     - id: dsh-trading-cn-dataplane-xysz
       name: '@dshtrading/connector-xysz/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
 

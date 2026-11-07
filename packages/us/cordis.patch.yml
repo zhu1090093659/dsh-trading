@@ -21,24 +21,30 @@
     # host 面数据行（2026-08-30 GUI 行情桥配套）：只 provide tradingUsMarketData。
     - id: dsh-trading-us-dataplane-yahoo
       name: '@dshtrading/connector-yahoo/dataplane'
+      inject: ['tradingMarketDataRegistry']
     - id: dsh-trading-us-dataplane-alpaca
       name: '@dshtrading/connector-alpaca/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-us-dataplane-fmp
       name: '@dshtrading/connector-fmp/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-us-dataplane-finnhub
       name: '@dshtrading/connector-finnhub/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-us-dataplane-polygon
       name: '@dshtrading/connector-polygon/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
     - id: dsh-trading-us-dataplane-ibkr
       name: '@dshtrading/connector-ibkr/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
 

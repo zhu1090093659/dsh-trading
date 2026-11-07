@@ -18,5 +18,6 @@
     # host 面数据行：注册 global 市场行情服务（金十源）。
     - id: dsh-trading-global-dataplane-jin10
       name: '@dshtrading/connector-jin10/dataplane'
+      inject: ['tradingMarketDataRegistry']
       config:
         enabled: true
