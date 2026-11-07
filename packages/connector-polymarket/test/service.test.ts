@@ -53,6 +53,28 @@ afterEach(async () => {
 
 const NO_SNAPSHOT = { snapshots: false, timeoutMs: 5_000, enabled: true, snapshotPath: '' } as const
 
+/**
+ * 假宿主面：只记 `reflect.provide` / `tools.register` 调用（不是 mock 库，是注入的宿主面）。
+ * `claimed` 用来模拟「宿主上已经有同名工具」——注册侧因此必须走先到先得。
+ */
+function fakeHostContext(claimed: readonly string[] = []): {
+  ctx: Context
+  provided: { key: string; value: unknown }[]
+  registered: string[]
+} {
+  const provided: { key: string; value: unknown }[] = []
+  const registered: string[] = []
+  const taken = new Set(claimed)
+  const ctx = {
+    reflect: { provide: (key: string, value: unknown) => { provided.push({ key, value }) } },
+    tools: {
+      get: (toolName: string) => (taken.has(toolName) ? {} : undefined),
+      register: (definition: { name: string }) => { registered.push(definition.name) },
+    },
+  } as unknown as Context
+  return { ctx, provided, registered }
+}
+
 describe('PolymarketService 取数（真实本地上游 + 真实网络夹具）', () => {
   it('运营取一次数就拿到三场会议的档位与数据时间戳', async () => {
     // Given 上游按实测响应回三场会议
@@ -300,30 +322,41 @@ describe('插件行（provide tradingPredictionFeed）', () => {
   })
 
   it('运营安装并启用连接器时拿到一份可用的服务对象', () => {
-    // Given 一个假 ctx（只记 provide 调用；不是 mock 库，是注入的宿主面）+ 真实上游不可达亦不影响挂载
-    const provided: { key: string; value: unknown }[] = []
-    const ctx = { reflect: { provide: (key: string, value: unknown) => { provided.push({ key, value }) } } } as unknown as Context
+    // Given 一个假 ctx（只记 provide / register 调用；不是 mock 库，是注入的宿主面）+ 真实上游不可达亦不影响挂载
+    const { ctx, provided, registered } = fakeHostContext()
 
-    // When 按配置 apply（apply 只注册服务，不发请求——上游故障不该阻止挂载）
+    // When 按配置 apply（apply 只注册服务与工具，不发请求——上游故障不该阻止挂载）
     apply(ctx, { ...Config({}), enabled: true, snapshots: false })
 
-    // Then provide 了服务键且服务面暴露取数方法
+    // Then provide 了服务键、注册了三个只读工具，且服务面暴露取数方法
     expect(provided).toHaveLength(1)
     expect(provided[0]?.key).toBe(TRADING_PREDICTION_FEED_KEY)
     const service = provided[0]?.value as { listFomcMeetings(): Promise<unknown> }
     expect(typeof service.listFomcMeetings).toBe('function')
+    expect(registered).toEqual(['prediction_fomc_meetings', 'prediction_search_events', 'prediction_event_detail'])
   })
 
-  it('运营把连接器 enabled 设为 false 时零 provide（服务缺席由桥报 TRADING_NOT_IMPLEMENTED）', () => {
+  it('运营看到已注册的同名工具不被覆盖（先到先得，不抛错）', () => {
+    // Given 宿主上已经有人占了第一个工具名
+    const { ctx, registered } = fakeHostContext(['prediction_fomc_meetings'])
+
+    // When apply
+    apply(ctx, { ...Config({}), enabled: true, snapshots: false })
+
+    // Then 只注册了剩下两个（同名先到先得，绝不重复注册）
+    expect(registered).toEqual(['prediction_search_events', 'prediction_event_detail'])
+  })
+
+  it('运营把连接器 enabled 设为 false 时零 provide 零注册（服务缺席由桥报 TRADING_NOT_IMPLEMENTED）', () => {
     // Given 禁用配置
-    const provided: { key: string }[] = []
-    const ctx = { reflect: { provide: (key: string) => { provided.push({ key }) } } } as unknown as Context
+    const { ctx, provided, registered } = fakeHostContext()
 
     // When apply
     apply(ctx, { ...Config({}), enabled: false })
 
-    // Then 一个服务都没 provide
+    // Then 一个服务、一个工具都没注册
     expect(provided).toEqual([])
+    expect(registered).toEqual([])
   })
 
   it('运营看到服务面只暴露 listFomcMeetings（不含任何交易/下单面）', async () => {

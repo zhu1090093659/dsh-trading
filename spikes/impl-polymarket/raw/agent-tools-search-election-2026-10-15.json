@@ -1,0 +1,1509 @@
+{
+ "observedAt": "2026-10-15T13:06:58.094Z",
+ "source": "gamma-api.polymarket.com /events (public read-only upstream)",
+ "stale": true,
+ "filtering": "local-page-filter",
+ "pageLimit": 100,
+ "scanned": 100,
+ "matched": 7,
+ "events": [
+  {
+   "id": "45915",
+   "title": "Brazil Presidential Election",
+   "slug": "brazil-presidential-election",
+   "closed": false,
+   "endDate": "2026-10-26T03:59:00Z",
+   "volume": 182580179.66845396,
+   "liquidity": 1043894.51519,
+   "buckets": [
+    {
+     "key": "raw:Tarcisio de Freitas",
+     "label": "Tarcisio de Freitas",
+     "probability": 0
+    },
+    {
+     "key": "raw:Luiz Inácio Lula da Silva",
+     "label": "Luiz Inácio Lula da Silva",
+     "probability": 0.205
+    },
+    {
+     "key": "raw:Jair Bolsonaro",
+     "label": "Jair Bolsonaro",
+     "probability": 0
+    },
+    {
+     "key": "raw:Fernando Haddad",
+     "label": "Fernando Haddad",
+     "probability": 0
+    },
+    {
+     "key": "raw:Michelle Bolsonaro",
+     "label": "Michelle Bolsonaro",
+     "probability": 0
+    },
+    {
+     "key": "raw:Eduardo Bolsonaro",
+     "label": "Eduardo Bolsonaro",
+     "probability": 0
+    },
+    {
+     "key": "raw:Ratinho Júnior",
+     "label": "Ratinho Júnior",
+     "probability": 0
+    },
+    {
+     "key": "raw:Renan Santos",
+     "label": "Renan Santos",
+     "probability": 0
+    },
+    {
+     "key": "raw:Flávio Bolsonaro",
+     "label": "Flávio Bolsonaro",
+     "probability": 0.7965
+    },
+    {
+     "key": "raw:Ronaldo Caiado",
+     "label": "Ronaldo Caiado",
+     "probability": 0
+    },
+    {
+     "key": "raw:Romeu Zema",
+     "label": "Romeu Zema",
+     "probability": 0
+    },
+    {
+     "key": "raw:Camilo Santana",
+     "label": "Camilo Santana",
+     "probability": 0
+    },
+    {
+     "key": "raw:Geraldo Alckmin",
+     "label": "Geraldo Alckmin",
+     "probability": 0
+    },
+    {
+     "key": "raw:Eduardo Leite",
+     "label": "Eduardo Leite",
+     "probability": 0
+    },
+    {
+     "key": "raw:Aldo Rebelo",
+     "label": "Aldo Rebelo",
+     "probability": 0
+    },
+    {
+     "key": "raw:Tereza Cristina",
+     "label": "Tereza Cristina",
+     "probability": 0
+    },
+    {
+     "key": "raw:Helder Barbalho",
+     "label": "Helder Barbalho",
+     "probability": 0
+    },
+    {
+     "key": "raw:Pablo Marçal",
+     "label": "Pablo Marçal",
+     "probability": 0
+    },
+    {
+     "key": "raw:Augusto Cury",
+     "label": "Augusto Cury",
+     "probability": 0
+    },
+    {
+     "key": "raw:Person O",
+     "label": "Person O"
+    },
+    {
+     "key": "raw:Person P",
+     "label": "Person P"
+    },
+    {
+     "key": "raw:Person Q",
+     "label": "Person Q"
+    },
+    {
+     "key": "raw:Person R",
+     "label": "Person R"
+    },
+    {
+     "key": "raw:Person S",
+     "label": "Person S"
+    },
+    {
+     "key": "raw:Person T",
+     "label": "Person T"
+    },
+    {
+     "key": "raw:Person U",
+     "label": "Person U"
+    },
+    {
+     "key": "raw:Person V",
+     "label": "Person V"
+    },
+    {
+     "key": "raw:Person W",
+     "label": "Person W"
+    },
+    {
+     "key": "raw:Person X",
+     "label": "Person X"
+    },
+    {
+     "key": "raw:Person Y",
+     "label": "Person Y"
+    },
+    {
+     "key": "raw:Person Z",
+     "label": "Person Z"
+    },
+    {
+     "key": "raw:Other",
+     "label": "Other"
+    }
+   ]
+  },
+  {
+   "id": "31552",
+   "title": "Presidential Election Winner 2028",
+   "slug": "presidential-election-winner-2028",
+   "closed": false,
+   "endDate": "2028-11-08T04:59:00Z",
+   "volume": 716755780.732439,
+   "liquidity": 60109795.80275,
+   "buckets": [
+    {
+     "key": "raw:JD Vance",
+     "label": "JD Vance",
+     "probability": 0.2215
+    },
+    {
+     "key": "raw:Gavin Newsom",
+     "label": "Gavin Newsom",
+     "probability": 0.0905
+    },
+    {
+     "key": "raw:Alexandria Ocasio-Cortez",
+     "label": "Alexandria Ocasio-Cortez",
+     "probability": 0.1315
+    },
+    {
+     "key": "raw:Pete Buttigieg",
+     "label": "Pete Buttigieg",
+     "probability": 0.0275
+    },
+    {
+     "key": "raw:Josh Shapiro",
+     "label": "Josh Shapiro",
+     "probability": 0.0315
+    },
+    {
+     "key": "raw:Marco Rubio",
+     "label": "Marco Rubio",
+     "probability": 0.0775
+    },
+    {
+     "key": "raw:Wes Moore",
+     "label": "Wes Moore",
+     "probability": 0.0095
+    },
+    {
+     "key": "raw:Gretchen Whitmer",
+     "label": "Gretchen Whitmer",
+     "probability": 0.0035
+    },
+    {
+     "key": "raw:Andy Beshear",
+     "label": "Andy Beshear",
+     "probability": 0.0185
+    },
+    {
+     "key": "raw:Glenn Youngkin",
+     "label": "Glenn Youngkin",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:Kamala Harris",
+     "label": "Kamala Harris",
+     "probability": 0.0415
+    },
+    {
+     "key": "raw:Stephen Smith",
+     "label": "Stephen Smith",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:JB Pritzker",
+     "label": "JB Pritzker",
+     "probability": 0.0055
+    },
+    {
+     "key": "raw:Tulsi Gabbard",
+     "label": "Tulsi Gabbard",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:Donald Trump",
+     "label": "Donald Trump",
+     "probability": 0.0125
+    },
+    {
+     "key": "raw:Donald Trump Jr.",
+     "label": "Donald Trump Jr.",
+     "probability": 0.005
+    },
+    {
+     "key": "raw:Nikki Haley",
+     "label": "Nikki Haley",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Ron DeSantis",
+     "label": "Ron DeSantis",
+     "probability": 0.0165
+    },
+    {
+     "key": "raw:Tim Walz",
+     "label": "Tim Walz",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Vivek Ramaswamy",
+     "label": "Vivek Ramaswamy",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Greg Abbott",
+     "label": "Greg Abbott",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:Elon Musk",
+     "label": "Elon Musk",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:LeBron James",
+     "label": "LeBron James",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Dwayne 'The Rock' Johnson",
+     "label": "Dwayne 'The Rock' Johnson",
+     "probability": 0.0155
+    },
+    {
+     "key": "raw:Tucker Carlson",
+     "label": "Tucker Carlson",
+     "probability": 0.0165
+    },
+    {
+     "key": "raw:Kim Kardashian",
+     "label": "Kim Kardashian",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Ivanka Trump",
+     "label": "Ivanka Trump",
+     "probability": 0.0065
+    },
+    {
+     "key": "raw:Zohran Mamdani",
+     "label": "Zohran Mamdani",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Michelle Obama",
+     "label": "Michelle Obama",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:Jamie Dimon",
+     "label": "Jamie Dimon",
+     "probability": 0.0035
+    },
+    {
+     "key": "raw:Ro Khanna",
+     "label": "Ro Khanna",
+     "probability": 0.0085
+    },
+    {
+     "key": "raw:Thomas Massie",
+     "label": "Thomas Massie",
+     "probability": 0.0105
+    },
+    {
+     "key": "raw:Jon Ossoff",
+     "label": "Jon Ossoff",
+     "probability": 0.0975
+    },
+    {
+     "key": "raw:James Talarico",
+     "label": "James Talarico",
+     "probability": 0.014
+    },
+    {
+     "key": "raw:Eric Trump",
+     "label": "Eric Trump",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Pete Hegseth",
+     "label": "Pete Hegseth",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Jalen Brunson",
+     "label": "Jalen Brunson",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Abigail Spanberger",
+     "label": "Abigail Spanberger",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Hakeem Jeffries",
+     "label": "Hakeem Jeffries",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Elissa Slotkin",
+     "label": "Elissa Slotkin",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Adam Schiff",
+     "label": "Adam Schiff",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Josh Stein",
+     "label": "Josh Stein",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Alex Padilla",
+     "label": "Alex Padilla",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Candace Owens",
+     "label": "Candace Owens",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Tim Scott",
+     "label": "Tim Scott",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Mike Johnson",
+     "label": "Mike Johnson",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Doug Burgum",
+     "label": "Doug Burgum",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Tom Cotton",
+     "label": "Tom Cotton",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:John N. Kennedy",
+     "label": "John N. Kennedy",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Rick Scott",
+     "label": "Rick Scott",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Mark Kelly",
+     "label": "Mark Kelly",
+     "probability": 0.0125
+    },
+    {
+     "key": "raw:Raphael Warnock",
+     "label": "Raphael Warnock",
+     "probability": 0.011
+    },
+    {
+     "key": "raw:Ted Cruz",
+     "label": "Ted Cruz",
+     "probability": 0.0055
+    },
+    {
+     "key": "raw:Rahm Emanuel",
+     "label": "Rahm Emanuel",
+     "probability": 0.0065
+    },
+    {
+     "key": "raw:Person AH",
+     "label": "Person AH"
+    },
+    {
+     "key": "raw:Person AI",
+     "label": "Person AI"
+    },
+    {
+     "key": "raw:Person AJ",
+     "label": "Person AJ"
+    },
+    {
+     "key": "raw:Person AK",
+     "label": "Person AK"
+    },
+    {
+     "key": "raw:Person AL",
+     "label": "Person AL"
+    },
+    {
+     "key": "raw:Person AM",
+     "label": "Person AM"
+    },
+    {
+     "key": "raw:Person AN",
+     "label": "Person AN"
+    },
+    {
+     "key": "raw:Person AO",
+     "label": "Person AO"
+    },
+    {
+     "key": "raw:Person AP",
+     "label": "Person AP"
+    },
+    {
+     "key": "raw:Person AQ",
+     "label": "Person AQ"
+    },
+    {
+     "key": "raw:Person AR",
+     "label": "Person AR"
+    },
+    {
+     "key": "raw:Person AS",
+     "label": "Person AS"
+    },
+    {
+     "key": "raw:Person AT",
+     "label": "Person AT"
+    },
+    {
+     "key": "raw:Person AU",
+     "label": "Person AU"
+    },
+    {
+     "key": "raw:Person AV",
+     "label": "Person AV"
+    },
+    {
+     "key": "raw:Person AW",
+     "label": "Person AW"
+    },
+    {
+     "key": "raw:Person AX",
+     "label": "Person AX"
+    },
+    {
+     "key": "raw:Person AY",
+     "label": "Person AY"
+    },
+    {
+     "key": "raw:Person AZ",
+     "label": "Person AZ"
+    },
+    {
+     "key": "raw:Person BA",
+     "label": "Person BA"
+    },
+    {
+     "key": "raw:Person BB",
+     "label": "Person BB"
+    },
+    {
+     "key": "raw:Person BC",
+     "label": "Person BC"
+    },
+    {
+     "key": "raw:Person BD",
+     "label": "Person BD"
+    },
+    {
+     "key": "raw:Person BE",
+     "label": "Person BE"
+    },
+    {
+     "key": "raw:Person BF",
+     "label": "Person BF"
+    },
+    {
+     "key": "raw:Person BG",
+     "label": "Person BG"
+    },
+    {
+     "key": "raw:Person BH",
+     "label": "Person BH"
+    },
+    {
+     "key": "raw:Person BI",
+     "label": "Person BI"
+    },
+    {
+     "key": "raw:Person BJ",
+     "label": "Person BJ"
+    },
+    {
+     "key": "raw:Person BK",
+     "label": "Person BK"
+    },
+    {
+     "key": "raw:Person BL",
+     "label": "Person BL"
+    },
+    {
+     "key": "raw:Person BM",
+     "label": "Person BM"
+    },
+    {
+     "key": "raw:Person BN",
+     "label": "Person BN"
+    },
+    {
+     "key": "raw:Person BO",
+     "label": "Person BO"
+    },
+    {
+     "key": "raw:Person BP",
+     "label": "Person BP"
+    },
+    {
+     "key": "raw:Person BQ",
+     "label": "Person BQ"
+    },
+    {
+     "key": "raw:Person BR",
+     "label": "Person BR"
+    },
+    {
+     "key": "raw:Person BS",
+     "label": "Person BS"
+    },
+    {
+     "key": "raw:Person BT",
+     "label": "Person BT"
+    },
+    {
+     "key": "raw:Person BU",
+     "label": "Person BU"
+    },
+    {
+     "key": "raw:Person BV",
+     "label": "Person BV"
+    },
+    {
+     "key": "raw:Person BW",
+     "label": "Person BW"
+    },
+    {
+     "key": "raw:Person BX",
+     "label": "Person BX"
+    },
+    {
+     "key": "raw:Person BY",
+     "label": "Person BY"
+    },
+    {
+     "key": "raw:Person BZ",
+     "label": "Person BZ"
+    },
+    {
+     "key": "raw:Person CA",
+     "label": "Person CA"
+    },
+    {
+     "key": "raw:Person CB",
+     "label": "Person CB"
+    },
+    {
+     "key": "raw:Person CC",
+     "label": "Person CC"
+    },
+    {
+     "key": "raw:Person CD",
+     "label": "Person CD"
+    },
+    {
+     "key": "raw:Person CE",
+     "label": "Person CE"
+    },
+    {
+     "key": "raw:Person CF",
+     "label": "Person CF"
+    },
+    {
+     "key": "raw:Person CG",
+     "label": "Person CG"
+    },
+    {
+     "key": "raw:Person CH",
+     "label": "Person CH"
+    },
+    {
+     "key": "raw:Person CI",
+     "label": "Person CI"
+    },
+    {
+     "key": "raw:Person CJ",
+     "label": "Person CJ"
+    },
+    {
+     "key": "raw:Person CK",
+     "label": "Person CK"
+    },
+    {
+     "key": "raw:Person CL",
+     "label": "Person CL"
+    },
+    {
+     "key": "raw:Person CM",
+     "label": "Person CM"
+    },
+    {
+     "key": "raw:Person CN",
+     "label": "Person CN"
+    },
+    {
+     "key": "raw:Person CO",
+     "label": "Person CO"
+    },
+    {
+     "key": "raw:Person CP",
+     "label": "Person CP"
+    },
+    {
+     "key": "raw:Person CQ",
+     "label": "Person CQ"
+    },
+    {
+     "key": "raw:Person CR",
+     "label": "Person CR"
+    },
+    {
+     "key": "raw:Person CS",
+     "label": "Person CS"
+    },
+    {
+     "key": "raw:Person CT",
+     "label": "Person CT"
+    },
+    {
+     "key": "raw:Person CU",
+     "label": "Person CU"
+    },
+    {
+     "key": "raw:Person CV",
+     "label": "Person CV"
+    },
+    {
+     "key": "raw:Person CW",
+     "label": "Person CW"
+    },
+    {
+     "key": "raw:Person CX",
+     "label": "Person CX"
+    },
+    {
+     "key": "raw:Person CY",
+     "label": "Person CY"
+    },
+    {
+     "key": "raw:Person CZ",
+     "label": "Person CZ"
+    },
+    {
+     "key": "raw:Person DA",
+     "label": "Person DA"
+    },
+    {
+     "key": "raw:Person DB",
+     "label": "Person DB"
+    },
+    {
+     "key": "raw:Other",
+     "label": "Other"
+    }
+   ]
+  },
+  {
+   "id": "81557",
+   "title": "Prime Minister of Israel after the next election?",
+   "slug": "who-will-be-the-next-prime-minister-of-israel-after-the-next-election",
+   "closed": false,
+   "endDate": "2026-10-28T03:59:00Z",
+   "volume": 46541038.985198,
+   "liquidity": 3405648.47784,
+   "buckets": [
+    {
+     "key": "raw:Benjamin Netanyahu",
+     "label": "Benjamin Netanyahu",
+     "probability": 0.275
+    },
+    {
+     "key": "raw:Naftali Bennett",
+     "label": "Naftali Bennett",
+     "probability": 0.155
+    },
+    {
+     "key": "raw:Yair Lapid",
+     "label": "Yair Lapid",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Gadi Eizenkot",
+     "label": "Gadi Eizenkot",
+     "probability": 0.4845
+    },
+    {
+     "key": "raw:Benny Gantz",
+     "label": "Benny Gantz",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Avigdor Lieberman",
+     "label": "Avigdor Lieberman",
+     "probability": 0.0295
+    },
+    {
+     "key": "raw:Yossi Cohen",
+     "label": "Yossi Cohen",
+     "probability": 0.002
+    },
+    {
+     "key": "raw:Yair Golan",
+     "label": "Yair Golan",
+     "probability": 0.002
+    },
+    {
+     "key": "raw:Itamar Ben Gvir",
+     "label": "Itamar Ben Gvir",
+     "probability": 0.0025
+    },
+    {
+     "key": "raw:Gideon Sa’ar",
+     "label": "Gideon Sa’ar",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Yariv Levin",
+     "label": "Yariv Levin",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Moshe Feiglin",
+     "label": "Moshe Feiglin",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Ayelet Shaked",
+     "label": "Ayelet Shaked",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Yoaz Hendel",
+     "label": "Yoaz Hendel",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Israel Katz",
+     "label": "Israel Katz",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Nir Barkat",
+     "label": "Nir Barkat",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Amir Ohana",
+     "label": "Amir Ohana",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:Gilad Erdan",
+     "label": "Gilad Erdan",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Ofer Winter",
+     "label": "Ofer Winter",
+     "probability": 0.0045
+    },
+    {
+     "key": "raw:Person H",
+     "label": "Person H"
+    },
+    {
+     "key": "raw:Person I",
+     "label": "Person I"
+    },
+    {
+     "key": "raw:Person J",
+     "label": "Person J"
+    },
+    {
+     "key": "raw:Person K",
+     "label": "Person K"
+    },
+    {
+     "key": "raw:Person L",
+     "label": "Person L"
+    },
+    {
+     "key": "raw:Person M",
+     "label": "Person M"
+    },
+    {
+     "key": "raw:Person N",
+     "label": "Person N"
+    },
+    {
+     "key": "raw:Person O",
+     "label": "Person O"
+    },
+    {
+     "key": "raw:Other",
+     "label": "Other"
+    }
+   ]
+  },
+  {
+   "id": "79987",
+   "title": "Next French Presidential Election",
+   "slug": "next-french-presidential-election",
+   "closed": false,
+   "endDate": "2027-04-19T03:59:00Z",
+   "volume": 151081403.11101398,
+   "liquidity": 17544950.32129,
+   "buckets": [
+    {
+     "key": "raw:Marine Le Pen",
+     "label": "Marine Le Pen",
+     "probability": 0.4565
+    },
+    {
+     "key": "raw:Jordan Bardella",
+     "label": "Jordan Bardella",
+     "probability": 0.0065
+    },
+    {
+     "key": "raw:Éric Zemmour",
+     "label": "Éric Zemmour",
+     "probability": 0.0055
+    },
+    {
+     "key": "raw:Édouard Philippe",
+     "label": "Édouard Philippe",
+     "probability": 0.195
+    },
+    {
+     "key": "raw:David Lisnard",
+     "label": "David Lisnard",
+     "probability": 0.1235
+    },
+    {
+     "key": "raw:Xavier Bertrand",
+     "label": "Xavier Bertrand",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Laurent Wauquiez",
+     "label": "Laurent Wauquiez",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:François Ruffin",
+     "label": "François Ruffin",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:Gabriel Attal",
+     "label": "Gabriel Attal",
+     "probability": 0.0155
+    },
+    {
+     "key": "raw:Bruno Retailleau",
+     "label": "Bruno Retailleau",
+     "probability": 0.0115
+    },
+    {
+     "key": "raw:François Hollande",
+     "label": "François Hollande",
+     "probability": 0.027
+    },
+    {
+     "key": "raw:Raphaël Glucksmann",
+     "label": "Raphaël Glucksmann",
+     "probability": 0.0195
+    },
+    {
+     "key": "raw:Jean-Luc Mélenchon",
+     "label": "Jean-Luc Mélenchon",
+     "probability": 0.115
+    },
+    {
+     "key": "raw:Marine Tondelier",
+     "label": "Marine Tondelier",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:Fabien Roussel",
+     "label": "Fabien Roussel",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Olivier Faure",
+     "label": "Olivier Faure",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Dominique de Villepin",
+     "label": "Dominique de Villepin",
+     "probability": 0.0055
+    },
+    {
+     "key": "raw:Ségolène Royal",
+     "label": "Ségolène Royal",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:François Asselineau",
+     "label": "François Asselineau",
+     "probability": 0.001
+    },
+    {
+     "key": "raw:Clémentine Autain",
+     "label": "Clémentine Autain",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Nicolas Dupont-Aignan",
+     "label": "Nicolas Dupont-Aignan",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Michel Barnier",
+     "label": "Michel Barnier",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Valérie Pécresse",
+     "label": "Valérie Pécresse",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:François Bayrou",
+     "label": "François Bayrou",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Élisabeth Borne",
+     "label": "Élisabeth Borne",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Yaël Braun-Pivet",
+     "label": "Yaël Braun-Pivet",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Jean Castex",
+     "label": "Jean Castex",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:Gérald Darmanin",
+     "label": "Gérald Darmanin",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Carole Delga",
+     "label": "Carole Delga",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Bernard Cazeneuve",
+     "label": "Bernard Cazeneuve",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Manuel Bompard",
+     "label": "Manuel Bompard",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Mathilde Panot",
+     "label": "Mathilde Panot",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Other",
+     "label": "Other"
+    },
+    {
+     "key": "raw:Sarah Knafo",
+     "label": "Sarah Knafo",
+     "probability": 0.0085
+    },
+    {
+     "key": "raw:Juan Branco",
+     "label": "Juan Branco",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Clémence Guetté",
+     "label": "Clémence Guetté",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Sébastien Lecornu",
+     "label": "Sébastien Lecornu",
+     "probability": 0.0025
+    },
+    {
+     "key": "raw:Karim Bouamrane",
+     "label": "Karim Bouamrane",
+     "probability": 0.0015
+    },
+    {
+     "key": "raw:Lucie Castets",
+     "label": "Lucie Castets",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Yannick Jadot",
+     "label": "Yannick Jadot",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:François Baroin",
+     "label": "François Baroin",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Marion Maréchal",
+     "label": "Marion Maréchal",
+     "probability": 0.0005
+    },
+    {
+     "key": "raw:Christine Lagarde",
+     "label": "Christine Lagarde",
+     "probability": 0.0095
+    },
+    {
+     "key": "raw:Person K",
+     "label": "Person K"
+    },
+    {
+     "key": "raw:Person L",
+     "label": "Person L"
+    },
+    {
+     "key": "raw:Person M",
+     "label": "Person M"
+    },
+    {
+     "key": "raw:Person N",
+     "label": "Person N"
+    },
+    {
+     "key": "raw:Person O",
+     "label": "Person O"
+    },
+    {
+     "key": "raw:Person P",
+     "label": "Person P"
+    },
+    {
+     "key": "raw:Person Q",
+     "label": "Person Q"
+    },
+    {
+     "key": "raw:Person R",
+     "label": "Person R"
+    },
+    {
+     "key": "raw:Person S",
+     "label": "Person S"
+    },
+    {
+     "key": "raw:Person T",
+     "label": "Person T"
+    },
+    {
+     "key": "raw:Person U",
+     "label": "Person U"
+    },
+    {
+     "key": "raw:Person V",
+     "label": "Person V"
+    },
+    {
+     "key": "raw:Person W",
+     "label": "Person W"
+    },
+    {
+     "key": "raw:Person X",
+     "label": "Person X"
+    },
+    {
+     "key": "raw:Person Y",
+     "label": "Person Y"
+    },
+    {
+     "key": "raw:Person Z",
+     "label": "Person Z"
+    },
+    {
+     "key": "raw:Person AA",
+     "label": "Person AA"
+    },
+    {
+     "key": "raw:Person AB",
+     "label": "Person AB"
+    },
+    {
+     "key": "raw:Person AC",
+     "label": "Person AC"
+    },
+    {
+     "key": "raw:Person AD",
+     "label": "Person AD"
+    },
+    {
+     "key": "raw:Person AE",
+     "label": "Person AE"
+    },
+    {
+     "key": "raw:Person AF",
+     "label": "Person AF"
+    },
+    {
+     "key": "raw:Person AG",
+     "label": "Person AG"
+    },
+    {
+     "key": "raw:Person AH",
+     "label": "Person AH"
+    },
+    {
+     "key": "raw:Person AI",
+     "label": "Person AI"
+    },
+    {
+     "key": "raw:Person AJ",
+     "label": "Person AJ"
+    },
+    {
+     "key": "raw:Person AK",
+     "label": "Person AK"
+    },
+    {
+     "key": "raw:Person AL",
+     "label": "Person AL"
+    },
+    {
+     "key": "raw:Person AM",
+     "label": "Person AM"
+    },
+    {
+     "key": "raw:Person AN",
+     "label": "Person AN"
+    },
+    {
+     "key": "raw:Person AO",
+     "label": "Person AO"
+    },
+    {
+     "key": "raw:Person AP",
+     "label": "Person AP"
+    },
+    {
+     "key": "raw:Person AQ",
+     "label": "Person AQ"
+    },
+    {
+     "key": "raw:Person AR",
+     "label": "Person AR"
+    },
+    {
+     "key": "raw:Person AS",
+     "label": "Person AS"
+    },
+    {
+     "key": "raw:Person AT",
+     "label": "Person AT"
+    },
+    {
+     "key": "raw:Person AU",
+     "label": "Person AU"
+    },
+    {
+     "key": "raw:Person AV",
+     "label": "Person AV"
+    },
+    {
+     "key": "raw:Person AW",
+     "label": "Person AW"
+    },
+    {
+     "key": "raw:Person AX",
+     "label": "Person AX"
+    },
+    {
+     "key": "raw:Person AY",
+     "label": "Person AY"
+    },
+    {
+     "key": "raw:Person AZ",
+     "label": "Person AZ"
+    },
+    {
+     "key": "raw:Person BA",
+     "label": "Person BA"
+    },
+    {
+     "key": "raw:Person BB",
+     "label": "Person BB"
+    },
+    {
+     "key": "raw:Person BC",
+     "label": "Person BC"
+    },
+    {
+     "key": "raw:Person BD",
+     "label": "Person BD"
+    },
+    {
+     "key": "raw:Person BE",
+     "label": "Person BE"
+    },
+    {
+     "key": "raw:Person BF",
+     "label": "Person BF"
+    },
+    {
+     "key": "raw:Person BG",
+     "label": "Person BG"
+    },
+    {
+     "key": "raw:Person BH",
+     "label": "Person BH"
+    },
+    {
+     "key": "raw:Person BI",
+     "label": "Person BI"
+    },
+    {
+     "key": "raw:Person BJ",
+     "label": "Person BJ"
+    },
+    {
+     "key": "raw:Person BK",
+     "label": "Person BK"
+    },
+    {
+     "key": "raw:Person BL",
+     "label": "Person BL"
+    },
+    {
+     "key": "raw:Person BM",
+     "label": "Person BM"
+    },
+    {
+     "key": "raw:Person BN",
+     "label": "Person BN"
+    },
+    {
+     "key": "raw:Person BO",
+     "label": "Person BO"
+    },
+    {
+     "key": "raw:Person BP",
+     "label": "Person BP"
+    },
+    {
+     "key": "raw:Person BQ",
+     "label": "Person BQ"
+    },
+    {
+     "key": "raw:Person BR",
+     "label": "Person BR"
+    },
+    {
+     "key": "raw:Person BS",
+     "label": "Person BS"
+    },
+    {
+     "key": "raw:Person BT",
+     "label": "Person BT"
+    },
+    {
+     "key": "raw:Person BU",
+     "label": "Person BU"
+    },
+    {
+     "key": "raw:Person BV",
+     "label": "Person BV"
+    },
+    {
+     "key": "raw:Person BW",
+     "label": "Person BW"
+    },
+    {
+     "key": "raw:Person BX",
+     "label": "Person BX"
+    },
+    {
+     "key": "raw:Person BY",
+     "label": "Person BY"
+    },
+    {
+     "key": "raw:Person BZ",
+     "label": "Person BZ"
+    },
+    {
+     "key": "raw:Person CA",
+     "label": "Person CA"
+    },
+    {
+     "key": "raw:Person CB",
+     "label": "Person CB"
+    },
+    {
+     "key": "raw:Person CC",
+     "label": "Person CC"
+    },
+    {
+     "key": "raw:Person CD",
+     "label": "Person CD"
+    },
+    {
+     "key": "raw:Person CE",
+     "label": "Person CE"
+    },
+    {
+     "key": "raw:Person CF",
+     "label": "Person CF"
+    },
+    {
+     "key": "raw:Person CG",
+     "label": "Person CG"
+    },
+    {
+     "key": "raw:Person CH",
+     "label": "Person CH"
+    },
+    {
+     "key": "raw:Person CI",
+     "label": "Person CI"
+    },
+    {
+     "key": "raw:Person CJ",
+     "label": "Person CJ"
+    },
+    {
+     "key": "raw:Person CK",
+     "label": "Person CK"
+    },
+    {
+     "key": "raw:Person CL",
+     "label": "Person CL"
+    },
+    {
+     "key": "raw:Person CM",
+     "label": "Person CM"
+    },
+    {
+     "key": "raw:Person CN",
+     "label": "Person CN"
+    },
+    {
+     "key": "raw:Person CO",
+     "label": "Person CO"
+    },
+    {
+     "key": "raw:Person CP",
+     "label": "Person CP"
+    },
+    {
+     "key": "raw:Person CQ",
+     "label": "Person CQ"
+    }
+   ]
+  },
+  {
+   "id": "1138953",
+   "title": "Brazil Presidential Election Second Round: Margin of Victory",
+   "slug": "brazil-presidential-election-second-round-margin-of-victory",
+   "closed": false,
+   "endDate": "2026-10-26T03:59:00Z",
+   "volume": 1310200.58215,
+   "liquidity": 850845.25035,
+   "buckets": [
+    {
+     "key": "raw:Flávio Bolsonaro 12%+",
+     "label": "Flávio Bolsonaro 12%+",
+     "probability": 0.0185
+    },
+    {
+     "key": "raw:Flávio Bolsonaro 8-12%",
+     "label": "Flávio Bolsonaro 8-12%",
+     "probability": 0.0875
+    },
+    {
+     "key": "raw:Flávio Bolsonaro 4-8%",
+     "label": "Flávio Bolsonaro 4-8%",
+     "probability": 0.325
+    },
+    {
+     "key": "raw:Flávio Bolsonaro <4%",
+     "label": "Flávio Bolsonaro <4%",
+     "probability": 0.405
+    },
+    {
+     "key": "raw:Lula da Silva <4%",
+     "label": "Lula da Silva <4%",
+     "probability": 0.185
+    },
+    {
+     "key": "raw:Lula da Silva 4-8%",
+     "label": "Lula da Silva 4-8%",
+     "probability": 0.0145
+    },
+    {
+     "key": "raw:Lula da Silva 8-12%",
+     "label": "Lula da Silva 8-12%",
+     "probability": 0.0035
+    },
+    {
+     "key": "raw:Lula da Silva 12%+",
+     "label": "Lula da Silva 12%+",
+     "probability": 0.0025
+    },
+    {
+     "key": "raw:Other",
+     "label": "Other",
+     "probability": 0.5
+    }
+   ]
+  }
+ ]
+}

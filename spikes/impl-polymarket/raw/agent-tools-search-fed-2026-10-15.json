@@ -1,0 +1,99 @@
+{
+ "observedAt": "2026-10-15T13:06:57.780Z",
+ "source": "gamma-api.polymarket.com /events (public read-only upstream)",
+ "stale": true,
+ "filtering": "local-page-filter",
+ "pageLimit": 100,
+ "scanned": 100,
+ "matched": 3,
+ "events": [
+  {
+   "id": "606422",
+   "title": "Fed Decision in October?",
+   "slug": "fed-decision-in-october-20260617190323537",
+   "closed": false,
+   "endDate": "2026-10-29T03:59:00Z",
+   "volume": 41443822.30955299,
+   "liquidity": 3741003.07067,
+   "buckets": [
+    {
+     "key": "dec_50plus",
+     "label": "50+ bps decrease",
+     "probability": 0.0015
+    },
+    {
+     "key": "dec_25",
+     "label": "25 bps decrease",
+     "probability": 0.0035
+    },
+    {
+     "key": "no_change",
+     "label": "No change",
+     "probability": 0.735
+    },
+    {
+     "key": "inc_25",
+     "label": "25 bps increase",
+     "probability": 0.255
+    },
+    {
+     "key": "inc_50plus",
+     "label": "50+ bps increase",
+     "probability": 0.0035
+    }
+   ]
+  },
+  {
+   "id": "770450",
+   "title": "Fed Decision in December?",
+   "slug": "fed-decision-in-december-20260729232808632",
+   "closed": false,
+   "endDate": "2026-12-10T04:59:00Z",
+   "volume": 3517035.5684250006,
+   "liquidity": 695477.34073,
+   "buckets": [
+    {
+     "key": "dec_50plus",
+     "label": "50+ bps decrease",
+     "probability": 0.0055
+    },
+    {
+     "key": "dec_25",
+     "label": "25 bps decrease",
+     "probability": 0.0085
+    },
+    {
+     "key": "no_change",
+     "label": "No change",
+     "probability": 0.185
+    },
+    {
+     "key": "inc_25",
+     "label": "25 bps increase",
+     "probability": 0.795
+    },
+    {
+     "key": "inc_50plus",
+     "label": "50+ bps increase",
+     "probability": 0.0275
+    }
+   ]
+  },
+  {
+   "id": "1034268",
+   "title": "Another Fed rate hike in 2026?",
+   "slug": "another-fed-rate-hike-in-2026",
+   "closed": false,
+   "endDate": "2026-12-10T04:59:00Z",
+   "volume": 795890.7223589997,
+   "liquidity": 83578.4835,
+   "buckets": [
+    {
+     "key": "raw:Yes",
+     "label": "Yes",
+     "probability": 0.855
+    }
+   ]
+  }
+ ]
+}

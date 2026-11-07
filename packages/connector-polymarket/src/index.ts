@@ -10,18 +10,23 @@
  *
  * 模块划分：
  *   errors.ts     —— 错误词汇载体（TradingErrorCode 复用 @dshtrading/api）
- *   gamma.ts      —— gamma HTTP 传输层（自有 UA / 超时 / 三层失败语义 / 绝不吞 403）
+ *   json.ts       —— 上游 JSON 取值原语（发现面与事件面共用同一口径）
+ *   gamma.ts      —— gamma HTTP 传输层（自有 UA / 超时 / 三层失败语义 / 绝不吞 403 / CDN 新鲜度）
  *   discovery.ts  —— 发现规则 L0..L5 与档位解析（纯函数，可离线复核历史证据）
+ *   events.ts     —— 事件读取面：关键词检索（本地过滤）与单事件详情（纯函数）
  *   snapshot.ts   —— 本地快照（trading home；Δ 标注；坏内容降级为空表）
- *   service.ts    —— 取数服务 + host 面服务对象
- *   plugin.ts     —— 插件入口（provide tradingPredictionFeed）
+ *   service.ts    —— 取数服务 + host 面服务对象 + 工具面方法
+ *   tools.ts      —— agent 工具面（三个只读工具，与桥共用同一 service 实例）
+ *   plugin.ts     —— 插件入口（provide tradingPredictionFeed + 注册工具）
  */
 
 export * from './discovery.js'
 export * from './errors.js'
+export * from './events.js'
 export * from './gamma.js'
 export * from './service.js'
 export * from './snapshot.js'
+export { createPolymarketTools } from './tools.js'
 
 // patch 行按包名解析（@dshtrading/connector-polymarket → lib/index.js）：loader 只从
 // **本入口**读插件元信息，故 name/inject/Config/apply 必须在此重导出——漏 inject 的

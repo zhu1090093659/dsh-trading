@@ -1,0 +1,1832 @@
+[OK  ] special_indicators_get_snapshot  137ms  
+[OK  ] special_indicators_get_sentiment_history  57ms  
+[OK  ] special_indicators_get_sector_ranking  12ms  
+[OK  ] special_indicators_get_sector_series  18ms  
+[OK  ] special_indicators_get_hk_short_top10  82ms  
+[OK  ] indicator_get_values(cn)  250ms  
+[OK  ] indicator_get_values(hk)  115ms  
+[FAIL] indicator_get_values(interval=1w 应拒绝)  0ms  indicator_get_values: interval "1w" is not supported — the key-day anchored reading is defined on daily bars only (the indicator decides the trading day from the bar openTime's UTC date, so a weekly/monthly bar would anchor a whole period, and an intraday bar would anchor the wrong day). Re-run with interval=1d.
+[OK  ] prediction_fomc_meetings  783ms  
+[OK  ] prediction_search_events(keyword=fed)  940ms  
+[OK  ] prediction_event_detail(606422)  263ms  
+[OK  ] flash_list(hot=沸,爆 limit=3)  1402ms  
+[OK  ] flash_list(no hot limit=2)  520ms  
+[OK  ] macro_rates  144ms  
+[OK  ] macro_rates(region=美国)  47ms  
+[OK  ] econ_calendar(limit=3)  84ms  
+{
+ "ranAt": "2026-10-15T13:15:57.359Z",
+ "tools": {
+  "special_indicators_get_snapshot": {
+   "args": {},
+   "ok": true,
+   "elapsedMs": 137,
+   "raw": "{\"as_of\":\"2026-10-15T13:15:57.497Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/snapshot + /api/sentiment/snapshot?market=cn&methodology=3 + /api/hk-short/snapshot + /api/sectors/snapshot\",\"groups\":{\"basis\":{\"ready\":true,\"stats\":{\"IF\":{\"min\":56.070000000000164,\"max\":84.10000000000036,\"mean\":72.95949999999995,\"last\":80.28999999999951,\"pct\":1.9271804694456929,\"p25\":69.41250000000002,\"p75\":76.29499999999973,\"n\":240},\"IM\":{\"min\":108.92999999999938,\"max\":146.40999999999985,\"mean\":126.314,\"last\":142.90999999999985,\"pct\":2.1382797105070592,\"p25\":123.40999999999985,\"p75\":129.41250000000036,\"n\":240}},\"products\":[{\"key\":\"IF\",\"name\":\"沪深300\",\"last_spot\":4166.19,\"last_fut\":4085.9,\"last_dt\":\"2026-10-15 14:59:59\"},{\"key\":\"IM\",\"name\":\"中证1000\",\"last_spot\":6683.41,\"last_fut\":6540.5,\"last_dt\":\"2026-10-15 14:59:59\"}],\"products_count\":2,\"expected_data_date\":\"2026-10-15\",\"expected_data_date_source\":\"derived: products[].last_dt 的最大日期（日内行情时间，非上游声明的应有数据日）\",\"stale\":false,\"stale_source\":\"no upstream stale/date signal\",\"cache_stale\":false},\"sentiment\":{\"market\":\"cn\",\"score\":26.29,\"label\":\"fear\",\"label_text\":\"恐惧\",\"date\":\"2026-10-14\",\"expected_data_date\":\"2026-10-14\",\"average_5d\":28.3,\"vs_5d\":-2.01,\"methodology_version\":3,\"source_version\":\"4668dee745fb5ba8\",\"coverage\":{\"valid\":8,\"total\":8,\"partial\":false},\"components_count\":8,\"missing_components\":[],\"stale\":false,\"stale_source\":\"upstream: /api/sentiment/snapshot.stale\",\"cache_stale\":false},\"hk_short\":{\"ready\":true,\"data_date\":\"2026-10-15\",\"index_data_date\":\"2026-10-15\",\"short_data_date\":\"2026-10-15\",\"last_update\":\"2026-10-15 17:22\",\"data_version\":\"d3e8c35a736b41f2\",\"updating\":false,\"n_days\":98,\"n_stocks\":10,\"five_day\":{\"current_pct\":22.988,\"average_pct\":22.589,\"pct_difference\":0.399,\"current_value\":63.593,\"average_value\":56.759,\"value_difference\":6.834,\"index_5d_pct\":-0.3},\"top10\":[{\"code\":\"00700\",\"name\":\"腾讯\",\"weight\":8},{\"code\":\"09988\",\"name\":\"阿里巴巴\",\"weight\":8},{\"code\":\"03690\",\"name\":\"美团\",\"weight\":7.5},{\"code\":\"01810\",\"name\":\"小米\",\"weight\":7.5},{\"code\":\"09618\",\"name\":\"京东\",\"weight\":6},{\"code\":\"01024\",\"name\":\"快手\",\"weight\":5},{\"code\":\"09888\",\"name\":\"百度\",\"weight\":4},{\"code\":\"09999\",\"name\":\"网易\",\"weight\":4},{\"code\":\"01211\",\"name\":\"比亚迪\",\"weight\":3},{\"code\":\"02015\",\"name\":\"理想汽车\",\"weight\":3}],\"stale\":false,\"stale_source\":\"no upstream stale/date signal\",\"cache_stale\":false},\"sectors\":{\"data_date\":\"2026-10-14\",\"expected_data_date\":\"2026-10-14\",\"index_data_date\":\"2026-10-14\",\"last_update\":\"2026-10-15 08:54\",\"data_version\":\"fc8cebdf30e408df\",\"updating\":false,\"n_ready\":18,\"n_total\":18,\"n_loaded\":18,\"five_day\":{\"current_change\":-26.69,\"average_change\":-15.5,\"difference\":-11.19,\"total_flow\":-77.51,\"unit\":\"亿元\"},\"sectors\":[{\"code\":\"801738\",\"name\":\"电网设备\",\"type\":\"sw\"},{\"code\":\"801125\",\"name\":\"白酒\",\"type\":\"sw\"},{\"code\":\"801764\",\"name\":\"游戏\",\"type\":\"sw\"},{\"code\":\"801181\",\"name\":\"房地产\",\"type\":\"sw\"},{\"code\":\"801155\",\"name\":\"中药\",\"type\":\"sw\"},{\"code\":\"801154\",\"name\":\"医药商业\",\"type\":\"sw\"},{\"code\":\"801782\",\"name\":\"银行\",\"type\":\"sw\"},{\"code\":\"801735\",\"name\":\"光伏\",\"type\":\"sw\"},{\"code\":\"801737\",\"name\":\"电池\",\"type\":\"sw\"},{\"code\":\"801951\",\"name\":\"煤炭\",\"type\":\"sw\"},{\"code\":\"801081\",\"name\":\"芯片\",\"type\":\"sw\"},{\"code\":\"801193\",\"name\":\"券商\",\"type\":\"sw\"},{\"code\":\"801744\",\"name\":\"国防军工\",\"type\":\"sw\"},{\"code\":\"801095\",\"name\":\"汽车\",\"type\":\"sw\"},{\"code\":\"801034\",\"name\":\"化工\",\"type\":\"sw\"},{\"code\":\"801017\",\"name\":\"畜牧\",\"type\":\"sw\"},{\"code\":\"562500\",\"name\":\"机器人\",\"type\":\"etf\"},{\"code\":\"159309\",\"name\":\"油气\",\"type\":\"etf\"}],\"sectors_count\":18,\"missing_margin\":[],\"stale_sectors\":[],\"stale\":false,\"stale_source\":\"derived: snapshot data_date < expected_data_date\",\"cache_stale\":false}},\"groups_read\":[\"basis\",\"sentiment\",\"hk_short\",\"sectors\"],\"stale\":false,\"stale_source\":\"basis: no upstream stale/date signal | sentiment: upstream: /api/sentiment/snapshot.stale | hk_short: no upstream stale/date signal | sectors: derived: snapshot data_date < expected_data_date\",\"cache_stale\":false,\"notes\":[\"hk_short: 上游 /api/hk-short/snapshot 不提供 expected_data_date；滞后请比对 index_data_date 与 short_data_date 两条源尾日，或用 special_indicators_get_hk_short_top10（含 chart 声明的 stale）\"]}",
+   "parsed": {
+    "as_of": "2026-10-15T13:15:57.497Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/snapshot + /api/sentiment/snapshot?market=cn&methodology=3 + /api/hk-short/snapshot + /api/sectors/snapshot",
+    "groups": {
+     "basis": {
+      "ready": true,
+      "stats": {
+       "IF": {
+        "min": 56.070000000000164,
+        "max": 84.10000000000036,
+        "mean": 72.95949999999995,
+        "last": 80.28999999999951,
+        "pct": 1.9271804694456929,
+        "p25": 69.41250000000002,
+        "p75": 76.29499999999973,
+        "n": 240
+       },
+       "IM": {
+        "min": 108.92999999999938,
+        "max": 146.40999999999985,
+        "mean": 126.314,
+        "last": 142.90999999999985,
+        "pct": 2.1382797105070592,
+        "p25": 123.40999999999985,
+        "p75": 129.41250000000036,
+        "n": 240
+       }
+      },
+      "products": [
+       {
+        "key": "IF",
+        "name": "沪深300",
+        "last_spot": 4166.19,
+        "last_fut": 4085.9,
+        "last_dt": "2026-10-15 14:59:59"
+       },
+       {
+        "key": "IM",
+        "name": "中证1000",
+        "last_spot": 6683.41,
+        "last_fut": 6540.5,
+        "last_dt": "2026-10-15 14:59:59"
+       }
+      ],
+      "products_count": 2,
+      "expected_data_date": "2026-10-15",
+      "expected_data_date_source": "derived: products[].last_dt 的最大日期（日内行情时间，非上游声明的应有数据日）",
+      "stale": false,
+      "stale_source": "no upstream stale/date signal",
+      "cache_stale": false
+     },
+     "sentiment": {
+      "market": "cn",
+      "score": 26.29,
+      "label": "fear",
+      "label_text": "恐惧",
+      "date": "2026-10-14",
+      "expected_data_date": "2026-10-14",
+      "average_5d": 28.3,
+      "vs_5d": -2.01,
+      "methodology_version": 3,
+      "source_version": "4668dee745fb5ba8",
+      "coverage": {
+       "valid": 8,
+       "total": 8,
+       "partial": false
+      },
+      "components_count": 8,
+      "missing_components": [],
+      "stale": false,
+      "stale_source": "upstream: /api/sentiment/snapshot.stale",
+      "cache_stale": false
+     },
+     "hk_short": {
+      "ready": true,
+      "data_date": "2026-10-15",
+      "index_data_date": "2026-10-15",
+      "short_data_date": "2026-10-15",
+      "last_update": "2026-10-15 17:22",
+      "data_version": "d3e8c35a736b41f2",
+      "updating": false,
+      "n_days": 98,
+      "n_stocks": 10,
+      "five_day": {
+       "current_pct": 22.988,
+       "average_pct": 22.589,
+       "pct_difference": 0.399,
+       "current_value": 63.593,
+       "average_value": 56.759,
+       "value_difference": 6.834,
+       "index_5d_pct": -0.3
+      },
+      "top10": [
+       {
+        "code": "00700",
+        "name": "腾讯",
+        "weight": 8
+       },
+       {
+        "code": "09988",
+        "name": "阿里巴巴",
+        "weight": 8
+       },
+       {
+        "code": "03690",
+        "name": "美团",
+        "weight": 7.5
+       },
+       {
+        "code": "01810",
+        "name": "小米",
+        "weight": 7.5
+       },
+       {
+        "code": "09618",
+        "name": "京东",
+        "weight": 6
+       },
+       {
+        "code": "01024",
+        "name": "快手",
+        "weight": 5
+       },
+       {
+        "code": "09888",
+        "name": "百度",
+        "weight": 4
+       },
+       {
+        "code": "09999",
+        "name": "网易",
+        "weight": 4
+       },
+       {
+        "code": "01211",
+        "name": "比亚迪",
+        "weight": 3
+       },
+       {
+        "code": "02015",
+        "name": "理想汽车",
+        "weight": 3
+       }
+      ],
+      "stale": false,
+      "stale_source": "no upstream stale/date signal",
+      "cache_stale": false
+     },
+     "sectors": {
+      "data_date": "2026-10-14",
+      "expected_data_date": "2026-10-14",
+      "index_data_date": "2026-10-14",
+      "last_update": "2026-10-15 08:54",
+      "data_version": "fc8cebdf30e408df",
+      "updating": false,
+      "n_ready": 18,
+      "n_total": 18,
+      "n_loaded": 18,
+      "five_day": {
+       "current_change": -26.69,
+       "average_change": -15.5,
+       "difference": -11.19,
+       "total_flow": -77.51,
+       "unit": "亿元"
+      },
+      "sectors": [
+       {
+        "code": "801738",
+        "name": "电网设备",
+        "type": "sw"
+       },
+       {
+        "code": "801125",
+        "name": "白酒",
+        "type": "sw"
+       },
+       {
+        "code": "801764",
+        "name": "游戏",
+        "type": "sw"
+       },
+       {
+        "code": "801181",
+        "name": "房地产",
+        "type": "sw"
+       },
+       {
+        "code": "801155",
+        "name": "中药",
+        "type": "sw"
+       },
+       {
+        "code": "801154",
+        "name": "医药商业",
+        "type": "sw"
+       },
+       {
+        "code": "801782",
+        "name": "银行",
+        "type": "sw"
+       },
+       {
+        "code": "801735",
+        "name": "光伏",
+        "type": "sw"
+       },
+       {
+        "code": "801737",
+        "name": "电池",
+        "type": "sw"
+       },
+       {
+        "code": "801951",
+        "name": "煤炭",
+        "type": "sw"
+       },
+       {
+        "code": "801081",
+        "name": "芯片",
+        "type": "sw"
+       },
+       {
+        "code": "801193",
+        "name": "券商",
+        "type": "sw"
+       },
+       {
+        "code": "801744",
+        "name": "国防军工",
+        "type": "sw"
+       },
+       {
+        "code": "801095",
+        "name": "汽车",
+        "type": "sw"
+       },
+       {
+        "code": "801034",
+        "name": "化工",
+        "type": "sw"
+       },
+       {
+        "code": "801017",
+        "name": "畜牧",
+        "type": "sw"
+       },
+       {
+        "code": "562500",
+        "name": "机器人",
+        "type": "etf"
+       },
+       {
+        "code": "159309",
+        "name": "油气",
+        "type": "etf"
+       }
+      ],
+      "sectors_count": 18,
+      "missing_margin": [],
+      "stale_sectors": [],
+      "stale": false,
+      "stale_source": "derived: snapshot data_date < expected_data_date",
+      "cache_stale": false
+     }
+    },
+    "groups_read": [
+     "basis",
+     "sentiment",
+     "hk_short",
+     "sectors"
+    ],
+    "stale": false,
+    "stale_source": "basis: no upstream stale/date signal | sentiment: upstream: /api/sentiment/snapshot.stale | hk_short: no upstream stale/date signal | sectors: derived: snapshot data_date < expected_data_date",
+    "cache_stale": false,
+    "notes": [
+     "hk_short: 上游 /api/hk-short/snapshot 不提供 expected_data_date；滞后请比对 index_data_date 与 short_data_date 两条源尾日，或用 special_indicators_get_hk_short_top10（含 chart 声明的 stale）"
+    ]
+   }
+  },
+  "special_indicators_get_sentiment_history": {
+   "args": {
+    "days": 250
+   },
+   "ok": true,
+   "elapsedMs": 57,
+   "raw": "{\"as_of\":\"2026-10-15T13:15:57.555Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/sentiment/history?market=cn&methodology=3&days=250\",\"days\":250,\"market\":\"cn\",\"methodology_version\":3,\"formula_version\":\"margin-streak-added-to-v2-v3\",\"source_version\":\"4668dee745fb5ba8\",\"expected_data_date\":\"2026-10-14\",\"overlay_name\":\"中证全指\",\"points\":250,\"first_date\":\"2025-09-24\",\"last_date\":\"2026-10-14\",\"latest\":{\"date\":\"2026-10-14\",\"score\":26.29,\"label\":\"fear\",\"label_text\":\"恐惧\",\"valid_components\":8,\"total_components\":8},\"stale\":false,\"stale_source\":\"derived: series[] 尾日 < expected_data_date\",\"cache_stale\":false}",
+   "parsed": {
+    "as_of": "2026-10-15T13:15:57.555Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/sentiment/history?market=cn&methodology=3&days=250",
+    "days": 250,
+    "market": "cn",
+    "methodology_version": 3,
+    "formula_version": "margin-streak-added-to-v2-v3",
+    "source_version": "4668dee745fb5ba8",
+    "expected_data_date": "2026-10-14",
+    "overlay_name": "中证全指",
+    "points": 250,
+    "first_date": "2025-09-24",
+    "last_date": "2026-10-14",
+    "latest": {
+     "date": "2026-10-14",
+     "score": 26.29,
+     "label": "fear",
+     "label_text": "恐惧",
+     "valid_components": 8,
+     "total_components": 8
+    },
+    "stale": false,
+    "stale_source": "derived: series[] 尾日 < expected_data_date",
+    "cache_stale": false
+   }
+  },
+  "special_indicators_get_sector_ranking": {
+   "args": {
+    "window": 20,
+    "limit": 5
+   },
+   "ok": true,
+   "elapsedMs": 12,
+   "raw": "{\"as_of\":\"2026-10-15T13:15:57.567Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/sectors/ranking?window=20 + /api/sectors/snapshot\",\"window\":20,\"limit\":5,\"list\":[{\"code\":\"801095\",\"name\":\"汽车\",\"type\":\"sw\",\"chg_pct\":0.02,\"latest_margin\":260.63,\"latest_close\":13130.55,\"daily_change\":0.31,\"avg_5d_change\":0.54,\"vs_5d_change\":-0.23,\"total_5d_flow\":2.72,\"index_5d_pct\":-2.42},{\"code\":\"159309\",\"name\":\"油气\",\"type\":\"etf\",\"chg_pct\":-0.49,\"latest_margin\":30.28,\"latest_close\":1.461,\"daily_change\":-0.23,\"avg_5d_change\":0.1,\"vs_5d_change\":-0.33,\"total_5d_flow\":0.5,\"index_5d_pct\":4.13},{\"code\":\"801744\",\"name\":\"国防军工\",\"type\":\"sw\",\"chg_pct\":-1.29,\"latest_margin\":100.82,\"latest_close\":3427.83,\"daily_change\":0.77,\"avg_5d_change\":1.21,\"vs_5d_change\":-0.44,\"total_5d_flow\":6.05,\"index_5d_pct\":-2.94},{\"code\":\"801125\",\"name\":\"白酒\",\"type\":\"sw\",\"chg_pct\":-1.49,\"latest_margin\":309.88,\"latest_close\":35392.15,\"daily_change\":-1.19,\"avg_5d_change\":-0.71,\"vs_5d_change\":-0.48,\"total_5d_flow\":-3.54,\"index_5d_pct\":1.16},{\"code\":\"801737\",\"name\":\"电池\",\"type\":\"sw\",\"chg_pct\":-1.7,\"latest_margin\":830.52,\"latest_close\":18551.76,\"daily_change\":-1.41,\"avg_5d_change\":1.5,\"vs_5d_change\":-2.9,\"total_5d_flow\":7.49,\"index_5d_pct\":-4.93}],\"list_count\":5,\"ranking_rows_upstream\":18,\"truncated\":true,\"units\":{\"latest_margin\":\"亿元\",\"daily_change\":\"亿元\",\"avg_5d_change\":\"亿元\",\"vs_5d_change\":\"亿元\",\"total_5d_flow\":\"亿元\",\"chg_pct\":\"%\",\"index_5d_pct\":\"%\",\"latest_close\":\"板块指数点\"},\"data_date\":\"2026-10-14\",\"expected_data_date\":\"2026-10-14\",\"index_data_date\":\"2026-10-14\",\"last_update\":\"2026-10-15 08:54\",\"data_version\":\"fc8cebdf30e408df\",\"n_ready\":18,\"n_total\":18,\"five_day\":{\"current_change\":-26.69,\"average_change\":-15.5,\"difference\":-11.19,\"total_flow\":-77.51,\"unit\":\"亿元\"},\"missing_margin\":[],\"stale\":false,\"stale_source\":\"derived: snapshot data_date < expected_data_date\",\"cache_stale\":false}",
+   "parsed": {
+    "as_of": "2026-10-15T13:15:57.567Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/sectors/ranking?window=20 + /api/sectors/snapshot",
+    "window": 20,
+    "limit": 5,
+    "list": [
+     {
+      "code": "801095",
+      "name": "汽车",
+      "type": "sw",
+      "chg_pct": 0.02,
+      "latest_margin": 260.63,
+      "latest_close": 13130.55,
+      "daily_change": 0.31,
+      "avg_5d_change": 0.54,
+      "vs_5d_change": -0.23,
+      "total_5d_flow": 2.72,
+      "index_5d_pct": -2.42
+     },
+     {
+      "code": "159309",
+      "name": "油气",
+      "type": "etf",
+      "chg_pct": -0.49,
+      "latest_margin": 30.28,
+      "latest_close": 1.461,
+      "daily_change": -0.23,
+      "avg_5d_change": 0.1,
+      "vs_5d_change": -0.33,
+      "total_5d_flow": 0.5,
+      "index_5d_pct": 4.13
+     },
+     {
+      "code": "801744",
+      "name": "国防军工",
+      "type": "sw",
+      "chg_pct": -1.29,
+      "latest_margin": 100.82,
+      "latest_close": 3427.83,
+      "daily_change": 0.77,
+      "avg_5d_change": 1.21,
+      "vs_5d_change": -0.44,
+      "total_5d_flow": 6.05,
+      "index_5d_pct": -2.94
+     },
+     {
+      "code": "801125",
+      "name": "白酒",
+      "type": "sw",
+      "chg_pct": -1.49,
+      "latest_margin": 309.88,
+      "latest_close": 35392.15,
+      "daily_change": -1.19,
+      "avg_5d_change": -0.71,
+      "vs_5d_change": -0.48,
+      "total_5d_flow": -3.54,
+      "index_5d_pct": 1.16
+     },
+     {
+      "code": "801737",
+      "name": "电池",
+      "type": "sw",
+      "chg_pct": -1.7,
+      "latest_margin": 830.52,
+      "latest_close": 18551.76,
+      "daily_change": -1.41,
+      "avg_5d_change": 1.5,
+      "vs_5d_change": -2.9,
+      "total_5d_flow": 7.49,
+      "index_5d_pct": -4.93
+     }
+    ],
+    "list_count": 5,
+    "ranking_rows_upstream": 18,
+    "truncated": true,
+    "units": {
+     "latest_margin": "亿元",
+     "daily_change": "亿元",
+     "avg_5d_change": "亿元",
+     "vs_5d_change": "亿元",
+     "total_5d_flow": "亿元",
+     "chg_pct": "%",
+     "index_5d_pct": "%",
+     "latest_close": "板块指数点"
+    },
+    "data_date": "2026-10-14",
+    "expected_data_date": "2026-10-14",
+    "index_data_date": "2026-10-14",
+    "last_update": "2026-10-15 08:54",
+    "data_version": "fc8cebdf30e408df",
+    "n_ready": 18,
+    "n_total": 18,
+    "five_day": {
+     "current_change": -26.69,
+     "average_change": -15.5,
+     "difference": -11.19,
+     "total_flow": -77.51,
+     "unit": "亿元"
+    },
+    "missing_margin": [],
+    "stale": false,
+    "stale_source": "derived: snapshot data_date < expected_data_date",
+    "cache_stale": false
+   }
+  },
+  "special_indicators_get_sector_series": {
+   "args": {
+    "code": "801737",
+    "days": 300
+   },
+   "ok": true,
+   "elapsedMs": 18,
+   "raw": "{\"as_of\":\"2026-10-15T13:15:57.585Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/v2/sectors/801737?days=300\",\"code\":\"801737\",\"name\":\"电池\",\"type\":\"sw\",\"days\":300,\"points\":{\"index\":300,\"margin\":300},\"index_first\":{\"date\":\"2025-07-17\",\"close\":16632.42},\"index_last\":{\"date\":\"2026-10-14\",\"close\":18551.76},\"margin_first\":{\"date\":\"2025-07-17\",\"rzye\":48254889957},\"margin_last\":{\"date\":\"2026-10-14\",\"rzye\":83052402726},\"data_date\":\"2026-10-14\",\"data_date_source\":\"derived: index[]/margin[] 尾日取最大\",\"units\":{\"index_close\":\"板块指数点\",\"margin_rzye\":\"元（原始口径；除以 1e8 为亿元）\"},\"expected_data_date_note\":\"上游 /api/v2/sectors/{code} 不提供 expected_data_date（只有自声明的 stale），派生不出，故该字段省略而非编造\",\"stale\":false,\"stale_source\":\"upstream: /api/v2/sectors/{code}.stale\",\"cache_stale\":false}",
+   "parsed": {
+    "as_of": "2026-10-15T13:15:57.585Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/v2/sectors/801737?days=300",
+    "code": "801737",
+    "name": "电池",
+    "type": "sw",
+    "days": 300,
+    "points": {
+     "index": 300,
+     "margin": 300
+    },
+    "index_first": {
+     "date": "2025-07-17",
+     "close": 16632.42
+    },
+    "index_last": {
+     "date": "2026-10-14",
+     "close": 18551.76
+    },
+    "margin_first": {
+     "date": "2025-07-17",
+     "rzye": 48254889957
+    },
+    "margin_last": {
+     "date": "2026-10-14",
+     "rzye": 83052402726
+    },
+    "data_date": "2026-10-14",
+    "data_date_source": "derived: index[]/margin[] 尾日取最大",
+    "units": {
+     "index_close": "板块指数点",
+     "margin_rzye": "元（原始口径；除以 1e8 为亿元）"
+    },
+    "expected_data_date_note": "上游 /api/v2/sectors/{code} 不提供 expected_data_date（只有自声明的 stale），派生不出，故该字段省略而非编造",
+    "stale": false,
+    "stale_source": "upstream: /api/v2/sectors/{code}.stale",
+    "cache_stale": false
+   }
+  },
+  "special_indicators_get_hk_short_top10": {
+   "args": {
+    "limit": 10
+   },
+   "ok": true,
+   "elapsedMs": 82,
+   "raw": "{\"as_of\":\"2026-10-15T13:15:57.667Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/hk-short/snapshot + /api/hk-short/chart\",\"ready\":true,\"data_date\":\"2026-10-15\",\"short_data_date\":\"2026-10-15\",\"index_data_date\":\"2026-10-15\",\"last_update\":\"2026-10-15 17:22\",\"data_version\":\"d3e8c35a736b41f2\",\"updating\":false,\"n_days\":98,\"n_stocks\":10,\"five_day\":{\"current_pct\":22.988,\"average_pct\":22.589,\"pct_difference\":0.399,\"current_value\":63.593,\"average_value\":56.759,\"value_difference\":6.834,\"index_5d_pct\":-0.3},\"limit\":10,\"top10\":[{\"code\":\"00700\",\"name\":\"腾讯\",\"weight\":8,\"latest_pct\":11.661,\"vs_5d_pct\":1.547,\"history_days\":97,\"latest_value\":10.09,\"previous_pct\":9.213,\"pct_delta\":2.448},{\"code\":\"09988\",\"name\":\"阿里巴巴\",\"weight\":8,\"latest_pct\":17.701,\"vs_5d_pct\":1.611,\"history_days\":97,\"latest_value\":15.06,\"previous_pct\":15.855,\"pct_delta\":1.846},{\"code\":\"03690\",\"name\":\"美团\",\"weight\":7.5,\"latest_pct\":13.04,\"vs_5d_pct\":-6.886,\"history_days\":97,\"latest_value\":3.337,\"previous_pct\":17.246,\"pct_delta\":-4.206},{\"code\":\"01810\",\"name\":\"小米\",\"weight\":7.5,\"latest_pct\":26.33,\"vs_5d_pct\":-0.852,\"history_days\":97,\"latest_value\":18.92,\"previous_pct\":22.679,\"pct_delta\":3.651},{\"code\":\"09618\",\"name\":\"京东\",\"weight\":6,\"latest_pct\":36.863,\"vs_5d_pct\":4.954,\"history_days\":97,\"latest_value\":2.586,\"previous_pct\":37.916,\"pct_delta\":-1.053},{\"code\":\"01024\",\"name\":\"快手\",\"weight\":5,\"latest_pct\":28.229,\"vs_5d_pct\":4.348,\"history_days\":97,\"latest_value\":3.071,\"previous_pct\":18.947,\"pct_delta\":9.282},{\"code\":\"09888\",\"name\":\"百度\",\"weight\":4,\"latest_pct\":17.592,\"vs_5d_pct\":-1.334,\"history_days\":97,\"latest_value\":2.654,\"previous_pct\":14.328,\"pct_delta\":3.264},{\"code\":\"09999\",\"name\":\"网易\",\"weight\":4,\"latest_pct\":42.105,\"vs_5d_pct\":4.601,\"history_days\":97,\"latest_value\":3.973,\"previous_pct\":37.79,\"pct_delta\":4.315},{\"code\":\"01211\",\"name\":\"比亚迪\",\"weight\":3,\"latest_pct\":22.628,\"vs_5d_pct\":-2.239,\"history_days\":97,\"latest_value\":2.64,\"previous_pct\":30.325,\"pct_delta\":-7.697},{\"code\":\"02015\",\"name\":\"理想汽车\",\"weight\":3,\"latest_pct\":29.391,\"vs_5d_pct\":-0.893,\"history_days\":97,\"latest_value\":1.261,\"previous_pct\":24.48,\"pct_delta\":4.911}],\"top10_count\":10,\"units\":{\"weight\":\"权重（%）\",\"latest_pct\":\"该股卖空成交额占其成交额比例（%，与聚合占比同口径）\",\"vs_5d_pct\":\"百分点（latest_pct 与 5 日均值之差）\",\"latest_value\":\"亿港元\",\"five_day_current_value\":\"亿港元\",\"five_day_pct_difference\":\"百分点\"},\"notes\":[\"上游契约：缺失个股的 latest_pct/latest_value 可能是 0 占位（须结合 history_days 与 short_ratio 判断，0 不证明存在真实观测）\",\"上游不提供 expected_data_date：滞后以下列 short_data_date/index_data_date 两条源尾日与 chart 的 stale 判定\"],\"stale\":false,\"stale_source\":\"upstream: /api/hk-short/chart.stale\",\"cache_stale\":false}",
+   "parsed": {
+    "as_of": "2026-10-15T13:15:57.667Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/hk-short/snapshot + /api/hk-short/chart",
+    "ready": true,
+    "data_date": "2026-10-15",
+    "short_data_date": "2026-10-15",
+    "index_data_date": "2026-10-15",
+    "last_update": "2026-10-15 17:22",
+    "data_version": "d3e8c35a736b41f2",
+    "updating": false,
+    "n_days": 98,
+    "n_stocks": 10,
+    "five_day": {
+     "current_pct": 22.988,
+     "average_pct": 22.589,
+     "pct_difference": 0.399,
+     "current_value": 63.593,
+     "average_value": 56.759,
+     "value_difference": 6.834,
+     "index_5d_pct": -0.3
+    },
+    "limit": 10,
+    "top10": [
+     {
+      "code": "00700",
+      "name": "腾讯",
+      "weight": 8,
+      "latest_pct": 11.661,
+      "vs_5d_pct": 1.547,
+      "history_days": 97,
+      "latest_value": 10.09,
+      "previous_pct": 9.213,
+      "pct_delta": 2.448
+     },
+     {
+      "code": "09988",
+      "name": "阿里巴巴",
+      "weight": 8,
+      "latest_pct": 17.701,
+      "vs_5d_pct": 1.611,
+      "history_days": 97,
+      "latest_value": 15.06,
+      "previous_pct": 15.855,
+      "pct_delta": 1.846
+     },
+     {
+      "code": "03690",
+      "name": "美团",
+      "weight": 7.5,
+      "latest_pct": 13.04,
+      "vs_5d_pct": -6.886,
+      "history_days": 97,
+      "latest_value": 3.337,
+      "previous_pct": 17.246,
+      "pct_delta": -4.206
+     },
+     {
+      "code": "01810",
+      "name": "小米",
+      "weight": 7.5,
+      "latest_pct": 26.33,
+      "vs_5d_pct": -0.852,
+      "history_days": 97,
+      "latest_value": 18.92,
+      "previous_pct": 22.679,
+      "pct_delta": 3.651
+     },
+     {
+      "code": "09618",
+      "name": "京东",
+      "weight": 6,
+      "latest_pct": 36.863,
+      "vs_5d_pct": 4.954,
+      "history_days": 97,
+      "latest_value": 2.586,
+      "previous_pct": 37.916,
+      "pct_delta": -1.053
+     },
+     {
+      "code": "01024",
+      "name": "快手",
+      "weight": 5,
+      "latest_pct": 28.229,
+      "vs_5d_pct": 4.348,
+      "history_days": 97,
+      "latest_value": 3.071,
+      "previous_pct": 18.947,
+      "pct_delta": 9.282
+     },
+     {
+      "code": "09888",
+      "name": "百度",
+      "weight": 4,
+      "latest_pct": 17.592,
+      "vs_5d_pct": -1.334,
+      "history_days": 97,
+      "latest_value": 2.654,
+      "previous_pct": 14.328,
+      "pct_delta": 3.264
+     },
+     {
+      "code": "09999",
+      "name": "网易",
+      "weight": 4,
+      "latest_pct": 42.105,
+      "vs_5d_pct": 4.601,
+      "history_days": 97,
+      "latest_value": 3.973,
+      "previous_pct": 37.79,
+      "pct_delta": 4.315
+     },
+     {
+      "code": "01211",
+      "name": "比亚迪",
+      "weight": 3,
+      "latest_pct": 22.628,
+      "vs_5d_pct": -2.239,
+      "history_days": 97,
+      "latest_value": 2.64,
+      "previous_pct": 30.325,
+      "pct_delta": -7.697
+     },
+     {
+      "code": "02015",
+      "name": "理想汽车",
+      "weight": 3,
+      "latest_pct": 29.391,
+      "vs_5d_pct": -0.893,
+      "history_days": 97,
+      "latest_value": 1.261,
+      "previous_pct": 24.48,
+      "pct_delta": 4.911
+     }
+    ],
+    "top10_count": 10,
+    "units": {
+     "weight": "权重（%）",
+     "latest_pct": "该股卖空成交额占其成交额比例（%，与聚合占比同口径）",
+     "vs_5d_pct": "百分点（latest_pct 与 5 日均值之差）",
+     "latest_value": "亿港元",
+     "five_day_current_value": "亿港元",
+     "five_day_pct_difference": "百分点"
+    },
+    "notes": [
+     "上游契约：缺失个股的 latest_pct/latest_value 可能是 0 占位（须结合 history_days 与 short_ratio 判断，0 不证明存在真实观测）",
+     "上游不提供 expected_data_date：滞后以下列 short_data_date/index_data_date 两条源尾日与 chart 的 stale 判定"
+    ],
+    "stale": false,
+    "stale_source": "upstream: /api/hk-short/chart.stale",
+    "cache_stale": false
+   }
+  },
+  "indicator_get_values(cn)": {
+   "args": {
+    "market": "cn",
+    "symbol": "002714.SZ"
+   },
+   "ok": true,
+   "elapsedMs": 250,
+   "raw": "{\"market\":\"cn\",\"symbol\":\"002714.SZ\",\"interval\":\"1d\",\"id\":\"kdas\",\"title\":\"KDAS\",\"keys_source\":\"symbolParams\",\"keys\":[20250821,20240924,20260626,20261014],\"params\":{\"kd1\":20250821,\"kd2\":20240924,\"kd3\":20260626,\"kd4\":0,\"kd5\":20261014,\"kd6\":0,\"kd7\":0,\"kd8\":0},\"params_scope\":\"cn:002714.SZ\",\"provider\":\"tencent\",\"parity\":\"same-source\",\"parity_note\":\"Same registry resolution as the GUI chart route: the bridge /klines candidate order also puts this market's active provider first, so both read the same provider.\",\"bars\":801,\"bars_requested\":800,\"window_first_bar\":\"2023-06-26\",\"window_last_bar\":\"2026-10-15\",\"as_of\":\"2026-10-15\",\"fetched_at\":\"2026-10-15T13:15:57.916Z\",\"bar_age_days\":0,\"stale\":false,\"stale_note\":\"Newest daily bar is 0 day(s) old (stale above 7); a market holiday can legitimately exceed this.\",\"latest_close\":39.75,\"lines\":[{\"key\":\"KDAS_24-09-24\",\"key_day\":20240924,\"anchored_at\":\"2024-09-24\",\"value\":42.288,\"bars_since\":496,\"latest_close\":39.75,\"distance_pct\":-6,\"side\":\"价格在下\",\"truncated\":false,\"ineffective\":false,\"note\":\"\"},{\"key\":\"KDAS_25-08-21\",\"key_day\":20250821,\"anchored_at\":\"2025-08-21\",\"value\":44.18,\"bars_since\":276,\"latest_close\":39.75,\"distance_pct\":-10.03,\"side\":\"价格在下\",\"truncated\":false,\"ineffective\":false,\"note\":\"\"},{\"key\":\"KDAS_26-06-26\",\"key_day\":20260626,\"anchored_at\":\"2026-06-26\",\"value\":39.351,\"bars_since\":74,\"latest_close\":39.75,\"distance_pct\":1.01,\"side\":\"价格在上\",\"truncated\":false,\"ineffective\":false,\"note\":\"\"},{\"key\":\"KDAS_26-10-14\",\"key_day\":20261014,\"anchored_at\":\"2026-10-14\",\"value\":39.959,\"bars_since\":2,\"latest_close\":39.75,\"distance_pct\":-0.52,\"side\":\"价格在下\",\"truncated\":false,\"ineffective\":false,\"note\":\"\"}],\"nearest_support\":{\"key\":\"KDAS_26-06-26\",\"key_day\":20260626,\"value\":39.351,\"distance_pct\":1.01},\"nearest_resistance\":{\"key\":\"KDAS_26-10-14\",\"key_day\":20261014,\"value\":39.959,\"distance_pct\":-0.52},\"notes\":[\"Values come from the indicator's own computeSource executed in the Node vm sandbox (same source the chart renders).\",\"Key days were read live from the chart roster (symbolParams for this market:symbol, else the global params).\"]}",
+   "parsed": {
+    "market": "cn",
+    "symbol": "002714.SZ",
+    "interval": "1d",
+    "id": "kdas",
+    "title": "KDAS",
+    "keys_source": "symbolParams",
+    "keys": [
+     20250821,
+     20240924,
+     20260626,
+     20261014
+    ],
+    "params": {
+     "kd1": 20250821,
+     "kd2": 20240924,
+     "kd3": 20260626,
+     "kd4": 0,
+     "kd5": 20261014,
+     "kd6": 0,
+     "kd7": 0,
+     "kd8": 0
+    },
+    "params_scope": "cn:002714.SZ",
+    "provider": "tencent",
+    "parity": "same-source",
+    "parity_note": "Same registry resolution as the GUI chart route: the bridge /klines candidate order also puts this market's active provider first, so both read the same provider.",
+    "bars": 801,
+    "bars_requested": 800,
+    "window_first_bar": "2023-06-26",
+    "window_last_bar": "2026-10-15",
+    "as_of": "2026-10-15",
+    "fetched_at": "2026-10-15T13:15:57.916Z",
+    "bar_age_days": 0,
+    "stale": false,
+    "stale_note": "Newest daily bar is 0 day(s) old (stale above 7); a market holiday can legitimately exceed this.",
+    "latest_close": 39.75,
+    "lines": [
+     {
+      "key": "KDAS_24-09-24",
+      "key_day": 20240924,
+      "anchored_at": "2024-09-24",
+      "value": 42.288,
+      "bars_since": 496,
+      "latest_close": 39.75,
+      "distance_pct": -6,
+      "side": "价格在下",
+      "truncated": false,
+      "ineffective": false,
+      "note": ""
+     },
+     {
+      "key": "KDAS_25-08-21",
+      "key_day": 20250821,
+      "anchored_at": "2025-08-21",
+      "value": 44.18,
+      "bars_since": 276,
+      "latest_close": 39.75,
+      "distance_pct": -10.03,
+      "side": "价格在下",
+      "truncated": false,
+      "ineffective": false,
+      "note": ""
+     },
+     {
+      "key": "KDAS_26-06-26",
+      "key_day": 20260626,
+      "anchored_at": "2026-06-26",
+      "value": 39.351,
+      "bars_since": 74,
+      "latest_close": 39.75,
+      "distance_pct": 1.01,
+      "side": "价格在上",
+      "truncated": false,
+      "ineffective": false,
+      "note": ""
+     },
+     {
+      "key": "KDAS_26-10-14",
+      "key_day": 20261014,
+      "anchored_at": "2026-10-14",
+      "value": 39.959,
+      "bars_since": 2,
+      "latest_close": 39.75,
+      "distance_pct": -0.52,
+      "side": "价格在下",
+      "truncated": false,
+      "ineffective": false,
+      "note": ""
+     }
+    ],
+    "nearest_support": {
+     "key": "KDAS_26-06-26",
+     "key_day": 20260626,
+     "value": 39.351,
+     "distance_pct": 1.01
+    },
+    "nearest_resistance": {
+     "key": "KDAS_26-10-14",
+     "key_day": 20261014,
+     "value": 39.959,
+     "distance_pct": -0.52
+    },
+    "notes": [
+     "Values come from the indicator's own computeSource executed in the Node vm sandbox (same source the chart renders).",
+     "Key days were read live from the chart roster (symbolParams for this market:symbol, else the global params)."
+    ]
+   }
+  },
+  "indicator_get_values(hk)": {
+   "args": {
+    "market": "hk",
+    "symbol": "00700.HK"
+   },
+   "ok": true,
+   "elapsedMs": 115,
+   "raw": "{\"market\":\"hk\",\"symbol\":\"00700.HK\",\"interval\":\"1d\",\"id\":\"kdas\",\"title\":\"KDAS\",\"keys_source\":\"symbolParams\",\"keys\":[20240919,20260423,20260922,20260929,20260813],\"params\":{\"kd1\":20240919,\"kd2\":20260423,\"kd3\":20260922,\"kd4\":20260929,\"kd5\":20260813,\"kd6\":0,\"kd7\":0,\"kd8\":0},\"params_scope\":\"hk:00700.HK\",\"provider\":\"tencent\",\"parity\":\"same-source\",\"parity_note\":\"Same registry resolution as the GUI chart route: the bridge /klines candidate order also puts this market's active provider first, so both read the same provider.\",\"bars\":800,\"bars_requested\":800,\"window_first_bar\":\"2023-07-19\",\"window_last_bar\":\"2026-10-15\",\"as_of\":\"2026-10-15\",\"fetched_at\":\"2026-10-15T13:15:58.032Z\",\"bar_age_days\":0,\"stale\":false,\"stale_note\":\"Newest daily bar is 0 day(s) old (stale above 7); a market holiday can legitimately exceed this.\",\"latest_close\":417.8,\"lines\":[{\"key\":\"KDAS_24-09-19\",\"key_day\":20240919,\"anchored_at\":\"2024-09-19\",\"value\":486.802,\"bars_since\":510,\"latest_close\":417.8,\"distance_pct\":-14.17,\"side\":\"价格在下\",\"truncated\":false,\"ineffective\":false,\"note\":\"\"},{\"key\":\"KDAS_26-04-23\",\"key_day\":20260423,\"anchored_at\":\"2026-04-23\",\"value\":451.737,\"bars_since\":121,\"latest_close\":417.8,\"distance_pct\":-7.51,\"side\":\"价格在下\",\"truncated\":false,\"ineffective\":false,\"note\":\"\"},{\"key\":\"KDAS_26-08-13\",\"key_day\":20260813,\"anchored_at\":\"2026-08-13\",\"value\":437.572,\"bars_since\":45,\"latest_close\":417.8,\"distance_pct\":-4.52,\"side\":\"价格在下\",\"truncated\":false,\"ineffective\":false,\"note\":\"\"},{\"key\":\"KDAS_26-09-22\",\"key_day\":20260922,\"anchored_at\":\"2026-09-22\",\"value\":432.451,\"bars_since\":17,\"latest_close\":417.8,\"distance_pct\":-3.39,\"side\":\"价格在下\",\"truncated\":false,\"ineffective\":false,\"note\":\"\"},{\"key\":\"KDAS_26-09-29\",\"key_day\":20260929,\"anchored_at\":\"2026-09-29\",\"value\":423.293,\"bars_since\":12,\"latest_close\":417.8,\"distance_pct\":-1.3,\"side\":\"价格在下\",\"truncated\":false,\"ineffective\":false,\"note\":\"\"}],\"nearest_support\":null,\"nearest_resistance\":{\"key\":\"KDAS_26-09-29\",\"key_day\":20260929,\"value\":423.293,\"distance_pct\":-1.3},\"notes\":[\"Values come from the indicator's own computeSource executed in the Node vm sandbox (same source the chart renders).\",\"Key days were read live from the chart roster (symbolParams for this market:symbol, else the global params).\"]}",
+   "parsed": {
+    "market": "hk",
+    "symbol": "00700.HK",
+    "interval": "1d",
+    "id": "kdas",
+    "title": "KDAS",
+    "keys_source": "symbolParams",
+    "keys": [
+     20240919,
+     20260423,
+     20260922,
+     20260929,
+     20260813
+    ],
+    "params": {
+     "kd1": 20240919,
+     "kd2": 20260423,
+     "kd3": 20260922,
+     "kd4": 20260929,
+     "kd5": 20260813,
+     "kd6": 0,
+     "kd7": 0,
+     "kd8": 0
+    },
+    "params_scope": "hk:00700.HK",
+    "provider": "tencent",
+    "parity": "same-source",
+    "parity_note": "Same registry resolution as the GUI chart route: the bridge /klines candidate order also puts this market's active provider first, so both read the same provider.",
+    "bars": 800,
+    "bars_requested": 800,
+    "window_first_bar": "2023-07-19",
+    "window_last_bar": "2026-10-15",
+    "as_of": "2026-10-15",
+    "fetched_at": "2026-10-15T13:15:58.032Z",
+    "bar_age_days": 0,
+    "stale": false,
+    "stale_note": "Newest daily bar is 0 day(s) old (stale above 7); a market holiday can legitimately exceed this.",
+    "latest_close": 417.8,
+    "lines": [
+     {
+      "key": "KDAS_24-09-19",
+      "key_day": 20240919,
+      "anchored_at": "2024-09-19",
+      "value": 486.802,
+      "bars_since": 510,
+      "latest_close": 417.8,
+      "distance_pct": -14.17,
+      "side": "价格在下",
+      "truncated": false,
+      "ineffective": false,
+      "note": ""
+     },
+     {
+      "key": "KDAS_26-04-23",
+      "key_day": 20260423,
+      "anchored_at": "2026-04-23",
+      "value": 451.737,
+      "bars_since": 121,
+      "latest_close": 417.8,
+      "distance_pct": -7.51,
+      "side": "价格在下",
+      "truncated": false,
+      "ineffective": false,
+      "note": ""
+     },
+     {
+      "key": "KDAS_26-08-13",
+      "key_day": 20260813,
+      "anchored_at": "2026-08-13",
+      "value": 437.572,
+      "bars_since": 45,
+      "latest_close": 417.8,
+      "distance_pct": -4.52,
+      "side": "价格在下",
+      "truncated": false,
+      "ineffective": false,
+      "note": ""
+     },
+     {
+      "key": "KDAS_26-09-22",
+      "key_day": 20260922,
+      "anchored_at": "2026-09-22",
+      "value": 432.451,
+      "bars_since": 17,
+      "latest_close": 417.8,
+      "distance_pct": -3.39,
+      "side": "价格在下",
+      "truncated": false,
+      "ineffective": false,
+      "note": ""
+     },
+     {
+      "key": "KDAS_26-09-29",
+      "key_day": 20260929,
+      "anchored_at": "2026-09-29",
+      "value": 423.293,
+      "bars_since": 12,
+      "latest_close": 417.8,
+      "distance_pct": -1.3,
+      "side": "价格在下",
+      "truncated": false,
+      "ineffective": false,
+      "note": ""
+     }
+    ],
+    "nearest_support": null,
+    "nearest_resistance": {
+     "key": "KDAS_26-09-29",
+     "key_day": 20260929,
+     "value": 423.293,
+     "distance_pct": -1.3
+    },
+    "notes": [
+     "Values come from the indicator's own computeSource executed in the Node vm sandbox (same source the chart renders).",
+     "Key days were read live from the chart roster (symbolParams for this market:symbol, else the global params)."
+    ]
+   }
+  },
+  "indicator_get_values(interval=1w 应拒绝)": {
+   "args": {
+    "market": "cn",
+    "symbol": "002714.SZ",
+    "interval": "1w"
+   },
+   "ok": false,
+   "elapsedMs": 0,
+   "error": "indicator_get_values: interval \"1w\" is not supported — the key-day anchored reading is defined on daily bars only (the indicator decides the trading day from the bar openTime's UTC date, so a weekly/monthly bar would anchor a whole period, and an intraday bar would anchor the wrong day). Re-run with interval=1d."
+  },
+  "prediction_fomc_meetings": {
+   "args": {},
+   "ok": true,
+   "elapsedMs": 783,
+   "raw": "{\"observedAt\":\"2026-10-15T13:15:58.816Z\",\"source\":\"gamma-api.polymarket.com /events (public read-only upstream)\",\"stale\":true,\"meetings\":[{\"id\":\"606422\",\"slug\":\"fed-decision-in-october-20260617190323537\",\"title\":\"Fed Decision in October?\",\"endDate\":\"2026-10-29T03:59:00Z\",\"meetingWindow\":\"October 27-28, 2026\",\"closed\":false,\"buckets\":[{\"key\":\"dec_50plus\",\"label\":\"50+ bps decrease\",\"changeBps\":-50,\"probability\":0.0015,\"bestBid\":0.001,\"bestAsk\":0.002,\"spread\":0.001,\"liquidity\":1629399.51229,\"volume\":6459092.970547006,\"volume24h\":122003.30599999998,\"tickSize\":0.001,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"dec_25\",\"label\":\"25 bps decrease\",\"changeBps\":-25,\"probability\":0.0035,\"bestBid\":0.003,\"bestAsk\":0.004,\"spread\":0.001,\"liquidity\":899116.56327,\"volume\":7000797.916287999,\"volume24h\":145810.83532800004,\"tickSize\":0.001,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"no_change\",\"label\":\"No change\",\"changeBps\":0,\"probability\":0.735,\"bestBid\":0.73,\"bestAsk\":0.74,\"spread\":0.01,\"liquidity\":195959.1317,\"volume\":12662559.553976998,\"volume24h\":1858498.3315800016,\"tickSize\":0.01,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"inc_25\",\"label\":\"25 bps increase\",\"changeBps\":25,\"probability\":0.255,\"bestBid\":0.25,\"bestAsk\":0.26,\"spread\":0.01,\"liquidity\":200437.6763,\"volume\":9668356.093268985,\"volume24h\":876117.7098349998,\"tickSize\":0.01,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"inc_50plus\",\"label\":\"50+ bps increase\",\"changeBps\":50,\"probability\":0.0035,\"bestBid\":0.003,\"bestAsk\":0.004,\"spread\":0.001,\"liquidity\":990201.40294,\"volume\":5682076.690718999,\"volume24h\":689647.17754,\"tickSize\":0.001,\"acceptingOrders\":true,\"closed\":false}],\"probabilitySum\":0.9985,\"degraded\":[]},{\"id\":\"770450\",\"slug\":\"fed-decision-in-december-20260729232808632\",\"title\":\"Fed Decision in December?\",\"endDate\":\"2026-12-10T04:59:00Z\",\"meetingWindow\":\"December 8-9, 2026\",\"closed\":false,\"buckets\":[{\"key\":\"dec_50plus\",\"label\":\"50+ bps decrease\",\"changeBps\":-50,\"probability\":0.0055,\"bestBid\":0.005,\"bestAsk\":0.006,\"spread\":0.001,\"liquidity\":117369.46547,\"volume\":662734.9766889999,\"volume24h\":69276.859331,\"tickSize\":0.001,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"dec_25\",\"label\":\"25 bps decrease\",\"changeBps\":-25,\"probability\":0.0085,\"bestBid\":0.007,\"bestAsk\":0.01,\"spread\":0.003,\"liquidity\":173599.23683,\"volume\":677290.9653840001,\"volume24h\":38729.932894,\"tickSize\":0.001,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"no_change\",\"label\":\"No change\",\"changeBps\":0,\"probability\":0.185,\"bestBid\":0.18,\"bestAsk\":0.19,\"spread\":0.01,\"liquidity\":149293.8562,\"volume\":803842.463311,\"volume24h\":33503.87944000001,\"tickSize\":0.01,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"inc_25\",\"label\":\"25 bps increase\",\"changeBps\":25,\"probability\":0.795,\"bestBid\":0.79,\"bestAsk\":0.8,\"spread\":0.01,\"liquidity\":134850.4266,\"volume\":871077.8399570002,\"volume24h\":32653.585826,\"tickSize\":0.01,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"inc_50plus\",\"label\":\"50+ bps increase\",\"changeBps\":50,\"probability\":0.0275,\"bestBid\":0.027,\"bestAsk\":0.028,\"spread\":0.001,\"liquidity\":115382.09381,\"volume\":502089.3230840001,\"volume24h\":50623.32550800001,\"tickSize\":0.001,\"acceptingOrders\":true,\"closed\":false}],\"probabilitySum\":1.0215,\"degraded\":[]},{\"id\":\"770451\",\"slug\":\"fed-decision-in-january-20260729233815502\",\"title\":\"Fed Decision in January?\",\"endDate\":\"2027-01-28T04:59:00Z\",\"meetingWindow\":\"January 26-27, 2027\",\"closed\":false,\"buckets\":[{\"key\":\"dec_50plus\",\"label\":\"50+ bps decrease\",\"changeBps\":-50,\"probability\":0.0055,\"bestBid\":0.005,\"bestAsk\":0.006,\"spread\":0.001,\"liquidity\":109882.11461,\"volume\":73465.455126,\"volume24h\":2199.99,\"tickSize\":0.001,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"dec_25\",\"label\":\"25 bps decrease\",\"changeBps\":-25,\"probability\":0.02,\"bestBid\":0.016,\"bestAsk\":0.024,\"spread\":0.008,\"liquidity\":90233.13486,\"volume\":83990.27415200001,\"volume24h\":6058.987857,\"tickSize\":0.001,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"no_change\",\"label\":\"No change\",\"changeBps\":0,\"probability\":0.575,\"bestBid\":0.57,\"bestAsk\":0.58,\"spread\":0.01,\"liquidity\":69898.1615,\"volume\":121389.78531500002,\"volume24h\":6805.055863999999,\"tickSize\":0.01,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"inc_25\",\"label\":\"25 bps increase\",\"changeBps\":25,\"probability\":0.355,\"bestBid\":0.35,\"bestAsk\":0.36,\"spread\":0.01,\"liquidity\":58403.4255,\"volume\":161285.76351000002,\"volume24h\":4916.932628,\"tickSize\":0.01,\"acceptingOrders\":true,\"closed\":false},{\"key\":\"inc_50plus\",\"label\":\"50+ bps increase\",\"changeBps\":50,\"probability\":0.013,\"bestBid\":0.012,\"bestAsk\":0.014,\"spread\":0.002,\"liquidity\":98480.55134,\"volume\":59325.235434,\"volume24h\":1645.27,\"tickSize\":0.001,\"acceptingOrders\":true,\"closed\":false}],\"probabilitySum\":0.9685,\"degraded\":[\"probability-sum-out-of-band\"]}]}",
+   "parsed": {
+    "observedAt": "2026-10-15T13:15:58.816Z",
+    "source": "gamma-api.polymarket.com /events (public read-only upstream)",
+    "stale": true,
+    "meetings": [
+     {
+      "id": "606422",
+      "slug": "fed-decision-in-october-20260617190323537",
+      "title": "Fed Decision in October?",
+      "endDate": "2026-10-29T03:59:00Z",
+      "meetingWindow": "October 27-28, 2026",
+      "closed": false,
+      "buckets": [
+       {
+        "key": "dec_50plus",
+        "label": "50+ bps decrease",
+        "changeBps": -50,
+        "probability": 0.0015,
+        "bestBid": 0.001,
+        "bestAsk": 0.002,
+        "spread": 0.001,
+        "liquidity": 1629399.51229,
+        "volume": 6459092.970547006,
+        "volume24h": 122003.30599999998,
+        "tickSize": 0.001,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "dec_25",
+        "label": "25 bps decrease",
+        "changeBps": -25,
+        "probability": 0.0035,
+        "bestBid": 0.003,
+        "bestAsk": 0.004,
+        "spread": 0.001,
+        "liquidity": 899116.56327,
+        "volume": 7000797.916287999,
+        "volume24h": 145810.83532800004,
+        "tickSize": 0.001,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "no_change",
+        "label": "No change",
+        "changeBps": 0,
+        "probability": 0.735,
+        "bestBid": 0.73,
+        "bestAsk": 0.74,
+        "spread": 0.01,
+        "liquidity": 195959.1317,
+        "volume": 12662559.553976998,
+        "volume24h": 1858498.3315800016,
+        "tickSize": 0.01,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "inc_25",
+        "label": "25 bps increase",
+        "changeBps": 25,
+        "probability": 0.255,
+        "bestBid": 0.25,
+        "bestAsk": 0.26,
+        "spread": 0.01,
+        "liquidity": 200437.6763,
+        "volume": 9668356.093268985,
+        "volume24h": 876117.7098349998,
+        "tickSize": 0.01,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "inc_50plus",
+        "label": "50+ bps increase",
+        "changeBps": 50,
+        "probability": 0.0035,
+        "bestBid": 0.003,
+        "bestAsk": 0.004,
+        "spread": 0.001,
+        "liquidity": 990201.40294,
+        "volume": 5682076.690718999,
+        "volume24h": 689647.17754,
+        "tickSize": 0.001,
+        "acceptingOrders": true,
+        "closed": false
+       }
+      ],
+      "probabilitySum": 0.9985,
+      "degraded": []
+     },
+     {
+      "id": "770450",
+      "slug": "fed-decision-in-december-20260729232808632",
+      "title": "Fed Decision in December?",
+      "endDate": "2026-12-10T04:59:00Z",
+      "meetingWindow": "December 8-9, 2026",
+      "closed": false,
+      "buckets": [
+       {
+        "key": "dec_50plus",
+        "label": "50+ bps decrease",
+        "changeBps": -50,
+        "probability": 0.0055,
+        "bestBid": 0.005,
+        "bestAsk": 0.006,
+        "spread": 0.001,
+        "liquidity": 117369.46547,
+        "volume": 662734.9766889999,
+        "volume24h": 69276.859331,
+        "tickSize": 0.001,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "dec_25",
+        "label": "25 bps decrease",
+        "changeBps": -25,
+        "probability": 0.0085,
+        "bestBid": 0.007,
+        "bestAsk": 0.01,
+        "spread": 0.003,
+        "liquidity": 173599.23683,
+        "volume": 677290.9653840001,
+        "volume24h": 38729.932894,
+        "tickSize": 0.001,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "no_change",
+        "label": "No change",
+        "changeBps": 0,
+        "probability": 0.185,
+        "bestBid": 0.18,
+        "bestAsk": 0.19,
+        "spread": 0.01,
+        "liquidity": 149293.8562,
+        "volume": 803842.463311,
+        "volume24h": 33503.87944000001,
+        "tickSize": 0.01,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "inc_25",
+        "label": "25 bps increase",
+        "changeBps": 25,
+        "probability": 0.795,
+        "bestBid": 0.79,
+        "bestAsk": 0.8,
+        "spread": 0.01,
+        "liquidity": 134850.4266,
+        "volume": 871077.8399570002,
+        "volume24h": 32653.585826,
+        "tickSize": 0.01,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "inc_50plus",
+        "label": "50+ bps increase",
+        "changeBps": 50,
+        "probability": 0.0275,
+        "bestBid": 0.027,
+        "bestAsk": 0.028,
+        "spread": 0.001,
+        "liquidity": 115382.09381,
+        "volume": 502089.3230840001,
+        "volume24h": 50623.32550800001,
+        "tickSize": 0.001,
+        "acceptingOrders": true,
+        "closed": false
+       }
+      ],
+      "probabilitySum": 1.0215,
+      "degraded": []
+     },
+     {
+      "id": "770451",
+      "slug": "fed-decision-in-january-20260729233815502",
+      "title": "Fed Decision in January?",
+      "endDate": "2027-01-28T04:59:00Z",
+      "meetingWindow": "January 26-27, 2027",
+      "closed": false,
+      "buckets": [
+       {
+        "key": "dec_50plus",
+        "label": "50+ bps decrease",
+        "changeBps": -50,
+        "probability": 0.0055,
+        "bestBid": 0.005,
+        "bestAsk": 0.006,
+        "spread": 0.001,
+        "liquidity": 109882.11461,
+        "volume": 73465.455126,
+        "volume24h": 2199.99,
+        "tickSize": 0.001,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "dec_25",
+        "label": "25 bps decrease",
+        "changeBps": -25,
+        "probability": 0.02,
+        "bestBid": 0.016,
+        "bestAsk": 0.024,
+        "spread": 0.008,
+        "liquidity": 90233.13486,
+        "volume": 83990.27415200001,
+        "volume24h": 6058.987857,
+        "tickSize": 0.001,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "no_change",
+        "label": "No change",
+        "changeBps": 0,
+        "probability": 0.575,
+        "bestBid": 0.57,
+        "bestAsk": 0.58,
+        "spread": 0.01,
+        "liquidity": 69898.1615,
+        "volume": 121389.78531500002,
+        "volume24h": 6805.055863999999,
+        "tickSize": 0.01,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "inc_25",
+        "label": "25 bps increase",
+        "changeBps": 25,
+        "probability": 0.355,
+        "bestBid": 0.35,
+        "bestAsk": 0.36,
+        "spread": 0.01,
+        "liquidity": 58403.4255,
+        "volume": 161285.76351000002,
+        "volume24h": 4916.932628,
+        "tickSize": 0.01,
+        "acceptingOrders": true,
+        "closed": false
+       },
+       {
+        "key": "inc_50plus",
+        "label": "50+ bps increase",
+        "changeBps": 50,
+        "probability": 0.013,
+        "bestBid": 0.012,
+        "bestAsk": 0.014,
+        "spread": 0.002,
+        "liquidity": 98480.55134,
+        "volume": 59325.235434,
+        "volume24h": 1645.27,
+        "tickSize": 0.001,
+        "acceptingOrders": true,
+        "closed": false
+       }
+      ],
+      "probabilitySum": 0.9685,
+      "degraded": [
+       "probability-sum-out-of-band"
+      ]
+     }
+    ]
+   }
+  },
+  "prediction_search_events(keyword=fed)": {
+   "args": {
+    "keyword": "fed",
+    "limit": 5
+   },
+   "ok": true,
+   "elapsedMs": 940,
+   "raw": "{\"observedAt\":\"2026-10-15T13:15:59.751Z\",\"source\":\"gamma-api.polymarket.com /events (public read-only upstream)\",\"stale\":true,\"filtering\":\"local-page-filter\",\"pageLimit\":100,\"scanned\":100,\"matched\":4,\"events\":[{\"id\":\"606422\",\"title\":\"Fed Decision in October?\",\"slug\":\"fed-decision-in-october-20260617190323537\",\"closed\":false,\"endDate\":\"2026-10-29T03:59:00Z\",\"volume\":41472883.22479999,\"liquidity\":3912665.72006,\"buckets\":[{\"key\":\"dec_50plus\",\"label\":\"50+ bps decrease\",\"probability\":0.0015},{\"key\":\"dec_25\",\"label\":\"25 bps decrease\",\"probability\":0.0035},{\"key\":\"no_change\",\"label\":\"No change\",\"probability\":0.735},{\"key\":\"inc_25\",\"label\":\"25 bps increase\",\"probability\":0.255},{\"key\":\"inc_50plus\",\"label\":\"50+ bps increase\",\"probability\":0.0035}]},{\"id\":\"770450\",\"title\":\"Fed Decision in December?\",\"slug\":\"fed-decision-in-december-20260729232808632\",\"closed\":false,\"endDate\":\"2026-12-10T04:59:00Z\",\"volume\":3517035.568425,\"liquidity\":689166.29302,\"buckets\":[{\"key\":\"dec_50plus\",\"label\":\"50+ bps decrease\",\"probability\":0.0055},{\"key\":\"dec_25\",\"label\":\"25 bps decrease\",\"probability\":0.0085},{\"key\":\"no_change\",\"label\":\"No change\",\"probability\":0.185},{\"key\":\"inc_25\",\"label\":\"25 bps increase\",\"probability\":0.795},{\"key\":\"inc_50plus\",\"label\":\"50+ bps increase\",\"probability\":0.0275}]},{\"id\":\"51456\",\"title\":\"How many Fed rate cuts in 2026?\",\"slug\":\"how-many-fed-rate-cuts-in-2026\",\"closed\":false,\"endDate\":\"2027-01-01T04:59:00Z\",\"volume\":54209864.100915,\"liquidity\":3817512.8801,\"buckets\":[{\"key\":\"raw:0 (0 bps)\",\"label\":\"0 (0 bps)\",\"probability\":0.9685},{\"key\":\"raw:1 (25 bps)\",\"label\":\"1 (25 bps)\",\"probability\":0.006},{\"key\":\"raw:2 (50 bps)\",\"label\":\"2 (50 bps)\",\"probability\":0.005},{\"key\":\"raw:3 (75 bps)\",\"label\":\"3 (75 bps)\",\"probability\":0.0015},{\"key\":\"raw:4 (100 bps)\",\"label\":\"4 (100 bps)\",\"probability\":0.0025},{\"key\":\"raw:5 (125 bps)\",\"label\":\"5 (125 bps)\",\"probability\":0.0015},{\"key\":\"raw:6 (150 bps)\",\"label\":\"6 (150 bps)\",\"probability\":0.001},{\"key\":\"raw:7 (175 bps)\",\"label\":\"7 (175 bps)\",\"probability\":0.0005},{\"key\":\"raw:8 (200 bps)\",\"label\":\"8 (200 bps)\",\"probability\":0.0005},{\"key\":\"raw:9 (225 bps)\",\"label\":\"9 (225 bps)\",\"probability\":0.0005},{\"key\":\"raw:10 (250 bps)\",\"label\":\"10 (250 bps)\",\"probability\":0.0005},{\"key\":\"raw:11 (275 bps)\",\"label\":\"11 (275 bps)\",\"probability\":0.0005},{\"key\":\"raw:12+ (300+ bps)\",\"label\":\"12+ (300+ bps)\",\"probability\":0.0005}]},{\"id\":\"1034268\",\"title\":\"Another Fed rate hike in 2026?\",\"slug\":\"another-fed-rate-hike-in-2026\",\"closed\":false,\"endDate\":\"2026-12-10T04:59:00Z\",\"volume\":795890.7223589997,\"liquidity\":88254.3944,\"buckets\":[{\"key\":\"raw:Yes\",\"label\":\"Yes\",\"probability\":0.855}]}]}",
+   "parsed": {
+    "observedAt": "2026-10-15T13:15:59.751Z",
+    "source": "gamma-api.polymarket.com /events (public read-only upstream)",
+    "stale": true,
+    "filtering": "local-page-filter",
+    "pageLimit": 100,
+    "scanned": 100,
+    "matched": 4,
+    "events": [
+     {
+      "id": "606422",
+      "title": "Fed Decision in October?",
+      "slug": "fed-decision-in-october-20260617190323537",
+      "closed": false,
+      "endDate": "2026-10-29T03:59:00Z",
+      "volume": 41472883.22479999,
+      "liquidity": 3912665.72006,
+      "buckets": [
+       {
+        "key": "dec_50plus",
+        "label": "50+ bps decrease",
+        "probability": 0.0015
+       },
+       {
+        "key": "dec_25",
+        "label": "25 bps decrease",
+        "probability": 0.0035
+       },
+       {
+        "key": "no_change",
+        "label": "No change",
+        "probability": 0.735
+       },
+       {
+        "key": "inc_25",
+        "label": "25 bps increase",
+        "probability": 0.255
+       },
+       {
+        "key": "inc_50plus",
+        "label": "50+ bps increase",
+        "probability": 0.0035
+       }
+      ]
+     },
+     {
+      "id": "770450",
+      "title": "Fed Decision in December?",
+      "slug": "fed-decision-in-december-20260729232808632",
+      "closed": false,
+      "endDate": "2026-12-10T04:59:00Z",
+      "volume": 3517035.568425,
+      "liquidity": 689166.29302,
+      "buckets": [
+       {
+        "key": "dec_50plus",
+        "label": "50+ bps decrease",
+        "probability": 0.0055
+       },
+       {
+        "key": "dec_25",
+        "label": "25 bps decrease",
+        "probability": 0.0085
+       },
+       {
+        "key": "no_change",
+        "label": "No change",
+        "probability": 0.185
+       },
+       {
+        "key": "inc_25",
+        "label": "25 bps increase",
+        "probability": 0.795
+       },
+       {
+        "key": "inc_50plus",
+        "label": "50+ bps increase",
+        "probability": 0.0275
+       }
+      ]
+     },
+     {
+      "id": "51456",
+      "title": "How many Fed rate cuts in 2026?",
+      "slug": "how-many-fed-rate-cuts-in-2026",
+      "closed": false,
+      "endDate": "2027-01-01T04:59:00Z",
+      "volume": 54209864.100915,
+      "liquidity": 3817512.8801,
+      "buckets": [
+       {
+        "key": "raw:0 (0 bps)",
+        "label": "0 (0 bps)",
+        "probability": 0.9685
+       },
+       {
+        "key": "raw:1 (25 bps)",
+        "label": "1 (25 bps)",
+        "probability": 0.006
+       },
+       {
+        "key": "raw:2 (50 bps)",
+        "label": "2 (50 bps)",
+        "probability": 0.005
+       },
+       {
+        "key": "raw:3 (75 bps)",
+        "label": "3 (75 bps)",
+        "probability": 0.0015
+       },
+       {
+        "key": "raw:4 (100 bps)",
+        "label": "4 (100 bps)",
+        "probability": 0.0025
+       },
+       {
+        "key": "raw:5 (125 bps)",
+        "label": "5 (125 bps)",
+        "probability": 0.0015
+       },
+       {
+        "key": "raw:6 (150 bps)",
+        "label": "6 (150 bps)",
+        "probability": 0.001
+       },
+       {
+        "key": "raw:7 (175 bps)",
+        "label": "7 (175 bps)",
+        "probability": 0.0005
+       },
+       {
+        "key": "raw:8 (200 bps)",
+        "label": "8 (200 bps)",
+        "probability": 0.0005
+       },
+       {
+        "key": "raw:9 (225 bps)",
+        "label": "9 (225 bps)",
+        "probability": 0.0005
+       },
+       {
+        "key": "raw:10 (250 bps)",
+        "label": "10 (250 bps)",
+        "probability": 0.0005
+       },
+       {
+        "key": "raw:11 (275 bps)",
+        "label": "11 (275 bps)",
+        "probability": 0.0005
+       },
+       {
+        "key": "raw:12+ (300+ bps)",
+        "label": "12+ (300+ bps)",
+        "probability": 0.0005
+       }
+      ]
+     },
+     {
+      "id": "1034268",
+      "title": "Another Fed rate hike in 2026?",
+      "slug": "another-fed-rate-hike-in-2026",
+      "closed": false,
+      "endDate": "2026-12-10T04:59:00Z",
+      "volume": 795890.7223589997,
+      "liquidity": 88254.3944,
+      "buckets": [
+       {
+        "key": "raw:Yes",
+        "label": "Yes",
+        "probability": 0.855
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "prediction_event_detail(606422)": {
+   "args": {
+    "eventId": "606422"
+   },
+   "ok": true,
+   "elapsedMs": 263,
+   "raw": "{\"observedAt\":\"2026-10-15T13:16:00.019Z\",\"source\":\"gamma-api.polymarket.com /events (public read-only upstream)\",\"stale\":true,\"event\":{\"id\":\"606422\",\"slug\":\"fed-decision-in-october-20260617190323537\",\"title\":\"Fed Decision in October?\",\"closed\":false,\"endDate\":\"2026-10-29T03:59:00Z\",\"negRisk\":true,\"volume\":41472883.22479999,\"liquidity\":3895750.87063,\"markets\":[{\"key\":\"dec_50plus\",\"label\":\"50+ bps decrease\",\"question\":\"Will the Fed decrease interest rates by 50+ bps after the October 2026 meeting?\",\"outcomes\":[\"Yes\",\"No\"],\"outcomePrices\":[0.0015,0.9985],\"bestBid\":0.001,\"bestAsk\":0.002,\"spread\":0.001,\"liquidity\":1628508.99322,\"volume\":6459092.970547006,\"closed\":false,\"acceptingOrders\":true},{\"key\":\"dec_25\",\"label\":\"25 bps decrease\",\"question\":\"Will the Fed decrease interest rates by 25 bps after the October 2026 meeting?\",\"outcomes\":[\"Yes\",\"No\"],\"outcomePrices\":[0.0035,0.9965],\"bestBid\":0.003,\"bestAsk\":0.004,\"spread\":0.001,\"liquidity\":899802.84232,\"volume\":7000797.916287999,\"closed\":false,\"acceptingOrders\":true},{\"key\":\"no_change\",\"label\":\"No change\",\"question\":\"Will there be no change in Fed interest rates after the October 2026 meeting?\",\"outcomes\":[\"Yes\",\"No\"],\"outcomePrices\":[0.735,0.265],\"bestBid\":0.73,\"bestAsk\":0.74,\"spread\":0.01,\"liquidity\":194473.7232,\"volume\":12662559.553976998,\"closed\":false,\"acceptingOrders\":true},{\"key\":\"inc_25\",\"label\":\"25 bps increase\",\"question\":\"Will the Fed increase interest rates by 25 bps after the October 2026 meeting?\",\"outcomes\":[\"Yes\",\"No\"],\"outcomePrices\":[0.255,0.745],\"bestBid\":0.25,\"bestAsk\":0.26,\"spread\":0.01,\"liquidity\":189754.5069,\"volume\":9668356.093268985,\"closed\":false,\"acceptingOrders\":true},{\"key\":\"inc_50plus\",\"label\":\"50+ bps increase\",\"question\":\"Will the Fed increase interest rates by 50+ bps after the October 2026 meeting?\",\"outcomes\":[\"Yes\",\"No\"],\"outcomePrices\":[0.0035,0.9965],\"bestBid\":0.003,\"bestAsk\":0.004,\"spread\":0.001,\"liquidity\":989359.60236,\"volume\":5682076.690718999,\"closed\":false,\"acceptingOrders\":true}]}}",
+   "parsed": {
+    "observedAt": "2026-10-15T13:16:00.019Z",
+    "source": "gamma-api.polymarket.com /events (public read-only upstream)",
+    "stale": true,
+    "event": {
+     "id": "606422",
+     "slug": "fed-decision-in-october-20260617190323537",
+     "title": "Fed Decision in October?",
+     "closed": false,
+     "endDate": "2026-10-29T03:59:00Z",
+     "negRisk": true,
+     "volume": 41472883.22479999,
+     "liquidity": 3895750.87063,
+     "markets": [
+      {
+       "key": "dec_50plus",
+       "label": "50+ bps decrease",
+       "question": "Will the Fed decrease interest rates by 50+ bps after the October 2026 meeting?",
+       "outcomes": [
+        "Yes",
+        "No"
+       ],
+       "outcomePrices": [
+        0.0015,
+        0.9985
+       ],
+       "bestBid": 0.001,
+       "bestAsk": 0.002,
+       "spread": 0.001,
+       "liquidity": 1628508.99322,
+       "volume": 6459092.970547006,
+       "closed": false,
+       "acceptingOrders": true
+      },
+      {
+       "key": "dec_25",
+       "label": "25 bps decrease",
+       "question": "Will the Fed decrease interest rates by 25 bps after the October 2026 meeting?",
+       "outcomes": [
+        "Yes",
+        "No"
+       ],
+       "outcomePrices": [
+        0.0035,
+        0.9965
+       ],
+       "bestBid": 0.003,
+       "bestAsk": 0.004,
+       "spread": 0.001,
+       "liquidity": 899802.84232,
+       "volume": 7000797.916287999,
+       "closed": false,
+       "acceptingOrders": true
+      },
+      {
+       "key": "no_change",
+       "label": "No change",
+       "question": "Will there be no change in Fed interest rates after the October 2026 meeting?",
+       "outcomes": [
+        "Yes",
+        "No"
+       ],
+       "outcomePrices": [
+        0.735,
+        0.265
+       ],
+       "bestBid": 0.73,
+       "bestAsk": 0.74,
+       "spread": 0.01,
+       "liquidity": 194473.7232,
+       "volume": 12662559.553976998,
+       "closed": false,
+       "acceptingOrders": true
+      },
+      {
+       "key": "inc_25",
+       "label": "25 bps increase",
+       "question": "Will the Fed increase interest rates by 25 bps after the October 2026 meeting?",
+       "outcomes": [
+        "Yes",
+        "No"
+       ],
+       "outcomePrices": [
+        0.255,
+        0.745
+       ],
+       "bestBid": 0.25,
+       "bestAsk": 0.26,
+       "spread": 0.01,
+       "liquidity": 189754.5069,
+       "volume": 9668356.093268985,
+       "closed": false,
+       "acceptingOrders": true
+      },
+      {
+       "key": "inc_50plus",
+       "label": "50+ bps increase",
+       "question": "Will the Fed increase interest rates by 50+ bps after the October 2026 meeting?",
+       "outcomes": [
+        "Yes",
+        "No"
+       ],
+       "outcomePrices": [
+        0.0035,
+        0.9965
+       ],
+       "bestBid": 0.003,
+       "bestAsk": 0.004,
+       "spread": 0.001,
+       "liquidity": 989359.60236,
+       "volume": 5682076.690718999,
+       "closed": false,
+       "acceptingOrders": true
+      }
+     ]
+    }
+   }
+  },
+  "flash_list(hot=沸,爆 limit=3)": {
+   "args": {
+    "hot": "沸,爆",
+    "limit": 3
+   },
+   "ok": true,
+   "elapsedMs": 1402,
+   "raw": "flash_list (hot=沸/爆) — 3 item(s) from a fixed 50-item upstream page, newest-first, source: Jin10 (金十数据) web flash endpoint (public heat-filtered feed):\n2026-10-15T12:40:09.000Z | 通胀压力持续升温 美国9月PPI数据大幅走高 | https://flash.jin10.com/detail/20261015204009005800 | hot=爆\n2026-10-15T12:31:18.000Z | 美国PPI、零售销售数据均超市场预期 | https://flash.jin10.com/detail/20261015203118588800 | hot=爆\n2026-10-15T12:25:54.000Z | 美国告知国际能源署成员国其对紧急石油释放表示不满 | https://flash.jin10.com/detail/20261015202554966800 | hot=沸\nhas_more=true — pass cursor=\"2026-10-14 20:34:05\" to flash_list for the next (older) page."
+  },
+  "flash_list(no hot limit=2)": {
+   "args": {
+    "limit": 2
+   },
+   "ok": true,
+   "elapsedMs": 520,
+   "raw": "flash_list — 2 item(s), newest-first, source: Jin10 (金十数据) MCP feed:\n2026-10-15T13:03:28.000Z | 王毅同阿塞拜疆外长巴伊拉莫夫会谈 | https://flash.jin10.com/detail/20261015210328906800\n2026-10-15T13:00:03.000Z | 俄罗斯至10月9日当周央行黄金和外汇储备 7235亿美元，前值7332亿美元 | https://flash.jin10.com/detail/20261015210003723800\nhas_more=true — pass cursor=\"1792067645279\" to flash_list for the next (older) page."
+  },
+  "macro_rates": {
+   "args": {},
+   "ok": true,
+   "elapsedMs": 144,
+   "raw": "{\"source\":\"Jin10 (金十数据) web rate board (public interest-rate endpoint behind rili.jin10.com)\",\"unit\":\"percent per year (publisher raw string)\",\"as_of\":\"2026-10-15T13:16:02.087Z\",\"snapshot_at\":null,\"snapshot_note\":\"The publisher returns a latest-value snapshot with no snapshot timestamp in the contract; each row carries its own publishedAt (publication date of that rate).\",\"region\":null,\"available_regions\":[\"中国\",\"丹麦\",\"乌克兰\",\"以色列\",\"俄罗斯\",\"加拿大\",\"匈牙利\",\"南非\",\"印度\",\"印度尼西亚\",\"哥伦比亚\",\"土耳其\",\"墨西哥\",\"尼日利亚\",\"巴西\",\"挪威\",\"捷克\",\"新西兰\",\"日本\",\"智利\",\"欧元区\",\"波兰\",\"泰国\",\"澳大利亚\",\"瑞士\",\"罗马尼亚\",\"美国\",\"英国\",\"菲律宾\",\"韩国\"],\"total\":30,\"count\":30,\"items\":[{\"region\":\"欧元区\",\"bankName\":\"欧洲央行\",\"rate\":\"2.5\",\"publishedAt\":\"2026-09-10\",\"indicatorName\":\"欧洲央行存款机制利率\"},{\"region\":\"美国\",\"bankName\":\"美国联邦储备局\",\"rate\":\"4\",\"publishedAt\":\"2026-09-17\",\"indicatorName\":\"美联储利率决定(上限)\"},{\"region\":\"中国\",\"bankName\":\"中国人民银行\",\"rate\":\"3\",\"publishedAt\":\"2025-05-20\",\"indicatorName\":\"一年期贷款市场报价利率\"},{\"region\":\"英国\",\"bankName\":\"英国央行\",\"rate\":\"3.75\",\"publishedAt\":\"2025-12-18\",\"indicatorName\":\"央行利率决定\"},{\"region\":\"日本\",\"bankName\":\"日本央行\",\"rate\":\"1.25\",\"publishedAt\":\"2026-09-18\",\"indicatorName\":\"央行目标利率（上限）\"},{\"region\":\"加拿大\",\"bankName\":\"加拿大央行\",\"rate\":\"2.25\",\"publishedAt\":\"2025-10-29\",\"indicatorName\":\"央行利率决定\"},{\"region\":\"瑞士\",\"bankName\":\"瑞士央行\",\"rate\":\"0\",\"publishedAt\":\"2025-06-19\",\"indicatorName\":\"央行政策利率\"},{\"region\":\"澳大利亚\",\"bankName\":\"澳洲联储\",\"rate\":\"4.6\",\"publishedAt\":\"2026-09-29\",\"indicatorName\":\"澳洲联储利率决定\"},{\"region\":\"新西兰\",\"bankName\":\"新西兰联储\",\"rate\":\"2.75\",\"publishedAt\":\"2026-09-02\",\"indicatorName\":\"联储利率决定\"},{\"region\":\"韩国\",\"bankName\":\"韩国央行\",\"rate\":\"3\",\"publishedAt\":\"2026-08-27\",\"indicatorName\":\"央行利率决定\"},{\"region\":\"俄罗斯\",\"bankName\":\"俄罗斯央行\",\"rate\":\"14\",\"publishedAt\":\"2026-07-24\",\"indicatorName\":\"央行利率决定\"},{\"region\":\"印度\",\"bankName\":\"印度储备银行\",\"rate\":\"5.5\",\"publishedAt\":\"2026-10-07\",\"indicatorName\":\"央行利率决定\"},{\"region\":\"泰国\",\"bankName\":\"泰国央行\",\"rate\":\"1\",\"publishedAt\":\"2026-02-25\",\"indicatorName\":\"央行利率决定\"},{\"region\":\"土耳其\",\"bankName\":\"土耳其央行\",\"rate\":\"37\",\"publishedAt\":\"2026-01-22\",\"indicatorName\":\"一周回购利率\"},{\"region\":\"挪威\",\"bankName\":\"挪威央行\",\"rate\":\"4.5\",\"publishedAt\":\"2026-09-24\",\"indicatorName\":\"央行利率决定\"},{\"region\":\"菲律宾\",\"bankName\":\"菲律宾央行\",\"rate\":\"5\",\"publishedAt\":\"2026-08-27\",\"indicatorName\":\"央行政策利率\"},{\"region\":\"巴西\",\"bankName\":\"巴西央行\",\"rate\":\"13.75\",\"publishedAt\":\"2026-09-17\",\"indicatorName\":\"Selic利率\"},{\"region\":\"墨西哥\",\"bankName\":\"墨西哥央行\",\"rate\":\"6.5\",\"publishedAt\":\"2026-05-08\",\"indicatorName\":\"央行利率决定\"},{\"region\":\"南非\",\"bankName\":\"南非央行\",\"rate\":\"7.25\",\"publishedAt\":\"2026-09-23\",\"indicatorName\":\"回购利率\"},{\"region\":\"丹麦\",\"bankName\":\"丹麦国民银行\",\"rate\":\"1.6\",\"publishedAt\":\"2025-06-05\"},{\"region\":\"以色列\",\"bankName\":\"以色列央行\",\"rate\":\"3.75\",\"publishedAt\":\"2026-05-25\"},{\"region\":\"印度尼西亚\",\"bankName\":\"印尼央行\",\"rate\":\"5.75\",\"publishedAt\":\"2026-06-18\",\"indicatorName\":\"7天逆回购利率\"},{\"region\":\"匈牙利\",\"bankName\":\"匈牙利国民银行\",\"rate\":\"6.25\",\"publishedAt\":\"2026-02-24\"},{\"region\":\"捷克\",\"bankName\":\"捷克国民银行\",\"rate\":\"3.5\",\"publishedAt\":\"2025-05-07\"},{\"region\":\"乌克兰\",\"bankName\":\"乌克兰国民银行\",\"rate\":\"16\",\"publishedAt\":\"2026-09-17\",\"indicatorName\":\"央行利率\"},{\"region\":\"哥伦比亚\",\"bankName\":\"哥伦比亚央行\",\"rate\":\"11.25\",\"publishedAt\":\"2026-04-02\"},{\"region\":\"尼日利亚\",\"bankName\":\"尼日利亚央行\",\"rate\":\"26.5\",\"publishedAt\":\"2026-02-24\"},{\"region\":\"罗马尼亚\",\"bankName\":\"罗马尼亚国民银行\",\"rate\":\"6.5\",\"publishedAt\":\"2024-08-07\"},{\"region\":\"波兰\",\"bankName\":\"波兰国民银行\",\"rate\":\"3.75\",\"publishedAt\":\"2026-03-04\"},{\"region\":\"智利\",\"bankName\":\"智利央行\",\"rate\":\"5\",\"publishedAt\":\"2024-12-18\",\"indicatorName\":\"央行基准利率\"}]}",
+   "parsed": {
+    "source": "Jin10 (金十数据) web rate board (public interest-rate endpoint behind rili.jin10.com)",
+    "unit": "percent per year (publisher raw string)",
+    "as_of": "2026-10-15T13:16:02.087Z",
+    "snapshot_at": null,
+    "snapshot_note": "The publisher returns a latest-value snapshot with no snapshot timestamp in the contract; each row carries its own publishedAt (publication date of that rate).",
+    "region": null,
+    "available_regions": [
+     "中国",
+     "丹麦",
+     "乌克兰",
+     "以色列",
+     "俄罗斯",
+     "加拿大",
+     "匈牙利",
+     "南非",
+     "印度",
+     "印度尼西亚",
+     "哥伦比亚",
+     "土耳其",
+     "墨西哥",
+     "尼日利亚",
+     "巴西",
+     "挪威",
+     "捷克",
+     "新西兰",
+     "日本",
+     "智利",
+     "欧元区",
+     "波兰",
+     "泰国",
+     "澳大利亚",
+     "瑞士",
+     "罗马尼亚",
+     "美国",
+     "英国",
+     "菲律宾",
+     "韩国"
+    ],
+    "total": 30,
+    "count": 30,
+    "items": [
+     {
+      "region": "欧元区",
+      "bankName": "欧洲央行",
+      "rate": "2.5",
+      "publishedAt": "2026-09-10",
+      "indicatorName": "欧洲央行存款机制利率"
+     },
+     {
+      "region": "美国",
+      "bankName": "美国联邦储备局",
+      "rate": "4",
+      "publishedAt": "2026-09-17",
+      "indicatorName": "美联储利率决定(上限)"
+     },
+     {
+      "region": "中国",
+      "bankName": "中国人民银行",
+      "rate": "3",
+      "publishedAt": "2025-05-20",
+      "indicatorName": "一年期贷款市场报价利率"
+     },
+     {
+      "region": "英国",
+      "bankName": "英国央行",
+      "rate": "3.75",
+      "publishedAt": "2025-12-18",
+      "indicatorName": "央行利率决定"
+     },
+     {
+      "region": "日本",
+      "bankName": "日本央行",
+      "rate": "1.25",
+      "publishedAt": "2026-09-18",
+      "indicatorName": "央行目标利率（上限）"
+     },
+     {
+      "region": "加拿大",
+      "bankName": "加拿大央行",
+      "rate": "2.25",
+      "publishedAt": "2025-10-29",
+      "indicatorName": "央行利率决定"
+     },
+     {
+      "region": "瑞士",
+      "bankName": "瑞士央行",
+      "rate": "0",
+      "publishedAt": "2025-06-19",
+      "indicatorName": "央行政策利率"
+     },
+     {
+      "region": "澳大利亚",
+      "bankName": "澳洲联储",
+      "rate": "4.6",
+      "publishedAt": "2026-09-29",
+      "indicatorName": "澳洲联储利率决定"
+     },
+     {
+      "region": "新西兰",
+      "bankName": "新西兰联储",
+      "rate": "2.75",
+      "publishedAt": "2026-09-02",
+      "indicatorName": "联储利率决定"
+     },
+     {
+      "region": "韩国",
+      "bankName": "韩国央行",
+      "rate": "3",
+      "publishedAt": "2026-08-27",
+      "indicatorName": "央行利率决定"
+     },
+     {
+      "region": "俄罗斯",
+      "bankName": "俄罗斯央行",
+      "rate": "14",
+      "publishedAt": "2026-07-24",
+      "indicatorName": "央行利率决定"
+     },
+     {
+      "region": "印度",
+      "bankName": "印度储备银行",
+      "rate": "5.5",
+      "publishedAt": "2026-10-07",
+      "indicatorName": "央行利率决定"
+     },
+     {
+      "region": "泰国",
+      "bankName": "泰国央行",
+      "rate": "1",
+      "publishedAt": "2026-02-25",
+      "indicatorName": "央行利率决定"
+     },
+     {
+      "region": "土耳其",
+      "bankName": "土耳其央行",
+      "rate": "37",
+      "publishedAt": "2026-01-22",
+      "indicatorName": "一周回购利率"
+     },
+     {
+      "region": "挪威",
+      "bankName": "挪威央行",
+      "rate": "4.5",
+      "publishedAt": "2026-09-24",
+      "indicatorName": "央行利率决定"
+     },
+     {
+      "region": "菲律宾",
+      "bankName": "菲律宾央行",
+      "rate": "5",
+      "publishedAt": "2026-08-27",
+      "indicatorName": "央行政策利率"
+     },
+     {
+      "region": "巴西",
+      "bankName": "巴西央行",
+      "rate": "13.75",
+      "publishedAt": "2026-09-17",
+      "indicatorName": "Selic利率"
+     },
+     {
+      "region": "墨西哥",
+      "bankName": "墨西哥央行",
+      "rate": "6.5",
+      "publishedAt": "2026-05-08",
+      "indicatorName": "央行利率决定"
+     },
+     {
+      "region": "南非",
+      "bankName": "南非央行",
+      "rate": "7.25",
+      "publishedAt": "2026-09-23",
+      "indicatorName": "回购利率"
+     },
+     {
+      "region": "丹麦",
+      "bankName": "丹麦国民银行",
+      "rate": "1.6",
+      "publishedAt": "2025-06-05"
+     },
+     {
+      "region": "以色列",
+      "bankName": "以色列央行",
+      "rate": "3.75",
+      "publishedAt": "2026-05-25"
+     },
+     {
+      "region": "印度尼西亚",
+      "bankName": "印尼央行",
+      "rate": "5.75",
+      "publishedAt": "2026-06-18",
+      "indicatorName": "7天逆回购利率"
+     },
+     {
+      "region": "匈牙利",
+      "bankName": "匈牙利国民银行",
+      "rate": "6.25",
+      "publishedAt": "2026-02-24"
+     },
+     {
+      "region": "捷克",
+      "bankName": "捷克国民银行",
+      "rate": "3.5",
+      "publishedAt": "2025-05-07"
+     },
+     {
+      "region": "乌克兰",
+      "bankName": "乌克兰国民银行",
+      "rate": "16",
+      "publishedAt": "2026-09-17",
+      "indicatorName": "央行利率"
+     },
+     {
+      "region": "哥伦比亚",
+      "bankName": "哥伦比亚央行",
+      "rate": "11.25",
+      "publishedAt": "2026-04-02"
+     },
+     {
+      "region": "尼日利亚",
+      "bankName": "尼日利亚央行",
+      "rate": "26.5",
+      "publishedAt": "2026-02-24"
+     },
+     {
+      "region": "罗马尼亚",
+      "bankName": "罗马尼亚国民银行",
+      "rate": "6.5",
+      "publishedAt": "2024-08-07"
+     },
+     {
+      "region": "波兰",
+      "bankName": "波兰国民银行",
+      "rate": "3.75",
+      "publishedAt": "2026-03-04"
+     },
+     {
+      "region": "智利",
+      "bankName": "智利央行",
+      "rate": "5",
+      "publishedAt": "2024-12-18",
+      "indicatorName": "央行基准利率"
+     }
+    ]
+   }
+  },
+  "macro_rates(region=美国)": {
+   "args": {
+    "region": "美国"
+   },
+   "ok": true,
+   "elapsedMs": 47,
+   "raw": "{\"source\":\"Jin10 (金十数据) web rate board (public interest-rate endpoint behind rili.jin10.com)\",\"unit\":\"percent per year (publisher raw string)\",\"as_of\":\"2026-10-15T13:16:02.135Z\",\"snapshot_at\":null,\"snapshot_note\":\"The publisher returns a latest-value snapshot with no snapshot timestamp in the contract; each row carries its own publishedAt (publication date of that rate).\",\"region\":\"美国\",\"available_regions\":[\"中国\",\"丹麦\",\"乌克兰\",\"以色列\",\"俄罗斯\",\"加拿大\",\"匈牙利\",\"南非\",\"印度\",\"印度尼西亚\",\"哥伦比亚\",\"土耳其\",\"墨西哥\",\"尼日利亚\",\"巴西\",\"挪威\",\"捷克\",\"新西兰\",\"日本\",\"智利\",\"欧元区\",\"波兰\",\"泰国\",\"澳大利亚\",\"瑞士\",\"罗马尼亚\",\"美国\",\"英国\",\"菲律宾\",\"韩国\"],\"total\":30,\"count\":1,\"items\":[{\"region\":\"美国\",\"bankName\":\"美国联邦储备局\",\"rate\":\"4\",\"publishedAt\":\"2026-09-17\",\"indicatorName\":\"美联储利率决定(上限)\"}]}",
+   "parsed": {
+    "source": "Jin10 (金十数据) web rate board (public interest-rate endpoint behind rili.jin10.com)",
+    "unit": "percent per year (publisher raw string)",
+    "as_of": "2026-10-15T13:16:02.135Z",
+    "snapshot_at": null,
+    "snapshot_note": "The publisher returns a latest-value snapshot with no snapshot timestamp in the contract; each row carries its own publishedAt (publication date of that rate).",
+    "region": "美国",
+    "available_regions": [
+     "中国",
+     "丹麦",
+     "乌克兰",
+     "以色列",
+     "俄罗斯",
+     "加拿大",
+     "匈牙利",
+     "南非",
+     "印度",
+     "印度尼西亚",
+     "哥伦比亚",
+     "土耳其",
+     "墨西哥",
+     "尼日利亚",
+     "巴西",
+     "挪威",
+     "捷克",
+     "新西兰",
+     "日本",
+     "智利",
+     "欧元区",
+     "波兰",
+     "泰国",
+     "澳大利亚",
+     "瑞士",
+     "罗马尼亚",
+     "美国",
+     "英国",
+     "菲律宾",
+     "韩国"
+    ],
+    "total": 30,
+    "count": 1,
+    "items": [
+     {
+      "region": "美国",
+      "bankName": "美国联邦储备局",
+      "rate": "4",
+      "publishedAt": "2026-09-17",
+      "indicatorName": "美联储利率决定(上限)"
+     }
+    ]
+   }
+  },
+  "econ_calendar(limit=3)": {
+   "args": {
+    "limit": 3
+   },
+   "ok": true,
+   "elapsedMs": 84,
+   "raw": "econ_calendar — 3 entr(ies) for the current week (Beijing time), source: Jin10 (金十数据) MCP feed:\n2026-10-12T23:01:00.000Z | ★2 | 英国9月BRC同店零售销售年率 | 前值=0.50 预期=- 公布=1 影响=利多\n2026-10-12T23:01:00.000Z | ★2 | 英国9月BRC总体零售销售年率 | 前值=0.7 预期=- 公布=1.3 影响=利多\n2026-10-12T23:50:00.000Z | ★2 | 日本9月季调后银行贷款年率 | 前值=5.40 预期=- 公布=5.3 修正=5.3 影响=利空"
+  }
+ },
+ "financeConfigured": true
+}

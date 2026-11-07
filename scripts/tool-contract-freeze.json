@@ -26,7 +26,7 @@
       {
         "name": "symbol",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "interval",
@@ -48,12 +48,12 @@
       {
         "name": "symbol",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "orderId",
         "type": "string",
-        "required": false
+        "required": true
       }
     ],
     "outputForm": "none"
@@ -64,7 +64,7 @@
       {
         "name": "symbol",
         "type": "string",
-        "required": false
+        "required": true
       }
     ],
     "outputForm": "none"
@@ -91,7 +91,7 @@
       {
         "name": "symbol",
         "type": "string",
-        "required": false
+        "required": true
       }
     ],
     "outputForm": "none"
@@ -102,7 +102,7 @@
       {
         "name": "symbol",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "limit",
@@ -250,6 +250,72 @@
         "name": "requestId",
         "type": "string",
         "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_hk_short_top10": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "limit",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_sector_ranking": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "window",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "name": "limit",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_sector_series": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "code",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "days",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_sentiment_history": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "days",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_snapshot": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "group",
+        "type": "string",
+        "required": false,
+        "enum": true
       }
     ],
     "outputForm": "object"
@@ -829,6 +895,11 @@
         "name": "limit",
         "type": "number",
         "required": false
+      },
+      {
+        "name": "hot",
+        "type": "string",
+        "required": false
       }
     ],
     "outputForm": "object"
@@ -839,7 +910,7 @@
       {
         "name": "keyword",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "limit",
@@ -866,7 +937,7 @@
       {
         "name": "code",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "time",
@@ -887,6 +958,17 @@
       {
         "name": "code",
         "type": "string",
+        "required": true
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/connector-jin10#macro_rates": {
+    "file": "packages/connector-jin10/src/tools.ts",
+    "params": [
+      {
+        "name": "region",
+        "type": "string",
         "required": false
       }
     ],
@@ -898,7 +980,7 @@
       {
         "name": "id",
         "type": "string",
-        "required": false
+        "required": true
       }
     ],
     "outputForm": "object"
@@ -925,7 +1007,7 @@
       {
         "name": "keyword",
         "type": "string",
-        "required": false
+        "required": true
       },
       {
         "name": "cursor",
@@ -1248,6 +1330,44 @@
       }
     ],
     "outputForm": "object"
+  },
+  "@dshtrading/connector-polymarket#prediction_event_detail": {
+    "file": "packages/connector-polymarket/src/tools.ts",
+    "params": [
+      {
+        "name": "eventId",
+        "type": "string",
+        "required": true
+      }
+    ],
+    "outputForm": "none"
+  },
+  "@dshtrading/connector-polymarket#prediction_fomc_meetings": {
+    "file": "packages/connector-polymarket/src/tools.ts",
+    "params": [
+      {
+        "name": "meetingId",
+        "type": "string",
+        "required": false
+      }
+    ],
+    "outputForm": "none"
+  },
+  "@dshtrading/connector-polymarket#prediction_search_events": {
+    "file": "packages/connector-polymarket/src/tools.ts",
+    "params": [
+      {
+        "name": "keyword",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "limit",
+        "type": "number",
+        "required": false
+      }
+    ],
+    "outputForm": "none"
   },
   "@dshtrading/connector-qmt#cn_cancel_order": {
     "file": "packages/connector-qmt/src/index.ts",
@@ -2061,6 +2181,38 @@
         "name": "id",
         "type": "string",
         "required": true
+      }
+    ],
+    "outputForm": "object"
+  },
+  "@dshtrading/indicators#indicator_get_values": {
+    "file": "packages/indicators/src/values-tool.ts",
+    "params": [
+      {
+        "name": "market",
+        "type": "string",
+        "required": true,
+        "enum": true
+      },
+      {
+        "name": "symbol",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "interval",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "id",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "keys",
+        "type": "string",
+        "required": false
       }
     ],
     "outputForm": "object"

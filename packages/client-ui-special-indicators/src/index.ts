@@ -13,6 +13,9 @@
  *   → 行配置 password → 环境变量 FINANCE_API_PASSWORD 兜底，逐请求惰性解析。
  * - 固定子路由白名单（非通用代理），查询参数服务端校验；对上游只做 GET。
  * - headless 宿主无 webServer/connection：ctx.inject 子插件挂起，零副作用。
+ * - agent 工具面同一实例：ctx.inject(['tools']) 注册五只只读工具，与桥**共用**本
+ *   apply 里的 FinanceClient（同一 TTL/落盘缓存、同一白名单路径、同一凭据链），
+ *   见 src/indicator-tools.ts。
  *
  * 浏览器半（exports["./client"]）注册中栏「特殊指标」tab。
  */
@@ -21,6 +24,8 @@ import Schema from '@deepseek-ai/schemastery'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createFileCachePersistence, defaultCacheFilePath } from './cache-file.ts'
 import { FinanceClient, FinanceError } from './finance-client.ts'
+import { createSpecialIndicatorTools } from './indicator-tools.ts'
+import { ROUTES, tierTtlMs } from './routes.ts'
 
 /** Cordis 插件名 = patch 行 id（TEMPLATES §8）。 */
 export const name = 'dsh-trading-client-ui-special-indicators'
@@ -66,6 +71,12 @@ interface RouterLike {
   getCredential?(provider: string): Record<string, string> | undefined
 }
 
+/** agent 工具注册面（@deepseek-ai/dsh-tools 的 tools 服务），只用到这三只方法。 */
+interface ToolsLike {
+  register(definition: unknown): () => void
+  get(name: string): unknown
+}
+
 export const MOUNT = '/dshtrading/api/special-indicators'
 
 function sendJson(res: ServerResponse, status: number, payload: unknown): void {
@@ -76,59 +87,7 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
   res.end(JSON.stringify(payload))
 }
 
-/** 板块代码白名单（数字/字母，防路径注入）。 */
-const SECTOR_CODE_RE = /^[0-9A-Za-z]{1,12}$/
-
-function clampInt(raw: string | null, fallback: number, min: number, max: number): number {
-  if (raw === null || raw.trim() === '') return fallback
-  const n = Number.parseInt(raw, 10)
-  if (!Number.isFinite(n)) return fallback
-  return Math.min(max, Math.max(min, n))
-}
-
-interface RouteDef {
-  /** 子路径（MOUNT 之后），如 /basis/snapshot。 */
-  sub: string
-  /** 由已校验查询参数与被解析的配置拼上游路径；返回 null = 参数非法（400）。 */
-  upstream: (url: URL, config: Config) => string | null
-  /** 缓存档：snapshot 用 snapshotCacheMs，history 用 historyCacheMs。 */
-  tier: 'snapshot' | 'history'
-}
-
-/** 固定子路由白名单（非通用代理；对上游只读 GET）。 */
-export const ROUTES: readonly RouteDef[] = [
-  { sub: '/basis/snapshot', upstream: () => '/api/snapshot', tier: 'snapshot' },
-  {
-    sub: '/basis/history',
-    upstream: (url) => '/api/v2/basis/history?days=' + clampInt(url.searchParams.get('days'), 200, 10, 500),
-    tier: 'history',
-  },
-  // 恐慌指数固定 market=cn + 配置里的方法学版本（docs/api.md：调用方应固定方法，
-  // 避免历史拼接混用；同一会话内不得一半 v2 一半 v3）。版本由配置给，不再写死在路由里。
-  { sub: '/sentiment/snapshot', upstream: (_url, config) => '/api/sentiment/snapshot?market=cn&methodology=' + String(config.sentimentMethodology), tier: 'snapshot' },
-  {
-    sub: '/sentiment/history',
-    upstream: (url, config) => '/api/sentiment/history?market=cn&methodology=' + String(config.sentimentMethodology) + '&days=' + clampInt(url.searchParams.get('days'), 750, 30, 800),
-    tier: 'history',
-  },
-  { sub: '/hk-short/snapshot', upstream: () => '/api/hk-short/snapshot', tier: 'snapshot' },
-  { sub: '/hk-short/chart', upstream: () => '/api/hk-short/chart', tier: 'history' },
-  { sub: '/sectors/snapshot', upstream: () => '/api/sectors/snapshot', tier: 'snapshot' },
-  {
-    sub: '/sectors/ranking',
-    upstream: (url) => '/api/sectors/ranking?window=' + clampInt(url.searchParams.get('window'), 20, 1, 120),
-    tier: 'snapshot',
-  },
-  {
-    sub: '/sectors/detail',
-    upstream: (url) => {
-      const code = url.searchParams.get('code') ?? ''
-      if (!SECTOR_CODE_RE.test(code)) return null
-      return '/api/v2/sectors/' + encodeURIComponent(code) + '?days=' + clampInt(url.searchParams.get('days'), 200, 10, 500)
-    },
-    tier: 'history',
-  },
-]
+/** 板块代码白名单、参数夹取与固定子路由白名单见 src/routes.ts（工具面同源白名单）。 */
 
 /** 凭据链：设置中心 credentials.finance → 行配置 → 环境变量（逐请求惰性解析）。 */
 export function createCredentialProviders(ctx: Context, config: Config): { username: () => string; password: () => string } {
@@ -172,7 +131,7 @@ export function createRouteHandler(client: FinanceClient, config: Config, connec
       return
     }
     try {
-      const ttl = route.tier === 'snapshot' ? config.snapshotCacheMs : config.historyCacheMs
+      const ttl = tierTtlMs(route.tier, config)
       const { payload, meta } = await client.getWithMeta(upstream, ttl)
       // 透传上游 JSON（自有服务自有数据；包装 ok 信封与 updater 桥一致）。
       // 陈旧回源立即服役时如实带 stale 标记（浏览器半渲染「数据滞后」徽标）。
@@ -213,9 +172,27 @@ export function apply(ctx: Context, config: Config): void {
     const handler = createRouteHandler(client, config, connection)
     ctx.effect(() => webServer.register({ kind: 'prefix', path: MOUNT, handler }), 'dsh-trading-client-ui-special-indicators: ' + MOUNT + ' route')
   })
+
+  // agent 工具面：与上面的桥共用同一个 client（同一缓存、同一凭据链、同一白名单）。
+  // 嵌套 inject 而非 module 级 inject（本包 inject: []）——headless/无 tools 服务的
+  // 宿主里桥照常工作，工具面自行挂起，不会因为缺一个服务整行不加载。
+  ctx.inject(['tools'], (toolCtx) => {
+    const tools = toolCtx.get('tools') as unknown as ToolsLike | undefined
+    if (tools === undefined) return
+    for (const tool of createSpecialIndicatorTools(client, config)) {
+      // 同名先到先得，绝不重复注册（dsh-tools 对同名重复注册直接抛错）。
+      if (tools.get(tool.name) === undefined) {
+        ctx.effect(() => tools.register(tool), 'dsh-trading-client-ui-special-indicators: tool ' + tool.name)
+      }
+    }
+  })
 }
 
 /** Re-exports for tests and tooling. */
 export { FinanceClient, FinanceError } from './finance-client.ts'
 export type { CachePersistence, PersistedCacheEntry } from './finance-client.ts'
 export { createFileCachePersistence, defaultCacheFilePath } from './cache-file.ts'
+export { ROUTES, SECTOR_CODE_RE, buildUpstreamPath, clampInt, tierOf, tierTtlMs } from './routes.ts'
+export type { CacheTierConfig, RouteConfig, RouteDef, RouteTier } from './routes.ts'
+export { createSpecialIndicatorTools, INDICATOR_TOOL_NAMES } from './indicator-tools.ts'
+export type { IndicatorToolConfig } from './indicator-tools.ts'

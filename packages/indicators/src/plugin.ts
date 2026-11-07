@@ -23,6 +23,7 @@ import { createFileChartActivationStore } from './chart-activations-fs.ts'
 import { seedDefaultChartActivations } from './chart-seed.ts'
 import { createChartActivationTools } from './chart-tools.ts'
 import { createAuthorIndicatorTool } from './tool.ts'
+import { createIndicatorValuesTool, type MarketDataRegistryLike } from './values-tool.ts'
 
 // 桥经本子路径取 file store（knowledge/tool 同款再导出先例）。
 export { createFileCustomIndicatorStore }
@@ -126,6 +127,15 @@ export function registerIndicatorsTools(ctx: Context, deps: IndicatorsPluginDeps
     register(createIndicatorDeleteTool({
       store: deps.store,
       onDeleted: () => events()?.emit('indicators'),
+    }))
+    // 指标数值读数（indicator_get_values）：挂 host 平面——关键日的唯一权威（图表激活
+    // 名册）与市场无关，一个工具覆盖全市场。行情面经同一注册表惰性解析（与桥 /klines
+    // 同源）；惰性是为了容忍「行情面晚于本插件就位」的部署。
+    register(createIndicatorValuesTool({
+      store: deps.store,
+      chartStore: deps.chartStore,
+      getMarketRegistry: () => (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown })
+        .get?.('tradingMarketDataRegistry', false) as MarketDataRegistryLike | undefined,
     }))
     // 图表激活名册工具族（issue #63）：写成功 emit('chart')，GUI 经 SSE 即时同步。
     if (deps.chartStore !== undefined) {

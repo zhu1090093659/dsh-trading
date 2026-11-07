@@ -37,14 +37,14 @@ describe('connector-jin10 插件行', () => {
     expect(name).toBe('dsh-trading-connector-jin10')
   })
 
-  it('apply 注册全部 9 个工具，重名不覆盖（先到先得）', () => {
+  it('apply 注册全部 10 个工具，重名不覆盖（先到先得）', () => {
     const { ctx, registered } = fakeCtx()
     registered.set('flash_list', { name: 'flash_list' })
     apply(ctx, { ...Config({}), enabled: true })
-    expect(registered.size).toBe(9)
+    expect(registered.size).toBe(10)
     expect([...registered.keys()].sort()).toEqual([
       'econ_calendar', 'flash_list', 'flash_search', 'global_instruments', 'global_klines',
-      'global_quote', 'news_get', 'news_list', 'news_search',
+      'global_quote', 'macro_rates', 'news_get', 'news_list', 'news_search',
     ])
   })
 

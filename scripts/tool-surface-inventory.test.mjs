@@ -167,6 +167,20 @@ describe('extractDefineTools', () => {
       { name: 'limit', type: 'number', required: false, enum: false, default: true, hasDescription: true },
     ])
   })
+
+  it('管理员：required 的 as const 写法与裸字面量读出同一形状', () => {
+    // Given 同一份契约的两种等价 TS 写法：`required: true as const`（字面量推断所需）
+    // 与裸 `required: true`——全仓 14 处参数用前者（jin10 的 keyword/code/id、base 的 symbol 等）
+    const src = "defineTool({ name: 'a', parameters: { code: { type: 'string' as const, required: true as const }, id: { type: 'string', required: true } }, output: { schema: { type: 'string' } }, execute() {} })"
+    // When 抽取
+    const defs = extractDefineTools(src, maskSource(src))
+    // Then 两者都必须判为必填：正文里漏剥 `as const` 会让 required 静默反向成 false，
+    // 于是 T2（必填面漂移）对该参数永不触发——门禁看着绿，改了必填也不红
+    expect(defs[0].params).toEqual([
+      { name: 'code', type: 'string', required: true, enum: false, default: false, hasDescription: false },
+      { name: 'id', type: 'string', required: true, enum: false, default: false, hasDescription: false },
+    ])
+  })
 })
 
 describe('descriptionText', () => {

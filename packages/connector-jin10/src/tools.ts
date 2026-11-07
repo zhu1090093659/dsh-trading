@@ -12,6 +12,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Jin10Service } from './service.js'
 import { FLASH_PAGE_SIZE, SEARCH_FLASH_MAX } from './service.js'
 import { MACRO_CALENDAR_MAX } from './macro-service.js'
+import { JIN10_HEAT_LEVELS, isJin10HeatLevel, type Jin10FlashItem, type Jin10HeatLevel } from './web-flash.js'
+import type { Jin10RateEntry } from './web-rates.js'
 import type { Jin10CalendarEntry, Jin10Instrument, Jin10NewsItem, Jin10NewsPage } from './parse.js'
 
 const textOutput = {
@@ -20,12 +22,35 @@ const textOutput = {
 }
 
 const SOURCE = 'Jin10 (金十数据) MCP feed'
+/** 热度过滤的实际取数面：金十网页版快讯接口（官方 MCP 的 list_flash 无热度参数）。 */
+const HEAT_SOURCE = 'Jin10 (金十数据) web flash endpoint (public heat-filtered feed)'
+/** 央行利率的实际取数面：金十日历网页版的公开利率接口，不是官方 MCP feed。 */
+const RATES_SOURCE = 'Jin10 (金十数据) web rate board (public interest-rate endpoint behind rili.jin10.com)'
 
-function renderNewsLines(items: readonly (Jin10NewsItem & { id?: string })[]): string[] {
+function renderNewsLines(items: readonly (Jin10NewsItem & { id?: string; hot?: string })[]): string[] {
   return items.map((item) => {
     const id = 'id' in item && typeof item.id === 'string' ? ` | id=${item.id}` : ''
-    return `${item.publishedAt} | ${item.title} | ${item.url}${id}`
+    const hot = typeof item.hot === 'string' ? ` | hot=${item.hot}` : ''
+    return `${item.publishedAt} | ${item.title} | ${item.url}${id}${hot}`
   })
+}
+
+/**
+ * `hot` 参数解析（逗号或空白分隔的多值；取值必须是既有热度词汇）。
+ * 非法值显式报错并列出支持值——热度过滤是服务端语义，猜一个近义词会静默改变取数范围。
+ */
+function parseHeatLevels(raw: unknown): Jin10HeatLevel[] {
+  if (raw === undefined || raw === null) return []
+  const text = typeof raw === 'string' ? raw : String(raw)
+  const levels: Jin10HeatLevel[] = []
+  for (const token of text.split(/[\s,]+/)) {
+    if (token.length === 0) continue
+    if (!isJin10HeatLevel(token)) {
+      throw new Error(`flash_list: unsupported hot level ${JSON.stringify(token)} (supported: ${JIN10_HEAT_LEVELS.join('/')}; comma-separated for several)`)
+    }
+    if (!levels.includes(token)) levels.push(token)
+  }
+  return levels
 }
 
 function pageFooter(page: Jin10NewsPage<unknown>, tool: string): string {
@@ -54,16 +79,32 @@ export function createJin10Tools(service: Jin10Service): Array<ReturnType<typeof
       description:
         `Latest market flash headlines from ${SOURCE}, newest first. Market-wide wire (macro, commodities, FX, A-shares, geopolitics) — not tied to one instrument. `
         + 'Each item carries publish time, headline and the source link; the full flash text stays on the linked page. '
-        + `Pages return up to ${FLASH_PAGE_SIZE} items: pass the returned cursor to read older pages. Upstream rate limit: 1500 calls per tool per Beijing calendar day.`,
+        + `Pages return up to ${FLASH_PAGE_SIZE} items: pass the returned cursor to read older pages. `
+        + `Optional hot (comma-separated, values ${JIN10_HEAT_LEVELS.join('/')}) filters server-side by the publisher's heat grade — that path reads ${HEAT_SOURCE} instead of the MCP feed, whose page size is fixed (up to 50 items, no limit parameter), so limit is applied locally to the page and items carry hot=<level>. `
+        + 'An upstream error (rate limit, bad token, network) throws instead of returning an empty list — empty output means the upstream really had nothing. '
+        + 'Upstream rate limit: 1500 calls per tool per Beijing calendar day.',
       parameters: {
         cursor: { type: 'string', description: 'Opaque page cursor from a previous flash_list call (omit for the newest page)' },
         limit: { type: 'number', description: `Max items to return (integer 1..50; default ${FLASH_PAGE_SIZE})` },
+        hot: { type: 'string', description: `Optional heat filter, comma-separated for several: ${JIN10_HEAT_LEVELS.join(' / ')} (火=least, 爆=most); any other value is rejected with the supported list` },
       },
       output: textOutput,
       async execute(raw) {
         const args = (raw ?? {}) as Record<string, unknown>
         const limit = readLimit(args.limit, FLASH_PAGE_SIZE, 50)
         const cursor = readCursor(args.cursor)
+        const hot = parseHeatLevels(args.hot)
+        if (hot.length > 0) {
+          // 热度过滤走网页版服务端过滤（与 GUI 快讯面板的 hot 参数同一条实现）。
+          const page = await service.listFlashByHeat({ hot, ...(cursor !== undefined ? { cursor } : {}) })
+          const items: readonly (Jin10FlashItem & { id?: string })[] = page.items.slice(0, limit)
+          if (items.length === 0) return `flash_list: no flash items at heat ${hot.join('/')} on this page.`
+          return [
+            `flash_list (hot=${hot.join('/')}) — ${items.length} item(s) from a fixed ${page.items.length}-item upstream page, newest-first, source: ${HEAT_SOURCE}:`,
+            ...renderNewsLines(items),
+            pageFooter(page, 'flash_list'),
+          ].join('\n')
+        }
         const page = await service.listFlash({ limit, ...(cursor !== undefined ? { cursor } : {}) })
         if (page.items.length === 0) return 'flash_list: no flash items returned by the upstream feed.'
         return [
@@ -182,6 +223,39 @@ export function createJin10Tools(service: Jin10Service): Array<ReturnType<typeof
           `econ_calendar — ${entries.length} entr(ies) for the current week (Beijing time), source: ${SOURCE}:`,
           ...entries.map(renderCalendarLine),
         ].join('\n')
+      },
+    }),
+    defineTool({
+      name: 'macro_rates',
+      description:
+        `Latest policy interest rate for every central bank on the ${RATES_SOURCE} (~30 banks: Fed, ECB, BOJ, PBoC, BoE …), one row per bank with the publication date of that rate. `
+        + 'Units: percent per year (the publisher\'s own string, e.g. "3.75" or "0"; never converted to a decimal fraction and never recomputed). '
+        + 'Time basis: the endpoint is a latest-value snapshot and declares no snapshot timestamp, so each row carries its own publishedAt and as_of is this call\'s time — check the call time, not the value alone. '
+        + 'Optional region filters on the publisher\'s own region label (e.g. 美国 / 欧元区 / 中国); a filter that matches nothing returns an empty list plus available_regions. '
+        + 'An upstream failure (HTTP error, non-JSON body, publisher status != 200) throws — an empty list never stands in for "the endpoint is down". '
+        + 'No Jin10 MCP token is needed for this reading.',
+      parameters: {
+        region: { type: 'string', description: 'Optional exact region label from the publisher vocabulary, e.g. 美国 / 欧元区 / 日本 / 中国 (omit for all banks)' },
+      },
+      output: textOutput,
+      async execute(raw) {
+        const args = (raw ?? {}) as Record<string, unknown>
+        const region = typeof args.region === 'string' && args.region.trim().length > 0 ? args.region.trim() : undefined
+        const all = await service.listRates()
+        const items: readonly Jin10RateEntry[] = region === undefined ? all : all.filter(entry => entry.region === region)
+        const regions = [...new Set(all.map(entry => entry.region).filter(value => value.length > 0))].sort()
+        return JSON.stringify({
+          source: RATES_SOURCE,
+          unit: 'percent per year (publisher raw string)',
+          as_of: new Date().toISOString(),
+          snapshot_at: null,
+          snapshot_note: 'The publisher returns a latest-value snapshot with no snapshot timestamp in the contract; each row carries its own publishedAt (publication date of that rate).',
+          region: region ?? null,
+          available_regions: regions,
+          total: all.length,
+          count: items.length,
+          items,
+        })
       },
     }),
     defineTool({
