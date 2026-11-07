@@ -21,6 +21,10 @@ trading-web 的魔改布局里，官方插件管理整页（`@deepseek-ai/dsh-cl
   官方页的列表、安装对话框、注册表探测、启停与更新全部原样。
 - **两条退化路径都落 `body[data-dshtrading-plugin-host='unavailable']`**：layout 服务缺席、`selectPanel` 抛错
   （宿主没注册该面板）。分区显示说明文案而不是留成空白。
+- **慢与坏要分得开**：官方页是懒加载的，`waitForPluginPanel` 观察 `[data-global-panel]`——出现即撤掉说明文案，
+  超过 `PANEL_TIMEOUT_MS`（8 秒）仍未出现就换成 `plugins.timeout` 文案并给出重试按钮，重试重新走一次借壳；
+  官方页迟到时仍然接管分区，用户不必自己重开。此前只有一句常驻的「正在打开插件管理…」，官方页静默缺席时
+  分区永远转圈。
 - **矩形铺到弹层右缘**：设置壳的内容列有固定宽度（1600 视口下仍只有 564px），只放宽面板不够。
   借壳态给设置壳的**弹层**打 `data-dshtrading-plugin-host-panel`（CSS 放宽到 `min(1200px, 100vw - 48px)`），
   矩形以分区容器左上角为起点、以弹层边界减 24px 为右下界。
@@ -44,8 +48,11 @@ trading-web 的魔改布局里，官方插件管理整页（`@deepseek-ai/dsh-cl
 
 ## 验证
 
-- `pnpm --filter @dshtrading/client-ui-settings test`：33 例全绿，其中 `test/plugins-section.test.ts` 6 例钉住
-  四个借壳分支（打开/卸载/layout 缺席/面板未注册）与注册面（分区 id、order、组件）。
+- `pnpm --filter @dshtrading/client-ui-settings test`：39 例全绿，其中 `test/plugins-section.test.ts` 12 例钉住
+  四个借壳分支（打开/卸载/layout 缺席/面板未注册）、注册面（分区 id、order、组件）与四条等待用例
+  （已在 DOM / 懒加载完成 / 超时后迟到 / 取消后不再回报）。
+- 2026-11-07 Mygo 实机（automation 通道 + 窗口级截图）：冷启动后首次点开，`[data-global-panel]` 81ms 出现、
+  官方页内容 677ms 就位，分区容器子节点归零（说明文案退场）；连续三次冷启动同一结果。
 - 实机 trading-web：设置导航 5 项 → 6 项；点「插件」后 `body[data-dshtrading-plugin-host='on']`
   与 `[data-global-panel]` 同时就位，官方整页渲染在分区矩形内（内置插件配置 / 实验性插件 / 已安装插件）。
   - 1600x813：弹层 800 → 1200（x=200，居中不溢出），官方页 564 → 964，`添加插件` 恢复完整标签。
