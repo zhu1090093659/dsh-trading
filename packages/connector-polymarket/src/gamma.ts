@@ -16,7 +16,7 @@
  * 3. **超时要显式**：上游无 429 证据，但存在 TLS `SSL_ERROR_SYSCALL`（curl 35）
  *    与 DNS/连接超时；用 AbortSignal 超时把它变成 TRADING_NETWORK 而不是悬挂。
  */
-import { PolymarketError, bodySnippet } from './errors.js'
+import { PolymarketError, bodySnippet, networkError } from './errors.js'
 
 export const GAMMA_BASE_URL = 'https://gamma-api.polymarket.com'
 export const DEFAULT_TIMEOUT_MS = 10_000
@@ -98,7 +98,7 @@ export class GammaClient {
         signal: controller.signal,
       })
     } catch (cause) {
-      throw networkError(url.pathname, cause)
+      throw networkError(`polymarket gamma ${url.pathname}`, cause)
     } finally {
       clearTimeout(timer)
     }
@@ -120,14 +120,4 @@ export class GammaClient {
     }
     return { status: response.status, body, text, headers: response.headers }
   }
-}
-
-function networkError(path: string, cause: unknown): PolymarketError {
-  const reason = cause instanceof Error ? cause.message : String(cause)
-  const timedOut = cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError')
-  return new PolymarketError(
-    'TRADING_NETWORK',
-    `polymarket gamma ${path}: ${timedOut ? 'request timed out' : 'network failure'} — ${reason}`,
-    cause,
-  )
 }

@@ -1228,6 +1228,12 @@ export interface PredictionOutcomeBucket {
   /** 最小报价粒度（上游 `orderPriceMinTickSize`）。 */
   readonly tickSize?: number | undefined
   /**
+   * 回填取数定位键（上游 gamma market `clobTokenIds[0]`，公开数据非凭据；客户端不消费）。
+   * 历史价格按 token 扇出（CLOB `prices-history` 只认 token），客户端拿到的是
+   * 按事件窗口聚合好的序列，不需要这个键。
+   */
+  readonly clobTokenId?: string | undefined
+  /**
    * 是否仍可下单（上游 market 级 `acceptingOrders`）。**不用 `active` 判断**：
    * 实测结算后 `active` 仍为 true，只有 `closed`/`acceptingOrders` 会翻转。
    */
@@ -1273,6 +1279,42 @@ export interface PredictionFeed {
   readonly meetings: readonly PredictionMeeting[]
 }
 
+/** 一条服务端历史价格读数（CLOB prices-history 的 t/p 原样，不换算单位）。 */
+export interface PredictionPricePoint {
+  /** 上游时间戳（unix 秒）。 */
+  readonly t: number
+  /** 上游价格（midpoint 口径 0..1，与 gamma outcomePrices 等价）。 */
+  readonly p: number
+}
+
+/** 单档在请求窗口内的历史序列。 */
+export interface PredictionPriceSeries {
+  readonly bucketKey: string
+  readonly points: readonly PredictionPricePoint[]
+}
+
+/** 一段请求窗口的历史结果（服务端解析 token 后扇出各档）。 */
+export interface PredictionPriceHistory {
+  /** 取数时刻（ISO 8601 UTC）。 */
+  readonly fetchedAt: string
+  /** 上游 event id。 */
+  readonly meetingId: string
+  /** 请求窗口（epoch ms，原样回述以便客户端复算）。 */
+  readonly fromMs: number
+  readonly toMs: number
+  /** 请求粒度（分钟）。 */
+  readonly fidelityMinutes: number
+  readonly series: readonly PredictionPriceSeries[]
+}
+
+/** 历史请求（窗口上限 336 小时 = 上游 startTs/endTs 实测边界）。 */
+export interface PredictionPriceHistoryRequest {
+  readonly meetingId: string
+  readonly fromMs: number
+  readonly toMs: number
+  readonly fidelityMinutes?: number | undefined
+}
+
 /**
  * 预测市场源契约（2026-10-11 Polymarket 接入，v1 只覆盖 FOMC 决议路径）：
  * host 平面由 connector-polymarket provide `tradingPredictionFeed`，GUI 面板经桥
@@ -1286,6 +1328,13 @@ export interface PredictionFeed {
 export interface PredictionFeedService {
   /** 当前 FOMC 决议路径全部会议（含已结算；按 endDate 升序）。 */
   listFomcMeetings(): Promise<PredictionFeed>
+  /**
+   * 单场会议在请求窗口内的逐档概率历史（2026-10-15 事件窗口回填）。
+   *
+   * 失败必须响亮：服务缺席/上游失败/窗口超限各自以可区分的错误抛出——**不得**
+   * 以空 series 冒充「上游没有变动」（真无变动与取数失败在客户端是两个结论）。
+   */
+  listPriceHistory(request: PredictionPriceHistoryRequest): Promise<PredictionPriceHistory>
 }
 
 /** 新闻聚合器注册表契约（Issue #37，router 插件提供）。 */

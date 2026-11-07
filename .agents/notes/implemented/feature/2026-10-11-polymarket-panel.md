@@ -39,18 +39,25 @@ Status: implemented
   October 全档（354k–999k）不标，现场可复核。
 - **上屏下一场 + 后续至多两场**（`VISIBLE_MEETINGS = 3`）。只看最近一场会看不到低深度形态：
   October 各档深度充足，真正的 90k 级薄档在 December/January——而那正是决策更远的押注。
-- **事件对照 = 会话内采样时间轴**：面板打开期间按轮询节拍（60s）留
-  `(时间, 各档概率)` 采样，把 `fetchMacroCalendar`（金十宏观日历，与 MacroPanel 同源）
-  里的美国 CPI/PPI 时点叠上去，读跨事件位移最大的档位。
-  实现为纯函数 `movementAround` / `largestMovementAround`（`prediction-view.ts`），
-  可离线复算。**单侧缺失即返回 `undefined`**（面板显示「采样不足」），
-  不拿单侧硬算、更不填 0。
-- **两个源各自记账**：预测市场与宏观日历独立 `FeedState`，任一失败只影响自己那块
-  （`TRADING_NOT_IMPLEMENTED` 与上游失败文案也分开），绝不把失败画成「没有数据」。
+- **事件对照 = 会话内采样时间轴 + 上游 CLOB prices-history 回填**：会话内按轮询节拍
+  （60s）留 `(时间, 各档 mid)` 采样；已公布的美国 CPI/PPI 时点（30 天保留期内、至多 6 条、
+  按时间降序）各回填**一次**上游历史（`GET /prediction/history`，事件前后各 24h、
+  `fidelityMinutes = 5`，缓存键 = `event.at`，观察对象是第一场未结算会议），
+  两条时间轴合并成同一条（同刻以会话读数为准）后读跨事件位移最大的档位。
+  对照一律取 **mid**（连接器 `probability` 原值 = prices-history 的 `p`）；主表显示
+  仍取 `bestAsk`，事件块标题下与会议标题行各标一行基准，不隐式换算。
+  判据为纯函数 `historyWindowOf` / `candidateEventsOf` / `samplesFromHistory` /
+  `mergeSamples` / `eventComparisonOf`（`prediction-view.ts`），可离线复算。
+- **事件行四态**：`comparable`（两侧都有读数，出 `before → after Δ`）、`insufficient`
+  （历史有覆盖但单侧缺采样）、`uncovered`（回填返回空 = 上游历史不覆盖该时点）、
+  `history-error`（回填失败，出可操作提示）。**任何情况都不填 0**，也不拿单侧硬算。
+- **三个源各自记账**：预测市场、宏观日历与历史回填独立记账，任一失败只影响自己那块
+  （`TRADING_NOT_IMPLEMENTED` 与上游失败文案也分开），绝不把失败画成「没有数据」；
+  回填失败不动档位表、会话采样与日历块。
 - **只读边界**：面板无任何下单/交易入口（用例断言仅一个关闭按钮、无 form/input）。
   取数走 `fetchPredictionFomc()`，不新增交易能力。
-- **测试走注入缝**：面板接受 `deps: { fetchPrediction, fetchCalendar, now }`，测试传真实
-  函数替身——**不使用 `vi.mock`**（测试卫生棘轮禁 mock，新文件带违规即红；既有
+- **测试走注入缝**：面板接受 `deps: { fetchPrediction, fetchCalendar, fetchHistory, now }`，
+  测试传真实函数替身——**不使用 `vi.mock`**（测试卫生棘轮禁 mock，新文件带违规即红；既有
   `macro-panel.smoke` 等文件的 mock 属存量债，不进基线即为合规）。
 
 ## Alternatives considered
@@ -76,12 +83,14 @@ Status: implemented
   逐值相等（Oct 0.2/0.5/84.0/16.0/0.4，Dec 0.4/1.3/23.0/75.0/3.0，Jan
   0.8/2.8/66.0/32.0/2.0）；January `25 bps decrease` 与 `50+ bps increase`
   两档被标「深度不足」，与上游 `liquidityNum` 84,878 / 88,755 一致。
-- 测试：新增 3 个测试文件 51 用例（纯判据 27 + 面板冒烟 17 + 互斥联动 13），
-  零 mock / 零 sleep / BDD 命名，`test:audit` 无需新增基线豁免。
+- 测试：prediction 相关三个测试文件共 78 用例（纯判据 41 + 面板冒烟 24 + 互斥联动 13），
+  包级全量 64 个文件 571 用例全绿；零 mock / 零 sleep / BDD 命名，`test:audit` 无需新增基线豁免。
 - **profile 刷新是本卡的前置观察**：P1 的连接器与桥路由落在 profile 上次刷新之后，
   未刷新时面板会显示 `TRADING_PROTOCOL`（桥不认识 `/prediction/fomc`）——这正是
   「失败不伪装成没有数据」的行为，但要用上真实数据必须先
   `DSH_HOME=~/.dsh-trading scripts/refresh-profile.sh trading-web`。
-- 已知限制：深色模式未现场验证（截图只在浅色主题下取）；事件对照需要面板持续打开
-  （采样是会话内状态，不落盘）；上游 `prices-history` 回填与 CLOB 盘口深度仍未做
-  （与 P1 的未做项一致）。
+- 已知限制：深色模式未现场验证（截图只在浅色主题下取）；CLOB 盘口深度仍未做（与 P1 的
+  未做项一致）。事件对照受上游两端限制：宏观日历只给当周（更早公布的时点取不到），
+  prices-history 只保留约 30 天且 token 不存在时返回 200 + 空数组（静默空，本仓按
+  「上游历史不覆盖」呈现，不当作「没有变动」）；单次回填窗口超过 336h 上游报
+  `interval is too long`（当前窗口 48h，未触顶）。

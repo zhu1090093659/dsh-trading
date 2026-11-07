@@ -36,18 +36,35 @@ v1 只覆盖 **FOMC 决议路径**，数据面按 connector-jin10 的先例分�
   - `snapshot.ts`：本地快照只存**每档最新一次读数**（不是 append-only 流水），
     故体积与会议数成正比而与采样频率无关——避开证据 Q3.5 里 1/分钟频率
     119 MiB/年/会议 的量级。落 trading home（`@dshtrading/dsh-home` 解析）。
+  - `clob.ts`（2026-10-15 事件对照回填）：`GET /prices-history?market=<clobTokenId>&startTs&endTs&fidelity`
+    的只读传输层，毫秒 → 上游 unix 秒只在这一层换算（向下取整，向上取整会把窗口撑出边界）。
+    发请求前闸门：`fromMs<toMs`、窗口 ≤ 336h、`fidelity>0`，违约
+    `TRADING_UNSUPPORTED_INTERVAL` 且**一个请求都不发**（上游实测 720h 直接回
+    `interval is too long`，证据 Q3.2/Q3.6）；`fidelity` 缺省 5 分钟
+    （`DEFAULT_PRICE_HISTORY_FIDELITY_MINUTES` 单一出处；上游对 1w 窗口要求 ≥5）。
+    **200 + `{"history":[]}` 不抛**——token 不存在也长这样（证据 Q5.2 的最危险形态），
+    故空数组只产出 `points: []`，本仓不把它读成「概率为 0」或「没有变动」；
+    非 2xx / 非 JSON / 缺 `history` 数组一律 `TRADING_UPSTREAM_ERROR`。
 - **概率口径取 gamma `outcomePrices[0]`**（证据 Q2.3 的 v1 裁决）：与 CLOB midpoint
   实测 15/15 完全相等，且一次请求拿全量；**不自算** (bestBid+bestAsk)/2——结算后
   `bestBid` 变 null 而 `bestAsk` 残留 0.001，自算会得到 0.0005 这种无意义值。
 - **契约**：`@dshtrading/api` 新增 `PredictionFeedService` / `PredictionFeed` /
   `PredictionMeeting` / `PredictionOutcomeBucket` 与 Context 键 `tradingPredictionFeed`
-  （照 `MacroFeedService` 同款），双半共用。
+  （照 `MacroFeedService` 同款），双半共用。历史面（2026-10-15 回填）再增
+  `PredictionPricePoint` / `PredictionPriceSeries` / `PredictionPriceHistory` /
+  `PredictionPriceHistoryRequest` 与 `PredictionFeedService.listPriceHistory`（必填方法：
+  失败必须响亮，**空 `series` 不许冒充**「上游没有变动」）；`PredictionOutcomeBucket`
+  增可选 `clobTokenId`（回填定位键，公开数据非凭据，客户端不消费）。
 - **host 面服务**：`service.ts` 的 `createPolymarketPredictionFeed` 返回普通对象 +
   `ctx.reflect.provide`（形态与理由照 `connector-jin10/src/macro-service.ts`）；
   GUI 面板与将来的 agent 工具面共用同一个 `PolymarketService` 实例，禁止两份取数逻辑漂移。
 - **桥**：`packages/bot-api` 的 `PredictionFeedLike` + `bridge.predictionFomc()` +
   `GET /dshtrading/api/prediction/fomc`，`index.ts` 的 `webCtx.get('tradingPredictionFeed')`
-  接线。服务缺席 → `TRADING_NOT_IMPLEMENTED`。
+  接线。服务缺席 → `TRADING_NOT_IMPLEMENTED`。历史面再增 `bridge.predictionHistory()` +
+  `GET /dshtrading/api/prediction/history`：参数闸门全在桥侧（`meetingId` 非空、
+  `fromMs/toMs` 有限数且 `fromMs<toMs`、`fidelityMinutes` 给出即须为正、窗口 ≤ 336h），
+  违约 400 + `TRADING_PROTOCOL` 且零上游请求；连接器版本太老没有历史面与服务缺席同为
+  `TRADING_NOT_IMPLEMENTED`。读路由表的单一真值仍在 `bridge.ts` 的 `dispatchBridgeRequest`。
 - **client 取数层**：`fetchPredictionFomc()` 返回**显式结果状态**
   （`{status:'ok'|'error'}`）而不是 macro 两个 fetcher 的 `null`：面板要能分别提示
   「未安装连接器」「上游失败」「确实没有会议」三种不同事实，`null` 会把前两者压成同一个值。
@@ -118,7 +135,13 @@ v1 只覆盖 **FOMC 决议路径**，数据面按 connector-jin10 的先例分�
 - 已结算会议一并返回（`closed=true`、各档概率 0/1），由面板决定展示形态。
 - gamma `/events` 有 `max-age=300` CDN 缓存：默认不加 cache-bust（面板轮询间隔离不开
   5 分钟时缓存是有益去重），需要真实时值时由调用方显式打开。
-- 测试全部合规（零 mock、零 sleep、BDD 命名）：新增 5 个测试文件 53 用例，
-  `test:audit` 无需任何基线豁免；`connector-polymarket` 覆盖率 99.09% lines / 86.6% branches。
-- 未做的（显式记录）：agent 工具面、上游 `prices-history` 回填、CLOB 盘口深度、
-  30 天以外的历史窗口。GUI 面板本身已由 [P2 面板卡](2026-10-11-polymarket-panel.md) 交付。
+- 测试全部合规（零 mock、零 sleep、BDD 命名）：`connector-polymarket` 现 6 个测试文件
+  83 用例全绿，`test:audit` 无需任何基线豁免。
+- 真网络实测（2026-10-20，证据 Q3.6）：会议 606422 五档 × 24h/5min 各 289 点、约 8 KB；
+  336h 窗口 3969 点可查，720h 由连接器本地拒发（`upstreamRequests=0`），同一窗口直连上游
+  则 HTTP 400 `interval is too long`——「参数不可能被接受」在本地就拦住。
+- 历史面的会议定位只覆盖未结算集合（复用 `closed=false` 的发现查询 + 60s 短 TTL 缓存，
+  失败不入缓存）：对已结算会议请求历史得 `TRADING_SYMBOL_NOT_FOUND`。面板只上屏未结算
+  会议，当前够用。
+- 未做的（显式记录）：agent 工具面、CLOB 盘口深度、30 天以外的历史窗口（上游保留期硬边界）、
+  已结算会议的历史定位。GUI 面板本身已由 [P2 面板卡](2026-10-11-polymarket-panel.md) 交付。
