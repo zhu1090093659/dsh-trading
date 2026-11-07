@@ -36,8 +36,8 @@ describe('抬升官方插件弹层容器', () => {
     // When 借壳开始、抬升器就位
     const detach = raisePluginDialogLayers()
 
-    // Then 它被抬到 1002 并带标记
-    expect(layer.style.zIndex).toBe('1002')
+    // Then 它被抬到 1200 并带标记
+    expect(layer.style.zIndex).toBe('1200')
     expect(layer.hasAttribute('data-dshtrading-plugin-layer')).toBe(true)
     detach()
   })
@@ -46,7 +46,7 @@ describe('抬升官方插件弹层容器', () => {
     // Given 一块已被抬升的容器
     const layer = makeLayer({ zIndex: '1000' })
     const detach = raisePluginDialogLayers()
-    expect(layer.style.zIndex).toBe('1002')
+    expect(layer.style.zIndex).toBe('1200')
 
     // When 借壳结束
     detach()
@@ -54,6 +54,22 @@ describe('抬升官方插件弹层容器', () => {
     // Then 内联值与标记都撤掉，官方自己的 z 回位
     expect(layer.style.zIndex).toBe('')
     expect(layer.hasAttribute('data-dshtrading-plugin-layer')).toBe(false)
+  })
+
+  it('用户看到的设置壳遮罩不会被抬：它含分区锚点，抬它会把借壳面板盖住', () => {
+    // Given 一块含分区锚点的 fixed 容器（设置壳 overlay，z 低于借壳面板）
+    const layer = makeLayer({ zIndex: '1000' })
+    const anchor = document.createElement('div')
+    anchor.setAttribute('data-dshtrading-plugin-anchor', '')
+    layer.append(anchor)
+
+    // When 抬升器就位
+    const detach = raisePluginDialogLayers()
+
+    // Then 它保持原层级，也不带抬升标记
+    expect(layer.style.zIndex).toBe('1000')
+    expect(layer.hasAttribute('data-dshtrading-plugin-layer')).toBe(false)
+    detach()
   })
 
   it('用户看到的不是弹层容器时不动它：缺 dialog 或层叠已经够高的都不抬', () => {

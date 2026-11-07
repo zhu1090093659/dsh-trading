@@ -58,7 +58,7 @@
   left: var(--dshtrading-plugin-host-left, 0px) !important;
   width: var(--dshtrading-plugin-host-width, 0px) !important;
   height: var(--dshtrading-plugin-host-height, 0px) !important;
-  z-index: 1001 !important;
+  z-index: 1100 !important;
   overflow: auto;
   background: var(--dsw-alias-bg-base);
   border-radius: 12px;

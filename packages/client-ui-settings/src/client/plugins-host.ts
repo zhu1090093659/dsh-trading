@@ -61,11 +61,12 @@ export function pluginPanelReady(root: ParentNode = document): boolean {
 /** 被抬升的官方弹层容器标记（只在借壳期间存在）。 */
 const RAISED_ATTR = 'data-dshtrading-plugin-layer'
 
-/** 借壳面板写在 `[data-global-panel]` 上的层叠值（见 plugins-section.module.css）。 */
-const PANEL_Z = 1001
+/** 借壳面板写在 `[data-global-panel]` 上的层叠值（见 plugins-section.module.css）。
+ *  必须高于设置壳自己的 overlay（1000）：低一个数量级就会被整块盖住，分区露出空白。 */
+const PANEL_Z = 1100
 
 /** 抬升后的层叠值：官方弹层必须盖在面板内容之上。 */
-const RAISED_Z = 1002
+const RAISED_Z = 1200
 
 /**
  * 把官方插件管理器的弹层容器抬到借壳面板之上。
@@ -81,6 +82,8 @@ export function raisePluginDialogLayers(): () => void {
       if (!(layer instanceof HTMLElement)) continue
       if (layer.hasAttribute(RAISED_ATTR)) continue
       if (layer.querySelector('[role="dialog"]') === null) continue
+      // 含分区锚点的容器是设置壳自己的 overlay：抬它就是把借壳面板整块盖住。
+      if (layer.querySelector('[data-dshtrading-plugin-anchor]') !== null) continue
       const style = getComputedStyle(layer)
       if (style.position !== 'fixed') continue
       const z = Number.parseInt(style.zIndex, 10)
