@@ -34,6 +34,13 @@ const RESERVED_IDS = new Set(['ma', 'ema', 'boll', 'macd', 'rsi', 'kdj'])
  */
 export const DEFAULT_TRIAL_TIMEOUT_MS = 100
 
+/**
+ * Worker 启动兜底（毫秒）。WebKit 上新建 Worker + 编译 blob 脚本是几十到上百毫秒，
+ * 且这段属于环境开销而不是指标代码的耗时——试算超时只从 Worker 报到 start 之后算，
+ * 这里给启动本身留足余量，同时不让它无限挂着。
+ */
+const WORKER_STARTUP_TIMEOUT_MS = 10_000
+
 export type ValidationResult =
   | { ok: true; definition: IndicatorDefinition; record: CustomIndicatorRecord }
   | { ok: false; reason: string }
@@ -157,6 +164,9 @@ export type AsyncComputeRunner = (
 const WORKER_TRIAL_SCRIPT = `self.onmessage = (event) => {
   const { source, bars, params } = event.data
   try {
+    // 先报一声"开始算了"，主线程据此才起超时计时：Worker 的创建与脚本编译在 WebKit
+    // 上是几十到上百毫秒，算作执行时间会把合法指标误判成死循环。
+    self.postMessage({ phase: 'start' })
     const trimmed = String(source).trim()
     let fn
     if (/^(?:\\([a-zA-Z0-9_,\\s]*\\)|[a-zA-Z0-9_]+)\\s*=>/.test(trimmed) || /^function\\b/.test(trimmed)) {
@@ -196,19 +206,33 @@ export function workerComputeRunner(
     const url = URL.createObjectURL(blob)
     const worker = new Worker(url)
     let settled = false
+    /** 当前生效的计时器：先是启动兜底，收到 Worker 的 start 后换成 compute 超时。 */
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const arm = (action: () => void, ms: number): void => {
+      if (timer !== undefined) clearTimeout(timer)
+      timer = setTimeout(action, ms)
+    }
     const finish = (action: () => void): void => {
       if (settled) return
       settled = true
-      clearTimeout(timer)
+      if (timer !== undefined) clearTimeout(timer)
       worker.terminate()
       URL.revokeObjectURL(url)
       action()
     }
-    const timer = setTimeout(() => {
-      finish(() => reject(new Error(`compute 执行超时（超过 ${timeoutMs}ms），可能存在死循环（如 while/for 未退出）`)))
-    }, timeoutMs)
+    // 启动兜底：Worker 起不来（或被浏览器拦）时不能让校验无限挂着。
+    arm(() => {
+      finish(() => reject(new Error('compute 试算环境没有起来（Worker 启动超时）')))
+    }, WORKER_STARTUP_TIMEOUT_MS)
     worker.onmessage = (event: MessageEvent) => {
-      const data = event.data as { ok: boolean; result?: unknown; message?: string }
+      const data = event.data as { phase?: string; ok?: boolean; result?: unknown; message?: string }
+      if (data.phase === 'start') {
+        // Worker 已把源码编译好、正要开算：从这一刻起计时才是 compute 自己的耗时。
+        arm(() => {
+          finish(() => reject(new Error(`compute 执行超时（超过 ${timeoutMs}ms），可能存在死循环（如 while/for 未退出）`)))
+        }, timeoutMs)
+        return
+      }
       finish(() => {
         if (data.ok) resolve(data.result)
         else reject(new Error(data.message ?? 'compute 执行失败'))
