@@ -23,6 +23,7 @@ import {
 import { TradingSettingsSection, type TradingMarketTabEntry } from './TradingSettingsSection.tsx'
 import { MarketProviderPanel } from './MarketProviderPanel.tsx'
 import { PluginsSection } from './PluginsSection.tsx'
+import { hideBuiltinPluginsNav } from './hide-builtin-plugins.ts'
 import type { PluginHostLayout } from './plugins-host.ts'
 
 import { en, zh } from './locales.ts'
@@ -56,6 +57,8 @@ const MARKET_TABS: readonly { id: string; order: number; key: string }[] = [
 export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-trading-settings: dictionaries')
+  // 官方只读的「内置插件」分区与本仓「插件」整页重复：入口只留一个。
+  ctx.effect(() => hideBuiltinPluginsNav(), 'dsh-trading-settings: hide the built-in plugins section')
 
   // 0.1.7：ConfigForms.get(entryId) 取代 settingsScope.bind({namespace})，
   // entryId = loader 行 id（快照 value/base/user/revision + revision-fenced
