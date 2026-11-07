@@ -51,7 +51,7 @@ function selfMintedPlane(dir: string, options: { dev?: boolean } = {}) {
   const pair = generateOperatorKeyPair('self-minted')
   writeFileSync(join(dir, TRUSTED_KEYS_FILENAME), buildTrustedKeysDocument([
     { keyId: 'self-minted', alg: 'ed25519', publicKeyPem: pair.publicKeyPem },
-  ]))
+  ]), { mode: 0o644 })
   const now = Date.now()
   writeFileSync(join(dir, GRANT_FILENAME), signLiveTradingGrant(
     {
@@ -63,7 +63,7 @@ function selfMintedPlane(dir: string, options: { dev?: boolean } = {}) {
     },
     pair.privateKeyPem,
     'self-minted',
-  ))
+  ), { mode: 0o644 })
   resetAuthorityCache()
   return pair
 }
@@ -225,7 +225,7 @@ describePosix('生产形态：dev 授权不被接受（需要 uid 语义）', ()
     // When 把 dev 标记从 payload 里抹掉（想把它洗成生产授权）
     const parsed = JSON.parse(readFileSync(join(dir, GRANT_FILENAME), 'utf8'))
     delete parsed.payload.dev
-    writeFileSync(join(dir, GRANT_FILENAME), JSON.stringify(parsed))
+    writeFileSync(join(dir, GRANT_FILENAME), JSON.stringify(parsed), { mode: 0o644 })
     resetAuthorityCache()
     const washed = liveTradingDecision(true, { dir, env: {}, euid: AGENT_UID })
     // Then 签名覆盖 payload —— 抹标记就是改内容，验签失败

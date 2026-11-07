@@ -47,6 +47,8 @@ CLI 端到端（临时目录）：无授权 → `拒绝（no-grant-document）`�
 - 用例：`packages/authority` 46 例（POSIX 46 全绿；无 uid 语义的模拟下 29 通过 / 17 平台跳过）。需真实属主差异的 POSIX 部署形态用例按 `process.geteuid` 可用性 `skipIf`/`describe.skip`；Windows 真实走的那条路径由「无 uid 语义的平台」4 例在**任何平台**覆盖（签名有效仍拒、注入 `euid` 仍拒、目录在不在都拒、dev opt-in 才放行且留痕）。
 - 本层此前从未在 Windows 上跑过：`pnpm -r test` 在首个失败包即中止（`ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL`），而排在 authority 之前的 `dsh-home` 一直先红，把它整段遮住；dsh-home 修好后 authority 才第一次上 Windows 并判红。`TMPDIR` 指向 0777 目录并以 `--import` 删掉 `process.geteuid` 可复现同一条路径；修正后 `pnpm -r test` 在该模拟下全绿（exit 0）。
 
+**夹具形态前提（2026-11-07，本机 umask 0002 判红后补齐）**：平面文件的 mode 是隔离检查的输入之一，而 `writeFileSync` 的缺省 mode（0o666）会与调用方 umask 相与——umask 0002 的机器上夹具写出的是 0o664，`inspectPlaneIsolation` 先按 `group-or-other-writable` 拒绝，把 `key-not-trusted` / `dev-grant-not-accepted` / `granted` 这些本该被断言的结论遮在 `plane-not-isolated` 后面（实测：本机 7 例失败，`umask 022` 下 66 例全绿；最小分叉 `asIs=plane-not-isolated` / 显式 0o644=`key-not-trusted`）。夹具因此与运营 CLI 同形态显式写 0o644（`src/testing.ts` 与 `authority-operator-guards` / `authority-plane-isolation` / `live-trading-authority` 三个用例文件的平面文件），断言与守卫本身不动。`sign` 侧「先隔离、后信任锚、再密钥信任」是既定顺序：隔离失败先报 `plane-not-isolated` 是 fail-closed 的正确结论，不是顺序缺陷。CI runner 缺省 umask 022，这条差异只在 umask 0002 的开发机上显形。
+
 篡改 preset 资产不改变实盘权限（`.packages/authority/test/live-trading-authority.test.ts`）：读真实资产 → 把 `liveTrading: false` 全替换成 true → 解析出镜像确实是 true → 判定仍 `allowed: false`（`no-trusted-keys` / `no-grant-document`），且 `mismatch: true`、告警真的发出。连接器层同样有一例回归：`.packages/connector-binance/test/place-order.test.ts` 里「preset 资产被改成 liveTrading=true 但平面未授予 → 仍结构化拒绝」。
 
 ## Alternatives considered

@@ -51,8 +51,9 @@ function tempDir(): string {
 function authorityFixture(options: { grant?: string } = {}) {
   const dir = tempDir()
   const pair = generateOperatorKeyPair('operator-1')
-  writeFileSync(join(dir, TRUSTED_KEYS_FILENAME), buildTrustedKeysDocument([{ keyId: 'operator-1', alg: 'ed25519', publicKeyPem: pair.publicKeyPem }]))
-  if (options.grant !== undefined) writeFileSync(join(dir, GRANT_FILENAME), options.grant)
+  // 平面文件按运营 CLI 的形态写（0o644）：隔离检查拒绝 group/other 写位，形态不能由调用方 umask 决定。
+  writeFileSync(join(dir, TRUSTED_KEYS_FILENAME), buildTrustedKeysDocument([{ keyId: 'operator-1', alg: 'ed25519', publicKeyPem: pair.publicKeyPem }]), { mode: 0o644 })
+  if (options.grant !== undefined) writeFileSync(join(dir, GRANT_FILENAME), options.grant, { mode: 0o644 })
   resetAuthorityCache()
   const decisionOptions = { dir, env: {}, euid: (processEuid() ?? 0) + 12_345 }
   return { dir, pair, decisionOptions }
@@ -242,7 +243,7 @@ describePosix('liveTradingDecision（镜像与授权平面取合取，需要 uid
   it('管理员：镜像为 false 时即使平面已授权也拒绝（镜像只能收紧）', () => {
     // Given 一份有效授权 + 镜像 false
     const { dir, pair, decisionOptions } = authorityFixture()
-    writeFileSync(join(dir, GRANT_FILENAME), validGrant(pair))
+    writeFileSync(join(dir, GRANT_FILENAME), validGrant(pair), { mode: 0o644 })
     resetAuthorityCache()
     // When 判定
     const decision = liveTradingDecision(false, decisionOptions)
@@ -255,7 +256,7 @@ describePosix('liveTradingDecision（镜像与授权平面取合取，需要 uid
   it('管理员：镜像为 true 且平面已授权时放行', () => {
     // Given 有效授权 + 镜像 true
     const { dir, pair, decisionOptions } = authorityFixture()
-    writeFileSync(join(dir, GRANT_FILENAME), validGrant(pair))
+    writeFileSync(join(dir, GRANT_FILENAME), validGrant(pair), { mode: 0o644 })
     resetAuthorityCache()
     // When 判定
     const decision = liveTradingDecision(true, decisionOptions)
@@ -267,7 +268,7 @@ describePosix('liveTradingDecision（镜像与授权平面取合取，需要 uid
   it('管理员：删掉授权文档后下一次判定立刻拒绝（撤销不吃缓存）', () => {
     // Given 已经放行过一次的平面
     const { dir, pair, decisionOptions } = authorityFixture()
-    writeFileSync(join(dir, GRANT_FILENAME), validGrant(pair))
+    writeFileSync(join(dir, GRANT_FILENAME), validGrant(pair), { mode: 0o644 })
     resetAuthorityCache()
     expect(liveTradingEnabled(true, decisionOptions)).toBe(true)
     // When 人删掉授权文档（撤销动作）

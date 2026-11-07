@@ -100,7 +100,7 @@ describe('写入侧身份守卫', () => {
     const dir = tempDir()
     const pair = generateOperatorKeyPair('existing')
     const anchor = buildTrustedKeysDocument([{ keyId: 'existing', alg: 'ed25519', publicKeyPem: pair.publicKeyPem }])
-    writeFileSync(join(dir, TRUSTED_KEYS_FILENAME), anchor)
+    writeFileSync(join(dir, TRUSTED_KEYS_FILENAME), anchor, { mode: 0o644 })
     // When 用正常形态（声明 agent uid）尝试再 init 一次
     const code = guardCode(() => initTrustAnchor({
       dir, keyFile: join(dir, 'operator.pem'), env: {}, euid: REAL_UID, agentUid: AGENT_UID,
@@ -143,13 +143,14 @@ describe('sign 侧的守卫', () => {
   })
 
   it.skipIf(!HAS_UID_SEMANTICS)('管理员：私钥与信任锚里登记的公钥不是同一把时 sign 拒绝', () => {
-    // Given 一个信任锚登记了 A，而手上有另一把 B 的私钥
+    // Given 一个信任锚登记了 A，而手上有另一把 B 的私钥（平面文件按运营 CLI 的形态写 0o644，
+    // 否则隔离检查会先按 group/other 写位拒绝，用例就测不到 key 信任这一层）
     const dir = tempDir()
     const pairA = generateOperatorKeyPair('operator-1')
     const pairB = generateOperatorKeyPair('operator-1')
     writeFileSync(join(dir, TRUSTED_KEYS_FILENAME), buildTrustedKeysDocument([
       { keyId: 'operator-1', alg: 'ed25519', publicKeyPem: pairA.publicKeyPem },
-    ]))
+    ]), { mode: 0o644 })
     writeFileSync(join(dir, 'operator.pem'), pairB.privateKeyPem, { mode: 0o600 })
     // When 尝试用 B 签
     const code = guardCode(() => signGrantIntoPlane({

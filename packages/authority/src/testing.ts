@@ -73,7 +73,8 @@ export function installTestAuthority(options: TestAuthorityOptions = {}): TestAu
   const dir = mkdtempSync(join(tmpdir(), 'dsh-authority-fixture-'))
   const keyId = 'operator-test'
   const pair = generateOperatorKeyPair(keyId)
-  writeFileSync(join(dir, TRUSTED_KEYS_FILENAME), buildTrustedKeysDocument([{ keyId, alg: 'ed25519', publicKeyPem: pair.publicKeyPem }]))
+  // 平面文件按运营 CLI 的形态写（0o644）：隔离检查拒绝 group/other 写位，形态不能由调用方 umask 决定。
+  writeFileSync(join(dir, TRUSTED_KEYS_FILENAME), buildTrustedKeysDocument([{ keyId, alg: 'ed25519', publicKeyPem: pair.publicKeyPem }]), { mode: 0o644 })
 
   const sign = (overrides: { days?: number; operator?: string } = {}) => {
     const now = Date.now()
@@ -87,7 +88,7 @@ export function installTestAuthority(options: TestAuthorityOptions = {}): TestAu
       },
       pair.privateKeyPem,
       keyId,
-    ))
+    ), { mode: 0o644 })
     resetAuthorityCache()
   }
 
