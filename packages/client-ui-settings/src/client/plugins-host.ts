@@ -97,6 +97,50 @@ export function pluginPanelPresent(root: ParentNode = document): boolean {
   return root.querySelector(PANEL_SELECTOR) !== null
 }
 
+/** 被抬升的官方弹层容器标记（只在借壳期间存在）。 */
+const RAISED_ATTR = 'data-dshtrading-plugin-layer'
+
+/** 借壳面板写在 `[data-global-panel]` 上的层叠值（见 plugins-section.module.css）。 */
+const PANEL_Z = 1001
+
+/** 抬升后的层叠值：官方弹层必须盖在面板内容之上。 */
+const RAISED_Z = 1002
+
+/**
+ * 把官方插件管理器的弹层容器抬到借壳面板之上。
+ *
+ * 官方把弹层渲染在自己那块 `position: fixed` 的容器里（z 低于借壳写在主面板上的
+ * 1001），借壳后弹层被插件页内容整块盖住——点「添加插件」看着没反应，其实弹层已经
+ * 开了。借壳期间按「body 直接子元素里出现 dialog 且自身是 fixed 且 z 低于面板」抬到
+ * 1002，detach 时还原。判据不认类名（官方 CSS 哈希会变），只认结构。
+ */
+export function raisePluginDialogLayers(): () => void {
+  const sweep = (): void => {
+    for (const layer of Array.from(document.body.children)) {
+      if (!(layer instanceof HTMLElement)) continue
+      if (layer.hasAttribute(RAISED_ATTR)) continue
+      if (layer.querySelector('[role="dialog"]') === null) continue
+      const style = getComputedStyle(layer)
+      if (style.position !== 'fixed') continue
+      const z = Number.parseInt(style.zIndex, 10)
+      if (!Number.isFinite(z) || z >= PANEL_Z) continue
+      layer.style.zIndex = String(RAISED_Z)
+      layer.setAttribute(RAISED_ATTR, '')
+    }
+  }
+  const observer = new MutationObserver(sweep)
+  observer.observe(document.body, { childList: true, subtree: true })
+  sweep()
+  return () => {
+    observer.disconnect()
+    for (const layer of Array.from(document.querySelectorAll(`[${RAISED_ATTR}]`))) {
+      if (!(layer instanceof HTMLElement)) continue
+      layer.style.removeProperty('z-index')
+      layer.removeAttribute(RAISED_ATTR)
+    }
+  }
+}
+
 /** 等待句柄：cancel 之后不再回报任何状态。 */
 export interface PanelWaitHandle {
   cancel(): void
@@ -171,7 +215,10 @@ export function attachPluginHost(
   }
 
   let observer: ResizeObserver | undefined
+  let unraise: (() => void) | undefined
   const detach = (): void => {
+    unraise?.()
+    unraise = undefined
     observer?.disconnect()
     observer = undefined
     window.removeEventListener('resize', write)
@@ -199,6 +246,7 @@ export function attachPluginHost(
   panel?.setAttribute(PANEL_ATTR, '')
   write()
   document.body.dataset[HOST_FLAG] = 'on'
+  unraise = raisePluginDialogLayers()
   // 无 ResizeObserver 的环境（SSR 探针、jsdom）只靠首帧与 resize 事件跟随。
   observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(write)
   observer?.observe(anchor)
