@@ -83,6 +83,67 @@ function findShellPanel(anchor: HTMLElement): HTMLElement | undefined {
   return panel
 }
 
+/** 官方整页在 layout 里的 DOM 锚点：选中全局面板时宿主写这个属性。 */
+const PANEL_SELECTOR = '[data-global-panel]'
+
+/**
+ * 等官方页出现的默认上限。官方页是懒加载的，首帧要下载并解析它自己的 client
+ * bundle；超过这个时间还没进 DOM，分区给用户一条可重试的说明，而不是无限转圈。
+ */
+export const PANEL_TIMEOUT_MS = 8000
+
+/** 官方页是否已经在 DOM 里（借壳定位 CSS 依赖这个节点）。 */
+export function pluginPanelPresent(root: ParentNode = document): boolean {
+  return root.querySelector(PANEL_SELECTOR) !== null
+}
+
+/** 等待句柄：cancel 之后不再回报任何状态。 */
+export interface PanelWaitHandle {
+  cancel(): void
+}
+
+/**
+ * 等官方整页进 DOM：出现即回 'on'；到点仍未出现回 'timeout'，之后迟到再回 'on'
+ * —— 迟到的页面照样接管分区，用户不必自己重开。
+ */
+export function waitForPluginPanel(
+  onState: (state: 'on' | 'timeout') => void,
+  options: { timeoutMs?: number; root?: ParentNode } = {},
+): PanelWaitHandle {
+  const root = options.root ?? document
+  const timeoutMs = options.timeoutMs ?? PANEL_TIMEOUT_MS
+  let settled = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const report = (state: 'on' | 'timeout'): void => {
+    if (settled) return
+    if (state === 'on') settled = true
+    onState(state)
+  }
+  if (pluginPanelPresent(root)) {
+    report('on')
+    return { cancel() { settled = true } }
+  }
+  const observer = new MutationObserver(() => {
+    if (!pluginPanelPresent(root)) return
+    observer.disconnect()
+    if (timer !== undefined) clearTimeout(timer)
+    report('on')
+  })
+  observer.observe(document.body, { childList: true, subtree: true })
+  timer = setTimeout(() => {
+    timer = undefined
+    // 观察者留着：官方页迟到的那一次仍然接管分区，用户不必自己重开。
+    report('timeout')
+  }, timeoutMs)
+  return {
+    cancel() {
+      settled = true
+      observer.disconnect()
+      if (timer !== undefined) clearTimeout(timer)
+    },
+  }
+}
+
 /**
  * 把官方插件管理页钉进 `anchor` 的矩形。
  *

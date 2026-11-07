@@ -7,8 +7,8 @@
  * 'unavailable' 而不是把分区留成空白（官方页不存在时用户要看见原因）。
  * jsdom 不做布局，getBoundingClientRect 恒为 0，故矩形断言取 '0px'。
  */
-import { describe, expect, it } from 'vitest'
-import { attachPluginHost, type PluginHostLayout } from '../src/client/plugins-host.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { attachPluginHost, waitForPluginPanel, type PluginHostLayout } from '../src/client/plugins-host.js'
 import { PluginsSection } from '../src/client/PluginsSection.js'
 import { apply } from '../src/client/index.js'
 
@@ -193,6 +193,84 @@ describe('设置壳面板放宽（借壳矩形之外，官方页还需要一个�
     expect(document.querySelectorAll('[data-dshtrading-plugin-host-panel]').length).toBe(0)
     expect(document.body.dataset[FLAG]).toBe('on')
     handle.detach()
+  })
+})
+
+describe('等待官方页（慢与坏要分得开）', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    for (const node of document.querySelectorAll('[data-global-panel]')) node.remove()
+  })
+
+  /** 造一个官方整页的锚点节点（layout 选中全局面板时宿主写的就是这个属性）。 */
+  function insertPanel(): void {
+    const panel = document.createElement('div')
+    panel.setAttribute('data-global-panel', '')
+    document.body.append(panel)
+  }
+
+  it('用户打开分区时官方页已经在 DOM 里，等待立即结束', () => {
+    // Given 官方页已经进 DOM
+    insertPanel()
+    const seen: string[] = []
+
+    // When 分区开始等它
+    const handle = waitForPluginPanel((state) => seen.push(state))
+
+    // Then 立刻报就位，不再等超时
+    expect(seen).toEqual(['on'])
+    handle.cancel()
+  })
+
+  it('用户等到官方页加载完成时等待结束，到点不再报超时', async () => {
+    // Given 一个在等的分区（上限 1s）
+    vi.useFakeTimers()
+    const seen: string[] = []
+    const handle = waitForPluginPanel((state) => seen.push(state), { timeoutMs: 1000 })
+    expect(seen).toEqual([])
+
+    // When 官方页在超时前出现
+    insertPanel()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Then 报就位，且到点不再报超时
+    expect(seen).toEqual(['on'])
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(seen).toEqual(['on'])
+    handle.cancel()
+  })
+
+  it('用户等满超时仍未见到官方页时看到可重试的说明，页面迟到仍接管分区', async () => {
+    // Given 一个在等的分区（上限 1s）
+    vi.useFakeTimers()
+    const seen: string[] = []
+    const handle = waitForPluginPanel((state) => seen.push(state), { timeoutMs: 1000 })
+
+    // When 到点官方页还没来
+    await vi.advanceTimersByTimeAsync(1000)
+
+    // Then 分区拿到超时状态（用户可重试）
+    expect(seen).toEqual(['timeout'])
+
+    // And 官方页迟到时仍接管分区，用户不必重开
+    insertPanel()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(seen).toEqual(['timeout', 'on'])
+    handle.cancel()
+  })
+
+  it('用户离开分区后等待句柄不再回报任何状态', async () => {
+    // Given 一个在等的分区
+    vi.useFakeTimers()
+    const seen: string[] = []
+    const handle = waitForPluginPanel((state) => seen.push(state), { timeoutMs: 1000 })
+
+    // When 分区卸载
+    handle.cancel()
+    await vi.advanceTimersByTimeAsync(2000)
+
+    // Then 既不报超时也不报就位
+    expect(seen).toEqual([])
   })
 })
 

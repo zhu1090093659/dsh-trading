@@ -9,6 +9,13 @@
   height: 100%;
 }
 
+.fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
 .hint {
   max-width: 340px;
   margin: 0;
@@ -16,6 +23,29 @@
   font-size: 13px;
   line-height: 1.6;
   text-align: center;
+}
+
+/* 重试只在等待超时后出现：原生按钮 + 宿主主题变量，与分区里唯一的说明文案
+   同一列对齐；本包没有已声明的组件库可复用（官方设置包不导出控件）。 */
+.retry {
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 8px;
+  padding: 6px 14px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.retry:hover {
+  background: var(--dsw-alias-bg-base);
+}
+
+.retry:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 /* 借壳态放宽设置壳面板：官方插件页是列表 + 对话框形态，内容区 560px 时工具栏

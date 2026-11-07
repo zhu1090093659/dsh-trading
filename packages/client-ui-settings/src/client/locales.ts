@@ -14,6 +14,8 @@ export type SettingsLocaleKey =
   | 'plugins.nav'
   | 'plugins.loading'
   | 'plugins.unavailable'
+  | 'plugins.timeout'
+  | 'plugins.retry'
   | 'lead'
   | 'tabs'
   | 'empty'
@@ -142,6 +144,8 @@ export const zh: Record<SettingsLocaleKey, string> = {
       'plugins.nav': '插件',
       'plugins.loading': '正在打开插件管理…',
       'plugins.unavailable': '当前宿主没有提供插件管理界面。',
+      'plugins.timeout': '插件管理界面没有在预期时间内打开。',
+      'plugins.retry': '重试',
       'lead': '选择每个市场使用的数据/交易所提供方。行情面板保存即生效；Agent 会话于新建会话生效（切换不中断当前会话）。',
       'tabs': '市场',
       'empty': '没有可配置的市场。',
@@ -271,6 +275,8 @@ export const en: Record<SettingsLocaleKey, string> = {
       'plugins.nav': 'Plugins',
       'plugins.loading': 'Opening plugin management…',
       'plugins.unavailable': 'This host does not provide a plugin management surface.',
+      'plugins.timeout': 'The plugin manager did not open in time.',
+      'plugins.retry': 'Retry',
       'lead': 'Choose the data/exchange provider for each market. Quote panels take effect immediately; agent sessions pick it up in new sessions (running sessions are not interrupted).',
       'tabs': 'Markets',
       'empty': 'No configurable markets.',
