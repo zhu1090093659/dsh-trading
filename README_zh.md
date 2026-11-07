@@ -2,7 +2,7 @@
 
 > **当前状态与交接**：见 [docs/current-state.md](docs/current-state.md)（已验收项、必须知道的 fail-closed 不变量、未完成与硬停、验证命令、文档地图）。
 
-[English](README.md) | **简体中文**
+[English](README.md) | **简体中文** | [Русский](README_ru.md)
 
 **dsh-trading** 是基于 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai) 和 [Cordis](https://github.com/cordisjs) 微内核架构构建的开源、Agent 原生全市场 AI 交易终端与量化投研系统。在一个模块化工作区内全面覆盖**加密货币**（Binance、OKX、Bybit、CCXT）、**美股**（Alpaca、盈透证券 IBKR、Yahoo Finance）、**A 股**（MiniQMT、东方财富、腾讯财经、HiThink、AkShare、Tushare）、**港股**（长桥、富途、老虎）以及**国内商品期货**。
 
@@ -278,6 +278,7 @@ dsh-trading 依托 DeepSeek Harness (DSH)，原生支持 **DeepSeek (V3 / R1)**�
 - [定性分析与量化路线图](docs/roadmap/analysis-roadmap.md)
 - [架构决策与 Spike 裁决史](spikes/REVIEW-LOG.md)
 - [English README](README.md)
+- [Русская версия](README_ru.md)
 
 ## 友情链接
 
