@@ -45,6 +45,11 @@ corepack 缓存目录（用户目录下），首用还要联网拉 pnpm，装进
 
 ## Consequences
 
+- 桌面测试夹具（`desktop/tests/profile-seed.test.mjs`）把同一个 pin 写进自己的种子
+  清单：pnpm 只从项目清单解析 `packageManager`，夹具因此跑安装包内置的那份 pnpm，
+  而不是开发者 PATH 上的 major——pnpm 12 不写 `.package-map.json`、也不再报
+  `ERR_PNPM_UNEXPECTED_STORE`，缺 tgz 的断言口径（`[ENOENT]` + 退出码非 0 + 缺件
+  没被装上）同样按内置版本定。
 - 本地实测（darwin arm64/x64 暂存目录）：stage-pnpm 安装 + 验证通过、
   幂等重跑正确、`verify-runtime-toolchain` 打出 node v24.20.0 / npm 11.19.0 /
   npx 11.19.0 / pnpm 11.9.0；`npm test`（desktop）8/8 绿。Windows 侧走

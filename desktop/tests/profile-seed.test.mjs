@@ -16,6 +16,19 @@ const {
 } = require('../src/runtime.cjs');
 
 /**
+ * The pnpm the packaged app stages: stage-pnpm.mjs installs the repository's
+ * packageManager pin into the runtime payload and main.cjs puts that bin
+ * directory on PATH, so a user's profile is only ever managed by that version.
+ * The fixture pins the same version in its seed manifest, because pnpm reads
+ * the pin from the project manifest: a bare `pnpm` from PATH is whatever major
+ * the developer installed, and pnpm 12 writes a different node_modules layout
+ * and drops the store-location check the cases below assert.
+ */
+const pinnedPnpm = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'package.json'), 'utf8')).packageManager;
+assert.match(pinnedPnpm, /^pnpm@\d+\.\d+\.\d+/, 'the repository pins the pnpm the desktop app stages');
+const pinnedPnpmVersion = pinnedPnpm.slice('pnpm@'.length);
+
+/**
  * The packaged profile seed is installed for real here: build-runtime.mjs ships
  * node_modules/vendor into a user's $DSH_HOME, and the plugin manager then runs
  * pnpm inside it. Issue #105 was exactly this tree failing on a Windows
@@ -72,10 +85,13 @@ before(() => {
   betaTarball = packVendored(workDir, pristine, BETA);
 
   // The generated manifest and workspace overrides mirror build-runtime.mjs:
-  // every workspace package resolves to file:./vendor/<tarball>.
+  // every workspace package resolves to file:./vendor/<tarball>. The pin is the
+  // fixture's own handle on the toolchain (see pinnedPnpm), not part of the
+  // manifest build-runtime.mjs writes.
   fs.writeFileSync(path.join(pristine, 'package.json'), JSON.stringify({
     name: 'dsh-profile-trading-web',
     private: true,
+    packageManager: pinnedPnpm,
     dependencies: { [ALPHA]: 'file:./vendor/' + alphaTarball },
     dsh: { profile: { bundles: [ALPHA], patchReload: 'live' } },
   }, null, 2) + '\n');
@@ -87,6 +103,9 @@ before(() => {
     'overrides:',
     "  '" + ALPHA + "': 'file:./vendor/" + alphaTarball + "'", '',
   ].join('\n'));
+  const toolchain = pnpm(['--version'], pristine);
+  assert.equal(toolchain.output.trim(), pinnedPnpmVersion, 'the fixture runs the pnpm the app stages, not the developer PATH');
+
   const installed = pnpm(['install'], pristine);
   assert.equal(installed.status, 0, 'the pristine seed installs: ' + installed.output);
 });
@@ -306,6 +325,10 @@ test('operator fails to add a plugin when the seed shipped without its vendor ta
   // the vendored tarball the seed is missing
   const added = pnpm(['add', 'file:../plugins/' + betaTarball], dir);
   assert.notEqual(added.status, 0);
-  assert.match(added.output, /ENOENT/);
+  // The pinned pnpm refuses the add with its ENOENT error code and names the
+  // tarball it cannot open; the code is the stable anchor here, not the
+  // sentence pnpm wraps it in.
+  assert.match(added.output, /\[ENOENT\]/);
   assert.ok(added.output.includes(alphaTarball), 'pnpm reports the vendored tarball the seed is missing');
+  assert.equal(fs.existsSync(path.join(dir, 'node_modules', BETA)), false, 'a refused add installs nothing');
 });
