@@ -18,6 +18,11 @@
  * drops other files needs a human decision), when the bundle holds files the
  * payload does not, and it re-checks the result before it reports success.
  *
+ * The shell's own signing is not drift: `mygo build -sign` re-signs every Mach-O
+ * it ships, and a signature is appended to the file, so the bundle copy is larger
+ * than the one staged. Those entries are reported as re-signed; any other
+ * difference still stops the build.
+ *
  * The app's seal is stale the moment a file lands in the bundle, so the caller
  * restores first and then signs: nothing else may run in between.
  *
@@ -30,6 +35,7 @@
  * gate the build runs after the restore.
  */
 
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -91,6 +97,40 @@ function same(a, b) {
   return true;
 }
 
+/** The magic numbers a Mach-O image starts with, thin and fat, either byte order. */
+const MACHO_MAGICS = new Set([0xfeedface, 0xfeedfacf, 0xcafebabe, 0xbebafeca, 0xcafebabf, 0xbfbafeca]);
+
+/** Whether the file starts with a Mach-O magic number. */
+function isMachO(file) {
+  const buffer = Buffer.alloc(4);
+  const fd = fs.openSync(file, 'r');
+  let read = 0;
+  try {
+    read = fs.readSync(fd, buffer, 0, 4, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (read !== 4) return false;
+  return MACHO_MAGICS.has(buffer.readUInt32BE(0)) || MACHO_MAGICS.has(buffer.readUInt32LE(0));
+}
+
+/**
+ * Whether the bundle entry is the staged binary the shell re-signed: both sides
+ * are Mach-O, the shipped copy is larger (codesign appends its signature), and
+ * codesign reads it as signed. On a host without codesign nothing counts as
+ * re-signed, so that comparison stays strict there.
+ */
+function isResigned(stagedPath, shippedPath) {
+  if (fs.statSync(shippedPath).size <= fs.statSync(stagedPath).size) return false;
+  if (!isMachO(stagedPath) || !isMachO(shippedPath)) return false;
+  try {
+    execFileSync('codesign', ['-dv', '--verbose=2', shippedPath], { stdio: ['ignore', 'pipe', 'pipe'] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Plan and, unless it is a check, perform the restore. */
 export function restore(options) {
   const source = path.resolve(options.source);
@@ -147,8 +187,16 @@ export function restore(options) {
   const differing = [...staged.keys()].filter(
     (relative) => shipped.has(relative) && !same(staged.get(relative), shipped.get(relative)),
   );
-  if (differing.length > 0) {
-    throw new Error('the bundle holds different content for ' + differing.slice(0, 5).join(', '));
+  const resigned = differing.filter(
+    (relative) => isResigned(path.join(source, relative), path.join(bundle, relative)),
+  );
+  const drifted = differing.filter((relative) => !resigned.includes(relative));
+  if (drifted.length > 0) {
+    throw new Error('the bundle holds different content for ' + drifted.slice(0, 5).join(', '));
+  }
+  report.resigned = resigned;
+  if (resigned.length > 0) {
+    console.log('[restore-mygo-dotfiles] ' + resigned.length + ' Mach-O entries re-signed by the shell, not drift');
   }
 
   if (options.check === true) {
@@ -175,6 +223,7 @@ export function restore(options) {
 
   const after = manifest(bundle);
   const wrong = [...staged.keys()].filter((relative) => {
+    if (resigned.includes(relative)) return false;
     const now = after.get(relative);
     return now === undefined || !same(staged.get(relative), now);
   });

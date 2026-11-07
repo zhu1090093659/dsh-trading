@@ -16,13 +16,14 @@ Status: implemented
   - 宿主子进程以独立进程组运行并按进程组回收；异常退出恢复预算为 `Max=3` / `Window=10min`，第 4 次意外退出耗尽预算并停在启动问题页，页面 `Retry` 重置预算。
   - 页面策略限制在 `internal/policy` 与 `internal/shell`：导航只放行 loopback 与 `file:`，其余取消或交系统浏览器；`window.open` 恒 deny；窗口标题不被页面 `<title>` 覆盖；页面权限请求一律拒绝（`mygo` 对被信任 origin 默认放行，必须显式拒绝）；渲染进程 warn/error 经预加载桥接写入宿主日志，行形为 `[renderer] <level> <source>:<line> <message>`。
 - **载荷与 profile 播种**：
-  - Go 侧 `internal/profile` 负责 `.dsh-desktop-seed.json` 标记与 `seed`/`reseed`/`leave` 判定；`reseed` 保留用户根 `cordis.patch.yml` 及其备份，包内 patch 层照抄。
+  - Go 侧 `internal/profile` 负责 `.dsh-desktop-seed.json` 标记与 `seed`/`reseed`/`leave` 判定；`reseed` 保留用户根 `cordis.patch.yml` 及其备份，包内 patch 层照抄。没有标记的 profile 判 `leave`：`dsh` CLI 维护的 live profile（`package.json` 的依赖是 `file:` 指向仓库）不会因换包而更新，升级到新载荷的路径是把它整体移走、启动一次让壳按 `seed` 建新 profile，再把备份里的用户 `cordis.patch.yml` 覆盖回去。
   - `internal/cohort` 把 profile 的 `@deepseek-ai/*` 副本重链到随包运行时。
   - `internal/launch` 的载荷布局为 `runtime/{node,host,profile-trading,VERSION.json}` 与 `ProfileDir`；`DSH_PRIMARY_RUNTIME` 只在 `runtime.json` 存在时下发，缺失即显式缺席、不回落系统 Python。
   - `desktop/scripts/stage-mygo-payload.mjs` 只映射既有载荷、不生成载荷，并在暂存阶段调用 `desktop/scripts/prune-mygo-payload.mjs` 按目标平台裁剪暂存副本：用 39 条「包名 → 目标平台」白名单，在删除前读取每个包 `package.json` 核对 `os`/`cpu`（矛盾即失败），删掉 35 个非目标平台包 823M 与 4912 个 `*.map` 54M，共 877M；源载荷保持完整（多平台是 Electron 一份载荷装三平台的前提），`--keep-all-platforms` 可跳过裁剪。
 - **打包与签名**：
-  - `mygo build -platform darwin/arm64` 在载荷按目标平台裁剪与点文件补拷后产出 `.app` 955 MiB（`node` 217 MiB / `host` 542 MiB / `profile-trading` 170 MiB）与 `dmg` 196,123,648 B（187 MiB）。
+  - `mygo build -platform darwin/arm64` 在载荷按目标平台裁剪与点文件补拷后产出 `.app` 与 `dmg`：2026-11-07 用 host `0.2.2-rc.1` 与 `0.6.3` 插件闭包重建为 930 MiB（`node` 218 MiB / `host` 587 MiB / `profile-trading` 97 MiB）与 173 MiB。
   - `mygo` v0.7.4 收集 `resources` 时跳过以 `.` 开头的条目（`cmd/mygo/resources.go`），导致载荷少 184 个文件 + 44 个目录（2.07 MiB），宿主 `llm-pi-ai` 因此报 `ERR_MODULE_NOT_FOUND`。`desktop/scripts/restore-mygo-dotfiles.mjs` 在 `build` 后按「暂存载荷 vs 包内」清单差异补拷、重签、重建 `dmg`，并以 `--check` 作为构建收尾闸门（差异必须为 0）。
+  - `mygo build -sign` 对包内每个 Mach-O 重新签名（ad-hoc 亦然），签名追加在文件尾部，包内副本必然大于暂存载荷；闸门把「两侧都是 Mach-O + 包内更大 + `codesign -dv` 认签」记为 `resigned` 而不是漂移，其余内容差异照旧中止构建。没有 `codesign` 的宿主（Windows 轨道）不做这项豁免，比对保持严格。
   - `CFBundleIdentifier` 为 `com.dsh-trading.desktop.mygo`，`CFBundleName` 为 `DSH Trading Mygo`，版本 `0.2.1` 与 `desktop/package.json` 对齐，图标取 `desktop/resources/icon.png`。
   - 产物名为 `dsh-trading-desktop-0.2.1-arm64.dmg`（与 `electron-builder` 的 `dsh-trading-desktop-<version>-mac-<arch>` 差 `-mac-` 段，理由在 `desktop/README.md`）。
   - 默认 ad-hoc 签名通过 `codesign --verify --deep --strict`；真实身份签名与公证入口是 `build-mygo-mac.sh --sign / --notarize`，需在 GUI 会话执行（ssh 会话钥匙串锁定会报 `errSecInternalComponent`）。

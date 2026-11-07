@@ -16,6 +16,8 @@
  *   5. a missing file that is not a dotfile is refused, and nothing is written;
  *   6. a bundle file the payload does not hold is refused;
  *   7. a bundle file whose content differs from the payload is refused;
+ *   7b. a bundle Mach-O the shell re-signed is not drift (macOS only: the case
+ *      needs codesign and a real Mach-O to sign);
  *   8. the report carries the copied count and the entries (the build reads the
  *      count out of it with plutil);
  *   9. the command line works when the script is reached through a symlinked
@@ -175,6 +177,27 @@ console.log('restore-mygo-dotfiles: fixture cases');
       message = String(error.message);
     }
     check('a differing copy is refused', /different content/.test(message), message);
+  } finally {
+    drop(base);
+  }
+}
+
+// 7b. A bundle Mach-O the shell re-signed is accepted, and named in the report.
+// macOS only: the case needs codesign and a real Mach-O to sign.
+if (process.platform === 'darwin') {
+  const { base, source, bundle } = makeFixture();
+  try {
+    const relative = 'host/node_modules/plain/lib/native.node';
+    const staged = path.join(source, relative);
+    const shipped = path.join(bundle, relative);
+    fs.copyFileSync('/bin/ls', shipped);
+    spawnSync('codesign', ['--remove-signature', shipped]);
+    fs.copyFileSync(shipped, staged);
+    const signed = spawnSync('codesign', ['--force', '--sign', '-', shipped], { encoding: 'utf8' });
+    check('the fixture Mach-O re-signs', signed.status === 0, signed.stderr);
+    check('the re-signed copy is the larger one', fs.statSync(shipped).size > fs.statSync(staged).size, String(fs.statSync(shipped).size - fs.statSync(staged).size));
+    const report = restore({ source, bundle });
+    check('a re-signed Mach-O is not drift', Array.isArray(report.resigned) && report.resigned.includes(relative), JSON.stringify(report.resigned));
   } finally {
     drop(base);
   }
