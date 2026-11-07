@@ -1,5 +1,13 @@
 # @dshtrading/global
 
+## 0.7.0
+
+### Patch Changes
+
+- Updated dependencies [8882933]
+  - @dshtrading/connector-jin10@0.7.0
+  - @dshtrading/kit-global@0.7.0
+
 ## 0.6.3
 
 ### Patch Changes

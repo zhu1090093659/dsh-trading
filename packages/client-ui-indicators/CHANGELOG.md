@@ -1,5 +1,12 @@
 # @dshtrading/client-ui-indicators
 
+## 0.7.0
+
+### Patch Changes
+
+- Updated dependencies [8882933]
+  - @dshtrading/indicators@0.7.0
+
 ## 0.6.3
 
 ### Patch Changes

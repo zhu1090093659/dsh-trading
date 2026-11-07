@@ -1,5 +1,11 @@
 # @dshtrading/kit-futures
 
+## 0.7.0
+
+### Patch Changes
+
+- @dshtrading/base@0.7.0
+
 ## 0.6.3
 
 ### Patch Changes
