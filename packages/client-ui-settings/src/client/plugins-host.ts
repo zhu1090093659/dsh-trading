@@ -37,52 +37,6 @@ export interface PluginHostHandle {
   detach(): void
 }
 
-/** 设置壳面板标记：借壳态放宽它的宽度（plugins-section.module.css 消费）。 */
-const PANEL_ATTR = 'data-dshtrading-plugin-host-panel'
-
-/** 设置壳面板的最小宽度：低于它的祖先不是那块 panel（内容区与导航都更窄）。 */
-const PANEL_MIN_WIDTH = 600
-
-/** 借壳矩形与面板边缘的间距（与设置壳自身的内容留白同款）。 */
-const PANEL_INSET = 24
-
-/**
- * 找设置壳的弹层元素（overlay 里那块真的面板，不是 overlay、也不是蒙层）。
- *
- * 借壳矩形只是它的内容区，而官方插件页是列表 + 对话框形态，窄容器里工具栏会
- * 收缩成图标。两层判据分开，是因为改错对象会立刻露馅：改 overlay 的宽度会让
- * 弹层在自己的容器里重新居中而整体偏左，改一个 static 中间层会让弹层宽过视口
- * 而溢出（两种都实测过）。所以先锁铺满视口的 overlay，再取它里面最宽的、
- * 且自身没铺满视口的子元素——蒙层的宽高都等于 overlay，按这条被排除。
- * 找不到就当没有，分区按原矩形显示。
- */
-function findShellPanel(anchor: HTMLElement): HTMLElement | undefined {
-  let node = anchor.parentElement
-  let overlay: HTMLElement | undefined
-  for (let depth = 0; node !== null && depth < 8; depth += 1) {
-    const rect = node.getBoundingClientRect()
-    if (rect.width >= window.innerWidth - 1 && rect.height >= window.innerHeight - 1) {
-      overlay = node
-      break
-    }
-    node = node.parentElement
-  }
-  if (overlay === undefined) return undefined
-
-  const overlayRect = overlay.getBoundingClientRect()
-  let panel: HTMLElement | undefined
-  let widest = 0
-  for (const child of Array.from(overlay.children)) {
-    if (!(child instanceof HTMLElement)) continue
-    const rect = child.getBoundingClientRect()
-    if (rect.width >= overlayRect.width - 1 && rect.height >= overlayRect.height - 1) continue
-    if (rect.width < PANEL_MIN_WIDTH || rect.width <= widest) continue
-    panel = child
-    widest = rect.width
-  }
-  return panel
-}
-
 /** 官方整页在 layout 里的 DOM 锚点：选中全局面板时宿主写这个属性。 */
 const PANEL_SELECTOR = '[data-global-panel]'
 
@@ -92,9 +46,16 @@ const PANEL_SELECTOR = '[data-global-panel]'
  */
 export const PANEL_TIMEOUT_MS = 8000
 
-/** 官方页是否已经在 DOM 里（借壳定位 CSS 依赖这个节点）。 */
-export function pluginPanelPresent(root: ParentNode = document): boolean {
-  return root.querySelector(PANEL_SELECTOR) !== null
+/**
+ * 官方页是否已经渲染出内容。
+ *
+ * 只看节点存在不够：面板先挂一个空壳，此时把说明文案撤掉，用户看到的就是一块空白
+ * （2026-11-07 用户实机截图）。有文本才算就位——骨架屏也有文本，比空白好。
+ */
+export function pluginPanelReady(root: ParentNode = document): boolean {
+  const panel = root.querySelector(PANEL_SELECTOR)
+  if (panel === null) return false
+  return (panel.textContent ?? '').trim().length > 0
 }
 
 /** 被抬升的官方弹层容器标记（只在借壳期间存在）。 */
@@ -163,17 +124,18 @@ export function waitForPluginPanel(
     if (state === 'on') settled = true
     onState(state)
   }
-  if (pluginPanelPresent(root)) {
+  if (pluginPanelReady(root)) {
     report('on')
     return { cancel() { settled = true } }
   }
   const observer = new MutationObserver(() => {
-    if (!pluginPanelPresent(root)) return
+    if (!pluginPanelReady(root)) return
     observer.disconnect()
     if (timer !== undefined) clearTimeout(timer)
     report('on')
   })
-  observer.observe(document.body, { childList: true, subtree: true })
+  // characterData：官方页可能先挂空壳、随后只改文本，不产生新的子树。
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true })
   timer = setTimeout(() => {
     timer = undefined
     // 观察者留着：官方页迟到的那一次仍然接管分区，用户不必自己重开。
@@ -200,18 +162,14 @@ export function attachPluginHost(
   getLayout: () => PluginHostLayout | undefined,
 ): PluginHostHandle {
   const style = document.body.style
-  // 设置壳的内容列有固定宽度（实测 1600 视口下面板放到 1200、内容列仍只有 564），
-  // 官方插件页要铺到面板右缘：矩形以分区容器的左上角为起点、以面板边界为右下界。
-  const panel = findShellPanel(anchor)
+  // 矩形就是分区自己的矩形：插件分区与其它分区同宽（2026-11-07 用户口径），
+  // 不再放宽设置壳面板，也不铺到面板右缘。
   const write = (): void => {
     const rect = anchor.getBoundingClientRect()
-    const bounds = panel?.getBoundingClientRect()
-    const right = bounds === undefined ? rect.right : bounds.right - PANEL_INSET
-    const bottom = bounds === undefined ? rect.bottom : bounds.bottom - PANEL_INSET
     style.setProperty(VARS.top, `${Math.round(rect.top)}px`)
     style.setProperty(VARS.left, `${Math.round(rect.left)}px`)
-    style.setProperty(VARS.width, `${Math.round(right - rect.left)}px`)
-    style.setProperty(VARS.height, `${Math.round(bottom - rect.top)}px`)
+    style.setProperty(VARS.width, `${Math.round(rect.width)}px`)
+    style.setProperty(VARS.height, `${Math.round(rect.height)}px`)
   }
 
   let observer: ResizeObserver | undefined
@@ -222,7 +180,6 @@ export function attachPluginHost(
     observer?.disconnect()
     observer = undefined
     window.removeEventListener('resize', write)
-    document.querySelectorAll(`[${PANEL_ATTR}]`).forEach((panel) => panel.removeAttribute(PANEL_ATTR))
     delete document.body.dataset[HOST_FLAG]
     for (const name of Object.values(VARS)) style.removeProperty(name)
     try {
@@ -242,8 +199,6 @@ export function attachPluginHost(
     return { detach }
   }
 
-  // 先放宽面板再测量：宽度一变矩形跟着变，测量必须落在它之后。
-  panel?.setAttribute(PANEL_ATTR, '')
   write()
   document.body.dataset[HOST_FLAG] = 'on'
   unraise = raisePluginDialogLayers()

@@ -60,7 +60,7 @@ function stubRect(target: HTMLElement, rect: Record<string, number>): void {
 
 /**
  * 设置壳替身：铺满视口的 overlay 里放一块全屏蒙层 + 一块 800x600 的弹层，
- * 分区容器挂在弹层里。遮罩与弹层的几何差异正是 findShellPanel 的判据。
+ * 分区容器挂在弹层里；借壳矩形取分区自身几何，不再依赖弹层/蒙层的几何差异。
  */
 function makeShellPanel(anchor: HTMLElement): { panel: HTMLElement; overlay: HTMLElement } {
   const overlay = document.createElement('div')
@@ -158,40 +158,25 @@ describe('attachPluginHost（官方插件整页借壳到分区矩形）', () => 
   })
 })
 
-describe('设置壳面板放宽（借壳矩形之外，官方页还需要一个够宽的容器）', () => {
-  it('用户在设置里打开插件分区时宿主面板被放宽，离开后标记撤掉', () => {
-    // Given 分区块挂在设置壳的弹层里（外层 overlay 铺满视口，里面还有一块蒙层）
+describe('借壳矩形（与其它设置分区同宽）', () => {
+  it('用户在设置里打开插件分区时矩形就是分区自身，不放宽任何祖先', () => {
+    // Given 分区块挂在设置壳的弹层里（外层 overlay 铺满视口，里面还有一块蒙层），分区有真实尺寸
     const { layout } = makeLayout()
     const anchor = makeAnchor()
-    const { panel, overlay } = makeShellPanel(anchor)
+    makeShellPanel(anchor)
+    stubRect(anchor, { left: 300, top: 100, width: 800, height: 600, right: 1100, bottom: 700 })
 
     // When 分区挂载
     const handle = attachPluginHost(anchor, () => layout)
 
-    // Then 放宽标记落在弹层上，而不是 overlay 或蒙层
-    expect(panel.hasAttribute('data-dshtrading-plugin-host-panel')).toBe(true)
-    expect(overlay.hasAttribute('data-dshtrading-plugin-host-panel')).toBe(false)
+    // Then 矩形取分区自己的几何，没有被撑到弹层右缘
+    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-left')).toBe('300px')
+    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-top')).toBe('100px')
+    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-width')).toBe('800px')
+    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-height')).toBe('600px')
 
-    // And 借壳矩形铺到弹层右缘而不是只覆盖内容列（1200 / 680 减 24 留白）
-    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-width')).toBe('1176px')
-    expect(document.body.style.getPropertyValue('--dshtrading-plugin-host-height')).toBe('656px')
-
-    // And 用户离开后标记撤掉，面板回到官方宽度
-    handle.detach()
-    expect(panel.hasAttribute('data-dshtrading-plugin-host-panel')).toBe(false)
-  })
-
-  it('用户在普通容器里打开插件分区时不放宽任何祖先（找不到设置壳面板就按原矩形显示）', () => {
-    // Given 一块没有设置壳面板祖先的分区容器
-    const { layout } = makeLayout()
-    const anchor = makeAnchor()
-
-    // When 分区挂载
-    const handle = attachPluginHost(anchor, () => layout)
-
-    // Then 没有任何元素被标记为放宽，借壳照常生效
+    // And 设置壳面板不被加任何放宽标记
     expect(document.querySelectorAll('[data-dshtrading-plugin-host-panel]').length).toBe(0)
-    expect(document.body.dataset[FLAG]).toBe('on')
     handle.detach()
   })
 })
@@ -202,10 +187,11 @@ describe('等待官方页（慢与坏要分得开）', () => {
     for (const node of document.querySelectorAll('[data-global-panel]')) node.remove()
   })
 
-  /** 造一个官方整页的锚点节点（layout 选中全局面板时宿主写的就是这个属性）。 */
-  function insertPanel(): void {
+  /** 造一个官方整页的锚点节点（layout 选中全局面板时宿主写的就是这个属性）；带文本才算就位。 */
+  function insertPanel(text = '插件管理'): void {
     const panel = document.createElement('div')
     panel.setAttribute('data-global-panel', '')
+    panel.textContent = text
     document.body.append(panel)
   }
 
