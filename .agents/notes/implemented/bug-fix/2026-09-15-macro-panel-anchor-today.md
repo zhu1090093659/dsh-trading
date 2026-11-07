@@ -1,6 +1,9 @@
 # Agent Note: 宏观面板首屏锚定今天 + 整周上限 250→400
 
 Status: implemented
+Superseded in part 2026-11-07: 首屏锚定已移除、日历改为整周倒序，见
+[2026-11-07-macro-calendar-descending.md](2026-11-07-macro-calendar-descending.md)；整周
+上限 250→400 一节仍是现行事实。
 
 ## Problem
 
@@ -18,12 +21,11 @@ Status: implemented
 
 ## Decision
 
-- **首屏锚定今天**：`MacroPanel` 新增 `calendarAnchorDate`（纯函数，本地时区口径）——
-  优先今天；今天无条目（周末/深夜）→ 第一条未公布条目；全部已公布 → 最后一条；
-  空列表不滚。首次日历数据就绪且日历页签挂载后，把锚定行滚到列表顶部（rAF +
-  手写 `scrollTop`，不用 `scrollIntoView`：jsdom 无实现、面板即唯一滚动容器）。
-  **只锚一次**（成功才记账）：先停利率页签/容器未挂载时下一拍补锚，用户手动滚动或
-  切地区段选后不再打扰。行挂 `data-dshtrading-cal-date`（本地 YYYY-MM-DD）供锚定查询。
+- **首屏锚定今天（2026-11-07 已退役）**：`MacroPanel` 曾以 `calendarAnchorDate`（纯函数，
+  本地时区口径；优先今天，今天无条目 → 第一条未公布条目，全部已公布 → 最后一条）在首次
+  日历数据就绪后把锚定行滚到列表顶部，用来补偿当时升序排列的首屏错位。日历改为整周倒序
+  后该机制连同 `localDateKeyOf`、`calListRef`、`data-dshtrading-cal-date` 一并移除，理由见
+  [整周倒序记录](2026-11-07-macro-calendar-descending.md)。
 - **上限 250 → 400**：`MacroPanel CALENDAR_LIMIT`、桥 `MAX_MACRO_CALENDAR_LIMIT`、
   连接器 `MACRO_CALENDAR_MAX` 三处同值抬到 400（连接器原注释「超出 400」与值 250
   本就不一致，顺势修正）。400 仍是防炸护栏而非翻页——上游一页即整周（254/整周），
@@ -31,8 +33,9 @@ Status: implemented
 
 ## Alternatives considered
 
-- **倒序排列（最新在上）**：日历语义是「时间轴读周」，倒序把周一~周日倒过来读，
-  与金十日历网页版习惯相反；锚定已解决「看到今天」，放弃。
+- **倒序排列（最新在上）**：当时以「日历语义是时间轴读周、与金十网页版习惯相反」为由
+  放弃；2026-11-07 用户裁决改为整周倒序并移除锚定，见
+  [整周倒序记录](2026-11-07-macro-calendar-descending.md)。
 - **「今天」高亮/分隔条**：视觉噪音，锚定后首屏即今天，YAGNI。
 - **每次轮询/切地区都重锚**：会把用户手动调好的滚动位置拽回去，只在首次数据就绪
   锚定一次。
@@ -40,10 +43,10 @@ Status: implemented
 
 ## Consequences
 
-- 面板打开即见当天数据（本周事件时间轴心智不变）；深夜/周末打开时锚到最近一条。
+- 「打开即见当天数据」的目标 2026-11-07 起由整周倒序承担（首屏是最新日期，不再滚动定位）。
 - 整周 254 条全量下 reach 客户端（payload ~44KB），周尾不再被静默裁掉。
-- 回归：`macro-panel.smoke.test.tsx` 新增 `calendarAnchorDate`/`localDateKeyOf`
-  时区无关用例（今天命中/未公布回退/全部已公布回退/空列表/日期键格式）。
+- 回归：`macro-panel.smoke.test.tsx` 覆盖双源状态、地区筛选与行序；锚定那一组用例已
+  随机制退役替换为顺序断言。
 - 桌面壳仍需按 profile 刷新契约重挂副本才能吃到本修复（本轮只刷新验证 trading-web）。
 - 2026-09-16 桌面壳核验：桌面宿主与 CLI 共用 `~/.dsh-trading/profiles/trading-web` 的
   @dshtrading 副本，刷新后随桌面壳重启即生效（CDP 实证宏观面板 + 锚定滚动均正常）；
@@ -51,10 +54,12 @@ Status: implemented
   （插件客户端模块 /plugins/??…@dshtrading/client-ui-trading/client.js 才是交易 UI 载体）。
   另：单 profile 双活会争任务台账锁——CLI 验证实例存续期间桌面会话 task ledger 降级
   （LedgerLockedError），收口为单实例后随下次桌面壳重启恢复。
+  （以上为 2026-09-16 当时核验；其中的锚定滚动此后已退役。）
 
 ## Verification
 
 - `pnpm build` 全仓绿；`i18n-audit --check` 绿；client-ui-trading 15 测、connector-jin10
   83 测全绿。
-- trading-web 刷新副本重启后：桥 `limit=400` 返回整周 254 条（含 9-19）；CDP 截图
-  实测面板打开 scrollTop=1041，首屏即 9-15 中国 8 月数据（带公布值）。
+- trading-web 刷新副本重启后：桥 `limit=400` 返回整周 254 条（含 9-19）。
+- 2026-09-16 当时核验：CDP 截图实测面板打开 scrollTop=1041、首屏即 9-15 中国 8 月数据；
+  该锚定滚动已于 2026-11-07 退役。

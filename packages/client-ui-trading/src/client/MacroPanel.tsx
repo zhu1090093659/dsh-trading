@@ -14,7 +14,7 @@
  * 1500 次/天/工具，60s 节奏会吃穿配额），利率随同一节拍复用快照。
  * 数据源未安装时显示可操作提示，绝不把失败画成「没有数据」。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { fetchMacroCalendar, fetchMacroRates, type ClientMacroCalendarEntry, type ClientMacroRateEntry } from './api.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import css from './macro-panel.module.css'
@@ -54,29 +54,6 @@ function shortTime(iso: string): string {
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-/** ISO → 本地日期键（YYYY-MM-DD；解析失败 = 空串）。 */
-export function localDateKeyOf(iso: string): string {
-  const date = new Date(iso)
-  if (!Number.isFinite(date.getTime())) return ''
-  const pad = (value: number): string => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-/**
- * 首屏锚定日期（列表升序，打开面板应直接看到「今天」而不是从周一滚起——2026-09-15
- * 用户反馈「只有 9.14 的数据」，实测数据是全的，首屏被周一占满）。优先今天；今天
- * 没有条目（周末/深夜）→ 锚定第一条未公布的条目；全部已公布 → 锚定最后一条；
- * 空列表 = 空串（不滚动）。
- */
-export function calendarAnchorDate(rows: readonly { publishedAt: string }[], now: Date): string {
-  if (rows.length === 0) return ''
-  const today = localDateKeyOf(now.toISOString())
-  if (today !== '' && rows.some((row) => localDateKeyOf(row.publishedAt) === today)) return today
-  const upcoming = rows.find((row) => Date.parse(row.publishedAt) >= now.getTime())
-  if (upcoming !== undefined) return localDateKeyOf(upcoming.publishedAt)
-  return localDateKeyOf(rows[rows.length - 1]!.publishedAt)
-}
-
 export function MacroPanel({ t, onClose }: MacroPanelProps) {
   const [tab, setTab] = useState<'calendar' | 'rates'>('calendar')
   const [g3Only, setG3Only] = useState(true)
@@ -86,10 +63,6 @@ export function MacroPanel({ t, onClose }: MacroPanelProps) {
   // 错误提示，绝不把「一个源挂了」画成「没有数据」（2026-09-15 评审 M3）。
   const [calendarState, setCalendarState] = useState<FeedState>('loading')
   const [ratesState, setRatesState] = useState<FeedState>('loading')
-  // 首屏锚定：日历列表升序铺开整周，打开面板不锚定的话首屏永远是周一（看起来
-  // 「只有昨天的数据」）。首次出数据后把当天滚到列表顶部，之后不再打扰用户滚动位置。
-  const calListRef = useRef<HTMLDivElement | null>(null)
-  const anchoredRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -109,25 +82,11 @@ export function MacroPanel({ t, onClose }: MacroPanelProps) {
   const filterRegion = <T extends { region: string }>(items: readonly T[]): readonly T[] =>
     g3Only ? items.filter((item) => G3_REGIONS.includes(item.region)) : items
 
-  // 日历按公布时间升序（时间轴顺序读周）；利率保持上游顺序（大体量级先行）。
-  const calendarRows = calendar === null ? null : [...filterRegion(calendar)].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt))
+  // 日历按公布时间倒序（最新日期在最上，越往下越早；2026-11-07 用户裁决，
+  // 反了 2026-09-15 的升序，见 .agents/notes/implemented/bug-fix/
+  // 2026-11-07-macro-calendar-descending.md）；利率保持上游顺序（大体量级先行）。
+  const calendarRows = calendar === null ? null : [...filterRegion(calendar)].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
   const rateRows = rates === null ? null : filterRegion(rates)
-
-  useEffect(() => {
-    if (calendarState !== 'ready' || calendar === null || tab !== 'calendar' || anchoredRef.current) return
-    const anchor = calendarAnchorDate(calendarRows ?? [], new Date())
-    if (anchor === '') return
-    // rAF 等行先上屏；手写 scrollTop 而非 scrollIntoView（jsdom 无后者，面板是唯一滚动容器）。
-    // 锚定成功才记账：先停在利率页签/容器未挂载时下一拍补锚。
-    requestAnimationFrame(() => {
-      const scroller = calListRef.current?.parentElement
-      const row = calListRef.current?.querySelector<HTMLElement>(`[data-dshtrading-cal-date="${anchor}"]`)
-      if (scroller === undefined || scroller === null || row === null || row === undefined) return
-      anchoredRef.current = true
-      scroller.scrollTop = Math.max(0, row.offsetTop - scroller.offsetTop)
-    })
-    // 单次锚定；g3Only 变化不重滚（不打扰用户已调好的位置）。
-  }, [calendarState, calendar, calendarRows, tab])
 
   return (
     <div className={css.panel} data-dshtrading-macro-panel="" role="panel" aria-label={t('stage.macro')}>
@@ -156,7 +115,7 @@ export function MacroPanel({ t, onClose }: MacroPanelProps) {
           </div>
         </div>
         {tab === 'calendar' ? (
-          <div className={css.list} ref={calListRef}>
+          <div className={css.list}>
             <p className={css.hint}>{t('macro.weekHint')}</p>
             {calendarState === 'error' ? <p className={css.error}>{t('macro.error')}</p> : null}
             {calendarState === 'loading' ? <p className={css.empty}>{t('macro.loading')}</p> : null}
@@ -164,7 +123,7 @@ export function MacroPanel({ t, onClose }: MacroPanelProps) {
               <p className={css.empty}>{t('macro.empty')}</p>
             ) : null}
             {(calendarRows ?? []).map((entry, index) => (
-              <div key={`${entry.publishedAt}-${index}`} className={css.calItem} data-dshtrading-cal-date={localDateKeyOf(entry.publishedAt)}>
+              <div key={`${entry.publishedAt}-${index}`} className={css.calItem}>
                 <div className={css.calTop}>
                   <span className={css.calTime}>{shortTime(entry.publishedAt)}</span>
                   {/* 星号先夹到 [0,5]：上游给负值/NaN 时 repeat 会抛 RangeError 炸掉整块面板。 */}

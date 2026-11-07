@@ -24,7 +24,7 @@ vi.mock('../src/client/api.ts', async (importOriginal) => {
   }
 })
 
-import { MacroPanel, calendarAnchorDate, localDateKeyOf } from '../src/client/MacroPanel.tsx'
+import { MacroPanel } from '../src/client/MacroPanel.tsx'
 
 /** key 直出翻译（断言用 key 而非文案，与词典解耦）。 */
 const t = (key: MarketLocaleKey): string => key
@@ -34,13 +34,14 @@ const cal = (region: string, title: string, extra: Record<string, unknown> = {})
 const rate = (region: string, bankName: string): Record<string, unknown> =>
   ({ region, bankName, rate: '3.75', publishedAt: '2026-09-10' })
 
-describe('MacroPanel 双源状态与地区筛选', () => {
-  beforeEach(() => {
-    net.calendar = null
-    net.rates = null
-  })
-  afterEach(() => cleanup())
+/** 两个 describe 共用：每例前清空桥面桩，每例后卸载（否则下一例 getByText 撞多份 DOM）。 */
+beforeEach(() => {
+  net.calendar = null
+  net.rates = null
+})
+afterEach(() => cleanup())
 
+describe('MacroPanel 双源状态与地区筛选', () => {
   it('默认只看美日中：日历与利率都按地区过滤，页签可切', async () => {
     net.calendar = [cal('美国', '美国9月核心CPI年率'), cal('德国', '德国8月CPI年率')]
     net.rates = [rate('日本', '日本央行'), rate('巴西', '巴西央行')]
@@ -104,38 +105,40 @@ describe('MacroPanel 双源状态与地区筛选', () => {
   })
 })
 
-/** 相对 now 的本地时间构造行（时区无关：全部用 setHours 本地钟面）。 */
-const relRow = (base: Date, days: number, hours: number): { publishedAt: string } => {
-  const d = new Date(base)
-  d.setDate(d.getDate() + days)
-  d.setHours(hours, 0, 0, 0)
-  return { publishedAt: d.toISOString() }
-}
+describe('日历排序（2026-11-07 用户裁决：最新日期在最上）', () => {
+  /** 面板列表容器的文本（列表 = 「本周」提示的父元素，行序即该串里的先后）。 */
+  const listText = (): string => screen.getByText('macro.weekHint').parentElement?.textContent ?? ''
 
-describe('calendarAnchorDate 首屏锚定（2026-09-15「只有 9.14 的数据」回归）', () => {
-  // t0 = 今天本地 10:00（避开午夜跨界歧义）。
-  const t0 = new Date()
-  t0.setHours(10, 0, 0, 0)
+  it('上游乱序到达也按公布时间倒序铺开：跨日整体倒序，不是按天分组', async () => {
+    net.calendar = [
+      cal('美国', '周一数据', { publishedAt: '2026-11-02T00:30:00.000Z' }),
+      cal('美国', '周日数据', { publishedAt: '2026-11-08T01:00:00.000Z' }),
+      cal('美国', '周六数据', { publishedAt: '2026-11-07T22:00:00.000Z' }),
+      cal('美国', '周中数据', { publishedAt: '2026-11-05T12:00:00.000Z' }),
+    ]
+    net.rates = []
+    render(<MacroPanel t={t} onClose={() => {}} />)
+    await waitFor(() => { expect(screen.queryByText('周一数据')).not.toBeNull() })
 
-  it('今天有条目 → 锚定今天（而不是升序列表开头的周一）', () => {
-    const rows = [relRow(t0, -1, 12), relRow(t0, 0, 8), relRow(t0, 0, 20), relRow(t0, 1, 9)]
-    expect(calendarAnchorDate(rows, t0)).toBe(localDateKeyOf(t0.toISOString()))
+    const text = listText()
+    const at = (title: string): number => text.indexOf(title)
+    expect(at('周日数据')).toBeLessThan(at('周六数据'))
+    expect(at('周六数据')).toBeLessThan(at('周中数据'))
+    expect(at('周中数据')).toBeLessThan(at('周一数据'))
   })
 
-  it('今天没有条目 → 锚定第一条尚未公布的条目', () => {
-    const rows = [relRow(t0, -2, 12), relRow(t0, 1, 9), relRow(t0, 2, 9)]
-    expect(calendarAnchorDate(rows, t0)).toBe(localDateKeyOf(rows[1]!.publishedAt))
-  })
+  it('倒序不受地区过滤影响：过滤后仍按公布时间倒序', async () => {
+    net.calendar = [
+      cal('美国', '美国早', { publishedAt: '2026-11-02T00:30:00.000Z' }),
+      cal('德国', '德国晚', { publishedAt: '2026-11-09T00:30:00.000Z' }),
+      cal('美国', '美国晚', { publishedAt: '2026-11-06T00:30:00.000Z' }),
+    ]
+    net.rates = []
+    render(<MacroPanel t={t} onClose={() => {}} />)
+    await waitFor(() => { expect(screen.queryByText('美国晚')).not.toBeNull() })
 
-  it('全部已公布 → 锚定最后一条；空列表 → 空串（不滚）', () => {
-    const rows = [relRow(t0, -2, 12), relRow(t0, -1, 9)]
-    expect(calendarAnchorDate(rows, t0)).toBe(localDateKeyOf(rows[1]!.publishedAt))
-    expect(calendarAnchorDate([], t0)).toBe('')
-  })
-
-  it('localDateKeyOf 产出本地 YYYY-MM-DD（与面板行 data 属性一致）', () => {
-    const d = new Date(2026, 8, 15, 23, 59)
-    expect(localDateKeyOf(d.toISOString())).toBe('2026-09-15')
-    expect(localDateKeyOf('not-a-date')).toBe('')
+    const text = listText()
+    expect(text).not.toContain('德国晚')
+    expect(text.indexOf('美国晚')).toBeLessThan(text.indexOf('美国早'))
   })
 })
