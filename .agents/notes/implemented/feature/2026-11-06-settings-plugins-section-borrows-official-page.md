@@ -33,6 +33,10 @@ trading-web 的魔改布局里，官方插件管理整页（`@deepseek-ai/dsh-cl
   改一个 static 中间层会让弹层宽过视口而溢出，两种都实测过。
   容器标记用 `data-dshtrading-plugin-anchor`，**不与 body 状态标志同名**——同名属性会让
   `querySelector('[data-dshtrading-plugin-host]')` 把 body 一起挑出来。
+- **官方弹层要抬到借壳面板之上**：官方把插件管理的弹层（添加插件 / 安装流程）渲染在自己那块
+  `position: fixed` 的容器里，层叠值低于借壳写在 `[data-global-panel]` 上的 1001，借壳后面板内容整块
+  盖住弹层——点「添加插件」看着没反应，其实弹层已经开了。借壳期间按结构判据（body 直接子元素 + 内含
+  `[role="dialog"]` + 自身 fixed + z 低于面板）把它抬到 1002，detach 时还原；不认官方 CSS 哈希类名。
 - **官方只读的「内置插件」分区不再出现**：官方那条 `settings.section` id 是 `plugins`（只读清单），与本仓
   「插件」整页说的是同一份插件列表，两个入口用户分不清该点哪个。宿主没有卸载 section 的面，所以按导航项文案
   （`内置插件` / `Built-in plugins`）在设置弹层里把它摘掉——判据用文案而不是结构或顺序，官方调顺序不会误伤
