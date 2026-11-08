@@ -146,6 +146,38 @@ function installedVersion(packagesDir: string, name: string): string {
   return (JSON.parse(readFileSync(path.join(packagesDir, ...name.split('/'), 'package.json'), 'utf8')) as { version: string }).version
 }
 
+/** 写一份「上次检查判过可用」的持久化状态（宿主重启后 loadPersistedCheck 读的就是它）。 */
+function writePersistedCheck(statePath: string, options: { available: boolean; version: string }): void {
+  writeFileSync(statePath, JSON.stringify({
+    version: 1,
+    lastCheck: {
+      at: '2026-09-04T00:00:00.000Z',
+      status: 'ok',
+      error: undefined,
+      available: options.available,
+      latest: {
+        version: options.version,
+        tagName: 'v' + options.version,
+        name: 'dsh-trading v' + options.version,
+        notes: '',
+        url: 'https://github.com/zhu1090093659/dsh-trading/releases/tag/v' + options.version,
+        publishedAt: '2026-09-04T00:00:00.000Z',
+        payloadAvailable: true,
+      },
+    },
+  }, null, 2))
+}
+
+/** 不发任何请求的服务实例（只读快照 / 启动对账场景）。 */
+function offlineService(profileRoot: string, statePath: string): UpdaterService {
+  return new UpdaterService({
+    env: envFor(profileRoot),
+    repo: 'zhu1090093659/dsh-trading',
+    statePath,
+    github: { fetchImpl: (async () => { throw new Error('unused') }) as unknown as typeof fetch, apiBase: 'https://api.example' },
+  })
+}
+
 const cleanup: string[] = []
 afterEach(() => {
   while (cleanup.length > 0) {
@@ -302,5 +334,91 @@ describe('UpdaterService.apply', () => {
     }, { timeout: 8000 })
     expect(harness.service.snapshot().apply.error).toContain('UPDATER_STALE_TARGET')
     expect(installedVersion(harness.packagesDir, 'base')).toBe(CURRENT_VERSION)
+  })
+})
+
+describe('UpdaterService 的 available 推导（升级之后不再报同一个版本）', () => {
+  it('用户已经装到最新版时，面板拿到的是「已是最新」而不是又一条「发现新版本」', () => {
+    // Given 磁盘上的家族版本已是 0.2.0，而 state.json 还记着上次检查判过「0.2.0 可用」
+    const profile = makeProfile([{ name: 'base', version: TARGET_VERSION }], TARGET_VERSION)
+    cleanup.push(profile.root)
+    const stateDir = makeTempDir('dsh-updater-state-')
+    cleanup.push(stateDir)
+    const statePath = path.join(stateDir, 'state.json')
+    writePersistedCheck(statePath, { available: true, version: TARGET_VERSION })
+    const service = offlineService(profile.root, statePath)
+
+    // When 面板轮询快照（/state 的唯一出口）
+    const snapshot = service.snapshot()
+
+    // Then available 按磁盘版本重算为 false，latest 仍保留供展示，不会再挂「立即更新」
+    expect(snapshot.check.available).toBe(false)
+    expect(snapshot.check.latest?.version).toBe(TARGET_VERSION)
+    expect(snapshot.environment.familyVersion).toBe(TARGET_VERSION)
+  })
+
+  it('用户升级完成后，TTL 内的非强制检查也不报同一个版本，且不重新请求 GitHub', async () => {
+    // Given 装的是 0.1.1，刚检查出 0.2.0 可用
+    const harness = makeHarness({
+      installed: [{ name: 'base', version: CURRENT_VERSION }],
+      targetPackages: [{ name: 'base', version: TARGET_VERSION }],
+    })
+    cleanup.push(harness.profileRoot)
+    await harness.service.check(true)
+    expect(harness.service.snapshot().check.available).toBe(true)
+
+    // When 升级完成（磁盘上的本包清单变成 0.2.0），随后一次 TTL 内的非强制检查
+    writeFileSync(
+      path.join(harness.packagesDir, 'client-ui-updater', 'package.json'),
+      JSON.stringify({ name: '@dshtrading/client-ui-updater', version: TARGET_VERSION }),
+    )
+    const snapshot = await harness.service.check(false)
+
+    // Then 结论跟着磁盘版本走，且没有多发一次 GitHub 请求
+    expect(snapshot.check.available).toBe(false)
+    expect(harness.calls.filter(url => url.includes('/releases/latest'))).toHaveLength(1)
+  })
+
+  it('用户点「立即更新」时若发现早已是最新，直接拒绝而不是白下载一遍 payload', async () => {
+    // Given 检查后判过 0.2.0 可用
+    const harness = makeHarness({
+      installed: [{ name: 'base', version: CURRENT_VERSION }],
+      targetPackages: [{ name: 'base', version: TARGET_VERSION }],
+    })
+    cleanup.push(harness.profileRoot)
+    await harness.service.check(true)
+
+    // When 期间另一路已把家族版本升到 0.2.0（手动换包 / 另一台机器 / 完整安装包）
+    writeFileSync(
+      path.join(harness.packagesDir, 'client-ui-updater', 'package.json'),
+      JSON.stringify({ name: '@dshtrading/client-ui-updater', version: TARGET_VERSION }),
+    )
+
+    // Then 按 UPDATER_NO_UPDATE 拒绝，一次 payload 请求都不发
+    await expect(harness.service.apply()).rejects.toMatchObject({ code: 'UPDATER_NO_UPDATE' })
+    expect(harness.calls.filter(url => url.includes('trading-update'))).toHaveLength(0)
+  })
+
+  it('用户下次启动时，state.json 里过期的「有新版本」被就地改正，右缘红点不再挂着', () => {
+    // Given 持久化状态记着 0.2.0 可用，磁盘上已经装到 0.2.0
+    const profile = makeProfile([{ name: 'base', version: TARGET_VERSION }], TARGET_VERSION)
+    cleanup.push(profile.root)
+    const stateDir = makeTempDir('dsh-updater-state-')
+    cleanup.push(stateDir)
+    const statePath = path.join(stateDir, 'state.json')
+    writePersistedCheck(statePath, { available: true, version: TARGET_VERSION })
+    const service = offlineService(profile.root, statePath)
+
+    // When 宿主启动
+    service.start()
+
+    // Then state.json 里的 available 被改写成 false（面板与红点都读这一份）
+    try {
+      const persisted = JSON.parse(readFileSync(statePath, 'utf8')) as { lastCheck: { available: boolean } }
+      expect(persisted.lastCheck.available).toBe(false)
+      expect(service.snapshot().check.available).toBe(false)
+    } finally {
+      service.dispose()
+    }
   })
 })

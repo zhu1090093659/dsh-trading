@@ -97,6 +97,22 @@ arm64+x64、win nsis/zip x64）→ GitHub Release 附全部安装包 + SHA256SUM
   即时动作经 window CustomEvent `dshtrading-update-available` 同步（跨 client 插件
   用 DOM 事件，不 import 彼此模块——colorMode 已有同款先例）。桥缺席 → 永不亮。
 
+### D8：available 现算，不沿用上一次检查的结论（2026-11-08，owner 报告「已升到 0.7.0 仍显示发现新版本 0.7.0」）
+
+- **判据**：`available` 只回答「发布版比**磁盘上装着的**家族版本新吗」。家族版本取
+  `<packagesRoot>/client-ui-updater/package.json` 现读——`env.familyVersion` 是宿主启动那一刻
+  的快照，增量 apply（或手动换包、完整安装包 reseed）之后进程里仍是旧值。
+- **三处共用同一判据**（`availabilityOf`）：check 写回结论时、`GET /state` 快照、
+  `POST /apply` 的前置守卫。快照必须现算，否则持久化的 `available: true` 会在宿主重启后
+  被原样端出来，面板与右缘红点一直挂着「发现新版本」，直到 TTL（30min）或自动检查（6h）
+  才自己纠正；点「立即更新」则白下载一次几 MB 的 payload、再把每个包比一遍全跳过。
+- **启动对账**：`start()` 读到的持久化结论与磁盘版本对不上时，就地改写 state.json
+  （`reconcilePersistedAvailability`），让「有新版本」这个事实在落盘面上也不残留。
+- **验证**：`test/updater-service.test.ts` 4 例——已是最新时快照报 false（latest 仍保留）、
+  升级完成后 TTL 内的非强制检查报 false 且不多发 GitHub 请求、已是最新时点立即更新按
+  `UPDATER_NO_UPDATE` 拒绝且一次 payload 请求都不发、启动对账把 state.json 改写为 false；
+  改动前 4 例全红、改动后绿。
+
 ### D7：i18n 与门禁
 
 - 新命名空间 dshtrading.updater：本包 locales.ts zh/en 单一来源（typed register）；

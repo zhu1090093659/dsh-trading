@@ -237,6 +237,7 @@ export class UpdaterService {
   /** Load persisted check state + schedule auto checks. Idempotent. */
   start(): void {
     if (this.disposed || this.timers.length > 0) return
+    this.reconcilePersistedAvailability()
     if (this.env.supported) {
       const initialTimer = setTimeout(() => { void this.check(false).catch(() => undefined) }, this.initialDelayMs)
       const intervalTimer = setInterval(() => { void this.check(false).catch(() => undefined) }, this.autoCheckMs)
@@ -244,6 +245,19 @@ export class UpdaterService {
       intervalTimer.unref?.()
       this.timers.push(initialTimer, intervalTimer)
     }
+  }
+
+  /**
+   * 启动对账：state.json 里的 available 是上次检查那一刻的结论，装着的版本一变就不再
+   * 成立（增量更新、手动换包、完整安装包 reseed 都会）。不写回去，state.json 与右缘
+   * 红点会一直声称「有新版本」，直到下一次检查。
+   */
+  private reconcilePersistedAvailability(): void {
+    if (this.checkState.latest === undefined) return
+    const derived = this.availabilityOf(this.checkState.latest)
+    if (derived === this.checkState.available) return
+    this.checkState = { ...this.checkState, available: derived }
+    this.persistCheck()
   }
 
   dispose(): void {
@@ -272,7 +286,7 @@ export class UpdaterService {
         ...(this.options.github?.timeoutMs === undefined ? {} : { timeoutMs: this.options.github.timeoutMs }),
       })
       const latest = release === undefined ? undefined : this.latestOf(release)
-      const available = latest?.version !== undefined && isNewerVersion(latest.version, this.env.familyVersion)
+      const available = this.availabilityOf(latest)
       // A 2xx means the budget is back: drop any cooldown so a later limit is
       // measured from its own reset, not from a stale one.
       this.rateLimitedUntil = 0
@@ -356,7 +370,10 @@ export class UpdaterService {
     if (!this.env.supported || this.env.profileRoot === undefined || this.env.packagesRoot === undefined) {
       throw new UpdaterError('UPDATER_UNSUPPORTED', 'incremental update requires a desktop-seeded profile')
     }
-    if (this.checkState.status !== 'ok' || this.checkState.available !== true || this.checkState.latest === undefined) {
+    // available 现算而不是读上一次检查的结论：升级完成、另一路（手动换包 / 完整安装包
+    // reseed）装过之后，内存与 state.json 里的 true 都已过期，照旧放行只会白下载一次
+    // 同一个版本的 payload 再把 61 个包逐个体检一遍全跳过。
+    if (this.checkState.status !== 'ok' || this.checkState.latest === undefined || !this.availabilityOf(this.checkState.latest)) {
       throw new UpdaterError('UPDATER_NO_UPDATE', 'no newer release is available')
     }
     if (this.checkState.latest.payloadAvailable !== true) {
@@ -508,6 +525,24 @@ export class UpdaterService {
     }
   }
 
+  /**
+   * 磁盘上真正装着的家族版本（本包自己的 manifest）：env.familyVersion 只是宿主启动
+   * 那一刻的快照，增量 apply 之后进程里仍是旧值，拿它比版本会把刚装好的那一版继续
+   * 报成「有新版本」。非 profile 环境（dev checkout / 手装 headless）没有 packagesRoot，
+   * 回落启动快照——那里也没有增量通道。
+   */
+  private installedFamilyVersion(): string {
+    const packagesRoot = this.env.packagesRoot
+    if (packagesRoot === undefined) return this.env.familyVersion
+    const installed = this.installedVersionOf(path.join(packagesRoot, 'client-ui-updater'))
+    return installed === 'unknown' || installed === 'missing' ? this.env.familyVersion : installed
+  }
+
+  /** 「发布版比磁盘上的家族版本新」——available 的唯一判据（检查、快照、apply 三处共用）。 */
+  private availabilityOf(latest: UpdaterLatest | undefined): boolean {
+    return latest?.version !== undefined && isNewerVersion(latest.version, this.installedFamilyVersion())
+  }
+
   /** Unzip into a staging dir under the profile and cross-check the manifest. */
   private stagePackages(zipBytes: Uint8Array, manifest: UpdateManifest, profileRoot: string): StagedPackage[] {
     let entries: Record<string, Uint8Array>
@@ -642,7 +677,11 @@ export class UpdaterService {
         profileRoot: this.env.profileRoot,
         supported: this.env.supported,
       },
-      check: this.checkState,
+      // available 是**推导值**，不是上一次检查的结论：它只回答「发布版比磁盘上装着的
+      // 家族版本新吗」。env.familyVersion 是宿主启动那一刻的快照，增量更新（或任何
+      // 原地换包）之后已经过期——照抄持久化的 true，面板就会一直挂着「发现新版本」，
+      // 直到 TTL 到期重查（30min）甚至自动检查（6h）。
+      check: { ...this.checkState, available: this.availabilityOf(this.checkState.latest) },
       apply: this.applyState,
       progress: this.applyState.phase === 'running' ? this.progress : undefined,
     }
