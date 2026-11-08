@@ -121,7 +121,22 @@ func FileURL(path string) string {
 	if err != nil {
 		abs = path
 	}
-	return (&url.URL{Scheme: "file", Path: abs}).String()
+	return fileURLFor(runtime.GOOS, abs)
+}
+
+// fileURLFor is FileURL for one target platform. A file URL always carries
+// forward slashes, and a Windows drive path becomes C:/… so the URL path is
+// /C:/… — the shape node accepts as an --import specifier. Hook paths come from
+// the app bundle, so a drive path is the only absolute shape that reaches here.
+func fileURLFor(goos, abs string) string {
+	path := abs
+	if goos == "windows" {
+		path = strings.ReplaceAll(path, `\`, "/")
+		if !strings.HasPrefix(path, "/") {
+			path = "/" + path
+		}
+	}
+	return (&url.URL{Scheme: "file", Path: path}).String()
 }
 
 // setEnv replaces key in an environ slice, or appends it when it is not there.

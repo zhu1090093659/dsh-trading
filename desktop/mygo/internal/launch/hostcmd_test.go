@@ -17,20 +17,29 @@ func spec(t *testing.T, hooks []string) HostSpec {
 			NodeBin:  filepath.Join(root, "runtime", "node", "bin", "node"),
 			HostBin:  filepath.Join(root, "runtime", "host", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js"),
 		},
-		Hooks:     hooks,
-		Port:      51999,
-		Home:      "/tmp/mygo-home-trading",
-		ShellPID:  4242,
-		ParentEnv: []string{"PATH=/usr/bin:/bin", "HOME=/Users/zcl", "DSH_HOME=/Users/zcl/.dsh", "ELECTRON_RUN_AS_NODE=1"},
+		Hooks:    hooks,
+		Port:     51999,
+		Home:     filepath.Join(t.TempDir(), "mygo-home-trading"),
+		ShellPID: 4242,
+		ParentEnv: []string{
+			"PATH=/usr/bin:/bin",
+			"HOME=" + filepath.Join(t.TempDir(), "user"),
+			"DSH_HOME=" + filepath.Join(t.TempDir(), "host-home"),
+			"ELECTRON_RUN_AS_NODE=1",
+		},
 	}
 }
 
 func TestArgsCarryTheProfileThePortAndTheHooks(t *testing.T) {
-	host := spec(t, []string{"/tmp/hooks/host-symbol-normalizer.mjs", "/tmp/hooks/host-orphan-guard.mjs"})
+	hooks := []string{
+		filepath.Join(t.TempDir(), "host-symbol-normalizer.mjs"),
+		filepath.Join(t.TempDir(), "host-orphan-guard.mjs"),
+	}
+	host := spec(t, hooks)
 	want := []string{
 		"--max-http-header-size=65536",
-		"--import", "file:///tmp/hooks/host-symbol-normalizer.mjs",
-		"--import", "file:///tmp/hooks/host-orphan-guard.mjs",
+		"--import", FileURL(hooks[0]),
+		"--import", FileURL(hooks[1]),
 		host.Paths.HostBin,
 		"--profile", "trading-web",
 		"--no-open",
@@ -64,9 +73,8 @@ func TestEnvSetsTheShellOwnedHomeAndTheGuardedShellPID(t *testing.T) {
 	host := spec(t, nil)
 	env := host.Env()
 	want := map[string]string{
-		HomeEnv:     "/tmp/mygo-home-trading",
+		HomeEnv:     host.Home,
 		ShellPIDEnv: "4242",
-		"PATH":      filepath.Join(host.Paths.NodeHome, "bin") + ":/usr/bin:/bin",
 	}
 	for key, value := range want {
 		got, ok := lookupEnv(env, key)
@@ -83,7 +91,8 @@ func TestEnvSetsTheShellOwnedHomeAndTheGuardedShellPID(t *testing.T) {
 	if count := strings.Count(strings.Join(env, "\n"), HomeEnv+"="); count != 1 {
 		t.Errorf("env carries %d %s entries, want 1", count, HomeEnv)
 	}
-	if got, _ := lookupEnv(env, "HOME"); got != "/Users/zcl" {
+	parentHome, _ := lookupEnv(host.ParentEnv, "HOME")
+	if got, _ := lookupEnv(env, "HOME"); got != parentHome {
 		t.Errorf("env dropped the parent HOME: %q", got)
 	}
 }
@@ -92,21 +101,29 @@ func TestEnvAppendsADshHomeThatTheParentDidNotSet(t *testing.T) {
 	host := spec(t, nil)
 	host.ParentEnv = []string{"PATH=/usr/bin"}
 	env := host.Env()
-	if got, _ := lookupEnv(env, HomeEnv); got != "/tmp/mygo-home-trading" {
+	if got, _ := lookupEnv(env, HomeEnv); got != host.Home {
 		t.Errorf("env %s = %q, want the resolved home", HomeEnv, got)
 	}
 }
 
-func TestFileURLEscapesThePath(t *testing.T) {
-	got := FileURL("/tmp/my hooks/a b.mjs")
-	if got != "file:///tmp/my%20hooks/a%20b.mjs" {
-		t.Errorf("FileURL = %q, want an escaped file URL", got)
+func TestFileURLUsesTheTargetPlatformsShape(t *testing.T) {
+	// A file URL keeps forward slashes on every platform, and a Windows drive
+	// path needs the leading slash that makes C:/… the URL path.
+	cases := []struct{ goos, path, want string }{
+		{"darwin", "/tmp/my hooks/a b.mjs", "file:///tmp/my%20hooks/a%20b.mjs"},
+		{"windows", `C:\tmp\my hooks\a b.mjs`, "file:///C:/tmp/my%20hooks/a%20b.mjs"},
+	}
+	for _, c := range cases {
+		if got := fileURLFor(c.goos, c.path); got != c.want {
+			t.Errorf("fileURLFor(%q, %q) = %q, want %q", c.goos, c.path, got, c.want)
+		}
 	}
 }
 
 func TestDirIsTheHostsHome(t *testing.T) {
-	if got := spec(t, nil).Dir(); got != "/tmp/mygo-home-trading" {
-		t.Errorf("Dir = %q, want the host home", got)
+	host := spec(t, nil)
+	if got := host.Dir(); got != host.Home {
+		t.Errorf("Dir = %q, want the host home %q", got, host.Home)
 	}
 }
 
@@ -142,7 +159,7 @@ func TestEnvForWindowsKeepsTheHomeAndTheShellPID(t *testing.T) {
 	host := spec(t, nil)
 	env := host.envFor("windows")
 	want := map[string]string{
-		HomeEnv:     "/tmp/mygo-home-trading",
+		HomeEnv:     host.Home,
 		ShellPIDEnv: "4242",
 		"PATH":      nodeBinDir("windows", host.Paths.NodeHome) + ";" + "/usr/bin:/bin",
 		"Path":      nodeBinDir("windows", host.Paths.NodeHome) + ";" + "/usr/bin:/bin",

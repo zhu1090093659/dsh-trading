@@ -86,9 +86,13 @@ func TestAcquireClearsAStaleSocket(t *testing.T) {
 func TestNotifyWithoutAListenerDoesNotBlockTheLaunch(t *testing.T) {
 	path := lockPath(t)
 	start := time.Now()
-	if _, err := Acquire(path, nil); err != nil {
+	lock, err := Acquire(path, nil)
+	if err != nil {
 		t.Fatalf("Acquire err = %v, want nil", err)
 	}
+	// The lock holds an open file handle: releasing it before the temp dir goes
+	// is what lets Windows remove the directory at all.
+	t.Cleanup(lock.Release)
 	// Nothing listens on this socket: the handover attempt must give up on its
 	// own rather than hang the launch.
 	notify(filepath.Join(t.TempDir(), "nobody.sock"))

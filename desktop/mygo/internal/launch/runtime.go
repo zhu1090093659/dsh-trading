@@ -78,13 +78,19 @@ func pathListSeparator(goos string) string {
 // ResolveRuntimePaths maps the app's resources directory to the payload inside
 // it.
 func ResolveRuntimePaths(resourcesRoot string) RuntimePaths {
+	return resolveRuntimePathsFor(runtime.GOOS, resourcesRoot)
+}
+
+// resolveRuntimePathsFor is ResolveRuntimePaths for one target platform, which
+// is what lets both payload layouts be tested on either build host.
+func resolveRuntimePathsFor(goos, resourcesRoot string) RuntimePaths {
 	root := filepath.Join(resourcesRoot, "runtime")
 	nodeHome := filepath.Join(root, "node")
 	hostRoot := filepath.Join(root, "host")
 	return RuntimePaths{
 		Root:        root,
 		NodeHome:    nodeHome,
-		NodeBin:     filepath.Join(nodeBinDir(runtime.GOOS, nodeHome), nodeExecutableName(runtime.GOOS)),
+		NodeBin:     filepath.Join(nodeBinDir(goos, nodeHome), nodeExecutableName(goos)),
 		HostBin:     filepath.Join(hostRoot, hostModulesDir, filepath.FromSlash(hostBinRelative)),
 		HostModules: filepath.Join(hostRoot, hostModulesDir),
 		ProfileSeed: filepath.Join(root, profileSeedDir),

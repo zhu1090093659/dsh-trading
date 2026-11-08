@@ -4,6 +4,7 @@ package instance
 
 import (
 	"errors"
+	"net"
 	"os"
 	"syscall"
 )
@@ -12,6 +13,12 @@ import (
 // on macOS and 108 on Linux, both counting the terminating NUL, so 96 leaves
 // room for the ".sock" suffix either way.
 const maxUnixSocketPath = 96
+
+// handoverListener is the AF_UNIX socket a later launch knocks on to make this
+// one show its window.
+func handoverListener(socket string) (net.Listener, error) {
+	return net.Listen("unix", socket)
+}
 
 // lockFile takes the exclusive, non-blocking flock on file. The kernel drops it
 // when the process dies, so a crashed shell never leaves a stale lock, and

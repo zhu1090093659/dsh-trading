@@ -1,3 +1,7 @@
+//go:build !windows
+
+// The app socket is a unix domain socket: the shell ships on macOS, and a
+// Windows build has no listener for these tests to dial.
 package automation
 
 import (

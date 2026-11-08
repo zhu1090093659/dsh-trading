@@ -7,32 +7,47 @@ import (
 )
 
 func TestResolveRuntimePathsFollowsThePackagedLayout(t *testing.T) {
-	paths := ResolveRuntimePaths("/Applications/DSH Trading.app/Contents/Resources")
-	root := filepath.Join("/Applications/DSH Trading.app/Contents/Resources", "runtime")
-	if paths.Root != root {
-		t.Errorf("Root = %q, want %q", paths.Root, root)
+	// The payload layout differs by target: a node zip on Windows keeps node.exe
+	// at the distribution root, a unix distribution keeps it under bin/. Both
+	// shapes are asserted on whichever host runs the test.
+	cases := []struct {
+		goos    string
+		nodeBin string
+	}{
+		{"darwin", "node/bin/node"},
+		{"windows", "node/node.exe"},
 	}
-	if want := filepath.Join(root, "node", "bin", "node"); paths.NodeBin != want {
-		t.Errorf("NodeBin = %q, want %q", paths.NodeBin, want)
-	}
-	if want := filepath.Join(root, "node"); paths.NodeHome != want {
-		t.Errorf("NodeHome = %q, want %q", paths.NodeHome, want)
-	}
-	want := filepath.Join(root, "host", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js")
-	if paths.HostBin != want {
-		t.Errorf("HostBin = %q, want %q", paths.HostBin, want)
-	}
-	// The rest of the payload the shell reads in place: the host closure the
-	// profile is normalized onto, the profile seed it is installed from, and the
-	// stamp that gives the seed its identity.
-	if want := filepath.Join(root, "host", "node_modules"); paths.HostModules != want {
-		t.Errorf("HostModules = %q, want %q", paths.HostModules, want)
-	}
-	if want := filepath.Join(root, "profile-trading"); paths.ProfileSeed != want {
-		t.Errorf("ProfileSeed = %q, want %q", paths.ProfileSeed, want)
-	}
-	if want := filepath.Join(root, "VERSION.json"); paths.StampFile != want {
-		t.Errorf("StampFile = %q, want %q", paths.StampFile, want)
+	for _, c := range cases {
+		t.Run(c.goos, func(t *testing.T) {
+			resources := filepath.Join(t.TempDir(), "DSH Trading.app", "Contents", "Resources")
+			paths := resolveRuntimePathsFor(c.goos, resources)
+			root := filepath.Join(resources, "runtime")
+			if paths.Root != root {
+				t.Errorf("Root = %q, want %q", paths.Root, root)
+			}
+			if want := filepath.Join(root, filepath.FromSlash(c.nodeBin)); paths.NodeBin != want {
+				t.Errorf("NodeBin = %q, want %q", paths.NodeBin, want)
+			}
+			if want := filepath.Join(root, "node"); paths.NodeHome != want {
+				t.Errorf("NodeHome = %q, want %q", paths.NodeHome, want)
+			}
+			want := filepath.Join(root, "host", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js")
+			if paths.HostBin != want {
+				t.Errorf("HostBin = %q, want %q", paths.HostBin, want)
+			}
+			// The rest of the payload the shell reads in place: the host closure
+			// the profile is normalized onto, the profile seed it is installed
+			// from, and the stamp that gives the seed its identity.
+			if want := filepath.Join(root, "host", "node_modules"); paths.HostModules != want {
+				t.Errorf("HostModules = %q, want %q", paths.HostModules, want)
+			}
+			if want := filepath.Join(root, "profile-trading"); paths.ProfileSeed != want {
+				t.Errorf("ProfileSeed = %q, want %q", paths.ProfileSeed, want)
+			}
+			if want := filepath.Join(root, "VERSION.json"); paths.StampFile != want {
+				t.Errorf("StampFile = %q, want %q", paths.StampFile, want)
+			}
+		})
 	}
 }
 

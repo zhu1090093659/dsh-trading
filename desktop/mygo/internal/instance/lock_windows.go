@@ -4,6 +4,7 @@ package instance
 
 import (
 	"errors"
+	"net"
 	"os"
 
 	"golang.org/x/sys/windows"
@@ -13,6 +14,14 @@ import (
 // bytes in the sockaddr layout (UNIX_PATH_MAX), one of which the API reserves
 // for the terminating NUL of a named socket, so 107 is the last usable length.
 const maxUnixSocketPath = 107
+
+// handoverListener is absent on Windows: Go's net package has no AF_UNIX
+// listener here (net.Listen("unix", …) fails with "bind: invalid argument"), so
+// a second launch cannot hand a focus request to the running one. The lock is
+// unaffected — it still decides who runs, and Acquire must not fail over it.
+func handoverListener(socket string) (net.Listener, error) {
+	return nil, nil
+}
 
 // lockFile takes the exclusive, non-blocking byte-range lock on file with
 // LockFileEx. The lock belongs to the handle, so the kernel drops it when the

@@ -68,14 +68,18 @@ func Acquire(lockPath string, onSecondLaunch func()) (*Lock, error) {
 	// leaves its socket behind as garbage, while a live one's socket is the
 	// channel this launch just knocked on and must survive the rejection.
 	_ = os.Remove(socket)
-	listener, err := net.Listen("unix", socket)
+	listener, err := handoverListener(socket)
 	if err != nil {
 		_ = unlock()
 		_ = file.Close()
 		return nil, err
 	}
 	lock := &Lock{file: file, socket: socket, listener: listener, unlock: unlock}
-	go lock.accept(onSecondLaunch)
+	// A platform without a handover listener still has a working lock: it decides
+	// who runs, and the second launch exits without asking for focus.
+	if listener != nil {
+		go lock.accept(onSecondLaunch)
+	}
 	return lock, nil
 }
 

@@ -114,7 +114,9 @@ func TestStopAsksTheTreeBeforeItKillsIt(t *testing.T) {
 	host, exited := stoppedHost(tree)
 	// The tree only goes once it is killed, which is what the escalation exists
 	// for: the graceful ask was ignored.
-	tree.onKill = func() { close(exited) }
+	// The kill is what empties the tree (on Windows that is the job object the
+	// reaper waits on), so the escalation is the step that ends in "reaped".
+	tree.onKill = func() { tree.setEmpty(true); close(exited) }
 
 	if exit := host.stop(20*time.Millisecond, 5*time.Second); exit != "reaped" {
 		t.Fatalf("stop = %q, want %q", exit, "reaped")
