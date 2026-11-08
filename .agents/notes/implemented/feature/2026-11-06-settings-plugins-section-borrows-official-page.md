@@ -34,6 +34,16 @@ trading-web 的魔改布局里，官方插件管理整页（`@deepseek-ai/dsh-cl
   `[data-dshtrading-plugin-anchor]` 的容器：那是设置壳自己的遮罩，抬它就是把借壳面板盖住。
   容器标记用 `data-dshtrading-plugin-anchor`，**不与 body 状态标志同名**——同名属性会让
   `querySelector('[data-dshtrading-plugin-host]')` 把 body 一起挑出来。
+- **借壳面板必须留在文档流里**：借壳面板就是会话列的主面板（`[data-global-panel]`，第 2 轨）。交易壳
+  折叠会话列（`body[data-dshtrading-chat-folded]`，shell-pad.css 规则 9）或打开六个覆盖面页签
+  （定时任务/资产/快讯/文件/宏观/预测市场，规则 11-16）时，列或它的直接子节点被 `display: none`
+  隐去——面板失去布局盒，`textContent` 照旧非空，借壳侧按「已就位」撤掉说明文案，用户看到一片空白
+  （2026-11-08 实机：折叠态与任务面板态都复现，Chromium 与 WebKit 同形）。规则 17 在借壳期间把列与
+  主面板重新显形；面板本身是 `position: fixed`、几何来自矩形变量，轨道宽度归零不影响它，弹层后面
+  也不会多出会话列内容。
+- **空白要换成原因**：等待多出一种结论 `blocked`——官方页有内容但拿不到布局盒（`pluginPanelShown`
+  读矩形），超时点报「插件页被当前布局遮住」并给重试按钮；布局盒回来（body 状态属性变化、窗口尺寸
+  变化）时自动接管。慢、坏、被遮三种情形各有自己的文案，都不留白屏。
 - **官方弹层要抬到借壳面板之上**：官方把插件管理的弹层（添加插件 / 安装流程）渲染在自己那块
   `position: fixed` 的容器里，层叠值低于借壳写在 `[data-global-panel]` 上的 1001，借壳后面板内容整块
   盖住弹层——点「添加插件」看着没反应，其实弹层已经开了。借壳期间按结构判据（body 直接子元素 + 内含
@@ -57,9 +67,14 @@ trading-web 的魔改布局里，官方插件管理整页（`@deepseek-ai/dsh-cl
 
 ## 验证
 
-- `pnpm --filter @dshtrading/client-ui-settings test`：39 例全绿，其中 `test/plugins-section.test.ts` 12 例钉住
-  四个借壳分支（打开/卸载/layout 缺席/面板未注册）、注册面（分区 id、order、组件）与四条等待用例
-  （已在 DOM / 懒加载完成 / 超时后迟到 / 取消后不再回报）。
+- `pnpm --filter @dshtrading/client-ui-settings test`：47 例全绿，其中 `test/plugins-section.test.ts` 13 例钉住
+  四个借壳分支（打开/卸载/layout 缺席/面板未注册）、注册面（分区 id、order、组件）与七条等待用例
+  （已在 DOM / 懒加载完成 / 超时后迟到 / 取消后不再回报 / 有内容没布局盒报被遮 / 布局盒回来后接管）。
+- 2026-11-08 双引擎实机（Chromium 与 WebKitGTK 2.52，1244x1190 同视口同浅色）：折叠会话列与任务面板
+  两种状态下，修复前面板矩形 0×0 而分区一片空白（与用户截图同形），规则 17 生效后面板 564x722、
+  官方整页完整渲染；把布局盒再用内联 `display: none` 压掉时，分区在超时点给出「插件页被当前布局
+  遮住」与重试按钮，而不是留白。Before/After 截图在 `.local/acceptance/plugins-section-visibility-2026-11-08/`
+  （本机不入库）。
 - 2026-11-07 Mygo 实机（automation 通道 + 窗口级截图）：冷启动后首次点开，`[data-global-panel]` 81ms 出现、
   官方页内容 677ms 就位，分区容器子节点归零（说明文案退场）；连续三次冷启动同一结果。
 - 实机 trading-web：设置导航 5 项 → 6 项；点「插件」后 `body[data-dshtrading-plugin-host='on']`

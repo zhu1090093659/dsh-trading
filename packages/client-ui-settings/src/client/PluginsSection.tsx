@@ -28,8 +28,8 @@ export type PluginsSectionProps =
   & PropsLocale<'dshtrading.settings'>
   & InjectFace<PluginsSectionInjected>
 
-/** 分区此刻该显示什么：等待、已就位、宿主没提供、等超时。 */
-type Phase = 'loading' | 'on' | 'unavailable' | 'timeout'
+/** 分区此刻该显示什么：等待、已就位、宿主没提供、等超时、有页面但被布局遮住。 */
+type Phase = 'loading' | 'on' | 'unavailable' | 'timeout' | 'blocked'
 
 export function PluginsSection({ t, getLayout }: PluginsSectionProps) {
   const anchor = useRef<HTMLDivElement>(null)
@@ -59,9 +59,11 @@ export function PluginsSection({ t, getLayout }: PluginsSectionProps) {
           <p className={css.hint}>
             {phase === 'unavailable'
               ? t('plugins.unavailable')
-              : phase === 'timeout' ? t('plugins.timeout') : t('plugins.loading')}
+              : phase === 'timeout'
+                ? t('plugins.timeout')
+                : phase === 'blocked' ? t('plugins.blocked') : t('plugins.loading')}
           </p>
-          {phase === 'timeout' ? (
+          {phase === 'timeout' || phase === 'blocked' ? (
             <button
               type="button"
               className={css.retry}

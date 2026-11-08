@@ -47,9 +47,10 @@ function makeAnchor(): HTMLElement {
   return anchor
 }
 
-/** jsdom 不做布局：矩形必须手工给（宿主真实 DOM 由浏览器算）。 */
+/** jsdom 不做布局：矩形必须手工给（宿主真实 DOM 由浏览器算）；configurable 供同一节点改判。 */
 function stubRect(target: HTMLElement, rect: Record<string, number>): void {
   Object.defineProperty(target, 'getBoundingClientRect', {
+    configurable: true,
     value: () => ({
       top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0,
       toJSON: () => ({}),
@@ -187,12 +188,17 @@ describe('等待官方页（慢与坏要分得开）', () => {
     for (const node of document.querySelectorAll('[data-global-panel]')) node.remove()
   })
 
-  /** 造一个官方整页的锚点节点（layout 选中全局面板时宿主写的就是这个属性）；带文本才算就位。 */
-  function insertPanel(text = '插件管理'): void {
+  /**
+   * 造一个官方整页的锚点节点（layout 选中全局面板时宿主写的就是这个属性）。
+   * 带文本且占着布局盒才算就位；jsdom 不做布局，盒子必须显式给。
+   */
+  function insertPanel(text = '插件管理', box = { width: 640, height: 420 }): HTMLElement {
     const panel = document.createElement('div')
     panel.setAttribute('data-global-panel', '')
     panel.textContent = text
+    stubRect(panel, { left: 0, top: 0, right: box.width, bottom: box.height, width: box.width, height: box.height })
     document.body.append(panel)
+    return panel
   }
 
   it('用户打开分区时官方页已经在 DOM 里，等待立即结束', () => {
@@ -243,6 +249,43 @@ describe('等待官方页（慢与坏要分得开）', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(seen).toEqual(['timeout', 'on'])
     handle.cancel()
+  })
+
+  it('用户看到的页面被布局遮住时（有内容但拿不到布局盒）分区拿到可重试的说明而不是空白', async () => {
+    // Given 一个在等的分区（上限 1s）
+    vi.useFakeTimers()
+    const seen: string[] = []
+    const handle = waitForPluginPanel((state) => seen.push(state), { timeoutMs: 1000 })
+
+    // When 官方页有内容、但整块被布局压成 0×0（会话列折叠 / 覆盖面页签）
+    insertPanel('插件管理', { width: 0, height: 0 })
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Then 不先报就位，也不撤说明文案；到点报被遮，用户可重试
+    expect(seen).toEqual([])
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(seen).toEqual(['blocked'])
+    handle.cancel()
+  })
+
+  it('用户把布局盒还回来（展开会话列）时分区自动接管，不必重开设置', async () => {
+    // Given 一个已经报出"被遮"的分区
+    vi.useFakeTimers()
+    const seen: string[] = []
+    const handle = waitForPluginPanel((state) => seen.push(state), { timeoutMs: 1000 })
+    const panel = insertPanel('插件管理', { width: 0, height: 0 })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(seen).toEqual(['blocked'])
+
+    // When 布局盒回来（body 状态属性变化触发重判）
+    stubRect(panel, { left: 0, top: 0, right: 640, bottom: 420, width: 640, height: 420 })
+    document.body.dataset.dshtradingPluginHost = 'on'
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Then 分区接管官方页，说明文案退场
+    expect(seen).toEqual(['blocked', 'on'])
+    handle.cancel()
+    delete document.body.dataset.dshtradingPluginHost
   })
 
   it('用户离开分区后等待句柄不再回报任何状态', async () => {

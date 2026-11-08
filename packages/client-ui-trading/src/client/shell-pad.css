@@ -249,3 +249,18 @@ body[data-dshtrading-macro-open='on'] div:has(> [data-shell-overlay]) > div:nth-
 body[data-dshtrading-prediction-open='on'] div:has(> [data-shell-overlay]) > div:nth-child(2) > * {
   display: none !important;
 }
+
+/* 17) 借壳期间（设置 → 插件）主面板必须保留布局盒：官方插件整页寄居在第 2 轨的
+       主面板里（见 .agents/notes/implemented/feature/2026-11-06-settings-plugins-section-borrows-official-page.md）。
+       规则 9 把会话列整列 display:none，规则 11-16 把列的直接子节点全部隐去——两种
+       情况下借壳面板都失去布局盒，DOM 里内容齐全、分区却是一片空白（2026-11-08 实机：
+       折叠会话列与任务面板两种状态都复现，且借壳侧凭 textContent 判定为"已就位"）。
+       借壳期间把列与主面板重新显形：面板本身是 position:fixed、几何来自矩形变量，
+       轨道宽度归零不影响它；会话列内容仍被自己的规则压住，弹层后面不会多出东西。 */
+body[data-dshtrading-plugin-host='on'][data-dshtrading-chat-folded='on'] div:has(> [data-shell-overlay]) > div:nth-child(2) {
+  display: flex !important;
+}
+
+body[data-dshtrading-plugin-host='on'] div:has(> [data-shell-overlay]) > div:nth-child(2) > [data-global-panel] {
+  display: flex !important;
+}

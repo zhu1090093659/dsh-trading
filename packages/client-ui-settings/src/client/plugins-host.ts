@@ -58,6 +58,21 @@ export function pluginPanelReady(root: ParentNode = document): boolean {
   return (panel.textContent ?? '').trim().length > 0
 }
 
+/**
+ * 官方页此刻是否真的占着布局盒。
+ *
+ * 有文本也不够：面板寄居在会话列的主面板里，交易壳折叠会话列（规则 9）或打开六个
+ * 覆盖面页签（规则 11-16）时整块失去布局盒——textContent 照旧，矩形却是 0×0，
+ * 分区于是空白且没有任何说明（2026-11-08 实机两种状态都复现）。借壳期例外规则在
+ * shell-pad.css 17 号把布局盒还回来，这里只做判定：拿不到盒子就不算就位。
+ */
+export function pluginPanelShown(root: ParentNode = document): boolean {
+  const panel = root.querySelector(PANEL_SELECTOR)
+  if (panel === null) return false
+  const rect = panel.getBoundingClientRect()
+  return rect.width > 0 && rect.height > 0
+}
+
 /** 被抬升的官方弹层容器标记（只在借壳期间存在）。 */
 const RAISED_ATTR = 'data-dshtrading-plugin-layer'
 
@@ -110,44 +125,54 @@ export interface PanelWaitHandle {
   cancel(): void
 }
 
+/** 等待的三种结论：就位、有内容但被布局遮住、始终没来。 */
+export type PanelWaitState = 'on' | 'blocked' | 'timeout'
+
 /**
- * 等官方整页进 DOM：出现即回 'on'；到点仍未出现回 'timeout'，之后迟到再回 'on'
- * —— 迟到的页面照样接管分区，用户不必自己重开。
+ * 等官方整页就位：有内容且占着布局盒回 'on'；到点仍不见页面回 'timeout'，页面在
+ * 而布局盒没了回 'blocked'——慢、坏、被遮三种情形用户都要看得懂，不能都是一块
+ * 空白。此后迟到的页面或恢复的布局盒照样接管分区，用户不必自己重开。
  */
 export function waitForPluginPanel(
-  onState: (state: 'on' | 'timeout') => void,
+  onState: (state: PanelWaitState) => void,
   options: { timeoutMs?: number; root?: ParentNode } = {},
 ): PanelWaitHandle {
   const root = options.root ?? document
   const timeoutMs = options.timeoutMs ?? PANEL_TIMEOUT_MS
-  let settled = false
+  let last: PanelWaitState | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
-  const report = (state: 'on' | 'timeout'): void => {
-    if (settled) return
-    if (state === 'on') settled = true
+  const publish = (state: PanelWaitState): void => {
+    if (state === last) return
+    last = state
     onState(state)
   }
-  if (pluginPanelReady(root)) {
-    report('on')
-    return { cancel() { settled = true } }
-  }
-  const observer = new MutationObserver(() => {
+  // 只有"有内容且占着盒子"才撤说明文案：有内容没盒子留到超时点再判定，免得弹层
+  // 开场动画的那几帧把分区误判成被遮。
+  const evaluate = (): void => {
     if (!pluginPanelReady(root)) return
-    observer.disconnect()
-    if (timer !== undefined) clearTimeout(timer)
-    report('on')
-  })
+    if (!pluginPanelShown(root)) return
+    publish('on')
+  }
   // characterData：官方页可能先挂空壳、随后只改文本，不产生新的子树。
-  observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+  const content = new MutationObserver(evaluate)
+  content.observe(document.body, { childList: true, subtree: true, characterData: true })
+  // 布局盒是被 body 状态属性（折叠会话列 / 六个覆盖面页签）拿走的：属性一变就重判。
+  const layout = new MutationObserver(evaluate)
+  layout.observe(document.body, { attributes: true })
+  // 窗口尺寸变化同样会改布局盒（极小窗口、折叠后拖宽），一并重判。
+  window.addEventListener('resize', evaluate)
+  evaluate()
   timer = setTimeout(() => {
     timer = undefined
     // 观察者留着：官方页迟到的那一次仍然接管分区，用户不必自己重开。
-    report('timeout')
+    if (!pluginPanelReady(root)) publish('timeout')
+    else if (!pluginPanelShown(root)) publish('blocked')
   }, timeoutMs)
   return {
     cancel() {
-      settled = true
-      observer.disconnect()
+      content.disconnect()
+      layout.disconnect()
+      window.removeEventListener('resize', evaluate)
       if (timer !== undefined) clearTimeout(timer)
     },
   }
