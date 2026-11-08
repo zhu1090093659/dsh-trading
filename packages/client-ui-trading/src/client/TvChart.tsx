@@ -1091,13 +1091,28 @@ export function syncIndicators(
     if (seriesMap === undefined) {
       seriesMap = new Map()
       refs.set(group.key, seriesMap)
-      for (const output of group.outputs) {
-        seriesMap.set(output.key, createSeries(chart, output, paneIndex, dark))
-      }
     }
+    // 组内输出结构 diff：同一组（同名实例）的输出键会随参数增删——KDAS 每条关键日一条线
+    // （KDAS_YY-MM-DD），右键菜单写的是 symbolParams，实例与组键都不变，只有输出集变了。
+    // 只在「组首次出现」时按当时的输出集建序列，新线永远等不到序列、被删的线永远留在图上，
+    // 用户只能整页刷新（重取全部行情）才看到结果。先建新序列、后撤旧序列：新序列先存在，
+    // 撤旧不会让 pane 归属先空一拍。
+    const outputKeys = new Set(group.outputs.map(output => output.key))
+    const lines: Array<{ output: IndicatorOutput; series: ISeriesApi<SeriesType> }> = []
     for (const output of group.outputs) {
-      const series = seriesMap.get(output.key)
-      if (series === undefined) continue
+      let series = seriesMap.get(output.key)
+      if (series === undefined) {
+        series = createSeries(chart, output, paneIndex, dark)
+        seriesMap.set(output.key, series)
+      }
+      lines.push({ output, series })
+    }
+    for (const [key, series] of seriesMap) {
+      if (outputKeys.has(key)) continue
+      chart.removeSeries(series)
+      seriesMap.delete(key)
+    }
+    for (const { output, series } of lines) {
       // 主题热切换：主图叠加（recreateAll=false）不重建序列，颜色必须显式重放，
       // 否则 themeColor 会停在旧主题色，直到指标增删触发一次重建。
       applySeriesColor(series, output, dark)

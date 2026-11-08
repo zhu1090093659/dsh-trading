@@ -43,8 +43,10 @@ Status: implemented
   五日级别跨源时改由同源的 ticker 合并，见下条；蜡烛/成交量
   走 `series.update()` 尾部增量（保留用户视窗），30s resync 兜底校正开高低/量。
   蜡烛/成交量只在 `dataKey`（market:symbol:interval）变化或头部时间位移时才
-  `setData` + `fitContent`；指标序列主图按组 diff、副图按激活顺序整组重建
-  （pane 索引随数组位置对齐，空 pane 由 v5 自动回收）。
+  `setData` + `fitContent`；指标序列主图按「组 + 组内输出键」diff——组键 = 实例 id +
+  全局 params，组内新增输出当场建序列、消失输出当场撤序列，实例与组键都不变而线名随
+  参数变化的指标（KDAS 每条关键日一条 `KDAS_YY-MM-DD`）因此不必等整图重建；副图按
+  激活顺序整组重建（pane 索引随数组位置对齐，空 pane 由 v5 自动回收）。
 - **五日级别（客户端视图级别 `'5d'`，2026-10-14）**：与日 K/分钟级别平级的胶囊，
   成交量按「同分钟量比」分档着色，显示窗口由滚轮档位决定（1..5 个交易日，默认 1）。
   四条机制：
@@ -140,6 +142,24 @@ Status: implemented
 - 调试陷阱备忘（验证环境，非产品 bug）：用户 Chrome 多会话并发时 CDP marker
   会漂到别的标签页——探针前必须 `switch_tab` + 校验 `location.href`；后台标签
   页 `usePoll` 冻结属既有设计，验证数据面须先激活标签页。
+
+### 主图叠加组内输出 diff（2026-10-23，修 KDAS 关键日线要刷新才出现）
+
+- 缺陷：主图叠加的序列只在「组首次出现」时按当时的输出集建立。KDAS 右键菜单写的是
+  symbolParams，实例与组键都不变、只有输出集变（每条关键日一条 `KDAS_YY-MM-DD`），
+  于是新增的关键日线永远拿不到序列、被移除的关键日线永远留在图上——用户只能整页刷新
+  （重取全部行情）才看到结果。
+- 修法：`syncIndicators` 对保留下来的组做**组内输出结构 diff**——先为缺席的输出建序列，
+  再撤下不再出现的输出序列，最后统一刷新数据；既有序列引用不变，视窗、其它线与
+  ticker 5s 推进都不受影响，也不产生任何网络请求。副图（整组重建）与占位 pane 路径不变。
+- 证据：`test/tv-chart-main-overlay-output-diff.test.ts` 3 例（新增输出建序列、消失输出
+  撤序列、同一份输出重复同步不重建）用最小图表契约假体重放 `syncIndicators`，在修复前
+  红（新建序列 1 条、撤下 0 条）、修复后绿；`client-ui-trading` 76 文件 666 例全绿，
+  `scripts/typecheck-gate.mjs` 354 = 基线，`scripts/test-audit.mjs --check` 无新增测试债，
+  该包 `tsdown` 双 bundle 构建通过。
+- 未做本机真机复验：live home（`~/.dsh-trading/indicators`）没有 KDAS 自定义指标记录、
+  也没有运行中的实例，复现需要先装指标与行情源；该修复的判定点（序列建/撤）由上述
+  回归用例直接钉住。
 
 ### 五日级别（2026-10-14）
 

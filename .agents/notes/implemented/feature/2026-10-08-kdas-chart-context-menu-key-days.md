@@ -21,6 +21,7 @@ KDAS（关键日 Anchored VWAP）的 Key Day 存储就是激活实例参数 kd1.
 - **守卫**：仅日 K 周期 + 聚焦标的存在 + KDAS 对当前标的可见（visibleInstances 命中）时接管右键；否则浏览器默认菜单。多标签并发 = host-first + SSE 重拉 last-write-wins，与参数弹窗同语义。
 - **TvChart 零业务**：TvChart 只加 onBarContextMenu（坐标→逻辑下标，与区间框选同源换算），守卫与动作全在 QuoteStage；满槽判定、锚点幂等（同锚去重 → 点击锚点柱只提供删除）都在 kdas-menu.ts 纯函数（18 例单测，含 clampRectInto）。
 - **菜单钳位（2026-10-08 owner 报告右缘残缺后补）**：菜单在 chartBox 内绝对定位，style 的 left/top 是容器坐标；钳位（clampRectInto）必须全程容器系——inner 用 kdasMenu.x/y、outer 用 chartBox 的 clientWidth/Height（原点归零），量测帧 visibility:hidden 渲染（useLayoutEffect 量真实尺寸后 placed 落位）。视口系与容器系混算会让"看似已钳位"的值再叠一次 chartBox 偏移（本 note 验证环节实测踩中：left 954 → 视口 1241 溢出）。
+- **关键日增删当场生效（2026-10-23 修复后）**：菜单写的是 symbolParams，实例与组键都不变，图上关键日线的增删由 TvChart 的组内输出键 diff 完成（新输出建序列、消失输出撤序列），不整图重建、不重取行情。机制归属见 [中栏 TradingView 视图](../architecture/2026-08-30-middle-stage-tradingview-views.md) 的「主图叠加组内输出 diff」。
 
 ## 文件
 
@@ -39,3 +40,4 @@ KDAS（关键日 Anchored VWAP）的 Key Day 存储就是激活实例参数 kd1.
 - 影子 profile 实机（trading-web-shadow-kdas @3421，独立 headless Chrome + CDP，用后即毁；不触碰运行中的桌面实例）：cn:002714.SZ 日 K 右键弹菜单（标题/设为关键日/底列 4 条带线色 Key Day/4·8 提示）；点「设为关键日 2026-08-17」→ host chart.json 该标的 kd3=20260817 落盘、读数行与图出现第 5 条线；右键锚点柱 → 菜单项变「移除关键日 2026-08-17」→ 点击后 host 归 0、线消失；底列点「2026-10-08 移除」（锚点在视野外）→ host kd7 归 0、线消失。验证产生的数据改动已现场还原原值并核对。
 - 右缘钳位复验（修复后同法重建影子环境）：右缘点击（容器系 x=773）菜单 right=1162=chart.right 零溢出；下缘点击（y=662）menuBottom=841 < chartBottom=845；容器中部回归点击落位与原坐标一致（left:413,top:300）。
 - 「挂载 KDAS」单项（实例缺席态）未单独实机走查：与已验证的添加路径同代码（kdasAddDay 空参 → setParams(scopeKey) 建实例），由单测覆盖。
+- 修正（2026-10-23 owner 报告「设为关键日后要手动刷新才显示」后复核）：上述「读数行与图出现第 5 条线」里的**图上线**不成立。当时代码的 `syncIndicators` 只在组首次出现时按当时输出集建序列，KDAS 每条关键日一条 `KDAS_YY-MM-DD`、菜单写 symbolParams（组键不变），新增的关键日线拿不到序列、只有整页刷新才出现；被移除的关键日线同样不会撤下。读数行不受影响（它直接消费本轮输出），当时的目视结论被读数行误导。修复与回归证据见 [中栏 TradingView 视图](../architecture/2026-08-30-middle-stage-tradingview-views.md)「主图叠加组内输出 diff」一节。
