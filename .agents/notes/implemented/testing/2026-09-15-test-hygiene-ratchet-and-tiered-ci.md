@@ -80,6 +80,15 @@ root 进程读不到 `packages/client-ui-trading/vitest.config.ts` 的 `setupFil
 容差 0.2pp：逐包并行下个别边界分支计数在两次运行间会差 1~2 个（11200 量级上约
 0.01pp），门禁要是指纹不是骰子，真实回归（少跑一个测试文件掉 1pp 以上）照样红。
 
+**root `pnpm test` 与逐包口径对齐（2026-11-07）**：根 `package.json` 的 `test`
+原为 `vitest run --passWithNoTests`（单进程），与上面这条决策相反却又是 AGENTS.md
+写明的测试基线，于是基线在 main 上长期是红的。实测：单跑 `packages/client-ui-trading`
+就红 6 例（`market-sidebar-tickers-chunk`、`market-sidebar-prevclose-seed`、
+`quote-stage-trade-desk-poll-guard`），根因是该包的 `setupFiles` 没被加载、storage
+跨用例继承；同一文件在该包内 `vitest run` 全绿，且文件与其实现对 origin/main 无改动
+——是入口问题不是用例问题。现在 `test` = `pnpm -r test && pnpm test:scripts`，
+与 CI 同口径；`desktop/` 仍是独立的 `test:desktop`（独立 npm 工程）。
+
 **5. CI 分层。** `ci.yml` 拆成两个 job：`static-gates`（ubuntu 单点跑 typecheck /
 i18n / test:audit / test:scripts / test:desktop，平台无关，失败不必等矩阵）与
 `test`（ubuntu 22/24 + windows 22 矩阵，保留 2026-09-06 的 Windows 信号前移

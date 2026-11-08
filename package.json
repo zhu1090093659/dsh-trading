@@ -29,7 +29,7 @@
     "patch-id:update": "node scripts/patch-id-gate.mjs --update",
     "release": "pnpm build && changeset publish",
     "sync:skills": "node scripts/sync-skills.mjs",
-    "test": "vitest run --passWithNoTests",
+    "test": "pnpm -r test && pnpm test:scripts",
     "test:audit": "node scripts/test-audit.mjs --check",
     "test:audit:report": "node scripts/test-audit.mjs --report",
     "test:desktop": "node --test \"desktop/tests/*.test.mjs\"",
