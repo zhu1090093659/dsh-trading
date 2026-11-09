@@ -3,7 +3,8 @@
  * the full preset catalog once the session is safely anchored.
  *
  * Phase 1 (no persisted `tool/call` yet):
- * - tool catalog: one platform shell plus `commonTools`
+ * - tool catalog: one platform shell plus `commonTools` — NOT APPLIED on host
+ *   0.2.2, see "TOOL CROP" below; the phase-1 catalog is the full preset one
  * - prompt sections: only the persona section (all other sections,
  *   including plan-mode's `plan:policy`, return after promotion)
  * - runtime contexts: emptied (no sandbox/approval snapshot)
@@ -32,6 +33,19 @@
  * promotion signal exists past that boundary. The reset lives both in the
  * live `session/event` path and inside the durable-log scan, so resume and
  * reload reconstruct the same phase.
+ *
+ * TOOL CROP (host 0.2.2 regression): the crop used to narrow the request by
+ * returning a filtered `tools` array from the `system-prompt/assemble`
+ * waterfall. Two independent host changes retired that lever —
+ * `assemble()` now appends `tools` to its own return value after the
+ * waterfall (a returned `tools` is dropped), and the loop resolves the
+ * step's tool admission (`tools.resolve`) BEFORE assembling the prompt, so a
+ * registry restriction applied here would only land on the next step — the
+ * opposite of "crop the first request". Phase 1 therefore keeps the full
+ * catalog; the message quarantine, the section/context narrowing and the
+ * `bootstrapMaxTokens` ceiling still apply, and the composition check below
+ * still reports drift. `compactionTools` stays in the policy contract for the
+ * phase that can crop again.
  *
  * ROBUSTNESS: composition drift (a missing bootstrap shell or common tool)
  * degrades to the full catalog with a one-time warning instead of throwing,
@@ -323,6 +337,27 @@ function applyPresentation(agent, state, policy) {
 }
 
 /**
+ * Tool names the agent's registry scope exposes right now. Host 0.2.2 stopped
+ * folding the assembled tool schemas into the `system-prompt/assemble`
+ * waterfall — the service appends `tools` to its own return value after the
+ * waterfall, so the hook sees sections/contexts/variables only — which makes
+ * the registry view the surviving source for the composition check.
+ */
+function registryToolNames(agent) {
+  const tools = agent?.ctx?.tools
+  if (tools === undefined || typeof tools.definitions !== 'function') return undefined
+  try {
+    const definitions = tools.definitions(agent)
+    if (!Array.isArray(definitions)) return undefined
+    return definitions
+      .map(definition => definition?.name)
+      .filter(toolName => typeof toolName === 'string')
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * a) first tool call, no anchor gate — promote immediately;
  * b) first tool call, anchored or `maxBootstrapSteps` fallback — promote;
  * c) first tool call, still gated, but the first turn ended and
@@ -513,7 +548,12 @@ export function apply(ctx, config) {
     const state = refresh(agent, policy)
     if (state.promoted) return withPtcInstruction(withWorkspaceLine(assembled, agent), policy)
 
-    const available = new Set(assembled.tools.map(tool => tool.name))
+    // The waterfall no longer carries the tool list (host 0.2.2): read the
+    // registry view instead, and leave the catalog untouched when it is out of
+    // reach rather than throwing on a surface this filter cannot inspect.
+    const toolNames = registryToolNames(agent)
+    if (toolNames === undefined) return assembled
+    const available = new Set(toolNames)
     const selectedShells = shellTools.filter(toolName => available.has(toolName))
     const missingCommon = commonTools.filter(toolName => !available.has(toolName))
     if (selectedShells.length !== 1 || missingCommon.length > 0) {
@@ -528,10 +568,6 @@ export function apply(ctx, config) {
       return assembled
     }
 
-    const bootstrap = new Set([...selectedShells, ...commonTools])
-    // After a compaction the controlled phase widens with the core work set
-    // so mid-task work can continue before re-promotion.
-    if (state.hasCompacted) for (const toolName of compactionTools) bootstrap.add(toolName)
     const sections = Array.isArray(assembled.sections)
       ? assembled.sections.filter(section => PERSONA_SECTION_NAMES.has(section?.name))
       : undefined
@@ -546,7 +582,6 @@ export function apply(ctx, config) {
         })
     return {
       ...assembled,
-      tools: assembled.tools.filter(tool => bootstrap.has(tool.name)),
       contexts: [],
       ...(phase1Sections !== undefined ? { sections: phase1Sections } : {}),
     }

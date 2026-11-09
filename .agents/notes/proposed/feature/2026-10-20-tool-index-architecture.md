@@ -47,6 +47,8 @@ Status: proposed
 
 **2026-10-21 校准（预设「加载失败」事故）**：这里曾写 `shellTools: []` 并注明「researcher 没有 bash，故留空」——空数组在插件 `apply` 阶段直接抛 `shellTools must be a non-empty array of non-empty strings`，预设行启动即失败、registry 记 `broken`，于是「标的分析研究员」与复用同一套行的「标的分析研究员（委派）」在设置中心双双显示「加载失败」（诊断原文见该行 id `dsh-trading-instrument-researcher-bootstrap`）。现在研究员挂 `dsh-trading-${id}-bash`、`shellTools: ['bash']`；`pnpm ui:check` 新增 H3 断言「Agent 预设名册无加载失败项」，回退成空数组即转红。
 
+**2026-11-09 校准（researcher 首轮崩溃事故）**：宿主升到 0.2.2 线后，`system-prompt/assemble` 的装配体只带 sections/contexts/variables——服务在瀑布之后自行追加 `tools`，钩子返回的 `tools` 被丢弃；同一世代里 loop 先 `tools.resolve` 做本步工具准入、再组装提示词，所以组装期施加的注册面限制只落到下一步。于是组装期那行 `assembled.tools.map(...)` 抛 `Cannot read properties of undefined (reading 'map')`：研究员与其委派预设每次首轮都失败（现场证据：Master 派发 researcher 子代理，子会话 `turn/start` 后 6 ms 即 `turn/end`，reason 为 UNKNOWN）。现在该插件改读注册面 `agent.ctx.tools.definitions(agent)` 做组合判定，并停止返回被丢弃的裁剪结果；**首轮工具收窄在 0.2.2 上不可达**，首轮保持全量目录（本机 139 个工具），消息隔离、段落/上下文收窄与 `bootstrapMaxTokens` 上限照旧生效。要回到「首轮只给 bash + holdings_list + routing_get」需另设计在 admission 之前生效的机制（例如预设层 `tools.restrict` + 晋升时释放），本轮不做。回归用例：`packages/base/test/tool-bootstrap-assemble.test.ts`。
+
 ## Alternatives considered
 
 - **直接开 `ptc` 模式**：能一步把 97 份 schema 压成 1 份，但会同时改变四种角色的调用范式，且模型必须学会 SDK 写法；在没有索引层兜底时，漏调风险最高。否决为第一步。
@@ -62,7 +64,7 @@ Status: proposed
 
 ## 授权与升级
 
-`assets/tool-bootstrap.mjs` 来自 <https://github.com/xiaobright/dsh-anchored-standard>（MIT），含 dsh-liangshen 两阶段扩展，署名与边界见 `packages/base/assets/NOTICE-tool-bootstrap.md`。本仓库只改挂载配置、不改插件源码；上游更新时重新复制并重跑测试。
+`assets/tool-bootstrap.mjs` 来自 <https://github.com/xiaobright/dsh-anchored-standard>（MIT），含 dsh-liangshen 两阶段扩展，署名与边界见 `packages/base/assets/NOTICE-tool-bootstrap.md`。本仓库除挂载配置外还带一处源码适配（2026-11-09：组装期改读注册面、不再返回被丢弃的 `tools` 裁剪结果，见上文校准）；上游更新时重新复制、重新施加该适配并重跑测试。
 
 ## 验证证据
 
