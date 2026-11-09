@@ -24,6 +24,9 @@ const t = (key: SpecialIndicatorsLocaleKey, params?: Record<string, unknown>): s
 
 const MOUNT = '/dshtrading/api/special-indicators'
 
+/** 置 true 时 sentiment 快照不带 shadow，用于断言「读数缺席则整块不渲染」。 */
+let omitSentimentShadow = false
+
 function fixtureFor(url: string): { status?: number; body: unknown } {
   if (url.endsWith(MOUNT + '/status')) return { body: { ok: true, configured: true, baseUrl: 'https://finance.example.test', username: 'api' } }
   if (url.includes('/basis/snapshot')) {
@@ -42,14 +45,36 @@ function fixtureFor(url: string): { status?: number; body: unknown } {
   }
   if (url.includes('/basis/history')) return { body: { basis: { IF: [], IM: [] } } }
   if (url.includes('/sentiment/snapshot')) {
-    return {
-      body: {
-        score: 42.65, label: 'fear', label_text: '恐惧', date: '2026-09-16', expected_data_date: '2026-09-16', stale: false,
-        average_5d: 29.24, vs_5d: 13.41, methodology_version: 3,
-        components: [{ key: 'cn_momentum', name: '全指动量', raw: -5.35, score: 7.8, direction: 'higher_fear' }],
-        coverage: { valid: 1, total: 8, partial: false },
-      },
+    const body: Record<string, unknown> = {
+      score: 42.65, label: 'fear', label_text: '恐惧', date: '2026-09-16', expected_data_date: '2026-09-16', stale: false,
+      average_5d: 29.24, vs_5d: 13.41, methodology_version: 3,
+      components: [{ key: 'cn_momentum', name: '全指动量', raw: -5.35, score: 7.8, direction: 'higher_fear' }],
+      coverage: { valid: 1, total: 8, partial: false },
     }
+    // shadow 是可选的 additive 读数：省略该键即「上游还没有这些读数」的真实状态。
+    if (!omitSentimentShadow) {
+      body.shadow = {
+        qvix: {
+          included_in_score: false, source: 'sse-50etf-chain-selfcomputed', as_of: '2026-11-09',
+          level: 17.02, percentile: null, band_label: '中性', sample_points: 0,
+        },
+        cffex_position: {
+          included_in_score: false, source: 'cffex-top20-member-position', as_of: '2026-11-06',
+          readings: [
+            { variety: 'IF', name: '沪深300股指期货', hedging_heavy: true, net_oi_pct: -5.48, percentile: 81.5 },
+            { variety: 'IM', name: '中证1000股指期货', hedging_heavy: false, net_oi_pct: -6.59, percentile: 85.4 },
+          ],
+        },
+        etf_flow: {
+          included_in_score: false, source: 'eastmoney-etf-share-snapshot', as_of: '2026-11-09', sample_days: 1,
+          groups: {
+            broad: { latest_date: '2026-11-09', shares_yi: 6169.4, change_yi: null, points: 1 },
+            sector: { latest_date: '2026-11-09', shares_yi: 19267.5, change_yi: null, points: 1 },
+          },
+        },
+      }
+    }
+    return { body }
   }
   if (url.includes('/sentiment/history')) return { body: { series: [], overlay: [], snapshot: { score: 42.65, label: 'fear', date: '2026-09-16' } } }
   if (url.includes('/hk-short/snapshot')) {
@@ -155,6 +180,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  omitSentimentShadow = false
   restoreFetch()
   restoreStorage()
   cleanup()
@@ -228,6 +254,39 @@ describe('特殊指标二级页签', () => {
     expect(dataCalls.some((u) => u.includes('/sentiment/snapshot'))).toBe(true)
     expect(dataCalls.some((u) => u.includes('/sentiment/history'))).toBe(true)
     expect(dataCalls.length).toBe(2)
+  })
+
+  it('恐慌指数卡片把 shadow 附加读数单独成块展示，与 0-100 分项分开', async () => {
+    // Given: 桥里带 qvix / 净持仓 / ETF 份额三条 additive 读数
+    const fake = installFakeFetch()
+    restoreFetch = fake.restore
+
+    // When: 用户打开视图，恐慌指数卡片上屏
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    await screen.findByText('42.6')
+
+    // Then: 附加读数单独成块，标题明写「不进分数」
+    expect(screen.getByText(zh['si.sentiment.readings'])).toBeTruthy()
+    // 期权：原值 + 样本不足的分位占位
+    expect(screen.getByText(/17\.02/)).toBeTruthy()
+    expect(screen.getByText(/分位 —/)).toBeTruthy()
+    // 期货：按品种给净空占比
+    expect(screen.getByText('IF -5.48%')).toBeTruthy()
+    expect(screen.getByText('IM -6.59%')).toBeTruthy()
+    // ETF：只有一个点时净申赎显示占位而不是 0
+    expect(screen.getByText('宽基 —')).toBeTruthy()
+  })
+
+  it('上游没有 shadow 读数时整块不渲染，不留空标题', async () => {
+    omitSentimentShadow = true
+    const fake = installFakeFetch()
+    restoreFetch = fake.restore
+
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    await screen.findByText('42.6')
+
+    expect(screen.queryByText(zh['si.sentiment.readings'])).toBeNull()
+    expect(screen.queryByText(zh['si.readings.qvix'])).toBeNull()
   })
 
   it('用户回访已加载页签时零网络，手动刷新只重拉已加载页签', async () => {

@@ -68,6 +68,67 @@ export interface SentimentSnapshot {
   components: SentimentComponent[]
   coverage: { valid: number; total: number; partial: boolean }
   methodology_version: number
+  shadow?: SentimentShadow
+}
+
+/** 期权隐含波动率读数（第三方复刻或交易所链自算，不进分数）。 */
+export interface SentimentQvixReading {
+  included_in_score: false
+  source: string
+  provenance?: string
+  as_of: string
+  level: number
+  percentile?: number | null
+  band?: string | null
+  band_label?: string | null
+  sample_points?: number
+}
+
+/** 中金所前 20 会员净持仓（按品种，不进分数）。 */
+export interface SentimentCffexVariety {
+  variety: string
+  name: string
+  hedging_heavy: boolean
+  net_oi?: number | null
+  net_oi_pct?: number | null
+  net_chg?: number | null
+  net_chg_5d?: number | null
+  percentile?: number | null
+  sample_points?: number
+}
+
+export interface SentimentCffexReading {
+  included_in_score: false
+  source: string
+  as_of: string
+  readings: SentimentCffexVariety[]
+}
+
+/** ETF 分组份额（净申赎=份额变化，份；不进分数）。 */
+export interface SentimentEtfGroup {
+  latest_date: string
+  shares_yi: number
+  change_yi?: number | null
+  change_5d_yi?: number | null
+  points: number
+}
+
+export interface SentimentEtfFlowReading {
+  included_in_score: false
+  source: string
+  as_of: string
+  groups: Record<string, SentimentEtfGroup | undefined>
+  sample_days?: number
+}
+
+/**
+ * shadow 里的 additive 读数：只作状态陈列，不进 0-100 分数。
+ * 三者都是可选——上游缺失或尚未累积样本时该键不存在，界面按缺席处理。
+ */
+export interface SentimentShadow {
+  qvix?: SentimentQvixReading
+  cffex_position?: SentimentCffexReading
+  etf_flow?: SentimentEtfFlowReading
 }
 
 export interface SentimentHistory {

@@ -49,6 +49,7 @@ import {
   type SectorRankingRow,
   type SectorsSnapshot,
   type SentimentHistory,
+  type SentimentShadow,
   type SentimentSnapshot,
 } from './wire.ts'
 import css from './SpecialIndicatorsView.module.css'
@@ -483,10 +484,76 @@ function SentimentCard({ t, snap, hist, loading, onRefresh }: {
                 </div>
               ))}
             </div>
+            <SentimentReadings t={t} shadow={s.shadow} />
             {series.some((x) => x.points.length > 0) && <LineChart series={series} />}
           </>
         )}
     </CardShell>
+  )
+}
+
+/**
+ * 附加读数:期权 QVIX / 期货净空 / ETF 净申赎。
+ *
+ * 三者都是 additive shadow(included_in_score=false),**不进上面那个 0-100 分数**,
+ * 所以单独成块、与分项列表区分开——原始读数与合成分数混排会让读者以为它们参与
+ * 了加权。任一读数缺席就整行不渲染;三个都缺席时整块不渲染,不留空标题。
+ */
+function SentimentReadings({ t, shadow }: { t: TFunc; shadow?: SentimentShadow }) {
+  const qvix = shadow?.qvix
+  const cffex = shadow?.cffex_position
+  const etf = shadow?.etf_flow
+  const rows: Array<{ key: string; label: string; items: string[] }> = []
+
+  if (qvix !== undefined) {
+    const parts = [formatNum(qvix.level, 2)]
+    if (qvix.band_label !== undefined && qvix.band_label !== null) parts.push(qvix.band_label)
+    parts.push(
+      t('si.readings.percentile') + ' ' +
+      (qvix.percentile === null || qvix.percentile === undefined ? '—' : formatNum(qvix.percentile, 0)),
+    )
+    rows.push({ key: 'qvix', label: t('si.readings.qvix'), items: [parts.join(' · ')] })
+  }
+
+  if (cffex !== undefined && cffex.readings.length > 0) {
+    rows.push({
+      key: 'cffex',
+      label: t('si.readings.cffex'),
+      items: cffex.readings.map((r) =>
+        r.net_oi_pct === null || r.net_oi_pct === undefined
+          ? r.variety + ' —'
+          : r.variety + ' ' + formatSigned(r.net_oi_pct, 2) + '%',
+      ),
+    })
+  }
+
+  if (etf !== undefined) {
+    const labels: Record<string, string> = { broad: '宽基', sector: '行业', cross_border: '跨境', other: '其他' }
+    const items = Object.keys(labels)
+      .filter((key) => etf.groups[key] !== undefined)
+      .map((key) => {
+        const change = etf.groups[key]?.change_yi
+        return labels[key] + ' ' + (change === null || change === undefined ? '—' : formatSigned(change, 1) + '亿')
+      })
+    if (items.length > 0) rows.push({ key: 'etf', label: t('si.readings.etf'), items })
+  }
+
+  if (rows.length === 0) return null
+
+  return (
+    <div className={cx('readings')}>
+      <div className={cx('readingsTitle')}>{t('si.sentiment.readings')}</div>
+      {rows.map((row) => (
+        <div key={row.key} className={cx('readingRow')}>
+          <span className={cx('readingName')}>{row.label}</span>
+          <span className={cx('readingValue')}>
+            {row.items.map((item) => (
+              <span key={item} className={cx('readingItem')}>{item}</span>
+            ))}
+          </span>
+        </div>
+      ))}
+    </div>
   )
 }
 
