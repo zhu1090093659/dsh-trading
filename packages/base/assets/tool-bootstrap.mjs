@@ -3,8 +3,8 @@
  * the full preset catalog once the session is safely anchored.
  *
  * Phase 1 (no persisted `tool/call` yet):
- * - tool catalog: one platform shell plus `commonTools` — NOT APPLIED on host
- *   0.2.2, see "TOOL CROP" below; the phase-1 catalog is the full preset one
+ * - tool catalog: one platform shell plus `commonTools`, installed as a
+ *   per-agent registry restriction (see "TOOL CROP" below)
  * - prompt sections: only the persona section (all other sections,
  *   including plan-mode's `plan:policy`, return after promotion)
  * - runtime contexts: emptied (no sandbox/approval snapshot)
@@ -34,18 +34,25 @@
  * live `session/event` path and inside the durable-log scan, so resume and
  * reload reconstruct the same phase.
  *
- * TOOL CROP (host 0.2.2 regression): the crop used to narrow the request by
- * returning a filtered `tools` array from the `system-prompt/assemble`
- * waterfall. Two independent host changes retired that lever —
- * `assemble()` now appends `tools` to its own return value after the
- * waterfall (a returned `tools` is dropped), and the loop resolves the
- * step's tool admission (`tools.resolve`) BEFORE assembling the prompt, so a
- * registry restriction applied here would only land on the next step — the
- * opposite of "crop the first request". Phase 1 therefore keeps the full
- * catalog; the message quarantine, the section/context narrowing and the
- * `bootstrapMaxTokens` ceiling still apply, and the composition check below
- * still reports drift. `compactionTools` stays in the policy contract for the
- * phase that can crop again.
+ * TOOL CROP (host 0.2.2): the phase-1 catalog is a per-agent registry
+ * restriction (`agent.ctx.tools.restrict({ allow })`), never a filtered
+ * `tools` array from the `system-prompt/assemble` waterfall. Two host
+ * behaviours force that: `assemble()` appends `tools` to its own return value
+ * after the waterfall (a returned `tools` is dropped), and the loop resolves
+ * the step's tool admission (`tools.resolve`) BEFORE assembling the prompt.
+ * A mask installed during assembly therefore only reaches the NEXT step, and a
+ * mask installed after admission narrows a set the model has already been
+ * shown — every call to a masked tool would fail as UNKNOWN_TOOL.
+ * The mask is installed from `agent/status` when it turns `running`: the
+ * driver emits that transition while committing the running phase and only
+ * then enters `turn()` → `preStep()` → `tools.resolve()`, which makes it the
+ * earliest hook that carries the live agent. It is re-synced at `step/end`
+ * and `turn/end` — the other boundaries where no admitted tool set is still
+ * in flight. Promotion disposes the mask. `compaction/end` resets the phase
+ * but never masks in place (the compacting step was already admitted); the
+ * next boundary installs the post-compaction core set instead. A session that
+ * is already promoted in the durable log replays as promoted from the same
+ * events the live path used, so a continued conversation is never narrowed.
  *
  * ROBUSTNESS: composition drift (a missing bootstrap shell or common tool)
  * degrades to the full catalog with a one-time warning instead of throwing,
@@ -271,6 +278,8 @@ function stateFor(session) {
       presentationApplied: false,
       hasCompacted: false,
       presentationDisposer: undefined,
+      restrictionDisposer: undefined,
+      restrictionKey: '',
     }
     promotionBySession.set(session, state)
   }
@@ -337,24 +346,135 @@ function applyPresentation(agent, state, policy) {
 }
 
 /**
- * Tool names the agent's registry scope exposes right now. Host 0.2.2 stopped
- * folding the assembled tool schemas into the `system-prompt/assemble`
- * waterfall — the service appends `tools` to its own return value after the
- * waterfall, so the hook sees sections/contexts/variables only — which makes
- * the registry view the surviving source for the composition check.
+ * One agent's registry view, read the way both the composition check and the
+ * phase-1 mask need it. `knownNames` is the PRE-restriction name set, so drift
+ * keeps meaning "the composition no longer carries a bootstrap tool" instead
+ * of "the mask already removed it"; `restrictableNames` is the subset a mask
+ * can actually remove (global and preset-scope registrations — an agent-scope
+ * registration stays visible and cannot be masked away). Host 0.2.2 stopped
+ * folding tool schemas into the `system-prompt/assemble` waterfall, so the
+ * registry view is the surviving source. Falls back to `definitions()` when no
+ * `view()` is reachable, which is the already-masked list.
  */
-function registryToolNames(agent) {
+function registryView(agent) {
   const tools = agent?.ctx?.tools
-  if (tools === undefined || typeof tools.definitions !== 'function') return undefined
+  if (tools === undefined) return undefined
   try {
-    const definitions = tools.definitions(agent)
-    if (!Array.isArray(definitions)) return undefined
-    return definitions
-      .map(definition => definition?.name)
-      .filter(toolName => typeof toolName === 'string')
+    if (typeof tools.view === 'function') {
+      const view = tools.view(agent)
+      if (view?.knownNames instanceof Set && view.restrictableNames instanceof Set) {
+        return { names: view.knownNames, restrictable: view.restrictableNames }
+      }
+    }
+    if (typeof tools.definitions === 'function') {
+      const definitions = tools.definitions(agent)
+      if (Array.isArray(definitions)) {
+        return {
+          names: new Set(definitions
+            .map(definition => definition?.name)
+            .filter(toolName => typeof toolName === 'string')),
+          restrictable: undefined,
+        }
+      }
+    }
   } catch {
     return undefined
   }
+  return undefined
+}
+
+/**
+ * The phase-1 catalog: one shell plus the common work set, widened by the
+ * post-compaction core set once this session has compacted.
+ */
+function phase1AllowList(state, policy) {
+  return [...new Set([
+    ...policy.shellTools,
+    ...policy.commonTools,
+    ...(state.hasCompacted ? policy.compactionTools : []),
+  ])]
+}
+
+/**
+ * Whether the registry still carries the phase-1 composition contract:
+ * exactly one configured shell and every common tool.
+ */
+function compositionDrift(names, policy) {
+  const available = new Set(names)
+  const shells = policy.shellTools.filter(toolName => available.has(toolName))
+  const missing = policy.commonTools.filter(toolName => !available.has(toolName))
+  if (shells.length === 1 && missing.length === 0) return undefined
+  return { shells, missing }
+}
+
+/** Report composition drift once; the catalog then stays complete. */
+function warnDrift(warnOnce, drift) {
+  warnOnce(
+    `${name}: expected exactly one bootstrap shell and every common tool; `
+    + `shells=${JSON.stringify(drift.shells)}, missing=${JSON.stringify(drift.missing)} — `
+    + 'bootstrap disabled, full catalog exposed',
+  )
+}
+
+/** Lift the phase-1 registry mask, if one is installed. */
+function releaseRestriction(state) {
+  const disposer = state.restrictionDisposer
+  state.restrictionDisposer = undefined
+  state.restrictionKey = ''
+  if (typeof disposer !== 'function') return
+  try {
+    disposer()
+  } catch {
+    // A mask that cannot be lifted must not break the session: the owning
+    // agent scope reclaims it on disposal either way.
+  }
+}
+
+/**
+ * Install the phase-1 catalog as this agent's registry mask. The mask is
+ * validated against the pre-restriction view, so a configured name the
+ * composition does not register is dropped instead of throwing inside
+ * `restrict()` (that call rejects unknown global names).
+ */
+function applyRestriction(agent, state, policy, warnOnce) {
+  const tools = agent?.ctx?.tools
+  if (tools === undefined || typeof tools.restrict !== 'function') return
+  const registry = registryView(agent)
+  if (registry === undefined) return
+  const drift = compositionDrift(registry.names, policy)
+  if (drift !== undefined) {
+    warnDrift(warnOnce, drift)
+    return
+  }
+  const wanted = phase1AllowList(state, policy)
+  const allow = registry.restrictable === undefined
+    ? wanted
+    : wanted.filter(toolName => registry.restrictable.has(toolName))
+  if (allow.length === 0) return
+  const key = allow.join('\n')
+  if (state.restrictionDisposer !== undefined && state.restrictionKey === key) return
+  releaseRestriction(state)
+  try {
+    state.restrictionDisposer = tools.restrict({ allow })
+    state.restrictionKey = key
+  } catch {
+    state.restrictionDisposer = undefined
+    state.restrictionKey = ''
+  }
+}
+
+/**
+ * Bring one agent's registry mask in line with its phase. Only boundaries with
+ * no admitted tool set in flight may call this: the host resolves a step's
+ * admission before assembling its prompt, so a mask installed after that point
+ * turns a tool the model was just shown into an UNKNOWN_TOOL failure.
+ */
+function syncRestriction(agent, state, policy, warnOnce) {
+  if (state.promoted) {
+    releaseRestriction(state)
+    return
+  }
+  applyRestriction(agent, state, policy, warnOnce)
 }
 
 /**
@@ -362,8 +482,8 @@ function registryToolNames(agent) {
  * b) first tool call, anchored or `maxBootstrapSteps` fallback — promote;
  * c) first tool call, still gated, but the first turn ended and
  *    `promoteAfterFirstResponse` is set — release on the new user turn (the
- *    release happens during prompt assembly, so that turn already gets the
- *    full catalog);
+ *    `turn/end` boundary lifts the registry mask, so that turn's admission
+ *    already sees the full catalog);
  * d) tool-less first response with `promoteAfterFirstResponse` — promote.
  */
 function decidePromotion(state, config) {
@@ -508,7 +628,23 @@ export function apply(ctx, config) {
     bootstrapMaxTokens,
     compactionTools,
     phase1FirstCallInstruction,
+    shellTools,
+    commonTools,
   }
+
+  // The phase-1 catalog is a registry mask, so it has to exist before the loop
+  // resolves a step's admission. `agent/status` is the earliest hook that
+  // carries the live agent: the driver commits the running phase and emits it
+  // synchronously, and only then enters `turn()` -> `preStep()` ->
+  // `tools.resolve()`. `refresh` replays the durable events the live path
+  // already saw, so a session that is already promoted (a continued
+  // conversation) reads as promoted here and is never narrowed.
+  ctx.on('agent/status', ({ agent, status }) => {
+    if (status !== 'running' || agent === undefined) return
+    const state = refresh(agent, policy)
+    if (state === undefined) return
+    syncRestriction(agent, state, policy, warnOnce)
+  })
 
   // Promotion is applied at step/turn boundaries, never while a step is still
   // executing tools: switching the presentation mid-step would collapse the
@@ -520,6 +656,11 @@ export function apply(ctx, config) {
   // start reconstructs the same controlled phase from the durable log.
   ctx.on('session/event', (session, event) => {
     if (event.type === 'compaction/end') {
+      // The compacting step was admitted before this event, so masking in
+      // place here would turn the tools the model was just shown into
+      // UNKNOWN_TOOL failures. `step/end`, `turn/end` or the next
+      // `agent/status` installs the post-compaction core set instead —
+      // always before the next admission.
       resetToControlled(stateFor(session), session)
       return
     }
@@ -529,10 +670,10 @@ export function apply(ctx, config) {
       scanEvents(state, session)
       if (decidePromotion(state, policy)) state.promoted = true
     }
-    if (state.promoted) {
-      const agent = agentBySession.get(session)
-      if (agent !== undefined) applyPresentation(agent, state, policy)
-    }
+    const agent = agentBySession.get(session)
+    if (agent !== undefined && state.promoted) applyPresentation(agent, state, policy)
+    if (agent !== undefined) syncRestriction(agent, state, policy, warnOnce)
+    else if (state.promoted) releaseRestriction(state)
   })
 
   // `prepend: true` puts both filters at the outermost position of their
@@ -550,21 +691,19 @@ export function apply(ctx, config) {
 
     // The waterfall no longer carries the tool list (host 0.2.2): read the
     // registry view instead, and leave the catalog untouched when it is out of
-    // reach rather than throwing on a surface this filter cannot inspect.
-    const toolNames = registryToolNames(agent)
-    if (toolNames === undefined) return assembled
-    const available = new Set(toolNames)
-    const selectedShells = shellTools.filter(toolName => available.has(toolName))
-    const missingCommon = commonTools.filter(toolName => !available.has(toolName))
-    if (selectedShells.length !== 1 || missingCommon.length > 0) {
+    // reach rather than throwing on a surface this filter cannot inspect. The
+    // view is read PRE-restriction, so drift still means "the composition lost
+    // a bootstrap tool" rather than "the mask already removed it".
+    const registry = registryView(agent)
+    if (registry === undefined) return assembled
+    const drift = compositionDrift(registry.names, policy)
+    if (drift !== undefined) {
       // Composition drift must not lock a session out: degrade to the full
       // catalog with a one-time warning instead of throwing (the bootstrap
-      // phase surfaces will simply not apply).
-      warnOnce(
-        `${name}: expected exactly one bootstrap shell and every common tool; `
-        + `shells=${JSON.stringify(selectedShells)}, missing=${JSON.stringify(missingCommon)} — `
-        + 'bootstrap disabled, full catalog exposed',
-      )
+      // phase surfaces will simply not apply). A mask installed by an earlier
+      // step must not outlive its premise either.
+      warnDrift(warnOnce, drift)
+      releaseRestriction(state)
       return assembled
     }
 

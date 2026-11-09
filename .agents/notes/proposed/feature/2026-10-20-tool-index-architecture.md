@@ -47,7 +47,15 @@ Status: proposed
 
 **2026-10-21 校准（预设「加载失败」事故）**：这里曾写 `shellTools: []` 并注明「researcher 没有 bash，故留空」——空数组在插件 `apply` 阶段直接抛 `shellTools must be a non-empty array of non-empty strings`，预设行启动即失败、registry 记 `broken`，于是「标的分析研究员」与复用同一套行的「标的分析研究员（委派）」在设置中心双双显示「加载失败」（诊断原文见该行 id `dsh-trading-instrument-researcher-bootstrap`）。现在研究员挂 `dsh-trading-${id}-bash`、`shellTools: ['bash']`；`pnpm ui:check` 新增 H3 断言「Agent 预设名册无加载失败项」，回退成空数组即转红。
 
-**2026-11-09 校准（researcher 首轮崩溃事故）**：宿主升到 0.2.2 线后，`system-prompt/assemble` 的装配体只带 sections/contexts/variables——服务在瀑布之后自行追加 `tools`，钩子返回的 `tools` 被丢弃；同一世代里 loop 先 `tools.resolve` 做本步工具准入、再组装提示词，所以组装期施加的注册面限制只落到下一步。于是组装期那行 `assembled.tools.map(...)` 抛 `Cannot read properties of undefined (reading 'map')`：研究员与其委派预设每次首轮都失败（现场证据：Master 派发 researcher 子代理，子会话 `turn/start` 后 6 ms 即 `turn/end`，reason 为 UNKNOWN）。现在该插件改读注册面 `agent.ctx.tools.definitions(agent)` 做组合判定，并停止返回被丢弃的裁剪结果；**首轮工具收窄在 0.2.2 上不可达**，首轮保持全量目录（本机 139 个工具），消息隔离、段落/上下文收窄与 `bootstrapMaxTokens` 上限照旧生效。要回到「首轮只给 bash + holdings_list + routing_get」需另设计在 admission 之前生效的机制（例如预设层 `tools.restrict` + 晋升时释放），本轮不做。回归用例：`packages/base/test/tool-bootstrap-assemble.test.ts`。
+**2026-11-09 校准（researcher 首轮崩溃事故）**：宿主升到 0.2.2 线后，`system-prompt/assemble` 的装配体只带 sections/contexts/variables——服务在瀑布之后自行追加 `tools`，钩子返回的 `tools` 被丢弃；同一世代里 loop 先 `tools.resolve` 做本步工具准入、再组装提示词，所以组装期施加的注册面限制只落到下一步。当时组装期那行 `assembled.tools.map(...)` 抛 `Cannot read properties of undefined (reading 'map')`：研究员与其委派预设每次首轮都失败（现场证据：Master 派发 researcher 子代理，子会话 `turn/start` 后 6 ms 即 `turn/end`，reason 为 UNKNOWN）。第一处修复把组合判定改读注册面 `agent.ctx.tools.definitions(agent)`、停止返回被丢弃的裁剪结果，但把首轮收窄一并降级成「0.2.2 上不可达」，首轮保持全量目录（本机 139 个工具）。
+
+**2026-11-10 校准（首轮收窄恢复为挂载期生效）**：收窄挪到 admission 之前——插件在 `agent/status` 首次 `running` 时对未晋升会话调用 `agent.ctx.tools.restrict({ allow })`。这个挂载点是当前宿主上唯一「既拿得到 live agent、又早于本步 `tools.resolve`」的时机：`wakeDriver()` 提交 running 阶段时同步派发该事件，之后才走 `turn()` → `preStep()` → `tools.resolve()`；组装期钩子拿到的 agent 虽然相同，但那时本步准入已经定死，限制只能落到下一步，且会与已发出的工具清单不一致（模型可见的工具会变成 UNKNOWN_TOOL）。限制在 `step/end` / `turn/end` 同步：晋升即 dispose，`compaction/end` 只重置阶段、不在本步就地收窄（本步准入早于压缩），下一次边界再装上 `compactionTools` 核心集。已在晋升态的续会话由持久事件复算（`tool/call`、`step/start`、`turn/end`、锚定推理）得出同样的晋升结论，因此不会被收窄——宁可晚一步也不误裁。组装期只剩段落/上下文窄化与组合漂移检查，漂移时释放限制。实测（本机 0.2.2，trading-web）：
+
+- 研究员与研究员（委派）预设首轮 `request/header` = `bash` + `holdings_list` + `routing_get`（3 个；预设作用域注册的 research-tools 等同样收得走，没有漏进首轮清单）；
+- 模型调用一次 `routing_get` / `holdings_list` 后，下一轮 `request/header` 为全量 139；
+- 宿主重启后续会话首轮 `request/header` 为 139（reason `resume`），未被收窄。
+
+回归用例：`packages/base/test/tool-bootstrap-assemble.test.ts`。
 
 ## Alternatives considered
 
@@ -64,7 +72,7 @@ Status: proposed
 
 ## 授权与升级
 
-`assets/tool-bootstrap.mjs` 来自 <https://github.com/xiaobright/dsh-anchored-standard>（MIT），含 dsh-liangshen 两阶段扩展，署名与边界见 `packages/base/assets/NOTICE-tool-bootstrap.md`。本仓库除挂载配置外还带一处源码适配（2026-11-09：组装期改读注册面、不再返回被丢弃的 `tools` 裁剪结果，见上文校准）；上游更新时重新复制、重新施加该适配并重跑测试。
+`assets/tool-bootstrap.mjs` 来自 <https://github.com/xiaobright/dsh-anchored-standard>（MIT），含 dsh-liangshen 两阶段扩展，署名与边界见 `packages/base/assets/NOTICE-tool-bootstrap.md`。本仓库除挂载配置外还带两处源码适配（2026-11-09：组装期改读注册面、不再返回被丢弃的 `tools` 裁剪结果；2026-11-10：首轮收窄改为挂载期注册面限制，见上文两段校准）；上游更新时重新复制、重新施加这两处适配并重跑测试。
 
 ## 验证证据
 
@@ -72,6 +80,7 @@ Status: proposed
 - 运行时：`tsx` 直接加载模块，`total/matched = 8/8`、`query 持仓 -> holdings`（首位）、`family holdings -> ["holdings_list","holdings_stage"]`。
 - 单测：`preset-surface-wiring.test.ts` 校验「researcher 的 phase1 是交易版最小集」「bootstrap 只给 researcher」「行序 bootstrap 在 shell 之前」「未追加激进裁剪」。
 - vendored 插件：`node --input-type=module` 直接 import，得到 `name=anchored-tool-bootstrap` / `inject=[systemPrompt,tools]` / `apply=function`。
+- 挂载期收窄（2026-11-10）：`tool-bootstrap-assemble.test.ts` 8/8 通过；真机实测首轮 3 个工具、晋升后 139、重启续会话 139，详见上文 2026-11-10 校准。
 - 提交：`df7b78a3`（索引层）、`9727558f`（按预设裁族）、`b55568d2`（静态 PTC）、及本次提交（两阶段移植），均在 `feat/tool-index-architecture`（基于 main `423cfd03`）。
 
 ## 集成与锁（2026-10-20 更新）
