@@ -28,6 +28,10 @@ Status: implemented
    `>=0.2.1-rc.2 → >=0.2.2-rc.1`（77 条）、编译期 devDep 精确钉同版本（16 条）、
    cordis `>=4.0.0 → >=4.1.0`（56 条）与 `^4.0.5 → ^4.1.0`（5 条）、
    schemastery `>=3.18.0 → >=3.19.0`（40 条）、cosmokit `>=1.8.6 → >=1.9.0`（1 条）。
+   根 `package.json` 自己那 5 条 devDependency（cordis `^4.0.5`、cosmokit `^1.8.6`、
+   schemastery `^3.18.5`、`@deepseek-ai/dsh-skill`/`dsh-tools` `0.2.1-rc.2`）同一批收口——
+   这 5 条当时被漏掉，靠 overrides 才没回退到旧世代；声明面与解析面一致后，
+   `pnpm-lock.yaml` 零变化（importers 记的是 override 之后的生效 specifier）。
 3. **Node 下限抬到官方要求**：官方 0.2.2 线把最低 Node.js 提到 24.9，root
    `engines.node` 由 `^22.19.0 || >=24.0.0` 收敛为 `>=24.9.0`。
 4. **宿主 floor 面同步**：`desktop/runtime/host/package.json` 的宿主钉版；
@@ -100,3 +104,11 @@ management and delivery to existing **or new Sessions**"，并导出 `createCron
   报告后，"指标低于基线"的告警消失——此前的跌幅是分母被剔除造成的假象）；
   `test:desktop` 红在播种 profile 的 vendor fixture 解析（`fixture-alpha-1.0.0.tgz` 不存在）。
   三条在升级前的 `6984af68` 上同样红。
+
+2026-11-09 复跑（根 devDep 声明面收口，提交 `chore(deps): 根 devDep 收口到 0.2.2-rc.1 cohort`）：`pnpm gates:all`
+**17 通过 / 0 失败**（GATES_EXIT=0），上面三条环境红在该提交上不复现；
+`pnpm install --frozen-lockfile --ignore-scripts` 在隔离工作树返回 "Already up to date"。
+宿主 CLI 与 profile 对照：`dsh --version` = 0.2.2-rc.1，`DSH_HOME=~/.dsh-trading
+profile-cohort-check.sh trading-web` **0 FAIL / 9 WARN**——9 个 `@deepseek-ai/*` 是
+与宿主同版本的实体拷贝（模块实例未割裂），归一成 symlink 需先停掉运行中的实例，
+留作下次重启时的维护动作。
