@@ -1,5 +1,12 @@
 # @dshtrading/global
 
+## 0.7.1
+
+### Patch Changes
+
+- @dshtrading/kit-global@0.7.1
+- @dshtrading/connector-jin10@0.7.1
+
 ## 0.7.0
 
 ### Patch Changes

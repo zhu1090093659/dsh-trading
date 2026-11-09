@@ -1,5 +1,12 @@
 # @dshtrading/connector-polymarket
 
+## 0.7.1
+
+### Patch Changes
+
+- @dshtrading/api@0.7.1
+- @dshtrading/dsh-home@0.7.1
+
 ## 0.7.0
 
 ### Minor Changes

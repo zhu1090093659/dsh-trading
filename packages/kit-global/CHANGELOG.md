@@ -1,5 +1,12 @@
 # @dshtrading/kit-global
 
+## 0.7.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @dshtrading/base@0.7.1
+
 ## 0.7.0
 
 ### Patch Changes

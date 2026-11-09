@@ -1,5 +1,14 @@
 # @dshtrading/kit-hk
 
+## 0.7.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @dshtrading/base@0.7.1
+  - @dshtrading/indicators@0.7.1
+  - @dshtrading/knowledge@0.7.1
+
 ## 0.7.0
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @dshtrading/router
 
+## 0.7.1
+
+### Patch Changes
+
+- @dshtrading/api@0.7.1
+
 ## 0.7.0
 
 ### Patch Changes
