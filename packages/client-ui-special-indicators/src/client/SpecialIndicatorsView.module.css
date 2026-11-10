@@ -440,6 +440,39 @@
   border-bottom: 1px solid rgba(128, 128, 128, 0.08);
 }
 
+/* 表头排序开关：按钮铺满单元格（紧凑表不放大触控目标，命中面 = 单元格），状态由
+   箭头与多键序号表达；颜色沿用视图既有的次要文字色与强调色，焦点环只走键盘路径。 */
+.thSort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.thSort:hover,
+.thSortActive {
+  color: #5b8def;
+}
+
+.thSort:focus-visible {
+  outline: 2px solid #5b8def;
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+/* 多键排序时的序号：与箭头同排，只占一个字符宽。 */
+.thSortRank {
+  font-size: 9px;
+  line-height: 1;
+}
+
 .numCell {
   text-align: right;
 }

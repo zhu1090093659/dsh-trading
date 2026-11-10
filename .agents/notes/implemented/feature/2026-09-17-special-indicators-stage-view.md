@@ -73,6 +73,15 @@ finance 自带的看盘网页查看，交易终端（中栏）没有入口；用
     右侧选中板块的融资余额面积（亿元，rzye/1e8）+ 板块指数双轴折线
     （/sectors/detail → /api/v2/sectors/{code}，days=300）；缺省选中排行
     第一名，点击行切换；明细请求带序号闸丢弃过期响应，快速连点不串图。
+  - **两张表支持列排序**（2026-11-10 用户裁决）：恒科成分股表与板块排行表的数值列点表头即可排——
+    点表头 降序 → 升序 → 取消（回上游顺序），Shift+点击追加次级排序键（表头显示箭头与 1/2/3 序号），
+    缺值（上游 null）恒排末尾、并列保持上游顺序（自选列表头同口径）。规则收在纯函数
+    `src/client/table-sort.ts`（12 例单测）；排序状态写 localStorage
+    `dshtrading.special-indicators.sort.v1`（与二级页签同款 try/catch 契约，读入经 sanitize 收敛）。
+    板块表的「缺省选中第一名」仍取**上游**第一名——排序只换展示次序，不改「排行第一」的含义。
+    证据：组件级 harness `packages/client-ui-special-indicators/harness/special-indicators.harness.tsx`
+    配 `node scripts/ui-component-check.mjs`（真实 Chrome、18 板块 + 10 成分股真实数据形态、
+    改前/改后 7 步对照图），见 [UI 验证通道](../process/2026-09-04-ui-verification-hosted-http-headless-chrome.md)。
 - **shell 改动面 insert-only**：client-ui-trading 词典加 `stage.special`
   （zh 特殊指标 / en Special）一键——中栏 tab 条文案由 shell 的 t 渲染，
   第三方视图包的 titleKey 必须落在 shell 词典（tradingStageViews 契约）。
@@ -137,8 +146,9 @@ finance 自带的看盘网页查看，交易终端（中栏）没有入口；用
   3 条 = 全仓 client 包同款系统性债（LocaleNamespaceMap augmentation 在
   tsc bundler 解析下 TS2664，连带 ctx.locale TS2339×2；knowledge/strategies/
   settings 均带同款），包自身类型面零债。
-- 单测构成：finance-client 8 / route-handler 9 / wire 5 / locale-contract 2 /
-  view.smoke 9 / lazy-entry.smoke 1，BDD 合规零新债。
+- 单测构成（2026-11-10 实测 116 例）：indicator-tools 28 / view.smoke 23 / finance-client 17 /
+  route-handler 13 / table-sort 12 / wire 9 / cache-file 7 / host-lifetime-cache 3 /
+  line-chart.smoke 2 / locale-contract 1 / lazy-entry.smoke 1，BDD 合规零新债。
 - 懒加载用例的等待窗口（2026-10-27）：`fallback=null` 让动态 import 落地前渲染为空，
   `findByText` 默认 1s 在满载 runner 上不够（2026-10-24 nightly 的 ubuntu 探测红成
   「找不到『特殊指标未配置』」而 body 只有空 div）。该例等待放宽到 5s，断言不变——

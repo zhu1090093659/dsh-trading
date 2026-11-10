@@ -86,7 +86,19 @@ function fixtureFor(url: string): { status?: number; body: unknown } {
       },
     }
   }
-  if (url.includes('/hk-short/chart')) return { body: { short_ratio: [], index: [], ratio_stats: null, top10: [], stale: false } }
+  if (url.includes('/hk-short/chart')) {
+    // top10 里两行同权重（8.0）：多列排序的可见效果靠这个并列值体现
+    return {
+      body: {
+        short_ratio: [], index: [], ratio_stats: null, stale: false,
+        top10: [
+          { code: '00700', name: '腾讯', weight: 8.0, latest_pct: 17.55, vs_5d_pct: 3.13 },
+          { code: '09988', name: '阿里巴巴', weight: 8.0, latest_pct: 19.27, vs_5d_pct: 1.78 },
+          { code: '01810', name: '小米', weight: 7.5, latest_pct: 39.10, vs_5d_pct: 8.95 },
+        ],
+      },
+    }
+  }
   if (url.includes('/sectors/snapshot')) {
     return {
       body: {
@@ -98,9 +110,12 @@ function fixtureFor(url: string): { status?: number; body: unknown } {
   }
   if (url.includes('/sectors/ranking')) {
     return {
+      // 煤炭/电池 的日变化并列（-0.23）而 5 日流不同：次级排序键的判据；
+      // 医药商业 五项数值全缺：缺值末位与上游 null 不补零的判据。
       body: [
         { code: '801951', name: '煤炭', type: 'sw', chg_pct: 5.48, latest_margin: 103.16, daily_change: -0.23, avg_5d_change: -0.09, total_5d_flow: -0.43, index_5d_pct: -3.87 },
-        { code: '801955', name: '电池', type: 'sw', chg_pct: 1.14, latest_margin: 844.0, daily_change: 9.6, avg_5d_change: -0.04, total_5d_flow: -0.21, index_5d_pct: -4.59 },
+        { code: '801955', name: '电池', type: 'sw', chg_pct: 1.14, latest_margin: 844.0, daily_change: -0.23, avg_5d_change: -0.04, total_5d_flow: 2.16, index_5d_pct: -4.59 },
+        { code: '801156', name: '医药商业', type: 'sw', chg_pct: null, latest_margin: null, daily_change: null, avg_5d_change: null, total_5d_flow: null, index_5d_pct: null },
       ],
     }
   }
@@ -256,7 +271,7 @@ describe('特殊指标二级页签', () => {
     expect(dataCalls.length).toBe(2)
   })
 
-  it('恐慌指数卡片把 shadow 附加读数单独成块展示，与 0-100 分项分开', async () => {
+  it('用户看到的 shadow 附加读数单独成块，与 0-100 分项分开', async () => {
     // Given: 桥里带 qvix / 净持仓 / ETF 份额三条 additive 读数
     const fake = installFakeFetch()
     restoreFetch = fake.restore
@@ -277,14 +292,15 @@ describe('特殊指标二级页签', () => {
     expect(screen.getByText('宽基 —')).toBeTruthy()
   })
 
-  it('上游没有 shadow 读数时整块不渲染，不留空标题', async () => {
+  it('用户遇到上游没有 shadow 读数时整块不渲染，不留空标题', async () => {
+    // Given: 上游快照里没有 shadow 键（读数尚未累积，是真实状态）
     omitSentimentShadow = true
     const fake = installFakeFetch()
     restoreFetch = fake.restore
-
+    // When: 用户打开恐慌指数卡片
     render(<SpecialIndicatorsView t={t} view="special-indicators" />)
     await screen.findByText('42.6')
-
+    // Then: 附加读数整块与标题都不渲染
     expect(screen.queryByText(zh['si.sentiment.readings'])).toBeNull()
     expect(screen.queryByText(zh['si.readings.qvix'])).toBeNull()
   })
@@ -490,3 +506,126 @@ describe('特殊指标缓存优先与平滑过渡', () => {
     expect(screen.queryByText(/bridge down/)).toBeNull()
   })
 })
+describe('特殊指标表列排序', () => {
+  /** 表格首列（板块 / 名称）顺序——排序结果只看这一列就够。 */
+  const firstColumn = (): string[] =>
+    Array.from(document.querySelectorAll('tbody tr')).map((tr) => (tr.children[0]?.textContent ?? '').trim())
+  /** 表头按钮（按可见文案前缀定位；多键序号数字排在文案之后）。 */
+  const headerButton = (label: string): HTMLElement => {
+    const found = Array.from(document.querySelectorAll('th button'))
+      .find((b) => (b.textContent ?? '').indexOf(label) >= 0)
+    if (found === undefined) throw new Error('未找到表头按钮：' + label)
+    return found as HTMLElement
+  }
+  /** 某列表头的 aria-sort 与多键序号（无则空串）。 */
+  const headerState = (label: string): { ariaSort: string; rank: string } => {
+    const button = headerButton(label)
+    return {
+      ariaSort: button.closest('th')?.getAttribute('aria-sort') ?? '',
+      rank: button.querySelector('[data-sort-rank]')?.textContent ?? '',
+    }
+  }
+
+  it('用户点表头时按该列 降序 → 升序 → 取消 三态循环', async () => {
+    // Given: 板块排行表已上屏（上游顺序：煤炭 → 电池 → 医药商业）
+    const fake = installFakeFetch()
+    restoreFetch = fake.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    fireEvent.click(await screen.findByRole('tab', { name: '板块融资余额' }))
+    await screen.findAllByText('煤炭')
+    expect(firstColumn()).toEqual(['煤炭', '电池', '医药商业'])
+    expect(headerState('融资余额(亿)').ariaSort).toBe('none')
+    // When: 点「融资余额(亿)」表头
+    fireEvent.click(headerButton('融资余额(亿)'))
+    // Then: 降序（844.0 在 103.16 前），主键表头宣告 descending
+    expect(headerState('融资余额(亿)').ariaSort).toBe('descending')
+    expect(firstColumn()).toEqual(['电池', '煤炭', '医药商业'])
+    // When: 再点一次
+    fireEvent.click(headerButton('融资余额(亿)'))
+    // Then: 升序
+    expect(headerState('融资余额(亿)').ariaSort).toBe('ascending')
+    expect(firstColumn()).toEqual(['煤炭', '电池', '医药商业'])
+    // When: 第三次点
+    fireEvent.click(headerButton('融资余额(亿)'))
+    // Then: 取消排序，回上游顺序
+    expect(headerState('融资余额(亿)').ariaSort).toBe('none')
+    expect(firstColumn()).toEqual(['煤炭', '电池', '医药商业'])
+  })
+
+  it('用户 Shift 点第二列表头时并列行按次级键重排，表头带排序键序号', async () => {
+    // Given: 煤炭与电池的日变化并列（-0.23），5 日流不同（-0.43 / 2.16）
+    const fake = installFakeFetch()
+    restoreFetch = fake.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    fireEvent.click(await screen.findByRole('tab', { name: '板块融资余额' }))
+    await screen.findAllByText('煤炭')
+    fireEvent.click(headerButton('日变化(亿)'))
+    // Then: 并列行保持上游顺序（稳定排序），此时只有一个主键
+    expect(firstColumn()).toEqual(['煤炭', '电池', '医药商业'])
+    expect(headerState('日变化(亿)').rank).toBe('')
+    // When: 按住 Shift 点「5 日流(亿)」表头
+    fireEvent.click(headerButton('5 日流(亿)'), { shiftKey: true })
+    // Then: 次级键生效——电池（2.16）排在煤炭（-0.43）前，两个表头各带 1/2 序号
+    expect(firstColumn()).toEqual(['电池', '煤炭', '医药商业'])
+    expect(headerState('日变化(亿)').rank).toBe('1')
+    expect(headerState('5 日流(亿)').rank).toBe('2')
+  })
+
+  it('用户排序时缺值行恒排末尾，与方向无关', async () => {
+    // Given: 医药商业 五项数值全缺（上游 null 不补零，界面显示占位）
+    const fake = installFakeFetch()
+    restoreFetch = fake.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    fireEvent.click(await screen.findByRole('tab', { name: '板块融资余额' }))
+    await screen.findAllByText('煤炭')
+    // When: 降序
+    fireEvent.click(headerButton('融资余额(亿)'))
+    // Then: 缺值行在末尾
+    expect(firstColumn().at(-1)).toBe('医药商业')
+    // When: 升序
+    fireEvent.click(headerButton('融资余额(亿)'))
+    // Then: 仍在末尾（不因方向变化顶到最前）
+    expect(firstColumn().at(-1)).toBe('医药商业')
+  })
+
+  it('用户排完序重开视图时仍按上次排序展示', async () => {
+    // Given: 内存 Storage + 已按「融资余额(亿)」降序
+    const storage = installMemoryStorage('localStorage')
+    restoreStorage = storage.restore
+    const fake = installFakeFetch()
+    restoreFetch = fake.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    fireEvent.click(await screen.findByRole('tab', { name: '板块融资余额' }))
+    await screen.findAllByText('煤炭')
+    fireEvent.click(headerButton('融资余额(亿)'))
+    expect(storage.store.get('dshtrading.special-indicators.sort.v1') ?? '').toContain('latest_margin')
+    // When: 视图卸载后重开（页签与排序都从持久化恢复）
+    cleanup()
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    // Then: 直接落在板块页签且按上次排序展示
+    await screen.findAllByText('煤炭')
+    expect(headerState('融资余额(亿)').ariaSort).toBe('descending')
+    expect(firstColumn()).toEqual(['电池', '煤炭', '医药商业'])
+  })
+
+  it('用户点权重表头排序后，同权重成分股按次级键定序', async () => {
+    // Given: 恒科成分股表（腾讯与阿里巴巴同为 8.0，卖空占比不同）
+    const fake = installFakeFetch()
+    restoreFetch = fake.restore
+    render(<SpecialIndicatorsView t={t} view="special-indicators" />)
+    fireEvent.click(await screen.findByRole('tab', { name: '恒科权重股卖空' }))
+    await screen.findAllByText('腾讯')
+    // When: 点「权重」表头（降序）
+    fireEvent.click(headerButton('权重'))
+    // Then: 同权重的两行保持上游顺序，序号为空（单键）
+    expect(firstColumn()).toEqual(['腾讯', '阿里巴巴', '小米'])
+    expect(headerState('权重').rank).toBe('')
+    // When: Shift 点「卖空占比」追加次级键
+    fireEvent.click(headerButton('卖空占比'), { shiftKey: true })
+    // Then: 同权重行按卖空占比降序（19.27 在 17.55 前），序号 1/2 齐备
+    expect(firstColumn()).toEqual(['阿里巴巴', '腾讯', '小米'])
+    expect(headerState('权重').rank).toBe('1')
+    expect(headerState('卖空占比').rank).toBe('2')
+  })
+})
+

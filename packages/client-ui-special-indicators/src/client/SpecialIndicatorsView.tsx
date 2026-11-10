@@ -30,7 +30,9 @@ import {
   type BridgePayload,
   type BridgeStatus,
 } from './api.ts'
+import { IconArrowDown, IconArrowUp } from './icons.tsx'
 import { LineChart, type LineChartSeries } from './LineChart.tsx'
+import { nextSortKeys, sanitizeSortKeys, sortRows, type SortKey } from './table-sort.ts'
 import type { SpecialIndicatorsLocaleKey } from './contract.ts'
 import {
   formatClock,
@@ -161,6 +163,43 @@ function loadedTabsOf(dash: Dashboard): Set<SubTabId> {
   return new Set(SUBTAB_IDS.filter((id) => DASH_TAB_KEYS[id].some((k) => dash[k] !== undefined)))
 }
 
+/** 排序状态持久化（localStorage，与页签同款契约）：两张表各存一份键表，
+ *  切页签、切走再回来、重开视图都保持上次排序；读入一律经 sanitize 收敛
+ *  （未知列/非法方向丢弃，不因外部改写而崩或排出怪序）。 */
+const SORT_KEY = 'dshtrading.special-indicators.sort.v1'
+
+/** 可排序列 = 表头声明的数值列（名称列不参与：按值大小排序对文本无意义）。 */
+const SECTOR_COLUMNS = ['chg_pct', 'latest_margin', 'daily_change', 'total_5d_flow', 'index_5d_pct'] as const
+const HK_COLUMNS = ['weight', 'latest_pct', 'vs_5d_pct'] as const
+
+type SortZone = 'sectors' | 'hkshort'
+type SortPrefs = Record<SortZone, SortKey[]>
+
+const EMPTY_SORT_PREFS: SortPrefs = { sectors: [], hkshort: [] }
+
+function readSortPrefs(): SortPrefs {
+  try {
+    const raw = window.localStorage.getItem(SORT_KEY)
+    if (raw === null) return EMPTY_SORT_PREFS
+    const parsed = JSON.parse(raw) as { v?: unknown; sectors?: unknown; hkshort?: unknown }
+    if (parsed?.v !== 1) return EMPTY_SORT_PREFS
+    return {
+      sectors: sanitizeSortKeys(parsed.sectors, SECTOR_COLUMNS),
+      hkshort: sanitizeSortKeys(parsed.hkshort, HK_COLUMNS),
+    }
+  } catch {
+    return EMPTY_SORT_PREFS
+  }
+}
+
+function writeSortPrefs(prefs: SortPrefs): void {
+  try {
+    window.localStorage.setItem(SORT_KEY, JSON.stringify({ v: 1, sectors: prefs.sectors, hkshort: prefs.hkshort }))
+  } catch {
+    // 隐私模式等写失败：排序仍可用，仅不持久化。
+  }
+}
+
 const ZONE_BADGE: Record<string, string> = {
   extreme_fear: cx('badgeFear'),
   fear: cx('badgeFear'),
@@ -214,6 +253,15 @@ export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
   // 加载指示 = 在途页签请求计数（并发 ensureTab 下不错位）。
   const [pending, setPending] = useState(0)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(restored.at)
+  // 列排序：状态提在视图层（两张表共用一次持久化读写），卡片只拿键表与写路径。
+  const [sortPrefs, setSortPrefs] = useState<SortPrefs>(readSortPrefs)
+  const toggleSort = useCallback((zone: SortZone, key: string, additive: boolean): void => {
+    setSortPrefs((prev) => {
+      const next: SortPrefs = { ...prev, [zone]: nextSortKeys(prev[zone], key, additive) }
+      writeSortPrefs(next)
+      return next
+    })
+  }, [])
   // 已加载页签集（回访零网络；恢复面里出现过的页签视为已加载，手动刷新
   // 会重拉它们）+ 每页签 in-flight 去重（快速切换/重复刷新复用同一次落地；
   // 注入式状态机，不睡不轮询）。
@@ -376,8 +424,8 @@ export function SpecialIndicatorsView({ t }: SpecialIndicatorsViewProps) {
       <div className={cx('panel')}>
         {tab === 'sentiment' && <SentimentCard t={t} snap={dash.sentimentSnap} hist={dash.sentimentHist} loading={loading} onRefresh={refresh} />}
         {tab === 'basis' && <BasisCard t={t} snap={dash.basisSnap} hist={dash.basisHist} loading={loading} onRefresh={refresh} />}
-        {tab === 'hkshort' && <HkShortCard t={t} snap={dash.hkSnap} chart={dash.hkChart} loading={loading} onRefresh={refresh} />}
-        {tab === 'sectors' && <SectorsCard t={t} snap={dash.sectorsSnap} ranking={dash.sectorsRanking} loading={loading} onRefresh={refresh} />}
+        {tab === 'hkshort' && <HkShortCard t={t} snap={dash.hkSnap} chart={dash.hkChart} loading={loading} onRefresh={refresh} sortKeys={sortPrefs.hkshort} onToggleSort={(key, additive) => toggleSort('hkshort', key, additive)} />}
+        {tab === 'sectors' && <SectorsCard t={t} snap={dash.sectorsSnap} ranking={dash.sectorsRanking} loading={loading} onRefresh={refresh} sortKeys={sortPrefs.sectors} onToggleSort={(key, additive) => toggleSort('sectors', key, additive)} />}
       </div>
     </div>
   )
@@ -418,6 +466,53 @@ function CardShell({ title, subtitle, date, stale, error, loading, refreshing, o
         ? <div className={cx('errorLine')}>{t('si.error.load', { message: error })}</div>
         : children ?? (loading ? <div className={cx('loadingLine')}>{t('si.loading')}</div> : null)}
     </section>
+  )
+}
+
+/* --------------------------------- 表头排序 --------------------------------- */
+
+/** 主键才写 aria-sort（ARIA 只能表达一个列头）；次级键的序号走按钮读屏文案。 */
+function ariaSortOf(keys: readonly SortKey[], column: string): 'ascending' | 'descending' | 'none' | undefined {
+  const primary = keys[0]
+  if (primary === undefined) return 'none'
+  if (primary.key !== column) return keys.some((k) => k.key === column) ? undefined : 'none'
+  return primary.dir === 'desc' ? 'descending' : 'ascending'
+}
+
+/**
+ * 可排序表头：按钮整格命中（紧凑表不放大触控目标，命中面 = 单元格），
+ * 状态由箭头 + 多键序号表达；读屏与 title 说明当前状态与下一步动作。
+ */
+function SortableTh({ t, label, column, keys, onToggle }: {
+  t: TFunc
+  label: string
+  column: string
+  keys: readonly SortKey[]
+  onToggle: (key: string, additive: boolean) => void
+}) {
+  const index = keys.findIndex((k) => k.key === column)
+  const active = index >= 0
+  const dir = index >= 0 ? keys[index]?.dir : undefined
+  const stateKey: SpecialIndicatorsLocaleKey = dir === 'desc' ? 'si.sort.desc' : dir === 'asc' ? 'si.sort.asc' : 'si.sort.none'
+  const state = t(stateKey, { column: label })
+    + (active && keys.length > 1 ? ' ' + t('si.sort.rank', { rank: index + 1 }) : '')
+  return (
+    <th className={cx('numCell')} aria-sort={ariaSortOf(keys, column)}>
+      <button
+        type="button"
+        className={active ? cx('thSort') + ' ' + cx('thSortActive') : cx('thSort')}
+        data-sort-key={column}
+        data-sort-dir={dir ?? 'none'}
+        aria-label={state}
+        title={state + t('si.sort.shiftHint')}
+        onClick={(e) => onToggle(column, e.shiftKey)}
+      >
+        <span>{label}</span>
+        {dir === 'desc' && <IconArrowDown />}
+        {dir === 'asc' && <IconArrowUp />}
+        {active && keys.length > 1 && <span className={cx('thSortRank')} data-sort-rank={index + 1}>{index + 1}</span>}
+      </button>
+    </th>
   )
 }
 
@@ -499,7 +594,7 @@ function SentimentCard({ t, snap, hist, loading, onRefresh }: {
  * 所以单独成块、与分项列表区分开——原始读数与合成分数混排会让读者以为它们参与
  * 了加权。任一读数缺席就整行不渲染;三个都缺席时整块不渲染,不留空标题。
  */
-function SentimentReadings({ t, shadow }: { t: TFunc; shadow?: SentimentShadow }) {
+function SentimentReadings({ t, shadow }: { t: TFunc; shadow?: SentimentShadow | undefined }) {
   const qvix = shadow?.qvix
   const cffex = shadow?.cffex_position
   const etf = shadow?.etf_flow
@@ -528,12 +623,18 @@ function SentimentReadings({ t, shadow }: { t: TFunc; shadow?: SentimentShadow }
   }
 
   if (etf !== undefined) {
-    const labels: Record<string, string> = { broad: '宽基', sector: '行业', cross_border: '跨境', other: '其他' }
-    const items = Object.keys(labels)
-      .filter((key) => etf.groups[key] !== undefined)
-      .map((key) => {
+    // 组名与单位都走词典（CJK 扫描门禁：界面文案不得写死在视图里）。
+    const labels: Array<[string, string]> = [
+      ['broad', t('si.readings.group.broad')],
+      ['sector', t('si.readings.group.sector')],
+      ['cross_border', t('si.readings.group.crossBorder')],
+      ['other', t('si.readings.group.other')],
+    ]
+    const items = labels
+      .filter(([key]) => etf.groups[key] !== undefined)
+      .map(([key, label]) => {
         const change = etf.groups[key]?.change_yi
-        return labels[key] + ' ' + (change === null || change === undefined ? '—' : formatSigned(change, 1) + '亿')
+        return label + ' ' + (change === null || change === undefined ? '—' : formatSigned(change, 1) + t('si.readings.unitYi'))
       })
     if (items.length > 0) rows.push({ key: 'etf', label: t('si.readings.etf'), items })
   }
@@ -621,15 +722,21 @@ function BasisCard({ t, snap, hist, loading, onRefresh }: {
 
 /* --------------------------------- 恒科卖空 --------------------------------- */
 
-function HkShortCard({ t, snap, chart, loading, onRefresh }: {
+function HkShortCard({ t, snap, chart, loading, onRefresh, sortKeys, onToggleSort }: {
   t: TFunc
   snap?: Panel<HkShortSnapshot> | undefined
   chart?: Panel<HkShortChart> | undefined
   loading: boolean
   onRefresh: () => void
+  sortKeys: readonly SortKey[]
+  onToggleSort: (key: string, additive: boolean) => void
 }) {
   const s = snap?.data
   const c = chart?.data
+  const top10 = useMemo(
+    () => sortRows(c?.top10 ?? [], sortKeys, (row, key) => (key === 'weight' ? row.weight : key === 'latest_pct' ? row.latest_pct : row.vs_5d_pct)),
+    [c?.top10, sortKeys],
+  )
   const series = useMemo<LineChartSeries[]>(() => {
     if (c === undefined) return []
     return [
@@ -669,13 +776,13 @@ function HkShortCard({ t, snap, chart, loading, onRefresh }: {
                 <thead>
                   <tr>
                     <th>{t('si.hkshort.col.name')}</th>
-                    <th className={cx('numCell')}>{t('si.hkshort.col.weight')}</th>
-                    <th className={cx('numCell')}>{t('si.hkshort.col.latestPct')}</th>
-                    <th className={cx('numCell')}>{t('si.hkshort.col.vs5d')}</th>
+                    <SortableTh t={t} label={t('si.hkshort.col.weight')} column="weight" keys={sortKeys} onToggle={onToggleSort} />
+                    <SortableTh t={t} label={t('si.hkshort.col.latestPct')} column="latest_pct" keys={sortKeys} onToggle={onToggleSort} />
+                    <SortableTh t={t} label={t('si.hkshort.col.vs5d')} column="vs_5d_pct" keys={sortKeys} onToggle={onToggleSort} />
                   </tr>
                 </thead>
                 <tbody>
-                  {c.top10.map((row) => (
+                  {top10.map((row) => (
                     <tr key={row.code}>
                       <td>{row.name}</td>
                       <td className={cx('numCell')}>{formatNum(row.weight, 1)}</td>
@@ -694,15 +801,23 @@ function HkShortCard({ t, snap, chart, loading, onRefresh }: {
 
 /* --------------------------------- 板块融资 --------------------------------- */
 
-function SectorsCard({ t, snap, ranking, loading, onRefresh }: {
+function SectorsCard({ t, snap, ranking, loading, onRefresh, sortKeys, onToggleSort }: {
   t: TFunc
   snap?: Panel<SectorsSnapshot> | undefined
   ranking?: Panel<SectorRankingRow[]> | undefined
   loading: boolean
   onRefresh: () => void
+  sortKeys: readonly SortKey[]
+  onToggleSort: (key: string, additive: boolean) => void
 }) {
   const s = snap?.data
   const rows = ranking?.data
+  // 展示顺序 = 上游顺序 + 排序键；缺省选中仍取**上游**第一名（与 finance 页面同口径，
+  // 排序只换展示次序，不改「排行第一」的含义）。
+  const viewRows = useMemo(
+    () => sortRows(rows ?? [], sortKeys, (row, key) => (key === 'chg_pct' ? row.chg_pct : key === 'latest_margin' ? row.latest_margin : key === 'daily_change' ? row.daily_change : key === 'total_5d_flow' ? row.total_5d_flow : row.index_5d_pct)),
+    [rows, sortKeys],
+  )
   // 选中板块：缺省第一名（与 finance 页面同口径），点击行切换；
   // 明细请求带序号闸，快速连点时丢弃过期响应（不睡不轮询）。
   const [selected, setSelected] = useState<string | null>(null)
@@ -760,15 +875,15 @@ function SectorsCard({ t, snap, ranking, loading, onRefresh }: {
                   <thead>
                     <tr>
                       <th>{t('si.sectors.col.name')}</th>
-                      <th className={cx('numCell')}>{t('si.sectors.col.chgPct')}</th>
-                      <th className={cx('numCell')}>{t('si.sectors.col.margin')}</th>
-                      <th className={cx('numCell')}>{t('si.sectors.col.daily')}</th>
-                      <th className={cx('numCell')}>{t('si.sectors.col.flow5d')}</th>
-                      <th className={cx('numCell')}>{t('si.sectors.col.index5d')}</th>
+                      <SortableTh t={t} label={t('si.sectors.col.chgPct')} column="chg_pct" keys={sortKeys} onToggle={onToggleSort} />
+                      <SortableTh t={t} label={t('si.sectors.col.margin')} column="latest_margin" keys={sortKeys} onToggle={onToggleSort} />
+                      <SortableTh t={t} label={t('si.sectors.col.daily')} column="daily_change" keys={sortKeys} onToggle={onToggleSort} />
+                      <SortableTh t={t} label={t('si.sectors.col.flow5d')} column="total_5d_flow" keys={sortKeys} onToggle={onToggleSort} />
+                      <SortableTh t={t} label={t('si.sectors.col.index5d')} column="index_5d_pct" keys={sortKeys} onToggle={onToggleSort} />
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((row) => (
+                    {viewRows.map((row) => (
                       <tr
                         key={row.code}
                         className={row.code === activeCode ? cx('rowClickable') + ' ' + cx('rowSelected') : cx('rowClickable')}

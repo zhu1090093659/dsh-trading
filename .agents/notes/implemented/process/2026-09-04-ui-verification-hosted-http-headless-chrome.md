@@ -1,10 +1,27 @@
-# Agent Note: dsh-trading UI 验证一律「桌面壳 + Computer Use 点击/截图」
+# Agent Note: dsh-trading UI 验证一律「headless Chrome + CDP」
 
 Status: implemented
 
-文件名里的 `hosted-http-headless-chrome` 是 2026-09-04 原决策的代号，为保持链接稳定不改名；**现行手法是下面 2026-10-14 的 Decision**，2026-09-04 的版本已就地记为历史。
+文件名里的 `hosted-http-headless-chrome` 是 2026-09-04 原决策的代号，为保持链接稳定不改名；**现行手法是下面 2026-11-10 的 Decision**，2026-10-14 与 2026-09-04 两版已就地记为历史。
 
-## Decision（2026-10-14 owner 拍板，推翻 2026-09-04 版）
+## Decision（2026-11-10 owner 拍板，推翻 2026-10-14 版）
+
+本仓界面验收的默认通道是**本机 headless Chrome + CDP**，分两层：
+
+1. **组件级取证**（视图改动的主力）：`node scripts/ui-component-check.mjs --harness packages/<pkg>/harness/<name>.harness.tsx`。runner 用 vite 把 harness 入口打成 IIFE 单文件 HTML（依赖全打包、JS/CSS 内联），以 `file://` 打开真实 Chrome，按 harness 在 `window.__uiHarness` 上声明的步骤（`ready` / `steps[].run` / `steps[].expect`）驱动、断言、截图，出改前/改后同场景对照图；harness 自己桩数据面，因此**不需要 profile 接线**、也不依赖本地 HTTP 服务。
+2. **全宿主断言**：`pnpm ui:check`（`scripts/ui-functional-check.mjs`）起 trading-web 实例做 DOM/布局/交互级断言——它仍是不依赖人眼的脚本化门禁，与本次裁决同属 CDP 通道。
+
+约束：截图只取目标区域（组件视口 / 应用窗口），不做全屏桌面截图；断言必须读图核对渲染结果，不是「跑完没报错」。
+
+桌面壳 + Computer Use（`cua_driver_native__*`：`check_permissions` 两项授权 → `list_windows` → `get_window_state` 窗口级截图 + `element_token` 定位 → `verify_state` / 复检截图）**只留给壳自身**（窗口、菜单、原生弹窗、安装包首启）且在装有壳的机器上做。本机（local1，Linux）没有 macOS/Windows 桌面壳可跑，壳不再是本仓界面验收的默认前置。
+
+## 为什么改回来（2026-11-10 实测）
+
+- 本机 Chrome 拉不到任何本地 HTTP 服务：vite dev server 与 python http.server 一律停在 `about:blank` / `chrome-error`（会话自带的那只 Chrome 也一样），而 `data:` / `file:` 页面正常渲染——所以组件级 harness 走「vite 打单文件 + `file://`」，不吃本地端口。
+- 视图级改动只动一个组件，为了看一眼就去接 profile（依赖行 + patch 行 + install + 重启）不划算；组件级 harness 直接把目标视图渲染出来，同场景改前/改后都可复现。
+- 桌面壳只在 macOS/Windows 存在（Electron 与 mygo 两条轨道），把壳设成验收前置等于让 Linux 编辑机上的每次 UI 改动都无处验收。
+
+## 被取代的 2026-10-14 决策（历史）
 
 以后 dsh-trading 的界面验证一律走**桌面壳窗口 + 原生 Computer Use**，不再走 browser-use / CDP 的浏览器验证：
 
@@ -16,7 +33,7 @@ Status: implemented
 6. 只用窗口级截图（`get_window_state` / `zoom`），**不做全屏桌面截图**（`get_desktop_state` / `screencapture`）：前台遮挡不可控、卷入用户桌面隐私。
 7. tokenized URL + `curl` 401 降级为「宿主活着待鉴权」的旁证，不再是 UI 证据来源。`pnpm ui:check`（`scripts/ui-functional-check.mjs`）继续走 headless Chrome + CDP 脚本化断言，它是不依赖人眼的回归门禁，不属本手法。
 
-## 为什么现在可以推翻 2026-09-04 的结论
+## 2026-10-14 当时为什么可以推翻 2026-09-04 的结论（历史）
 
 原决策整体判死「桌面截图」，落选理由三条：全屏 screencapture 遮挡/隐私；`screencapture -l` 需要 swift/pyobjc 取 CGWindowID；osascript 取窗口几何要「辅助访问」授权（未授权即 -1719）。现行 CUA 驱动的性质变了：
 
@@ -42,7 +59,13 @@ Status: implemented
 
 当时的替代方案裁决：全屏 screencapture 后人眼找窗口、swift CGWindowList / pyobjc 取窗口 id、osascript System Events 取窗口几何——全部落选；`virtual-time-budget` 等页面静默也落选，换 `--timeout`。
 
-## Consequences（2026-10-14 更新）
+## Consequences（2026-11-10 更新）
+
+- 界面验证证据默认是**组件级改前/改后对照图 + 脚本断言**（`scripts/ui-component-check.mjs`）与 `pnpm ui:check` 的全宿主断言；harness 入口落在包内（`packages/<pkg>/harness/*.harness.tsx`），随包不发布（`files: ["lib"]`）。
+- 组件级 harness 只证明**目标视图**的渲染与交互，不证明宿主接线（tab 注册、注入面）——接线面的回归仍由 `pnpm ui:check` 与包内 host 侧测试承担。
+- 桌面壳自身的验证（窗口、菜单、安装包首启）仍在装有壳的机器上用 Computer Use 做，见 [桌面 home 契约](2026-09-08-separate-dsh-home.md) 与 [桌面壳签名](2026-10-16-desktop-mac-code-signing.md)。
+
+### 2026-10-14 的历史后果
 
 - 界面验证证据统一为桌面壳**窗口级截图 + Computer Use 交互**：窗口可后台（AX 路径不抢焦点）、不依赖桌面状态、不卷入用户隐私；代价是机器必须已授予 Accessibility + Screen Recording。
 - 载体同步：根 [AGENTS.md](../../../../AGENTS.md)「Home 与运行验证」bullet、[release skill](../../../../.agents/skills/dsh-trading-release/SKILL.md) §5 本地抽查、全局 skill `ui-screenshot-verify` 与 `~/.agents/harness/task-routing.md` 的 UI 验证路由。历史证据里按旧手法拍下的截图（cockpit 12 类型、2026-09-09 桌面壳复验等）原地不动——它们是当时的事实，不是现行手法声明。
