@@ -254,6 +254,22 @@
     ],
     "outputForm": "object"
   },
+  "@dshtrading/client-ui-special-indicators#special_indicators_get_all": {
+    "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
+    "params": [
+      {
+        "name": "window",
+        "type": "integer",
+        "required": false
+      },
+      {
+        "name": "sector_limit",
+        "type": "integer",
+        "required": false
+      }
+    ],
+    "outputForm": "object"
+  },
   "@dshtrading/client-ui-special-indicators#special_indicators_get_hk_short_top10": {
     "file": "packages/client-ui-special-indicators/src/indicator-tools.ts",
     "params": [

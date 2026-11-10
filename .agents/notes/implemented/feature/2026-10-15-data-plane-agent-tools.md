@@ -30,9 +30,16 @@ auth 栅栏与 headless 静默语义都不动）；金十在同包 `tools.ts` �
 
 ### 特殊指标（`@dshtrading/client-ui-special-indicators`）
 
-五只只读工具：`special_indicators_get_snapshot`（四组快照，可选 `group`）、
+六只只读工具：`special_indicators_get_snapshot`（四组快照，可选 `group`）、
 `special_indicators_get_sentiment_history`、`special_indicators_get_sector_ranking`、
-`special_indicators_get_sector_series`、`special_indicators_get_hk_short_top10`。
+`special_indicators_get_sector_series`、`special_indicators_get_hk_short_top10`，
+外加 **`special_indicators_get_all`**（2026-11-10 追加，owner 要求「简单、快速地直接获取全部特殊指标」）：
+一次调用把四组快照与两张明细表（恒科逐股卖空占比、板块融资排行行，默认全量、`sector_limit` 可夹取）
+合成一份出参，六条上游 GET 并行——实测冷缓存 229ms / 9.6KB，热缓存 1ms（同一 client 缓存）。
+它复用单只工具的同一批 builder 与合并实现（`mergeHkTop10` / `rankingRowsOf`），不另写一份取数口径；
+**单组上游失败只吞该组**（进 `errors[]`，带 FinanceError code 与「没拿到数据」），其余组照常返回，
+四组全失败才抛错——空信封绝不冒充成功。现场验收与原始响应：
+[spikes/impl-data-plane-tools/ACCEPTANCE.md](../../../../spikes/impl-data-plane-tools/ACCEPTANCE.md) §6。
 
 - 白名单子路由表、参数夹取（`clampInt`/`SECTOR_CODE_RE`）与缓存档从 `index.ts` 抽到
   `src/routes.ts`，**桥与工具面同源**——工具不自己拼 URL、不复制参数边界、不复制 TTL 档。

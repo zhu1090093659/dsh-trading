@@ -1,0 +1,1253 @@
+[OK  ] special_indicators_get_snapshot  1893ms  
+[OK  ] special_indicators_get_sentiment_history  69ms  
+[OK  ] special_indicators_get_sector_ranking  8ms  
+[OK  ] special_indicators_get_sector_series  11ms  
+[OK  ] special_indicators_get_hk_short_top10  69ms  
+[OK  ] special_indicators_get_all  1ms  
+{
+ "ranAt": "2026-11-10T01:52:48.675Z",
+ "only": "special",
+ "tools": {
+  "special_indicators_get_snapshot": {
+   "args": {},
+   "ok": true,
+   "elapsedMs": 1893,
+   "raw": "{\"as_of\":\"2026-11-10T01:52:50.569Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/snapshot + /api/sentiment/snapshot?market=cn&methodology=3 + /api/hk-short/snapshot + /api/sectors/snapshot\",\"groups\":{\"basis\":{\"ready\":true,\"stats\":{\"IF\":{\"min\":41.08999999999969,\"max\":44.220000000000255,\"mean\":42.65391304347826,\"last\":43.57999999999993,\"pct\":1.0700833378349826,\"p25\":41.85500000000002,\"p75\":43.434999999999945,\"n\":23},\"IM\":{\"min\":75.64000000000033,\"max\":87.26000000000022,\"mean\":81.40999999999997,\"last\":87.26000000000022,\"pct\":1.3267326130520356,\"p25\":78.53500000000031,\"p75\":84.1850000000004,\"n\":23}},\"products\":[{\"key\":\"IF\",\"name\":\"沪深300\",\"last_spot\":4072.58,\"last_fut\":4029,\"last_dt\":\"2026-11-10 09:52:48\"},{\"key\":\"IM\",\"name\":\"中证1000\",\"last_spot\":6577.06,\"last_fut\":6489.8,\"last_dt\":\"2026-11-10 09:52:48\"}],\"products_count\":2,\"expected_data_date\":\"2026-11-10\",\"expected_data_date_source\":\"derived: products[].last_dt 的最大日期（日内行情时间，非上游声明的应有数据日）\",\"stale\":false,\"stale_source\":\"no upstream stale/date signal\",\"cache_stale\":false},\"sentiment\":{\"market\":\"cn\",\"score\":23.99,\"label\":\"extreme_fear\",\"label_text\":\"极端恐惧\",\"date\":\"2026-11-09\",\"expected_data_date\":\"2026-11-09\",\"average_5d\":25.4,\"vs_5d\":-1.41,\"methodology_version\":3,\"source_version\":\"eb3553dc39f98f35\",\"coverage\":{\"valid\":8,\"total\":8,\"partial\":false},\"components_count\":8,\"missing_components\":[],\"stale\":false,\"stale_source\":\"upstream: /api/sentiment/snapshot.stale\",\"cache_stale\":false},\"hk_short\":{\"ready\":true,\"data_date\":\"2026-11-09\",\"index_data_date\":\"2026-11-09\",\"short_data_date\":\"2026-11-09\",\"last_update\":\"2026-11-09 17:22\",\"data_version\":\"6dc4ef3ac9c91666\",\"updating\":false,\"n_days\":114,\"n_stocks\":10,\"five_day\":{\"current_pct\":26.826,\"average_pct\":22.806,\"pct_difference\":4.019,\"current_value\":61.512,\"average_value\":78.655,\"value_difference\":-17.144,\"index_5d_pct\":5.24},\"top10\":[{\"code\":\"00700\",\"name\":\"腾讯\",\"weight\":8},{\"code\":\"09988\",\"name\":\"阿里巴巴\",\"weight\":8},{\"code\":\"03690\",\"name\":\"美团\",\"weight\":7.5},{\"code\":\"01810\",\"name\":\"小米\",\"weight\":7.5},{\"code\":\"09618\",\"name\":\"京东\",\"weight\":6},{\"code\":\"01024\",\"name\":\"快手\",\"weight\":5},{\"code\":\"09888\",\"name\":\"百度\",\"weight\":4},{\"code\":\"09999\",\"name\":\"网易\",\"weight\":4},{\"code\":\"01211\",\"name\":\"比亚迪\",\"weight\":3},{\"code\":\"02015\",\"name\":\"理想汽车\",\"weight\":3}],\"stale\":false,\"stale_source\":\"no upstream stale/date signal\",\"cache_stale\":false},\"sectors\":{\"data_date\":\"2026-11-09\",\"expected_data_date\":\"2026-11-09\",\"index_data_date\":\"2026-11-09\",\"last_update\":\"2026-11-10 08:55\",\"data_version\":\"11a8530355f3fbc9\",\"updating\":false,\"n_ready\":18,\"n_total\":18,\"n_loaded\":18,\"five_day\":{\"current_change\":35.03,\"average_change\":-14.99,\"difference\":50.02,\"total_flow\":-74.95,\"unit\":\"亿元\"},\"sectors\":[{\"code\":\"801738\",\"name\":\"电网设备\",\"type\":\"sw\"},{\"code\":\"801125\",\"name\":\"白酒\",\"type\":\"sw\"},{\"code\":\"801764\",\"name\":\"游戏\",\"type\":\"sw\"},{\"code\":\"801181\",\"name\":\"房地产\",\"type\":\"sw\"},{\"code\":\"801155\",\"name\":\"中药\",\"type\":\"sw\"},{\"code\":\"801154\",\"name\":\"医药商业\",\"type\":\"sw\"},{\"code\":\"801782\",\"name\":\"银行\",\"type\":\"sw\"},{\"code\":\"801735\",\"name\":\"光伏\",\"type\":\"sw\"},{\"code\":\"801737\",\"name\":\"电池\",\"type\":\"sw\"},{\"code\":\"801951\",\"name\":\"煤炭\",\"type\":\"sw\"},{\"code\":\"801081\",\"name\":\"芯片\",\"type\":\"sw\"},{\"code\":\"801193\",\"name\":\"券商\",\"type\":\"sw\"},{\"code\":\"801744\",\"name\":\"国防军工\",\"type\":\"sw\"},{\"code\":\"801095\",\"name\":\"汽车\",\"type\":\"sw\"},{\"code\":\"801034\",\"name\":\"化工\",\"type\":\"sw\"},{\"code\":\"801017\",\"name\":\"畜牧\",\"type\":\"sw\"},{\"code\":\"562500\",\"name\":\"机器人\",\"type\":\"etf\"},{\"code\":\"159309\",\"name\":\"油气\",\"type\":\"etf\"}],\"sectors_count\":18,\"missing_margin\":[],\"stale_sectors\":[],\"stale\":false,\"stale_source\":\"derived: snapshot data_date < expected_data_date\",\"cache_stale\":false}},\"groups_read\":[\"basis\",\"sentiment\",\"hk_short\",\"sectors\"],\"stale\":false,\"stale_source\":\"basis: no upstream stale/date signal | sentiment: upstream: /api/sentiment/snapshot.stale | hk_short: no upstream stale/date signal | sectors: derived: snapshot data_date < expected_data_date\",\"cache_stale\":false,\"notes\":[\"hk_short: 上游 /api/hk-short/snapshot 不提供 expected_data_date；滞后请比对 index_data_date 与 short_data_date 两条源尾日，或用 special_indicators_get_hk_short_top10（含 chart 声明的 stale）\"]}",
+   "parsed": {
+    "as_of": "2026-11-10T01:52:50.569Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/snapshot + /api/sentiment/snapshot?market=cn&methodology=3 + /api/hk-short/snapshot + /api/sectors/snapshot",
+    "groups": {
+     "basis": {
+      "ready": true,
+      "stats": {
+       "IF": {
+        "min": 41.08999999999969,
+        "max": 44.220000000000255,
+        "mean": 42.65391304347826,
+        "last": 43.57999999999993,
+        "pct": 1.0700833378349826,
+        "p25": 41.85500000000002,
+        "p75": 43.434999999999945,
+        "n": 23
+       },
+       "IM": {
+        "min": 75.64000000000033,
+        "max": 87.26000000000022,
+        "mean": 81.40999999999997,
+        "last": 87.26000000000022,
+        "pct": 1.3267326130520356,
+        "p25": 78.53500000000031,
+        "p75": 84.1850000000004,
+        "n": 23
+       }
+      },
+      "products": [
+       {
+        "key": "IF",
+        "name": "沪深300",
+        "last_spot": 4072.58,
+        "last_fut": 4029,
+        "last_dt": "2026-11-10 09:52:48"
+       },
+       {
+        "key": "IM",
+        "name": "中证1000",
+        "last_spot": 6577.06,
+        "last_fut": 6489.8,
+        "last_dt": "2026-11-10 09:52:48"
+       }
+      ],
+      "products_count": 2,
+      "expected_data_date": "2026-11-10",
+      "expected_data_date_source": "derived: products[].last_dt 的最大日期（日内行情时间，非上游声明的应有数据日）",
+      "stale": false,
+      "stale_source": "no upstream stale/date signal",
+      "cache_stale": false
+     },
+     "sentiment": {
+      "market": "cn",
+      "score": 23.99,
+      "label": "extreme_fear",
+      "label_text": "极端恐惧",
+      "date": "2026-11-09",
+      "expected_data_date": "2026-11-09",
+      "average_5d": 25.4,
+      "vs_5d": -1.41,
+      "methodology_version": 3,
+      "source_version": "eb3553dc39f98f35",
+      "coverage": {
+       "valid": 8,
+       "total": 8,
+       "partial": false
+      },
+      "components_count": 8,
+      "missing_components": [],
+      "stale": false,
+      "stale_source": "upstream: /api/sentiment/snapshot.stale",
+      "cache_stale": false
+     },
+     "hk_short": {
+      "ready": true,
+      "data_date": "2026-11-09",
+      "index_data_date": "2026-11-09",
+      "short_data_date": "2026-11-09",
+      "last_update": "2026-11-09 17:22",
+      "data_version": "6dc4ef3ac9c91666",
+      "updating": false,
+      "n_days": 114,
+      "n_stocks": 10,
+      "five_day": {
+       "current_pct": 26.826,
+       "average_pct": 22.806,
+       "pct_difference": 4.019,
+       "current_value": 61.512,
+       "average_value": 78.655,
+       "value_difference": -17.144,
+       "index_5d_pct": 5.24
+      },
+      "top10": [
+       {
+        "code": "00700",
+        "name": "腾讯",
+        "weight": 8
+       },
+       {
+        "code": "09988",
+        "name": "阿里巴巴",
+        "weight": 8
+       },
+       {
+        "code": "03690",
+        "name": "美团",
+        "weight": 7.5
+       },
+       {
+        "code": "01810",
+        "name": "小米",
+        "weight": 7.5
+       },
+       {
+        "code": "09618",
+        "name": "京东",
+        "weight": 6
+       },
+       {
+        "code": "01024",
+        "name": "快手",
+        "weight": 5
+       },
+       {
+        "code": "09888",
+        "name": "百度",
+        "weight": 4
+       },
+       {
+        "code": "09999",
+        "name": "网易",
+        "weight": 4
+       },
+       {
+        "code": "01211",
+        "name": "比亚迪",
+        "weight": 3
+       },
+       {
+        "code": "02015",
+        "name": "理想汽车",
+        "weight": 3
+       }
+      ],
+      "stale": false,
+      "stale_source": "no upstream stale/date signal",
+      "cache_stale": false
+     },
+     "sectors": {
+      "data_date": "2026-11-09",
+      "expected_data_date": "2026-11-09",
+      "index_data_date": "2026-11-09",
+      "last_update": "2026-11-10 08:55",
+      "data_version": "11a8530355f3fbc9",
+      "updating": false,
+      "n_ready": 18,
+      "n_total": 18,
+      "n_loaded": 18,
+      "five_day": {
+       "current_change": 35.03,
+       "average_change": -14.99,
+       "difference": 50.02,
+       "total_flow": -74.95,
+       "unit": "亿元"
+      },
+      "sectors": [
+       {
+        "code": "801738",
+        "name": "电网设备",
+        "type": "sw"
+       },
+       {
+        "code": "801125",
+        "name": "白酒",
+        "type": "sw"
+       },
+       {
+        "code": "801764",
+        "name": "游戏",
+        "type": "sw"
+       },
+       {
+        "code": "801181",
+        "name": "房地产",
+        "type": "sw"
+       },
+       {
+        "code": "801155",
+        "name": "中药",
+        "type": "sw"
+       },
+       {
+        "code": "801154",
+        "name": "医药商业",
+        "type": "sw"
+       },
+       {
+        "code": "801782",
+        "name": "银行",
+        "type": "sw"
+       },
+       {
+        "code": "801735",
+        "name": "光伏",
+        "type": "sw"
+       },
+       {
+        "code": "801737",
+        "name": "电池",
+        "type": "sw"
+       },
+       {
+        "code": "801951",
+        "name": "煤炭",
+        "type": "sw"
+       },
+       {
+        "code": "801081",
+        "name": "芯片",
+        "type": "sw"
+       },
+       {
+        "code": "801193",
+        "name": "券商",
+        "type": "sw"
+       },
+       {
+        "code": "801744",
+        "name": "国防军工",
+        "type": "sw"
+       },
+       {
+        "code": "801095",
+        "name": "汽车",
+        "type": "sw"
+       },
+       {
+        "code": "801034",
+        "name": "化工",
+        "type": "sw"
+       },
+       {
+        "code": "801017",
+        "name": "畜牧",
+        "type": "sw"
+       },
+       {
+        "code": "562500",
+        "name": "机器人",
+        "type": "etf"
+       },
+       {
+        "code": "159309",
+        "name": "油气",
+        "type": "etf"
+       }
+      ],
+      "sectors_count": 18,
+      "missing_margin": [],
+      "stale_sectors": [],
+      "stale": false,
+      "stale_source": "derived: snapshot data_date < expected_data_date",
+      "cache_stale": false
+     }
+    },
+    "groups_read": [
+     "basis",
+     "sentiment",
+     "hk_short",
+     "sectors"
+    ],
+    "stale": false,
+    "stale_source": "basis: no upstream stale/date signal | sentiment: upstream: /api/sentiment/snapshot.stale | hk_short: no upstream stale/date signal | sectors: derived: snapshot data_date < expected_data_date",
+    "cache_stale": false,
+    "notes": [
+     "hk_short: 上游 /api/hk-short/snapshot 不提供 expected_data_date；滞后请比对 index_data_date 与 short_data_date 两条源尾日，或用 special_indicators_get_hk_short_top10（含 chart 声明的 stale）"
+    ]
+   }
+  },
+  "special_indicators_get_sentiment_history": {
+   "args": {
+    "days": 250
+   },
+   "ok": true,
+   "elapsedMs": 69,
+   "raw": "{\"as_of\":\"2026-11-10T01:52:50.638Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/sentiment/history?market=cn&methodology=3&days=250\",\"days\":250,\"market\":\"cn\",\"methodology_version\":3,\"formula_version\":\"margin-streak-added-to-v2-v3\",\"source_version\":\"eb3553dc39f98f35\",\"expected_data_date\":\"2026-11-09\",\"overlay_name\":\"中证全指\",\"points\":250,\"first_date\":\"2025-10-28\",\"last_date\":\"2026-11-09\",\"latest\":{\"date\":\"2026-11-09\",\"score\":23.99,\"label\":\"extreme_fear\",\"label_text\":\"极端恐惧\",\"valid_components\":8,\"total_components\":8},\"stale\":false,\"stale_source\":\"derived: series[] 尾日 < expected_data_date\",\"cache_stale\":false}",
+   "parsed": {
+    "as_of": "2026-11-10T01:52:50.638Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/sentiment/history?market=cn&methodology=3&days=250",
+    "days": 250,
+    "market": "cn",
+    "methodology_version": 3,
+    "formula_version": "margin-streak-added-to-v2-v3",
+    "source_version": "eb3553dc39f98f35",
+    "expected_data_date": "2026-11-09",
+    "overlay_name": "中证全指",
+    "points": 250,
+    "first_date": "2025-10-28",
+    "last_date": "2026-11-09",
+    "latest": {
+     "date": "2026-11-09",
+     "score": 23.99,
+     "label": "extreme_fear",
+     "label_text": "极端恐惧",
+     "valid_components": 8,
+     "total_components": 8
+    },
+    "stale": false,
+    "stale_source": "derived: series[] 尾日 < expected_data_date",
+    "cache_stale": false
+   }
+  },
+  "special_indicators_get_sector_ranking": {
+   "args": {
+    "window": 20,
+    "limit": 5
+   },
+   "ok": true,
+   "elapsedMs": 8,
+   "raw": "{\"as_of\":\"2026-11-10T01:52:50.646Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/sectors/ranking?window=20 + /api/sectors/snapshot\",\"window\":20,\"limit\":5,\"list\":[{\"code\":\"801744\",\"name\":\"国防军工\",\"type\":\"sw\",\"chg_pct\":-0.18,\"latest_margin\":98.99,\"latest_close\":3072.4,\"daily_change\":0.95,\"avg_5d_change\":0.13,\"vs_5d_change\":0.81,\"total_5d_flow\":0.67,\"index_5d_pct\":1.87},{\"code\":\"159309\",\"name\":\"油气\",\"type\":\"etf\",\"chg_pct\":-0.4,\"latest_margin\":30.18,\"latest_close\":1.325,\"daily_change\":-0.39,\"avg_5d_change\":0.03,\"vs_5d_change\":-0.42,\"total_5d_flow\":0.13,\"index_5d_pct\":-4.95},{\"code\":\"801782\",\"name\":\"银行\",\"type\":\"sw\",\"chg_pct\":-3.57,\"latest_margin\":60.49,\"latest_close\":2235.49,\"daily_change\":1.02,\"avg_5d_change\":-0.38,\"vs_5d_change\":1.4,\"total_5d_flow\":-1.89,\"index_5d_pct\":-0.83},{\"code\":\"801155\",\"name\":\"中药\",\"type\":\"sw\",\"chg_pct\":-3.87,\"latest_margin\":174.13,\"latest_close\":5565.77,\"daily_change\":1.01,\"avg_5d_change\":0,\"vs_5d_change\":1,\"total_5d_flow\":0.02,\"index_5d_pct\":1.93},{\"code\":\"801193\",\"name\":\"券商\",\"type\":\"sw\",\"chg_pct\":-3.98,\"latest_margin\":1207.98,\"latest_close\":5675.33,\"daily_change\":4.62,\"avg_5d_change\":-1.76,\"vs_5d_change\":6.38,\"total_5d_flow\":-8.81,\"index_5d_pct\":-0.08}],\"list_count\":5,\"ranking_rows_upstream\":18,\"truncated\":true,\"units\":{\"latest_margin\":\"亿元\",\"daily_change\":\"亿元\",\"avg_5d_change\":\"亿元\",\"vs_5d_change\":\"亿元\",\"total_5d_flow\":\"亿元\",\"chg_pct\":\"%\",\"index_5d_pct\":\"%\",\"latest_close\":\"板块指数点\"},\"data_date\":\"2026-11-09\",\"expected_data_date\":\"2026-11-09\",\"index_data_date\":\"2026-11-09\",\"last_update\":\"2026-11-10 08:55\",\"data_version\":\"11a8530355f3fbc9\",\"n_ready\":18,\"n_total\":18,\"five_day\":{\"current_change\":35.03,\"average_change\":-14.99,\"difference\":50.02,\"total_flow\":-74.95,\"unit\":\"亿元\"},\"missing_margin\":[],\"stale\":false,\"stale_source\":\"derived: snapshot data_date < expected_data_date\",\"cache_stale\":false}",
+   "parsed": {
+    "as_of": "2026-11-10T01:52:50.646Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/sectors/ranking?window=20 + /api/sectors/snapshot",
+    "window": 20,
+    "limit": 5,
+    "list": [
+     {
+      "code": "801744",
+      "name": "国防军工",
+      "type": "sw",
+      "chg_pct": -0.18,
+      "latest_margin": 98.99,
+      "latest_close": 3072.4,
+      "daily_change": 0.95,
+      "avg_5d_change": 0.13,
+      "vs_5d_change": 0.81,
+      "total_5d_flow": 0.67,
+      "index_5d_pct": 1.87
+     },
+     {
+      "code": "159309",
+      "name": "油气",
+      "type": "etf",
+      "chg_pct": -0.4,
+      "latest_margin": 30.18,
+      "latest_close": 1.325,
+      "daily_change": -0.39,
+      "avg_5d_change": 0.03,
+      "vs_5d_change": -0.42,
+      "total_5d_flow": 0.13,
+      "index_5d_pct": -4.95
+     },
+     {
+      "code": "801782",
+      "name": "银行",
+      "type": "sw",
+      "chg_pct": -3.57,
+      "latest_margin": 60.49,
+      "latest_close": 2235.49,
+      "daily_change": 1.02,
+      "avg_5d_change": -0.38,
+      "vs_5d_change": 1.4,
+      "total_5d_flow": -1.89,
+      "index_5d_pct": -0.83
+     },
+     {
+      "code": "801155",
+      "name": "中药",
+      "type": "sw",
+      "chg_pct": -3.87,
+      "latest_margin": 174.13,
+      "latest_close": 5565.77,
+      "daily_change": 1.01,
+      "avg_5d_change": 0,
+      "vs_5d_change": 1,
+      "total_5d_flow": 0.02,
+      "index_5d_pct": 1.93
+     },
+     {
+      "code": "801193",
+      "name": "券商",
+      "type": "sw",
+      "chg_pct": -3.98,
+      "latest_margin": 1207.98,
+      "latest_close": 5675.33,
+      "daily_change": 4.62,
+      "avg_5d_change": -1.76,
+      "vs_5d_change": 6.38,
+      "total_5d_flow": -8.81,
+      "index_5d_pct": -0.08
+     }
+    ],
+    "list_count": 5,
+    "ranking_rows_upstream": 18,
+    "truncated": true,
+    "units": {
+     "latest_margin": "亿元",
+     "daily_change": "亿元",
+     "avg_5d_change": "亿元",
+     "vs_5d_change": "亿元",
+     "total_5d_flow": "亿元",
+     "chg_pct": "%",
+     "index_5d_pct": "%",
+     "latest_close": "板块指数点"
+    },
+    "data_date": "2026-11-09",
+    "expected_data_date": "2026-11-09",
+    "index_data_date": "2026-11-09",
+    "last_update": "2026-11-10 08:55",
+    "data_version": "11a8530355f3fbc9",
+    "n_ready": 18,
+    "n_total": 18,
+    "five_day": {
+     "current_change": 35.03,
+     "average_change": -14.99,
+     "difference": 50.02,
+     "total_flow": -74.95,
+     "unit": "亿元"
+    },
+    "missing_margin": [],
+    "stale": false,
+    "stale_source": "derived: snapshot data_date < expected_data_date",
+    "cache_stale": false
+   }
+  },
+  "special_indicators_get_sector_series": {
+   "args": {
+    "code": "801737",
+    "days": 300
+   },
+   "ok": true,
+   "elapsedMs": 11,
+   "raw": "{\"as_of\":\"2026-11-10T01:52:50.657Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/v2/sectors/801737?days=300\",\"code\":\"801737\",\"name\":\"电池\",\"type\":\"sw\",\"days\":300,\"points\":{\"index\":300,\"margin\":300},\"index_first\":{\"date\":\"2025-08-11\",\"close\":17137.04},\"index_last\":{\"date\":\"2026-11-09\",\"close\":17019.85},\"margin_first\":{\"date\":\"2025-08-12\",\"rzye\":52057573427},\"margin_last\":{\"date\":\"2026-11-09\",\"rzye\":69267313756},\"data_date\":\"2026-11-09\",\"data_date_source\":\"derived: index[]/margin[] 尾日取最大\",\"units\":{\"index_close\":\"板块指数点\",\"margin_rzye\":\"元（原始口径；除以 1e8 为亿元）\"},\"expected_data_date_note\":\"上游 /api/v2/sectors/{code} 不提供 expected_data_date（只有自声明的 stale），派生不出，故该字段省略而非编造\",\"stale\":false,\"stale_source\":\"upstream: /api/v2/sectors/{code}.stale\",\"cache_stale\":false}",
+   "parsed": {
+    "as_of": "2026-11-10T01:52:50.657Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/v2/sectors/801737?days=300",
+    "code": "801737",
+    "name": "电池",
+    "type": "sw",
+    "days": 300,
+    "points": {
+     "index": 300,
+     "margin": 300
+    },
+    "index_first": {
+     "date": "2025-08-11",
+     "close": 17137.04
+    },
+    "index_last": {
+     "date": "2026-11-09",
+     "close": 17019.85
+    },
+    "margin_first": {
+     "date": "2025-08-12",
+     "rzye": 52057573427
+    },
+    "margin_last": {
+     "date": "2026-11-09",
+     "rzye": 69267313756
+    },
+    "data_date": "2026-11-09",
+    "data_date_source": "derived: index[]/margin[] 尾日取最大",
+    "units": {
+     "index_close": "板块指数点",
+     "margin_rzye": "元（原始口径；除以 1e8 为亿元）"
+    },
+    "expected_data_date_note": "上游 /api/v2/sectors/{code} 不提供 expected_data_date（只有自声明的 stale），派生不出，故该字段省略而非编造",
+    "stale": false,
+    "stale_source": "upstream: /api/v2/sectors/{code}.stale",
+    "cache_stale": false
+   }
+  },
+  "special_indicators_get_hk_short_top10": {
+   "args": {
+    "limit": 10
+   },
+   "ok": true,
+   "elapsedMs": 69,
+   "raw": "{\"as_of\":\"2026-11-10T01:52:50.726Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/hk-short/snapshot + /api/hk-short/chart\",\"ready\":true,\"data_date\":\"2026-11-09\",\"short_data_date\":\"2026-11-09\",\"index_data_date\":\"2026-11-09\",\"last_update\":\"2026-11-09 17:22\",\"data_version\":\"6dc4ef3ac9c91666\",\"updating\":false,\"n_days\":114,\"n_stocks\":10,\"five_day\":{\"current_pct\":26.826,\"average_pct\":22.806,\"pct_difference\":4.019,\"current_value\":61.512,\"average_value\":78.655,\"value_difference\":-17.144,\"index_5d_pct\":5.24},\"limit\":10,\"top10\":[{\"code\":\"00700\",\"name\":\"腾讯\",\"weight\":8,\"latest_pct\":17.546,\"vs_5d_pct\":3.13,\"history_days\":113,\"latest_value\":12.09,\"previous_pct\":11.625,\"pct_delta\":5.921},{\"code\":\"09988\",\"name\":\"阿里巴巴\",\"weight\":8,\"latest_pct\":19.273,\"vs_5d_pct\":1.784,\"history_days\":113,\"latest_value\":10.9,\"previous_pct\":16.399,\"pct_delta\":2.874},{\"code\":\"03690\",\"name\":\"美团\",\"weight\":7.5,\"latest_pct\":17.262,\"vs_5d_pct\":-2.469,\"history_days\":113,\"latest_value\":8.694,\"previous_pct\":16.597,\"pct_delta\":0.665},{\"code\":\"01810\",\"name\":\"小米\",\"weight\":7.5,\"latest_pct\":39.104,\"vs_5d_pct\":8.95,\"history_days\":113,\"latest_value\":15.4,\"previous_pct\":25.076,\"pct_delta\":14.028},{\"code\":\"09618\",\"name\":\"京东\",\"weight\":6,\"latest_pct\":40.935,\"vs_5d_pct\":12.061,\"history_days\":113,\"latest_value\":2.621,\"previous_pct\":27.165,\"pct_delta\":13.77},{\"code\":\"01024\",\"name\":\"快手\",\"weight\":5,\"latest_pct\":26.903,\"vs_5d_pct\":6.11,\"history_days\":113,\"latest_value\":1.662,\"previous_pct\":21.901,\"pct_delta\":5.002},{\"code\":\"09888\",\"name\":\"百度\",\"weight\":4,\"latest_pct\":17.071,\"vs_5d_pct\":-0.137,\"history_days\":113,\"latest_value\":1.049,\"previous_pct\":12.95,\"pct_delta\":4.121},{\"code\":\"09999\",\"name\":\"网易\",\"weight\":4,\"latest_pct\":38.886,\"vs_5d_pct\":5.851,\"history_days\":113,\"latest_value\":4.907,\"previous_pct\":32.043,\"pct_delta\":6.843},{\"code\":\"01211\",\"name\":\"比亚迪\",\"weight\":3,\"latest_pct\":24.849,\"vs_5d_pct\":0.979,\"history_days\":113,\"latest_value\":2.919,\"previous_pct\":19.863,\"pct_delta\":4.986},{\"code\":\"02015\",\"name\":\"理想汽车\",\"weight\":3,\"latest_pct\":35.479,\"vs_5d_pct\":2.817,\"history_days\":113,\"latest_value\":1.27,\"previous_pct\":26.553,\"pct_delta\":8.926}],\"top10_count\":10,\"units\":{\"weight\":\"权重（%）\",\"latest_pct\":\"该股卖空成交额占其成交额比例（%，与聚合占比同口径）\",\"vs_5d_pct\":\"百分点（latest_pct 与 5 日均值之差）\",\"latest_value\":\"亿港元\",\"five_day_current_value\":\"亿港元\",\"five_day_pct_difference\":\"百分点\"},\"notes\":[\"上游契约：缺失个股的 latest_pct/latest_value 可能是 0 占位（须结合 history_days 与 short_ratio 判断，0 不证明存在真实观测）\",\"上游不提供 expected_data_date：滞后以下列 short_data_date/index_data_date 两条源尾日与 chart 的 stale 判定\"],\"stale\":false,\"stale_source\":\"upstream: /api/hk-short/chart.stale\",\"cache_stale\":false}",
+   "parsed": {
+    "as_of": "2026-11-10T01:52:50.726Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/hk-short/snapshot + /api/hk-short/chart",
+    "ready": true,
+    "data_date": "2026-11-09",
+    "short_data_date": "2026-11-09",
+    "index_data_date": "2026-11-09",
+    "last_update": "2026-11-09 17:22",
+    "data_version": "6dc4ef3ac9c91666",
+    "updating": false,
+    "n_days": 114,
+    "n_stocks": 10,
+    "five_day": {
+     "current_pct": 26.826,
+     "average_pct": 22.806,
+     "pct_difference": 4.019,
+     "current_value": 61.512,
+     "average_value": 78.655,
+     "value_difference": -17.144,
+     "index_5d_pct": 5.24
+    },
+    "limit": 10,
+    "top10": [
+     {
+      "code": "00700",
+      "name": "腾讯",
+      "weight": 8,
+      "latest_pct": 17.546,
+      "vs_5d_pct": 3.13,
+      "history_days": 113,
+      "latest_value": 12.09,
+      "previous_pct": 11.625,
+      "pct_delta": 5.921
+     },
+     {
+      "code": "09988",
+      "name": "阿里巴巴",
+      "weight": 8,
+      "latest_pct": 19.273,
+      "vs_5d_pct": 1.784,
+      "history_days": 113,
+      "latest_value": 10.9,
+      "previous_pct": 16.399,
+      "pct_delta": 2.874
+     },
+     {
+      "code": "03690",
+      "name": "美团",
+      "weight": 7.5,
+      "latest_pct": 17.262,
+      "vs_5d_pct": -2.469,
+      "history_days": 113,
+      "latest_value": 8.694,
+      "previous_pct": 16.597,
+      "pct_delta": 0.665
+     },
+     {
+      "code": "01810",
+      "name": "小米",
+      "weight": 7.5,
+      "latest_pct": 39.104,
+      "vs_5d_pct": 8.95,
+      "history_days": 113,
+      "latest_value": 15.4,
+      "previous_pct": 25.076,
+      "pct_delta": 14.028
+     },
+     {
+      "code": "09618",
+      "name": "京东",
+      "weight": 6,
+      "latest_pct": 40.935,
+      "vs_5d_pct": 12.061,
+      "history_days": 113,
+      "latest_value": 2.621,
+      "previous_pct": 27.165,
+      "pct_delta": 13.77
+     },
+     {
+      "code": "01024",
+      "name": "快手",
+      "weight": 5,
+      "latest_pct": 26.903,
+      "vs_5d_pct": 6.11,
+      "history_days": 113,
+      "latest_value": 1.662,
+      "previous_pct": 21.901,
+      "pct_delta": 5.002
+     },
+     {
+      "code": "09888",
+      "name": "百度",
+      "weight": 4,
+      "latest_pct": 17.071,
+      "vs_5d_pct": -0.137,
+      "history_days": 113,
+      "latest_value": 1.049,
+      "previous_pct": 12.95,
+      "pct_delta": 4.121
+     },
+     {
+      "code": "09999",
+      "name": "网易",
+      "weight": 4,
+      "latest_pct": 38.886,
+      "vs_5d_pct": 5.851,
+      "history_days": 113,
+      "latest_value": 4.907,
+      "previous_pct": 32.043,
+      "pct_delta": 6.843
+     },
+     {
+      "code": "01211",
+      "name": "比亚迪",
+      "weight": 3,
+      "latest_pct": 24.849,
+      "vs_5d_pct": 0.979,
+      "history_days": 113,
+      "latest_value": 2.919,
+      "previous_pct": 19.863,
+      "pct_delta": 4.986
+     },
+     {
+      "code": "02015",
+      "name": "理想汽车",
+      "weight": 3,
+      "latest_pct": 35.479,
+      "vs_5d_pct": 2.817,
+      "history_days": 113,
+      "latest_value": 1.27,
+      "previous_pct": 26.553,
+      "pct_delta": 8.926
+     }
+    ],
+    "top10_count": 10,
+    "units": {
+     "weight": "权重（%）",
+     "latest_pct": "该股卖空成交额占其成交额比例（%，与聚合占比同口径）",
+     "vs_5d_pct": "百分点（latest_pct 与 5 日均值之差）",
+     "latest_value": "亿港元",
+     "five_day_current_value": "亿港元",
+     "five_day_pct_difference": "百分点"
+    },
+    "notes": [
+     "上游契约：缺失个股的 latest_pct/latest_value 可能是 0 占位（须结合 history_days 与 short_ratio 判断，0 不证明存在真实观测）",
+     "上游不提供 expected_data_date：滞后以下列 short_data_date/index_data_date 两条源尾日与 chart 的 stale 判定"
+    ],
+    "stale": false,
+    "stale_source": "upstream: /api/hk-short/chart.stale",
+    "cache_stale": false
+   }
+  },
+  "special_indicators_get_all": {
+   "args": {},
+   "ok": true,
+   "elapsedMs": 1,
+   "raw": "{\"as_of\":\"2026-11-10T01:52:50.727Z\",\"source\":\"自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/snapshot + /api/sentiment/snapshot?market=cn&methodology=3 + /api/hk-short/snapshot + /api/hk-short/chart + /api/sectors/snapshot + /api/sectors/ranking?window=20\",\"window\":20,\"sector_limit\":60,\"groups\":{\"basis\":{\"ready\":true,\"stats\":{\"IF\":{\"min\":41.08999999999969,\"max\":44.220000000000255,\"mean\":42.65391304347826,\"last\":43.57999999999993,\"pct\":1.0700833378349826,\"p25\":41.85500000000002,\"p75\":43.434999999999945,\"n\":23},\"IM\":{\"min\":75.64000000000033,\"max\":87.26000000000022,\"mean\":81.40999999999997,\"last\":87.26000000000022,\"pct\":1.3267326130520356,\"p25\":78.53500000000031,\"p75\":84.1850000000004,\"n\":23}},\"products\":[{\"key\":\"IF\",\"name\":\"沪深300\",\"last_spot\":4072.58,\"last_fut\":4029,\"last_dt\":\"2026-11-10 09:52:48\"},{\"key\":\"IM\",\"name\":\"中证1000\",\"last_spot\":6577.06,\"last_fut\":6489.8,\"last_dt\":\"2026-11-10 09:52:48\"}],\"products_count\":2,\"expected_data_date\":\"2026-11-10\",\"expected_data_date_source\":\"derived: products[].last_dt 的最大日期（日内行情时间，非上游声明的应有数据日）\",\"stale\":false,\"stale_source\":\"no upstream stale/date signal\",\"cache_stale\":false},\"sentiment\":{\"market\":\"cn\",\"score\":23.99,\"label\":\"extreme_fear\",\"label_text\":\"极端恐惧\",\"date\":\"2026-11-09\",\"expected_data_date\":\"2026-11-09\",\"average_5d\":25.4,\"vs_5d\":-1.41,\"methodology_version\":3,\"source_version\":\"eb3553dc39f98f35\",\"coverage\":{\"valid\":8,\"total\":8,\"partial\":false},\"components_count\":8,\"missing_components\":[],\"stale\":false,\"stale_source\":\"upstream: /api/sentiment/snapshot.stale\",\"cache_stale\":false},\"hk_short\":{\"ready\":true,\"data_date\":\"2026-11-09\",\"index_data_date\":\"2026-11-09\",\"short_data_date\":\"2026-11-09\",\"last_update\":\"2026-11-09 17:22\",\"data_version\":\"6dc4ef3ac9c91666\",\"updating\":false,\"n_days\":114,\"n_stocks\":10,\"five_day\":{\"current_pct\":26.826,\"average_pct\":22.806,\"pct_difference\":4.019,\"current_value\":61.512,\"average_value\":78.655,\"value_difference\":-17.144,\"index_5d_pct\":5.24},\"top10\":[{\"code\":\"00700\",\"name\":\"腾讯\",\"weight\":8,\"latest_pct\":17.546,\"vs_5d_pct\":3.13,\"history_days\":113,\"latest_value\":12.09,\"previous_pct\":11.625,\"pct_delta\":5.921},{\"code\":\"09988\",\"name\":\"阿里巴巴\",\"weight\":8,\"latest_pct\":19.273,\"vs_5d_pct\":1.784,\"history_days\":113,\"latest_value\":10.9,\"previous_pct\":16.399,\"pct_delta\":2.874},{\"code\":\"03690\",\"name\":\"美团\",\"weight\":7.5,\"latest_pct\":17.262,\"vs_5d_pct\":-2.469,\"history_days\":113,\"latest_value\":8.694,\"previous_pct\":16.597,\"pct_delta\":0.665},{\"code\":\"01810\",\"name\":\"小米\",\"weight\":7.5,\"latest_pct\":39.104,\"vs_5d_pct\":8.95,\"history_days\":113,\"latest_value\":15.4,\"previous_pct\":25.076,\"pct_delta\":14.028},{\"code\":\"09618\",\"name\":\"京东\",\"weight\":6,\"latest_pct\":40.935,\"vs_5d_pct\":12.061,\"history_days\":113,\"latest_value\":2.621,\"previous_pct\":27.165,\"pct_delta\":13.77},{\"code\":\"01024\",\"name\":\"快手\",\"weight\":5,\"latest_pct\":26.903,\"vs_5d_pct\":6.11,\"history_days\":113,\"latest_value\":1.662,\"previous_pct\":21.901,\"pct_delta\":5.002},{\"code\":\"09888\",\"name\":\"百度\",\"weight\":4,\"latest_pct\":17.071,\"vs_5d_pct\":-0.137,\"history_days\":113,\"latest_value\":1.049,\"previous_pct\":12.95,\"pct_delta\":4.121},{\"code\":\"09999\",\"name\":\"网易\",\"weight\":4,\"latest_pct\":38.886,\"vs_5d_pct\":5.851,\"history_days\":113,\"latest_value\":4.907,\"previous_pct\":32.043,\"pct_delta\":6.843},{\"code\":\"01211\",\"name\":\"比亚迪\",\"weight\":3,\"latest_pct\":24.849,\"vs_5d_pct\":0.979,\"history_days\":113,\"latest_value\":2.919,\"previous_pct\":19.863,\"pct_delta\":4.986},{\"code\":\"02015\",\"name\":\"理想汽车\",\"weight\":3,\"latest_pct\":35.479,\"vs_5d_pct\":2.817,\"history_days\":113,\"latest_value\":1.27,\"previous_pct\":26.553,\"pct_delta\":8.926}],\"stale\":false,\"stale_source\":\"upstream: /api/hk-short/chart.stale\",\"cache_stale\":false,\"top10_count\":10,\"units\":{\"weight\":\"权重（%）\",\"latest_pct\":\"该股卖空成交额占其成交额比例（%，与聚合占比同口径）\",\"vs_5d_pct\":\"百分点（latest_pct 与 5 日均值之差）\",\"latest_value\":\"亿港元\",\"five_day_current_value\":\"亿港元\",\"five_day_pct_difference\":\"百分点\"}},\"sectors\":{\"data_date\":\"2026-11-09\",\"expected_data_date\":\"2026-11-09\",\"index_data_date\":\"2026-11-09\",\"last_update\":\"2026-11-10 08:55\",\"data_version\":\"11a8530355f3fbc9\",\"updating\":false,\"n_ready\":18,\"n_total\":18,\"n_loaded\":18,\"five_day\":{\"current_change\":35.03,\"average_change\":-14.99,\"difference\":50.02,\"total_flow\":-74.95,\"unit\":\"亿元\"},\"sectors\":[{\"code\":\"801738\",\"name\":\"电网设备\",\"type\":\"sw\"},{\"code\":\"801125\",\"name\":\"白酒\",\"type\":\"sw\"},{\"code\":\"801764\",\"name\":\"游戏\",\"type\":\"sw\"},{\"code\":\"801181\",\"name\":\"房地产\",\"type\":\"sw\"},{\"code\":\"801155\",\"name\":\"中药\",\"type\":\"sw\"},{\"code\":\"801154\",\"name\":\"医药商业\",\"type\":\"sw\"},{\"code\":\"801782\",\"name\":\"银行\",\"type\":\"sw\"},{\"code\":\"801735\",\"name\":\"光伏\",\"type\":\"sw\"},{\"code\":\"801737\",\"name\":\"电池\",\"type\":\"sw\"},{\"code\":\"801951\",\"name\":\"煤炭\",\"type\":\"sw\"},{\"code\":\"801081\",\"name\":\"芯片\",\"type\":\"sw\"},{\"code\":\"801193\",\"name\":\"券商\",\"type\":\"sw\"},{\"code\":\"801744\",\"name\":\"国防军工\",\"type\":\"sw\"},{\"code\":\"801095\",\"name\":\"汽车\",\"type\":\"sw\"},{\"code\":\"801034\",\"name\":\"化工\",\"type\":\"sw\"},{\"code\":\"801017\",\"name\":\"畜牧\",\"type\":\"sw\"},{\"code\":\"562500\",\"name\":\"机器人\",\"type\":\"etf\"},{\"code\":\"159309\",\"name\":\"油气\",\"type\":\"etf\"}],\"sectors_count\":18,\"missing_margin\":[],\"stale_sectors\":[],\"stale\":false,\"stale_source\":\"derived: snapshot data_date < expected_data_date\",\"cache_stale\":false,\"ranking\":[{\"code\":\"801744\",\"name\":\"国防军工\",\"type\":\"sw\",\"chg_pct\":-0.18,\"latest_margin\":98.99,\"latest_close\":3072.4,\"daily_change\":0.95,\"avg_5d_change\":0.13,\"vs_5d_change\":0.81,\"total_5d_flow\":0.67,\"index_5d_pct\":1.87},{\"code\":\"159309\",\"name\":\"油气\",\"type\":\"etf\",\"chg_pct\":-0.4,\"latest_margin\":30.18,\"latest_close\":1.325,\"daily_change\":-0.39,\"avg_5d_change\":0.03,\"vs_5d_change\":-0.42,\"total_5d_flow\":0.13,\"index_5d_pct\":-4.95},{\"code\":\"801782\",\"name\":\"银行\",\"type\":\"sw\",\"chg_pct\":-3.57,\"latest_margin\":60.49,\"latest_close\":2235.49,\"daily_change\":1.02,\"avg_5d_change\":-0.38,\"vs_5d_change\":1.4,\"total_5d_flow\":-1.89,\"index_5d_pct\":-0.83},{\"code\":\"801155\",\"name\":\"中药\",\"type\":\"sw\",\"chg_pct\":-3.87,\"latest_margin\":174.13,\"latest_close\":5565.77,\"daily_change\":1.01,\"avg_5d_change\":0,\"vs_5d_change\":1,\"total_5d_flow\":0.02,\"index_5d_pct\":1.93},{\"code\":\"801193\",\"name\":\"券商\",\"type\":",
+   "parsed": {
+    "as_of": "2026-11-10T01:52:50.727Z",
+    "source": "自有 finance 服务（owner self-hosted，HTTP Basic，http://127.0.0.1:8787）—上游 GET /api/snapshot + /api/sentiment/snapshot?market=cn&methodology=3 + /api/hk-short/snapshot + /api/hk-short/chart + /api/sectors/snapshot + /api/sectors/ranking?window=20",
+    "window": 20,
+    "sector_limit": 60,
+    "groups": {
+     "basis": {
+      "ready": true,
+      "stats": {
+       "IF": {
+        "min": 41.08999999999969,
+        "max": 44.220000000000255,
+        "mean": 42.65391304347826,
+        "last": 43.57999999999993,
+        "pct": 1.0700833378349826,
+        "p25": 41.85500000000002,
+        "p75": 43.434999999999945,
+        "n": 23
+       },
+       "IM": {
+        "min": 75.64000000000033,
+        "max": 87.26000000000022,
+        "mean": 81.40999999999997,
+        "last": 87.26000000000022,
+        "pct": 1.3267326130520356,
+        "p25": 78.53500000000031,
+        "p75": 84.1850000000004,
+        "n": 23
+       }
+      },
+      "products": [
+       {
+        "key": "IF",
+        "name": "沪深300",
+        "last_spot": 4072.58,
+        "last_fut": 4029,
+        "last_dt": "2026-11-10 09:52:48"
+       },
+       {
+        "key": "IM",
+        "name": "中证1000",
+        "last_spot": 6577.06,
+        "last_fut": 6489.8,
+        "last_dt": "2026-11-10 09:52:48"
+       }
+      ],
+      "products_count": 2,
+      "expected_data_date": "2026-11-10",
+      "expected_data_date_source": "derived: products[].last_dt 的最大日期（日内行情时间，非上游声明的应有数据日）",
+      "stale": false,
+      "stale_source": "no upstream stale/date signal",
+      "cache_stale": false
+     },
+     "sentiment": {
+      "market": "cn",
+      "score": 23.99,
+      "label": "extreme_fear",
+      "label_text": "极端恐惧",
+      "date": "2026-11-09",
+      "expected_data_date": "2026-11-09",
+      "average_5d": 25.4,
+      "vs_5d": -1.41,
+      "methodology_version": 3,
+      "source_version": "eb3553dc39f98f35",
+      "coverage": {
+       "valid": 8,
+       "total": 8,
+       "partial": false
+      },
+      "components_count": 8,
+      "missing_components": [],
+      "stale": false,
+      "stale_source": "upstream: /api/sentiment/snapshot.stale",
+      "cache_stale": false
+     },
+     "hk_short": {
+      "ready": true,
+      "data_date": "2026-11-09",
+      "index_data_date": "2026-11-09",
+      "short_data_date": "2026-11-09",
+      "last_update": "2026-11-09 17:22",
+      "data_version": "6dc4ef3ac9c91666",
+      "updating": false,
+      "n_days": 114,
+      "n_stocks": 10,
+      "five_day": {
+       "current_pct": 26.826,
+       "average_pct": 22.806,
+       "pct_difference": 4.019,
+       "current_value": 61.512,
+       "average_value": 78.655,
+       "value_difference": -17.144,
+       "index_5d_pct": 5.24
+      },
+      "top10": [
+       {
+        "code": "00700",
+        "name": "腾讯",
+        "weight": 8,
+        "latest_pct": 17.546,
+        "vs_5d_pct": 3.13,
+        "history_days": 113,
+        "latest_value": 12.09,
+        "previous_pct": 11.625,
+        "pct_delta": 5.921
+       },
+       {
+        "code": "09988",
+        "name": "阿里巴巴",
+        "weight": 8,
+        "latest_pct": 19.273,
+        "vs_5d_pct": 1.784,
+        "history_days": 113,
+        "latest_value": 10.9,
+        "previous_pct": 16.399,
+        "pct_delta": 2.874
+       },
+       {
+        "code": "03690",
+        "name": "美团",
+        "weight": 7.5,
+        "latest_pct": 17.262,
+        "vs_5d_pct": -2.469,
+        "history_days": 113,
+        "latest_value": 8.694,
+        "previous_pct": 16.597,
+        "pct_delta": 0.665
+       },
+       {
+        "code": "01810",
+        "name": "小米",
+        "weight": 7.5,
+        "latest_pct": 39.104,
+        "vs_5d_pct": 8.95,
+        "history_days": 113,
+        "latest_value": 15.4,
+        "previous_pct": 25.076,
+        "pct_delta": 14.028
+       },
+       {
+        "code": "09618",
+        "name": "京东",
+        "weight": 6,
+        "latest_pct": 40.935,
+        "vs_5d_pct": 12.061,
+        "history_days": 113,
+        "latest_value": 2.621,
+        "previous_pct": 27.165,
+        "pct_delta": 13.77
+       },
+       {
+        "code": "01024",
+        "name": "快手",
+        "weight": 5,
+        "latest_pct": 26.903,
+        "vs_5d_pct": 6.11,
+        "history_days": 113,
+        "latest_value": 1.662,
+        "previous_pct": 21.901,
+        "pct_delta": 5.002
+       },
+       {
+        "code": "09888",
+        "name": "百度",
+        "weight": 4,
+        "latest_pct": 17.071,
+        "vs_5d_pct": -0.137,
+        "history_days": 113,
+        "latest_value": 1.049,
+        "previous_pct": 12.95,
+        "pct_delta": 4.121
+       },
+       {
+        "code": "09999",
+        "name": "网易",
+        "weight": 4,
+        "latest_pct": 38.886,
+        "vs_5d_pct": 5.851,
+        "history_days": 113,
+        "latest_value": 4.907,
+        "previous_pct": 32.043,
+        "pct_delta": 6.843
+       },
+       {
+        "code": "01211",
+        "name": "比亚迪",
+        "weight": 3,
+        "latest_pct": 24.849,
+        "vs_5d_pct": 0.979,
+        "history_days": 113,
+        "latest_value": 2.919,
+        "previous_pct": 19.863,
+        "pct_delta": 4.986
+       },
+       {
+        "code": "02015",
+        "name": "理想汽车",
+        "weight": 3,
+        "latest_pct": 35.479,
+        "vs_5d_pct": 2.817,
+        "history_days": 113,
+        "latest_value": 1.27,
+        "previous_pct": 26.553,
+        "pct_delta": 8.926
+       }
+      ],
+      "stale": false,
+      "stale_source": "upstream: /api/hk-short/chart.stale",
+      "cache_stale": false,
+      "top10_count": 10,
+      "units": {
+       "weight": "权重（%）",
+       "latest_pct": "该股卖空成交额占其成交额比例（%，与聚合占比同口径）",
+       "vs_5d_pct": "百分点（latest_pct 与 5 日均值之差）",
+       "latest_value": "亿港元",
+       "five_day_current_value": "亿港元",
+       "five_day_pct_difference": "百分点"
+      }
+     },
+     "sectors": {
+      "data_date": "2026-11-09",
+      "expected_data_date": "2026-11-09",
+      "index_data_date": "2026-11-09",
+      "last_update": "2026-11-10 08:55",
+      "data_version": "11a8530355f3fbc9",
+      "updating": false,
+      "n_ready": 18,
+      "n_total": 18,
+      "n_loaded": 18,
+      "five_day": {
+       "current_change": 35.03,
+       "average_change": -14.99,
+       "difference": 50.02,
+       "total_flow": -74.95,
+       "unit": "亿元"
+      },
+      "sectors": [
+       {
+        "code": "801738",
+        "name": "电网设备",
+        "type": "sw"
+       },
+       {
+        "code": "801125",
+        "name": "白酒",
+        "type": "sw"
+       },
+       {
+        "code": "801764",
+        "name": "游戏",
+        "type": "sw"
+       },
+       {
+        "code": "801181",
+        "name": "房地产",
+        "type": "sw"
+       },
+       {
+        "code": "801155",
+        "name": "中药",
+        "type": "sw"
+       },
+       {
+        "code": "801154",
+        "name": "医药商业",
+        "type": "sw"
+       },
+       {
+        "code": "801782",
+        "name": "银行",
+        "type": "sw"
+       },
+       {
+        "code": "801735",
+        "name": "光伏",
+        "type": "sw"
+       },
+       {
+        "code": "801737",
+        "name": "电池",
+        "type": "sw"
+       },
+       {
+        "code": "801951",
+        "name": "煤炭",
+        "type": "sw"
+       },
+       {
+        "code": "801081",
+        "name": "芯片",
+        "type": "sw"
+       },
+       {
+        "code": "801193",
+        "name": "券商",
+        "type": "sw"
+       },
+       {
+        "code": "801744",
+        "name": "国防军工",
+        "type": "sw"
+       },
+       {
+        "code": "801095",
+        "name": "汽车",
+        "type": "sw"
+       },
+       {
+        "code": "801034",
+        "name": "化工",
+        "type": "sw"
+       },
+       {
+        "code": "801017",
+        "name": "畜牧",
+        "type": "sw"
+       },
+       {
+        "code": "562500",
+        "name": "机器人",
+        "type": "etf"
+       },
+       {
+        "code": "159309",
+        "name": "油气",
+        "type": "etf"
+       }
+      ],
+      "sectors_count": 18,
+      "missing_margin": [],
+      "stale_sectors": [],
+      "stale": false,
+      "stale_source": "derived: snapshot data_date < expected_data_date",
+      "cache_stale": false,
+      "ranking": [
+       {
+        "code": "801744",
+        "name": "国防军工",
+        "type": "sw",
+        "chg_pct": -0.18,
+        "latest_margin": 98.99,
+        "latest_close": 3072.4,
+        "daily_change": 0.95,
+        "avg_5d_change": 0.13,
+        "vs_5d_change": 0.81,
+        "total_5d_flow": 0.67,
+        "index_5d_pct": 1.87
+       },
+       {
+        "code": "159309",
+        "name": "油气",
+        "type": "etf",
+        "chg_pct": -0.4,
+        "latest_margin": 30.18,
+        "latest_close": 1.325,
+        "daily_change": -0.39,
+        "avg_5d_change": 0.03,
+        "vs_5d_change": -0.42,
+        "total_5d_flow": 0.13,
+        "index_5d_pct": -4.95
+       },
+       {
+        "code": "801782",
+        "name": "银行",
+        "type": "sw",
+        "chg_pct": -3.57,
+        "latest_margin": 60.49,
+        "latest_close": 2235.49,
+        "daily_change": 1.02,
+        "avg_5d_change": -0.38,
+        "vs_5d_change": 1.4,
+        "total_5d_flow": -1.89,
+        "index_5d_pct": -0.83
+       },
+       {
+        "code": "801155",
+        "name": "中药",
+        "type": "sw",
+        "chg_pct": -3.87,
+        "latest_margin": 174.13,
+        "latest_close": 5565.77,
+        "daily_change": 1.01,
+        "avg_5d_change": 0,
+        "vs_5d_change": 1,
+        "total_5d_flow": 0.02,
+        "index_5d_pct": 1.93
+       },
+       {
+        "code": "801193",
+        "name": "券商",
+        "type": "sw",
+        "chg_pct": -3.98,
+        "latest_margin": 1207.98,
+        "latest_close": 5675.33,
+        "daily_change": 4.62,
+        "avg_5d_change": -1.76,
+        "vs_5d_change": 6.38,
+        "total_5d_flow": -8.81,
+        "index_5d_pct": -0.08
+       },
+       {
+        "code": "801181",
+        "name": "房地产",
+        "type": "sw",
+        "chg_pct": -4.89,
+        "latest_margin": 250.74,
+        "latest_close": 1989.31,
+        "daily_change": 2.9,
+        "avg_5d_change": -0.33,
+        "vs_5d_change": 3.23,
+        "total_5d_flow": -1.63,
+        "index_5d_pct": 0.91
+       },
+       {
+        "code": "801951",
+        "name": "煤炭",
+        "type": "sw",
+        "chg_pct": -5.83,
+        "latest_margin": 93.73,
+        "latest_close": 3745.7,
+        "daily_change": -0.05,
+        "avg_5d_change": 0.23,
+        "vs_5d_change": -0.28,
+        "total_5d_flow": 1.15,
+        "index_5d_pct": -2.41
+       },
+       {
+        "code": "801735",
+        "name": "光伏",
+        "type": "sw",
+        "chg_pct": -6.13,
+        "latest_margin": 405.31,
+        "latest_close": 4637.95,
+        "daily_change": 2.58,
+        "avg_5d_change": 1.43,
+        "vs_5d_change": 1.15,
+        "total_5d_flow": 7.16,
+        "index_5d_pct": 8.96
+       },
+       {
+        "code": "801095",
+        "name": "汽车",
+        "type": "sw",
+        "chg_pct": -6.21,
+        "latest_margin": 242.74,
+        "latest_close": 13276.18,
+        "daily_change": 0.24,
+        "avg_5d_change": -0.52,
+        "vs_5d_change": 0.76,
+        "total_5d_flow": -2.6,
+        "index_5d_pct": 0.55
+       },
+       {
+        "code": "801017",
+        "name": "畜牧",
+        "type": "sw",
+        "chg_pct": -6.92,
+        "latest_margin": 83.48,
+        "latest_close": 2934.68,
+        "daily_change": -0.39,
+        "avg_5d_change": -0.41,
+        "vs_5d_change": 0.02,
+        "total_5d_flow": -2.05,
+        "index_5d_pct": 6.43
+       },
+       {
+        "code": "801764",
+        "name": "游戏",
+        "type": "sw",
+        "chg_pct": -8.45,
+        "latest_margin": 164.53,
+        "latest_close": 2654,
+        "daily_change": 0.23,
+        "avg_5d_change": -0.15,
+        "vs_5d_change": 0.38,
+        "total_5d_flow": -0.73,
+        "index_5d_pct": 2.32
+       },
+       {
+        "code": "801034",
+        "name": "化工",
+        "type": "sw",
+        "chg_pct": -9.56,
+        "latest_margin": 278.34,
+        "latest_close": 5699.15,
+        "daily_change": 3.22,
+        "avg_5d_change": -1.09,
+        "vs_5d_change": 4.31,
+        "total_5d_flow": -5.46,
+        "index_5d_pct": 2.83
+       },
+       {
+        "code": "801154",
+        "name": "医药商业",
+        "type": "sw",
+        "chg_pct": -9.64,
+        "latest_margin": 46.52,
+        "latest_close": 4602.59,
+        "daily_change": 0.47,
+        "avg_5d_change": -0.03,
+        "vs_5d_change": 0.51,
+        "total_5d_flow": -0.16,
+        "index_5d_pct": -1.65
+       },
+       {
+        "code": "801738",
+        "name": "电网设备",
+        "type": "sw",
+        "chg_pct": -9.94,
+        "latest_margin": 303.87,
+        "latest_close": 4777.45,
+        "daily_change": 1.28,
+        "avg_5d_change": -0.62,
+        "vs_5d_change": 1.9,
+        "total_5d_flow": -3.09,
+        "index_5d_pct": 4
+       },
+       {
+        "code": "801125",
+        "name": "白酒",
+        "type": "sw",
+        "chg_pct": -9.96,
+        "latest_margin": 279.64,
+        "latest_close": 39435.87,
+        "daily_change": 0.34,
+        "avg_5d_change": -1.29,
+        "vs_5d_change": 1.63,
+        "total_5d_flow": -6.47,
+        "index_5d_pct": 0.23
+       },
+       {
+        "code": "801081",
+        "name": "芯片",
+        "type": "sw",
+        "chg_pct": -15.8,
+        "latest_margin": 1357.47,
+        "latest_close": 7191.99,
+        "daily_change": 11.43,
+        "avg_5d_change": -6.43,
+        "vs_5d_change": 17.87,
+        "total_5d_flow": -32.17,
+        "index_5d_pct": 3.74
+       },
+       {
+        "code": "562500",
+        "name": "机器人",
+        "type": "etf",
+        "chg_pct": -16.24,
+        "latest_margin": 367.2,
+        "latest_close": 0.874,
+        "daily_change": 3.87,
+        "avg_5d_change": -1.62,
+        "vs_5d_change": 5.49,
+        "total_5d_flow": -8.08,
+        "index_5d_pct": 3.19
+       },
+       {
+        "code": "801737",
+        "name": "电池",
+        "type": "sw",
+        "chg_pct": -17.44,
+        "latest_margin": 692.67,
+        "latest_close": 17019.85,
+        "daily_change": 1.7,
+        "avg_5d_change": -2.19,
+        "vs_5d_change": 3.89,
+        "total_5d_flow": -10.96,
+        "index_5d_pct": 4.27
+       }
+      ],
+      "ranking_count": 18,
+      "ranking_rows_upstream": 18,
+      "units": {
+       "latest_margin": "亿元",
+       "daily_change": "亿元",
+       "avg_5d_change": "亿元",
+       "vs_5d_change": "亿元",
+       "total_5d_flow": "亿元",
+       "chg_pct": "%",
+       "index_5d_pct": "%",
+       "latest_close": "板块指数点"
+      }
+     }
+    },
+    "groups_read": [
+     "basis",
+     "sentiment",
+     "hk_short",
+     "sectors"
+    ],
+    "groups_failed": [],
+    "stale": false,
+    "stale_source": "basis: no upstream stale/date signal | sentiment: upstream: /api/sentiment/snapshot.stale | hk_short: upstream: /api/hk-short/chart.stale | sectors: derived: snapshot data_date < expected_data_date",
+    "cache_stale": false,
+    "notes": [
+     "hk_short: 上游 /api/hk-short/snapshot 不提供 expected_data_date；滞后请比对 index_data_date 与 short_data_date 两条源尾日，或用 special_indicators_get_hk_short_top10（含 chart 声明的 stale）"
+    ]
+   }
+  }
+ },
+ "financeConfigured": true
+}

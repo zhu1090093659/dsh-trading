@@ -1,5 +1,5 @@
 /**
- * 特殊指标 agent 工具面契约测试（五只只读工具）。
+ * 特殊指标 agent 工具面契约测试（六只只读工具）。
  *
  * 零 mock：上游为契约化 fake fetch（真实 Response 对象），FinanceClient 注入 fake
  * 上游与假时钟；时钟推进 = 直接改注入的 counter，不睡不轮询。断言对着**出参 JSON**
@@ -193,7 +193,7 @@ function group(result: Record<string, unknown>, name: string): Record<string, un
 /* ---------------------------------- 用例 ---------------------------------- */
 
 describe('特殊指标工具面注册面', () => {
-  it('用户加载插件时拿到五只只读工具，名字与清单一致', () => {
+  it('用户加载插件时拿到六只只读工具，名字与清单一致', () => {
     // Given: 一个共用的 FinanceClient 与工具面配置
     const { tools } = makeHarness()
     // When: 工厂产出工具集合
@@ -552,11 +552,12 @@ describe('凭据链与出参信封', () => {
     expect(harness.upstream.calls).toHaveLength(0)
   })
 
-  it('用户调用五只工具时出参都带 as_of/source/stale/cache_stale 信封', async () => {
-    // Given: 全绿上游与五只工具
+  it('用户调用六只工具时出参都带 as_of/source/stale/cache_stale 信封', async () => {
+    // Given: 全绿上游与六只工具
     const harness = makeHarness()
     const calls: Array<[string, Record<string, unknown>]> = [
       ['special_indicators_get_snapshot', {}],
+      ['special_indicators_get_all', {}],
       ['special_indicators_get_sentiment_history', {}],
       ['special_indicators_get_sector_ranking', {}],
       ['special_indicators_get_sector_series', { code: '801737' }],
@@ -611,7 +612,7 @@ function bootApply(cfg: Config) {
 }
 
 describe('apply 组装面', () => {
-  it('用户启动宿主时 apply 注册五只工具，且工具面与桥共用同一 client 缓存', async () => {
+  it('用户启动宿主时 apply 注册六只工具，且工具面与桥共用同一 client 缓存', async () => {
     // Given: 真实 apply 组装 + 真实本地 HTTP 上游（统计命中次数）+ 临时缓存文件
     const dir = mkdtempSync(join(tmpdir(), 'si-tools-apply-'))
     let hits = 0
@@ -637,7 +638,7 @@ describe('apply 组装面', () => {
     }
     try {
       const host = bootApply(cfg)
-      // Then: 五只工具经 ctx.inject(['tools']) 全部注册，名字与清单一致
+      // Then: 六只工具经 ctx.inject(['tools']) 全部注册，名字与清单一致
       expect([...host.registered.keys()].sort()).toEqual([...INDICATOR_TOOL_NAMES].sort())
       // When: 先用工具读板块快照（冷缓存 → 打一次上游），再经桥读同一路径
       const tool = host.registered.get('special_indicators_get_snapshot')
@@ -661,3 +662,93 @@ describe('apply 组装面', () => {
     }
   })
 })
+
+describe('special_indicators_get_all', () => {
+  it('用户一次调用拿到四组指标与两张明细表，上游只打六条白名单路径', async () => {
+    // Given: 六条上游路由全绿
+    const harness = makeHarness()
+    // When: 不带参数调用 get_all
+    const result = await harness.run('special_indicators_get_all')
+    // Then: 四组齐备、信封字段齐备、来源写清打过的六条上游路径
+    expect(Object.keys(result.groups as Record<string, unknown>)).toEqual(['basis', 'sentiment', 'hk_short', 'sectors'])
+    expect(result.groups_read).toEqual(['basis', 'sentiment', 'hk_short', 'sectors'])
+    expect(result.groups_failed).toEqual([])
+    expect(result.window).toBe(20)
+    expect(result.sector_limit).toBe(60)
+    expect(group(result, 'basis').products_count).toBe(2)
+    expect(group(result, 'sentiment').score).toBe(26.29)
+    expect(harness.upstream.calls).toHaveLength(6)
+    expect(new Set(harness.upstream.calls).size).toBe(6)
+    expect(String(result.source)).toContain('/api/sectors/ranking?window=20')
+    expect(result.stale).toBe(false)
+    expect(result.cache_stale).toBe(false)
+  })
+
+  it('用户读全部时恒科组带逐股卖空占比、板块组带排行行与单位', async () => {
+    // Given: chart 提供逐股明细、排行提供排序行
+    const harness = makeHarness()
+    // When: 读全部
+    const result = await harness.run('special_indicators_get_all')
+    // Then: 权重行与 chart 明细已按 code 合并；排行行带字段与单位
+    const hk = group(result, 'hk_short')
+    expect(hk.top10_count).toBe(2)
+    expect((hk.top10 as Array<Record<string, unknown>>)[0]).toMatchObject({ code: '00700', weight: 8, latest_pct: 11.661, vs_5d_pct: 1.547 })
+    const sectors = group(result, 'sectors')
+    expect(sectors.ranking_count).toBe(2)
+    expect((sectors.ranking as Array<Record<string, unknown>>)[0]).toMatchObject({ code: '801095', chg_pct: 0.02, latest_margin: 260.63 })
+    expect(sectors.units).toMatchObject({ latest_margin: '亿元', index_5d_pct: '%' })
+    expect(sectors.ranking_truncated).toBeUndefined()
+  })
+
+  it('用户请求越界窗口与条数时按契约夹取并标记排行截断', async () => {
+    // Given: 全绿上游
+    const harness = makeHarness()
+    // When: 传越界 window 与过小 sector_limit
+    const result = await harness.run('special_indicators_get_all', { window: 999, sector_limit: 1 })
+    // Then: 夹取到上界、只回一条并标记截断，且上游路径带夹取后的窗口
+    expect(result.window).toBe(120)
+    expect(result.sector_limit).toBe(1)
+    expect(group(result, 'sectors').ranking_count).toBe(1)
+    expect(group(result, 'sectors').ranking_truncated).toBe(true)
+    expect(harness.upstream.calls).toContain('/api/sectors/ranking?window=120')
+  })
+
+  it('用户读全部而单组上游失败时其余三组照常返回，errors 写明该组与错误码', async () => {
+    // Given: 只有板块快照这一条上游 502
+    const harness = makeHarness({ routes: { ...ALL_ROUTES, '/api/sectors/snapshot': { status: 502, body: { error: 'upstream down' } } } })
+    // When: 读全部
+    const result = await harness.run('special_indicators_get_all')
+    // Then: 三组照常返回、失败组进 errors（带「没拿到数据」与 FinanceError 码），不整单丢弃
+    expect(result.groups_failed).toEqual(['sectors'])
+    expect(Object.keys(result.groups as Record<string, unknown>)).toEqual(['basis', 'sentiment', 'hk_short'])
+    const errors = result.errors as Array<{ group: string; error: string }>
+    expect(errors).toHaveLength(1)
+    expect(errors[0].group).toBe('sectors')
+    expect(errors[0].error).toContain('没拿到数据')
+    expect(errors[0].error).toContain('FINANCE_UPSTREAM_ERROR')
+    expect(result.stale).toBe(false)
+  })
+
+  it('用户读全部而四组全失败时工具响亮抛错并逐组列出原因', async () => {
+    // Given: 所有上游路径都不可用
+    const harness = makeHarness({ routes: {} })
+    // When: 读全部
+    const error = await harness.run('special_indicators_get_all').catch((e: unknown) => e)
+    // Then: 抛错而不是回空信封，四组原因都在文案里
+    const message = String((error as Error).message)
+    expect(message).toContain('四组特殊指标全部没拿到数据')
+    for (const name of ['basis', 'sentiment', 'hk_short', 'sectors']) expect(message).toContain(name)
+  })
+
+  it('用户连续两次读全部时第二次命中同一 client 的缓存，不再打上游', async () => {
+    // Given: 全绿上游与已完成的一次读全部
+    const harness = makeHarness()
+    await harness.run('special_indicators_get_all')
+    const afterFirst = harness.upstream.calls.length
+    // When: 立刻再读一次（缓存 TTL 内）
+    await harness.run('special_indicators_get_all')
+    // Then: 零新增上游请求
+    expect(harness.upstream.calls).toHaveLength(afterFirst)
+  })
+})
+

@@ -185,3 +185,39 @@ required=true 参数总数: before=188  after=202
 - **`kdas.py` 公开端点路径的 hk 数值与工具不等**（见 §2），已定位为端点/复权口径差异，
   技能文档已更正；未改脚本本身（它保留为降级与算法交叉核对路径）。
 - 特殊指标与预测市场两条 `stale` 语义不可横向比较（前者上游声明、后者 CDN 缓存状态）。
+
+## 6. 2026-11-10 追加：special_indicators_get_all（一次调用拿全部四组 + 两张明细表）
+
+变更：新增第六只只读工具 special_indicators_get_all（packages/client-ui-special-indicators/src/indicator-tools.ts），
+把四组快照与两张明细表（恒科逐股卖空占比、板块融资排行行）合成**一次调用**；单组失败只吞该组（进
+errors[]，带 FinanceError code），四组全失败才抛错。
+
+复现（本机隧道 8787 不校验凭据，FINANCE_PW 传占位值；未回显、未入库）：
+
+    pnpm --filter @dshtrading/client-ui-special-indicators build
+    DSH_HOME=$HOME/.dsh-trading FINANCE_BASE_URL=http://127.0.0.1:8787 FINANCE_USER=api \
+    FINANCE_PW=<占位值> node spikes/impl-data-plane-tools/run.mjs --only special \
+      > spikes/impl-data-plane-tools/raw-run-2026-11-10-special-indicators.json
+
+六只工具全绿（本机隧道真实数据；digest 在五只单用途工具之后跑，故为热缓存）：
+
+    [OK  ] special_indicators_get_snapshot             1893ms
+    [OK  ] special_indicators_get_sentiment_history      69ms
+    [OK  ] special_indicators_get_sector_ranking          8ms
+    [OK  ] special_indicators_get_sector_series          11ms
+    [OK  ] special_indicators_get_hk_short_top10         69ms
+    [OK  ] special_indicators_get_all                     1ms（热缓存）
+
+冷缓存单独实测（同一生产代码、全新 client，六条上游 GET 并行）：**229ms / 9601 字节**，四组齐备、stale=false。
+
+真实载荷抽样（2026-11-09 数据日）：
+
+- sentiment：score 23.99 / label extreme_fear / 极端恐惧 / date 2026-11-09
+- hk_short：five_day.current_pct 26.826；top10[0] = 腾讯 weight 8、latest_pct 17.546、vs_5d_pct +3.13、history_days 113、latest_value 12.09（亿港元）
+- sectors：ranking 18 行；首行 国防军工 chg_pct -0.18、latest_margin 98.99（亿元）、daily_change +0.95、total_5d_flow +0.67、index_5d_pct +1.87
+- basis：IF last 44.07、pct 1.08
+- source 写清六条上游路径：/api/snapshot + /api/sentiment/snapshot?market=cn&methodology=3 + /api/hk-short/snapshot + /api/hk-short/chart + /api/sectors/snapshot + /api/sectors/ranking?window=20
+
+未做与诚实标注：本次只跑特殊指标一类（--only special），KDAS / 预测市场 / 金十三类未复跑（各自需要
+凭据与外部网络）；脚本未注入 persistence，未写 ~/.dsh-trading/special-indicators/cache.json。
+

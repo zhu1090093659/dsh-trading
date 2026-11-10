@@ -1,5 +1,5 @@
 /**
- * 特殊指标 agent 工具面（五只只读工具）——四组专有指标（IF/IM 期现基差、
+ * 特殊指标 agent 工具面（六只只读工具）——四组专有指标（IF/IM 期现基差、
  * A 股恐慌指数、恒科前十大权重股卖空、板块融资余额）直接进模型上下文。
  *
  * 纪律（与浏览器半同源，取自 docs/api.md 与桥的既有裁决）：
@@ -29,13 +29,14 @@ export interface IndicatorToolConfig extends RouteConfig, CacheTierConfig {
   baseUrl: string
 }
 
-/** 五只工具名（patch/门禁/测试引用同一份清单）。 */
+/** 六只工具名（patch/门禁/测试引用同一份清单）。 */
 export const INDICATOR_TOOL_NAMES = [
   'special_indicators_get_snapshot',
   'special_indicators_get_sentiment_history',
   'special_indicators_get_sector_ranking',
   'special_indicators_get_sector_series',
   'special_indicators_get_hk_short_top10',
+  'special_indicators_get_all',
 ] as const
 
 const SNAPSHOT_GROUPS = ['basis', 'sentiment', 'hk_short', 'sectors'] as const
@@ -319,6 +320,125 @@ async function sectorsGroup(client: FinanceClient, config: IndicatorToolConfig, 
   }
 }
 
+/* --------------------------- get_all：四组 + 两张表 --------------------------- */
+
+const ALL_TOOL = 'special_indicators_get_all'
+
+/**
+ * 单组取数失败只吞这一组：该组进 `errors[]`（带 FinanceError code 与「没拿到数据」），
+ * 其余组照常返回——四组全失败才抛错（那说明桥/凭据整体不可用，不该回一个空信封）。
+ */
+async function attemptGroup(group: SnapshotGroup, build: () => Promise<GroupResult>): Promise<{ group: SnapshotGroup; result?: GroupResult; error?: string }> {
+  try {
+    return { group, result: await build() }
+  } catch (error) {
+    return { group, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/** 恒科组（get_all 用）：聚合快照 + chart 的逐股卖空占比合并进 top10。 */
+async function hkShortDigestGroup(client: FinanceClient, config: IndicatorToolConfig, tool: string): Promise<GroupResult> {
+  const [aggregate, chartResult] = await Promise.all([
+    hkShortGroup(client, config, tool),
+    read(client, config, tool, 'hk-short chart', '/hk-short/chart'),
+  ])
+  const chart = asRecord(tool, 'hk-short chart', chartResult)
+  const merged = mergeHkTop10(rows(aggregate.value.top10) ?? [], chart)
+  const declared = bool(chart.stale)
+  const cacheStale = aggregate.cacheStale || chartResult.cacheStale
+  const stale = staleOf({
+    declared: declared ?? (aggregate.stale ? true : undefined),
+    upstreamSource: declared === undefined ? undefined : '/api/hk-short/chart.stale',
+    cacheStale,
+  })
+  const missingDetail = merged.filter((row) => row.latest_pct === undefined).map((row) => str(row.code) ?? '?')
+  return {
+    value: { ...aggregate.value, top10: merged, top10_count: merged.length, units: HK_UNITS, ...stale },
+    stale: stale.stale,
+    staleSource: declared === undefined ? aggregate.staleSource : stale.stale_source,
+    cacheStale,
+    notes: aggregate.notes.concat(
+      noteIf(missingDetail.length > 0, 'chart 缺 ' + missingDetail.join(',') + ' 的逐股明细（对应 latest_pct/vs_5d_pct 已省略，不补零）'),
+    ),
+  }
+}
+
+/** 板块组（get_all 用）：就绪度/日期/五日摘要 + 排行行（默认全量，受 limit 夹取）。 */
+async function sectorsDigestGroup(client: FinanceClient, config: IndicatorToolConfig, tool: string, window: number, limit: number): Promise<GroupResult> {
+  const [snapshot, rankingResult] = await Promise.all([
+    sectorsGroup(client, config, tool),
+    read(client, config, tool, 'sector ranking window=' + window, '/sectors/ranking', { window }),
+  ])
+  const { list, total, truncated } = rankingRowsOf(tool, 'sector ranking', rankingResult, limit)
+  const cacheStale = snapshot.cacheStale || rankingResult.cacheStale
+  return {
+    value: {
+      ...snapshot.value,
+      ranking: list,
+      ranking_count: list.length,
+      ranking_rows_upstream: total,
+      ...(truncated ? { ranking_truncated: true } : {}),
+      units: SECTOR_UNITS,
+      ...(cacheStale ? { cache_stale: true } : {}),
+    },
+    stale: snapshot.stale,
+    staleSource: snapshot.staleSource,
+    cacheStale,
+    notes: snapshot.notes.concat(noteIf(total === 0, '上游返回空排行（此窗口没有可排板块）——空数据，不是取数失败')),
+  }
+}
+
+/* ------------------------------ 两个复用实现面 ------------------------------ */
+
+/**
+ * 权重行（/api/hk-short/snapshot 的 top10）+ 逐股卖空明细（/api/hk-short/chart 的 top10）
+ * 按 code 合并：单只工具与 get_all 共用这一份实现，避免两处各写一遍合并口径。
+ * chart 缺某只个股时该股的 latest_pct 等字段整体缺席（不补零）。
+ */
+function mergeHkTop10(weightRows: readonly Record<string, unknown>[], chart: Record<string, unknown>): Record<string, unknown>[] {
+  const chartRows = rows(chart.top10) ?? []
+  const byCode = new Map(chartRows.filter((row) => str(row.code) !== undefined).map((row) => [str(row.code) as string, row]))
+  return weightRows.map((row) => {
+    const code = str(row.code)
+    const extra = code === undefined ? undefined : byCode.get(code)
+    return {
+      ...fields(row, ['code', 'name', 'weight']),
+      ...(extra === undefined ? {} : fields(extra, ['latest_pct', 'vs_5d_pct', 'history_days', 'latest_value', 'previous_pct', 'pct_delta'])),
+    }
+  })
+}
+
+/** 板块排行行（白名单字段 + 截断标记）：单只工具与 get_all 共用。 */
+function rankingRowsOf(tool: string, label: string, result: ReadResult, limit: number): { list: Record<string, unknown>[]; total: number; truncated: boolean } {
+  const ranking = asRows(tool, label, result)
+  const list = ranking.slice(0, limit).map((row) => fields(row, [
+    'code', 'name', 'type', 'chg_pct', 'latest_margin', 'latest_close',
+    'daily_change', 'avg_5d_change', 'vs_5d_change', 'total_5d_flow', 'index_5d_pct',
+  ]))
+  return { list, total: ranking.length, truncated: ranking.length > list.length }
+}
+
+/** 两个明细表的单位（get_all 与单只工具同一份口径）。 */
+const HK_UNITS = {
+  weight: '权重（%）',
+  latest_pct: '该股卖空成交额占其成交额比例（%，与聚合占比同口径）',
+  vs_5d_pct: '百分点（latest_pct 与 5 日均值之差）',
+  latest_value: '亿港元',
+  five_day_current_value: '亿港元',
+  five_day_pct_difference: '百分点',
+}
+
+const SECTOR_UNITS = {
+  latest_margin: '亿元',
+  daily_change: '亿元',
+  avg_5d_change: '亿元',
+  vs_5d_change: '亿元',
+  total_5d_flow: '亿元',
+  chg_pct: '%',
+  index_5d_pct: '%',
+  latest_close: '板块指数点',
+}
+
 /* --------------------------------- 工具工厂 --------------------------------- */
 
 /** 快照工具名：`defineTool.name` 必须写成字面量（scripts/tool-surface-inventory 逐
@@ -342,7 +462,8 @@ export function createSpecialIndicatorTools(client: FinanceClient, config: Indic
         + 'Four groups: `basis` = IF/IM index-futures basis (intraday stats + per-product last values), `sentiment` = A-share fear & greed index (0-100, lower = more fear), '
         + '`hk_short` = HSTECH top-10 heavyweight short-selling, `sectors` = sector margin-financing readiness. Omit `group` for all four. '
         + 'Every group carries `as_of` (this read), `stale` with `stale_source` (upstream-declared, date-derived, or bridge-cache), and `source`; null/empty upstream values are NOT filled with zeros. '
-        + 'An upstream failure, missing credential or rejected route raises an error naming the FinanceError code — it never returns an empty result.',
+        + 'An upstream failure, missing credential or rejected route raises an error naming the FinanceError code — it never returns an empty result. '
+        + 'For the same four groups PLUS the two detail tables (HSTECH per-stock short ratios, sector ranking rows) in a single call, prefer special_indicators_get_all.',
       parameters: {
         group: {
           type: 'string',
@@ -456,7 +577,7 @@ export function createSpecialIndicatorTools(client: FinanceClient, config: Indic
           read(client, config, tool, 'sector ranking window=' + window, '/sectors/ranking', { window }),
           read(client, config, tool, 'sector snapshot', '/sectors/snapshot'),
         ])
-        const ranking = asRows(tool, 'sector ranking', rankingResult)
+        const { list, total, truncated } = rankingRowsOf(tool, 'sector ranking', rankingResult, limit)
         const snapshot = asRecord(tool, 'sector snapshot', snapshotResult)
         const dataDate = str(snapshot.data_date)
         const expected = str(snapshot.expected_data_date)
@@ -467,10 +588,6 @@ export function createSpecialIndicatorTools(client: FinanceClient, config: Indic
           lagSource: derivable ? 'snapshot data_date < expected_data_date' : undefined,
           cacheStale: rankingResult.cacheStale || snapshotResult.cacheStale,
         })
-        const list = ranking.slice(0, limit).map((row) => fields(row, [
-          'code', 'name', 'type', 'chg_pct', 'latest_margin', 'latest_close',
-          'daily_change', 'avg_5d_change', 'vs_5d_change', 'total_5d_flow', 'index_5d_pct',
-        ]))
         return JSON.stringify({
           as_of: new Date().toISOString(),
           source: sourceOf(config, [rankingResult.path, snapshotResult.path]),
@@ -478,22 +595,13 @@ export function createSpecialIndicatorTools(client: FinanceClient, config: Indic
           limit,
           list,
           list_count: list.length,
-          ranking_rows_upstream: ranking.length,
-          ...(ranking.length > list.length ? { truncated: true } : {}),
-          units: {
-            latest_margin: '亿元',
-            daily_change: '亿元',
-            avg_5d_change: '亿元',
-            vs_5d_change: '亿元',
-            total_5d_flow: '亿元',
-            chg_pct: '%',
-            index_5d_pct: '%',
-            latest_close: '板块指数点',
-          },
+          ranking_rows_upstream: total,
+          ...(truncated ? { truncated: true } : {}),
+          units: SECTOR_UNITS,
           ...fields(snapshot, ['data_date', 'expected_data_date', 'index_data_date', 'last_update', 'data_version', 'n_ready', 'n_total', 'five_day']),
           missing_margin: (Array.isArray(snapshot.missing_margin) ? snapshot.missing_margin : []).slice(0, MAX_KEY_LIST),
           ...stale,
-          ...(ranking.length === 0 ? { notes: ['上游返回空排行（此窗口没有可排板块）——空数据，不是取数失败'] } : {}),
+          ...(total === 0 ? { notes: ['上游返回空排行（此窗口没有可排板块）——空数据，不是取数失败'] } : {}),
         })
       },
     }),
@@ -570,17 +678,7 @@ export function createSpecialIndicatorTools(client: FinanceClient, config: Indic
         ])
         const snapshot = asRecord(tool, 'hk-short snapshot', snapshotResult)
         const chart = asRecord(tool, 'hk-short chart', chartResult)
-        const chartRows = rows(chart.top10) ?? []
-        const snapshotRows = rows(snapshot.top10) ?? []
-        const byCode = new Map(chartRows.filter((row) => str(row.code) !== undefined).map((row) => [str(row.code) as string, row]))
-        const merged = snapshotRows.map((row) => {
-          const code = str(row.code)
-          const extra = code === undefined ? undefined : byCode.get(code)
-          return {
-            ...fields(row, ['code', 'name', 'weight']),
-            ...(extra === undefined ? {} : fields(extra, ['latest_pct', 'vs_5d_pct', 'history_days', 'latest_value', 'previous_pct', 'pct_delta'])),
-          }
-        })
+        const merged = mergeHkTop10(rows(snapshot.top10) ?? [], chart)
         const top10 = merged.slice(0, limit)
         const declared = bool(chart.stale)
         const stale = staleOf({ declared, upstreamSource: '/api/hk-short/chart.stale', cacheStale: snapshotResult.cacheStale || chartResult.cacheStale })
@@ -593,20 +691,82 @@ export function createSpecialIndicatorTools(client: FinanceClient, config: Indic
           top10,
           top10_count: top10.length,
           ...(merged.length > top10.length ? { truncated: true } : {}),
-          units: {
-            weight: '权重（%）',
-            latest_pct: '该股卖空成交额占其成交额比例（%，与聚合占比同口径）',
-            vs_5d_pct: '百分点（latest_pct 与 5 日均值之差）',
-            latest_value: '亿港元',
-            five_day_current_value: '亿港元',
-            five_day_pct_difference: '百分点',
-          },
+          units: HK_UNITS,
           notes: [
             '上游契约：缺失个股的 latest_pct/latest_value 可能是 0 占位（须结合 history_days 与 short_ratio 判断，0 不证明存在真实观测）',
             '上游不提供 expected_data_date：滞后以下列 short_data_date/index_data_date 两条源尾日与 chart 的 stale 判定',
             ...noteIf(missingDetail.length > 0, 'chart 缺 ' + missingDetail.join(',') + ' 的逐股明细（对应 latest_pct/vs_5d_pct 已省略，不补零）'),
           ],
           ...stale,
+        })
+      },
+    }),
+    defineTool({
+      name: 'special_indicators_get_all',
+      description:
+        'ALL special indicators in one read-only call from the owner\'s self-hosted finance service (same bridge, client, cache and credential chain as the other special_indicators_* tools): the four snapshot groups PLUS the two detail tables the single-purpose tools return. '
+        + 'Groups: \`basis\` (IF/IM index-futures basis: intraday stats + per-product last spot/future), \`sentiment\` (A-share fear & greed 0-100, lower = more fear, with coverage and methodology version), '
+        + '\`hk_short\` (HSTECH top-10 heavyweight short-selling: 5-day aggregate block + per-stock \`latest_pct\` / \`vs_5d_pct\` / \`latest_value\` / \`history_days\`), '
+        + '\`sectors\` (sector margin-financing: readiness, all-sector 5-day summary, and the full ranking rows by \`chg_pct\` with units). '
+        + 'Use this when the question is "what do the special indicators say right now" — one call replaces special_indicators_get_snapshot + special_indicators_get_hk_short_top10 + special_indicators_get_sector_ranking. '
+        + 'Call the dedicated tools instead when you need a series: special_indicators_get_sentiment_history (scored daily history) or special_indicators_get_sector_series (one sector\'s index + margin series). '
+        + '\`window\` = sector ranking window in trading days (integer 1..120, default 20, clamped); \`sector_limit\` = max ranking rows (integer 1..60, default 60 = the whole roster; fewer rows set \`ranking_truncated\`). '
+        + 'Each group carries \`stale\` with \`stale_source\` (upstream-declared, date-derived, or bridge-cache) and \`cache_stale\`; null/empty upstream values are never filled with zeros. '
+        + 'A group whose upstream read fails is reported in \`errors[]\` (with the FinanceError code) while the other groups are still returned; all four failing raises an error instead of returning an empty envelope.',
+      parameters: {
+        window: { type: 'integer', description: 'Sector ranking window in trading days (integer 1..120, default 20, out-of-range is clamped)' },
+        sector_limit: { type: 'integer', description: 'Max sector ranking rows to return (integer 1..60, default 60 = the whole roster; fewer rows set ranking_truncated)' },
+      },
+      output: textOutput,
+      async execute(raw) {
+        const args = (raw ?? {}) as Record<string, unknown>
+        const window = clampArg(args.window, 20, 1, 120)
+        const sectorLimit = clampArg(args.sector_limit, MAX_SECTOR_ROWS, 1, MAX_SECTOR_ROWS)
+        const outcomes = await Promise.all([
+          attemptGroup('basis', () => basisGroup(client, config, ALL_TOOL)),
+          attemptGroup('sentiment', () => sentimentGroup(client, config, ALL_TOOL)),
+          attemptGroup('hk_short', () => hkShortDigestGroup(client, config, ALL_TOOL)),
+          attemptGroup('sectors', () => sectorsDigestGroup(client, config, ALL_TOOL, window, sectorLimit)),
+        ])
+        const failed = outcomes.filter((outcome) => outcome.result === undefined)
+        if (failed.length === outcomes.length) {
+          throw new Error(ALL_TOOL + ': 四组特殊指标全部没拿到数据 — ' + failed.map((outcome) => outcome.group + ': ' + String(outcome.error)).join(' | '))
+        }
+        const groups: Record<string, unknown> = {}
+        const notes: string[] = []
+        const staleSources: string[] = []
+        let stale = false
+        let cacheStale = false
+        for (const outcome of outcomes) {
+          const result = outcome.result
+          if (result === undefined) continue
+          groups[outcome.group] = result.value
+          stale = stale || result.stale
+          cacheStale = cacheStale || result.cacheStale
+          staleSources.push(outcome.group + ': ' + result.staleSource)
+          notes.push(...result.notes.map((note) => outcome.group + ': ' + note))
+        }
+        const paths = [
+          buildUpstreamPath('/basis/snapshot', {}, config) ?? '/basis/snapshot',
+          buildUpstreamPath('/sentiment/snapshot', {}, config) ?? '/sentiment/snapshot',
+          buildUpstreamPath('/hk-short/snapshot', {}, config) ?? '/hk-short/snapshot',
+          buildUpstreamPath('/hk-short/chart', {}, config) ?? '/hk-short/chart',
+          buildUpstreamPath('/sectors/snapshot', {}, config) ?? '/sectors/snapshot',
+          buildUpstreamPath('/sectors/ranking', { window }, config) ?? '/sectors/ranking',
+        ]
+        return JSON.stringify({
+          as_of: new Date().toISOString(),
+          source: sourceOf(config, paths),
+          window,
+          sector_limit: sectorLimit,
+          groups,
+          groups_read: outcomes.filter((outcome) => outcome.result !== undefined).map((outcome) => outcome.group),
+          groups_failed: failed.map((outcome) => outcome.group),
+          ...(failed.length > 0 ? { errors: failed.map((outcome) => ({ group: outcome.group, error: outcome.error })) } : {}),
+          stale,
+          stale_source: staleSources.join(' | '),
+          cache_stale: cacheStale,
+          ...(notes.length > 0 ? { notes } : {}),
         })
       },
     }),

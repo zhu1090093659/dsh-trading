@@ -16,6 +16,9 @@
  *   FINANCE_PW=$(...) JIN10_TOKEN=$(...) \
  *   node spikes/impl-data-plane-tools/run.mjs > /tmp/dp-accept.json
  *
+ * `--only=<special|kdas|prediction|jin10>` 只跑一类（其余类需要各自凭据/网络；
+ * 缺省 all 跑全部）。特殊指标一类只用本机隧道，无凭据也能跑。
+ *
  * 只读：脚本不写任何 store、不写任何 home 文件。
  */
 import { join } from 'node:path'
@@ -41,7 +44,15 @@ if (!defaultStorePath().includes('.dsh-trading')) {
   throw new Error(`refusing to run: DSH_HOME does not resolve to the trading instance (${defaultStorePath()})`)
 }
 
-const out = { ranAt: new Date().toISOString(), tools: {} }
+const ONLY = (() => {
+  const i = process.argv.indexOf('--only')
+  const value = i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : 'all'
+  if (!['all', 'special', 'kdas', 'prediction', 'jin10'].includes(value)) throw new Error('未知 --only：' + value)
+  return value
+})()
+const wants = (section) => ONLY === 'all' || ONLY === section
+
+const out = { ranAt: new Date().toISOString(), only: ONLY, tools: {} }
 
 async function capture(label, tool, args) {
   const started = Date.now()
@@ -59,6 +70,7 @@ async function capture(label, tool, args) {
 }
 
 // ---------- 特殊指标（真实隧道） ----------
+if (wants('special')) {
 const finance = new FinanceClient({
   baseUrl: process.env.FINANCE_BASE_URL ?? 'http://127.0.0.1:8787',
   username: () => process.env.FINANCE_USER ?? 'api',
@@ -77,8 +89,11 @@ await capture('special_indicators_get_sentiment_history', siTools.special_indica
 await capture('special_indicators_get_sector_ranking', siTools.special_indicators_get_sector_ranking, { window: 20, limit: 5 })
 await capture('special_indicators_get_sector_series', siTools.special_indicators_get_sector_series, { code: '801737', days: 300 })
 await capture('special_indicators_get_hk_short_top10', siTools.special_indicators_get_hk_short_top10, { limit: 10 })
+await capture('special_indicators_get_all', siTools.special_indicators_get_all, {})
+}
 
 // ---------- KDAS（真实 provider，与 profile 路由一致） ----------
+if (wants('kdas')) {
 const services = {}
 for (const market of ['cn', 'hk']) {
   const rest = new TencentRestClient(market, { timeoutMs: 15_000 })
@@ -96,14 +111,18 @@ const valuesTool = createIndicatorValuesTool({
 await capture('indicator_get_values(cn)', valuesTool, { market: 'cn', symbol: '002714.SZ' })
 await capture('indicator_get_values(hk)', valuesTool, { market: 'hk', symbol: '00700.HK' })
 await capture('indicator_get_values(interval=1w 应拒绝)', valuesTool, { market: 'cn', symbol: '002714.SZ', interval: '1w' })
+}
 
 // ---------- Polymarket（真实 gamma；不注入 snapshots） ----------
+if (wants('prediction')) {
 const polyTools = Object.fromEntries(createPolymarketTools(new PolymarketService({ gamma: new GammaClient({ timeoutMs: 30_000 }) })).map(t => [t.name, t]))
 await capture('prediction_fomc_meetings', polyTools.prediction_fomc_meetings, {})
 await capture('prediction_search_events(keyword=fed)', polyTools.prediction_search_events, { keyword: 'fed', limit: 5 })
 await capture('prediction_event_detail(606422)', polyTools.prediction_event_detail, { eventId: '606422' })
+}
 
 // ---------- 金十（真实 MCP + 网页版热度） ----------
+if (wants('jin10')) {
 const jin10 = new Jin10Service(new Jin10McpClient({
   endpoint: DEFAULT_ENDPOINT,
   token: () => process.env.JIN10_TOKEN,
@@ -115,5 +134,6 @@ await capture('flash_list(no hot limit=2)', jin10Tools.flash_list, { limit: 2 })
 await capture('macro_rates', jin10Tools.macro_rates, {})
 await capture('macro_rates(region=美国)', jin10Tools.macro_rates, { region: '美国' })
 await capture('econ_calendar(limit=3)', jin10Tools.econ_calendar, { limit: 3 })
+}
 
 console.log(JSON.stringify(out, null, 1))
