@@ -9,7 +9,7 @@ DSH 交易插件 monorepo，按市场组织 bundle（crypto/us/cn/hk）。本文
 ## 安全与当前授权
 
 - bundle patch insert-only；知识进 skill 随包分发；base 拥有全部市场无关行；不内置密钥、不再分发数据。下单默认 dry-run，liveTrading 必须显式开启，base 统一审批闸门不得绕过。
-- 修 CI、管线、配置或文档不授权发布。版本发布 bump、提交/推送、tag、npm 与 GitHub Release 按当前请求确认范围；历史授权、token 和启用的 workflow 不构成当前许可。发布入口：[dsh-trading-release](.agents/skills/dsh-trading-release/SKILL.md)。
+- 修 CI、管线、配置或文档不授权发布。提交与推送按「开发、分支与门禁」的日常豁免执行；**版本发布 bump、tag、npm 与 GitHub Release 仍按当前请求确认范围**，历史授权、token 和启用的 workflow 不构成当前许可。发布入口：[dsh-trading-release](.agents/skills/dsh-trading-release/SKILL.md)。
 - DSH 宿主安装与 SDK cohort 以当前实际安装及项目声明核验，不硬编码旧版本；宿主本体对本项目任务只读，不修改旧 deepseek-harness checkout。
 
 ## Home 与运行验证
@@ -21,7 +21,8 @@ DSH 交易插件 monorepo，按市场组织 bundle（crypto/us/cn/hk）。本文
 ## 开发、分支与门禁
 
 - 每次非平凡变更前先查阅历史决策，并在同一变更中记录或原地更新 [Agent Note](.agents/notes/README.md)。修改已有机制或跨包契约前，先搜索 `.agents/notes/implemented/` 审阅 Owning Note 的历史约束与被否决方案；若已有 Note 拥有该决策，就地更新其事实即满足要求，仅在无 Note 拥有时新建。交付态只写现在时事实，禁入规格腔（Proposal/Plan/Acceptance criteria）。遵循「一个事实只有一个家（One home per fact）」。Prompt 分层、模型能力选择、CI 归因与反震荡规则由该文档维护，不在入口复述。
-- main 是集成/默认分支，无 dev。较大功能（公共 API、交易安全语义、跨多包新功能/重构）从最新 main 开 `feat/<issue号>-<短名>`，PR 关联 Issue 并至少一个审查批准；docs/notes、CI/脚本微调和单点修复等小改可直接 main，不强制 PR。此契约不代替当前提交/推送授权。见 [交付流分级](.agents/notes/implemented/process/2026-09-02-pr-flow-scope-refined.md)。提交用 Conventional Commits，只暂存核对过的精确文件。
+- main 是集成/默认分支，无 dev。**单人开发期（2026-11-15 起）直推 main 是默认交付流**：本地改完即提交并推送，不再为功能改动开 PR——原「较大功能 → feat 分支 + PR + 审查」的分级只在需要留审查痕迹或跨多天推进时按需采用（用则合并后删分支）。Conventional Commits 与「只暂存核对过的精确文件」不变。见 [交付流分级](.agents/notes/implemented/process/2026-09-02-pr-flow-scope-refined.md)。
+- 提交与推送是日常动作，不需要逐次授权；**发布仍需当前请求的显式授权**：版本 bump、tag、npm publish、创建 GitHub Release。提交用 Conventional Commits，只暂存核对过的精确文件。本机 git 不继承 shell 的 `http_proxy`（curl 通而 `git push` 报 GnuTLS handshake failed），仓库级 `http.proxy` / `https.proxy` 已写进 `.git/config`；新克隆要重设一次。
 - 构建/测试基线是 `pnpm build` 与 `pnpm test`；连接器另需真实网络原始响应证据（`spikes/impl-*/`）。按改动运行相关验证，完整门禁放在提交/推送及发布边界，不为纯指令编辑生成分发副本。
 - 测试与 CI 棘轮：`pnpm test:audit`（BDD 命名/结构、零 mock、零 sleep、断言完整性）、`pnpm coverage:check`（分支/行/函数/语句四项覆盖率）、`pnpm test:scripts`（scripts/ 门禁自测）、`pnpm test:desktop`（桌面壳用例）。**新写测试必须合规**——棘轮只收存量债，任何规则或单文件计数上升即红，清债后用对应 `--update` 只降/只升地刷新基线。CI 分层：`ci.yml` = 静态门禁 + 三 OS 测试矩阵，`nightly.yml` = 覆盖率棘轮 + 抖动三连跑；发版管线闸门与静态门禁同源。见 [测试与 CI 棘轮](.agents/notes/implemented/testing/2026-09-15-test-hygiene-ratchet-and-tiered-ci.md)。
 
