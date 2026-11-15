@@ -328,6 +328,9 @@ export async function resolveIndicatorSpec(id: string, customStore?: CustomIndic
         pane: record.pane,
         params: record.params,
         ...(record.description !== undefined ? { description: record.description } : {}),
+        // 自定义指标也能声明新实例默认适用范围（2026-11-15）：预置早有这条通道。
+        // 缺席保持缺席——存量记录零迁移，新实例仍是「全部市场全部级别」。
+        ...(record.defaultApplyScope !== undefined ? { defaultApplyScope: record.defaultApplyScope } : {}),
       }
     }
   }

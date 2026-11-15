@@ -41,6 +41,16 @@ export interface IndicatorParamSpec {
   default: number
   min: number
   max: number
+  /**
+   * 参数控件的数据来源（可选，缺省 = 数字输入框），编辑期决定渲染成下拉还是输入框。
+   *
+   * - 'kdas-key-days'：值域是**当前标的已经设置好的 KDAS 关键日**（YYYYMMDD 整数），
+   *   选项来自图表激活名册里 kdas 实例的 kd1..kd8。读激活名册而不是另一个指标：
+   *   关键日的存储（chart.json 的 kdas 实例参数）是双方共享的事实，不违反 compute
+   *   的纯函数契约——compute 仍然只吃传进来的 params，选项只是**编辑期**的输入辅助。
+   * - 'on-off'：开 / 关两态（0 / 1），用于可选拓展的开关，免得用户对着数字框猜 0 和 1。
+   */
+  optionsSource?: 'kdas-key-days' | 'on-off'
 }
 
 /** 主题双色（亮/暗各一色）：同一语义在两种主题底上各自可辨的取色。 */
@@ -74,6 +84,22 @@ export interface IndicatorOutput {
   invertFilledArea?: boolean
   /** 线宽（1-4） */
   lineWidth?: number
+  /**
+   * 线型（可选）：缺省 'solid'，与存量渲染逐字一致。'dashed' 给止损位、支撑位
+   * 这类**参考线**——它们不是趋势线，画实线会与均线混淆。
+   */
+  lineStyle?: 'solid' | 'dashed' | 'dotted'
+  /**
+   * 是否在价格轴显示该序列最新值的实心价签（可选，缺省 false）。缺省关闭是
+   * 存量行为：每条指标线都挂价签会把轴塞满；参考线这类要看数的才显式打开。
+   */
+  showLastValue?: boolean
+  /**
+   * 是否从主图读数行（图表顶端那一行「指标名 分量: 值」）里隐藏该输出（可选，
+   * 缺省 false = 照旧显示）。参考线类输出的数已经以价签形式落在价格轴上，同
+   * 一个数不再在读数行重复一次。
+   */
+  hideReadout?: boolean
   /** 图例/读数小数位（缺省 2）：成本线类自定义指标可设 3 提高读数分辨率。 */
   precision?: number
 }

@@ -1193,9 +1193,22 @@ function createEmptyPaneSeries(chart: IChartApi, paneIndex: number): ISeriesApi<
   }, paneIndex)
 }
 
+/**
+ * 输出声明的线型 → lightweight-charts 枚举：缺省 Solid（存量输出零迁移）。
+ * 只对 line / area 有意义，histogram 不读这条。
+ */
+function outputLineStyle(output: IndicatorOutput): LineStyle {
+  if (output.lineStyle === 'dashed') return LineStyle.Dashed
+  if (output.lineStyle === 'dotted') return LineStyle.Dotted
+  return LineStyle.Solid
+}
+
 function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: number, dark: boolean): ISeriesApi<SeriesType> {
   // 主图叠加（pane 0）与蜡烛同住左轴价格刻度；副图 pane 保持各自默认右轴。
   const priceScaleId = paneIndex === 0 ? { priceScaleId: 'left' as const } : {}
+  const lineStyle = outputLineStyle(output)
+  // 参考线类输出在价格轴挂实心价签（缺省 false = 存量行为，不挂）。
+  const lastValueVisible = output.showLastValue === true
   // 序列 priceFormat 由 output.priceFormat 决定：成交量类输出走库的紧凑量格式，
   // 其余显式传入按 output.precision 提高十字线/轴标签分辨率（见 outputPriceFormat）。
   const priceFormat = outputPriceFormat(output)
@@ -1219,8 +1232,9 @@ function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: numb
       bottomColor: output.bottomColor ?? 'transparent',
       invertFilledArea: output.invertFilledArea ?? false,
       lineWidth: (output.lineWidth ?? 1.5) as 1 | 2 | 3 | 4,
+      lineStyle,
       priceLineVisible: false,
-      lastValueVisible: false,
+      lastValueVisible,
       crosshairMarkerVisible: false,
       priceFormat,
     }, paneIndex)
@@ -1229,8 +1243,9 @@ function createSeries(chart: IChartApi, output: IndicatorOutput, paneIndex: numb
     ...priceScaleId,
     color,
     lineWidth: (output.lineWidth ?? 1.2) as 1 | 2 | 3 | 4,
+    lineStyle,
     priceLineVisible: false,
-    lastValueVisible: false,
+    lastValueVisible,
     crosshairMarkerVisible: false,
     priceFormat,
   }, paneIndex)

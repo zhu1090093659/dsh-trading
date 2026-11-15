@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateCustomIndicator, compileComputeSource } from '../src/validate.ts'
+import { validateCustomIndicator, validateCustomIndicatorAsync, compileComputeSource } from '../src/validate.ts'
 import { createMemoryCustomIndicatorStore } from '../src/custom.ts'
 import { createAuthorIndicatorTool, validateCustomIndicatorNode } from '../src/tool.ts'
 
@@ -351,5 +351,196 @@ describe('createAuthorIndicatorTool', () => {
     })
 
     expect(res.ok).toBe(true)
+  })
+})
+
+describe('参数控件的选项来源（optionsSource）', () => {
+  const base = {
+    id: 'param_source_probe',
+    title: '参数来源探针',
+    pane: 'main',
+    computeSource: '(bars) => [{ key: "X", kind: "line", color: "#000000", values: bars.map(() => 1) }]',
+  }
+
+  it('用户声明 kdas-key-days 的参数经校验后仍带 optionsSource', () => {
+    // Given 一个把 kd1 的输入来源声明成「关键日下拉」的指标
+    const candidate = {
+      ...base,
+      params: [{ key: 'kd1', label: '关键日', default: 0, min: 0, max: 20991231, optionsSource: 'kdas-key-days' }],
+    }
+
+    // When 提交校验
+    const res = validateCustomIndicator(candidate)
+
+    // Then 校验通过，且来源字段被保留（丢弃它等于编辑期静默变回数字输入框）
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.record.params[0]?.optionsSource).toBe('kdas-key-days')
+  })
+
+  it('用户未声明来源时参数不带 optionsSource（存量指标零迁移）', () => {
+    // Given 一个普通数字参数
+    const candidate = { ...base, params: [{ key: 'n', label: '周期', default: 5, min: 2, max: 50 }] }
+
+    // When 提交校验
+    const res = validateCustomIndicator(candidate)
+
+    // Then 该字段缺省不落地
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.record.params[0]?.optionsSource).toBeUndefined()
+  })
+
+  it('用户写了未知来源时校验拒收，不静默丢弃', () => {
+    // Given 作者写了个不存在的来源
+    const candidate = {
+      ...base,
+      params: [{ key: 'kd1', label: '关键日', default: 0, min: 0, max: 20991231, optionsSource: 'whatever' }],
+    }
+
+    // When 提交校验
+    const res = validateCustomIndicator(candidate)
+
+    // Then 直接拒收，并在原因里点名该字段
+    expect(res.ok).toBe(false)
+    if (res.ok) return
+    expect(res.reason).toContain('optionsSource')
+  })
+})
+
+describe('新实例默认适用范围（defaultApplyScope）', () => {
+  const base = {
+    id: 'scope_probe',
+    title: '作用域探针',
+    pane: 'main',
+    computeSource: '(bars) => [{ key: "X", kind: "line", color: "#000000", values: bars.map(() => 1) }]',
+  }
+  const onlyFiveDay = { cn: { enabled: true, intervals: ['5d'] } }
+
+  it('管理员声明范围后 definition 与 record 带同一份 scope', () => {
+    // Given 一个「只在五日显示」的自定义指标
+    const candidate = { ...base, defaultApplyScope: onlyFiveDay }
+
+    // When 提交校验
+    const res = validateCustomIndicator(candidate)
+
+    // Then 两条产物都带上范围（缺一条实例就落不到新范围）
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.definition.defaultApplyScope).toEqual(onlyFiveDay)
+    expect(res.record.defaultApplyScope).toEqual(onlyFiveDay)
+  })
+
+  it('管理员未声明范围时字段缺席（存量自定义指标零迁移）', () => {
+    // Given 一个没有范围声明的指标
+    const candidate = { ...base }
+
+    // When 提交校验
+    const res = validateCustomIndicator(candidate)
+
+    // Then 两个字段都不落地
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.definition.defaultApplyScope).toBeUndefined()
+    expect(res.record.defaultApplyScope).toBeUndefined()
+  })
+
+  it('管理员填了不合法形状时一律拒收，不猜', () => {
+    // Given 六种坏形状（非对象、数组、大写 slug、非布尔、非字符串数组、缺 intervals）
+    const broken: unknown[] = [
+      42,
+      [],
+      { CN: { enabled: true, intervals: ['5d'] } },
+      { cn: { enabled: 'yes', intervals: ['5d'] } },
+      { cn: { enabled: true, intervals: [1] } },
+      { cn: { enabled: true } },
+    ]
+
+    // When 逐个提交校验
+    const results = broken.map(defaultApplyScope => validateCustomIndicator({ ...base, defaultApplyScope }))
+
+    // Then 全部拒收
+    expect(results.every(result => !result.ok)).toBe(true)
+  })
+
+  it('用户经客户端异步入口校验时同样保留范围', () => {
+    // Given 客户端实际调用的那个入口（indicator-load 的 register 吃它的 definition）
+    const candidate = { ...base, defaultApplyScope: onlyFiveDay }
+
+    // When await 异步校验，再断言
+    return validateCustomIndicatorAsync(candidate).then(res => {
+      // Then 定义侧仍带范围，自行长出来的实例才会有默认适用范围
+      expect(res.ok).toBe(true)
+      if (!res.ok) return
+      expect(res.definition.defaultApplyScope).toEqual(onlyFiveDay)
+    })
+  })
+})
+
+describe('参数个数上限（12）', () => {
+  const source = '(bars) => [{ key: "X", kind: "line", color: "#000000", values: bars.map(() => 1) }]'
+  const spec = (index: number) => ({ key: 'p' + index, label: 'P' + index, default: 1, min: 0, max: 10 })
+
+  it('运营配置 12 个参数时通过（8 个关键日槽 + 4 个拓展参数）', () => {
+    // Given 正好 12 个参数
+    const params = Array.from({ length: 12 }, (_, index) => spec(index))
+
+    // When 提交校验
+    const res = validateCustomIndicator({ id: 'param_cap_probe', title: '参数上限探针', pane: 'main', params, computeSource: source })
+
+    // Then 通过
+    expect(res.ok).toBe(true)
+  })
+
+  it('运营配置 13 个参数时被拒（上限仍是硬门）', () => {
+    // Given 13 个参数
+    const params = Array.from({ length: 13 }, (_, index) => spec(index))
+
+    // When 提交校验
+    const res = validateCustomIndicator({ id: 'param_cap_probe', title: '参数上限探针', pane: 'main', params, computeSource: source })
+
+    // Then 拒收且原因点明上限，不是静默截断
+    expect(res.ok).toBe(false)
+    if (res.ok) return
+    expect(res.reason).toContain('上限')
+  })
+})
+
+describe('参数控件来源 on-off（可选拓展的开关）', () => {
+  const base = {
+    id: 'switch_source_probe',
+    title: '开关来源探针',
+    pane: 'main',
+    computeSource: '(bars) => [{ key: "X", kind: "line", color: "#000000", values: bars.map(() => 1) }]',
+  }
+
+  it('用户声明 on-off 的参数经校验后保留来源，编辑期渲染成开/关下拉', () => {
+    // Given 一个可选拓展开关
+    const candidate = {
+      ...base,
+      params: [{ key: 'stopOn', label: '止损线开关', default: 0, min: 0, max: 1, optionsSource: 'on-off' }],
+    }
+
+    // When 提交校验
+    const res = validateCustomIndicator(candidate)
+
+    // Then 来源落地
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.record.params[0]?.optionsSource).toBe('on-off')
+  })
+
+  it('用户写了未登记的来源时被拒（白名单仍是硬门）', () => {
+    // Given 一个没登记过的来源
+    const candidate = {
+      ...base,
+      params: [{ key: 'stopOn', label: '止损线开关', default: 0, min: 0, max: 1, optionsSource: 'checkbox' }],
+    }
+
+    // When 提交校验
+    const res = validateCustomIndicator(candidate)
+
+    // Then 拒收
+    expect(res.ok).toBe(false)
   })
 })

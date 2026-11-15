@@ -69,4 +69,30 @@ describe('readoutItems', () => {
     expect(items[0]).toMatchObject({ title: 'KDAS', label: 'KDAS_24-09-24', color: '#FFD700' })
     expect(items[2]).toMatchObject({ title: 'MA', label: 'MA5', text: '12.00' })
   })
+
+  it('用户声明 hideReadout 后该输出不进读数行，未声明的照旧', () => {
+    // Given 同组一条普通分量，和一条「数只走价格轴价签」的参考线
+    const group = {
+      key: 'stoploss',
+      title: '综合止损线',
+      outputs: [
+        { key: 'MA', kind: 'line', color: '#e6a23c', values: [10, 11, 12] } as IndicatorOutput,
+        {
+          key: 'SL_NOW',
+          kind: 'line',
+          color: '#2ba471',
+          values: [8, 8, 8],
+          showLastValue: true,
+          hideReadout: true,
+        } as IndicatorOutput,
+      ],
+    }
+
+    // When 取读数项
+    const items = readoutItems([group], 2)
+
+    // Then 读数行只剩未声明隐藏的那条，项数与会话/悬停无关
+    expect(items.map(item => item.key)).toEqual(['stoploss.MA'])
+    expect(items.map(item => item.text)).toEqual(['12.00'])
+  })
 })

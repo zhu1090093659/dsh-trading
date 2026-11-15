@@ -341,7 +341,9 @@
   top: calc(100% + 6px);
   right: 0;
   z-index: 40;
-  width: 250px;
+  /* 320px 是「标题 + 四个动作按钮」单行放得下的最小宽度（250px 时自定义指标行
+     必然折行，见 .pickerLabel 的注释）。 */
+  width: 320px;
   max-height: min(420px, 60vh);
   overflow: auto;
   display: flex;
@@ -415,8 +417,13 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  flex: 1;
-  min-width: 0;
+  /* 标题按内容占宽、不参与压缩。原来的 flex:1 + min-width:0 会把中文标题压到
+     一个字宽并逐字折行（2026-11-15 owner 截图：四个动作按钮的自定义指标行里
+     「综合止损线」竖排五行、「WAP 加权均价」折三行）。空间仍不够时由 .pickerRow
+     的 flex-wrap 把动作按钮整体换到下一行，标题始终单行。 */
+  flex: 1 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
   padding: 3px 2px;
   cursor: pointer;
 }
@@ -468,14 +475,20 @@
   gap: 10px;
 }
 
-.paramRow input {
-  width: 72px;
+/* 数字输入框与下拉框同一个盒子：同一行里两个控件宽度不一致，右边对齐而左边参差
+   （2026-11-15 owner 截图：开关下拉 35.5px 贴着数字框 72px 的右边）。120px 才容得下
+   「2026-11-02」这种关键日文本加下拉箭头——96px 会把日期尾巴吃掉。 */
+.paramRow input,
+.paramRow select {
+  width: 120px;
   box-sizing: border-box;
   padding: 3px 6px;
   border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
   border-radius: var(--dsw-futu-radius-sm, 4px);
   font: inherit;
   font-variant-numeric: tabular-nums;
+  background: var(--dsw-futu-bg-surface, #ffffff);
+  color: inherit;
 }
 
 .paramActions {

@@ -1,7 +1,7 @@
 /**
  * 自定义指标数据模型与存储接口（纯类型与内存存储，零 Node.js 运行时依赖，浏览器安全）。
  */
-import type { IndicatorPane, IndicatorParamSpec } from './types.ts'
+import type { IndicatorApplyScope, IndicatorPane, IndicatorParamSpec } from './types.ts'
 
 export interface CustomIndicatorRecord {
   /** 指标唯一 ID，如 'td9' 或 'supertrend' */
@@ -18,6 +18,12 @@ export interface CustomIndicatorRecord {
   createdAt: number
   /** 可选的指标描述或来源提示 */
   description?: string
+  /**
+   * 新实例的默认适用范围（可选；缺省 = 全部市场、全部级别应用，存量记录零迁移）。
+   * 与预置定义的同名属性同义：挂在哪些市场/级别上是指标的固有属性，落在定义侧，
+   * 三条创建路径共用。自定义指标此前没有这条通道，只能在挂载后手动点「适用范围」。
+   */
+  defaultApplyScope?: IndicatorApplyScope
 }
 
 export interface CustomIndicatorStore {

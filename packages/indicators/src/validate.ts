@@ -11,6 +11,7 @@
  * 6. 有限数值与 warm-up 断言（严禁 NaN/Infinity/非法类型）
  */
 import type {
+  IndicatorApplyScope,
   IndicatorDefinition,
   IndicatorOutput,
   IndicatorPane,
@@ -22,8 +23,50 @@ import type { CustomIndicatorRecord } from './custom.ts'
 const ID_PATTERN = /^[a-z0-9_]{2,32}$/
 const PARAM_KEY_PATTERN = /^[a-zA-Z0-9_]{1,16}$/
 const MAX_SOURCE_LENGTH = 16 * 1024 // 16KB
-const MAX_PARAMS_COUNT = 8
+/**
+ * 参数个数上限。历史上卡在 8，因为最早的指标都是「几个均线周期」量级；KDAS 把
+ * kd1..kd8 八槽用满后，任何「可选拓展」（例如同一指标内的止损开关）都无处安放。
+ * 面板本身按 schema 渲染、不假设上限，放宽只影响校验：12 是「8 个关键日槽 +
+ * 4 个止损参数」的自然上限。
+ */
+const MAX_PARAMS_COUNT = 12
 const RESERVED_IDS = new Set(['ma', 'ema', 'boll', 'macd', 'rsi', 'kdj'])
+/** 市场 slug 词汇（applyScope 的键）：与 IndicatorMarketScope 的市场键同源。 */
+const MARKET_SLUG_PATTERN = /^[a-z][a-z0-9_]*$/
+
+/**
+ * 默认适用范围（可选字段 defaultApplyScope）的结构校验。
+ *
+ * 合法形状：{ [market]: { enabled: boolean, intervals: string[] } }——与预置定义的
+ * 同名属性逐字同义。缺席 = 全部市场全部级别应用（存量记录零迁移）；形状不合法
+ * 一律拒收：半截的 scope 表会让实例带着无法解释的「适用/不适用」落地，比不写更糟。
+ */
+function checkApplyScope(raw: unknown):
+  | { error: string }
+  | { error?: undefined; scope?: IndicatorApplyScope } {
+  if (raw === undefined) return {}
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { error: 'defaultApplyScope 必须是对象（市场 slug → { enabled, intervals }）' }
+  }
+  const scope: IndicatorApplyScope = {}
+  for (const [market, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!MARKET_SLUG_PATTERN.test(market)) {
+      return { error: `defaultApplyScope 的市场 slug "${market}" 不合法（小写字母开头，仅字母数字下划线）` }
+    }
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return { error: `defaultApplyScope.${market} 必须是 { enabled, intervals }` }
+    }
+    const entry = value as { enabled?: unknown; intervals?: unknown }
+    if (typeof entry.enabled !== 'boolean') {
+      return { error: `defaultApplyScope.${market}.enabled 必须是布尔值` }
+    }
+    if (!Array.isArray(entry.intervals) || entry.intervals.some(item => typeof item !== 'string')) {
+      return { error: `defaultApplyScope.${market}.intervals 必须是字符串数组（级别 slug 如 "1d" / "5d"）` }
+    }
+    scope[market] = { enabled: entry.enabled, intervals: [...(entry.intervals as string[])] }
+  }
+  return { scope }
+}
 
 /**
  * 试算超时默认值（毫秒）。试算本身是 30 根 K 线的纯计算，正常耗时在微秒级；
@@ -312,7 +355,21 @@ function checkCustomIndicatorStructure(raw: unknown):
       if (defVal < minVal || defVal > maxVal) {
         return { ok: false, reason: `params[${index}] (${key}) 的 default (${defVal}) 必须在 [min, max] (${minVal}..${maxVal}) 范围内` }
       }
-      params.push({ key, label, default: defVal, min: minVal, max: maxVal })
+      // 参数控件的数据来源（可选）：只认已知来源，其余值 fail closed——未知来源会让
+      // 编辑期渲染回落成数字输入，静默丢弃等于把作者的意图吃掉。
+      const optionsSource = p.optionsSource
+      const knownSource = optionsSource === 'kdas-key-days' || optionsSource === 'on-off'
+      if (optionsSource !== undefined && !knownSource) {
+        return { ok: false, reason: `params[${index}] (${key}) 的 optionsSource 只支持 "kdas-key-days" / "on-off"，收到: ${JSON.stringify(optionsSource)}` }
+      }
+      params.push({
+        key,
+        label,
+        default: defVal,
+        min: minVal,
+        max: maxVal,
+        ...(knownSource ? { optionsSource } as const : {}),
+      })
     }
   }
 
@@ -411,12 +468,18 @@ export function validateCustomIndicator(raw: unknown, options?: { runner?: Compu
 
   const computeFn = compileComputeSource(computeSource)
 
+  // 6. 默认适用范围（可选）：结构不合法即拒收——半截的 scope 表会让实例带着
+  // 无法解释的「适用/不适用」落地，比不写更糟。
+  const defaultApplyScope = checkApplyScope(input.defaultApplyScope)
+  if (defaultApplyScope.error !== undefined) return { ok: false, reason: defaultApplyScope.error }
+
   const definition: IndicatorDefinition = {
     id,
     title,
     pane,
     params,
     compute: computeFn,
+    ...(defaultApplyScope.scope !== undefined ? { defaultApplyScope: defaultApplyScope.scope } : {}),
   }
 
   const record: CustomIndicatorRecord = {
@@ -427,6 +490,7 @@ export function validateCustomIndicator(raw: unknown, options?: { runner?: Compu
     computeSource,
     createdAt: typeof input.createdAt === 'number' ? input.createdAt : Date.now(),
     description: typeof input.description === 'string' ? input.description.trim() : undefined,
+    ...(defaultApplyScope.scope !== undefined ? { defaultApplyScope: defaultApplyScope.scope } : {}),
   }
 
   return { ok: true, definition, record }
@@ -464,7 +528,18 @@ export async function validateCustomIndicatorAsync(
   }
 
   const computeFn = compileComputeSource(computeSource)
-  const definition: IndicatorDefinition = { id, title, pane, params, compute: computeFn }
+  // 与同步入口同一套校验：客户端走的是这条（indicator-load 的 register 吃它的
+  // definition），默认适用范围漏在这里等于自定义指标永远拿不到这条通道。
+  const defaultApplyScope = checkApplyScope(input.defaultApplyScope)
+  if (defaultApplyScope.error !== undefined) return { ok: false, reason: defaultApplyScope.error }
+  const definition: IndicatorDefinition = {
+    id,
+    title,
+    pane,
+    params,
+    compute: computeFn,
+    ...(defaultApplyScope.scope !== undefined ? { defaultApplyScope: defaultApplyScope.scope } : {}),
+  }
   const record: CustomIndicatorRecord = {
     id,
     title,
@@ -473,6 +548,7 @@ export async function validateCustomIndicatorAsync(
     computeSource,
     createdAt: typeof input.createdAt === 'number' ? input.createdAt : Date.now(),
     description: typeof input.description === 'string' ? input.description.trim() : undefined,
+    ...(defaultApplyScope.scope !== undefined ? { defaultApplyScope: defaultApplyScope.scope } : {}),
   }
   return { ok: true, definition, record }
 }

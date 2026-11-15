@@ -66,6 +66,9 @@ export function readoutItems(groups: readonly IndicatorReadoutGroup[], readoutIn
   const items: ReadoutItem[] = []
   for (const group of groups) {
     for (const output of group.outputs) {
+      // 声明了 hideReadout 的输出不进读数行（缺省 false = 存量指标照旧）；判据是
+      // output 的静态字段，与十字光标位置无关，布局契约（项数只随数据变化）不受影响。
+      if (output.hideReadout === true) continue
       const value = output.values[readoutIndex]
       const precision = output.precision ?? 2
       items.push({

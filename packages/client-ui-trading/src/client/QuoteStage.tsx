@@ -1666,6 +1666,19 @@ export function IndicatorPicker(props: {
   // 决策 5：只列当前市场可用的指标（如港股通持股比例不进 crypto/us/cn 的选择器）。
   const definitions = availableDefinitions(indicators.list(), market)
   const empty = definitions.length === 0
+  /**
+   * 当前标的已设置好的关键日（YYYYMMDD），供声明 optionsSource='kdas-key-days' 的
+   * 参数做下拉选项。来源是激活名册里 kdas 实例对当前标的的生效参数（覆盖优先），
+   * 与右键菜单写的是同一个字段，所以下拉里出现的日期就是图上那几条 KDAS 线。
+   */
+  const keyDays = useMemo(() => {
+    if (market === undefined || scopeKey === undefined) return []
+    const separator = scopeKey.indexOf(':')
+    if (separator <= 0) return []
+    const kdas = activeInstances.find(instance => instance.id === KDAS_ID)
+    if (kdas === undefined) return []
+    return kdasSlots(effectiveInstanceParams(kdas, market, scopeKey.slice(separator + 1))).map(slot => slot.kd)
+  }, [activeInstances, market, scopeKey])
   return (
     <>
       <div className={css.pickerBackdrop} onClick={onClose} aria-hidden="true" />
@@ -1699,6 +1712,7 @@ export function IndicatorPicker(props: {
               definitions={definitions.filter(definition => definition.pane === 'main')}
               instances={instances}
               activeInstances={activeInstances}
+              keyDays={keyDays}
               editingIndicator={editingIndicator}
               scopeKey={scopeKey}
               symbolLabel={symbolLabel}
@@ -1715,6 +1729,7 @@ export function IndicatorPicker(props: {
               definitions={definitions.filter(definition => definition.pane === 'sub')}
               instances={instances}
               activeInstances={activeInstances}
+              keyDays={keyDays}
               editingIndicator={editingIndicator}
               scopeKey={scopeKey}
               symbolLabel={symbolLabel}
@@ -1740,6 +1755,8 @@ function PickerGroup(props: {
   instances: readonly IndicatorInstance[]
   /** 全量激活名册（「全局移除」按钮存在性）。 */
   activeInstances: readonly IndicatorInstance[]
+  /** 当前标的已设置好的关键日（YYYYMMDD），喂给声明 optionsSource 的参数做下拉选项。 */
+  keyDays: readonly number[]
   editingIndicator: string | null
   scopeKey?: string | undefined
   symbolLabel?: string | undefined
@@ -1751,7 +1768,7 @@ function PickerGroup(props: {
   onRemoveGlobal: (id: string) => void
   onDelete: (id: string) => void
 }): React.JSX.Element {
-  const { title, definitions, instances, activeInstances, editingIndicator, scopeKey, symbolLabel, t, onToggle, onEdit, onSetScope, onApply, onRemoveGlobal, onDelete } = props
+  const { title, definitions, instances, activeInstances, keyDays, editingIndicator, scopeKey, symbolLabel, t, onToggle, onEdit, onSetScope, onApply, onRemoveGlobal, onDelete } = props
   // 适用范围面板单开（每行一个，避让参数编辑器）。
   const [scopeId, setScopeId] = useState<string | null>(null)
   return (
@@ -1831,6 +1848,7 @@ function PickerGroup(props: {
                 overrideHint={scopedParams !== undefined && symbolLabel !== undefined
                   ? t('indicator.symbolOverride', { symbol: symbolLabel })
                   : undefined}
+                keyDays={keyDays}
                 t={t}
                 onCancel={() => onEdit(definition.id)}
                 onApply={(params) => onApply(definition.id, params)}
@@ -1940,16 +1958,19 @@ function IndicatorScopeEditor(props: {
   )
 }
 
-function IndicatorParamEditor(props: {
+export function IndicatorParamEditor(props: {
   definition: IndicatorDefinition
   initial: Record<string, number>
   /** issue #72：当前编辑的是某标的的专属覆盖时展示的提示文案。 */
   overrideHint?: string | undefined
+  /** 声明 optionsSource='kdas-key-days' 的参数用它做下拉选项（YYYYMMDD）。 */
+  keyDays?: readonly number[]
   t: Translate
   onCancel: () => void
   onApply: (params: Record<string, number>) => void
 }): React.JSX.Element {
   const { definition, initial, t } = props
+  const keyDays = props.keyDays ?? []
   const [draft, setDraft] = useState<Record<string, number>>(() => {
     const out: Record<string, number> = {}
     for (const spec of definition.params) out[spec.key] = initial[spec.key] ?? spec.default
@@ -1959,21 +1980,54 @@ function IndicatorParamEditor(props: {
   return (
     <div className={css.paramEditor}>
       {props.overrideHint !== undefined && <div className={css.paramHint}>{props.overrideHint}</div>}
-      {definition.params.map(spec => (
-        <label key={spec.key} className={css.paramRow}>
-          <span>{spec.label}</span>
-          <input
-            type="number"
-            min={spec.min}
-            max={spec.max}
-            value={Number.isFinite(draft[spec.key]) ? draft[spec.key] : spec.default}
-            onChange={(event) => {
-              const next = Number(event.target.value)
-              setDraft(prev => ({ ...prev, [spec.key]: Number.isFinite(next) ? next : spec.default }))
-            }}
-          />
-        </label>
-      ))}
+      {definition.params.map(spec => {
+        const current = Number.isFinite(draft[spec.key]) ? draft[spec.key] : spec.default
+        // 关键日类参数的值是 YYYYMMDD 整数，键盘手填容易错位，改成从「当前标的已设置好的
+        // 关键日」里下拉选。已存但后来从 KDAS 移除的日期仍占一项，免得一次编辑把旧值抹掉。
+        const keyDayOptions = current > 0 && !keyDays.includes(current) ? [...keyDays, current] : keyDays
+        // 声明了 optionsSource 的参数渲染成下拉：'on-off' 是固定两态，'kdas-key-days'
+        // 是当前标的的关键日列表。两者共用同一个 select，选项表在下面拼。
+        const selectOptions = spec.optionsSource === 'on-off'
+          ? [
+            { value: 0, label: t('indicator.switchOff') },
+            { value: 1, label: t('indicator.switchOn') },
+          ]
+          : spec.optionsSource === 'kdas-key-days'
+            ? [
+              { value: 0, label: '—' },
+              ...keyDayOptions.map(kd => ({ value: kd, label: formatKdasDay(kd) })),
+            ]
+            : null
+        return (
+          <label key={spec.key} className={css.paramRow}>
+            <span>{spec.label}</span>
+            {selectOptions !== null ? (
+              <select
+                value={current}
+                onChange={(event) => {
+                  const next = Number(event.target.value)
+                  setDraft(prev => ({ ...prev, [spec.key]: Number.isFinite(next) ? next : 0 }))
+                }}
+              >
+                {selectOptions.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="number"
+                min={spec.min}
+                max={spec.max}
+                value={current}
+                onChange={(event) => {
+                  const next = Number(event.target.value)
+                  setDraft(prev => ({ ...prev, [spec.key]: Number.isFinite(next) ? next : spec.default }))
+                }}
+              />
+            )}
+          </label>
+        )
+      })}
       <div className={css.paramActions}>
         <button type="button" className={css.paramButton} onClick={props.onCancel}>{t('indicator.cancel')}</button>
         <button type="button" className={`${css.paramButton} ${css.paramApply}`} onClick={() => props.onApply(draft)}>{t('indicator.apply')}</button>
