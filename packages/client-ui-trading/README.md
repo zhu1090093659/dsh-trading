@@ -1,55 +1,29 @@
 # @dshtrading/client-ui-trading
 
-交易 GUI 壳（专业交易软件的三栏式架构载体），dsh web 宿主双面包插件：
+交易 GUI 壳（专业交易终端的三栏式架构载体），dsh web 宿主双面包插件：
 
-- **node 半**（`src/index.ts`）：注册 `/dshtrading/api` 前缀路由，把客户端行情请求透传给
-  对应市场的 `MarketDataService`（connector-binance/yahoo/tencent）。依赖 `webServer` +
-  `connection`（`ctx.inject` 子插件声明），**headless 宿主永不解析、零副作用**。
-  路由挂在 `connection.requestRejection` 认证栅栏后（与 `/api` 同一浏览器 cookie）。
+- **node 半**（`src/index.ts`）：声明与兼容 `/dshtrading/api/*` 市场桥路由口径（核心 HTTP 桥已拆分至 `@dshtrading/bot-api` 供 GUI 与无头 bot 共用），经 `connection.requestRejection` 认证栅栏把行情、衍生品、自定义指标、策略/选股器、知识库、自选组、快讯/宏观/预测及交易读写请求路由到宿主服务。**headless 宿主不解析浏览器半区、零副作用**。
 - **浏览器半**（`src/client/index.ts`）：
-  - 遮蔽 `sidebar.workspaces`（priority -1）→ 左栏市场页签（自选/crypto/us/cn/hk）+
-    标的行（迷你走势、最新价、涨跌幅，红涨绿跌）、搜索加自选（localStorage 持久化）；
-  - `shell.overlay` 加 `dshtrading-quote-pane`（order 50）→ 中栏舞台
-    `MiddleStage`（3.0）：视图注册表（行情 | 量化占位）+ 顶部切换条；行情视图 =
-    报价头 + **lightweight-charts v5 K线**（主图蜡烛 + 叠加指标，副图成交量 +
-    指标，周期页签，crypto 支持分钟级）+ OKX 式技术指标选择器（3.1：单按钮
-    展开，主/副图两组勾选 + 行内参数编辑）；
-  - `shell.overlay` 加 `dshtrading-session-rail`（order 60）→ 右缘常驻会话竖条
-    （折叠/新会话/设置，2.9）。
-  - 中栏几何由 QuotePane 实测（自选停靠右缘 ↔ 对话列/竖条左缘），视图互斥挂载。
+  - 遮蔽 `sidebar.workspaces`（priority -1）→ 左栏全市场自选与导航（`自选 / crypto / us / cn / hk / futures / global` 七标签，标的行展示迷你走势、最新价与涨跌幅，搜索并持久化至 `@dshtrading/watchlist` 宿主账本）；
+  - `shell.overlay` 加 `dshtrading-quote-pane` → 中栏舞台 `MiddleStage`：
+    - **行情 (`QuoteStage`)**：报价头 + **Lightweight Charts v5 K 线**（多周期蜡烛/A股与港股 5 日分时跨源路由、主/副图指标叠加与 OKX 式参数编辑、**KDAS 关键日右键锚定线**）、衍生品指标面板（持仓量/资金费率/多空比）、盘口深度/逐笔成交、基本面与新闻公告；
+    - **策略 (`@dshtrading/client-ui-strategies`)**：6 大经典量化范式与自定义策略回测（`strategy_backtest` / `strategy_author`）、资金曲线与交易明细，以及 5 类预设与自定义选股器；
+    - **知识库 (`@dshtrading/client-ui-knowledge`)**：Obsidian 风格力导图谱与结构化投研知识卡片库（检索、聚类漫游、导入导出）。
+  - `shell.overlay` 加 `dshtrading-session-rail` → 右缘常驻驾驶舱与会话竖条（定时任务、统一持仓台账 `@dshtrading/holdings`、金十快讯、宏观日历与央行利率、工作区文件、Polymarket FOMC 预测市场）。
+  - 中栏几何由 `QuotePane` 实测（左栏右缘 ↔ 会话列/右栏左缘），多视图在单一会话内按状态互斥挂载。
 
-## 指标系统（3.1 插件化）
+## 指标与扩展点
 
-- 指标 definition（类型 + math + 预置）在纯库 `@dshtrading/indicators`；预置
-  MA/EMA/BOLL/MACD/RSI/KDJ 由 `@dshtrading/client-ui-indicators` 插件在
-  client 上下文 provide 为 `tradingIndicators` 服务（cordis reflect.provide）。
-- 本包持有本地注册表（`indicator-registry.ts` 单例）+ 可选桥接（`ctx.inject`
-  服务可用才合并 definition）；插件未安装时行情视图零指标正常工作。
-- definition 的 title/label 是普通字符串（宿主 locale 命名空间单占，外部插件
-  无 i18n 通道）；社区指标 = 交付纯数据 definition 并 inject 服务 register。
-  设计与备选：`.agents/notes/implemented/architecture/2026-08-30-indicator-plugin-split.md`。
+- 指标定义（类型 + 数学逻辑 + 预置）位于 `@dshtrading/indicators`；预置 MA/EMA/BOLL/MACD/RSI/KDJ 由 `@dshtrading/client-ui-indicators` 在 client 上下文 provide 为 `tradingIndicators` 服务；自定义指标经 `/dshtrading/api/indicators/custom` 与右键 KDAS 锚定线联动。
+- 策略与知识库视图通过客户端视图扩展机制挂载进 `MiddleStage`，数据层分别由 `@dshtrading/strategies` 与 `@dshtrading/knowledge` 提供。
+- 设计决策见 `.agents/notes/implemented/architecture/` 下对应 Owning Notes。
 
 ## 数据与合规（铁律 #5）
 
-- 桥是无状态透传：不缓存、不落盘、不再分发；频率由客户端轮询控制
-  （自选批量 8s/市场、行情页 5s，页面隐藏时暂停），单次批量 symbols 封顶 32。
-- 行情源是各连接器的公共端点（Yahoo/腾讯/Binance），ToS 边界见根 README 数据源表。
-- 自选列表只存浏览器 localStorage（`dshtrading.watchlist.v1`），不上传。
-
-## 已知边界（上游改进候选）
-
-1. **视图切换没有跨组件通路**：`conversation.view` 的激活视图是宿主按会话持久化的
-   私有 store，外部无法程序化切 tab——左栏点击标的后，若当前不在「行情」tab，需手动点
-   一次（之后按会话保持）。上游若把视图切换暴露成 ctx 服务即可消除。
-2. **无会话时中栏是宿主 hero**（选择工作区 + 新会话输入框）：`conversation.view` 只在
-   会话内渲染，属宿主结构；在官方 composer 直接输入即建会话进入。历史会话面板
-   已 portal 并入该 hero 容器拼成同一张卡（HomeHistory），设置/新会话/折叠收敛在
-   右缘常驻会话竖条（SessionRail，2.9）。
-3. 右栏面板是浮层（`shell.overlay`），非占位列——展开时覆盖中栏右缘；折叠为 34px 细轨。
-   真正的停靠列需要宿主 AppFrame 扩展（上游建议）。
-4. `Ticker` 契约无 name 字段：搜索添加的标的以代码为显示名（种子列表带中文名）。
+- 桥为无状态透传：不缓存、不落盘、不再分发；行情轮询在页面隐藏时自动暂停，单次批量 symbols 封顶 32。
+- 自选列表与分组归 `@dshtrading/watchlist` 宿主侧持久化管理。
+- 所有下单请求严格经过 `@dshtrading/base` 的 dry-run 与人工/Ed25519 审批闸门。
 
 ## 构建
 
-`pnpm build`（node 半 tsdown + 浏览器半 tsdown.client.config.mjs，与 client-ui-settings
-同款三段 banner/intro/footer 契约与 CSS module 内联）。
+`pnpm build`（node 半 `tsdown` + 浏览器半 `tsdown.client.config.mjs`，与 `client-ui-settings` 同款三段 banner/intro/footer 契约与 CSS module 内联）。

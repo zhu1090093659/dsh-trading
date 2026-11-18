@@ -1,6 +1,6 @@
 # 全市场连接器申请与配置全景指引 (Connectors Guide)
 
-本项目支持 A 股 (CN)、美股 (US)、港股 (HK)、加密货币 (Crypto)、国内期货 (Futures)、全球大宗与外汇 (Global) 六大市场板块共 21+ 个连接器。为了方便用户获取 API 密钥、了解免费/付费政策与本地网关安装要求，本文档汇总了各连接器的官方指引。
+本项目支持 A 股 (CN)、美股 (US)、港股 (HK)、加密货币 (Crypto)、国内期货 (Futures)、全球大宗与外汇 (Global) 六大市场板块及跨市场快讯/预测共 23 个连接器。为了方便用户获取 API 密钥、了解免费/付费政策与本地网关安装要求，本文档汇总了各连接器的官方指引。
 
 ---
 
@@ -35,6 +35,7 @@
 | **Finnhub (`finnhub`)** | 商业金融 API | `FINNHUB_API_KEY` | [finnhub.io/register](https://finnhub.io/register) | 免费注册每分钟 60 次调用，支持实时报价与市场新闻 |
 | **Polygon.io (`polygon`)** | 机构级高频 API | `POLYGON_API_KEY` | [polygon.io](https://polygon.io) | 免费 Basic 计划每分钟 5 次请求，提供微秒级 K 线 |
 | **盈透证券 (`ibkr`)** | 机构券商网关 | 连接器 `Config.gatewayUrl`（默认 `https://127.0.0.1:5000/v1/api`；`IBKR_GATEWAY_URL` 只在插件路径外生效）<br>`IBKR_ACCOUNT_ID` | [interactivebrokers.com/campus/ibkr-api-page/cpapi/](https://www.interactivebrokers.com/campus/ibkr-api-page/cpapi/) | 需在本机运行 Client Portal Gateway (`localhost:5000`)；支持真实 Ledger 资金拉取、Pre-order Warning 自动确认、委托申报与撤单 |
+| **Stooq (`stooq`)** | 备选公共 CSV 行情（当前 US 切片默认使用 Yahoo Finance） | 无需配置 | [stooq.com](https://stooq.com) | 通过公共 CSV 端点提供美股历史日 K（最新日 K 近似报价，不含盘前盘后）；部分出口触发反爬 JS 挑战或拒绝访问（`TRADING_RATE_LIMITED` / `TRADING_AUTH_FAILED`），代码完整保留在仓备选 |
 
 ---
 
@@ -72,13 +73,14 @@
 
 ---
 
-## 六、市场快讯与新闻数据源（跨市场）
+## 六、市场快讯、宏观与预测市场数据源（跨市场）
 
-以下数据源不绑定单一市场（内容跨宏观/大宗/外汇/A 股/地缘），以 agent 工具面接入，供所有市场会话使用。
+以下数据源不绑定单一市场（内容跨宏观/大宗/外汇/A 股/地缘/利率预期），以 agent 工具面与右栏驾驶舱面板接入，供所有市场会话使用。
 
 | 数据源 | 类型 | 认证方式与环境变量 | 官网与申请地址 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
 | **金十数据 (`jin10`)** | MCP 开放数据服务（免费） | `JIN10_MCP_TOKEN`（或设置中心 `dshtrading.credentials.jin10.token`） | [mcp.jin10.com/app](https://mcp.jin10.com/app/) | 标准 MCP 服务（Streamable HTTP，协议 2025-11-25）：实时快讯、财经资讯、本周财经日历、全球品种报价与分钟 K 线（现货贵金属/原油/铜、外汇、全球与 A 股指数）。工具：`flash_list`（可选 `hot` = 火/热/沸/爆，走网页版热度过滤；不给时走官方 MCP 全量流）/ `flash_search` / `news_list` / `news_search` / `news_get` / `econ_calendar` / `macro_rates`（央行最新利率，约 30 家，可选 `region` 过滤）/ `global_instruments` / `global_quote` / `global_klines`；每用户每工具每北京时间自然日限 1500 次调用（热度路径走网页版公开接口，不受该配额约束）；快讯/资讯只下发标题、时间与链接（数据零再分发） |
+| **Polymarket (`polymarket`)** | 只读预测市场公共 API（免费） | 无需配置 | [polymarket.com](https://polymarket.com) | 经公共 Gamma / CLOB 只读端点拉取 FOMC 利率决议隐含概率与事件详情（无钱包/下单面，严禁下单）；注册 `prediction_fomc_meetings` / `prediction_search_events` / `prediction_event_detail` 三个只读工具，并经 `tradingPredictionFeed` 驱动右侧栏预测市场面板（支持概率变化快照对比） |
 
 配置方式二选一（BYOK，插件不内置密钥）。推荐路径是设置中心：**设置 → 交易 → 市场快讯数据源**（保存即生效）。手改文档时 0.1.7 起写当前 profile 的 `cordis.patch.yml`：
 

@@ -61,13 +61,14 @@
 涵盖真实运行、网络配置、环境切换与发版门禁：
 
 1. **[全市场连接器配置全景指引](./guides/connectors-guide.md)** (`docs/guides/connectors-guide.md`)
-   - 汇总 A 股、美股、港股、加密、期货和全球品种等 21+ 个连接器的官网、环境变量、申请流程与本地网关桥要求。
+   - 汇总 A 股、美股、港股、加密、期货和全球品种等 23 个连接器的官网、环境变量、申请流程与本地网关桥要求。
 2. **[运行 dsh-trading](./ops/running.md)** (`docs/ops/running.md`)
    - 独立 Home 目录 `~/.dsh-trading` 隔离规范。
    - 启动命令、`trading-web` 缺省 8888 端口注入、无头 profile 与包热刷新脚本。
 3. **[发布前检查清单](./ops/release-checklist.md)** (`docs/ops/release-checklist.md`)
    - 从开发态切换到分发态的门禁闸门：PolyForm 许可证、Changeset 版本发布与全市场回归。
-4. **[DSH 上游 SDK 升级检查清单](./ops/upstream-upgrade-checklist.md)**
+4. **[DSH 上游 SDK 升级检查清单](./ops/upstream-upgrade-checklist.md)** (`docs/ops/upstream-upgrade-checklist.md`)
+   - 紧密跟踪官方 `@deepseek-ai/*` SDK 发版（当前基线 0.2.2-rc.1）的抽核、升级与验收指南。
 5. **运维手册**（随自动交易平面迁往私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)：docs/ops/ops-runbook.md）
    - kill switch 四级、dead-man 三层、演练记录（P5 各档执行记录的家）与接线台账。
 6. **[P5 三档准入清单](./roadmap/p5-acceptance-checklist.md)** (docs/roadmap/p5-acceptance-checklist.md)
@@ -75,8 +76,8 @@
 7. **移动端落仓方案**（随 iOS 观测端迁往私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)：docs/client/mobile-app-plan.md）
    - 移动端落仓形态、分发决策与 CI 策略；Expo/RN 旧工程（apps/mobile）已按 owner 2026-10-02 决定退役删除，
      原生观测端工程操作与实测证据在该仓的 apps/ios-native/README.md。
- (`docs/ops/upstream-upgrade-checklist.md`)
-   - 紧密跟踪官方 `@deepseek-ai/*` SDK 发版（当前基线 0.2.2-rc.1）的抽核、升级与验收指南。
+8. **[桌面端应用指南（Electron & Mygo）](../desktop/README.zh.md)** (`desktop/README.zh.md`)
+   - macOS（Apple Silicon / Intel）与 Windows x64 安装包构建、内置 Node/DSH 运行时载荷、独立 `~/.dsh-trading` 数据目录与内建更新器说明。
 
 ---
 

@@ -4,9 +4,9 @@
 
 **English** | [简体中文](README_zh.md)
 
-**dsh-trading** is an open-source, agent-native AI trading terminal and quantitative investment research platform built on [DeepSeek Harness (DSH)](https://github.com/deepseek-ai) and the [Cordis](https://github.com/cordisjs) microkernel. It unifies **Cryptocurrency** (Binance, OKX, Bybit, CCXT), **US Equities** (Alpaca, Interactive Brokers, Yahoo Finance), **China A-Shares** (MiniQMT, Eastmoney, AkShare, Tushare), **Hong Kong Stocks** (Longbridge, Futu, Tiger), and **Chinese Commodity Futures** into a single modular workspace.
+**dsh-trading** is an open-source, agent-native AI trading terminal, cross-platform desktop application (macOS / Windows), and multi-agent quantitative investment research platform built on [DeepSeek Harness (DSH)](https://github.com/deepseek-ai) and the [Cordis](https://github.com/cordisjs) microkernel. It unifies **Cryptocurrency** (Binance, OKX with perpetual swap trading, Bybit, CCXT across 9 direct spot venues), **US Equities** (Alpaca, Interactive Brokers, Yahoo Finance, FMP, Finnhub, Polygon.io, Stooq), **China A-Shares** (MiniQMT, China Galaxy XYSZ, Eastmoney, Tencent Finance, HiThink, Tushare Pro, AkShare), **Hong Kong Stocks** (Longbridge, Futu, Tiger, Tencent HK), **Chinese Commodity & Index Futures** (HiThink), and **Global Commodities, FX & Prediction Markets** (Jin10 MCP 97 instruments + read-only Polymarket FOMC probabilities) inside a single modular workspace.
 
-Combining TradingView Lightweight Charts v5, role-based multi-agent teams (Master, Researcher, Trader, Risk Reviewer), built-in strategy backtesting, and a zero-trust dual-track human approval gate, dsh-trading bridges the gap between deep AI reasoning and disciplined trading execution.
+Combining TradingView Lightweight Charts v5 (with right-click **KDAS key-day anchored lines** and cross-source 5-day intraday routing), a three-view center stage (**Quotes / Strategy Backtester & Screeners / Force-Directed Knowledge Graph**), a six-panel right-rail cockpit (Scheduled Tasks, Unified Holdings Ledger, Jin10 Flash News, Macro Calendar & Central Bank Rates, Workspace Files, Polymarket FOMC Odds), role-based multi-agent teams (`master` lead, `instrument-researcher`, `trader`, `risk-reviewer`, and three delegate presets), and a zero-trust dual-track human approval gate, dsh-trading bridges deep AI reasoning and disciplined execution via both CLI Web mode and a ready-to-run desktop client.
 
 [Quick start](#quick-start) · [Key features](#key-features) · [Why dsh-trading](#why-dsh-trading-vs-alternatives) · [Supported markets](#supported-markets--broker-connectors) · [Agent architecture](#what-does-agent-native-mean) · [FAQ](#frequently-asked-questions-faq) · [Documentation](#documentation)
 
@@ -18,8 +18,9 @@ Combining TradingView Lightweight Charts v5, role-based multi-agent teams (Maste
 <div align="center">
 
 [![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.2.2--rc.1-blue.svg)](https://github.com/deepseek-ai)
-[![Markets](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK%20%7C%20Futures-green.svg)](#supported-markets--broker-connectors)
-[![Connectors](https://img.shields.io/badge/Connectors-19%2B%20Exchanges%20%26%20Brokers-orange.svg)](docs/guides/connectors-guide.md)
+[![Desktop App](https://img.shields.io/github/v/release/zhu1090093659/dsh-trading?label=Desktop%20App&color=2b6cb0)](https://github.com/zhu1090093659/dsh-trading/releases)
+[![Markets](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK%20%7C%20Futures%20%7C%20Global-green.svg)](#supported-markets--broker-connectors)
+[![Connectors](https://img.shields.io/badge/Connectors-23%20Exchanges%2C%20Brokers%20%26%20Feeds-orange.svg)](docs/guides/connectors-guide.md)
 [![Architecture](https://img.shields.io/badge/Architecture-Cordis%20Microkernel-purple.svg)](https://github.com/cordisjs)
 [![Charting](https://img.shields.io/badge/Charting-Lightweight%20Charts%20v5-blueviolet.svg)](https://tradingview.github.io/lightweight-charts/)
 [![Execution](https://img.shields.io/badge/Execution-Dry--Run%20Default%20%7C%20Human%20Gate-red.svg)](#zero-trust-safety--execution-discipline)
@@ -31,13 +32,13 @@ Combining TradingView Lightweight Charts v5, role-based multi-agent teams (Maste
 
 ## Key Features
 
-- **All-in-One Multi-Market Workspace:** Follow Crypto (spot & perpetuals), US stocks, China A-shares, Hong Kong equities, and commodity futures in a unified watchlist with real-time quotes, order books, and corporate disclosures.
-- **TradingView Charting & Market Depth Engine:** Center-stage Lightweight Charts v5 with multi-timeframe switching (5m to weekly), 15+ technical indicators (MA, EMA, MACD, RSI, Bollinger Bands, KDJ, SuperTrend, TD9), tick-by-tick trades, and crypto derivatives metrics (Open Interest, Funding Rates, Long/Short ratio).
-- **Agent-Native Multi-Agent Orchestration:** A collaborative AI team (`master` lead, `instrument-researcher`, `trader`, `risk-reviewer`) that autonomously queries market data tools, performs financial statement analysis, drafts trade plans, and stresses risk scenarios.
-- **Institutional Research Playbooks & Risk Checklists:** Bundled pre-trade risk checklists for every market, a 5-step crypto instrument analysis framework, institutional company valuation playbooks, and an append-only dual-track trading journal.
-- **Quantitative Strategy Backtesting:** Formulate and backtest systematic trading signals with `strategy_backtest`, author custom technical indicators, and evaluate historical performance across market cycles.
-- **Zero-Trust Safety & Dual-Track Approval Gate:** Dry-run simulation by default; live broker orders require explicit opt-in, interactive human confirmation, and an Ed25519 authority plane. Fail-closed in headless environments.
-- **100% Local Privacy (BYOK):** Bring Your Own Keys. API keys and personal trading records live strictly on your local machine. Zero vendor lock-in, zero cloud telemetry, and zero market data redistribution.
+- **Six-Market Coverage & Host Watchlist Ledger:** Track Crypto spot and perpetual swaps (`-SWAP`, OKX `ctVal` contract conversion & `crypto_set_leverage`), US stocks, China A-shares, Hong Kong stocks, domestic futures, and 97 global FX/commodity/index symbols in one workspace backed by host-persisted `@dshtrading/watchlist` groups.
+- **Three-View Center Stage & Six-Panel Right Cockpit:** Center `MiddleStage` integrates **Quotes** (Lightweight Charts v5, cross-source 5-day intraday routing for CN/HK, right-click **KDAS key-day anchors**, OKX-style inline indicator editing, and crypto derivatives telemetry), **Strategies** (`strategy_backtest` / `strategy_author` across 6 paradigms and 5 market screeners), and **Knowledge Base** (Obsidian-style force-directed graph and structured research cards); the right-rail hosts **Scheduled Tasks, Unified Holdings Ledger (`@dshtrading/holdings`), Jin10 Flash News, Macro Calendar & ~30 Central Bank Rates, Workspace Files, and Polymarket FOMC Odds**.
+- **Zero-Setup Cross-Platform Desktop Client:** Dual-track `desktop/` builds package both Electron (macOS arm64/x64 & Windows x64 NSIS) and a native Go/WebView `mygo` shell with bundled Node/pnpm, DSH host, isolated `~/.dsh-trading` home seeding, and an in-app updater (`@dshtrading/client-ui-updater`).
+- **Agent-Native Multi-Agent Orchestration & Tool Batching:** `master` coordinates three delegate presets (`researcher_subagent`, `trader_subagent`, `risk_reviewer_subagent`), two-stage tool loading on `instrument-researcher`, parallel read-only exploration via `trading_batch`, and dynamic tool discovery via `trading_tools_index` alongside the bundled "Chinese Master Quotes" pack (`@dshtrading/client-ui-masters-quotes`).
+- **Institutional Research Playbooks & Six-Market Checklists:** Bundled pre-trade risk checklists across all six markets (Crypto, US, CN, HK, Futures, Global), 5-step crypto analysis framework, company valuation playbook, `content-insight` media distillation, weekly trading plan synthesis, and append-only dual-track trading journals.
+- **Quantitative Strategy Backtesting, Screeners & Indicator Authoring:** Native `strategy_backtest` engine (Donchian breakout, RSI mean-reversion, EMA crossover, Bollinger Bands reversion, 200-day moving average, and 12-month momentum), `screener_run`/`screener_author` scanners, and `indicator_author` + `indicator_get_values`.
+- **Zero-Trust Dual-Track Gate & BYOK Privacy:** Order routing defaults to dry-run simulation; live orders require explicit `liveTrading: true`, interactive human approval, and an Ed25519 authority grant (fail-closed when headless). All API keys, broker credentials, holdings ledgers, and knowledge graphs stay strictly local under `~/.dsh-trading`.
 
 ---
 
@@ -53,7 +54,7 @@ The market opens every day, and bulls and bears fight it out every day. The most
 
 That is why dsh-trading exists: an **agent-native trading terminal** built on [DeepSeek Harness (DSH)](https://github.com/deepseek-ai). A professional trading workflow, paired with an AI agent in sync with the market: quotes, news, and capital flow are all in its view; research follows institutional-grade playbooks; and before a real order goes out, every single one passes an approval gate that only your hand can click.
 
-Crypto, US equities, China A-shares, Hong Kong stocks. One terminal. One agent. Nineteen-plus connectors. Zero vendor lock-in — every key stays on your machine.
+Crypto, US equities, China A-shares, Hong Kong stocks, domestic futures, global commodities/FX, and prediction markets. One terminal. One agent team. Twenty-three connectors. Ready-to-run Desktop App. Zero vendor lock-in — every key, position ledger, and knowledge graph stays on your machine.
 
 ![dsh-trading terminal — watchlist, chart stage with indicators, order book and derivatives panel](docs/screenshots/terminal-overview.png)
 
@@ -63,12 +64,12 @@ Crypto, US equities, China A-shares, Hong Kong stocks. One terminal. One agent. 
 
 | Dimension | Traditional Trading Terminals (TradingView / Broker Apps) | Generic AI Chatbots (ChatGPT / Copilot sidebars) | **dsh-trading (Agent-Native Terminal)** |
 |---|---|---|---|
-| **Multi-Market Scope** | Fragmented accounts across different apps | Text-only dialogue; no live market feeds | **Single unified watchlist & dock: Crypto, US, CN, HK, Futures** |
-| **Real-Time Market Depth** | Expensive subscriptions; walled gardens | Hallucinations; zero tick data or order books | **Live L2 order book, tick-by-tick trades, crypto funding rates & open interest** |
-| **Terminal Integration** | None or simple external alerts | Chatbox glued next to chart; manual copy-paste | **First-class terminal citizen: AI directly drives native quote tools & code analysis** |
-| **Multi-Agent Architecture** | None | Single prompt / single model | **Hierarchical team: Master (Lead) + Researcher + Quant Trader + Risk Reviewer** |
-| **Investment Research** | Manual reading across disparate websites | Generic web-search summaries | **Built-in institutional skills: Market risk checklists, 5-step crypto framework, valuation playbooks** |
-| **Strategy & Backtesting** | Proprietary scripting (Pine Script) in silos | Cannot run code on real market feeds | **Native `strategy_backtest` engine & indicator authoring inside the workspace** |
+| **Multi-Market Scope** | Fragmented accounts across different apps | Text-only dialogue; no live market feeds | **Host watchlist & dock unifying Crypto, US, CN, HK, Futures, 97 Global symbols + Macro/FOMC** |
+| **Real-Time Market Depth** | Expensive subscriptions; walled gardens | Hallucinations; zero tick data or order books | **Live L2 order book, tick trades, crypto perps (`-SWAP` / `ctVal`), OI/funding & KDAS anchors** |
+| **Terminal Integration** | None or simple external alerts | Chatbox glued next to chart; manual copy-paste | **First-class citizen: `trading_batch` calls, native quotes, backtesting & knowledge graph** |
+| **Multi-Agent Architecture** | None | Single prompt / single model | **`master` lead + 3 delegate presets + 2-stage `instrument-researcher` + `trader` + `risk-reviewer`** |
+| **Investment Research** | Manual reading across disparate websites | Generic web-search summaries | **6 market risk checklists, `content-insight` distillation, Obsidian-style graph & weekly plan** |
+| **Strategy & Backtesting** | Proprietary scripting (Pine Script) in silos | Cannot run code on real market feeds | **6 backtest paradigms + 5 screeners (`strategy_backtest` / `screener_run`) + custom indicators** |
 | **Execution Safety** | Manual clicks or opaque black-box algos | Dangerous unmonitored execution or none | **Dual-track gate: Dry-run by default, human approval for live orders, Ed25519 authority** |
 | **Privacy & Credentials** | Keys stored on third-party cloud servers | Prompts & data sent to external cloud AI | **100% BYOK stored locally on your machine, zero data redistribution** |
 
@@ -86,11 +87,11 @@ dsh-trading turns that relationship upside down: **the agent is a first-class ci
 
 2. **The agent can trade, but the gate is in your hands.** Market data, order books, derivatives positioning, news, and order placement are all native tools. Yet every order defaults to **dry-run simulation**; live routing requires an explicit `liveTrading: true` opt-in, and then each order still passes through interactive human approval. In headless environments it fails closed. One rule: no move without the gate. Nothing executes behind your back.
 
-3. **The agent trained for this.** Domain knowledge ships as bundled skills, not model improvisation: pre-trade risk checklists for every market ([crypto](.agents/skills/crypto-risk-checklist/SKILL.md) · [US](.agents/skills/us-risk-checklist/SKILL.md) · [CN](.agents/skills/cn-risk-checklist/SKILL.md) · [HK](.agents/skills/hk-risk-checklist/SKILL.md)), a five-step [crypto instrument analysis framework](.agents/skills/crypto-instrument-analysis/SKILL.md), a full [company analysis playbook](.agents/skills/company-analysis/SKILL.md), and a [trading journal discipline](.agents/skills/trading-notes-setup/SKILL.md) that dual-tracks "what the agent did" versus "what you did" — append-only and auditable.
+3. **The agent trained for this.** Domain knowledge ships as bundled skills, not model improvisation: pre-trade risk checklists for all six markets ([crypto](.agents/skills/crypto-risk-checklist/SKILL.md) · [US](.agents/skills/us-risk-checklist/SKILL.md) · [CN](.agents/skills/cn-risk-checklist/SKILL.md) · [HK](.agents/skills/hk-risk-checklist/SKILL.md) · [Futures](.agents/skills/futures-risk-checklist/SKILL.md) · [Global](.agents/skills/global-risk-checklist/SKILL.md)), a five-step [crypto instrument analysis framework](.agents/skills/crypto-instrument-analysis/SKILL.md), a full [company analysis playbook](.agents/skills/company-analysis/SKILL.md), [strategy paradigms](.agents/skills/trading-strategy-paradigms/SKILL.md), [knowledge curation](.agents/skills/knowledge-curation/SKILL.md), and a [trading journal discipline](.agents/skills/trading-notes-setup/SKILL.md) that dual-tracks "what the agent did" versus "what you did" — append-only and auditable.
 
 The risk checklist runs before every entry — a discipline most veterans never sustain in ten years (usually undone by "just this once").
 
-4. **One master leading a role-based team.** `master` (大师) is the all-capable multi-agent team lead: it grounds every trade question in the unified holdings ledger (`holdings_list` / `holdings_stage`) and per-market balance tools, pulls the user knowledge base first, then decomposes the task and delegates specialist work to persona-pinned subagents — instrument analysis to the researcher (`researcher_subagent`), trading-plan drafting to the trader (`trader_subagent`), plan review to the risk reviewer (`risk_reviewer_subagent`) — dispatching project skills by task type (analysis frameworks, market risk checklists, strategy paradigms with `strategy_backtest`, dynamic packages for one-off cross-instrument aggregation) before cross-checking and integrating a single conclusion. Cross-market overviews and order execution it can do itself, still dry-run by default behind the approval gate; delegates deliver analysis text only — execution stays with the master behind the gate. Beneath it: `trader` (交易员) for trading plans and gated execution, `instrument-researcher` (标的分析研究员) for disclosures, fundamentals and valuation, `risk-reviewer` (风险审查员) for exposure, stress scenarios and rejection conditions. Every role prioritizes project knowledge, news/announcements and fundamentals tools. Research and risk retain read-only quotes/candles but mount no order/cancel connectors; subagents inherit the session toolset with a persona pinning their duties — shared host tools remain visible, so role scoping is not a separate security sandbox.
+4. **One master leading a role-based team.** `master` (大师) is the all-capable multi-agent team lead: it grounds every trade question in the unified holdings ledger (`holdings_list` / `holdings_stage`) and per-market balance tools, pulls the user knowledge base first (`knowledge_search` / `knowledge_graph`), uses `trading_batch` and `trading_tools_index` for parallel exploration and dynamic tool discovery, and delegates specialist work to three dedicated delegate presets — instrument analysis to the researcher (`researcher_subagent`), trading-plan drafting to the trader (`trader_subagent`), and plan review to the risk reviewer (`risk_reviewer_subagent`) — dispatching project skills by task type (analysis frameworks, market risk checklists, strategy paradigms with `strategy_backtest`, `screener_run` stock/coin scanners) before cross-checking and integrating a single conclusion. Cross-market overviews and order execution it can do itself, still dry-run by default behind the approval gate; delegates deliver analysis text only — execution stays with the master behind the gate. Beneath it: `trader` (交易员) for trading plans and gated execution, `instrument-researcher` (标的分析研究员) with two-stage tool loading (keeping seldom-used schemas paged out until activated) for disclosures, fundamentals and valuation, and `risk-reviewer` (风险审查员) for exposure, stress scenarios and rejection conditions. Every role prioritizes project knowledge, news/announcements and fundamentals tools. Research and risk retain read-only quotes/candles but mount no order/cancel connectors; subagents inherit the session toolset with a persona pinning their duties — shared host tools remain visible, so role scoping is not a separate security sandbox.
 
 The base installer generates these four roles from enabled market bundles, including partial-market installations; the deployment default for new sessions is 大师 (master) — overridable per user in settings. Unmodified managed legacy market presets move to a sibling `.legacy-backup` root; custom, unstamped or extended directories remain untouched. No user preset data is deleted.
 
@@ -100,29 +101,31 @@ The base installer generates these four roles from enabled market bundles, inclu
 
 A shoddy terminal makes even the smartest agent an armchair general.
 
-- **Center-stage charting:** Lightweight Charts v5 with multi-timeframe switching (5m to weekly); MA / EMA / BOLL / MACD / RSI / KDJ / SuperTrend, all visually editable; strategy signal markers, knowledge-event pins, and drag-to-measure range statistics.
-- **Real market depth:** Live order book with buy/sell pressure bars, tick-by-tick trades, and a derivatives cockpit — open interest, funding rates with settlement countdown, long/short ratio, taker flow. Quote and fund-flow data are native tools the agent queries on demand.
-- **Cross-market watchlist:** Crypto perps next to AAPL next to 牧原股份, with sparklines and real-time quotes. Your whole risk universe in one dock.
+- **Three-view center stage (`MiddleStage` — Quotes / Strategies / Knowledge Base):** Features **Quotes** (Lightweight Charts v5 from 5m to weekly plus cross-source 5-day intraday routing for CN/HK equities, editable MA / EMA / BOLL / MACD / RSI / KDJ / SuperTrend with `indicator_get_values`, and **right-click KDAS key-day anchored lines**), **Strategies** (`@dshtrading/client-ui-strategies` powering `strategy_backtest`/`strategy_author` across 6 classical paradigms, equity curves, and 5 market screeners), and **Knowledge Base** (`@dshtrading/client-ui-knowledge` with an Obsidian-style force-directed graph, topic clustering, and Markdown knowledge cards).
+- **Six-panel right cockpit (`SessionRail`) & host watchlist ledger:** Right-rail panels unify Scheduled Tasks, Unified Holdings Ledger (`@dshtrading/holdings` two-zone staged/confirmed ledger with FX translation), Jin10 Flash News (with `hot` heat filtering), Macro Calendar & ~30 Central Bank Rates, Workspace Files, and Polymarket FOMC Prediction Markets. Left watchlist persists to `@dshtrading/watchlist` with custom groups, keeping crypto perps beside AAPL, Kweichow Moutai, and Spot Gold.
+- **Real market depth & perpetuals cockpit:** Live order book with buy/sell pressure bars, tick-by-tick trades, perpetual swap (`-SWAP`) open interest, funding rates with settlement countdown, long/short ratio, taker flow, OKX `crypto_set_leverage`, and automatic `ctVal` contract-to-coin conversion — all exposed natively to agents.
+- **Desktop client & locale packs out of the box:** `desktop/` ships dual-track Electron (macOS arm64/x64 & Windows x64 NSIS) and native Go/WebView `mygo` installers with `@dshtrading/client-ui-updater` and the bundled `@dshtrading/client-ui-masters-quotes` language pack.
 
 ### The operations surface is built in
 
 - **Usage statistics:** DSH's built-in *Performance & Usage* settings surface each session's live token stream and spend, resolved host-side so credentials never reach the browser.
-- **Plugin manager:** The Plugins section gains a manager tab: install from an npm spec or a git URL, flip next-start enablement, check and apply verified updates (gated on each package's declared minimum DSH version), roll back conflicting installs, and hand failures to a repair conversation. Writes are loopback-only and ride the official CLI; the desktop build ships a `dsh` shim so this works without a global install.
+- **Plugin manager & desktop updates:** The Plugins section gains a manager tab (install from npm or git, enable/disable switches, verified updates gated on declared minimum DSH versions, rollback, and failure handoff), while desktop builds bundle `@dshtrading/client-ui-updater` for in-app upgrades; writes are loopback-only.
 - **Per-model capability declarations:** Every custom `llm-pi-ai` provider card carries a capability area: declare image input and reasoning efforts per model (including the exact wire value each level sends), or archive a provider to take its route down without touching its stored keys.
 
 ---
 
 ## Supported Markets & Broker Connectors
 
-dsh-trading connects to 19+ market data providers, cryptocurrency exchanges, and licensed stock brokers:
+dsh-trading connects to 23 market data providers, cryptocurrency exchanges, licensed stock brokers, and cross-market intelligence feeds:
 
 | Market | Supported Providers & Broker Connectors | Coverage & Data Plane Capabilities | Execution & Auth Mode |
 |---|---|---|---|
-| **Cryptocurrency** | **Binance**, **OKX** (Paper/Live), **Bybit**, **CCXT** (spot-only aggregation across nine exchanges) | Binance / OKX / Bybit: spot & perpetual swap quotes, depth, historical candles, open interest, funding rates, long/short ratio. CCXT: spot quotes and candles on nine direct routes (binance, okx, bybit, gateio, kucoin, kraken, coinbase, bitfinex, htx) with per-venue candle interval mapping — no depth, no derivatives, no account reads, and perpetual `-SWAP` symbols are rejected | REST polling (no connector ships a WebSocket transport), BYOK API keys; OKX contract trading with auto ctVal unit conversion |
-| **US Equities** | **Alpaca** (Paper/Live), **Interactive Brokers (IBKR)**, **Yahoo Finance**, **FMP**, **Finnhub**, **Polygon.io** | Real-time quotes, historical K-lines, balance sheet & cash flow fundamentals, SEC filings, analyst sentiment | Official Broker REST/WS APIs, BYOK credentials; Yahoo Finance free public endpoints |
-| **China A-Shares** | **MiniQMT (QMT / XtQuant)**, **Tencent Finance**, **Eastmoney (东方财富)**, **HiThink (同花顺/富遥)**, **Tushare Pro**, **AkShare** | Real-time L1 quotes, auction prices, daily K-lines, sector capital flow, valuation metrics | Local MiniQMT broker client gateway for live execution; public REST & token authentication |
-| **Hong Kong Stocks** | **Longbridge (长桥 OpenAPI)**, **Futu OpenD (富途)**, **Tiger (老虎证券 OpenAPI)**, **Tencent HK** | Real-time quotes, Level 2 market data, warrants & CBBCs | Licensed Broker OpenAPI / Gateway execution; Tencent HK public quotes |
-| **Commodity Futures** | **HiThink (同花顺/富遥期货)** | Daily K-lines, intraday tick points, commodity & index futures data plane | Institutional REST API (data-plane only) |
+| **Cryptocurrency** | **Binance**, **OKX** (Paper/Live), **Bybit**, **CCXT** (spot-only aggregation across nine exchanges) | Binance / OKX / Bybit: spot & perpetual swap (`-SWAP`) quotes, depth, historical candles, open interest, funding rates, long/short ratio. CCXT: spot quotes and candles on nine direct routes (binance, okx, bybit, gateio, kucoin, kraken, coinbase, bitfinex, htx) with per-venue candle interval mapping — perpetual `-SWAP` symbols rejected | REST polling, BYOK API keys; OKX contract trading with `crypto_set_leverage` & auto `ctVal` unit conversion |
+| **US Equities** | **Alpaca** (Paper/Live), **Interactive Brokers (IBKR)**, **Yahoo Finance**, **FMP**, **Finnhub**, **Polygon.io**, **Stooq** | Real-time quotes, historical & intraday K-lines, balance sheet & cash flow fundamentals, SEC filings, analyst sentiment (`Stooq` preserved as backup CSV daily source, subject to exit anti-bot checks) | Official Broker REST/WS APIs, BYOK credentials; Yahoo Finance free public endpoints |
+| **China A-Shares** | **MiniQMT (QMT / XtQuant)**, **China Galaxy XYSZ (`xysz`)**, **Tencent Finance**, **Eastmoney (东方财富)**, **HiThink (同花顺/富遥)**, **Tushare Pro**, **AkShare** | Real-time L1/L2 quotes, auction prices, daily/minute K-lines (`xysz` serves full 1m–1M history since 2013 and A-share rosters), 5-day cross-source intraday routing, sector capital flow, valuation metrics | Local MiniQMT gateway for live execution; local FastAPI bridge (`xysz-api`); public REST & token authentication |
+| **Hong Kong Stocks** | **Longbridge (长桥 OpenAPI)**, **Futu OpenD (富途)**, **Tiger (老虎证券 OpenAPI)**, **Tencent HK** | Real-time quotes, Level 2 market data, 5-day cross-source intraday routing, warrants & CBBCs | Licensed Broker OpenAPI / Gateway execution; Tencent HK public quotes |
+| **Commodity & Index Futures** | **HiThink (同花顺/富遥期货)** | Daily K-lines, intraday tick points, dominant contracts across SHFE/DCE/CZCE/CFFEX/GFEX | Institutional REST API (data-plane only) |
+| **Global Markets, Macro & Predictions** | **Jin10 MCP (`jin10`)**, **Polymarket (`polymarket`)** | 97 global precious metals, crude oil, copper, FX & index instruments (`1m`–`1h`), real-time flash news with `hot` filter, economic calendar & ~30 central bank policy rates; Polymarket read-only FOMC rate-path implied probabilities | Jin10 Streamable HTTP MCP token (BYOK, public heat feed quota-free); Polymarket public Gamma/CLOB API (zero keys, strictly read-only) |
 
 **Hot-swappable data planes:** Not happy with a data source? Swap it. **Settings → Trading** routes any market to any installed provider: the quote panel re-routes on save, agent sessions pick it up on their next turn — no restarts, no config archaeology.
 
@@ -147,30 +150,34 @@ Without your signature, not a single cent moves.
 
 ## Quick Start
 
-### 1. Installation
+### 1. Desktop App (Recommended, Zero Setup)
+
+Download an installer from [GitHub Releases](https://github.com/zhu1090093659/dsh-trading/releases) (dual-track Electron and native Go/WebView `mygo` builds for macOS Apple Silicon / Intel `.dmg`/`.zip` and Windows x64 NSIS `.exe`). The app bundles Node, pnpm, and the DSH host runtime, automatically seeds an isolated `~/.dsh-trading` home with the `trading-web` profile on first launch without touching `~/.dsh`, and receives updates via the built-in `@dshtrading/client-ui-updater`. See [desktop/README.md](desktop/README.md).
+
+### 2. CLI Installation & Launch
 
 Trading runs in its own dedicated DSH home directory (`~/.dsh-trading`) so it never mixes with your main dsh web home (`~/.dsh`). Every dsh-trading package resolves paths through `$DSH_HOME`.
 
 ```sh
 # Install into a dedicated DSH profile (pick your markets)
 export DSH_HOME=~/.dsh-trading
-dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtrading/us
+dsh plugin --profile trading-web add @dshtrading/base @dshtrading/gui @dshtrading/bot-api @dshtrading/crypto @dshtrading/us
 
-# Or install all markets at once
-dsh plugin --profile trading-web add @dshtrading/base @dshtrading/crypto @dshtrading/us @dshtrading/cn @dshtrading/hk
+# Or install all six markets at once
+dsh plugin --profile trading-web add @dshtrading/base @dshtrading/gui @dshtrading/bot-api @dshtrading/crypto @dshtrading/us @dshtrading/cn @dshtrading/hk @dshtrading/futures @dshtrading/global
 
 # Serve the browser UI in this profile (run once): insert the in-box web host layer
-node -e "const f=(process.env.DSH_HOME||require('os').homedir()+'/.dsh')+'/profiles/trading-web/package.json',fs=require('fs'),m=JSON.parse(fs.readFileSync(f,'utf8'));m.dsh.profile.bundles.includes('@deepseek-ai/dsh-web-app')||m.dsh.profile.bundles.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(f,JSON.stringify(m,null,2)+'\n')"
+node -e "const f=(process.env.DSH_HOME||require('os').homedir()+'/.dsh-trading')+'/profiles/trading-web/package.json',fs=require('fs'),m=JSON.parse(fs.readFileSync(f,'utf8'));m.dsh.profile.bundles.includes('@deepseek-ai/dsh-web-app')||m.dsh.profile.bundles.splice(1,0,'@deepseek-ai/dsh-web-app');fs.writeFileSync(f,JSON.stringify(m,null,2)+'\n')"
 ```
 
-### 2. Launch
+Launch:
 
 ```sh
 # From a repository checkout: install the wrapper once, then launch
 cp scripts/home/dsh-trading ~/.local/bin/ && chmod +x ~/.local/bin/dsh-trading
 dsh-trading --profile trading-web        # serves on port 8888 by default
 
-# Installed from npm only? The wrapper sets DSH_HOME and the 8888 default:
+# Installed from npm only? Set DSH_HOME and port 8888 explicitly:
 DSH_HOME=~/.dsh-trading dsh --profile trading-web --port 8888
 ```
 
@@ -183,12 +190,12 @@ Profiles ship for different operational needs:
 | `trading-all` | Headless, all markets | dsh-base + dsh-headless + base + all + cn + crypto + hk + us |
 | `trading-bot` | Bot surface: agent host + `/dshtrading/api`, loopback-only | dsh-base + base + bot + bot-api + crypto — source in the private [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot) repo |
 
-Open the printed URL in your browser: watchlist on the left, chart in the center, and your AI trading agent on the right. Create a new conversation → select a market preset → ask the agent: *"What do you see in the market today?"*
+Open the printed URL in your browser: six-market watchlist on the left, Quotes / Strategies / Knowledge Base stage in the center, and your AI trading team and right-rail cockpit on the right. Create a new conversation → choose 大师 (`master`, default) or a market preset → ask the agent: *"What do you see in the market today?"*
 
 ### 3. Build From Source
 
 ```sh
-pnpm install && pnpm build && pnpm test   # Node per engines (^22.19.0 || >=24.0.0), pnpm 11
+pnpm install && pnpm build && pnpm test   # Requires Node >= 24.9.0, pnpm 11
 ./scripts/refresh-profile.sh              # Rebuild profile file: copies (default trading-web)
 ```
 
@@ -201,11 +208,14 @@ See [docs/ops/running.md](docs/ops/running.md) for the complete running, profile
 A modular, layered [Cordis](https://github.com/cordisjs) microkernel architecture where markets compose cleanly without interference:
 
 ```
-@dshtrading/base          ← Core: account/order/quote contracts, approval gate, GUI shell
-├── @dshtrading/crypto    ← Binance / OKX / Bybit / CCXT + skills + presets
-├── @dshtrading/us        ← Yahoo / Alpaca / FMP / Finnhub / Polygon / IBKR + skills + presets
-├── @dshtrading/cn        ← Tencent / Eastmoney / Tushare / AkShare / MiniQMT + skills + presets
-└── @dshtrading/hk        ← Tencent HK / Longbridge / Futu / Tiger + skills + presets
+@dshtrading/base          ← Core: account/order/quote contracts, approval gate, presets, trading_batch
+├── @dshtrading/gui + bot-api  ← Three-column cockpit UI, /dshtrading/api bridge, Strategies & Knowledge UI
+├── @dshtrading/crypto    ← Binance / OKX / Bybit / CCXT + perpetuals + skills
+├── @dshtrading/us        ← Yahoo / Alpaca / FMP / Finnhub / Polygon / IBKR / Stooq + skills
+├── @dshtrading/cn        ← Tencent / Eastmoney / HiThink / Tushare / AkShare / MiniQMT / XYSZ + skills
+├── @dshtrading/hk        ← Tencent HK / Longbridge / Futu / Tiger + skills
+├── @dshtrading/futures   ← HiThink Chinese commodity & index futures + skills
+└── @dshtrading/global    ← Jin10 MCP 97 global assets + Polymarket FOMC odds + skills
 ```
 
 Six architectural invariants safeguard the system:
@@ -231,6 +241,7 @@ Six architectural invariants safeguard the system:
 | **China A-Shares** | Tencent Finance / Eastmoney / HiThink (Fuyao) | Public endpoints; HiThink REST API for daily K, fundamentals & auction data; live execution via local MiniQMT broker gateway |
 | **Futures (CN)** | HiThink (Fuyao) | HiThink REST API for daily K, intraday points, commodity & index futures; data plane only |
 | **Hong Kong** | Tencent HK / Longbridge | Public endpoints; licensed broker OpenAPI/Gateway for execution |
+| **Global, Macro & Prediction** | Jin10 MCP / Polymarket | Jin10 Streamable HTTP MCP (1500 calls/day/tool, flash items return titles/timestamps/links only); Polymarket read-only public API |
 | **Crypto** | Binance / OKX | Official exchange APIs; OKX paper trading with BYOK credentials |
 | **Crypto Fundamentals** | CoinCap | Public REST, individual use only — no redistribution, no bulk scraping |
 
@@ -244,19 +255,23 @@ It is an **AI-assisted trading terminal**, not an unattended live-trading bot. O
 
 ### Which exchanges, brokers, and market data APIs can I connect?
 
-dsh-trading supports 19+ connectors: **Binance, OKX, Bybit, CCXT (spot quotes and candles on nine direct routes: binance / okx / bybit / gateio / kucoin / kraken / coinbase / bitfinex / htx)** for crypto; **Alpaca, Interactive Brokers (IBKR), Yahoo Finance, FMP, Finnhub, Polygon.io** for US stocks; **MiniQMT, Tencent Finance, Eastmoney, HiThink, Tushare Pro, AkShare** for China A-shares; **Longbridge, Futu OpenD, Tiger OpenAPI** for Hong Kong stocks; and **HiThink** for commodity futures. See the [connector configuration guide](docs/guides/connectors-guide.md).
+dsh-trading ships 23 connectors: **Binance, OKX, Bybit, CCXT (spot quotes and candles on nine direct routes: binance / okx / bybit / gateio / kucoin / kraken / coinbase / bitfinex / htx)** for crypto; **Alpaca, Interactive Brokers (IBKR), Yahoo Finance, FMP, Finnhub, Polygon.io, Stooq** for US stocks; **MiniQMT, China Galaxy XYSZ (`xysz`), Tencent Finance, Eastmoney, HiThink, Tushare Pro, AkShare** for China A-shares; **Longbridge, Futu OpenD, Tiger OpenAPI, Tencent HK** for Hong Kong stocks; **HiThink** for commodity & index futures; and **Jin10 MCP** (97 global FX/commodity/index symbols, economic calendar, central bank rates & flash news) plus **Polymarket** (read-only FOMC probabilities) for cross-market intelligence. See the [connector configuration guide](docs/guides/connectors-guide.md).
 
 ### Which AI models can be used with dsh-trading?
 
-dsh-trading runs on DeepSeek Harness (DSH), supporting **DeepSeek (V3 / R1)**, Anthropic Claude, OpenAI GPT-4o, and custom OpenAI-compatible endpoints or local models (via Ollama / vLLM). You can configure reasoning effort, image capabilities, and token budgets per model in settings.
+dsh-trading runs on DeepSeek Harness (DSH), supporting **DeepSeek (V4.1 / V3 / R1)**, Anthropic Claude, OpenAI GPT series, Google Gemini, Kimi, GLM, and custom OpenAI-compatible endpoints or local models (via Ollama / vLLM). You can configure reasoning effort, image capabilities, and token budgets per model in settings.
+
+### Is there a standalone Desktop App? Will it touch my existing DSH setup?
+
+Yes. [GitHub Releases](https://github.com/zhu1090093659/dsh-trading/releases) ships dual-track Electron and native Go/WebView `mygo` builds for macOS (arm64/x64) and Windows x64. They bundle Node/pnpm and the six-market payload, isolate all configs and sessions under `~/.dsh-trading` separately from `~/.dsh`, and include the built-in `@dshtrading/client-ui-updater`. See [desktop/README.md](desktop/README.md).
 
 ### Do I need API keys to use the terminal?
 
-Some public market data sources (such as Tencent Finance, Eastmoney, and Yahoo Finance) work out of the box without keys. Authenticated data services, licensed brokers, cryptocurrency exchanges, and your selected AI provider require separate credentials. You supply your own keys (**BYOK**); credentials remain strictly on your local machine.
+Some public market data sources (such as Tencent Finance, Eastmoney, Yahoo Finance, and read-only Polymarket FOMC feeds) work out of the box without keys. Authenticated services (Jin10 global/calendar MCP, broker gateways, cryptocurrency exchanges) and your selected AI provider require separate credentials (**BYOK**), stored strictly on your local machine under `~/.dsh-trading`.
 
-### Can I backtest trading strategies and build custom indicators?
+### Can I backtest trading strategies, screen stocks, and build a knowledge graph?
 
-Yes. The terminal includes a native `strategy_backtest` engine alongside classical quantitative paradigms (Donchian breakout, RSI mean-reversion, EMA crossover, Bollinger Bands reversion, 200-day trend following, momentum). You can also author custom indicators (SuperTrend, TD9, OBV+MA) that render directly onto the chart.
+Yes. The center stage natively runs `strategy_backtest` / `strategy_author` across classical quantitative paradigms (Donchian breakout, RSI mean-reversion, EMA crossover, Bollinger Bands reversion, 200-day moving average, 12-month momentum) and 5 market screeners (`screener_run`), alongside custom indicators (`indicator-authoring`) and right-click **KDAS key-day anchors**. An Obsidian-style Knowledge Graph and `content-insight` workflow organize your research notes locally.
 
 ### Is dsh-trading free for commercial use?
 
@@ -267,10 +282,14 @@ No. The [PolyForm Noncommercial 1.0.0 license](LICENSE) permits personal, educat
 ## Documentation
 
 - [Documentation Index](docs/README.md)
+- [Desktop App Guide (macOS & Windows)](desktop/README.md)
 - [Running, Profiles & Development](docs/ops/running.md)
-- [Connector Onboarding & Configuration](docs/guides/connectors-guide.md)
+- [Connector Onboarding & Configuration (23 Connectors)](docs/guides/connectors-guide.md)
 - [New Connector Playbook](docs/guides/connector-playbook.md)
 - [Skills Architecture Guide](docs/guides/skills-guide.md)
+- [Strategy Tab & Screener Design](docs/design/strategy-tab.md)
+- [Trading Knowledge Graph Design](docs/design/knowledge-graph.md)
+- [Unified Holdings Ledger Design](docs/design/holdings-ledger.md)
 - [Symbol Vocabulary Standard](docs/guides/symbol-vocabulary.md)
 - [Exchange Routing & Data Plane](docs/guides/exchange-routing.md)
 - [Analysis & Quantitative Roadmap](docs/roadmap/analysis-roadmap.md)
@@ -312,4 +331,4 @@ Go experience it. Go make the mistakes. Go review your trades. The road is long 
 
 ### Topics & Search Tags
 
-`ai-trading` · `algorithmic-trading` · `quantitative-finance` · `deepseek` · `deepseek-harness` · `trading-terminal` · `lightweight-charts` · `technical-analysis` · `crypto-trading` · `binance` · `okx` · `bybit` · `ccxt` · `stock-trading` · `alpaca` · `interactive-brokers` · `miniqmt` · `futu` · `longbridge` · `multi-agent-systems` · `backtesting` · `risk-management`
+`ai-trading` · `ai-trading-terminal` · `algorithmic-trading` · `quantitative-finance` · `deepseek` · `deepseek-v4.1` · `deepseek-harness` · `trading-terminal` · `lightweight-charts` · `kdas-anchored-vwap` · `technical-analysis` · `crypto-trading` · `perpetual-futures` · `binance` · `okx` · `bybit` · `ccxt` · `stock-trading` · `us-equities` · `china-a-shares` · `hong-kong-stocks` · `commodity-futures` · `alpaca` · `interactive-brokers` · `miniqmt` · `xysz` · `futu` · `longbridge` · `jin10` · `polymarket` · `knowledge-graph` · `stock-screener` · `multi-agent-systems` · `backtesting` · `risk-management` · `electron-desktop` · `golang-webview`

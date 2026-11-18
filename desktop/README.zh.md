@@ -67,7 +67,7 @@ npm run dist:win       # dist/*.exe（nsis）+ *.zip（可从 macOS 交叉构建
 
 | 环境变量 | 默认值 | 含义 |
 | --- | --- | --- |
-| `DSH_HOME` | `~/.dsh` | 与 dsh CLI 共享的数据目录（配置、会话、密钥）。仅在隔离测试时设置。 |
+| `DSH_HOME` | `~/.dsh-trading` | 与 `dsh-trading` CLI 共享的独立交易数据目录（配置、会话、密钥）。仅在隔离测试时设置。 |
 | `DSH_DESKTOP_NO_ATTACH` | 未设置 | 设置后跳过默认 URL 的移交检查，总是启动内置宿主。 |
 
 宿主版本锁定在 `runtime/host/package.json`；trading 载荷版本在构建时取自 workspace 包。两者都记录进 `resources/runtime/VERSION.json`。
@@ -84,7 +84,8 @@ npm run dist:win       # dist/*.exe（nsis）+ *.zip（可从 macOS 交叉构建
 
 - **签名**：本机 macOS 构建按钥匙串里自动发现的 Apple Development 身份签名（`Identifier=com.dsh-trading.desktop`，团队 `3H4FK5CBYJ`）并启用 hardened runtime，因此 macOS 的隐私授权可以跨重建保留。授权本身仍是人工步骤——在**系统设置 → 隐私与安全性 → 辅助功能 / 屏幕录制**里加入 `/Applications/DSH Trading.app`；embedded 模式下驱动不会主动弹窗。开发签名仍会被 Gatekeeper 拒绝，所以**发布产物保持未签名**，直到 Developer ID 证书 + 公证落地；因此下载安装仍需要**系统设置 → 隐私与安全性 → "仍要打开"**（首次被拦后出现）或 `xattr -cr "/Applications/DSH Trading.app"`。Windows 有 SmartScreen 提示（更多信息 → 仍要运行）。用 `CSC_NAME=<证书 SHA-1>` 可固定签名身份；在没有任何可用身份的机器上构建时产物与从前一致，并在日志里打出显式横幅。
 - **Windows arm64 与 Linux** 暂不构建；运行时布局已支持后续加入。
-- 全新机器首次启动会花几秒钟把预装 profile 拷贝进 `~/.dsh`（一次性）。
+- 全新机器首次启动会花几秒钟把预装 profile 拷贝进 `~/.dsh-trading`（一次性）。
+- **Office 技能与 `load_workspace_dependencies` 默认禁用。** 应用不会自动下载或复制约 359MB 的 `primary-runtime` 载荷；启动宿主前会依次检查 `resources/runtime/primary-runtime` 与 `$DSH_HOME/dsh-runtimes/dsh-primary-runtime`，仅当目录包含 `runtime.json` 时才设置 `DSH_PRIMARY_RUNTIME`，否则这两项官方能力保持显式禁用，绝不静默回退到系统 Python。若需启用，请将兼容载荷放入上述任一目录（或手动导出 `DSH_PRIMARY_RUNTIME`）；桌面端刻意不使用 `~/.dsh` 主目录。
 - 内置载荷由 workspace 检出状态构建；拉取更新后需重新构建，才能把连接器或策略更新带进安装包。
 
 ## mygo 壳（迁移目标）

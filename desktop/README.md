@@ -67,7 +67,7 @@ npm run dist:win       # dist/*.exe (nsis) + *.zip (cross-build from macOS)
 
 | Environment variable | Default | Meaning |
 | --- | --- | --- |
-| `DSH_HOME` | `~/.dsh` | Data home shared with the dsh CLI (config, sessions, keys). Set only for isolated testing. |
+| `DSH_HOME` | `~/.dsh-trading` | Isolated trading data home shared with the `dsh-trading` CLI (config, sessions, keys). Set only for isolated testing. |
 | `DSH_DESKTOP_NO_ATTACH` | unset | When set, skip the default-URL handoff check and always spawn a bundled host. |
 
 The host version is pinned in `runtime/host/package.json`; the trading payload versions come from the workspace packages at build time. Both are recorded into `resources/runtime/VERSION.json`.
@@ -84,7 +84,7 @@ The host version is pinned in `runtime/host/package.json`; the trading payload v
 
 - **Signing**: local macOS builds sign with the Apple Development identity auto-discovered in the keychain (`Identifier=com.dsh-trading.desktop`, team `3H4FK5CBYJ`) plus hardened runtime, so macOS privacy grants survive rebuilds. The grant itself is a manual step — add `/Applications/DSH Trading.app` under **System Settings → Privacy & Security → Accessibility / Screen Recording**; in embedded mode the driver never prompts. Development-signed builds are still rejected by Gatekeeper, so **release artifacts stay unsigned** until a Developer ID certificate plus notarization land. Downloading a release therefore still needs **System Settings → Privacy & Security → "Open Anyway"** (appears after the first blocked attempt) or `xattr -cr "/Applications/DSH Trading.app"`; Windows shows SmartScreen (More info → Run anyway). Pin a specific identity with `CSC_NAME=<cert SHA-1>`; a machine without any usable identity keeps producing the previous unsigned bundle and says so in a banner.
 - **Windows arm64 and Linux** are not built; the runtime layout already covers adding them.
-- First launch on a fresh machine spends a few seconds copying the preinstalled profile into `~/.dsh` (one-time).
+- First launch on a fresh machine spends a few seconds copying the preinstalled profile into `~/.dsh-trading` (one-time).
 - **Office skills and `load_workspace_dependencies` ship disabled.** The app never downloads or copies the primary-runtime payload (about 359MB). Before spawning the host it looks for `resources/runtime/primary-runtime`, then `$DSH_HOME/dsh-runtimes/dsh-primary-runtime`, and sets `DSH_PRIMARY_RUNTIME` only when the directory holds `runtime.json`; otherwise the two official rows stay explicitly disabled rather than falling back to a system Python. Place a compatible payload in either location (or export `DSH_PRIMARY_RUNTIME` yourself) to enable them. The host `~/.dsh` instance is deliberately never used.
 - The bundled payload is built from the workspace checkout state; rebuild after pulling to carry connector or strategy updates into the installer.
 
