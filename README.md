@@ -2,7 +2,7 @@
 
 > **Current Status & Handoff** / **当前状态与交接**：See [docs/current-state.md](docs/current-state.md) (accepted milestones, fail-closed invariants, documentation map).
 
-**English** | [简体中文](README_zh.md)
+**English** | [简体中文](README_zh.md) | [Русский](README_ru.md)
 
 **dsh-trading** is an open-source, agent-native AI trading terminal, cross-platform desktop application (macOS / Windows), and multi-agent quantitative investment research platform built on [DeepSeek Harness (DSH)](https://github.com/deepseek-ai) and the [Cordis](https://github.com/cordisjs) microkernel. It unifies **Cryptocurrency** (Binance, OKX with perpetual swap trading, Bybit, CCXT across 9 direct spot venues), **US Equities** (Alpaca, Interactive Brokers, Yahoo Finance, FMP, Finnhub, Polygon.io, Stooq), **China A-Shares** (MiniQMT, China Galaxy XYSZ, Eastmoney, Tencent Finance, HiThink, Tushare Pro, AkShare), **Hong Kong Stocks** (Longbridge, Futu, Tiger, Tencent HK), **Chinese Commodity & Index Futures** (HiThink), and **Global Commodities, FX & Prediction Markets** (Jin10 MCP 97 instruments + read-only Polymarket FOMC probabilities) inside a single modular workspace.
 
@@ -295,6 +295,7 @@ No. The [PolyForm Noncommercial 1.0.0 license](LICENSE) permits personal, educat
 - [Analysis & Quantitative Roadmap](docs/roadmap/analysis-roadmap.md)
 - [Architecture Decision Log (Spikes)](spikes/REVIEW-LOG.md)
 - [简体中文说明](README_zh.md)
+- [Русский перевод](README_ru.md)
 
 ## Friendly Links
 
