@@ -567,6 +567,8 @@ export type MarketLocaleKey =
   | 'indicator.loadInvalid'
   | 'indicator.loadRetry'
   | 'indicator.params'
+  | 'indicator.switchOn'
+  | 'indicator.switchOff'
   | 'indicator.apply'
   | 'indicator.cancel'
   | 'indicator.symbolOverride'

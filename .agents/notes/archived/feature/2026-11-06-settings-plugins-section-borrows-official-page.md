@@ -1,6 +1,6 @@
 # Agent Note: 插件管理入口落在设置壳的插件分区（借壳官方整页）
 
-Status: implemented
+Status: superseded（2026-11-21 起借壳实现已删除：官方 @deepseek-ai/dsh-client-ui-settings-plugins 成为设置里唯一的插件分区；交易壳内可操作插件管理器随之失去入口，作为已知能力缺口记录在 process/2026-11-21-sdk-upgrade-npm-0.2.2-rc.5.md。）
 
 ## Problem
 

@@ -4,16 +4,18 @@
  * 主图指标读数行（副图指标读数在 TvChart 各自 pane 内）+
  * 底部横向指标快捷词条带 + 底部市场指数状态栏。
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement,
+} from 'react'
 import {
   fetchKlines, fetchKlinesFrom, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiOrder,
-  cancelGuiOrder, fetchSouthboundHoldings, fetchActiveBuy, type TradeRowsReason,
+  fetchSouthboundHoldings, fetchActiveBuy, type TradeRowsReason,
 } from './api.ts'
 import { setHoldingsPanelOpen } from './holdings-store.ts'
 import { tradeModeStore, writeTradeMode } from './trade-mode-store.ts'
 import {
-  createOrderIntentTracker, submitGuiCancel, submitGuiOrder,
+  createOrderIntentTracker, submitGuiOrder,
   type GuiApprovalContextProps, type OrderIntentTracker,
 } from './gui-approval.ts'
 import { TvChart, toBar } from './TvChart.tsx'
@@ -26,8 +28,8 @@ import { paperTradingStore } from './paper-trading-store.ts'
 import { computeRangeStats } from './range-stats.ts'
 import { readoutItems } from './indicator-readout.ts'
 import {
-  addKdasDay, clampRectInto, formatKdasDay, isKdasDay, kdasAnchorSourceDay, kdasOutputKey, kdasSlots,
-  removeKdasDay, utcDayNum,
+  KDAS_ID, KDAS_MENU_TARGET, formatKdasDay, kdasAnchorSourceDay, kdasOutputKey, kdasSlots, utcDayNum,
+  openKdasContextMenu,
 } from './kdas-menu.ts'
 import { IconIndicators } from './icons.tsx'
 import type { MarketLocaleKey } from './contract.ts'
@@ -76,8 +78,8 @@ import type { ChartSignalMarkerInput, ChartKnowledgeMarkerInput } from './TvChar
 import css from './quote-stage.module.css'
 
 const INTERVAL_KEY_PREFIX = 'dshtrading.interval.'
-/** KDAS 指标 id（custom 库自定义指标；Key Day 即 kd1..kd8 参数）。 */
-const KDAS_ID = 'kdas'
+/** 关键日线缺色时的圆点色（主图叠加组尚无该输出）。 */
+const KDAS_LINE_FALLBACK = '#8e95a3'
 const ORDERBOOK_OPEN_KEY = 'dshtrading.orderbook.open'
 const TRADE_DESK_OPEN_KEY = 'dshtrading.tradeDesk.open'
 const TICKER_POLL_MS = 5000
@@ -254,11 +256,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     () => selectApplicableInstances(visibleInstances, market, chartInterval),
     [visibleInstances, market, chartInterval],
   )
-  /**
-   * KDAS 关键日右键菜单：null = 关闭。x/y 为 TvChart 容器系的原始命中坐标；
-   * placed 为量测钳位后的最终落点（null = 待量测，先隐藏渲染防右缘溢出闪现）。
-   */
-  const [kdasMenu, setKdasMenu] = useState<{ index: number; x: number; y: number; placed: { x: number; y: number } | null } | null>(null)
   const chartBoxRef = useRef<HTMLDivElement | null>(null)
   /** 行情板块页签（图表 | 基本面 | 新闻 | 公告）：跨标的保持。 */
   const [stageTab, setStageTab] = useState<'chart' | 'derivatives' | 'fundamentals' | 'news' | 'announcements'>('chart')
@@ -328,6 +325,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const activeBalances = tradeMode === 'paper' ? paperTradingStore.getBalances() : tradeBalances
   const activeOrders = tradeMode === 'paper' ? paperTradingStore.getOrders() : tradeOrders
   const activeFills = tradeMode === 'paper' ? paperTradingStore.getFills() : tradeFills
+  void activeOrders
+  void activeFills
   const paperCash = paperTradingStore.getAccount().cash
   void paperTick // 模拟账本 subscribe 通知的重渲染驱动（paper 行直读 store）
 
@@ -537,14 +536,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
    * 稳定意图 id。未知结果/网络失败重试续用同一意图；参数变化、成功或主动新动作轮换。
    */
   const orderIntentRef = useRef<OrderIntentTracker | null>(null)
-  const cancelIntentRef = useRef<OrderIntentTracker | null>(null)
   const orderIntentTracker = (): OrderIntentTracker => {
     orderIntentRef.current ??= createOrderIntentTracker()
     return orderIntentRef.current
-  }
-  const cancelIntentTracker = (): OrderIntentTracker => {
-    cancelIntentRef.current ??= createOrderIntentTracker()
-    return cancelIntentRef.current
   }
 
   const onSubmitGuiOrder = async (input: Parameters<typeof placeGuiOrder>[1]): Promise<Awaited<ReturnType<typeof placeGuiOrder>>> => {
@@ -590,22 +584,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     if (stageTab === 'derivatives' && market !== 'crypto') setStageTab('chart')
     if (stageTab === 'fundamentals' && market === 'crypto') setStageTab('chart')
   }, [stageTab, market])
-
-  /** GUI 撤单：与下单同门槛（官方当前会话 + 稳定意图 + 宿主逐动作审批）。 */
-  const onCancelGuiOrder = async (orderId: string, sym?: string): Promise<boolean> => {
-    const ok = await submitGuiCancel({
-      market: activeMarket,
-      orderId,
-      symbol: sym,
-      sessionId: guiSessionId?.(),
-      tracker: cancelIntentTracker(),
-      cancel: cancelGuiOrder,
-    })
-    if (ok) {
-      void refreshTradeDesk(activeMarket)
-    }
-    return ok
-  }
 
   // 换标的：立即清场
   useEffect(() => {
@@ -702,24 +680,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     return () => window.removeEventListener('keydown', onKey)
   }, [rangeMode])
 
-  // KDAS 关键日菜单：Esc / 外点关闭（HomeHistory 行菜单同款三路关闭）。
-  useEffect(() => {
-    if (kdasMenu === null) return
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setKdasMenu(null)
-    }
-    const onPointerDown = (event: PointerEvent): void => {
-      if (event.target instanceof Node && kdasMenuRef.current?.contains(event.target)) return
-      setKdasMenu(null)
-    }
-    window.addEventListener('keydown', onKey)
-    document.addEventListener('pointerdown', onPointerDown, true)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.removeEventListener('pointerdown', onPointerDown, true)
-    }
-  }, [kdasMenu])
-
   /**
    * 五日级别显示档位（滚轮换档，1..5 个交易日，默认 1 个）：档位只决定图上画几段，
    * 不参与量比计算——比较窗口恒为取数落地的最近 5 个交易日（见 five-day-series
@@ -793,54 +753,14 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     [rangeSelection, seriesKlines],
   )
 
-  /* ---- KDAS 关键日右键菜单 ---- */
+  /* ---- KDAS 关键日右键菜单（官方 ContextMenus：本仓只贡献 target 与动作） ---- */
 
-  const kdasMenuRef = useRef<HTMLDivElement | null>(null)
   const kdasInstance = applicableInstances.find(instance => instance.id === KDAS_ID)
   // 菜单启用守卫：聚焦标的 + 日 K 周期 + KDAS 已激活、对当前标的可见且在当前市场/级别适用。
   const kdasMenuEnabled = market !== undefined && symbol !== undefined && !INTRADAY_INTERVALS.has(chartInterval) && kdasInstance !== undefined
   const kdasScopeParams = kdasInstance !== undefined && market !== undefined && symbol !== undefined
     ? effectiveInstanceParams(kdasInstance, market, symbol)
     : undefined
-  /** 右键命中柱 → 菜单动作面（存储口径 UTC 取日，显示标签走本地口径）。 */
-  const openKdasMenu = useCallback((info: { index: number; x: number; y: number }): boolean => {
-    if (!kdasMenuEnabled || seriesKlines === null || seriesKlines[info.index] === undefined) return false
-    setKdasMenu({ ...info, placed: null })
-    return true
-  }, [kdasMenuEnabled, seriesKlines])
-
-  // 菜单钳位：挂载帧量测真实尺寸 → clampRectInto 收进图表容器（右缘/下缘越界平移）。
-  // 全程容器系：style 的 left/top 相对 chartBox，outer 只取尺寸（原点归零），坐标不做视口混算。
-  useLayoutEffect(() => {
-    if (kdasMenu === null || kdasMenu.placed !== null) return
-    const menuEl = kdasMenuRef.current
-    const boxEl = chartBoxRef.current
-    if (menuEl === null || boxEl === null) return
-    const menuRect = menuEl.getBoundingClientRect()
-    const placed = clampRectInto(
-      { x: kdasMenu.x, y: kdasMenu.y, width: menuRect.width, height: menuRect.height },
-      { x: 0, y: 0, width: boxEl.clientWidth, height: boxEl.clientHeight },
-    )
-    setKdasMenu((prev) => (prev === null || prev.placed !== null ? prev : { ...prev, placed }))
-  }, [kdasMenu])
-
-  const applyKdasParams = useCallback((params: Record<string, number>): void => {
-    if (market === undefined || symbol === undefined) return
-    setIndicatorParams(KDAS_ID, params, symbolScopeKey(market, symbol))
-  }, [market, symbol, setIndicatorParams])
-
-  const kdasAddDay = useCallback((day: number): void => {
-    // 未挂载实例时 setParams(scopeKey) 的桥/本地语义即「建实例（全局 schema 默认）
-    // + 写本标的覆盖」，挂载与追加天然合一；始终写覆盖，不污染全局 params。
-    const result = addKdasDay(kdasScopeParams ?? {}, day)
-    if (result.ok) applyKdasParams(result.params)
-  }, [kdasScopeParams, applyKdasParams])
-
-  const kdasRemoveDay = useCallback((day: number): void => {
-    if (kdasScopeParams === undefined) return
-    const result = removeKdasDay(kdasScopeParams, day)
-    if (result.ok) applyKdasParams(result.params)
-  }, [kdasScopeParams, applyKdasParams])
 
   // 指标调度：适用实例 × 图表序列 × 外部序列 → 渲染输入（symbol visibility + 适用范围
   // 双重过滤后的实例才参与计算与绘制；主图与副图同规则）。声明了 aux 的实例另需外部
@@ -864,6 +784,40 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   }, [seriesKlines, applicableInstances, rosterVersion, market, symbol, auxSeries, auxState.liveKeys, fiveDayBarAux])
 
   const mainOverlays = useMemo(() => indicatorGroups.filter(group => group.pane === 'main'), [indicatorGroups])
+
+  /** 关键日线的图上颜色（菜单圆点与图同色；叠加组里还没有该输出时用兜底色）。 */
+  const kdasLineColor = useCallback((kd: number): string =>
+    mainOverlays.find(group => group.id === KDAS_ID)
+      ?.outputs.find(output => output.key === kdasOutputKey(kd))?.color ?? KDAS_LINE_FALLBACK,
+  [mainOverlays])
+
+  /**
+   * 右键命中柱 → 打开官方菜单。target value 是本次命中的业务快照（动作只读它），
+   * 坐标换算到视口系（chartBox 与 TvChart 容器同原点、同尺寸，见 TvChart 根节点
+   * width/height 100%）。
+   *
+   * @returns 是否接管本次右键；假 = 浏览器默认菜单（官方菜单服务未挂载或守卫不成立）。
+   */
+  const openKdasMenu = useCallback((info: { index: number; x: number; y: number }): boolean => {
+    const box = chartBoxRef.current
+    const bar = seriesKlines === null ? undefined : seriesKlines[info.index]
+    if (!kdasMenuEnabled || box === null || bar === undefined) return false
+    if (market === undefined || symbol === undefined) return false
+    const params = kdasScopeParams ?? {}
+    const barDay = utcDayNum(bar.openTime)
+    const rect = box.getBoundingClientRect()
+    return openKdasContextMenu({
+      kind: KDAS_MENU_TARGET,
+      value: {
+        market,
+        symbol,
+        barDay,
+        anchorDay: kdasAnchorSourceDay(params, seriesKlines ?? [], barDay),
+        mounted: kdasInstance !== undefined,
+        days: kdasSlots(params).map(({ kd }) => ({ kd, color: kdasLineColor(kd) })),
+      },
+    }, { x: rect.left + info.x, y: rect.top + info.y })
+  }, [kdasMenuEnabled, seriesKlines, kdasScopeParams, kdasInstance, market, symbol, kdasLineColor])
   // 副图组的空态文案在这里落地（词典只属于 UI 层，dispatch 只给数据域键位）：
   // 占位组的 outputs 恒为空，TvChart 据此建一个只带标题行理由的 pane。
   const subIndicators = useMemo(() => indicatorGroups
@@ -1311,73 +1265,6 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 onBarContextMenu={openKdasMenu}
               />
             )}
-            {kdasMenu !== null && seriesKlines !== null && market !== undefined && symbol !== undefined && (() => {
-              const hitBar = seriesKlines[kdasMenu.index]
-              if (hitBar === undefined) return null
-              // 守卫期（实例中途被摘/切标的）参数缺席 → 空表（菜单项自然退化为挂载/新增）。
-              const params = kdasScopeParams ?? {}
-              const slots = kdasSlots(params)
-              // 命中柱交易日：取存储口径（与 compute 同源的 UTC 日）；标题显示走本地日。
-              const barDay = utcDayNum(hitBar.openTime)
-              const anchorDay = kdasAnchorSourceDay(params, seriesKlines, barDay)
-              const full = slots.length >= 8 && !isKdasDay(params, barDay)
-              const mountedHere = kdasInstance !== undefined
-              const colorOfDay = (kd: number): string =>
-                mainOverlays.find(group => group.id === KDAS_ID)
-                  ?.outputs.find(output => output.key === kdasOutputKey(kd))?.color ?? '#8e95a3'
-              // placed=null = 量测帧：真实尺寸渲染但隐藏（visibility），不闪现原始位置。
-              const placedStyle = kdasMenu.placed !== null
-                ? { left: kdasMenu.placed.x, top: kdasMenu.placed.y }
-                : { left: kdasMenu.x, top: kdasMenu.y, visibility: 'hidden' as const }
-              return (
-                <div
-                  ref={kdasMenuRef}
-                  className={css.kdasMenu}
-                  style={placedStyle}
-                  onContextMenu={(event) => { event.preventDefault() }}
-                >
-                  <div className={css.kdasMenuTitle}>
-                    {t('kdas.menu.title', { date: fmtDay(hitBar.openTime) })}
-                  </div>
-                  {!mountedHere && (
-                    <button type="button" className={css.kdasMenuItem} onClick={() => { setKdasMenu(null); kdasAddDay(barDay) }}>
-                      {t('kdas.menu.mount')}
-                    </button>
-                  )}
-                  {mountedHere && anchorDay !== null && (
-                    <button type="button" className={css.kdasMenuItem} onClick={() => { setKdasMenu(null); kdasRemoveDay(anchorDay) }}>
-                      {t('kdas.menu.remove', { date: formatKdasDay(anchorDay) })}
-                    </button>
-                  )}
-                  {mountedHere && anchorDay === null && (
-                    <button
-                      type="button"
-                      className={css.kdasMenuItem}
-                      disabled={full}
-                      title={full ? t('kdas.menu.full') : undefined}
-                      onClick={() => { setKdasMenu(null); kdasAddDay(barDay) }}
-                    >
-                      {t('kdas.menu.add', { date: formatKdasDay(barDay) })}
-                    </button>
-                  )}
-                  {mountedHere && slots.length > 0 && (
-                    <>
-                      <div className={css.kdasMenuGroup}>{t('kdas.menu.listTitle')}</div>
-                      {slots.map(({ slot, kd }) => (
-                        <button key={slot} type="button" className={css.kdasMenuItem} onClick={() => { setKdasMenu(null); kdasRemoveDay(kd) }}>
-                          <span className={css.kdasMenuDot} style={{ background: colorOfDay(kd) }} />
-                          <span className={css.kdasMenuDate}>{formatKdasDay(kd)}</span>
-                          <span className={css.kdasMenuAction}>{t('kdas.menu.removeShort')}</span>
-                        </button>
-                      ))}
-                    </>
-                  )}
-                  {mountedHere && (
-                    <div className={css.kdasMenuHint}>{slots.length}/8 · {t('kdas.menu.hint')}</div>
-                  )}
-                </div>
-              )
-            })()}
             {rangeMode && rangeStats !== null && (
               <div className={css.rangePanel} role="dialog" aria-label={t('quote.rangeStats')}>
                 <div className={css.rangePanelHead}>
@@ -1636,6 +1523,16 @@ function StatusBar(props: {
 }
 
 /** 指标选择器面板（同文件内导出：选择器渲染的独立用例直接 mount 它）。 */
+/**
+ * 关键日行的线色圆点：官方 contextMenu.icon 的一格（按 action.icon.key 分发）。
+ *
+ * 线色随图标元数据以 data URL 携带——官方动作只给 { key, src }，所以这里把 src
+ * 画出来即可，不为每种颜色注册一格。
+ */
+export function KdasDayDot({ icon }: { icon?: { src?: string } }): ReactElement {
+  return <img className={css.kdasMenuDot} src={icon?.src} alt="" />
+}
+
 export function IndicatorPicker(props: {
   t: Translate
   /** 当前标的可见实例（勾选态/参数编辑的数据源）。 */

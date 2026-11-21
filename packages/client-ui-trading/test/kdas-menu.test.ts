@@ -1,13 +1,17 @@
 /**
- * kdas-menu 纯函数单测：Key Day 槽位推导、添加/移除动作与锚定命中判定。
+ * kdas-menu 单测：Key Day 槽位推导、添加/移除动作、锚定命中判定，以及官方菜单面
+ * （target 动作推导、圆点图片、服务桥）。
  * 口径契约（UTC 取日、kd1..kd8、锚定 = 第一根交易日 >= kd）见模块头注；
  * 这里的手算期望值即 kdas computeSource 的同规则复算。
  */
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
-  addKdasDay, clampRectInto, freeKdasSlot, formatKdasDay, isKdasDay, isKdasDayValue,
-  kdasAnchorSourceDay, kdasOutputKey, kdasSlots, removeKdasDay, utcDayNum,
+  addKdasDay, freeKdasSlot, formatKdasDay, installKdasContextMenu, isKdasDay, isKdasDayValue,
+  kdasAnchorSourceDay, kdasDayDotSrc, kdasDayFromActionId, kdasMenuActions, kdasOutputKey,
+  kdasRemoveDayActionId, kdasSlots, openKdasContextMenu, removeKdasDay, utcDayNum,
+  type KdasContextMenus, type KdasMenuAction, type KdasMenuCopy, type KdasMenuValue,
 } from '../src/client/kdas-menu.ts'
+import { en, zh } from '../src/client/locales.ts'
 
 /** UTC 日毫秒（避免本地时区影响测试断言）。 */
 const utcMs = (y: number, m: number, d: number): number => Date.UTC(y, m - 1, d)
@@ -162,48 +166,197 @@ describe('kdasAnchorSourceDay', () => {
   })
 })
 
-describe('clampRectInto', () => {
-  const outer = { x: 100, y: 200, width: 800, height: 600 }
-
-  it('用户拖出菜单到容器内：位置不动（含 padding 内边距裕量）', () => {
-    // Given: 外层容器与完全落在内边距以内的 inner 矩形
-    // When: 做越界钳位
-    // Then: x/y 原样返回
-    const inner = { x: 300, y: 400, width: 190, height: 220 }
-    expect(clampRectInto(inner, outer)).toEqual({ x: 300, y: 400 })
+describe('kdasMenuActions', () => {
+  /** 真实词典 + 占位符替换：断言的是生产文案，不是替身文案。 */
+  const copyFrom = (dict: Record<string, string>): KdasMenuCopy =>
+    (key, vars) => (dict[key] ?? key).replace(/\{(\w+)\}/g, (_match, name: string) => vars === undefined ? '' : (vars as Record<string, string>)[name] ?? '')
+  const copy = copyFrom(zh)
+  const value = (patch: Partial<KdasMenuValue> = {}): KdasMenuValue => ({
+    market: 'cn',
+    symbol: '002714.SZ',
+    barDay: 20261008,
+    anchorDay: null,
+    mounted: true,
+    days: [],
+    ...patch,
   })
 
-  it('用户拖到右缘或下缘越界：分别左移、上移收回容器', () => {
-    // Given: 右缘越界与下缘越界两个矩形
-    // When: 分别做钳位
-    // Then: x 收到 right - 4 - width、y 收到 bottom - 4 - height（各留 4px padding）
-    const atRightEdge = { x: 890, y: 300, width: 190, height: 220 }
-    expect(clampRectInto(atRightEdge, outer)).toEqual({ x: 800 - 4 - 190 + 100, y: 300 })
-    const atBottom = { x: 300, y: 700, width: 190, height: 220 }
-    expect(clampRectInto(atBottom, outer)).toEqual({ x: 300, y: 200 + 600 - 4 - 220 })
+  it('用户没挂载 KDAS：右键只有挂载一项，不出现增删', () => {
+    // Given: 未挂载（mounted=false）的命中快照
+    // When: 推导菜单动作
+    // Then: 只剩挂载一项，文案走词典的 kdas.menu.mount
+    expect(kdasMenuActions(value({ mounted: false }), copy)).toEqual([
+      { id: 'mount', label: '挂载 KDAS（关键日均价线）' },
+    ])
   })
 
-  it('用户拖到右下角同时越界：双向钳位', () => {
-    // Given: 右下角同时越界的矩形
-    // When: 做钳位
-    // Then: x 与 y 同时收回容器内
-    const corner = { x: 890, y: 700, width: 190, height: 220 }
-    expect(clampRectInto(corner, outer)).toEqual({ x: 100 + 800 - 4 - 190, y: 200 + 600 - 4 - 220 })
+  it('用户右键已锚定的 K 线：给的是移除该锚，而不是再加一条同锚线', () => {
+    // Given: 命中柱上锚定 20250821，名册里也有这一天
+    // When: 推导菜单动作
+    // Then: 首项是移除该锚（存储日进文案），没有设为关键日
+    const actions = kdasMenuActions(value({ anchorDay: 20250821, days: [{ kd: 20250821, color: '#e5484d' }] }), copy)
+    expect(actions[0]).toMatchObject({ id: 'remove-anchor', label: '移除关键日 2025-08-21' })
+    expect(actions.some(action => action.id === 'add')).toBe(false)
   })
 
-  it('用户遇到菜单比容器还大：钉在左/上 padding，保证左上可见', () => {
-    // Given: 宽高都超过容器的矩形
-    // When: 做钳位
-    // Then: 钉在 (outer.x + 4, outer.y + 4)
-    const huge = { x: 150, y: 250, width: 900, height: 700 }
-    expect(clampRectInto(huge, outer)).toEqual({ x: 104, y: 204 })
+  it('用户右键自由柱：给设为关键日，日期取存储口径（UTC 日）', () => {
+    // Given: 自由柱（anchorDay=null）与已有一条关键日
+    // When: 推导菜单动作
+    // Then: 首项是设为关键日 2026-10-08，且该项未禁用
+    const actions = kdasMenuActions(value({ days: [{ kd: 20250821, color: '#e5484d' }] }), copy)
+    expect(actions[0]).toMatchObject({ id: 'add', label: '设为关键日 2026-10-08' })
+    expect(actions[0]?.disabled).toBeUndefined()
   })
 
-  it('用户自定义 padding：按该裕量钳位', () => {
-    // Given: 右缘越界的矩形与 padding=8
-    // When: 做钳位
-    // Then: x = right - 8 - width
-    const inner = { x: 890, y: 300, width: 190, height: 220 }
-    expect(clampRectInto(inner, outer, 8).x).toBe(100 + 800 - 8 - 190)
+  it('用户满 8 条再点自由柱：该项禁用，且行上写明原因', () => {
+    // Given: 名册已满 8 条，命中柱不在其中
+    // When: 推导菜单动作
+    // Then: 设为关键日被禁用，文案换成 kdas.menu.full（官方动作没有 tooltip 位）
+    const days = Array.from({ length: 8 }, (_, i) => ({ kd: 20200101 + i, color: '#3b82f6' }))
+    const actions = kdasMenuActions(value({ days }), copy)
+    expect(actions[0]).toMatchObject({ id: 'add', disabled: true, label: '关键日已满 8 条，先移除后再添加' })
+  })
+
+  it('用户点击的日已在名册里：满 8 条也不禁用（幂等拒绝由动作自己承担）', () => {
+    // Given: 满 8 条且命中柱就是其中一条的存储日
+    // When: 推导菜单动作
+    // Then: 设为关键日仍可点（不是满槽）
+    const days = Array.from({ length: 8 }, (_, i) => ({ kd: 20200101 + i, color: '#3b82f6' }))
+    const actions = kdasMenuActions(value({ barDay: days[0]!.kd, days }), copy)
+    expect(actions[0]).toMatchObject({ id: 'add' })
+    expect(actions[0]?.disabled).toBeUndefined()
+  })
+
+  it('用户查看底部逐日行：按槽位序列出全部关键日，首行带分隔线', () => {
+    // Given: 名册里两条关键日（槽位序）与自由柱快照
+    // When: 推导菜单动作
+    // Then: 两条移除行按序排列，id 带存储日、文案日期 + 移除、圆点走同一图标格、首行 separatorBefore
+    const days = [{ kd: 20250821, color: '#e5484d' }, { kd: 20260625, color: '#3b82f6' }]
+    const actions = kdasMenuActions(value({ days }), copy)
+    const rows = actions.filter(action => action.id.startsWith('remove-day:'))
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({
+      id: 'remove-day:20250821',
+      label: '2025-08-21 · 移除',
+      separatorBefore: true,
+      icon: { key: 'dshtrading.kdas.day', src: kdasDayDotSrc('#e5484d') },
+    })
+    expect(rows[1]).toMatchObject({ id: 'remove-day:20260625', label: '2026-06-25 · 移除' })
+    expect(rows[1]?.separatorBefore).toBeUndefined()
+  })
+
+  it('用户切到英文：同一动作给英文文案（词典键 zh/en 两侧齐全）', () => {
+    // Given: 英文词典与含一条关键日、命中锚点的快照
+    // When: 推导菜单动作
+    // Then: 移除锚点与逐日行的英文文案与 zh 同构
+    const actions = kdasMenuActions(
+      value({ anchorDay: 20250821, days: [{ kd: 20250821, color: '#e5484d' }] }),
+      copyFrom(en),
+    )
+    expect(actions.map(action => action.label)).toEqual(['Remove key day 2025-08-21', '2025-08-21 · Remove'])
+  })
+})
+
+describe('kdasDayDotSrc', () => {
+  it('用户看到关键日行圆点：线色进 SVG data URL，井号必须编码', () => {
+    // Given: 图上线色 #e5484d
+    // When: 生成圆点图片地址
+    // Then: 是 svg data URL、解码后含该线色、原串里不出现裸井号（否则整段 URL 断在锚点上）
+    const src = kdasDayDotSrc('#e5484d')
+    expect(src.startsWith('data:image/svg+xml,')).toBe(true)
+    expect(decodeURIComponent(src)).toContain('fill="#e5484d"')
+    expect(src).not.toContain('#')
+  })
+})
+
+describe('kdasRemoveDayActionId / kdasDayFromActionId', () => {
+  it('用户点逐日移除：id 往返还原存储日', () => {
+    // Given: 存储日 20260625
+    // When: 生成动作 id 再还原
+    // Then: id 为 remove-day:20260625，还原得同一日号
+    const id = kdasRemoveDayActionId(20260625)
+    expect(id).toBe('remove-day:20260625')
+    expect(kdasDayFromActionId(id)).toBe(20260625)
+  })
+
+  it('用户点非本族动作：还原返回 null（不误伤挂载/新增/移除锚点）', () => {
+    // Given: 挂载、新增、移除锚点三个动作 id，与一个非法日号
+    // When: 逐个尝试还原
+    // Then: 全部为 null
+    expect(kdasDayFromActionId('mount')).toBeNull()
+    expect(kdasDayFromActionId('add')).toBeNull()
+    expect(kdasDayFromActionId('remove-anchor')).toBeNull()
+    expect(kdasDayFromActionId('remove-day:123')).toBeNull()
+  })
+})
+
+describe('installKdasContextMenu / openKdasContextMenu', () => {
+  /** 官方 ContextMenus 的契约面替身：只记录调用，不伪造弹层行为。 */
+  const recorder = () => {
+    const opened: Array<{ target: unknown; point: { x: number; y: number } }> = []
+    const registered: string[] = []
+    const service: KdasContextMenus = {
+      register(contribution) {
+        registered.push(contribution.target + '/' + contribution.id)
+        return () => { registered.pop() }
+      },
+      open(target, point) { opened.push({ target, point }) },
+    }
+    return { service, opened, registered }
+  }
+  let detach: (() => void) | undefined
+  afterEach(() => {
+    detach?.()
+    detach = undefined
+  })
+
+  const target = {
+    kind: 'dshtrading.kdas' as const,
+    value: {
+      market: 'cn', symbol: '002714.SZ', barDay: 20261008, anchorDay: null, mounted: true,
+      days: [{ kd: 20250821, color: '#e5484d' }],
+    },
+  }
+
+  it('用户右键时菜单服务缺席：不接管右键，交回浏览器默认菜单', () => {
+    // Given: 没有装上任何菜单服务
+    // When: 请求打开关键日菜单
+    // Then: 返回 false（TvChart 据此不拦截默认菜单）
+    expect(openKdasContextMenu(target, { x: 120, y: 240 })).toBe(false)
+  })
+
+  it('用户装上官方菜单服务后右键：target 与视口坐标原样交给它', () => {
+    // Given: 一个记录调用的菜单服务
+    // When: 装上后打开菜单
+    // Then: 返回 true，服务收到同一个 target 与同一个坐标
+    const { service, opened } = recorder()
+    detach = installKdasContextMenu(service)
+    expect(openKdasContextMenu(target, { x: 120, y: 240 })).toBe(true)
+    expect(opened).toEqual([{ target, point: { x: 120, y: 240 } }])
+  })
+
+  it('用户卸载菜单服务之后右键：重新交回默认菜单', () => {
+    // Given: 装上菜单服务后又卸载
+    // When: 请求打开菜单
+    // Then: 返回 false，且服务不再收到调用
+    const { service, opened } = recorder()
+    const uninstall = installKdasContextMenu(service)
+    uninstall()
+    expect(openKdasContextMenu(target, { x: 1, y: 2 })).toBe(false)
+    expect(opened).toEqual([])
+  })
+
+  it('用户热重载菜单服务后再跑旧卸载：新服务仍然是当前服务', () => {
+    // Given: 先装 A、再装 B（官方插件热重载）
+    // When: 跑 A 的卸载
+    // Then: 打开的仍是 B（旧卸载不摘新服务）
+    const first = recorder()
+    const second = recorder()
+    const uninstallFirst = installKdasContextMenu(first.service)
+    detach = installKdasContextMenu(second.service)
+    uninstallFirst()
+    expect(openKdasContextMenu(target, { x: 3, y: 4 })).toBe(true)
+    expect(first.opened).toEqual([])
+    expect(second.opened).toHaveLength(1)
   })
 })

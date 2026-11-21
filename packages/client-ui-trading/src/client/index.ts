@@ -22,7 +22,10 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { ISessions, SessionTarget } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { IndicatorMarketScope, IndicatorRegistry } from '@dshtrading/indicators'
+import {
+  effectiveInstanceParams, symbolScopeKey,
+  type IndicatorMarketScope, type IndicatorRegistry,
+} from '@dshtrading/indicators'
 import type { Instrument, MarketId } from './types.ts'
 import { createSelectionStore, createWatchlistGroupsStore, createWatchlistSortStore, createWatchlistStore } from './store.ts'
 import { createChartStateStore } from './chart-state.ts'
@@ -36,6 +39,12 @@ import { QuotePane } from './QuotePane.tsx'
 import { HomeHistory } from './HomeHistory.tsx'
 import { SessionRail } from './SessionRail.tsx'
 import { ChatResizeHandle } from './ChatResizeHandle.tsx'
+import { KdasDayDot } from './QuoteStage.tsx'
+import {
+  KDAS_ACTION_ADD, KDAS_ACTION_MOUNT, KDAS_ACTION_REMOVE_ANCHOR, KDAS_ID, KDAS_MENU_DAY_ICON,
+  KDAS_MENU_TARGET, addKdasDay, installKdasContextMenu, kdasDayFromActionId, kdasMenuActions,
+  removeKdasDay, type KdasContextMenus, type KdasMenuValue,
+} from './kdas-menu.ts'
 import { foldStore, marketFoldStore } from './fold-store.ts'
 import { rightbarStore } from './rightbar-store.ts'
 import { deleteCustomIndicator, subscribeTradingBridgeReady, subscribeTradingEvents } from './api.ts'
@@ -76,8 +85,8 @@ interface SettingsShellStoreFace {
 
 /** 注册 slot + locale 字典。 */
 export function apply(ctx: ClientContext): void {
-  // bind 的 t 由 slot 的 locale: NS 声明经框架注入组件；本文件不直接消费。
-  ctx.locale.bind(NS)
+  // 组件里的 t 由 slot 的 locale: NS 声明经框架注入；本文件自身只给菜单动作文案用。
+  const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-trading-market: dictionaries')
 
   const selection = createSelectionStore()
@@ -98,51 +107,20 @@ export function apply(ctx: ClientContext): void {
   }
 
   /**
-   * 打开官方设置弹层。三条候选路径按「离 DOM 结构越远越优先」排列，命中即返回：
-   * 1. 槽台账里的设置壳状态：ui-settings-general 把 open 状态作为 sidebar.settings
-   *    槽的 store 声明（create() 注册时钉死为同一实例），actions.open() 是面板唯一
-   *    的打开动作——不读任何 DOM，宿主改版不会失效；
-   * 2. 老宿主把触发器按钮渲染在退役侧栏列内（侧栏唯一的 [aria-haspopup=dialog]）；
-   * 3. 当前宿主把入口换成账号菜单两级（launcher → 菜单项「设置」）。
-   * 命中路径写到 body[data-dshtrading-settings-path]，供 ui:check 与现场排障读取。
+   * 打开官方设置弹层。唯一通路是槽台账里的设置壳 store：ui-settings-general 把面板
+   * 状态声明为 sidebar.settings 槽的 store（create() 注册时钉死为同一实例），
+   * actions.open() 是面板唯一的打开动作——不读任何 DOM，宿主改版不会失效。
+   * 命中写到 body[data-dshtrading-settings-path]（值恒为 'store'），供 ui:check 与
+   * 现场排障读取。
    */
   const openSettings = (): void => {
-    const mark = (path: string): void => {
-      try { document.body.dataset.dshtradingSettingsPath = path } catch { /* SSR guard */ }
-    }
     const ledger = ctx.slots as unknown as {
       entries(key: string): readonly { store?: SettingsShellStoreFace }[]
     }
     try {
       ledger.entries('sidebar.settings')[0]?.store?.create().actions.open()
-      mark('store')
-      return
-    } catch { /* 未挂设置壳或 store 外形变化 → 落到 DOM */ }
-    const trigger = document.querySelector<HTMLElement>(
-      "[data-slot='sidebar.settings'] [aria-haspopup='dialog'],"
-      + " div:has(> [data-shell-overlay]) > div:nth-child(1) [aria-haspopup='dialog']",
-    )
-    if (trigger !== null) {
-      trigger.click()
-      mark('trigger')
-      return
-    }
-    // 账号菜单两级：launcher 点开菜单，菜单项按文案（设置/Settings）点击。
-    const launcher = document.querySelector<HTMLElement>("[data-slot='sidebar.settings'] [aria-haspopup='menu']")
-    if (launcher === null) return
-    launcher.click()
-    let tries = 0
-    const pickMenuItem = (): void => {
-      const item = Array.from(document.querySelectorAll<HTMLElement>("[role='menuitem'], [role='menu'] button"))
-        .find((el) => /^\s*(设置|Settings)/.test(el.textContent ?? '')) // i18n-allow: 只匹配宿主已按当前语言渲染的菜单文案，不渲染插件自有 UI 文案
-      if (item !== undefined) {
-        item.click()
-        mark('menu')
-        return
-      }
-      if (++tries < 4) setTimeout(pickMenuItem, 50)
-    }
-    setTimeout(pickMenuItem, 0)
+    } catch { /* 宿主没挂设置壳：不开，也不退回 DOM 触发器 */ return }
+    try { document.body.dataset.dshtradingSettingsPath = 'store' } catch { /* SSR guard */ }
   }
   const chatFolded = foldStore()
   const marketFolded = marketFoldStore()
@@ -389,4 +367,55 @@ export function apply(ctx: ClientContext): void {
       },
     }),
   }, QuotePane))
+
+  /**
+   * 关键日菜单动作的执行面：命中后重读当前参数（另一个标签页可能刚改过），再写回本
+   * 标的覆盖——setParams(scopeKey) 在未挂载时即「建实例 + 写该标的覆盖」，挂载与追加
+   * 天然合一（见 kdas-menu 模块头注的写入契约）。
+   */
+  const runKdasAction = (value: KdasMenuValue, id: string): void => {
+    const write = (params: Record<string, number>): void => {
+      chart.setParams(KDAS_ID, params, symbolScopeKey(value.market, value.symbol))
+    }
+    const instance = chart.instanceFor(KDAS_ID)
+    const current = instance === undefined
+      ? {}
+      : effectiveInstanceParams(instance, value.market, value.symbol)
+    if (id === KDAS_ACTION_MOUNT || id === KDAS_ACTION_ADD) {
+      const added = addKdasDay(current, value.barDay)
+      if (added.ok) write(added.params)
+      return
+    }
+    const kd = id === KDAS_ACTION_REMOVE_ANCHOR ? value.anchorDay : kdasDayFromActionId(id)
+    if (kd === null) return
+    const removed = removeKdasDay(current, kd)
+    if (removed.ok) write(removed.params)
+  }
+
+  // 图表右键菜单走官方 ContextMenus（dsh-client-ui-context-menu）：弹层负责定位与钳位、
+  // Esc/外点关闭、键盘与焦点；本仓只贡献关键日一族 target 与它的动作——官方
+  // ContextMenuTargetMap 明示外部插件可扩展 target 家族。服务由别的插件注册、可能晚于
+  // 本 apply，故按需 ctx.inject（与服务注入同款纪律）。
+  ctx.inject(['contextMenus'] as never, (scope) => {
+    const menus = (scope as unknown as { contextMenus: KdasContextMenus }).contextMenus
+    scope.effect(() => installKdasContextMenu(menus), 'dsh-trading-market: kdas menu service')
+    scope.effect(() => menus.register({
+      id: 'dshtrading-kdas',
+      target: KDAS_MENU_TARGET,
+      order: 0,
+      resolve: (value: KdasMenuValue) => kdasMenuActions(value, t).map(action => ({
+        ...action,
+        run: () => { runKdasAction(value, action.id) },
+      })),
+    }), 'dsh-trading-market: kdas menu actions')
+    // 逐日行的线色圆点：官方按 key 分发一格 icon，线色经 action.icon.src 携带。
+    // 该槽由 dsh-client-ui-context-menu 声明（不在本包依赖里），故按最小面取用。
+    const iconSlot = ctx.slots as unknown as {
+      inject(key: string, provider: () => () => void): void
+      register(options: { readonly name: string; readonly key: string }, component: unknown): () => void
+    }
+    iconSlot.inject('contextMenu.icon', () => iconSlot.register(
+      { name: 'contextMenu.icon', key: KDAS_MENU_DAY_ICON }, KdasDayDot,
+    ))
+  })
 }
