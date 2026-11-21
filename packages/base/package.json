@@ -73,13 +73,13 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.1.0",
-    "@deepseek-ai/dsh-agent-preset-registry": ">=0.2.2-rc.1",
-    "@deepseek-ai/dsh-skill": ">=0.2.2-rc.1",
-    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-agent-preset-registry": ">=0.2.2-rc.5",
+    "@deepseek-ai/dsh-skill": ">=0.2.2-rc.5",
+    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.5",
     "@deepseek-ai/schemastery": ">=3.19.0"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-tool-executor-native": "0.2.2-rc.5",
     "tsdown": "^0.22.0",
     "vitest": "^3.0.0"
   }

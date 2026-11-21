@@ -17,7 +17,7 @@
 
 <div align="center">
 
-[![DSH 基线](https://img.shields.io/badge/DSH%20Baseline-0.2.2--rc.1-blue.svg)](https://github.com/deepseek-ai)
+[![DSH 基线](https://img.shields.io/badge/DSH%20Baseline-0.2.2--rc.5-blue.svg)](https://github.com/deepseek-ai)
 [![桌面客户端](https://img.shields.io/github/v/release/zhu1090093659/dsh-trading?label=Desktop%20App&color=2b6cb0)](https://github.com/zhu1090093659/dsh-trading/releases)
 [![覆盖市场](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK%20%7C%20Futures%20%7C%20Global-green.svg)](#一个终端全市场覆盖)
 [![连接器](https://img.shields.io/badge/Connectors-23%20Exchanges%2C%20Brokers%20%26%20Feeds-orange.svg)](docs/guides/connectors-guide.md)

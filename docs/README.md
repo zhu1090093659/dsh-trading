@@ -68,7 +68,7 @@
 3. **[发布前检查清单](./ops/release-checklist.md)** (`docs/ops/release-checklist.md`)
    - 从开发态切换到分发态的门禁闸门：PolyForm 许可证、Changeset 版本发布与全市场回归。
 4. **[DSH 上游 SDK 升级检查清单](./ops/upstream-upgrade-checklist.md)** (`docs/ops/upstream-upgrade-checklist.md`)
-   - 紧密跟踪官方 `@deepseek-ai/*` SDK 发版（当前基线 0.2.2-rc.1）的抽核、升级与验收指南。
+   - 紧密跟踪官方 `@deepseek-ai/*` SDK 发版（当前基线 0.2.2-rc.5）的抽核、升级与验收指南。
 5. **运维手册**（随自动交易平面迁往私有卫星仓 [dsh-trading-bot](https://github.com/zhu1090093659/dsh-trading-bot)：docs/ops/ops-runbook.md）
    - kill switch 四级、dead-man 三层、演练记录（P5 各档执行记录的家）与接线台账。
 6. **[P5 三档准入清单](./roadmap/p5-acceptance-checklist.md)** (docs/roadmap/p5-acceptance-checklist.md)

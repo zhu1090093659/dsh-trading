@@ -17,7 +17,7 @@ Combining TradingView Lightweight Charts v5 (with right-click **KDAS key-day anc
 
 <div align="center">
 
-[![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.2.2--rc.1-blue.svg)](https://github.com/deepseek-ai)
+[![DSH Baseline](https://img.shields.io/badge/DSH%20Baseline-0.2.2--rc.5-blue.svg)](https://github.com/deepseek-ai)
 [![Desktop App](https://img.shields.io/github/v/release/zhu1090093659/dsh-trading?label=Desktop%20App&color=2b6cb0)](https://github.com/zhu1090093659/dsh-trading/releases)
 [![Markets](https://img.shields.io/badge/Markets-Crypto%20%7C%20US%20%7C%20CN%20%7C%20HK%20%7C%20Futures%20%7C%20Global-green.svg)](#supported-markets--broker-connectors)
 [![Connectors](https://img.shields.io/badge/Connectors-23%20Exchanges%2C%20Brokers%20%26%20Feeds-orange.svg)](docs/guides/connectors-guide.md)
