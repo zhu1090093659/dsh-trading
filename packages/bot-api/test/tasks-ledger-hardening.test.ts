@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LedgerLockedError, TaskActionError, TasksLedger } from '../src/tasks/ledger.ts'
+import { nextRunAtMs } from '@dshtrading/api'
 
 const T0 = new Date(2026, 0, 1, 9, 0, 30).getTime()
 
@@ -194,6 +195,35 @@ describe('TasksLedger 加固', () => {
     const openA = ledger.openExecutions()[0]
     ledger.settleRun('a', openA.executionId, 'succeeded', undefined)
     expect(ledger.openRun('b', 'manual').taskId).toBe('b')
+  })
+
+  it('用户 日历上永不触发的 cron 在 create 与 update 都被拒且排期不变', () => {
+    // Given 一个按合法 cron 排期的任务，以及一个日历上永不匹配的表达式（2 月没有 31 日）
+    const env = makeEnv('ledger-never.json')
+    envs.push(env)
+    const ledger = open(env)
+    ledger.apply(createEnvelope('t-never', { schedule: { enabled: true, cron: '0 9 * * *' } }) as never)
+    const arming = () => ledger.snapshot().tasks.find(task => task.id === 't-never')?.schedule
+    const revisionBefore = ledger.snapshot().revision
+    // When create 与 update 分别提交这个表达式
+    const created = catchActionError(() => {
+      ledger.apply(createEnvelope('t-never-new', { schedule: { enabled: true, cron: '0 0 31 2 *' } }) as never)
+    })
+    const updated = catchActionError(() => {
+      ledger.apply({
+        requestId: 'update-never',
+        action: { kind: 'update', taskId: 't-never', patch: { schedule: { enabled: true, cron: '0 0 31 2 *' } } },
+      } as never)
+    })
+    // Then 两条路径都落到 TASKS_CRON_INVALID，账本没有落下「已启用却没有下次运行」的规则
+    expect(created.code).toBe('TASKS_CRON_INVALID')
+    expect(created.status).toBe(400)
+    expect(updated.code).toBe('TASKS_CRON_INVALID')
+    expect(ledger.snapshot().tasks.some(task => task.id === 't-never-new')).toBe(false)
+    expect(arming()?.enabled).toBe(true)
+    expect(arming()?.cron).toBe('0 9 * * *')
+    expect(arming()?.nextRunAt).toBe(nextRunAtMs('0 9 * * *', T0))
+    expect(ledger.snapshot().revision).toBe(revisionBefore)
   })
 
   it('用户 跳过的触发点写入结构化原因并在重开后仍可读', () => {

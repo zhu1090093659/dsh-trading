@@ -10,7 +10,7 @@
 
 第 3 问是唯一的验收门槛：**答不出一个可执行检测点就是「未满足」**，不允许写「已评估」。判定列只有三种取值：`满足`（有可执行检测点且在 CI 里跑）、`部分满足`（有检测点但不覆盖该缝的失效形态）、`未满足`（没有检测点，已登记进 §C 缺口清单）。
 
-官方版本锚：DSH cohort **0.2.2-rc.1**（`pnpm-workspace.yaml` 的 `overrides` 块钉定，`minimumReleaseAgeExclude` 只负责放行发布冷却窗口），patch 引擎 `@deepseek-ai/cordis-plugin-loader@1.1.0`（实际解析版本见 `pnpm-lock.yaml`）。换 cohort 时本文件与 §C 一起重审。
+官方版本锚：DSH cohort **0.2.2-rc.5**（`pnpm-workspace.yaml` 的 `overrides` 块钉定，`minimumReleaseAgeExclude` 只负责放行发布冷却窗口），patch 引擎 `@deepseek-ai/cordis-plugin-loader@1.1.0`（实际解析版本见 `pnpm-lock.yaml`）。换 cohort 时本文件与 §C 一起重审。
 
 ---
 
@@ -81,8 +81,9 @@
 
 ### B1 官方 `dsh-schedule`
 
-- **① 实现细节 + experimental**：它绑定 `sessionId`（desk 会话换代即失联），依赖 `dsh-api-session-controller` → peer `dsh-client-connection`，与「bot 不踩 web 栈」冲突；且不在已发布 profile 的 bundles 列表里。
-- **②③ 检测点**：仓库内零引用（`grep -rn "dsh-schedule" packages/<pkg>/src packages/<pkg>/cordis.patch.yml` 为空），profile bundles 白名单见 §C-4。**判定：部分满足**（白名单断言尚未落地）。
+- **① 实现细节（2026-11-21 按 0.2.2-rc.5 复核）**：它的 peer 集含 `dsh-api-session-controller@0.2.2-rc.5`，后者 peer `dsh-client-connection@0.2.2-rc.5` —— 「bot 不踩 web 栈」的冲突**依旧成立**（约束在传递 peer 上，不在直接 peer）。已过期的两条旧理由：它现在**不是** experimental bundle（包内无 `dsh` 字段），且投递目标已含新会话（`session` / `new_once` / `new` + `agentPreset`），不再只能绑单一 `sessionId`。
+- **④ 新增的硬理由**：官方 `ScheduleService` **没有投递前否决钩子**——交易端在「任务真正跑起来」之前要先过人工确认门、requestId 幂等、有界扇出与重启对账，这四项义务无处挂载，所以调度循环不能改调官方服务（详见 [SDK cohort 升级记录](../../.agents/notes/implemented/process/2026-11-21-sdk-upgrade-npm-0.2.2-rc.5.md) 与 [侧栏定时任务](../../.agents/notes/implemented/feature/2026-09-04-sidebar-scheduled-tasks.md)）。
+- **②③ 检测点**：仓库内仍然零引用（`grep -rn "dsh-schedule" packages/<pkg>/src packages/<pkg>/cordis.patch.yml` 为空），profile bundles 白名单见 §C-4。**判定：部分满足**（白名单断言尚未落地）。前置改造若要推进，先拆 `dsh-api-session-controller → dsh-client-connection` 这条传递 peer 与上面的否决钩子缺口。
 
 ### B2 官方 `dsh-webhook`
 

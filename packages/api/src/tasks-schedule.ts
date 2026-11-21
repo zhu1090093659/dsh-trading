@@ -9,6 +9,27 @@
  * parseCron 返回 null，由协议层/UI 拒绝。
  */
 
+/**
+ * 全仓唯一的 cron 触发时刻实现，与官方 `@deepseek-ai/dsh-schedule` 同职
+ * （`parseCronInput` / `canonicalizeCronExpression` / `resolveCronOccurrence` 覆盖同一
+ * 语义），是本仓已知且唯一的重复面。不挂官方实现的原因是外部事实：
+ *
+ * - 官方包唯一可导入的运行时入口是 `lib/index.js`，运行时 import cordis / dsh-llm /
+ *   dsh-session / dsh-storage-domain / dsh-subagent / zod / `node:crypto`；而本模块经
+ *   `@dshtrading/api` 被浏览器半消费（`client-ui-trading` 的 `ScheduledTasksPanel` 用
+ *   `isValidCron` / `nextRunAtMs` 做输入校验与下次运行预览），其 `./client` 子入口只
+ *   re-export 类型、不含 cron 函数。挂上去等于把宿主服务图与 node 内置模块灌进交易端
+ *   浏览器包。
+ * - `docs/design/dsh-seam-inventory.md` §B1 把「仓内对 `dsh-schedule` 零引用」记为
+ *   「bot 平面不踩 web 栈」这条设计排除项的检测点；本模块 import 它即让该检测点变红，
+ *   换实现前须先裁决那条排除项。
+ *
+ * 因此真正的去重是把 cron 能力从 `@dshtrading/api` 迁到宿主侧（`packages/bot-api`）
+ * 并改挂官方 occurrence 引擎——跨包责任迁移，不在本模块层面可解。事实来源：
+ * `.agents/notes/implemented/process/2026-11-06-sdk-upgrade-npm-0.2.2-rc.1.md`
+ * 「官方能力去重（native 为基座）」与 `.agents/notes/implemented/feature/2026-09-04-sidebar-scheduled-tasks.md`。
+ */
+
 /** 一条 cron 表达式解析出的各字段匹配集。 */
 export interface CronSchedule {
   minutes: ReadonlySet<number>

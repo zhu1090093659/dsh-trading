@@ -312,6 +312,7 @@ export class TasksRunner {
   /**
    * 启动一次执行：校验钉住三元组，按执行 id 派生会话/请求身份建会话，重命名，
    * 应用权限，queue 发 prompt。返回会话 id。身份派生使重复调用幂等。
+   * 薄扩展（官方 dsh-schedule 无对应）：/permission 落地 + 执行身份派生，见 tasks/service.ts 顶部「薄扩展边界」。
    */
   async launch(task: RunnerTask, executionId: string): Promise<string> {
     const gateway = this.session()
@@ -370,6 +371,8 @@ export class TasksRunner {
    * 侦查一次执行的结局。会话消失判 cancelled；仍在运行判 pending；会话静默后
    * 从 follow 快照向前翻有界历史页（100 页封顶，到执行 startedAt 边界停），找
    * startedAt 之后最早的一条 turn/end 并按 SDK reason 分类。
+   *
+   * 薄扩展（官方 dsh-schedule 无对应）：执行结算（官方回执只是 inbox 投递确认），见 tasks/service.ts 顶部「薄扩展边界」。
    *
    * pending 分两种：正常等待（无诊断）；读取异常或「会话空闲且完整历史没有
    * turn/end」（带 diagnostic，后者另置 historyExhausted 供服务层按窗口收敛）。

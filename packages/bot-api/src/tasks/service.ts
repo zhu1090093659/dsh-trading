@@ -5,6 +5,14 @@
  * 时刻取下一个匹配）、5 秒执行轮询（会话静默 + turn/end 侦查结算）、启动对账
  * （有会话 id 的运行中执行继续观察，无 id 的启动中断取消不重发）。所有定时器
  * 异常吞掉并记入 scheduler.error，绝不打断宿主进程。
+ *
+ * ── 薄扩展边界（官方 `@deepseek-ai/dsh-schedule` 无对应，不得删除）────────────
+ *
+ * 本平面 = 官方调度域 + 四项官方没有的前置义务（人工确认门 / requestId 幂等账本 /
+ * 有界扇出 / 重启对账 + 执行结算），清单与逐项证据见
+ * `.agents/notes/implemented/feature/2026-09-04-sidebar-scheduled-tasks.md`。官方
+ * `ScheduleService` 没有投递前的否决钩子（只在投递时拒绝 `schedule_execution_pending`
+ * 与归档目标），四项义务无处可挂，所以下面的调度循环不能改成调用官方服务。
  */
 import { TasksLedger, TaskActionError, type AppliedAction } from './ledger.ts'
 import {
@@ -325,6 +333,9 @@ export class TradingTasksService {
    * 起跑失败不再静默消费触发点：触发点在有会话落定前保持到期，可补偿失败由
    * 后续 tick 自然重试（同一触发点，次数封顶）。错过触发点不逐条补跑的语义不变
    * ——消费时才从当前时刻取下一个匹配。
+   *
+   * 这个循环不替换成官方 `ScheduleService`：四项前置义务没有官方钩子可挂，见本文件
+   * 顶部「薄扩展边界」。
    */
   private async tick(): Promise<void> {
     if (this.disposed || this.tickInFlight) return

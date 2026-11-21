@@ -126,7 +126,7 @@ Rust/Go 侧车（判据未触发，见 §3）、Postgres / NATS / Redis、自建
 
 - **每 desk 一个声明式长驻 agent**（`dsh-agent-loop` 的 `Config.agents` + 稳定 `sessionId`/`resumeSessionId`）；**权威状态在执行核的外部账本**，会话是**可丢弃的推理缓存**；**换代优先于压缩**（初值 300k input / 200 轮 / 24h，须在 paper 阶段用真实用量重新标定）。
 - **触发器由执行核自建 timer + 事件泵产生**，经 `ctx.agents.get(deskSessionId).followup(...)` 扇出到既有 desk 会话。
-  - 不用官方 `dsh-schedule`：它绑定 `sessionId`（desk 会话换代即失联），且依赖 `dsh-api-session-controller` → peer `dsh-client-connection`，与"bot 不踩 web 栈"冲突；它还是 experimental bundle、不在已发布 profile 的 bundles 列表里。
+  - 不用官方 `dsh-schedule`：它的 peer 集经 `dsh-api-session-controller` 传递到 `dsh-client-connection`，与"bot 不踩 web 栈"冲突（2026-11-21 按 0.2.2-rc.5 复核仍成立；它已不是 experimental bundle，投递目标也已支持新会话）；更硬的理由是官方没有**投递前否决钩子**，人工确认门与幂等/扇出/对账四项义务无处挂载。
   - 不用官方 `dsh-webhook`：唯一运行时动作是**新建 root Session**，唤不醒既有 desk 会话，且自称无队列/重放/重试/去重。
   - `followup` 每次都是一条独立普通 turn ⇒ **扇出必须节流**（不变量）。
   - **扇出机制已实测（U9）**：在 `dsh-base` + `dsh-headless`（无 webServer/connection）组合里，profile 声明 `agent-loop` 的 `agents: [{ id, sessionId }]` 可物化，且**对已存在 sessionId 是恢复历史而非新建空会话**（两次启动 `createdAt` 不变、帧数追加）。热路径用 `ctx.agents.get(id).followup()`；冷路径靠 profile 自声明 `agents` 行。

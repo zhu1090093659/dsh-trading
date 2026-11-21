@@ -150,7 +150,13 @@ function armSchedule(rule: { enabled: boolean; cron: string }, now: number): Sch
   if (!isValidCron(rule.cron)) {
     throw new TaskActionError(400, 'TASKS_CRON_INVALID', `invalid cron expression: ${rule.cron}`)
   }
-  return { enabled: true, cron: rule.cron, nextRunAt: nextRunAtMs(rule.cron, now), lastTriggeredAt: undefined }
+  const nextRunAt = nextRunAtMs(rule.cron, now)
+  // 语法合法但日历上永不匹配（如 `0 0 31 2 *`）同样拒绝：存成「已启用却没有下次
+  // 运行」会让任务永远不触发且不留痕迹，官方 occurrence 引擎对同一输入也是拒绝。
+  if (nextRunAt === undefined) {
+    throw new TaskActionError(400, 'TASKS_CRON_INVALID', `cron expression never matches a calendar instant: ${rule.cron}`)
+  }
+  return { enabled: true, cron: rule.cron, nextRunAt, lastTriggeredAt: undefined }
 }
 
 /**
@@ -503,6 +509,7 @@ export class TasksLedger {
    * 应用一个动作信封（幂等）：同 requestId + 同指纹 → 无副作用返回当前快照；
    * 同 requestId + 异指纹 → 拒绝（对齐 task-board 的重试防重放语义）。
    * run 动作在账本内开执行记录，启动返回给服务层异步进行。
+   * 薄扩展（官方 dsh-schedule 无对应）：requestId 幂等账本，见 tasks/service.ts 顶部「薄扩展边界」。
    */
   apply(envelope: TasksActionEnvelope): AppliedAction {
     if (this.disposed) throw new TaskActionError(503, 'TASKS_LEDGER_DISPOSED', 'task ledger is disposed')
@@ -587,6 +594,7 @@ export class TasksLedger {
   /**
    * 打开一条执行记录（手动 run 与 cron 触发共用）。拒绝：任务不存在、已有未
    * 结算执行（同任务不并发）、权限门待确认（cron 与手动一致拒绝）。
+   * 薄扩展（官方 dsh-schedule 无对应）：人工确认门 + 有界扇出，见 tasks/service.ts 顶部「薄扩展边界」。
    */
   openRun(taskId: string, trigger: 'cron' | 'manual'): { taskId: string; executionId: string } {
     if (this.disposed) throw new TaskActionError(503, 'TASKS_LEDGER_DISPOSED', 'task ledger is disposed')
@@ -725,6 +733,7 @@ export class TasksLedger {
   /**
    * 重启对账：有 sessionId 的运行中执行继续观察（确定性恢复）；没有 sessionId
    * 的启动中断就地取消，不重发。
+   * 薄扩展（官方 dsh-schedule 无对应）：重启对账，见 tasks/service.ts 顶部「薄扩展边界」。
    */
   reconcileStartup(): void {
     const now = this.now()
