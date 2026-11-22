@@ -85,9 +85,21 @@ set-schedule 三条入口抛出既有的 `TASKS_CRON_INVALID`（停用路径不�
 - **死词条**：`kdas.menu.{title,listTitle,hint}` 与设置侧 `plugins.*` 共 27 行已无消费方，但
   `dsh-i18n` 的中央词典是构建产物，需与重建同批删除，本轮未动。
 - **桌面 Windows lane 未在本机执行**（本机 Linux 无 mygo-windows 运行面）；本机以
-  `node desktop/scripts/build-runtime.mjs` 证明载荷可在 rc.5 装配。
+  `node desktop/scripts/build-runtime.mjs` 证明载荷可在 rc.5 装配；CI 的 windows-latest 桌面 job 在同一
+  提交上实跑通过（见下条）。
 - **交易壳 GUI 面未验证**（见验收节）：`ui:check` 的 DOM 断言在本机全红且脚本挂死，未建立改动前
   基线，所以本轮对客户端改动的结论只到「单测 + 类型 + 构建」这一层。
+
+## 发版（2026-11-22，v0.8.0）
+
+按 owner 授权走完整通道（npm 家族 + Electron/mygo 安装包 + GitHub Release）：
+tag `v0.8.0` → 提交 `bead16d2`（家族 59 包统一到 0.8.0，`verify-release-version` 通过）→
+run `44971476507` 五个 job 全绿（check-version、npm-publish、macos、windows、mygo）→
+Release 10 个资产（mac arm64/x64 的 dmg+zip、win x64 exe+zip、mygo arm64 dmg、SHA256SUMS.txt、
+自动更新 feed 与 manifest）；npm 59/59 包 `0.8.0` 齐备、`latest` 指向 0.8.0；
+`trading-update-v0.8.0.zip` 的 SHA256 与 SHA256SUMS.txt 一致。**这就把桌面钉版送达了用户**——
+安装包内嵌的 runtime 由 `prepare-runtime`（`build-runtime.mjs`）在 `bead16d2` 上现生成，
+该提交的 `desktop/runtime/host/package.json` 钉 `@deepseek-ai/dsh: 0.2.2-rc.5`。
 
 ## 验收（全部在本工作树与最终提交上现场跑过）
 
