@@ -45,5 +45,6 @@ Status: implemented
 - **已知上游边界**：基金净值端点 `pageSize` 硬上限 20（传 2000 回 `Data:null`），实现按 `TotalCount` 翻页；深交所份额 xlsx 单次窗口按 3 个月切分（实测 5.7 个月窗口在 65536 行处截断并丢掉最早日期）；深交所只认 `SHOWTYPE=xlsx`（csv/txt 回 500）。
 - **合规面**：`kit-cn` 第一次落盘持久化上游披露数据（`<trading home>/etf-rescue/`），只用于增量补数、不对外分发、不再分发原始披露数据；`connector-akshare` 的「本仓不缓存、不再分发行情数据」因此保持原样成立（数据层已不在那里）。
 - **两条键可以由同一次应答供给**：`aux` 机制的既有事实是「一条键一条取数分支」；本指标引入「两条键共享一次端点应答 + 请求级 memo」。新增同族指标时，若两条序列同源（同一响应按口径拆分）应复用 `createEtfRescueMemo` 的形状，而不是各发一次请求。
+- **预置名册在客户端 bundle 里**：新预置指标有两个家——`@dshtrading/indicators`（node 半：definition、取数校验、agent 工具面）与 `@dshtrading/client-ui-indicators`（浏览器半：内联了一份 `presetDefinitions`，指标选择器读它）。只换前者时，指标在名册里根本不出现（2026-11-22 往 Mac 上装完第一版就是这个症状：`client.js` 里能查到 `vol-tier` 却查不到新 id）。装/升级预置指标必须两个包一起换。
 - **纵轴无 %**：副图右轴是两位小数的百分比数值（`1.00/1.50/2.00`），单位只由图例的 `%` 承载。要让轴自己带 `%` 需要动通用 `outputPriceFormat`，影响所有副图指标，本次不做。
 - **证据**：`node scripts/ui-component-check.mjs --harness packages/client-ui-trading/harness/etf-rescue-sub-pane.harness.tsx` 出图（图例 `ETF渗透%: 1.19` / `非300渗透%: 2.19`，两条线 2590px/2325px 落笔、跨度 33px/49px、轴 precision 2、组 `["ETF渗透%","非300渗透%"]`）；跨包接缝校验用真实缓存喂 `etfRescueToAuxPoints` → `computeAux`，940 点全对齐、零坏值、与源数据逐位相符。
