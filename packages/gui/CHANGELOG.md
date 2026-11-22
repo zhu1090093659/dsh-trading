@@ -1,5 +1,20 @@
 # @dshtrading/gui
 
+## 0.8.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @dshtrading/client-ui-trading@0.8.0
+  - @dshtrading/dsh-i18n@0.8.0
+  - @dshtrading/client-ui-indicators@0.8.0
+  - @dshtrading/client-ui-knowledge@0.8.0
+  - @dshtrading/client-ui-masters-quotes@0.8.0
+  - @dshtrading/client-ui-settings@0.8.0
+  - @dshtrading/client-ui-strategies@0.8.0
+  - @dshtrading/client-ui-updater@0.8.0
+  - @dshtrading/indicator-supertrend@0.8.0
+
 ## 0.7.1
 
 ### Patch Changes

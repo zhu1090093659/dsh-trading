@@ -1,5 +1,21 @@
 # @dshtrading/client-ui-trading
 
+## 0.8.0
+
+### Minor Changes
+
+- SDK cohort 升到 @deepseek-ai 0.2.2-rc.5（宿主 CLI 同步）。原生能力去重：删掉设置内插件分区借壳与设置打开的两档 DOM 兜底，KDAS 关键日右键菜单改挂官方 ContextMenus（弹层定位交宿主）；定时任务平面按官方装不下的四项义务保留为薄扩展，并修掉「日历上永不触发的 cron 被存成已启用」的缺陷。交易壳内不再有可操作的插件管理入口（官方插件页注册在已被压掉的侧栏里）。
+
+### Patch Changes
+
+- @dshtrading/api@0.8.0
+- @dshtrading/holdings@0.8.0
+- @dshtrading/indicators@0.8.0
+- @dshtrading/knowledge@0.8.0
+- @dshtrading/router@0.8.0
+- @dshtrading/strategies@0.8.0
+- @dshtrading/watchlist@0.8.0
+
 ## 0.7.1
 
 ### Patch Changes

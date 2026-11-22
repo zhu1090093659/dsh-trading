@@ -1,5 +1,15 @@
 # @dshtrading/kit-cn
 
+## 0.8.0
+
+### Patch Changes
+
+- @dshtrading/api@0.8.0
+- @dshtrading/base@0.8.0
+- @dshtrading/connector-hithink@0.8.0
+- @dshtrading/indicators@0.8.0
+- @dshtrading/knowledge@0.8.0
+
 ## 0.7.1
 
 ### Patch Changes

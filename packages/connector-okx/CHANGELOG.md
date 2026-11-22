@@ -1,5 +1,13 @@
 # @dshtrading/connector-okx
 
+## 0.8.0
+
+### Patch Changes
+
+- @dshtrading/api@0.8.0
+- @dshtrading/authority@0.8.0
+- @dshtrading/indicators@0.8.0
+
 ## 0.7.1
 
 ### Patch Changes

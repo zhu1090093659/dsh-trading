@@ -1,5 +1,12 @@
 # @dshtrading/strategies
 
+## 0.8.0
+
+### Patch Changes
+
+- @dshtrading/dsh-home@0.8.0
+- @dshtrading/indicators@0.8.0
+
 ## 0.7.1
 
 ### Patch Changes
