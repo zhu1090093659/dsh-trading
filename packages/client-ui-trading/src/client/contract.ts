@@ -558,6 +558,8 @@ export type MarketLocaleKey =
   | 'indicator.auxEmpty.generic'
   | 'indicator.auxEmpty.hkConnectHolding'
   | 'indicator.auxEmpty.cnActiveBuy'
+  | 'indicator.auxEmpty.cnEtfRescueDepth'
+  | 'indicator.auxEmpty.cnEtfRescueBreadth'
   | 'indicator.picker'
   | 'indicator.group.main'
   | 'indicator.group.sub'

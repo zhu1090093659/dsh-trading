@@ -10,7 +10,7 @@ import {
 import {
   fetchKlines, fetchKlinesFrom, fetchTickers, fetchDerivatives, fetchDerivativesHistory, fetchOrderbook, fetchRecentTrades,
   fetchTradePositions, fetchTradeBalances, fetchTradeOpenOrders, fetchTradeFills, placeGuiOrder,
-  fetchSouthboundHoldings, fetchActiveBuy, type TradeRowsReason,
+  fetchSouthboundHoldings, fetchActiveBuy, fetchEtfRescue, type TradeRowsReason,
 } from './api.ts'
 import { setHoldingsPanelOpen } from './holdings-store.ts'
 import { tradeModeStore, writeTradeMode } from './trade-mode-store.ts'
@@ -464,7 +464,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   }, [market, symbol, chartInterval])
 
   const auxKeys = requiredAuxKeys(applicableInstances, market, id => indicators.get(id))
-  const auxState = useAuxSeries(market, symbol, auxKeys, fetchSouthboundHoldings, fetchActiveBuy)
+  const auxState = useAuxSeries(market, symbol, auxKeys, fetchSouthboundHoldings, fetchActiveBuy, fetchEtfRescue)
   const auxSeries = auxState.series
 
   // 衍生品指标轮询（issue #38，仅 crypto；现货输入由连接器升到对应永续）。

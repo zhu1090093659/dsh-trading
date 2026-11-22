@@ -15,6 +15,7 @@
  * - Issue #65：提供 /holdings 七个端点 + /fx 端点（统一资产台账，契约 §3/§4）。
  * - 2026-10-13：提供 /active-buy 端点（cn 主动买盘日频文件序列 + 可选当日 live，只读）。
  * - 2026-10-13：提供 /southbound-holdings 端点（港股通持股副图；按能力跨 provider 解析）。
+ * - 2026-11-22：提供 /etf-rescue 端点（「ETF 托底」副图；cn-only，能力缺席回内联 ok:false）。
  * - 2026-10-15：/klines 按连接器声明的 K 线能力跨源解析取数源（active 声明覆盖就用 active），
  *   wire 标注实际供数 provider；/markets 上报同市场能力并集；/tickers 支持显式 provider
  *   （未注册即 400）。
@@ -22,7 +23,7 @@
  *   后者全程最多兜底 1 次；限流/坏符号/交易所业务错误仍原样抛。整段同源、provider 如实标注。
  */
 import { instrumentFormOf } from '@dshtrading/api'
-import type { ActiveBuySnapshot, AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, InstrumentAssetClass, InstrumentForm, InstrumentRef, Interval, Kline, KlineCapability, MacroCalendarEntry, MacroRateEntry, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, OrderRequest, Position, PredictionFeed, PredictionMeeting, PredictionPriceHistory, PredictionPriceHistoryRequest, SouthboundHoldingHistory, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
+import type { ActiveBuySnapshot, AccountBalance, DerivativesData, DerivativesHistory, EtfRescueHistory, FundamentalsPackage, InstrumentAssetClass, InstrumentForm, InstrumentRef, Interval, Kline, KlineCapability, MacroCalendarEntry, MacroRateEntry, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, OrderRequest, Position, PredictionFeed, PredictionMeeting, PredictionPriceHistory, PredictionPriceHistoryRequest, SouthboundHoldingHistory, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
 import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dshtrading/kit-cn'
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dshtrading/kit-hk'
 import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dshtrading/kit-us'
@@ -452,6 +453,27 @@ export interface SouthboundHoldingsWire {
   southboundHoldings: SouthboundHoldingHistory
 }
 
+/**
+ * 「ETF 托底」历史信封（2026-11-22）：字段名 = 方法名/路由名，客户端按
+ * payload.etfRescue 读取。标的不映射到宽基指数时 points 为空数组（空 ≠ 0，前端
+ * 隐藏副图），上游失败则由错误信封承载。
+ */
+export interface EtfRescueWire {
+  ok: true
+  etfRescue: EtfRescueHistory
+}
+
+/**
+ * 能力缺席/市场不适用时的**内联**拒绝信封（HTTP 200）：与错误信封同形
+ * （{ ok:false, code, message }），但由本方法直接返回而不抛出——「这个部署没有
+ * ETF 托底源」「这个市场没有这块副图」是稳定的能力事实，不是本请求的异常。
+ */
+export interface EtfRescueRejectedWire {
+  ok: false
+  code: string
+  message: string
+}
+
 /** 实现了港股通持股端点的行情服务（可选能力；连接器选择性实现）。 */
 type SouthboundCapableService = MarketDataService & {
   getSouthboundHoldings(symbol: string): Promise<SouthboundHoldingHistory>
@@ -460,6 +482,16 @@ type SouthboundCapableService = MarketDataService & {
 /** 能力探测（鸭子类型）：只认真正实现了可选方法的服务，缺席/非函数一律不算。 */
 function hasSouthboundHoldings(service: MarketDataService | undefined): service is SouthboundCapableService {
   return typeof (service as { getSouthboundHoldings?: unknown } | undefined)?.getSouthboundHoldings === 'function'
+}
+
+/** 实现了 ETF 托底历史端点的行情服务（可选能力；连接器选择性实现）。 */
+type EtfRescueCapableService = MarketDataService & {
+  getEtfRescue(symbol: string): Promise<EtfRescueHistory>
+}
+
+/** 能力探测（鸭子类型）：只认真正实现了可选方法的服务，缺席/非函数一律不算。 */
+function hasEtfRescue(service: MarketDataService | undefined): service is EtfRescueCapableService {
+  return typeof (service as { getEtfRescue?: unknown } | undefined)?.getEtfRescue === 'function'
 }
 
 /** 实现了主动买盘快照端点的行情服务（可选能力；连接器选择性实现）。 */
@@ -903,6 +935,16 @@ export const SOUTHBOUND_CACHE_TTL_MS = 5 * 60 * 1000
 /** 港股通持股缓存条目上限（LRU）：按「市场:标的」为键，宿主长生命周期必须有界。 */
 export const SOUTHBOUND_CACHE_MAX = 64
 
+/**
+ * 「ETF 托底」历史缓存 TTL（5分钟）：与 southbound/fundamentals 同量级——序列是
+ * 日频（每交易日一点，份额/净值都按日披露），副图随级别切换、重挂指标反复取数时
+ * 一次翻转只打一轮上游；短于分钟级只会把上游压力放大，不增加任何分辨率。
+ */
+export const ETF_RESCUE_CACHE_TTL_MS = 5 * 60 * 1000
+
+/** 「ETF 托底」缓存条目上限（LRU）：键 = 「市场:标的」，宿主长生命周期必须有界。 */
+export const ETF_RESCUE_CACHE_MAX = 64
+
 /** 读一个「必须是字符串」的可选字段：非字符串/空白一律回空串（形状不信任）。 */
 function readTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -946,6 +988,9 @@ export class TradingBridge {
   /** 港股通持股历史缓存（2026-10-13；键 = `${market}:${symbol}`，同 fundamentals 模式）。 */
   private readonly southboundCache = new TtlCache<SouthboundHoldingHistory>(SOUTHBOUND_CACHE_TTL_MS, SOUTHBOUND_CACHE_MAX)
   private readonly southboundInflight = new Map<string, Promise<SouthboundHoldingHistory>>()
+  /** 「ETF 托底」历史缓存（2026-11-22；键 = `${market}:${symbol}`，同 southbound 模式）。 */
+  private readonly etfRescueCache = new TtlCache<EtfRescueHistory>(ETF_RESCUE_CACHE_TTL_MS, ETF_RESCUE_CACHE_MAX)
+  private readonly etfRescueInflight = new Map<string, Promise<EtfRescueHistory>>()
   /** FX 兜底 fetcher（issue #65；host.fetchFxRates 注入正式实现时不走这里）。 */
   readonly #fallbackFxFetcher: FxRatesFetcher = createFallbackFxFetcher()
 
@@ -2098,6 +2143,48 @@ export class TradingBridge {
   }
 
   /**
+   * 「ETF 托底」历史（GUI 宽基指数副图，2026-11-22）。
+   *
+   * 解析顺序与 southboundHoldings 同族（active 优先 → 同市场注册项按 provider 名排序
+   * 取第一个实现者），差别只在失败面：能力缺席**不抛**，直接回内联 ok:false 信封——
+   * 「这个部署没有 ETF 托底源」是稳定的能力事实，不是本次请求的异常（HTTP 层若把它当
+   * 异常处理，客户端看到的是同一句 ok:false，但桥内多了一条无谓的异常控制流）。
+   * - 非 cn 市场 → ok:false（宽基 ETF 渗透率只有 A 股口径，非 cn 连服务都不解析）；
+   * - cn 但无 provider 实现 getEtfRescue → ok:false + TRADING_NOT_IMPLEMENTED；
+   * - 上游失败 → 原样抛，交 HTTP 层错误信封（与其它端点一致）。
+   *
+   * 缓存照抄 southbound：5 分钟 TTL + 同键 in-flight 去重。空 points 如实透传
+   * （标的不映射宽基指数；空 ≠ 0，前端隐藏副图而不是画零线）。
+   */
+  async etfRescue(market: string, symbol: string): Promise<EtfRescueWire | EtfRescueRejectedWire> {
+    const id = this.#requireMarketId(market)
+    const trimmed = symbol.trim()
+    if (trimmed === '') throw new BridgeProtocolError(400, 'etfRescue: symbol is required')
+    if (id !== 'cn') {
+      return {
+        ok: false,
+        code: 'TRADING_UNSUPPORTED_SYMBOL',
+        message: `etfRescue: only cn publishes an ETF rescue series (got market ${market})`,
+      }
+    }
+    const service = this.#resolveEtfRescueService(id)
+    if (service === undefined) {
+      return {
+        ok: false,
+        code: 'TRADING_NOT_IMPLEMENTED',
+        message: 'etfRescue: no provider implements getEtfRescue for cn — enable a connector that serves the ETF rescue series',
+      }
+    }
+    const history = await this.#cachedFetch(
+      this.etfRescueCache,
+      this.etfRescueInflight,
+      `${id}:${trimmed}`,
+      () => service.getEtfRescue(trimmed),
+    )
+    return { ok: true, etfRescue: history }
+  }
+
+  /**
    * 主动买盘历史只读文件；非 cn 一律空序列，不解析服务或文件。
    * cn 按 active 优先、provider 名排序扫描注册项解析 live 能力；
    * 能力缺席/调用抛错/非今天均只返回历史，
@@ -2139,6 +2226,17 @@ export class TradingBridge {
     // active 缺席或命中但方法缺失：扫同市场注册项，按 provider 名排序取第一个有能力的。
     const capable = [...(registry?.list?.(market) ?? [])]
       .filter((entry): entry is { provider: string; service: SouthboundCapableService } => hasSouthboundHoldings(entry.service))
+      .sort((a, b) => (a.provider < b.provider ? -1 : a.provider > b.provider ? 1 : 0))
+    return capable[0]?.service
+  }
+
+  /** 按能力解析 ETF 托底数据源（冻结顺序同 #resolveSouthboundService；cn 单一市场）。 */
+  #resolveEtfRescueService(market: string): EtfRescueCapableService | undefined {
+    const registry = this.host.marketRegistry
+    const active = registry?.active(market)?.service
+    if (hasEtfRescue(active)) return active
+    const capable = [...(registry?.list?.(market) ?? [])]
+      .filter((entry): entry is { provider: string; service: EtfRescueCapableService } => hasEtfRescue(entry.service))
       .sort((a, b) => (a.provider < b.provider ? -1 : a.provider > b.provider ? 1 : 0))
     return capable[0]?.service
   }
@@ -3145,6 +3243,11 @@ export async function dispatchBridgeRequest(
         const market = search.get('market') ?? ''
         const symbol = search.get('symbol') ?? ''
         return readResult(await bridge.southboundHoldings(market, symbol))
+      }
+      case '/etf-rescue': {
+        const market = search.get('market') ?? ''
+        const symbol = search.get('symbol') ?? ''
+        return readResult(await bridge.etfRescue(market, symbol))
       }
       case '/derivatives': {
         const market = search.get('market') ?? ''

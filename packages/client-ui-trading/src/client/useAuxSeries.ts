@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AuxPoint, AuxSeriesKey, AuxSeriesMap } from '@dshtrading/indicators'
-import { CN_ACTIVE_BUY_KEY, createAuxRequestGuard, isCnPollingWindow, loadAuxSeriesSnapshot } from './aux-series.ts'
-import type { ActiveBuyFetcher, HoldingsFetcher } from './aux-series.ts'
+import { CN_ACTIVE_BUY_KEY, createAuxRequestGuard, createEtfRescueMemo, isCnPollingWindow, loadAuxSeriesSnapshot } from './aux-series.ts'
+import type { ActiveBuyFetcher, EtfRescueFetcher, HoldingsFetcher } from './aux-series.ts'
 import type { MarketId } from './types.ts'
 import { usePoll } from './usePoll.ts'
 
@@ -20,6 +20,7 @@ export function useAuxSeries(
   keys: readonly AuxSeriesKey[],
   fetchHoldings: HoldingsFetcher,
   fetchActiveBuy: ActiveBuyFetcher,
+  fetchEtfRescue?: EtfRescueFetcher,
 ): AuxSeriesState {
   const request = market !== undefined && symbol !== undefined ? `${market}:${symbol}` : ''
   const signature = JSON.stringify(keys)
@@ -38,8 +39,12 @@ export function useAuxSeries(
     const batch = {}
     const identity = current.current
     inFlight.current = batch
+    // 「ETF 托底」两条键读同一个端点：每次刷新建一份请求级 memo，于是本批两条键只发一次
+    // GET；下一批（换标的/换指标/重新可见）自然是新 memo，旧应答仍由下面的
+    // handle/identity 守卫丢弃——去重不承担跨请求复用。
+    const etfRescue = createEtfRescueMemo(fetchEtfRescue)
     try {
-      const entries = await Promise.all(keys.map(async key => [key, await loadAuxSeriesSnapshot(key, market, symbol, fetchHoldings, fetchActiveBuy)] as const))
+      const entries = await Promise.all(keys.map(async key => [key, await loadAuxSeriesSnapshot(key, market, symbol, fetchHoldings, fetchActiveBuy, etfRescue)] as const))
       if (!handle.isCurrent() || current.current !== identity) return
       setState(previous => {
         const series: Record<string, readonly AuxPoint[]> = previous.request === request ? { ...previous.series } : {}

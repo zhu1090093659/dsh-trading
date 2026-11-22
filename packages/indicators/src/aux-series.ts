@@ -23,7 +23,8 @@ export interface AuxPoint {
 }
 
 /**
- * 指标外部序列来源键（开放词汇；当前有 'hk-connect-holding' 与 'cn-active-buy'）。
+ * 指标外部序列来源键（开放词汇；当前有 'hk-connect-holding'、'cn-active-buy'、
+ * 'cn-etf-rescue-depth' 与 'cn-etf-rescue-breadth'）。
  * 消费方（宿主）据此 prefetch，并把结果按同名键注入 compute 第三参。
  */
 export type AuxSeriesKey = string

@@ -1,7 +1,7 @@
 /**
  * 预置指标（仿富途：主图 MA/EMA/BOLL，副图 MACD/RSI/KDJ；副图另有成交「量」、
- * 全级别通用的「量比分档量能」、仅港股的「港股通持股比例」与仅 A 股的「主动买盘」
- * 三条外部序列/逐根序列指标）。全部是 definition 数据 + math.ts 纯函数的组合，无
+ * 全级别通用的「量比分档量能」、仅港股的「港股通持股比例」、仅 A 股的「主动买盘」
+ * 与「ETF托底」四条外部序列/逐根序列指标）。全部是 definition 数据 + math.ts 纯函数的组合，无
  * 渲染逻辑；由指标插件（client-ui-indicators）注册进 tradingIndicators 服务。
  */
 import type { IndicatorDefinition, IndicatorThemeColor, Kline } from './types.ts'
@@ -53,6 +53,10 @@ const HK_CONNECT_HOLDING_AUX_KEY = 'hk-connect-holding'
 
 /** 主动买盘副图消费的外部序列键（与桥端点同名，宿主按此键 prefetch 并注入）。 */
 const ACTIVE_BUY_AUX_KEY = 'cn-active-buy'
+
+/** ETF托底副图消费的两条外部序列键：深度（该标的所属指数篮子的渗透率）与广度（非沪深300 六指数）。 */
+const ETF_RESCUE_DEPTH_AUX_KEY = 'cn-etf-rescue-depth'
+const ETF_RESCUE_BREADTH_AUX_KEY = 'cn-etf-rescue-breadth'
 
 /** 一天的毫秒数（K 线交易日归一到 UTC 00:00 用）。 */
 const MS_PER_DAY = 86_400_000
@@ -193,7 +197,7 @@ function volumeRatios(bars: readonly Kline[], period: number): Array<number | un
 const VOLUME_UP_COLOR = 'rgba(230, 69, 69, 0.55)'
 const VOLUME_DOWN_COLOR = 'rgba(43, 164, 113, 0.55)'
 
-/** 十个预置 definition（纯数据，注册时机归消费方）。 */
+/** 十一个预置 definition（纯数据，注册时机归消费方）。 */
 export function presetDefinitions(): IndicatorDefinition[] {
   return [
     {
@@ -488,6 +492,62 @@ export function presetDefinitions(): IndicatorDefinition[] {
             // 对齐上不做前向填充（上面的区间内匹配）：aux 值语义是「某一日的当日累计占比」，
             // 跨日沿用会把昨日读数画成今日累计——把「没数据」伪装成「有数据」，比留空更糟。
             values: net.map(value => (value === undefined ? undefined : (100 + value) / 2)),
+            precision: 2,
+          },
+        ]
+      },
+    },
+    {
+      // ETF托底（副图，仅 A 股）：数据来自宿主预取的**两条**日频外部序列——深度
+      // （该标的所属宽基指数篮子的 ETF 渗透率）与广度（除沪深300 外六指数的合计渗透率）。
+      // 无参数，两条 line。规模/流通市值的合成口径归数据侧，本 definition 只负责把两条
+      // 序列对齐到 K 线并逐条画线。
+      id: 'cn-etf-rescue',
+      pane: 'sub',
+      title: 'ETF托底',
+      params: [],
+      markets: ['cn'],
+      description: '数据源：ETF 份额 × 单位净值汇总成规模，除以对应宽基指数的流通市值。'
+        + '「ETF渗透%」= 该标的所属宽基指数的 ETF 篮子规模 ÷ 该指数流通市值；'
+        + '「非300渗透%」= 除沪深300 外六个宽基指数篮子的合计规模 ÷ 这六个指数的合计流通市值。'
+        + '某交易日缺份额或净值的那只 ETF 不参与当日合计，全部不可得则当日不出点：'
+        + '曲线在缺数据的交易日断开，不插值、不沿用前一交易日。'
+        + '读图注意：广度口径含中证A500，而该指数 2024-09-23 才发布，当日分母构成变化使'
+        + '「非300渗透%」一次性下降约 44.7%（A500 占六个篮子流通市值的 44.7%）——'
+        + '那是构成台阶，不是资金行为。',
+      aux: [ETF_RESCUE_DEPTH_AUX_KEY, ETF_RESCUE_BREADTH_AUX_KEY],
+      compute() {
+        // 声明了 aux 的指标由宿主走 computeAux（契约 §3 二选一）：旧宿主若误调
+        // compute，返回空输出即「什么都不画」，绝不降级为一条贴底的零线。
+        return []
+      },
+      computeAux(bars, _params, aux) {
+        const depth = aux[ETF_RESCUE_DEPTH_AUX_KEY]
+        const breadth = aux[ETF_RESCUE_BREADTH_AUX_KEY]
+        // 两条线是同一块副图的整体：任一序列缺席或为空 ⇒ 整块隐藏（空 ≠ 0）——只画半块
+        // 会让读图的人把缺的那条当成 0，绝不降级为零线。
+        if (depth === undefined || depth.length === 0) return []
+        if (breadth === undefined || breadth.length === 0) return []
+        // 对齐用本文件的「区间内匹配（无前向填充）」，与主动买盘同款，而不用 aux-series.ts
+        // 的 alignAuxToBars：后者是前向填充语义（「该交易日收盘时已知的最新值」），而深度/
+        // 广度是「某一日的当日存量占比」，跨日沿用会把昨日读数画成今日——把「没数据」伪装
+        // 成「有数据」，比留空更糟。
+        // 非有限值（脏数据）按 warm-up 处理：曲线断开，不把 NaN/Infinity 交给渲染层。
+        const series = (points: readonly AuxPoint[]) => alignAuxToBarCoverage(bars, points)
+          .map(value => (typeof value === 'number' && Number.isFinite(value) ? value : undefined))
+        return [
+          {
+            key: 'ETF渗透%',
+            kind: 'line',
+            color: '#e64545',
+            values: series(depth),
+            precision: 2,
+          },
+          {
+            key: '非300渗透%',
+            kind: 'line',
+            color: '#3b82f6',
+            values: series(breadth),
             precision: 2,
           },
         ]

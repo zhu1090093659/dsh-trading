@@ -40,7 +40,7 @@ Status: implemented
 
 - 新指标 `hk-connect-holding`（title `港股通持股比例`，`pane: 'sub'`，无参数，`markets: ['hk']`，`aux: ['hk-connect-holding']`，单条 line，precision 2）。y 轴范围由 lightweight-charts autoscale 自适应数据 min/max（本仓副图 pane 既无锁定范围设置）。
 - **本机真实拓扑下端到端可用**：`active('hk')` 是 tencent（无该方法）、eastmoney 经 `list()` 被选中，取到 00700.HK **471 点**（2024-10-14 → 2026-10-09，升序、UTC 零点、比例 9.76 → 11.9）；`08083.HK`（非港股通）返回空序列，图上出该指标的**占位副图**（pane 出现、标题行显示空态文案），不再静默消失。**空态文案是三选一的成因折中**：客户端拿到的空序列无法区分「标的不在港股通范围」「没有采集记录」「桥取数失败」（`loadAuxSeriesSnapshot` 把失败与空数组统一成 `points: undefined`），因此写「该标的无港股通持股记录（不在港股通范围，或未采集/取数失败）」，不替上游下结论。
-- 外部序列缝对后续同族指标开放：新增一条 aux 键只需在 `aux-series.ts` 补一条取数分支 + 指标声明 `aux`，宿主调度无需改动（未登记的键按「无数据」处理，不会静默画错线）。
+- 外部序列缝对后续同族指标开放：新增一条 aux 键只需在 `aux-series.ts` 补一条取数分支 + 指标声明 `aux`，宿主调度无需改动（未登记的键按「无数据」处理，不会静默画错线）。**两条键由同一次端点应答供给**的首例是 [etf-rescue-indicator](2026-11-22-etf-rescue-indicator.md)（`cn-etf-rescue-depth` / `-breadth`）：客户端在每次刷新时建一份请求级 memo，一批里两条键只发一次 GET，换标的守卫仍在 `useAuxSeries`。
 - 存量零迁移：`aux`/`computeAux`/`markets`/`defaultApplyScope` 全部可选，MA/MACD 等七个既有指标与自定义指标、KDAS 的创建与写入路径行为不变。
 - agent 工具面：`<market>_get_indicators` 在 crypto/us 为 6 个指标（不含本指标），hk 为 7 个且本指标以「需要宿主行情副图数据（本工具面不可用）」一行呈现；显式请求跨市场不可用 id 报明确错误。
 - 测试：`indicators` 107 例、`bot-api` 223 例、`client-ui-trading` 415 例全绿；新增用例覆盖「空 ≠ 0」「按能力解析三条分支（含 active 无能力时走 list）」「前向填充不吃未来值」「无数据出空态占位副图」「markets 白名单双层过滤」「清空级别后再次写参数不被补回」。连接器 5 条真实网络用例带实测耗时，网络不可达时显式 `describe.skip` 并打印原因（不假绿）。

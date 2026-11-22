@@ -860,6 +860,12 @@ importers:
       '@dshtrading/api':
         specifier: workspace:^
         version: link:../api
+      '@dshtrading/dsh-home':
+        specifier: workspace:^
+        version: link:../dsh-home
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
     devDependencies:
       tsdown:
         specifier: ^0.22.0

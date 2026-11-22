@@ -671,6 +671,38 @@ export interface SouthboundHoldingHistory {
   readonly points: readonly SouthboundHoldingPoint[]
 }
 
+/** 「ETF 托底」副图单点（cn 宽基指数专用，2026-11-22）。 */
+export interface EtfRescuePoint {
+  /** 交易日（UTC 当日 00:00 的 epoch ms；与日 K 的 openTime 同口径便于对齐）。 */
+  readonly date: number
+  /**
+   * 深度：该标的对应指数的宽基 ETF 篮子规模合计 ÷ 该指数**流通市值**（百分比数值，
+   * 如 0.83 表示 0.83%）。分母不用自由流通市值——后者无免费日频源。
+   */
+  readonly depthPct: number
+  /** 广度：非沪深300 宽基 ETF 篮子规模合计 ÷ 对应指数流通市值合计（百分比数值）。 */
+  readonly breadthPct: number
+}
+
+/**
+ * 「ETF 托底」历史序列（cn 宽基指数专用，2026-11-22）。
+ *
+ * 口径：指数 ETF 的场内份额 × 单位净值 = 规模；规模 ÷ 指数流通市值 = 该指数的 ETF
+ * 渗透率。份额来自交易所每日披露（沪/深两所），净值来自基金净值日频。所谓「国家队」
+ * 只能从份额异动**推断**，不是可证事实——图例只说 ETF，不替数据下结论。
+ * 空 points = 该标的映射不到宽基指数，消费方隐藏副图而非画零线（空 ≠ 0）。
+ */
+export interface EtfRescueHistory {
+  /** 市场规范词汇 symbol。 */
+  readonly symbol: string
+  /** 该标的映射到的宽基指数代码（如 000300）；映射不到时为空串且 points 为空。 */
+  readonly indexCode: string
+  /** 深度线的图例名（如「沪深300ETF」）。 */
+  readonly depthLabel: string
+  /** 序列升序、按交易日去重。 */
+  readonly points: readonly EtfRescuePoint[]
+}
+
 /**
  * 当日累计主动买盘快照（cn 行情行盘口推断口径，2026-10-13）。
  *
@@ -816,6 +848,13 @@ export interface MarketDataService {
    * 入参接受规范形与连接器原生形，输出 `symbol` 一律市场规范词汇。
    */
   getActiveBuySnapshot?(symbol: string): Promise<ActiveBuySnapshot>
+  /**
+   * 「ETF 托底」历史（GUI 大盘指数副图用，2026-11-22）：日频序列，升序去重。
+   * 可选方法：只有 cn 宽基指数数据源实现；标的不映射到宽基指数时返回空 points
+   * （**空 ≠ 0**，消费方隐藏副图而非画零线），上游失败则抛错。
+   * 入参接受规范形与连接器原生形，输出 `symbol` 一律市场规范词汇。
+   */
+  getEtfRescue?(symbol: string): Promise<EtfRescueHistory>
 }
 
 /**

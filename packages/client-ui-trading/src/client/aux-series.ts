@@ -8,7 +8,7 @@
  */
 import type { AuxBarSeriesMap, AuxPoint, AuxSeriesKey, AuxSeriesMap, IndicatorDefinition, IndicatorInstance } from '@dshtrading/indicators'
 import { isDefinitionAvailableOn } from '@dshtrading/indicators'
-import type { SouthboundHoldingHistory } from '@dshtrading/api'
+import type { EtfRescueHistory, SouthboundHoldingHistory } from '@dshtrading/api'
 import type { ActiveBuyHistory } from './api.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import type { MarketId } from './types.ts'
@@ -16,7 +16,15 @@ import type { MarketId } from './types.ts'
 /** 港股通持股比例的外部序列键（冻结字面量，与预置 definition.aux 同名）。 */
 export const HK_CONNECT_HOLDING_KEY: AuxSeriesKey = 'hk-connect-holding'
 export const CN_ACTIVE_BUY_KEY: AuxSeriesKey = 'cn-active-buy'
+/**
+ * 「ETF 托底」副图的两条外部序列键（冻结字面量，与预置 cn-etf-rescue 的 definition.aux
+ * 同名）：深度 = 该标的所属宽基指数篮子的 ETF 渗透率，广度 = 除沪深300 外六指数合计。
+ * 两条键的数据来自**同一次** GET /dshtrading/api/etf-rescue 应答（见 createEtfRescueMemo）。
+ */
+export const CN_ETF_RESCUE_DEPTH_KEY: AuxSeriesKey = 'cn-etf-rescue-depth'
+export const CN_ETF_RESCUE_BREADTH_KEY: AuxSeriesKey = 'cn-etf-rescue-breadth'
 export type ActiveBuyFetcher = (market: MarketId, symbol: string) => Promise<ActiveBuyHistory | undefined>
+export type EtfRescueFetcher = (market: MarketId, symbol: string) => Promise<EtfRescueHistory | undefined>
 
 /**
  * 外部序列取数缝：键之外的取数实现由调用方注入（生产传 api.ts 的
@@ -34,6 +42,39 @@ export function southboundHoldingsToAuxPoints(history: SouthboundHoldingHistory 
   if (history === undefined) return undefined
   const points = history.points.map(point => ({ date: point.date, value: point.holdRatio }))
   return points.length === 0 ? undefined : points
+}
+
+/**
+ * 「ETF 托底」历史 → 外部序列：同一份应答按**键**取不同口径（深度/广度），所以两条
+ * 键天然共享一次取数。取数失败、空 points、或键不在本指标声明范围 → undefined
+ * （空 ≠ 0：消费方据此整体隐藏副图，不画零线）。
+ */
+export function etfRescueToAuxPoints(history: EtfRescueHistory | undefined, key: AuxSeriesKey): readonly AuxPoint[] | undefined {
+  if (history === undefined || history.points.length === 0) return undefined
+  if (key === CN_ETF_RESCUE_DEPTH_KEY) return history.points.map(point => ({ date: point.date, value: point.depthPct }))
+  if (key === CN_ETF_RESCUE_BREADTH_KEY) return history.points.map(point => ({ date: point.date, value: point.breadthPct }))
+  return undefined
+}
+
+/**
+ * 请求级 memo（同键 in-flight 去重）：两条 ETF 托底键读的是同一个端点，把 memo 之后
+ * 的取数函数交给一次 chart 刷新里的两次 loadAuxSeriesSnapshot，对两条键只发一次请求。
+ *
+ * 生命周期归调用方：useAuxSeries 每次刷新建一个 memo，于是「换标的/换指标组合」自然
+ * 换一份缓存——旧标的的在途应答不会喂给新标的（竞态守卫仍在 useAuxSeries 里，这一层
+ * 只负责去重，不负责跨请求复用）。fetcher 缺席 → 恒 undefined，等于该能力未接线。
+ */
+export function createEtfRescueMemo(fetcher: EtfRescueFetcher | undefined): EtfRescueFetcher {
+  const inFlight = new Map<string, Promise<EtfRescueHistory | undefined>>()
+  return (market, symbol) => {
+    if (fetcher === undefined) return Promise.resolve(undefined)
+    const key = `${market}:${symbol}`
+    const hit = inFlight.get(key)
+    if (hit !== undefined) return hit
+    const pending = fetcher(market, symbol)
+    inFlight.set(key, pending)
+    return pending
+  }
 }
 
 export function activeBuyToAuxPoints(history: ActiveBuyHistory | undefined): readonly AuxPoint[] | undefined {
@@ -65,7 +106,14 @@ export async function loadAuxSeriesSnapshot(
   symbol: string,
   fetchHoldings: HoldingsFetcher,
   fetchActiveBuy?: ActiveBuyFetcher,
+  fetchEtfRescue?: EtfRescueFetcher,
 ): Promise<AuxSeriesSnapshot> {
+  // 「ETF 托底」两条键：同一次应答按口径拆分，日频存量占比不是盘中量，live 恒 false。
+  if (key === CN_ETF_RESCUE_DEPTH_KEY || key === CN_ETF_RESCUE_BREADTH_KEY) {
+    if (fetchEtfRescue === undefined) return { points: undefined, live: false }
+    const history = await fetchEtfRescue(market, symbol).catch(() => undefined)
+    return { points: etfRescueToAuxPoints(history, key), live: false }
+  }
   if (key !== HK_CONNECT_HOLDING_KEY && key !== CN_ACTIVE_BUY_KEY) return { points: undefined, live: false }
   if (key === CN_ACTIVE_BUY_KEY) {
     const history = await fetchActiveBuy?.(market, symbol).catch(() => undefined)
@@ -81,8 +129,9 @@ export async function loadAuxSeries(
   symbol: string,
   fetchHoldings: HoldingsFetcher,
   fetchActiveBuy?: ActiveBuyFetcher,
+  fetchEtfRescue?: EtfRescueFetcher,
 ): Promise<readonly AuxPoint[] | undefined> {
-  return (await loadAuxSeriesSnapshot(key, market, symbol, fetchHoldings, fetchActiveBuy)).points
+  return (await loadAuxSeriesSnapshot(key, market, symbol, fetchHoldings, fetchActiveBuy, fetchEtfRescue)).points
 }
 
 /**
@@ -124,6 +173,10 @@ export function auxSeriesReady(definition: Pick<IndicatorDefinition, 'aux'>, ser
 export function auxEmptyNoticeKey(key: AuxSeriesKey): MarketLocaleKey {
   if (key === HK_CONNECT_HOLDING_KEY) return 'indicator.auxEmpty.hkConnectHolding'
   if (key === CN_ACTIVE_BUY_KEY) return 'indicator.auxEmpty.cnActiveBuy'
+  // 同一块副图的两条键各说各话：深度缺 = 这个标的没映射到宽基指数（或份额未采集），
+  // 广度缺 = 六指数篮子整体取不到——两句话的排查方向不同，不能共用一条。
+  if (key === CN_ETF_RESCUE_DEPTH_KEY) return 'indicator.auxEmpty.cnEtfRescueDepth'
+  if (key === CN_ETF_RESCUE_BREADTH_KEY) return 'indicator.auxEmpty.cnEtfRescueBreadth'
   return 'indicator.auxEmpty.generic'
 }
 

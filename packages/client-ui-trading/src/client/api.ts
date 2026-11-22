@@ -4,7 +4,7 @@
  * carries the auth cookie by default).
  */
 import type { AccountBalance, DerivativesData, DerivativesHistory, Kline, MarketId, MarketInfo, Order, Orderbook, Position, TickerOutcome, TradeFill, TradeTick } from './types.ts'
-import type { FundamentalsPackage, InstrumentAssetClass, InstrumentForm, SouthboundHoldingHistory } from '@dshtrading/api'
+import type { EtfRescueHistory, FundamentalsPackage, InstrumentAssetClass, InstrumentForm, SouthboundHoldingHistory } from '@dshtrading/api'
 import type { CustomIndicatorRecord, IndicatorApplyScope, IndicatorInstance } from '@dshtrading/indicators'
 import type { KnowledgeCard } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord, CustomScreenerRecord } from '@dshtrading/strategies'
@@ -1347,6 +1347,25 @@ export async function fetchActiveBuy(market: MarketId, symbol: string, signal?: 
     return wire.ok ? wire : undefined
   } catch (err) {
     console.warn(`[dsh-trading] fetchActiveBuy ${market}/${symbol} failed:`, err)
+    return undefined
+  }
+}
+
+/**
+ * 「ETF 托底」历史（GUI 宽基指数副图，2026-11-22）。信封字段名是 etfRescue。
+ * 宿主未装该端点、标的不映射宽基指数或上游失败 → undefined：副图整体隐藏
+ * （空 ≠ 0，不画零线），主图与其它指标不受影响。
+ *
+ * 深度与广度两条序列来自**同一次**应答，调用方据此按请求级 memo 复用同一次请求
+ * （见 aux-series.createEtfRescueMemo），本函数保持「一次调用一次 GET」的朴素形状。
+ */
+export async function fetchEtfRescue(market: MarketId, symbol: string, signal?: AbortSignal): Promise<EtfRescueHistory | undefined> {
+  try {
+    const query = new URLSearchParams({ market, symbol })
+    const wire = await getJson<{ ok: boolean; etfRescue?: EtfRescueHistory }>(`/dshtrading/api/etf-rescue?${query.toString()}`, signal)
+    return wire.ok ? wire.etfRescue : undefined
+  } catch (err) {
+    console.warn(`[dsh-trading] fetchEtfRescue ${market}/${symbol} failed:`, err)
     return undefined
   }
 }
