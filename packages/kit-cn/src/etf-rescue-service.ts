@@ -14,7 +14,9 @@
  */
 
 import type { EtfRescueHistory } from '@dshtrading/api'
-import { TradingServiceError } from './rest.js'
+// 错误词汇与连接器同源（与 kit 引用 connector-hithink 的 HiThinkRestClient 同款先例）：
+// 「上游失败」必须是同一个可诊断的错误类型，桥与测试都按它分流。
+import { TradingServiceError } from '@dshtrading/connector-akshare'
 import {
   ETF_RESCUE_BASKETS,
   ETF_RESCUE_BASKET_CODES,

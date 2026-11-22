@@ -1,6 +1,6 @@
 {
   "name": "@dshtrading/connector-akshare",
-  "description": "AkShare 名义的 A 股宏观/另类数据连接器：实现面为东方财富公开 REST 直连（push2/push2his）、交易所份额披露与腾讯指数日线，提供 tradingCnMarketData 行情服务（含「ETF 托底」getEtfRescue 能力）与 cn_get_ticker / cn_get_klines / cn_get_sector_fund_flow 三个工具，无交易通道。",
+    "description": "AkShare 名义的 A 股宏观/另类数据连接器：实现面为东方财富公开 REST 直连（push2/push2his），提供 tradingCnMarketData 行情服务与 cn_get_ticker / cn_get_klines / cn_get_sector_fund_flow 三个工具，无交易通道。",
   "version": "0.8.0",
   "type": "module",
   "main": "lib/index.js",
@@ -25,9 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dshtrading/api": "workspace:^",
-    "@dshtrading/dsh-home": "workspace:^",
-    "fflate": "^0.8.3"
+    "@dshtrading/api": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.1.0",

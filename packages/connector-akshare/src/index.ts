@@ -10,7 +10,6 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import Schema from '@deepseek-ai/schemastery'
 import type {
   Disposable,
-  EtfRescueHistory,
   Interval,
   Kline,
   MarketDataService,
@@ -22,13 +21,7 @@ import {
   INTERVAL_VOCABULARY,
   SUPPORTED_KLINES_INTERVALS,
 } from './rest.js'
-import { EtfRescueService, type EtfRescueServiceOptions } from './etf-rescue-service.js'
-
 export * from './rest.js'
-export * from './etf-rescue.js'
-export * from './etf-rescue-cache.js'
-export * from './etf-rescue-source.js'
-export * from './etf-rescue-service.js'
 
 export const name = 'dsh-trading-cn-connector-akshare'
 
@@ -42,15 +35,10 @@ export const Config: Schema<Config> = Schema.object({
 
 export const TRADING_CN_MARKET_DATA_KEY = 'tradingCnMarketData'
 
-export interface AkshareMarketDataOptions extends AkshareRestOptions {
-  /** 「ETF 托底」缓存/网络注入（缺省：trading home 下 etf-rescue/ + 全局 fetch）。 */
-  readonly etfRescue?: EtfRescueServiceOptions | undefined
-}
+export interface AkshareMarketDataOptions extends AkshareRestOptions {}
 
 export class AkshareMarketDataService extends Service implements MarketDataService {
   private readonly client: AkshareRestClient
-  private readonly etfRescueOptions: EtfRescueServiceOptions
-  private etfRescueService: EtfRescueService | undefined
 
   constructor(
     ctx: Context,
@@ -59,8 +47,6 @@ export class AkshareMarketDataService extends Service implements MarketDataServi
   ) {
     super(ctx, serviceName)
     this.client = new AkshareRestClient(options)
-    // 取价走 rest 的 fetch 注入；ETF 托底另有一整套缓存目录/时钟/节流注入，故单独构造。
-    this.etfRescueOptions = { fetchImpl: options.fetchImpl, ...options.etfRescue }
   }
 
   async getTicker(symbol: string): Promise<Ticker> {
@@ -73,13 +59,6 @@ export class AkshareMarketDataService extends Service implements MarketDataServi
 
   async getSectorFundFlow(): Promise<Array<{ name: string; changePercent: number; mainNetInflow: number }>> {
     return this.client.getSectorFundFlow()
-  }
-
-  async getEtfRescue(symbol: string): Promise<EtfRescueHistory> {
-    // 惰性构造：不用「ETF 托底」的部署不在服务构造期解析 home 目录（dshHomeDir 会打告警）。
-    const service = this.etfRescueService ?? new EtfRescueService(this.etfRescueOptions)
-    this.etfRescueService = service
-    return service.getEtfRescue(symbol)
   }
 
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void, options?: { intervalMs?: number }): Disposable {

@@ -24,7 +24,7 @@
  */
 import { instrumentFormOf } from '@dshtrading/api'
 import type { ActiveBuySnapshot, AccountBalance, DerivativesData, DerivativesHistory, EtfRescueHistory, FundamentalsPackage, InstrumentAssetClass, InstrumentForm, InstrumentRef, Interval, Kline, KlineCapability, MacroCalendarEntry, MacroRateEntry, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, OrderRequest, Position, PredictionFeed, PredictionMeeting, PredictionPriceHistory, PredictionPriceHistoryRequest, SouthboundHoldingHistory, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
-import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dshtrading/kit-cn'
+import { aggregateNews as aggregateCnNews, fetchCnEtfRescue, fetchCnFundamentalsPackage } from '@dshtrading/kit-cn'
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dshtrading/kit-hk'
 import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dshtrading/kit-us'
 import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dshtrading/kit-crypto'
@@ -237,6 +237,8 @@ export function createBridgeHost(services: {
   holdingsStore?: HoldingsStoreLike | undefined
   /** FX 服务（issue #65；缺席 → 桥内兜底 fetcher，契约 §4 减文件缓存）。 */
   fetchFxRates?: FxRatesFetcher | undefined
+  /** 「ETF 托底」参考数据源（2026-11-22；缺席 → kit-cn 的实现）。 */
+  fetchEtfRescue?: EtfRescueFetcher | undefined
   /** 新闻注册表（issue #37）。 */
   newsRegistry?: TradingNewsRegistryLike | undefined
   /** CryptoPanic API token 取值函数（从 router settings 获取；可选）。 */
@@ -273,6 +275,7 @@ export function createBridgeHost(services: {
     selectionStore: services.selectionStore ?? createMemorySelectionStore(),
     holdingsStore: services.holdingsStore ?? createFallbackHoldingsStore(),
     fetchFxRates: services.fetchFxRates,
+    fetchEtfRescue: services.fetchEtfRescue,
     newsRegistry: services.newsRegistry,
     newsKey: services.newsKey,
     newsSources: services.newsSources,
@@ -330,6 +333,8 @@ export interface BridgeHost {
   holdingsStore?: HoldingsStoreLike
   /** FX 服务（可选，issue #65；缺席 → 桥内兜底 fetcher）。 */
   fetchFxRates?: FxRatesFetcher | undefined
+  /** 「ETF 托底」参考数据源（可选，2026-11-22；缺席 → kit-cn 的实现）。 */
+  fetchEtfRescue?: EtfRescueFetcher | undefined
   /**
    * 交易服务（可选，issue #40）：tradeRegistry 按 market 解析；未注册 → undefined
    * （交易台整体隐藏）。**安全语义（2026-10-12 更新）**：桥可发起真交易，但实盘
@@ -482,16 +487,6 @@ type SouthboundCapableService = MarketDataService & {
 /** 能力探测（鸭子类型）：只认真正实现了可选方法的服务，缺席/非函数一律不算。 */
 function hasSouthboundHoldings(service: MarketDataService | undefined): service is SouthboundCapableService {
   return typeof (service as { getSouthboundHoldings?: unknown } | undefined)?.getSouthboundHoldings === 'function'
-}
-
-/** 实现了 ETF 托底历史端点的行情服务（可选能力；连接器选择性实现）。 */
-type EtfRescueCapableService = MarketDataService & {
-  getEtfRescue(symbol: string): Promise<EtfRescueHistory>
-}
-
-/** 能力探测（鸭子类型）：只认真正实现了可选方法的服务，缺席/非函数一律不算。 */
-function hasEtfRescue(service: MarketDataService | undefined): service is EtfRescueCapableService {
-  return typeof (service as { getEtfRescue?: unknown } | undefined)?.getEtfRescue === 'function'
 }
 
 /** 实现了主动买盘快照端点的行情服务（可选能力；连接器选择性实现）。 */
@@ -695,6 +690,12 @@ export interface FxRatesSnapshot {
 
 /** FX 服务形状（@dshtrading/holdings/fx 集成时的适配目标，函数式最小面）。 */
 export type FxRatesFetcher = (base: string) => Promise<FxRatesSnapshot>
+
+/**
+ * 「ETF 托底」参考数据取数函数（2026-11-22）：缺省直接用 `@dshtrading/kit-cn` 的实现，
+ * 宿主可注入替身（测试与换源用），与 `fetchFxRates` 同款注入缝。
+ */
+export type EtfRescueFetcher = (symbol: string) => Promise<EtfRescueHistory>
 
 /** FX 支持的基准币（契约 §4；USDT 恒定锚定 USD，不作基准）。 */
 export const FX_BASES: readonly string[] = ['USD', 'CNY', 'HKD']
@@ -2145,13 +2146,13 @@ export class TradingBridge {
   /**
    * 「ETF 托底」历史（GUI 宽基指数副图，2026-11-22）。
    *
-   * 解析顺序与 southboundHoldings 同族（active 优先 → 同市场注册项按 provider 名排序
-   * 取第一个实现者），差别只在失败面：能力缺席**不抛**，直接回内联 ok:false 信封——
-   * 「这个部署没有 ETF 托底源」是稳定的能力事实，不是本次请求的异常（HTTP 层若把它当
-   * 异常处理，客户端看到的是同一句 ok:false，但桥内多了一条无谓的异常控制流）。
-   * - 非 cn 市场 → ok:false（宽基 ETF 渗透率只有 A 股口径，非 cn 连服务都不解析）；
-   * - cn 但无 provider 实现 getEtfRescue → ok:false + TRADING_NOT_IMPLEMENTED；
-   * - 上游失败 → 原样抛，交 HTTP 层错误信封（与其它端点一致）。
+   * **不走行情路由**：ETF 份额与指数市值是参考数据，与「cn 报价由哪个连接器提供」无关。
+   * 挂成连接器的可选能力会让这个特性随报价源开关——`connector-akshare` 的 apply 在
+   * cn 未被路由到它时直接返回，能力便永不注册（2026-11-22 装 Mac 时实测踩中）。所以数据
+   * 取 `@dshtrading/kit-cn` 的 `fetchCnEtfRescue`，与 `fetchCnFundamentalsPackage` 同款。
+   *
+   * 失败面：非 cn 市场 → 内联 ok:false（宽基 ETF 渗透率只有 A 股口径）；上游失败 → 原样抛，
+   * 交 HTTP 层错误信封（与其它端点一致）。宿主可用 `host.fetchEtfRescue` 注入替身。
    *
    * 缓存照抄 southbound：5 分钟 TTL + 同键 in-flight 去重。空 points 如实透传
    * （标的不映射宽基指数；空 ≠ 0，前端隐藏副图而不是画零线）。
@@ -2167,19 +2168,12 @@ export class TradingBridge {
         message: `etfRescue: only cn publishes an ETF rescue series (got market ${market})`,
       }
     }
-    const service = this.#resolveEtfRescueService(id)
-    if (service === undefined) {
-      return {
-        ok: false,
-        code: 'TRADING_NOT_IMPLEMENTED',
-        message: 'etfRescue: no provider implements getEtfRescue for cn — enable a connector that serves the ETF rescue series',
-      }
-    }
+    const fetcher = this.host.fetchEtfRescue ?? fetchCnEtfRescue
     const history = await this.#cachedFetch(
       this.etfRescueCache,
       this.etfRescueInflight,
       `${id}:${trimmed}`,
-      () => service.getEtfRescue(trimmed),
+      () => fetcher(trimmed),
     )
     return { ok: true, etfRescue: history }
   }
@@ -2226,17 +2220,6 @@ export class TradingBridge {
     // active 缺席或命中但方法缺失：扫同市场注册项，按 provider 名排序取第一个有能力的。
     const capable = [...(registry?.list?.(market) ?? [])]
       .filter((entry): entry is { provider: string; service: SouthboundCapableService } => hasSouthboundHoldings(entry.service))
-      .sort((a, b) => (a.provider < b.provider ? -1 : a.provider > b.provider ? 1 : 0))
-    return capable[0]?.service
-  }
-
-  /** 按能力解析 ETF 托底数据源（冻结顺序同 #resolveSouthboundService；cn 单一市场）。 */
-  #resolveEtfRescueService(market: string): EtfRescueCapableService | undefined {
-    const registry = this.host.marketRegistry
-    const active = registry?.active(market)?.service
-    if (hasEtfRescue(active)) return active
-    const capable = [...(registry?.list?.(market) ?? [])]
-      .filter((entry): entry is { provider: string; service: EtfRescueCapableService } => hasEtfRescue(entry.service))
       .sort((a, b) => (a.provider < b.provider ? -1 : a.provider > b.provider ? 1 : 0))
     return capable[0]?.service
   }

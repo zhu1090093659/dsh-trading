@@ -29,17 +29,39 @@ import {
   type KitConfig,
 } from '@dshtrading/base/role-skills'
 import { createGetIndicatorsTool } from '@dshtrading/indicators/tool'
-import type { MarketDataService } from '@dshtrading/api'
+import type { EtfRescueHistory, MarketDataService } from '@dshtrading/api'
 import { aggregateNews, type AggregateNewsOptions } from './news.js'
 import { fetchCnFundamentals, renderCnFundamentals } from './fundamentals.js'
 import {
   fetchCnAuctionStrength,
   fetchCnLimitUpPool,
 } from './sentiment.js'
+import { EtfRescueService } from './etf-rescue-service.js'
 
+export * from './etf-rescue.js'
+export * from './etf-rescue-cache.js'
+export * from './etf-rescue-service.js'
+export * from './etf-rescue-source.js'
 export * from './fundamentals.js'
 export * from './news.js'
 export * from './sentiment.js'
+
+/**
+ * 「ETF 托底」历史序列（cn 宽基指数参考数据，2026-11-22）——桥直接调它，不经行情路由。
+ *
+ * 为什么在这里而不是某个连接器的可选能力：ETF 份额与指数流通市值是**参考数据**，
+ * 与「cn 报价由哪个连接器提供」无关。连接器的 apply 在行情路由未选中自己时会直接
+ * 返回（`routeAllows`），能力于是永不注册，指标就只在「用户把 cn 路由切到那个连接器」
+ * 时才有数据——特性随报价源开关是错的分层。
+ *
+ * 服务实例模块级惰性复用：缓存水位与 k 标定都在实例上，每次新建等于每次冷启动。
+ */
+let sharedEtfRescueService: EtfRescueService | undefined
+
+export async function fetchCnEtfRescue(symbol: string): Promise<EtfRescueHistory> {
+  sharedEtfRescueService ??= new EtfRescueService()
+  return sharedEtfRescueService.getEtfRescue(symbol)
+}
 
 // ── skill provider（host 面 skill 全局可见即可，本切片不改 skill 作用域） ─────────
 

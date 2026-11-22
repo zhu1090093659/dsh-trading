@@ -21,7 +21,9 @@
  * 传输层失败 = TRADING_NETWORK；不静默补 0，也不把失败包装成空数据。
  */
 
-import { TradingServiceError } from './rest.js'
+// 错误词汇与连接器同源（与 kit 引用 connector-hithink 的 HiThinkRestClient 同款先例）：
+// 「上游失败」必须是同一个可诊断的错误类型，桥与测试都按它分流。
+import { TradingServiceError } from '@dshtrading/connector-akshare'
 import {
   findEtfRescueBasket,
   parseFundNavPayload,

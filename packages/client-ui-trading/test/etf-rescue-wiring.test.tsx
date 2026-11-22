@@ -100,7 +100,8 @@ beforeEach(async () => {
       return
     }
     if (downstream === 'rejected') {
-      res.end(JSON.stringify({ ok: false, code: 'TRADING_NOT_IMPLEMENTED', message: 'etfRescue: no provider implements getEtfRescue for cn' }))
+      // 桥的内联 ok:false（非 cn 市场）与上游失败都长这样：客户端只看 ok，两种都落到「无序列」。
+      res.end(JSON.stringify({ ok: false, code: 'TRADING_UNSUPPORTED_SYMBOL', message: 'etfRescue: only cn publishes an ETF rescue series' }))
       return
     }
     res.end(JSON.stringify({ ok: true, etfRescue: historyOf() }))

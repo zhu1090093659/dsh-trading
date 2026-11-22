@@ -89,7 +89,6 @@ A 股行情连接器：包名取 AkShare，**实现面是东方财富公开 REST
 | `getTicker` | 有（`src/index.ts:51`） | `cn_get_ticker`（`src/index.ts:96`） |
 | `getKlines` | 有（`src/index.ts:55`） | `cn_get_klines`（`src/index.ts:106`） |
 | `getSectorFundFlow` | 有（`src/index.ts:59`） | `cn_get_sector_fund_flow`（`src/index.ts:126`） |
-| `getEtfRescue`（「ETF 托底」日频序列，2026-11-22） | 有（`src/index.ts:78`） | 缺席 |
 | `subscribeTicker`（快照轮询，最小 1000 ms、默认 5000 ms） | 有（`src/index.ts:63-71`） | 缺席 |
 | `listInstruments` / 盘口 / 基本面 / 宏观与另类数据 | 未实现 | 未实现 |
 | TradeService（下单 / 撤单 / 持仓 / 资金） | 未实现（本包无 `tradingCnTrade`） | 未实现 |
@@ -106,25 +105,12 @@ A 股行情连接器：包名取 AkShare，**实现面是东方财富公开 REST
 - 无 `listInstruments`、盘口、基本面、主动买盘能力（同市场的 eastmoney、xysz 各有对照实现）。
 - 2026-10-14 起本出口对 `push2.eastmoney.com` 不可达（`curl: (52) Empty reply from server`），
   故「状态」段按未实证处理；2026-10-15 复测 push2his 同样空回。
-- **「ETF 托底」三条已知边界**：① 冷缓存首轮回溯约 4 分钟、约 120 MB 上游流量（2023-01-01 至
-  2026-11-20 共 940 个点），暖缓存 55–67 ms 且零请求；取数按文件水位增量，中断后下次从水位继续。
-  ② 广度口径含中证A500，而该指数 2024-09-23 才发布，当日分母构成变化使广度读数一次性下降约
-  44.7%（A500 占六个篮子流通市值 44.7%）——构成台阶而非资金行为，指标说明里已标注。
-  ③ 指数流通市值标定主路径是 `push2 .../stock/get` 的 `f117`，本机实测该端点传输层空回
-  （`OpenSSL SSL_read: unexpected eof`），实现按同域 `ulist.np/get` 的 `f21 ÷ (f2/100)` 等价兜底
-  （2026-11-22 实测 000300 两者差 0.58 元），缓存条目以 `source` 字段留痕。
-- 基金净值端点 `api.fund.eastmoney.com/f10/lsjz` 的 `pageSize` 硬上限为 20（传 2000 回 `Data:null`），
-  实现按 `TotalCount` 翻页；深交所份额 xlsx 单次窗口按 3 个月切分，实测 5.7 个月窗口在 65536 行处
-  截断并丢掉最早日期。
+
 
 ## 合规记录
 
 **东方财富公开端点**：无 key、无官方授权，个人使用边界自负，以东方财富服务条款为准。
-本次会话实测该端点不可达。
-
-**交易所与基金净值公开披露（2026-11-22 起，仅 `getEtfRescue`）**：上交所 / 深交所每日披露的
-ETF 基金份额、基金净值与指数行情，只落本地缓存（`<home>/etf-rescue/`）用于增量补数，不对外分发、
-不再分发原始披露数据；上游条款以两所网站声明与天天基金条款为准。除此以外的行情仍不缓存。
+本次会话实测该端点不可达。本仓不缓存、不再分发行情数据。
 
 ## 出网验证
 

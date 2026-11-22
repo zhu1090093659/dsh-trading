@@ -848,13 +848,6 @@ export interface MarketDataService {
    * 入参接受规范形与连接器原生形，输出 `symbol` 一律市场规范词汇。
    */
   getActiveBuySnapshot?(symbol: string): Promise<ActiveBuySnapshot>
-  /**
-   * 「ETF 托底」历史（GUI 大盘指数副图用，2026-11-22）：日频序列，升序去重。
-   * 可选方法：只有 cn 宽基指数数据源实现；标的不映射到宽基指数时返回空 points
-   * （**空 ≠ 0**，消费方隐藏副图而非画零线），上游失败则抛错。
-   * 入参接受规范形与连接器原生形，输出 `symbol` 一律市场规范词汇。
-   */
-  getEtfRescue?(symbol: string): Promise<EtfRescueHistory>
 }
 
 /**
