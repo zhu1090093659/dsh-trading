@@ -51,7 +51,33 @@ export const ETF_RESCUE_BASKETS: readonly EtfRescueBasket[] = [
 export const ETF_RESCUE_OTHER_BASKETS: readonly EtfRescueBasket[] =
   ETF_RESCUE_BASKETS.filter((basket) => basket.indexCode !== ETF_RESCUE_DEPTH_INDEX_CODE)
 
-/** 白名单里的全部 ETF 代码（十四个，去重）。 */
+/** 中证全指：覆盖沪深全市场，**没有跟踪它自己的宽基 ETF**（2026-11-22 实测两所名单里
+ * 「全指」产品全是子指数），所以它的「篮子」是七个宽基篮子的并集——深度读作
+ * 「国家队通过宽基 ETF 持有的规模 ÷ 全市场流通市值」。 */
+export const ETF_RESCUE_ALL_SHARE_INDEX_CODE = '000985'
+
+/** 中证全指篮子：只用于「该标的自己的深度」，**不进广度口径**（见 OTHER_BASKETS）。 */
+export const ETF_RESCUE_ALL_SHARE_BASKET: EtfRescueBasket = {
+  indexCode: ETF_RESCUE_ALL_SHARE_INDEX_CODE,
+  indexName: '中证全指',
+  depthLabel: '全市场宽基ETF',
+  exchange: 'sh',
+  // 并集去重：七个篮子没有任何重复代码，这里仍用 Set 表达「并集」这个语义。
+  etfs: [...new Set(ETF_RESCUE_BASKETS.flatMap((basket) => basket.etfs))],
+}
+
+/**
+ * 参与取数与 k 标定的全部指数（七个篮子 + 中证全指）。
+ *
+ * 与 ETF_RESCUE_BASKETS 分成两张表是有意的：广度口径冻结在「除沪深300 外的六个篮子」，
+ * 中证全指覆盖全市场、把它算进广度分母会把同一批市值重复计一次。
+ */
+export const ETF_RESCUE_INDEX_BASKETS: readonly EtfRescueBasket[] = [
+  ...ETF_RESCUE_BASKETS,
+  ETF_RESCUE_ALL_SHARE_BASKET,
+]
+
+/** 白名单里的全部 ETF 代码（十五个，去重；中证全指篮子是并集，不引入新代码）。 */
 export const ETF_RESCUE_BASKET_CODES: readonly string[] = [
   ...new Set(ETF_RESCUE_BASKETS.flatMap((basket) => basket.etfs)),
 ]
@@ -61,9 +87,9 @@ export function isEtfRescueBasketCode(code: string): boolean {
   return ETF_RESCUE_BASKET_CODES.includes(code)
 }
 
-/** 指数代码 → 篮子；不在白名单返回 undefined。 */
+/** 指数代码 → 篮子（七个宽基 + 中证全指）；不在白名单返回 undefined。 */
 export function findEtfRescueBasket(indexCode: string): EtfRescueBasket | undefined {
-  return ETF_RESCUE_BASKETS.find((basket) => basket.indexCode === indexCode)
+  return ETF_RESCUE_INDEX_BASKETS.find((basket) => basket.indexCode === indexCode)
 }
 
 /* ------------------------------------------------------------------ */

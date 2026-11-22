@@ -18,8 +18,8 @@ import type { EtfRescueHistory } from '@dshtrading/api'
 // 「上游失败」必须是同一个可诊断的错误类型，桥与测试都按它分流。
 import { TradingServiceError } from '@dshtrading/connector-akshare'
 import {
-  ETF_RESCUE_BASKETS,
   ETF_RESCUE_BASKET_CODES,
+  ETF_RESCUE_INDEX_BASKETS,
   ETF_RESCUE_START_DATE,
   addDays,
   computeEtfRescuePoints,
@@ -186,10 +186,10 @@ export class EtfRescueService {
     }
   }
 
-  /** 七个指数的交易日并集（≥起点、≤已结算上界）。 */
+  /** 全部指数的交易日并集（≥起点、≤已结算上界）。 */
   private tradingDays(closes: Record<string, Record<string, number>>, settled: string): string[] {
     const days = new Set<string>()
-    for (const basket of ETF_RESCUE_BASKETS) {
+    for (const basket of ETF_RESCUE_INDEX_BASKETS) {
       for (const date of Object.keys(closes[basket.indexCode] ?? {})) {
         if (date >= ETF_RESCUE_START_DATE && date <= settled) days.add(date)
       }
@@ -200,7 +200,7 @@ export class EtfRescueService {
   /** 指数收盘：按指数增量补齐到已结算上界（fetchedThrough 水位挡住重复请求）。 */
   private async loadCloses(settled: string): Promise<Record<string, Record<string, number>>> {
     const out: Record<string, Record<string, number>> = {}
-    for (const basket of ETF_RESCUE_BASKETS) {
+    for (const basket of ETF_RESCUE_INDEX_BASKETS) {
       const cached = await this.cache.readCloses(basket.indexCode)
       if (cached !== undefined && cached.fetchedThrough >= settled) {
         out[basket.indexCode] = cached.closes
@@ -311,14 +311,14 @@ export class EtfRescueService {
     return sharesByCode
   }
 
-  /** 七个指数的 k：缓存 90 天内直接用；过期则重标定，失败沿用上次 k，无旧值即抛错。 */
+  /** 全部指数的 k：缓存 90 天内直接用；过期则重标定，失败沿用上次 k，无旧值即抛错。 */
   private async loadKs(): Promise<Record<string, number>> {
     const cached = await this.cache.readCalibrations()
     const nowMs = this.now().getTime()
     const out: Record<string, number> = {}
     const next: Record<string, IndexCalibrationEntry> = { ...cached }
     let changed = false
-    for (const basket of ETF_RESCUE_BASKETS) {
+    for (const basket of ETF_RESCUE_INDEX_BASKETS) {
       const entry = cached[basket.indexCode]
       if (entry !== undefined && nowMs - Date.parse(entry.calibratedAt) < this.calibrationTtlMs) {
         out[basket.indexCode] = entry.k

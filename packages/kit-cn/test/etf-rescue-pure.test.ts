@@ -303,3 +303,67 @@ describe('其余上游响应解析', () => {
     expect(tradingDateMs('2024-02-29')).toBe(Date.UTC(2024, 1, 29))
   })
 })
+
+describe('中证全指（000985）深度口径', () => {
+  it('用户打开中证全指时，看到它的篮子取七个宽基篮子的并集', () => {
+    // Given 冻结白名单
+    const union = new Set(ETF_RESCUE_BASKETS.flatMap((basket) => [...basket.etfs]))
+
+    // When 查 000985 的篮子
+    const basket = findEtfRescueBasket('000985')
+
+    // Then 有篮子、图例名为全市场宽基ETF、代码集恰好是并集（不含重复）
+    expect(basket).toBeDefined()
+    expect(basket?.indexName).toBe('中证全指')
+    expect(basket?.depthLabel).toBe('全市场宽基ETF')
+    expect(basket?.exchange).toBe('sh')
+    expect(new Set(basket?.etfs ?? []).size).toBe(union.size)
+    expect(new Set(basket?.etfs ?? [])).toEqual(union)
+  })
+
+  it('用户在中证全指上看到全市场深度：并集规模合计 ÷ 中证全指流通市值', () => {
+    // Given 八条指数都有收盘与 k、十五只 ETF 都有份额与净值
+    const dates = ['2026-11-19', '2026-11-20'] as const
+    const allEtfs = codesOf(INDEX_CODES)
+    const series: EtfRescueSeries = {
+      targetIndexCode: '000985',
+      sharesByCode: byDate(allEtfs, dates, SHARES),
+      navByCode: byDate(allEtfs, dates, NAV),
+      closeByIndex: byDate([...INDEX_CODES, '000985'], dates, CLOSE),
+      kByIndex: ksFor([...INDEX_CODES, '000985']),
+      startDate: '2023-01-01',
+    }
+    const unionScale = ETF_RESCUE_BASKETS.reduce((sum, basket) => sum + basket.etfs.length * SHARES * NAV, 0)
+
+    // When
+    const points = computeEtfRescuePoints(series)
+
+    // Then 深度 = 并集规模 / (k × close) × 100；两个交易日逐条相同
+    expect(points).toHaveLength(2)
+    for (const point of points) expect(point.depthPct).toBeCloseTo((unionScale / (K * CLOSE)) * 100, 10)
+  })
+
+  it('用户在同一张图上换标的时，广度读数不因中证全指参与取数而改变', () => {
+    // Given 同时含 000300 与 000985 的样本
+    const dates = ['2026-11-19', '2026-11-20'] as const
+    const allEtfs = codesOf(INDEX_CODES)
+    const closes = byDate([...INDEX_CODES, '000985'], dates, CLOSE)
+    const ks = ksFor([...INDEX_CODES, '000985'])
+    const shares = byDate(allEtfs, dates, SHARES)
+    const navs = byDate(allEtfs, dates, NAV)
+
+    // When 分别按沪深300 与中证全指出点
+    const onCsi300 = computeEtfRescuePoints({
+      targetIndexCode: '000300', sharesByCode: shares, navByCode: navs, closeByIndex: closes, kByIndex: ks, startDate: '2023-01-01',
+    })
+    const onAllShare = computeEtfRescuePoints({
+      targetIndexCode: '000985', sharesByCode: shares, navByCode: navs, closeByIndex: closes, kByIndex: ks, startDate: '2023-01-01',
+    })
+
+    // Then 广度逐条相等（广度口径冻结在除沪深300 外的六个篮子，中证全指不进分母）
+    expect(onAllShare.map((point) => point.breadthPct)).toEqual(onCsi300.map((point) => point.breadthPct))
+    // 而深度不同：全市场口径把沪深300、上证50、A500 的规模也算进分子
+    expect(onAllShare[0]?.depthPct).toBeGreaterThan(onCsi300[0]?.depthPct ?? 0)
+  })
+})
+
