@@ -186,19 +186,41 @@ function pinCalls(calls: readonly CapturedRequest[]): CapturedRequest[] {
   return calls.filter(call => call.url === '/dshtrading/api/watchlist-pins')
 }
 
-function clearLocalStorage(): void {
-  const storage = (globalThis as { localStorage?: { clear?: () => void } }).localStorage
-  storage?.clear?.()
+/** 内存版 Storage 契约假件（Node 25+/jsdom 默认原点下缺可用 localStorage，按用例隔离并不用 vi.* mock）。 */
+let storageDescriptor: PropertyDescriptor | undefined
+
+function installMemoryStorage(): void {
+  storageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  const backing = new Map<string, string>()
+  const fakeStorage: Storage = {
+    get length() { return backing.size },
+    clear: () => { backing.clear() },
+    getItem: (key: string) => backing.get(key) ?? null,
+    key: (index: number) => [...backing.keys()][index] ?? null,
+    removeItem: (key: string) => { backing.delete(key) },
+    setItem: (key: string, value: string) => { backing.set(key, String(value)) },
+  }
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    writable: true,
+    value: fakeStorage,
+  })
+}
+
+function restoreStorage(): void {
+  if (storageDescriptor === undefined) delete (globalThis as { localStorage?: unknown }).localStorage
+  else Object.defineProperty(globalThis, 'localStorage', storageDescriptor)
 }
 
 beforeEach(() => {
-  // 从仓库根跑 vitest 不会加载包内 setup.ts：本文件自己清浏览器存储，用例之间不串镜像。
-  clearLocalStorage()
+  // 按用例装全新内存存储，同时覆盖 Node 25+/26 缺失可用 localStorage 的环境差异，用例间不串镜像。
+  installMemoryStorage()
   FakeEventSource.created.length = 0
 })
 
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose()
+  restoreStorage()
 })
 
 afterAll(() => {
