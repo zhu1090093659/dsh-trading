@@ -20,6 +20,22 @@ esac
 DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
 export DSH_HOME
 
+# 外部工具 CLI 子命令：dsh-trading tool <status|index|schema|call ...>
+if [ "${1:-}" = "tool" ]; then
+  shift
+  script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+  if [ -x "$script_dir/dsh-trading-tool" ]; then
+    exec "$script_dir/dsh-trading-tool" "$@"
+  elif command -v dsh-trading-tool >/dev/null 2>&1; then
+    exec dsh-trading-tool "$@"
+  elif [ -x "$script_dir/../dsh-trading-tool.mjs" ]; then
+    exec "$script_dir/../dsh-trading-tool.mjs" "$@"
+  else
+    echo "dsh-trading: 找不到 dsh-trading-tool 可执行文件" >&2
+    exit 1
+  fi
+fi
+
 # trading-web 缺省监听 8888：宿主 web-app 的缺省端口是 3080，会与主 dsh web 宿主撞车。
 # 显式 --port / --port=N 优先；只对 trading-web 注入（trading-dev / trading-all 是无头
 # profile，不接受 --port）；--dump-config / --help 这类 launcher 面不注入。
