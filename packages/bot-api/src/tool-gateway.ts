@@ -1,21 +1,16 @@
 /**
- * 回环工具调用网关（loopback tool gateway）——把宿主 `ctx.tools` 暴露给本机外部 Agent。
+ * 外部工具调用网关（External Tool Gateway）——把宿主 `ctx.tools` 暴露给任意外部 Agent。
  *
  * 设计约束：
- * - 复用活宿主（`trading-web`）的单一实例 store、`tradingEvents` 广播、router 凭据、
- *   `tool-call-log` 与全部连接器服务，避免外部进程冷启动直读写造成写锁（writer lease）
- *   或双缓存互踩。
- * - 只绑 `127.0.0.1:0`（OS 分配端口），请求必须同时满足：Host 为回环字面量、Origin
- *   缺席或为回环源、Authorization Bearer token 与随机 256-bit 密钥常量时间相等。
- * - 工具暴露走**白名单族**（`EXPOSED_TOOL_FAMILIES`）：`bash`、`read`、`write`、`edit`、
- *   `*_subagent`、`trading_batch`、`trading_tools_index` 等宿主壳与元编排工具一律不暴露。
- * - 实盘安全闸门 fail-closed：命中 `LIVE_ACTION_GATE_PATTERN` 且 `dryRun !== true` 的
- *   调用在进管线前直接以 403 `TRADING_APPROVAL_REQUIRED` 拒绝，绝不绕过人工审批与
- *   `@dshtrading/authority`。
+ * - 默认仅绑 `127.0.0.1:0`（零配置即本机安全可用），同时支持通过 `tool-gateway-config.ts`
+ *   灵活配置监听地址/固定端口/对外 URL/静态或文件令牌/`Host` 与 `Origin` 白名单、
+ *   预设范围、工具/族黑白名单、只读模式与超时上限；
+ * - 统一提供 CLI/HTTP JSON（`/health`、`/index`、`/schema`、`/call`）、`/openapi.json`
+ *   与 Streamable HTTP MCP（`/mcp`，支持 `index` 与 `flat` 两种工具投影模式）；
+ * - `INTERNAL_TOOL_DENY_PATTERNS` 与实盘动作门禁 `TRADING_APPROVAL_REQUIRED`
+ *   在任何暴露模式与协议下始终 fail-closed 强制执行；
  * - 通过 `@deepseek-ai/dsh-tools/pipeline` 的 `ToolExecutionPipeline` 携带透明 `parent`
- *   令牌执行：`tools/pre-execute` 闸门、`tools/execute` 超时策略、schema 校验、`render`、
- *   `tools/post-execute` 调用日志照常运行，同时避开 `dsh-session-checkpoint-policy` 对
- *   `exec.agent.session` 的强假设（外部网关调用不归属聊天 Session，也不往侧边栏生成幽灵会话）。
+ *   令牌执行，完整复用宿主超时/校验/结构化日志，且不污染侧边栏聊天会话。
  *
  * @module @dshtrading/bot-api/tool-gateway
  */
@@ -29,86 +24,41 @@ import { readFileSync, rmSync } from 'node:fs'
 import { chmod } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import path from 'node:path'
+import {
+  DEFAULT_CALL_TIMEOUT_MS,
+  DEFAULT_EXPOSED_TOOL_FAMILIES,
+  DEFAULT_GATEWAY_FAMILIES,
+  DEFAULT_GATEWAY_PRESET,
+  DEFAULT_MAX_GATEWAY_BODY_BYTES,
+  LIVE_ACTION_GATE_PATTERN,
+  MIN_CALL_TIMEOUT_MS,
+  familyOfToolName,
+  isHostAllowedByConfig,
+  isInternalDeniedTool,
+  isMutatingToolName,
+  isOriginAllowedByConfig,
+  isToolAllowedByPolicy,
+  resolveToolGatewayConfig,
+  type GatewayFamilyMeta,
+  type GatewayToolSchema,
+  type McpToolMode,
+  type ResolvedToolGatewayConfig,
+  type ToolExposurePolicy,
+  type ToolGatewayConfigInput,
+} from './tool-gateway-config.ts'
+import {
+  buildGatewayOpenApiSpec,
+  handleMcpJsonRpc,
+  type GatewayCallOutcome,
+  type McpGatewayOperations,
+} from './tool-gateway-mcp.ts'
 
-export const TOOL_GATEWAY_DESCRIPTOR_FILE = 'tool-gateway.json'
-export const DEFAULT_GATEWAY_PRESET = 'master'
-export const DEFAULT_CALL_TIMEOUT_MS = 60_000
-export const MIN_CALL_TIMEOUT_MS = 1_000
-export const MAX_CALL_TIMEOUT_MS = 300_000
-export const MAX_GATEWAY_BODY_BYTES = 1024 * 1024
+export * from './tool-gateway-config.ts'
+export * from './tool-gateway-mcp.ts'
 
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1'])
-
-/**
- * 实盘动作工具名模式：与 `@dshtrading/base` 同口径。
- * 命中且未显式传 `dryRun: true` 时在网关入口直接 fail-closed 拒绝。
- */
-export const LIVE_ACTION_GATE_PATTERN =
-  /^(?:(?:crypto|us|cn|hk|futures|global)_(?:place|cancel)_order|crypto_set_leverage)$/
-
-/** 对外部 Agent 暴露的交易工具族白名单（前缀 = 首个下划线之前的部分）。 */
-export const EXPOSED_TOOL_FAMILIES: ReadonlySet<string> = new Set([
-  'cn',
-  'hk',
-  'us',
-  'crypto',
-  'futures',
-  'global',
-  'instruments',
-  'watchlist',
-  'holdings',
-  'indicator',
-  'strategy',
-  'screener',
-  'knowledge',
-  'tasks',
-  'news',
-  'flash',
-  'econ',
-  'macro',
-  'prediction',
-  'fx',
-  'routing',
-  'special',
-])
-
-interface FamilyMeta {
-  readonly label: string
-  readonly whenToUse: string
-}
-
-/** 各暴露族的路由说明（对齐 `@dshtrading/base/tool-index` 并补全跨市场/特色指标族）。 */
-export const GATEWAY_FAMILIES: Readonly<Record<string, FamilyMeta>> = {
-  cn: { label: 'A 股行情与账户', whenToUse: '查 A 股报价/K 线/财务/新闻/公告/估值/资金流，或 A 股账户余额与下单（默认 dry-run）' },
-  hk: { label: '港股行情与账户', whenToUse: '查港股报价/K 线/财务/新闻，或港股账户余额' },
-  us: { label: '美股行情与账户', whenToUse: '查美股报价/K 线/财务/新闻/公司画像，或美股账户余额' },
-  crypto: { label: '加密行情与账户', whenToUse: '查币种报价/K 线/资金费率/衍生品指标，或加密账户余额与下单（默认 dry-run）' },
-  futures: { label: '期货行情与账户', whenToUse: '查期货报价/K 线，或期货账户余额' },
-  global: { label: '全球品种（金十）', whenToUse: '现货贵金属/原油/外汇/全球指数的报价与分钟线，代码先用 instruments 解析' },
-  instruments: { label: '标的检索', whenToUse: '跨市场按代码或名称模糊找标的，得到规范 symbol 后再调行情工具' },
-  watchlist: { label: '自选股', whenToUse: '增删改查用户自选行与分组，或在 GUI 中栏切换当前标的' },
-  holdings: { label: '统一资产台账', whenToUse: '任何涉及持仓、仓位、敞口、复盘的任务——先读台账再谈别的' },
-  indicator: { label: '图表指标', whenToUse: '挂载/隐藏/自研图表指标，读取指标计算值或查看参数 schema' },
-  strategy: { label: '策略与回测', whenToUse: '策略清单、自定义策略落地、纯函数引擎回测' },
-  screener: { label: '选股器', whenToUse: '横截面筛选（全市场扫描某条件），非单标的研判' },
-  knowledge: { label: '知识库', whenToUse: '检索/读取/沉淀知识卡片，或看主题图谱' },
-  tasks: { label: '定时任务', whenToUse: '创建、列出、手动运行、修改或删除定时任务' },
-  news: { label: '金十资讯', whenToUse: '金十文章列表与检索（较长的宏观/市场分析）' },
-  flash: { label: '金十快讯', whenToUse: '金十快讯流与关键词搜索（事实核查首选）' },
-  econ: { label: '经济日历', whenToUse: '当周经济数据发布日历与共识/实际值' },
-  macro: { label: '宏观利率', whenToUse: '主要央行政策利率与宏观数据快照' },
-  prediction: { label: '预测市场', whenToUse: 'Polymarket 美联储议息概率与宏观预测事件（只读）' },
-  fx: { label: '汇率', whenToUse: 'USD/CNY/HKD 换算与跨币种市值折算' },
-  routing: { label: '行情路由', whenToUse: '确认各市场当前生效的数据提供方' },
-  special: { label: '特色情绪与板块指标', whenToUse: '读取市场情绪历史、行业排行/序列、港股沽空前十等综合快照' },
-}
-
-export interface GatewayToolSchema {
-  readonly name: string
-  readonly description?: string
-  readonly parameters?: unknown
-}
+export const MAX_GATEWAY_BODY_BYTES = DEFAULT_MAX_GATEWAY_BODY_BYTES
+export const EXPOSED_TOOL_FAMILIES: ReadonlySet<string> = new Set(DEFAULT_EXPOSED_TOOL_FAMILIES)
+export const GATEWAY_FAMILIES: Readonly<Record<string, GatewayFamilyMeta>> = DEFAULT_GATEWAY_FAMILIES
 
 export interface GatewayToolsServiceLike {
   schemas(scope?: unknown): readonly GatewayToolSchema[]
@@ -149,43 +99,51 @@ export interface ToolGatewayDescriptor {
   readonly host: string
   readonly port: number
   readonly url: string
+  readonly publicUrl?: string | undefined
   readonly token: string
   readonly preset: string
+  readonly protocols: readonly string[]
+  readonly mcpDefaultMode: McpToolMode
+  readonly readOnly: boolean
   readonly startedAt: string
 }
 
 export interface ToolGatewayDependencies {
-  /** 提供 `tools` 服务的 Cordis Context（用于 `ToolExecutionPipeline` 与事件派发）。 */
   readonly ctx: () => Context | undefined
-  /** 惰性读取宿主 `tools` 服务（缺省从 `ctx()` 读取）。 */
   readonly tools?: (() => GatewayToolsServiceLike | undefined) | undefined
-  /** 惰性读取 `agentPresets` 服务（用于获取 `master` 等预设作用域）。 */
   readonly agentPresets?: (() => GatewayAgentPresetsLike | undefined) | undefined
-  /** Bearer 认证密钥（32 字节 hex）。 */
   readonly token: string
-  /** 缺省预设 id，默认 `master`。 */
   readonly defaultPreset?: string | undefined
-  /** 进程启动时间戳（ISO-8601）。 */
   readonly startedAt?: string | undefined
-  /** 进程 pid。 */
   readonly pid?: number | undefined
+  readonly config?: ResolvedToolGatewayConfig | undefined
+  readonly advertisedUrl?: string | undefined
 }
 
 export interface ToolGatewayStartOptions {
   readonly ctx: () => Context | undefined
   readonly tools?: (() => GatewayToolsServiceLike | undefined) | undefined
   readonly agentPresets?: (() => GatewayAgentPresetsLike | undefined) | undefined
-  readonly descriptorPath?: string | undefined
+  readonly descriptorPath?: string | null | undefined
   readonly token?: string | undefined
   readonly defaultPreset?: string | undefined
   readonly host?: string | undefined
+  readonly port?: number | undefined
+  readonly dshHome?: string | undefined
+  readonly rowConfig?: unknown
+  readonly env?: Record<string, string | undefined> | undefined
+  readonly config?: ResolvedToolGatewayConfig | undefined
+  readonly overrides?: Partial<ToolGatewayConfigInput> | undefined
 }
 
 export interface ToolGatewayHandle {
   readonly url: string
+  readonly advertisedUrl: string
+  readonly host: string
   readonly port: number
   readonly token: string
-  readonly descriptorPath: string
+  readonly descriptorPath: string | null
+  readonly config: ResolvedToolGatewayConfig
   dispose(): Promise<void>
 }
 
@@ -193,12 +151,11 @@ export interface ToolGatewayHandle {
 const GATEWAY_PARENT_TOKEN = Symbol('dsh.trading.tool-gateway') as unknown as ToolExecutionToken
 
 export function familyOfTool(toolName: string): string {
-  const index = toolName.indexOf('_')
-  return index < 0 ? toolName : toolName.slice(0, index)
+  return familyOfToolName(toolName)
 }
 
 export function isExposedToolName(toolName: string): boolean {
-  return EXPOSED_TOOL_FAMILIES.has(familyOfTool(toolName).toLowerCase())
+  return !isInternalDeniedTool(toolName) && EXPOSED_TOOL_FAMILIES.has(familyOfTool(toolName).toLowerCase())
 }
 
 export function isLiveActionBlocked(toolName: string, args: unknown): boolean {
@@ -215,15 +172,23 @@ function briefDescription(description: string | undefined, max = 110): string {
   return first.length > max ? `${first.slice(0, max - 1)}…` : first
 }
 
-/** 按暴露白名单过滤注册工具并生成按族聚合的索引表。 */
+/** 按策略过滤注册工具并生成按族聚合的索引表。 */
 export function buildGatewayToolIndex(
   schemas: readonly GatewayToolSchema[],
   query?: string,
   family?: string,
+  options?: {
+    readonly policy?: ToolExposurePolicy | undefined
+    readonly familyMeta?: Readonly<Record<string, GatewayFamilyMeta>> | undefined
+  },
 ): GatewayToolIndex {
   const q = query?.trim().toLowerCase() || undefined
   const fam = family?.trim().toLowerCase() || undefined
-  const exposed = schemas.filter(schema => isExposedToolName(schema.name))
+  const policy = options?.policy
+  const familyMeta = options?.familyMeta ?? DEFAULT_GATEWAY_FAMILIES
+  const exposed = schemas.filter(schema =>
+    policy === undefined ? isExposedToolName(schema.name) : isToolAllowedByPolicy(schema.name, policy),
+  )
 
   const grouped = new Map<string, GatewayToolSchema[]>()
   for (const schema of exposed) {
@@ -236,7 +201,7 @@ export function buildGatewayToolIndex(
   const families: GatewayIndexFamily[] = []
   for (const [key, tools] of [...grouped.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))) {
     if (fam !== undefined && key !== fam) continue
-    const meta = GATEWAY_FAMILIES[key]
+    const meta = familyMeta[key]
     const nameHit = q !== undefined && (key.includes(q) || (meta?.label ?? '').toLowerCase().includes(q))
     const noteHit = q !== undefined && (meta?.whenToUse ?? '').toLowerCase().includes(q)
     const familyHit = q === undefined || nameHit || noteHit
@@ -259,7 +224,7 @@ export function buildGatewayToolIndex(
   if (q !== undefined) {
     families.sort((a, b) => {
       const rank = (item: GatewayIndexFamily) => {
-        const meta = GATEWAY_FAMILIES[item.family]
+        const meta = familyMeta[item.family]
         return item.family.includes(q) || (meta?.label ?? '').toLowerCase().includes(q) ? 0 : 1
       }
       return rank(a) - rank(b)
@@ -274,30 +239,12 @@ export function buildGatewayToolIndex(
   }
 }
 
-function hostnameOfHostHeader(hostHeader: string | undefined): string | undefined {
-  if (hostHeader === undefined || hostHeader.trim() === '') return undefined
-  const value = hostHeader.trim()
-  if (value.startsWith('[')) {
-    const end = value.indexOf(']')
-    return end < 0 ? undefined : value.slice(0, end + 1).toLowerCase()
-  }
-  const colon = value.indexOf(':')
-  return (colon < 0 ? value : value.slice(0, colon)).toLowerCase()
-}
-
 export function isLoopbackHostHeader(hostHeader: string | undefined): boolean {
-  const hostname = hostnameOfHostHeader(hostHeader)
-  return hostname !== undefined && LOOPBACK_HOSTS.has(hostname)
+  return isHostAllowedByConfig(hostHeader, { host: '127.0.0.1' })
 }
 
 export function isLoopbackOriginHeader(originHeader: string | undefined): boolean {
-  if (originHeader === undefined || originHeader === '') return true
-  try {
-    const parsed = new URL(originHeader)
-    return LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase())
-  } catch {
-    return false
-  }
+  return isOriginAllowedByConfig(originHeader, {})
 }
 
 function isAuthorizedBearer(authHeader: string | undefined, expectedToken: string): boolean {
@@ -323,34 +270,71 @@ class GatewayHttpError extends Error {
   }
 }
 
-function sendJson(res: ServerResponse, status: number, payload: unknown): void {
+function buildCorsHeaders(
+  originHeader: string | undefined,
+  allowedOrigins: readonly string[] | undefined,
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  if (originHeader === undefined || originHeader === '') return extra
+  const wildcard = (allowedOrigins ?? []).some(entry => entry.trim() === '*')
+  return {
+    'access-control-allow-origin': wildcard ? '*' : originHeader,
+    vary: 'Origin',
+    ...extra,
+  }
+}
+
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  payload: unknown,
+  extraHeaders: Record<string, string> = {},
+): void {
   if (res.writableEnded || res.destroyed) return
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
+    ...extraHeaders,
   })
   res.end(JSON.stringify(payload))
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+function sendEmpty(
+  res: ServerResponse,
+  status: number,
+  extraHeaders: Record<string, string> = {},
+): void {
+  if (res.writableEnded || res.destroyed) return
+  res.writeHead(status, {
+    'cache-control': 'no-store',
+    ...extraHeaders,
+  })
+  res.end()
+}
+
+async function readJsonBody(
+  req: IncomingMessage,
+  maxBytes: number,
+  jsonRpcParseError = false,
+): Promise<unknown> {
   const chunks: Buffer[] = []
   let total = 0
   for await (const chunk of req) {
     const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
     total += buf.length
-    if (total > MAX_GATEWAY_BODY_BYTES) {
-      throw new GatewayHttpError(413, 'PAYLOAD_TOO_LARGE', 'request body exceeds 1MiB cap')
+    if (total > maxBytes) {
+      throw new GatewayHttpError(413, 'PAYLOAD_TOO_LARGE', `request body exceeds ${maxBytes} bytes cap`)
     }
     chunks.push(buf)
   }
   const text = Buffer.concat(chunks).toString('utf8').trim()
   if (text === '') {
-    throw new GatewayHttpError(400, 'INVALID_REQUEST', 'request body must be a JSON object')
+    throw new GatewayHttpError(400, jsonRpcParseError ? 'JSON_RPC_PARSE_ERROR' : 'INVALID_REQUEST', 'request body must be a JSON object')
   }
   try {
     return JSON.parse(text)
   } catch {
-    throw new GatewayHttpError(400, 'INVALID_JSON', 'request body must be valid JSON')
+    throw new GatewayHttpError(400, jsonRpcParseError ? 'JSON_RPC_PARSE_ERROR' : 'INVALID_JSON', 'request body must be valid JSON')
   }
 }
 
@@ -358,15 +342,19 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function clampTimeoutMs(raw: unknown): number {
-  if (raw === undefined) return DEFAULT_CALL_TIMEOUT_MS
+function clampTimeoutMs(raw: unknown, defaultMs: number, maxMs: number): number {
+  if (raw === undefined) return defaultMs
   if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
     throw new GatewayHttpError(400, 'INVALID_REQUEST', 'timeoutMs must be a positive finite number')
   }
-  return Math.min(MAX_CALL_TIMEOUT_MS, Math.max(MIN_CALL_TIMEOUT_MS, Math.trunc(raw)))
+  return Math.min(maxMs, Math.max(MIN_CALL_TIMEOUT_MS, Math.trunc(raw)))
 }
 
-function parseCallPayload(raw: unknown): {
+function parseCallPayload(
+  raw: unknown,
+  defaultTimeoutMs: number,
+  maxTimeoutMs: number,
+): {
   readonly name: string
   readonly arguments: Record<string, unknown>
   readonly preset?: string
@@ -375,8 +363,7 @@ function parseCallPayload(raw: unknown): {
   if (!isPlainRecord(raw)) {
     throw new GatewayHttpError(400, 'INVALID_REQUEST', 'request body must be a JSON object')
   }
-  const rawName = raw.name
-  const name = typeof rawName === 'string' ? rawName.trim() : ''
+  const name = typeof raw.name === 'string' ? raw.name.trim() : ''
   if (name === '') {
     throw new GatewayHttpError(400, 'INVALID_REQUEST', 'name must be a non-empty string')
   }
@@ -398,7 +385,7 @@ function parseCallPayload(raw: unknown): {
     name,
     arguments: toolArgs,
     ...(preset === undefined ? {} : { preset }),
-    timeoutMs: clampTimeoutMs(raw.timeoutMs),
+    timeoutMs: clampTimeoutMs(raw.timeoutMs, defaultTimeoutMs, maxTimeoutMs),
   }
 }
 
@@ -409,11 +396,88 @@ function extractTextContent(content: ReadonlyArray<{ type?: string; text?: strin
     .join('\n')
 }
 
+function defaultGatewayConfig(deps: ToolGatewayDependencies): ResolvedToolGatewayConfig {
+  if (deps.config !== undefined) return deps.config
+  return {
+    enabled: true,
+    host: '127.0.0.1',
+    port: 0,
+    descriptorPath: null,
+    defaultPreset: deps.defaultPreset ?? DEFAULT_GATEWAY_PRESET,
+    defaultTimeoutMs: DEFAULT_CALL_TIMEOUT_MS,
+    maxTimeoutMs: 300_000,
+    maxBodyBytes: DEFAULT_MAX_GATEWAY_BODY_BYTES,
+    mcpEnabled: true,
+    mcpDefaultMode: 'index',
+    policy: {
+      exposeMode: 'allowlist',
+      allowedFamilies: [...DEFAULT_EXPOSED_TOOL_FAMILIES],
+      extraFamilies: [],
+      deniedFamilies: [],
+      deniedTools: [],
+      readOnly: false,
+    },
+    familyMeta: DEFAULT_GATEWAY_FAMILIES,
+  }
+}
+
+function formatBoundHost(host: string): string {
+  const trimmed = host.trim()
+  if (trimmed.includes(':') && !trimmed.startsWith('[')) return `[${trimmed}]`
+  return trimmed
+}
+
+function defaultDescriptorUrls(host: string, port: number, publicUrl: string | undefined): {
+  readonly boundUrl: string
+  readonly advertisedUrl: string
+} {
+  const boundUrl = `http://${formatBoundHost(host)}:${port}`
+  return { boundUrl, advertisedUrl: publicUrl ?? boundUrl }
+}
+
+function protocolsForConfig(config: Pick<ResolvedToolGatewayConfig, 'mcpEnabled'>): readonly string[] {
+  return config.mcpEnabled
+    ? ['http-json', 'openapi-3.1', 'mcp-streamable-http']
+    : ['http-json', 'openapi-3.1']
+}
+
+function isFamilyAllowedForListing(family: string, policy: ToolExposurePolicy): boolean {
+  const lower = family.trim().toLowerCase()
+  if (policy.deniedFamilies.some(entry => entry.toLowerCase() === lower)) return false
+  if (policy.exposeMode === 'open') return true
+  return policy.allowedFamilies.some(entry => entry.toLowerCase() === lower)
+    || policy.extraFamilies.some(entry => entry.toLowerCase() === lower)
+}
+
 export function createToolGatewayHandler(deps: ToolGatewayDependencies) {
-  const defaultPreset = deps.defaultPreset ?? DEFAULT_GATEWAY_PRESET
+  const config = defaultGatewayConfig(deps)
+  const defaultPreset = deps.defaultPreset ?? config.defaultPreset
   const startedAt = deps.startedAt ?? new Date().toISOString()
   const pid = deps.pid ?? process.pid
   let callCounter = 0
+
+  const ensurePresetAllowed = (preset: string): void => {
+    if (config.allowedPresets !== undefined && !config.allowedPresets.includes(preset)) {
+      throw new GatewayHttpError(403, 'PRESET_NOT_ALLOWED', `preset "${preset}" is not in allowedPresets`)
+    }
+  }
+
+  const ensureToolAllowedForCall = (toolName: string, args: unknown): void => {
+    const policyWithoutReadOnly: ToolExposurePolicy = { ...config.policy, readOnly: false }
+    if (!isToolAllowedByPolicy(toolName, policyWithoutReadOnly)) {
+      throw new GatewayHttpError(403, 'TOOL_NOT_EXPOSED', `tool "${toolName}" is not exposed by the external gateway`)
+    }
+    if (isLiveActionBlocked(toolName, args)) {
+      throw new GatewayHttpError(
+        403,
+        'TRADING_APPROVAL_REQUIRED',
+        `live trading action "${toolName}" is blocked on the external gateway unless dryRun=true; live orders must be approved inside the interactive terminal`,
+      )
+    }
+    if (config.policy.readOnly && isMutatingToolName(toolName)) {
+      throw new GatewayHttpError(403, 'TOOL_READ_ONLY_BLOCKED', `mutating tool "${toolName}" is blocked when gateway readOnly=true`)
+    }
+  }
 
   const resolveTools = (): GatewayToolsServiceLike | undefined => {
     if (deps.tools !== undefined) return deps.tools()
@@ -427,6 +491,7 @@ export function createToolGatewayHandler(deps: ToolGatewayDependencies) {
     presetId: string,
     fn: (tools: GatewayToolsServiceLike, scope: unknown, pipelineCtx: Context | undefined) => Promise<T>,
   ): Promise<T> => {
+    ensurePresetAllowed(presetId)
     const pipelineCtx = deps.ctx()
     const tools = resolveTools()
     if (tools === undefined) {
@@ -450,28 +515,177 @@ export function createToolGatewayHandler(deps: ToolGatewayDependencies) {
     }
   }
 
+  const getSchemaPayload = async (preset: string, name?: string, family?: string, all = false) => {
+    if (name) {
+      if (!isToolAllowedByPolicy(name, config.policy)) {
+        throw new GatewayHttpError(403, 'TOOL_NOT_EXPOSED', `tool "${name}" is not exposed by the external gateway`)
+      }
+      const tool = await withPresetScope(preset, async (tools, scope) =>
+        tools.schemas(scope).find(schema => schema.name === name),
+      )
+      if (tool === undefined) {
+        throw new GatewayHttpError(404, 'TOOL_NOT_FOUND', `tool "${name}" is not registered in preset "${preset}"`)
+      }
+      return { ok: true, preset, tool }
+    }
+    if (family) {
+      const normalized = family.trim().toLowerCase()
+      if (!isFamilyAllowedForListing(normalized, config.policy)) {
+        throw new GatewayHttpError(403, 'TOOL_NOT_EXPOSED', `tool family "${family}" is not exposed by the external gateway`)
+      }
+      const matched = await withPresetScope(preset, async (tools, scope) =>
+        tools
+          .schemas(scope)
+          .filter(schema => familyOfTool(schema.name).toLowerCase() === normalized && isToolAllowedByPolicy(schema.name, config.policy))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      )
+      return { ok: true, preset, family: normalized, tools: matched }
+    }
+    if (all) {
+      const matched = await withPresetScope(preset, async (tools, scope) =>
+        tools
+          .schemas(scope)
+          .filter(schema => isToolAllowedByPolicy(schema.name, config.policy))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      )
+      return { ok: true, preset, tools: matched }
+    }
+    throw new GatewayHttpError(400, 'INVALID_REQUEST', 'name, family, or all=1 query parameter is required')
+  }
+
+  const executeGatewayCall = async (options: {
+    readonly name: string
+    readonly arguments: Record<string, unknown>
+    readonly preset: string
+    readonly timeoutMs: number
+    readonly signal?: AbortSignal | undefined
+  }): Promise<GatewayCallOutcome> => {
+    ensurePresetAllowed(options.preset)
+    ensureToolAllowedForCall(options.name, options.arguments)
+
+    const timeoutSignal = AbortSignal.timeout(options.timeoutMs)
+    const signal = options.signal === undefined
+      ? timeoutSignal
+      : AbortSignal.any([options.signal, timeoutSignal])
+
+    const outcome = await withPresetScope(options.preset, async (tools, scope, pipelineCtx) => {
+      const visible = tools.schemas(scope).some(schema => schema.name === options.name)
+      if (!visible) {
+        throw new GatewayHttpError(404, 'TOOL_NOT_FOUND', `tool "${options.name}" is not registered in preset "${options.preset}"`)
+      }
+      if (pipelineCtx === undefined) {
+        throw new GatewayHttpError(503, 'TOOLS_UNAVAILABLE', 'host pipeline context is unavailable')
+      }
+      const callId = `gw-${++callCounter}`
+      const pipeline = new ToolExecutionPipeline(pipelineCtx)
+      const prepared = await pipeline.prepare({
+        callId: callId as ToolCallId,
+        name: options.name,
+        arguments: options.arguments,
+        ...(scope === undefined ? {} : { agent: scope as never }),
+        parent: GATEWAY_PARENT_TOKEN,
+        signal,
+      })
+      const dispatched = prepared.kind === 'dispatch'
+        ? await pipeline.dispatch(prepared.exec)
+        : prepared
+      const result = await pipeline.complete(prepared.exec, dispatched)
+      return { callId, result }
+    })
+
+    const text = extractTextContent(outcome.result.content)
+    if (outcome.result.isError) {
+      return {
+        ok: false,
+        tool: options.name,
+        callId: outcome.callId,
+        isError: true,
+        code: outcome.result.error.info?.code ?? 'TOOL_EXECUTION_ERROR',
+        message: outcome.result.error.message || text || 'tool execution failed',
+        text,
+        content: outcome.result.content,
+      }
+    }
+
+    return {
+      ok: true,
+      tool: options.name,
+      callId: outcome.callId,
+      ...(outcome.result.value !== undefined ? { value: outcome.result.value } : {}),
+      text,
+      content: outcome.result.content,
+    }
+  }
+
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const originHeader = typeof req.headers.origin === 'string' ? req.headers.origin : undefined
+    let corsHeaders: Record<string, string> = {}
+
     try {
-      if (!isLoopbackHostHeader(req.headers.host)) {
-        throw new GatewayHttpError(403, 'FORBIDDEN_HOST', 'non-loopback Host header is rejected')
+      if (!isHostAllowedByConfig(req.headers.host, config)) {
+        throw new GatewayHttpError(403, 'FORBIDDEN_HOST', 'non-allowed Host header is rejected')
       }
-      if (!isLoopbackOriginHeader(typeof req.headers.origin === 'string' ? req.headers.origin : undefined)) {
-        throw new GatewayHttpError(403, 'FORBIDDEN_ORIGIN', 'non-loopback Origin header is rejected')
+      if (!isOriginAllowedByConfig(originHeader, config)) {
+        throw new GatewayHttpError(403, 'FORBIDDEN_ORIGIN', 'non-allowed Origin header is rejected')
       }
+      corsHeaders = buildCorsHeaders(originHeader, config.allowedOrigins)
+
+      const method = req.method ?? 'GET'
+      if (method === 'OPTIONS') {
+        sendEmpty(
+          res,
+          204,
+          buildCorsHeaders(originHeader, config.allowedOrigins, {
+            'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
+            'access-control-allow-headers': 'authorization, content-type, accept, mcp-session-id, mcp-protocol-version',
+            'access-control-max-age': '600',
+          }),
+        )
+        return
+      }
+
       if (!isAuthorizedBearer(req.headers.authorization, deps.token)) {
         throw new GatewayHttpError(401, 'UNAUTHORIZED', 'missing or invalid bearer token')
       }
 
-      const method = req.method ?? 'GET'
       const url = new URL(req.url ?? '/', 'http://127.0.0.1')
       const pathname = url.pathname
 
       if (pathname === '/health') {
         if (method !== 'GET') throw new GatewayHttpError(405, 'METHOD_NOT_ALLOWED', 'GET required for /health')
         const toolCount = await withPresetScope(defaultPreset, async (tools, scope) =>
-          tools.schemas(scope).filter(schema => isExposedToolName(schema.name)).length,
+          tools.schemas(scope).filter(schema => isToolAllowedByPolicy(schema.name, config.policy)).length,
         )
-        sendJson(res, 200, { ok: true, pid, preset: defaultPreset, toolCount, startedAt })
+        sendJson(res, 200, {
+          ok: true,
+          pid,
+          preset: defaultPreset,
+          toolCount,
+          startedAt,
+          protocols: protocolsForConfig(config),
+          mcpDefaultMode: config.mcpDefaultMode,
+          exposeMode: config.policy.exposeMode,
+          readOnly: config.policy.readOnly,
+          ...(config.publicUrl === undefined ? {} : { publicUrl: config.publicUrl }),
+        }, corsHeaders)
+        return
+      }
+
+      if (pathname === '/openapi.json') {
+        if (method !== 'GET') throw new GatewayHttpError(405, 'METHOD_NOT_ALLOWED', 'GET required for /openapi.json')
+        const hostFallback = req.headers.host ? `http://${req.headers.host}` : 'http://127.0.0.1'
+        const serverUrl = deps.advertisedUrl ?? config.publicUrl ?? hostFallback
+        sendJson(
+          res,
+          200,
+          buildGatewayOpenApiSpec({
+            serverUrl,
+            defaultPreset,
+            mcpEnabled: config.mcpEnabled,
+            mcpDefaultMode: config.mcpDefaultMode,
+          }),
+          corsHeaders,
+        )
         return
       }
 
@@ -481,9 +695,12 @@ export function createToolGatewayHandler(deps: ToolGatewayDependencies) {
         const query = url.searchParams.get('query') ?? undefined
         const family = url.searchParams.get('family') ?? undefined
         const index = await withPresetScope(preset, async (tools, scope) =>
-          buildGatewayToolIndex(tools.schemas(scope), query, family),
+          buildGatewayToolIndex(tools.schemas(scope), query, family, {
+            policy: config.policy,
+            familyMeta: config.familyMeta,
+          }),
         )
-        sendJson(res, 200, { ok: true, preset, ...index })
+        sendJson(res, 200, { ok: true, preset, ...index }, corsHeaders)
         return
       }
 
@@ -492,51 +709,83 @@ export function createToolGatewayHandler(deps: ToolGatewayDependencies) {
         const preset = url.searchParams.get('preset')?.trim() || defaultPreset
         const name = url.searchParams.get('name')?.trim()
         const family = url.searchParams.get('family')?.trim()
-        if (name) {
-          if (!isExposedToolName(name)) {
-            throw new GatewayHttpError(403, 'TOOL_NOT_EXPOSED', `tool "${name}" is not exposed by the external gateway`)
-          }
-          const tool = await withPresetScope(preset, async (tools, scope) =>
-            tools.schemas(scope).find(schema => schema.name === name),
-          )
-          if (tool === undefined) {
-            throw new GatewayHttpError(404, 'TOOL_NOT_FOUND', `tool "${name}" is not registered in preset "${preset}"`)
-          }
-          sendJson(res, 200, { ok: true, preset, tool })
-          return
-        }
-        if (family) {
-          const normalized = family.toLowerCase()
-          if (!EXPOSED_TOOL_FAMILIES.has(normalized)) {
-            throw new GatewayHttpError(403, 'TOOL_NOT_EXPOSED', `tool family "${family}" is not exposed by the external gateway`)
-          }
-          const matched = await withPresetScope(preset, async (tools, scope) =>
-            tools
-              .schemas(scope)
-              .filter(schema => familyOfTool(schema.name).toLowerCase() === normalized)
-              .sort((a, b) => a.name.localeCompare(b.name)),
-          )
-          sendJson(res, 200, { ok: true, preset, family: normalized, tools: matched })
-          return
-        }
-        throw new GatewayHttpError(400, 'INVALID_REQUEST', 'name or family query parameter is required')
+        const allRaw = url.searchParams.get('all')?.trim().toLowerCase()
+        const all = allRaw === '1' || allRaw === 'true'
+        const payload = await getSchemaPayload(preset, name, family, all)
+        sendJson(res, 200, payload, corsHeaders)
+        return
       }
 
       if (pathname === '/call') {
         if (method !== 'POST') throw new GatewayHttpError(405, 'METHOD_NOT_ALLOWED', 'POST required for /call')
-        const rawBody = await readJsonBody(req)
-        const parsed = parseCallPayload(rawBody)
+        const rawBody = await readJsonBody(req, config.maxBodyBytes)
+        const parsed = parseCallPayload(rawBody, config.defaultTimeoutMs, config.maxTimeoutMs)
         const preset = parsed.preset ?? defaultPreset
 
-        if (!isExposedToolName(parsed.name)) {
-          throw new GatewayHttpError(403, 'TOOL_NOT_EXPOSED', `tool "${parsed.name}" is not exposed by the external gateway`)
+        const disconnect = new AbortController()
+        const hasSocketEvents = typeof res.on === 'function' && typeof res.off === 'function'
+        const onClose = (): void => {
+          if (!res.writableEnded) disconnect.abort(new Error('gateway client disconnected'))
         }
-        if (isLiveActionBlocked(parsed.name, parsed.arguments)) {
-          throw new GatewayHttpError(
-            403,
-            'TRADING_APPROVAL_REQUIRED',
-            `live trading action "${parsed.name}" is blocked on the external gateway unless dryRun=true; live orders must be approved inside the interactive terminal`,
-          )
+        if (hasSocketEvents) res.on('close', onClose)
+        try {
+          const outcome = await executeGatewayCall({
+            name: parsed.name,
+            arguments: parsed.arguments,
+            preset,
+            timeoutMs: parsed.timeoutMs,
+            signal: disconnect.signal,
+          })
+          sendJson(res, 200, outcome, corsHeaders)
+          return
+        } finally {
+          if (hasSocketEvents) res.off('close', onClose)
+        }
+      }
+
+      if (pathname === '/mcp') {
+        if (!config.mcpEnabled) {
+          throw new GatewayHttpError(404, 'NOT_FOUND', 'MCP endpoint is disabled on this gateway')
+        }
+        if (method === 'GET') {
+          sendJson(res, 405, { ok: false, code: 'METHOD_NOT_ALLOWED', message: 'POST required for /mcp' }, {
+            ...corsHeaders,
+            allow: 'POST, DELETE, OPTIONS',
+          })
+          return
+        }
+        if (method === 'DELETE') {
+          sendEmpty(res, 204, corsHeaders)
+          return
+        }
+        if (method !== 'POST') {
+          throw new GatewayHttpError(405, 'METHOD_NOT_ALLOWED', 'POST required for /mcp')
+        }
+
+        const modeParam = url.searchParams.get('mode')?.trim().toLowerCase()
+        const mode: McpToolMode = modeParam === undefined || modeParam === ''
+          ? config.mcpDefaultMode
+          : (modeParam === 'index' || modeParam === 'flat'
+              ? modeParam
+              : (() => { throw new GatewayHttpError(400, 'INVALID_REQUEST', 'mode query parameter must be "index" or "flat"') })())
+        const preset = url.searchParams.get('preset')?.trim() || defaultPreset
+        ensurePresetAllowed(preset)
+        const familyParam = url.searchParams.get('family')?.trim()
+        const families = familyParam ? familyParam.split(',').map(f => f.trim().toLowerCase()).filter(Boolean) : undefined
+
+        let rawBody: unknown
+        try {
+          rawBody = await readJsonBody(req, config.maxBodyBytes, true)
+        } catch (error) {
+          if (error instanceof GatewayHttpError && error.code === 'JSON_RPC_PARSE_ERROR') {
+            sendJson(res, 400, {
+              jsonrpc: '2.0',
+              id: null,
+              error: { code: -32700, message: error.message },
+            }, corsHeaders)
+            return
+          }
+          throw error
         }
 
         const disconnect = new AbortController()
@@ -545,57 +794,45 @@ export function createToolGatewayHandler(deps: ToolGatewayDependencies) {
           if (!res.writableEnded) disconnect.abort(new Error('gateway client disconnected'))
         }
         if (hasSocketEvents) res.on('close', onClose)
-        const signal = AbortSignal.any([disconnect.signal, AbortSignal.timeout(parsed.timeoutMs)])
-
         try {
-          const outcome = await withPresetScope(preset, async (tools, scope, pipelineCtx) => {
-            const visible = tools.schemas(scope).some(schema => schema.name === parsed.name)
-            if (!visible) {
-              throw new GatewayHttpError(404, 'TOOL_NOT_FOUND', `tool "${parsed.name}" is not registered in preset "${preset}"`)
-            }
-            if (pipelineCtx === undefined) {
-              throw new GatewayHttpError(503, 'TOOLS_UNAVAILABLE', 'host pipeline context is unavailable')
-            }
-            const callId = `gw-${++callCounter}`
-            const pipeline = new ToolExecutionPipeline(pipelineCtx)
-            const prepared = await pipeline.prepare({
-              callId: callId as ToolCallId,
-              name: parsed.name,
-              arguments: parsed.arguments,
-              ...(scope === undefined ? {} : { agent: scope as never }),
-              parent: GATEWAY_PARENT_TOKEN,
-              signal,
-            })
-            const dispatched = prepared.kind === 'dispatch'
-              ? await pipeline.dispatch(prepared.exec)
-              : prepared
-            const result = await pipeline.complete(prepared.exec, dispatched)
-            return { callId, result }
-          })
-
-          const text = extractTextContent(outcome.result.content)
-          if (outcome.result.isError) {
-            sendJson(res, 200, {
-              ok: false,
-              tool: parsed.name,
-              callId: outcome.callId,
-              isError: true,
-              code: outcome.result.error.info?.code ?? 'TOOL_EXECUTION_ERROR',
-              message: outcome.result.error.message || text || 'tool execution failed',
-              text,
-              content: outcome.result.content,
-            })
-            return
+          const ops: McpGatewayOperations = {
+            getIndex: async (targetPreset, query, family) => {
+              const index = await withPresetScope(targetPreset, async (tools, scope) =>
+                buildGatewayToolIndex(tools.schemas(scope), query, family, {
+                  policy: config.policy,
+                  familyMeta: config.familyMeta,
+                }),
+              )
+              return { ok: true, preset: targetPreset, ...index }
+            },
+            getSchema: async (targetPreset, name, family) =>
+              getSchemaPayload(targetPreset, name, family, false),
+            listSchemas: async (targetPreset, filterFamilies) =>
+              withPresetScope(targetPreset, async (tools, scope) => {
+                const familySet = filterFamilies && filterFamilies.length > 0 ? new Set(filterFamilies) : undefined
+                return tools.schemas(scope).filter(schema =>
+                  isToolAllowedByPolicy(schema.name, config.policy)
+                  && (familySet === undefined || familySet.has(familyOfTool(schema.name).toLowerCase())),
+                )
+              }),
+            callTool: async (callReq) => {
+              const timeoutMs = clampTimeoutMs(callReq.timeoutMs, config.defaultTimeoutMs, config.maxTimeoutMs)
+              return executeGatewayCall({
+                name: callReq.name,
+                arguments: callReq.arguments,
+                preset: callReq.preset,
+                timeoutMs,
+                signal: disconnect.signal,
+              })
+            },
           }
 
-          sendJson(res, 200, {
-            ok: true,
-            tool: parsed.name,
-            callId: outcome.callId,
-            ...(outcome.result.value !== undefined ? { value: outcome.result.value } : {}),
-            text,
-            content: outcome.result.content,
-          })
+          const rpcRes = await handleMcpJsonRpc(rawBody, ops, { mode, preset, families })
+          if (rpcRes.status === 202) {
+            sendEmpty(res, 202, corsHeaders)
+            return
+          }
+          sendJson(res, rpcRes.status, rpcRes.payload, corsHeaders)
           return
         } finally {
           if (hasSocketEvents) res.off('close', onClose)
@@ -605,35 +842,36 @@ export function createToolGatewayHandler(deps: ToolGatewayDependencies) {
       throw new GatewayHttpError(404, 'NOT_FOUND', `no such gateway endpoint: ${pathname}`)
     } catch (error) {
       if (error instanceof GatewayHttpError) {
-        sendJson(res, error.status, { ok: false, code: error.code, message: error.message })
+        sendJson(res, error.status, { ok: false, code: error.code, message: error.message }, corsHeaders)
         return
       }
       const message = error instanceof Error ? error.message : String(error)
-      sendJson(res, 500, { ok: false, code: 'INTERNAL_ERROR', message })
+      sendJson(res, 500, { ok: false, code: 'INTERNAL_ERROR', message }, corsHeaders)
     }
   }
 }
 
 export async function startToolGatewayServer(options: ToolGatewayStartOptions): Promise<ToolGatewayHandle> {
-  const host = options.host ?? '127.0.0.1'
-  const token = options.token ?? randomBytes(32).toString('hex')
-  const defaultPreset = options.defaultPreset ?? DEFAULT_GATEWAY_PRESET
+  const explicitOverrides: Record<string, unknown> = {
+    ...(options.overrides ?? {}),
+    ...(options.host === undefined ? {} : { host: options.host }),
+    ...(options.port === undefined ? {} : { port: options.port }),
+    ...(options.token === undefined ? {} : { token: options.token }),
+    ...(options.defaultPreset === undefined ? {} : { defaultPreset: options.defaultPreset }),
+    ...(options.descriptorPath === undefined ? {} : { descriptorPath: options.descriptorPath }),
+  }
+
+  const resolvedConfig = options.config ?? resolveToolGatewayConfig({
+    dshHome: options.dshHome ?? dshHomeDir(),
+    rowConfig: options.rowConfig,
+    env: options.env,
+    overrides: explicitOverrides as Partial<ToolGatewayConfigInput>,
+  })
+
+  const token = resolvedConfig.token ?? randomBytes(32).toString('hex')
   const startedAt = new Date().toISOString()
-  const descriptorPath = options.descriptorPath ?? path.join(dshHomeDir(), TOOL_GATEWAY_DESCRIPTOR_FILE)
 
-  const handler = createToolGatewayHandler({
-    ctx: options.ctx,
-    tools: options.tools,
-    agentPresets: options.agentPresets,
-    token,
-    defaultPreset,
-    startedAt,
-    pid: process.pid,
-  })
-
-  const server = createServer((req, res) => {
-    void handler(req, res)
-  })
+  const server = createServer()
 
   await new Promise<void>((resolve, reject) => {
     const onError = (error: Error): void => {
@@ -646,47 +884,73 @@ export async function startToolGatewayServer(options: ToolGatewayStartOptions): 
     }
     server.once('error', onError)
     server.once('listening', onListening)
-    server.listen(0, host)
+    server.listen(resolvedConfig.port, resolvedConfig.host)
   })
 
   const addr = server.address() as AddressInfo | null
   if (addr === null || typeof addr === 'string') {
     server.close()
-    throw new Error('tool gateway failed to resolve bound loopback port')
+    throw new Error('tool gateway failed to resolve bound port')
   }
   const port = addr.port
-  const url = `http://${host}:${port}`
-  const descriptor: ToolGatewayDescriptor = {
-    version: 1,
-    pid: process.pid,
-    host,
-    port,
-    url,
-    token,
-    preset: defaultPreset,
-    startedAt,
-  }
+  const { boundUrl, advertisedUrl } = defaultDescriptorUrls(resolvedConfig.host, port, resolvedConfig.publicUrl)
 
-  try {
-    await writeJsonAtomic(descriptorPath, descriptor, '[dsh-trading/tool-gateway] failed to write descriptor to')
-    await chmod(descriptorPath, 0o600)
-  } catch (error) {
-    server.closeAllConnections?.()
-    await new Promise<void>(resolve => { server.close(() => resolve()) })
-    throw error
+  const handler = createToolGatewayHandler({
+    ctx: options.ctx,
+    tools: options.tools,
+    agentPresets: options.agentPresets,
+    token,
+    defaultPreset: resolvedConfig.defaultPreset,
+    startedAt,
+    pid: process.pid,
+    config: resolvedConfig,
+    advertisedUrl,
+  })
+  server.on('request', (req, res) => {
+    void handler(req, res)
+  })
+
+  const descriptorPath = resolvedConfig.descriptorPath
+  if (descriptorPath !== null) {
+    const descriptor: ToolGatewayDescriptor = {
+      version: 1,
+      pid: process.pid,
+      host: resolvedConfig.host,
+      port,
+      url: boundUrl,
+      ...(resolvedConfig.publicUrl === undefined ? {} : { publicUrl: resolvedConfig.publicUrl }),
+      token,
+      preset: resolvedConfig.defaultPreset,
+      protocols: protocolsForConfig(resolvedConfig),
+      mcpDefaultMode: resolvedConfig.mcpDefaultMode,
+      readOnly: resolvedConfig.policy.readOnly,
+      startedAt,
+    }
+    try {
+      await writeJsonAtomic(descriptorPath, descriptor, '[dsh-trading/tool-gateway] failed to write descriptor to')
+      await chmod(descriptorPath, 0o600)
+    } catch (error) {
+      server.closeAllConnections?.()
+      await new Promise<void>(resolve => { server.close(() => resolve()) })
+      throw error
+    }
   }
 
   let disposed = false
   return {
-    url,
+    url: boundUrl,
+    advertisedUrl,
+    host: resolvedConfig.host,
     port,
     token,
     descriptorPath,
+    config: resolvedConfig,
     async dispose(): Promise<void> {
       if (disposed) return
       disposed = true
       server.closeAllConnections?.()
       await new Promise<void>(resolve => { server.close(() => resolve()) })
+      if (descriptorPath === null) return
       try {
         const raw = readFileSync(descriptorPath, 'utf8')
         const current = JSON.parse(raw) as { pid?: unknown }

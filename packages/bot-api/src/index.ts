@@ -45,9 +45,11 @@ import { TASKS_ACTION_BYTES_LIMIT, TASKS_API_SUBPATH, parseTasksEnvelope } from 
 import { TradingTasksService } from './tasks/service.ts'
 import { GatewayPeerSeat, type PeerLike, type SessionCommandDispatcher, type SessionGateway } from './tasks/runner.ts'
 import {
+  resolveToolGatewayConfig,
   startToolGatewayServer,
   type GatewayAgentPresetsLike,
   type GatewayToolsServiceLike,
+  type ResolvedToolGatewayConfig,
   type ToolGatewayHandle,
 } from './tool-gateway.ts'
 
@@ -82,10 +84,11 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
 }
 
 /**
- * Host plugin body：注册 /dshtrading/api 路由（web 宿主）或静默挂起（headless）。
+ * Host plugin body：注册 /dshtrading/api 路由（web/bot 宿主）并按需启动外部工具网关。
  * @param ctx - Host cordis context（bundle loader entry）。
+ * @param rawConfig - Cordis 行配置（可包含网关灵活配置项或 `toolGateway` 子对象）。
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, rawConfig?: unknown): void {
   // store 单实例解析（issue #33 收口）：能力包 ./plugin 以 Service 类 provide
   // 服务——ctx.get 取到的是 Service 实例（store 挂在 .store 属性，不是 store 本
   // 身；2026-09-01 实证 store.list is not a function 回归）→ 解包 .store 复用同
@@ -381,14 +384,36 @@ export function apply(ctx: Context): void {
       },
     }
     ctx.effect(() => webServer.register(route), 'dsh-trading-client-ui-trading: /dshtrading/api route')
-    if (
-      process.env.DSH_TRADING_TOOL_GATEWAY !== '0'
-      && process.env.VITEST === undefined
-      && process.env.NODE_ENV !== 'test'
-    ) {
+  }
+  ctx.inject(['webServer', 'connection'], (c) => {
+    const webServer = c.get('webServer') as unknown as WebServerLike | undefined
+    const connection = c.get('connection') as unknown as ConnectionLike | undefined
+    if (webServer !== undefined && connection !== undefined) mountOn(c, webServer, connection)
+  })
+  ctx.inject(['botHttp', 'botFence'], (c) => {
+    const botHttp = c.get('botHttp') as unknown as WebServerLike | undefined
+    const botFence = c.get('botFence') as unknown as ConnectionLike | undefined
+    if (botHttp !== undefined && botFence !== undefined) mountOn(c, botHttp, botFence)
+  })
+
+  // 外部工具网关挂载在顶层 apply（独立于 webServer/botHttp），使 GUI、bot 与 headless
+  // （trading-dev / trading-all）三类宿主均可通过一致配置对外提供安全可控的工具面。
+  if (process.env.VITEST === undefined && process.env.NODE_ENV !== 'test') {
+    const home = dshHomeDir()
+    let gatewayConfig: ResolvedToolGatewayConfig | undefined
+    try {
+      gatewayConfig = resolveToolGatewayConfig({ dshHome: home, rowConfig: rawConfig })
+    } catch (error) {
+      console.error('[dsh-trading/tool-gateway] invalid configuration (gateway disabled fail-closed):', error)
+    }
+    if (gatewayConfig !== undefined && gatewayConfig.enabled) {
       let gatewayDisposed = false
       let gatewayHandle: ToolGatewayHandle | undefined
       let activeToolsCtx: Context | undefined
+      const resolveGatewayService = (key: string): unknown =>
+        (activeToolsCtx as unknown as { get?: (k: string, strict?: boolean) => unknown } | undefined)?.get?.(key, false)
+        ?? serviceGet(key)
+
       // Cordis 严格要求访问 `c.tools` 的上下文自身声明 `inject: ['tools']`；
       // 单开非阻塞子 inject 既能给 `ToolExecutionPipeline` 提供合法 `toolsCtx`，又不在无 `tools` 宿主上卡死。
       ctx.inject(['tools'], (toolsCtx) => {
@@ -401,37 +426,29 @@ export function apply(ctx: Context): void {
         gatewayDisposed = true
         if (gatewayHandle !== undefined) {
           void gatewayHandle.dispose().catch((error: unknown) => {
-            console.error('[dsh-trading/tool-gateway] failed to dispose loopback tool gateway:', error)
+            console.error('[dsh-trading/tool-gateway] failed to dispose external tool gateway:', error)
           })
         }
-      }, 'dsh-trading-bot-api: loopback tool gateway')
+      }, 'dsh-trading-bot-api: external tool gateway')
       void startToolGatewayServer({
         ctx: () => activeToolsCtx,
-        tools: () => resolveHostService('tools') as GatewayToolsServiceLike | undefined,
-        agentPresets: () => resolveHostService('agentPresets') as GatewayAgentPresetsLike | undefined,
+        tools: () => resolveGatewayService('tools') as GatewayToolsServiceLike | undefined,
+        agentPresets: () => resolveGatewayService('agentPresets') as GatewayAgentPresetsLike | undefined,
+        config: gatewayConfig,
+        dshHome: home,
       }).then((handle) => {
         if (gatewayDisposed) {
           void handle.dispose().catch((error: unknown) => {
-            console.error('[dsh-trading/tool-gateway] failed to dispose late loopback tool gateway:', error)
+            console.error('[dsh-trading/tool-gateway] failed to dispose late external tool gateway:', error)
           })
           return
         }
         gatewayHandle = handle
       }).catch((error: unknown) => {
-        console.error('[dsh-trading/tool-gateway] failed to start loopback tool gateway:', error)
+        console.error('[dsh-trading/tool-gateway] failed to start external tool gateway:', error)
       })
     }
   }
-  ctx.inject(['webServer', 'connection'], (c) => {
-    const webServer = c.get('webServer') as unknown as WebServerLike | undefined
-    const connection = c.get('connection') as unknown as ConnectionLike | undefined
-    if (webServer !== undefined && connection !== undefined) mountOn(c, webServer, connection)
-  })
-  ctx.inject(['botHttp', 'botFence'], (c) => {
-    const botHttp = c.get('botHttp') as unknown as WebServerLike | undefined
-    const botFence = c.get('botFence') as unknown as ConnectionLike | undefined
-    if (botHttp !== undefined && botFence !== undefined) mountOn(c, botHttp, botFence)
-  })
 }
 
 /**

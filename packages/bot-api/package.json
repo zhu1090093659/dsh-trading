@@ -5,6 +5,9 @@
   "type": "module",
   "main": "lib/index.js",
   "types": "./lib/index.d.ts",
+  "bin": {
+    "dsh-trading-tool": "./bin/dsh-trading-tool.mjs"
+  },
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
@@ -15,6 +18,7 @@
   },
   "files": [
     "lib",
+    "bin",
     "cordis.patch.yml"
   ],
   "license": "PolyForm-Noncommercial-1.0.0",

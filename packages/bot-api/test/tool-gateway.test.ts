@@ -12,9 +12,9 @@ import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { request as httpRequest } from 'node:http'
+import { createServer, request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -658,5 +658,42 @@ describe('tool-gateway HTTP server and lifecycle', () => {
     expect(resState.status).toBe(503)
     expect(JSON.parse(resState.body)).toMatchObject({ ok: false, code: 'TOOLS_UNAVAILABLE' })
     expect(JSON.parse(readFileSync(foreignDescriptorPath, 'utf8'))).toEqual({ pid: process.pid + 99999 })
+  })
+
+  it('operator: binds explicit port, skips descriptor when disabled, and respects mcpEnabled=false', async () => {
+    // Given an OS-chosen free fixed port probed upfront and a server started with descriptorPath=null and mcpEnabled=false
+    const probe = createServer()
+    await new Promise<void>(resolve => { probe.listen(0, '127.0.0.1', () => resolve()) })
+    const addr = probe.address()
+    const fixedPort = typeof addr === 'object' && addr !== null ? addr.port : 0
+    await new Promise<void>(resolve => { probe.close(() => resolve()) })
+
+    harness = await bootGatewayHarness()
+    const handle = await startToolGatewayServer({
+      ctx: () => harness?.ctx,
+      agentPresets: () => harness?.agentPresets,
+      dshHome: dir,
+      port: fixedPort,
+      token: TEST_TOKEN,
+      descriptorPath: null,
+      overrides: { mcpEnabled: false },
+    })
+
+    try {
+      // When checking bound port, missing descriptor on disk, and calling disabled /mcp
+      const mcpRes = await fetch(`${handle.url}/mcp`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${TEST_TOKEN}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
+      })
+
+      // Then port matches fixedPort, no tool-gateway.json exists, and /mcp returns 404
+      expect(handle.port).toBe(fixedPort)
+      expect(handle.descriptorPath).toBeNull()
+      expect(existsSync(join(dir, 'tool-gateway.json'))).toBe(false)
+      expect(mcpRes.status).toBe(404)
+    } finally {
+      await handle.dispose()
+    }
   })
 })

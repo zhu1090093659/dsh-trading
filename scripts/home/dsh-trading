@@ -20,7 +20,7 @@ esac
 DSH_HOME="${DSH_HOME:-$HOME/.dsh-trading}"
 export DSH_HOME
 
-# 外部工具 CLI 子命令：dsh-trading tool <status|index|schema|call ...>
+# 外部工具 CLI 子命令：dsh-trading tool <status|index|schema|call|openapi|mcp|setup ...>
 if [ "${1:-}" = "tool" ]; then
   shift
   script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
@@ -28,6 +28,8 @@ if [ "${1:-}" = "tool" ]; then
     exec "$script_dir/dsh-trading-tool" "$@"
   elif command -v dsh-trading-tool >/dev/null 2>&1; then
     exec dsh-trading-tool "$@"
+  elif [ -x "$script_dir/../../packages/bot-api/bin/dsh-trading-tool.mjs" ]; then
+    exec "$script_dir/../../packages/bot-api/bin/dsh-trading-tool.mjs" "$@"
   elif [ -x "$script_dir/../dsh-trading-tool.mjs" ]; then
     exec "$script_dir/../dsh-trading-tool.mjs" "$@"
   else

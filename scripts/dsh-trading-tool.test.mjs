@@ -7,11 +7,13 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parseCliArgs, resolveTradingHome, runCli, unwrapToolResponse } from './dsh-trading-tool.mjs'
+import { parseCliArgs, renderSetupSnippet, resolveGatewayTarget, resolveTradingHome, runCli, unwrapToolResponse } from './dsh-trading-tool.mjs'
 
-async function startFakeGatewayServer(handler) {
+async function startFakeGatewayServer(handlerOrOptions) {
+  const options = typeof handlerOrOptions === 'function' ? { handler: handlerOrOptions } : (handlerOrOptions ?? {})
+  const handler = options.handler
   const requests = []
-  const token = 'b'.repeat(64)
+  const token = options.token ?? 'b'.repeat(64)
   const server = createServer(async (req, res) => {
     const chunks = []
     for await (const chunk of req) chunks.push(chunk)
@@ -57,11 +59,58 @@ async function startFakeGatewayServer(handler) {
     }
     if (parsed.pathname === '/schema') {
       res.writeHead(200, { 'content-type': 'application/json' })
+      if (parsed.searchParams.get('all') === '1') {
+        res.end(JSON.stringify({
+          ok: true,
+          preset: parsed.searchParams.get('preset') ?? 'master',
+          tools: [
+            { name: 'cn_get_ticker', parameters: { type: 'object' } },
+            { name: 'routing_get', parameters: { type: 'object' } },
+          ],
+        }))
+        return
+      }
       res.end(JSON.stringify({
         ok: true,
-        preset: 'master',
+        preset: parsed.searchParams.get('preset') ?? 'master',
         tool: { name: parsed.searchParams.get('name') ?? 'cn_get_ticker', parameters: { type: 'object' } },
       }))
+      return
+    }
+    if (parsed.pathname === '/openapi.json') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({
+        openapi: '3.1.0',
+        info: { title: 'dsh-trading External Tool Gateway', version: '1.0.0' },
+        servers: [{ url: 'http://127.0.0.1' }],
+        paths: { '/health': {}, '/index': {}, '/schema': {}, '/call': {}, '/mcp': {} },
+      }))
+      return
+    }
+    if (parsed.pathname === '/mcp') {
+      const mode = parsed.searchParams.get('mode') ?? 'index'
+      const rpcMethod = body?.method
+      const rpcId = body?.id
+      if (rpcMethod === 'tools/list') {
+        const tools = mode === 'flat'
+          ? [{ name: 'routing_get', description: 'routing', inputSchema: { type: 'object', properties: {} } }]
+          : [{ name: 'dsh_trading_index', description: 'index', inputSchema: { type: 'object', properties: {} } }]
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ jsonrpc: '2.0', id: rpcId, result: { tools } }))
+        return
+      }
+      if (rpcMethod === 'tools/call') {
+        const toolName = body?.params?.name
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          id: rpcId,
+          result: { content: [{ type: 'text', text: JSON.stringify({ ok: true, toolName, portTag: token.slice(0, 4) }) }] },
+        }))
+        return
+      }
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ jsonrpc: '2.0', id: rpcId, error: { code: -32601, message: 'Method not found' } }))
       return
     }
     if (parsed.pathname === '/call') {
@@ -281,5 +330,148 @@ describe('dsh-trading-tool CLI execution', () => {
     expect(JSON.parse(deniedCap.stderrText())).toMatchObject({ status: 403, code: 'TRADING_APPROVAL_REQUIRED' })
     expect(badJsonCode).toBe(2)
     expect(badFlagCode).toBe(2)
+  })
+
+  it('operator: connects remotely via --url + --token-file, named client --profile, and --descriptor without local tradingHome', async () => {
+    // Given a live gateway reached without local tool-gateway.json via URL+tokenFile, named profile config, and explicit descriptor
+    serverHandle = await startFakeGatewayServer({ token: 'd'.repeat(64) })
+    const tokenFile = join(dir, 'remote.token')
+    writeFileSync(tokenFile, `${serverHandle.token}\n`, 'utf8')
+    const clientCfgDir = join(dir, '.config', 'dsh-trading-tool')
+    mkdirSync(clientCfgDir, { recursive: true })
+    writeFileSync(join(clientCfgDir, 'config.json'), JSON.stringify({
+      defaultProfile: 'prod',
+      profiles: {
+        prod: {
+          url: serverHandle.url,
+          tokenFile,
+          preset: 'research',
+          timeoutMs: 25000,
+        },
+      },
+    }), 'utf8')
+    const customDesc = join(dir, 'custom-gw.json')
+    writeFileSync(customDesc, JSON.stringify({ url: serverHandle.url, token: serverHandle.token }), 'utf8')
+
+    // When invoking schema --all via named profile, openapi via --url/--token-file, index via --descriptor, and URL without token
+    const profileCap = captureIo()
+    const profileCode = await runCli(['schema', '--all'], { ...profileCap.io, env: {} })
+
+    const urlCap = captureIo()
+    const urlCode = await runCli(['--url', serverHandle.url, '--token-file', tokenFile, 'openapi'], { ...urlCap.io, homeDir: join(dir, 'empty-home'), env: {} })
+
+    const descCap = captureIo()
+    const descCode = await runCli(['--descriptor', customDesc, 'index', '--family', 'cn'], { ...descCap.io, env: {} })
+
+    const missingTokCap = captureIo()
+    const missingTokCode = await runCli(['--url', serverHandle.url, 'status'], { ...missingTokCap.io, homeDir: join(dir, 'empty-home'), env: {} })
+
+    // Then remote targets succeed, inherit profile preset, and fail closed when --url omits token
+    expect(profileCode).toBe(0)
+    expect(JSON.parse(profileCap.stdoutText())).toMatchObject({ ok: true, preset: 'research' })
+    expect(urlCode).toBe(0)
+    expect(JSON.parse(urlCap.stdoutText())).toMatchObject({ openapi: '3.1.0' })
+    expect(descCode).toBe(0)
+    expect(JSON.parse(descCap.stdoutText())).toMatchObject({ ok: true })
+    expect(missingTokCode).toBe(2)
+    expect(resolveGatewayTarget({ url: serverHandle.url, tokenFile }, {}, dir).preset).toBeUndefined()
+  })
+
+  it('operator: generates universal setup configs with token redaction by default and opt-in --include-token', async () => {
+    // Given a live descriptor and setup targets for different external agents/IDEs
+    mkdirSync(tradingHome, { recursive: true })
+    serverHandle = await startFakeGatewayServer({ token: 'e'.repeat(64) })
+    writeFileSync(join(tradingHome, 'tool-gateway.json'), JSON.stringify({
+      url: serverHandle.url,
+      token: serverHandle.token,
+    }))
+
+    // When running setup for mcp-stdio, mcp-http (redacted vs --include-token), claude-code, codex, curl, server-config, client-config
+    const stdioCap = captureIo()
+    const stdioCode = await runCli(['setup', 'mcp-stdio', '--mode', 'flat', '--family', 'cn,holdings'], stdioCap.io)
+
+    const httpRedactedCap = captureIo()
+    const httpRedactedCode = await runCli(['setup', 'mcp-http'], httpRedactedCap.io)
+
+    const httpTokenCap = captureIo()
+    const httpTokenCode = await runCli(['setup', 'mcp-http', '--include-token'], httpTokenCap.io)
+
+    const codexCap = captureIo()
+    const codexCode = await runCli(['setup', 'codex', '--url', 'https://gw.example.com'], codexCap.io)
+
+    const serverCfgText = renderSetupSnippet({ target: 'server-config' })
+
+    // Then snippets are valid, redact live secret by default, and embed token only when requested
+    expect(stdioCode).toBe(0)
+    expect(JSON.parse(stdioCap.stdoutText()).mcpServers['dsh-trading']).toEqual({
+      command: 'dsh-trading-tool',
+      args: ['mcp', '--mode', 'flat', '--family', 'cn,holdings'],
+    })
+    expect(httpRedactedCode).toBe(0)
+    expect(httpRedactedCap.stdoutText()).not.toContain(serverHandle.token)
+    expect(httpRedactedCap.stdoutText()).toContain('<DSH_TRADING_GATEWAY_TOKEN>')
+    expect(httpTokenCode).toBe(0)
+    expect(httpTokenCap.stdoutText()).toContain(`Bearer ${serverHandle.token}`)
+    expect(codexCode).toBe(0)
+    expect(codexCap.stdoutText()).toContain('[mcp_servers.dsh-trading]')
+    expect(JSON.parse(serverCfgText)).toMatchObject({ exposeMode: 'allowlist', mcpEnabled: true })
+  })
+
+  it('user: bridges stdio MCP JSON-RPC requests dynamically even across host port/token rotation', async () => {
+    // Given a running gateway descriptor, a sequence of JSON-RPC messages including notification + handshake + port rotation mid-session
+    mkdirSync(tradingHome, { recursive: true })
+    serverHandle = await startFakeGatewayServer({ token: '1111'.repeat(16) })
+    const descFile = join(tradingHome, 'tool-gateway.json')
+    writeFileSync(descFile, JSON.stringify({ url: serverHandle.url, token: serverHandle.token }))
+
+    let server2
+    const lines = (async function* () {
+      yield JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26' } })
+      yield JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })
+      yield JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'ping' })
+      yield JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })
+
+      // Simulate host restart rotating port and token while stdio MCP session stays alive
+      await serverHandle.dispose()
+      serverHandle = undefined
+      server2 = await startFakeGatewayServer({ token: '2222'.repeat(16) })
+      writeFileSync(descFile, JSON.stringify({ url: server2.url, token: server2.token }))
+
+      yield JSON.stringify({
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'routing_get', arguments: {} },
+      })
+    })()
+
+    const outLines = []
+    let errText = ''
+    try {
+      // When executing stdio MCP bridge over those messages
+      const exitCode = await runCli(['mcp', '--mode', 'flat', '--family', 'routing'], {
+        env: { DSH_HOME: tradingHome },
+        homeDir: dir,
+        lines,
+        stdout: (chunk) => {
+          for (const item of chunk.split('\n')) {
+            if (item.trim()) outLines.push(JSON.parse(item))
+          }
+        },
+        stderr: (chunk) => { errText += chunk },
+      })
+
+      // Then initialize/ping/tools/list/tools/call all succeed in order, notification emits no stdout, and post-rotation call hits server2
+      expect(exitCode).toBe(0)
+      expect(errText).toBe('')
+      expect(outLines).toHaveLength(4)
+      expect(outLines[0]).toMatchObject({ id: 1, result: { protocolVersion: '2025-03-26' } })
+      expect(outLines[1]).toEqual({ jsonrpc: '2.0', id: 2, result: {} })
+      expect(outLines[2].result.tools.map(t => t.name)).toEqual(['routing_get'])
+      const callText = JSON.parse(outLines[3].result.content[0].text)
+      expect(callText).toEqual({ ok: true, toolName: 'routing_get', portTag: '2222' })
+    } finally {
+      if (server2 !== undefined) await server2.dispose()
+    }
   })
 })
