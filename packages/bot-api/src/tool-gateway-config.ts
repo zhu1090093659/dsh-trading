@@ -31,6 +31,15 @@ export const DEFAULT_MAX_GATEWAY_BODY_BYTES = 1024 * 1024
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1'])
 const WILDCARD_BIND_HOSTS = new Set(['0.0.0.0', '::', '[::]'])
+const DISABLED_DESCRIPTOR_LITERALS = new Set(['', 'none', 'false', 'null', 'off', '0'])
+
+/** 交易角色预设默认集合：在 `exposeMode: 'open'` 未显式配置 `allowedPresets` 时作纵深收口。 */
+export const DEFAULT_TRADING_PRESETS: readonly string[] = [
+  'master',
+  'trader',
+  'instrument-researcher',
+  'risk-reviewer',
+]
 
 /** 对外部 Agent 暴露的默认交易与投研工具族白名单（前缀 = 首个下划线之前的部分）。 */
 export const DEFAULT_EXPOSED_TOOL_FAMILIES: readonly string[] = [
@@ -58,29 +67,61 @@ export const DEFAULT_EXPOSED_TOOL_FAMILIES: readonly string[] = [
   'special',
 ]
 
-/** 内部宿主壳与元编排工具黑名单：任意暴露模式下均硬拦截。 */
+/** 内部宿主壳、文件系统、代码执行与元编排工具黑名单：任意暴露模式下均硬拦截。 */
 export const INTERNAL_TOOL_DENY_PATTERNS: readonly string[] = [
   'bash',
+  'pwsh',
   'read',
   'write',
   'edit',
+  'apply_patch',
+  'str_replace_editor',
   'read_image',
+  'grep',
+  'glob',
   'skill',
   'job_*',
+  'subagent',
+  'subagent_*',
   '*_subagent',
+  'list_subagent_models',
+  '*_agent',
+  'list_agents',
+  'send_message',
+  'workflow',
+  'run_code',
+  'plugin_*',
+  'terminal_*',
+  'user_terminal_*',
+  'session_*',
+  'schedule_*',
+  'timeline_*',
+  'team_task_*',
+  'enter_worktree',
+  'exit_worktree',
+  'ask_user_question',
+  'todo_write',
+  'web_fetch',
+  'web_search',
+  'office_*',
+  'present',
+  'ralph',
+  '*_mcp_resource*',
+  '*_goal',
+  'exit_plan_mode',
   'trading_batch',
   'trading_tools_index',
   'load_workspace_dependencies',
   'cordis_*',
 ]
 
-/** 实盘动作工具名模式（与 `@dshtrading/base` 同口径）：无 `dryRun: true` 时在网关入口 fail-closed 拒绝。 */
+/** 实盘动作工具名模式（与 `@dshtrading/base` 同口径，大小写不敏感）：无 `dryRun: true` 时在网关入口 fail-closed 拒绝。 */
 export const LIVE_ACTION_GATE_PATTERN =
-  /^(?:(?:crypto|us|cn|hk|futures|global)_(?:place|cancel)_order|crypto_set_leverage)$/
+  /^(?:(?:crypto|us|cn|hk|futures|global)_(?:place|cancel)_order|crypto_set_leverage)$/i
 
 /** 只读模式下需要拦截的写操作/变更动作工具名模式（screener_run / strategy_backtest 放行）。 */
 export const MUTATING_TOOL_PATTERN =
-  /(?:_(?:place_order|cancel_order|set_leverage|add|remove|delete|create|rename|update|stage|confirm|discard|author|activate|deactivate|ingest|import|export|reset|select|assign)|^tasks_run)$/
+  /(?:_(?:place_order|cancel_order|set_leverage|add|remove|delete|create|rename|update|stage|confirm|discard|author|activate|deactivate|ingest|import|export|reset|select|assign|patch|write|edit|exec|eval)|^(?:tasks_run|apply_patch|write|edit|run_code))$/i
 
 export interface GatewayToolSchema {
   readonly name: string
@@ -411,6 +452,10 @@ function loadConfigFileLayer(dshHome: string, env: Record<string, string | undef
   if (!isPlainRecord(parsed)) {
     throw new Error(`[dsh-trading/tool-gateway] config file ${configPath} must export a JSON object`)
   }
+  const unknownKeys = Object.keys(parsed).filter(key => !KNOWN_CONFIG_KEYS.has(key))
+  if (unknownKeys.length > 0) {
+    throw new Error(`[dsh-trading/tool-gateway] unknown config key(s) in ${configPath}: ${unknownKeys.join(', ')}`)
+  }
   return parsed
 }
 
@@ -436,7 +481,8 @@ function envToConfigLayer(env: Record<string, string | undefined>): Record<strin
 
   const descriptor = env.DSH_TRADING_TOOL_GATEWAY_DESCRIPTOR
   if (descriptor !== undefined && descriptor.trim() !== '') {
-    out.descriptorPath = descriptor.trim().toLowerCase() === 'none' ? null : descriptor.trim()
+    const normalized = descriptor.trim().toLowerCase()
+    out.descriptorPath = DISABLED_DESCRIPTOR_LITERALS.has(normalized) ? null : descriptor.trim()
   }
 
   const allowedHosts = take('DSH_TRADING_TOOL_GATEWAY_ALLOWED_HOSTS')
@@ -505,7 +551,7 @@ function resolveDescriptorPath(raw: unknown, dshHome: string): string | null {
     throw new Error('[dsh-trading/tool-gateway] config "descriptorPath" must be a path string, null, or false')
   }
   const clean = raw.trim()
-  if (clean === '' || clean.toLowerCase() === 'none') return null
+  if (DISABLED_DESCRIPTOR_LITERALS.has(clean.toLowerCase())) return null
   return path.resolve(dshHome, expandHomePath(clean))
 }
 
@@ -557,7 +603,10 @@ export function resolveToolGatewayConfig(options: {
     throw new Error('[dsh-trading/tool-gateway] config "enabled" must be a boolean')
   }
 
-  const host = merged.host === undefined ? '127.0.0.1' : String(merged.host).trim()
+  if (merged.host !== undefined && typeof merged.host !== 'string') {
+    throw new Error('[dsh-trading/tool-gateway] config "host" must be a string')
+  }
+  const host = merged.host === undefined ? '127.0.0.1' : merged.host.trim()
   if (host === '') {
     throw new Error('[dsh-trading/tool-gateway] config "host" must be a non-empty hostname or IP')
   }
@@ -590,7 +639,10 @@ export function resolveToolGatewayConfig(options: {
   const descriptorPath = resolveDescriptorPath(merged.descriptorPath, options.dshHome)
   const tokenResolved = resolveToken(merged, options.dshHome)
 
-  const defaultPreset = merged.defaultPreset === undefined ? DEFAULT_GATEWAY_PRESET : String(merged.defaultPreset).trim()
+  if (merged.defaultPreset !== undefined && typeof merged.defaultPreset !== 'string') {
+    throw new Error('[dsh-trading/tool-gateway] config "defaultPreset" must be a string')
+  }
+  const defaultPreset = merged.defaultPreset === undefined ? DEFAULT_GATEWAY_PRESET : merged.defaultPreset.trim()
   if (defaultPreset === '') {
     throw new Error('[dsh-trading/tool-gateway] config "defaultPreset" must be non-empty')
   }
@@ -601,7 +653,7 @@ export function resolveToolGatewayConfig(options: {
   const allowedOrigins = merged.allowedOrigins === undefined
     ? undefined
     : normalizeStringList(merged.allowedOrigins, 'allowedOrigins')
-  const allowedPresets = merged.allowedPresets === undefined
+  const explicitAllowedPresets = merged.allowedPresets === undefined
     ? undefined
     : normalizeStringList(merged.allowedPresets, 'allowedPresets')
 
@@ -609,6 +661,13 @@ export function resolveToolGatewayConfig(options: {
   if (exposeModeRaw !== 'allowlist' && exposeModeRaw !== 'open') {
     throw new Error(`[dsh-trading/tool-gateway] config "exposeMode" must be "allowlist" or "open"`)
   }
+  // open 模式下未显式声明 allowedPresets 时默认收口到交易角色预设（加当前 defaultPreset），
+  // 避免外部调用方凭 ?preset=standard|ptc|cordis 触达非交易宿主预设；显式传 ['*'] 可放开全部预设。
+  const allowedPresets = explicitAllowedPresets !== undefined
+    ? (explicitAllowedPresets.includes('*') ? undefined : explicitAllowedPresets)
+    : (exposeModeRaw === 'open'
+        ? [...new Set([defaultPreset, ...DEFAULT_TRADING_PRESETS])]
+        : undefined)
 
   const mcpEnabled = merged.mcpEnabled === undefined ? true : Boolean(merged.mcpEnabled)
   if (merged.mcpEnabled !== undefined && typeof merged.mcpEnabled !== 'boolean') {

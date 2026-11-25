@@ -5,13 +5,15 @@ import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { request as httpRequest } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  normalizeMcpInputSchema,
   startToolGatewayServer,
   type GatewayAgentPresetsLike,
   type ToolGatewayConfigInput,
@@ -176,6 +178,7 @@ describe('tool-gateway Streamable HTTP MCP, OpenAPI, and access policies', () =>
       ctx: () => harness?.ctx,
       agentPresets: () => harness?.agentPresets,
       dshHome: dir,
+      env: {},
       token: TEST_TOKEN,
       overrides,
     })
@@ -361,5 +364,121 @@ describe('tool-gateway Streamable HTTP MCP, OpenAPI, and access policies', () =>
     expect(await liveOrderRes.json()).toMatchObject({ code: 'TRADING_APPROVAL_REQUIRED' })
     expect(badPresetRes.status).toBe(403)
     expect(await badPresetRes.json()).toMatchObject({ code: 'PRESET_NOT_ALLOWED' })
+  })
+
+  it('operator: maps 0.0.0.0 wildcard bind descriptor url to loopback 127.0.0.1 and reflects validated Host in /openapi.json', async () => {
+    // Given a gateway bound to 0.0.0.0 with allowedHosts=['trading.example.com'] and no publicUrl
+    const gw = await startWith({ host: '0.0.0.0', allowedHosts: ['trading.example.com'] })
+    const descPath = join(dir, 'tool-gateway.json')
+    const descriptor = JSON.parse(readFileSync(descPath, 'utf8')) as { host: string; url: string; port: number }
+
+    // When calling /health via descriptor.url and /openapi.json with validated remote Host header
+    const localHealth = await fetch(`${descriptor.url}/health`, {
+      headers: { authorization: `Bearer ${TEST_TOKEN}` },
+    })
+    const remoteSpec = await new Promise<{ status: number; body: { servers: Array<{ url: string }> } }>((resolve, reject) => {
+      const req = httpRequest({
+        hostname: '127.0.0.1',
+        port: gw.port,
+        method: 'GET',
+        path: '/openapi.json',
+        headers: {
+          host: `trading.example.com:${gw.port}`,
+          authorization: `Bearer ${TEST_TOKEN}`,
+        },
+      }, (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as { servers: Array<{ url: string }> },
+          })
+        })
+      })
+      req.on('error', reject)
+      req.end()
+    })
+
+    // Then descriptor preserves host='0.0.0.0' while using loopback url, local /health succeeds 200, and /openapi.json reflects validated Host
+    expect(descriptor.host).toBe('0.0.0.0')
+    expect(descriptor.url).toBe(`http://127.0.0.1:${gw.port}`)
+    expect(localHealth.status).toBe(200)
+    expect(remoteSpec.status).toBe(200)
+    expect(remoteSpec.body.servers[0]?.url).toBe(`http://trading.example.com:${gw.port}`)
+  })
+
+  it('user: enforces MCP family scope on meta-tools, blocks meta-tools in flat mode, and handles JSON-RPC/schema/call error paths', async () => {
+    // Given an active gateway and both scoped flat and scoped index MCP endpoints
+    const gw = await startWith()
+    const headers = { authorization: `Bearer ${TEST_TOKEN}`, 'content-type': 'application/json' }
+    const post = (query: string, body: unknown) =>
+      fetch(`${gw.url}/mcp${query}`, { method: 'POST', headers, body: JSON.stringify(body) })
+
+    // When testing flat meta-tool block, index family scoping, dsh_trading_schema branches, invalid JSON-RPC/params/mode, and tool error wrapping
+    const flatMetaIndex = await post('?mode=flat&family=routing', {
+      jsonrpc: '2.0', id: 20, method: 'tools/call', params: { name: 'dsh_trading_index', arguments: {} },
+    })
+    const scopedIndexAll = await post('?mode=index&family=cn', {
+      jsonrpc: '2.0', id: 21, method: 'tools/call', params: { name: 'dsh_trading_index', arguments: {} },
+    })
+    const scopedIndexOob = await post('?mode=index&family=cn', {
+      jsonrpc: '2.0', id: 22, method: 'tools/call', params: { name: 'dsh_trading_index', arguments: { family: 'routing' } },
+    })
+    const schemaOk = await post('?mode=index&family=cn', {
+      jsonrpc: '2.0', id: 23, method: 'tools/call', params: { name: 'dsh_trading_schema', arguments: { name: 'cn_get_ticker' } },
+    })
+    const schemaOob = await post('?mode=index&family=cn', {
+      jsonrpc: '2.0', id: 24, method: 'tools/call', params: { name: 'dsh_trading_schema', arguments: { name: 'routing_get' } },
+    })
+    const schemaMissing = await post('?mode=index', {
+      jsonrpc: '2.0', id: 25, method: 'tools/call', params: { name: 'dsh_trading_schema', arguments: {} },
+    })
+    const schemaBoth = await post('?mode=index', {
+      jsonrpc: '2.0', id: 26, method: 'tools/call', params: { name: 'dsh_trading_schema', arguments: { name: 'cn_get_ticker', family: 'cn' } },
+    })
+    const callInvalidName = await post('?mode=index', {
+      jsonrpc: '2.0', id: 27, method: 'tools/call', params: { name: 'dsh_trading_call', arguments: { name: '' } },
+    })
+    const callInvalidArgs = await post('?mode=index', {
+      jsonrpc: '2.0', id: 28, method: 'tools/call', params: { name: 'dsh_trading_call', arguments: { name: 'cn_get_ticker', arguments: [] } },
+    })
+    const callRuntimeErr = await post('?mode=index', {
+      jsonrpc: '2.0', id: 29, method: 'tools/call', params: { name: 'dsh_trading_call', arguments: { name: 'cn_get_ticker', arguments: {}, preset: 'master', timeoutMs: 5000 } },
+    })
+    const rpcBadParams = await post('?mode=index', {
+      jsonrpc: '2.0', id: 30, method: 'tools/call', params: { name: 'cn_get_ticker', arguments: 'not-object' },
+    })
+    const rpcInvalidReq = await post('?mode=index', { jsonrpc: '1.0', id: 31 })
+    const rpcParseErr = await fetch(`${gw.url}/mcp`, { method: 'POST', headers, body: '{bad-json' })
+    const badModeRes = await post('?mode=bogus', { jsonrpc: '2.0', id: 32, method: 'ping' })
+    const flatListBadPreset = await post('?mode=flat&preset=unknown', { jsonrpc: '2.0', id: 33, method: 'tools/list' })
+
+    // Then family isolation, error wrapping, JSON-RPC error codes, and shorthand inputSchema normalization all hold
+    expect(JSON.parse(((await flatMetaIndex.json()) as { result: { content: Array<{ text: string }> } }).result.content[0]?.text ?? '{}')).toMatchObject({ code: 'TOOL_OUT_OF_SCOPE' })
+    expect(JSON.parse(((await scopedIndexAll.json()) as { result: { content: Array<{ text: string }> } }).result.content[0]?.text ?? '{}')).toMatchObject({ ok: true, total: 1 })
+    expect(JSON.parse(((await scopedIndexOob.json()) as { result: { content: Array<{ text: string }> } }).result.content[0]?.text ?? '{}')).toMatchObject({ code: 'TOOL_OUT_OF_SCOPE' })
+    expect(JSON.parse(((await schemaOk.json()) as { result: { content: Array<{ text: string }> } }).result.content[0]?.text ?? '{}')).toMatchObject({ ok: true, tool: { name: 'cn_get_ticker' } })
+    expect(JSON.parse(((await schemaOob.json()) as { result: { content: Array<{ text: string }> } }).result.content[0]?.text ?? '{}')).toMatchObject({ code: 'TOOL_OUT_OF_SCOPE' })
+    expect(((await schemaMissing.json()) as { result: { isError: boolean } }).result.isError).toBe(true)
+    expect(((await schemaBoth.json()) as { result: { isError: boolean } }).result.isError).toBe(true)
+    expect(((await callInvalidName.json()) as { result: { isError: boolean } }).result.isError).toBe(true)
+    expect(((await callInvalidArgs.json()) as { result: { isError: boolean } }).result.isError).toBe(true)
+    expect(JSON.parse(((await callRuntimeErr.json()) as { result: { content: Array<{ text: string }> } }).result.content[0]?.text ?? '{}')).toMatchObject({ ok: false, code: 'INVALID_ARGS' })
+    expect(((await rpcBadParams.json()) as { error: { code: number } }).error.code).toBe(-32602)
+    expect(rpcInvalidReq.status).toBe(400)
+    expect(((await rpcInvalidReq.json()) as { error: { code: number } }).error.code).toBe(-32600)
+    expect(rpcParseErr.status).toBe(400)
+    expect(((await rpcParseErr.json()) as { error: { code: number } }).error.code).toBe(-32700)
+    expect(badModeRes.status).toBe(400)
+    expect(((await flatListBadPreset.json()) as { error: { code: number } }).error.code).toBe(-32603)
+
+    expect(normalizeMcpInputSchema(undefined)).toEqual({ type: 'object', properties: {} })
+    expect(normalizeMcpInputSchema({ type: 'object' })).toEqual({ type: 'object', properties: {} })
+    expect(normalizeMcpInputSchema({ sym: { type: 'string', required: true }, note: 'plain' })).toEqual({
+      type: 'object',
+      properties: { sym: { type: 'string' }, note: 'plain' },
+      required: ['sym'],
+    })
   })
 })

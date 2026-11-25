@@ -159,7 +159,7 @@ export function isExposedToolName(toolName: string): boolean {
 }
 
 export function isLiveActionBlocked(toolName: string, args: unknown): boolean {
-  if (!LIVE_ACTION_GATE_PATTERN.test(toolName)) return false
+  if (!LIVE_ACTION_GATE_PATTERN.test(toolName.trim())) return false
   const dryRun = (args as { dryRun?: unknown } | null | undefined)?.dryRun
   return dryRun !== true
 }
@@ -180,14 +180,19 @@ export function buildGatewayToolIndex(
   options?: {
     readonly policy?: ToolExposurePolicy | undefined
     readonly familyMeta?: Readonly<Record<string, GatewayFamilyMeta>> | undefined
+    readonly allowedFamiliesScope?: readonly string[] | undefined
   },
 ): GatewayToolIndex {
   const q = query?.trim().toLowerCase() || undefined
   const fam = family?.trim().toLowerCase() || undefined
   const policy = options?.policy
   const familyMeta = options?.familyMeta ?? DEFAULT_GATEWAY_FAMILIES
+  const scopeSet = options?.allowedFamiliesScope && options.allowedFamiliesScope.length > 0
+    ? new Set(options.allowedFamiliesScope.map(f => f.trim().toLowerCase()).filter(Boolean))
+    : undefined
   const exposed = schemas.filter(schema =>
-    policy === undefined ? isExposedToolName(schema.name) : isToolAllowedByPolicy(schema.name, policy),
+    (policy === undefined ? isExposedToolName(schema.name) : isToolAllowedByPolicy(schema.name, policy))
+    && (scopeSet === undefined || scopeSet.has(familyOfTool(schema.name).toLowerCase())),
   )
 
   const grouped = new Map<string, GatewayToolSchema[]>()
@@ -427,11 +432,19 @@ function formatBoundHost(host: string): string {
   return trimmed
 }
 
+function clientConnectHost(host: string): string {
+  const trimmed = host.trim()
+  if (trimmed === '0.0.0.0') return '127.0.0.1'
+  if (trimmed === '::' || trimmed === '[::]') return '[::1]'
+  return formatBoundHost(trimmed)
+}
+
 function defaultDescriptorUrls(host: string, port: number, publicUrl: string | undefined): {
   readonly boundUrl: string
   readonly advertisedUrl: string
 } {
-  const boundUrl = `http://${formatBoundHost(host)}:${port}`
+  // 通配绑定 0.0.0.0 / :: 写入本机可直连的回环地址，防止本机 CLI 发 Host: 0.0.0.0 触发 403 或误走 http_proxy 泄密。
+  const boundUrl = `http://${clientConnectHost(host)}:${port}`
   return { boundUrl, advertisedUrl: publicUrl ?? boundUrl }
 }
 
@@ -796,11 +809,12 @@ export function createToolGatewayHandler(deps: ToolGatewayDependencies) {
         if (hasSocketEvents) res.on('close', onClose)
         try {
           const ops: McpGatewayOperations = {
-            getIndex: async (targetPreset, query, family) => {
+            getIndex: async (targetPreset, query, family, allowedFamilies) => {
               const index = await withPresetScope(targetPreset, async (tools, scope) =>
                 buildGatewayToolIndex(tools.schemas(scope), query, family, {
                   policy: config.policy,
                   familyMeta: config.familyMeta,
+                  allowedFamiliesScope: allowedFamilies,
                 }),
               )
               return { ok: true, preset: targetPreset, ...index }
@@ -904,7 +918,7 @@ export async function startToolGatewayServer(options: ToolGatewayStartOptions): 
     startedAt,
     pid: process.pid,
     config: resolvedConfig,
-    advertisedUrl,
+    ...(resolvedConfig.publicUrl === undefined ? {} : { advertisedUrl: resolvedConfig.publicUrl }),
   })
   server.on('request', (req, res) => {
     void handler(req, res)
@@ -927,7 +941,12 @@ export async function startToolGatewayServer(options: ToolGatewayStartOptions): 
       startedAt,
     }
     try {
-      await writeJsonAtomic(descriptorPath, descriptor, '[dsh-trading/tool-gateway] failed to write descriptor to')
+      await writeJsonAtomic(
+        descriptorPath,
+        descriptor,
+        '[dsh-trading/tool-gateway] failed to write descriptor to',
+        { mode: 0o600 },
+      )
       await chmod(descriptorPath, 0o600)
     } catch (error) {
       server.closeAllConnections?.()

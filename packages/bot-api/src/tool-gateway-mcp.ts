@@ -32,7 +32,7 @@ export interface GatewayCallOutcome {
 }
 
 export interface McpGatewayOperations {
-  getIndex(preset: string, query?: string, family?: string): Promise<unknown>
+  getIndex(preset: string, query?: string, family?: string, allowedFamilies?: readonly string[]): Promise<unknown>
   getSchema(preset: string, name?: string, family?: string): Promise<unknown>
   listSchemas(preset: string, families?: readonly string[]): Promise<readonly GatewayToolSchema[]>
   callTool(options: {
@@ -148,6 +148,12 @@ const INDEX_META_TOOLS = [
   },
 ] as const
 
+const INDEX_META_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'dsh_trading_index',
+  'dsh_trading_schema',
+  'dsh_trading_call',
+])
+
 function filterByFamilies(
   schemas: readonly GatewayToolSchema[],
   families: readonly string[] | undefined,
@@ -254,15 +260,35 @@ export async function handleMcpJsonRpc(
     }
     const callName = params.name.trim()
     const callArgs = isPlainRecord(params.arguments) ? params.arguments : {}
+    const familyScope = requestOptions.families && requestOptions.families.length > 0
+      ? new Set(requestOptions.families.map(f => f.trim().toLowerCase()).filter(Boolean))
+      : undefined
 
     try {
+      if (requestOptions.mode === 'flat' && INDEX_META_TOOL_NAMES.has(callName)) {
+        return rpcOk(mcpTextResult({
+          ok: false,
+          code: 'TOOL_OUT_OF_SCOPE',
+          message: `meta tool "${callName}" is unavailable in flat MCP mode`,
+        }, true))
+      }
+
       if (callName === 'dsh_trading_index') {
         const preset = typeof callArgs.preset === 'string' && callArgs.preset.trim()
           ? callArgs.preset.trim()
           : requestOptions.preset
         const query = typeof callArgs.query === 'string' ? callArgs.query : undefined
-        const family = typeof callArgs.family === 'string' ? callArgs.family : undefined
-        const index = await ops.getIndex(preset, query, family)
+        const family = typeof callArgs.family === 'string' && callArgs.family.trim()
+          ? callArgs.family.trim()
+          : undefined
+        if (familyScope !== undefined && family !== undefined && !familyScope.has(family.toLowerCase())) {
+          return rpcOk(mcpTextResult({
+            ok: false,
+            code: 'TOOL_OUT_OF_SCOPE',
+            message: `tool family "${family}" is outside this MCP endpoint's family filter`,
+          }, true))
+        }
+        const index = await ops.getIndex(preset, query, family, familyScope ? [...familyScope] : undefined)
         return rpcOk(mcpTextResult(index))
       }
 
@@ -277,6 +303,16 @@ export async function handleMcpJsonRpc(
         }
         if (name && family) {
           return rpcOk(mcpTextResult({ ok: false, code: 'INVALID_REQUEST', message: 'specify either name or family, not both' }, true))
+        }
+        if (familyScope !== undefined) {
+          const targetFamily = name ? familyOfToolName(name).toLowerCase() : family!.toLowerCase()
+          if (!familyScope.has(targetFamily)) {
+            return rpcOk(mcpTextResult({
+              ok: false,
+              code: 'TOOL_OUT_OF_SCOPE',
+              message: `schema request for "${name ?? family}" is outside this MCP endpoint's family filter`,
+            }, true))
+          }
         }
         const schema = await ops.getSchema(preset, name, family)
         return rpcOk(mcpTextResult(schema))

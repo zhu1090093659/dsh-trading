@@ -7,11 +7,14 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   DEFAULT_EXPOSED_TOOL_FAMILIES,
+  DEFAULT_TRADING_PRESETS,
   isHostAllowedByConfig,
+  isMutatingToolName,
   isOriginAllowedByConfig,
   isToolAllowedByPolicy,
   resolveToolGatewayConfig,
 } from '../src/tool-gateway-config.ts'
+import { isLiveActionBlocked } from '../src/tool-gateway.ts'
 
 describe('tool-gateway config and policy resolution', () => {
   let dir: string
@@ -187,5 +190,92 @@ describe('tool-gateway config and policy resolution', () => {
     expect(isOriginAllowedByConfig('https://app.example.com', originConfig)).toBe(true)
     expect(isOriginAllowedByConfig('https://studio.console.local:5173', originConfig)).toBe(true)
     expect(isOriginAllowedByConfig('https://evil.example.com', originConfig)).toBe(false)
+  })
+
+  it('operator: blocks all DSH host shell/fs/subagent/code-exec tools in open+readOnly mode and scopes default presets', () => {
+    // Given an open+readOnly config with default allowedPresets vs explicit ['*'] wildcard opt-in
+    const openDefault = resolveToolGatewayConfig({
+      dshHome: dir,
+      env: {},
+      overrides: { exposeMode: 'open', readOnly: true },
+    })
+    const openWildcard = resolveToolGatewayConfig({
+      dshHome: dir,
+      env: {},
+      overrides: { exposeMode: 'open', allowedPresets: ['*'] },
+    })
+
+    // When testing every high-risk DSH host tool, mixed-case live actions, and default preset boundary
+    const hostDangerTools = [
+      'apply_patch', 'pwsh', 'subagent', 'subagent_fork', 'workflow', 'run_code',
+      'plugin_manager', 'plugin_market', 'grep', 'glob', 'terminal_open', 'terminal_send',
+      'user_terminal_exec', 'session_send_message', 'schedule_create', 'str_replace_editor',
+      'list_subagent_models', 'wait_agent', 'send_message', 'web_fetch', 'web_search',
+      'office_edit', 'enter_worktree', 'ask_user_question', 'todo_write',
+    ]
+
+    // Then all host internal tools are rejected, live/mutating checks are case-insensitive, and open mode defaults allowedPresets to trading roles
+    for (const toolName of hostDangerTools) {
+      expect(isToolAllowedByPolicy(toolName, openDefault.policy), toolName).toBe(false)
+    }
+    expect(isMutatingToolName('APPLY_PATCH')).toBe(true)
+    expect(isMutatingToolName('partner_edit')).toBe(true)
+    expect(isLiveActionBlocked(' CRYPTO_PLACE_ORDER ', { dryRun: false })).toBe(true)
+    expect(isLiveActionBlocked('CN_CANCEL_ORDER', {})).toBe(true)
+    expect(openDefault.allowedPresets).toEqual(['master', ...DEFAULT_TRADING_PRESETS.filter(p => p !== 'master')])
+    expect(openWildcard.allowedPresets).toBeUndefined()
+  })
+
+  it('operator: disables descriptor for false/null/off/0 env values, parses all env flags, and rejects unknown config keys/types', () => {
+    // Given env disable literals for descriptorPath, full env flag matrix, and invalid config/env cases
+    for (const literal of ['false', 'null', 'none', 'off', '0', 'FALSE']) {
+      const disabled = resolveToolGatewayConfig({
+        dshHome: dir,
+        env: { DSH_TRADING_TOOL_GATEWAY_DESCRIPTOR: literal },
+      })
+      expect(disabled.descriptorPath, literal).toBeNull()
+    }
+
+    const fromEnv = resolveToolGatewayConfig({
+      dshHome: dir,
+      env: {
+        DSH_TRADING_TOOL_GATEWAY: 'off',
+        DSH_TRADING_TOOL_GATEWAY_HOST: '127.0.0.1',
+        DSH_TRADING_TOOL_GATEWAY_PORT: '8899',
+        DSH_TRADING_TOOL_GATEWAY_TOKEN: 'env-token-value',
+        DSH_TRADING_TOOL_GATEWAY_ALLOWED_HOSTS: 'a.local,*.b.local',
+        DSH_TRADING_TOOL_GATEWAY_ALLOWED_ORIGINS: 'https://a.local',
+        DSH_TRADING_TOOL_GATEWAY_PRESET: 'trader',
+        DSH_TRADING_TOOL_GATEWAY_EXPOSE_MODE: 'open',
+        DSH_TRADING_TOOL_GATEWAY_ALLOWED_FAMILIES: 'cn,us',
+        DSH_TRADING_TOOL_GATEWAY_EXTRA_FAMILIES: 'custom',
+        DSH_TRADING_TOOL_GATEWAY_DENIED_FAMILIES: 'tasks',
+        DSH_TRADING_TOOL_GATEWAY_ALLOWED_TOOLS: 'cn_*',
+        DSH_TRADING_TOOL_GATEWAY_DENIED_TOOLS: 'cn_place_order',
+        DSH_TRADING_TOOL_GATEWAY_READ_ONLY: 'yes',
+        DSH_TRADING_TOOL_GATEWAY_MAX_BODY_BYTES: '65536',
+        DSH_TRADING_TOOL_GATEWAY_MCP: 'false',
+        DSH_TRADING_TOOL_GATEWAY_MCP_MODE: 'flat',
+      },
+    })
+
+    const typoConfig = join(dir, 'typo.json')
+    writeFileSync(typoConfig, JSON.stringify({ allowHosts: ['example.com'] }), 'utf8')
+
+    // When validating env parsing and malformed/typo config inputs
+    // Then env values parse accurately and unknown keys, bad bool/int envs, and non-string host/preset fail closed
+    expect(fromEnv.enabled).toBe(false)
+    expect(fromEnv.mcpEnabled).toBe(false)
+    expect(fromEnv.maxBodyBytes).toBe(65536)
+    expect(fromEnv.policy.readOnly).toBe(true)
+    expect(fromEnv.policy.allowedTools).toEqual(['cn_*'])
+    expect(() => resolveToolGatewayConfig({ dshHome: dir, env: { DSH_TRADING_TOOL_GATEWAY_CONFIG: typoConfig } })).toThrow(/unknown config key/)
+    expect(() => resolveToolGatewayConfig({ dshHome: dir, env: { DSH_TRADING_TOOL_GATEWAY_READ_ONLY: 'maybe' } })).toThrow(/invalid boolean env/)
+    expect(() => resolveToolGatewayConfig({ dshHome: dir, env: { DSH_TRADING_TOOL_GATEWAY_PORT: 'not-int' } })).toThrow(/invalid integer env/)
+    expect(() => resolveToolGatewayConfig({ dshHome: dir, env: {}, overrides: { host: 123 as never } })).toThrow(/must be a string/)
+    expect(() => resolveToolGatewayConfig({ dshHome: dir, env: {}, overrides: { defaultPreset: 42 as never } })).toThrow(/must be a string/)
+    expect(() => resolveToolGatewayConfig({ dshHome: dir, env: {}, overrides: { publicUrl: 'ftp://bad' } })).toThrow(/http: or https:/)
+    expect(() => resolveToolGatewayConfig({ dshHome: dir, env: {}, overrides: { maxBodyBytes: 10 } })).toThrow(/maxBodyBytes/)
+    expect(() => resolveToolGatewayConfig({ dshHome: dir, env: {}, overrides: { allowedFamilies: 'cn' as never } })).toThrow(/array of strings/)
   })
 })

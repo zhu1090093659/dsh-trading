@@ -2,7 +2,7 @@
 
 `dsh-trading` exposes its live host tools (`ctx.tools` across global and preset scopes) to any external agent, IDE, automation workflow, or script through a single authenticated gateway inside `@dshtrading/bot-api` (`apply(ctx, rawConfig)`), plus a zero-dependency CLI & stdio MCP bridge (`dsh-trading-tool`).
 
-This runs across GUI (`trading-web`), bot (`trading-bot`), Electron desktop, and headless (`trading-dev`, `trading-all`) hosts without colliding on single-instance file locks or re-initializing 23 connectors.
+This runs across GUI (`trading-web`), bot (`trading-bot`), Electron desktop, and headless hosts (`trading-dev`, `trading-all` — add `@dshtrading/bot-api` to the headless profile's `bundles` to enable the gateway) without colliding on single-instance file locks or re-initializing 23 connectors.
 
 ## Supported Protocols
 
@@ -16,9 +16,10 @@ This runs across GUI (`trading-web`), bot (`trading-bot`), Electron desktop, and
 
 ## Safety Invariants (Always Enforced)
 
-1. **Internal host tools stay hidden**: `bash`, `read`, `write`, `edit`, `read_image`, `skill`, `job_*`, `*_subagent`, `trading_batch`, `trading_tools_index`, `load_workspace_dependencies`, and `cordis_*` are always denied (`INTERNAL_TOOL_DENY_PATTERNS`), even when `exposeMode: "open"`.
-2. **Live trading actions remain fail-closed**: `<market>_place_order`, `<market>_cancel_order`, and `crypto_set_leverage` without `"dryRun": true` are rejected before entering the tool pipeline with HTTP `403 TRADING_APPROVAL_REQUIRED` (or MCP `isError: true` with the same code). Interactive terminal approval and `@dshtrading/authority` are never bypassed.
-3. **Host/Origin and Bearer authentication**: Every request requires constant-time `Authorization: Bearer <token>`, an allowed `Host` header, and an absent or allowed `Origin` header.
+1. **Internal host tools stay hidden**: Shell, filesystem, code-execution, subagent, plugin-management, terminal, and session tools (`bash`, `pwsh`, `read`, `write`, `edit`, `apply_patch`, `str_replace_editor`, `read_image`, `grep`, `glob`, `skill`, `job_*`, `subagent`, `subagent_*`, `*_subagent`, `workflow`, `run_code`, `plugin_*`, `terminal_*`, `session_*`, `schedule_*`, `trading_batch`, `trading_tools_index`, `load_workspace_dependencies`, `cordis_*`, etc.) are always denied (`INTERNAL_TOOL_DENY_PATTERNS`), even when `exposeMode: "open"`.
+2. **Live trading actions remain fail-closed**: `<market>_place_order`, `<market>_cancel_order`, and `crypto_set_leverage` (case-insensitive) without `"dryRun": true` are rejected before entering the tool pipeline with HTTP `403 TRADING_APPROVAL_REQUIRED` (or MCP `isError: true` with the same code). Interactive terminal approval and `@dshtrading/authority` are never bypassed.
+3. **Host/Origin and Bearer authentication**: Every request requires constant-time `Authorization: Bearer <token>`, an allowed `Host` header, and an absent or allowed `Origin` header. Descriptor files are created directly with mode `0600`.
+4. **Preset boundary in `open` mode**: When `exposeMode: "open"` is enabled without an explicit `allowedPresets`, presets default to trading roles (`master`, `trader`, `instrument-researcher`, `risk-reviewer`, plus `defaultPreset`) so non-trading host presets stay unreachable unless explicitly opted in (e.g. `allowedPresets: ["*"]`).
 
 ## Server-Side Flexible Configuration
 
@@ -30,23 +31,23 @@ Precedence (lowest to highest):
 4. Environment variables (`DSH_TRADING_TOOL_GATEWAY_*`)
 5. Programmatic `overrides`
 
-Invalid JSON, missing explicit config files, unreadable `tokenFile`, or invalid port/mode/timeout values fail closed during startup instead of weakening security defaults.
+Invalid JSON, unknown config keys (catches typos like `allowHosts`), missing explicit config files, unreadable `tokenFile`, or invalid port/mode/timeout values fail closed during startup instead of weakening security defaults.
 
 ### Config Fields (`$DSH_HOME/tool-gateway.config.json`)
 
 | Field | Env Var | Default | Notes |
 |---|---|---|---|
 | `enabled` | `DSH_TRADING_TOOL_GATEWAY` | `true` | `false`/`0` disables the gateway |
-| `host` | `DSH_TRADING_TOOL_GATEWAY_HOST` | `"127.0.0.1"` | Bind interface (`0.0.0.0` still blocks non-loopback `Host` unless `allowedHosts` or `publicUrl` is set) |
+| `host` | `DSH_TRADING_TOOL_GATEWAY_HOST` | `"127.0.0.1"` | Bind interface (`0.0.0.0`/`::` maps descriptor `url` to local loopback `127.0.0.1`/`[::1]` and still blocks non-loopback `Host` unless `allowedHosts` or `publicUrl` is set) |
 | `port` | `DSH_TRADING_TOOL_GATEWAY_PORT` | `0` | Fixed port (`1..65535`) or `0` for OS ephemeral port |
 | `publicUrl` | `DSH_TRADING_TOOL_GATEWAY_PUBLIC_URL` | unset | Advertised URL in descriptor & `/openapi.json` (hostname also added to `allowedHosts`) |
 | `token` | `DSH_TRADING_TOOL_GATEWAY_TOKEN` | random 64-hex | Static bearer token (prefer `tokenFile` for production) |
 | `tokenFile` | `DSH_TRADING_TOOL_GATEWAY_TOKEN_FILE` | unset | Path to file containing bearer token |
-| `descriptorPath` | `DSH_TRADING_TOOL_GATEWAY_DESCRIPTOR` | `<DSH_HOME>/tool-gateway.json` | Set `null`, `false`, or `"none"` to skip writing descriptor |
+| `descriptorPath` | `DSH_TRADING_TOOL_GATEWAY_DESCRIPTOR` | `<DSH_HOME>/tool-gateway.json` | Set `null`, `false`, `"none"`, `"off"`, or `"0"` to skip writing descriptor |
 | `allowedHosts` | `DSH_TRADING_TOOL_GATEWAY_ALLOWED_HOSTS` | unset | Comma-separated / array (`exact`, `*.domain.com`, `*`, IPv6) |
 | `allowedOrigins` | `DSH_TRADING_TOOL_GATEWAY_ALLOWED_ORIGINS` | unset | Browser CORS allowlist (`https://app.example.com`, `*.domain.com`, `*`) |
 | `defaultPreset` | `DSH_TRADING_TOOL_GATEWAY_PRESET` | `"master"` | Default scope preset |
-| `allowedPresets` | `DSH_TRADING_TOOL_GATEWAY_ALLOWED_PRESETS` | all host presets | Restrict queryable presets (fail-closed `403 PRESET_NOT_ALLOWED`) |
+| `allowedPresets` | `DSH_TRADING_TOOL_GATEWAY_ALLOWED_PRESETS` | all in `allowlist`; trading presets in `open` | Restrict queryable presets (`403 PRESET_NOT_ALLOWED`); pass `["*"]` to opt into all host presets under `open` |
 | `exposeMode` | `DSH_TRADING_TOOL_GATEWAY_EXPOSE_MODE` | `"allowlist"` | `"allowlist"` (family allowlist) or `"open"` (all non-internal families) |
 | `allowedFamilies` | `DSH_TRADING_TOOL_GATEWAY_ALLOWED_FAMILIES` | 22 built-in families | Replace base family allowlist |
 | `extraFamilies` | `DSH_TRADING_TOOL_GATEWAY_EXTRA_FAMILIES` | `[]` | Append custom/third-party families to allowlist |
@@ -105,8 +106,8 @@ Use `dsh-trading-tool setup <target>` (`mcp-stdio`, `mcp-http`, `claude-code`, `
   dsh-trading-tool setup codex
   ```
 - **Remote Access (SSH tunnel or reverse proxy / Tailscale)**:
-  1. Option A (zero-exposure SSH tunnel from workstation `Mac` to `local1`):
-     Configure fixed `port` (e.g. `8899`) + `tokenFile` in `$DSH_HOME/tool-gateway.config.json`, forward `ssh -N -L 8899:127.0.0.1:8899 <host>`, and set a client profile pointing to `http://127.0.0.1:8899`.
+  1. Option A (zero-exposure SSH tunnel from `<local-workstation>` to `<remote-host>`):
+     Configure fixed `port` (e.g. `8899`) + `tokenFile` in `$DSH_HOME/tool-gateway.config.json`, forward `ssh -N -L 8899:127.0.0.1:8899 <remote-host>`, and set a client profile pointing to `http://127.0.0.1:8899`.
   2. Option B (TLS reverse proxy / Tailscale):
      Set `host`, `port`, `publicUrl`, `tokenFile`, and `allowedHosts` (plus `allowedOrigins` for browser agents), then run `dsh-trading-tool setup mcp-http --url https://...`.
 - **Workflow Engines (n8n / Dify / custom OpenAPI clients)**:

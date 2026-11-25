@@ -22,6 +22,7 @@ const TRADING_HOME_DIR_NAME = '.dsh-trading'
 const TRADING_HOME_GUARD_MARKER = '-trading'
 const DEFAULT_CLIENT_CONFIG_REL = join('.config', 'dsh-trading-tool', 'config.json')
 const DEFAULT_HTTP_TIMEOUT_MS = 60_000
+const CLIENT_TIMEOUT_MARGIN_MS = 5_000
 const MCP_SUPPORTED_VERSIONS = ['2025-03-26', '2024-11-05']
 
 export const SETUP_TARGETS = [
@@ -203,12 +204,16 @@ export function resolveGatewayTarget(options = {}, env = process.env, homeDir = 
 
   const normalizeUrl = (raw) => raw.trim().replace(/\/+$/, '')
 
-  const explicitUrl = options.url?.trim()
+  const explicitCliUrl = options.url?.trim() || undefined
+  const explicitUrl = explicitCliUrl
     || env.DSH_TRADING_GATEWAY_URL?.trim()
     || (typeof profile.url === 'string' && profile.url.trim() ? profile.url.trim() : undefined)
 
-  const explicitDescriptorPath = options.descriptorPath?.trim()
-    || env.DSH_TRADING_GATEWAY_DESCRIPTOR?.trim()
+  // 显式传 CLI `--url` 且未同时传 CLI `--descriptor` 时，不读取环境中的 `DSH_TRADING_GATEWAY_DESCRIPTOR`，
+  // 防止把本机描述符里的 Bearer 密钥误发往外部远程 URL。
+  const explicitCliDescriptor = options.descriptorPath?.trim() || undefined
+  const explicitDescriptorPath = explicitCliDescriptor
+    || (explicitCliUrl ? undefined : env.DSH_TRADING_GATEWAY_DESCRIPTOR?.trim())
     || (typeof profile.descriptorPath === 'string' && profile.descriptorPath.trim() ? profile.descriptorPath.trim() : undefined)
 
   let token
@@ -221,6 +226,7 @@ export function resolveGatewayTarget(options = {}, env = process.env, homeDir = 
 
   let descriptorResult
   let url
+  let publicUrl
   if (explicitDescriptorPath !== undefined) {
     const resolvedDesc = resolve(expandHome(explicitDescriptorPath, homeDir))
     descriptorResult = readDescriptorFile(resolvedDesc)
@@ -247,7 +253,7 @@ export function resolveGatewayTarget(options = {}, env = process.env, homeDir = 
     if (!token && descriptorResult?.descriptor) {
       token = descriptorResult.descriptor.token
     }
-    if (!token) {
+    if (!token && options.requireToken !== false) {
       throw new Error(`已指定网关 URL (${url})，但缺少 Bearer token（请提供 --token / --token-file 或配置档案凭证）`)
     }
   } else {
@@ -266,6 +272,9 @@ export function resolveGatewayTarget(options = {}, env = process.env, homeDir = 
       }
     }
     url = normalizeUrl(descriptorResult.descriptor.url)
+    if (typeof descriptorResult.descriptor.publicUrl === 'string' && descriptorResult.descriptor.publicUrl.trim()) {
+      publicUrl = normalizeUrl(descriptorResult.descriptor.publicUrl)
+    }
     token = token ?? descriptorResult.descriptor.token
   }
 
@@ -287,7 +296,8 @@ export function resolveGatewayTarget(options = {}, env = process.env, homeDir = 
 
   return {
     url,
-    token,
+    ...(publicUrl === undefined ? {} : { publicUrl }),
+    ...(token === undefined ? {} : { token }),
     ...(preset === undefined ? {} : { preset }),
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
     ...(descriptorResult?.descriptorPath === undefined ? {} : { descriptorPath: descriptorResult.descriptorPath }),
@@ -609,14 +619,23 @@ function parseArgumentsObject(parsedArgs, readStdin) {
   return decoded
 }
 
+function shellQuote(arg) {
+  if (/^[a-zA-Z0-9_./:@=,+%-]+$/.test(arg)) return arg
+  return `'${arg.replace(/'/g, "'\\''")}'`
+}
+
 function buildStdioArgs(parsed) {
   const args = ['mcp']
   if (parsed.mode && parsed.mode !== 'index') args.push('--mode', parsed.mode)
   if (parsed.family) args.push('--family', parsed.family)
   if (parsed.preset) args.push('--preset', parsed.preset)
   if (parsed.profile) args.push('--profile', parsed.profile)
+  if (parsed.configPath) args.push('--config', parsed.configPath)
+  if (parsed.descriptorPath) args.push('--descriptor', parsed.descriptorPath)
   if (parsed.url) args.push('--url', parsed.url)
+  if (parsed.tokenFile) args.push('--token-file', parsed.tokenFile)
   if (parsed.dshHome) args.push('--dsh-home', parsed.dshHome)
+  if (parsed.timeoutMs !== undefined) args.push('--timeout', String(parsed.timeoutMs))
   return args
 }
 
@@ -630,13 +649,15 @@ function buildMcpHttpEndpointUrl(baseUrl, parsed) {
 
 /** 生成给任意外部 Agent/IDE/平台复制使用的接入配置片段（默认脱敏不回显实时 token）。 */
 export function renderSetupSnippet(parsed, resolvedTarget) {
-  const baseUrl = resolvedTarget?.url ?? 'http://127.0.0.1:<PORT>'
+  const fallbackUrl = parsed.url?.trim() ? parsed.url.trim().replace(/\/+$/, '') : undefined
+  const baseUrl = resolvedTarget?.publicUrl ?? resolvedTarget?.url ?? fallbackUrl ?? 'http://127.0.0.1:<PORT>'
   const tokenValue = parsed.includeToken && resolvedTarget?.token
     ? resolvedTarget.token
     : '<DSH_TRADING_GATEWAY_TOKEN>'
   const mcpUrl = buildMcpHttpEndpointUrl(baseUrl, parsed)
   const cmd = parsed.binCommand || 'dsh-trading-tool'
   const stdioArgs = buildStdioArgs(parsed)
+  const needsRemoteEnv = Boolean(parsed.url && !parsed.tokenFile)
 
   if (parsed.target === 'mcp-stdio') {
     return JSON.stringify({
@@ -644,7 +665,7 @@ export function renderSetupSnippet(parsed, resolvedTarget) {
         'dsh-trading': {
           command: cmd,
           args: stdioArgs,
-          ...(parsed.url
+          ...(needsRemoteEnv
             ? {
                 env: {
                   DSH_TRADING_GATEWAY_URL: baseUrl,
@@ -672,9 +693,10 @@ export function renderSetupSnippet(parsed, resolvedTarget) {
   }
 
   if (parsed.target === 'claude-code') {
+    const quotedStdio = [cmd, ...stdioArgs].map(shellQuote).join(' ')
     return [
       '# 1. 本机 / 同机进程接入（推荐，自动随宿主机端口轮转）：',
-      `claude mcp add dsh-trading -- ${cmd} ${stdioArgs.join(' ')}`,
+      `claude mcp add dsh-trading -- ${quotedStdio}`,
       '',
       '# 2. 远程或直接 Streamable HTTP 接入：',
       `claude mcp add --transport http dsh-trading "${mcpUrl}" --header "Authorization: Bearer ${tokenValue}"`,
@@ -687,7 +709,7 @@ export function renderSetupSnippet(parsed, resolvedTarget) {
       '[mcp_servers.dsh-trading]',
       `command = ${JSON.stringify(cmd)}`,
       `args = [${argsList}]`,
-      ...(parsed.url
+      ...(needsRemoteEnv
         ? [
             '[mcp_servers.dsh-trading.env]',
             `DSH_TRADING_GATEWAY_URL = ${JSON.stringify(baseUrl)}`,
@@ -851,7 +873,17 @@ export async function runMcpBridge(options, io = {}) {
     if (options.family) qs.set('family', options.family)
     const effectivePreset = options.preset ?? target.preset
     if (effectivePreset) qs.set('preset', effectivePreset)
-    const timeoutMs = options.timeoutMs ?? target.timeoutMs ?? DEFAULT_HTTP_TIMEOUT_MS
+    const baseTimeoutMs = options.timeoutMs ?? target.timeoutMs ?? DEFAULT_HTTP_TIMEOUT_MS
+    const requestedCallTimeout = msg.method === 'tools/call'
+      && isPlainRecord(msg.params)
+      && msg.params.name === 'dsh_trading_call'
+      && isPlainRecord(msg.params.arguments)
+      && typeof msg.params.arguments.timeoutMs === 'number'
+      && Number.isFinite(msg.params.arguments.timeoutMs)
+      && msg.params.arguments.timeoutMs > 0
+      ? Math.trunc(msg.params.arguments.timeoutMs)
+      : baseTimeoutMs
+    const httpTimeoutMs = Math.max(baseTimeoutMs, requestedCallTimeout) + CLIENT_TIMEOUT_MARGIN_MS
 
     let response
     try {
@@ -862,7 +894,7 @@ export async function runMcpBridge(options, io = {}) {
           'content-type': 'application/json',
         },
         body: JSON.stringify(msg),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.timeout(httpTimeoutMs),
       })
     } catch (error) {
       writeRpc({
@@ -951,7 +983,12 @@ export async function runCli(argv, io = {}) {
   if (parsed.command === 'setup') {
     let targetForSnippet
     try {
-      const candidate = resolveCurrentTarget()
+      const candidate = resolveGatewayTarget(
+        { ...parsed, requireToken: false },
+        env,
+        homeDir,
+        (msg) => { stderr(msg + '\n') },
+      )
       if (candidate.error === undefined) targetForSnippet = candidate
     } catch {
       targetForSnippet = undefined
@@ -1012,7 +1049,7 @@ export async function runCli(argv, io = {}) {
       response = await fetchImpl(`${target.url}${pathname}`, {
         ...init,
         headers: { ...headers, ...(init.headers ?? {}) },
-        signal: AbortSignal.timeout(effectiveTimeoutMs),
+        signal: AbortSignal.timeout(effectiveTimeoutMs + CLIENT_TIMEOUT_MARGIN_MS),
       })
     } catch (error) {
       stderr(JSON.stringify({

@@ -399,9 +399,26 @@ describe('dsh-trading-tool CLI execution', () => {
     const codexCap = captureIo()
     const codexCode = await runCli(['setup', 'codex', '--url', 'https://gw.example.com'], codexCap.io)
 
+    const remoteHttpCap = captureIo()
+    const remoteHttpCode = await runCli(['setup', 'mcp-http', '--url', 'https://gw.example.com'], remoteHttpCap.io)
+
+    const claudeQuotedCap = captureIo()
+    const claudeQuotedCode = await runCli([
+      'setup', 'claude-code',
+      '--config', '/tmp/my dir/config.json',
+      '--token-file', '/tmp/my dir/gw.token',
+      '--timeout', '45000',
+    ], claudeQuotedCap.io)
+
+    const ambientLeakCap = captureIo()
+    const ambientLeakCode = await runCli(
+      ['--url', 'https://untrusted.example.com', 'status'],
+      { ...ambientLeakCap.io, env: { DSH_TRADING_GATEWAY_DESCRIPTOR: join(tradingHome, 'tool-gateway.json') } },
+    )
+
     const serverCfgText = renderSetupSnippet({ target: 'server-config' })
 
-    // Then snippets are valid, redact live secret by default, and embed token only when requested
+    // Then snippets are valid, redact live secret by default, preserve --url without --token, quote paths, and never leak ambient descriptor token to CLI --url
     expect(stdioCode).toBe(0)
     expect(JSON.parse(stdioCap.stdoutText()).mcpServers['dsh-trading']).toEqual({
       command: 'dsh-trading-tool',
@@ -414,6 +431,14 @@ describe('dsh-trading-tool CLI execution', () => {
     expect(httpTokenCap.stdoutText()).toContain(`Bearer ${serverHandle.token}`)
     expect(codexCode).toBe(0)
     expect(codexCap.stdoutText()).toContain('[mcp_servers.dsh-trading]')
+    expect(codexCap.stdoutText()).toContain('DSH_TRADING_GATEWAY_URL = "https://gw.example.com"')
+    expect(remoteHttpCode).toBe(0)
+    expect(JSON.parse(remoteHttpCap.stdoutText()).mcpServers['dsh-trading'].url).toBe('https://gw.example.com/mcp?mode=index')
+    expect(claudeQuotedCode).toBe(0)
+    expect(claudeQuotedCap.stdoutText()).toContain("'/tmp/my dir/config.json'")
+    expect(claudeQuotedCap.stdoutText()).toContain('--token-file')
+    expect(claudeQuotedCap.stdoutText()).toContain('--timeout 45000')
+    expect(ambientLeakCode).toBe(2)
     expect(JSON.parse(serverCfgText)).toMatchObject({ exposeMode: 'allowlist', mcpEnabled: true })
   })
 

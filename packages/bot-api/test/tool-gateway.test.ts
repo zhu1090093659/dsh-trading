@@ -376,6 +376,8 @@ describe('tool-gateway HTTP server and lifecycle', () => {
     gateway = await startToolGatewayServer({
       ctx: () => harness?.ctx,
       agentPresets: () => harness?.agentPresets,
+      dshHome: dir,
+      env: {},
       descriptorPath,
       token: TEST_TOKEN,
     })
@@ -427,6 +429,8 @@ describe('tool-gateway HTTP server and lifecycle', () => {
     gateway = await startToolGatewayServer({
       ctx: () => harness?.ctx,
       agentPresets: () => harness?.agentPresets,
+      dshHome: dir,
+      env: {},
       descriptorPath: join(dir, 'tool-gateway.json'),
       token: TEST_TOKEN,
     })
@@ -468,6 +472,8 @@ describe('tool-gateway HTTP server and lifecycle', () => {
     gateway = await startToolGatewayServer({
       ctx: () => harness?.ctx,
       agentPresets: () => harness?.agentPresets,
+      dshHome: dir,
+      env: {},
       descriptorPath: join(dir, 'tool-gateway.json'),
       token: TEST_TOKEN,
     })
@@ -516,6 +522,8 @@ describe('tool-gateway HTTP server and lifecycle', () => {
     gateway = await startToolGatewayServer({
       ctx: () => harness?.ctx,
       agentPresets: () => harness?.agentPresets,
+      dshHome: dir,
+      env: {},
       descriptorPath: join(dir, 'tool-gateway.json'),
       token: TEST_TOKEN,
     })
@@ -557,6 +565,8 @@ describe('tool-gateway HTTP server and lifecycle', () => {
     gateway = await startToolGatewayServer({
       ctx: () => harness?.ctx,
       agentPresets: () => harness?.agentPresets,
+      dshHome: dir,
+      env: {},
       descriptorPath: join(dir, 'tool-gateway.json'),
       token: TEST_TOKEN,
     })
@@ -631,6 +641,8 @@ describe('tool-gateway HTTP server and lifecycle', () => {
     harness = await bootGatewayHarness()
     const serverHandle = await startToolGatewayServer({
       ctx: () => harness?.ctx,
+      dshHome: dir,
+      env: {},
       descriptorPath: foreignDescriptorPath,
       token: TEST_TOKEN,
     })
@@ -673,6 +685,7 @@ describe('tool-gateway HTTP server and lifecycle', () => {
       ctx: () => harness?.ctx,
       agentPresets: () => harness?.agentPresets,
       dshHome: dir,
+      env: {},
       port: fixedPort,
       token: TEST_TOKEN,
       descriptorPath: null,
@@ -680,20 +693,65 @@ describe('tool-gateway HTTP server and lifecycle', () => {
     })
 
     try {
-      // When checking bound port, missing descriptor on disk, and calling disabled /mcp
+      // When checking bound port, missing descriptor on disk, calling disabled /mcp, and calling uppercase live order
       const mcpRes = await fetch(`${handle.url}/mcp`, {
         method: 'POST',
         headers: { authorization: `Bearer ${TEST_TOKEN}`, 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }),
       })
+      const upperOrderRes = await fetch(`${handle.url}/call`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${TEST_TOKEN}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ name: ' CRYPTO_PLACE_ORDER ', arguments: { symbol: 'BTCUSDT', dryRun: false } }),
+      })
+      const openapiRes = await fetch(`${handle.url}/openapi.json`, {
+        headers: { authorization: `Bearer ${TEST_TOKEN}` },
+      })
+      const openapiJson = await openapiRes.json() as { paths: Record<string, unknown> }
 
-      // Then port matches fixedPort, no tool-gateway.json exists, and /mcp returns 404
+      // Then port matches fixedPort, no tool-gateway.json exists, /mcp returns 404, uppercase live order returns 403, and OpenAPI omits /mcp
       expect(handle.port).toBe(fixedPort)
       expect(handle.descriptorPath).toBeNull()
       expect(existsSync(join(dir, 'tool-gateway.json'))).toBe(false)
       expect(mcpRes.status).toBe(404)
+      expect(upperOrderRes.status).toBe(403)
+      expect(await upperOrderRes.json()).toMatchObject({ code: 'TRADING_APPROVAL_REQUIRED' })
+      expect(openapiJson.paths['/mcp']).toBeUndefined()
     } finally {
       await handle.dispose()
     }
+  })
+
+  it('operator: works without agentPresets in headless hosts and rejects invalid Host/timeout inputs cleanly', async () => {
+    // Given a gateway started without agentPresets (headless host profile)
+    harness = await bootGatewayHarness()
+    gateway = await startToolGatewayServer({
+      ctx: () => harness?.ctx,
+      dshHome: dir,
+      env: {},
+      descriptorPath: null,
+      token: TEST_TOKEN,
+    })
+
+    // When calling /health and global host tool holdings_list plus an invalid timeoutMs request
+    const headers = { authorization: `Bearer ${TEST_TOKEN}`, 'content-type': 'application/json' }
+    const healthRes = await fetch(`${gateway.url}/health`, { headers })
+    const callRes = await fetch(`${gateway.url}/call`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'holdings_list', arguments: {} }),
+    })
+    const badTimeoutRes = await fetch(`${gateway.url}/call`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'holdings_list', arguments: {}, timeoutMs: -5 }),
+    })
+
+    // Then headless host serves global tools cleanly and rejects non-positive timeoutMs with 400
+    expect(healthRes.status).toBe(200)
+    expect(await healthRes.json()).toMatchObject({ ok: true, toolCount: 2 })
+    expect(callRes.status).toBe(200)
+    expect(await callRes.json()).toMatchObject({ ok: true })
+    expect(badTimeoutRes.status).toBe(400)
   })
 })

@@ -71,14 +71,21 @@ async function fsyncDirectory(dir: string): Promise<void> {
   if (failure !== undefined) throw failure
 }
 
-export async function writeJsonAtomic(filePath: string, data: unknown, logPrefix: string): Promise<void> {
+export async function writeJsonAtomic(
+  filePath: string,
+  data: unknown,
+  logPrefix: string,
+  options?: { readonly mode?: number | undefined },
+): Promise<void> {
   const dir = dirname(filePath)
   const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`
   const text = JSON.stringify(data, null, 2)
   let tmpPresent = false
   try {
     await mkdir(dir, { recursive: true })
-    const handle = await open(tmpPath, 'wx')
+    const handle = options?.mode === undefined
+      ? await open(tmpPath, 'wx')
+      : await open(tmpPath, 'wx', options.mode)
     tmpPresent = true
     let failure: unknown
     try {
