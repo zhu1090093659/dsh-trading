@@ -41,6 +41,13 @@ const {
   consoleMessageArgsToEntry,
   rendererLogLine,
 } = require('./runtime.cjs');
+const {
+  parseChromiumProxyResult,
+  readSavedProxyConfig,
+  detectOsSystemProxySync,
+  buildDesktopProxyEnv,
+  redactProxyUrl,
+} = require('./proxy.cjs');
 
 const READY_TIMEOUT_MS = 180000;
 const LOG_TAIL_LINES = 200;
@@ -96,8 +103,8 @@ function setStatus(text) {
  * @param {string} nodeHome - Bundled Node distribution root.
  * @param {string} [primaryRuntime] - Absolute payload directory, when one exists.
  */
-function childEnv(home, nodeHome, primaryRuntime) {
-  const env = { ...process.env, DSH_HOME: home };
+function childEnv(home, nodeHome, primaryRuntime, proxyOverlay = {}) {
+  const env = { ...process.env, ...proxyOverlay, DSH_HOME: home };
   if (primaryRuntime !== undefined) env.DSH_PRIMARY_RUNTIME = primaryRuntime;
   // The host hooks watch this shell so a shell that dies without `before-quit`
   // (SIGTERM/SIGKILL to the app) does not leave the detached host orphaned;
@@ -143,7 +150,7 @@ function hostHookPath(fileName) {
   return fs.existsSync(unpackedPath) ? unpackedPath : undefined;
 }
 
-function startHost(runtime, home, port) {
+function startHost(runtime, home, port, proxyOverlay = {}) {
   const primaryRuntime = resolvePrimaryRuntime(runtime.runtimeRoot, home);
   pushLogLine('[desktop] primary runtime: ' + (primaryRuntime ?? 'absent (Office skills and load_workspace_dependencies stay disabled)'));
   const hookImports = [];
@@ -165,7 +172,7 @@ function startHost(runtime, home, port) {
   ];
   const child = spawn(runtime.nodeBin, args, {
     cwd: home,
-    env: childEnv(home, runtime.nodeHome, primaryRuntime),
+    env: childEnv(home, runtime.nodeHome, primaryRuntime, proxyOverlay),
     detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -379,10 +386,43 @@ async function bootOnce() {
     pushLogLine('[desktop] normalized ' + cohort.relinked.length + ' core package link(s) to the bundled runtime');
   }
 
+  let proxyOverlay = {};
+  try {
+    const resolveWithTimeout = async (targetUrl) => {
+      if (mainWindow === null || mainWindow.isDestroyed()) return undefined;
+      const targetSession = mainWindow.webContents.session;
+      if (targetSession === undefined || typeof targetSession.resolveProxy !== 'function') return undefined;
+      const timer = new Promise((resolvePromise) => setTimeout(() => resolvePromise(undefined), 2000));
+      const resolved = await Promise.race([targetSession.resolveProxy(targetUrl), timer]).catch(() => undefined);
+      return typeof resolved === 'string' ? parseChromiumProxyResult(resolved) : undefined;
+    };
+    const [sessionHttps, sessionHttp] = await Promise.all([
+      resolveWithTimeout('https://example.com'),
+      resolveWithTimeout('http://example.com'),
+    ]);
+    const savedConfig = readSavedProxyConfig(profileDir);
+    const osProxy = detectOsSystemProxySync();
+    const proxyPlan = buildDesktopProxyEnv(process.env, {
+      savedConfig,
+      osProxy,
+      sessionHttp,
+      sessionHttps,
+    });
+    proxyOverlay = proxyPlan.envOverlay;
+    pushLogLine(
+      '[desktop] proxy bootstrap: mode=' + proxyPlan.mode
+      + ' source=' + proxyPlan.source
+      + (proxyPlan.httpsProxy ? ' https=' + (redactProxyUrl(proxyPlan.httpsProxy) ?? '') : '')
+      + (proxyPlan.httpProxy && proxyPlan.httpProxy !== proxyPlan.httpsProxy ? ' http=' + (redactProxyUrl(proxyPlan.httpProxy) ?? '') : ''),
+    );
+  } catch (error) {
+    pushLogLine('[desktop] proxy bootstrap failed (continuing direct): ' + String(error && error.message ? error.message : error));
+  }
+
   setStatus('Starting the dsh host…');
   const port = await findFreePort();
   pushLogLine('[desktop] spawning host on 127.0.0.1:' + port);
-  hostChild = startHost(runtime, home, port);
+  hostChild = startHost(runtime, home, port, proxyOverlay);
   const child = hostChild;
   const spawnedAt = Date.now();
   let exited = false;

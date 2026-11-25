@@ -41,6 +41,91 @@ import type {
   TradeService,
 } from '@dshtrading/api'
 import { createInstrumentsSearchTool, createRoutingGetTool, type RouterToolServices } from './tools.ts'
+import {
+  NetworkProxyService,
+  PROXY_TEST_TARGETS,
+  TRADING_NETWORK_PROXY_KEY,
+  createProxyDispatcher,
+  isProxyTestTarget,
+  publishProxyEnv,
+  type NetworkProxyServiceOptions,
+  type NetworkProxyStatusSnapshot,
+  type ProxyConnectivityTestOptions,
+  type ProxyConnectivityTestResult,
+  type ProxyTestTarget,
+} from './proxy.ts'
+import {
+  LOOPBACK_NO_PROXY,
+  PROXY_ENV_NAMES,
+  bypassesProxy,
+  captureLaunchProxyEnv,
+  detectSystemProxy,
+  isLoopbackHost,
+  isSocksProxyUrl,
+  mergeNoProxy,
+  normalizeProxyMode,
+  normalizeProxyUrlForUndici,
+  parseGsettingsProxy,
+  parseKdeKioslavercProxy,
+  parseMacScutilProxy,
+  parseWindowsRegProxy,
+  proxyForUrl,
+  redactProxyUrl,
+  resolveEffectiveProxyPolicy,
+  validateProxyUrl,
+  type DetectSystemProxyOptions,
+  type DetectedSystemProxy,
+  type GsettingsProxyValues,
+  type LaunchProxyEnvSnapshot,
+  type ProxyConfig,
+  type ProxyMode,
+  type ProxySource,
+  type ProxyUrlValidation,
+  type ResolvedProxyPolicy,
+} from './system-proxy.ts'
+
+export {
+  LOOPBACK_NO_PROXY,
+  NetworkProxyService,
+  PROXY_ENV_NAMES,
+  PROXY_TEST_TARGETS,
+  TRADING_NETWORK_PROXY_KEY,
+  bypassesProxy,
+  captureLaunchProxyEnv,
+  createProxyDispatcher,
+  detectSystemProxy,
+  isLoopbackHost,
+  isProxyTestTarget,
+  isSocksProxyUrl,
+  mergeNoProxy,
+  normalizeProxyMode,
+  normalizeProxyUrlForUndici,
+  parseGsettingsProxy,
+  parseKdeKioslavercProxy,
+  parseMacScutilProxy,
+  parseWindowsRegProxy,
+  proxyForUrl,
+  publishProxyEnv,
+  redactProxyUrl,
+  resolveEffectiveProxyPolicy,
+  validateProxyUrl,
+}
+export type {
+  DetectSystemProxyOptions,
+  DetectedSystemProxy,
+  GsettingsProxyValues,
+  LaunchProxyEnvSnapshot,
+  NetworkProxyServiceOptions,
+  NetworkProxyStatusSnapshot,
+  ProxyConfig,
+  ProxyConnectivityTestOptions,
+  ProxyConnectivityTestResult,
+  ProxyMode,
+  ProxySource,
+  ProxyTestTarget,
+  ProxyUrlValidation,
+  ResolvedProxyPolicy,
+}
 
 /**
  * Cordis 插件名 = patch 行 id：市场无关共享行，base 拥有（铁律 #1/#4）。
@@ -116,6 +201,8 @@ export interface Config {
    * 的字段）——否则设置页写入能落盘、读回却永远缺该字段，radio 无法回显。
    */
   colorMode?: 'red-up' | 'green-up'
+  /** 网络代理配置（默认 mode=system，跟随系统代理）。 */
+  proxy?: ProxyConfig
 }
 
 export const DEFAULT_MARKETS: Record<string, MarketProviderEntry> = {
@@ -169,6 +256,12 @@ export const Config: Schema<any> = Schema.object({
   // 现状零变化。必须声明在 schema —— 0.1.7 的 describe 只投影 schema 声明字段，
   // 未声明的写入能落盘但读不回，radio 会永远停在默认值。
   colorMode: Schema.string().default('red-up'),
+  // 网络代理配置（2026-11-25）：默认跟随系统代理（mode=system），支持自定义与直连。
+  proxy: Schema.object({
+    mode: Schema.string().default('system'),
+    url: Schema.string().default(''),
+    noProxy: Schema.string().default(''),
+  }).default({}),
 }).volatile()
 
 /**
@@ -193,6 +286,7 @@ interface RouterConfigView {
   markets: Record<string, MarketProviderEntry>
   credentials?: Record<string, Record<string, string>>
   news?: { cryptoPanicKey?: string; sources?: Readonly<Record<string, readonly string[]>> }
+  proxy?: ProxyConfig
 }
 
 export class MarketRouterService extends Service implements MarketRouterServiceContract {
@@ -243,6 +337,18 @@ export class MarketRouterService extends Service implements MarketRouterServiceC
   /** 某市场启用的新闻/公告源 id 列表（issue #96；缺省 undefined = 该 kit 默认源全集）。 */
   newsSources(market: string): readonly string[] | undefined {
     return this.snapshot().news?.sources?.[market]
+  }
+
+  /** 当前网络代理配置（默认 mode=system，跟随系统代理）。 */
+  proxyConfig(): ProxyConfig {
+    const raw = this.snapshot().proxy
+    const url = typeof raw?.url === 'string' ? raw.url.trim() : ''
+    const noProxy = typeof raw?.noProxy === 'string' ? raw.noProxy.trim() : ''
+    return {
+      mode: normalizeProxyMode(raw?.mode),
+      ...(url !== '' ? { url } : {}),
+      ...(noProxy !== '' ? { noProxy } : {}),
+    }
   }
 
   /** 订阅激活变化（volatile-update 驱动；restart 型当前仅记录，未来 live 用）。 */
@@ -534,6 +640,21 @@ export function apply(ctx: Context, config: Config): void {
     (ctx as unknown as { get?: (key: string, strict?: boolean) => unknown })
       .get?.('tradingEvents', false) as TradingEventsPublisher | undefined
 
+  // 预测市场（Polymarket 接入，2026-10-11）同款 host 常驻服务模式：提供
+  // tradingNetworkProxy（默认跟随系统代理；设置页修改 proxy 字段时热切换，无需重启）。
+  const proxyService = new NetworkProxyService(ctx)
+  const isTestRuntime = process.env.VITEST !== undefined || process.env.NODE_ENV === 'test'
+  let lastProxyFingerprint = JSON.stringify(service.proxyConfig())
+  if (!isTestRuntime) {
+    void proxyService.applyConfig(service.proxyConfig()).catch((error: unknown) => {
+      log.warn('[dsh-trading-market-router] failed to apply initial network proxy:', error)
+    })
+  }
+  const effect = (ctx as unknown as { effect?: (cb: () => () => void, name?: string) => void }).effect
+  if (typeof effect === 'function') {
+    effect.call(ctx, () => () => { void proxyService.dispose() }, 'dsh-trading-market-router: network proxy')
+  }
+
   // routing_get / instruments_search（issue #33 / P4，host 平面，全会话可见 D4）。
   ctx.inject(['tools'] as never, (toolCtx) => {
     const tools = (toolCtx as unknown as { tools?: { register(t: unknown): void; get(name: string): unknown } }).tools
@@ -560,6 +681,16 @@ export function apply(ctx: Context, config: Config): void {
   ctx.on('loader/volatile-update' as never, (() => {
     warnUnknownProviders(service.snapshot(), log)
     if (service.notify()) eventsOf()?.emit('routing')
+    const nextProxy = service.proxyConfig()
+    const nextProxyFingerprint = JSON.stringify(nextProxy)
+    if (nextProxyFingerprint !== lastProxyFingerprint) {
+      lastProxyFingerprint = nextProxyFingerprint
+      if (!isTestRuntime) {
+        void proxyService.applyConfig(nextProxy).catch((error: unknown) => {
+          log.warn('[dsh-trading-market-router] failed to update network proxy:', error)
+        })
+      }
+    }
   }) as never)
 }
 

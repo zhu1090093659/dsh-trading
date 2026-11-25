@@ -113,6 +113,20 @@ export function apply(ctx: ClientContext): void {
       try { localStorage.setItem('dshtrading.color_mode.v1', JSON.stringify(mode)) } catch { /* unavailable */ }
       try { window.dispatchEvent(new Event('dshtrading-color-mode-changed')) } catch { /* SSR guard */ }
     },
+    async setProxy(next) {
+      await mutateOrThrow([{
+        op: 'set',
+        path: ['proxy'],
+        value: {
+          mode: next.mode,
+          url: next.url.trim(),
+          noProxy: next.noProxy.trim(),
+        },
+      }])
+    },
+    async resetProxy() {
+      await mutateOrThrow([{ op: 'unset', path: ['proxy'] }])
+    },
   }
 
   // Tab ledger read + locale revision (官方 sectionInjected 模式).
@@ -166,6 +180,8 @@ export function apply(ctx: ClientContext): void {
       setColorMode: actions.setColorMode,
       setJin10Token: actions.setJin10Token,
       clearJin10Token: actions.clearJin10Token,
+      setProxy: actions.setProxy,
+      resetProxy: actions.resetProxy,
     }),
     children: { 'dshtrading.market.tab': { kind: 'list', scope: 'root' } },
   }, TradingSettingsSection))

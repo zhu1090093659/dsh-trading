@@ -139,6 +139,48 @@ export type SettingsLocaleKey =
   | 'field.placeholder.longbridgeAppSecret'
   | 'field.placeholder.longbridgeAccessToken'
   | 'field.placeholder.tigerPrivateKey'
+  | 'proxy.title'
+  | 'proxy.modeLabel'
+  | 'proxy.mode.system'
+  | 'proxy.mode.custom'
+  | 'proxy.mode.direct'
+  | 'proxy.status.activeSystem'
+  | 'proxy.status.activeCustom'
+  | 'proxy.status.direct'
+  | 'proxy.status.systemEmpty'
+  | 'proxy.detectedLabel'
+  | 'proxy.detectedNone'
+  | 'proxy.pacNotice'
+  | 'proxy.source.env'
+  | 'proxy.source.macos-scutil'
+  | 'proxy.source.windows-registry'
+  | 'proxy.source.linux-gsettings'
+  | 'proxy.source.linux-kde'
+  | 'proxy.source.desktop-system'
+  | 'proxy.source.custom'
+  | 'proxy.source.direct'
+  | 'proxy.source.none'
+  | 'proxy.urlLabel'
+  | 'proxy.urlPlaceholder'
+  | 'proxy.urlError.empty'
+  | 'proxy.urlError.socks4'
+  | 'proxy.urlError.unsupported'
+  | 'proxy.urlError.invalid'
+  | 'proxy.noProxyLabel'
+  | 'proxy.noProxyPlaceholder'
+  | 'proxy.refresh'
+  | 'proxy.refreshed'
+  | 'proxy.testTargetLabel'
+  | 'proxy.testBtn'
+  | 'proxy.testing'
+  | 'proxy.testOkProxied'
+  | 'proxy.testOkDirect'
+  | 'proxy.testFail'
+  | 'proxy.reset'
+  | 'proxy.saved'
+  | 'proxy.resetDone'
+  | 'proxy.saveFailed'
+  | 'proxy.statusUnavailable'
 
 export const zh: Record<SettingsLocaleKey, string> = {
       'nav': '交易',
@@ -270,6 +312,48 @@ export const zh: Record<SettingsLocaleKey, string> = {
       'field.placeholder.longbridgeAppSecret': 'LONGBRIDGE_APP_SECRET',
       'field.placeholder.longbridgeAccessToken': 'LONGBRIDGE_ACCESS_TOKEN',
       'field.placeholder.tigerPrivateKey': 'TIGER_PRIVATE_KEY',
+      'proxy.title': '网络代理',
+      'proxy.modeLabel': '代理模式',
+      'proxy.mode.system': '系统代理',
+      'proxy.mode.custom': '自定义代理',
+      'proxy.mode.direct': '直连',
+      'proxy.status.activeSystem': '系统代理 · {proxy}',
+      'proxy.status.activeCustom': '自定义 · {proxy}',
+      'proxy.status.direct': '直连',
+      'proxy.status.systemEmpty': '未检测到系统代理（直连）',
+      'proxy.detectedLabel': '当前系统代理（{source}）：{proxy}',
+      'proxy.detectedNone': '当前未检测到系统代理或启动环境变量代理，将直接连接。',
+      'proxy.pacNotice': '检测到系统 PAC 脚本（{pacUrl}），若节点未解析请改用自定义代理或开启 TUN。',
+      'proxy.source.env': '环境变量',
+      'proxy.source.macos-scutil': 'macOS 系统',
+      'proxy.source.windows-registry': 'Windows 系统',
+      'proxy.source.linux-gsettings': 'GNOME 系统',
+      'proxy.source.linux-kde': 'KDE 系统',
+      'proxy.source.desktop-system': '桌面系统',
+      'proxy.source.custom': '自定义',
+      'proxy.source.direct': '直连',
+      'proxy.source.none': '未配置',
+      'proxy.urlLabel': '代理地址',
+      'proxy.urlPlaceholder': 'http://127.0.0.1:7890 或 socks5://127.0.0.1:7890',
+      'proxy.urlError.empty': '请填写代理地址',
+      'proxy.urlError.socks4': '不支持 SOCKS4，请改用 http://、https://、socks5:// 或 socks5h://',
+      'proxy.urlError.unsupported': '仅支持 http://、https://、socks5:// 或 socks5h:// 协议',
+      'proxy.urlError.invalid': '代理地址格式无效',
+      'proxy.noProxyLabel': '绕过列表 (NO_PROXY)',
+      'proxy.noProxyPlaceholder': 'localhost,127.0.0.1,192.168.0.0/16,.internal',
+      'proxy.refresh': '刷新检测',
+      'proxy.refreshed': '已刷新系统代理检测',
+      'proxy.testTargetLabel': '探测目标',
+      'proxy.testBtn': '测试连通性',
+      'proxy.testing': '正在测试…',
+      'proxy.testOkProxied': '连通成功（HTTP {status}，{ms}ms，经 {proxy}）',
+      'proxy.testOkDirect': '连通成功（HTTP {status}，{ms}ms，直连）',
+      'proxy.testFail': '连通失败（{ms}ms）：{error}',
+      'proxy.reset': '恢复默认',
+      'proxy.saved': '代理设置已保存并立即生效',
+      'proxy.resetDone': '已恢复为默认（系统代理）',
+      'proxy.saveFailed': '代理设置保存失败',
+      'proxy.statusUnavailable': '代理状态不可用',
 }
 
 export const en: Record<SettingsLocaleKey, string> = {
@@ -402,4 +486,46 @@ export const en: Record<SettingsLocaleKey, string> = {
       'field.placeholder.longbridgeAppSecret': 'LONGBRIDGE_APP_SECRET',
       'field.placeholder.longbridgeAccessToken': 'LONGBRIDGE_ACCESS_TOKEN',
       'field.placeholder.tigerPrivateKey': 'TIGER_PRIVATE_KEY',
+      'proxy.title': 'Network Proxy',
+      'proxy.modeLabel': 'Proxy mode',
+      'proxy.mode.system': 'System proxy',
+      'proxy.mode.custom': 'Custom proxy',
+      'proxy.mode.direct': 'Direct',
+      'proxy.status.activeSystem': 'System · {proxy}',
+      'proxy.status.activeCustom': 'Custom · {proxy}',
+      'proxy.status.direct': 'Direct',
+      'proxy.status.systemEmpty': 'No system proxy detected (direct)',
+      'proxy.detectedLabel': 'Detected system proxy ({source}): {proxy}',
+      'proxy.detectedNone': 'No OS or environment proxy detected; connections go direct.',
+      'proxy.pacNotice': 'System PAC script detected ({pacUrl}); switch to Custom proxy or TUN if unresolved.',
+      'proxy.source.env': 'Env var',
+      'proxy.source.macos-scutil': 'macOS System',
+      'proxy.source.windows-registry': 'Windows System',
+      'proxy.source.linux-gsettings': 'GNOME System',
+      'proxy.source.linux-kde': 'KDE System',
+      'proxy.source.desktop-system': 'Desktop System',
+      'proxy.source.custom': 'Custom',
+      'proxy.source.direct': 'Direct',
+      'proxy.source.none': 'None',
+      'proxy.urlLabel': 'Proxy URL',
+      'proxy.urlPlaceholder': 'http://127.0.0.1:7890 or socks5://127.0.0.1:7890',
+      'proxy.urlError.empty': 'Enter a proxy URL',
+      'proxy.urlError.socks4': 'SOCKS4 is unsupported; use http://, https://, socks5://, or socks5h://',
+      'proxy.urlError.unsupported': 'Only http://, https://, socks5://, and socks5h:// are supported',
+      'proxy.urlError.invalid': 'Invalid proxy URL',
+      'proxy.noProxyLabel': 'Bypass list (NO_PROXY)',
+      'proxy.noProxyPlaceholder': 'localhost,127.0.0.1,192.168.0.0/16,.internal',
+      'proxy.refresh': 'Refresh',
+      'proxy.refreshed': 'System proxy refreshed',
+      'proxy.testTargetLabel': 'Test target',
+      'proxy.testBtn': 'Test connection',
+      'proxy.testing': 'Testing…',
+      'proxy.testOkProxied': 'Connected (HTTP {status}, {ms}ms via {proxy})',
+      'proxy.testOkDirect': 'Connected (HTTP {status}, {ms}ms, direct)',
+      'proxy.testFail': 'Connection failed ({ms}ms): {error}',
+      'proxy.reset': 'Reset default',
+      'proxy.saved': 'Proxy settings saved and applied',
+      'proxy.resetDone': 'Reset to default (system proxy)',
+      'proxy.saveFailed': 'Failed to save proxy settings',
+      'proxy.statusUnavailable': 'Proxy status unavailable',
 }

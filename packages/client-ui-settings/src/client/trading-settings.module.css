@@ -23,6 +23,7 @@
   --sec-bg-active: var(--dsw-alias-primary-bg, rgba(37, 99, 235, 0.06));
   --sec-bg-input: var(--dsw-alias-bg-l1, #ffffff);
   --sec-primary: var(--dsw-alias-primary, #2563eb);
+  --sec-danger: #b91c1c;
 }
 
 /* 显式深色模式变量注入（仅当宿主处于深色状态时生效，绝不干扰白天模式） */
@@ -40,6 +41,7 @@
   --sec-bg-active: rgba(37, 99, 235, 0.16);
   --sec-bg-input: rgba(0, 0, 0, 0.25);
   --sec-primary: #3b82f6;
+  --sec-danger: #f87171;
 }
 
 .root {
@@ -105,6 +107,55 @@
   border: 1px solid var(--sec-border);
   border-radius: 10px;
   background: var(--sec-bg-card);
+}
+
+.cardWide {
+  grid-column: 1 / -1;
+}
+
+.proxySystemRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.proxyFieldsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.fieldError {
+  font-size: 12px;
+  color: var(--sec-danger);
+  margin: 2px 0 0;
+  line-height: 1.45;
+}
+
+.proxySelect {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sec-border);
+  border-radius: 6px;
+  background: var(--sec-bg-input);
+  color: var(--sec-text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.proxySelect:focus-visible {
+  outline: 2px solid var(--sec-primary);
+  outline-offset: 1px;
+}
+
+.actionMsg[data-tone='error'] {
+  color: var(--sec-danger);
+}
+
+.actionMsg[data-tone='ok'] {
+  color: #16a34a;
 }
 
 .cardHead {

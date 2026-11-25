@@ -24,6 +24,31 @@ const DEFAULT_CLIENT_CONFIG_REL = join('.config', 'dsh-trading-tool', 'config.js
 const DEFAULT_HTTP_TIMEOUT_MS = 60_000
 const CLIENT_TIMEOUT_MARGIN_MS = 5_000
 const MCP_SUPPORTED_VERSIONS = ['2025-03-26', '2024-11-05']
+const LOOPBACK_NO_PROXY_ENTRIES = ['localhost', '127.0.0.1', '::1', '[::1]']
+const PROXY_URL_ENV_NAMES = ['http_proxy', 'HTTP_PROXY', 'https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY']
+
+/**
+ * Ensure loopback hosts (`localhost`, `127.0.0.1`, `::1`, `[::1]`) are listed in `NO_PROXY`/`no_proxy`
+ * when proxy environment variables are present, preventing local gateway calls from hitting an upstream proxy.
+ */
+export function ensureLoopbackNoProxy(env = process.env) {
+  const hasProxy = PROXY_URL_ENV_NAMES.some((name) => typeof env[name] === 'string' && env[name].trim() !== '')
+  if (!hasProxy) return
+  const raw = env.no_proxy ?? env.NO_PROXY ?? ''
+  const entries = raw.split(/[,\s;]+/).map((entry) => entry.trim()).filter((entry) => entry !== '')
+  if (entries.includes('*')) return
+  const seen = new Set(entries.map((entry) => entry.toLowerCase()))
+  const merged = [...entries]
+  for (const loopback of LOOPBACK_NO_PROXY_ENTRIES) {
+    if (!seen.has(loopback)) {
+      seen.add(loopback)
+      merged.push(loopback)
+    }
+  }
+  const value = merged.join(',')
+  env.no_proxy = value
+  env.NO_PROXY = value
+}
 
 export const SETUP_TARGETS = [
   'mcp-stdio',
@@ -799,8 +824,10 @@ async function readLineChunks(linesIterable, onLine) {
 export async function runMcpBridge(options, io = {}) {
   const stdout = io.stdout ?? ((text) => { process.stdout.write(text) })
   const stderr = io.stderr ?? ((text) => { process.stderr.write(text) })
+  const env = io.env ?? process.env
+  ensureLoopbackNoProxy(env)
   const fetchImpl = io.fetch ?? globalThis.fetch
-  const resolveTarget = io.resolveTarget ?? (() => resolveGatewayTarget(options, io.env ?? process.env, io.homeDir ?? homedir(), (m) => stderr(m + '\n')))
+  const resolveTarget = io.resolveTarget ?? (() => resolveGatewayTarget(options, env, io.homeDir ?? homedir(), (m) => stderr(m + '\n')))
   const lines = io.lines ?? createInterface({ input: io.stdin ?? process.stdin, crlfDelay: Infinity })
 
   const writeRpc = (payload) => {
@@ -961,6 +988,7 @@ export async function runCli(argv, io = {}) {
   const stdout = io.stdout ?? ((text) => { process.stdout.write(text) })
   const stderr = io.stderr ?? ((text) => { process.stderr.write(text) })
   const env = io.env ?? process.env
+  ensureLoopbackNoProxy(env)
   const homeDir = io.homeDir ?? homedir()
   const fetchImpl = io.fetch ?? globalThis.fetch
   const readStdin = io.readStdin ?? (() => readFileSync(0, 'utf8'))
@@ -1180,6 +1208,7 @@ export function isEntryScript(metaUrl = import.meta.url) {
 }
 
 if (isEntryScript()) {
+  ensureLoopbackNoProxy(process.env)
   runCli(process.argv.slice(2)).then(
     (code) => { process.exit(code) },
     (error) => {

@@ -25,7 +25,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@dshtrading/api": "workspace:^"
+    "@dshtrading/api": "workspace:^",
+    "undici": "^8.11.2"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.1.0",

@@ -177,6 +177,14 @@ export const PROVIDER_CREDENTIAL_SPECS: Record<string, readonly CredentialField[
   ],
 }
 
+export type TradingProxyMode = 'system' | 'custom' | 'direct'
+
+export interface TradingProxyConfig {
+  mode?: TradingProxyMode
+  url?: string
+  noProxy?: string
+}
+
 /** dshtrading namespace 下的值形状（router 侧同步；窄化后的子集契约）。 */
 export interface TradingSettings {
   markets: Record<string, { provider?: string; tradeProvider?: string }>
@@ -186,6 +194,8 @@ export interface TradingSettings {
   news?: { cryptoPanicKey?: string; sources?: Record<string, string[]> }
   /** 涨跌配色模式：red-up = 红涨绿跌（国内），green-up = 绿涨红跌（国际）。 */
   colorMode?: 'red-up' | 'green-up'
+  /** 网络代理配置（默认 mode=system，跟随系统代理）。 */
+  proxy?: TradingProxyConfig
 }
 
 /** 组件的可观察状态（SnapshotStore 值）：已解析 value + 覆盖标记。 */
@@ -207,6 +217,14 @@ export interface TradingSettingsState {
   newsSourcesOverridden: Record<string, boolean>
   /** 涨跌配色模式。 */
   colorMode: 'red-up' | 'green-up'
+  /** 网络代理模式（默认 system）。 */
+  proxyMode: TradingProxyMode
+  /** 自定义代理地址。 */
+  proxyUrl: string
+  /** 绕过列表（NO_PROXY）。 */
+  proxyNoProxy: string
+  /** 用户是否显式覆盖了代理配置。 */
+  proxyOverridden: boolean
   /** 表单可写：直接取快照的 writable（Host 文档是否接受写入）。 */
   writable: boolean
 }
@@ -229,6 +247,46 @@ export interface TradingSettingsActions {
   resetNewsSources(market: string): Promise<void>
   /** 设置涨跌配色模式。 */
   setColorMode(mode: 'red-up' | 'green-up'): Promise<void>
+  /** 设置网络代理模式、地址与绕过列表。 */
+  setProxy(next: { mode: TradingProxyMode; url: string; noProxy: string }): Promise<void>
+  /** 恢复代理默认设置（system）。 */
+  resetProxy(): Promise<void>
+}
+
+const SUPPORTED_CLIENT_PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks:', 'socks5:', 'socks5h:'])
+const SOCKS4_CLIENT_PROXY_PROTOCOLS = new Set(['socks4:', 'socks4a:'])
+
+/** Pure browser-safe validation for custom proxy URL input. */
+export function validateCustomProxyUrl(raw: string): 'empty' | 'socks4' | 'unsupported' | 'invalid' | undefined {
+  const trimmed = raw.trim()
+  if (trimmed === '') return 'empty'
+  let parsed: URL
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    return 'invalid'
+  }
+  if (parsed.hostname === '') return 'invalid'
+  if (SOCKS4_CLIENT_PROXY_PROTOCOLS.has(parsed.protocol)) return 'socks4'
+  if (!SUPPORTED_CLIENT_PROXY_PROTOCOLS.has(parsed.protocol)) return 'unsupported'
+  return undefined
+}
+
+/** Redact embedded proxy credentials for safe display in browser UI. */
+export function redactClientProxyUrl(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined
+  const trimmed = raw.trim()
+  if (trimmed === '') return undefined
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.username !== '' || parsed.password !== '') {
+      const hostPort = parsed.port !== '' ? `${parsed.hostname}:${parsed.port}` : parsed.hostname
+      return `${parsed.protocol}//***@${hostPort}${parsed.pathname === '/' ? '' : parsed.pathname}`
+    }
+    return trimmed
+  } catch {
+    return trimmed.replace(/\/\/[^/@]+@/, '//***@')
+  }
 }
 
 /** 状态转化：从 settings 快照投射为组件的可观察视图。 */
@@ -268,6 +326,13 @@ export function projectSnapshot(snap: ConfigFormSnapshot<TradingSettings>): Trad
     newsSources[marketId] = news?.sources?.[marketId]
     newsSourcesOverridden[marketId] = userNews?.sources?.[marketId] !== undefined
   }
+  const baseProxy = (snap.base as TradingSettings | undefined)?.proxy
+  const userProxy = ((snap.user ?? {}) as { proxy?: TradingProxyConfig }).proxy
+  const effectiveProxy = value?.proxy ?? baseProxy
+  const rawProxyMode = effectiveProxy?.mode
+  const proxyMode: TradingProxyMode =
+    rawProxyMode === 'custom' || rawProxyMode === 'direct' ? rawProxyMode : 'system'
+
   return {
     status: snap.status,
     resolved,
@@ -278,6 +343,10 @@ export function projectSnapshot(snap: ConfigFormSnapshot<TradingSettings>): Trad
     newsSources,
     newsSourcesOverridden,
     colorMode: value?.colorMode === 'green-up' ? 'green-up' : 'red-up',
+    proxyMode,
+    proxyUrl: typeof effectiveProxy?.url === 'string' ? effectiveProxy.url : '',
+    proxyNoProxy: typeof effectiveProxy?.noProxy === 'string' ? effectiveProxy.noProxy : '',
+    proxyOverridden: userProxy !== undefined,
     writable: snap.writable,
   }
 }
