@@ -1,5 +1,13 @@
 # @dshtrading/connector-tiger
 
+## 0.9.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @dshtrading/api@0.9.0
+  - @dshtrading/authority@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes

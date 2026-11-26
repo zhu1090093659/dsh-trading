@@ -1,5 +1,22 @@
 # @dshtrading/base
 
+## 0.9.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @dshtrading/router@0.9.0
+  - @dshtrading/indicators@0.9.0
+  - @dshtrading/api@0.9.0
+  - @dshtrading/dsh-home@0.9.0
+  - @dshtrading/strategies@0.9.0
+  - @dshtrading/connector-jin10@0.9.0
+  - @dshtrading/connector-polymarket@0.9.0
+  - @dshtrading/eventbus@0.9.0
+  - @dshtrading/holdings@0.9.0
+  - @dshtrading/knowledge@0.9.0
+  - @dshtrading/watchlist@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes

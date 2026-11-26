@@ -1,5 +1,14 @@
 # @dshtrading/connector-binance
 
+## 0.9.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @dshtrading/indicators@0.9.0
+  - @dshtrading/api@0.9.0
+  - @dshtrading/authority@0.9.0
+
 ## 0.8.0
 
 ### Patch Changes
