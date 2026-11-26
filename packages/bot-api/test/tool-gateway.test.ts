@@ -399,8 +399,11 @@ describe('tool-gateway HTTP server and lifecycle', () => {
     const schemaFamilyRes = await fetch(`${gateway.url}/schema?family=cn`, { headers: authHeaders })
     const schemaFamilyJson = await schemaFamilyRes.json() as { ok: boolean; family: string; tools: Array<{ name: string }> }
 
-    // Then descriptor is 0600, trading tools across host+preset are visible, and internal tools are excluded
-    expect(mode).toBe(0o600)
+    // Then descriptor is 0600 on POSIX (Windows/NTFS synthesizes 0666 without POSIX mode bits),
+    // trading tools across host+preset are visible, and internal tools are excluded
+    if (process.platform !== 'win32') {
+      expect(mode).toBe(0o600)
+    }
     expect(descriptor.pid).toBe(process.pid)
     expect(descriptor.port).toBe(gateway.port)
     expect(healthRes.status).toBe(200)
