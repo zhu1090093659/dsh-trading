@@ -1,5 +1,17 @@
 # @dshtrading/kit-cn
 
+## 0.9.1
+
+### Patch Changes
+
+- @dshtrading/api@0.9.1
+- @dshtrading/base@0.9.1
+- @dshtrading/connector-akshare@0.9.1
+- @dshtrading/connector-hithink@0.9.1
+- @dshtrading/dsh-home@0.9.1
+- @dshtrading/indicators@0.9.1
+- @dshtrading/knowledge@0.9.1
+
 ## 0.9.0
 
 ### Minor Changes

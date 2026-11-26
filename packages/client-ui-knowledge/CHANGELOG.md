@@ -1,5 +1,11 @@
 # @dshtrading/client-ui-knowledge
 
+## 0.9.1
+
+### Patch Changes
+
+- @dshtrading/knowledge@0.9.1
+
 ## 0.9.0
 
 ### Patch Changes

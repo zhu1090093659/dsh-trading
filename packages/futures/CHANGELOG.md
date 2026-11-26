@@ -1,5 +1,12 @@
 # @dshtrading/futures
 
+## 0.9.1
+
+### Patch Changes
+
+- @dshtrading/connector-hithink@0.9.1
+- @dshtrading/kit-futures@0.9.1
+
 ## 0.9.0
 
 ### Patch Changes

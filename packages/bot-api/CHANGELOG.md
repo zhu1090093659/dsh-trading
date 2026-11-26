@@ -1,5 +1,23 @@
 # @dshtrading/bot-api
 
+## 0.9.1
+
+### Patch Changes
+
+- 修复 Windows/NTFS 上 `tool-gateway` 描述文件 POSIX `0600` 权限位测试断言导致的 Windows 桌面构建中断，并补发 `v0.9.0` 的完整桌面安装包（Electron macOS/Windows、mygo macOS arm64）与增量更新包。
+  - @dshtrading/api@0.9.1
+  - @dshtrading/dsh-home@0.9.1
+  - @dshtrading/eventbus@0.9.1
+  - @dshtrading/holdings@0.9.1
+  - @dshtrading/indicators@0.9.1
+  - @dshtrading/kit-cn@0.9.1
+  - @dshtrading/kit-crypto@0.9.1
+  - @dshtrading/kit-hk@0.9.1
+  - @dshtrading/kit-us@0.9.1
+  - @dshtrading/knowledge@0.9.1
+  - @dshtrading/strategies@0.9.1
+  - @dshtrading/watchlist@0.9.1
+
 ## 0.9.0
 
 ### Minor Changes

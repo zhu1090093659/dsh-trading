@@ -1,5 +1,11 @@
 # @dshtrading/connector-xysz
 
+## 0.9.1
+
+### Patch Changes
+
+- @dshtrading/api@0.9.1
+
 ## 0.9.0
 
 ### Patch Changes
