@@ -336,8 +336,22 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
     })
     mo.observe(seat, { childList: true, subtree: true })
     if (typeof document !== 'undefined') {
-      mo.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'data-theme'] })
+      // 会话列默认折叠（display:none）时首轮 findCard 测得 0x0 盒；展开切换翻动
+      // data-dshtrading-chat-folded 后需要重跑找卡与拼接。
+      mo.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['data-ds-dark-theme', 'data-theme', 'data-dshtrading-chat-folded'],
+      })
     }
+    // 对话列从折叠（display:none / 0px 轨）展开走宿主 0.3s grid-template-columns 过渡：
+    // 属性翻转瞬间卡宽可能仍小于 120px，观察 seat 尺寸变化确保展开过渡中/完成后补接卡。
+    const seatObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => {
+        cancelAnimationFrame(raf)
+        raf = requestAnimationFrame(() => { adopt(findCard()) })
+      })
+    seatObserver?.observe(seat)
 
     // 承载容器跟随：宿主整列替换对话列（或同列内换掉 seat）时 blank 不变、本 effect
     // 的依赖也不变，旧容器随旧子树一起消失——按元素身份判出「容器已脱离 DOM」或
@@ -366,6 +380,7 @@ export function HomeHistory({ t, useSessions, useWorkspaces, openSession, startN
       disposed = true
       cancelAnimationFrame(raf)
       mo.disconnect()
+      seatObserver?.disconnect()
       carrier.disconnect()
       window.removeEventListener('resize', onResize)
       if (card !== null && saved !== null) {

@@ -19,8 +19,16 @@ Status: implemented
 - **SessionRail（shell.overlay order 60，取代 WindowChrome）**：fixed 贴视口
   右缘全高 44px，`role=toolbar aria-orientation=vertical`。自上而下：折叠/展开
   （aria-pressed 驱动，折叠态图标 scaleX(-1) 镜像提示展开方向）、新会话、分隔
-  线、设置；分隔线下方是后续功能页签扩展位。恒挂载恒可见——首页、会话进行中、
-  折叠态都是同一入口，不再按状态切换入口面。
+  线、功能页签（定时任务/资产/快讯/宏观/文件/预测市场；设置入口 3.0 起迁往左侧
+  MarketDock 底部）。恒挂载恒可见——首页、会话进行中、折叠态都是同一入口，不再
+  按状态切换入口面。
+- **默认折叠会话列（2026-11-27 裁决）**：`foldStore()`（`dshtrading.chat.folded.v1`）
+  缺省值为 `true`，打开软件时会话列默认折叠、优先让出完整行情视野（左侧自选栏
+  `marketFoldStore()` 维持默认展开）。插件 `apply(ctx)` 在 slot 首次渲染前同步写
+  `body[data-dshtrading-chat-folded]` 避免首帧 380px 闪烁；折叠态下用户点击竖条
+  「新会话」或定时任务执行历史「打开会话」时自动展开会话列，避免操作无视觉反馈；
+  `HomeHistory` 同步监听 `data-dshtrading-chat-folded` 与 `[data-composer-seat]`
+  尺寸变化，确保从默认折叠态首次展开后融合面板正常接卡并对齐。
 - **几何占位复用侧栏轨道（shell-pad.css 规则 8 改写）**：2.7 把侧栏轨道
   `!important` 归零，2.9 起改为常驻 `44px`——rtl 栅格第 1 轨道恰在右缘，天然
   就是竖条的让位区；对话列（380px）与 QuotePane 测量天然以竖条左缘为界。

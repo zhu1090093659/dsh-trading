@@ -283,4 +283,26 @@ describe('HomeHistory 融合面板挂载时序', () => {
     expect(b.scrollBody.querySelector('[data-dshtrading-home-history]')).toBeNull()
     expect(homeHistory()).toBeNull()
   })
+
+  it('用户默认折叠启动后再展开会话列：原本零尺寸的 composer 卡在展开后被接上并抹平圆角', async () => {
+    // Given 启动时会话列处于折叠态，composer 卡此刻在 display:none 列里盒宽为 0
+    document.body.dataset.dshtradingChatFolded = 'on'
+    const { seat } = composerColumn(true)
+    const card = composerCard(seat as HTMLElement)
+    cardBox(card, 0, 0)
+    render(<HomeHistory {...(homeHistoryProps() as never)} />)
+    expect(card.style.borderBottomLeftRadius).toBe('18px')
+    // When 用户点击展开会话列：卡恢复真实布局尺寸，body 折叠标记翻到 off
+    cardBox(card, 332, 96)
+    await act(async () => {
+      document.body.dataset.dshtradingChatFolded = 'off'
+    })
+    // Then HomeHistory 捕获折叠态翻转后重新找卡并拼接：底圆角被抹平、面板同宽对齐
+    const panel = homeHistory() as HTMLElement | null
+    expect(panel).not.toBeNull()
+    expect(card.style.borderBottomLeftRadius).toBe('0px')
+    expect(card.style.borderBottomRightRadius).toBe('0px')
+    expect(panel?.style.width).toBe('332px')
+    delete document.body.dataset.dshtradingChatFolded
+  })
 })

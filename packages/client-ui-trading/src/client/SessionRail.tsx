@@ -173,7 +173,7 @@ export function SessionRail({ t, useFolded, useRightbar, startNewSession, toggle
         className={css.button}
         aria-label={t('entry.new')}
         title={t('entry.new')}
-        onClick={() => { closeContainer(); startNewSession() }}
+        onClick={() => { closeContainer(); if (folded) toggleFold(); startNewSession() }}
       >
         <IconNewSession size={16} />
       </button>
@@ -250,7 +250,7 @@ export function SessionRail({ t, useFolded, useRightbar, startNewSession, toggle
       {tasksOpen && (
         <ScheduledTasksPanel
           t={t}
-          openSession={(sessionId) => { toggleTasks(false); openSession(sessionId) }}
+          openSession={(sessionId) => { toggleTasks(false); if (folded) toggleFold(); openSession(sessionId) }}
           close={() => { toggleTasks(false) }}
         />
       )}

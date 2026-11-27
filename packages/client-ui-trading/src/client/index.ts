@@ -126,6 +126,14 @@ export function apply(ctx: ClientContext): void {
   const marketFolded = marketFoldStore()
   const toggleFold = (): void => { chatFolded.toggle() }
   const toggleMarketFold = (): void => { marketFolded.toggle() }
+  // 首帧零闪烁：apply 早于 slot 首次渲染，先把初始折叠态写到 body，
+  // 避免默认折叠时对话列先以 380px 闪出再走 0.3s 轨道过渡收起。
+  ctx.effect(() => {
+    try { document.body.dataset.dshtradingChatFolded = chatFolded.getSnapshot() ? 'on' : 'off' } catch { /* SSR guard */ }
+    return () => {
+      try { delete document.body.dataset.dshtradingChatFolded } catch { /* SSR guard */ }
+    }
+  }, 'dsh-trading-market: initial chat fold attribute')
 
   // 宿主右侧栏（官方 sidebar-right dock，0.1.5 起接管 details 列，承载文件/
   // 预览等原生页签）：SessionRail 文件页签的开合动作面。最小结构面不 import

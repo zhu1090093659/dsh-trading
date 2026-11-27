@@ -200,6 +200,43 @@ check('D. 交易面挂载', mounted?.overlay === true && (mounted?.watchlist ?? 
   mounted ? `overlay=${mounted.overlay} watchlistRows=${mounted.watchlist}` : 'eval failed');
 await sleep(4000); // 行情流/注入稳定窗口
 
+// --- D2. 启动默认折叠会话列 -----------------------------------------------
+// 默认首屏优先留给行情与自选：新实例启动时会话列应处于折叠态，随后点开以继续
+// 校验会话 composer 与工作区菜单交互。
+
+const initialFold = await evalJs(`(() => {
+  const frame = document.querySelector('div:has(> [data-shell-overlay])');
+  const chatCol = frame ? frame.children[1] : null;
+  const expandBtn = document.querySelector('button[aria-label="展开会话列"]');
+  return {
+    attr: document.body.dataset.dshtradingChatFolded ?? '',
+    chatW: chatCol ? Math.round(chatCol.getBoundingClientRect().width) : null,
+    pressed: expandBtn ? expandBtn.getAttribute('aria-pressed') : null,
+    btnBox: expandBtn ? (() => {
+      const r = expandBtn.getBoundingClientRect();
+      return [Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)];
+    })() : null,
+  };
+})()`);
+check('D2. 启动默认折叠会话列',
+  initialFold !== null && initialFold.attr === 'on' && initialFold.pressed === 'true' && initialFold.chatW !== null && initialFold.chatW <= 1,
+  initialFold
+    ? `chatFolded=${initialFold.attr} pressed=${initialFold.pressed} chatW=${initialFold.chatW}px`
+    : 'eval failed');
+if (initialFold?.btnBox) {
+  await click(initialFold.btnBox[0], initialFold.btnBox[1]);
+  for (let i = 0; i < 16; i++) {
+    await sleep(250);
+    const expanded = await evalJs(`(() => {
+      const frame = document.querySelector('div:has(> [data-shell-overlay])');
+      const chatCol = frame ? frame.children[1] : null;
+      return document.body.dataset.dshtradingChatFolded === 'off'
+        && chatCol !== null && chatCol.getBoundingClientRect().width > 100;
+    })()`);
+    if (expanded === true) break;
+  }
+}
+
 // --- B. 会话创建链路（composer 可用态） ----------------------------------
 
 const composer = await evalJs(`(() => {

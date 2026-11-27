@@ -96,9 +96,13 @@ export function QuotePane(props: QuotePaneProps) {
       // 影响）；仅「折叠 + 任务」组合下面板浮在市场区右缘——此时取面板左缘
       // 为中栏右界。纯轨道位移不触发 ResizeObserver，开合兜底靠下方两个监听。
       const tasksBox = document.querySelector('[data-dshtrading-tasks-panel]')?.getBoundingClientRect()
+      const sidebarW = Number.parseFloat(getComputedStyle(frame).getPropertyValue('--dshtrading-sidebar-w'))
+      const railRight = railBox !== undefined && railBox.width > 0
+        ? railBox.left
+        : frameBox.right - (Number.isFinite(sidebarW) && sidebarW > 0 ? sidebarW : 0)
       const fallbackRight = tasksBox !== undefined && tasksBox.width > 0
         ? tasksBox.left
-        : (railBox !== undefined && railBox.width > 0 ? railBox.left : frameBox.right)
+        : railRight
 
       let right = fallbackRight
       if (!chatFolded) {
